@@ -101,7 +101,7 @@ def list_leaves(
 def create_leave(
     payload: LeaveCreate,
     db: Annotated[Session, Depends(get_db)],
-    _user: Annotated[User, Depends(require_capability("leaves.edit"))],
+    _user: Annotated[User, Depends(require_capability("leaves.create"))],
 ) -> LeaveRead:
     """Manual record creation — National Service only (other kinds are born
     from form generation)."""
@@ -206,7 +206,7 @@ def download_leave_certificate(
 def delete_leave(
     leave_id: int,
     db: Annotated[Session, Depends(get_db)],
-    _user: Annotated[User, Depends(require_capability("leaves.edit"))],
+    _user: Annotated[User, Depends(require_capability("leaves.delete"))],
 ) -> Response:
     leave_service.soft_delete_leave(db, leave_id, actor=_user.email)
     return Response(status_code=status.HTTP_204_NO_CONTENT)

@@ -56,6 +56,7 @@ describe('CustomizeWidgetsDialog', () => {
     expect(within(groupOf('From Leaves')).getByText('on_leave_today')).toBeInTheDocument()
     expect(within(groupOf('From Ledger')).getByText('recent_ledger')).toBeInTheDocument()
     expect(within(groupOf('From Employees')).getByText('workspace')).toBeInTheDocument()
+    expect(within(groupOf('From Workforce')).getByText('workforce_pulse')).toBeInTheDocument()
   })
 
   it('saves the chosen canvas width alongside the widgets', async () => {

@@ -27,6 +27,9 @@ class EmployeeStatsRead(BaseModel):
     leaves_taken_days: int
     leaves_allowed_days: int
     violations: int
+    #: Days marked absent in the current calendar year — the record-side count,
+    #: scoped like ``leaves_taken_days`` so the figures stay comparable.
+    absence_days: int
     ledger_count: int
     tenure_years: float
 
@@ -57,6 +60,12 @@ class RecentViolationRead(ORMBase):
     description: str | None = None
 
 
+class RecentAbsenceRead(ORMBase):
+    id: int
+    date: date_t
+    note: str | None = None
+
+
 class RecentLedgerRead(ORMBase):
     id: int
     subject: str
@@ -67,9 +76,17 @@ class RecentLedgerRead(ORMBase):
 
 class ActivityItemRead(ORMBase):
     when: datetime
-    kind: Literal["document", "leave", "violation", "ledger"]
+    kind: Literal["document", "leave", "violation", "ledger", "absence", "duty_location"]
     summary: str
     ref_id: int
+    event_type: Literal["initial_placement", "transfer"] | None = None
+    from_department: str | None = None
+    from_unit: str | None = None
+    from_post: str | None = None
+    to_department: str | None = None
+    to_unit: str | None = None
+    to_post: str | None = None
+    reason: str | None = None
 
 
 class EmployeeDetailRead(BaseModel):
@@ -78,6 +95,7 @@ class EmployeeDetailRead(BaseModel):
     recent_documents: list[RecentDocumentRead]
     recent_leaves: list[RecentLeaveRead]
     recent_violations: list[RecentViolationRead]
+    recent_absences: list[RecentAbsenceRead]
     recent_ledger: list[RecentLedgerRead]
     recent_activity: list[ActivityItemRead]
     recent_sms: list[NotifyMessageRead]

@@ -34,6 +34,13 @@ from app.db.models import Employee, User, VaultFile
 from app.db.session import get_db
 from app.schemas import employee_activity as activity_schemas
 from app.schemas import employee_detail as detail_schemas
+from app.schemas.absence import (
+    AbsenceCreate,
+    AbsenceCreateResult,
+    AbsenceEpisodeRead,
+    AbsenceRead,
+    AbsenceRecordRead,
+)
 from app.schemas.employee import (
     EmployeeCreate,
     EmployeeListItem,
@@ -46,6 +53,7 @@ from app.schemas.leave import LeaveBalanceRead, LeaveRead
 from app.schemas.vault_file import VaultEntry, VaultTree
 from app.schemas.violation import ViolationCreate, ViolationRead, ViolationUpdate
 from app.services import (
+    absence_service,
     employee_activity_service,
     employee_detail_service,
     employee_service,
@@ -122,7 +130,7 @@ def list_employees(
 def create_employee(
     payload: EmployeeCreate,
     db: Annotated[Session, Depends(get_db)],
-    _user: Annotated[User, Depends(require_capability("employees.edit"))],
+    _user: Annotated[User, Depends(require_capability("employees.create"))],
 ) -> EmployeeRead:
     row = employee_service.create_employee(db, payload)
     return EmployeeRead.model_validate(row).model_copy(update=_photo_fields(db, row.id))
@@ -265,7 +273,7 @@ def create_employee_violation(
     employee_id: str,
     payload: ViolationCreate,
     db: Annotated[Session, Depends(get_db)],
-    _user: Annotated[User, Depends(require_capability("violations.manage"))],
+    _user: Annotated[User, Depends(require_capability("violations.create"))],
 ) -> ViolationRead:
     row = violation_service.create(db, employee_id, payload)
     return ViolationRead.model_validate(row)
@@ -276,7 +284,7 @@ def update_violation(
     violation_id: int,
     payload: ViolationUpdate,
     db: Annotated[Session, Depends(get_db)],
-    _user: Annotated[User, Depends(require_capability("violations.manage"))],
+    _user: Annotated[User, Depends(require_capability("violations.edit"))],
 ) -> ViolationRead:
     return ViolationRead.model_validate(violation_service.update(db, violation_id, payload))
 
@@ -285,9 +293,88 @@ def update_violation(
 def delete_violation(
     violation_id: int,
     db: Annotated[Session, Depends(get_db)],
-    _user: Annotated[User, Depends(require_capability("violations.manage"))],
+    _user: Annotated[User, Depends(require_capability("violations.delete"))],
 ) -> Response:
     violation_service.delete(db, violation_id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+# --- Absences --------------------------------------------------------------- #
+# A day-level record on the employee, recorded the same way a sick leave is. #
+# The time sheet only reads it; nothing here is timesheet-owned.             #
+
+
+@router.get("/{employee_id}/absences", response_model=list[AbsenceRead])
+def list_employee_absences(
+    employee_id: str,
+    db: Annotated[Session, Depends(get_db)],
+    _user: Annotated[User, Depends(require_capability("leaves.view"))],
+) -> list[AbsenceRead]:
+    rows = absence_service.list_for_employee(db, employee_id)
+    return [AbsenceRead.model_validate(r) for r in rows]
+
+
+@router.get("/{employee_id}/absences/episodes", response_model=AbsenceRecordRead)
+def list_employee_absence_episodes(
+    employee_id: str,
+    db: Annotated[Session, Depends(get_db)],
+    _user: Annotated[User, Depends(require_capability("leaves.view"))],
+) -> AbsenceRecordRead:
+    emp = absence_service._get_employee_or_404(db, employee_id)
+    episodes = absence_service.list_episodes(db, employee_id)
+    return AbsenceRecordRead(
+        employee_id=emp.id,
+        employee_name_en=emp.name_en,
+        employee_name_ar=emp.name_ar,
+        duty_post=emp.duty_post,
+        duty_unit=emp.duty_unit,
+        episodes=[
+            AbsenceEpisodeRead(
+                start_date=e.start,
+                end_date=e.end,
+                days=e.day_count,
+                notes=e.notes,
+            )
+            for e in episodes
+        ],
+    )
+
+
+@router.post(
+    "/{employee_id}/absences",
+    response_model=AbsenceCreateResult,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_employee_absences(
+    employee_id: str,
+    payload: AbsenceCreate,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(require_capability("leaves.edit"))],
+) -> AbsenceCreateResult:
+    result = absence_service.add_range(
+        db,
+        employee_id,
+        start=payload.start_date,
+        end=payload.end_date,
+        note=payload.note,
+        user_id=user.id,
+    )
+    return AbsenceCreateResult(
+        created=[AbsenceRead.model_validate(r) for r in result.created],
+        skipped_off_roster=result.skipped_off_roster,
+    )
+
+
+@router.delete("/{employee_id}/absences", status_code=status.HTTP_204_NO_CONTENT)
+def delete_employee_absences(
+    employee_id: str,
+    start_date: Annotated[date, Query()],
+    end_date: Annotated[date, Query()],
+    db: Annotated[Session, Depends(get_db)],
+    _user: Annotated[User, Depends(require_capability("leaves.edit"))],
+) -> Response:
+    """Un-mark a whole episode (any day range) from the register."""
+    absence_service.delete_range(db, employee_id, start_date, end_date)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
@@ -314,7 +401,7 @@ def get_employee_vault(
 async def upload_to_vault(
     employee_id: str,
     db: Annotated[Session, Depends(get_db)],
-    _user: Annotated[User, Depends(require_capability("employees.edit"))],
+    _user: Annotated[User, Depends(require_capability("employees.vault.manage"))],
     kind: Annotated[str, Form()],
     upload: Annotated[UploadFile, File(alias="file")],
 ) -> VaultEntry:
@@ -343,7 +430,7 @@ def delete_vault_file(
     kind: str,
     filename: str,
     db: Annotated[Session, Depends(get_db)],
-    _user: Annotated[User, Depends(require_capability("employees.edit"))],
+    _user: Annotated[User, Depends(require_capability("employees.vault.manage"))],
 ) -> Response:
     employee_service.get_employee(db, employee_id)
     vault_service.delete_file(db, employee_id, kind, filename)

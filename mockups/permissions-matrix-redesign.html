@@ -1,0 +1,706 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Permissions redesign — granular matrix · search · bulk · AR/RTL</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600;700&family=Noto+Sans+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#f5f4f1; --surface:#ffffff; --surface-raised:#fafaf6; --surface-tinted:#f0eee8;
+    --primary:#0d2845; --primary-hover:#1d3a5e; --primary-soft:#e8edf3; --on-primary:#ffffff;
+    --accent:#c8102e; --accent-hover:#a30d24; --accent-soft:#fbe5e8;
+    --success:#047857; --success-soft:#d6f0e4;
+    --warning:#92400e; --warning-soft:#fbedd8;
+    --info:#1d4ed8; --info-soft:#e0e8f8;
+    --destructive:#dc2626;
+    --text:#1c1f24; --text-muted:#5a6068; --text-faint:#8b9098;
+    --border:#e6e4dd; --border-strong:#d4d1c8; --hairline:#efece5;
+    --font-sans:"Inter","Noto Sans Arabic",ui-sans-serif,system-ui,sans-serif;
+    --font-arabic:"Noto Sans Arabic","Inter",sans-serif;
+    --font-mono:"IBM Plex Mono","Noto Sans Arabic",ui-monospace,Consolas,monospace;
+    --ease:cubic-bezier(.16,1,.3,1);
+  }
+  *{box-sizing:border-box;margin:0;padding:0;border-color:var(--border)}
+  html,body{height:100%}
+  body{background:var(--bg);color:var(--text);font-family:var(--font-sans);
+    -webkit-font-smoothing:antialiased;line-height:1.45;overflow:hidden}
+  [dir="rtl"] body{font-family:var(--font-arabic)}
+  button{font:inherit;cursor:pointer;background:none;border:none;color:inherit}
+  svg{display:block;flex:none}
+  .mono{font-family:var(--font-mono);font-variant-numeric:tabular-nums}
+
+  /* ─── Top bar ───────────────────────────────────────────────────────────── */
+  .topbar{position:fixed;inset-inline:0;top:0;z-index:60;display:flex;align-items:center;gap:14px;
+    height:52px;padding:0 18px;background:color-mix(in srgb,var(--primary) 96%,transparent);
+    color:#fff;backdrop-filter:blur(6px)}
+  .brand{display:flex;align-items:center;gap:9px;font-size:13px;font-weight:700;letter-spacing:.02em}
+  .brand .dot{width:22px;height:22px;border-radius:7px;background:linear-gradient(135deg,#c8102e,#8f0b20);
+    display:grid;place-items:center;font-size:10px;font-weight:800;color:#fff}
+  .brand .tag{font-size:10px;font-weight:600;letter-spacing:.14em;text-transform:uppercase;opacity:.55;
+    margin-inline-start:2px}
+  .seg{display:inline-flex;margin-inline:auto;background:rgba(255,255,255,.09);border-radius:10px;padding:3px}
+  .seg button{padding:5px 14px;border-radius:8px;font-size:12px;font-weight:600;color:rgba(255,255,255,.65)}
+  .seg button[aria-pressed="true"]{background:#fff;color:var(--primary);box-shadow:0 1px 4px rgba(0,0,0,.25)}
+  .langseg{display:inline-flex;background:rgba(255,255,255,.09);border-radius:10px;padding:3px}
+  .langseg button{padding:5px 12px;border-radius:8px;font-size:12px;font-weight:600;color:rgba(255,255,255,.65)}
+  .langseg button[aria-pressed="true"]{background:var(--accent);color:#fff}
+  @media (max-width:720px){.brand .tag,.topbar .hint{display:none}}
+
+  /* ─── Dimmed backdrop page (context only) ───────────────────────────────── */
+  .backdrop{position:fixed;inset:0;top:52px;padding:28px 32px;overflow:hidden;user-select:none}
+  .backdrop .page{max-width:1060px;margin:0 auto;filter:saturate(.9)}
+  .crumb{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-faint);margin-bottom:18px}
+  .crumb b{color:var(--text-muted);font-weight:600}
+  .panelcard{background:var(--surface);border:1px solid var(--border);border-radius:16px;overflow:hidden}
+  .panelhead{display:flex;align-items:center;justify-content:space-between;gap:10px;
+    padding:16px 20px;border-bottom:1px solid var(--hairline)}
+  .panelhead h2{font-size:15px;font-weight:700}
+  .panelhead p{font-size:12px;color:var(--text-muted);margin-top:2px}
+  .utable{width:100%;border-collapse:collapse;font-size:13px}
+  .utable th{font-size:11px;font-weight:700;letter-spacing:.09em;text-transform:uppercase;
+    color:var(--text-faint);text-align:start;padding:10px 20px;border-bottom:1px solid var(--hairline)}
+  .utable td{padding:12px 20px;border-bottom:1px solid var(--hairline)}
+  .utable tr:last-child td{border-bottom:0}
+  .uav{width:30px;height:30px;border-radius:50%;background:var(--primary-soft);color:var(--primary);
+    display:inline-grid;place-items:center;font-size:11px;font-weight:700;margin-inline-end:10px;vertical-align:middle}
+  .uchip{display:inline-flex;border-radius:6px;padding:2px 8px;font-size:10px;font-weight:700;
+    letter-spacing:.06em;text-transform:uppercase}
+  .kebab{width:28px;height:28px;border-radius:8px;display:grid;place-items:center;color:var(--text-faint)}
+  .locked-demo{margin-top:18px;display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+  .locked-demo span{font-size:12px;color:var(--text-faint)}
+  .lockbtn{display:inline-flex;align-items:center;gap:7px;border:1px dashed var(--border-strong);
+    background:var(--surface-raised);border-radius:10px;padding:8px 14px;font-size:13px;font-weight:600;
+    color:var(--text-muted)}
+
+  /* ─── Scrim + sheet ─────────────────────────────────────────────────────── */
+  .scrim{position:fixed;inset:0;top:52px;z-index:40;background:rgba(13,26,43,.42);animation:fade .25s var(--ease)}
+  @keyframes fade{from{opacity:0}}
+  .sheet{position:fixed;z-index:50;top:52px;bottom:0;inset-inline-end:0;width:min(680px,100vw);
+    background:var(--bg);display:flex;flex-direction:column;
+    box-shadow:-32px 0 70px -30px rgba(9,20,38,.5);animation:slide .32s var(--ease)}
+  @keyframes slide{from{transform:translateX(var(--slide-from,40px));opacity:.4}}
+  [dir="rtl"]{--slide-from:-40px}
+
+  .shead{background:var(--surface);border-bottom:1px solid var(--border);padding:16px 24px 14px}
+  .eyebrow{font-size:10px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--text-faint)}
+  .shead-r1{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-top:5px}
+  .uname{font-size:17px;font-weight:700;line-height:1.25}
+  .usub{font-size:13px;color:var(--text-muted);margin-top:3px}
+  .xbtn{width:34px;height:34px;border-radius:9px;display:grid;place-items:center;color:var(--text-muted)}
+  .xbtn:hover{background:var(--surface-tinted);color:var(--text)}
+  .rolechip{display:inline-flex;align-items:center;gap:5px;margin-top:9px;border-radius:7px;
+    padding:3px 9px;font-size:10px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;
+    background:var(--info-soft);color:var(--info)}
+  .stats{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}
+  .stat{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--hairline);
+    background:var(--surface-raised);border-radius:99px;padding:3px 11px;font-size:11px;color:var(--text-muted)}
+  .stat b{font-weight:700;color:var(--text)}
+  .stat .sw{width:7px;height:7px;border-radius:50%}
+
+  /* sticky tool row */
+  .tools{position:sticky;top:0;z-index:5;background:var(--bg);padding:14px 24px 12px;
+    border-bottom:1px solid var(--hairline)}
+  .search{display:flex;align-items:center;gap:9px;background:var(--surface);border:1px solid var(--border);
+    border-radius:11px;padding:0 13px;height:40px;transition:border-color .15s,box-shadow .15s}
+  .search:focus-within{border-color:var(--primary);box-shadow:0 0 0 3px rgba(13,40,69,.08)}
+  .search svg{color:var(--text-faint)}
+  .search input{flex:1;min-width:0;border:0;outline:0;background:none;font:inherit;font-size:13px}
+  .search input::placeholder{color:var(--text-faint)}
+  .search .kbd{font-family:var(--font-mono);font-size:10px;color:var(--text-faint);
+    border:1px solid var(--border);border-radius:5px;padding:1px 6px}
+  .search .clr{display:none;align-items:center;gap:4px;font-size:11px;font-weight:600;color:var(--text-muted)}
+  .search.hasq .clr{display:inline-flex}
+  .resultnote{display:none;margin-top:8px;font-size:12px;color:var(--text-muted)}
+  .resultnote.show{display:block}
+  .resultnote b{color:var(--text)}
+
+  .sscroll{flex:1;overflow-y:auto;padding:18px 24px 90px}
+  .domain{background:var(--surface);border:1px solid var(--border);border-radius:14px;margin-bottom:12px;
+    overflow:hidden;transition:box-shadow .2s var(--ease)}
+  .domain:hover{box-shadow:0 6px 18px -12px rgba(13,40,69,.18)}
+  .dhead{width:100%;display:flex;align-items:center;gap:10px;padding:13px 18px;text-align:start}
+  .dhead:hover{background:var(--surface-raised)}
+  .dname{font-size:13px;font-weight:700}
+  .dcount{font-family:var(--font-mono);font-size:11px;color:var(--text-faint);
+    border:1px solid var(--hairline);border-radius:6px;padding:1px 6px}
+  .dbulk{margin-inline-start:auto;display:inline-flex;border:1px solid var(--border);border-radius:8px;
+    overflow:hidden}
+  .dbulk button{padding:4px 10px;font-size:11px;font-weight:600;color:var(--text-muted);
+    border-inline-end:1px solid var(--border)}
+  .dbulk button:last-child{border-inline-end:0}
+  .dbulk button:hover{background:var(--surface-tinted)}
+  .dbulk button.on-default{background:var(--surface-tinted);color:var(--text)}
+  .dbulk button.on-grant{background:var(--success-soft);color:var(--success)}
+  .dbulk button.on-deny{background:var(--accent-soft);color:var(--accent)}
+  .chev{transition:transform .22s var(--ease);color:var(--text-faint)}
+  .domain.closed .chev{transform:rotate(-90deg)}
+  [dir="rtl"] .domain.closed .chev{transform:rotate(90deg)}
+  .rows{border-top:1px solid var(--hairline)}
+  .domain.closed .rows{display:none}
+
+  .row{display:flex;gap:14px;align-items:flex-start;padding:13px 18px;border-bottom:1px solid var(--hairline);
+    transition:background .3s}
+  .row:last-child{border-bottom:0}
+  .row:hover{background:var(--surface-raised)}
+  .row.flash{animation:flash 1s var(--ease)}
+  @keyframes flash{0%{background:var(--success-soft)}100%{background:transparent}}
+  .rmain{min-width:0;flex:1}
+  .rlabel{font-size:13px;font-weight:600}
+  .rdesc{font-size:12px;color:var(--text-muted);margin-top:2px;line-height:1.5}
+  .rmeta{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:7px}
+  .capid{font-family:var(--font-mono);font-size:10px;color:var(--text-faint);direction:ltr;unicode-bidi:isolate}
+  .chip{display:inline-flex;align-items:center;gap:4px;border-radius:5px;padding:1.5px 7px;
+    font-size:9px;font-weight:700;letter-spacing:.08em;text-transform:uppercase}
+  .chip.ok{background:var(--success-soft);color:var(--success)}
+  .chip.no{background:var(--surface-tinted);color:var(--text-muted)}
+  .chip.ovr{background:var(--warning-soft);color:var(--warning)}
+  .flag{display:inline-flex;align-items:center;gap:5px;border:1px dashed #d9a441;border-radius:6px;
+    background:#fdf6e7;color:#8a5a12;padding:2px 8px;font-size:10px;font-weight:600}
+  .flag .n{display:inline-grid;place-items:center;width:14px;height:14px;border-radius:50%;
+    background:#d9a441;color:#fff;font-size:9px;font-weight:800}
+
+  /* tri-state */
+  .tri{flex:none;display:inline-flex;border:1px solid var(--border);border-radius:9px;overflow:hidden;
+    margin-top:2px}
+  .tri button{padding:6px 12px;font-size:12px;font-weight:600;color:var(--text-faint);
+    border-inline-end:1px solid var(--border);transition:all .15s}
+  .tri button:last-child{border-inline-end:0}
+  .tri button:hover{background:var(--surface-tinted)}
+  .tri button[aria-pressed="true"].t-default{background:var(--surface-tinted);color:var(--text)}
+  .tri button[aria-pressed="true"].t-grant{background:var(--success-soft);color:var(--success)}
+  .tri button[aria-pressed="true"].t-deny{background:var(--accent-soft);color:var(--accent)}
+
+  .noresults{display:none;text-align:center;padding:56px 20px;color:var(--text-muted)}
+  .noresults.show{display:block}
+  .noresults .big{width:44px;height:44px;border-radius:12px;background:var(--surface-tinted);
+    display:grid;place-items:center;margin:0 auto 12px;color:var(--text-faint)}
+  .noresults b{display:block;font-size:13px;color:var(--text);margin-bottom:3px}
+  .noresults p{font-size:12px}
+  .noresults button{margin-top:14px;border:1px solid var(--border);background:var(--surface);
+    border-radius:9px;padding:7px 16px;font-size:12px;font-weight:600}
+
+  /* before-mode footnote */
+  .footnote{display:none;margin:4px 0 14px;border:1px solid #ecd9b1;background:#fdf6e7;border-radius:12px;
+    padding:12px 16px;font-size:12px;color:#6b4a0e;line-height:1.6}
+  .footnote.show{display:block}
+  .footnote .fn{display:inline-grid;place-items:center;width:15px;height:15px;border-radius:50%;
+    background:#d9a441;color:#fff;font-size:10px;font-weight:800;margin-inline-end:6px}
+
+  /* toast + dialog */
+  .toast{position:fixed;z-index:90;bottom:26px;left:50%;transform:translateX(-50%);
+    background:var(--primary);color:#fff;border-radius:11px;padding:11px 18px;font-size:13px;font-weight:600;
+    display:none;align-items:center;gap:9px;box-shadow:0 14px 34px -12px rgba(9,20,38,.6)}
+  .toast.show{display:inline-flex;animation:pop .3s var(--ease)}
+  @keyframes pop{from{transform:translateX(-50%) translateY(8px);opacity:0}}
+  .dlgwrap{position:fixed;inset:0;z-index:80;display:none;place-items:center;background:rgba(13,26,43,.45);padding:20px}
+  .dlgwrap.open{display:grid}
+  .dlg{width:min(430px,100%);background:var(--surface);border-radius:16px;padding:22px 24px;
+    box-shadow:0 40px 90px -30px rgba(9,20,38,.6);animation:pop2 .28s var(--ease)}
+  @keyframes pop2{from{transform:scale(.96) translateY(8px);opacity:0}}
+  .dlg h3{font-size:15px;font-weight:700;display:flex;align-items:center;gap:9px}
+  .dlg h3 .ic{width:30px;height:30px;border-radius:9px;background:var(--warning-soft);color:var(--warning);
+    display:grid;place-items:center}
+  .dlg p{font-size:13px;color:var(--text-muted);margin-top:10px;line-height:1.65}
+  .dlg p b{color:var(--text)}
+  .dlgrow{display:flex;justify-content:flex-end;gap:9px;margin-top:20px}
+  .btn{border-radius:9px;padding:8px 16px;font-size:13px;font-weight:700}
+  .btn.primary{background:var(--primary);color:#fff}
+  .btn.primary:hover{background:var(--primary-hover)}
+  .btn.ghost{border:1px solid var(--border);color:var(--text-muted)}
+
+  .variant-tag{position:fixed;bottom:16px;inset-inline-start:16px;z-index:99;background:var(--primary);color:#fff;
+    border-radius:99px;padding:8px 16px;font-size:12px;font-weight:700;box-shadow:0 8px 24px rgba(4,15,30,.4)}
+  .variant-tag span{color:#ff8fa0;font-family:var(--font-mono);margin-inline-end:8px}
+
+  ::-webkit-scrollbar{width:10px}
+  ::-webkit-scrollbar-thumb{background:var(--border-strong);border-radius:8px;border:2.5px solid var(--bg)}
+</style>
+</head>
+<body>
+
+<!-- ═══ Top bar ═══ -->
+<header class="topbar">
+  <div class="brand"><span class="dot">S</span> Sentinel <span class="tag">UX mockup</span></div>
+  <div class="seg" id="viewSeg" role="tablist">
+    <button data-view="before" aria-pressed="false">Before — current</button>
+    <button data-view="after" aria-pressed="true">After — proposed</button>
+  </div>
+  <div class="langseg" id="langSeg">
+    <button data-lang="en" aria-pressed="true">English</button>
+    <button data-lang="ar" aria-pressed="false">العربية</button>
+  </div>
+</header>
+
+<!-- ═══ Backdrop page ═══ -->
+<div class="backdrop" aria-hidden="true">
+  <div class="page">
+    <div class="crumb"><span id="bdCrumb1">Settings</span> <span>›</span> <span id="bdCrumb2">Access</span> <span>›</span> <b id="bdCrumb3">Active users</b></div>
+    <div class="panelcard">
+      <div class="panelhead">
+        <div><h2 id="bdTitle">Access requests &amp; users</h2><p id="bdSub">Approve who requested access and manage current users.</p></div>
+      </div>
+      <table class="utable">
+        <thead><tr><th id="bdThUser">User</th><th id="bdThRole">Role</th><th id="bdThStatus">Status</th><th></th></tr></thead>
+        <tbody>
+          <tr><td><span class="uav">KM</span><b>Khalid Al-Mansouri</b><br><span style="font-size:11px;color:var(--text-faint)">k.mansouri@gssg.ae</span></td>
+              <td><span class="uchip" style="background:var(--info-soft);color:var(--info)" id="bdRoleMgr">Manager</span></td>
+              <td style="color:var(--success);font-weight:600;font-size:12px" id="bdActive">Active</td>
+              <td><span class="kebab">⋮</span></td></tr>
+          <tr><td><span class="uav">SA</span><b>Sara Ahli</b><br><span style="font-size:11px;color:var(--text-faint)">s.ahli@gssg.ae</span></td>
+              <td><span class="uchip" style="background:var(--surface-tinted);color:var(--text-muted)" id="bdRoleOp">Operator</span></td>
+              <td style="color:var(--success);font-weight:600;font-size:12px" id="bdActive2">Active</td>
+              <td><span class="kebab">⋮</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+    <div class="locked-demo">
+      <span id="bdLockHint">While you're here — this is how a locked action asks for permission (now fully translated):</span>
+      <button class="lockbtn" id="demoLockBtn">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+        <span id="demoLockLabel">Manage Word templates</span>
+      </button>
+    </div>
+  </div>
+</div>
+
+<div class="scrim"></div>
+
+<!-- ═══ The sheet ═══ -->
+<aside class="sheet" aria-label="User permissions">
+  <div class="shead">
+    <div class="eyebrow" id="shEyebrow">USER PERMISSIONS</div>
+    <div class="shead-r1">
+      <div>
+        <div class="uname" id="shName">Khalid Al-Mansouri</div>
+        <div class="usub" id="shSub">Each switch overrides the user's role default.</div>
+      </div>
+      <button class="xbtn" aria-label="Close">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" style="transform:rotate(-90deg)"><path d="m6 9 6 6 6-6"/></svg>
+      </button>
+    </div>
+    <span class="rolechip" id="shRole">Manager</span>
+    <div class="stats" id="shStats"></div>
+  </div>
+
+  <div class="tools" id="tools">
+    <div class="search" id="searchBox">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+      <input id="searchInput" type="text" placeholder="Search permissions…" aria-label="Search permissions">
+      <button class="clr" id="searchClr">Clear ✕</button>
+      <span class="kbd">/</span>
+    </div>
+    <div class="resultnote" id="resultNote"></div>
+  </div>
+
+  <div class="sscroll" id="scrollArea">
+    <div class="footnote" id="footnote">
+      <div style="display:flex;gap:14px;flex-wrap:wrap">
+        <span><span class="fn">1</span><span id="fn1"></span></span>
+        <span><span class="fn">2</span><span id="fn2"></span></span>
+      </div>
+    </div>
+    <div id="groups"></div>
+    <div class="noresults" id="noResults">
+      <div class="big"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg></div>
+      <b id="nrTitle">No permissions match</b>
+      <p id="nrSub">Try a different word — search checks names, descriptions and IDs.</p>
+      <button id="nrClear">Clear search</button>
+    </div>
+  </div>
+</aside>
+
+<div class="toast" id="toast"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#6ee7b7" stroke-width="2.4"><path d="M20 6 9 17l-5-5"/></svg><span id="toastMsg"></span></div>
+
+<div class="dlgwrap" id="dlgWrap">
+  <div class="dlg" role="dialog" aria-modal="true" aria-labelledby="dlgTitle">
+    <h3><span class="ic"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span><span id="dlgTitle">Request permission</span></h3>
+    <p id="dlgBody"></p>
+    <div class="dlgrow">
+      <button class="btn ghost" id="dlgCancel">Close</button>
+      <button class="btn primary" id="dlgSend">Request</button>
+    </div>
+  </div>
+</div>
+
+<div class="variant-tag"><span>MOCK</span><span id="vtLabel">permissions redesign</span></div>
+
+<script>
+/* ═══════════ Strings ═══════════ */
+const T = {
+  en:{
+    dir:'ltr',
+    shEyebrow:'USER PERMISSIONS',
+    shSub:'Each switch overrides the user\u2019s role default.',
+    role:{admin:'Admin',manager:'Manager',operator:'Operator'},
+    st:{default:'Default',grant:'Grant',deny:'Deny'},
+    inherited:(s)=>'Role default: '+s,
+    overridden:'Overridden',
+    searchPh:'Search permissions\u2026', clear:'Clear',
+    results:(n)=>n+' result'+(n===1?'':'s'),
+    nrTitle:'No permissions match', nrSub:'Try a different word \u2014 search checks names, descriptions and IDs.',
+    nrClear:'Clear search',
+    fn1:'Create + edit + submit + delete + Word templates bundled into ONE switch \u2014 admins can\u2019t pinpoint actions.',
+    fn2:'This description stays English even in Arabic RTL mode (missing translation).',
+    stats:(c,i,o,g,d)=>`${c} permissions`,
+    statTotal:'permissions', statInherited:'inherited', statOverrides:'overrides', statGranted:'granted', statDenied:'denied',
+    dlgTitle:'Request permission',
+    dlgBody:(l,d)=>`You don\u2019t have permission to <b>${l}</b>. ${d} Would you like to request access?`,
+    dlgSend:'Request', dlgClose:'Close',
+    toastSaved:'Permission updated.', toastSent:'Request sent',
+    vt:'permissions redesign',
+    bd:{c1:'Settings',c2:'Access',c3:'Active users',title:'Access requests & users',
+        sub:'Approve who requested access and manage current users.',th:['User','Role','Status'],
+        roles:['Manager','Operator'],active:'Active',
+        lockHint:'While you\u2019re here \u2014 this is how a locked action asks for permission (now fully translated):'},
+  },
+  ar:{
+    dir:'rtl',
+    shEyebrow:'صلاحيات المستخدم',
+    shSub:'كل مفتاح يُحدد تجاوزًا فوق الافتراضي لدور المستخدم.',
+    role:{admin:'مسؤول',manager:'مدير',operator:'موظف'},
+    st:{default:'افتراضي',grant:'منح',deny:'رفض'},
+    inherited:(s)=>'افتراضي الدور: '+s,
+    overridden:'تم التجاوز',
+    searchPh:'ابحث في الصلاحيات\u2026', clear:'مسح',
+    results:(n)=>n==='1'?'نتيجة واحدة':n+' نتيجة',
+    nrTitle:'لا توجد صلاحيات مطابقة', nrSub:'جرّب كلمة أخرى \u2014 البحث يشمل الأسماء والأوصاف والمعرّفات.',
+    nrClear:'مسح البحث',
+    fn1:'الإنشاء + التعديل + الإرسال + الحذف + قوالب وورد مدمجة كلها في مفتاح واحد \u2014 لا يمكن تحديد إجراء بعينه.',
+    fn2:'هذا الوصف يبقى بالإنجليزية حتى في الوضع العربي (ترجمة ناقصة).',
+    statTotal:'صلاحية', statInherited:'موروثة', statOverrides:'تجاوزات', statGranted:'ممنوحة', statDenied:'مرفوضة',
+    dlgTitle:'طلب إذن',
+    dlgBody:(l,d)=>`ليس لديك إذن <b>${l}</b>. ${d} هل تريد طلب الوصول؟`,
+    dlgSend:'طلب', dlgClose:'إغلاق',
+    toastSaved:'تم تحديث الصلاحية.', toastSent:'تم إرسال الطلب',
+    vt:'إعادة تصميم الصلاحيات',
+    bd:{c1:'الإعدادات',c2:'الوصول',c3:'المستخدمون النشطون',title:'طلبات الوصول والمستخدمون',
+        sub:'وافق على طلبات الوصول وأدر المستخدمين الحاليين.',th:['المستخدم','الدور','الحالة'],
+        roles:['مدير','موظف'],active:'نشط',
+        lockHint:'وهكذا يطلب المستخدم إذنًا لإجراء مقفل \u2014 ومترجم بالكامل الآن:'},
+  },
+};
+
+/* ═══════════ Catalog ═══════════ id, domain, en label, en desc, ar label, ar desc */
+const CAPS_NEW=[
+ ['app.access','app','Access the app','Sign in and see the dashboard and read-only chrome.','الوصول إلى التطبيق','تسجيل الدخول وعرض لوحة المعلومات والعناصر للقراءة فقط.'],
+ ['employees.view','employees','View employees','See the employee directory and individual employee records.','عرض الموظفين','عرض دليل الموظفين وسِجلاتهم الفردية.'],
+ ['employees.create','employees','Create employees','Add new employees to the directory.','إضافة موظفين','إضافة موظفين جدد إلى الدليل.'],
+ ['employees.edit','employees','Edit employee profiles','Edit profiles, photos, signature, and passport data.','تعديل بيانات الموظفين','تعديل البيانات والصور والتوقيع وبيانات جواز السفر.'],
+ ['employees.vault.manage','employees','Manage document vaults','Upload and organise files inside employee vaults.','إدارة خزنة المستندات','رفع الملفات وتنظيمها داخل خزنة الموظف.'],
+ ['employees.notify','employees','Notify employees','Send WhatsApp (SMS fallback) confirmations.','إشعار الموظفين','إرسال تأكيدات عبر واتساب مع بديل الرسائل النصية.'],
+ ['leaves.view','leaves','View leaves','See leave records and their status.','عرض الإجازات','عرض سِجلات الإجازات وحالتها.'],
+ ['leaves.create','leaves','Create leaves','Record new leaves.','تسجيل إجازات','تسجيل إجازات جديدة.'],
+ ['leaves.edit','leaves','Edit leaves','Amend leaves, attach certificates, record duty returns.','تعديل الإجازات','تعديل الإجازات وإرفاق الشهادات وتسجيل المناوبات.'],
+ ['leaves.delete','leaves','Delete leaves','Remove leave records.','حذف الإجازات','حذف سِجلات الإجازات.'],
+ ['violations.view','violations','View violations','See recorded violations.','عرض المخالفات','عرض المخالفات المسجَّلة.'],
+ ['violations.create','violations','Create violations','Record new violations.','تسجيل مخالفات','تسجيل مخالفات جديدة.'],
+ ['violations.edit','violations','Edit violations','Correct violation details.','تعديل المخالفات','تصحيح تفاصيل المخالفة.'],
+ ['violations.delete','violations','Delete violations','Remove violations.','حذف المخالفات','حذف المخالفات المسجَّلة.'],
+ ['documents.generate','documents','Generate documents','Create official documents from templates.','إنشاء المستندات','إنشاء مستندات رسمية من القوالب.'],
+ ['documents.scan','documents','Scan documents with OCR','Upload scans and run OCR import.','مسح المستندات ضوئيًا','رفع المسحات وتشغيل التعرّف الضوئي على الحروف.'],
+ ['books.view','books','View records','Browse the records register.','عرض السجلات','تصفّح سجل السجلات.'],
+ ['books.create','books','Create records','Start new records from forms or templates.','إنشاء سجلات','بدء سجلات جديدة من النماذج أو القوالب.'],
+ ['books.edit','books','Edit records & attachments','Edit fields, reviewers, attachments, and file scan-backs.','تعديل السجلات والمرفقات','تعديل الحقول والمراجعين والمرفقات وإيداع المسحات.'],
+ ['books.submit','books','Submit for approval','Send records into the approval chain.','إرسال للاعتماد','إرسال السجلات إلى مسار الاعتماد.'],
+ ['books.approve','books','Approve / reject records','Approve, sign, or reject in the approval queue.','اعتماد السجلات أو رفضها','اعتماد أو توقيع أو رفض السجلات في قائمة الانتظار.'],
+ ['books.override_state','books','Force a record\u2019s state','Set any record to any state, bypassing the chain. Admin-grade.','فرض حالة السجل','ضبط أي سجل على أي حالة بتخطّي المسار. من رتبة المسؤول.'],
+ ['books.templates','books','Manage Word templates','Edit shared Word templates used to compose records.','إدارة قوالب وورد','تعديل قوالب وورد المشتركة المستخدمة في تحرير السجلات.'],
+ ['books.delete','books','Delete records','Move records to the bin.','حذف السجلات','نقل السجلات إلى المحذوفات.'],
+ ['permits.view','permits','View security permits','See the entry-permit register and its status.','عرض تصاريح الدخول','عرض سجل تصاريح دخول المناطق الأمنية وحالتها.'],
+ ['permits.create','permits','Issue permits','Register new zone-entry permits.','إصدار التصاريح','تسجيل تصاريح دخول جديدة.'],
+ ['permits.edit','permits','Amend & renew permits','Edit people, vehicles, documents; renew permits.','تعديل التصاريح وتجديدها','تعديل الأشخاص والمركبات والمستندات وتجديد التصاريح.'],
+ ['permits.revoke','permits','Revoke permits','Revoke active permits.','إلغاء التصاريح','إلغاء التصاريح النشطة.'],
+ ['permits.delete','permits','Delete permits','Remove permit records.','حذف التصاريح','حذف سِجلات التصاريح.'],
+ ['ledger.view','ledger','View correspondence log','Read ledger entries.','عرض سجل المراسلات','قراءة قيود سجل المراسلات.'],
+ ['ledger.create','ledger','Create entries & drafts','Compose new entries, drafts, contacts, recipient lists.','إنشاء القيود والمسودّات','كتابة قيود ومسودّات وجهات اتصال وقوائم استلام جديدة.'],
+ ['ledger.edit','ledger','Edit entries & address book','Edit entries and lists, flag, star, attach files.','تعديل القيود ودفتر العناوين','تعديل القيود والقوائم والتمييز والإسناد النجمي وإرفاق الملفات.'],
+ ['ledger.send','ledger','Send email from the ledger','Send messages from the ledger as yourself.','إرسال البريد من السجل','إرسال رسائل البريد من السجل باسمك.'],
+ ['ledger.delete','ledger','Delete entries & drafts','Remove entries, drafts, contacts and lists.','حذف القيود والمسودّات','حذف القيود والمسودّات وجهات الاتصال والقوائم.'],
+ ['email.manage','email','Manage your mailbox','Link and sync your own mailbox.','إدارة صندوق بريدك','ربط صندوق بريدك ومزامنته.'],
+ ['settings.view','settings','View settings','See application settings.','عرض الإعدادات','عرض إعدادات التطبيق.'],
+ ['settings.edit','settings','Change settings','Change application settings.','تغيير الإعدادات','تغيير إعدادات التطبيق.'],
+ ['submitters.manage','submitters','Manage submitters','Manage the list of document submitters.','إدارة مقدّمي الطلبات','إدارة قائمة مقدّمي المستندات.'],
+ ['editor_templates.manage','editor_templates','Manage editor templates','Create and edit document editor templates.','إدارة قوالب المحرر','إنشاء وتعديل قوالب محرر المستندات.'],
+ ['users.manage','users','Manage users + permissions','Manage user accounts and their permissions. Admin-grade.','إدارة المستخدمين والصلاحيات','إدارة حسابات المستخدمين وصلاحياتهم. من رتبة المسؤول.'],
+ ['messages.broadcast','messages','Send group announcements','Post announcements to WhatsApp groups.','إرسال إعلانات للمجموعات','نشر إعلانات نصية أو مستندات إلى مجموعات واتساب.'],
+ ['workforce.self.view','workforce','View own workforce record','View your own schedule and attendance punches.','عرض سجلّك في القوى العاملة','عرض جدولك وبطاقات حضورك الخاصة.'],
+ ['workforce.dashboard.view','workforce','View workforce dashboard','Aggregate dashboard data inside assigned scope.','عرض لوحة القوى العاملة','بيانات اللوحة الإجمالية ضمن النطاق المسند إليك.'],
+ ['workforce.people.view','workforce','View workforce people','Roster and attendance details inside scope.','عرض منتسبي القوى العاملة','تفاصيل الكشف والحضور ضمن النطاق.'],
+ ['workforce.schedule.manage','workforce','Manage schedules','Crews, rotations, memberships, overrides.','إدارة الجداول','إدارة الفرق والدورة والعضويات وتجاوزات الجدول.'],
+ ['workforce.policy.manage','workforce','Manage policies','Staffing requirements and attendance policies.','إدارة السياسات','متطلبات التوظيف وسياسات الحضور.'],
+ ['workforce.attendance.review','workforce','Review attendance','Attendance cases, exceptions, source facts.','مراجعة الحضور','حالات الحضور والاستثناءات والبيانات المصدرية.'],
+ ['workforce.attendance.correct','workforce','Correct attendance','Audited attendance adjustments.','تصحيح الحضور','تعديلات حضور مُدقَّقة ومسجَّلة.'],
+ ['workforce.integration.manage','workforce','Manage integration','Provider status, mappings, sync tests.','إدارة تكامل القوى العاملة','حالة المزوّد والربط واختبارات المزامنة.'],
+ ['system.admin','system','Admin key + migration','Use the admin key and system tools. Admin-grade.','مفتاح المسؤول والترحيل','استخدام مفتاح المسؤول وأدوات النظام. من رتبة المسؤول.'],
+];
+const DOMAIN_ORDER=['app','employees','leaves','violations','documents','books','permits','ledger','email','settings','submitters','editor_templates','users','messages','workforce','system'];
+const DOMAIN_AR={app:'التطبيق',employees:'الموظفون',leaves:'الإجازات',violations:'المخالفات',documents:'المستندات',books:'السجلات',permits:'تصاريح الدخول',ledger:'السجل',email:'البريد',settings:'الإعدادات',submitters:'مقدّمو الطلبات',editor_templates:'قوالب المحرر',users:'المستخدمون',messages:'الرسائل',workforce:'القوى العاملة',system:'النظام'};
+const DOMAIN_EN={app:'Application',employees:'Employees',leaves:'Leaves',violations:'Violations',documents:'Documents',books:'Books',permits:'Permits',ledger:'Ledger',email:'Email',settings:'Settings',submitters:'Submitters',editor_templates:'Editor templates',users:'Users',messages:'Messages',workforce:'Workforce',system:'System'};
+
+/* OLD bundled catalog (subset shown identically in “before”) */
+const CAPS_OLD=[
+ ['app.access','app','Access the app','Sign in and see the dashboard, document fields, and read-only chrome.'],
+ ['employees.view','employees','View employees','See the employee directory and individual employee records.'],
+ ['employees.edit','employees','Create / edit employees + vault','Add and edit employees and manage their document vault.'],
+ ['employees.notify','employees','Notify employees','Send WhatsApp confirmations for leaves and violations.'],
+ ['leaves.view','leaves','View leaves','See leave records and their status.'],
+ ['leaves.edit','leaves','Edit / delete leaves','Create, edit, and delete leave records.'],
+ ['violations.view','violations','View violations','See recorded violations.'],
+ ['violations.manage','violations','Create / edit / delete violations','Record, edit, and remove violations.'],
+ ['documents.generate','documents','Generate documents','Create official documents from templates.'],
+ ['documents.scan','documents','Scan documents with OCR','Upload scans and run OCR to import documents.'],
+ ['books.view','books','View books','Browse the records register.'],
+ ['books.manage','books','Create / edit / delete books','Create records, edit them, submit for approval, and delete.'],
+ ['books.approve','books','Approve / reject books','Approve, sign, or reject documents in the approval queue.'],
+ ['books.override_state','books','Force a record\u2019s state','Set any record to any state, bypassing the approval chain.'],
+ ['permits.view','permits','View security permits','See the security-zone entry-permit register.'],
+ ['permits.manage','permits','Manage security permits','Issue, renew, amend, and revoke entry permits.'],
+ ['ledger.view','ledger','View ledger','Read correspondence ledger entries.'],
+ ['ledger.edit','ledger','Edit ledger entries + drafts','Create and edit ledger entries and email drafts.'],
+ ['ledger.send','ledger','Send email from the ledger','Send email messages from the ledger as yourself.'],
+ ['email.manage','email','Manage your mailbox','Link and sync your own mailbox.'],
+ ['settings.view','settings','View settings','See application settings.'],
+ ['settings.edit','settings','Change settings','Change application settings.'],
+ ['submitters.manage','submitters','Manage submitters','Manage the list of document submitters.'],
+ ['editor_templates.manage','editor_templates','Manage editor templates','Create and edit document editor templates.'],
+ ['users.manage','users','Manage users + permissions','Manage user accounts and their permissions.'],
+ ['messages.broadcast','messages','Send group announcements','Post announcements to WhatsApp groups.'],
+ ['workforce.self.view','workforce','View own workforce record','View your own schedule and attendance.'],
+ ['workforce.dashboard.view','workforce','View workforce dashboard','Aggregate dashboard data inside assigned scope.'],
+ ['workforce.people.view','workforce','View workforce people','Roster and attendance details inside assigned scope.'],
+ ['workforce.schedule.manage','workforce','Manage workforce schedules','Manage crews, rotations, memberships.'],
+ ['workforce.policy.manage','workforce','Manage workforce policies','Staffing requirements and attendance policies.'],
+ ['workforce.attendance.review','workforce','Review workforce attendance','Review attendance cases and exceptions.'],
+ ['workforce.attendance.correct','workforce','Correct workforce attendance','Create audited attendance adjustments.'],
+ ['workforce.integration.manage','workforce','Manage workforce integration','Provider status, mappings, synchronization.'],
+ ['system.admin','system','Admin key + v3 migration','Use the admin key and run system/migration tools.'],
+];
+
+/* Demo user: manager. Role defaults = everything managers hold today. */
+const MANAGER_DEFAULT=new Set(CAPS_NEW.map(c=>c[0]).filter(id=>{
+  const sensitive=['users.manage','system.admin','books.override_state','messages.broadcast'];
+  if(sensitive.includes(id))return false;
+  if(id.startsWith('workforce.'))return false;
+  return true;
+}));
+const OVERRIDES={ 'books.delete':'deny', 'books.override_state':'grant', 'permits.revoke':'deny' };
+
+/* ═══════════ State ═══════════ */
+let lang='en', view='after', query='';
+const effects=new Map(Object.entries(OVERRIDES));
+
+const $=(id)=>document.getElementById(id);
+
+function t(){return T[lang]}
+function capLabel(c){return view==='after' ? (lang==='ar'?c[4]:c[2]) : c[2]}
+function capDesc(c){
+  if(view==='before') return c[3];                       // ← always English (the bug)
+  return lang==='ar'?c[5]:c[3];
+}
+function capId(c){return c[0]}
+function domainName(d){return lang==='ar'?(DOMAIN_AR[d]||d):(DOMAIN_EN[d]||d)}
+
+/* ═══════════ Render ═══════════ */
+function renderChrome(){
+  const tr=t();
+  document.documentElement.lang=lang;
+  document.documentElement.dir=tr.dir;
+  $('shEyebrow').textContent=tr.shEyebrow;
+  $('shSub').textContent=tr.shSub;
+  $('shRole').textContent=tr.role.manager;
+  $('searchInput').placeholder=tr.searchPh;
+  $('searchClr').textContent=tr.clear+' ✕';
+  $('nrTitle').textContent=tr.nrTitle;
+  $('nrSub').textContent=tr.nrSub;
+  $('nrClear').textContent=tr.nrClear;
+  $('fn1').textContent=tr.fn1; $('fn2').textContent=tr.fn2;
+  $('vtLabel').textContent=tr.vt;
+  $('dlgTitle').textContent=tr.dlgTitle;
+  $('dlgCancel').textContent=tr.dlgClose;
+  $('dlgSend').textContent=tr.dlgSend;
+  $('toastMsg').textContent=tr.toastSaved;
+  // backdrop
+  const b=tr.bd;
+  $('bdCrumb1').textContent=b.c1;$('bdCrumb2').textContent=b.c2;$('bdCrumb3').textContent=b.c3;
+  $('bdTitle').textContent=b.title;$('bdSub').textContent=b.sub;
+  $('bdThUser').textContent=b.th[0];$('bdThRole').textContent=b.th[1];$('bdThStatus').textContent=b.th[2];
+  $('bdRoleMgr').textContent=b.roles[0];$('bdRoleOp').textContent=b.roles[1];
+  $('bdActive').textContent=b.active;$('bdActive2').textContent=b.active;
+  $('bdLockHint').textContent=b.lockHint;
+  $('demoLockLabel').textContent=capText('books.templates');
+  $('footnote').classList.toggle('show',view==='before');
+}
+
+function capText(id){
+  if(view==='after'){const c=CAPS_NEW.find(x=>x[0]===id);return lang==='ar'?c[4]:c[2]}
+  const c=CAPS_OLD.find(x=>x[0]===id);return c?c[2]:id;
+}
+
+function effective(id){
+  const o=effects.get(id);
+  if(o)return o==='grant';
+  return MANAGER_DEFAULT.has(id);
+}
+
+function renderStats(){
+  const ids=(view==='after'?CAPS_NEW:CAPS_OLD).map(capId);
+  const grants=ids.filter(effective).length;
+  const denies=ids.length-grants;
+  const ovr=[...effects.keys()].filter(id=>ids.includes(id)).length;
+  const tr=t();
+  const item=(cls,label,val)=>`<span class="stat"><span class="sw" style="background:${cls}"></span><b>${val}</b>&nbsp;${label}</span>`;
+  $('shStats').innerHTML=
+    item('var(--primary)',tr.statTotal,ids.length)+
+    item('var(--success)',tr.statGranted,grants)+
+    item('var(--accent)',tr.statDenied,denies)+
+    (ovr?item('var(--warning)',tr.statOverrides,ovr):'');
+}
+
+function triHTML(id,val,compact){
+  const tr=t();
+  const opt=(k,cls)=>`<button data-cap="${id}" data-eff="${k}" class="${cls}" aria-pressed="${val===k}">${tr.st[k]}</button>`;
+  return `<div class="${compact?'dbulk':'tri'}" ${compact?'data-bulk="'+id+'"':''}>`+
+    opt('default','t-default')+opt('grant','t-grant')+opt('deny','t-deny')+`</div>`;
+}
+
+function rowHTML(c){
+  const id=capId(c);
+  const val=effects.get(id)||'default';
+  const isInDef=MANAGER_DEFAULT.has(id);
+  const ovr=val!=='default';
+  const tr=t();
+  const flag=view==='before'
+    ? (id==='books.manage'?`<span class="flag"><span class="n">1</span>bundled</span>`:'')
+    :'';
+  const descFlag=(view==='before'&&lang==='ar'&&id==='books.manage')
+    ? `<span class="flag"><span class="n">2</span>untranslated</span>`:'';
+  return `<div class="row" data-row="${id}" data-search="${
+    (capLabel(c)+' '+capDesc(c)+' '+id+' '+(lang==='ar'?c[2]+' '+c[3]:c[4]+' '+c[5])).replace(/"/g,'&quot;').toLowerCase()}">
+    <div class="rmain">
+      <div class="rlabel">${capLabel(c)}</div>
+      <div class="rdesc">${capDesc(c)} ${descFlag}</div>
+      <div class="rmeta">
+        <span class="capid">${id}</span>${flag}
+        <span class="chip ${isInDef?'ok':'no'}">${tr.inherited(tr.st[isInDef?'grant':'deny'])}</span>
+        ${ovr?`<span class="chip ovr">${tr.overridden}</span>`:''}
+      </div>
+    </div>
+    ${triHTML(id,val,false)}
+  </div>`;
+}
+
+function renderGroups(){
+  const src=view==='after'?CAPS_NEW:CAPS_OLD;
+  const q=query.trim().toLowerCase();
+  let html='',shown=0;
+  for(const d of DOMAIN_ORDER){
+    const caps=src.filter(c=>c[1]===d);
+    if(!caps.length)continue;
+    const vis=q?caps.filter(c=>rowMatches(c,q)):caps;
+    if(q&&!vis.length)continue;
+    shown+=vis.length;
+    // bulk state: uniform?
+    const vals=caps.map(c=>effects.get(capId(c))||'default');
+    const uni=vals.every(v=>v===vals[0])?vals[0]:null;
+    const uniCls=uni==='default'?'on-default':uni==='grant'?'on-grant':uni==='deny'?'on-deny':'';
+    html+=`<section class="domain" data-domain="${d}">
+      <div style="display:flex;align-items:center;gap:10px;padding-right:0">
+        <button class="dhead" data-toggle="${d}" aria-expanded="${query?'true':'true'}" style="flex:1">
+          <svg class="chev" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg>
+          <span class="dname">${domainName(d)}</span>
+          <span class="dcount">${vis.length}</span>
+        </button>
+        ${view==='after'?triHTML('domain:'+d,uni&&vals.every(v=>v===uni)?uni:null,true).replace(`data-cap="domain:${d}"`,`data-bulk="${d}"`).replaceAll(`data-eff`,'data-beff'):''}
+      </div>
+      <div class="rows">${vis.map(rowHTML).join('')}</div>
+    </section>`;
+  }
+  $('groups').innerHTML=html;
+  $('noResults').classList.toggle('show',q&&!shown);
+  const rn=$('resultNote');
+  if(q){rn.classList.add('show');rn.innerHTML=`<b>${t().results(shown)}</b>`;}
+  else rn.classList.remove('show');
+  renderStats();
+}
+
+function rowMatches(c,q){
+  const hay=(c[0]+' '+c[2]+' '+c[3]+' '+(c[4]||'')+' '+(c[5]||'')).toLowerCase();
+  return hay.includes(q);
+}
+
+/* ═══════════ Events ═══════════ */
+document.addEventListener('click',(e)=>{
+  const tri=e.target.closest('.tri button[data-eff]');
+  if(tri){
+    const id=tri.dataset.cap,eff=tri.dataset.eff;
+    if(eff==='default')effects.delete(id);else effects.set(id,eff);
+    bump(id);renderGroups();toast(t().toastSaved);return;
+  }
+  const bulk=e.target.closest('.dbulk button[data-beff]');
+  if(bulk){
+    const d=bulk.dataset.bulk,eff=bulk.dataset.beff;
+    (view==='after'?CAPS_NEW:CAPS_OLD).filter(c=>c[1]===d).forEach(c=>{
+      const id=capId(c);
+      if(eff==='default')effects.delete(id);else effects.set(id,eff);
+      bump(id);
+    });
+    renderGroups();toast(t().toastSaved);return;
+  }
+  const tg=e.target.closest('[data-toggle]');
+  if(tg){tg.closest('.domain').classList.toggle('closed');
+    tg.setAttribute('aria-expanded',!tg.closest('.domain').classList.contains('closed'));return;}
+});
+
+function bump(id){const r=document.querySelector(`[data-row="${id}"]`);if(r){r.classList.remove('flash');void r.offsetWidth;r.classList.add('flash')}}
+
+let toastTimer;
+function toast(msg){$('toastMsg').textContent=msg;const el=$('toast');el.classList.remove('show');void el.offsetWidth;el.classList.add('show');
+  clearTimeout(toastTimer);toastTimer=setTimeout(()=>el.classList.remove('show'),1800);}
+
+$('searchInput').addEventListener('input',(e)=>{query=e.target.value;$('searchBox').classList.toggle('hasq',!!query);renderGroups();});
+$('searchClr').addEventListener('click',()=>{query='';$('searchInput').value='';$('searchBox').classList.remove('hasq');renderGroups();});
+$('nrClear').addEventListener('click',()=>{query='';$('searchInput').value='';$('searchBox').classList.remove('hasq');renderGroups();});
+document.addEventListener('keydown',(e)=>{
+  if(e.key==='/'&&document.activeElement!==$('searchInput')){e.preventDefault();$('searchInput').focus()}
+  if(e.key==='Escape'){$('dlgWrap').classList.remove('open')}
+});
+
+document.querySelectorAll('#langSeg button').forEach(b=>b.addEventListener('click',()=>{
+  lang=b.dataset.lang;
+  document.querySelectorAll('#langSeg button').forEach(x=>x.setAttribute('aria-pressed',x===b));
+  renderChrome();renderGroups();
+}));
+document.querySelectorAll('#viewSeg button').forEach(b=>b.addEventListener('click',()=>{
+  view=b.dataset.view;
+  document.querySelectorAll('#viewSeg button').forEach(x=>x.setAttribute('aria-pressed',x===b));
+  $('tools').style.display=view==='after'?'':'none';   // current UI has no search
+  renderChrome();renderGroups();
+}));
+
+/* request dialog demo */
+$('demoLockBtn').addEventListener('click',()=>{
+  const l=capText('books.templates'),d=lang==='ar'?'تعديل قوالب وورد المشتركة المستخدمة في تحرير السجلات.':'Edit shared Word templates used to compose records.';
+  $('dlgBody').innerHTML=t().dlgBody(l,d);
+  $('dlgWrap').classList.add('open');
+});
+$('dlgCancel').addEventListener('click',()=>$('dlgWrap').classList.remove('open'));
+$('dlgSend').addEventListener('click',()=>{$('dlgWrap').classList.remove('open');toast(t().toastSent)});
+$('dlgWrap').addEventListener('click',(e)=>{if(e.target===$('dlgWrap'))$('dlgWrap').classList.remove('open')});
+
+/* init — optional state via hash: #ar/before, #ar/after, #en/before */
+(function(){
+  const h=(location.hash||'').replace('#','').split('/');
+  if(h[0]==='ar'||h[0]==='en')lang=h[0];
+  if(h[1]==='before'||h[1]==='after')view=h[1];
+  document.querySelectorAll('#langSeg button').forEach(x=>x.setAttribute('aria-pressed',x.dataset.lang===lang));
+  document.querySelectorAll('#viewSeg button').forEach(x=>x.setAttribute('aria-pressed',x.dataset.view===view));
+  $('tools').style.display=view==='after'?'':'none';
+})();
+renderChrome();
+renderGroups();
+</script>
+</body>
+</html>

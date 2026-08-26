@@ -1,0 +1,876 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GSSG Manager — Approvals redesign mockup</title>
+<style>
+  /* ── GSSG tokens (verbatim from DESIGN.md §1.1) ─────────────────────── */
+  [data-theme="light"] {
+    --bg: #f5f4f1; --surface: #ffffff; --surface-raised: #fafaf6; --surface-tinted: #f0eee8;
+    --primary: #0d2845; --primary-hover: #1d3a5e; --primary-soft: #e8edf3; --on-primary: #ffffff;
+    --accent: #c8102e; --accent-soft: #fbe5e8;
+    --success: #047857; --success-soft: #d6f0e4;
+    --warning: #b45309; --warning-soft: #fbedd8;
+    --info: #1d4ed8; --info-soft: #e0e8f8;
+    --text: #1c1f24; --text-muted: #5a6068; --text-faint: #8b9098;
+    --border: #e6e4dd; --hairline: #efece5;
+  }
+  [data-theme="dark"] {
+    --bg: #0a0e18; --surface: #131826; --surface-raised: #1a2034; --surface-tinted: #1f263b;
+    --primary: #5778cf; --primary-hover: #7491db; --primary-soft: #1c2849; --on-primary: #0a0e18;
+    --accent: #ef4858; --accent-soft: #3a1820;
+    --success: #34d399; --success-soft: #142d23;
+    --warning: #fbbf24; --warning-soft: #3a2a10;
+    --info: #60a5fa; --info-soft: #1c2940;
+    --text: #e6e9f2; --text-muted: #8a93a7; --text-faint: #5f6678;
+    --border: #2a3148; --hairline: #1f263b;
+  }
+  :root { color-scheme: light dark; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: #26221c;
+    font-family: "Inter", ui-sans-serif, system-ui, "Segoe UI", sans-serif;
+  }
+  .frame-label {
+    max-width: 720px; margin: 28px auto 10px; padding: 0 4px;
+    font-size: 12px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase;
+    color: #b7ad9c; display: flex; justify-content: space-between; align-items: center;
+  }
+  .theme-toggle {
+    font: inherit; text-transform: none; letter-spacing: 0; cursor: pointer;
+    background: none; border: 1px solid #55503f; color: #d8cfbe;
+    border-radius: 99px; padding: 4px 12px;
+  }
+  [lang="ar"] .frame-label { font-family: "Noto Sans Arabic", "Inter", sans-serif; }
+
+  /* ── The redesigned page ────────────────────────────────────────────── */
+  .page {
+    max-width: 720px; margin: 0 auto 40px; padding: 22px 24px 40px;
+    background: var(--bg); color: var(--text);
+    border-radius: 16px; box-shadow: 0 20px 50px rgba(0,0,0,.35);
+    font-size: 17px; line-height: 1.45;
+  }
+  [dir="rtl"] .page { font-family: "Noto Sans Arabic", "Inter", system-ui, sans-serif; }
+
+  header.page-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin-bottom: 18px; }
+  h1 { margin: 0; font-size: 1.45em; font-weight: 700; letter-spacing: -0.01em; }
+  .head-sub { margin-top: 2px; font-size: 0.8em; color: var(--text-muted); }
+  .head-sub b { color: var(--warning); font-weight: 600; }
+  .icon-btn {
+    width: 32px; height: 32px; border-radius: 8px; border: 1px solid var(--border);
+    background: var(--surface); color: var(--text-muted);
+    display: grid; place-items: center; cursor: pointer; transition: background-color 150ms ease, color 150ms ease;
+  }
+  .icon-btn:hover { background: var(--surface-tinted); color: var(--text); }
+
+  /* Tabs with counts */
+  .toolbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+  .tabs { display: inline-flex; gap: 2px; background: var(--surface-tinted); border-radius: 99px; padding: 3px; }
+  .tab {
+    appearance: none; border: 0; cursor: pointer; border-radius: 99px; background: transparent;
+    padding: 6px 14px; font: inherit; font-size: 0.8em; font-weight: 600;
+    color: var(--text-muted); display: inline-flex; align-items: center; gap: 7px;
+    transition: color 150ms ease, background-color 150ms ease;
+  }
+  .tab:hover { color: var(--text); }
+  .tab[aria-selected="true"] { background: var(--primary); color: var(--on-primary); }
+  .tab .n { font-family: "IBM Plex Mono", ui-monospace, Consolas, monospace; font-variant-numeric: tabular-nums; font-size: 0.85em; opacity: .75; }
+
+  .filters { margin-inline-start: auto; display: flex; gap: 6px; flex-wrap: wrap; }
+  .chip {
+    appearance: none; cursor: pointer; font: inherit; font-size: 0.75em; font-weight: 600;
+    border-radius: 99px; padding: 4px 11px; display: inline-flex; gap: 6px; align-items: center;
+    border: 1px solid transparent; color: var(--text-muted); background: transparent;
+    transition: background-color 150ms ease, color 150ms ease, border-color 150ms ease;
+  }
+  .chip:hover { background: var(--surface-tinted); color: var(--text); }
+  .chip[aria-pressed="true"] { border-color: color-mix(in srgb, var(--primary) 35%, transparent); background: color-mix(in srgb, var(--primary) 10%, transparent); color: var(--primary); }
+  .chip .n { font-family: "IBM Plex Mono", ui-monospace, Consolas, monospace; font-variant-numeric: tabular-nums; font-weight: 500; opacity: .7; }
+
+  /* ── The ledger ─────────────────────────────────────────────────────── */
+  .ledger { border: 1px solid var(--border); border-radius: 16px; background: var(--surface); overflow: hidden; }
+  .section-head {
+    display: flex; align-items: center; gap: 9px;
+    padding: 11px 20px 9px; background: var(--surface-raised);
+    border-bottom: 1px solid var(--hairline);
+    font-size: 0.72em; font-weight: 600; letter-spacing: .08em; text-transform: uppercase;
+    color: var(--text-muted);
+  }
+  .section-head .dot { width: 7px; height: 7px; border-radius: 99px; }
+  .section-head .n { font-family: "IBM Plex Mono", ui-monospace, Consolas, monospace; font-weight: 500; color: var(--text); }
+  .section-head + .section-head-guard { border-top: 0; }
+  .divider { border: 0; border-top: 1px solid var(--hairline); margin: 0; }
+
+  .row {
+    display: flex; align-items: center; gap: 14px;
+    padding: 13px 20px; cursor: pointer; position: relative;
+    transition: background-color 150ms ease;
+  }
+  .row:hover { background: var(--surface-raised); }
+  .row:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; border-radius: 8px; }
+
+  /* Fake document thumbnail */
+  .thumb {
+    flex: none; width: 52px; height: 36px; border-radius: 6px;
+    border: 1px solid var(--border); background: #fff;
+    display: grid; place-items: center;
+  }
+  [data-theme="dark"] .thumb { background: var(--surface-tinted); }
+  .thumb svg { display: block; }
+
+  .row-main { min-width: 0; flex: 1; }
+  .row-title { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+  .ref {
+    flex: none; font-family: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+    font-size: 0.72em; font-weight: 500; color: var(--text-muted);
+    direction: ltr; unicode-bidi: isolate;
+  }
+  .subject {
+    margin: 0; font-size: 0.92em; font-weight: 550; color: var(--text);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .high-flag { flex: none; font-size: 0.65em; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--accent); }
+  .row-meta { margin-top: 3px; font-size: 0.72em; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .row-meta .who { color: var(--text); }
+
+  .row-side { flex: none; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+  .pill {
+    font-size: 0.65em; font-weight: 700; letter-spacing: .05em; text-transform: uppercase;
+    border-radius: 99px; padding: 3px 9px; display: inline-flex; align-items: center; gap: 5px;
+  }
+  .pill svg { flex: none; }
+  .pill.pending   { background: var(--warning-soft); color: var(--warning); }
+  .pill.approved  { background: var(--success-soft); color: var(--success); }
+  .pill.rejected  { background: var(--accent-soft); color: var(--accent); }
+  .pill.returned  { background: var(--info-soft); color: var(--info); }
+  .when { font-family: "IBM Plex Mono", ui-monospace, Consolas, monospace; font-size: 0.68em; font-variant-numeric: tabular-nums; color: var(--text-faint); }
+  .waiting { font-size: 0.68em; font-weight: 600; color: var(--warning); }
+  /* ── Document preview lightbox ──────────────────────────────────────── */
+  .thumb { cursor: pointer; transition: box-shadow 150ms ease, border-color 150ms ease; }
+  .thumb:hover { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-soft); }
+  .pv-root { position: fixed; inset: 0; z-index: 60; color: var(--text); }
+  .pv-root[hidden] { display: none; }
+  .pv-root.rec-only .pv-shell { display: none; }
+  .pv-root:not(.rec-only) .pv-shell { z-index: 2; }
+  .pv-scrim { position: absolute; inset: 0; background: rgba(6, 9, 15, .62); }
+  .pv-shell {
+    position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center;
+    padding: clamp(8px, 2.5vh, 24px) clamp(8px, 3vw, 24px); pointer-events: none;
+  }
+  .pv-bar {
+    pointer-events: auto; width: min(860px, 100%); display: flex; align-items: center; gap: 8px;
+    background: var(--surface); border: 1px solid var(--border); border-bottom: 0;
+    border-radius: 12px 12px 0 0; padding: 8px 10px;
+  }
+  .pv-title { flex: 1; min-width: 0; font-size: .85em; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .pv-title .ref { margin-inline-end: 8px; }
+  .pv-btn {
+    appearance: none; cursor: pointer; font: inherit; font-size: .72em; font-weight: 600;
+    display: inline-flex; align-items: center; gap: 6px; min-height: 30px; flex: none;
+    border: 1px solid var(--border); border-radius: 8px; padding: 4px 10px;
+    background: var(--surface); color: var(--text-muted);
+    transition: background-color 150ms ease, color 150ms ease;
+  }
+  .pv-btn:hover { background: var(--surface-tinted); color: var(--text); }
+  .pv-btn.primary { background: var(--primary); border-color: var(--primary); color: var(--on-primary); }
+  .pv-btn.primary:hover { background: var(--primary-hover); color: var(--on-primary); }
+  .pv-zoom { display: inline-flex; align-items: center; border: 1px solid var(--border); border-radius: 8px; padding: 1px; flex: none; }
+  .pv-zoom .pv-btn { border: 0; }
+  .pv-zoom .zval {
+    width: 42px; text-align: center; font-family: "IBM Plex Mono", ui-monospace, Consolas, monospace;
+    font-size: .68em; color: var(--text-muted); font-variant-numeric: tabular-nums;
+  }
+  .pv-viewport {
+    pointer-events: auto; width: min(860px, 100%); flex: 1; overflow: auto; -webkit-overflow-scrolling: touch;
+    background: var(--surface-tinted); border: 1px solid var(--border); border-top: 0;
+    border-radius: 0 0 12px 12px; touch-action: pan-x pan-y;
+  }
+  .pv-doc {
+    width: min(600px, 100%); margin: 20px auto; background: #fff; color: #1c1f24;
+    padding: clamp(24px, 5vw, 52px); border-radius: 3px; box-shadow: 0 12px 32px rgba(0,0,0,.28);
+  }
+  .doc-head { display: flex; align-items: center; gap: 12px; padding-bottom: 14px; border-bottom: 2px solid #0d2845; }
+  .doc-logo {
+    flex: none; width: 34px; height: 34px; border-radius: 8px; background: #0d2845; color: #fff;
+    display: grid; place-items: center; font-weight: 800; font-size: 12px;
+  }
+  .doc-org b { display: block; font-size: 13px; letter-spacing: .04em; }
+  .doc-org span { font-size: 10.5px; color: #5a6068; }
+  .doc-refline {
+    display: flex; justify-content: space-between; gap: 12px; margin: 14px 0 4px;
+    font-family: "IBM Plex Mono", ui-monospace, Consolas, monospace; font-size: 10.5px; color: #5a6068;
+  }
+  .doc-title { margin: 18px 0 10px; font-size: 15px; font-weight: 700; text-align: center; }
+  .doc-meta { margin: 0 0 14px; font-size: 11.5px; color: #5a6068; }
+  .doc-meta b { color: #1c1f24; font-weight: 600; }
+  .doc-body p { margin: 0 0 10px; font-size: 12px; line-height: 1.7; }
+  .doc-sig { margin-top: 22px; display: flex; justify-content: space-between; align-items: flex-end; }
+  .doc-sig .name { font-size: 12px; font-weight: 700; border-top: 1px solid #1c1f24; padding-top: 4px; margin-top: 26px; }
+  .doc-stamp {
+    flex: none; width: 74px; height: 74px; border: 2px solid rgba(13,40,69,.45); border-radius: 99px;
+    display: grid; place-items: center; transform: rotate(-12deg);
+    color: rgba(13,40,69,.55); font-size: 9px; font-weight: 800; letter-spacing: .12em; text-align: center;
+  }
+
+  /* ── Full record sheet ──────────────────────────────────────────────── */
+  .rec-sheet {
+    position: absolute; top: 0; bottom: 0; inset-inline-end: 0; width: min(440px, 100%);
+    background: var(--bg); border-inline-start: 1px solid var(--border);
+    box-shadow: -30px 0 70px rgba(0,0,0,.4);
+    display: flex; flex-direction: column;
+    transform: translateX(-100vw); transition: transform 280ms cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  [dir="rtl"] .rec-sheet { transform: translateX(100vw); }
+  .rec-sheet.open { transform: translateX(0); }
+  .rec-head {
+    display: flex; align-items: center; gap: 10px; padding: 12px 16px;
+    border-bottom: 1px solid var(--hairline); background: var(--surface-raised);
+  }
+  .rec-head h2 {
+    margin: 0; font-size: .95em; font-weight: 700; flex: 1; min-width: 0;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .rec-body { flex: 1; overflow: auto; padding: 18px 16px 24px; }
+  .rec-meta { padding-bottom: 14px; margin-bottom: 16px; border-bottom: 1px solid var(--hairline); }
+  .rec-subject { margin: 0; font-size: 1.05em; font-weight: 700; }
+  .rec-status-row { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+  .rec-status-row .priority { font-size: .68em; font-weight: 600; color: var(--text-muted); }
+  .rec-status-row .priority.high { color: var(--accent); }
+  .rec-parties { margin: 8px 0 0; font-size: .78em; color: var(--text-muted); }
+  .rec-doc-card {
+    display: flex; align-items: center; gap: 12px; padding: 12px; cursor: pointer;
+    border: 1px solid var(--border); border-radius: 12px; background: var(--surface);
+    transition: border-color 150ms ease, background-color 150ms ease;
+  }
+  .rec-doc-card:hover { border-color: var(--primary); background: var(--surface-raised); }
+  .rec-doc-card .grow { flex: 1; min-width: 0; }
+  .rec-doc-card .fname { font-size: .8em; font-weight: 600; font-family: "IBM Plex Mono", ui-monospace, Consolas, monospace; }
+  .rec-doc-card .fmeta { font-size: .68em; color: var(--text-muted); margin-top: 2px; }
+  .rec-actions { display: flex; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--hairline); background: var(--surface-raised); }
+  .rec-btn {
+    flex: 1; appearance: none; cursor: pointer; font: inherit; font-size: .82em; font-weight: 700;
+    border-radius: 10px; padding: 11px 12px; min-height: 44px;
+    display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+    border: 1px solid var(--border); background: var(--surface); color: var(--text);
+    transition: background-color 150ms ease, color 150ms ease;
+  }
+  .rec-btn.approve { background: var(--primary); border-color: var(--primary); color: var(--on-primary); }
+  .rec-btn.approve:hover { background: var(--primary-hover); }
+  .rec-btn.reject { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 40%, transparent); }
+  .rec-btn.reject:hover { background: var(--accent-soft); }
+  .rec-reason { flex: 1; }
+  .rec-reason textarea {
+    width: 100%; font: inherit; font-size: .8em; color: var(--text); background: var(--surface);
+    border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; min-height: 74px; resize: vertical;
+  }
+  .rec-reason .confirm { margin-top: 8px; width: 100%; }
+  .rec-verdict {
+    margin-top: 14px; padding: 12px 14px; border-radius: 10px; font-size: .78em; font-weight: 600;
+    display: flex; gap: 8px; align-items: center;
+  }
+  .rec-verdict.ok { background: var(--success-soft); color: var(--success); }
+  .rec-verdict.no { background: var(--accent-soft); color: var(--accent); }
+  .rec-verdict.ret { background: var(--info-soft); color: var(--info); }
+  .toast {
+    position: fixed; bottom: 22px; inset-inline-start: 50%; transform: translateX(-50%);
+    background: var(--primary); color: var(--on-primary); font-size: .78em; font-weight: 600;
+    border-radius: 99px; padding: 9px 18px; box-shadow: 0 10px 26px rgba(0,0,0,.3);
+    opacity: 0; transition: opacity 200ms ease; pointer-events: none; z-index: 80; white-space: nowrap;
+  }
+  [dir="rtl"] .toast { transform: translateX(50%); }
+  .toast.show { opacity: 1; }
+
+  @media (max-width: 640px) {
+    .page { padding: 14px 12px 32px; }
+    .row { padding: 12px 14px; gap: 10px; }
+    .section-head { padding: 10px 14px 8px; }
+    .row .thumb { width: 44px; height: 44px; }
+    .pv-shell { padding: 0; }
+    .pv-bar { width: 100%; border-radius: 0; border-inline: 0; border-top: 0; }
+    .pv-viewport { width: 100%; border: 0; border-radius: 0; }
+    .pv-btn .pv-label { display: none; }
+    .pv-btn { padding: 6px 9px; min-height: 38px; }
+    .rec-sheet {
+      width: 100%; inset-inline: 0; top: auto; height: 94%;
+      border: 0; border-radius: 16px 16px 0 0; box-shadow: 0 -24px 60px rgba(0,0,0,.45);
+      transform: translateY(105%);
+    }
+    [dir="rtl"] .rec-sheet { transform: translateY(105%); }
+    .rec-sheet.open { transform: translateY(0); }
+    .rec-sheet::before {
+      content: ""; position: absolute; top: 8px; inset-inline-start: 50%; margin-inline-start: -18px;
+      width: 36px; height: 4px; border-radius: 99px; background: var(--border);
+    }
+    .rec-body { padding-bottom: 20px; }
+    .rec-actions {
+      position: fixed; bottom: 0; inset-inline: 0;
+      padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+    }
+  }
+  @media print {
+    body { background: #fff; }
+    body > *:not(.pv-root) { display: none !important; }
+    .pv-scrim, .pv-bar, .rec-sheet, .toast { display: none !important; }
+    .pv-shell { position: static; padding: 0; }
+    .pv-viewport { overflow: visible; border: 0; border-radius: 0; background: #fff; }
+    .pv-doc { zoom: 1 !important; box-shadow: none; margin: 0 auto; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ══════════════════ Frame 1 · English · light ══════════════════ -->
+<div class="frame-label"><span>EN · Light · click row = record, thumbnail = preview</span></div>
+<section class="page" data-theme="light" lang="en" dir="ltr" data-frame>
+  <header class="page-head">
+    <div>
+      <h1>Approvals</h1>
+      <p class="head-sub">6 records &middot; <b>3 awaiting your decision</b></p>
+    </div>
+    <button class="icon-btn" aria-label="Refresh">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
+    </button>
+  </header>
+
+  <div class="toolbar">
+    <div class="tabs" role="tablist" aria-label="Approvals">
+      <button class="tab" role="tab" aria-selected="true">Received <span class="n">6</span></button>
+      <button class="tab" role="tab" aria-selected="false">Sent <span class="n">12</span></button>
+    </div>
+    <div class="filters" role="group" aria-label="Filter by status">
+      <button class="chip" aria-pressed="true">All <span class="n">6</span></button>
+      <button class="chip" aria-pressed="false">Pending <span class="n">3</span></button>
+      <button class="chip" aria-pressed="false">Approved <span class="n">1</span></button>
+      <button class="chip" aria-pressed="false">Rejected <span class="n">1</span></button>
+      <button class="chip" aria-pressed="false">Returned <span class="n">1</span></button>
+    </div>
+  </div>
+
+  <div class="ledger">
+    <div class="section-head">
+      <span class="dot" style="background:var(--warning)"></span>
+      Awaiting your decision <span class="n">3</span>
+    </div>
+
+    <div class="row" role="button" tabindex="0">
+      <div class="thumb" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8b9098" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg></div>
+      <div class="row-main">
+        <div class="row-title">
+          <span class="ref">GS-0412</span>
+          <p class="subject">Leave Clearance Form — M. Al Mansouri</p>
+          <span class="high-flag">High</span>
+        </div>
+        <p class="row-meta">Fatima Al Mansouri → Ahmed Al Suwaidi</p>
+      </div>
+      <div class="row-side">
+        <span class="pill pending"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>Pending</span>
+        <span class="when">18 Aug</span>
+        <span class="waiting">6 days waiting</span>
+      </div>
+    </div>
+    <hr class="divider">
+
+    <div class="row" role="button" tabindex="0">
+      <div class="thumb" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8b9098" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg></div>
+      <div class="row-main">
+        <div class="row-title">
+          <span class="ref">NAT-0642</span>
+          <p class="subject">Warning Notice — Attendance</p>
+        </div>
+        <p class="row-meta">Khalid Rashid → Ahmed Al Suwaidi</p>
+      </div>
+      <div class="row-side">
+        <span class="pill pending"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>Pending</span>
+        <span class="when">21 Aug</span>
+        <span class="waiting">3 days waiting</span>
+      </div>
+    </div>
+    <hr class="divider">
+
+    <div class="row" role="button" tabindex="0">
+      <div class="thumb" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8b9098" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg></div>
+      <div class="row-main">
+        <div class="row-title">
+          <span class="ref">HR-1189</span>
+          <p class="subject">Experience Certificate</p>
+        </div>
+        <p class="row-meta">Maryam Obaid → Ahmed Al Suwaidi</p>
+      </div>
+      <div class="row-side">
+        <span class="pill pending"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>Pending</span>
+        <span class="when">23 Aug</span>
+        <span class="waiting">1 day waiting</span>
+      </div>
+    </div>
+
+    <div class="section-head" style="border-top:1px solid var(--hairline)">
+      <span class="dot" style="background:var(--text-faint)"></span>
+      Recent verdicts <span class="n">3</span>
+    </div>
+
+    <div class="row" role="button" tabindex="0">
+      <div class="thumb" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8b9098" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg></div>
+      <div class="row-main">
+        <div class="row-title">
+          <span class="ref">GS-0401</span>
+          <p class="subject">Salary Certificate</p>
+        </div>
+        <p class="row-meta">Omar Hareb → Ahmed Al Suwaidi</p>
+      </div>
+      <div class="row-side">
+        <span class="pill approved"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>Approved</span>
+        <span class="when">decided 14 Aug</span>
+      </div>
+    </div>
+    <hr class="divider">
+
+    <div class="row" role="button" tabindex="0">
+      <div class="thumb" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8b9098" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg></div>
+      <div class="row-main">
+        <div class="row-title">
+          <span class="ref">NAT-0598</span>
+          <p class="subject">NOC — Vehicle Registration</p>
+        </div>
+        <p class="row-meta">Salem Khamis → Ahmed Al Suwaidi</p>
+      </div>
+      <div class="row-side">
+        <span class="pill returned"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m9 14-4-4 4-4"/><path d="M5 10h11a4 4 0 0 1 4 4v2"/></svg>Returned</span>
+        <span class="when">decided 11 Aug</span>
+      </div>
+    </div>
+    <hr class="divider">
+
+    <div class="row" role="button" tabindex="0">
+      <div class="thumb" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8b9098" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg></div>
+      <div class="row-main">
+        <div class="row-title">
+          <span class="ref">HR-1176</span>
+          <p class="subject">Contract Renewal Letter</p>
+        </div>
+        <p class="row-meta">Aisha Dhahi → Ahmed Al Suwaidi</p>
+      </div>
+      <div class="row-side">
+        <span class="pill rejected"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>Rejected</span>
+        <span class="when">decided 5 Aug</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════ Frame 2 · Arabic · RTL ══════════════════ -->
+<div class="frame-label"><span>AR · RTL · اضغط الصف للسجل، المصغّر للمعاينة</span><button class="theme-toggle" onclick="flip(this)">تبديل المظهر</button></div>
+<section class="page" data-theme="light" lang="ar" dir="rtl" data-frame>
+  <header class="page-head">
+    <div>
+      <h1>الاعتمادات</h1>
+      <p class="head-sub">6 سجلات &middot; <b>3 بانتظار قرارك</b></p>
+    </div>
+    <button class="icon-btn" aria-label="تحديث">
+      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
+    </button>
+  </header>
+
+  <div class="toolbar">
+    <div class="tabs" role="tablist" aria-label="الاعتمادات">
+      <button class="tab" role="tab" aria-selected="true">الواردة إليّ <span class="n">6</span></button>
+      <button class="tab" role="tab" aria-selected="false">المرسلة مني <span class="n">12</span></button>
+    </div>
+    <div class="filters" role="group" aria-label="تصفية حسب الحالة">
+      <button class="chip" aria-pressed="true">الكل <span class="n">6</span></button>
+      <button class="chip" aria-pressed="false">قيد الاعتماد <span class="n">3</span></button>
+      <button class="chip" aria-pressed="false">معتمد <span class="n">1</span></button>
+      <button class="chip" aria-pressed="false">مرفوض <span class="n">1</span></button>
+      <button class="chip" aria-pressed="false">معاد <span class="n">1</span></button>
+    </div>
+  </div>
+
+  <div class="ledger">
+    <div class="section-head">
+      <span class="dot" style="background:var(--warning)"></span>
+      بانتظار قرارك <span class="n">3</span>
+    </div>
+
+    <div class="row" role="button" tabindex="0">
+      <div class="thumb" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8b9098" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg></div>
+      <div class="row-main">
+        <div class="row-title">
+          <span class="ref">GS-0412</span>
+          <p class="subject">نموذج إخلاء طرف — م. المنصوري</p>
+          <span class="high-flag">عالية</span>
+        </div>
+        <p class="row-meta">فاطمة المنصوري ← أحمد السويدي</p>
+      </div>
+      <div class="row-side">
+        <span class="pill pending"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>قيد الاعتماد</span>
+        <span class="when">18 أغسطس</span>
+        <span class="waiting">بانتظار منذ 6 أيام</span>
+      </div>
+    </div>
+    <hr class="divider">
+
+    <div class="row" role="button" tabindex="0">
+      <div class="thumb" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8b9098" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg></div>
+      <div class="row-main">
+        <div class="row-title">
+          <span class="ref">NAT-0642</span>
+          <p class="subject">إخطار إنذار — الحضور</p>
+        </div>
+        <p class="row-meta">خالد راشد ← أحمد السويدي</p>
+      </div>
+      <div class="row-side">
+        <span class="pill pending"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>قيد الاعتماد</span>
+        <span class="when">21 أغسطس</span>
+        <span class="waiting">بانتظار منذ 3 أيام</span>
+      </div>
+    </div>
+    <hr class="divider">
+
+    <div class="row" role="button" tabindex="0">
+      <div class="thumb" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8b9098" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg></div>
+      <div class="row-main">
+        <div class="row-title">
+          <span class="ref">HR-1189</span>
+          <p class="subject">شهادة خبرة</p>
+        </div>
+        <p class="row-meta">مريم عبيد ← أحمد السويدي</p>
+      </div>
+      <div class="row-side">
+        <span class="pill pending"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>قيد الاعتماد</span>
+        <span class="when">23 أغسطس</span>
+        <span class="waiting">بانتظار منذ يوم واحد</span>
+      </div>
+    </div>
+
+    <div class="section-head" style="border-top:1px solid var(--hairline)">
+      <span class="dot" style="background:var(--text-faint)"></span>
+      قرارات حديثة <span class="n">3</span>
+    </div>
+
+    <div class="row" role="button" tabindex="0">
+      <div class="thumb" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8b9098" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg></div>
+      <div class="row-main">
+        <div class="row-title">
+          <span class="ref">GS-0401</span>
+          <p class="subject">شهادة راتب</p>
+        </div>
+        <p class="row-meta">عمر حارب ← أحمد السويدي</p>
+      </div>
+      <div class="row-side">
+        <span class="pill approved"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>معتمد</span>
+        <span class="when">قرر في 14 أغسطس</span>
+      </div>
+    </div>
+    <hr class="divider">
+
+    <div class="row" role="button" tabindex="0">
+      <div class="thumb" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8b9098" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg></div>
+      <div class="row-main">
+        <div class="row-title">
+          <span class="ref">NAT-0598</span>
+          <p class="subject">لا مانع — تسجيل مركبة</p>
+        </div>
+        <p class="row-meta">سالم خميس ← أحمد السويدي</p>
+      </div>
+      <div class="row-side">
+        <span class="pill returned"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m9 14-4-4 4-4"/><path d="M5 10h11a4 4 0 0 1 4 4v2"/></svg>معاد</span>
+        <span class="when">قرر في 11 أغسطس</span>
+      </div>
+    </div>
+    <hr class="divider">
+
+    <div class="row" role="button" tabindex="0">
+      <div class="thumb" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8b9098" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg></div>
+      <div class="row-main">
+        <div class="row-title">
+          <span class="ref">HR-1176</span>
+          <p class="subject">خطاب تجديد عقد</p>
+        </div>
+        <p class="row-meta">عائشة الظاهي ← أحمد السويدي</p>
+      </div>
+      <div class="row-side">
+        <span class="pill rejected"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>مرفوض</span>
+        <span class="when">قرر في 5 أغسطس</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════════ Overlay · document preview + full record ══════════════════ -->
+<div class="pv-root" id="pvRoot" data-theme="light" lang="en" dir="ltr" hidden>
+  <div class="pv-scrim" id="pvScrim"></div>
+  <div class="pv-shell">
+    <div class="pv-bar">
+      <button class="pv-btn" id="pvClose" aria-label="Close preview"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+      <div class="pv-title"><span class="ref" id="pvRef"></span><span id="pvSubject"></span></div>
+      <div class="pv-zoom" role="group" aria-label="Zoom">
+        <button class="pv-btn" id="zOut" aria-label="Zoom out"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M5 12h14"/></svg></button>
+        <span class="zval" id="zVal">100%</span>
+        <button class="pv-btn" id="zIn" aria-label="Zoom in"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button>
+      </div>
+      <button class="pv-btn" id="pvPrint"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v8H6z"/></svg><span class="pv-label" id="pvPrintLbl">Print</span></button>
+      <button class="pv-btn primary" id="pvRecord"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9 15h6M9 11h2"/></svg><span class="pv-label" id="pvRecordLbl">Full record</span></button>
+    </div>
+    <div class="pv-viewport" id="pvViewport">
+      <div class="pv-doc" id="pvDoc"></div>
+    </div>
+  </div>
+  <aside class="rec-sheet" id="recSheet" role="dialog" aria-modal="true">
+    <div class="rec-head">
+      <button class="pv-btn" id="recClose" aria-label="Close record"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg></button>
+      <h2 id="recTitle"></h2>
+      <span class="ref" id="recRef"></span>
+    </div>
+    <div class="rec-body" id="recBody"></div>
+    <div class="rec-actions" id="recActions"></div>
+  </aside>
+  <div class="toast" id="pvToast" role="status"></div>
+</div>
+
+<script>
+  // Theme flip for quick dark-mode review of any frame.
+  function flip(btn) {
+    const frame = btn.closest('.frame-label').nextElementSibling;
+    frame.dataset.theme = frame.dataset.theme === 'light' ? 'dark' : 'light';
+    btn.textContent = frame.dataset.theme === 'light' ? 'تبديل المظهر' : 'Toggle theme';
+  }
+
+  // ── Preview + record overlay ─────────────────────────────────────────
+  const T = (lang, en, ar) => (lang === 'ar' ? ar : en);
+  const pvRoot = document.getElementById('pvRoot');
+  const pvViewport = document.getElementById('pvViewport');
+  const pvDoc = document.getElementById('pvDoc');
+  const recSheet = document.getElementById('recSheet');
+  const recBody = document.getElementById('recBody');
+  const recActions = document.getElementById('recActions');
+  const zVal = document.getElementById('zVal');
+  const pvToast = document.getElementById('pvToast');
+  let cur = null; // { row, frame, lang }
+  let zoom = 1;
+  let toastTimer = null;
+
+  const ICONS = {
+    pending: '<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>',
+    approved: '<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>',
+    rejected: '<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>',
+    returned: '<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m9 14-4-4 4-4"/><path d="M5 10h11a4 4 0 0 1 4 4v2"/></svg>'
+  };
+  const PILL_LABEL = {
+    pending: ['Pending', 'قيد الاعتماد'], approved: ['Approved', 'معتمد'],
+    rejected: ['Rejected', 'مرفوض'], returned: ['Returned', 'معاد']
+  };
+
+  function rowData(row) {
+    const lang = cur.lang;
+    const parts = row.querySelector('.row-meta').textContent.split(lang === 'ar' ? '←' : '→').map(s => s.trim());
+    const pill = row.querySelector('.pill');
+    const status = [...pill.classList].find(c => PILL_LABEL[c]) || 'pending';
+    return {
+      ref: row.querySelector('.ref').textContent.trim(),
+      subject: row.querySelector('.subject').textContent.trim(),
+      from: parts[0], to: parts[1] || '', status,
+      high: !!row.querySelector('.high-flag'),
+      date: row.querySelector('.when').textContent.trim(),
+      waitingEl: row.querySelector('.waiting')
+    };
+  }
+
+  function docMarkup(d, ar) {
+    return `
+      <div class="doc-head">
+        <div class="doc-logo">GS</div>
+        <div class="doc-org"><b>GSSG MANAGER</b><span>${ar ? 'إدارة الموارد البشرية والوثائق' : 'Human Resources & Documents'}</span></div>
+      </div>
+      <div class="doc-refline"><span>${ar ? 'الرقم' : 'Ref'}: ${d.ref}</span><span>${ar ? 'التاريخ' : 'Date'}: ${d.date.replace(/^decided |^قرر في /, '')}</span></div>
+      <h3 class="doc-title">${d.subject}</h3>
+      <p class="doc-meta">${ar ? 'مقدَّم من' : 'Submitted by'} <b>${d.from}</b> ${ar ? 'إلى' : 'to'} <b>${d.to}</b></p>
+      <div class="doc-body">
+        <p>${ar
+          ? 'تشير إلى أن الطلب المشار إليه أعلاه، المقدَّم من ' + d.from + '، قد تمت معالجته عبر نظام GSSG Manager ويُعرض الآن للمراجعة واتخاذ القرار وفق الصلاحيات المعتمدة.'
+          : 'This is to certify that the request referenced above, submitted by ' + d.from + ', has been processed through the GSSG Manager document workflow and is presented for review and decision under the delegated approval authority.'}</p>
+        <p>${ar
+          ? 'تم التحقق من السجل المرفق مقابل ملف الموظف، وأي تعديل لاحق يتطلب طلباً رسمياً من القسم المُصدر قبل التوقيع النهائي.'
+          : 'The attached record has been verified against the employee file. Any subsequent amendment requires a formal request through the issuing department before final sign-off.'}</p>
+      </div>
+      <div class="doc-sig">
+        <div class="name">${d.from}</div>
+        <div class="doc-stamp">GSSG<br>${ar ? 'رسمية' : 'OFFICIAL'}</div>
+      </div>`;
+  }
+  function renderDoc() {
+    const d = rowData(cur.row), ar = cur.lang === 'ar';
+    document.getElementById('pvRef').textContent = d.ref;
+    document.getElementById('pvSubject').textContent = d.subject;
+    pvDoc.innerHTML = docMarkup(d, ar);
+  }
+
+  function renderRecord() {
+    const d = rowData(cur.row), lang = cur.lang, ar = lang === 'ar';
+    document.getElementById('recTitle').textContent = T(lang, 'Full record', 'السجل الكامل');
+    document.getElementById('recRef').textContent = d.ref;
+    let verdict = '';
+    if (d.status === 'approved') verdict = `<div class="rec-verdict ok">${ICONS.approved}${T(lang, 'Approved · ', 'تم الاعتماد · ')}${d.date.replace('decided ', '').replace('قرر في ', '')}</div>`;
+    if (d.status === 'rejected') verdict = `<div class="rec-verdict no">${ICONS.rejected}${T(lang, 'Rejected · ', 'تم الرفض · ')}${d.date.replace('decided ', '').replace('قرر في ', '')}</div>`;
+    if (d.status === 'returned') verdict = `<div class="rec-verdict ret">${ICONS.returned}${T(lang, 'Returned to sender · ', 'أُعيد إلى المُرسل · ')}${d.date.replace('decided ', '').replace('قرر في ', '')}</div>`;
+    recBody.innerHTML = `
+      <div class="rec-meta">
+        <p class="rec-subject">${d.subject}</p>
+        <div class="rec-status-row">
+          <span class="pill ${d.status}">${ICONS[d.status]}${PILL_LABEL[d.status][ar ? 1 : 0]}</span>
+          <span class="when">${d.date}</span>
+          <span class="priority${d.high ? ' high' : ''}">${d.high ? T(lang, 'High priority', 'أولوية عالية') : T(lang, 'Normal priority', 'أولوية عادية')}</span>
+        </div>
+        <p class="rec-parties">${d.from} ${ar ? '←' : '→'} ${d.to}</p>
+      </div>
+      ${verdict}
+      <div class="rec-doc-card" id="recDocCard" role="button" tabindex="0" aria-label="${ar ? 'فتح المعاينة الكاملة للمستند' : 'Open the full document preview'}">
+        <div class="thumb" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#8b9098" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg></div>
+        <div class="grow">
+          <div class="fname">${d.ref}.pdf</div>
+          <div class="fmeta">${ar ? 'اضغط لفتح المعاينة الكاملة · قرّب بإصبعين' : 'Opens the full preview · pinch to zoom'}</div>
+        </div>
+        <button class="pv-btn primary" tabindex="-1">${ar ? 'معاينة' : 'Preview'}</button>
+      </div>`;
+    const openPv = () => { pvRoot.classList.remove('rec-only'); setZoom(1); renderDoc(); pvViewport.scrollTop = 0; document.getElementById('pvClose').focus(); };
+    const card = document.getElementById('recDocCard');
+    card.onclick = openPv;
+    card.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openPv(); } });
+    renderActions(d, lang);
+  }
+
+  function renderActions(d, lang) {
+    const ar = lang === 'ar';
+    if (d.status !== 'pending') { recActions.innerHTML = ''; recActions.style.display = 'none'; return; }
+    recActions.style.display = '';
+    recActions.innerHTML = `
+      <button class="rec-btn reject" id="btnReject">${ar ? '✕ رفض' : '✕ Reject'}</button>
+      <button class="rec-btn approve" id="btnApprove">${ar ? '✓ اعتماد' : '✓ Approve'}</button>`;
+    document.getElementById('btnApprove').onclick = () => applyVerdict('approved');
+    document.getElementById('btnReject').onclick = showReason;
+  }
+
+  function showReason() {
+    const ar = cur.lang === 'ar';
+    recActions.innerHTML = `
+      <div class="rec-reason">
+        <textarea id="reasonTxt" placeholder="${ar ? 'سبب الرفض (مطلوب)' : 'Rejection reason (required)'}"></textarea>
+        <button class="rec-btn reject confirm" id="btnConfirm">${ar ? 'تأكيد الرفض' : 'Confirm rejection'}</button>
+      </div>`;
+    const txt = document.getElementById('reasonTxt');
+    document.getElementById('btnConfirm').onclick = () => {
+      if (!txt.value.trim()) { txt.focus(); return; }
+      applyVerdict('rejected');
+    };
+    txt.focus();
+  }
+
+  function applyVerdict(status) {
+    const d = rowData(cur.row), ar = cur.lang === 'ar';
+    const pill = cur.row.querySelector('.pill');
+    pill.className = 'pill ' + status;
+    pill.innerHTML = ICONS[status] + PILL_LABEL[status][ar ? 1 : 0];
+    if (d.waitingEl) d.waitingEl.remove();
+    cur.row.querySelector('.when').textContent = ar ? 'قرر الآن' : 'decided now';
+    toast(ar ? d.ref + ': تم ' + (status === 'approved' ? 'الاعتماد' : 'الرفض')
+             : d.ref + (status === 'approved' ? ' approved' : ' rejected'));
+    renderRecord();
+  }
+
+  function toast(msg) {
+    pvToast.textContent = msg;
+    pvToast.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => pvToast.classList.remove('show'), 2400);
+  }
+
+  function syncOverlay() {
+    pvRoot.dataset.theme = cur.frame.dataset.theme;
+    pvRoot.lang = cur.lang;
+    pvRoot.dir = cur.frame.dir;
+    document.getElementById('pvPrintLbl').textContent = T(cur.lang, 'Print', 'طباعة');
+    document.getElementById('pvRecordLbl').textContent = T(cur.lang, 'Full record', 'السجل الكامل');
+  }
+  function openPreview(row) {
+    cur = { row, frame: row.closest('.page'), lang: row.closest('.page').lang };
+    syncOverlay();
+    pvViewport.scrollTop = 0;
+    setZoom(1);
+    renderDoc();
+    pvRoot.hidden = false;
+    document.getElementById('pvClose').focus();
+  }
+  function closePreview() {
+    if (recSheet.classList.contains('open')) {
+      pvRoot.classList.add('rec-only'); // collapse to record-only view
+    } else {
+      pvRoot.hidden = true;
+      pvRoot.classList.remove('rec-only');
+    }
+  }
+  function openRecord(row) {
+    cur = { row, frame: row.closest('.page'), lang: row.closest('.page').lang };
+    syncOverlay();
+    renderRecord();
+    if (pvRoot.hidden) { pvRoot.classList.add('rec-only'); pvRoot.hidden = false; }
+    recSheet.classList.add('open');
+    document.getElementById('recClose').focus();
+  }
+  function closeRecord() {
+    recSheet.classList.remove('open');
+    if (pvRoot.classList.contains('rec-only')) { pvRoot.hidden = true; pvRoot.classList.remove('rec-only'); }
+  }
+
+  // ── Zoom: buttons, ctrl+wheel, double-click, pinch ──────────────────
+  function setZoom(nz) {
+    zoom = Math.min(3, Math.max(0.5, nz));
+    pvDoc.style.zoom = zoom;
+    zVal.textContent = Math.round(zoom * 100) + '%';
+  }
+  document.getElementById('zIn').onclick = () => setZoom(zoom + 0.25);
+  document.getElementById('zOut').onclick = () => setZoom(zoom - 0.25);
+  pvViewport.addEventListener('wheel', e => {
+    if (!e.ctrlKey && !e.metaKey) return;
+    e.preventDefault();
+    setZoom(zoom + (e.deltaY < 0 ? 0.15 : -0.15));
+  }, { passive: false });
+  pvViewport.addEventListener('dblclick', () => setZoom(zoom > 1.05 ? 1 : 2));
+  let pinch = null;
+  pvViewport.addEventListener('touchstart', e => {
+    if (e.touches.length === 2) {
+      const [a, b] = e.touches;
+      pinch = { d: Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY), z: zoom };
+    } else pinch = null;
+  }, { passive: true });
+  pvViewport.addEventListener('touchmove', e => {
+    if (!pinch || e.touches.length !== 2) return;
+    e.preventDefault();
+    const [a, b] = e.touches;
+    setZoom(pinch.z * (Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY) / pinch.d));
+  }, { passive: false });
+  pvViewport.addEventListener('touchend', () => { pinch = null; }, { passive: true });
+
+  // ── Wiring ───────────────────────────────────────────────────────────
+  document.getElementById('pvClose').onclick = closePreview;
+  document.getElementById('recClose').onclick = closeRecord;
+  document.getElementById('pvScrim').onclick = () => (recSheet.classList.contains('open') ? closeRecord() : closePreview());
+  document.getElementById('pvRecord').onclick = () => openRecord(cur.row);
+  document.getElementById('pvPrint').onclick = () => window.print();
+  document.addEventListener('keydown', e => {
+    if (e.key !== 'Escape' || pvRoot.hidden) return;
+    recSheet.classList.contains('open') ? closeRecord() : closePreview();
+  });
+  document.querySelectorAll('.page').forEach(frame => {
+    frame.querySelectorAll('.row').forEach(row => {
+      row.addEventListener('click', () => openRecord(row));
+      row.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openRecord(row); } });
+      const thumb = row.querySelector('.thumb');
+      thumb.setAttribute('role', 'button');
+      thumb.tabIndex = 0;
+      thumb.setAttribute('aria-label', frame.lang === 'ar' ? 'معاينة المستند' : 'Preview document');
+      thumb.addEventListener('click', e => { e.stopPropagation(); openPreview(row); });
+      thumb.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); e.preventDefault(); openPreview(row); } });
+    });
+  });
+</script>
+</body>
+</html>

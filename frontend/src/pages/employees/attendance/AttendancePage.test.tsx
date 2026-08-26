@@ -17,14 +17,16 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-const { listAttendanceDay, hasCapability } = vi.hoisted(() => ({
+const { listAttendanceDay, listAttendanceExceptions, getAttendanceCase, hasCapability } = vi.hoisted(() => ({
   listAttendanceDay: vi.fn(),
+  listAttendanceExceptions: vi.fn(),
+  getAttendanceCase: vi.fn(),
   hasCapability: vi.fn<(cap: string) => boolean>(),
 }))
 
 vi.mock('@/lib/api', async (orig) => {
   const real = await orig<typeof import('@/lib/api')>()
-  return { ...real, api: { ...real.api, listAttendanceDay } }
+  return { ...real, api: { ...real.api, listAttendanceDay, listAttendanceExceptions, getAttendanceCase } }
 })
 
 vi.mock('@/lib/useCapabilities', () => ({
@@ -61,7 +63,7 @@ function row(overrides: Record<string, unknown> = {}) {
     scheduled_end_at: MORNING_END,
     first_punch_at: '2026-08-19T00:52:00',
     last_punch_at: '2026-08-19T09:06:00',
-    punch_count: 2,
+    case_id: 42,
     late_minutes: 0,
     grace_minutes: 30,
     absence_due_at: MORNING_ABSENCE_DUE,
@@ -120,6 +122,30 @@ beforeEach(() => {
   vi.clearAllMocks()
   hasCapability.mockReturnValue(true)
   listAttendanceDay.mockResolvedValue({ items: DAY_ROWS, next_cursor: null })
+  listAttendanceExceptions.mockResolvedValue({
+    items: [
+      {
+        employee_id: 'G-9001',
+        name_en: 'Ahmed Ali',
+        name_ar: null,
+        department: 'Security',
+        duty_unit: 'Main Gate',
+        duty_post: 'Gate 1',
+        crew_code: 'A',
+        shift_code: 'morning',
+        presence_state: 'late',
+        reason_code: 'late_arrival',
+        scheduled_start_at: MORNING_START,
+        scheduled_end_at: MORNING_END,
+        case_id: 42,
+        late_minutes: 12,
+        early_exit_minutes: null,
+        missing_checkout: false,
+      },
+    ],
+    next_cursor: null,
+  })
+  getAttendanceCase.mockResolvedValue({ data: null, etag: 'case-v1' })
 })
 
 afterEach(() => {
@@ -239,6 +265,7 @@ describe('AttendancePage', () => {
   })
 
   it('shows the attention queue ordered worst first', async () => {
+    hasCapability.mockImplementation((cap) => cap !== 'workforce.attendance.review')
     renderPage()
 
     const queue = await screen.findByTestId('attendance-attention-queue')
@@ -250,6 +277,38 @@ describe('AttendancePage', () => {
     expect(names[0]).toContain('Faisal Hamad')
     expect(names.join(' ')).toContain('Salem Obaid')
     expect(names.join(' ')).not.toContain('Night Person')
+  })
+
+  it('opens the exact selected exception case for reviewers', async () => {
+    const user = userEvent.setup()
+    renderPage()
+
+    const reviewButton = await screen.findByRole('button', { name: /Review Ahmed Ali/i })
+    await user.click(reviewButton)
+
+    await waitFor(() => expect(getAttendanceCase).toHaveBeenCalledWith(42))
+    await user.click(screen.getByRole('button', { name: /close/i }))
+    await waitFor(() => expect(reviewButton).toHaveFocus())
+
+  })
+
+  it('keeps the derived attention queue visible when review exceptions fail', async () => {
+    listAttendanceExceptions.mockRejectedValue(new Error('network unavailable'))
+    renderPage()
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Review exceptions unavailable')
+    const queue = screen.getByTestId('attendance-attention-queue')
+    expect(within(queue).getByText('Faisal Hamad')).toBeInTheDocument()
+    expect(within(queue).queryByRole('button', { name: /Review Ahmed Ali/i })).not.toBeInTheDocument()
+  })
+
+  it('does not request review exceptions for non-reviewers', async () => {
+    hasCapability.mockImplementation((cap) => cap !== 'workforce.attendance.review')
+    renderPage()
+
+    await waitFor(() => expect(listAttendanceDay).toHaveBeenCalledOnce())
+    expect(listAttendanceExceptions).not.toHaveBeenCalled()
+    expect(screen.queryByRole('button', { name: /Review Ahmed Ali/i })).not.toBeInTheDocument()
   })
 
   it('renders the empty state for a day with no rows', async () => {

@@ -87,3 +87,24 @@ def test_widget_tuple_and_literal_stay_in_sync():
     from app.schemas.settings import DASHBOARD_WIDGET_IDS, DashboardWidgetId
 
     assert set(DASHBOARD_WIDGET_IDS) == set(get_args(DashboardWidgetId))
+
+
+def test_dashboard_layout_accepts_workforce_pulse_as_hidden_lower_widget():
+    from app.schemas.settings import DashboardLayout
+
+    layout = DashboardLayout.model_validate(
+        {
+            "widgets": [
+                {
+                    "id": "workforce_pulse",
+                    "visible": False,
+                    "order": 13,
+                    "zone": "under_workspace",
+                }
+            ],
+            "quick_actions": [],
+            "canvas_width": "compact",
+        }
+    )
+
+    assert layout.widgets[0].id == "workforce_pulse"

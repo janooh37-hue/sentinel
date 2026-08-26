@@ -1,12 +1,12 @@
 /**
  * Activity tab — chronological timeline merging documents, leaves,
- * violations, and ledger entries.
+ * violations, absences, and ledger entries.
  */
 
-import { AlertTriangle, FileText, MailIcon, Plane } from 'lucide-react'
+import { AlertTriangle, FileText, MailIcon, MapPin, Plane, UserX } from 'lucide-react'
 import { useMemo, type ComponentType } from 'react'
 import { useTranslation } from 'react-i18next'
-
+import { DutyLocationActivity } from '@/components/employees/DutyLocationActivity'
 import type { ActivityItemRead } from '@/lib/api'
 
 type Kind = ActivityItemRead['kind']
@@ -16,12 +16,16 @@ const ICONS: Record<Kind, ComponentType<{ className?: string }>> = {
   leave: Plane,
   violation: AlertTriangle,
   ledger: MailIcon,
+  absence: UserX,
+  duty_location: MapPin,
 }
 const COLORS: Record<Kind, string> = {
   document: 'bg-primary',
   leave: 'bg-success',
   violation: 'bg-accent',
   ledger: 'bg-primary',
+  absence: 'bg-destructive',
+  duty_location: 'bg-primary',
 }
 
 interface Props {
@@ -55,7 +59,7 @@ export function ActivityTab({ activity }: Props): React.JSX.Element {
             >
               <Icon className="h-3.5 w-3.5" />
             </span>
-            <div className="text-[0.92em] font-medium text-foreground">{a.summary}</div>
+            {a.kind === 'duty_location' ? <DutyLocationActivity item={a} /> : <div className="text-[0.92em] font-medium text-foreground">{a.summary}</div>}
             <div className="mt-0.5 font-mono text-[0.78em] text-muted-foreground">{fmt.format(new Date(a.when))}</div>
           </div>
         )

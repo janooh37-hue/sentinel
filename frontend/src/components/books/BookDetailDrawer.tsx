@@ -4,8 +4,8 @@
  *
  * Footer (see `footerActionFor`):
  *  - caller owns the current pending step → approve/reject/return/note (`decide`)
- *  - state returned/rejected + `books.manage` → Revise & regenerate (`revise`)
- *  - state none + `books.manage` → Submit for approval (`submit`)
+ *  - state returned/rejected + `books.edit` → Revise & regenerate (`revise`)
+ *  - state none + `books.submit` → Submit for approval (`submit`)
  *  - otherwise read-only
  *
  * Replaces the approval-only BookApprovalSheet; the approval bar behaviour
@@ -211,7 +211,10 @@ export function BookDetailDrawer({ bookId, onClose, onSubmitForApproval }: Props
   const { has } = useCapabilities()
   const { user } = useAuth()
   const canApprove = has('books.approve')
-  const canManage = has('books.manage')
+  const canEdit = has('books.edit')
+  // Submit-for-approval is its own authority (atomic `books.submit`), separate
+  // from edit: a draft's footer submit action keys off this, not canEdit.
+  const canSubmitBook = has('books.submit')
   // Revise regenerates via POST /documents/generate, which requires this cap;
   // without it the committed Save would 403.
   const canGenerate = has('documents.generate')
@@ -256,7 +259,8 @@ export function BookDetailDrawer({ bookId, onClose, onSubmitForApproval }: Props
   const currentStepIndex = currentSteps.findIndex((s) => s.state !== 'approved')
 
   const action = footerActionFor(book?.approval_state ?? 'none', {
-    canManage,
+    canRevise: canEdit,
+    canSubmitBook,
     canApprove,
     isAssignee,
     isReviewer: myReview != null,
@@ -459,7 +463,7 @@ export function BookDetailDrawer({ bookId, onClose, onSubmitForApproval }: Props
                               <Paperclip className="h-3.5 w-3.5 shrink-0 text-muted-foreground" strokeWidth={1.8} aria-hidden />
                               <span className="min-w-0 flex-1 truncate" dir="auto">{filename}</span>
                             </a>
-                            {canManage && (
+                            {canEdit && (
                               <>
                                 <button
                                   type="button"

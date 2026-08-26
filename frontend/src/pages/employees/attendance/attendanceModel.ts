@@ -112,7 +112,16 @@ export function isUnpaired(row: JudgedDay, { now }: StateInput): boolean {
 
 export function rowState(row: JudgedDay, input: StateInput): RowState {
   if (row.on_leave || row.presence_state === 'excused_leave') return 'leave'
+  // A human correction outranks the punches. The evaluator only ever rules
+  // `absent` with zero punches, so `absent` beside punches is a correction;
+  // and `completed`/`on_duty` without punches can only be one, because every
+  // automatic completion derives from at least one punch. Without this, a
+  // corrected present row keeps rendering — and counting — as absent.
+  if (row.presence_state === 'absent') return 'absent'
   if (row.punch_count === 0) {
+    if (row.presence_state === 'completed' || row.presence_state === 'on_duty') {
+      return 'verified'
+    }
     // The one verdict that lands mid-duty. `absence_due_at` is the server's own
     // boundary — twice the grace past the start — so the register calls an
     // absence at the same instant the evaluator does, without waiting for the
@@ -123,7 +132,7 @@ export function rowState(row: JudgedDay, input: StateInput): RowState {
     // re-evaluates the case into a late arrival.
     const absenceDue = parseInstant(row.absence_due_at)
     const reached = absenceDue !== null && absenceDue <= input.now.getTime()
-    return reached || row.presence_state === 'absent' ? 'absent' : 'pending'
+    return reached ? 'absent' : 'pending'
   }
   // Lateness outranks pairing on purpose: a lone punch hours past the absence
   // boundary is a very late arrival, and labelling it "unpaired" would hide the
@@ -205,7 +214,7 @@ export function postSummary(rows: readonly AttendanceRow[], input: StateInput): 
       leave += 1
       continue
     }
-    if (row.punch_count > 0) seen += 1
+    if (row.punch_count > 0 || state === 'verified') seen += 1
     if (needsDecision(state)) exceptions += 1
   }
   return { due: rows.length - leave, seen, leave, exceptions }
@@ -227,7 +236,7 @@ export function shiftCounts(rows: readonly AttendanceRow[], input: StateInput): 
       continue
     }
     entry.due += 1
-    if (row.punch_count > 0) entry.seen += 1
+    if (row.punch_count > 0 || rowState(row, input) === 'verified') entry.seen += 1
     counts[code] = entry
   }
   return counts

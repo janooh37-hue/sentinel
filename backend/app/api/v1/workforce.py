@@ -89,6 +89,7 @@ from app.services.workforce_scope_service import (
     encode_cursor,
     intersect_workforce_scope,
     normalize_scope_entry,
+    normalize_scope_value,
     resolve_workforce_scope,
     scope_allows,
 )
@@ -160,6 +161,28 @@ def _assert_scope_filter(scope: WorkforceScope, *, department: str | None, duty_
         duty_unit=duty_unit,
         duty_post=duty_post,
     )
+
+
+def _intersect_coverage_scope(
+    scope: WorkforceScope,
+    *,
+    department: str | None,
+    duty_unit: str | None,
+) -> WorkforceScope:
+    """Allow a selected hierarchy ancestor without widening a narrower grant."""
+    if department is None and duty_unit is None:
+        return scope
+    for entry in scope.entries:
+        if entry.scope_kind == "organization":
+            return intersect_workforce_scope(scope, department=department, duty_unit=duty_unit)
+        if entry.scope_kind == "self":
+            continue
+        if entry.department is not None and entry.department != department:
+            continue
+        if duty_unit is not None and entry.scope_kind != "department" and entry.duty_unit != duty_unit:
+            continue
+        return intersect_workforce_scope(scope, department=department, duty_unit=duty_unit)
+    raise AppError("FORBIDDEN", "Requested filter is outside workforce scope.", http_status=403)
 
 
 def _require_organization_schedule_scope(db: Session, user: User) -> None:
@@ -329,10 +352,46 @@ def get_dashboard_analytics(user: Annotated[User, Depends(require_capability("wo
 
 
 @router.get("/dashboard/coverage", response_model=CursorPage[CoverageRowRead])
-def get_dashboard_coverage(operational_date: date, parent_kind: Annotated[str, Query(pattern="^(department|duty_unit|duty_post)$")], user: Annotated[User, Depends(require_capability("workforce.dashboard.view"))], db: Annotated[Session, Depends(get_db)], department: str | None = None, duty_unit: str | None = None, duty_post: str | None = None, limit: Annotated[int, Query(ge=1, le=_MAX_LIMIT)] = 100, cursor: str | None = None) -> dict[str, Any]:
-    scope = _assert_scope_filter(_scope(db, user), department=department, duty_unit=duty_unit, duty_post=duty_post)
-    rows = workforce_dashboard_service.get_coverage_children(db, scope=scope, operational_date=operational_date, parent_kind=parent_kind, department=department, duty_unit=duty_unit, duty_post=duty_post)
-    items, next_cursor = _cursor_page(rows, endpoint="coverage", scope=scope, filters={"operational_date": operational_date, "parent_kind": parent_kind, "department": department, "duty_unit": duty_unit, "duty_post": duty_post}, limit=limit, cursor=cursor)
+def get_dashboard_coverage(
+    operational_date: date,
+    parent_kind: Annotated[str, Query(pattern="^(organization|department|duty_unit)$")],
+    user: Annotated[User, Depends(require_capability("workforce.dashboard.view"))],
+    db: Annotated[Session, Depends(get_db)],
+    department: str | None = None,
+    duty_unit: str | None = None,
+    limit: Annotated[int, Query(ge=1, le=_MAX_LIMIT)] = 100,
+    cursor: str | None = None,
+) -> dict[str, Any]:
+    department = normalize_scope_value(department)
+    duty_unit = normalize_scope_value(duty_unit)
+    if parent_kind == "organization" and (department is not None or duty_unit is not None):
+        raise ValidationFailedError("WORKFORCE_COVERAGE_PARENT_INVALID", "Organization coverage cannot include a parent filter.")
+    if parent_kind == "department" and (department is None or duty_unit is not None):
+        raise ValidationFailedError("WORKFORCE_COVERAGE_PARENT_INVALID", "Duty-unit coverage requires only a department filter.")
+    if parent_kind == "duty_unit" and (department is None or duty_unit is None):
+        raise ValidationFailedError("WORKFORCE_COVERAGE_PARENT_INVALID", "Duty-post coverage requires department and duty-unit filters.")
+    scope = _intersect_coverage_scope(_scope(db, user), department=department, duty_unit=duty_unit)
+    rows = workforce_dashboard_service.get_coverage_children(
+        db,
+        scope=scope,
+        operational_date=operational_date,
+        parent_kind=parent_kind,
+        department=department,
+        duty_unit=duty_unit,
+    )
+    items, next_cursor = _cursor_page(
+        rows,
+        endpoint="coverage",
+        scope=scope,
+        filters={
+            "operational_date": operational_date,
+            "parent_kind": parent_kind,
+            "department": department,
+            "duty_unit": duty_unit,
+        },
+        limit=limit,
+        cursor=cursor,
+    )
     return {"items": items, "next_cursor": next_cursor}
 
 
@@ -399,6 +458,19 @@ def get_roster(operational_date: date, user: Annotated[User, Depends(require_cap
 def get_attendance_exceptions(user: Annotated[User, Depends(require_capability("workforce.attendance.review"))], people_user: Annotated[User, Depends(require_capability("workforce.people.view"))], db: Annotated[Session, Depends(get_db)], operational_date: date | None = None, presence: str | None = None, exception: str | None = None, limit: Annotated[int, Query(ge=1, le=_MAX_LIMIT)] = 100, cursor: str | None = None) -> dict[str, Any]:
     scope = _scope(db, user)
     rows = workforce_read_service.list_exceptions(db, scope=scope, operational_date=operational_date, presence=presence, exception=exception)
+    def severity(row: dict[str, Any]) -> tuple[int, str, int]:
+        if row.get("presence_state") == "absent":
+            return (0, row["employee_id"], row["case_id"])
+        if row.get("missing_checkout"):
+            return (1, row["employee_id"], row["case_id"])
+        if (row.get("late_minutes") or 0) > 0:
+            return (2, row["employee_id"], row["case_id"])
+        if (row.get("early_exit_minutes") or 0) > 0:
+            return (3, row["employee_id"], row["case_id"])
+        if row.get("presence_state") == "unknown":
+            return (4, row["employee_id"], row["case_id"])
+        return (5, row["employee_id"], row["case_id"])
+    rows = sorted(rows, key=severity)
     items, next_cursor = _cursor_page(rows, endpoint="exceptions", scope=scope, filters={"operational_date": operational_date, "presence": presence, "exception": exception}, limit=limit, cursor=cursor)
     return {"items": items, "next_cursor": next_cursor}
 
@@ -540,8 +612,12 @@ def get_employee_attendance_history(
 
 
 @router.get("/attendance/cases/{case_id}", response_model=AttendanceCaseRead)
-def get_attendance_case(case_id: int, user: Annotated[User, Depends(require_capability("workforce.attendance.review"))], people_user: Annotated[User, Depends(require_capability("workforce.people.view"))], db: Annotated[Session, Depends(get_db)]) -> dict[str, Any]:
-    return workforce_read_service.get_attendance_case(db, scope=_scope(db, user), case_id=case_id)
+def get_attendance_case(case_id: int, response: Response, user: Annotated[User, Depends(require_capability("workforce.attendance.review"))], people_user: Annotated[User, Depends(require_capability("workforce.people.view"))], db: Annotated[Session, Depends(get_db)]) -> dict[str, Any]:
+    snapshot = workforce_read_service.get_attendance_case_snapshot(
+        db, scope=_scope(db, user), case_id=case_id
+    )
+    _set_etag(response, snapshot.etag)
+    return snapshot.body
 
 
 @router.post("/attendance/cases/{case_id}/adjustments", status_code=status.HTTP_201_CREATED)
@@ -549,7 +625,7 @@ def create_attendance_adjustment(*, case_id: int, body: AttendanceAdjustmentWrit
     workforce_read_service.get_attendance_case(db, scope=_scope(db, user), case_id=case_id)
     row = workforce_admin_service.apply_adjustment(db, case_id=case_id, payload=body.model_dump(mode="python"), if_match=if_match, actor=user)
     db.commit()
-    _set_etag(response, workforce_admin_service.row_etag(row))
+    _set_etag(response, workforce_admin_service.attendance_case_etag(db, case_id))
     return {"id": row.id, "case_id": case_id}
 
 
@@ -558,7 +634,7 @@ def revoke_attendance_adjustment(*, case_id: int, adjustment_id: int, body: Adju
     workforce_read_service.get_attendance_case(db, scope=_scope(db, user), case_id=case_id)
     row = workforce_admin_service.revoke_adjustment(db, case_id=case_id, adjustment_id=adjustment_id, reason=body.reason, if_match=if_match, actor=user)
     db.commit()
-    _set_etag(response, workforce_admin_service.row_etag(row))
+    _set_etag(response, workforce_admin_service.attendance_case_etag(db, case_id))
     return {"id": row.id, "revoked_at": row.revoked_at}
 
 

@@ -75,6 +75,15 @@ def get_employee_detail(db: Session, employee_id: str) -> sx.EmployeeDetailRead 
             select(func.count(models.Violation.id)).where(models.Violation.employee_id == emp.id)
         ).scalar_one()
     )
+    # Absence rows are day-level facts; the stat is the current calendar year,
+    # same scoping as ``leaves_taken_days``.
+    absence_days = int(
+        db.execute(
+            select(func.count(models.Absence.id))
+            .where(models.Absence.employee_id == emp.id)
+            .where(func.extract("year", models.Absence.date) == current_year)
+        ).scalar_one()
+    )
 
     ledger_count = int(
         db.execute(
@@ -89,6 +98,7 @@ def get_employee_detail(db: Session, employee_id: str) -> sx.EmployeeDetailRead 
         leaves_taken_days=leave_days,
         leaves_allowed_days=DEFAULT_LEAVE_ALLOWANCE_DAYS,
         violations=violation_count,
+        absence_days=absence_days,
         ledger_count=ledger_count,
         tenure_years=tenure_years,
     )
@@ -146,6 +156,16 @@ def get_employee_detail(db: Session, employee_id: str) -> sx.EmployeeDetailRead 
         )
     ]
 
+    recent_absences = [
+        sx.RecentAbsenceRead.model_validate(a)
+        for a in db.scalars(
+            select(models.Absence)
+            .where(models.Absence.employee_id == emp.id)
+            .order_by(models.Absence.date.desc())
+            .limit(RECENT_LIMIT)
+        )
+    ]
+
     recent_ledger = [
         sx.RecentLedgerRead.model_validate(le)
         for le in db.scalars(
@@ -157,7 +177,26 @@ def get_employee_detail(db: Session, employee_id: str) -> sx.EmployeeDetailRead 
         )
     ]
 
-    activity = _build_activity(recent_docs, recent_leaves, recent_violations, recent_ledger)
+    recent_duty_events = list(
+        db.scalars(
+            select(models.DutyAssignmentEvent)
+            .where(models.DutyAssignmentEvent.employee_id == emp.id)
+            .where(
+                models.DutyAssignmentEvent.event_type.in_(("initial_placement", "transfer"))
+            )
+            .order_by(models.DutyAssignmentEvent.effective_at.desc())
+            .limit(ACTIVITY_LIMIT)
+        )
+    )
+
+    activity = _build_activity(
+        recent_docs,
+        recent_leaves,
+        recent_violations,
+        recent_ledger,
+        recent_absences,
+        recent_duty_events,
+    )
 
     recent_sms = [
         sx.NotifyMessageRead.model_validate(m)
@@ -179,6 +218,7 @@ def get_employee_detail(db: Session, employee_id: str) -> sx.EmployeeDetailRead 
         recent_documents=recent_docs,
         recent_leaves=recent_leaves,
         recent_violations=recent_violations,
+        recent_absences=recent_absences,
         recent_ledger=recent_ledger,
         recent_activity=activity,
         recent_sms=recent_sms,
@@ -201,6 +241,8 @@ def _build_activity(
     leaves: list[sx.RecentLeaveRead],
     violations: list[sx.RecentViolationRead],
     ledger: list[sx.RecentLedgerRead],
+    absences: list[sx.RecentAbsenceRead],
+    duty_events: list[models.DutyAssignmentEvent],
 ) -> list[sx.ActivityItemRead]:
     items: list[sx.ActivityItemRead] = []
     for d in docs:
@@ -241,6 +283,32 @@ def _build_activity(
                 kind="ledger",
                 summary=le.subject,
                 ref_id=le.id,
+            )
+        )
+    for a in absences:
+        items.append(
+            sx.ActivityItemRead(
+                when=datetime.combine(a.date, datetime.min.time()),
+                kind="absence",
+                summary=a.note or "Absence",
+                ref_id=a.id,
+            )
+        )
+    for event in duty_events:
+        items.append(
+            sx.ActivityItemRead(
+                when=event.effective_at,
+                kind="duty_location",
+                summary=event.event_type,
+                ref_id=event.id,
+                event_type=event.event_type,
+                from_department=event.from_department,
+                from_unit=event.from_unit,
+                from_post=event.from_post,
+                to_department=event.to_department,
+                to_unit=event.to_unit,
+                to_post=event.to_post,
+                reason=event.reason,
             )
         )
     items.sort(key=lambda x: x.when, reverse=True)

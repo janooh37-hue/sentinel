@@ -1911,7 +1911,7 @@ def add_attachment(
     )
     if flip_version is not None:
         # Recording a physically-signed paper. Authority is the route gate
-        # (books.manage) — unified across all flip states; the real signature is
+        # (books.edit) — unified across all flip states; the real signature is
         # on the paper, the app user is recording it.
         if ext != ".pdf":
             data = _image_to_pdf_bytes(data, ext)

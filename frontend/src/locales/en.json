@@ -361,6 +361,7 @@
       "leave": "Leave",
       "violation": "Violations",
       "ledger": "Correspondence",
+      "duty_location": "Duty location",
       "employee": "Employee",
       "activity": "Activity",
       "type": "Type",
@@ -371,6 +372,14 @@
       "openLeave": "Open leave",
       "openViolation": "Open violation",
       "openLedger": "Open correspondence",
+      "dutyLocation": {
+        "label": "Duty location",
+        "initial_placement": "Initial placement",
+        "transfer": "Transferred",
+        "unassigned": "Unassigned",
+        "openEmployeeActivity": "Open employee activity",
+        "historyBegins": "History begins at"
+      },
       "loadMore": "Load more activity",
       "loading": "Loading recent activity",
       "showing": "Showing {{shown}} of {{total}} recent entries",
@@ -2229,7 +2238,8 @@
       "activity": "Activity",
       "messages": "Messages",
       "showingRecent": "Showing {{shown}} of {{total}}",
-      "attendance": "Attendance"
+      "attendance": "Attendance",
+      "absences": "Absences"
     },
     "stats": {
       "documents": "Documents",
@@ -2658,7 +2668,8 @@
         "employees": "From Employees",
         "leaves": "From Leaves",
         "records": "From Records",
-        "ledger": "From Ledger"
+        "ledger": "From Ledger",
+        "workforce": "From Workforce"
       },
       "topFull": "Top zone is full (max {{count}})",
       "topOnlyBigCards": "Only big cards can go in the Top zone",
@@ -2677,6 +2688,81 @@
       "maxVisibleHint": "Max {{count}} widgets visible at a time",
       "quickActionsMaxVisibleHint": "Max {{count}} quick actions visible at a time"
     },
+    "workforcePulse": {
+      "title": "Workforce Pulse",
+      "openCoverage": "Open coverage",
+      "self": {
+        "heading": "My shift",
+        "status": "Status",
+        "reason": "Reason",
+        "start": "Starts",
+        "end": "Ends",
+        "presence": {
+          "scheduled": "Scheduled",
+          "on_duty": "On duty",
+          "completed": "Completed",
+          "absent": "Absent",
+          "excused_leave": "Excused leave",
+          "off": "Off duty",
+          "unknown": "Not yet verified"
+        }
+      },
+      "aggregate": {
+        "heading": "Current shift"
+      },
+      "metrics": {
+        "scheduled": "Scheduled",
+        "working": "On duty",
+        "coverage": "Coverage"
+      },
+      "noScope": {
+        "title": "No Workforce scope assigned",
+        "detail": "Ask an administrator to assign a Workforce scope."
+      },
+      "setup": {
+        "title": "{{missing}} setup required",
+        "detail": "Workforce data is unavailable until {{missing}} is configured.",
+        "missing": {
+          "schedules": "Schedule",
+          "policy": "Policy",
+          "mappings": "Mapping",
+          "integration": "Integration"
+        }
+      },
+      "stale": {
+        "title": "Attendance source is stale",
+        "detail": "Current attendance data is not fresh enough to show."
+      },
+      "withheld": {
+        "title": "Pending verification",
+        "detail": "Attendance verification is still in progress."
+      },
+      "coverage": {
+        "title": "Coverage",
+        "operationalDate": "Operational date: {{date}}",
+        "back": "Back",
+        "breadcrumb": "Coverage hierarchy",
+        "allDepartments": "All departments",
+        "empty": "No coverage groups are available for this level.",
+        "pendingVerification": "Pending verification",
+        "unassigned": "Unassigned",
+        "loadMore": "Load more",
+        "level": {
+          "organization": "Departments",
+          "department": "Duty units",
+          "duty_unit": "Duty posts"
+        },
+        "metrics": {
+          "scheduled": "Scheduled",
+          "excused": "Excused",
+          "expected": "Expected",
+          "evaluated": "Evaluated",
+          "excluded": "Excluded",
+          "working": "On duty",
+          "gap": "Gap"
+        }
+      }
+    },
     "widgetLabels": {
       "pending": "Documents Completed",
       "workspace": "My Workspace",
@@ -2693,7 +2779,8 @@
       "waiting_approvals_aria_other": "Waiting approvals: {{count}}. Review.",
       "expiring_soon": "Expiring Soon",
       "recent_ledger": "Recent Ledger",
-      "pending_departures": "Pending Departures"
+      "pending_departures": "Pending Departures",
+      "workforce_pulse": "Workforce Pulse"
     },
     "quickActionLabels": {
       "general_book": "General Book",
@@ -2980,6 +3067,42 @@
       "unsupportedType": "Only images and PDF files are accepted",
       "tooLarge": "File exceeds the {{max}} limit"
     }
+  },
+  "absences": {
+    "tile": {
+      "name": "Employee Absence"
+    },
+    "title": "Employee Absence",
+    "subtitle": "Record the days an employee was absent without leave. No document is created — the record lands on the employee and the time sheet picks it up.",
+    "form": {
+      "start": "First day",
+      "end": "Last day",
+      "note": "Note (optional)",
+      "notePlaceholder": "e.g. no call, no show",
+      "save": "Record absence"
+    },
+    "saved": "Recorded {{count}} absence day(s).",
+    "savedWithSkips": "Recorded {{count}} day(s); skipped {{skipped}} day(s) outside the employee's service window.",
+    "nothingToSave": "Every day in that range is already recorded.",
+    "pickEmployee": "Pick an employee to record or review absences.",
+    "list": {
+      "title": "Recorded absences",
+      "empty": "No absences recorded for this employee.",
+      "confirmDeleteRange": "Remove the absence from {{start}} to {{end}} ({{count}} day(s))?"
+    },
+    "deleted": "Absence removed.",
+    "overwritten": "This leave overwrote {{count}} recorded absence day(s) ({{from}} → {{to}}).",
+    "table": {
+      "id": "ID",
+      "name": "Name",
+      "start": "Start date",
+      "end": "End date",
+      "totalDays": "Total days",
+      "postUnit": "Post unit",
+      "notes": "Notes"
+    },
+    "copy": "Copy table",
+    "copied": "Table copied to the clipboard."
   },
   "dutyLocations": {
     "tile": {
@@ -3329,6 +3452,13 @@
       "adminAll": "Admins always have every capability — overrides don't apply.",
       "saved": "Permission updated.",
       "saveError": "Couldn't update the permission.",
+      "searchPlaceholder": "Search permissions…",
+      "results": "{{count}} result(s)",
+      "noResults": "No permissions match",
+      "noResultsHint": "Search checks names, descriptions and IDs.",
+      "clearSearch": "Clear",
+      "bulkApply": "Apply to all",
+      "savedBulk": "Permissions updated.",
       "domains": {
         "app": "Application",
         "employees": "Employees",
@@ -3343,31 +3473,61 @@
         "editor_templates": "Editor templates",
         "users": "Users",
         "system": "System",
-        "timesheet": "Time sheet"
+        "timesheet": "Time sheet",
+        "permits": "Permits",
+        "messages": "Messages",
+        "workforce": "Workforce"
       },
       "caps": {
         "app.access": "Access the app",
         "employees.view": "View employees",
-        "employees.edit": "Create / edit employees + vault",
+        "employees.create": "Create employees",
+        "employees.edit": "Edit employee profiles",
+        "employees.vault.manage": "Manage document vaults",
+        "employees.notify": "Notify employees",
         "leaves.view": "View leaves",
-        "leaves.edit": "Edit / delete leaves",
+        "leaves.create": "Create leaves",
+        "leaves.edit": "Edit leaves",
+        "leaves.delete": "Delete leaves",
         "violations.view": "View violations",
-        "violations.manage": "Create / edit / delete violations",
+        "violations.create": "Create violations",
+        "violations.edit": "Edit violations",
+        "violations.delete": "Delete violations",
         "documents.generate": "Generate documents",
         "documents.scan": "Scan documents with OCR",
         "books.view": "View books",
-        "books.manage": "Create / edit / delete books",
+        "books.create": "Create records",
+        "books.edit": "Edit records & attachments",
+        "books.submit": "Submit for approval",
         "books.approve": "Approve / reject books",
         "books.override_state": "Force a record's state",
+        "books.templates": "Manage Word templates",
+        "books.delete": "Delete records",
+        "permits.view": "View security permits",
+        "permits.create": "Issue permits",
+        "permits.edit": "Amend & renew permits",
+        "permits.revoke": "Revoke permits",
+        "permits.delete": "Delete permits",
         "ledger.view": "View ledger",
-        "ledger.edit": "Edit ledger entries + drafts",
+        "ledger.create": "Create entries & drafts",
+        "ledger.edit": "Edit entries & address book",
         "ledger.send": "Send email from the ledger",
+        "ledger.delete": "Delete entries & drafts",
         "email.manage": "Manage your mailbox",
         "settings.view": "View settings",
         "settings.edit": "Change settings",
         "submitters.manage": "Manage submitters",
         "editor_templates.manage": "Manage editor templates",
         "users.manage": "Manage users + permissions",
+        "messages.broadcast": "Send group announcements",
+        "workforce.self.view": "View own workforce record",
+        "workforce.dashboard.view": "View workforce dashboard",
+        "workforce.people.view": "View workforce people",
+        "workforce.schedule.manage": "Manage workforce schedules",
+        "workforce.policy.manage": "Manage workforce policies",
+        "workforce.attendance.review": "Review workforce attendance",
+        "workforce.attendance.correct": "Correct workforce attendance",
+        "workforce.integration.manage": "Manage workforce integration",
         "system.admin": "Admin key + v3 migration",
         "timesheet.view": "View the time sheet",
         "timesheet.edit": "Correct and close the time sheet"
@@ -3421,7 +3581,60 @@
     },
     "noAccessPage": "You don't have access to this page",
     "requestAccess": "Request access",
-    "caps": {}
+    "caps": {
+      "app.access": { "desc": "Sign in and see the dashboard, document fields, and read-only chrome." },
+      "employees.view": { "desc": "See the employee directory and individual employee records." },
+      "employees.create": { "desc": "Add new employees to the directory." },
+      "employees.edit": { "desc": "Edit profiles, photos, signature, and passport data." },
+      "employees.vault.manage": { "desc": "Upload and organise files inside employee vaults." },
+      "employees.notify": { "desc": "Send WhatsApp (with SMS fallback) confirmations to employees for leaves, duty resumptions, and violations." },
+      "leaves.view": { "desc": "See leave records and their status." },
+      "timesheet.view": { "desc": "See the monthly attendance grid and download the sheets." },
+      "timesheet.edit": { "desc": "Mark absence, correct cells, set the post count, and close or reopen a month." },
+      "leaves.create": { "desc": "Record new leave requests." },
+      "leaves.edit": { "desc": "Amend leaves, attach certificates, and record duty returns." },
+      "leaves.delete": { "desc": "Remove leave records." },
+      "violations.view": { "desc": "See recorded violations." },
+      "violations.create": { "desc": "Record new violations." },
+      "violations.edit": { "desc": "Correct violation details." },
+      "violations.delete": { "desc": "Remove violations." },
+      "documents.generate": { "desc": "Create official documents from templates." },
+      "documents.scan": { "desc": "Upload scans and run OCR to import documents." },
+      "books.view": { "desc": "Browse the records register." },
+      "books.create": { "desc": "Start new records from forms or templates." },
+      "books.edit": { "desc": "Edit fields, reviewers, attachments, and file scan-backs." },
+      "books.submit": { "desc": "Send records into the approval chain." },
+      "books.approve": { "desc": "Approve, sign, or reject documents in the approval queue." },
+      "books.override_state": { "desc": "Set any record to any state — draft, awaiting signature, awaiting scan, approved, returned, rejected, or voided — bypassing the approval chain. Admin-grade: it overrides who signed what." },
+      "books.templates": { "desc": "Edit the shared Word templates records are composed from." },
+      "books.delete": { "desc": "Move records to the bin." },
+      "permits.view": { "desc": "See the security-zone entry-permit register and its status." },
+      "permits.create": { "desc": "Register new security-zone entry permits." },
+      "permits.edit": { "desc": "Edit people, vehicles, and documents; renew permits." },
+      "permits.revoke": { "desc": "Revoke active entry permits." },
+      "permits.delete": { "desc": "Remove permit records." },
+      "ledger.view": { "desc": "Read correspondence ledger entries." },
+      "ledger.create": { "desc": "Compose new entries, drafts, contacts, and recipient lists." },
+      "ledger.edit": { "desc": "Edit entries and lists, flag, star, and attach files." },
+      "ledger.send": { "desc": "Send email messages from the ledger as yourself." },
+      "ledger.delete": { "desc": "Remove entries, drafts, contacts, and lists." },
+      "email.manage": { "desc": "Link and sync your own mailbox." },
+      "settings.view": { "desc": "See application settings." },
+      "settings.edit": { "desc": "Change application settings." },
+      "submitters.manage": { "desc": "Manage the list of document submitters." },
+      "editor_templates.manage": { "desc": "Create and edit document editor templates." },
+      "users.manage": { "desc": "Manage user accounts and their permissions (admin-only)." },
+      "messages.broadcast": { "desc": "Post announcements (text or a document) to WhatsApp groups." },
+      "workforce.self.view": { "desc": "View your own schedule, attendance punches, and leave." },
+      "workforce.dashboard.view": { "desc": "View aggregate workforce dashboard data inside assigned scope." },
+      "workforce.people.view": { "desc": "View roster and attendance details inside assigned scope." },
+      "workforce.schedule.manage": { "desc": "Manage crews, rotations, memberships, and schedule overrides." },
+      "workforce.policy.manage": { "desc": "Manage staffing requirements, attendance policies, and excusing leave kinds." },
+      "workforce.attendance.review": { "desc": "Review workforce attendance cases, exceptions, and source facts." },
+      "workforce.attendance.correct": { "desc": "Create audited workforce attendance adjustments." },
+      "workforce.integration.manage": { "desc": "Manage workforce provider status, mappings, tests, and synchronization." },
+      "system.admin": { "desc": "Use the admin key and run system/migration tools (admin-only)." }
+    }
   },
   "dutySupervisors": {
     "title": "Notify supervisors",
@@ -3962,6 +4175,84 @@
       "none": "Nothing needs a decision today.",
       "reviewAll": "Review all",
       "openFile": "Open attendance file"
+    },
+    "review": {
+      "title": "Attendance review",
+      "review": "Review {{name}}",
+      "sourceFacts": "Source facts",
+      "automaticEvaluations": "Automatic evaluations",
+      "humanCorrections": "Human corrections",
+      "assignment": "Captured assignment",
+      "department": "Captured department",
+      "crew": "Captured crew",
+      "shift": "Captured shift",
+      "scheduledWindow": "Scheduled window",
+      "effectiveResult": "Effective result",
+      "baseEvaluation": "Base evaluation",
+      "supersedes": "Supersedes correction",
+      "replacementPresence": "Presence",
+      "firstIn": "First in",
+      "latestIn": "Latest in",
+      "finalOut": "Final out",
+      "lateMinutes": "Late minutes",
+      "earlyExitMinutes": "Early exit minutes",
+      "missingCheckout": "Missing checkout",
+      "reason": "Reason",
+      "revoked": "revoked",
+      "exceptionsFailed": "Review exceptions unavailable. Showing the derived attention queue.",
+      "presence": {
+        "scheduled": "Scheduled",
+        "on_duty": "On duty",
+        "completed": "Completed",
+        "absent": "Absent",
+        "excused_leave": "Excused leave",
+        "off": "Off",
+        "unknown": "Unknown",
+        "late": "Late"
+      },
+      "reasons": {
+        "punch_out_recorded": "Exit recorded",
+        "no_in_after_threshold": "No arrival after threshold",
+        "scheduled_before_absence_boundary": "Awaiting absence threshold",
+        "punch_recorded_directionless": "Punch recorded",
+        "punch_in_active": "On-duty punch",
+        "shift_ended": "Shift ended",
+        "sync_stale": "Sync data is stale",
+        "policy_missing": "Policy is missing",
+        "punch_sequence_invalid": "Punch sequence is invalid",
+        "late_arrival": "Late arrival",
+        "missing_checkout": "Missing checkout",
+        "early_exit": "Early exit",
+        "identity_conflict": "Identity conflict",
+        "identity_unverified": "Identity is unverified",
+        "employment_status_unknown": "Employment status is unknown",
+        "punch_out_only_inferred": "Exit-only punch inferred",
+        "punch_order_inferred": "Punch order inferred",
+        "attendance_adjustment_changed": "Attendance adjustment changed",
+        "leave_national_service": "National service leave",
+        "leave_sick": "Sick leave",
+        "leave_annual": "Annual leave"
+      },
+      "auditActions": {
+        "created": "Correction created",
+        "revoked": "Correction revoked"
+      },
+      "loadFailed": "Attendance case could not be loaded.",
+      "correction": "Correction",
+      "correctionPresence": "Correction presence",
+      "noOverride": "Clear value",
+      "correctionReason": "Correction reason",
+      "saveCorrection": "Save correction",
+      "correctionSaved": "Correction saved.",
+      "reasonRequired": "A correction reason is required.",
+      "unchanged": "Change at least one attendance value before saving.",
+      "conflictWarning": "This attendance case changed. Compare the refreshed evidence before submitting your preserved draft.",
+      "revokeReason": "Revoke reason",
+      "revokeCorrection": "Revoke correction",
+      "confirmRevokeTitle": "Revoke this correction?",
+      "confirmRevokeDescription": "This correction will no longer be effective. The reason will be recorded in the audit trail.",
+      "confirmRevoke": "Confirm revoke",
+      "correctionRevoked": "Correction revoked."
     },
     "hero": {
       "title": "ATTENDANCE TODAY",

@@ -39,6 +39,9 @@ interface Props {
   employeeId: string
   highlightedId?: number | null
   targetNotFound: boolean
+  canCreate: boolean
+  canEdit: boolean
+  canDelete: boolean
   onCreate: (v: ViolationCreate) => Promise<void>
   onUpdate: (id: number, v: ViolationUpdate) => Promise<void>
   onDelete: (id: number) => Promise<void>
@@ -49,6 +52,9 @@ export function ViolationsTable({
   employeeId,
   highlightedId,
   targetNotFound,
+  canCreate,
+  canEdit,
+  canDelete,
   onCreate,
   onUpdate,
   onDelete,
@@ -69,9 +75,11 @@ export function ViolationsTable({
     <Card>
       <CardHeader>
         <CardTitle>{t('violations.title')}</CardTitle>
-        <Button size="sm" onClick={() => setAdding((v) => !v)}>
-          {adding ? t('common.cancel') : t('violations.add')}
-        </Button>
+        {canCreate && (
+          <Button size="sm" onClick={() => setAdding((v) => !v)}>
+            {adding ? t('common.cancel') : t('violations.add')}
+          </Button>
+        )}
       </CardHeader>
       <CardContent className="space-y-3 p-0">
         {adding && (
@@ -155,23 +163,27 @@ export function ViolationsTable({
                     <TableCell>
                       <div className="flex items-center justify-end gap-1.5">
                         <SendButton eventType="violation" recordId={row.id} />
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="xs"
-                          onClick={() => setEditingId(row.id)}
-                        >
-                          {t('common.edit')}
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="xs"
-                          className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-                          onClick={() => setDeletingId(row.id)}
-                        >
-                          {t('common.delete')}
-                        </Button>
+                        {canEdit && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="xs"
+                            onClick={() => setEditingId(row.id)}
+                          >
+                            {t('common.edit')}
+                          </Button>
+                        )}
+                        {canDelete && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="xs"
+                            className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                            onClick={() => setDeletingId(row.id)}
+                          >
+                            {t('common.delete')}
+                          </Button>
+                        )}
                       </div>
                     </TableCell>
                   </TableRow>

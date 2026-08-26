@@ -21,6 +21,7 @@ import { useCapabilities } from '@/lib/useCapabilities'
 import { pickEmployeeName } from '@/lib/employeeName'
 
 import { AttentionQueue } from './AttentionQueue'
+import { AttendanceCorrectionDrawer } from './AttendanceCorrectionDrawer'
 import type { PrintLayout } from './AttendancePrintSheet'
 import { AttendancePrintSheet } from './AttendancePrintSheet'
 import type { AttendanceView } from './AttendanceToolbar'
@@ -60,9 +61,10 @@ export function AttendancePage(): React.JSX.Element {
   // is switched BEFORE the dialog opens, so React has committed the right
   // layout by the time the browser paints the preview.
   const [printLayout, setPrintLayout] = useState<PrintLayout>('sheet')
+  const [selectedCaseId, setSelectedCaseId] = useState<number | null>(null)
   const { has } = useCapabilities()
   const hasIntegrationView = has('workforce.integration.manage')
-
+  const canReview = has('workforce.people.view') && has('workforce.attendance.review')
   const setParam = useCallback(
     (key: string, value: string | null) => {
       setParams(
@@ -94,6 +96,12 @@ export function AttendancePage(): React.JSX.Element {
     staleTime: 30_000,
   })
 
+  const exceptionsQuery = useQuery({
+    queryKey: ['attendance-exceptions', operationalDate, shiftCode] as const,
+    queryFn: () => api.listAttendanceExceptions({ operational_date: operationalDate, limit: 500 }),
+    enabled: canReview,
+  })
+
   const allRows = useMemo<AttendanceRow[]>(() => dayQuery.data?.items ?? [], [dayQuery.data])
   // Judge against the instant the payload was produced: counts and rows must
   // never disagree about whether a window had opened.
@@ -119,10 +127,9 @@ export function AttendancePage(): React.JSX.Element {
     })
   }, [allRows, i18n.language, search, shiftCode])
 
-  const attention = useMemo(
-    () => allRows.filter((row) => needsDecision(rowState(row, { now }))).length,
-    [allRows, now],
-  )
+  const attention = exceptionsQuery.isSuccess
+    ? exceptionsQuery.data.items.length
+    : allRows.filter((row) => needsDecision(rowState(row, { now }))).length
 
   const dayStrip = useMemo<DayStripEntry[]>(() => {
     const entries: DayStripEntry[] = []
@@ -273,10 +280,17 @@ export function AttendancePage(): React.JSX.Element {
         <div className="grid gap-3.5 lg:grid-cols-[minmax(0,1fr)_320px]">
           <div className="min-w-0">{body()}</div>
           <div className="mt-3 lg:mt-3">
+            {exceptionsQuery.isError && (
+              <p role="alert" className="mb-2 rounded-xl border border-warning/30 bg-warning/10 px-3 py-2 text-[0.75em] text-warning">
+                {t('attendance.review.exceptionsFailed')}
+              </p>
+            )}
             <AttentionQueue
               rows={allRows}
+              exceptionRows={exceptionsQuery.isSuccess ? exceptionsQuery.data.items : undefined}
               now={now}
               onOpenEmployee={openEmployee}
+              onReviewCase={exceptionsQuery.isSuccess ? setSelectedCaseId : undefined}
             />
           </div>
         </div>
@@ -294,6 +308,7 @@ export function AttendancePage(): React.JSX.Element {
         shiftCode={shiftCode}
         search={search}
       />
+      <AttendanceCorrectionDrawer caseId={selectedCaseId} onClose={() => setSelectedCaseId(null)} />
     </div>
   )
 }

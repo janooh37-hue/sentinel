@@ -61,7 +61,8 @@ export function BooksPage(): React.JSX.Element {
   const isAr = i18n.language.startsWith('ar')
   const qc = useQueryClient()
   const { has } = useCapabilities()
-  const canManage = has('books.manage')
+  const canDelete = has('books.delete')
+  const canSubmit = has('books.submit')
   const navigate = useNavigate()
   const isMobile = useIsMobile()
   const isDesktop = !isMobile
@@ -569,7 +570,7 @@ export function BooksPage(): React.JSX.Element {
                       >
                         {t('basket.addN', { count: selectedForBasket.size })}
                       </button>
-                      {canManage && (
+                      {canDelete && (
                         <button
                           type="button"
                           onClick={() => setConfirmDeleteOpen(true)}
@@ -680,7 +681,7 @@ export function BooksPage(): React.JSX.Element {
                     key={row.id}
                     row={row}
                     isAr={isAr}
-                    canManage={canManage}
+                    canSubmit={canSubmit}
                     highlighted={row.id === highlightedId}
                     onSubmit={() => setSubmitBookId(row.id)}
                     onOpen={() => openBook(row)}
@@ -789,7 +790,7 @@ function DirectionPill({
 interface BookMobileCardProps {
   row: BookRead
   isAr: boolean
-  canManage: boolean
+  canSubmit: boolean
   highlighted: boolean
   onSubmit: () => void
   onOpen: () => void
@@ -799,7 +800,7 @@ interface BookMobileCardProps {
 function BookMobileCard({
   row,
   isAr,
-  canManage,
+  canSubmit,
   highlighted,
   onSubmit,
   onOpen,
@@ -840,7 +841,7 @@ function BookMobileCard({
         ) : (
           <>
             <ApprovalStatePill state="none" t={t} />
-            {canManage ? (
+            {canSubmit ? (
               <button
                 type="button"
                 onClick={(e) => { e.stopPropagation(); onSubmit() }}

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import date
+
 from typing import Any
 
 from fastapi.testclient import TestClient
@@ -11,6 +13,8 @@ from app.api.deps import get_current_user
 from app.db.models import Employee, User, UserWorkforceScope
 from app.db.session import get_db
 from app.main import create_app
+from tests.factories.attendance import build_attendance_day
+
 
 
 def _employee(employee_id: str, *, department: str, duty_unit: str, name: str) -> Employee:
@@ -170,6 +174,45 @@ def test_workforce_routes_fail_closed_for_an_operator_without_the_required_capab
         )
         assert response.status_code == 403, f"{method.upper()} {path}: {response.text}"
 
+
+
+def test_double_shift_attendance_responses_publish_exact_case_ids(api_db: Session) -> None:
+    operational_date = date(2026, 8, 19)
+    fixture = build_attendance_day(
+        api_db, operational_date=operational_date, posts=[("البوابة الرئيسية", 1)]
+    )
+    client = _client(api_db, fixture.admin)
+    employee = fixture.employees[0]
+    expected = {
+        case.shift_code_snapshot: case.id
+        for case in fixture.cases
+        if case.employee_id == employee.id
+    }
+    assert expected.keys() == {"morning", "night"}
+
+    day = client.get(
+        "/api/v1/workforce/attendance/day",
+        params={"operational_date": operational_date.isoformat()},
+    )
+    assert day.status_code == 200, day.text
+    day_case_ids = {
+        row["shift_code"]: row["case_id"]
+        for row in day.json()["items"]
+        if row["employee_id"] == employee.id
+    }
+    assert day_case_ids == expected
+
+    exceptions = client.get(
+        "/api/v1/workforce/attendance/exceptions",
+        params={"operational_date": operational_date.isoformat()},
+    )
+    assert exceptions.status_code == 200, exceptions.text
+    exception_case_ids = {
+        row["shift_code"]: row["case_id"]
+        for row in exceptions.json()["items"]
+        if row["employee_id"] == employee.id
+    }
+    assert exception_case_ids == expected
 
 def test_self_capability_can_read_only_its_self_snapshot_block(api_db: Session) -> None:
     """Self view remains usable but never acts as aggregate or person-level authorization."""

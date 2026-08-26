@@ -1,6 +1,8 @@
 """Scoped person-level workforce reads and non-secret integration projections."""
 from __future__ import annotations
 
+import json
+from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from math import floor
 from typing import Any
@@ -10,11 +12,12 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.api.errors import NotFoundError, ValidationFailedError
-from app.db.models import Employee
+from app.db.models import AuditLog, Employee
 from app.db.workforce_models import (
     AttendanceAdjustment,
     AttendanceCase,
     AttendanceEvaluation,
+    AttendanceEvaluationPunchSource,
     AttendanceEvaluationQueue,
     AttendanceProviderPerson,
     AttendancePunch,
@@ -31,6 +34,12 @@ from app.db.workforce_models import (
 from app.services import attendance_profile_service
 from app.services.attendance_evaluation_service import effective_policy
 from app.services.workforce_scope_service import scope_allows
+from app.services.workforce_admin_service import (
+    active_attendance_adjustment,
+    active_attendance_adjustments,
+    attendance_case_etag_for,
+    overlay_attendance_adjustment,
+)
 
 
 def _latest_evaluations(db: Session, case_ids: list[int]) -> dict[int, AttendanceEvaluation]:
@@ -45,6 +54,7 @@ def _latest_evaluations(db: Session, case_ids: list[int]) -> dict[int, Attendanc
     for row in rows:
         latest.setdefault(row.attendance_case_id, row)
     return latest
+
 
 
 def _case_allowed(case: AttendanceCase, scope: Any) -> bool:
@@ -84,14 +94,17 @@ def list_roster(db: Session, *, scope: Any, operational_date: date) -> list[dict
         if _case_allowed(case, scope)
     ]
     latest = _latest_evaluations(db, [case.id for case in cases])
+    adjustments = active_attendance_adjustments(db, [case.id for case in cases])
     result: list[dict[str, Any]] = []
     for case in cases:
-        evaluation = latest.get(case.id)
+        effective = _effective_evaluation_values(
+            latest.get(case.id), adjustments.get(case.id)
+        )
         result.append(
             {
                 **_person_fields(db, case),
-                "presence_state": evaluation.presence_state if evaluation else None,
-                "reason_code": evaluation.reason_code if evaluation else None,
+                "presence_state": effective["presence_state"] if effective else None,
+                "reason_code": effective["reason_code"] if effective else None,
             }
         )
     return sorted(result, key=lambda row: (row["scheduled_start_at"], row["employee_id"]))
@@ -110,18 +123,21 @@ def list_exceptions(
         query = query.where(AttendanceCase.operational_date == operational_date)
     cases = [case for case in db.scalars(query) if _case_allowed(case, scope)]
     latest = _latest_evaluations(db, [case.id for case in cases])
+    adjustments = active_attendance_adjustments(db, [case.id for case in cases])
     result: list[dict[str, Any]] = []
     for case in cases:
-        evaluation = latest.get(case.id)
-        if evaluation is None:
+        effective = _effective_evaluation_values(
+            latest.get(case.id), adjustments.get(case.id)
+        )
+        if effective is None:
             continue
-        if presence and evaluation.presence_state != presence:
+        if presence and effective["presence_state"] != presence:
             continue
         has_exception = bool(
-            (evaluation.late_minutes or 0) > 0
-            or (evaluation.early_exit_minutes or 0) > 0
-            or evaluation.missing_checkout
-            or evaluation.presence_state in {"absent", "unknown"}
+            (effective["late_minutes"] or 0) > 0
+            or (effective["early_exit_minutes"] or 0) > 0
+            or effective["missing_checkout"]
+            or effective["presence_state"] in {"absent", "unknown"}
         )
         if exception and not has_exception:
             continue
@@ -130,11 +146,12 @@ def list_exceptions(
         result.append(
             {
                 **_person_fields(db, case),
-                "presence_state": evaluation.presence_state,
-                "reason_code": evaluation.reason_code,
-                "late_minutes": evaluation.late_minutes,
-                "early_exit_minutes": evaluation.early_exit_minutes,
-                "missing_checkout": evaluation.missing_checkout,
+                "case_id": case.id,
+                "presence_state": effective["presence_state"],
+                "reason_code": effective["reason_code"],
+                "late_minutes": effective["late_minutes"],
+                "early_exit_minutes": effective["early_exit_minutes"],
+                "missing_checkout": effective["missing_checkout"],
             }
         )
     return sorted(result, key=lambda row: (row["scheduled_start_at"], row["employee_id"]))
@@ -282,12 +299,15 @@ def list_attendance_day(
         return []
 
     latest = _latest_evaluations(db, [case.id for case in cases])
+    adjustments = active_attendance_adjustments(db, [case.id for case in cases])
     people = _verified_people(db, {case.employee_id for case in cases})
 
     result: list[dict[str, Any]] = []
     for case in cases:
-        evaluation = latest.get(case.id)
-        presence_state = evaluation.presence_state if evaluation else None
+        adjustment = adjustments.get(case.id)
+        effective = _effective_evaluation_values(
+            latest.get(case.id), adjustment
+        )
         policy = effective_policy(db, case)
         first_at, last_at, count = _punch_bounds(
             db, case=case, person=people.get(case.employee_id), policy=policy
@@ -295,13 +315,18 @@ def list_attendance_day(
         result.append(
             {
                 **_person_fields(db, case),
-                "presence_state": presence_state,
-                "reason_code": evaluation.reason_code if evaluation else None,
+                "case_id": case.id,
+                "presence_state": effective["presence_state"] if effective else None,
+                "reason_code": effective["reason_code"] if effective else None,
                 "first_punch_at": first_at,
                 "last_punch_at": last_at,
                 "punch_count": count,
-                "late_minutes": _late_minutes(case, first_at),
-                "on_leave": presence_state == "excused_leave",
+                "late_minutes": (
+                    effective["late_minutes"]
+                    if adjustment is not None and effective
+                    else _late_minutes(case, first_at)
+                ),
+                "on_leave": effective is not None and effective["presence_state"] == "excused_leave",
                 "judgment_due_at": _judgment_due_at(case, policy),
                 "grace_minutes": policy.grace_minutes if policy is not None else None,
                 "absence_due_at": _absence_due_at(case, policy),
@@ -347,11 +372,15 @@ def employee_attendance_range(
         if _case_allowed(case, scope)
     ]
     latest = _latest_evaluations(db, [case.id for case in cases])
+    adjustments = active_attendance_adjustments(db, [case.id for case in cases])
     person = _verified_people(db, {employee_id}).get(employee_id)
 
     days: list[dict[str, Any]] = []
     for case in cases:
-        evaluation = latest.get(case.id)
+        adjustment = adjustments.get(case.id)
+        effective = _effective_evaluation_values(
+            latest.get(case.id), adjustment
+        )
         policy = effective_policy(db, case)
         first_at, _last_at, count = _punch_bounds(db, case=case, person=person, policy=policy)
         punches: list[dict[str, Any]] = []
@@ -375,9 +404,13 @@ def employee_attendance_range(
                 "shift_code": case.shift_code_snapshot,
                 "scheduled_start_at": case.scheduled_start_at,
                 "scheduled_end_at": case.scheduled_end_at,
-                "presence_state": evaluation.presence_state if evaluation else None,
-                "reason_code": evaluation.reason_code if evaluation else None,
-                "late_minutes": _late_minutes(case, first_at),
+                "presence_state": effective["presence_state"] if effective else None,
+                "reason_code": effective["reason_code"] if effective else None,
+                "late_minutes": (
+                    effective["late_minutes"]
+                    if adjustment is not None and effective
+                    else _late_minutes(case, first_at)
+                ),
                 "punch_count": count,
                 "grace_minutes": policy.grace_minutes if policy is not None else None,
                 "absence_due_at": _absence_due_at(case, policy),
@@ -423,6 +456,14 @@ def _evaluation_read(row: AttendanceEvaluation) -> dict[str, Any]:
         "evaluated_at": row.evaluated_at,
     }
 
+def _effective_evaluation_values(
+    evaluation: AttendanceEvaluation | None,
+    adjustment: AttendanceAdjustment | None,
+) -> dict[str, Any] | None:
+    if evaluation is None:
+        return None
+    return overlay_attendance_adjustment(_evaluation_read(evaluation), adjustment)
+
 
 def _adjustment_read(row: AttendanceAdjustment) -> dict[str, Any]:
     return {
@@ -440,9 +481,98 @@ def _adjustment_read(row: AttendanceAdjustment) -> dict[str, Any]:
         "revoked_at": row.revoked_at,
         "supersedes_adjustment_id": row.supersedes_adjustment_id,
     }
+def _case_punches(db: Session, case: AttendanceCase) -> list[dict[str, Any]]:
+    """Return the immutable provider events recorded by the case evaluations."""
+    return [
+        {"occurred_at": _as_utc_aware(row.occurred_at), "device_name": row.device_name}
+        for row in db.scalars(
+            select(AttendancePunch)
+            .join(
+                AttendanceEvaluationPunchSource,
+                AttendanceEvaluationPunchSource.punch_id == AttendancePunch.id,
+            )
+            .join(
+                AttendanceEvaluation,
+                AttendanceEvaluation.id == AttendanceEvaluationPunchSource.evaluation_id,
+            )
+            .where(AttendanceEvaluation.attendance_case_id == case.id)
+            .distinct()
+            .order_by(AttendancePunch.occurred_at, AttendancePunch.id)
+        )
+    ]
 
 
-def get_attendance_case(db: Session, *, scope: Any, case_id: int) -> dict[str, Any]:
+def _audit_reason(row: AuditLog) -> str | None:
+    """Read an explicitly recorded adjustment reason without interpreting payloads."""
+    if not row.payload:
+        return None
+    try:
+        payload = json.loads(row.payload)
+    except (TypeError, json.JSONDecodeError):
+        return None
+    after = payload.get("after") if isinstance(payload, dict) else None
+    reason = after.get("reason") if isinstance(after, dict) else None
+    return reason.strip() if isinstance(reason, str) and reason.strip() else None
+
+
+def _adjustment_audit_read(
+    db: Session, adjustments: list[AttendanceAdjustment]
+) -> list[dict[str, Any]]:
+    adjustment_ids = {row.id for row in adjustments}
+    if not adjustment_ids:
+        return []
+    rows = db.scalars(
+        select(AuditLog)
+        .where(
+            AuditLog.entity_type == "attendance_adjustment",
+            AuditLog.entity_id.in_([str(adjustment_id) for adjustment_id in adjustment_ids]),
+            AuditLog.action.in_(
+                (
+                    "workforce.attendance_adjustment.created",
+                    "workforce.attendance_adjustment.revoked",
+                )
+            ),
+        )
+        .order_by(AuditLog.ts, AuditLog.id)
+    )
+    result: list[dict[str, Any]] = []
+    adjustment_reasons = {row.id: row.reason for row in adjustments}
+    for row in rows:
+        if row.entity_id is None:
+            continue
+        try:
+            adjustment_id = int(row.entity_id)
+        except ValueError:
+            continue
+        if adjustment_id not in adjustment_ids:
+            continue
+        action = row.action.rsplit(".", maxsplit=1)[-1]
+        reason = _audit_reason(row)
+        if reason is None and action == "created":
+            reason = adjustment_reasons[adjustment_id]
+        if reason is None:
+            continue
+        result.append(
+            {
+                "adjustment_id": adjustment_id,
+                "action": row.action.rsplit(".", maxsplit=1)[-1],
+                "actor": row.actor,
+                "occurred_at": _as_utc_aware(row.ts),
+                "reason": reason,
+            }
+        )
+    return result
+
+
+@dataclass(frozen=True)
+class AttendanceCaseSnapshot:
+    body: dict[str, Any]
+    etag: str
+
+
+def get_attendance_case_snapshot(
+    db: Session, *, scope: Any, case_id: int
+) -> AttendanceCaseSnapshot:
     case = db.get(AttendanceCase, case_id)
     if case is None:
         raise NotFoundError("ATTENDANCE_CASE_NOT_FOUND", "Attendance case was not found.")
@@ -461,42 +591,42 @@ def get_attendance_case(db: Session, *, scope: Any, case_id: int) -> dict[str, A
         db.scalars(
             select(AttendanceAdjustment)
             .where(AttendanceAdjustment.attendance_case_id == case.id)
-            .order_by(AttendanceAdjustment.created_at)
+            .order_by(AttendanceAdjustment.created_at, AttendanceAdjustment.id)
         )
     )
     latest = evaluations[-1] if evaluations else None
-    active = next(
-        (
-            adjustment
-            for adjustment in reversed(adjustments)
-            if adjustment.revoked_at is None
-            and not any(other.supersedes_adjustment_id == adjustment.id for other in adjustments)
-        ),
-        None,
-    )
-    effective: dict[str, Any] | None = _evaluation_read(latest) if latest else None
-    if effective is not None and active is not None:
-        replacements = {
-            "presence_state": active.replacement_presence_state,
-            "first_in_at": active.replacement_first_in_at,
-            "latest_in_at": active.replacement_latest_in_at,
-            "final_out_at": active.replacement_final_out_at,
-            "late_minutes": active.replacement_late_minutes,
-            "early_exit_minutes": active.replacement_early_exit_minutes,
-            "missing_checkout": active.replacement_missing_checkout,
-        }
-        effective.update({key: value for key, value in replacements.items() if value is not None})
-        effective["adjustment_id"] = active.id
-    return {
+    active = active_attendance_adjustment(adjustments)
+    effective = _effective_evaluation_values(latest, active)
+    employee = _employee_row(db, case.employee_id)
+    body = {
         "id": case.id,
         "employee_id": case.employee_id,
+        "name_en": employee.name_en if employee else "",
+        "name_ar": employee.name_ar if employee else None,
         "operational_date": case.operational_date,
         "scheduled_start_at": case.scheduled_start_at,
         "scheduled_end_at": case.scheduled_end_at,
+        "department_snapshot": case.department_snapshot,
+        "duty_unit_snapshot": case.duty_unit_snapshot,
+        "duty_post_snapshot": case.duty_post_snapshot,
+        "crew_code_snapshot": case.crew_code_snapshot,
+        "crew_name_snapshot": case.crew_name_snapshot,
+        "shift_code_snapshot": case.shift_code_snapshot,
+        "organization_snapshot_state": case.organization_snapshot_state,
+        "punches": _case_punches(db, case),
         "effective": effective,
         "evaluations": [_evaluation_read(row) for row in evaluations],
         "adjustments": [_adjustment_read(row) for row in adjustments],
+        "adjustment_audit": _adjustment_audit_read(db, adjustments),
     }
+    return AttendanceCaseSnapshot(
+        body=body,
+        etag=attendance_case_etag_for(case_id=case.id, latest=latest, active=active),
+    )
+
+
+def get_attendance_case(db: Session, *, scope: Any, case_id: int) -> dict[str, Any]:
+    return get_attendance_case_snapshot(db, scope=scope, case_id=case_id).body
 
 
 def list_duty_assignment_events(db: Session, *, scope: Any) -> list[dict[str, Any]]:

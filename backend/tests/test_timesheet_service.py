@@ -36,6 +36,7 @@ from app.db.models import (
     TimesheetStatFiller,
 )
 from app.schemas.timesheet import TimesheetRosterAssignmentWrite
+from app.services import absence_service
 from app.services import timesheet_service as svc
 from tests.conftest import make_user
 
@@ -272,10 +273,10 @@ def test_a_day_the_month_does_not_have_is_rejected(db_session, guards):
 
 def test_a_sick_certificate_supersedes_the_absence(db_session, guards):
     svc.set_cell(db_session, 2026, 7, "G1001", 14, "AB")
-    removed = svc.delete_absences_covered_by(
+    removed = absence_service.delete_absences_covered_by(
         db_session, "G1001", date(2026, 7, 14), date(2026, 7, 14)
     )
-    assert removed == 1
+    assert removed == [date(2026, 7, 14)]
     assert db_session.query(Absence).count() == 0
 
 
@@ -1038,7 +1039,9 @@ def test_a_certificate_may_still_be_filed_against_a_closed_month(db_session, gua
     svc.set_cell(db_session, 2026, 7, "G1001", 14, "AB")
     svc.close_month(db_session, 2026, 7)
 
-    assert svc.delete_absences_covered_by(db_session, "G1001", date(2026, 7, 1), date(2026, 7, 31))
+    assert absence_service.delete_absences_covered_by(
+        db_session, "G1001", date(2026, 7, 1), date(2026, 7, 31)
+    ) == [date(2026, 7, 14)]
     assert db_session.query(Absence).count() == 0
     assert _row(db_session, 2026, 7, "G1001").codes[13] == CODE_ABSENT  # still sealed
 

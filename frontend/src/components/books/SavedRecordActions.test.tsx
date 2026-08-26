@@ -63,7 +63,7 @@ function renderWithLocation() {
 beforeEach(async () => {
   await i18n.addResourceBundle('ar', 'translation', ar, true, true)
   await i18n.changeLanguage('ar')
-  mockUseCapabilities.mockReturnValue({ capabilities: new Set(['books.manage']), isLoading: false, has: () => true })
+  mockUseCapabilities.mockReturnValue({ capabilities: new Set(['books.submit']), isLoading: false, has: () => true })
   vi.spyOn(api, 'getBook').mockResolvedValue(makeBook())
   mockUseIsMobile.mockReturnValue(false)
 })
@@ -115,7 +115,7 @@ describe('SavedRecordActions', () => {
     expect(screen.queryByRole('button', { name: 'إرسال للموافقة' })).not.toBeInTheDocument()
   })
 
-  it('hides approval action without books.manage', async () => {
+  it('hides approval action without books.submit', async () => {
     mockUseCapabilities.mockReturnValue({ capabilities: new Set(), isLoading: false, has: () => false })
     vi.mocked(api.getBook).mockResolvedValue(makeBook({ approval_state: 'none' }))
     renderActions()

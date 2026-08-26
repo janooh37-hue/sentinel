@@ -35,6 +35,48 @@ export type EmployeeAttendanceHistory = components['schemas']['EmployeeAttendanc
 export type EmployeeAttendanceHistoryDay =
   components['schemas']['EmployeeAttendanceHistoryDayRead']
 export type WorkforceIntegrationStatus = components['schemas']['IntegrationStatusRead']
+export type WorkforceAccess = components['schemas']['WorkforceAccessRead']
+export type WorkforceSnapshot = components['schemas']['WorkforceSnapshotRead']
+export type WorkforceCoverageRow = components['schemas']['CoverageRowRead']
+export type WorkforceCoveragePage = components['schemas']['CursorPage_CoverageRowRead_']
+export type AttendanceException = components['schemas']['AttendanceExceptionRead']
+export type AttendanceExceptionPage = components['schemas']['CursorPage_AttendanceExceptionRead_']
+export type AttendanceCase = components['schemas']['AttendanceCaseRead']
+export type AttendanceAdjustmentWrite = components['schemas']['AttendanceAdjustmentWrite']
+export type AdjustmentRevokeWrite = components['schemas']['AdjustmentRevokeWrite']
+
+export interface Versioned<T> {
+  data: T
+  etag: string
+}
+
+export interface AttendanceAdjustmentCreated {
+  id: number
+  case_id: number
+}
+
+export interface AttendanceAdjustmentRevoked {
+  id: number
+  revoked_at: string | null
+}
+
+export interface ListAttendanceExceptionsParams {
+  operational_date?: string
+  presence?: string
+  exception?: string
+  limit?: number
+  cursor?: string
+}
+
+
+export interface WorkforceCoverageParams {
+  operational_date: string
+  parent_kind: 'organization' | 'department' | 'duty_unit'
+  department?: string
+  duty_unit?: string
+  limit?: number
+  cursor?: string
+}
 
 export interface ListAttendanceDayParams {
   operational_date: string
@@ -161,6 +203,15 @@ export type ActivityItemRead = components['schemas']['ActivityItemRead']
 export type ViolationRead = components['schemas']['ViolationRead']
 export type ViolationCreate = components['schemas']['ViolationCreate']
 export type ViolationUpdate = components['schemas']['ViolationUpdate']
+// Absence records — day-level facts on the employee, recorded from the
+// Services gallery (no document); the time sheet reads them as AB. The
+// register groups contiguous days into episodes (one row per run).
+export type AbsenceRead = components['schemas']['AbsenceRead']
+export type AbsenceCreate = components['schemas']['AbsenceCreate']
+export type AbsenceCreateResult = components['schemas']['AbsenceCreateResult']
+export type AbsenceEpisodeRead = components['schemas']['AbsenceEpisodeRead']
+export type AbsenceRecordRead = components['schemas']['AbsenceRecordRead']
+export type RecentAbsenceRead = components['schemas']['RecentAbsenceRead']
 
 // The backend now returns the employee's bilingual name alongside each leave
 // row so the Records table can render a name instead of a raw G-number. These
@@ -939,6 +990,33 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
   }
   return unwrap<T>(await fetch(`${BASE}${path}`, init))
 }
+export async function requestVersioned<T>(
+  method: string,
+  path: string,
+  body?: unknown,
+  etag?: string,
+): Promise<Versioned<T>> {
+  const headers: Record<string, string> = {}
+  if (body !== undefined) headers['content-type'] = 'application/json'
+  if (etag) headers['If-Match'] = etag
+  const res = await fetch(`${BASE}${path}`, {
+    method,
+    cache: 'no-store',
+    credentials: 'same-origin',
+    headers,
+    body: body === undefined ? undefined : JSON.stringify(body),
+  })
+  const data = await unwrap<T>(res)
+  const nextEtag = res.headers.get('etag')
+  if (!nextEtag) throw new ApiError(500, 'MISSING_ETAG', 'Versioned response omitted ETag')
+  return { data, etag: nextEtag }
+}
+
+function requireEtag(etag: string): string {
+  if (!etag.trim()) throw new ApiError(400, 'MISSING_ETAG', 'A current case ETag is required')
+  return etag
+}
+
 
 async function multipart<T>(path: string, form: FormData, method = 'POST'): Promise<T> {
   return unwrap<T>(
@@ -1070,6 +1148,33 @@ export const api = {
   getEmployee: (id: string) => request<EmployeeRead>('GET', `/employees/${encodeURIComponent(id)}`),
   listAttendanceDay: (params: ListAttendanceDayParams) =>
     request<AttendanceDayPage>('GET', `/workforce/attendance/day${qs({ ...params })}`),
+  listAttendanceExceptions: (params: ListAttendanceExceptionsParams = {}) =>
+    request<AttendanceExceptionPage>('GET', `/workforce/attendance/exceptions${qs({ ...params })}`),
+  getAttendanceCase: (caseId: number) =>
+    requestVersioned<AttendanceCase>('GET', `/workforce/attendance/cases/${caseId}`),
+  createAttendanceAdjustment: async (
+    caseId: number,
+    etag: string,
+    payload: AttendanceAdjustmentWrite,
+  ) =>
+    requestVersioned<AttendanceAdjustmentCreated>(
+      'POST',
+      `/workforce/attendance/cases/${caseId}/adjustments`,
+      payload,
+      requireEtag(etag),
+    ),
+  revokeAttendanceAdjustment: async (
+    caseId: number,
+    adjustmentId: number,
+    etag: string,
+    payload: AdjustmentRevokeWrite,
+  ) =>
+    requestVersioned<AttendanceAdjustmentRevoked>(
+      'POST',
+      `/workforce/attendance/cases/${caseId}/adjustments/${adjustmentId}/revoke`,
+      payload,
+      requireEtag(etag),
+    ),
   getEmployeeAttendance: (employeeId: string, params: EmployeeAttendanceParams) =>
     request<EmployeeAttendanceRange>(
       'GET',
@@ -1077,6 +1182,11 @@ export const api = {
     ),
   getWorkforceIntegrationStatus: () =>
     request<WorkforceIntegrationStatus>('GET', '/workforce/integration/status'),
+  getWorkforceAccess: () => request<WorkforceAccess>('GET', '/workforce/access/me'),
+  getWorkforceSnapshot: () =>
+    request<WorkforceSnapshot>('GET', '/workforce/dashboard/snapshot'),
+  getWorkforceCoverage: (params: WorkforceCoverageParams) =>
+    request<WorkforceCoveragePage>('GET', `/workforce/dashboard/coverage${qs({ ...params })}`),
   getEmployeeAttendanceHistory: (employeeId: string, params: EmployeeAttendanceParams) =>
     request<EmployeeAttendanceHistory>(
       'GET',
@@ -1107,6 +1217,25 @@ export const api = {
   // --- leaves (employee sub-resource, read-only) ---
   listEmployeeLeaves: (employeeId: string) =>
     request<LeaveRead[]>('GET', `/employees/${encodeURIComponent(employeeId)}/leaves`),
+  // --- absences (employee sub-resource; record-only, no document) ---
+  listEmployeeAbsences: (employeeId: string) =>
+    request<AbsenceRead[]>('GET', `/employees/${encodeURIComponent(employeeId)}/absences`),
+  listEmployeeAbsenceEpisodes: (employeeId: string) =>
+    request<AbsenceRecordRead>(
+      'GET',
+      `/employees/${encodeURIComponent(employeeId)}/absences/episodes`,
+    ),
+  createEmployeeAbsences: (employeeId: string, body: AbsenceCreate) =>
+    request<AbsenceCreateResult>(
+      'POST',
+      `/employees/${encodeURIComponent(employeeId)}/absences`,
+      body,
+    ),
+  deleteEmployeeAbsenceRange: (employeeId: string, startDate: string, endDate: string) =>
+    request<void>(
+      'DELETE',
+      `/employees/${encodeURIComponent(employeeId)}/absences?start_date=${startDate}&end_date=${endDate}`,
+    ),
 
   // --- leaves (Phase 06 — standalone collection) ---
   listLeaves: (params: {
@@ -1579,7 +1708,7 @@ export const api = {
     params: { limit?: number; offset?: number } = {},
   ) => request<ApprovalLogResponse>('GET', `/books/approval-log${qs({ scope, ...params })}`),
   /** GET /books/awaiting-scan — records stranded at `awaiting_scan` past 24h.
-   * `scope='all'` returns everyone's (both scopes need books.manage). */
+   * `scope='all'` returns everyone's (both scopes need books.edit). */
   listAwaitingScanBooks: (scope: 'mine' | 'all' = 'mine') =>
     request<BookRead[]>('GET', `/books/awaiting-scan?scope=${scope}`),
   /** GET /books/approvers — valid approver candidates for the submit picker. */
@@ -1658,25 +1787,25 @@ export const api = {
     return multipart<BookRead>(`/books/${bookId}/attachments`, form)
   },
   /** DELETE /books/{id}/attachments/{index} — remove a plain attachment (undo a
-   * wrongly-uploaded scan). books.manage. */
+   * wrongly-uploaded scan). books.edit. */
   deleteBookAttachment: (bookId: number, index: number) =>
     request<BookRead>('DELETE', `/books/${bookId}/attachments/${index}`),
   /** PUT /books/{id}/attachments/{index} — replace a plain attachment's bytes,
-   * keeping its index. books.manage. */
+   * keeping its index. books.edit. */
   replaceBookAttachment: (bookId: number, index: number, file: File) => {
     const form = new FormData()
     form.append('file', file)
     return multipart<BookRead>(`/books/${bookId}/attachments/${index}`, form, 'PUT')
   },
   /** PUT /books/{id}/signed-copy — replace the signed copy's bytes, keeping the
-   * record approved. books.manage. */
+   * record approved. books.edit. */
   replaceSignedCopy: (bookId: number, file: File) => {
     const form = new FormData()
     form.append('file', file)
     return multipart<BookRead>(`/books/${bookId}/signed-copy`, form, 'PUT')
   },
   /** DELETE /books/{id}/signed-copy — unfile the signed copy and revert the
-   * record's approval state. books.manage. */
+   * record's approval state. books.edit. */
   unfileSignedCopy: (bookId: number) =>
     request<BookRead>('DELETE', `/books/${bookId}/signed-copy`),
   /** Build a side-effect-free preview of the proposed fixed-base-first package. */
@@ -2048,6 +2177,12 @@ export const api = {
       capability,
       effect,
     }),
+  /** Apply a batch of overrides in one call (admin matrix save); each item's
+   * effect null reverts that capability to the role default. */
+  setUserPermissionsBulk: (
+    id: number,
+    items: Array<{ capability: string; effect: PermissionEffect | null }>,
+  ) => request<UserPermissionRead>('PUT', `/auth/users/${id}/permissions/bulk`, { items }),
 
   // --- permission requests (Task 10) ---
   /** Submit a capability request for the signed-in user.

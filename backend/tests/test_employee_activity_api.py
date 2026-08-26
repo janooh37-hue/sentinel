@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
@@ -8,6 +10,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from app.api.deps import get_current_user
 from app.db import session as session_mod
 from app.db.models import Base, Book, BookCategory, Document, Employee, User, UserPermission
+from app.db.workforce_models import DutyAssignmentEvent
 from app.db.session import attach_sqlite_pragmas, get_db
 from app.main import create_app
 from app.services import perm_service
@@ -98,3 +101,66 @@ def test_activity_route_validates_kind_and_limit(manager_client: TestClient):
 
 def test_activity_route_requires_employees_view(operator_client: TestClient):
     assert operator_client.get("/api/v1/employees/activity").status_code == 403
+
+
+def test_activity_route_returns_recorded_duty_location_events(
+    api_db: Session, manager_client: TestClient
+):
+    manager = api_db.query(User).filter_by(email="mgr@x.ae").one()
+    api_db.add_all([
+        DutyAssignmentEvent(
+            employee_id="G100",
+            event_type="initial_placement",
+            from_department=None,
+            from_unit=None,
+            from_post=None,
+            to_department="Security",
+            to_unit="Main Gate",
+            to_post="Gate 1",
+            effective_at=datetime(2026, 8, 1, 8, tzinfo=UTC).replace(tzinfo=None),
+            actor_user_id=manager.id,
+            reason="Initial placement",
+        ),
+        DutyAssignmentEvent(
+            employee_id="G100",
+            event_type="transfer",
+            from_department="Security",
+            from_unit="Main Gate",
+            from_post="Gate 1",
+            to_department="Security",
+            to_unit="Administration",
+            to_post="Reception",
+            effective_at=datetime(2026, 8, 20, 8, tzinfo=UTC).replace(tzinfo=None),
+            actor_user_id=manager.id,
+            reason="Duty transfer",
+        ),
+        DutyAssignmentEvent(
+            employee_id="G100",
+            event_type="baseline",
+            from_department=None,
+            from_unit=None,
+            from_post=None,
+            to_department="Security",
+            to_unit="Legacy",
+            to_post=None,
+            effective_at=datetime(2026, 7, 1, 8, tzinfo=UTC).replace(tzinfo=None),
+            actor_user_id=manager.id,
+            reason="Seed baseline",
+        ),
+    ])
+    api_db.commit()
+
+    response = manager_client.get(
+        "/api/v1/employees/activity",
+        params={"employee_id": "G100", "kind": "duty_location"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total"] == 2
+    assert [item["event_type"] for item in body["items"]] == ["transfer", "initial_placement"]
+    assert body["items"][0]["from_unit"] == "Main Gate"
+    assert body["items"][0]["to_unit"] == "Administration"
+    assert body["items"][0]["reason"] == "Duty transfer"
+    assert all(item["event_type"] != "baseline" for item in body["items"])
+    assert manager_client.get("/api/v1/employees/activity?kind=unknown").status_code == 422

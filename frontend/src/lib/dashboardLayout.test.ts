@@ -4,6 +4,7 @@ import type { DashboardLayout } from './api'
 import {
   DEFAULT_LAYOUT,
   QUICK_ACTION_IDS,
+  TOP_ELIGIBLE_SET,
   WIDGET_IDS,
   WIDGET_SOURCE,
   WIDGET_SOURCES,
@@ -47,6 +48,27 @@ describe('pending_departures widget is hidden by default', () => {
     const resolved = resolveLayout(saved)
     const widget = resolved.widgets.find((w) => w.id === 'pending_departures')
     expect(widget).toMatchObject({ visible: false })
+  })
+})
+
+describe('workforce_pulse widget is hidden by default', () => {
+  it('is appended to saved layouts that never mentioned it in a lower zone', () => {
+    const saved = {
+      widgets: [{ id: 'pending', visible: true, order: 0, zone: 'top' }],
+      quick_actions: [],
+    } as unknown as DashboardLayout
+
+    const resolved = resolveLayout(saved)
+
+    expect(resolved.widgets.find((w) => w.id === 'workforce_pulse')).toMatchObject({
+      visible: false,
+      zone: 'under_workspace',
+    })
+  })
+
+  it('is filed under Workforce and cannot occupy the top zone', () => {
+    expect(WIDGET_SOURCE.workforce_pulse).toBe('workforce')
+    expect(TOP_ELIGIBLE_SET.has('workforce_pulse')).toBe(false)
   })
 })
 

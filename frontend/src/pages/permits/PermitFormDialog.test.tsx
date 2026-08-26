@@ -7,7 +7,7 @@ import { api, type PermitRead } from '@/lib/api'
 import { PermitFormDialog } from './PermitFormDialog'
 
 vi.mock('@/lib/useCapabilities', () => ({
-  useCapabilities: () => ({ capabilities: new Set(['permits.manage']), isLoading: false, has: () => true }),
+  useCapabilities: () => ({ capabilities: new Set(['permits.create', 'permits.edit']), isLoading: false, has: () => true }),
 }))
 
 // Silence toast in tests

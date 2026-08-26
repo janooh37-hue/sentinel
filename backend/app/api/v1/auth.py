@@ -41,6 +41,7 @@ from app.schemas.auth import (
     RejectRequest,
     ResetPasswordRequest,
     SessionUser,
+    SetPermissionBulkRequest,
     SetPermissionRequest,
     SetRoleRequest,
     UserPermissionRead,
@@ -356,6 +357,32 @@ def set_user_permission(
     auth_service.audit_permission_change(
         db, actor=_actor(admin), user=user, capability=body.capability, effect=body.effect
     )
+    return UserPermissionRead(
+        user_id=user.id,
+        role=user.role,
+        is_admin=user.role == "admin",
+        effective=sorted(perm_service.effective_caps(db, user)),
+        role_defaults=sorted(perm_service.role_default_caps(db, user.role)),
+        overrides=perm_service.get_user_overrides(db, user.id),
+    )
+
+
+@router.put("/users/{user_id}/permissions/bulk", response_model=UserPermissionRead)
+def set_user_permissions_bulk(
+    user_id: int,
+    body: SetPermissionBulkRequest,
+    admin: Annotated[User, Depends(require_admin)],
+    db: Annotated[Session, Depends(get_db)],
+) -> UserPermissionRead:
+    """Apply several override changes in one all-or-nothing call."""
+    user = auth_service.require_user(db, user_id)
+    perm_service.set_user_overrides(
+        db, user.id, [(i.capability, i.effect, i.expires_at) for i in body.items], actor=admin
+    )
+    for item in body.items:
+        auth_service.audit_permission_change(
+            db, actor=_actor(admin), user=user, capability=item.capability, effect=item.effect
+        )
     return UserPermissionRead(
         user_id=user.id,
         role=user.role,

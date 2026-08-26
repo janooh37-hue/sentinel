@@ -7,7 +7,7 @@
  * - `BookRead` does NOT expose `employee_id` (subject employee); the subject
  *   employee's name is parsed from `row.subject` via `subjectEmployeePart`.
  * - Version fields (via `getBookVersionFields`) may carry `employee_id` for
- *   per-employee forms, but the endpoint requires `books.manage` capability.
+ *   per-employee forms, but the endpoint requires `books.edit` capability.
  *   When available it also carries `leave_type` for leave forms.
  * - When fields are unavailable (no fields, or cap not held), we fall back to
  *   `subjectEmployeePart(book.subject)` for the name and leave type from the
@@ -138,7 +138,7 @@ export function deriveRecordItem({
  * always serialises `has_fields=false` (only GET /books/{id} rebuilds it), so
  * gating on it would silently drop leave_type/dates here. The fetch is cheap for
  * the handful of records in a bulk add and the try/catch covers fieldless forms
- * + a missing `books.manage` cap.
+ * + a missing `books.edit` cap.
  */
 export async function buildRecordBasketItem(
   book: BookRead,
@@ -151,7 +151,7 @@ export async function buildRecordBasketItem(
     const res = await api.getBookVersionFields(book.id, cur.id)
     fields = res.fields
   } catch {
-    // Fieldless form, or the caller lacks books.manage — proceed without fields.
+    // Fieldless form, or the caller lacks books.edit — proceed without fields.
   }
 
   let emp: EmployeeRead | null = null

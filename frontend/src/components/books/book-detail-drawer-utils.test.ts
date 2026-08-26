@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 
-import { canFileSignedCopy, canSendForApproval } from './book-detail-drawer-utils'
+import {
+  canFileSignedCopy,
+  canSendForApproval,
+  footerActionFor,
+} from './book-detail-drawer-utils'
 
 /**
  * canFileSignedCopy — admin "file the physically-signed scan back" gate. Both
@@ -10,7 +14,7 @@ import { canFileSignedCopy, canSendForApproval } from './book-detail-drawer-util
  * to upload the signed copy regardless of who the approver is.
  */
 describe('canFileSignedCopy', () => {
-  const admin = { canManage: true, canScan: true }
+  const admin = { canEdit: true, canScan: true }
 
   it('opens on a draft — the paper route is a valid first move', () => {
     expect(canFileSignedCopy('none', admin)).toBe(true)
@@ -33,9 +37,53 @@ describe('canFileSignedCopy', () => {
     expect(canFileSignedCopy('rejected', admin)).toBe(false)
   })
 
-  it('requires both the manage and scan capabilities', () => {
-    expect(canFileSignedCopy('pending', { canManage: true, canScan: false })).toBe(false)
-    expect(canFileSignedCopy('pending', { canManage: false, canScan: true })).toBe(false)
+  it('requires both the edit and scan capabilities', () => {
+    expect(canFileSignedCopy('pending', { canEdit: true, canScan: false })).toBe(false)
+    expect(canFileSignedCopy('pending', { canEdit: false, canScan: true })).toBe(false)
+  })
+})
+
+/**
+ * footerActionFor — state-driven footer selection. The revise and submit
+ * branches key off DIFFERENT capabilities: `books.edit` regenerates a
+ * returned/rejected record; `books.submit` sends a draft for approval. A user
+ * holding only one must never see the other's action (a submit affordance
+ * under edit authority opens an empty SubmitForApprovalDialog).
+ */
+describe('footerActionFor', () => {
+  const base = { canApprove: false, isAssignee: false }
+
+  it('offers submit on a draft only with books.submit — even without edit rights', () => {
+    expect(footerActionFor('none', { ...base, canRevise: false, canSubmitBook: true })).toBe('submit')
+  })
+
+  it('does NOT offer submit on a draft with books.edit alone (no books.submit)', () => {
+    expect(footerActionFor('none', { ...base, canRevise: true, canSubmitBook: false })).toBe('none')
+  })
+
+  it('offers revise on returned/rejected only with books.edit — even without submit rights', () => {
+    expect(footerActionFor('returned', { ...base, canRevise: true, canSubmitBook: false })).toBe('revise')
+    expect(footerActionFor('rejected', { ...base, canRevise: true, canSubmitBook: true })).toBe('revise')
+  })
+
+  it('is read-only on returned/rejected without books.edit', () => {
+    expect(footerActionFor('returned', { ...base, canRevise: false, canSubmitBook: true })).toBe('none')
+  })
+
+  it('lets the assigned approver decide a pending request', () => {
+    expect(
+      footerActionFor('pending', { ...base, canRevise: false, canSubmitBook: true, canApprove: true, isAssignee: true }),
+    ).toBe('decide')
+  })
+
+  it('shows the reviewer footer to an advisory reviewer on a pending request', () => {
+    expect(footerActionFor('pending', { ...base, canRevise: true, canSubmitBook: true, isReviewer: true })).toBe(
+      'review',
+    )
+  })
+
+  it('never offers a footer action while awaiting the signed scan', () => {
+    expect(footerActionFor('awaiting_scan', { ...base, canRevise: true, canSubmitBook: true })).toBe('none')
   })
 })
 
@@ -46,7 +94,7 @@ describe('canFileSignedCopy', () => {
  * scan instead") and approved. So the button shows on `none` + `pending` only.
  */
 describe('canSendForApproval', () => {
-  const mgr = { canManage: true }
+  const mgr = { canSubmitBook: true }
 
   it('opens on a draft (first submission)', () => {
     expect(canSendForApproval('none', mgr)).toBe(true)
@@ -64,8 +112,8 @@ describe('canSendForApproval', () => {
     expect(canSendForApproval('approved', mgr)).toBe(false)
   })
 
-  it('requires the manage capability', () => {
-    expect(canSendForApproval('none', { canManage: false })).toBe(false)
-    expect(canSendForApproval('pending', { canManage: false })).toBe(false)
+  it('requires the submit capability', () => {
+    expect(canSendForApproval('none', { canSubmitBook: false })).toBe(false)
+    expect(canSendForApproval('pending', { canSubmitBook: false })).toBe(false)
   })
 })

@@ -26,7 +26,7 @@ interface Props {
 export function MessagesTab({ messages, onRecheck }: Props): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const caps = useCapabilities()
-  const canRecheck = caps.has('books.manage')
+  const canRecheck = caps.has('books.edit')
   const fmt = useMemo(
     () => new Intl.DateTimeFormat(i18n.language, { dateStyle: 'medium', timeStyle: 'short' }),
     [i18n.language],

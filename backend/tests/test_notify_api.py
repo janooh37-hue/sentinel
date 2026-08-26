@@ -9,7 +9,7 @@ Fixture pattern mirrors test_sms_api.py / test_whatsapp_api.py:
 Gates:
   - POST /notify/send requires employees.notify  (manager has it, operator does not)
   - GET  /notify/status requires employees.notify
-  - POST /notify/{id}/refresh-delivery requires books.manage
+  - POST /notify/{id}/refresh-delivery requires books.edit
 """
 
 from __future__ import annotations
@@ -108,7 +108,7 @@ def test_send_requires_capability(api_db: Session) -> None:
 
 
 def test_refresh_delivery_requires_capability(api_db: Session) -> None:
-    """operator role does NOT have books.manage → must get 403."""
+    """operator role does NOT have books.edit → must get 403."""
     c = _client(api_db, _user(api_db, role="operator", email="op2@x.ae"))
     r = c.post("/api/v1/notify/1/refresh-delivery")
     assert r.status_code == 403

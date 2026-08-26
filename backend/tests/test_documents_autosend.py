@@ -62,6 +62,7 @@ def test_run_generation_notification_choice_and_book_id(
             book_id=42,
             submission_id="sub",
             documents=[],
+            superseded_absences=[],
         ),
     )
     monkeypatch.setattr(

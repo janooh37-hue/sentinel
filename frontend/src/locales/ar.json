@@ -382,6 +382,7 @@
       "leave": "الإجازات",
       "violation": "المخالفات",
       "ledger": "المراسلات",
+      "duty_location": "موقع العمل",
       "employee": "الموظف",
       "activity": "النشاط",
       "type": "النوع",
@@ -392,6 +393,14 @@
       "openLeave": "فتح الإجازة",
       "openViolation": "فتح المخالفة",
       "openLedger": "فتح المراسلة",
+      "dutyLocation": {
+        "label": "موقع العمل",
+        "initial_placement": "التعيين الأولي",
+        "transfer": "تم النقل",
+        "unassigned": "غير محدد",
+        "openEmployeeActivity": "فتح نشاط الموظف",
+        "historyBegins": "يبدأ السجل من"
+      },
       "loadMore": "تحميل المزيد من الأنشطة",
       "loading": "جارٍ تحميل النشاط الأخير",
       "showing": "عرض {{shown}} من أصل {{total}} من الأنشطة الأخيرة",
@@ -2412,7 +2421,8 @@
       "activity": "النشاط",
       "messages": "الرسائل",
       "showingRecent": "عرض {{shown}} من {{total}}",
-      "attendance": "الحضور"
+      "attendance": "الحضور",
+      "absences": "الغيابات"
     },
     "stats": {
       "documents": "المستندات",
@@ -2849,7 +2859,8 @@
         "employees": "من الموظفين",
         "leaves": "من الإجازات",
         "records": "من المستندات",
-        "ledger": "من المراسلات"
+        "ledger": "من المراسلات",
+        "workforce": "من القوى العاملة"
       },
       "topFull": "منطقة الأعلى ممتلئة (الحد الأقصى {{count}})",
       "topOnlyBigCards": "البطاقات الكبيرة فقط يمكن وضعها في الأعلى",
@@ -2867,6 +2878,81 @@
       "hideAria": "إخفاء {{name}}",
       "maxVisibleHint": "الحد الأقصى {{count}} أدوات معروضة في وقت واحد",
       "quickActionsMaxVisibleHint": "الحد الأقصى {{count}} إجراءات سريعة معروضة في وقت واحد"
+    },
+    "workforcePulse": {
+      "title": "نبض القوى العاملة",
+      "openCoverage": "فتح التغطية",
+      "self": {
+        "heading": "ورديتي",
+        "status": "الحالة",
+        "reason": "السبب",
+        "start": "تبدأ",
+        "end": "تنتهي",
+        "presence": {
+          "scheduled": "مجدولة",
+          "on_duty": "على رأس العمل",
+          "completed": "مكتملة",
+          "absent": "غائب",
+          "excused_leave": "إجازة معتمدة",
+          "off": "خارج الوردية",
+          "unknown": "لم يتم التحقق بعد"
+        }
+      },
+      "aggregate": {
+        "heading": "الوردية الحالية"
+      },
+      "metrics": {
+        "scheduled": "المجدول",
+        "working": "على رأس العمل",
+        "coverage": "التغطية"
+      },
+      "noScope": {
+        "title": "لم يتم تعيين نطاق للقوى العاملة",
+        "detail": "اطلب من المسؤول تعيين نطاق للقوى العاملة."
+      },
+      "setup": {
+        "title": "يلزم إعداد {{missing}}",
+        "detail": "بيانات القوى العاملة غير متاحة حتى يتم إعداد {{missing}}.",
+        "missing": {
+          "schedules": "الجداول",
+          "policy": "السياسة",
+          "mappings": "التعيينات",
+          "integration": "التكامل"
+        }
+      },
+      "stale": {
+        "title": "مصدر الحضور قديم",
+        "detail": "بيانات الحضور الحالية ليست حديثة بما يكفي للعرض."
+      },
+      "withheld": {
+        "title": "بانتظار التحقق",
+        "detail": "لا يزال التحقق من الحضور قيد التنفيذ."
+      },
+      "coverage": {
+        "title": "التغطية",
+        "operationalDate": "التاريخ التشغيلي: {{date}}",
+        "back": "رجوع",
+        "breadcrumb": "تدرج التغطية",
+        "allDepartments": "كل الإدارات",
+        "empty": "لا توجد مجموعات تغطية لهذا المستوى.",
+        "pendingVerification": "بانتظار التحقق",
+        "unassigned": "غير معيّن",
+        "loadMore": "عرض المزيد",
+        "level": {
+          "organization": "الإدارات",
+          "department": "وحدات الواجب",
+          "duty_unit": "مواقع الواجب"
+        },
+        "metrics": {
+          "scheduled": "المجدول",
+          "excused": "المعفى",
+          "expected": "المتوقع",
+          "evaluated": "المقيّم",
+          "excluded": "المستبعد",
+          "working": "على رأس العمل",
+          "gap": "الفجوة"
+        }
+      }
     },
     "widgetLabels": {
       "pending": "المستندات المنجزة",
@@ -2888,7 +2974,8 @@
       "waiting_approvals_aria_other": "بانتظار الاعتماد: {{count}}. مراجعة.",
       "expiring_soon": "قرب الانتهاء",
       "recent_ledger": "أحدث المراسلات",
-      "pending_departures": "المغادرات المجدولة"
+      "pending_departures": "المغادرات المجدولة",
+      "workforce_pulse": "نبض القوى العاملة"
     },
     "quickActionLabels": {
       "general_book": "السجل العام",
@@ -3214,6 +3301,50 @@
       "unsupportedType": "يُقبل ملفات الصور وملفات PDF فقط",
       "tooLarge": "يتجاوز الملف الحد المسموح {{max}}"
     }
+  },
+  "absences": {
+    "tile": {
+      "name": "غياب موظف"
+    },
+    "title": "غياب موظف",
+    "subtitle": "سجّل أيام غياب الموظف دون إذن. لا يُنشأ أي مستند — يُحفظ السجل في ملف الموظف ويلتقطه كشف الحضور.",
+    "form": {
+      "start": "أول يوم",
+      "end": "آخر يوم",
+      "note": "ملاحظة (اختياري)",
+      "notePlaceholder": "مثال: لم يحضر دون اتصال",
+      "save": "تسجيل الغياب"
+    },
+    "saved_one": "تم تسجيل يوم غياب واحد.",
+    "saved_two": "تم تسجيل يومَي غياب.",
+    "saved_few": "تم تسجيل {{count}} أيام غياب.",
+    "saved_many": "تم تسجيل {{count}} يوم غياب.",
+    "saved_other": "تم تسجيل {{count}} يوم غياب.",
+    "savedWithSkips": "تم تسجيل {{count}} من أيام الغياب؛ وتجاوز {{skipped}} من الأيام لوقوعها خارج فترة خدمة الموظف.",
+    "nothingToSave": "كل الأيام في هذا النطاق مسجلة مسبقًا.",
+    "pickEmployee": "اختر موظفًا لتسجيل الغياب أو مراجعته.",
+    "list": {
+      "title": "الغيابات المسجلة",
+      "empty": "لا توجد أيام غياب مسجلة لهذا الموظف.",
+      "confirmDeleteRange": "إزالة غياب من {{start}} إلى {{end}} (عدد الأيام: {{count}})؟"
+    },
+    "deleted": "تمت إزالة الغياب.",
+    "overwritten_one": "هذه الإجازة استبدلت يوم غياب مسجل واحد (من {{from}} إلى {{to}}).",
+    "overwritten_two": "هذه الإجازة استبدلت يومَي غياب مسجلَين (من {{from}} إلى {{to}}).",
+    "overwritten_few": "هذه الإجازة استبدلت {{count}} أيام غياب مسجلة (من {{from}} إلى {{to}}).",
+    "overwritten_many": "هذه الإجازة استبدلت {{count}} يوم غياب مسجل (من {{from}} إلى {{to}}).",
+    "overwritten_other": "هذه الإجازة استبدلت {{count}} يوم غياب مسجل (من {{from}} إلى {{to}}).",
+    "table": {
+      "id": "المعرف",
+      "name": "الاسم",
+      "start": "تاريخ البدء",
+      "end": "تاريخ الانتهاء",
+      "totalDays": "إجمالي الأيام",
+      "postUnit": "النقطة / الوحدة",
+      "notes": "ملاحظات"
+    },
+    "copy": "نسخ الجدول",
+    "copied": "تم نسخ الجدول إلى الحافظة."
   },
   "dutyLocations": {
     "tile": {
@@ -3600,6 +3731,13 @@
       "adminAll": "المسؤولون يملكون جميع الصلاحيات دائمًا — لا تُطبَّق التجاوزات.",
       "saved": "تم تحديث الصلاحية.",
       "saveError": "تعذّر تحديث الصلاحية.",
+      "searchPlaceholder": "ابحث في الصلاحيات…",
+      "results": "{{count}} نتيجة",
+      "noResults": "لا توجد صلاحيات مطابقة",
+      "noResultsHint": "البحث يشمل الأسماء والأوصاف والمعرّفات.",
+      "clearSearch": "مسح",
+      "bulkApply": "تطبيق على الجميع",
+      "savedBulk": "تم تحديث الصلاحيات.",
       "domains": {
         "app": "التطبيق",
         "employees": "الموظفون",
@@ -3614,31 +3752,61 @@
         "editor_templates": "قوالب المحرر",
         "users": "المستخدمون",
         "system": "النظام",
-        "timesheet": "كشف الحضور"
+        "timesheet": "كشف الحضور",
+        "permits": "تصاريح الدخول",
+        "messages": "الرسائل",
+        "workforce": "القوى العاملة"
       },
       "caps": {
         "app.access": "الوصول إلى التطبيق",
         "employees.view": "عرض الموظفين",
-        "employees.edit": "إنشاء / تعديل الموظفين + الخزنة",
+        "employees.create": "إضافة موظفين",
+        "employees.edit": "تعديل بيانات الموظفين",
+        "employees.vault.manage": "إدارة خزنة المستندات",
+        "employees.notify": "إشعار الموظفين",
         "leaves.view": "عرض الإجازات",
-        "leaves.edit": "تعديل / حذف الإجازات",
+        "leaves.create": "تسجيل إجازات",
+        "leaves.edit": "تعديل الإجازات",
+        "leaves.delete": "حذف الإجازات",
         "violations.view": "عرض المخالفات",
-        "violations.manage": "إنشاء / تعديل / حذف المخالفات",
+        "violations.create": "تسجيل مخالفات",
+        "violations.edit": "تعديل المخالفات",
+        "violations.delete": "حذف المخالفات",
         "documents.generate": "إنشاء المستندات",
         "documents.scan": "مسح المستندات بالتعرّف الضوئي",
         "books.view": "عرض السجلات",
-        "books.manage": "إنشاء / تعديل / حذف السجلات",
+        "books.create": "إنشاء سجلات",
+        "books.edit": "تعديل السجلات والمرفقات",
+        "books.submit": "إرسال للاعتماد",
         "books.approve": "اعتماد / رفض السجلات",
         "books.override_state": "فرض حالة السجل",
+        "books.templates": "إدارة قوالب وورد",
+        "books.delete": "حذف السجلات",
+        "permits.view": "عرض تصاريح الدخول",
+        "permits.create": "إصدار التصاريح",
+        "permits.edit": "تعديل التصاريح وتجديدها",
+        "permits.revoke": "إلغاء التصاريح",
+        "permits.delete": "حذف التصاريح",
         "ledger.view": "عرض السجل",
-        "ledger.edit": "تعديل قيود السجل + المسودّات",
+        "ledger.create": "إنشاء القيود والمسودّات",
+        "ledger.edit": "تعديل القيود وجهات الاتصال",
         "ledger.send": "إرسال البريد من السجل",
+        "ledger.delete": "حذف القيود والمسودّات",
         "email.manage": "إدارة صندوق بريدك",
         "settings.view": "عرض الإعدادات",
         "settings.edit": "تغيير الإعدادات",
         "submitters.manage": "إدارة مقدّمي الطلبات",
         "editor_templates.manage": "إدارة قوالب المحرر",
         "users.manage": "إدارة المستخدمين + الصلاحيات",
+        "messages.broadcast": "إرسال إعلانات للمجموعات",
+        "workforce.self.view": "عرض سجلّك في القوى العاملة",
+        "workforce.dashboard.view": "عرض لوحة القوى العاملة",
+        "workforce.people.view": "عرض منتسبي القوى العاملة",
+        "workforce.schedule.manage": "إدارة الجداول",
+        "workforce.policy.manage": "إدارة السياسات",
+        "workforce.attendance.review": "مراجعة الحضور",
+        "workforce.attendance.correct": "تصحيح الحضور",
+        "workforce.integration.manage": "إدارة تكامل القوى العاملة",
         "system.admin": "مفتاح المسؤول + ترحيل الإصدار الثالث",
         "timesheet.view": "عرض كشف الحضور",
         "timesheet.edit": "تصحيح وإغلاق كشف الحضور"
@@ -3692,7 +3860,60 @@
     },
     "noAccessPage": "ليس لديك صلاحية الوصول إلى هذه الصفحة",
     "requestAccess": "طلب الوصول",
-    "caps": {}
+    "caps": {
+      "app.access": { "desc": "تسجيل الدخول وعرض لوحة المعلومات وحقول المستندات والعناصر للقراءة فقط." },
+      "employees.view": { "desc": "عرض دليل الموظفين وسِجلاتهم الفردية." },
+      "employees.create": { "desc": "إضافة موظفين جدد إلى الدليل." },
+      "employees.edit": { "desc": "تعديل البيانات والصور والتوقيع وبيانات جواز السفر." },
+      "employees.vault.manage": { "desc": "رفع الملفات وتنظيمها داخل خزنة الموظف." },
+      "employees.notify": { "desc": "إرسال تأكيدات عبر واتساب (مع بديل الرسائل النصية) للإجازات واستئناف المناوبة والمخالفات." },
+      "leaves.view": { "desc": "عرض سِجلات الإجازات وحالتها." },
+      "timesheet.view": { "desc": "عرض شبكة الحضور الشهرية وتنزيل الكشوف." },
+      "timesheet.edit": { "desc": "تسجيل الغياب وتصحيح الخلايا وضبط عدد النقاط وإغلاق الشهر أو إعادة فتحه." },
+      "leaves.create": { "desc": "تسجيل طلبات إجازة جديدة." },
+      "leaves.edit": { "desc": "تعديل الإجازات وإرفاق الشهادات وتسجيل استئناف المناوبة." },
+      "leaves.delete": { "desc": "حذف سِجلات الإجازات." },
+      "violations.view": { "desc": "عرض المخالفات المسجَّلة." },
+      "violations.create": { "desc": "تسجيل مخالفات جديدة." },
+      "violations.edit": { "desc": "تصحيح تفاصيل المخالفة." },
+      "violations.delete": { "desc": "حذف المخالفات." },
+      "documents.generate": { "desc": "إنشاء مستندات رسمية من القوالب." },
+      "documents.scan": { "desc": "رفع المسحات وتشغيل التعرّف الضوئي على الحروف لاستيراد المستندات." },
+      "books.view": { "desc": "تصفّح سجل السجلات." },
+      "books.create": { "desc": "بدء سجلات جديدة من النماذج أو القوالب." },
+      "books.edit": { "desc": "تعديل الحقول والمراجعين والمرفقات وإيداع مسحات الكشف." },
+      "books.submit": { "desc": "إرسال السجلات إلى مسار الاعتماد." },
+      "books.approve": { "desc": "اعتماد أو توقيع أو رفض المستندات في قائمة الانتظار." },
+      "books.override_state": { "desc": "ضبط أي سجل على أي حالة — مسودة أو بانتظار توقيع أو بانتظار مسح أو معتمد أو مرتجع أو مرفوض أو ملغى — بتخطّي مسار الاعتماد. من رتبة المسؤول: يتجاوز من وقّع وماذا." },
+      "books.templates": { "desc": "تعديل قوالب وورد المشتركة التي تُصاغ منها السجلات." },
+      "books.delete": { "desc": "نقل السجلات إلى المحذوفات." },
+      "permits.view": { "desc": "عرض سجل تصاريح دخول المناطق الأمنية وحالتها." },
+      "permits.create": { "desc": "تسجيل تصاريح دخول جديدة للمناطق الأمنية." },
+      "permits.edit": { "desc": "تعديل الأشخاص والمركبات والمستندات وتجديد التصاريح." },
+      "permits.revoke": { "desc": "إلغاء التصاريح النشطة." },
+      "permits.delete": { "desc": "حذف سِجلات التصاريح." },
+      "ledger.view": { "desc": "قراءة قيود سجل المراسلات." },
+      "ledger.create": { "desc": "كتابة قيود ومسودّات وجهات اتصال وقوائم استلام جديدة." },
+      "ledger.edit": { "desc": "تعديل القيود والقوائم والتمييز والإسناد النجمي وإرفاق الملفات." },
+      "ledger.send": { "desc": "إرسال رسائل البريد من السجل باسمك." },
+      "ledger.delete": { "desc": "حذف القيود والمسودّات وجهات الاتصال والقوائم." },
+      "email.manage": { "desc": "ربط صندوق بريدك ومزامنته." },
+      "settings.view": { "desc": "عرض إعدادات التطبيق." },
+      "settings.edit": { "desc": "تغيير إعدادات التطبيق." },
+      "submitters.manage": { "desc": "إدارة قائمة مقدّمي المستندات." },
+      "editor_templates.manage": { "desc": "إنشاء وتعديل قوالب محرر المستندات." },
+      "users.manage": { "desc": "إدارة حسابات المستخدمين وصلاحياتهم (للمسؤول فقط)." },
+      "messages.broadcast": { "desc": "نشر إعلانات نصية أو مستندات إلى مجموعات واتساب." },
+      "workforce.self.view": { "desc": "عرض جدولك وبطاقات حضورك وإجازاتك الخاصة." },
+      "workforce.dashboard.view": { "desc": "عرض بيانات لوحة القوى العاملة الإجمالية ضمن النطاق المسند إليك." },
+      "workforce.people.view": { "desc": "عرض الكشف وتفاصيل الحضور ضمن النطاق المسند." },
+      "workforce.schedule.manage": { "desc": "إدارة الفرق والدورة والعضويات وتجاوزات الجدول." },
+      "workforce.policy.manage": { "desc": "إدارة متطلبات التوظيف وسياسات الحضور وأنواع الإجازات المستثناة." },
+      "workforce.attendance.review": { "desc": "مراجعة حالات الحضور والاستثناءات والبيانات المصدرية." },
+      "workforce.attendance.correct": { "desc": "إنشاء تعديلات حضور مُدقَّقة ومسجَّلة." },
+      "workforce.integration.manage": { "desc": "إدارة حالة مزوّد القوى العاملة والربط واختبارات المزامنة." },
+      "system.admin": { "desc": "استخدام مفتاح المسؤول وتشغيل أدوات النظام والترحيل (للمسؤول فقط)." }
+    }
   },
   "dutySupervisors": {
     "title": "إشعار المشرفين",
@@ -4256,6 +4477,84 @@
       "none": "لا شيء يحتاج قراراً اليوم.",
       "reviewAll": "مراجعة الكل",
       "openFile": "فتح ملف الحضور"
+    },
+    "review": {
+      "title": "مراجعة الحضور",
+      "review": "مراجعة {{name}}",
+      "sourceFacts": "حقائق المصدر",
+      "automaticEvaluations": "التقييمات التلقائية",
+      "humanCorrections": "التصحيحات البشرية",
+      "assignment": "التكليف المسجل",
+      "department": "القسم المسجل",
+      "crew": "الفريق المسجل",
+      "shift": "الوردية المسجلة",
+      "scheduledWindow": "الوقت المجدول",
+      "effectiveResult": "النتيجة النهائية",
+      "baseEvaluation": "التقييم الأساسي",
+      "supersedes": "يستبدل التصحيح",
+      "replacementPresence": "الحالة",
+      "firstIn": "أول دخول",
+      "latestIn": "آخر دخول",
+      "finalOut": "الخروج النهائي",
+      "lateMinutes": "دقائق التأخير",
+      "earlyExitMinutes": "دقائق الخروج المبكر",
+      "missingCheckout": "خروج مفقود",
+      "reason": "السبب",
+      "revoked": "أُلغي",
+      "exceptionsFailed": "تعذر تحميل استثناءات المراجعة. تُعرض قائمة التنبيه المشتقة.",
+      "presence": {
+        "scheduled": "مجدول",
+        "on_duty": "على رأس العمل",
+        "completed": "مكتمل",
+        "absent": "غائب",
+        "excused_leave": "إجازة معتمدة",
+        "off": "إجازة",
+        "unknown": "غير معروف",
+        "late": "متأخر"
+      },
+      "reasons": {
+        "punch_out_recorded": "تم تسجيل الخروج",
+        "no_in_after_threshold": "لا دخول بعد الحد الزمني",
+        "scheduled_before_absence_boundary": "بانتظار حد الغياب",
+        "punch_recorded_directionless": "تم تسجيل بصمة",
+        "punch_in_active": "بصمة أثناء الدوام",
+        "shift_ended": "انتهت الوردية",
+        "sync_stale": "بيانات المزامنة قديمة",
+        "policy_missing": "سياسة الحضور مفقودة",
+        "punch_sequence_invalid": "تسلسل البصمات غير صالح",
+        "late_arrival": "تأخر الوصول",
+        "missing_checkout": "خروج مفقود",
+        "early_exit": "خروج مبكر",
+        "identity_conflict": "تعارض في الهوية",
+        "identity_unverified": "الهوية غير موثقة",
+        "employment_status_unknown": "حالة الموظف غير معروفة",
+        "punch_out_only_inferred": "استنتاج بصمة خروج فقط",
+        "punch_order_inferred": "استنتاج ترتيب البصمات",
+        "attendance_adjustment_changed": "تغير تصحيح الحضور",
+        "leave_national_service": "إجازة خدمة وطنية",
+        "leave_sick": "إجازة مرضية",
+        "leave_annual": "إجازة سنوية"
+      },
+      "auditActions": {
+        "created": "تم إنشاء التصحيح",
+        "revoked": "تم إلغاء التصحيح"
+      },
+      "loadFailed": "تعذر تحميل حالة الحضور.",
+      "correction": "تصحيح الحضور",
+      "correctionPresence": "حالة التصحيح",
+      "noOverride": "مسح القيمة",
+      "correctionReason": "سبب التصحيح",
+      "saveCorrection": "حفظ التصحيح",
+      "correctionSaved": "تم حفظ التصحيح.",
+      "reasonRequired": "سبب التصحيح مطلوب.",
+      "unchanged": "غيّر قيمة حضور واحدة على الأقل قبل الحفظ.",
+      "conflictWarning": "تغيّرت حالة الحضور. قارن البيانات المُحدَّثة قبل إرسال مسودتك المحفوظة.",
+      "revokeReason": "سبب الإلغاء",
+      "revokeCorrection": "إلغاء التصحيح",
+      "confirmRevokeTitle": "هل تريد إلغاء هذا التصحيح؟",
+      "confirmRevokeDescription": "لن يعود هذا التصحيح فعالاً، وسيُسجل السبب في سجل المراجعة.",
+      "confirmRevoke": "تأكيد الإلغاء",
+      "correctionRevoked": "تم إلغاء التصحيح."
     },
     "hero": {
       "title": "حضور اليوم",

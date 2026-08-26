@@ -53,7 +53,7 @@ const fmtLongDate = (iso: string, language: string): string =>
 export function PermitsPage(): React.JSX.Element {
   const { t } = useTranslation()
   const { has } = useCapabilities()
-  const canManage = has('permits.manage')
+  const canCreate = has('permits.create')
 
   const [state, setState] = useState<string>('')
   const [zone, setZone] = useState<string>('')
@@ -225,7 +225,7 @@ export function PermitsPage(): React.JSX.Element {
               <Printer className="me-1.5 h-4 w-4" aria-hidden />
               {selected.size ? t('permits.printSelected', { count: selected.size }) : t('permits.print')}
             </Button>
-            {canManage && (
+            {canCreate && (
               <Button type="button" size="sm" onClick={openNew}>
                 <Plus className="me-1.5 h-4 w-4" aria-hidden />
                 {t('permits.new')}
@@ -247,7 +247,7 @@ export function PermitsPage(): React.JSX.Element {
           <EmptyState
             icon={ShieldCheck}
             message={filtersActive ? t('permits.empty') : t('permits.emptyRegister')}
-            {...(!filtersActive && canManage
+            {...(!filtersActive && canCreate
               ? { actionLabel: t('permits.new'), onAction: openNew }
               : {})}
           />

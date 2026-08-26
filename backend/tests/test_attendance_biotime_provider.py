@@ -110,8 +110,8 @@ def test_authenticates_with_jwt_scheme_and_reads_punches():
     assert len(page.items) == 1
 
 
-def test_window_bounds_are_sent_as_site_local_wall_time():
-    """The server compares start/end against naive local punch_time literally."""
+def test_punch_window_overlaps_start_by_one_second_in_site_wall_time():
+    """BioTime excludes both bounds; overlap keeps a punch on the shared boundary."""
     captured: dict[str, str] = {}
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -127,8 +127,9 @@ def test_window_bounds_are_sent_as_site_local_wall_time():
         until=datetime(2026, 8, 18, 10, 0, tzinfo=UTC),
     )
 
-    # 04:00Z and 10:00Z are 08:00 and 14:00 in Asia/Dubai.
-    assert captured["start_time"] == "2026-08-18 08:00:00"
+    # 04:00Z and 10:00Z are 08:00 and 14:00 in Asia/Dubai. The start overlaps
+    # one second because BioTime excludes a punch exactly equal to start_time.
+    assert captured["start_time"] == "2026-08-18 07:59:59"
     assert captured["end_time"] == "2026-08-18 14:00:00"
 
 

@@ -350,12 +350,16 @@ class RosterRowRead(ORMBase):
 
 
 class AttendanceExceptionRead(RosterRowRead):
+    case_id: int
+
     late_minutes: int | None = Field(default=None, ge=0)
     early_exit_minutes: int | None = Field(default=None, ge=0)
     missing_checkout: bool | None = None
 
 
 class AttendanceDayRowRead(RosterRowRead):
+    case_id: int
+
     """One person's scheduled shift on one operational date, with punch facts.
 
     ``first_punch_at`` / ``last_punch_at`` are the earliest and latest punches
@@ -486,13 +490,13 @@ class EmployeeAttendanceHistoryRead(BaseModel):
 class AttendanceAdjustmentWrite(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    replacement_presence_state: PresenceState | None = None
-    replacement_first_in_at: UtcDateTime | None = None
-    replacement_latest_in_at: UtcDateTime | None = None
-    replacement_final_out_at: UtcDateTime | None = None
-    replacement_late_minutes: int | None = Field(default=None, ge=0)
-    replacement_early_exit_minutes: int | None = Field(default=None, ge=0)
-    replacement_missing_checkout: bool | None = None
+    replacement_presence_state: PresenceState | None
+    replacement_first_in_at: UtcDateTime | None
+    replacement_latest_in_at: UtcDateTime | None
+    replacement_final_out_at: UtcDateTime | None
+    replacement_late_minutes: int | None = Field(ge=0)
+    replacement_early_exit_minutes: int | None = Field(ge=0)
+    replacement_missing_checkout: bool | None
     reason: str = Field(min_length=1, max_length=1024)
 
 
@@ -502,17 +506,71 @@ class AdjustmentRevokeWrite(BaseModel):
     reason: str = Field(min_length=1, max_length=1024)
 
 
+class AttendanceCasePunchRead(ORMBase):
+    occurred_at: datetime
+    device_name: str | None = None
+
+
+class AttendanceEvaluationRead(ORMBase):
+    id: int
+    revision: int
+    presence_state: PresenceState | None = None
+    reason_code: str | None = None
+    first_in_at: datetime | None = None
+    latest_in_at: datetime | None = None
+    final_out_at: datetime | None = None
+    late_minutes: int | None = None
+    early_exit_minutes: int | None = None
+    missing_checkout: bool | None = None
+    evaluated_at: datetime
+
+
+class AttendanceAdjustmentRead(ORMBase):
+    id: int
+    base_evaluation_id: int
+    replacement_presence_state: PresenceState | None = None
+    replacement_first_in_at: datetime | None = None
+    replacement_latest_in_at: datetime | None = None
+    replacement_final_out_at: datetime | None = None
+    replacement_late_minutes: int | None = None
+    replacement_early_exit_minutes: int | None = None
+    replacement_missing_checkout: bool | None = None
+    reason: str
+    created_at: datetime
+    revoked_at: datetime | None = None
+    supersedes_adjustment_id: int | None = None
+
+
+class AttendanceAdjustmentAuditRead(ORMBase):
+    adjustment_id: int
+    action: Literal["created", "revoked"]
+    actor: str | None = None
+    occurred_at: datetime
+    reason: str
+
+
 class AttendanceCaseRead(ORMBase):
     model_config = ConfigDict(extra="forbid")
 
     id: int
     employee_id: str
+    name_en: str
+    name_ar: str | None = None
     operational_date: date
     scheduled_start_at: datetime
     scheduled_end_at: datetime
+    department_snapshot: str | None = None
+    duty_unit_snapshot: str | None = None
+    duty_post_snapshot: str | None = None
+    crew_code_snapshot: str | None = None
+    crew_name_snapshot: str | None = None
+    shift_code_snapshot: str
+    organization_snapshot_state: str
+    punches: list[AttendanceCasePunchRead] = Field(default_factory=list)
     effective: dict[str, object] | None = None
-    evaluations: list[dict[str, object]]
-    adjustments: list[dict[str, object]]
+    evaluations: list[AttendanceEvaluationRead] = Field(default_factory=list)
+    adjustments: list[AttendanceAdjustmentRead] = Field(default_factory=list)
+    adjustment_audit: list[AttendanceAdjustmentAuditRead] = Field(default_factory=list)
 
 
 class DutyAssignmentEventRead(ORMBase):
@@ -920,9 +978,13 @@ __all__ = [
     "EXCUSING_RECORD_KINDS",
     "AdjustmentRevokeWrite",
     "AssignmentKind",
+    "AttendanceAdjustmentAuditRead",
+    "AttendanceAdjustmentRead",
     "AttendanceAdjustmentWrite",
+    "AttendanceCasePunchRead",
     "AttendanceCaseRead",
     "AttendanceDayRowRead",
+    "AttendanceEvaluationRead",
     "AttendanceExceptionRead",
     "AttendancePolicyWrite",
     "ConfigurationPatch",

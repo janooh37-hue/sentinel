@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
 import { EmployeeBadgeCard } from './EmployeeBadgeCard'
+import { DutyLocationActivity } from './DutyLocationActivity'
 import { EmployeeActivityLookup } from './EmployeeActivityLookup'
 import { api, type EmployeeActivityItemRead, type EmployeeActivityKind, type EmployeeListItem } from '@/lib/api'
 import { pickEmployeeName } from '@/lib/employeeName'
@@ -30,6 +31,11 @@ const KIND_STYLES: Record<EmployeeActivityKind, { soft: string; color: string; i
     color: '#6b4fb0',
     icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M3.5 5.5h17v13h-17zM3.5 6.5 12 13l8.5-6.5" /></svg>,
   },
+  duty_location: {
+    soft: 'var(--primary-soft)',
+    color: 'var(--primary-on-soft)',
+    icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M12 21s7-6 7-12a7 7 0 1 0-14 0c0 6 7 12 7 12Zm0-9.5h.01" /></svg>,
+  },
 }
 
 function activityHref(item: EmployeeActivityItemRead): string {
@@ -42,6 +48,8 @@ function activityHref(item: EmployeeActivityItemRead): string {
       return `/employees/${encodeURIComponent(item.employee_id)}?tab=violations&open=${item.source_id}`
     case 'ledger':
       return `/ledger?open=${item.source_id}`
+    case 'duty_location':
+      return `/employees/${encodeURIComponent(item.employee_id)}?tab=activity`
   }
 }
 
@@ -151,7 +159,7 @@ export function EmployeeActivitySection({ onOpenProfile }: EmployeeActivitySecti
             <div className="mb-6 flex flex-wrap items-center gap-2.5">
               <EmployeeActivityLookup onSelect={handleEmployeeSelect} onOpenProfile={onOpenProfile} />
               <div role="group" aria-label={t('employees.activity.typeLabel')} className="flex flex-wrap gap-1.5">
-                {(['all', 'document', 'leave', 'violation', 'ledger'] as const).map((value) => (
+                {(['all', 'document', 'leave', 'violation', 'ledger', 'duty_location'] as const).map((value) => (
                   <button
                     key={value}
                     type="button"
@@ -274,15 +282,20 @@ function ActivityRow({
     .join('')
     .toUpperCase()
   const date = new Date(item.occurred_at)
-  const actionKey = `employees.activity.actions.${item.kind}`
-  const actionOptions = item.kind === 'leave' ? { title: item.title, days: item.days ?? 0 } : { title: item.title }
-  const action = t(actionKey, actionOptions)
-  const destinationKey = {
-    document: 'employees.activity.openDocument',
-    leave: 'employees.activity.openLeave',
-    violation: 'employees.activity.openViolation',
-    ledger: 'employees.activity.openLedger',
-  }[item.kind]
+  const action = item.kind === 'duty_location'
+    ? null
+    : t(
+        `employees.activity.actions.${item.kind}`,
+        item.kind === 'leave' ? { title: item.title, days: item.days ?? 0 } : { title: item.title },
+      )
+  const destinationKey = item.kind === 'duty_location'
+    ? 'employees.activity.dutyLocation.openEmployeeActivity'
+    : {
+        document: 'employees.activity.openDocument',
+        leave: 'employees.activity.openLeave',
+        violation: 'employees.activity.openViolation',
+        ledger: 'employees.activity.openLedger',
+      }[item.kind]
   const kindStyle = KIND_STYLES[item.kind]
 
   return (
@@ -294,8 +307,14 @@ function ActivityRow({
         {kindStyle.icon}
       </span>
       <span className="min-w-0 flex-1">
-        <span dir="auto" className="block truncate text-sm font-semibold text-foreground">{item.title}</span>
-        <span dir="auto" className="mt-0.5 block truncate text-xs text-muted-foreground">{action}{item.detail ? ` · ${item.detail}` : ''}</span>
+        {item.kind === 'duty_location' ? (
+          <DutyLocationActivity item={item} />
+        ) : (
+          <>
+            <span dir="auto" className="block truncate text-sm font-semibold text-foreground">{item.title}</span>
+            <span dir="auto" className="mt-0.5 block truncate text-xs text-muted-foreground">{action}{item.detail ? ` · ${item.detail}` : ''}</span>
+          </>
+        )}
       </span>
       {showEmployee && (
         <span className="hidden w-[210px] shrink-0 items-center gap-2.5 md:flex">

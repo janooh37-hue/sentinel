@@ -1517,6 +1517,75 @@
         }
       }
     },
+    "/api/v1/auth/users/{user_id}/permissions/bulk": {
+      "put": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Set User Permissions Bulk",
+        "description": "Apply several override changes in one all-or-nothing call.",
+        "operationId": "set_user_permissions_bulk_api_v1_auth_users__user_id__permissions_bulk_put",
+        "parameters": [
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "User Id"
+            }
+          },
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetPermissionBulkRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserPermissionRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/announcements/groups": {
       "get": {
         "tags": [
@@ -2174,7 +2243,8 @@
                     "document",
                     "leave",
                     "violation",
-                    "ledger"
+                    "ledger",
+                    "duty_location"
                   ],
                   "type": "string"
                 },
@@ -2680,6 +2750,262 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ViolationRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/employees/{employee_id}/absences": {
+      "get": {
+        "tags": [
+          "employees"
+        ],
+        "summary": "List Employee Absences",
+        "operationId": "list_employee_absences_api_v1_employees__employee_id__absences_get",
+        "parameters": [
+          {
+            "name": "employee_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Employee Id"
+            }
+          },
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/AbsenceRead"
+                  },
+                  "title": "Response List Employee Absences Api V1 Employees  Employee Id  Absences Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "employees"
+        ],
+        "summary": "Create Employee Absences",
+        "operationId": "create_employee_absences_api_v1_employees__employee_id__absences_post",
+        "parameters": [
+          {
+            "name": "employee_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Employee Id"
+            }
+          },
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AbsenceCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AbsenceCreateResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "employees"
+        ],
+        "summary": "Delete Employee Absences",
+        "description": "Un-mark a whole episode (any day range) from the register.",
+        "operationId": "delete_employee_absences_api_v1_employees__employee_id__absences_delete",
+        "parameters": [
+          {
+            "name": "employee_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Employee Id"
+            }
+          },
+          {
+            "name": "start_date",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "title": "Start Date"
+            }
+          },
+          {
+            "name": "end_date",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "title": "End Date"
+            }
+          },
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/employees/{employee_id}/absences/episodes": {
+      "get": {
+        "tags": [
+          "employees"
+        ],
+        "summary": "List Employee Absence Episodes",
+        "operationId": "list_employee_absence_episodes_api_v1_employees__employee_id__absences_episodes_get",
+        "parameters": [
+          {
+            "name": "employee_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Employee Id"
+            }
+          },
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AbsenceRecordRead"
                 }
               }
             }
@@ -7065,7 +7391,7 @@
           "books"
         ],
         "summary": "List Word Templates",
-        "description": "Shared General Book boilerplate library (Word path).",
+        "description": "Shared General Book boilerplate library (Word path). Readable by record\ncomposers; renaming/deleting stays on ``books.templates``.",
         "operationId": "list_word_templates_api_v1_books_word_templates_get",
         "parameters": [
           {
@@ -7238,7 +7564,7 @@
           "books"
         ],
         "summary": "Get Word Template Table Schema",
-        "description": "Return table detection result for a shared General Book template.",
+        "description": "Return table detection result for a shared General Book template\n(read — same gate as the template list).",
         "operationId": "get_word_template_table_schema_api_v1_books_word_templates__name__table_get",
         "parameters": [
           {
@@ -7606,7 +7932,7 @@
           "books"
         ],
         "summary": "Save Book As Template",
-        "description": "Copy a finished General Book into the shared template library\n(retokenized + validated; content becomes visible to all books.manage users).",
+        "description": "Copy a finished General Book into the shared template library\n(retokenized + validated; content becomes visible to all books.templates users).",
         "operationId": "save_book_as_template_api_v1_books__book_id__save_as_template_post",
         "parameters": [
           {
@@ -8041,7 +8367,7 @@
           "books"
         ],
         "summary": "List Awaiting Scan",
-        "description": "Records stranded at ``awaiting_scan`` past 24h, oldest first.\n\n``scope=mine`` (default) is the caller's own; ``scope=all`` is everyone's,\nso an admin can clear records stranded by a user who lacks books.manage.\n\nDeclared before ``/{book_id}`` so the literal ``awaiting-scan`` segment isn't\nswallowed by the int path param — same reason as ``/awaiting`` above.\nAuthority is ``books.manage``: the same capability filing the scan requires.",
+        "description": "Records stranded at ``awaiting_scan`` past 24h, oldest first.\n\n``scope=mine`` (default) is the caller's own; ``scope=all`` is everyone's,\nso an admin can clear records stranded by a user who lacks books.edit.\n\nDeclared before ``/{book_id}`` so the literal ``awaiting-scan`` segment isn't\nswallowed by the int path param — same reason as ``/awaiting`` above.\nAuthority is ``books.edit``: the same capability filing the scan requires.",
         "operationId": "list_awaiting_scan_api_v1_books_awaiting_scan_get",
         "parameters": [
           {
@@ -8620,7 +8946,7 @@
           "books"
         ],
         "summary": "Get Version Fields",
-        "description": "Return the raw stored ``fields`` blob for one book version — backs the\nApplicationPage revise-mode prefill. Deliberately not on ``BookRead`` (the\ndetail payload only exposes ``has_fields``).\n\nRequires ``books.manage`` (not ``books.view``) because this backs the\nrevise/edit write-path: the caller fetches these fields in order to submit\na revised generation, which is a managed write operation.",
+        "description": "Return the raw stored ``fields`` blob for one book version — backs the\nApplicationPage revise-mode prefill. Deliberately not on ``BookRead`` (the\ndetail payload only exposes ``has_fields``).\n\nRequires ``books.edit`` (not ``books.view``) because this backs the\nrevise/edit write-path: the caller fetches these fields in order to submit\na revised generation, which is a managed write operation.",
         "operationId": "get_version_fields_api_v1_books__book_id__versions__version_id__fields_get",
         "parameters": [
           {
@@ -9563,7 +9889,7 @@
           "books"
         ],
         "summary": "Add Book Attachment",
-        "description": "File an attachment. ``awaiting_scan`` books flip silently (the scan is the\nsignature). For a ``none``/``pending`` book, ``as_signed=true`` records the\nupload as the signed copy and approves the record; otherwise it is filed as a\nplain attachment. Authority is ``books.manage`` for every path.",
+        "description": "File an attachment. ``awaiting_scan`` books flip silently (the scan is the\nsignature). For a ``none``/``pending`` book, ``as_signed=true`` records the\nupload as the signed copy and approves the record; otherwise it is filed as a\nplain attachment. Authority is ``books.edit`` for every path.",
         "operationId": "add_book_attachment_api_v1_books__book_id__attachments_post",
         "parameters": [
           {
@@ -12819,6 +13145,7 @@
           "ledger"
         ],
         "summary": "Send Attachment To Vault",
+        "description": "File a ledger attachment into an employee's document vault (vault-write\ngate — profile edits don't cover vault contents).",
         "operationId": "send_attachment_to_vault_api_v1_ledger_entries__entry_id__attachments__attachment_index__send_to_vault_post",
         "parameters": [
           {
@@ -17930,7 +18257,7 @@
             "required": true,
             "schema": {
               "type": "string",
-              "pattern": "^(department|duty_unit|duty_post)$",
+              "pattern": "^(organization|department|duty_unit)$",
               "title": "Parent Kind"
             }
           },
@@ -17964,22 +18291,6 @@
                 }
               ],
               "title": "Duty Unit"
-            }
-          },
-          {
-            "name": "duty_post",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Duty Post"
             }
           },
           {
@@ -21542,6 +21853,210 @@
   },
   "components": {
     "schemas": {
+      "AbsenceCreate": {
+        "properties": {
+          "start_date": {
+            "type": "string",
+            "format": "date",
+            "title": "Start Date"
+          },
+          "end_date": {
+            "type": "string",
+            "format": "date",
+            "title": "End Date"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "type": "object",
+        "required": [
+          "start_date",
+          "end_date"
+        ],
+        "title": "AbsenceCreate",
+        "description": "Mark every day in ``[start_date, end_date]`` (inclusive) as absent."
+      },
+      "AbsenceCreateResult": {
+        "properties": {
+          "created": {
+            "items": {
+              "$ref": "#/components/schemas/AbsenceRead"
+            },
+            "type": "array",
+            "title": "Created"
+          },
+          "skipped_off_roster": {
+            "items": {
+              "type": "string",
+              "format": "date"
+            },
+            "type": "array",
+            "title": "Skipped Off Roster"
+          }
+        },
+        "type": "object",
+        "required": [
+          "created",
+          "skipped_off_roster"
+        ],
+        "title": "AbsenceCreateResult",
+        "description": "The days recorded, and the requested days refused as off-roster."
+      },
+      "AbsenceEpisodeRead": {
+        "properties": {
+          "start_date": {
+            "type": "string",
+            "format": "date",
+            "title": "Start Date"
+          },
+          "end_date": {
+            "type": "string",
+            "format": "date",
+            "title": "End Date"
+          },
+          "days": {
+            "type": "integer",
+            "title": "Days"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "start_date",
+          "end_date",
+          "days"
+        ],
+        "title": "AbsenceEpisodeRead",
+        "description": "One contiguous run of absence days — a register row."
+      },
+      "AbsenceRead": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "employee_id": {
+            "type": "string",
+            "title": "Employee Id"
+          },
+          "date": {
+            "type": "string",
+            "format": "date",
+            "title": "Date"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "employee_id",
+          "date",
+          "note",
+          "created_at"
+        ],
+        "title": "AbsenceRead"
+      },
+      "AbsenceRecordRead": {
+        "properties": {
+          "employee_id": {
+            "type": "string",
+            "title": "Employee Id"
+          },
+          "employee_name_en": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Employee Name En"
+          },
+          "employee_name_ar": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Employee Name Ar"
+          },
+          "duty_post": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duty Post"
+          },
+          "duty_unit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duty Unit"
+          },
+          "episodes": {
+            "items": {
+              "$ref": "#/components/schemas/AbsenceEpisodeRead"
+            },
+            "type": "array",
+            "title": "Episodes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "employee_id",
+          "episodes"
+        ],
+        "title": "AbsenceRecordRead",
+        "description": "The employee's absence register: who, and the episode rows."
+      },
       "ActivityItemRead": {
         "properties": {
           "when": {
@@ -21555,7 +22070,9 @@
               "document",
               "leave",
               "violation",
-              "ledger"
+              "ledger",
+              "absence",
+              "duty_location"
             ],
             "title": "Kind"
           },
@@ -21566,6 +22083,98 @@
           "ref_id": {
             "type": "integer",
             "title": "Ref Id"
+          },
+          "event_type": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "initial_placement",
+                  "transfer"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Event Type"
+          },
+          "from_department": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "From Department"
+          },
+          "from_unit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "From Unit"
+          },
+          "from_post": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "From Post"
+          },
+          "to_department": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "To Department"
+          },
+          "to_unit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "To Unit"
+          },
+          "to_post": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "To Post"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
           }
         },
         "type": "object",
@@ -22595,6 +23204,191 @@
         ],
         "title": "AttachmentSlotRead"
       },
+      "AttendanceAdjustmentAuditRead": {
+        "properties": {
+          "adjustment_id": {
+            "type": "integer",
+            "title": "Adjustment Id"
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "created",
+              "revoked"
+            ],
+            "title": "Action"
+          },
+          "actor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Actor"
+          },
+          "occurred_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Occurred At"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "adjustment_id",
+          "action",
+          "occurred_at",
+          "reason"
+        ],
+        "title": "AttendanceAdjustmentAuditRead"
+      },
+      "AttendanceAdjustmentRead": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "base_evaluation_id": {
+            "type": "integer",
+            "title": "Base Evaluation Id"
+          },
+          "replacement_presence_state": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "scheduled",
+                  "on_duty",
+                  "completed",
+                  "absent",
+                  "excused_leave",
+                  "off",
+                  "unknown"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Replacement Presence State"
+          },
+          "replacement_first_in_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Replacement First In At"
+          },
+          "replacement_latest_in_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Replacement Latest In At"
+          },
+          "replacement_final_out_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Replacement Final Out At"
+          },
+          "replacement_late_minutes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Replacement Late Minutes"
+          },
+          "replacement_early_exit_minutes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Replacement Early Exit Minutes"
+          },
+          "replacement_missing_checkout": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Replacement Missing Checkout"
+          },
+          "reason": {
+            "type": "string",
+            "title": "Reason"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "revoked_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Revoked At"
+          },
+          "supersedes_adjustment_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Supersedes Adjustment Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "base_evaluation_id",
+          "reason",
+          "created_at"
+        ],
+        "title": "AttendanceAdjustmentRead"
+      },
       "AttendanceAdjustmentWrite": {
         "properties": {
           "replacement_presence_state": {
@@ -22701,9 +23495,41 @@
         "additionalProperties": false,
         "type": "object",
         "required": [
+          "replacement_presence_state",
+          "replacement_first_in_at",
+          "replacement_latest_in_at",
+          "replacement_final_out_at",
+          "replacement_late_minutes",
+          "replacement_early_exit_minutes",
+          "replacement_missing_checkout",
           "reason"
         ],
         "title": "AttendanceAdjustmentWrite"
+      },
+      "AttendanceCasePunchRead": {
+        "properties": {
+          "occurred_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Occurred At"
+          },
+          "device_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Device Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "occurred_at"
+        ],
+        "title": "AttendanceCasePunchRead"
       },
       "AttendanceCaseRead": {
         "properties": {
@@ -22714,6 +23540,21 @@
           "employee_id": {
             "type": "string",
             "title": "Employee Id"
+          },
+          "name_en": {
+            "type": "string",
+            "title": "Name En"
+          },
+          "name_ar": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name Ar"
           },
           "operational_date": {
             "type": "string",
@@ -22730,6 +23571,76 @@
             "format": "date-time",
             "title": "Scheduled End At"
           },
+          "department_snapshot": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Department Snapshot"
+          },
+          "duty_unit_snapshot": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duty Unit Snapshot"
+          },
+          "duty_post_snapshot": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duty Post Snapshot"
+          },
+          "crew_code_snapshot": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Crew Code Snapshot"
+          },
+          "crew_name_snapshot": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Crew Name Snapshot"
+          },
+          "shift_code_snapshot": {
+            "type": "string",
+            "title": "Shift Code Snapshot"
+          },
+          "organization_snapshot_state": {
+            "type": "string",
+            "title": "Organization Snapshot State"
+          },
+          "punches": {
+            "items": {
+              "$ref": "#/components/schemas/AttendanceCasePunchRead"
+            },
+            "type": "array",
+            "title": "Punches"
+          },
           "effective": {
             "anyOf": [
               {
@@ -22744,19 +23655,24 @@
           },
           "evaluations": {
             "items": {
-              "additionalProperties": true,
-              "type": "object"
+              "$ref": "#/components/schemas/AttendanceEvaluationRead"
             },
             "type": "array",
             "title": "Evaluations"
           },
           "adjustments": {
             "items": {
-              "additionalProperties": true,
-              "type": "object"
+              "$ref": "#/components/schemas/AttendanceAdjustmentRead"
             },
             "type": "array",
             "title": "Adjustments"
+          },
+          "adjustment_audit": {
+            "items": {
+              "$ref": "#/components/schemas/AttendanceAdjustmentAuditRead"
+            },
+            "type": "array",
+            "title": "Adjustment Audit"
           }
         },
         "additionalProperties": false,
@@ -22764,11 +23680,12 @@
         "required": [
           "id",
           "employee_id",
+          "name_en",
           "operational_date",
           "scheduled_start_at",
           "scheduled_end_at",
-          "evaluations",
-          "adjustments"
+          "shift_code_snapshot",
+          "organization_snapshot_state"
         ],
         "title": "AttendanceCaseRead"
       },
@@ -22903,6 +23820,10 @@
             ],
             "title": "Scheduled End At"
           },
+          "case_id": {
+            "type": "integer",
+            "title": "Case Id"
+          },
           "first_punch_at": {
             "anyOf": [
               {
@@ -22991,10 +23912,134 @@
         "type": "object",
         "required": [
           "employee_id",
-          "name_en"
+          "name_en",
+          "case_id"
         ],
-        "title": "AttendanceDayRowRead",
-        "description": "One person's scheduled shift on one operational date, with punch facts.\n\n``first_punch_at`` / ``last_punch_at`` are the earliest and latest punches\ninside this case's policy match window. They are timestamps of events, not a\ncheck-in and a check-out: this provider reports no direction, so a single\npunch yields ``punch_count == 1`` with both bounds equal, and a client must\npresent it as \"seen at\", never as a span.\n\n``judgment_due_at`` is when the duty stops running and a lone punch may be\ncalled unpaired: before that instant one punch is an arrival still waiting for\nits departure, not an exception. ``absence_due_at`` is the earlier boundary,\ntwice the grace past the start, after which a case with no punch at all is an\nabsence. ``grace_minutes`` is the policy's own grace, published so a client\nnames the same arrival late as the evaluator does instead of guessing."
+        "title": "AttendanceDayRowRead"
+      },
+      "AttendanceEvaluationRead": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "revision": {
+            "type": "integer",
+            "title": "Revision"
+          },
+          "presence_state": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "scheduled",
+                  "on_duty",
+                  "completed",
+                  "absent",
+                  "excused_leave",
+                  "off",
+                  "unknown"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Presence State"
+          },
+          "reason_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason Code"
+          },
+          "first_in_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "First In At"
+          },
+          "latest_in_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latest In At"
+          },
+          "final_out_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Final Out At"
+          },
+          "late_minutes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Late Minutes"
+          },
+          "early_exit_minutes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Early Exit Minutes"
+          },
+          "missing_checkout": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Missing Checkout"
+          },
+          "evaluated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Evaluated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "revision",
+          "evaluated_at"
+        ],
+        "title": "AttendanceEvaluationRead"
       },
       "AttendanceExceptionRead": {
         "properties": {
@@ -23127,6 +24172,10 @@
             ],
             "title": "Scheduled End At"
           },
+          "case_id": {
+            "type": "integer",
+            "title": "Case Id"
+          },
           "late_minutes": {
             "anyOf": [
               {
@@ -23167,7 +24216,8 @@
         "type": "object",
         "required": [
           "employee_id",
-          "name_en"
+          "name_en",
+          "case_id"
         ],
         "title": "AttendanceExceptionRead"
       },
@@ -27026,7 +28076,8 @@
               "waiting_approvals",
               "expiring_soon",
               "recent_ledger",
-              "pending_departures"
+              "pending_departures",
+              "workforce_pulse"
             ],
             "title": "Id"
           },
@@ -28359,7 +29410,8 @@
               "document",
               "leave",
               "violation",
-              "ledger"
+              "ledger",
+              "duty_location"
             ],
             "title": "Kind"
           },
@@ -28457,6 +29509,98 @@
           "reference": {
             "type": "string",
             "title": "Reference"
+          },
+          "event_type": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "initial_placement",
+                  "transfer"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Event Type"
+          },
+          "from_department": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "From Department"
+          },
+          "from_unit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "From Unit"
+          },
+          "from_post": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "From Post"
+          },
+          "to_department": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "To Department"
+          },
+          "to_unit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "To Unit"
+          },
+          "to_post": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "To Post"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
           }
         },
         "type": "object",
@@ -29193,6 +30337,13 @@
             "type": "array",
             "title": "Recent Violations"
           },
+          "recent_absences": {
+            "items": {
+              "$ref": "#/components/schemas/RecentAbsenceRead"
+            },
+            "type": "array",
+            "title": "Recent Absences"
+          },
           "recent_ledger": {
             "items": {
               "$ref": "#/components/schemas/RecentLedgerRead"
@@ -29232,6 +30383,7 @@
           "recent_documents",
           "recent_leaves",
           "recent_violations",
+          "recent_absences",
           "recent_ledger",
           "recent_activity",
           "recent_sms",
@@ -29759,6 +30911,10 @@
             "type": "integer",
             "title": "Violations"
           },
+          "absence_days": {
+            "type": "integer",
+            "title": "Absence Days"
+          },
           "ledger_count": {
             "type": "integer",
             "title": "Ledger Count"
@@ -29774,6 +30930,7 @@
           "leaves_taken_days",
           "leaves_allowed_days",
           "violations",
+          "absence_days",
           "ledger_count",
           "tenure_years"
         ],
@@ -31297,6 +32454,14 @@
               }
             ],
             "title": "Documents"
+          },
+          "superseded_absence_dates": {
+            "items": {
+              "type": "string",
+              "format": "date"
+            },
+            "type": "array",
+            "title": "Superseded Absence Dates"
           },
           "error_code": {
             "anyOf": [
@@ -35281,6 +36446,36 @@
         ],
         "title": "PushSubscriptionIn"
       },
+      "RecentAbsenceRead": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "date": {
+            "type": "string",
+            "format": "date",
+            "title": "Date"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "date"
+        ],
+        "title": "RecentAbsenceRead"
+      },
       "RecentDocumentRead": {
         "properties": {
           "id": {
@@ -36571,6 +37766,25 @@
         ],
         "title": "SessionUser",
         "description": "The signed-in user, shaped for the frontend auth context."
+      },
+      "SetPermissionBulkRequest": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/SetPermissionRequest"
+            },
+            "type": "array",
+            "maxItems": 200,
+            "minItems": 1,
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "title": "SetPermissionBulkRequest",
+        "description": "Apply several override changes in one all-or-nothing call."
       },
       "SetPermissionRequest": {
         "properties": {
