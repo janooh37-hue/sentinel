@@ -332,7 +332,7 @@ describe('WordHandoffDialog', () => {
     expect(canvas?.getAttribute('data-pdf-url')).toContain('/word-sessions/preview')
   })
 
-  it('finished Report view shows shared actions but not Save as template', async () => {
+  it('finished Report view uses the signed PDF URL and rev marker', async () => {
     const user = userEvent.setup()
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
     vi.spyOn(apiMod.api, 'getBook').mockResolvedValue(bookWith('2026-07-17T10:05:00Z'))
@@ -343,7 +343,9 @@ describe('WordHandoffDialog', () => {
           id: 1,
           version_no: 1,
           template_id: 'Report',
+          status: 'approved',
           pdf_url: '/api/v1/documents/9/download?format=pdf',
+          signed_pdf_url: '/api/v1/documents/9/download?format=pdf',
           docx_url: '/api/v1/documents/9/download?format=docx',
         },
       ],
@@ -364,8 +366,12 @@ describe('WordHandoffDialog', () => {
       expect(btn?.disabled).toBe(false)
     })
     await user.click(screen.getByText('إنهاء التحرير'))
-    await screen.findByTestId('doc-pdf-canvas')
+    const canvas = await screen.findByTestId('doc-pdf-canvas')
 
+    expect(canvas).toHaveAttribute(
+      'data-pdf-url',
+      '/api/v1/documents/9/download?format=pdf&rev=signed',
+    )
     expect(screen.getByTestId('saved-record-actions')).toBeTruthy()
     expect(screen.queryByText('حفظ كقالب')).toBeNull()
   })

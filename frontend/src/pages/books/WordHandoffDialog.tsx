@@ -146,7 +146,10 @@ export function WordHandoffDialog({ session, open, onClose }: Props): React.JSX.
     const canSaveAsTemplate =
       has('books.templates') &&
       (latest?.template_id === 'General Book' || latest?.template_id === 'Security Permit')
-    const pdfUrl = latest?.pdf_url ?? null
+    const signedPdfUrl = latest?.signed_pdf_url
+    const pdfUrl = signedPdfUrl
+      ? `${signedPdfUrl}${signedPdfUrl.includes('?') ? '&' : '?'}rev=signed`
+      : (latest?.pdf_url ?? null)
     const docxUrl = latest?.docx_url ?? undefined
     return (
       <>

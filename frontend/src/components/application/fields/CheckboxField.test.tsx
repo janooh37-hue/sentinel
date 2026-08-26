@@ -32,6 +32,16 @@ const FIELDS: TemplateField[] = [
     required: false,
   },
 ]
+const DEFAULT_ON_FIELDS: TemplateField[] = [
+  {
+    id: 'sign',
+    type: 'checkbox',
+    label_en: 'Sign now',
+    label_ar: 'توقيع الآن',
+    required: false,
+    default: 'true',
+  },
+]
 
 function Watched(): React.JSX.Element {
   const v = useWatch({ name: 'action_notified' })
@@ -51,6 +61,22 @@ function Harness({ onSubmit }: { onSubmit: (v: unknown) => void }): React.JSX.El
     <FormProvider {...form}>
       <CheckboxField name="action_notified" label_en="Notified" label_ar="ابلاغ" />
       <Watched />
+      <button type="button" onClick={() => void form.handleSubmit(onSubmit)()}>
+        submit
+      </button>
+    </FormProvider>
+  )
+}
+
+function DefaultOnHarness({ onSubmit }: { onSubmit: (v: unknown) => void }): React.JSX.Element {
+  const { t } = useTranslation()
+  const form = useForm({
+    resolver: zodResolver(buildZodSchema(DEFAULT_ON_FIELDS, t)),
+    defaultValues: {},
+  })
+  return (
+    <FormProvider {...form}>
+      <CheckboxField name="sign" label_en="Sign now" label_ar="توقيع الآن" defaultOn />
       <button type="button" onClick={() => void form.handleSubmit(onSubmit)()}>
         submit
       </button>
@@ -89,5 +115,16 @@ describe('CheckboxField — submitted payload types', () => {
     const payload = onSubmit.mock.calls[0][0] as Record<string, unknown>
     expect(payload.action_notified).toBe(false)
     expect(typeof payload.action_notified).toBe('boolean')
+  })
+
+  it('an untouched default-on checkbox submits boolean true', async () => {
+    const onSubmit = vi.fn()
+    render(<DefaultOnHarness onSubmit={onSubmit} />)
+    expect(screen.getByRole('checkbox')).toBeChecked()
+    await userEvent.click(screen.getByRole('button', { name: 'submit' }))
+    expect(onSubmit).toHaveBeenCalledTimes(1)
+    const payload = onSubmit.mock.calls[0][0] as Record<string, unknown>
+    expect(payload.sign).toBe(true)
+    expect(typeof payload.sign).toBe('boolean')
   })
 })

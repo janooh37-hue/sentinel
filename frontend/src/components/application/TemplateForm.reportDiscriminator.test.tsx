@@ -76,7 +76,7 @@ const REPORT_SCHEMA: TemplateDetailResponse = {
     { id: 'recipient_id', type: 'recipient_picker', label_en: 'To (Recipient)', label_ar: 'إلى (المستلم)', required: false },
     { id: 'subject', type: 'text', label_en: 'Subject', label_ar: 'الموضوع', required: true },
     { id: 'report_date', type: 'date', label_en: 'Date', label_ar: 'التاريخ', required: true },
-    { id: 'sign', type: 'checkbox', label_en: 'Sign now', label_ar: 'توقيع الآن', required: false },
+    { id: 'sign', type: 'checkbox', label_en: 'Sign now', label_ar: 'توقيع الآن', required: false, default: 'true' },
   ],
 }
 
