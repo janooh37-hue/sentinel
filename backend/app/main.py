@@ -8,8 +8,11 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import Depends, FastAPI
+from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.responses import Response
+from starlette.types import Scope
 
 from app import __version__
 from app.api import dav
@@ -61,6 +64,22 @@ STATIC_DIR = Path(__file__).resolve().parent / "static"
 MAX_BODY_BYTES = 30 * 1024 * 1024
 
 log = logging.getLogger(__name__)
+
+
+class _ImmutableStaticFiles(StaticFiles):
+    """StaticFiles that marks built assets as permanently cacheable.
+
+    Vite emits ``/assets/*`` with content-hashed filenames — a new deploy
+    means new URLs, so cached bytes can never go stale. Without the explicit
+    header the browser revalidates every chunk on every page load: dozens of
+    conditional requests per navigation on the LAN for zero benefit.
+    """
+
+    async def get_response(self, path: str, scope: Scope) -> Response:
+        response = await super().get_response(path, scope)
+        if response.status_code == 200:
+            response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+        return response
 
 
 class BodySizeLimitMiddleware:
@@ -164,6 +183,10 @@ def create_app() -> FastAPI:
 
     # Cap request bodies before they are buffered into RAM (API-01).
     app.add_middleware(BodySizeLimitMiddleware, max_bytes=MAX_BODY_BYTES)
+    # Compress JSON/list payloads above 1 KB for clients that ask for it.
+    # Outermost middleware so it wraps error responses too. Clients that omit
+    # ``Accept-Encoding: gzip`` (Word's DAV stack) get identity bytes.
+    app.add_middleware(GZipMiddleware, minimum_size=1024)
 
     # Baseline authentication: every data router requires a valid session.
     # Public surfaces (login/register/me/logout + the system probes the launcher
@@ -228,7 +251,7 @@ def create_app() -> FastAPI:
         # Serve the built React app. `html=True` lets `/` resolve index.html.
         app.mount(
             "/assets",
-            StaticFiles(directory=STATIC_DIR / "assets", check_dir=False),
+            _ImmutableStaticFiles(directory=STATIC_DIR / "assets", check_dir=False),
             name="assets",
         )
 

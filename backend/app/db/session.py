@@ -42,6 +42,16 @@ def attach_sqlite_pragmas(eng: Engine, *, wal: bool = True) -> None:
             # sync) racing the HTTP request thread fails immediately with
             # "database is locked". 5s is plenty for the short writes we do.
             cursor.execute("PRAGMA busy_timeout=5000")
+            # NORMAL under WAL still survives a process crash; only an OS or
+            # power loss can drop the last committed transaction. FULL would
+            # fsync twice per commit — the dominant write-latency cost here.
+            cursor.execute("PRAGMA synchronous=NORMAL")
+            # Temp b-trees (dashboard/search ORDER BY/GROUP BY spills) in RAM.
+            cursor.execute("PRAGMA temp_store=MEMORY")
+            # Negative cache_size = KiB → 64 MB page cache.
+            cursor.execute("PRAGMA cache_size=-64000")
+            # mmap reads for the SSD-backed DB file: page-in instead of read().
+            cursor.execute("PRAGMA mmap_size=268435456")
         cursor.execute("PRAGMA foreign_keys=ON")
         cursor.close()
 

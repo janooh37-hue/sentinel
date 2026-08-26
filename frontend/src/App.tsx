@@ -21,6 +21,28 @@ import { useAuth } from '@/lib/authContext'
 import { useIsMobile } from '@/lib/useIsMobile'
 import { useLockState } from '@/lib/useLockState'
 import { type Page, PAGE_PATHS, buildPagePath } from '@/lib/pageNav'
+import {
+  loadAccessRequestsPage,
+  loadApplicationPage,
+  loadApprovalsPage,
+  loadAttendancePage,
+  loadBookRecordPage,
+  loadBooksPage,
+  loadDashboardPage,
+  loadDutyLocationsPage,
+  loadEmployeeDetailPage,
+  loadEmployeesOrgTreePage,
+  loadExpiryPage,
+  loadIntakePage,
+  loadLeavesPage,
+  loadLedgerPage,
+  loadPermitsPage,
+  loadScanBackPage,
+  loadScanInboxPage,
+  loadSendToGroupPage,
+  loadSettingsPage,
+  loadTimesheetPage,
+} from '@/lib/routeLoaders'
 import { useNotificationStream } from '@/hooks/useNotificationStream'
 import { TopProgressBar } from './components/refresh/TopProgressBar'
 import { useRefreshHeartbeat } from './hooks/useRefreshHeartbeat'
@@ -77,32 +99,14 @@ const EmployeeDetailPage = lazy(() =>
 )
 // The monthly time sheet is a subpage of Employees, not a top-nav entry, so it
 // is code-split here and routed beside the employee routes below.
-const TimesheetPage = lazy(() =>
-  import('@/pages/timesheet/TimesheetPage').then((m) => ({ default: m.TimesheetPage })),
-)
-const AccessRequestsPage = lazy(() =>
-  import('@/pages/access/AccessRequestsPage').then((m) => ({ default: m.AccessRequestsPage })),
-)
-const ExpiryPage = lazy(() =>
-  import('@/pages/expiry/ExpiryPage').then((m) => ({ default: m.ExpiryPage })),
-)
-const IntakePage = lazy(() =>
-  import('@/pages/intake/IntakePage').then((m) => ({ default: m.IntakePage })),
-)
-const DutyLocationsPage = lazy(() =>
-  import('@/pages/dutyLocations/DutyLocationsPage').then((m) => ({
-    default: m.DutyLocationsPage,
-  })),
-)
-const ScanInboxPage = lazy(() =>
-  import('@/pages/scanInbox/ScanInboxPage').then((m) => ({ default: m.ScanInboxPage })),
-)
-const SendToGroupPage = lazy(() =>
-  import('@/pages/announcements/SendToGroupPage').then((m) => ({ default: m.SendToGroupPage })),
-)
-const ScanBackPage = lazy(() =>
-  import('@/pages/scanBack/ScanBackPage').then((m) => ({ default: m.ScanBackPage })),
-)
+const TimesheetPage = lazy(loadTimesheetPage)
+const AccessRequestsPage = lazy(loadAccessRequestsPage)
+const ExpiryPage = lazy(loadExpiryPage)
+const IntakePage = lazy(loadIntakePage)
+const DutyLocationsPage = lazy(loadDutyLocationsPage)
+const ScanInboxPage = lazy(loadScanInboxPage)
+const SendToGroupPage = lazy(loadSendToGroupPage)
+const ScanBackPage = lazy(loadScanBackPage)
 
 const queryClient = new QueryClient({
   defaultOptions: {

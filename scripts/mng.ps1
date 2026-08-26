@@ -14,8 +14,8 @@
         mng stop            # stop the service            (elevates if needed)
         mng restart         # restart the service         (elevates if needed)
         mng build           # rebuild the frontend bundle into backend\app\static
-        mng deploy          # build + restart  (apply local code changes)
-        mng update          # git pull; if anything changed -> deploy
+        mng deploy          # backup DB + build + migrate + smoke check + restart
+        mng update          # git pull; if changed -> deploy (skips build when frontend/ is untouched)
         mng logs            # tail the service log   (-Tail N, -Stderr)
         mng open            # open the app in the default browser
         mng help            # this help
@@ -306,9 +306,33 @@ function Invoke-Migrate {
     # can't leave the live DB behind the code (a mismatch that manifests as
     # "no such column" 500s once the new code queries the not-yet-added column).
     # Additive migrations are safe to run while the old code is still serving.
-    Write-Host '  Applying DB migrations (alembic upgrade head) ...' -ForegroundColor Cyan
     $venvPy = Join-Path $Root 'venv\Scripts\python.exe'
     if (-not (Test-Path $venvPy)) { throw "venv python not found at $venvPy" }
+
+    # Back up the DB first: once alembic migrates, rolling back means restoring
+    # data, and there is no other automatic copy. The CLI reads data_dir from
+    # settings and copies the DB via SQLite's online-backup API (WAL-safe while
+    # the service is running), then prunes old copies. The app package only
+    # resolves with backend\ as the working directory.
+    Write-Host '  Backing up the database before migrating ...' -ForegroundColor Cyan
+    Push-Location (Join-Path $Root 'backend')
+    try {
+        # backup_service logs to stderr; same EAP demotion as the alembic call
+        # below, judged by exit code alone.
+        $prevEAP = $ErrorActionPreference
+        $ErrorActionPreference = 'Continue'
+        try {
+            & $venvPy -m app.services.backup_service 2>&1 | ForEach-Object { Write-Host "    $_" }
+        } finally {
+            $ErrorActionPreference = $prevEAP
+        }
+        if ($LASTEXITCODE -ne 0) { throw "pre-migration backup failed (exit $LASTEXITCODE) - migration aborted; fix the backup error above and rerun" }
+    } finally {
+        Pop-Location
+    }
+    Write-Host '  Pre-migration backup complete.' -ForegroundColor Green
+
+    Write-Host '  Applying DB migrations (alembic upgrade head) ...' -ForegroundColor Cyan
     Push-Location $Root
     try {
         # alembic logs to stderr; under $ErrorActionPreference='Stop' PS 5.1 would
@@ -326,11 +350,37 @@ function Invoke-Migrate {
     }
     Write-Host '  Migrations applied.' -ForegroundColor Green
 }
+function Invoke-SmokeCheck {
+    # Restart is the point of no return: a dead-on-arrival import (syntax error,
+    # bad router wiring) currently takes the service down with it. Building the
+    # FastAPI app exercises every module import and router registration without
+    # touching the DB or binding a port, so it is safe while the service runs.
+    Write-Host '  Smoke-checking backend import (create_app) ...' -ForegroundColor Cyan
+    $venvPy = Join-Path $Root 'venv\Scripts\python.exe'
+    if (-not (Test-Path $venvPy)) { throw "venv python not found at $venvPy" }
+    Push-Location (Join-Path $Root 'backend')
+    try {
+        # The app logs to stderr during startup; same EAP demotion as the
+        # alembic/backup calls, judged by exit code alone.
+        $prevEAP = $ErrorActionPreference
+        $ErrorActionPreference = 'Continue'
+        try {
+            & $venvPy -c "from app.main import create_app; create_app()" 2>&1 | ForEach-Object { Write-Host "    $_" }
+        } finally {
+            $ErrorActionPreference = $prevEAP
+        }
+        if ($LASTEXITCODE -ne 0) { throw "backend smoke check failed (exit $LASTEXITCODE) - fix the import error above before restarting the service" }
+    } finally {
+        Pop-Location
+    }
+    Write-Host '  Smoke check passed.' -ForegroundColor Green
+}
 
 function Invoke-Deploy {
     Assert-Admin 'deploy'
     Invoke-Build
     Invoke-Migrate
+    Invoke-SmokeCheck
     Write-Host "  Restarting $Service to load backend changes ..." -ForegroundColor Cyan
     Restart-Service -Name $Service -Force
     Wait-Healthy
@@ -346,6 +396,10 @@ function Invoke-Update {
         git pull --ff-only
         if ($LASTEXITCODE -ne 0) { throw 'git pull failed (resolve manually, then run: mng deploy)' }
         $after = (git rev-parse HEAD).Trim()
+        # Pathspecs are cwd-relative, so the frontend diff must run while we are
+        # still at the repo root. `git diff --name-only` prints nothing when the
+        # range left frontend/ untouched.
+        $frontendFiles = @(git diff --name-only $before $after -- 'frontend/')
     } finally {
         Pop-Location
     }
@@ -356,8 +410,15 @@ function Invoke-Update {
     }
     Write-Host ("  Updated {0} -> {1}. Deploying ..." -f $before.Substring(0, 7), $after.Substring(0, 7)) -ForegroundColor Cyan
     try {
-        Invoke-Build
+        if ($frontendFiles.Count -eq 0) {
+            # The bundle in backend\app\static already matches this range, and a
+            # rebuild needs commit headroom (see Assert-BuildMemory) for no gain - skip it.
+            Write-Host '  No frontend changes in this range - skipping the frontend build.' -ForegroundColor DarkGray
+        } else {
+            Invoke-Build
+        }
         Invoke-Migrate
+        Invoke-SmokeCheck
     } catch {
         # The pull already moved the checkout forward. If the build or migration
         # fails the service keeps serving the PREVIOUS bundle, so the code on disk
@@ -394,8 +455,8 @@ function Show-Help {
     Write-Host '    mng stop        stop the service'
     Write-Host '    mng restart     restart the service'
     Write-Host '    mng build       rebuild frontend bundle -> backend\app\static'
-    Write-Host '    mng deploy      build + restart (apply local code changes)'
-    Write-Host '    mng update      git pull; if changed -> build + restart'
+    Write-Host '    mng deploy      backup DB + build + migrate + smoke check + restart'
+    Write-Host '    mng update      git pull; if changed -> deploy (skips build if frontend/ unchanged)'
     Write-Host '    mng logs        tail service log   (-Tail N, -Stderr)'
     Write-Host '    mng open        open the app in the browser'
     Write-Host ''

@@ -20,6 +20,7 @@ import { api } from '@/lib/api'
 import type { Theme } from '@/lib/api'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { migrateLegacyFontScale, persistFontScale, persistTheme } from '@/lib/theme'
+import { prefetchRouteForPath } from '@/lib/prefetchRoute'
 
 import { AaSlider } from './AaSlider'
 import { IntakeLauncher } from '@/components/intake/IntakeLauncher'
@@ -74,6 +75,8 @@ export function TopNav({ onLock, onOpenSettings, onSignOut }: TopNavProps): Reac
         to="/"
         end
         aria-label={t('nav.dashboard')}
+        onPointerEnter={() => prefetchRouteForPath('/')}
+        onFocus={() => prefetchRouteForPath('/')}
         className="flex items-center gap-7 rounded-md transition-transform duration-200 hover:scale-[1.02] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
       >
         <img
@@ -99,6 +102,8 @@ export function TopNav({ onLock, onOpenSettings, onSignOut }: TopNavProps): Reac
             end={to === '/'}
             title={t(key)}
             aria-label={t(key)}
+            onPointerEnter={() => prefetchRouteForPath(to)}
+            onFocus={() => prefetchRouteForPath(to)}
             className={({ isActive }) =>
               `topnav-link relative flex items-center justify-center gap-2 rounded-lg px-3.5 py-2 font-medium transition-all duration-200 motion-reduce:!transition-none ${
                 isActive

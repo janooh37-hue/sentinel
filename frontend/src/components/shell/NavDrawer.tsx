@@ -19,6 +19,7 @@ import { api } from '@/lib/api'
 import type { Theme } from '@/lib/api'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { migrateLegacyFontScale, persistFontScale, persistTheme } from '@/lib/theme'
+import { prefetchRouteForPath } from '@/lib/prefetchRoute'
 
 import { AaSlider } from './AaSlider'
 import { LanguageToggle } from './LanguageToggle'
@@ -88,6 +89,8 @@ export function NavDrawer({ open, onOpenChange }: NavDrawerProps): React.JSX.Ele
               to={to}
               end={to === '/'}
               onClick={close}
+              onPointerEnter={() => prefetchRouteForPath(to)}
+              onFocus={() => prefetchRouteForPath(to)}
               className={({ isActive }) =>
                 `flex items-center gap-3 rounded-lg px-3 py-2.5 text-[0.95em] font-medium transition-colors ${
                   isActive
@@ -107,6 +110,8 @@ export function NavDrawer({ open, onOpenChange }: NavDrawerProps): React.JSX.Ele
           <NavLink
             to="/settings"
             onClick={close}
+            onPointerEnter={() => prefetchRouteForPath('/settings')}
+            onFocus={() => prefetchRouteForPath('/settings')}
             className={({ isActive }) =>
               `flex items-center gap-3 rounded-lg px-3 py-2.5 text-[0.95em] font-medium transition-colors ${
                 isActive
@@ -122,6 +127,8 @@ export function NavDrawer({ open, onOpenChange }: NavDrawerProps): React.JSX.Ele
             <NavLink
               to="/access-requests"
               onClick={close}
+              onPointerEnter={() => prefetchRouteForPath('/access-requests')}
+              onFocus={() => prefetchRouteForPath('/access-requests')}
               className={({ isActive }) =>
                 `flex items-center gap-3 rounded-lg px-3 py-2.5 text-[0.95em] font-medium transition-colors ${
                   isActive
