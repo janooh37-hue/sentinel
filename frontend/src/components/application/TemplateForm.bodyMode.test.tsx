@@ -43,6 +43,14 @@ vi.mock('@/lib/api', () => ({
   },
 }))
 
+// WordTemplateManager (mounted by the General Book word-mode section) gates
+// rename/delete on books.templates via useCapabilities → useAuth, which
+// throws without an AuthProvider. Stub the hook (same pattern as
+// AttendanceHeroCard.test.tsx).
+vi.mock('@/lib/useCapabilities', () => ({
+  useCapabilities: () => ({ capabilities: new Set<string>(), isLoading: false, has: () => true }),
+}))
+
 import { TemplateForm } from './TemplateForm'
 import { api } from '@/lib/api'
 import type { TemplateDetailResponse } from './types'
