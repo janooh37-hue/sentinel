@@ -88,9 +88,11 @@ describe('AttendanceHeroCard', () => {
       items: [
         row(),
         row({ employee_id: 'G-9002', name_en: 'Late Person', late_minutes: 62 }),
+        // Evaluator-ruled absence has zero punches and presence_state absent; completed with zero punches is a human correction.
         row({
           employee_id: 'G-9003',
           name_en: 'Absent Person',
+          presence_state: 'absent',
           punch_count: 0,
           first_punch_at: null,
           last_punch_at: null,
