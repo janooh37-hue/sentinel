@@ -1247,7 +1247,15 @@
       "emptySent": "لم ترسل أي سجل للاعتماد بعد.",
       "emptyReceived": "لا يوجد ما ينتظر مراجعتك، ولا قرارات لك خلال الثلاثين يومًا الماضية.",
       "emptyFiltered": "لا توجد سجلات تطابق هذا المرشح.",
-      "viewFullLog": "عرض السجل الكامل"
+      "viewFullLog": "عرض السجل الكامل",
+      "groupWaiting": "بانتظار التوقيع أو المراجعة",
+      "groupWaitingHint": "التوقيع أولاً، ثم قيد المراجعة",
+      "groupReturnedHint": "يحتاج إلى تعديل قبل المتابعة",
+      "groupApprovedHint": "نسخ معتمدة وموقّعة",
+      "groupRejectedHint": "أُغلق دون اعتماد",
+      "previewTitle": "معاينة المستند",
+      "previewThumb": "معاينة المستند {{ref}}",
+      "openRecord": "فتح السجل الكامل"
     },
     "approval": {
       "awaitingTitle": "الدفاتر · في انتظار موافقتك",

@@ -9,6 +9,7 @@
  */
 
 import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -61,6 +62,7 @@ import { BookWordActions } from '@/components/books/BookWordActions'
 import { IncludedPapersDialog } from './IncludedPapersDialog'
 import { QueueNav } from './QueueNav'
 import { MarkToggle } from './MarkToggle'
+import { RecordDecisionActions } from './RecordDecisionActions'
 import { isIncludedPapersOwner } from './includedPapersState'
 import { HeaderBtn } from './HeaderBtn'
 import { nextAfterDecision, useAwaitingQueue } from './useAwaitingQueue'
@@ -252,6 +254,78 @@ function StatePill({
   )
 }
 
+interface DecisionReasonFormProps {
+  act: 'return' | 'reject'
+  reason: string
+  reasonValid: boolean
+  busy: boolean
+  inputRef: React.RefObject<HTMLTextAreaElement | null>
+  onReasonChange: (reason: string) => void
+  onCancel: (act: 'return' | 'reject') => void
+  onConfirm: (act: 'return' | 'reject') => void
+}
+
+function DecisionReasonForm({
+  act,
+  reason,
+  reasonValid,
+  busy,
+  inputRef,
+  onReasonChange,
+  onCancel,
+  onConfirm,
+}: DecisionReasonFormProps): React.JSX.Element {
+  const { t } = useTranslation()
+  return (
+    <>
+      <label
+        htmlFor="rec-reason"
+        className="mb-1.5 block text-[0.78em] font-semibold text-foreground"
+      >
+        {act === 'return'
+          ? t('books.approval.return')
+          : t('books.approval.reject')}{' '}
+        · {t('books.approval.reasonLabel')}
+      </label>
+      <textarea
+        ref={inputRef}
+        id="rec-reason"
+        rows={2}
+        value={reason}
+        onChange={(e) => onReasonChange(e.target.value)}
+        placeholder={t('books.approval.reasonPlaceholder')}
+        dir="auto"
+        className="w-full rounded-lg border border-hairline bg-background px-3 py-2 text-[0.88em] text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/30"
+      />
+      <div className="mt-2 flex items-center justify-end gap-2.5">
+        {!reasonValid && (
+          <span className="me-auto text-[0.74em] text-muted-foreground">
+            {t('books.approval.reasonOrMark')}
+          </span>
+        )}
+        <button
+          type="button"
+          onClick={() => onCancel(act)}
+          className="rounded-lg border border-hairline px-3 py-1.5 text-[0.8em] font-medium text-muted-foreground transition-colors hover:bg-surface-tinted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        >
+          {t('books.approval.cancelDecision')}
+        </button>
+        <button
+          type="button"
+          disabled={!reasonValid || busy}
+          onClick={() => onConfirm(act)}
+          className={cn(
+            'rounded-lg border border-transparent px-4 py-1.5 text-[0.8em] font-semibold text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50',
+            act === 'return' ? 'bg-warning hover:bg-warning/90' : 'bg-accent hover:bg-accent/90',
+          )}
+        >
+          {act === 'return' ? t('books.approval.return') : t('books.approval.reject')}
+        </button>
+      </div>
+    </>
+  )
+}
+
 export function BookRecordPage(): React.JSX.Element {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
@@ -286,6 +360,11 @@ export function BookRecordPage(): React.JSX.Element {
   // Inline reason panel for return/reject (backend requires a non-empty reason).
   const [decision, setDecision] = useState<'return' | 'reject' | null>(null)
   const [reason, setReason] = useState('')
+  const decisionPanelRef = useRef<HTMLDivElement | null>(null)
+  const decisionReasonRef = useRef<HTMLTextAreaElement | null>(null)
+  const panelReturnButtonRef = useRef<HTMLButtonElement | null>(null)
+  const panelRejectButtonRef = useRef<HTMLButtonElement | null>(null)
+  const [dockHidden, setDockHidden] = useState(false)
 
   const { data: book, isPending, isError, refetch } = useQuery({
     queryKey: ['books', 'detail', bookId],
@@ -355,6 +434,19 @@ export function BookRecordPage(): React.JSX.Element {
     isAssignee,
     isReviewer: myReview != null,
   })
+
+  useEffect(() => {
+    if (isMobile && action === 'decide' && decisionPanelRef.current) {
+      const observer = new IntersectionObserver(
+        ([entry]) => setDockHidden(entry.intersectionRatio >= 0.4),
+        { threshold: 0.4 },
+      )
+      observer.observe(decisionPanelRef.current)
+      return () => observer.disconnect()
+    }
+
+    setDockHidden(false)
+  }, [isMobile, action, bookId])
 
   // Seen-on-open: fire once when the current user has a step with no seen_at.
   const myStep = currentSteps.find((s) => s.assignee_user_id === user?.id)
@@ -440,6 +532,39 @@ export function BookRecordPage(): React.JSX.Element {
   const busy = decideMutation.isPending || signMutation.isPending
   const canRevise = Boolean(current?.template_id && current?.has_fields && canGenerate)
   const reasonValid = reason.trim().length > 0 || hasCommentBearingMark(annotations)
+  const decisionReasonFormProps = {
+    reason,
+    reasonValid,
+    busy,
+    inputRef: decisionReasonRef,
+    onReasonChange: setReason,
+    onCancel: (act: 'return' | 'reject') => {
+      setDecision(null)
+      setReason('')
+      if (isMobile) {
+        requestAnimationFrame(() => {
+          const actionRef =
+            act === 'return' ? panelReturnButtonRef : panelRejectButtonRef
+          actionRef.current?.focus()
+        })
+      }
+    },
+    onConfirm: (act: 'return' | 'reject') =>
+      decideMutation.mutate({ act, note: reason.trim() }),
+  }
+
+  function openMobileDecision(nextDecision: 'return' | 'reject'): void {
+    setReason('')
+    setDecision(nextDecision)
+    requestAnimationFrame(() => {
+      decisionPanelRef.current?.scrollIntoView({
+        behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
+        block: 'end',
+      })
+      decisionReasonRef.current?.focus({ preventScroll: true })
+    })
+  }
+
 
   if (isError) {
     return (
@@ -616,7 +741,7 @@ export function BookRecordPage(): React.JSX.Element {
             </>
           )}
 
-          {action === 'decide' && (
+          {action === 'decide' && !isMobile && (
             <>
               <HeaderBtn
                 icon={<CornerUpLeft className="h-3.5 w-3.5" />}
@@ -752,54 +877,9 @@ export function BookRecordPage(): React.JSX.Element {
       )}
 
       {/* inline reason panel for return / reject */}
-      {decision && (
+      {decision && !isMobile && (
         <div className="border-b border-hairline bg-surface px-5 py-3.5" data-print-hide>
-          <label
-            htmlFor="rec-reason"
-            className="mb-1.5 block text-[0.78em] font-semibold text-foreground"
-          >
-            {decision === 'return'
-              ? t('books.approval.return')
-              : t('books.approval.reject')}{' '}
-            · {t('books.approval.reasonLabel')}
-          </label>
-          <textarea
-            id="rec-reason"
-            rows={2}
-            value={reason}
-            onChange={(e) => setReason(e.target.value)}
-            placeholder={t('books.approval.reasonPlaceholder')}
-            dir="auto"
-            className="w-full rounded-lg border border-hairline bg-background px-3 py-2 text-[0.88em] text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/30"
-          />
-          <div className="mt-2 flex items-center justify-end gap-2.5">
-            {!reasonValid && (
-              <span className="me-auto text-[0.74em] text-muted-foreground">
-                {t('books.approval.reasonOrMark')}
-              </span>
-            )}
-            <button
-              type="button"
-              onClick={() => {
-                setDecision(null)
-                setReason('')
-              }}
-              className="rounded-lg border border-hairline px-3 py-1.5 text-[0.8em] font-medium text-muted-foreground transition-colors hover:bg-surface-tinted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              {t('books.approval.cancelDecision')}
-            </button>
-            <button
-              type="button"
-              disabled={!reasonValid || busy}
-              onClick={() => decideMutation.mutate({ act: decision, note: reason.trim() })}
-              className={cn(
-                'rounded-lg border border-transparent px-4 py-1.5 text-[0.8em] font-semibold text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50',
-                decision === 'return' ? 'bg-warning hover:bg-warning/90' : 'bg-accent hover:bg-accent/90',
-              )}
-            >
-              {decision === 'return' ? t('books.approval.return') : t('books.approval.reject')}
-            </button>
-          </div>
+          <DecisionReasonForm {...decisionReasonFormProps} act={decision} />
         </div>
       )}
 
@@ -811,7 +891,7 @@ export function BookRecordPage(): React.JSX.Element {
       <div className="flex min-h-0 flex-1" style={{ direction: 'ltr' }}>
         {/* desk */}
         <div
-          className="flex flex-1 justify-center overflow-auto px-6 py-7"
+          className="flex flex-1 justify-center overflow-auto px-6 py-7 max-md:flex-col max-md:items-center max-md:justify-start max-md:pb-4"
           style={{
             background:
               'radial-gradient(150% 100% at 40% -10%, var(--surface) 0%, var(--surface-tinted) 70%, var(--bg) 100%)',
@@ -872,6 +952,34 @@ export function BookRecordPage(): React.JSX.Element {
               </div>
             )}
           </div>
+          {isMobile && action === 'decide' && (
+            <div
+              ref={decisionPanelRef}
+              dir={isAr ? 'rtl' : 'ltr'}
+              data-print-hide
+              className="mt-5 w-full max-w-[640px] md:hidden"
+            >
+              <RecordDecisionActions
+                returnButtonRef={panelReturnButtonRef}
+                rejectButtonRef={panelRejectButtonRef}
+                busy={busy}
+                onSign={() => signMutation.mutate()}
+                onReturn={() => {
+                  setReason('')
+                  setDecision('return')
+                }}
+                onReject={() => {
+                  setReason('')
+                  setDecision('reject')
+                }}
+              />
+              {decision !== null && (
+                <div className="mt-3 rounded-xl border border-hairline bg-surface p-3.5">
+                  <DecisionReasonForm {...decisionReasonFormProps} act={decision} />
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* vertical progress timeline */}
@@ -937,6 +1045,31 @@ export function BookRecordPage(): React.JSX.Element {
           )}
         </aside>
       </div>
+
+      {isMobile &&
+        action === 'decide' &&
+        createPortal(
+          <div
+            dir={isAr ? 'rtl' : 'ltr'}
+            data-print-hide
+            aria-hidden={dockHidden ? true : undefined}
+            inert={dockHidden}
+            className={cn(
+              'fixed inset-x-0 bottom-[calc(5.5rem+env(safe-area-inset-bottom))] z-40 border-t border-hairline bg-surface/95 px-3 pt-2 backdrop-blur md:hidden',
+              'pb-[max(0.5rem,env(safe-area-inset-bottom))]',
+              'transition-opacity motion-reduce:transition-none',
+              dockHidden && 'pointer-events-none opacity-0',
+            )}
+          >
+            <RecordDecisionActions
+              busy={busy}
+              onSign={() => signMutation.mutate()}
+              onReturn={() => openMobileDecision('return')}
+              onReject={() => openMobileDecision('reject')}
+            />
+          </div>,
+          document.body,
+        )}
 
       {submitOpen && book && (
         <SubmitForApprovalDialog bookId={book.id} onClose={() => setSubmitOpen(false)} />
