@@ -10,29 +10,30 @@
  * `books.approve`, else their sent list; `?tab=sent|received` overrides once
  * and is consumed + stripped (same pattern as BooksPage's ?open/?status).
  *
- * Rows carry a page-1 PDF thumbnail (pdf.js canvas, IDM-safe base64 fetch —
- * reuses scanInbox/ScanPdfCanvas), a mono ref chip, the subject, the
- * submitter → manager line, both dates, and a status chip. Status chips filter
- * client-side. Clicking a row opens BookDetailDrawer, which owns every
- * decision mutation; this page stays read-only.
+ * Rows carry a page-1 PDF thumbnail, mono reference, subject, submitter →
+ * manager route, dates, and status. Status chips filter the priority-grouped
+ * ledger client-side. A thumbnail opens a document preview dialog; activating
+ * the rest of a row routes to `/books/:id`, where decisions live.
  */
 
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
-import { useSearchParams } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { format, parseISO } from 'date-fns'
 import { ar as arLocale } from 'date-fns/locale'
-import { FileText, Inbox, Stamp } from 'lucide-react'
+import { Check, Clock, CornerUpLeft, FileText, Inbox, Stamp, X } from 'lucide-react'
 
-import { api, type ApprovalLogItem } from '@/lib/api'
-import { isApprovalScope, type ApprovalScope } from '@/lib/approvals'
-import { useCapabilities } from '@/lib/useCapabilities'
-import { BookDetailDrawer } from '@/components/books/BookDetailDrawer'
+import { RefreshButton } from '@/components/refresh/RefreshButton'
 import { EmptyState } from '@/components/ui/empty-state'
 import { SkeletonRow } from '@/components/ui/skeleton'
-import { RefreshButton } from '@/components/refresh/RefreshButton'
+import { api } from '@/lib/api'
+import type { ApprovalLogItem } from '@/lib/api'
+import { isApprovalScope } from '@/lib/approvals'
+import type { ApprovalScope } from '@/lib/approvals'
+import { useCapabilities } from '@/lib/useCapabilities'
 import { cn } from '@/lib/utils'
+import { ApprovalPreviewDialog, StatusChip } from './ApprovalPreviewDialog'
 
 const ScanPdfCanvas = lazy(() => import('@/pages/scanInbox/ScanPdfCanvas'))
 
@@ -40,6 +41,13 @@ const ScanPdfCanvas = lazy(() => import('@/pages/scanInbox/ScanPdfCanvas'))
  *  always show under "all" only. */
 const STATUS_FILTERS = ['all', 'pending', 'approved', 'rejected', 'returned'] as const
 type StatusFilter = (typeof STATUS_FILTERS)[number]
+
+const PRIORITY_GROUPS = [
+  { id: 'waiting', statuses: ['pending', 'awaiting_scan', 'none'], icon: Clock },
+  { id: 'returned', statuses: ['returned'], icon: CornerUpLeft },
+  { id: 'approved', statuses: ['approved'], icon: Check },
+  { id: 'rejected', statuses: ['rejected'], icon: X },
+] as const
 
 function formatDate(iso: string | null | undefined, locale?: typeof arLocale): string {
   if (!iso) return '—'
@@ -53,10 +61,17 @@ function formatDate(iso: string | null | undefined, locale?: typeof arLocale): s
 /** Page-1 thumbnail of the record's paper; icon tile when there is no
  *  generated document or the PDF won't render. Mounting is gated on visibility
  *  like ScanBackThumb — each thumb is its own PDF fetch. */
-function ApprovalThumb({ item }: { item: ApprovalLogItem }): React.JSX.Element {
+function ApprovalThumb({
+  item,
+  onPreview,
+}: {
+  item: ApprovalLogItem
+  onPreview: (trigger: HTMLButtonElement) => void
+}): React.JSX.Element {
+  const { t } = useTranslation()
   const [failed, setFailed] = useState(false)
   const [visible, setVisible] = useState(false)
-  const boxRef = useRef<HTMLDivElement | null>(null)
+  const boxRef = useRef<HTMLElement | null>(null)
 
   useEffect(() => {
     const el = boxRef.current
@@ -70,55 +85,53 @@ function ApprovalThumb({ item }: { item: ApprovalLogItem }): React.JSX.Element {
 
   const pdfUrl =
     item.document_id != null ? api.documentDownloadUrl(item.document_id, 'pdf') : null
+  const tileClass =
+    'col-start-1 row-span-4 row-start-1 aspect-[16/11] min-h-11 w-14 shrink-0 overflow-hidden rounded-md border border-hairline bg-white md:col-start-1 md:row-span-1 md:row-start-1'
+  const tileContent =
+    pdfUrl !== null && visible && !failed ? (
+      <Suspense
+        fallback={<span className="block h-full w-full animate-pulse bg-surface-tinted" />}
+      >
+        <ScanPdfCanvas pdfUrl={pdfUrl} onError={() => setFailed(true)} />
+      </Suspense>
+    ) : (
+      <span className="flex h-full w-full items-center justify-center bg-surface-tinted text-faint">
+        <FileText className="h-4 w-4" strokeWidth={1.8} aria-hidden />
+      </span>
+    )
+
+  if (pdfUrl !== null && !failed) {
+    return (
+      <button
+        ref={(node) => {
+          boxRef.current = node
+        }}
+        type="button"
+        aria-label={t('books.approvals.previewThumb', { ref: item.ref_number })}
+        onClick={(e) => {
+          e.stopPropagation()
+          onPreview(e.currentTarget)
+        }}
+        className={cn(
+          tileClass,
+          'cursor-zoom-in focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+        )}
+      >
+        {tileContent}
+      </button>
+    )
+  }
 
   return (
     <div
-      ref={boxRef}
+      ref={(node) => {
+        boxRef.current = node
+      }}
       aria-hidden
-      className="aspect-[16/11] w-14 shrink-0 overflow-hidden rounded-md border border-hairline bg-white"
+      className={tileClass}
     >
-      {pdfUrl !== null && visible && !failed ? (
-        <Suspense fallback={<span className="block h-full w-full animate-pulse bg-surface-tinted" />}>
-          <ScanPdfCanvas pdfUrl={pdfUrl} onError={() => setFailed(true)} />
-        </Suspense>
-      ) : (
-        <span className="flex h-full w-full items-center justify-center bg-surface-tinted text-faint">
-          <FileText className="h-4 w-4" strokeWidth={1.8} />
-        </span>
-      )}
+      {tileContent}
     </div>
-  )
-}
-
-function StatusChip({ item }: { item: ApprovalLogItem }): React.JSX.Element {
-  const { t } = useTranslation()
-  const variants: Record<string, string> = {
-    none: 'bg-warning-soft text-warning',
-    pending: 'bg-warning-soft text-warning',
-    awaiting_scan: 'bg-info-soft text-info',
-    approved: 'bg-success-soft text-success',
-    rejected: 'bg-destructive/10 text-destructive',
-    returned: 'bg-info-soft text-info',
-  }
-  // Verdict wording when decided ("Approved"/"Rejected"/"Returned"), otherwise
-  // the state label — same keys the records surfaces use.
-  const key =
-    item.verdict != null
-      ? `books.approval.state${item.verdict[0].toUpperCase()}${item.verdict.slice(1)}`
-      : item.status === 'awaiting_scan'
-        ? 'books.approval.stateAwaitingScan'
-        : item.status === 'none'
-          ? 'books.approval.stateDraft'
-          : `books.approval.state${item.status[0].toUpperCase()}${item.status.slice(1)}`
-  return (
-    <span
-      className={cn(
-        'inline-flex shrink-0 items-center rounded-full px-2.5 py-0.5 text-[0.72em] font-semibold uppercase tracking-[0.06em]',
-        variants[item.status] ?? 'bg-surface-tinted text-muted-foreground',
-      )}
-    >
-      {t(key)}
-    </span>
   )
 }
 
@@ -126,9 +139,10 @@ interface RowProps {
   item: ApprovalLogItem
   dfLocale?: typeof arLocale
   onOpen: () => void
+  onPreview: (trigger: HTMLButtonElement) => void
 }
 
-function ApprovalRow({ item, dfLocale, onOpen }: RowProps): React.JSX.Element {
+function ApprovalRow({ item, dfLocale, onOpen, onPreview }: RowProps): React.JSX.Element {
   const { t } = useTranslation()
   return (
     <article
@@ -137,6 +151,7 @@ function ApprovalRow({ item, dfLocale, onOpen }: RowProps): React.JSX.Element {
       data-testid="approval-row"
       onClick={onOpen}
       onKeyDown={(e) => {
+        if (e.target !== e.currentTarget) return
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault()
           onOpen()
@@ -144,65 +159,66 @@ function ApprovalRow({ item, dfLocale, onOpen }: RowProps): React.JSX.Element {
       }}
       aria-label={t('books.approval.open')}
       className={cn(
-        'flex cursor-pointer items-start gap-3 rounded-xl border border-hairline bg-surface p-3 transition-colors',
+        'grid cursor-pointer grid-cols-[3.5rem_minmax(0,1fr)] gap-x-3 gap-y-1 p-3 transition-colors',
         'hover:bg-surface-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+        'md:grid-cols-[3.5rem_8rem_minmax(0,2.2fr)_minmax(0,1.6fr)_max-content_max-content] md:items-center md:gap-x-4',
       )}
     >
-      <ApprovalThumb item={item} />
-      <div className="flex min-w-0 flex-1 flex-col gap-1">
-        {/* ref · priority · status */}
-        <div className="flex items-center gap-2">
-          <span className="shrink-0 rounded-md bg-surface-tinted px-1.5 py-0.5 font-mono text-[0.72em] font-semibold text-foreground">
-            <bdi dir="ltr">{item.ref_number}</bdi>
+      <ApprovalThumb item={item} onPreview={onPreview} />
+
+      <div className="col-start-2 row-start-1 flex min-w-0 items-center gap-2 pe-24 md:col-start-2 md:flex-col md:items-start md:gap-1 md:pe-0">
+        <span className="shrink-0 rounded-md bg-surface-tinted px-1.5 py-0.5 font-mono text-[0.72em] font-semibold text-foreground">
+          <bdi dir="ltr">{item.ref_number}</bdi>
+        </span>
+        {item.priority === 'High' && (
+          <span className="rounded-full bg-accent-soft px-1.5 py-0.5 text-[0.65em] font-semibold text-accent">
+            {t('books.approval.high')}
           </span>
-          {item.priority === 'High' && (
-            <span
-              className="rounded-full px-1.5 py-0.5 text-[0.65em] font-semibold"
-              style={{ background: 'var(--accent-soft)', color: 'var(--accent)' }}
-            >
-              {t('books.approval.high')}
-            </span>
-          )}
-          <span className="ms-auto">
-            <StatusChip item={item} />
-          </span>
-        </div>
-        {/* subject */}
-        {item.subject && (
-          <p className="line-clamp-2 text-[0.82em] leading-snug text-foreground" dir="auto">
-            {item.subject}
-          </p>
         )}
-        {/* submitter → manager */}
-        <p className="truncate text-[0.72em] text-muted-foreground">
-          {t('books.approval.submitter')}:{' '}
-          <span className="text-foreground">{item.submitted_by_name ?? '—'}</span>
-          {item.doc_manager_name && (
-            <>
-              {' '}
-              <span aria-hidden>→</span>{' '}
-              <span className="text-foreground">{item.doc_manager_name}</span>
-            </>
-          )}
-        </p>
-        {/* dates */}
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 font-mono text-[0.7em] text-muted-foreground">
-          <span>
-            {t('books.approval.submittedAt')}: {formatDate(item.submitted_at, dfLocale)}
-          </span>
-          {item.decided_at && (
-            <span>
-              {t('books.approvals.decidedAt')}: {formatDate(item.decided_at, dfLocale)}
-            </span>
-          )}
-        </div>
       </div>
+      <span className="col-start-2 row-start-1 justify-self-end md:col-start-6 md:row-start-1">
+        <StatusChip item={item} />
+      </span>
+
+      {item.subject && (
+        <p
+          className="col-start-2 row-start-2 line-clamp-2 text-[0.82em] leading-snug text-foreground md:col-start-3 md:row-start-1"
+          dir="auto"
+        >
+          {item.subject}
+        </p>
+      )}
+
+      <p className="col-start-2 row-start-3 truncate text-[0.72em] text-muted-foreground md:col-start-4 md:row-start-1">
+        {t('books.approval.submitter')}:{' '}
+        <span className="text-foreground">{item.submitted_by_name ?? '—'}</span>
+        {item.doc_manager_name && (
+          <>
+            {' '}
+            <span aria-hidden>→</span>{' '}
+            <span className="text-foreground">{item.doc_manager_name}</span>
+          </>
+        )}
+      </p>
+
+      <div className="col-start-2 row-start-4 flex flex-wrap items-center gap-x-3 gap-y-0.5 font-mono text-[0.7em] text-muted-foreground md:col-start-5 md:row-start-1 md:flex-col md:items-start md:gap-0.5">
+        <span>
+          {t('books.approval.submittedAt')}: {formatDate(item.submitted_at, dfLocale)}
+        </span>
+        {item.decided_at && (
+          <span>
+            {t('books.approvals.decidedAt')}: {formatDate(item.decided_at, dfLocale)}
+          </span>
+        )}
+      </div>
+
     </article>
   )
 }
 
 export function ApprovalsPage(): React.JSX.Element {
   const { t, i18n } = useTranslation()
+  const navigate = useNavigate()
   const isAr = i18n.language.startsWith('ar')
   const dfLocale = isAr ? arLocale : undefined
   const { has } = useCapabilities()
@@ -233,7 +249,8 @@ export function ApprovalsPage(): React.JSX.Element {
   /* eslint-enable react-hooks/set-state-in-effect */
 
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
-  const [openBookId, setOpenBookId] = useState<number | null>(null)
+  const [preview, setPreview] = useState<ApprovalLogItem | null>(null)
+  const previewTriggerRef = useRef<HTMLButtonElement | null>(null)
 
   const logQuery = useQuery({
     queryKey: ['books', 'approval-log', tab],
@@ -246,6 +263,21 @@ export function ApprovalsPage(): React.JSX.Element {
       statusFilter === 'all' ? rows : rows.filter((row) => row.status === statusFilter),
     [rows, statusFilter],
   )
+  const groupedRows = useMemo(() => {
+    const groups = PRIORITY_GROUPS.map((group) => ({
+      ...group,
+      items: [] as ApprovalLogItem[],
+    }))
+
+    for (const item of filteredRows) {
+      const group =
+        groups.find((entry) => entry.statuses.some((status) => status === item.status)) ??
+        groups[0]
+      group.items.push(item)
+    }
+
+    return groups
+  }, [filteredRows])
 
   const tabs: Array<{ id: ApprovalScope; label: string; show: boolean }> = [
     { id: 'received', label: t('books.approvals.tabReceived'), show: canApprove },
@@ -253,7 +285,7 @@ export function ApprovalsPage(): React.JSX.Element {
   ]
 
   return (
-    <div className="mx-auto flex h-full w-full max-w-4xl flex-col overflow-y-auto px-6 pb-6 pt-5">
+    <div className="flex h-full w-full flex-col overflow-y-auto px-6 pb-6 pt-5">
       <header className="mb-3 flex shrink-0 items-end justify-between gap-4">
         <div className="min-w-0">
           <h1 className="text-[1.45em] font-bold tracking-tight text-foreground">
@@ -353,22 +385,62 @@ export function ApprovalsPage(): React.JSX.Element {
           />
         </div>
       ) : (
-        <div className="flex flex-col gap-2 pb-10">
-          {filteredRows.map((item) => (
-            <ApprovalRow
-              key={item.book_id}
-              item={item}
-              dfLocale={dfLocale}
-              onOpen={() => setOpenBookId(item.book_id)}
-            />
-          ))}
+        <div className="flex flex-col gap-5 pb-10">
+          {groupedRows.map((group) => {
+            if (group.items.length === 0) return null
+            const GroupIcon = group.icon
+            const headingKey =
+              group.id === 'waiting'
+                ? 'books.approvals.groupWaiting'
+                : `books.approval.state${group.id[0].toUpperCase()}${group.id.slice(1)}`
+            const hintKey = `books.approvals.group${group.id[0].toUpperCase()}${group.id.slice(1)}Hint`
+
+            return (
+              <section key={group.id} data-testid={`approvals-group-${group.id}`}>
+                <header className="mb-2 flex items-start gap-2 px-1">
+                  <GroupIcon
+                    className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground"
+                    strokeWidth={1.8}
+                    aria-hidden
+                  />
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <h2 className="text-[0.9em] font-bold text-foreground">
+                        {t(headingKey)}
+                      </h2>
+                      <span className="rounded-md bg-surface-tinted px-1.5 py-0.5 font-mono text-[0.72em] text-muted-foreground">
+                        {group.items.length}
+                      </span>
+                    </div>
+                    <p className="mt-0.5 text-[0.72em] text-muted-foreground">
+                      {t(hintKey)}
+                    </p>
+                  </div>
+                </header>
+                <div className="divide-y divide-hairline overflow-hidden rounded-2xl border border-hairline bg-surface">
+                  {group.items.map((item) => (
+                    <ApprovalRow
+                      key={item.book_id}
+                      item={item}
+                      dfLocale={dfLocale}
+                      onOpen={() => navigate(`/books/${item.book_id}`)}
+                      onPreview={(trigger) => {
+                        previewTriggerRef.current = trigger
+                        setPreview(item)
+                      }}
+                    />
+                  ))}
+                </div>
+              </section>
+            )
+          })}
         </div>
       )}
 
-      <BookDetailDrawer
-        bookId={openBookId}
-        onClose={() => setOpenBookId(null)}
-        onSubmitForApproval={() => setOpenBookId(null)}
+      <ApprovalPreviewDialog
+        item={preview}
+        triggerRef={previewTriggerRef}
+        onClose={() => setPreview(null)}
       />
     </div>
   )

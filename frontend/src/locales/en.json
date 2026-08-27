@@ -1135,7 +1135,15 @@
       "emptySent": "You haven't sent any records for approval yet.",
       "emptyReceived": "Nothing awaiting your review, and no verdicts from the last 30 days.",
       "emptyFiltered": "No records match this filter.",
-      "viewFullLog": "View full log"
+      "viewFullLog": "View full log",
+      "groupWaiting": "Waiting for signature or review",
+      "groupWaitingHint": "Signature first, then pending review",
+      "groupReturnedHint": "Needs revision before it can continue",
+      "groupApprovedHint": "Approved and signed copies",
+      "groupRejectedHint": "Closed without approval",
+      "previewTitle": "Document preview",
+      "previewThumb": "Preview document {{ref}}",
+      "openRecord": "Open full record"
     },
     "approval": {
       "awaitingTitle": "Books · awaiting your approval",
