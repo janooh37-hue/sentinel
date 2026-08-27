@@ -139,16 +139,22 @@ export function TopNav({ onLock, onOpenSettings, onSignOut }: TopNavProps): Reac
         <EmailBasketTray />
         <GatewayIndicator />
         <NavBellPopover />
-        <button
-          type="button"
-          onClick={onOpenSettings}
-          aria-label={t('nav.settings')}
-          title={t('nav.settings')}
-          className="rounded-lg p-2 text-foreground transition-colors hover:bg-surface-tinted hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
-        >
-          <Settings className="h-[1.15em] w-[1.15em]" strokeWidth={1.8} aria-hidden />
-        </button>
-        <AccountMenu onLock={onLock} onOpenSettings={onOpenSettings} onSignOut={onSignOut} />
+        {has('settings.view') && (
+          <button
+            type="button"
+            onClick={onOpenSettings}
+            aria-label={t('nav.settings')}
+            title={t('nav.settings')}
+            className="rounded-lg p-2 text-foreground transition-colors hover:bg-surface-tinted hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1"
+          >
+            <Settings className="h-[1.15em] w-[1.15em]" strokeWidth={1.8} aria-hidden />
+          </button>
+        )}
+        <AccountMenu
+          onLock={onLock}
+          onOpenSettings={has('settings.view') ? onOpenSettings : undefined}
+          onSignOut={onSignOut}
+        />
       </div>
     </header>
   )

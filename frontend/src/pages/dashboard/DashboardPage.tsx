@@ -66,6 +66,8 @@ import {
   QUICK_ACTION_IDS,
   WIDGET_IDS,
   WIDGET_SIZE,
+  isQuickActionAllowed,
+  mergeQuickActionsPreservingDenied,
   resolveLayout,
   visibleByZone,
   widgetsForApi,
@@ -73,6 +75,7 @@ import {
   type WidgetId,
   type WidgetZone,
 } from '@/lib/dashboardLayout'
+import { useCapabilities } from '@/lib/useCapabilities'
 import { QUICK_ACTION_META } from '@/lib/quickActions'
 import { useIdentity } from '@/lib/useIdentity'
 import { cn } from '@/lib/utils'
@@ -162,6 +165,7 @@ function joinNames(names: string[], isAr: boolean): string {
 export function DashboardPage({ onNavigate }: DashboardPageProps): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const isAr = i18n.language.startsWith('ar')
+  const { has } = useCapabilities()
   const dfLocale = isAr ? arLocale : undefined
   const { identity } = useIdentity()
   const qc = useQueryClient()
@@ -198,6 +202,14 @@ export function DashboardPage({ onNavigate }: DashboardPageProps): React.JSX.Ele
     [settingsQuery.data?.dashboard_layout],
   )
 
+  const allowedQuickActions = useMemo(
+    () => layout.quick_actions.filter((item) => isQuickActionAllowed(item.id, has)),
+    [has, layout.quick_actions],
+  )
+  const allowedQuickActionDefaults = useMemo(
+    () => DEFAULT_LAYOUT.quick_actions.filter((item) => isQuickActionAllowed(item.id, has)),
+    [has],
+  )
   const updateSettings = useMutation({
     mutationFn: api.updateSettings,
     onSuccess: () => {
@@ -284,8 +296,8 @@ export function DashboardPage({ onNavigate }: DashboardPageProps): React.JSX.Ele
   // (visible + hidden) is fed to the edit dialog so the operator can
   // promote a hidden tile back into view.
   const visibleQuickActions = useMemo(
-    () => layout.quick_actions.filter((q) => q.visible).slice(0, MAX_VISIBLE_QUICK_ACTIONS),
-    [layout.quick_actions],
+    () => allowedQuickActions.filter((q) => q.visible).slice(0, MAX_VISIBLE_QUICK_ACTIONS),
+    [allowedQuickActions],
   )
 
   // Render a single widget by id, parameterised by the zone it sits in so
@@ -659,17 +671,18 @@ export function DashboardPage({ onNavigate }: DashboardPageProps): React.JSX.Ele
         onOpenChange={setQuickActionsDialogOpen}
         title={t('dashboard.editWidgets.quickActionsTitle')}
         description={t('dashboard.editWidgets.quickActionsDescription')}
-        items={layout.quick_actions}
+        items={allowedQuickActions}
         labels={quickActionLabels}
-        defaults={DEFAULT_LAYOUT.quick_actions}
+        defaults={allowedQuickActionDefaults}
         isSaving={updateSettings.isPending}
         maxVisible={MAX_VISIBLE_QUICK_ACTIONS}
         maxVisibleHint={t('dashboard.editWidgets.quickActionsMaxVisibleHint', {
           count: MAX_VISIBLE_QUICK_ACTIONS,
         })}
         onSave={(items) => {
+          const quickActions = mergeQuickActionsPreservingDenied(layout.quick_actions, items)
           updateSettings.mutate(
-            { dashboard_layout: { ...layout, quick_actions: items } },
+            { dashboard_layout: { ...layout, quick_actions: quickActions } },
             { onSuccess: () => setQuickActionsDialogOpen(false) },
           )
         }}

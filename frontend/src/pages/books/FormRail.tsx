@@ -7,6 +7,7 @@
 import { useTranslation } from 'react-i18next'
 
 import { cn } from '@/lib/utils'
+import { useCapabilities } from '@/lib/useCapabilities'
 
 export interface RailItem {
   serviceId: string
@@ -36,12 +37,16 @@ export function FormRail({
   onChange: (serviceId: string) => void
 }): React.JSX.Element {
   const { t } = useTranslation()
+  const { has } = useCapabilities()
+  const visibleItems = items.filter(
+    (item) => item.serviceId === 'all' || has(`books.service.${item.serviceId}`),
+  )
   return (
     <nav
       aria-label={t('books.formKind.all')}
       className="overflow-y-auto rounded-2xl border border-hairline bg-surface p-2"
     >
-      {items.map((item) => {
+      {visibleItems.map((item) => {
         const isActive = active === item.serviceId
         return (
           <button

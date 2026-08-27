@@ -74,15 +74,14 @@ LIST_MAX_LIMIT = 500
 # ---------------------------------------------------------------------------
 
 
-def list_book_categories(db: Session) -> list[BookCategory]:
-    """Return all categories in natural numeric order ("1", "2", … "10", "11").
-
-    ``id`` is a String PK that holds both numeric ("1".."12") and legacy alpha
-    codes ("HR", "GS"). A plain string sort would yield "1","10","11","2",…;
-    cast to INTEGER so numeric ids order naturally. Non-numeric codes cast to 0
-    in SQLite and fall first, then tie-break on the raw id for stability.
-    """
-    stmt = select(BookCategory).order_by(func.cast(BookCategory.id, Integer), BookCategory.id)
+def list_book_categories(db: Session, user: User | None = None) -> list[BookCategory]:
+    """Return visible categories in natural numeric order ("1", "2", …)."""
+    stmt = select(BookCategory)
+    if user is not None:
+        _denied_services, denied_categories = perm_service.denied_record_types(db, user)
+        if denied_categories:
+            stmt = stmt.where(BookCategory.id.not_in(denied_categories))
+    stmt = stmt.order_by(func.cast(BookCategory.id, Integer), BookCategory.id)
     return list(db.execute(stmt).scalars().all())
 
 
@@ -202,6 +201,36 @@ def service_clause(service_id: str) -> ColumnElement[bool]:
     )
 
 
+def user_visibility_clause(db: Session, user: User) -> ColumnElement[bool] | None:
+    """SQL clause hiding every service/category explicitly denied to ``user``."""
+    denied_services, denied_categories = perm_service.denied_record_types(db, user)
+    clauses: list[ColumnElement[bool]] = []
+    if denied_categories:
+        clauses.append(Book.category_id.not_in(denied_categories))
+    if denied_services:
+        clauses.append(
+            not_(or_(*[service_clause(service_id) for service_id in sorted(denied_services)]))
+        )
+    return and_(*clauses) if clauses else None
+
+
+def assert_record_type_visible(db: Session, user: User, row: Book) -> None:
+    """Raise the stable 403 when ``row`` belongs to a denied record type."""
+    denied_services, denied_categories = perm_service.denied_record_types(db, user)
+    newest = max(row.versions, key=lambda version: version.version_no, default=None)
+    service_id = resolve_service(
+        row.subject,
+        newest.template_id if newest is not None else None,
+        versioned=newest is not None,
+    )
+    if row.category_id in denied_categories or service_id in denied_services:
+        raise AppError(
+            "RECORD_TYPE_FORBIDDEN",
+            "You don't have access to this record type.",
+            http_status=403,
+        )
+
+
 class ServiceCount(NamedTuple):
     """One rail entry's numbers. `states` maps approval_state → count."""
 
@@ -210,7 +239,9 @@ class ServiceCount(NamedTuple):
     states: dict[str, int]
 
 
-def service_facets(db: Session) -> tuple[ServiceCount, list[ServiceCount]]:
+def service_facets(
+    db: Session, user: User | None = None
+) -> tuple[ServiceCount, list[ServiceCount]]:
     """`(all_records, per_service)` over EVERY non-deleted book.
 
     Deliberately unpaginated: these are the numbers the Records rail and the
@@ -246,6 +277,10 @@ def service_facets(db: Session) -> tuple[ServiceCount, list[ServiceCount]]:
     stmt = select(Book.subject, Book.approval_state, newest_template_id, n_versions).where(
         Book.deleted_at.is_(None)
     )
+    if user is not None:
+        visibility = user_visibility_clause(db, user)
+        if visibility is not None:
+            stmt = stmt.where(visibility)
 
     all_states: Counter[str] = Counter()
     per_service: dict[str, Counter[str]] = {}
@@ -268,6 +303,7 @@ def service_facets(db: Session) -> tuple[ServiceCount, list[ServiceCount]]:
 def list_books(
     db: Session,
     *,
+    user: User | None = None,
     category_id: str | None = None,
     service_id: str | None = None,
     direction: str | None = None,
@@ -298,6 +334,11 @@ def list_books(
     stmt = select(Book)
     count_stmt = select(func.count()).select_from(Book)
 
+    if user is not None:
+        visibility = user_visibility_clause(db, user)
+        if visibility is not None:
+            stmt = stmt.where(visibility)
+            count_stmt = count_stmt.where(visibility)
     if not include_deleted:
         stmt = stmt.where(Book.deleted_at.is_(None))
         count_stmt = count_stmt.where(Book.deleted_at.is_(None))
@@ -1165,7 +1206,7 @@ def delete_annotation(
     db.commit()
 
 
-def list_awaiting(db: Session, *, user_id: int) -> list[Book]:
+def list_awaiting(db: Session, *, user_id: int, user: User | None = None) -> list[Book]:
     """Books with a pending step (approver OR reviewer) assigned to ``user_id``."""
     stmt = (
         select(Book)
@@ -1174,6 +1215,10 @@ def list_awaiting(db: Session, *, user_id: int) -> list[Book]:
         .where(Book.approval_state == "pending")
         .order_by(Book.created_at.desc())
     )
+    if user is not None:
+        visibility = user_visibility_clause(db, user)
+        if visibility is not None:
+            stmt = stmt.where(visibility)
     out: list[Book] = []
     for book in db.execute(stmt).scalars().all():
         if your_step_kind(book, user_id) is not None:
@@ -1188,7 +1233,11 @@ SCANBACK_STALE_HOURS = 24
 
 
 def list_awaiting_scan(
-    db: Session, *, user_id: int | None, stale_hours: int = SCANBACK_STALE_HOURS
+    db: Session,
+    *,
+    user_id: int | None,
+    user: User | None = None,
+    stale_hours: int = SCANBACK_STALE_HOURS,
 ) -> list[Book]:
     """Books stranded at ``awaiting_scan`` past the stale line, oldest first.
 
@@ -1210,6 +1259,10 @@ def list_awaiting_scan(
         .where(Book.created_at < cutoff)
         .order_by(Book.created_at)
     )
+    if user is not None:
+        visibility = user_visibility_clause(db, user)
+        if visibility is not None:
+            stmt = stmt.where(visibility)
     out: list[Book] = []
     for book in db.execute(stmt).scalars().all():
         if user_id is None:
@@ -1362,14 +1415,23 @@ def _resolve_log_names(db: Session, rows: list[Book]) -> tuple[dict[int, str], d
 
 
 def approval_log_sent(
-    db: Session, *, user_id: int, limit: int, offset: int
+    db: Session,
+    *,
+    user_id: int,
+    user: User | None = None,
+    limit: int,
+    offset: int,
 ) -> tuple[list[ApprovalLogItem], int]:
     """Books the caller submitted for approval, newest first — their outbox."""
-    total = db.execute(
+    count_stmt = (
         select(func.count())
         .select_from(Book)
         .where(Book.deleted_at.is_(None), Book.submitted_by_user_id == user_id)
-    ).scalar_one()
+    )
+    visibility = user_visibility_clause(db, user) if user is not None else None
+    if visibility is not None:
+        count_stmt = count_stmt.where(visibility)
+    total = db.execute(count_stmt).scalar_one()
     stmt = (
         select(Book)
         .options(
@@ -1381,6 +1443,8 @@ def approval_log_sent(
         .limit(limit)
         .offset(offset)
     )
+    if visibility is not None:
+        stmt = stmt.where(visibility)
     rows = list(db.execute(stmt).scalars().all())
     names_by_id, manager_user_by_id = _resolve_log_names(db, rows)
     items = [
@@ -1393,50 +1457,53 @@ def approval_log_sent(
 
 
 def approval_log_received(
-    db: Session, *, user_id: int, limit: int, offset: int
+    db: Session,
+    *,
+    user_id: int,
+    user: User | None = None,
+    limit: int,
+    offset: int,
 ) -> tuple[list[ApprovalLogItem], int]:
     """The caller's inbox: records whose current pending step is theirs (the
     ``list_awaiting`` semantics) plus records where their own decided step falls
     inside the last ``APPROVAL_LOG_RECEIVED_WINDOW_DAYS`` days. Newest activity
     first."""
-    pending_books = list_awaiting(db, user_id=user_id)
+    pending_books = list_awaiting(db, user_id=user_id, user=user)
     cutoff = datetime.now(UTC).replace(tzinfo=None) - timedelta(
         days=APPROVAL_LOG_RECEIVED_WINDOW_DAYS
     )
-    decided_book_ids = list(
-        db.execute(
-            select(BookApprovalStep.book_id)
-            .join(Book, Book.id == BookApprovalStep.book_id)
-            .where(
-                BookApprovalStep.assignee_user_id == user_id,
-                BookApprovalStep.state != "pending",
-                BookApprovalStep.decided_at.is_not(None),
-                BookApprovalStep.decided_at >= cutoff,
-                Book.deleted_at.is_(None),
-            )
+    decided_stmt = (
+        select(BookApprovalStep.book_id)
+        .join(Book, Book.id == BookApprovalStep.book_id)
+        .where(
+            BookApprovalStep.assignee_user_id == user_id,
+            BookApprovalStep.state != "pending",
+            BookApprovalStep.decided_at.is_not(None),
+            BookApprovalStep.decided_at >= cutoff,
+            Book.deleted_at.is_(None),
         )
-        .scalars()
-        .all()
     )
+    visibility = user_visibility_clause(db, user) if user is not None else None
+    if visibility is not None:
+        decided_stmt = decided_stmt.where(visibility)
+    decided_book_ids = list(db.scalars(decided_stmt).all())
     # One ordered id list: pending first (they are the actionable rows), then the
     # recently-decided ones not already covered.
     seen = {b.id for b in pending_books}
     book_ids = [b.id for b in pending_books] + [i for i in decided_book_ids if i not in seen]
     if not book_ids:
         return [], 0
-    rows_by_id = {
-        b.id: b
-        for b in db.execute(
-            select(Book)
-            .options(
-                selectinload(Book.category),
-                selectinload(Book.versions).selectinload(BookVersion.approval_steps),
-            )
-            .where(Book.id.in_(book_ids))
+    rows_stmt = (
+        select(Book)
+        .options(
+            selectinload(Book.category),
+            selectinload(Book.versions).selectinload(BookVersion.approval_steps),
         )
-        .scalars()
-        .all()
-    }
+        .where(Book.id.in_(book_ids))
+    )
+    if visibility is not None:
+        rows_stmt = rows_stmt.where(visibility)
+    rows_by_id = {book.id: book for book in db.scalars(rows_stmt).all()}
     ordered = [rows_by_id[i] for i in book_ids if i in rows_by_id]
 
     def _activity_key(book: Book) -> datetime:
@@ -2286,6 +2353,7 @@ __all__ = [
     "add_attachment",
     "add_note",
     "add_reviewers",
+    "assert_record_type_visible",
     "build_step_read",
     "create_book",
     "decide_step",
@@ -2316,4 +2384,5 @@ __all__ = [
     "submitter_g_number",
     "unfile_signed_copy",
     "update_book",
+    "user_visibility_clause",
 ]

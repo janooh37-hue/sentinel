@@ -13,7 +13,14 @@ from __future__ import annotations
 
 from typing import Final, NamedTuple
 
+from app.core.form_kind import OTHER_SERVICE_ID, SERVICE_IDS
 from app.core.roles import ADMIN_ROLE, MANAGER_ROLE, OPERATOR_ROLE
+
+SERVICE_CAP_PREFIX: Final[str] = "books.service."
+CATEGORY_CAP_PREFIX: Final[str] = "books.category."
+SERVICE_CAPABILITY_IDS: Final[frozenset[str]] = frozenset(
+    f"{SERVICE_CAP_PREFIX}{service_id}" for service_id in (*SERVICE_IDS, OTHER_SERVICE_ID)
+)
 
 
 class Capability(NamedTuple):
@@ -67,6 +74,12 @@ CAPABILITIES: Final[tuple[Capability, ...]] = (
         "Notify employees",
         "Send WhatsApp (with SMS fallback) confirmations to employees for leaves, "
         "duty resumptions, and violations.",
+    ),
+    Capability(
+        "expiry.view",
+        "expiry",
+        "View expiry",
+        "See the document-expiry board.",
     ),
     Capability(
         "leaves.view",
@@ -363,6 +376,7 @@ _OPERATOR_CAPS: Final[frozenset[str]] = frozenset(
     {
         "app.access",
         "employees.view",
+        "expiry.view",
         "leaves.view",
         "timesheet.view",
         "violations.view",
@@ -433,7 +447,10 @@ __all__ = [
     "ALL_CAPABILITIES",
     "CAPABILITIES",
     "CAPABILITY_IDS",
+    "CATEGORY_CAP_PREFIX",
     "ROLE_DEFAULTS",
+    "SERVICE_CAPABILITY_IDS",
+    "SERVICE_CAP_PREFIX",
     "Capability",
     "default_caps_for_role",
 ]

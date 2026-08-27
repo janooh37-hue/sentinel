@@ -9,6 +9,9 @@ import {
   WIDGET_SOURCE,
   WIDGET_SOURCES,
   resolveLayout,
+  isQuickActionAllowed,
+  mergeQuickActionsPreservingDenied,
+  type QuickActionId,
 } from './dashboardLayout'
 
 describe('companion quick-actions are gone', () => {
@@ -30,6 +33,43 @@ describe('companion quick-actions are gone', () => {
     const ids = resolved.quick_actions.map((q) => q.id)
     expect(ids).not.toContain('Leave Undertaking')
     expect(ids).toContain('Leave Application Form')
+  })
+})
+
+describe('dynamic service capabilities', () => {
+  it('maps every quick action to its books.service capability', () => {
+    const checked: string[] = []
+    const has = (capability: string): boolean => {
+      checked.push(capability)
+      return capability === 'books.service.Report'
+    }
+
+    expect(isQuickActionAllowed('Report', has)).toBe(true)
+    expect(isQuickActionAllowed('General Book', has)).toBe(false)
+    expect(checked).toEqual([
+      'books.service.Report',
+      'books.service.General Book',
+    ])
+  })
+})
+
+describe('permission-filtered quick-action saves', () => {
+  it('keeps denied entries in their original positions while applying allowed order', () => {
+    const original: Array<{ id: QuickActionId; visible: boolean; order: number }> = [
+      { id: 'General Book', visible: true, order: 0 },
+      { id: 'Report', visible: true, order: 1 },
+      { id: 'Violation Form', visible: true, order: 2 },
+    ]
+    const editedAllowed: Array<{ id: QuickActionId; visible: boolean; order: number }> = [
+      { id: 'Violation Form', visible: true, order: 0 },
+      { id: 'General Book', visible: false, order: 1 },
+    ]
+
+    expect(mergeQuickActionsPreservingDenied(original, editedAllowed)).toEqual([
+      { id: 'Violation Form', visible: true, order: 0 },
+      { id: 'Report', visible: true, order: 1 },
+      { id: 'General Book', visible: false, order: 2 },
+    ])
   })
 })
 

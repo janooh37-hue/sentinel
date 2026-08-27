@@ -2,9 +2,11 @@
  * Mobile service filter. Deliberately NOT called "Category": that word already
  * means the 12 ref-number buckets in this same bar.
  */
-import { describe, it, expect, vi } from 'vitest'
+import { beforeEach, describe, it, expect, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+
+const capabilityState = vi.hoisted(() => ({ allowed: new Set<string>() }))
 
 import { BooksFilterBar, type BooksFilters } from './BooksFilterBar'
 import type { ServiceFacetRead } from '@/lib/api'
@@ -30,6 +32,14 @@ vi.mock('./serviceLabels', () => ({
   OTHER_SERVICE_ID: 'other',
   serviceGlyph: () => '📊',
   useServiceLabel: () => (id: string) => (id === 'Report' ? 'تقرير' : id),
+}))
+
+vi.mock('@/lib/useCapabilities', () => ({
+  useCapabilities: () => ({
+    capabilities: capabilityState.allowed,
+    isLoading: false,
+    has: (capability: string) => capabilityState.allowed.has(capability),
+  }),
 }))
 
 const SERVICES: ServiceFacetRead[] = [
@@ -61,6 +71,13 @@ function setup(filters: Partial<BooksFilters> = {}) {
   return { onChange }
 }
 
+
+beforeEach(() => {
+  capabilityState.allowed = new Set([
+    'books.service.Report',
+    'books.service.other',
+  ])
+})
 describe('BooksFilterBar service filter', () => {
   it('renders a Service trigger distinct from the Category trigger', () => {
     setup()
@@ -81,6 +98,15 @@ describe('BooksFilterBar service filter', () => {
     await userEvent.click(screen.getByTestId('service-filter'))
     await userEvent.click(screen.getByText('تقرير'))
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ serviceId: 'Report' }))
+  })
+
+  it('hides services denied by capability', async () => {
+    capabilityState.allowed = new Set(['books.service.other'])
+    setup()
+    await userEvent.click(screen.getByTestId('service-filter'))
+
+    expect(screen.queryByText('تقرير')).not.toBeInTheDocument()
+    expect(screen.getByText('other')).toBeVisible()
   })
 
   it('counts as an active filter and Clear resets it to all', async () => {

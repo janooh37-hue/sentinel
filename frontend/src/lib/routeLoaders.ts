@@ -37,6 +37,8 @@ export const loadTimesheetPage = () =>
   import('@/pages/timesheet/TimesheetPage').then((m) => ({ default: m.TimesheetPage }))
 export const loadAccessRequestsPage = () =>
   import('@/pages/access/AccessRequestsPage').then((m) => ({ default: m.AccessRequestsPage }))
+export const loadPermissionsPage = () =>
+  import('@/pages/access/PermissionsPage').then((m) => ({ default: m.PermissionsPage }))
 export const loadExpiryPage = () =>
   import('@/pages/expiry/ExpiryPage').then((m) => ({ default: m.ExpiryPage }))
 export const loadIntakePage = () =>

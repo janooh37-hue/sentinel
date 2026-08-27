@@ -39,6 +39,7 @@ from app.api._responses import maybe_base64
 from app.api.deps import get_current_user, require_capability
 from app.api.errors import AppError, NotFoundError
 from app.config import get_settings
+from app.core.form_kind import SERVICE_ALIASES, SERVICE_IDS
 from app.core.pdf_merge import merge_pdfs_to_bytes
 from app.db.models import Document, User
 from app.db.session import SessionLocal, get_db
@@ -332,7 +333,18 @@ def generate_document(
     payload: DocumentGenerateRequest,
     background_tasks: BackgroundTasks,
     user: Annotated[User, Depends(require_capability("documents.generate"))],
+    db: Annotated[Session, Depends(get_db)],
 ) -> DocumentGenerateResponse:
+    service_id = SERVICE_ALIASES.get(payload.template_id, payload.template_id)
+    if (
+        service_id in SERVICE_IDS
+        and f"books.service.{service_id}" not in perm_service.effective_caps(db, user)
+    ):
+        raise AppError(
+            "RECORD_TYPE_FORBIDDEN",
+            "You don't have access to this record type.",
+            http_status=403,
+        )
     job_id = submit_job()
     # The task opens its own session (the request session is closed once this
     # response returns). `user` is threaded so the service can stamp the

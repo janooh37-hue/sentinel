@@ -16,6 +16,7 @@ import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '@/lib/api'
+import { useCapabilities } from '@/lib/useCapabilities'
 import { getRecentEmployees } from '@/lib/employeeRecents'
 import { pickEmployeeName } from '@/lib/employeeName'
 
@@ -185,6 +186,7 @@ interface Props {
 export function LookupHeroCards({ onOpen, extraCard }: Props): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const lang = i18n.language
+  const { has } = useCapabilities()
 
   // ── Recents (synchronous — localStorage) ─────────────────────────────────
   const recents = getRecentEmployees(3)
@@ -284,14 +286,16 @@ export function LookupHeroCards({ onOpen, extraCard }: Props): React.JSX.Element
           )
         )}
 
-        <div className="mt-[10px]">
-          <Link
-            to="/expiry"
-            className="text-[11.5px] font-semibold text-white/75 no-underline hover:text-white"
-          >
-            {t('employees.lookup.expiryViewAll')}
-          </Link>
-        </div>
+        {has('expiry.view') ? (
+          <div className="mt-[10px]">
+            <Link
+              to="/expiry"
+              className="text-[11.5px] font-semibold text-white/75 no-underline hover:text-white"
+            >
+              {t('employees.lookup.expiryViewAll')}
+            </Link>
+          </div>
+        ) : null}
       </HCard>
 
       {/* ── Card 3: Data-gap summary ──────────────────────────────────────── */}

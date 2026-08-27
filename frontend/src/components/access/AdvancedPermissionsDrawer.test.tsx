@@ -1,0 +1,180 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import { render, screen, waitFor, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+const toastSuccess = vi.hoisted(() => vi.fn())
+vi.mock('sonner', () => ({
+  toast: { success: toastSuccess, error: vi.fn() },
+}))
+
+vi.mock('@/lib/api', () => ({
+  api: {
+    setUserPermission: vi.fn(),
+    setUserPermissionsBulk: vi.fn(),
+  },
+}))
+
+import { AdvancedPermissionsDrawer } from './AdvancedPermissionsDrawer'
+import { api, type AdminUserRead, type CapabilityRead, type UserPermissionRead } from '@/lib/api'
+
+function createDeferred<T>() {
+  let resolve!: (value: T | PromiseLike<T>) => void
+  let reject!: (reason?: unknown) => void
+  const promise = new Promise<T>((onResolve, onReject) => {
+    resolve = onResolve
+    reject = onReject
+  })
+  return { promise, resolve, reject }
+}
+
+const user: AdminUserRead = {
+  id: 42,
+  email: 'test@example.com',
+  employee_id: null,
+  display_name: 'Test User',
+  name_en: 'Test User',
+  role: 'operator',
+  status: 'active',
+  failed_attempts: 0,
+  last_login_at: null,
+  created_at: null,
+  is_default_manager: false,
+}
+
+function cap(id: string, domain = id.split('.')[0], label = id): CapabilityRead {
+  return { id, domain, label, description: `${label} description`, default_roles: [] }
+}
+
+const capabilities = [
+  cap('books.view', 'books', 'View books'),
+  cap('books.edit', 'books', 'Edit books'),
+  cap('leaves.view', 'leaves', 'View leaves'),
+  cap('books.service.General Book', 'services', 'General Book'),
+  cap('books.category.incoming', 'categories', 'Incoming'),
+  cap('books.service.other', 'services', 'Other'),
+]
+
+function perms(overrides: UserPermissionRead['overrides'] = {}): UserPermissionRead {
+  return {
+    user_id: user.id,
+    role: 'operator',
+    is_admin: false,
+    effective: ['books.view', 'leaves.view'],
+    role_defaults: ['books.view', 'leaves.view'],
+    overrides,
+  }
+}
+
+function renderDrawer(permissionData = perms()) {
+  const client = new QueryClient({
+    defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+  })
+  return render(
+    <QueryClientProvider client={client}>
+      <AdvancedPermissionsDrawer user={user} perms={permissionData} capabilities={capabilities} />
+    </QueryClientProvider>,
+  )
+}
+
+describe('AdvancedPermissionsDrawer', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    vi.mocked(api.setUserPermission).mockResolvedValue(perms({ 'books.view': 'deny' }))
+    vi.mocked(api.setUserPermissionsBulk).mockResolvedValue(perms())
+  })
+
+  it('keeps the tri-state row editor and excludes blueprint-owned domains', async () => {
+    renderDrawer()
+    await userEvent.click(screen.getByRole('button', { name: /advanced/i }))
+
+    expect(screen.queryByText('General Book')).not.toBeInTheDocument()
+    expect(screen.queryByText('Incoming')).not.toBeInTheDocument()
+
+    const rowToggle = screen.getByRole('group', { name: 'View books' })
+    await userEvent.click(within(rowToggle).getByRole('button', { name: 'Deny' }))
+
+    await waitFor(() =>
+      expect(api.setUserPermission).toHaveBeenCalledWith(user.id, 'books.view', 'deny'),
+    )
+  })
+
+  it('keeps unowned dynamic services editable while named services and categories stay in the blueprint', async () => {
+    renderDrawer()
+    await userEvent.click(screen.getByRole('button', { name: /advanced/i }))
+
+    expect(screen.queryByText('General Book')).not.toBeInTheDocument()
+    expect(screen.queryByText('Incoming')).not.toBeInTheDocument()
+    const otherToggle = screen.getByRole('group', { name: 'Other' })
+    await userEvent.click(within(otherToggle).getByRole('button', { name: 'Deny' }))
+
+    await waitFor(() =>
+      expect(api.setUserPermission).toHaveBeenCalledWith(
+        user.id,
+        'books.service.other',
+        'deny',
+      ),
+    )
+  })
+
+  it('filters by raw capability id and clears an empty result', async () => {
+    renderDrawer()
+    await userEvent.click(screen.getByRole('button', { name: /advanced/i }))
+
+    const input = screen.getByPlaceholderText('Search permissions…')
+    await userEvent.type(input, 'leaves.view')
+    expect(screen.getByText('leaves.view')).toBeVisible()
+    expect(screen.queryByText('books.view')).not.toBeInTheDocument()
+
+    await userEvent.clear(input)
+    await userEvent.type(input, 'nothing-matches')
+    expect(screen.getByText('No permissions match')).toBeVisible()
+    const clearButtons = screen.getAllByRole('button', { name: /clear/i })
+    await userEvent.click(clearButtons[clearButtons.length - 1]!)
+    expect(screen.getByText('books.view')).toBeVisible()
+  })
+
+  it('applies a domain-wide deny in one bulk request', async () => {
+    renderDrawer()
+    await userEvent.click(screen.getByRole('button', { name: /advanced/i }))
+
+    const bulkToggle = screen.getByRole('group', { name: 'Apply to all books' })
+    await userEvent.click(within(bulkToggle).getByRole('button', { name: 'Deny' }))
+
+    await waitFor(() =>
+      expect(api.setUserPermissionsBulk).toHaveBeenCalledWith(user.id, [
+        { capability: 'books.view', effect: 'deny' },
+        { capability: 'books.edit', effect: 'deny' },
+      ]),
+    )
+    expect(api.setUserPermission).not.toHaveBeenCalled()
+  })
+
+  it('keeps every tri-state control focusable but non-actionable while a write is pending', async () => {
+    const deferred = createDeferred<UserPermissionRead>()
+    vi.mocked(api.setUserPermission).mockReturnValue(deferred.promise)
+    renderDrawer()
+    await userEvent.click(screen.getByRole('button', { name: /advanced/i }))
+
+    const booksView = screen.getByRole('group', { name: 'View books' })
+    const activeDeny = within(booksView).getByRole('button', { name: 'Deny' })
+    await userEvent.click(activeDeny)
+    expect(document.activeElement).toBe(activeDeny)
+
+    const booksEdit = screen.getByRole('group', { name: 'Edit records & attachments' })
+    await waitFor(() => {
+      for (const button of within(booksEdit).getAllByRole('button')) {
+        expect(button).not.toBeDisabled()
+        expect(button).toHaveAttribute('aria-disabled', 'true')
+      }
+      expect(booksView).toHaveAttribute('aria-busy', 'true')
+    })
+    await userEvent.click(within(booksEdit).getByRole('button', { name: 'Deny' }))
+    expect(api.setUserPermission).toHaveBeenCalledTimes(1)
+
+    deferred.resolve(perms({ 'books.view': 'deny' }))
+    await waitFor(() => expect(booksView).toHaveAttribute('aria-busy', 'false'))
+    expect(document.activeElement).toBe(activeDeny)
+    expect(toastSuccess).not.toHaveBeenCalled()
+  })
+})

@@ -138,13 +138,26 @@ export function BottomTabBar(): React.JSX.Element {
 
   useEffect(() => cancelLongPress, [cancelLongPress])
 
-  const renderedSlots = slotIds.map((slotId, index) => {
-    const entry = entryById(slotId)
-    if (!entry || (entry.cap && !has(entry.cap))) {
-      return entryById(DEFAULT_SLOT_IDS[index])!
-    }
-    return entry
-  })
+  const renderedSlots = (() => {
+    const used = new Set<string>()
+    const allowedSections = SECTION_ENTRIES.filter((entry) => !entry.cap || has(entry.cap))
+    return slotIds.flatMap((slotId, index) => {
+      const requested = entryById(slotId)
+      const preferred = entryById(DEFAULT_SLOT_IDS[index] ?? '')
+      const entry =
+        requested && (!requested.cap || has(requested.cap)) && !used.has(requested.id)
+          ? requested
+          : [preferred, ...allowedSections].find(
+              (candidate) =>
+                candidate != null &&
+                (!candidate.cap || has(candidate.cap)) &&
+                !used.has(candidate.id),
+            )
+      if (!entry) return []
+      used.add(entry.id)
+      return [{ entry, sourceSlotIndex: index }]
+    })
+  })()
 
   const countFor = useCallback(
     (entry: DockEntry): number => (entry.signal ? (signals[entry.signal] ?? 0) : 0),
@@ -192,6 +205,7 @@ export function BottomTabBar(): React.JSX.Element {
   }
 
   const availableSections = SECTION_ENTRIES.filter((entry) => !entry.cap || has(entry.cap))
+  const availableSignals = SIGNAL_ENTRIES.filter((entry) => !entry.cap || has(entry.cap))
 
   return (
     // modal={false}: a modal dialog sets pointer-events:none on <body>, which would
@@ -209,15 +223,15 @@ export function BottomTabBar(): React.JSX.Element {
           editMode ? 'z-50' : 'z-40',
         )}
       >
-        {renderedSlots.map((entry, slotIndex) => {
+        {renderedSlots.map(({ entry, sourceSlotIndex }, renderedIndex) => {
           const label = t(entry.labelKey)
           const count = countFor(entry)
-          const rotation = slotIndex % 2 === 0 ? 'motion-safe:-rotate-[2.2deg]' : 'motion-safe:rotate-[2.2deg]'
+          const rotation = renderedIndex % 2 === 0 ? 'motion-safe:-rotate-[2.2deg]' : 'motion-safe:rotate-[2.2deg]'
 
           return (
             <div
-              key={`${slotIndex}:${entry.id}`}
-              data-slot-index={slotIndex}
+              key={`${sourceSlotIndex}:${entry.id}`}
+              data-slot-index={sourceSlotIndex}
               data-entry-id={entry.id}
               className={cn(
                 'relative flex min-w-0 flex-1 justify-center',
@@ -228,14 +242,14 @@ export function BottomTabBar(): React.JSX.Element {
                 <button
                   type="button"
                   aria-label={label}
-                  onClick={() => setSelectedSlot(slotIndex)}
+                  onClick={() => setSelectedSlot(sourceSlotIndex)}
                   className="flex min-w-0 flex-1 flex-col items-center gap-0.5 px-1 py-1 text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
                 >
                   <DockSlotVisual
                     entry={entry}
                     label={label}
                     count={count}
-                    selected={selectedSlot === slotIndex}
+                    selected={selectedSlot === sourceSlotIndex}
                   />
                 </button>
               ) : (
@@ -245,7 +259,7 @@ export function BottomTabBar(): React.JSX.Element {
                   aria-label={label}
                   onPointerEnter={() => prefetchRouteForPath(entry.to)}
                   onFocus={() => prefetchRouteForPath(entry.to)}
-                  onPointerDown={(event) => startLongPress(slotIndex, event)}
+                  onPointerDown={(event) => startLongPress(sourceSlotIndex, event)}
                   onPointerMove={moveLongPress}
                   onPointerUp={cancelLongPress}
                   onPointerCancel={cancelLongPress}
@@ -264,7 +278,7 @@ export function BottomTabBar(): React.JSX.Element {
                 <button
                   type="button"
                   aria-label={t('nav.customize.reset')}
-                  onClick={() => restoreSlot(slotIndex)}
+                  onClick={() => restoreSlot(sourceSlotIndex)}
                   className="absolute top-0 end-1 inline-flex h-4 w-4 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-sm transition-colors hover:bg-primary/85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-surface motion-reduce:transition-none"
                 >
                   <Minus className="h-2.5 w-2.5" strokeWidth={1.8} aria-hidden />
@@ -284,6 +298,7 @@ export function BottomTabBar(): React.JSX.Element {
           />
         )}
         <RadixDialog.Content
+          aria-describedby={undefined}
           onInteractOutside={(event) => {
             // Taps on the dock are part of the editing interaction, not a dismissal.
             if (navRef.current?.contains(event.target as Node)) event.preventDefault()
@@ -328,7 +343,7 @@ export function BottomTabBar(): React.JSX.Element {
                 {t('nav.customize.signals')}
               </h3>
               <div className="grid grid-cols-4 gap-x-2 gap-y-3">
-                {SIGNAL_ENTRIES.map((entry) => (
+                {availableSignals.map((entry) => (
                   <EntryPicker
                     key={entry.id}
                     entry={entry}

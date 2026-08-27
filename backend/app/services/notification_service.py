@@ -97,7 +97,7 @@ def actionable_items(db: Session, user: User) -> list[ActionableItem]:
     items: list[ActionableItem] = []
 
     # Approval chain — books whose current pending step is assigned to this user.
-    for book in book_service.list_awaiting(db, user_id=user.id):
+    for book in book_service.list_awaiting(db, user_id=user.id, user=user):
         role = book_service.your_step_kind(book, user.id)
         kind = "review" if role == "reviewer" else "approval"
         label = book.ref_number or book.subject or f"#{book.id}"
@@ -137,7 +137,7 @@ def actionable_items(db: Session, user: User) -> list[ActionableItem]:
     # Stranded scan-backs — same books.edit gate as the scan-back list: a push is
     # only worth sending to someone who can actually file the scan.
     if perm_service.has_capability(db, user, "books.edit"):
-        for book in book_service.list_awaiting_scan(db, user_id=user.id):
+        for book in book_service.list_awaiting_scan(db, user_id=user.id, user=user):
             items.append(
                 ActionableItem(
                     "scanback",
@@ -204,7 +204,7 @@ def relevant_counts(
     # Without the cap the bell row is hidden, so a non-zero count here would be
     # misleading (SSE/push would fire for an action the user can't take).
     if perm_service.has_capability(db, user, "books.approve"):
-        approvals = len(book_service.list_awaiting(db, user_id=user.id))
+        approvals = len(book_service.list_awaiting(db, user_id=user.id, user=user))
     else:
         approvals = 0
     scans = scan_inbox_service.counts(db, owner_user_id=user.id)["total"]

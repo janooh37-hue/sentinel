@@ -28,20 +28,20 @@ async function fetchAllLeaves(): Promise<LeaveListItem[]> {
   return items
 }
 
-export function useAwaitingReturnCount(): number {
+export function useAwaitingReturnCount(enabled = true): number {
   const today = todayIso()
   const { data } = useQuery({
     queryKey: ['leaves-list', 'report-all'],
     queryFn: fetchAllLeaves,
+    enabled,
     staleTime: 60_000,
   })
-  return useMemo(
-    () =>
-      (data ?? []).filter(
-        (r) =>
-          displayState(r.leave_type, r.status, r.end_date, today, r.has_certificate) ===
-          'AwaitingReturn',
-      ).length,
-    [data, today],
-  )
+  return useMemo(() => {
+    if (!enabled) return 0
+    return (data ?? []).filter(
+      (r) =>
+        displayState(r.leave_type, r.status, r.end_date, today, r.has_certificate) ===
+        'AwaitingReturn',
+    ).length
+  }, [data, enabled, today])
 }

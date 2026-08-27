@@ -16,6 +16,10 @@ vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (k: string) => k, i18n: { language: 'en' } }),
 }))
 
+vi.mock('@/lib/useCapabilities', () => ({
+  useCapabilities: () => ({ capabilities: new Set(), isLoading: false, has: () => true }),
+}))
+
 const FACETS: BookFacetsResponse = {
   total: 629,
   states: { none: 100, pending: 20, approved: 509 },

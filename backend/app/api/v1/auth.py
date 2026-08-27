@@ -20,13 +20,20 @@ from __future__ import annotations
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, Request, Response, UploadFile, status
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import COOKIE_NAME, get_current_user, require_admin
 from app.config import get_settings
 from app.core import ratelimit
-from app.core.permissions import CAPABILITIES, ROLE_DEFAULTS
-from app.db.models import User
+from app.core.form_kind import OTHER_SERVICE_ID, SERVICE_IDS
+from app.core.permissions import (
+    CAPABILITIES,
+    CATEGORY_CAP_PREFIX,
+    ROLE_DEFAULTS,
+    SERVICE_CAP_PREFIX,
+)
+from app.db.models import BookCategory, User
 from app.db.session import get_db
 from app.schemas.auth import (
     AdminUserRead,
@@ -310,9 +317,11 @@ def set_default_manager(
 @router.get("/capabilities", response_model=list[CapabilityRead])
 def list_capabilities(
     _admin: Annotated[User, Depends(require_admin)],
+    db: Annotated[Session, Depends(get_db)],
 ) -> list[CapabilityRead]:
-    """The full capability catalog + which roles grant each by default."""
-    return [
+    """The static catalog followed by dynamic service/category capabilities."""
+    default_roles = ["operator", "manager", "admin"]
+    static = [
         CapabilityRead(
             id=cap.id,
             domain=cap.domain,
@@ -322,6 +331,27 @@ def list_capabilities(
         )
         for cap in CAPABILITIES
     ]
+    services = [
+        CapabilityRead(
+            id=f"{SERVICE_CAP_PREFIX}{service_id}",
+            domain="services",
+            label=service_id,
+            description="",
+            default_roles=default_roles,
+        )
+        for service_id in (*SERVICE_IDS, OTHER_SERVICE_ID)
+    ]
+    categories = [
+        CapabilityRead(
+            id=f"{CATEGORY_CAP_PREFIX}{row.id}",
+            domain="categories",
+            label=row.name_en or row.id,
+            description=row.name_ar or "",
+            default_roles=default_roles,
+        )
+        for row in db.scalars(select(BookCategory).order_by(BookCategory.id)).all()
+    ]
+    return [*static, *services, *categories]
 
 
 @router.get("/users/{user_id}/permissions", response_model=UserPermissionRead)
@@ -337,7 +367,7 @@ def get_user_permissions(
         role=user.role,
         is_admin=user.role == "admin",
         effective=sorted(perm_service.effective_caps(db, user)),
-        role_defaults=sorted(perm_service.role_default_caps(db, user.role)),
+        role_defaults=sorted(perm_service.role_default_caps_with_dynamic(db, user.role)),
         overrides=perm_service.get_user_overrides(db, user.id),
     )
 
@@ -362,7 +392,7 @@ def set_user_permission(
         role=user.role,
         is_admin=user.role == "admin",
         effective=sorted(perm_service.effective_caps(db, user)),
-        role_defaults=sorted(perm_service.role_default_caps(db, user.role)),
+        role_defaults=sorted(perm_service.role_default_caps_with_dynamic(db, user.role)),
         overrides=perm_service.get_user_overrides(db, user.id),
     )
 
@@ -388,7 +418,7 @@ def set_user_permissions_bulk(
         role=user.role,
         is_admin=user.role == "admin",
         effective=sorted(perm_service.effective_caps(db, user)),
-        role_defaults=sorted(perm_service.role_default_caps(db, user.role)),
+        role_defaults=sorted(perm_service.role_default_caps_with_dynamic(db, user.role)),
         overrides=perm_service.get_user_overrides(db, user.id),
     )
 

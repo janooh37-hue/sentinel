@@ -61,7 +61,7 @@ export function NavDrawer({ open, onOpenChange }: NavDrawerProps): React.JSX.Ele
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent aria-label={t('nav.menu')}>
+      <SheetContent aria-label={t('nav.menu')} aria-describedby={undefined}>
         <SheetTitle className="sr-only">{t('nav.menu')}</SheetTitle>
         {/* Header: brand + close */}
         <div className="flex items-center justify-between border-b border-border px-4 py-3">
@@ -107,22 +107,24 @@ export function NavDrawer({ open, onOpenChange }: NavDrawerProps): React.JSX.Ele
 
         {/* Secondary links */}
         <div className="flex flex-col gap-0.5 border-t border-border px-3 py-3">
-          <NavLink
-            to="/settings"
-            onClick={close}
-            onPointerEnter={() => prefetchRouteForPath('/settings')}
-            onFocus={() => prefetchRouteForPath('/settings')}
-            className={({ isActive }) =>
-              `flex items-center gap-3 rounded-lg px-3 py-2.5 text-[0.95em] font-medium transition-colors ${
-                isActive
-                  ? 'bg-primary/10 text-primary'
-                  : 'text-foreground hover:bg-surface-tinted hover:text-primary'
-              }`
-            }
-          >
-            <Settings className="h-4.5 w-4.5 shrink-0" strokeWidth={1.8} aria-hidden />
-            {t('nav.settings')}
-          </NavLink>
+          {has('settings.view') && (
+            <NavLink
+              to="/settings"
+              onClick={close}
+              onPointerEnter={() => prefetchRouteForPath('/settings')}
+              onFocus={() => prefetchRouteForPath('/settings')}
+              className={({ isActive }) =>
+                `flex items-center gap-3 rounded-lg px-3 py-2.5 text-[0.95em] font-medium transition-colors ${
+                  isActive
+                    ? 'bg-primary/10 text-primary'
+                    : 'text-foreground hover:bg-surface-tinted hover:text-primary'
+                }`
+              }
+            >
+              <Settings className="h-4.5 w-4.5 shrink-0" strokeWidth={1.8} aria-hidden />
+              {t('nav.settings')}
+            </NavLink>
+          )}
           {has('users.manage') && (
             <NavLink
               to="/access-requests"

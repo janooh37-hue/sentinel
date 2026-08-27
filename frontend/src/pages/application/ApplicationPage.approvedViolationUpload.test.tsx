@@ -18,6 +18,9 @@ vi.mock('@/lib/api', () => ({
   },
   apiErrorMessage: (error: unknown) => String(error),
 }))
+vi.mock('@/lib/useCapabilities', () => ({
+  useCapabilities: () => ({ capabilities: new Set(), isLoading: false, has: () => true }),
+}))
 vi.mock('@/lib/applicationFormSchema', () => ({
   buildZodSchema: () => z.object({}),
 }))

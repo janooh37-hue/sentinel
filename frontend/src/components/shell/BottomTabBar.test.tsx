@@ -68,6 +68,68 @@ describe('BottomTabBar', () => {
     }
   })
 
+  it('never falls back to a denied default destination', () => {
+    mockUseCapabilities.mockReturnValue({
+      capabilities: new Set(),
+      has: () => false,
+      isLoading: false,
+    })
+    renderDock()
+
+    const navigation = screen.getByRole('navigation', { name: 'Menu' })
+    expect(within(navigation).getAllByRole('link')).toHaveLength(1)
+    expect(within(navigation).getByRole('link', { name: 'Dashboard' })).toBeVisible()
+    for (const denied of ['Employees', 'Ledger', 'Services', 'Records']) {
+      expect(within(navigation).queryByRole('link', { name: denied })).not.toBeInTheDocument()
+    }
+  })
+
+  it('omits denied waiting signals from the customization picker', () => {
+    vi.useFakeTimers()
+    mockUseCapabilities.mockReturnValue({
+      capabilities: new Set(),
+      has: () => false,
+      isLoading: false,
+    })
+    renderDock()
+
+    enterEditMode('Dashboard')
+    const dialog = screen.getByRole('dialog')
+    expect(within(dialog).queryByRole('button', { name: 'Approvals' })).not.toBeInTheDocument()
+    expect(within(dialog).queryByRole('button', { name: 'Scan-back' })).not.toBeInTheDocument()
+    expect(within(dialog).queryByRole('button', { name: 'Unread' })).not.toBeInTheDocument()
+  })
+
+  it('edits the original persisted slot when denied slots compact the rendered dock', () => {
+    vi.useFakeTimers()
+    localStorage.setItem(
+      NAV_SLOTS_STORAGE_KEY,
+      JSON.stringify({
+        v: 1,
+        ids: [
+          'sec:/',
+          'sec:/employees',
+          'sec:/application',
+          'sig:approvals',
+          'sec:/books',
+        ],
+      }),
+    )
+    mockUseCapabilities.mockReturnValue({
+      capabilities: new Set(['books.view']),
+      has: (capability) => capability === 'books.view',
+      isLoading: false,
+    })
+    renderDock()
+
+    enterEditMode('Approvals')
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Scan-back' }))
+
+    const stored = JSON.parse(localStorage.getItem(NAV_SLOTS_STORAGE_KEY) ?? '')
+    expect(stored.ids[2]).toBe('sec:/application')
+    expect(stored.ids[3]).toBe('sig:scanback')
+  })
+
   it('opens customization on long-press without navigating', () => {
     vi.useFakeTimers()
     renderDock()

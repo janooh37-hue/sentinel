@@ -15,6 +15,13 @@ vi.mock('react-router-dom', async (orig) => ({
 vi.mock('@/pages/scanBack/useScanBack', () => ({
   useScanBack: () => ({ books: [{ id: 7 }, { id: 8 }], isLoading: false, count: 2, enabled: true }),
 }))
+vi.mock('@/lib/useCapabilities', () => ({
+  useCapabilities: () => ({
+    capabilities: new Set(['books.view', 'books.edit']),
+    isLoading: false,
+    has: (capability: string) => ['books.view', 'books.edit'].includes(capability),
+  }),
+}))
 // NavBellPopover pulls in useIdentity/useCapabilities, both of which need a
 // real AuthProvider ancestor outside of App — stub the shared auth context
 // module instead of standing one up, matching this suite's narrow scope.

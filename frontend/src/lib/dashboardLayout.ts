@@ -149,6 +149,31 @@ export const QUICK_ACTION_IDS = [
 
 export type QuickActionId = (typeof QUICK_ACTION_IDS)[number]
 
+export function isQuickActionAllowed(
+  id: string,
+  has: (capability: string) => boolean,
+): boolean {
+  return has(`books.service.${id}`)
+}
+
+export function isQuickActionId(id: string): id is QuickActionId {
+  return QUICK_ACTION_ID_SET.has(id)
+}
+
+export function mergeQuickActionsPreservingDenied(
+  original: readonly DashboardQuickActionConfig[],
+  editedAllowed: readonly DashboardQuickActionConfig[],
+): DashboardQuickActionConfig[] {
+  const allowedIds = new Set(editedAllowed.map((item) => item.id))
+  let editedIndex = 0
+  return original.map((item, order) => {
+    if (!allowedIds.has(item.id)) return { ...item, order }
+    const replacement = editedAllowed[editedIndex]
+    editedIndex += 1
+    return { ...(replacement ?? item), order }
+  })
+}
+
 const WIDGET_ID_SET = new Set<string>(WIDGET_IDS)
 const QUICK_ACTION_ID_SET = new Set<string>(QUICK_ACTION_IDS)
 

@@ -22,7 +22,7 @@ from typing import Any
 from sqlalchemy import Text, and_, cast, func, select
 from sqlalchemy.orm import Session
 
-from app.db.models import Book, Document, Employee, Leave, LedgerEntry, Violation
+from app.db.models import Book, Document, Employee, Leave, LedgerEntry, User, Violation
 from app.schemas.dashboard import (
     DashboardLeaveItem,
     DashboardRecentDocument,
@@ -32,7 +32,7 @@ from app.schemas.dashboard import (
     DashboardTotals,
     DashboardUpcomingLeaveItem,
 )
-from app.services import email_service
+from app.services import book_service, email_service
 from app.services.ledger_service import DRAFT_TAG
 
 # How many "recent" rows to surface per stream.
@@ -54,7 +54,11 @@ def _first_of_month(today: date) -> datetime:
 
 
 def get_summary(
-    db: Session, *, today: date | None = None, owner_user_id: int | None = None
+    db: Session,
+    *,
+    user: User | None = None,
+    today: date | None = None,
+    owner_user_id: int | None = None,
 ) -> DashboardSummary:
     """Compose the dashboard payload.
 
@@ -63,14 +67,14 @@ def get_summary(
     queries separate makes the test surface small.
 
     ``owner_user_id`` scopes only the email-sync widget to the signed-in
-    user's mailbox/rows; the other sections are install-wide. ``None``
-    (legacy/no-user callers) preserves the unscoped behavior.
+    user's mailbox/rows. ``user`` scopes Book-backed totals to visible record
+    types; ``None`` (legacy/no-user callers) preserves unscoped behavior.
     """
     if today is None:
         today = date.today()
 
     return DashboardSummary(
-        totals=_compute_totals(db, today=today),
+        totals=_compute_totals(db, today=today, user=user),
         on_leave_today=_on_leave_today(db, today=today),
         upcoming_leave_ends=_upcoming_leave_ends(db, today=today),
         recent_documents=_recent_documents(db),
@@ -84,18 +88,18 @@ def get_summary(
 # ---------------------------------------------------------------------------
 
 
-def _compute_totals(db: Session, *, today: date) -> DashboardTotals:
+def _compute_totals(db: Session, *, today: date, user: User | None = None) -> DashboardTotals:
     employees_active = int(
         db.execute(
-            select(func.count()).select_from(Employee).where(
-                Employee.status == _ACTIVE_STATUS
-            )
+            select(func.count()).select_from(Employee).where(Employee.status == _ACTIVE_STATUS)
         ).scalar_one()
     )
 
     on_leave_count = int(
         db.execute(
-            select(func.count()).select_from(Leave).where(
+            select(func.count())
+            .select_from(Leave)
+            .where(
                 and_(
                     Leave.deleted_at.is_(None),
                     Leave.status == _APPROVED_STATUS,
@@ -110,7 +114,9 @@ def _compute_totals(db: Session, *, today: date) -> DashboardTotals:
 
     forms_this_month = int(
         db.execute(
-            select(func.count()).select_from(Document).where(
+            select(func.count())
+            .select_from(Document)
+            .where(
                 Document.created_at >= _first_of_month(today),
                 Document.ref_number != "DRAFT",
             )
@@ -119,16 +125,16 @@ def _compute_totals(db: Session, *, today: date) -> DashboardTotals:
 
     open_violations_count = int(
         db.execute(
-            select(func.count()).select_from(Violation).where(
-                Violation.status == "Open"
-            )
+            select(func.count()).select_from(Violation).where(Violation.status == "Open")
         ).scalar_one()
     )
 
     draft_needle = f'%"{DRAFT_TAG}"%'
     draft_count = int(
         db.execute(
-            select(func.count()).select_from(LedgerEntry).where(
+            select(func.count())
+            .select_from(LedgerEntry)
+            .where(
                 and_(
                     LedgerEntry.deleted_at.is_(None),
                     cast(LedgerEntry.tags, Text).like(draft_needle),
@@ -137,13 +143,16 @@ def _compute_totals(db: Session, *, today: date) -> DashboardTotals:
         ).scalar_one()
     )
 
-    book_draft_count = int(
-        db.execute(
-            select(func.count()).select_from(Book).where(
-                and_(Book.deleted_at.is_(None), Book.approval_state == "none")
-            )
-        ).scalar_one()
+    book_draft_stmt = (
+        select(func.count())
+        .select_from(Book)
+        .where(and_(Book.deleted_at.is_(None), Book.approval_state == "none"))
     )
+    if user is not None:
+        visibility = book_service.user_visibility_clause(db, user)
+        if visibility is not None:
+            book_draft_stmt = book_draft_stmt.where(visibility)
+    book_draft_count = int(db.execute(book_draft_stmt).scalar_one())
 
     return DashboardTotals(
         employees_active=employees_active,
@@ -196,9 +205,7 @@ def _on_leave_today(db: Session, *, today: date) -> list[DashboardLeaveItem]:
     ]
 
 
-def _upcoming_leave_ends(
-    db: Session, *, today: date
-) -> list[DashboardUpcomingLeaveItem]:
+def _upcoming_leave_ends(db: Session, *, today: date) -> list[DashboardUpcomingLeaveItem]:
     horizon = date.fromordinal(today.toordinal() + UPCOMING_WINDOW_DAYS)
     stmt = (
         select(
@@ -291,9 +298,7 @@ def _recent_ledger(db: Session) -> list[DashboardRecentLedger]:
             related_emp.c.name_en.label("related_employee_name_en"),
             related_emp.c.name_ar.label("related_employee_name_ar"),
         )
-        .outerjoin(
-            related_emp, related_emp.c.id == LedgerEntry.related_employee_id
-        )
+        .outerjoin(related_emp, related_emp.c.id == LedgerEntry.related_employee_id)
         .where(
             LedgerEntry.deleted_at.is_(None),
             cast(LedgerEntry.tags, Text).not_like(f'%"{DRAFT_TAG}"%'),
@@ -341,18 +346,20 @@ def _email_sync(
     """
     account = email_service.get_account(db, owner_user_id)
 
-    incoming_stmt = select(func.count()).select_from(LedgerEntry).where(
-        and_(
-            LedgerEntry.channel == "email",
-            LedgerEntry.direction == "incoming",
-            LedgerEntry.entry_date == today,
-            LedgerEntry.deleted_at.is_(None),
+    incoming_stmt = (
+        select(func.count())
+        .select_from(LedgerEntry)
+        .where(
+            and_(
+                LedgerEntry.channel == "email",
+                LedgerEntry.direction == "incoming",
+                LedgerEntry.entry_date == today,
+                LedgerEntry.deleted_at.is_(None),
+            )
         )
     )
     if owner_user_id is not None:
-        incoming_stmt = incoming_stmt.where(
-            LedgerEntry.owner_user_id == owner_user_id
-        )
+        incoming_stmt = incoming_stmt.where(LedgerEntry.owner_user_id == owner_user_id)
     incoming_today = int(db.execute(incoming_stmt).scalar_one())
 
     if account is None:

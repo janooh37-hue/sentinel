@@ -25,7 +25,11 @@ def get_summary(
     db: Annotated[Session, Depends(get_db)],
     current_user: Annotated[User, Depends(get_current_user)],
 ) -> DashboardSummary:
-    return dashboard_service.get_summary(db, owner_user_id=current_user.id)
+    return dashboard_service.get_summary(
+        db,
+        user=current_user,
+        owner_user_id=current_user.id,
+    )
 
 
 __all__ = ["router"]

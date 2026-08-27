@@ -68,6 +68,8 @@ import { ApiError } from '@/lib/api'
 import { clearAllDrafts, clearDraft, loadDraft, saveDraft } from '@/lib/formDrafts'
 import { addToBasket, basketLabel, countByFormKind, type EmailBasketItem } from '@/lib/emailBasket'
 import { useEmailBasket } from '@/hooks/useEmailBasket'
+import { isQuickActionAllowed, isQuickActionId } from '@/lib/dashboardLayout'
+import { useCapabilities } from '@/lib/useCapabilities'
 
 import { useShortcutAction } from '@/lib/useKeyboardShortcuts'
 
@@ -119,6 +121,7 @@ function formWidthClass(fields: readonly TemplateField[] | undefined): string {
 export function ApplicationPage(): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const isAr = i18n.language.startsWith('ar')
+  const { has } = useCapabilities()
 
   // Per-template email-basket counts → the marker on each gallery tile.
   const { baskets } = useEmailBasket()
@@ -227,9 +230,16 @@ export function ApplicationPage(): React.JSX.Element {
     queryFn: () => api.listTemplates(),
     staleTime: Infinity,
   })
-  const templates: TemplateMeta[] = useMemo(
+  const allTemplates: TemplateMeta[] = useMemo(
     () => templatesQuery.data?.items ?? [],
     [templatesQuery.data],
+  )
+  const templates = useMemo(
+    () =>
+      allTemplates.filter(
+        (template) => !isQuickActionId(template.id) || isQuickActionAllowed(template.id, has),
+      ),
+    [allTemplates, has],
   )
 
   // Once the template list is fetched, hydrate ?form= → selectedTemplate.

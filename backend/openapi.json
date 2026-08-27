@@ -1343,7 +1343,7 @@
           "auth"
         ],
         "summary": "List Capabilities",
-        "description": "The full capability catalog + which roles grant each by default.",
+        "description": "The static catalog followed by dynamic service/category capabilities.",
         "operationId": "list_capabilities_api_v1_auth_capabilities_get",
         "parameters": [
           {

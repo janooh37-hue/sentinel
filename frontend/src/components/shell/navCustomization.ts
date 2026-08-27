@@ -32,6 +32,7 @@ export const SECTION_ENTRIES: readonly DockEntry[] = [
     labelKey: 'nav.settings',
     Icon: Settings,
     to: '/settings',
+    cap: 'settings.view',
   },
 ]
 
@@ -42,6 +43,7 @@ export const SIGNAL_ENTRIES: readonly DockEntry[] = [
     labelKey: 'nav.signals.approvals',
     Icon: Hourglass,
     to: '/books',
+    cap: 'books.view',
     signal: 'approvals',
   },
   {
@@ -50,6 +52,7 @@ export const SIGNAL_ENTRIES: readonly DockEntry[] = [
     labelKey: 'nav.signals.scanback',
     Icon: ScanLine,
     to: '/books',
+    cap: 'books.view',
     signal: 'scanback',
   },
   {
@@ -58,6 +61,7 @@ export const SIGNAL_ENTRIES: readonly DockEntry[] = [
     labelKey: 'nav.signals.ledgerUnread',
     Icon: Inbox,
     to: '/ledger',
+    cap: 'ledger.view',
     signal: 'ledgerUnread',
   },
 ]

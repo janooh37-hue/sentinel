@@ -59,21 +59,21 @@ export const dockDismissKeyFor = (userId: number | string): string =>
 // `toLocaleDateString('en-CA')` gives YYYY-MM-DD in the browser's local time.
 export const today = (): string => new Date().toLocaleDateString('en-CA')
 
-export function useScanBack(scope: 'mine' | 'all' = 'mine'): {
+export function useScanBack(scope: 'mine' | 'all' = 'mine', visible = true): {
   books: BookRead[]
   isLoading: boolean
   count: number
   enabled: boolean
 } {
   const { has } = useCapabilities()
-  const enabled = has('books.edit')
+  const enabled = visible && has('books.edit')
   const query = useQuery({
     queryKey: ['books', 'awaiting-scan', scope],
     queryFn: () => api.listAwaitingScanBooks(scope),
     staleTime: 30_000,
     enabled,
   })
-  const books = query.data ?? []
+  const books = enabled ? (query.data ?? []) : []
   return { books, isLoading: query.isLoading, count: books.length, enabled }
 }
 

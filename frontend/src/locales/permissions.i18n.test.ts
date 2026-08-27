@@ -80,3 +80,43 @@ describe('permission catalog i18n completeness', () => {
     expect(missing).toEqual([])
   })
 })
+
+describe('Mirror editor bilingual copy', () => {
+  it('ships every new EN/AR label and complete count plurals', () => {
+    const missing: string[] = []
+    const sharedKeys = [
+      'access.permissions.mirror.pickUser',
+      'access.permissions.mirror.nothingVisible',
+      'access.permissions.mirror.userNotFound',
+      'access.permissions.mirror.blueprintLabel',
+    ]
+    for (const [locale, tree] of [['en', en], ['ar', ar]] as const) {
+      for (const key of sharedKeys) {
+        if (!get(tree as unknown as Rec, key)) missing.push(`${locale} ${key}`)
+      }
+    }
+    for (const suffix of ['one', 'other']) {
+      if (!get(en as unknown as Rec, `access.permissions.mirror.availableCount_${suffix}`)) {
+        missing.push(`en availableCount_${suffix}`)
+      }
+      if (!get(en as unknown as Rec, `access.permissions.mirror.hiddenLabel_${suffix}`)) {
+        missing.push(`en hiddenLabel_${suffix}`)
+      }
+    }
+    for (const suffix of ['zero', 'one', 'two', 'few', 'many', 'other']) {
+      if (!get(ar as unknown as Rec, `access.permissions.mirror.availableCount_${suffix}`)) {
+        missing.push(`ar availableCount_${suffix}`)
+      }
+      if (!get(ar as unknown as Rec, `access.permissions.mirror.hiddenLabel_${suffix}`)) {
+        missing.push(`ar hiddenLabel_${suffix}`)
+      }
+    }
+    expect(missing).toEqual([])
+  })
+
+  it('uses the Arabic verb for updating the device preview', () => {
+    const help = get(ar as unknown as Rec, 'access.permissions.mirror.help')
+    expect(help).toContain('تُحدَّث')
+    expect(help).not.toContain('تتحدّث')
+  })
+})

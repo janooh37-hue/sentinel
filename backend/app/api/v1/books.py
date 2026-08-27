@@ -30,10 +30,18 @@ from sqlalchemy.orm import Session
 
 from app.api._responses import maybe_base64
 from app.api.deps import get_current_user, require_capability
-from app.api.errors import AppError
+from app.api.errors import AppError, NotFoundError
 from app.core import form_policy
 from app.core.classifications import CLASSIFICATIONS
-from app.db.models import Book, BookEditSession, BookVersion, Document, User
+from app.core.form_kind import resolve_service
+from app.db.models import (
+    Book,
+    BookCategory,
+    BookEditSession,
+    BookVersion,
+    Document,
+    User,
+)
 from app.db.session import get_db
 from app.schemas.book import (
     ApprovalLogResponse,
@@ -82,6 +90,30 @@ router = APIRouter(prefix="/books", tags=["books"])
 categories_router = APIRouter(prefix="/book-categories", tags=["books"])
 
 
+def _require_record_type_access(
+    db: Session,
+    user: User,
+    *,
+    category_id: str | None = None,
+    service_id: str | None = None,
+) -> None:
+    if category_id is not None and db.get(BookCategory, category_id) is None:
+        raise NotFoundError(
+            "BOOK_CATEGORY_NOT_FOUND",
+            f"Book category {category_id!r} does not exist",
+            category_id=category_id,
+        )
+    caps = perm_service.effective_caps(db, user)
+    category_denied = category_id is not None and f"books.category.{category_id}" not in caps
+    service_denied = service_id is not None and f"books.service.{service_id}" not in caps
+    if category_denied or service_denied:
+        raise AppError(
+            "RECORD_TYPE_FORBIDDEN",
+            "You don't have access to this record type.",
+            http_status=403,
+        )
+
+
 def _signed_source_of(v: BookVersion) -> Literal["in_app", "scan"] | None:
     """Classify by the preserved base; packaged scan outputs live elsewhere."""
     if not v.signed_pdf_path:
@@ -108,9 +140,9 @@ def _signed_pdf_url_of(v: BookVersion) -> str | None:
 @categories_router.get("", response_model=list[BookCategoryRead])
 def list_book_categories(
     db: Annotated[Session, Depends(get_db)],
-    _user: Annotated[User, Depends(require_capability("books.view"))],
+    user: Annotated[User, Depends(require_capability("books.view"))],
 ) -> list[BookCategoryRead]:
-    rows = book_service.list_book_categories(db)
+    rows = book_service.list_book_categories(db, user)
     return [BookCategoryRead.model_validate(r) for r in rows]
 
 
@@ -143,11 +175,11 @@ def list_classifications(
 @router.get("/facets", response_model=BookFacetsResponse)
 def book_facets(
     db: Annotated[Session, Depends(get_db)],
-    _user: Annotated[User, Depends(require_capability("books.view"))],
+    user: Annotated[User, Depends(require_capability("books.view"))],
 ) -> BookFacetsResponse:
     """Per-service counts for the Records rail + per-service approval-state
     counts for the status spine. Global, unpaginated."""
-    all_records, services = book_service.service_facets(db)
+    all_records, services = book_service.service_facets(db, user)
     return BookFacetsResponse(
         total=all_records.count,
         states=all_records.states,
@@ -209,6 +241,8 @@ def create_word_session(
 ) -> WordSessionRead:
     """Create a General Book, or a no-ref Report when a signer is given, with a
     Word-editable working docx."""
+    service_id = "Report" if payload.signer_employee_id is not None else "General Book"
+    _require_record_type_access(db, user, service_id=service_id)
     if payload.signer_employee_id is not None:
         info = word_book_service.create_report_word_book(
             db,
@@ -375,7 +409,7 @@ def _fill_draft_fields(
 @router.get("", response_model=BookListResponse)
 def list_books(
     db: Annotated[Session, Depends(get_db)],
-    _user: Annotated[User, Depends(require_capability("books.view"))],
+    user: Annotated[User, Depends(require_capability("books.view"))],
     category_id: str | None = None,
     service_id: str | None = None,
     direction: str | None = None,
@@ -389,6 +423,7 @@ def list_books(
 ) -> BookListResponse:
     rows, total, fts_snippets = book_service.list_books(
         db,
+        user=user,
         category_id=category_id,
         service_id=service_id,
         direction=direction,
@@ -464,12 +499,13 @@ def _enrich_path_fields(
 def get_book_by_ref(
     ref: str,
     db: Annotated[Session, Depends(get_db)],
-    _user: Annotated[User, Depends(require_capability("books.view"))],
+    user: Annotated[User, Depends(require_capability("books.view"))],
 ) -> BookRead:
     """Resolve a book by its ``ref_number`` — backs the ledger book-chip
     deep-link. Declared before ``/{book_id}`` so the literal ``by-ref`` segment
     isn't swallowed by the int path param."""
     row = book_service.get_book_by_ref(db, ref)
+    book_service.assert_record_type_visible(db, user, row)
     return _enrich_path_fields(BookRead.model_validate(row), row, db)
 
 
@@ -482,7 +518,7 @@ def list_awaiting(
 
     Declared before ``/{book_id}`` so the literal ``awaiting`` segment isn't
     swallowed by the int path param."""
-    rows = book_service.list_awaiting(db, user_id=user.id)
+    rows = book_service.list_awaiting(db, user_id=user.id, user=user)
     # Batch-resolve submitter names once instead of 2 db.get per row (N+1).
     name_by_id = book_service.resolve_names_by_ids(
         db, {r.submitted_by_user_id for r in rows if r.submitted_by_user_id is not None}
@@ -525,7 +561,11 @@ def list_awaiting_scan(
     swallowed by the int path param — same reason as ``/awaiting`` above.
     Authority is ``books.edit``: the same capability filing the scan requires.
     """
-    rows = book_service.list_awaiting_scan(db, user_id=None if scope == "all" else user.id)
+    rows = book_service.list_awaiting_scan(
+        db,
+        user_id=None if scope == "all" else user.id,
+        user=user,
+    )
     return [BookRead.model_validate(r) for r in rows]
 
 
@@ -568,11 +608,11 @@ def get_approval_log(
     """
     if scope == "sent":
         items, total = book_service.approval_log_sent(
-            db, user_id=user.id, limit=limit, offset=offset
+            db, user_id=user.id, user=user, limit=limit, offset=offset
         )
     else:
         items, total = book_service.approval_log_received(
-            db, user_id=user.id, limit=limit, offset=offset
+            db, user_id=user.id, user=user, limit=limit, offset=offset
         )
     return ApprovalLogResponse(items=items, total=total, limit=limit, offset=offset)
 
@@ -784,10 +824,11 @@ def save_included_papers(
 def get_book(
     book_id: int,
     db: Annotated[Session, Depends(get_db)],
-    _user: Annotated[User, Depends(require_capability("books.view"))],
+    user: Annotated[User, Depends(require_capability("books.view"))],
     include_deleted: bool = False,
 ) -> BookRead:
     row = book_service.get_book_detail(db, book_id, include_deleted=include_deleted)
+    book_service.assert_record_type_visible(db, user, row)
     return _build_book_detail(db, row)
 
 
@@ -882,8 +923,15 @@ def delete_annotation(
 def create_book(
     payload: BookCreate,
     db: Annotated[Session, Depends(get_db)],
-    _user: Annotated[User, Depends(require_capability("books.create"))],
+    user: Annotated[User, Depends(require_capability("books.create"))],
 ) -> BookRead:
+    service_id = resolve_service(payload.subject, None, versioned=False)
+    _require_record_type_access(
+        db,
+        user,
+        category_id=payload.category_id,
+        service_id=service_id,
+    )
     row = book_service.create_book(db, payload)
     return BookRead.model_validate(row)
 

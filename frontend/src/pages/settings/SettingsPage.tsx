@@ -454,6 +454,9 @@ function AccessRequestsSection(): React.JSX.Element {
           </span>
         )}
         <div className="flex flex-wrap items-center gap-2">
+          <OutlineButton onClick={() => navigate('/permissions')}>
+            {t('access.settingsCard.permissionsCta')}
+          </OutlineButton>
           <PrimaryButton onClick={() => navigate('/access-requests')}>
             {t('access.settingsCard.review')}
             <ArrowRight className="h-3.5 w-3.5 rtl:rotate-180" strokeWidth={1.8} />

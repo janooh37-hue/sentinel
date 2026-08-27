@@ -457,7 +457,7 @@ export interface paths {
         };
         /**
          * List Capabilities
-         * @description The full capability catalog + which roles grant each by default.
+         * @description The static catalog followed by dynamic service/category capabilities.
          */
         get: operations["list_capabilities_api_v1_auth_capabilities_get"];
         put?: never;

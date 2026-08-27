@@ -25,7 +25,9 @@ def expires_from_window(window: str) -> datetime:
 
 
 def create_request(db: Session, user: User, capability: str) -> PermissionRequest:
-    if capability not in CAPABILITY_IDS:
+    if capability not in CAPABILITY_IDS and capability not in perm_service.dynamic_capability_ids(
+        db
+    ):
         raise AppError("UNKNOWN_CAPABILITY", f"Unknown capability {capability!r}", http_status=400)
     if capability in _SENSITIVE:
         raise AppError("FORBIDDEN_REQUEST", "This permission can't be requested.", http_status=400)
@@ -50,30 +52,55 @@ def create_request(db: Session, user: User, capability: str) -> PermissionReques
         db.refresh(row)
     # Notify admins for both new requests and re-requests.
     from app.core.permissions import CAPABILITIES
+
     label = next((c.label for c in CAPABILITIES if c.id == capability), capability)
     from app.services import admin_notify
+
     admin_notify.notify_admins_new_request(db, user, label, row.id)
     return row
 
 
 def list_pending(db: Session) -> list[PermissionRequest]:
-    return list(db.scalars(
-        select(PermissionRequest).where(PermissionRequest.status == "pending").order_by(PermissionRequest.created_at.desc())
-    ))
+    return list(
+        db.scalars(
+            select(PermissionRequest)
+            .where(PermissionRequest.status == "pending")
+            .order_by(PermissionRequest.created_at.desc())
+        )
+    )
 
 
-def decide(db: Session, request_id: int, *, admin: User, decision: str, window: str | None = None, note: str | None = None) -> PermissionRequest:
+def decide(
+    db: Session,
+    request_id: int,
+    *,
+    admin: User,
+    decision: str,
+    window: str | None = None,
+    note: str | None = None,
+) -> PermissionRequest:
     row = db.get(PermissionRequest, request_id)
     if row is None or row.status != "pending":
-        raise AppError("REQUEST_NOT_PENDING", "Request not found or already decided.", http_status=404)
+        raise AppError(
+            "REQUEST_NOT_PENDING", "Request not found or already decided.", http_status=404
+        )
     target = db.get(User, row.user_id)
     if decision == "permanent":
         perm_service.set_user_override(db, target.id, row.capability, "grant", actor=admin)
         row.status, row.decision = "granted", "permanent"
     elif decision == "once":
         if not window:
-            raise AppError("INVALID_WINDOW", "A window is required for a one-time grant.", http_status=400)
-        perm_service.set_user_override(db, target.id, row.capability, "grant", actor=admin, expires_at=expires_from_window(window))
+            raise AppError(
+                "INVALID_WINDOW", "A window is required for a one-time grant.", http_status=400
+            )
+        perm_service.set_user_override(
+            db,
+            target.id,
+            row.capability,
+            "grant",
+            actor=admin,
+            expires_at=expires_from_window(window),
+        )
         row.status, row.decision = "granted", "once"
     elif decision == "refused":
         row.status, row.decision, row.note = "refused", "refused", note
