@@ -52,6 +52,7 @@ import type { TemplateDetailResponse, TemplateField } from '@/components/applica
 import { buildZodSchema } from '@/lib/applicationFormSchema'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
+import { ServiceArtwork, type ServiceArtworkId } from '@/components/ui/service-artwork'
 import { TemplateForm } from '@/components/application/TemplateForm'
 import { AttachmentsBlock } from '@/components/application/AttachmentsBlock'
 import {
@@ -69,6 +70,7 @@ import { clearAllDrafts, clearDraft, loadDraft, saveDraft } from '@/lib/formDraf
 import { addToBasket, basketLabel, countByFormKind, type EmailBasketItem } from '@/lib/emailBasket'
 import { useEmailBasket } from '@/hooks/useEmailBasket'
 import { isQuickActionAllowed, isQuickActionId } from '@/lib/dashboardLayout'
+import { QUICK_ACTION_META } from '@/lib/quickActions'
 import { useCapabilities } from '@/lib/useCapabilities'
 
 import { useShortcutAction } from '@/lib/useKeyboardShortcuts'
@@ -928,6 +930,7 @@ export function ApplicationPage(): React.JSX.Element {
                       name={nsTitle}
                       category={t('application.nsCategory')}
                       emoji="🎖️"
+                      artwork="national-service"
                       onSelect={() => navigate('/leaves?ns=new')}
                     />
                   )}
@@ -937,6 +940,7 @@ export function ApplicationPage(): React.JSX.Element {
                       name={dlTitle}
                       category={t('dutyLocations.tile.category')}
                       emoji="🚚"
+                      artwork="duty-locations"
                       onSelect={() => navigate('/duty-locations')}
                     />
                   )}
@@ -945,6 +949,7 @@ export function ApplicationPage(): React.JSX.Element {
                       key="employee-absence"
                       name={absTitle}
                       category={t('dutyLocations.tile.category')}
+                      artwork="employee-absence"
                       emoji="🚫"
                       onSelect={() => navigate('/absences')}
                     />
@@ -955,6 +960,9 @@ export function ApplicationPage(): React.JSX.Element {
                       name={isAr ? tpl.name_ar : tpl.name_en}
                       category={t(`application.formList.${tpl.category}`)}
                       emoji={emojiForTemplate(tpl.id)}
+                      artwork={
+                        isQuickActionId(tpl.id) ? QUICK_ACTION_META[tpl.id].artwork : undefined
+                      }
                       basketCount={basketCounts[tpl.id] ?? 0}
                       hasCode={tpl.has_code}
                       onSelect={() => handleSelectTemplate(tpl.id)}
@@ -1365,6 +1373,7 @@ function ServiceCell({
   name,
   category,
   emoji,
+  artwork,
   basketCount,
   hasCode,
   onSelect,
@@ -1372,6 +1381,7 @@ function ServiceCell({
   name: string
   category: string
   emoji: string
+  artwork?: ServiceArtworkId
   basketCount?: number
   /** Whether the generated form carries a scannable ref code. Omit on synthetic
    *  tiles (National Service / Duty Locations) that aren't standard forms. */
@@ -1382,15 +1392,21 @@ function ServiceCell({
     <button
       type="button"
       onClick={onSelect}
-      className="group relative flex h-full min-h-[120px] w-full flex-col items-start rounded-2xl border-t-4 border-primary bg-surface p-4 text-start shadow-sm ring-1 ring-hairline transition-[transform,box-shadow] duration-200 ease-[cubic-bezier(0.16,1,0.3,1)] hover:-translate-y-1 hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+      className="service-tile group relative flex h-full min-h-[120px] w-full flex-col items-start rounded-2xl border-t-4 border-primary bg-surface p-4 text-start shadow-sm ring-1 ring-hairline transition-[transform,box-shadow] duration-200 ease-[cubic-bezier(0.16,1,0.3,1)] hover:-translate-y-1 hover:shadow-md focus-visible:-translate-y-1 focus-visible:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary motion-reduce:!translate-none motion-reduce:transition-none"
     >
       {hasCode !== undefined && <CodeBadge hasCode={hasCode} />}
-      <span
-        className="block text-[1.6em] leading-none transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:-translate-y-[3px]"
-        aria-hidden
-      >
-        {emoji}
-      </span>
+      {artwork ? (
+        <span className="block w-8 transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:-translate-y-1.5 group-focus-visible:-translate-y-1.5 motion-reduce:!translate-none motion-reduce:transition-none">
+          <ServiceArtwork artwork={artwork} size="gallery" />
+        </span>
+      ) : (
+        <span
+          className="block text-[1.6em] leading-none transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:-translate-y-[3px] group-focus-visible:-translate-y-[3px] motion-reduce:!translate-none motion-reduce:transition-none"
+          aria-hidden
+        >
+          {emoji}
+        </span>
+      )}
       <span className="mt-2.5 line-clamp-2 pb-0.5 text-[0.84em] font-semibold leading-snug text-foreground">
         {name}
       </span>

@@ -98,6 +98,27 @@ describe('ApplicationPage service permissions', () => {
     expect(screen.getByText('Demo companion')).toBeVisible()
   })
 
+  it('uses calibrated artwork for synthetic and supported template tiles', async () => {
+    capabilityState.allowed = new Set([
+      'documents.generate',
+      'books.view',
+      'books.service.General Book',
+    ])
+    renderPage()
+
+    for (const [label, artwork] of [
+      ['National Service', 'national-service'],
+      ['Duty Locations & Transfers', 'duty-locations'],
+      ['Employee Absence', 'employee-absence'],
+      ['General Book', 'general-book'],
+    ]) {
+      const text = await screen.findByText(label)
+      const tile = text.closest('button')
+      expect(tile).not.toBeNull()
+      expect(tile?.querySelector(`[data-service-artwork="${artwork}"]`)).toBeInTheDocument()
+    }
+  })
+
   it.each([
     ['documents.generate', ['books.view', 'books.service.General Book']],
     ['books.view', ['documents.generate', 'books.service.General Book']],
