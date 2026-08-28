@@ -136,6 +136,7 @@ def test_create_word_session_dispatches_report(db_session):
     from app.db.models import Employee, User
     from app.main import create_app
 
+    _seed_gs(db_session)
     u = User(email="op2@test.ae", password_hash="x", role="admin", status="active")
     db_session.add(u)
     db_session.add(Employee(id="G1042", name_en="Muhannad", name_ar="مهند", position="Head"))

@@ -73,10 +73,17 @@ export function NavBellPopover(): React.JSX.Element {
 
   const { isAdmin } = useIdentity()
   const { has } = useCapabilities()
-
+  const canViewBooks = has('books.view')
+  const canApproveBooks = has('books.approve')
+  const canEditBooks = has('books.edit')
+  const canViewExpiry = has('expiry.view')
+  const canViewLeaves = has('leaves.view')
+  const canViewLedger = has('ledger.view')
+  const canScanDocuments = has('documents.scan')
   const recentQuery = useQuery({
     queryKey: ['ledger', 'unread-recent'],
     queryFn: () => api.getLedgerUnreadRecent(5),
+    enabled: canViewLedger,
     // Phase 4: SSE stream drives live invalidation; this is a safety-poll fallback.
     refetchInterval: 120_000,
     staleTime: 15_000,
@@ -97,16 +104,16 @@ export function NavBellPopover(): React.JSX.Element {
   const expiryQuery = useQuery({
     queryKey: ['expiry', 'summary'],
     queryFn: api.getExpirySummary,
-    enabled: has('employees.view'),
+    enabled: canViewExpiry,
     staleTime: 60_000,
     refetchInterval: 60_000,
   })
-  const expiryUrgent = expiryQuery.data?.urgent ?? 0
+  const expiryUrgent = canViewExpiry ? (expiryQuery.data?.urgent ?? 0) : 0
 
-  const awaitingReturn = useAwaitingReturnCount()
-  const scanInbox = useScanInboxCount()
-  const followUps = useFlagCount()
-  const { count: scanBackCount } = useScanBack()
+  const awaitingReturn = useAwaitingReturnCount(canViewLeaves)
+  const scanInbox = useScanInboxCount(canScanDocuments)
+  const followUps = useFlagCount(canViewLedger)
+  const { count: scanBackCount } = useScanBack('mine', canViewBooks && canEditBooks)
 
   // Phase 4 LAN — awaiting MY approval (books.approve-gated).
   // Query key ['books','awaiting'] is also invalidated by useNotificationStream.
@@ -115,9 +122,9 @@ export function NavBellPopover(): React.JSX.Element {
     queryFn: api.listAwaitingBooks,
     staleTime: 30_000,
     refetchInterval: 120_000,
-    enabled: has('books.approve'),
+    enabled: canApproveBooks,
   })
-  const awaitingApproval = approvalsQuery.data?.length ?? 0
+  const awaitingApproval = canApproveBooks ? (approvalsQuery.data?.length ?? 0) : 0
 
   const markAllMutation = useMutation({
     mutationFn: () => api.markAllLedgerRead(),
@@ -161,8 +168,8 @@ export function NavBellPopover(): React.JSX.Element {
     }
   }, [open])
 
-  const items = recentQuery.data?.items ?? []
-  const totalUnread = recentQuery.data?.total_unread ?? 0
+  const items = canViewLedger ? (recentQuery.data?.items ?? []) : []
+  const totalUnread = canViewLedger ? (recentQuery.data?.total_unread ?? 0) : 0
   const moreCount = Math.max(0, totalUnread - items.length)
   const hasNothing = items.length === 0 && pendingRequests === 0 && expiryUrgent === 0 && awaitingReturn === 0 && scanInbox === 0 && awaitingApproval === 0 && followUps === 0 && scanBackCount === 0
 
@@ -226,12 +233,12 @@ export function NavBellPopover(): React.JSX.Element {
           )}
 
           {/* Awaiting MY approval (books.approve-gated) — Phase 4 LAN */}
-          {awaitingApproval > 0 && (
+          {canApproveBooks && awaitingApproval > 0 && (
             <button
               type="button"
               onClick={() => {
                 setOpen(false)
-                navigate('/books')
+                navigate('/books/approvals')
               }}
               className="flex w-full items-center gap-3 border-b border-hairline px-4 py-3 text-start transition-colors hover:bg-surface-tinted focus-visible:bg-surface-tinted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
             >
@@ -252,8 +259,8 @@ export function NavBellPopover(): React.JSX.Element {
             </button>
           )}
 
-          {/* Signed copy never filed — books.edit-gated inside useScanBack */}
-          {scanBackCount > 0 && (
+          {/* Signed copy never filed — books.view + books.edit gated */}
+          {canViewBooks && canEditBooks && scanBackCount > 0 && (
             <button
               type="button"
               onClick={() => {
@@ -306,7 +313,7 @@ export function NavBellPopover(): React.JSX.Element {
             </button>
           )}
 
-          {/* Expiring documents (employees.view-gated) */}
+          {/* Expiring documents — expiry.view gated */}
           {expiryUrgent > 0 && (
             <button
               type="button"
@@ -334,7 +341,7 @@ export function NavBellPopover(): React.JSX.Element {
           )}
 
           {/* Awaiting return form */}
-          {awaitingReturn > 0 && (
+          {canViewLeaves && awaitingReturn > 0 && (
             <button
               type="button"
               onClick={() => {
@@ -361,7 +368,7 @@ export function NavBellPopover(): React.JSX.Element {
           )}
 
           {/* Scan inbox — scanned documents awaiting confirmation or routing */}
-          {scanInbox > 0 && (
+          {canScanDocuments && scanInbox > 0 && (
             <button
               type="button"
               onClick={() => { setOpen(false); navigate('/scan-inbox') }}
@@ -385,7 +392,7 @@ export function NavBellPopover(): React.JSX.Element {
           )}
 
           {/* Body */}
-          {recentQuery.isPending ? (
+          {canViewLedger && recentQuery.isPending ? (
             <div className="flex flex-col gap-2 px-4 py-6">
               {Array.from({ length: 3 }).map((_, i) => (
                 <div
@@ -487,16 +494,18 @@ export function NavBellPopover(): React.JSX.Element {
                 })}
               </div>
             )}
-            <Link
-              to="/ledger"
-              onClick={() => setOpen(false)}
-              className="flex items-center justify-between px-4 py-2.5 text-sm text-primary transition-colors hover:bg-surface-tinted focus-visible:bg-surface-tinted focus-visible:outline-none"
-            >
-              <span>
-                {t('appBar.viewAllInbox', { defaultValue: 'View all in inbox' })}
-              </span>
-              <ArrowRight className="h-3.5 w-3.5 rtl:rotate-180" strokeWidth={1.8} />
-            </Link>
+            {canViewLedger ? (
+              <Link
+                to="/ledger"
+                onClick={() => setOpen(false)}
+                className="flex items-center justify-between px-4 py-2.5 text-sm text-primary transition-colors hover:bg-surface-tinted focus-visible:bg-surface-tinted focus-visible:outline-none"
+              >
+                <span>
+                  {t('appBar.viewAllInbox', { defaultValue: 'View all in inbox' })}
+                </span>
+                <ArrowRight className="h-3.5 w-3.5 rtl:rotate-180" strokeWidth={1.8} />
+              </Link>
+            ) : null}
           </div>
         </div>
       )}

@@ -3427,6 +3427,7 @@
       "title": "Access requests",
       "desc": "Approve people who requested access, and manage existing users.",
       "review": "Review requests",
+      "permissionsCta": "Permissions studio",
       "none": "No pending requests",
       "pending": "{{count}} pending"
     },
@@ -3436,20 +3437,8 @@
       "operator": "Operator"
     },
     "permissions": {
-      "title": "Permissions",
-      "eyebrow": "Administration",
-      "subtitle": "Grant or revoke individual capabilities per user. Roles set the defaults; overrides layer on top.",
-      "sheetEyebrow": "User permissions",
-      "sheetSubtitle": "Each toggle sets an override on top of the user's role defaults.",
-      "selectUser": "User",
       "loadError": "Couldn't load permissions.",
       "empty": "No users to manage yet.",
-      "rolePreset": "Role preset",
-      "legend": {
-        "default": "Inherited from role",
-        "grant": "Granted",
-        "deny": "Denied"
-      },
       "state": {
         "default": "Default",
         "grant": "Grant",
@@ -3457,8 +3446,6 @@
       },
       "inherited": "Role default: {{state}}",
       "overridden": "Overridden",
-      "adminAll": "Admins always have every capability — overrides don't apply.",
-      "saved": "Permission updated.",
       "saveError": "Couldn't update the permission.",
       "searchPlaceholder": "Search permissions…",
       "results": "{{count}} result(s)",
@@ -3466,10 +3453,48 @@
       "noResultsHint": "Search checks names, descriptions and IDs.",
       "clearSearch": "Clear",
       "bulkApply": "Apply to all",
-      "savedBulk": "Permissions updated.",
+      "mirror": {
+        "title": "Permissions studio",
+        "help": "Shape what each person can see. The device mirror updates from the same permission blueprint.",
+        "hint": "Focus or choose an item to see how this permission is applied.",
+        "pickUser": "Choose who to edit",
+        "nothingVisible": "Nothing here for this person",
+        "userNotFound": "This user is not available for permission editing.",
+        "blueprintLabel": "Permission blueprint",
+        "hiddenCount_one": "{{count}} hidden",
+        "hiddenCount_other": "{{count}} hidden",
+        "hiddenLabel_one": "hidden",
+        "hiddenLabel_other": "hidden",
+        "always": "Always visible — cannot be denied",
+        "deniedForUser": "Denied for this user",
+        "consequence": "Hidden everywhere — Services, Records, dashboard and creation",
+        "consequenceRecords": "Records hidden — creation blocked",
+        "viewPrereqWarning": "Records is hidden — this user cannot create or browse records. Only records awaiting their approval stay reachable.",
+        "explicitGrant": "Granted beyond role",
+        "roleCaption": "{{role}} role defaults",
+        "viewingAs": "Viewing as {{name}}",
+        "blueprintPages": "Pages",
+        "blueprintServices": "Services",
+        "serviceOther": "Other records",
+        "blueprintCategories": "Record categories",
+        "quickActions": "Quick actions",
+        "availableCount_one": "{{count}} available",
+        "availableCount_other": "{{count}} available",
+        "adminNote": "Always full access",
+        "requestedAccess": "Requested access",
+        "approve": "Approve",
+        "refuse": "Refuse",
+        "advanced": "Advanced permissions",
+        "advancedCaption": "Full per-action overrides"
+      },
+      "pages": {
+        "settings": "Settings",
+        "expiry": "Expiry"
+      },
       "domains": {
         "app": "Application",
         "employees": "Employees",
+        "expiry": "Expiry",
         "leaves": "Leaves",
         "violations": "Violations",
         "documents": "Documents",
@@ -3493,6 +3518,7 @@
         "employees.edit": "Edit employee profiles",
         "employees.vault.manage": "Manage document vaults",
         "employees.notify": "Notify employees",
+        "expiry.view": "View expiry",
         "leaves.view": "View leaves",
         "leaves.create": "Create leaves",
         "leaves.edit": "Edit leaves",
@@ -3511,6 +3537,7 @@
         "books.override_state": "Force a record's state",
         "books.templates": "Manage Word templates",
         "books.delete": "Delete records",
+        "books.service.other": "Other records",
         "permits.view": "View security permits",
         "permits.create": "Issue permits",
         "permits.edit": "Amend & renew permits",
@@ -3577,6 +3604,9 @@
     "newItems": "{{n}} new",
     "listUpdated": "List updated, {{n}} new"
   },
+  "requireCap": {
+    "notRequestable": "Access to this area is managed by administrators and cannot be requested."
+  },
   "perms": {
     "locked": "You need permission for {{label}}. Click to request access.",
     "request": {
@@ -3596,6 +3626,7 @@
       "employees.edit": { "desc": "Edit profiles, photos, signature, and passport data." },
       "employees.vault.manage": { "desc": "Upload and organise files inside employee vaults." },
       "employees.notify": { "desc": "Send WhatsApp (with SMS fallback) confirmations to employees for leaves, duty resumptions, and violations." },
+      "expiry.view": { "desc": "See the document-expiry board." },
       "leaves.view": { "desc": "See leave records and their status." },
       "timesheet.view": { "desc": "See the monthly attendance grid and download the sheets." },
       "timesheet.edit": { "desc": "Mark absence, correct cells, set the post count, and close or reopen a month." },

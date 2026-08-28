@@ -33,14 +33,16 @@ from fastapi import (
 )
 from fastapi.responses import FileResponse, Response
 from pydantic import BaseModel, Field, StringConstraints
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api._responses import maybe_base64
 from app.api.deps import get_current_user, require_capability
 from app.api.errors import AppError, NotFoundError
 from app.config import get_settings
+from app.core.form_kind import OTHER_SERVICE_ID, SERVICE_ALIASES, SERVICE_IDS
 from app.core.pdf_merge import merge_pdfs_to_bytes
-from app.db.models import Document, User
+from app.db.models import Book, BookVersion, Document, User
 from app.db.session import SessionLocal, get_db
 from app.schemas._base import ORMBase
 from app.services import (
@@ -63,6 +65,56 @@ from app.services.job_registry import (
 )
 
 log = logging.getLogger(__name__)
+
+
+def _effective_document_service(template_id: str) -> str:
+    resolved = SERVICE_ALIASES.get(template_id, template_id)
+    return resolved if resolved in SERVICE_IDS else OTHER_SERVICE_ID
+
+
+def _require_document_record_access(db: Session, user: User, row: Document) -> None:
+    """Apply the complete read gate for a stored document.
+
+    Linked documents inherit their book's row-level policy, including the
+    pending-assignment exception. Only unlinked documents require generation
+    access and their standalone service-type visibility.
+    """
+    linked_book = db.scalar(
+        select(Book)
+        .join(BookVersion, BookVersion.book_id == Book.id)
+        .where(BookVersion.document_id == row.id)
+        .order_by(BookVersion.version_no.desc())
+        .limit(1)
+    )
+    if linked_book is not None:
+        book_service.require_book_access(db, user, linked_book)
+        return
+    if linked_book is None and row.role == "companion":
+        primary_document_ids = select(Document.id).where(
+            Document.submission_id == row.submission_id,
+            Document.role == "primary",
+        )
+        linked_book = db.scalar(
+            select(Book)
+            .join(BookVersion, BookVersion.book_id == Book.id)
+            .where(BookVersion.document_id.in_(primary_document_ids))
+            .order_by(BookVersion.version_no.desc())
+            .limit(1)
+        )
+        if linked_book is not None:
+            book_service.require_book_access(db, user, linked_book)
+            return
+    if not perm_service.has_capability(db, user, "documents.generate"):
+        raise AppError(
+            "FORBIDDEN",
+            "You don't have permission to access this document",
+            http_status=status.HTTP_403_FORBIDDEN,
+        )
+    book_service.require_record_type_access(
+        db,
+        user,
+        service_id=_effective_document_service(row.template_id),
+    )
 
 
 def _should_autosend(
@@ -267,6 +319,7 @@ def _run_generation(
             embed_signature=request.embed_signature,
             commit=request.commit,
             current_user=current_user,
+            record_access_user=current_user,
             revise_of_book_id=request.revise_of_book_id,
             attachments=request.attachments,
             classification_code=request.classification_code,
@@ -332,11 +385,39 @@ def generate_document(
     payload: DocumentGenerateRequest,
     background_tasks: BackgroundTasks,
     user: Annotated[User, Depends(require_capability("documents.generate"))],
+    db: Annotated[Session, Depends(get_db)],
+    _viewer: Annotated[User, Depends(require_capability("books.view"))],
 ) -> DocumentGenerateResponse:
+    effective_service = _effective_document_service(payload.template_id)
+    category_id = document_service.record_category_for_template(payload.template_id)
+    book_service.require_record_type_access(
+        db,
+        user,
+        category_id=category_id,
+        service_id=effective_service,
+    )
+    if payload.revise_of_book_id is not None:
+        if not perm_service.has_capability(db, user, "books.edit"):
+            raise AppError(
+                "FORBIDDEN",
+                "Missing capability: books.edit",
+                http_status=status.HTTP_403_FORBIDDEN,
+                details={"capability": "books.edit"},
+            )
+        revise_book = db.get(Book, payload.revise_of_book_id)
+        if revise_book is not None and revise_book.deleted_at is None:
+            book_service.require_book_access(db, user, revise_book)
+
+    for source in payload.attachments or ():
+        if source.source == "staged" or source.book_id is None:
+            continue
+        source_book = db.get(Book, source.book_id)
+        if source_book is not None and source_book.deleted_at is None:
+            book_service.require_book_access(db, user, source_book)
     job_id = submit_job()
     # The task opens its own session (the request session is closed once this
-    # response returns). `user` is threaded so the service can stamp the
-    # submitter's G-number into the General Book footer ({{ submitter_g }}).
+    # response returns). The caller is both the stamping identity and the
+    # interactive record-access authorization identity.
     background_tasks.add_task(_run_generation, job_id, payload, user)
     return DocumentGenerateResponse(job_id=job_id)
 
@@ -398,7 +479,14 @@ def commit_approved_violation(
     payload: ApprovedViolationImportRequest,
     db: Annotated[Session, Depends(get_db)],
     user: Annotated[User, Depends(require_capability("documents.generate"))],
+    _viewer: Annotated[User, Depends(require_capability("books.view"))],
 ) -> ApprovedViolationImportRead:
+    book_service.require_record_type_access(
+        db,
+        user,
+        category_id="NAT",
+        service_id="Inmate Conduct Violations",
+    )
     result = approved_import_service.commit_approved_import(
         db,
         owner=user,
@@ -455,15 +543,9 @@ def get_document(
 ) -> DocumentRead:
     row: Document | None = db.get(Document, document_id)
 
-    # Mirror download_document's gate: signed/locked docs require books.view
-    # (so signers/viewers can read metadata without documents.generate);
-    # unsigned (or missing) docs preserve the documents.generate gate. The
-    # cap check runs before the 404 so a denied caller can't probe doc ids.
-    locked = (
-        book_service.is_document_signed_locked(db, document_id)[0] if row is not None else False
-    )
-    required_cap = "books.view" if locked else "documents.generate"
-    if not perm_service.has_capability(db, user, required_cap):
+    # Preserve the non-probing behavior for missing ids. Existing linked rows
+    # are authorized below by their book instead of a blanket capability.
+    if row is None and not perm_service.has_capability(db, user, "documents.generate"):
         raise AppError(
             "FORBIDDEN",
             "You don't have permission to view this document",
@@ -477,6 +559,7 @@ def get_document(
             id=document_id,
         )
 
+    _require_document_record_access(db, user, row)
     return DocumentRead.model_validate(row)
 
 
@@ -530,21 +613,16 @@ def download_document(
             f"Document {document_id} not found",
             id=document_id,
         )
+    _require_document_record_access(db, user, row)
 
     settings = get_settings()
 
     _DOCX_MEDIA_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 
     # ``original=true`` short-circuit: serve the pre-signature generated PDF
-    # regardless of signed-lock. books.view is sufficient — an original form is
-    # viewable by anyone who can view the record.
+    # regardless of signed-lock. The linked-book or unlinked-document read gate
+    # above is complete, so no second blanket capability applies here.
     if original:
-        if not perm_service.has_capability(db, user, "books.view"):
-            raise AppError(
-                "FORBIDDEN",
-                "You don't have permission to download this document",
-                http_status=status.HTTP_403_FORBIDDEN,
-            )
         if not row.pdf_path:
             raise NotFoundError(
                 "PDF_NOT_AVAILABLE",
@@ -596,17 +674,6 @@ def download_document(
     # .pdf (normal) or a .docx fallback (when PDF conversion is unavailable), so
     # derive the media type / extension from the artifact's real suffix.
     locked, signed_rel = book_service.is_document_signed_locked(db, document_id)
-
-    # In-handler authorization: signed/locked docs require books.view (so
-    # signers/viewers can retrieve the artifact without documents.generate);
-    # unsigned docs preserve the existing documents.generate gate.
-    required_cap = "books.view" if locked else "documents.generate"
-    if not perm_service.has_capability(db, user, required_cap):
-        raise AppError(
-            "FORBIDDEN",
-            "You don't have permission to download this document",
-            http_status=status.HTTP_403_FORBIDDEN,
-        )
 
     # Only the pre-signature generated PDF gets companion pages appended (not the
     # signed scan-back, not DOCX). Set when we serve row.pdf_path below.

@@ -15,18 +15,21 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from sqlalchemy import delete, select
+from sqlalchemy import literal, select, union_all
 from sqlalchemy.orm import Session
 
 from app.api.errors import AppError
 from app.core.permissions import (
     ALL_CAPABILITIES,
     CAPABILITY_IDS,
+    CATEGORY_CAP_PREFIX,
     ROLE_DEFAULTS,
+    SERVICE_CAP_PREFIX,
+    SERVICE_CAPABILITY_IDS,
     default_caps_for_role,
 )
 from app.core.roles import ADMIN_ROLE
-from app.db.models import RolePermission, User, UserPermission
+from app.db.models import BookCategory, RolePermission, User, UserPermission
 
 # Capabilities that must never be reachable via a per-user override: they are
 # the keys to user management / admin tooling and are admin-only by role. A
@@ -36,20 +39,60 @@ from app.db.models import RolePermission, User, UserPermission
 _SENSITIVE_CAPS: frozenset[str] = frozenset({"users.manage", "system.admin"})
 
 
-def role_default_caps(db: Session, role: str) -> set[str]:
-    """Default capabilities for a role, read from ``role_permissions``.
-
-    Falls back to the in-code preset when the table has no rows for the role
-    (e.g. a test DB built via ``metadata.create_all`` with no seed).
-    """
-    rows = (
-        db.execute(select(RolePermission.capability).where(RolePermission.role == role))
-        .scalars()
-        .all()
+def _role_and_dynamic_caps(db: Session, role: str) -> tuple[set[str], set[str]]:
+    """Load role defaults and category defaults together in one query."""
+    tagged_caps = union_all(
+        select(
+            RolePermission.capability.label("capability"),
+            literal(False).label("is_dynamic"),
+        ).where(RolePermission.role == role),
+        select(
+            literal(CATEGORY_CAP_PREFIX).concat(BookCategory.id).label("capability"),
+            literal(True).label("is_dynamic"),
+        ),
     )
-    if rows:
-        return set(rows)
-    return set(default_caps_for_role(role))
+    role_caps: set[str] = set()
+    dynamic_caps = set(SERVICE_CAPABILITY_IDS)
+    for capability, is_dynamic in db.execute(tagged_caps):
+        if is_dynamic:
+            dynamic_caps.add(capability)
+        else:
+            role_caps.add(capability)
+    if not role_caps:
+        role_caps = set(default_caps_for_role(role))
+    return role_caps, dynamic_caps
+
+
+def role_default_caps_with_dynamic(db: Session, role: str) -> set[str]:
+    """Role defaults plus implicit service/category capabilities."""
+    role_caps, dynamic_caps = _role_and_dynamic_caps(db, role)
+    return role_caps | dynamic_caps
+
+
+def category_capability_ids(db: Session) -> set[str]:
+    """Dynamic deny-only capability ids for the current category catalog."""
+    return {
+        f"{CATEGORY_CAP_PREFIX}{category_id}"
+        for category_id in db.scalars(select(BookCategory.id)).all()
+    }
+
+
+def dynamic_capability_ids(db: Session) -> set[str]:
+    """Implicitly granted service and category capabilities."""
+    return set(SERVICE_CAPABILITY_IDS) | category_capability_ids(db)
+
+
+def dynamic_capability_label(db: Session, capability_id: str) -> str:
+    """Human label for a dynamic capability, or the id for non-dynamic input."""
+    if capability_id.startswith(CATEGORY_CAP_PREFIX):
+        category_id = capability_id.removeprefix(CATEGORY_CAP_PREFIX)
+        category = db.get(BookCategory, category_id)
+        if category is None:
+            return category_id
+        return category.name_en or category_id
+    if capability_id.startswith(SERVICE_CAP_PREFIX):
+        return capability_id.removeprefix(SERVICE_CAP_PREFIX)
+    return capability_id
 
 
 def effective_caps(db: Session, user: User) -> set[str]:
@@ -66,10 +109,11 @@ def effective_caps(db: Session, user: User) -> set[str]:
     if cached is not None:
         return set(cached)
 
+    role_caps, dynamic_caps = _role_and_dynamic_caps(db, user.role)
     if user.role == ADMIN_ROLE:
-        caps = set(ALL_CAPABILITIES)
+        caps = set(ALL_CAPABILITIES) | dynamic_caps
     else:
-        caps = role_default_caps(db, user.role)
+        caps = role_caps | dynamic_caps
         overrides = (
             db.execute(select(UserPermission).where(UserPermission.user_id == user.id))
             .scalars()
@@ -79,7 +123,9 @@ def effective_caps(db: Session, user: User) -> set[str]:
         for ov in overrides:
             if ov.effect == "grant":
                 if ov.expires_at is not None and ov.expires_at <= now:
-                    continue  # expired temporary grant
+                    if ov.capability in dynamic_caps:
+                        caps.discard(ov.capability)
+                    continue
                 caps.add(ov.capability)
             elif ov.effect == "deny":
                 caps.discard(ov.capability)
@@ -89,6 +135,8 @@ def effective_caps(db: Session, user: User) -> set[str]:
 
 
 def has_capability(db: Session, user: User, capability: str) -> bool:
+    if user.role == ADMIN_ROLE:
+        return True
     return capability in effective_caps(db, user)
 
 
@@ -114,6 +162,57 @@ def get_user_overrides(db: Session, user_id: int) -> dict[str, str]:
     return {r.capability: r.effect for r in rows}
 
 
+def _validate_temporary_dynamic_grant(
+    capability: str,
+    effect: str | None,
+    expires_at: datetime | None,
+    dynamic_caps: set[str],
+    existing: UserPermission | None,
+) -> None:
+    unswept_expired_grant = (
+        existing is not None
+        and existing.effect == "grant"
+        and existing.expires_at is not None
+        and existing.expires_at <= datetime.now(UTC).replace(tzinfo=None)
+    )
+    restores_prior_deny = (
+        existing is not None and existing.effect == "deny"
+    ) or unswept_expired_grant
+    if (
+        effect == "grant"
+        and expires_at is not None
+        and capability in dynamic_caps
+        and not restores_prior_deny
+    ):
+        raise AppError(
+            "TEMPORARY_GRANT_REQUIRES_DENY",
+            "A temporary dynamic grant must replace an existing deny override.",
+            http_status=400,
+        )
+
+
+def _validate_override_item(
+    db: Session,
+    capability: str,
+    effect: str | None,
+    *,
+    dynamic_caps: set[str] | None = None,
+) -> set[str]:
+    dynamic_caps = dynamic_capability_ids(db) if dynamic_caps is None else dynamic_caps
+    if capability not in CAPABILITY_IDS and capability not in dynamic_caps:
+        raise AppError("UNKNOWN_CAPABILITY", f"Unknown capability {capability!r}")
+    if effect not in ("grant", "deny", None):
+        raise AppError("INVALID_EFFECT", f"Effect must be grant/deny/null, got {effect!r}")
+    if effect == "grant" and capability in _SENSITIVE_CAPS:
+        raise AppError(
+            "FORBIDDEN_OVERRIDE",
+            f"{capability!r} cannot be granted via a per-user override; "
+            "it is granted by the admin role only.",
+            http_status=400,
+        )
+    return dynamic_caps
+
+
 def set_user_override(
     db: Session,
     user_id: int,
@@ -137,25 +236,22 @@ def set_user_override(
     * An admin can't target their own row, so they can't deny themselves out of
       a capability they're managing.
     """
-    if capability not in CAPABILITY_IDS:
-        raise AppError("UNKNOWN_CAPABILITY", f"Unknown capability {capability!r}")
-    if effect not in ("grant", "deny", None):
-        raise AppError("INVALID_EFFECT", f"Effect must be grant/deny/null, got {effect!r}")
-    if effect == "grant" and capability in _SENSITIVE_CAPS:
-        raise AppError(
-            "FORBIDDEN_OVERRIDE",
-            f"{capability!r} cannot be granted via a per-user override; "
-            "it is granted by the admin role only.",
-            http_status=400,
-        )
+    dynamic_caps = _validate_override_item(db, capability, effect)
     if actor is not None and actor.id == user_id:
         raise AppError(
             "FORBIDDEN_OVERRIDE",
             "You cannot change your own permissions.",
             http_status=400,
         )
-
     existing = db.get(UserPermission, (user_id, capability))
+    _validate_temporary_dynamic_grant(
+        capability,
+        effect,
+        expires_at,
+        dynamic_caps,
+        existing,
+    )
+
     if effect is None:
         if existing is not None:
             db.delete(existing)
@@ -198,20 +294,26 @@ def set_user_overrides(
     for capability, effect, expires_at in items:
         collapsed[capability] = (effect, expires_at)
     items = [(cap, eff, exp) for cap, (eff, exp) in collapsed.items()]
-    for capability, effect, _expires in items:
-        if capability not in CAPABILITY_IDS:
-            raise AppError("UNKNOWN_CAPABILITY", f"Unknown capability {capability!r}")
-        if effect not in ("grant", "deny", None):
-            raise AppError("INVALID_EFFECT", f"Effect must be grant/deny/null, got {effect!r}")
-        if effect == "grant" and capability in _SENSITIVE_CAPS:
-            raise AppError(
-                "FORBIDDEN_OVERRIDE",
-                f"{capability!r} cannot be granted via a per-user override; "
-                "it is granted by the admin role only.",
-                http_status=400,
-            )
+    dynamic_caps = dynamic_capability_ids(db)
+    existing_by_capability: dict[str, UserPermission | None] = {}
     for capability, effect, expires_at in items:
+        _validate_override_item(
+            db,
+            capability,
+            effect,
+            dynamic_caps=dynamic_caps,
+        )
         existing = db.get(UserPermission, (user_id, capability))
+        _validate_temporary_dynamic_grant(
+            capability,
+            effect,
+            expires_at,
+            dynamic_caps,
+            existing,
+        )
+        existing_by_capability[capability] = existing
+    for capability, effect, expires_at in items:
+        existing = existing_by_capability[capability]
         if effect is None:
             if existing is not None:
                 db.delete(existing)
@@ -228,24 +330,50 @@ def set_user_overrides(
     _invalidate_caps_cache(db, user_id)
 
 
+def denied_record_types(db: Session, user: User) -> tuple[set[str], set[str]]:
+    """Return bare service/category ids explicitly hidden from ``user``."""
+    denied = dynamic_capability_ids(db) - effective_caps(db, user)
+    denied_services = {
+        capability.removeprefix(SERVICE_CAP_PREFIX)
+        for capability in denied
+        if capability.startswith(SERVICE_CAP_PREFIX)
+    }
+    denied_categories = {
+        capability.removeprefix(CATEGORY_CAP_PREFIX)
+        for capability in denied
+        if capability.startswith(CATEGORY_CAP_PREFIX)
+    }
+    return denied_services, denied_categories
+
+
 # ─── Expiry sweep ─────────────────────────────────────────────────────────────
 
 
 def sweep_expired_grants(db: Session) -> int:
-    """Delete expired grant rows (effect='grant' with expires_at <= now).
-
-    Returns the number of deleted rows.
-    """
+    """Clean expired grants, restoring dynamic caps to their prior deny."""
     now = datetime.now(UTC).replace(tzinfo=None)
-    res = db.execute(
-        delete(UserPermission).where(
-            UserPermission.effect == "grant",
-            UserPermission.expires_at.is_not(None),
-            UserPermission.expires_at <= now,
-        )
+    expired = list(
+        db.scalars(
+            select(UserPermission).where(
+                UserPermission.effect == "grant",
+                UserPermission.expires_at.is_not(None),
+                UserPermission.expires_at <= now,
+            )
+        ).all()
     )
+    dynamic_caps = dynamic_capability_ids(db)
+    affected_user_ids: set[int] = set()
+    for row in expired:
+        affected_user_ids.add(row.user_id)
+        if row.capability in dynamic_caps:
+            row.effect = "deny"
+            row.expires_at = None
+        else:
+            db.delete(row)
     db.commit()
-    return int(getattr(res, "rowcount", 0) or 0)
+    for user_id in affected_user_ids:
+        _invalidate_caps_cache(db, user_id)
+    return len(expired)
 
 
 # ─── Seeding (used by migration 0018 + idempotent boot safety) ────────────────
@@ -266,10 +394,14 @@ def seed_role_defaults(db: Session) -> None:
 
 
 __all__ = [
+    "category_capability_ids",
+    "denied_record_types",
+    "dynamic_capability_ids",
+    "dynamic_capability_label",
     "effective_caps",
     "get_user_overrides",
     "has_capability",
-    "role_default_caps",
+    "role_default_caps_with_dynamic",
     "seed_role_defaults",
     "set_user_override",
     "set_user_overrides",

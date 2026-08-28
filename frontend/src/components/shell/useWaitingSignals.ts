@@ -29,25 +29,29 @@ export function useWaitingSignals(enabled: boolean): Partial<Record<WaitingSigna
     staleTime: 5 * 60_000,
   })
   const capabilities = capabilitiesQuery.data
+  const canViewBooks = capabilities?.includes('books.view') === true
+  const canApproveBooks = capabilities?.includes('books.approve') === true
+  const canEditBooks = capabilities?.includes('books.edit') === true
+  const canViewLedger = capabilities?.includes('ledger.view') === true
 
   const approvalsQuery = useQuery({
     queryKey: ['books', 'awaiting'],
     queryFn: api.listAwaitingBooks,
-    enabled: authenticated && capabilities?.includes('books.approve') === true,
+    enabled: authenticated && canApproveBooks,
     staleTime: STALE_TIME,
     refetchInterval: REFRESH_INTERVAL,
   })
   const scanBackQuery = useQuery({
     queryKey: ['books', 'awaiting-scan', 'mine'],
     queryFn: () => api.listAwaitingScanBooks('mine'),
-    enabled: authenticated && capabilities?.includes('books.edit') === true,
+    enabled: authenticated && canViewBooks && canEditBooks,
     staleTime: STALE_TIME,
     refetchInterval: REFRESH_INTERVAL,
   })
   const ledgerUnreadQuery = useQuery({
     queryKey: ['ledger', 'unread-recent'],
     queryFn: () => api.getLedgerUnreadRecent(5),
-    enabled: authenticated,
+    enabled: authenticated && canViewLedger,
     staleTime: STALE_TIME,
     refetchInterval: REFRESH_INTERVAL,
   })

@@ -101,6 +101,12 @@ _FORM_CATEGORY: dict[str, str] = {
     "Inmate Conduct Violations": "NAT",
 }
 
+
+def record_category_for_template(template_id: str) -> str:
+    """Category persisted on the Book created by a committed generation."""
+    return _FORM_CATEGORY.get(template_id, "HR")
+
+
 #: Inmate Conduct Violations — the fixed "إجراءات المشرف" bullets, in the order
 #: they print. Key = the _fields.json checkbox key. The Arabic copy lives here
 #: (not in the docx) so the template stays a layout and the wording has one home.
@@ -955,14 +961,17 @@ def _submitter_sign_path(db: Session, submitter_id: int) -> str | None:
 
 
 def _resolve_attachment_sources(
-    db: Session, specs: Sequence[GenerateAttachmentSpec]
+    db: Session,
+    specs: Sequence[GenerateAttachmentSpec],
+    *,
+    record_access_user: User | None = None,
 ) -> list[tuple[GenerateAttachmentSpec, Path]]:
-    """Resolve every attachment spec to an on-disk file, failing fast (422).
+    """Authorize and resolve attachment sources without copying client-side.
 
-    ``staged`` → the parked upload (token); ``record_document`` → the
-    referenced book's current generated PDF; ``record_attachment`` → one of
-    the referenced book's film-strip scans. All reads are containment-checked
-    server-side, so "from Records" needs no client download.
+    ``staged`` resolves the parked upload token. For interactive generation,
+    ``record_document`` and ``record_attachment`` first enforce the referenced
+    book's assignment-aware row policy, then resolve its current PDF or film-strip
+    scan. Invalid locators fail fast before reference allocation.
     """
     from app.services import book_service, staging_service
 
@@ -988,6 +997,8 @@ def _resolve_attachment_sources(
                     book_id=spec.book_id,
                     slot_key=spec.slot_key,
                 )
+            if record_access_user is not None:
+                book_service.require_book_access(db, record_access_user, book)
             if spec.source == "record_document":
                 version = book.versions[-1] if book.versions else None
                 doc = (
@@ -1051,6 +1062,7 @@ def generate_document(
     embed_signature: dict[str, bool] | None = None,
     commit: bool = True,
     current_user: User | None = None,
+    record_access_user: User | None = None,
     revise_of_book_id: int | None = None,
     attachments: Sequence[GenerateAttachmentSpec] | None = None,
     return_for_leave_id: int | None = None,
@@ -1072,11 +1084,11 @@ def generate_document(
         sentinel ``ref_number="DRAFT"`` and is the absence of a Book row that
         identifies it as un-committed.
 
-    ``current_user`` is the authenticated caller (added 2026-05-28). When set,
-    their ``employee_id`` (G-number) is injected as ``data["submitter_g"]`` for
-    the template footer; falls back to ``""`` if absent or unlinked. The
-    template (General Book) hides the line gracefully via a Jinja ``{% if %}``
-    guard.
+    ``current_user`` is the presentation and stamping identity. When set, their
+    ``employee_id`` (G-number) is injected as ``data["submitter_g"]`` for the
+    template footer; it falls back to ``""`` if absent or unlinked. Interactive
+    callers separately pass ``record_access_user`` to enforce revision and source
+    record authorization. Trusted system workflows leave that identity unset.
 
     Round 2 — Fix E: ``embed_signature`` replaces the old ``hand_sign`` kwarg
     with inverted semantics. ``embed_signature[entity]=True`` opts INTO
@@ -1182,6 +1194,17 @@ def generate_document(
                 f"Book {revise_of_book_id} does not exist",
                 id=revise_of_book_id,
             )
+        if record_access_user is not None:
+            from app.services import book_service, perm_service
+
+            if not perm_service.has_capability(db, record_access_user, "books.edit"):
+                raise AppError(
+                    "FORBIDDEN",
+                    "Missing capability: books.edit",
+                    http_status=403,
+                    details={"capability": "books.edit"},
+                )
+            book_service.require_book_access(db, record_access_user, revise_book)
         if revise_book.approval_state not in (
             "returned",
             "rejected",
@@ -1226,7 +1249,11 @@ def generate_document(
             )
     resolved_attachments: list[tuple[GenerateAttachmentSpec, Path]] = []
     if commit and attachment_specs:
-        resolved_attachments = _resolve_attachment_sources(db, attachment_specs)
+        resolved_attachments = _resolve_attachment_sources(
+            db,
+            attachment_specs,
+            record_access_user=record_access_user,
+        )
 
     # ------------------------------------------------------------------
     # 2. Determine output directory
@@ -1245,7 +1272,7 @@ def generate_document(
     # Preview (commit=False) uses the literal sentinel "DRAFT"; the monotonic
     # counter is untouched, so concurrent previews don't burn ref numbers.
     # ------------------------------------------------------------------
-    cat_code = _FORM_CATEGORY.get(template_id, "HR")
+    cat_code = record_category_for_template(template_id)
     # Classified-paper refs come exclusively from the classified register
     # (1/{tab}/GSSG/{serial}) — the legacy GS-#### counter is retired for these
     # forms regardless of authoring surface (rich editor OR Word). Validate the

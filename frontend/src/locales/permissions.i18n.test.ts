@@ -80,3 +80,72 @@ describe('permission catalog i18n completeness', () => {
     expect(missing).toEqual([])
   })
 })
+
+describe('Mirror editor bilingual copy', () => {
+  it('ships every new EN/AR label and complete count plurals', () => {
+    const missing: string[] = []
+    const sharedKeys = [
+      'access.permissions.mirror.pickUser',
+      'access.permissions.mirror.nothingVisible',
+      'access.permissions.mirror.userNotFound',
+      'access.permissions.mirror.blueprintLabel',
+      'access.permissions.mirror.viewPrereqWarning',
+      'access.permissions.mirror.consequenceRecords',
+      'access.permissions.mirror.serviceOther',
+      'requireCap.notRequestable',
+      'access.permissions.caps.books.service.other',
+    ]
+    for (const [locale, tree] of [['en', en], ['ar', ar]] as const) {
+      for (const key of sharedKeys) {
+        if (!get(tree as unknown as Rec, key)) missing.push(`${locale} ${key}`)
+      }
+    }
+    for (const suffix of ['one', 'other']) {
+      if (!get(en as unknown as Rec, `access.permissions.mirror.availableCount_${suffix}`)) {
+        missing.push(`en availableCount_${suffix}`)
+      }
+      if (!get(en as unknown as Rec, `access.permissions.mirror.hiddenLabel_${suffix}`)) {
+        missing.push(`en hiddenLabel_${suffix}`)
+      }
+    }
+    for (const suffix of ['zero', 'one', 'two', 'few', 'many', 'other']) {
+      if (!get(ar as unknown as Rec, `access.permissions.mirror.availableCount_${suffix}`)) {
+        missing.push(`ar availableCount_${suffix}`)
+      }
+      if (!get(ar as unknown as Rec, `access.permissions.mirror.hiddenLabel_${suffix}`)) {
+        missing.push(`ar hiddenLabel_${suffix}`)
+      }
+    }
+    expect(missing).toEqual([])
+  })
+
+  it('describes the Records prerequisite and assignee exception truthfully in both languages', () => {
+    const enWarning = String(
+      get(en as unknown as Rec, 'access.permissions.mirror.viewPrereqWarning'),
+    )
+    const arWarning = String(
+      get(ar as unknown as Rec, 'access.permissions.mirror.viewPrereqWarning'),
+    )
+    const enConsequence = String(
+      get(en as unknown as Rec, 'access.permissions.mirror.consequenceRecords'),
+    )
+    const arConsequence = String(
+      get(ar as unknown as Rec, 'access.permissions.mirror.consequenceRecords'),
+    )
+
+    expect(enWarning).toContain('cannot create or browse records')
+    expect(enWarning).toContain('awaiting their approval')
+    expect(arWarning).toContain('صفحة المستندات مخفية')
+    expect(arWarning).toContain('المنتظرة اعتماده')
+    expect(enConsequence).toContain('Records hidden')
+    expect(enConsequence).toContain('creation blocked')
+    expect(arConsequence).toContain('صفحة المستندات مخفية')
+    expect(arConsequence).toContain('إنشاء السجلات محظور')
+  })
+
+  it('uses the Arabic verb for updating the device preview', () => {
+    const help = get(ar as unknown as Rec, 'access.permissions.mirror.help')
+    expect(help).toContain('تُحدَّث')
+    expect(help).not.toContain('تتحدّث')
+  })
+})

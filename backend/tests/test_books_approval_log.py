@@ -2,14 +2,12 @@
 
 Covers the contract of the two scopes:
 
-- ``sent``: every record the caller submitted (and only those), flattened to
-  ApprovalLogItem rows carrying ref / subject / category / state / verdict /
-  chain names / thumbnail document id;
-- ``received``: the caller's pending steps (the ``list_awaiting`` semantics)
-  PLUS their own decided steps from the last 30 days — the window boundary is
-  inclusive;
-- authority: ``received`` needs ``books.approve`` (mirrors /books/awaiting);
-  ``sent`` is any authenticated user;
+- ``sent``: records the caller submitted (and only those), requiring
+  ``books.view``, flattened to ApprovalLogItem rows carrying ref / subject /
+  category / state / verdict / chain names / thumbnail document id;
+- ``received``: pending assigned steps requiring ``books.approve``; callers who
+  also hold ``books.view`` additionally see their decided steps from the last
+  30 days, with the window boundary inclusive;
 - paging: limit/offset with an honest total;
 - routing: the literal ``approval-log`` segment must beat ``/{book_id}``.
 """
@@ -219,8 +217,8 @@ def test_sent_scope_rejected_verdict(api_db: Session):
     assert row["decided_at"] is not None
 
 
-def test_sent_scope_any_authenticated_user(api_db: Session):
-    """No books.approve required to read your own outbox."""
+def test_sent_scope_allows_caller_with_books_view(api_db: Session):
+    """No books.approve is needed when the caller holds books.view."""
     plain = _user(api_db, "plain@x.ae", "operator")
     response = _client(api_db, plain).get("/api/v1/books/approval-log", params={"scope": "sent"})
     assert response.status_code == 200
@@ -341,7 +339,7 @@ def test_received_scope_reviewer_pending_step_counts(api_db: Session):
 
 
 def test_received_scope_requires_books_approve(api_db: Session):
-    """scope=received mirrors /books/awaiting's gate; scope=sent stays open."""
+    """scope=received needs books.approve; this operator retains books.view for sent."""
     plain = _user(api_db, "plain@x.ae", "operator")
     client = _client(api_db, plain)
     denied = client.get("/api/v1/books/approval-log", params={"scope": "received"})

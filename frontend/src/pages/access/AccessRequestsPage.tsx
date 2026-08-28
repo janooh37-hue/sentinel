@@ -19,7 +19,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { useSearchParams } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import {
   AlertTriangle,
@@ -43,7 +43,6 @@ import {
 import { api, ApiError, type AdminUserRead, type AuditEntryRead, apiErrorMessage } from '@/lib/api'
 import { useAuth } from '@/lib/authContext'
 import { PermissionRequestsTab } from '@/components/access/PermissionRequestsTab'
-import { UserPermissionsSheet } from '@/components/access/UserPermissionsSheet'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import {
   DropdownMenu,
@@ -498,7 +497,7 @@ function DetailKV({
 // Active / Suspended users table
 // ---------------------------------------------------------------------------
 
-function UsersTable({
+export function UsersTable({
   users,
   emptyMessage,
   currentUserId,
@@ -514,7 +513,7 @@ function UsersTable({
   currentUserId: number | undefined
   onReset: (u: AdminUserRead) => void
   onChangeRole: (u: AdminUserRead) => void
-  onEditPermissions: (u: AdminUserRead) => void
+  onEditPermissions?: (u: AdminUserRead) => void
   onSetDefaultManager: (u: AdminUserRead, enabled: boolean) => void
   onLock: (u: AdminUserRead) => void
   onUnlock: (u: AdminUserRead) => void
@@ -547,6 +546,8 @@ function UsersTable({
           {users.map((u) => {
             const locked = u.status === 'locked' || u.status === 'disabled'
             const isSelf = currentUserId != null && u.id === currentUserId
+            const canEditPermissions =
+              onEditPermissions != null && u.status === 'active' && u.role !== 'admin'
             return (
               <tr
                 key={u.id}
@@ -607,10 +608,12 @@ function UsersTable({
                         <UserCog className="h-3.5 w-3.5" strokeWidth={1.8} />
                         {t('access.active.changeRole')}
                       </DropdownMenuItem>
-                      <DropdownMenuItem onSelect={() => onEditPermissions(u)}>
-                        <SlidersHorizontal className="h-3.5 w-3.5" strokeWidth={1.8} />
-                        {t('access.active.editPermissions')}
-                      </DropdownMenuItem>
+                      {canEditPermissions ? (
+                        <DropdownMenuItem onSelect={() => onEditPermissions?.(u)}>
+                          <SlidersHorizontal className="h-3.5 w-3.5" strokeWidth={1.8} />
+                          {t('access.active.editPermissions')}
+                        </DropdownMenuItem>
+                      ) : null}
                       {u.is_default_manager ? (
                         <DropdownMenuItem onSelect={() => onSetDefaultManager(u, false)}>
                           <BadgeMinus className="h-3.5 w-3.5" strokeWidth={1.8} />
@@ -776,6 +779,7 @@ export function AccessRequestsPage(): React.JSX.Element {
   const { t } = useTranslation()
   const qc = useQueryClient()
   const { user } = useAuth()
+  const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   // One-shot URL → state sync: ?tab=permission-requests deep-links into that tab.
   const [tab, setTab] = useState<TabId>(() => {
@@ -799,7 +803,6 @@ export function AccessRequestsPage(): React.JSX.Element {
   const [rejectTarget, setRejectTarget] = useState<AdminUserRead | null>(null)
   const [resetTarget, setResetTarget] = useState<AdminUserRead | null>(null)
   const [roleTarget, setRoleTarget] = useState<AdminUserRead | null>(null)
-  const [permsTarget, setPermsTarget] = useState<AdminUserRead | null>(null)
   const [approvingId, setApprovingId] = useState<number | null>(null)
 
   const usersQuery = useQuery({
@@ -861,10 +864,11 @@ export function AccessRequestsPage(): React.JSX.Element {
   })
   const roleMut = useMutation({
     mutationFn: ({ id, role }: { id: number; role: Role }) => api.setAuthUserRole(id, role),
-    onSuccess: () => {
+    onSuccess: (_user, variables) => {
       toast.success(t('access.toast.roleChanged'))
       setRoleTarget(null)
       invalidate()
+      void qc.invalidateQueries({ queryKey: ['user-permissions', variables.id] })
     },
     onError,
   })
@@ -978,7 +982,7 @@ export function AccessRequestsPage(): React.JSX.Element {
                 currentUserId={user?.id}
                 onReset={setResetTarget}
                 onChangeRole={setRoleTarget}
-                onEditPermissions={setPermsTarget}
+                onEditPermissions={(target) => navigate(`/permissions?user=${target.id}`)}
                 onSetDefaultManager={(u, enabled) => defaultManagerMut.mutate({ id: u.id, enabled })}
                 onLock={(u) => lockMut.mutate(u.id)}
                 onUnlock={(u) => unlockMut.mutate(u.id)}
@@ -992,7 +996,6 @@ export function AccessRequestsPage(): React.JSX.Element {
                 currentUserId={user?.id}
                 onReset={setResetTarget}
                 onChangeRole={setRoleTarget}
-                onEditPermissions={setPermsTarget}
                 onSetDefaultManager={(u, enabled) => defaultManagerMut.mutate({ id: u.id, enabled })}
                 onLock={(u) => lockMut.mutate(u.id)}
                 onUnlock={(u) => unlockMut.mutate(u.id)}
@@ -1038,9 +1041,6 @@ export function AccessRequestsPage(): React.JSX.Element {
           onCancel={() => setRoleTarget(null)}
           onConfirm={(role) => roleMut.mutate({ id: roleTarget.id, role })}
         />
-      )}
-      {permsTarget && (
-        <UserPermissionsSheet user={permsTarget} onClose={() => setPermsTarget(null)} />
       )}
     </div>
   )

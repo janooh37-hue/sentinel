@@ -11,10 +11,16 @@
 import { render, screen } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { MemoryRouter } from 'react-router-dom'
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+
+const capabilityState = vi.hoisted(() => ({ denied: new Set<string>() }))
 
 vi.mock('@/lib/useCapabilities', () => ({
-  useCapabilities: () => ({ capabilities: new Set(), isLoading: false, has: () => true }),
+  useCapabilities: () => ({
+    capabilities: new Set(),
+    isLoading: false,
+    has: (capability: string) => !capabilityState.denied.has(capability),
+  }),
 }))
 vi.mock('@/lib/api', () => ({
   api: { getSettings: vi.fn().mockResolvedValue({ theme: 'light', font_scale: 16 }) },
@@ -50,6 +56,10 @@ function renderNav() {
   )
 }
 
+beforeEach(() => {
+  capabilityState.denied.clear()
+})
+
 describe('TopNav', () => {
   it('gives every destination an accessible name and an icon to collapse to', () => {
     renderNav()
@@ -79,5 +89,12 @@ describe('TopNav', () => {
       expect(screen.getByRole('button', { name })).toBeInTheDocument()
     }
     expect(screen.getByRole('button', { name: 'Settings' })).toBeInTheDocument()
+  })
+
+  it('hides the settings utility without settings.view', () => {
+    capabilityState.denied.add('settings.view')
+    renderNav()
+
+    expect(screen.queryByRole('button', { name: 'Settings' })).not.toBeInTheDocument()
   })
 })

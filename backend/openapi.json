@@ -1343,7 +1343,7 @@
           "auth"
         ],
         "summary": "List Capabilities",
-        "description": "The full capability catalog + which roles grant each by default.",
+        "description": "The static catalog followed by dynamic service/category capabilities.",
         "operationId": "list_capabilities_api_v1_auth_capabilities_get",
         "parameters": [
           {
@@ -8367,7 +8367,7 @@
           "books"
         ],
         "summary": "List Awaiting Scan",
-        "description": "Records stranded at ``awaiting_scan`` past 24h, oldest first.\n\n``scope=mine`` (default) is the caller's own; ``scope=all`` is everyone's,\nso an admin can clear records stranded by a user who lacks books.edit.\n\nDeclared before ``/{book_id}`` so the literal ``awaiting-scan`` segment isn't\nswallowed by the int path param — same reason as ``/awaiting`` above.\nAuthority is ``books.edit``: the same capability filing the scan requires.",
+        "description": "Records stranded at ``awaiting_scan`` past 24h, oldest first.\n\n``scope=mine`` (default) is the caller's own; ``scope=all`` is everyone's,\nso an admin can clear records stranded by a user who lacks books.edit.\n\nDeclared before ``/{book_id}`` so the literal ``awaiting-scan`` segment isn't\nswallowed by the int path param — same reason as ``/awaiting`` above.\nAuthority is the same conjunction as filing a scan from the Records surface:\n``books.view`` and ``books.edit``.",
         "operationId": "list_awaiting_scan_api_v1_books_awaiting_scan_get",
         "parameters": [
           {
@@ -8432,7 +8432,7 @@
           "books"
         ],
         "summary": "Get Approval Log",
-        "description": "The approvals log — ``scope=sent`` (records I submitted) or\n``scope=received`` (my pending decisions + my verdicts from the last 30\ndays). Paged like GET /books; rows are flattened ApprovalLogItem payloads.\n\nDeclared before ``/{book_id}`` so the literal ``approval-log`` segment isn't\nswallowed by the int path param — same reason as ``/awaiting`` above.",
+        "description": "The approvals log — ``scope=sent`` (records I submitted, requiring\n``books.view``) or ``scope=received`` (my pending decisions, plus recent\nverdicts only when I also hold ``books.view``). Paged like GET /books.\n\nDeclared before ``/{book_id}`` so the literal ``approval-log`` segment isn't\nswallowed by the int path param — same reason as ``/awaiting`` above.",
         "operationId": "get_approval_log_api_v1_books_approval_log_get",
         "parameters": [
           {
@@ -14223,6 +14223,120 @@
         "responses": {
           "204": {
             "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/dashboard/layout": {
+      "get": {
+        "tags": [
+          "dashboard"
+        ],
+        "summary": "Get Layout",
+        "operationId": "get_layout_api_v1_dashboard_layout_get",
+        "parameters": [
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/DashboardLayout"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Response Get Layout Api V1 Dashboard Layout Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "dashboard"
+        ],
+        "summary": "Update Layout",
+        "operationId": "update_layout_api_v1_dashboard_layout_put",
+        "parameters": [
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DashboardLayout"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DashboardLayout"
+                }
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -22517,16 +22631,6 @@
           "signature_boldness": {
             "type": "integer",
             "title": "Signature Boldness"
-          },
-          "dashboard_layout": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/DashboardLayout"
-              },
-              {
-                "type": "null"
-              }
-            ]
           }
         },
         "type": "object",
@@ -22714,16 +22818,6 @@
               }
             ],
             "title": "Signature Boldness"
-          },
-          "dashboard_layout": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/DashboardLayout"
-              },
-              {
-                "type": "null"
-              }
-            ]
           }
         },
         "type": "object",

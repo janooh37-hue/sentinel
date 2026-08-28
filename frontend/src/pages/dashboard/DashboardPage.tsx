@@ -36,7 +36,7 @@ import {
 import { api } from '@/lib/api'
 import { APPROVALS_RECEIVED_DEEPLINK } from '@/lib/approvals'
 import type {
-  AppSettingsRead,
+  DashboardLayout,
   DashboardOnLeaveItem,
   DashboardRecentDocument,
   DashboardRecentLedger,
@@ -66,6 +66,8 @@ import {
   QUICK_ACTION_IDS,
   WIDGET_IDS,
   WIDGET_SIZE,
+  isQuickActionAllowed,
+  mergeQuickActionsPreservingDenied,
   resolveLayout,
   visibleByZone,
   widgetsForApi,
@@ -73,6 +75,8 @@ import {
   type WidgetId,
   type WidgetZone,
 } from '@/lib/dashboardLayout'
+import { useAuth } from '@/lib/authContext'
+import { useCapabilities } from '@/lib/useCapabilities'
 import { QUICK_ACTION_META } from '@/lib/quickActions'
 import { useIdentity } from '@/lib/useIdentity'
 import { cn } from '@/lib/utils'
@@ -162,8 +166,10 @@ function joinNames(names: string[], isAr: boolean): string {
 export function DashboardPage({ onNavigate }: DashboardPageProps): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const isAr = i18n.language.startsWith('ar')
+  const { has } = useCapabilities()
   const dfLocale = isAr ? arLocale : undefined
   const { identity } = useIdentity()
+  const { user } = useAuth()
   const qc = useQueryClient()
   const navigate = useNavigate()
 
@@ -186,22 +192,35 @@ export function DashboardPage({ onNavigate }: DashboardPageProps): React.JSX.Ele
 
   const summary: DashboardSummary | undefined = summaryQuery.data
 
-  // Layout: read user-saved dashboard layout from `/settings`; fall back to
-  // `DEFAULT_LAYOUT` when the user hasn't customised. Reused across both
-  // edit dialogs and the rendering loop.
-  const settingsQuery = useQuery<AppSettingsRead>({
-    queryKey: ['settings'],
-    queryFn: api.getSettings,
+  // Layout: read this user's private dashboard layout; fall back to
+  // `DEFAULT_LAYOUT` until they customise it.
+  const layoutQuery = useQuery<DashboardLayout | null>({
+    queryKey: ['dashboard-layout', user?.id],
+    queryFn: api.getDashboardLayout,
+    enabled: Boolean(user),
   })
   const layout = useMemo(
-    () => resolveLayout(settingsQuery.data?.dashboard_layout ?? null),
-    [settingsQuery.data?.dashboard_layout],
+    () => resolveLayout(layoutQuery.data ?? null),
+    [layoutQuery.data],
   )
 
-  const updateSettings = useMutation({
-    mutationFn: api.updateSettings,
+  const allowedQuickActions = useMemo(
+    () => layout.quick_actions.filter((item) => isQuickActionAllowed(item.id, has)),
+    [has, layout.quick_actions],
+  )
+  const allowedQuickActionDefaults = useMemo(
+    () => DEFAULT_LAYOUT.quick_actions.filter((item) => isQuickActionAllowed(item.id, has)),
+    [has],
+  )
+  const updateLayout = useMutation({
+    mutationFn: (nextLayout: DashboardLayout) => {
+      if (!user) throw new Error('Cannot save a dashboard layout without an authenticated user')
+      return api.updateDashboardLayout(nextLayout)
+    },
     onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ['settings'] })
+      if (user) {
+        void qc.invalidateQueries({ queryKey: ['dashboard-layout', user.id] })
+      }
       toast.success(isAr ? 'تم حفظ تخطيط لوحة التحكم' : 'Dashboard layout saved')
     },
     onError: (err: Error) => toast.error(err.message),
@@ -284,8 +303,8 @@ export function DashboardPage({ onNavigate }: DashboardPageProps): React.JSX.Ele
   // (visible + hidden) is fed to the edit dialog so the operator can
   // promote a hidden tile back into view.
   const visibleQuickActions = useMemo(
-    () => layout.quick_actions.filter((q) => q.visible).slice(0, MAX_VISIBLE_QUICK_ACTIONS),
-    [layout.quick_actions],
+    () => allowedQuickActions.filter((q) => q.visible).slice(0, MAX_VISIBLE_QUICK_ACTIONS),
+    [allowedQuickActions],
   )
 
   // Render a single widget by id, parameterised by the zone it sits in so
@@ -640,15 +659,13 @@ export function DashboardPage({ onNavigate }: DashboardPageProps): React.JSX.Ele
         items={layout.widgets}
         labels={widgetLabels}
         canvasWidth={layout.canvas_width ?? DEFAULT_CANVAS_WIDTH}
-        isSaving={updateSettings.isPending}
+        isSaving={updateLayout.isPending}
         onSave={(items, canvasWidth) => {
-          updateSettings.mutate(
+          updateLayout.mutate(
             {
-              dashboard_layout: {
-                ...layout,
-                widgets: widgetsForApi(items),
-                canvas_width: canvasWidth,
-              },
+              ...layout,
+              widgets: widgetsForApi(items),
+              canvas_width: canvasWidth,
             },
             { onSuccess: () => setWidgetDialogOpen(false) },
           )
@@ -659,17 +676,18 @@ export function DashboardPage({ onNavigate }: DashboardPageProps): React.JSX.Ele
         onOpenChange={setQuickActionsDialogOpen}
         title={t('dashboard.editWidgets.quickActionsTitle')}
         description={t('dashboard.editWidgets.quickActionsDescription')}
-        items={layout.quick_actions}
+        items={allowedQuickActions}
         labels={quickActionLabels}
-        defaults={DEFAULT_LAYOUT.quick_actions}
-        isSaving={updateSettings.isPending}
+        defaults={allowedQuickActionDefaults}
+        isSaving={updateLayout.isPending}
         maxVisible={MAX_VISIBLE_QUICK_ACTIONS}
         maxVisibleHint={t('dashboard.editWidgets.quickActionsMaxVisibleHint', {
           count: MAX_VISIBLE_QUICK_ACTIONS,
         })}
         onSave={(items) => {
-          updateSettings.mutate(
-            { dashboard_layout: { ...layout, quick_actions: items } },
+          const quickActions = mergeQuickActionsPreservingDenied(layout.quick_actions, items)
+          updateLayout.mutate(
+            { ...layout, quick_actions: quickActions },
             { onSuccess: () => setQuickActionsDialogOpen(false) },
           )
         }}

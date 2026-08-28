@@ -239,7 +239,7 @@ export function PermissionRequestsTab(): React.JSX.Element {
   function invalidate(): void {
     void qc.invalidateQueries({ queryKey: ['permission-requests'] })
     void qc.invalidateQueries({ queryKey: ['user-permissions'] })
-    void qc.invalidateQueries({ queryKey: ['users'] })
+    void qc.invalidateQueries({ queryKey: ['auth-users'] })
   }
 
   const decideMut = useMutation({

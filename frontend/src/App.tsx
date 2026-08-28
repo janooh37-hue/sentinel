@@ -8,7 +8,10 @@ import { BottomTabBar } from '@/components/shell/BottomTabBar'
 import { LockOverlay } from '@/components/shell/LockOverlay'
 import { MobileTopBar } from '@/components/shell/MobileTopBar'
 import { NavDrawer } from '@/components/shell/NavDrawer'
-import { RequireCapability } from '@/components/shell/RequireCapability'
+import {
+  RequireAnyCapability,
+  RequireCapability,
+} from '@/components/shell/RequireCapability'
 import { TopNav } from '@/components/shell/TopNav'
 import { ErrorBoundary } from '@/components/ui/error-boundary'
 import { ShortcutsHelpDialog } from '@/components/ui/shortcuts-help'
@@ -33,6 +36,7 @@ import {
   loadEmployeeDetailPage,
   loadEmployeesOrgTreePage,
   loadExpiryPage,
+  loadPermissionsPage,
   loadIntakePage,
   loadLeavesPage,
   loadLedgerPage,
@@ -74,12 +78,14 @@ const EmployeeDetailPage = lazy(loadEmployeeDetailPage)
 // is code-split here and routed beside the employee routes below.
 const TimesheetPage = lazy(loadTimesheetPage)
 const AccessRequestsPage = lazy(loadAccessRequestsPage)
+const PermissionsPage = lazy(loadPermissionsPage)
 const ExpiryPage = lazy(loadExpiryPage)
 const IntakePage = lazy(loadIntakePage)
 const DutyLocationsPage = lazy(loadDutyLocationsPage)
 const ScanInboxPage = lazy(loadScanInboxPage)
 const SendToGroupPage = lazy(loadSendToGroupPage)
 const ScanBackPage = lazy(loadScanBackPage)
+const APPROVALS_ROUTE_CAPS = ['books.view', 'books.approve'] as const
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -207,7 +213,14 @@ function Shell(): React.JSX.Element {
             <main id="main-content" tabIndex={-1} key={location.pathname} className="anim-fade-up flex flex-1 overflow-hidden pb-[calc(5rem+env(safe-area-inset-bottom))] md:pb-0">
             <Routes>
               <Route path="/" element={<DashboardRoute />} />
-              <Route path="/employees" element={<EmployeeLookupPage />} />
+              <Route
+                path="/employees"
+                element={
+                  <RequireCapability cap="employees.view">
+                    <EmployeeLookupPage />
+                  </RequireCapability>
+                }
+              />
               {/* A static segment outranks a dynamic one in React Router's route
                   ranking, so this is not swallowed by `/employees/:id`. */}
               <Route
@@ -236,22 +249,63 @@ function Shell(): React.JSX.Element {
                   </RequireCapability>
                 }
               />
-              <Route path="/employees/:id" element={<EmployeeDetailPage />} />
-              <Route path="/application" element={<ApplicationPage />} />
-              <Route path="/books" element={<BooksPage />} />
+              <Route
+                path="/employees/:id"
+                element={
+                  <RequireCapability cap="employees.view">
+                    <EmployeeDetailPage />
+                  </RequireCapability>
+                }
+              />
+              <Route
+                path="/application"
+                element={
+                  <RequireCapability cap="documents.generate">
+                    <RequireCapability cap="books.view">
+                      <ApplicationPage />
+                    </RequireCapability>
+                  </RequireCapability>
+                }
+              />
+              <Route
+                path="/books"
+                element={
+                  <RequireCapability cap="books.view">
+                    <BooksPage />
+                  </RequireCapability>
+                }
+              />
               {/* Static segment outranks /books/:id in react-router's ranking —
                   same pattern as /employees/timesheet. */}
-              <Route path="/books/approvals" element={<ApprovalsPage />} />
+              <Route
+                path="/books/approvals"
+                element={
+                  <RequireAnyCapability caps={APPROVALS_ROUTE_CAPS}>
+                    <ApprovalsPage />
+                  </RequireAnyCapability>
+                }
+              />
+              {/* Pending approval/reviewer assignment is row authority even
+                  without global book caps; the API owns that decision. */}
               <Route path="/books/:id" element={<BookRecordPage />} />
               <Route
                 path="/scan-back"
                 element={
-                  <RequireCapability cap="books.edit">
-                    <ScanBackPage />
+                  <RequireCapability cap="books.view">
+                    <RequireCapability cap="books.edit">
+                      <ScanBackPage />
+                    </RequireCapability>
                   </RequireCapability>
                 }
               />
-              <Route path="/leaves" element={<LeavesPage />} />
+              <Route
+                path="/leaves"
+                element={
+                  <RequireCapability cap="leaves.view">
+                    <LeavesPage />
+                  </RequireCapability>
+                }
+              />
               <Route
                 path="/absences"
                 element={
@@ -268,9 +322,30 @@ function Shell(): React.JSX.Element {
                   </RequireCapability>
                 }
               />
-              <Route path="/ledger" element={<LedgerRoute />} />
-              <Route path="/settings" element={<SettingsPage />} />
-              <Route path="/expiry" element={<ExpiryPage />} />
+              <Route
+                path="/ledger"
+                element={
+                  <RequireCapability cap="ledger.view">
+                    <LedgerRoute />
+                  </RequireCapability>
+                }
+              />
+              <Route
+                path="/settings"
+                element={
+                  <RequireCapability cap="settings.view">
+                    <SettingsPage />
+                  </RequireCapability>
+                }
+              />
+              <Route
+                path="/expiry"
+                element={
+                  <RequireCapability cap="expiry.view">
+                    <ExpiryPage />
+                  </RequireCapability>
+                }
+              />
               <Route
                 path="/duty-locations"
                 element={
@@ -311,10 +386,14 @@ function Shell(): React.JSX.Element {
                   </RequireCapability>
                 }
               />
-              {/* The standalone /permissions page was folded into Active-users
-                  (Access requests → three-dots). Redirect old bookmarks/links
-                  there instead of silently bouncing to Dashboard. */}
-              <Route path="/permissions" element={<Navigate to="/access-requests" replace />} />
+              <Route
+                path="/permissions"
+                element={
+                  <RequireCapability cap="users.manage">
+                    <PermissionsPage />
+                  </RequireCapability>
+                }
+              />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
             </main>

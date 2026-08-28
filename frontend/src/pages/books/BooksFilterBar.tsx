@@ -5,7 +5,7 @@
  * · search · clear. Tests still reach inputs by their data-testid attributes.
  */
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useEffectEvent, useRef, useState } from 'react'
 import { ChevronDown, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
@@ -14,6 +14,8 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
 import { serviceGlyph, useServiceLabel } from './serviceLabels'
+import { useCapabilities } from '@/lib/useCapabilities'
+import { hasServiceCap } from '@/lib/dashboardLayout'
 
 export interface BooksFilters {
   categoryIds: string[]
@@ -42,9 +44,18 @@ export function BooksFilterBar({
   const { t, i18n } = useTranslation()
   const isAr = i18n.language.startsWith('ar')
   const serviceLabel = useServiceLabel()
+  const { has } = useCapabilities()
+  const visibleServices = services.filter((service) => hasServiceCap(service.id, has))
+  const selectedServiceAllowed =
+    filters.serviceId === 'all' || hasServiceCap(filters.serviceId, has)
+  const selectedServiceId = selectedServiceAllowed ? filters.serviceId : 'all'
+  const resetDeniedServiceRef = useRef<string | null>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [catOpen, setCatOpen] = useState(false)
   const catRootRef = useRef<HTMLDivElement>(null)
+  const resetDeniedService = useEffectEvent(() => {
+    onChange({ ...filters, serviceId: 'all' })
+  })
   const [svcOpen, setSvcOpen] = useState(false)
   const svcRootRef = useRef<HTMLDivElement>(null)
 
@@ -56,7 +67,17 @@ export function BooksFilterBar({
     filters.toDate !== '' ||
     filters.q !== '' ||
     !!filters.drafts ||
-    filters.serviceId !== 'all'
+    selectedServiceId !== 'all'
+
+  useEffect(() => {
+    if (selectedServiceAllowed) {
+      resetDeniedServiceRef.current = null
+      return
+    }
+    if (resetDeniedServiceRef.current === filters.serviceId) return
+    resetDeniedServiceRef.current = filters.serviceId
+    resetDeniedService()
+  }, [filters.serviceId, selectedServiceAllowed])
 
   const clear = (): void => {
     onChange({ categoryIds: [], direction: 'all', status: 'all', fromDate: '', toDate: '', q: '', drafts: false, serviceId: 'all' })
@@ -233,14 +254,14 @@ export function BooksFilterBar({
           onClick={() => setSvcOpen((v) => !v)}
           className={cn(
             'inline-flex h-8 items-center gap-1.5 rounded-full border border-hairline px-3 text-[0.78em] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background',
-            filters.serviceId !== 'all'
+            selectedServiceId !== 'all'
               ? 'bg-primary-soft font-semibold text-primary'
               : 'bg-surface-tinted text-muted-foreground hover:bg-border hover:text-foreground',
           )}
         >
           <span>{t('books.filters.service')}</span>
-          <span className={filters.serviceId !== 'all' ? '' : 'text-muted-foreground/70'}>
-            {filters.serviceId === 'all' ? t('books.filters.serviceAll') : serviceLabel(filters.serviceId)}
+          <span className={selectedServiceId !== 'all' ? '' : 'text-muted-foreground/70'}>
+            {selectedServiceId === 'all' ? t('books.filters.serviceAll') : serviceLabel(selectedServiceId)}
           </span>
           <ChevronDown
             className={cn('h-3.5 w-3.5 shrink-0 transition-transform', svcOpen && 'rotate-180')}
@@ -259,14 +280,14 @@ export function BooksFilterBar({
                 <button
                   type="button"
                   role="option"
-                  aria-selected={filters.serviceId === 'all'}
+                  aria-selected={selectedServiceId === 'all'}
                   onClick={() => {
                     onChange({ ...filters, serviceId: 'all' })
                     setSvcOpen(false)
                   }}
                   className={cn(
                     'flex w-full items-center gap-2.5 px-3 py-2 text-start text-[0.82em] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
-                    filters.serviceId === 'all'
+                    selectedServiceId === 'all'
                       ? 'bg-primary-soft font-semibold text-primary'
                       : 'text-foreground hover:bg-surface-tinted',
                   )}
@@ -274,8 +295,8 @@ export function BooksFilterBar({
                   <span dir="auto">{t('books.filters.serviceAll')}</span>
                 </button>
               </li>
-              {services.map((s) => {
-                const checked = filters.serviceId === s.id
+              {visibleServices.map((s) => {
+                const checked = selectedServiceId === s.id
                 return (
                   <li key={s.id}>
                     <button

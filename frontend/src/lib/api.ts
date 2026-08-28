@@ -133,12 +133,18 @@ export interface MigrationResult {
 // Phase 08 — Settings + System
 // Hand-augmented with signature appearance fields (Task 6) ahead of gen:api.
 // Task 10: sms_autosend_enabled added ahead of next gen:api run.
-export type AppSettingsRead = components['schemas']['AppSettingsRead'] & {
+export type AppSettingsRead = Omit<
+  components['schemas']['AppSettingsRead'],
+  'dashboard_layout'
+> & {
   signature_size_mm: number
   signature_boldness: number
   sms_autosend_enabled: boolean
 }
-export type AppSettingsUpdate = components['schemas']['AppSettingsUpdate'] & {
+export type AppSettingsUpdate = Omit<
+  components['schemas']['AppSettingsUpdate'],
+  'dashboard_layout'
+> & {
   signature_size_mm?: number
   signature_boldness?: number
   sms_autosend_enabled?: boolean
@@ -1701,8 +1707,8 @@ export const api = {
   /** GET /books/awaiting — books pending the signed-in user's decision. */
   listAwaitingBooks: () => request<BookRead[]>('GET', '/books/awaiting'),
   /** GET /books/approval-log — the approvals log. `scope=sent` lists records I
-   *  submitted (any authenticated user); `scope=received` lists my pending
-   *  decisions + my verdicts from the last 30 days (needs books.approve). */
+   *  submitted (needs books.view); `scope=received` lists pending assignments
+   *  (needs books.approve) plus recent verdicts when books.view is also held. */
   listApprovalLog: (
     scope: 'sent' | 'received',
     params: { limit?: number; offset?: number } = {},
@@ -2090,6 +2096,9 @@ export const api = {
 
   // --- dashboard (Phase 12) ---
   getDashboardSummary: () => request<DashboardSummary>('GET', '/dashboard/summary'),
+  getDashboardLayout: () => request<DashboardLayout | null>('GET', '/dashboard/layout'),
+  updateDashboardLayout: (body: DashboardLayout) =>
+    request<DashboardLayout>('PUT', '/dashboard/layout', body),
 
   // --- email integration (Phase 13) ---
   getEmailAccount: () => request<EmailAccountRead | null>('GET', '/email/account'),

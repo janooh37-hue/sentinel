@@ -3,6 +3,7 @@ import { useTranslation } from 'react-i18next'
 
 import { AccountMenu } from '@/components/shell/AccountMenu'
 import { NavBellPopover } from '@/components/shell/NavBellPopover'
+import { useCapabilities } from '@/lib/useCapabilities'
 
 interface MobileTopBarProps {
   onBurger: () => void
@@ -18,6 +19,7 @@ export function MobileTopBar({
   onSignOut,
 }: MobileTopBarProps): React.JSX.Element {
   const { t } = useTranslation()
+  const { has } = useCapabilities()
   return (
     <header className="flex items-center gap-3 border-b border-border bg-surface px-4 py-3 md:hidden">
       <button
@@ -36,7 +38,11 @@ export function MobileTopBar({
       <span className="text-[1.05em] font-bold tracking-tight text-primary">GSSG</span>
       <div className="ms-auto flex items-center gap-1.5">
         <NavBellPopover />
-        <AccountMenu onLock={onLock} onOpenSettings={onOpenSettings} onSignOut={onSignOut} />
+        <AccountMenu
+          onLock={onLock}
+          onOpenSettings={has('settings.view') ? onOpenSettings : undefined}
+          onSignOut={onSignOut}
+        />
       </div>
     </header>
   )

@@ -134,10 +134,12 @@ def actionable_items(db: Session, user: User) -> list[ActionableItem]:
             )
         )
 
-    # Stranded scan-backs — same books.edit gate as the scan-back list: a push is
-    # only worth sending to someone who can actually file the scan.
-    if perm_service.has_capability(db, user, "books.edit"):
-        for book in book_service.list_awaiting_scan(db, user_id=user.id):
+    # Stranded scan-backs — match the endpoint/navigation conjunction: only
+    # users who can both reach Records and edit can act on this push.
+    if perm_service.has_capability(db, user, "books.view") and perm_service.has_capability(
+        db, user, "books.edit"
+    ):
+        for book in book_service.list_awaiting_scan(db, user_id=user.id, user=user):
             items.append(
                 ActionableItem(
                     "scanback",

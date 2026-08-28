@@ -18,20 +18,8 @@ from sqlalchemy.orm import Session
 
 from app.core.constants import STAMP_STYLE_HEADER
 from app.db.models import AppSetting, AuditLog
-from app.schemas.settings import (
-    DASHBOARD_QUICK_ACTION_IDS,
-    AppSettingsRead,
-    AppSettingsUpdate,
-    DashboardLayout,
-)
+from app.schemas.settings import AppSettingsRead, AppSettingsUpdate
 from app.schemas.workforce import WorkforceConfiguration
-
-_VALID_QUICK_ACTION_IDS = frozenset(DASHBOARD_QUICK_ACTION_IDS)
-
-# Well-known key for the singleton row that owns the dashboard_layout JSON
-# column. The column is nullable and only populated on this one row; all
-# other settings continue to use the (key, value) text pattern.
-_DASHBOARD_LAYOUT_KEY = "settings.dashboard_layout"
 
 # Workforce configuration is stored as individual, JSON-encoded AppSetting
 # values for backwards-compatible operational reads.  It is never writable
@@ -150,57 +138,6 @@ def _set_workforce_configuration_value(db: Session, key: str, value: object) -> 
     _upsert_setting(db, key, value)
 
 
-def _get_dashboard_layout(db: Session) -> DashboardLayout | None:
-    """Read the dashboard layout from the JSON column on the singleton row.
-
-    Returns ``None`` when either the row doesn't exist or the column is NULL —
-    in both cases the frontend falls back to its built-in defaults.
-
-    Quick-action ids that are no longer known (e.g. a template removed from the
-    quick-launcher) are dropped rather than failing validation, so a layout
-    saved before the removal still loads.
-    """
-    row = db.execute(
-        select(AppSetting).where(AppSetting.key == _DASHBOARD_LAYOUT_KEY)
-    ).scalar_one_or_none()
-    if row is None or row.dashboard_layout is None:
-        return None
-    raw = row.dashboard_layout
-    if isinstance(raw, dict) and isinstance(raw.get("quick_actions"), list):
-        raw = {
-            **raw,
-            "quick_actions": [
-                qa
-                for qa in raw["quick_actions"]
-                if isinstance(qa, dict) and qa.get("id") in _VALID_QUICK_ACTION_IDS
-            ],
-        }
-    return DashboardLayout.model_validate(raw)
-
-
-def _set_dashboard_layout(db: Session, layout: DashboardLayout | None) -> None:
-    """Write the dashboard layout to the JSON column on the singleton row.
-
-    Passing ``None`` resets to "use defaults". The row's ``value`` column is
-    kept as JSON-encoded ``null`` purely to satisfy the NOT-NULL Text column —
-    the real payload lives on ``dashboard_layout``.
-    """
-    payload = layout.model_dump(mode="json") if layout is not None else None
-    row = db.execute(
-        select(AppSetting).where(AppSetting.key == _DASHBOARD_LAYOUT_KEY)
-    ).scalar_one_or_none()
-    if row is None:
-        db.add(
-            AppSetting(
-                key=_DASHBOARD_LAYOUT_KEY,
-                value=json.dumps(None),
-                dashboard_layout=payload,
-            )
-        )
-    else:
-        row.dashboard_layout = payload
-
-
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
@@ -235,7 +172,6 @@ def get_settings(db: Session) -> AppSettingsRead:
         "signature_boldness": _get(
             db, "settings.signature_boldness", _DEFAULTS["settings.signature_boldness"]
         ),
-        "dashboard_layout": _get_dashboard_layout(db),
     }
     # Legacy rows can hold font_scale below the schema floor of 16 (the
     # 0015 enum→int remap / manual edits). Clamp on read so GET /settings
@@ -274,8 +210,6 @@ def update_settings(db: Session, payload: AppSettingsUpdate) -> AppSettingsRead:
     for field, key in mapping.items():
         if field in payload.model_fields_set:
             _set(db, key, getattr(payload, field))
-    if "dashboard_layout" in payload.model_fields_set:
-        _set_dashboard_layout(db, payload.dashboard_layout)
     db.commit()
     return get_settings(db)
 
@@ -308,9 +242,7 @@ def _validate_workforce_evaluation_boundary(
     if duty_assignment_baseline_at is None:
         return
     if configuration.evaluation_start_at < duty_assignment_baseline_at:
-        raise ValueError(
-            "evaluation_start_at must be at or after duty_assignment_baseline_at"
-        )
+        raise ValueError("evaluation_start_at must be at or after duty_assignment_baseline_at")
 
 
 def get_workforce_configuration(db: Session) -> WorkforceConfiguration | None:
@@ -364,14 +296,10 @@ def update_workforce_configuration(
         and validated.evaluation_start_at != current.evaluation_start_at
         and db.scalar(select(AttendanceCase.id).limit(1)) is not None
     ):
-        raise ValueError(
-            "evaluation_start_at cannot change after attendance cases exist"
-        )
+        raise ValueError("evaluation_start_at cannot change after attendance cases exist")
 
     serialized = validated.model_dump(mode="json")
-    current_serialized = (
-        current.model_dump(mode="json") if current is not None else {}
-    )
+    current_serialized = current.model_dump(mode="json") if current is not None else {}
     changes = {
         field: {
             "before": current_serialized.get(field),

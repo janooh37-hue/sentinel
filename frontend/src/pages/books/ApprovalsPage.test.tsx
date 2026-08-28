@@ -146,6 +146,41 @@ describe('ApprovalsPage tabs', () => {
       expect(screen.getByTestId('location')).toHaveTextContent('/books/approvals'),
     )
   })
+
+  it('approve-only callers cannot select sent and an unauthorized ?tab=sent is sanitized', async () => {
+    mockHas.mockImplementation((cap) => cap === 'books.approve')
+    vi.mocked(api.listApprovalLog).mockResolvedValue({
+      items: [],
+      total: 0,
+      limit: 100,
+      offset: 0,
+    })
+
+    renderPage('/books/approvals?tab=sent')
+
+    await waitFor(() => expect(api.listApprovalLog).toHaveBeenCalledWith('received'))
+    expect(api.listApprovalLog).not.toHaveBeenCalledWith('sent')
+    expect(screen.queryByTestId('approvals-tab-sent')).not.toBeInTheDocument()
+    await waitFor(() =>
+      expect(screen.getByTestId('location')).toHaveTextContent('/books/approvals'),
+    )
+  })
+
+  it('view-only callers sanitize an unauthorized received tab to sent', async () => {
+    mockHas.mockImplementation((cap) => cap === 'books.view')
+    vi.mocked(api.listApprovalLog).mockResolvedValue({
+      items: [],
+      total: 0,
+      limit: 100,
+      offset: 0,
+    })
+
+    renderPage('/books/approvals?tab=received')
+
+    await waitFor(() => expect(api.listApprovalLog).toHaveBeenCalledWith('sent'))
+    expect(api.listApprovalLog).not.toHaveBeenCalledWith('received')
+    expect(screen.queryByTestId('approvals-tab-received')).not.toBeInTheDocument()
+  })
 })
 
 describe('ApprovalsPage rows and filters', () => {

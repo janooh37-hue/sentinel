@@ -457,7 +457,7 @@ export interface paths {
         };
         /**
          * List Capabilities
-         * @description The full capability catalog + which roles grant each by default.
+         * @description The static catalog followed by dynamic service/category capabilities.
          */
         get: operations["list_capabilities_api_v1_auth_capabilities_get"];
         put?: never;
@@ -2025,7 +2025,8 @@ export interface paths {
          *
          *     Declared before ``/{book_id}`` so the literal ``awaiting-scan`` segment isn't
          *     swallowed by the int path param — same reason as ``/awaiting`` above.
-         *     Authority is ``books.edit``: the same capability filing the scan requires.
+         *     Authority is the same conjunction as filing a scan from the Records surface:
+         *     ``books.view`` and ``books.edit``.
          */
         get: operations["list_awaiting_scan_api_v1_books_awaiting_scan_get"];
         put?: never;
@@ -2045,9 +2046,9 @@ export interface paths {
         };
         /**
          * Get Approval Log
-         * @description The approvals log — ``scope=sent`` (records I submitted) or
-         *     ``scope=received`` (my pending decisions + my verdicts from the last 30
-         *     days). Paged like GET /books; rows are flattened ApprovalLogItem payloads.
+         * @description The approvals log — ``scope=sent`` (records I submitted, requiring
+         *     ``books.view``) or ``scope=received`` (my pending decisions, plus recent
+         *     verdicts only when I also hold ``books.view``). Paged like GET /books.
          *
          *     Declared before ``/{book_id}`` so the literal ``approval-log`` segment isn't
          *     swallowed by the int path param — same reason as ``/awaiting`` above.
@@ -3258,6 +3259,24 @@ export interface paths {
         head?: never;
         /** Update Template */
         patch: operations["update_template_api_v1_editor_templates__template_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/dashboard/layout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Layout */
+        get: operations["get_layout_api_v1_dashboard_layout_get"];
+        /** Update Layout */
+        put: operations["update_layout_api_v1_dashboard_layout_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/dashboard/summary": {
@@ -5140,7 +5159,6 @@ export interface components {
             signature_size_mm: number;
             /** Signature Boldness */
             signature_boldness: number;
-            dashboard_layout?: components["schemas"]["DashboardLayout"] | null;
         };
         /**
          * AppSettingsUpdate
@@ -5175,7 +5193,6 @@ export interface components {
             signature_size_mm?: number | null;
             /** Signature Boldness */
             signature_boldness?: number | null;
-            dashboard_layout?: components["schemas"]["DashboardLayout"] | null;
         };
         /**
          * ApprovalLogItem
@@ -18821,6 +18838,72 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EditorTemplateRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_layout_api_v1_dashboard_layout_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DashboardLayout"] | null;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_layout_api_v1_dashboard_layout_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DashboardLayout"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DashboardLayout"];
                 };
             };
             /** @description Validation Error */

@@ -9,6 +9,10 @@ import {
   WIDGET_SOURCE,
   WIDGET_SOURCES,
   resolveLayout,
+  isQuickActionAllowed,
+  hasServiceCap,
+  mergeQuickActionsPreservingDenied,
+  type QuickActionId,
 } from './dashboardLayout'
 
 describe('companion quick-actions are gone', () => {
@@ -30,6 +34,65 @@ describe('companion quick-actions are gone', () => {
     const ids = resolved.quick_actions.map((q) => q.id)
     expect(ids).not.toContain('Leave Undertaking')
     expect(ids).toContain('Leave Application Form')
+  })
+})
+
+describe('dynamic service capabilities', () => {
+  it('requires both creation page capabilities and the selected service capability', () => {
+    const allowed = new Set([
+      'documents.generate',
+      'books.view',
+      'books.service.Report',
+    ])
+    const has = (capability: string): boolean => allowed.has(capability)
+
+    expect(isQuickActionAllowed('Report', has)).toBe(true)
+
+    allowed.delete('documents.generate')
+    expect(isQuickActionAllowed('Report', has)).toBe(false)
+
+    allowed.add('documents.generate')
+    allowed.delete('books.view')
+    expect(isQuickActionAllowed('Report', has)).toBe(false)
+
+    allowed.add('books.view')
+    allowed.delete('books.service.Report')
+    expect(isQuickActionAllowed('Report', has)).toBe(false)
+  })
+
+  it('checks bare service visibility independently from creation capabilities', () => {
+    const checked: string[] = []
+    const has = (capability: string): boolean => {
+      checked.push(capability)
+      return capability === 'books.service.Report'
+    }
+
+    expect(hasServiceCap('Report', has)).toBe(true)
+    expect(hasServiceCap('General Book', has)).toBe(false)
+    expect(checked).toEqual([
+      'books.service.Report',
+      'books.service.General Book',
+    ])
+  })
+})
+
+describe('permission-filtered quick-action saves', () => {
+  it('keeps denied entries in their original positions while applying allowed order', () => {
+    const original: Array<{ id: QuickActionId; visible: boolean; order: number }> = [
+      { id: 'General Book', visible: true, order: 0 },
+      { id: 'Report', visible: true, order: 1 },
+      { id: 'Violation Form', visible: true, order: 2 },
+    ]
+    const editedAllowed: Array<{ id: QuickActionId; visible: boolean; order: number }> = [
+      { id: 'Violation Form', visible: true, order: 0 },
+      { id: 'General Book', visible: false, order: 1 },
+    ]
+
+    expect(mergeQuickActionsPreservingDenied(original, editedAllowed)).toEqual([
+      { id: 'Violation Form', visible: true, order: 0 },
+      { id: 'Report', visible: true, order: 1 },
+      { id: 'General Book', visible: false, order: 2 },
+    ])
   })
 })
 

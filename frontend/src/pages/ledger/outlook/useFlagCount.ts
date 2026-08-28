@@ -9,12 +9,13 @@ import { useQuery } from '@tanstack/react-query'
 
 import { api } from '@/lib/api'
 
-export function useFlagCount(): number {
+export function useFlagCount(enabled = true): number {
   const { data } = useQuery({
     queryKey: ['ledger-flag-count'],
     queryFn: () => api.getLedgerFlagCount(),
+    enabled,
     staleTime: 30_000,
     refetchInterval: 120_000,
   })
-  return data?.count ?? 0
+  return enabled ? (data?.count ?? 0) : 0
 }

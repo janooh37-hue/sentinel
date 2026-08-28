@@ -223,7 +223,6 @@ def test_finished_word_version_keeps_older_pdf_when_new_conversion_returns_none(
     assert latest_document is not None and latest_document.pdf_path is None
 
 
-
 def test_permit_letter_renders_from_its_own_paper(gen_env):
     """The permit letter is a General Book clone on a SEPARATE .docx, so the
     permit form can be restyled without touching every other 1/x letter."""

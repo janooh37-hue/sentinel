@@ -9,6 +9,15 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
+
+vi.mock('@/lib/useCapabilities', () => ({
+  useCapabilities: () => ({
+    capabilities: new Set(['expiry.view']),
+    isLoading: false,
+    has: (capability: string) => capability === 'expiry.view',
+  }),
+}))
+
 import { LookupHeroCards } from './LookupHeroCards'
 
 // ─── Mock: @/lib/api ─────────────────────────────────────────────────────────

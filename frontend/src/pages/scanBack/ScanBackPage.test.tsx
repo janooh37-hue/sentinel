@@ -19,9 +19,16 @@ function daysAgo(n: number): string {
   return d.toISOString().slice(0, 19).replace('T', ' ')
 }
 
+const grantedCapabilities: Record<string, true> = {
+  'books.view': true,
+  'books.edit': true,
+}
+
 vi.mock('@/lib/useCapabilities', () => ({
-  useCapabilities: () => ({ has: (c: string) => c === 'books.edit',
-                            capabilities: new Set(['books.edit']), isLoading: false }),
+  useCapabilities: () => ({
+    has: (capability: string) => grantedCapabilities[capability] === true,
+    isLoading: false,
+  }),
 }))
 vi.mock('@/lib/api', async (orig) => ({
   ...(await orig<Record<string, unknown>>()),
