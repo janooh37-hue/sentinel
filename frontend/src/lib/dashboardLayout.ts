@@ -7,7 +7,7 @@
  *   • under_quick_actions — grid below the quick-action tiles.
  * Hidden = `visible: false` (zone is remembered so re-showing restores place).
  *
- * The backend stores `AppSettings.dashboard_layout` as nullable JSON; this
+ * The backend stores a nullable private layout per user; this
  * module is the canonical catalog + resolver. Legacy (zone-less) layouts are
  * migrated by `resolveLayout`: pending/workspace → top, previously-visible
  * widgets → under_workspace, never-seen ids appended hidden.
@@ -149,11 +149,18 @@ export const QUICK_ACTION_IDS = [
 
 export type QuickActionId = (typeof QUICK_ACTION_IDS)[number]
 
-export function isQuickActionAllowed(
+export function hasServiceCap(
   id: string,
   has: (capability: string) => boolean,
 ): boolean {
   return has(`books.service.${id}`)
+}
+
+export function isQuickActionAllowed(
+  id: string,
+  has: (capability: string) => boolean,
+): boolean {
+  return has('documents.generate') && has('books.view') && hasServiceCap(id, has)
 }
 
 export function isQuickActionId(id: string): id is QuickActionId {

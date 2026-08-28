@@ -29,6 +29,7 @@ import { EmailBasketTray } from './EmailBasketTray'
 import { GatewayIndicator } from './GatewayIndicator'
 import { NavBellPopover } from './NavBellPopover'
 import { NAV_ITEMS } from './navItems'
+import { isNavEntryAllowed } from './navCustomization'
 import { ThemeToggle } from './ThemeToggle'
 
 interface TopNavProps {
@@ -95,7 +96,7 @@ export function TopNav({ onLock, onOpenSettings, onSignOut }: TopNavProps): Reac
         aria-label={t('nav.menu')}
         className="topnav-destinations ms-5 flex min-w-0 gap-1 text-[0.95em]"
       >
-        {NAV_ITEMS.filter((item) => !item.cap || has(item.cap)).map(({ to, key, Icon }) => (
+        {NAV_ITEMS.filter((item) => isNavEntryAllowed(item, has)).map(({ to, key, Icon }) => (
           <NavLink
             key={to}
             to={to}

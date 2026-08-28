@@ -13,6 +13,7 @@ import {
   SECTION_ENTRIES,
   SIGNAL_ENTRIES,
   entryById,
+  isNavEntryAllowed,
   loadSlotIds,
   placeEntry,
   resetSlot,
@@ -140,17 +141,17 @@ export function BottomTabBar(): React.JSX.Element {
 
   const renderedSlots = (() => {
     const used = new Set<string>()
-    const allowedSections = SECTION_ENTRIES.filter((entry) => !entry.cap || has(entry.cap))
+    const allowedSections = SECTION_ENTRIES.filter((entry) => isNavEntryAllowed(entry, has))
     return slotIds.flatMap((slotId, index) => {
       const requested = entryById(slotId)
       const preferred = entryById(DEFAULT_SLOT_IDS[index] ?? '')
       const entry =
-        requested && (!requested.cap || has(requested.cap)) && !used.has(requested.id)
+        requested && isNavEntryAllowed(requested, has) && !used.has(requested.id)
           ? requested
           : [preferred, ...allowedSections].find(
               (candidate) =>
                 candidate != null &&
-                (!candidate.cap || has(candidate.cap)) &&
+                isNavEntryAllowed(candidate, has) &&
                 !used.has(candidate.id),
             )
       if (!entry) return []
@@ -204,8 +205,8 @@ export function BottomTabBar(): React.JSX.Element {
     })
   }
 
-  const availableSections = SECTION_ENTRIES.filter((entry) => !entry.cap || has(entry.cap))
-  const availableSignals = SIGNAL_ENTRIES.filter((entry) => !entry.cap || has(entry.cap))
+  const availableSections = SECTION_ENTRIES.filter((entry) => isNavEntryAllowed(entry, has))
+  const availableSignals = SIGNAL_ENTRIES.filter((entry) => isNavEntryAllowed(entry, has))
 
   return (
     // modal={false}: a modal dialog sets pointer-events:none on <body>, which would

@@ -89,6 +89,11 @@ describe('Mirror editor bilingual copy', () => {
       'access.permissions.mirror.nothingVisible',
       'access.permissions.mirror.userNotFound',
       'access.permissions.mirror.blueprintLabel',
+      'access.permissions.mirror.viewPrereqWarning',
+      'access.permissions.mirror.consequenceRecords',
+      'access.permissions.mirror.serviceOther',
+      'requireCap.notRequestable',
+      'access.permissions.caps.books.service.other',
     ]
     for (const [locale, tree] of [['en', en], ['ar', ar]] as const) {
       for (const key of sharedKeys) {
@@ -112,6 +117,30 @@ describe('Mirror editor bilingual copy', () => {
       }
     }
     expect(missing).toEqual([])
+  })
+
+  it('describes the Records prerequisite and assignee exception truthfully in both languages', () => {
+    const enWarning = String(
+      get(en as unknown as Rec, 'access.permissions.mirror.viewPrereqWarning'),
+    )
+    const arWarning = String(
+      get(ar as unknown as Rec, 'access.permissions.mirror.viewPrereqWarning'),
+    )
+    const enConsequence = String(
+      get(en as unknown as Rec, 'access.permissions.mirror.consequenceRecords'),
+    )
+    const arConsequence = String(
+      get(ar as unknown as Rec, 'access.permissions.mirror.consequenceRecords'),
+    )
+
+    expect(enWarning).toContain('cannot create or browse records')
+    expect(enWarning).toContain('awaiting their approval')
+    expect(arWarning).toContain('صفحة المستندات مخفية')
+    expect(arWarning).toContain('المنتظرة اعتماده')
+    expect(enConsequence).toContain('Records hidden')
+    expect(enConsequence).toContain('creation blocked')
+    expect(arConsequence).toContain('صفحة المستندات مخفية')
+    expect(arConsequence).toContain('إنشاء السجلات محظور')
   })
 
   it('uses the Arabic verb for updating the device preview', () => {

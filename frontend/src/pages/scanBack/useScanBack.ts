@@ -2,9 +2,9 @@
  * Shared data layer for every scan-back surface (page, dock, gate).
  *
  * One query key so filing from any surface refreshes all of them. Gated on
- * `books.edit` — the capability POST /books/{id}/attachments requires. A user
- * without it would get rows whose upload 403s, so they get nothing instead;
- * their stranded records surface under the Everyone scope for an admin.
+ * both `books.view` (the global Records surface) and `books.edit` (the
+ * capability POST /books/{id}/attachments requires). A user without either
+ * gets no query; their stranded records surface under Everyone for an admin.
  */
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -66,7 +66,7 @@ export function useScanBack(scope: 'mine' | 'all' = 'mine', visible = true): {
   enabled: boolean
 } {
   const { has } = useCapabilities()
-  const enabled = visible && has('books.edit')
+  const enabled = visible && has('books.view') && has('books.edit')
   const query = useQuery({
     queryKey: ['books', 'awaiting-scan', scope],
     queryFn: () => api.listAwaitingScanBooks(scope),

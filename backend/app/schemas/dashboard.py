@@ -1,18 +1,131 @@
-"""Dashboard summary schemas — Phase 12.
-
-Aggregate read-only response for ``GET /api/v1/dashboard/summary``.  The
-backend composes the values from existing tables (employees, leaves,
-documents, ledger_entries) so there's nothing to write — only ``Read``
-shapes here.
-"""
+"""Dashboard summary and private layout schemas."""
 
 from __future__ import annotations
 
 from datetime import date, datetime
+from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.schemas._base import ORMBase
+
+# Known widget / quick-action ids. Add to these lists when the Dashboard
+# component grows a new tile so the API validates instead of silently storing
+# stale ids. Frontend mirrors these in `lib/dashboardLayout.ts`.
+#
+# Widget IDs:
+#   - Top row (fixed, always visible): pending, workspace
+#   - Original bottom row: violations, drafts, ledger
+#   - Promoted section cards: on_leave_today, upcoming_leave
+#   - New widgets:           recent_docs, email_sync_status,
+#                            waiting_approvals, expiring_soon, recent_ledger,
+#                            pending_departures
+#
+# Quick-action IDs are services only: one entry per selectable ``template_id``
+# from `app.core.constants.TEMPLATE_FILES`, so every tile deep-links into a
+# pre-selected form. The section shortcuts (hr/violations/leaves/books) were
+# dropped — the nav owns wayfinding — and the tolerant read path prunes them
+# from layouts saved before the removal.
+DASHBOARD_WIDGET_IDS = (
+    "pending",
+    "workspace",
+    "violations",
+    "drafts",
+    "ledger",
+    "on_leave_today",
+    "upcoming_leave",
+    "recent_docs",
+    "email_sync_status",
+    "waiting_approvals",
+    "expiring_soon",
+    "recent_ledger",
+    "pending_departures",
+    "workforce_pulse",
+)
+DASHBOARD_QUICK_ACTION_IDS = (
+    "General Book",
+    "Acknowledgment Form",
+    "Salary Transfer Request",
+    "Leave Permit Form",
+    "Violation Form",
+    "Leave Application Form",
+    "Duty Resumption Form",
+    "HR Request Form",
+    "Salary Deduction Form",
+    "Employee Clearance Form",
+    "Passport Release Form",
+    "Material Request Form",
+    "Resignation Letter",
+    "Administrative Leave Form",
+    "Warning Form",
+    "Passport Release List",
+    "Report",
+    "Inmate Conduct Violations",
+)
+
+DashboardWidgetId = Literal[
+    "pending",
+    "workspace",
+    "violations",
+    "drafts",
+    "ledger",
+    "on_leave_today",
+    "upcoming_leave",
+    "recent_docs",
+    "email_sync_status",
+    "waiting_approvals",
+    "expiring_soon",
+    "recent_ledger",
+    "pending_departures",
+    "workforce_pulse",
+]
+DashboardQuickActionId = Literal[
+    "General Book",
+    "Acknowledgment Form",
+    "Salary Transfer Request",
+    "Leave Permit Form",
+    "Violation Form",
+    "Leave Application Form",
+    "Duty Resumption Form",
+    "HR Request Form",
+    "Salary Deduction Form",
+    "Employee Clearance Form",
+    "Passport Release Form",
+    "Material Request Form",
+    "Resignation Letter",
+    "Administrative Leave Form",
+    "Warning Form",
+    "Passport Release List",
+    "Report",
+    "Inmate Conduct Violations",
+]
+
+
+DashboardWidgetZone = Literal["top", "under_workspace", "under_quick_actions"]
+#: Dashboard canvas measure. ``compact`` keeps the 1180px column the rest of
+#: the app uses; ``wide`` lets the grid span the window. Compact is the
+#: default because it is what operators are used to, and a layout saved before
+#: this field existed must not silently change width on the next load.
+DashboardCanvasWidth = Literal["compact", "wide"]
+
+
+class DashboardWidgetConfig(BaseModel):
+    id: DashboardWidgetId
+    visible: bool = True
+    order: int
+    zone: DashboardWidgetZone = "under_workspace"
+
+
+class DashboardQuickActionConfig(BaseModel):
+    id: DashboardQuickActionId
+    visible: bool = True
+    order: int
+
+
+class DashboardLayout(BaseModel):
+    widgets: list[DashboardWidgetConfig] = Field(default_factory=list)
+    quick_actions: list[DashboardQuickActionConfig] = Field(default_factory=list)
+    canvas_width: DashboardCanvasWidth = "compact"
 
 
 class DashboardTotals(BaseModel):
@@ -88,11 +201,20 @@ class DashboardSummary(BaseModel):
 
 
 __all__ = [
+    "DASHBOARD_QUICK_ACTION_IDS",
+    "DASHBOARD_WIDGET_IDS",
+    "DashboardCanvasWidth",
+    "DashboardLayout",
     "DashboardLeaveItem",
+    "DashboardQuickActionConfig",
+    "DashboardQuickActionId",
     "DashboardRecentDocument",
     "DashboardRecentLedger",
     "DashboardSummary",
     "DashboardSyncStatus",
     "DashboardTotals",
     "DashboardUpcomingLeaveItem",
+    "DashboardWidgetConfig",
+    "DashboardWidgetId",
+    "DashboardWidgetZone",
 ]

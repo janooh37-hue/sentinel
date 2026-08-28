@@ -2,7 +2,7 @@
  * ExpiringSoonWidget — dashboard widget showing employees with expiring
  * Emirates ID or passport documents within the next 90 days.
  *
- * Self-gating: renders nothing when the user lacks `employees.view`.
+ * Self-gating: renders nothing when the user lacks `expiry.view`.
  * Shows top 5 rows; footer links to the full /expiry page.
  *
  * Query key: ['expiry', 'soon']
@@ -24,7 +24,7 @@ import { cn } from '@/lib/utils'
 interface ExpiryRowProps {
   item: ExpiryItem
   language: string
-  onNavigate: () => void
+  onNavigate?: () => void
 }
 
 function ExpiryRow({ item, language, onNavigate }: ExpiryRowProps): React.JSX.Element {
@@ -47,12 +47,8 @@ function ExpiryRow({ item, language, onNavigate }: ExpiryRowProps): React.JSX.El
     urgencyLabel = t('expiry.urgency.soon', { days })
   }
 
-  return (
-    <button
-      type="button"
-      onClick={onNavigate}
-      className="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-start transition-colors hover:bg-surface-tinted focus-visible:bg-surface-tinted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-    >
+  const content = (
+    <>
       {/* Name + id */}
       <div className="min-w-0 flex-1">
         <span className="block truncate text-[0.86em] font-medium text-foreground">
@@ -73,6 +69,20 @@ function ExpiryRow({ item, language, onNavigate }: ExpiryRowProps): React.JSX.El
         <UrgIcon className="h-3.5 w-3.5" strokeWidth={1.8} aria-hidden />
         <span className="text-[0.72em] font-medium">{urgencyLabel}</span>
       </div>
+    </>
+  )
+
+  if (!onNavigate) {
+    return <div className="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-start">{content}</div>
+  }
+
+  return (
+    <button
+      type="button"
+      onClick={onNavigate}
+      className="flex w-full items-center gap-3 rounded-lg px-2 py-2 text-start transition-colors hover:bg-surface-tinted focus-visible:bg-surface-tinted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+    >
+      {content}
     </button>
   )
 }
@@ -81,17 +91,20 @@ export function ExpiringSoonWidget(): React.JSX.Element | null {
   const { t, i18n } = useTranslation()
   const navigate = useNavigate()
   const { has } = useCapabilities()
+  const canViewExpiry = has('expiry.view')
+  const canViewLeaves = has('leaves.view')
+  const canViewEmployees = has('employees.view')
 
   const expiryQuery = useQuery({
     queryKey: ['expiry', 'soon'],
     queryFn: () => api.getExpiry(90, 'all'),
+    enabled: canViewExpiry,
     staleTime: 60_000,
   })
 
-  const awaitingReturn = useAwaitingReturnCount()
+  const awaitingReturn = useAwaitingReturnCount(canViewExpiry && canViewLeaves)
 
-  // Capability gate — only users who can view employees see this.
-  if (!has('employees.view')) return null
+  if (!canViewExpiry) return null
 
   const allItems = expiryQuery.data ?? []
   const items = allItems.slice(0, 5)
@@ -123,7 +136,7 @@ export function ExpiringSoonWidget(): React.JSX.Element | null {
       </div>
 
       {/* Awaiting return form — shown above expiry rows when there are any */}
-      {awaitingReturn > 0 && (
+      {canViewLeaves && awaitingReturn > 0 && (
         <button
           type="button"
           onClick={() => navigate('/leaves', { state: { awaitingReturn: true } })}
@@ -170,14 +183,18 @@ export function ExpiringSoonWidget(): React.JSX.Element | null {
               key={`${item.employee_id}-${item.doc_type}`}
               item={item}
               language={i18n.language}
-              onNavigate={() => navigate(`/employees/${encodeURIComponent(item.employee_id)}`)}
+              onNavigate={
+                canViewEmployees
+                  ? () => navigate(`/employees/${encodeURIComponent(item.employee_id)}`)
+                  : undefined
+              }
             />
           ))
         )}
       </div>
 
       {/* Footer */}
-      {!isEmpty && !expiryQuery.isLoading && has('expiry.view') && (
+      {!isEmpty && !expiryQuery.isLoading && (
         <div className="border-t border-hairline px-5 py-2.5">
           <Link
             to="/expiry"

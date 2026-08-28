@@ -86,17 +86,28 @@ describe('ApplicationPage service permissions', () => {
     vi.mocked(api.getSettings).mockResolvedValue({} as never)
   })
 
-  it('hides denied service templates while retaining companion templates', async () => {
+  it('shows service templates when all creation capabilities are granted', async () => {
+    capabilityState.allowed = new Set([
+      'documents.generate',
+      'books.view',
+      'books.service.General Book',
+    ])
     renderPage()
 
-    expect(await screen.findByText('Demo companion')).toBeVisible()
-    expect(screen.queryByText('General Book')).not.toBeInTheDocument()
+    expect(await screen.findByText('General Book')).toBeVisible()
+    expect(screen.getByText('Demo companion')).toBeVisible()
   })
 
-  it('does not hydrate a denied service deep link', async () => {
+  it.each([
+    ['documents.generate', ['books.view', 'books.service.General Book']],
+    ['books.view', ['documents.generate', 'books.service.General Book']],
+    ['service access', ['documents.generate', 'books.view']],
+  ])('does not show or deep-link a service missing %s', async (_missing, allowed) => {
+    capabilityState.allowed = new Set(allowed)
     renderPage('/application?form=General%20Book')
 
     expect(await screen.findByText('Demo companion')).toBeVisible()
+    expect(screen.queryByText('General Book')).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /Services/i })).not.toBeInTheDocument()
   })
 })

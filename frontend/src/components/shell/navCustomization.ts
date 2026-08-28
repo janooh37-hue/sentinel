@@ -12,6 +12,7 @@ export interface DockEntry {
   Icon: LucideIcon
   to: string
   cap?: string
+  caps?: readonly string[]
   signal?: WaitingSignalId
 }
 
@@ -42,8 +43,8 @@ export const SIGNAL_ENTRIES: readonly DockEntry[] = [
     kind: 'signal',
     labelKey: 'nav.signals.approvals',
     Icon: Hourglass,
-    to: '/books',
-    cap: 'books.view',
+    to: '/books/approvals',
+    cap: 'books.approve',
     signal: 'approvals',
   },
   {
@@ -51,8 +52,8 @@ export const SIGNAL_ENTRIES: readonly DockEntry[] = [
     kind: 'signal',
     labelKey: 'nav.signals.scanback',
     Icon: ScanLine,
-    to: '/books',
-    cap: 'books.view',
+    to: '/scan-back',
+    caps: ['books.view', 'books.edit'],
     signal: 'scanback',
   },
   {
@@ -87,6 +88,13 @@ interface StoredSlotIds {
 
 export function entryById(id: string): DockEntry | undefined {
   return entriesById[id]
+}
+
+export function isNavEntryAllowed(
+  entry: Pick<DockEntry, 'cap' | 'caps'>,
+  has: (capability: string) => boolean,
+): boolean {
+  return (!entry.cap || has(entry.cap)) && (!entry.caps || entry.caps.every(has))
 }
 
 function normalizeSlotIds(ids: readonly unknown[]): string[] {

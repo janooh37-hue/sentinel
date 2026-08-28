@@ -335,7 +335,7 @@ def list_capabilities(
         CapabilityRead(
             id=f"{SERVICE_CAP_PREFIX}{service_id}",
             domain="services",
-            label=service_id,
+            label="Other" if service_id == OTHER_SERVICE_ID else service_id,
             description="",
             default_roles=default_roles,
         )

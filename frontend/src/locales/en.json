@@ -3437,20 +3437,8 @@
       "operator": "Operator"
     },
     "permissions": {
-      "title": "Permissions",
-      "eyebrow": "Administration",
-      "subtitle": "Grant or revoke individual capabilities per user. Roles set the defaults; overrides layer on top.",
-      "sheetEyebrow": "User permissions",
-      "sheetSubtitle": "Each toggle sets an override on top of the user's role defaults.",
-      "selectUser": "User",
       "loadError": "Couldn't load permissions.",
       "empty": "No users to manage yet.",
-      "rolePreset": "Role preset",
-      "legend": {
-        "default": "Inherited from role",
-        "grant": "Granted",
-        "deny": "Denied"
-      },
       "state": {
         "default": "Default",
         "grant": "Grant",
@@ -3458,8 +3446,6 @@
       },
       "inherited": "Role default: {{state}}",
       "overridden": "Overridden",
-      "adminAll": "Admins always have every capability — overrides don't apply.",
-      "saved": "Permission updated.",
       "saveError": "Couldn't update the permission.",
       "searchPlaceholder": "Search permissions…",
       "results": "{{count}} result(s)",
@@ -3467,7 +3453,6 @@
       "noResultsHint": "Search checks names, descriptions and IDs.",
       "clearSearch": "Clear",
       "bulkApply": "Apply to all",
-      "savedBulk": "Permissions updated.",
       "mirror": {
         "title": "Permissions studio",
         "help": "Shape what each person can see. The device mirror updates from the same permission blueprint.",
@@ -3483,11 +3468,14 @@
         "always": "Always visible — cannot be denied",
         "deniedForUser": "Denied for this user",
         "consequence": "Hidden everywhere — Services, Records, dashboard and creation",
+        "consequenceRecords": "Records hidden — creation blocked",
+        "viewPrereqWarning": "Records is hidden — this user cannot create or browse records. Only records awaiting their approval stay reachable.",
         "explicitGrant": "Granted beyond role",
         "roleCaption": "{{role}} role defaults",
         "viewingAs": "Viewing as {{name}}",
         "blueprintPages": "Pages",
         "blueprintServices": "Services",
+        "serviceOther": "Other records",
         "blueprintCategories": "Record categories",
         "quickActions": "Quick actions",
         "availableCount_one": "{{count}} available",
@@ -3549,6 +3537,7 @@
         "books.override_state": "Force a record's state",
         "books.templates": "Manage Word templates",
         "books.delete": "Delete records",
+        "books.service.other": "Other records",
         "permits.view": "View security permits",
         "permits.create": "Issue permits",
         "permits.edit": "Amend & renew permits",
@@ -3614,6 +3603,9 @@
     "updatedAgo": "Updated {{n}} ago",
     "newItems": "{{n}} new",
     "listUpdated": "List updated, {{n}} new"
+  },
+  "requireCap": {
+    "notRequestable": "Access to this area is managed by administrators and cannot be requested."
   },
   "perms": {
     "locked": "You need permission for {{label}}. Click to request access.",

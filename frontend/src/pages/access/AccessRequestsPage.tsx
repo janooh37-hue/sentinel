@@ -513,7 +513,7 @@ export function UsersTable({
   currentUserId: number | undefined
   onReset: (u: AdminUserRead) => void
   onChangeRole: (u: AdminUserRead) => void
-  onEditPermissions: (u: AdminUserRead) => void
+  onEditPermissions?: (u: AdminUserRead) => void
   onSetDefaultManager: (u: AdminUserRead, enabled: boolean) => void
   onLock: (u: AdminUserRead) => void
   onUnlock: (u: AdminUserRead) => void
@@ -546,7 +546,8 @@ export function UsersTable({
           {users.map((u) => {
             const locked = u.status === 'locked' || u.status === 'disabled'
             const isSelf = currentUserId != null && u.id === currentUserId
-            const canEditPermissions = u.status === 'active' && u.role !== 'admin'
+            const canEditPermissions =
+              onEditPermissions != null && u.status === 'active' && u.role !== 'admin'
             return (
               <tr
                 key={u.id}
@@ -608,7 +609,7 @@ export function UsersTable({
                         {t('access.active.changeRole')}
                       </DropdownMenuItem>
                       {canEditPermissions ? (
-                        <DropdownMenuItem onSelect={() => onEditPermissions(u)}>
+                        <DropdownMenuItem onSelect={() => onEditPermissions?.(u)}>
                           <SlidersHorizontal className="h-3.5 w-3.5" strokeWidth={1.8} />
                           {t('access.active.editPermissions')}
                         </DropdownMenuItem>
@@ -863,10 +864,11 @@ export function AccessRequestsPage(): React.JSX.Element {
   })
   const roleMut = useMutation({
     mutationFn: ({ id, role }: { id: number; role: Role }) => api.setAuthUserRole(id, role),
-    onSuccess: () => {
+    onSuccess: (_user, variables) => {
       toast.success(t('access.toast.roleChanged'))
       setRoleTarget(null)
       invalidate()
+      void qc.invalidateQueries({ queryKey: ['user-permissions', variables.id] })
     },
     onError,
   })
@@ -994,7 +996,6 @@ export function AccessRequestsPage(): React.JSX.Element {
                 currentUserId={user?.id}
                 onReset={setResetTarget}
                 onChangeRole={setRoleTarget}
-                onEditPermissions={(target) => navigate(`/permissions?user=${target.id}`)}
                 onSetDefaultManager={(u, enabled) => defaultManagerMut.mutate({ id: u.id, enabled })}
                 onLock={(u) => lockMut.mutate(u.id)}
                 onUnlock={(u) => unlockMut.mutate(u.id)}

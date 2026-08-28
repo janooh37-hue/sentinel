@@ -24,7 +24,7 @@ def _items(db: Session, within: int, doc_type: str) -> list[ExpiryItem]:
 @router.get("", response_model=list[ExpiryItemOut])
 def list_expiry(
     db: Annotated[Session, Depends(get_db)],
-    _: Annotated[object, Depends(require_capability("employees.view"))],
+    _: Annotated[object, Depends(require_capability("expiry.view"))],
     within: int = Query(90, ge=0, le=3650),
     type: Literal["all", "uae_id", "passport"] = "all",
 ) -> list[ExpiryItemOut]:
@@ -45,7 +45,7 @@ def list_expiry(
 @router.get("/summary", response_model=ExpirySummaryOut)
 def expiry_summary(
     db: Annotated[Session, Depends(get_db)],
-    _: Annotated[object, Depends(require_capability("employees.view"))],
+    _: Annotated[object, Depends(require_capability("expiry.view"))],
 ) -> ExpirySummaryOut:
     items = _items(db, 30, "all")
     expired = sum(1 for i in items if i.bucket == "expired")

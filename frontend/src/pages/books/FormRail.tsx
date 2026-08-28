@@ -8,6 +8,7 @@ import { useTranslation } from 'react-i18next'
 
 import { cn } from '@/lib/utils'
 import { useCapabilities } from '@/lib/useCapabilities'
+import { hasServiceCap } from '@/lib/dashboardLayout'
 
 export interface RailItem {
   serviceId: string
@@ -39,7 +40,7 @@ export function FormRail({
   const { t } = useTranslation()
   const { has } = useCapabilities()
   const visibleItems = items.filter(
-    (item) => item.serviceId === 'all' || has(`books.service.${item.serviceId}`),
+    (item) => item.serviceId === 'all' || hasServiceCap(item.serviceId, has),
   )
   return (
     <nav

@@ -10,6 +10,7 @@ import {
   WIDGET_SOURCES,
   resolveLayout,
   isQuickActionAllowed,
+  hasServiceCap,
   mergeQuickActionsPreservingDenied,
   type QuickActionId,
 } from './dashboardLayout'
@@ -37,15 +38,37 @@ describe('companion quick-actions are gone', () => {
 })
 
 describe('dynamic service capabilities', () => {
-  it('maps every quick action to its books.service capability', () => {
+  it('requires both creation page capabilities and the selected service capability', () => {
+    const allowed = new Set([
+      'documents.generate',
+      'books.view',
+      'books.service.Report',
+    ])
+    const has = (capability: string): boolean => allowed.has(capability)
+
+    expect(isQuickActionAllowed('Report', has)).toBe(true)
+
+    allowed.delete('documents.generate')
+    expect(isQuickActionAllowed('Report', has)).toBe(false)
+
+    allowed.add('documents.generate')
+    allowed.delete('books.view')
+    expect(isQuickActionAllowed('Report', has)).toBe(false)
+
+    allowed.add('books.view')
+    allowed.delete('books.service.Report')
+    expect(isQuickActionAllowed('Report', has)).toBe(false)
+  })
+
+  it('checks bare service visibility independently from creation capabilities', () => {
     const checked: string[] = []
     const has = (capability: string): boolean => {
       checked.push(capability)
       return capability === 'books.service.Report'
     }
 
-    expect(isQuickActionAllowed('Report', has)).toBe(true)
-    expect(isQuickActionAllowed('General Book', has)).toBe(false)
+    expect(hasServiceCap('Report', has)).toBe(true)
+    expect(hasServiceCap('General Book', has)).toBe(false)
     expect(checked).toEqual([
       'books.service.Report',
       'books.service.General Book',

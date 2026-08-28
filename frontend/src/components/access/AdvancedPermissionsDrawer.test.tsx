@@ -99,22 +99,14 @@ describe('AdvancedPermissionsDrawer', () => {
     )
   })
 
-  it('keeps unowned dynamic services editable while named services and categories stay in the blueprint', async () => {
+  it('leaves Other records with the blueprint alongside named services and categories', async () => {
     renderDrawer()
     await userEvent.click(screen.getByRole('button', { name: /advanced/i }))
 
     expect(screen.queryByText('General Book')).not.toBeInTheDocument()
     expect(screen.queryByText('Incoming')).not.toBeInTheDocument()
-    const otherToggle = screen.getByRole('group', { name: 'Other' })
-    await userEvent.click(within(otherToggle).getByRole('button', { name: 'Deny' }))
-
-    await waitFor(() =>
-      expect(api.setUserPermission).toHaveBeenCalledWith(
-        user.id,
-        'books.service.other',
-        'deny',
-      ),
-    )
+    expect(screen.queryByText('Other')).not.toBeInTheDocument()
+    expect(api.setUserPermission).not.toHaveBeenCalled()
   })
 
   it('filters by raw capability id and clears an empty result', async () => {
@@ -138,7 +130,7 @@ describe('AdvancedPermissionsDrawer', () => {
     renderDrawer()
     await userEvent.click(screen.getByRole('button', { name: /advanced/i }))
 
-    const bulkToggle = screen.getByRole('group', { name: 'Apply to all books' })
+    const bulkToggle = screen.getByRole('group', { name: 'Apply to all Books' })
     await userEvent.click(within(bulkToggle).getByRole('button', { name: 'Deny' }))
 
     await waitFor(() =>

@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -347,11 +347,13 @@ describe('PermissionsPage Mirror editor', () => {
       effective: [
         ...pageCaps,
         ...QUICK_ACTION_IDS.map((id) => `books.service.${id}`),
+        'books.service.other',
         'books.category.incoming',
       ],
       role_defaults: [
         ...pageCaps,
         ...QUICK_ACTION_IDS.map((id) => `books.service.${id}`),
+        'books.service.other',
         'books.category.incoming',
       ],
       overrides: {},
@@ -452,5 +454,131 @@ describe('PermissionsPage Mirror editor', () => {
       'max-h-[calc(100dvh-8rem)]',
     )
     expect(screen.getByRole('link', { name: 'Permission requests' })).toHaveClass('min-h-11')
+  })
+
+  it('warns when Records is denied and books.approve is the only warning trigger', async () => {
+    const base = permissionFixture()
+    const noRecordsView = permissionFixture({
+      effective: [
+        ...base.effective.filter(
+          (capability) => capability !== 'books.view' && capability !== 'documents.generate',
+        ),
+        'books.approve',
+      ],
+      overrides: { ...base.overrides, 'books.view': 'deny' },
+    })
+    renderPage(noRecordsView, { requests: [] })
+
+    const warning = await screen.findByRole('note')
+    expect(warning).toHaveTextContent('cannot create or browse records')
+    expect(warning).toHaveTextContent('records awaiting their approval')
+    expect(warning).toHaveClass('bg-warning-soft')
+  })
+
+  it('removes creation and record previews when books.view is the only missing prerequisite', async () => {
+    const base = permissionFixture()
+    const noRecordsView = permissionFixture({
+      effective: base.effective.filter((capability) => capability !== 'books.view'),
+      overrides: { ...base.overrides, 'books.view': 'deny' },
+    })
+    renderPage(noRecordsView, { requests: [] })
+
+    const mirror = await screen.findByTestId('mirror-device')
+    expect(within(mirror).queryByRole('heading', { name: 'Services' })).not.toBeInTheDocument()
+    expect(within(mirror).queryByRole('heading', { name: 'Quick actions' })).not.toBeInTheDocument()
+    expect(
+      within(mirror).queryByRole('heading', { name: 'Record categories' }),
+    ).not.toBeInTheDocument()
+
+    const recordsTile = screen.getByRole('button', { name: /Records Deny/ })
+    fireEvent.focus(recordsTile)
+    expect(await screen.findByText(/Records hidden/)).toHaveTextContent('creation blocked')
+  })
+
+  it('localizes dynamic Other-record requests instead of showing the backend fallback', async () => {
+    renderPage(permissionFixture(), {
+      requests: [
+        {
+          ...pendingRequest,
+          capability: 'books.service.other',
+          capability_label: 'other',
+        },
+      ],
+    })
+
+    const requestStrip = (await screen.findByText('Requested access')).parentElement?.parentElement
+    expect(requestStrip).not.toBeNull()
+    expect(within(requestStrip!).getByText('Other records')).toBeVisible()
+    expect(within(requestStrip!).queryByText('other')).not.toBeInTheDocument()
+  })
+
+  it('edits Other records in the blueprint, counts its deny, and never previews it as creatable', async () => {
+    const allVisible = permissionFixture({
+      effective: [
+        ...pageCaps,
+        ...QUICK_ACTION_IDS.map((id) => `books.service.${id}`),
+        'books.service.other',
+        'books.category.incoming',
+      ],
+      role_defaults: [
+        ...pageCaps,
+        ...QUICK_ACTION_IDS.map((id) => `books.service.${id}`),
+        'books.service.other',
+        'books.category.incoming',
+      ],
+      overrides: {},
+    })
+    vi.mocked(api.setUserPermission).mockResolvedValue({
+      ...allVisible,
+      effective: allVisible.effective.filter(
+        (capability) => capability !== 'books.service.other',
+      ),
+      overrides: { 'books.service.other': 'deny' },
+    })
+    renderPage(allVisible, { requests: [] })
+
+    const blueprint = await screen.findByRole('region', { name: 'Permission blueprint' })
+    const otherRecords = within(blueprint).getByRole('button', {
+      name: /Other records Grant/,
+    })
+    expect(within(screen.getByTestId('mirror-device')).queryByText('Other records')).not.toBeInTheDocument()
+    expect(
+      screen.getByText(
+        (_, element) =>
+          element?.tagName === 'SPAN' &&
+          element.textContent?.trim() === '0 hidden' &&
+          element.querySelector('strong') != null,
+      ),
+    ).toBeVisible()
+
+    await userEvent.click(otherRecords)
+
+    expect(api.setUserPermission).toHaveBeenCalledWith(
+      operator.id,
+      'books.service.other',
+      'deny',
+    )
+    expect(
+      await screen.findByText(
+        (_, element) =>
+          element?.tagName === 'SPAN' &&
+          element.textContent?.trim() === '1 hidden' &&
+          element.querySelector('strong') != null,
+      ),
+    ).toBeVisible()
+  })
+
+  it('treats a disabled admin deep-link as unavailable instead of full access', async () => {
+    const disabledAdmin: AdminUserRead = { ...admin, status: 'disabled' }
+    renderPage(permissionFixture(), {
+      users: [operator, disabledAdmin],
+      entry: '/permissions?user=1',
+    })
+
+    expect(
+      await screen.findByText('This user is not available for permission editing.'),
+    ).toBeVisible()
+    expect(screen.queryByText('Always full access')).not.toBeInTheDocument()
+    expect(api.getUserPermissions).not.toHaveBeenCalled()
   })
 })

@@ -19,11 +19,23 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import Any
 
+from pydantic import ValidationError
 from sqlalchemy import Text, and_, cast, func, select
 from sqlalchemy.orm import Session
 
-from app.db.models import Book, Document, Employee, Leave, LedgerEntry, User, Violation
+from app.db.models import (
+    Book,
+    Document,
+    Employee,
+    Leave,
+    LedgerEntry,
+    User,
+    UserDashboardLayout,
+    Violation,
+)
 from app.schemas.dashboard import (
+    DASHBOARD_QUICK_ACTION_IDS,
+    DashboardLayout,
     DashboardLeaveItem,
     DashboardRecentDocument,
     DashboardRecentLedger,
@@ -46,6 +58,45 @@ _ACTIVE_STATUS = "Active"
 
 # Only Approved leaves are considered real absences.
 _APPROVED_STATUS = "Approved"
+_VALID_QUICK_ACTION_IDS = frozenset(DASHBOARD_QUICK_ACTION_IDS)
+
+
+def get_user_layout(db: Session, user_id: int) -> DashboardLayout | None:
+    """Return one user's saved layout, tolerating absent or stale stored JSON."""
+    row = db.get(UserDashboardLayout, user_id)
+    if row is None:
+        return None
+    raw = row.layout
+    quick_actions = raw.get("quick_actions") if isinstance(raw, dict) else None
+    if isinstance(raw, dict) and isinstance(quick_actions, list):
+        raw = {
+            **raw,
+            "quick_actions": [
+                action
+                for action in quick_actions
+                if isinstance(action, dict) and action.get("id") in _VALID_QUICK_ACTION_IDS
+            ],
+        }
+    try:
+        return DashboardLayout.model_validate(raw)
+    except ValidationError:
+        return None
+
+
+def set_user_layout(
+    db: Session,
+    user_id: int,
+    layout: DashboardLayout,
+) -> DashboardLayout:
+    """Persist a complete private layout for one user."""
+    payload = layout.model_dump(mode="json")
+    row = db.get(UserDashboardLayout, user_id)
+    if row is None:
+        db.add(UserDashboardLayout(user_id=user_id, layout=payload))
+    else:
+        row.layout = payload
+    db.commit()
+    return layout
 
 
 def _first_of_month(today: date) -> datetime:
@@ -77,7 +128,7 @@ def get_summary(
         totals=_compute_totals(db, today=today, user=user),
         on_leave_today=_on_leave_today(db, today=today),
         upcoming_leave_ends=_upcoming_leave_ends(db, today=today),
-        recent_documents=_recent_documents(db),
+        recent_documents=_recent_documents(db, user=user),
         recent_ledger=_recent_ledger(db),
         email_sync=_email_sync(db, today=today, owner_user_id=owner_user_id),
     )
@@ -112,16 +163,19 @@ def _compute_totals(db: Session, *, today: date, user: User | None = None) -> Da
 
     present_today = max(employees_active - on_leave_count, 0)
 
-    forms_this_month = int(
-        db.execute(
-            select(func.count())
-            .select_from(Document)
-            .where(
-                Document.created_at >= _first_of_month(today),
-                Document.ref_number != "DRAFT",
-            )
-        ).scalar_one()
+    forms_stmt = (
+        select(func.count())
+        .select_from(Document)
+        .where(
+            Document.created_at >= _first_of_month(today),
+            Document.ref_number != "DRAFT",
+        )
     )
+    if user is not None:
+        document_visibility = book_service.document_visibility_clause(db, user)
+        if document_visibility is not None:
+            forms_stmt = forms_stmt.where(document_visibility)
+    forms_this_month = int(db.execute(forms_stmt).scalar_one())
 
     open_violations_count = int(
         db.execute(
@@ -247,7 +301,11 @@ def _upcoming_leave_ends(db: Session, *, today: date) -> list[DashboardUpcomingL
 # ---------------------------------------------------------------------------
 
 
-def _recent_documents(db: Session) -> list[DashboardRecentDocument]:
+def _recent_documents(
+    db: Session,
+    *,
+    user: User | None = None,
+) -> list[DashboardRecentDocument]:
     stmt = (
         select(
             Document.id,
@@ -264,6 +322,10 @@ def _recent_documents(db: Session) -> list[DashboardRecentDocument]:
         .order_by(Document.created_at.desc(), Document.id.desc())
         .limit(RECENT_LIMIT)
     )
+    if user is not None:
+        document_visibility = book_service.document_visibility_clause(db, user)
+        if document_visibility is not None:
+            stmt = stmt.where(document_visibility)
 
     return [
         DashboardRecentDocument(

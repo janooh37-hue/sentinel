@@ -5,7 +5,7 @@
  * · search · clear. Tests still reach inputs by their data-testid attributes.
  */
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useEffectEvent, useRef, useState } from 'react'
 import { ChevronDown, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
@@ -15,6 +15,7 @@ import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
 import { serviceGlyph, useServiceLabel } from './serviceLabels'
 import { useCapabilities } from '@/lib/useCapabilities'
+import { hasServiceCap } from '@/lib/dashboardLayout'
 
 export interface BooksFilters {
   categoryIds: string[]
@@ -44,14 +45,17 @@ export function BooksFilterBar({
   const isAr = i18n.language.startsWith('ar')
   const serviceLabel = useServiceLabel()
   const { has } = useCapabilities()
-  const visibleServices = services.filter((service) => has(`books.service.${service.id}`))
-  const selectedServiceId =
-    filters.serviceId === 'all' || has(`books.service.${filters.serviceId}`)
-      ? filters.serviceId
-      : 'all'
+  const visibleServices = services.filter((service) => hasServiceCap(service.id, has))
+  const selectedServiceAllowed =
+    filters.serviceId === 'all' || hasServiceCap(filters.serviceId, has)
+  const selectedServiceId = selectedServiceAllowed ? filters.serviceId : 'all'
+  const resetDeniedServiceRef = useRef<string | null>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [catOpen, setCatOpen] = useState(false)
   const catRootRef = useRef<HTMLDivElement>(null)
+  const resetDeniedService = useEffectEvent(() => {
+    onChange({ ...filters, serviceId: 'all' })
+  })
   const [svcOpen, setSvcOpen] = useState(false)
   const svcRootRef = useRef<HTMLDivElement>(null)
 
@@ -64,6 +68,16 @@ export function BooksFilterBar({
     filters.q !== '' ||
     !!filters.drafts ||
     selectedServiceId !== 'all'
+
+  useEffect(() => {
+    if (selectedServiceAllowed) {
+      resetDeniedServiceRef.current = null
+      return
+    }
+    if (resetDeniedServiceRef.current === filters.serviceId) return
+    resetDeniedServiceRef.current = filters.serviceId
+    resetDeniedService()
+  }, [filters.serviceId, selectedServiceAllowed])
 
   const clear = (): void => {
     onChange({ categoryIds: [], direction: 'all', status: 'all', fromDate: '', toDate: '', q: '', drafts: false, serviceId: 'all' })

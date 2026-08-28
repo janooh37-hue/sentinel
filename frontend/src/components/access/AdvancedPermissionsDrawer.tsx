@@ -164,15 +164,13 @@ function DomainGroup({
               aria-hidden
             />
           </button>
-          {!perms.is_admin && (
-            <EffectToggle
-              compact
-              value={uniform ?? 'default'}
-              disabled={writePending || saving === `domain:${domain}`}
-              groupLabel={`${t('access.permissions.bulkApply')} ${domain}`}
-              onChange={(next) => onBulk(caps, next)}
-            />
-          )}
+          <EffectToggle
+            compact
+            value={uniform ?? 'default'}
+            disabled={writePending || saving === `domain:${domain}`}
+            groupLabel={`${t('access.permissions.bulkApply')} ${domainLabel}`}
+            onChange={(next) => onBulk(caps, next)}
+          />
         </div>
       </CardHeader>
       {open && (
@@ -215,7 +213,7 @@ function DomainGroup({
                           : t('access.permissions.state.deny'),
                       })}
                     </span>
-                    {override && !perms.is_admin ? (
+                    {override ? (
                       <span className="inline-flex items-center rounded bg-warning-soft px-1.5 py-px text-[0.65em] font-semibold uppercase tracking-[0.06em] text-warning">
                         {t('access.permissions.overridden')}
                       </span>
@@ -224,8 +222,8 @@ function DomainGroup({
                 </div>
                 <div className="shrink-0 sm:pt-0.5">
                   <EffectToggle
-                    value={perms.is_admin ? 'grant' : value}
-                    disabled={perms.is_admin || writePending || saving === cap.id}
+                    value={value}
+                    disabled={writePending || saving === cap.id}
                     groupLabel={label}
                     onChange={(next) => onSet(cap.id, next)}
                   />
@@ -261,7 +259,8 @@ export function AdvancedPermissionsDrawer({
       capabilities.filter((capability) => {
         if (capability.id.startsWith('books.category.')) return false
         if (!capability.id.startsWith('books.service.')) return true
-        return !isQuickActionId(capability.id.slice('books.service.'.length))
+        const serviceId = capability.id.slice('books.service.'.length)
+        return serviceId !== 'other' && !isQuickActionId(serviceId)
       }),
     [capabilities],
   )
@@ -320,7 +319,7 @@ export function AdvancedPermissionsDrawer({
   }
 
   return (
-    <section className="advanced overflow-hidden rounded-2xl border border-hairline bg-surface">
+    <section className="overflow-hidden rounded-2xl border border-hairline bg-surface">
       <button
         type="button"
         onClick={() => setOpen((value) => !value)}
@@ -382,12 +381,6 @@ export function AdvancedPermissionsDrawer({
           </div>
 
           <div className="space-y-4 p-5">
-            {perms.is_admin ? (
-              <div className="flex items-center gap-2.5 rounded-lg border border-border bg-accent-soft/40 px-4 py-3 text-sm text-foreground">
-                <ShieldCheck className="h-4 w-4 shrink-0 text-accent" strokeWidth={1.8} aria-hidden />
-                {t('access.permissions.adminAll')}
-              </div>
-            ) : null}
 
             {query.trim() && visibleCount === 0 ? (
               <EmptyState

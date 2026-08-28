@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, expect, it, vi } from 'vitest'
 
@@ -36,7 +36,7 @@ beforeEach(() => {
   } as never)
 })
 
-it('hides the employee-lookup expiry-board link without expiry.view', async () => {
+it('hides the expiry hero and skips its query without expiry.view', async () => {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   render(
     <QueryClientProvider client={client}>
@@ -46,7 +46,10 @@ it('hides the employee-lookup expiry-board link without expiry.view', async () =
     </QueryClientProvider>,
   )
 
-  expect(await screen.findByText(/Aisha Noor/)).toBeVisible()
+  await waitFor(() => expect(api.getEmployeesCompleteness).toHaveBeenCalledOnce())
+  expect(api.getExpiry).not.toHaveBeenCalled()
+  expect(screen.queryByText('Expiring documents')).not.toBeInTheDocument()
+  expect(screen.queryByText(/Aisha Noor/)).not.toBeInTheDocument()
   expect(
     screen.queryByRole('link', { name: /View all expiring documents/i }),
   ).not.toBeInTheDocument()

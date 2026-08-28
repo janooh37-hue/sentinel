@@ -74,10 +74,12 @@ export function NavBellPopover(): React.JSX.Element {
   const { isAdmin } = useIdentity()
   const { has } = useCapabilities()
   const canViewBooks = has('books.view')
+  const canApproveBooks = has('books.approve')
+  const canEditBooks = has('books.edit')
   const canViewExpiry = has('expiry.view')
   const canViewLeaves = has('leaves.view')
   const canViewLedger = has('ledger.view')
-
+  const canScanDocuments = has('documents.scan')
   const recentQuery = useQuery({
     queryKey: ['ledger', 'unread-recent'],
     queryFn: () => api.getLedgerUnreadRecent(5),
@@ -102,16 +104,16 @@ export function NavBellPopover(): React.JSX.Element {
   const expiryQuery = useQuery({
     queryKey: ['expiry', 'summary'],
     queryFn: api.getExpirySummary,
-    enabled: has('employees.view') && canViewExpiry,
+    enabled: canViewExpiry,
     staleTime: 60_000,
     refetchInterval: 60_000,
   })
   const expiryUrgent = canViewExpiry ? (expiryQuery.data?.urgent ?? 0) : 0
 
   const awaitingReturn = useAwaitingReturnCount(canViewLeaves)
-  const scanInbox = useScanInboxCount()
+  const scanInbox = useScanInboxCount(canScanDocuments)
   const followUps = useFlagCount(canViewLedger)
-  const { count: scanBackCount } = useScanBack('mine', canViewBooks)
+  const { count: scanBackCount } = useScanBack('mine', canViewBooks && canEditBooks)
 
   // Phase 4 LAN — awaiting MY approval (books.approve-gated).
   // Query key ['books','awaiting'] is also invalidated by useNotificationStream.
@@ -120,9 +122,9 @@ export function NavBellPopover(): React.JSX.Element {
     queryFn: api.listAwaitingBooks,
     staleTime: 30_000,
     refetchInterval: 120_000,
-    enabled: canViewBooks && has('books.approve'),
+    enabled: canApproveBooks,
   })
-  const awaitingApproval = canViewBooks ? (approvalsQuery.data?.length ?? 0) : 0
+  const awaitingApproval = canApproveBooks ? (approvalsQuery.data?.length ?? 0) : 0
 
   const markAllMutation = useMutation({
     mutationFn: () => api.markAllLedgerRead(),
@@ -231,12 +233,12 @@ export function NavBellPopover(): React.JSX.Element {
           )}
 
           {/* Awaiting MY approval (books.approve-gated) — Phase 4 LAN */}
-          {awaitingApproval > 0 && (
+          {canApproveBooks && awaitingApproval > 0 && (
             <button
               type="button"
               onClick={() => {
                 setOpen(false)
-                navigate('/books')
+                navigate('/books/approvals')
               }}
               className="flex w-full items-center gap-3 border-b border-hairline px-4 py-3 text-start transition-colors hover:bg-surface-tinted focus-visible:bg-surface-tinted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
             >
@@ -257,8 +259,8 @@ export function NavBellPopover(): React.JSX.Element {
             </button>
           )}
 
-          {/* Signed copy never filed — books.edit-gated inside useScanBack */}
-          {scanBackCount > 0 && (
+          {/* Signed copy never filed — books.view + books.edit gated */}
+          {canViewBooks && canEditBooks && scanBackCount > 0 && (
             <button
               type="button"
               onClick={() => {
@@ -311,7 +313,7 @@ export function NavBellPopover(): React.JSX.Element {
             </button>
           )}
 
-          {/* Expiring documents (employees.view-gated) */}
+          {/* Expiring documents — expiry.view gated */}
           {expiryUrgent > 0 && (
             <button
               type="button"
@@ -339,7 +341,7 @@ export function NavBellPopover(): React.JSX.Element {
           )}
 
           {/* Awaiting return form */}
-          {awaitingReturn > 0 && (
+          {canViewLeaves && awaitingReturn > 0 && (
             <button
               type="button"
               onClick={() => {
@@ -366,7 +368,7 @@ export function NavBellPopover(): React.JSX.Element {
           )}
 
           {/* Scan inbox — scanned documents awaiting confirmation or routing */}
-          {scanInbox > 0 && (
+          {canScanDocuments && scanInbox > 0 && (
             <button
               type="button"
               onClick={() => { setOpen(false); navigate('/scan-inbox') }}

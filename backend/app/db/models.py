@@ -798,12 +798,24 @@ class AppSetting(Base):
 
     key: Mapped[str] = mapped_column(String(64), primary_key=True)
     value: Mapped[str] = mapped_column(Text)  # JSON-encoded payload
-    # Sidecar JSON column for large structured settings (Phase 17 polish).
-    # Operator-controlled dashboard widget visibility/ordering lives under the
-    # well-known key ``settings.dashboard_layout``; all other settings continue
-    # to use ``value``. Stored as a native JSON column so the read path can
-    # return a typed dict without a string decode.
-    dashboard_layout: Mapped[dict[str, object] | None] = mapped_column(JSON, nullable=True)
+
+
+class UserDashboardLayout(Base):
+    """A user's private dashboard widget and quick-action arrangement."""
+
+    __tablename__ = "user_dashboard_layouts"
+
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    layout: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=_utcnow,
+        onupdate=_utcnow,
+        server_default=func.current_timestamp(),
+        nullable=False,
+    )
 
 
 class VaultFile(Base):

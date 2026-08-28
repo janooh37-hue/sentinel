@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useIsMutating, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
+  AlertTriangle,
   ChevronDown,
   Eye,
   EyeOff,
@@ -65,6 +66,16 @@ const PAGE_BLUEPRINT: readonly PageBlueprintItem[] = [
 ]
 
 const MIRROR_MOBILE_QUERY = '(max-width: 759px)'
+
+const RECORD_CAPABILITIES_REQUIRING_VIEW = [
+  'books.create',
+  'books.edit',
+  'books.approve',
+  'books.submit',
+  'books.delete',
+  'books.override_state',
+  'documents.generate',
+] as const
 
 function userLabel(user: AdminUserRead): string {
   return (user.display_name || user.name_en || user.email.split('@')[0]) ?? user.email
@@ -181,6 +192,8 @@ function MirrorDevice({
   pages,
   services,
   categories,
+  showCreation,
+  showRecords,
   expanded,
   mobile,
   onExpandedChange,
@@ -191,6 +204,8 @@ function MirrorDevice({
   pages: BlueprintItem[]
   services: BlueprintItem[]
   categories: BlueprintItem[]
+  showCreation: boolean
+  showRecords: boolean
   expanded: boolean
   mobile: boolean
   onExpandedChange: (expanded: boolean) => void
@@ -272,68 +287,74 @@ function MirrorDevice({
             </div>
           </section>
 
-          <section data-mirror-region="service">
-            <div className="mb-2 flex items-center justify-between gap-3 text-[0.68em] font-semibold uppercase tracking-[0.08em] text-primary-foreground">
-              <h3>{t('access.permissions.mirror.blueprintServices')}</h3>
-              <span>{t('access.permissions.mirror.availableCount', { count: services.length })}</span>
-            </div>
-            {services.length === 0 ? (
-              <p className="text-[0.7em] text-primary-foreground">
-                {t('access.permissions.mirror.nothingVisible')}
-              </p>
-            ) : (
-              <div className="grid grid-cols-2 gap-2">
-                {services.map((service) => (
-                  <span
-                    key={service.id}
-                    className="rounded-lg border border-primary-foreground/10 bg-primary-foreground/10 px-2.5 py-2 text-[0.7em]"
-                  >
-                    <span className="me-1" aria-hidden>{service.glyph}</span>
-                    <bdi dir="auto">{service.label}</bdi>
-                  </span>
-                ))}
+          {showCreation ? (
+            <section data-mirror-region="service">
+              <div className="mb-2 flex items-center justify-between gap-3 text-[0.68em] font-semibold uppercase tracking-[0.08em] text-primary-foreground">
+                <h3>{t('access.permissions.mirror.blueprintServices')}</h3>
+                <span>{t('access.permissions.mirror.availableCount', { count: services.length })}</span>
               </div>
-            )}
-          </section>
+              {services.length === 0 ? (
+                <p className="text-[0.7em] text-primary-foreground">
+                  {t('access.permissions.mirror.nothingVisible')}
+                </p>
+              ) : (
+                <div className="grid grid-cols-2 gap-2">
+                  {services.map((service) => (
+                    <span
+                      key={service.id}
+                      className="rounded-lg border border-primary-foreground/10 bg-primary-foreground/10 px-2.5 py-2 text-[0.7em]"
+                    >
+                      <span className="me-1" aria-hidden>{service.glyph}</span>
+                      <bdi dir="auto">{service.label}</bdi>
+                    </span>
+                  ))}
+                </div>
+              )}
+            </section>
+          ) : null}
 
-          <section data-mirror-region="category">
-            <h3 className="mb-2 text-[0.68em] font-semibold uppercase tracking-[0.08em] text-primary-foreground">
-              {t('access.permissions.mirror.blueprintCategories')}
-            </h3>
-            {categories.length === 0 ? (
-              <p className="text-[0.7em] text-primary-foreground">
-                {t('access.permissions.mirror.nothingVisible')}
-              </p>
-            ) : (
-              <div className="flex flex-wrap gap-1.5">
-                {categories.map((category) => (
-                  <span key={category.id} className="rounded-full border border-primary-foreground/15 px-2.5 py-1 text-[0.68em]">
-                    <bdi dir="auto">{category.label}</bdi>
-                  </span>
-                ))}
-              </div>
-            )}
-          </section>
+          {showRecords ? (
+            <section data-mirror-region="category">
+              <h3 className="mb-2 text-[0.68em] font-semibold uppercase tracking-[0.08em] text-primary-foreground">
+                {t('access.permissions.mirror.blueprintCategories')}
+              </h3>
+              {categories.length === 0 ? (
+                <p className="text-[0.7em] text-primary-foreground">
+                  {t('access.permissions.mirror.nothingVisible')}
+                </p>
+              ) : (
+                <div className="flex flex-wrap gap-1.5">
+                  {categories.map((category) => (
+                    <span key={category.id} className="rounded-full border border-primary-foreground/15 px-2.5 py-1 text-[0.68em]">
+                      <bdi dir="auto">{category.label}</bdi>
+                    </span>
+                  ))}
+                </div>
+              )}
+            </section>
+          ) : null}
 
-          <section>
-            <h3 className="mb-2 text-[0.68em] font-semibold uppercase tracking-[0.08em] text-primary-foreground">
-              {t('access.permissions.mirror.quickActions')}
-            </h3>
-            {services.length === 0 ? (
-              <p className="text-[0.7em] text-primary-foreground">
-                {t('access.permissions.mirror.nothingVisible')}
-              </p>
-            ) : (
-              <div className="grid grid-cols-3 gap-1.5">
-                {services.slice(0, 6).map((service) => (
-                  <span key={service.id} className="rounded-md bg-primary-foreground/10 px-2 py-1.5 text-center text-[0.64em]">
-                    <span className="block text-base" aria-hidden>{service.glyph}</span>
-                    <bdi dir="auto">{service.label}</bdi>
-                  </span>
-                ))}
-              </div>
-            )}
-          </section>
+          {showCreation ? (
+            <section>
+              <h3 className="mb-2 text-[0.68em] font-semibold uppercase tracking-[0.08em] text-primary-foreground">
+                {t('access.permissions.mirror.quickActions')}
+              </h3>
+              {services.length === 0 ? (
+                <p className="text-[0.7em] text-primary-foreground">
+                  {t('access.permissions.mirror.nothingVisible')}
+                </p>
+              ) : (
+                <div className="grid grid-cols-3 gap-1.5">
+                  {services.slice(0, 6).map((service) => (
+                    <span key={service.id} className="rounded-md bg-primary-foreground/10 px-2 py-1.5 text-center text-[0.64em]">
+                      <span className="block text-base" aria-hidden>{service.glyph}</span>
+                      <bdi dir="auto">{service.label}</bdi>
+                    </span>
+                  ))}
+                </div>
+              )}
+            </section>
+          ) : null}
         </div>
       ) : null}
       </div>
@@ -380,7 +401,9 @@ function RequestStrip({
           <div key={request.id} className="flex flex-col gap-2 rounded-lg bg-surface/70 p-3 sm:flex-row sm:items-center">
             <span className="min-w-0 flex-1">
               <bdi className="block text-[0.82em] font-semibold" dir="auto">
-                {request.capability_label}
+                {t(`access.permissions.caps.${request.capability}`, {
+                  defaultValue: request.capability_label,
+                })}
               </bdi>
               <span className="block font-mono text-[0.68em] text-muted-foreground">
                 {formatter.format(new Date(request.created_at))}
@@ -455,13 +478,14 @@ export function PermissionsPage(): React.JSX.Element {
       : (users.find(
           (user) => user.id === requestedUserId && user.role !== 'admin',
         ) ?? null)
-  const requestedUser =
-    requestedUserId === null
-      ? null
-      : ((usersQuery.data ?? []).find((user) => user.id === requestedUserId) ?? null)
-  const requestedAdmin = requestedUser?.role === 'admin'
+  const requestedAdmin =
+    requestedUserId !== null &&
+    users.some((user) => user.id === requestedUserId && user.role === 'admin')
   const requestedUserMissing =
-    requestedUserParam !== null && users.length > 0 && selectedUser == null && !requestedAdmin
+    requestedUserParam !== null &&
+    (usersQuery.data ?? []).length > 0 &&
+    selectedUser == null &&
+    !requestedAdmin
   const selectedId = selectedUser?.id ?? null
   const permissionWritesPending =
     useIsMutating({ mutationKey: ['user-permission-write', selectedId] }) > 0
@@ -492,18 +516,25 @@ export function PermissionsPage(): React.JSX.Element {
     [t],
   )
   const serviceItems = useMemo<BlueprintItem[]>(
-    () =>
-      QUICK_ACTION_IDS.map((id: QuickActionId) => {
+    () => [
+      ...QUICK_ACTION_IDS.map((id: QuickActionId) => {
         const template = templatesById[id]
         return {
           id,
           capability: `books.service.${id}`,
           label: (isAr ? template?.name_ar : template?.name_en) || id,
-          kind: 'service',
+          kind: 'service' as const,
           glyph: emojiForTemplate(id),
         }
       }),
-    [isAr, templatesById],
+      {
+        id: 'other',
+        capability: 'books.service.other',
+        label: t('access.permissions.mirror.serviceOther'),
+        kind: 'service',
+      },
+    ],
+    [isAr, t, templatesById],
   )
   const categoryItems = useMemo<BlueprintItem[]>(
     () =>
@@ -526,15 +557,25 @@ export function PermissionsPage(): React.JSX.Element {
         0,
       )
     : 0
+  const canViewRecords = effective.has('books.view')
+  const canCreateRecords = canViewRecords && effective.has('documents.generate')
+  const showViewPrereqWarning =
+    !canViewRecords &&
+    RECORD_CAPABILITIES_REQUIRING_VIEW.some((capability) => effective.has(capability))
   const visiblePages = pageItems.filter(
     (item) => item.locked || (item.capability != null && effective.has(item.capability)),
   )
-  const visibleServices = serviceItems.filter(
-    (item) => item.capability != null && effective.has(item.capability),
-  )
-  const visibleCategories = categoryItems.filter(
-    (item) => item.capability != null && effective.has(item.capability),
-  )
+  const visibleServices = canCreateRecords
+    ? serviceItems.filter(
+        (item) =>
+          item.id !== 'other' && item.capability != null && effective.has(item.capability),
+      )
+    : []
+  const visibleCategories = canViewRecords
+    ? categoryItems.filter(
+        (item) => item.capability != null && effective.has(item.capability),
+      )
+    : []
   const selectedRequests = (requestsQuery.data ?? []).filter(
     (request) => request.user_id === selectedUser?.id && request.status === 'pending',
   )
@@ -635,6 +676,9 @@ export function PermissionsPage(): React.JSX.Element {
     if (captionItem.locked) return t('access.permissions.mirror.always')
     if (!captionItem.capability) return t('access.permissions.mirror.always')
     const denied = !effective.has(captionItem.capability)
+    if (denied && captionItem.capability === 'books.view') {
+      return t('access.permissions.mirror.consequenceRecords')
+    }
     if (denied && (captionItem.kind === 'service' || captionItem.kind === 'category')) {
       return t('access.permissions.mirror.consequence')
     }
@@ -753,10 +797,26 @@ export function PermissionsPage(): React.JSX.Element {
         ) : (
           <>
             <section className="overflow-hidden rounded-2xl border border-hairline bg-surface shadow-sm">
-              <div className="flex justify-end border-b border-hairline px-5 py-3">
+              <div className="flex flex-col gap-3 border-b border-hairline px-5 py-3 sm:flex-row sm:items-center sm:justify-between">
+                {showViewPrereqWarning ? (
+                  <div
+                    role="note"
+                    className="flex min-w-0 items-start gap-2 rounded-lg border border-warning/30 bg-warning-soft px-3 py-2 text-start text-[0.78em] leading-relaxed text-foreground"
+                  >
+                    <AlertTriangle
+                      className="mt-0.5 h-4 w-4 shrink-0 text-warning"
+                      strokeWidth={1.8}
+                      aria-hidden
+                    />
+                    <span className="min-w-0">
+                      {t('access.permissions.mirror.viewPrereqWarning')}
+                    </span>
+                  </div>
+                ) : null}
                 <span
                   className={cn(
-                    'rounded-full px-3 py-1.5 text-[0.72em]',
+                    'shrink-0 self-start rounded-full px-3 py-1.5 text-[0.72em] sm:self-auto',
+                    !showViewPrereqWarning && 'sm:ms-auto',
                     hiddenCount > 0
                       ? 'bg-accent-soft text-accent'
                       : 'bg-surface-tinted text-muted-foreground',
@@ -839,6 +899,8 @@ export function PermissionsPage(): React.JSX.Element {
                     pages={visiblePages}
                     services={visibleServices}
                     categories={visibleCategories}
+                    showCreation={canCreateRecords}
+                    showRecords={canViewRecords}
                     expanded
                     mobile={false}
                     onExpandedChange={() => {}}
@@ -880,6 +942,8 @@ export function PermissionsPage(): React.JSX.Element {
                 pages={visiblePages}
                 services={visibleServices}
                 categories={visibleCategories}
+                showCreation={canCreateRecords}
+                showRecords={canViewRecords}
                 expanded={mirrorExpanded}
                 mobile
                 onExpandedChange={setMirrorExpanded}

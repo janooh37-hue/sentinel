@@ -8,7 +8,10 @@ import { BottomTabBar } from '@/components/shell/BottomTabBar'
 import { LockOverlay } from '@/components/shell/LockOverlay'
 import { MobileTopBar } from '@/components/shell/MobileTopBar'
 import { NavDrawer } from '@/components/shell/NavDrawer'
-import { RequireCapability } from '@/components/shell/RequireCapability'
+import {
+  RequireAnyCapability,
+  RequireCapability,
+} from '@/components/shell/RequireCapability'
 import { TopNav } from '@/components/shell/TopNav'
 import { ErrorBoundary } from '@/components/ui/error-boundary'
 import { ShortcutsHelpDialog } from '@/components/ui/shortcuts-help'
@@ -82,6 +85,7 @@ const DutyLocationsPage = lazy(loadDutyLocationsPage)
 const ScanInboxPage = lazy(loadScanInboxPage)
 const SendToGroupPage = lazy(loadSendToGroupPage)
 const ScanBackPage = lazy(loadScanBackPage)
+const APPROVALS_ROUTE_CAPS = ['books.view', 'books.approve'] as const
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -257,7 +261,9 @@ function Shell(): React.JSX.Element {
                 path="/application"
                 element={
                   <RequireCapability cap="documents.generate">
-                    <ApplicationPage />
+                    <RequireCapability cap="books.view">
+                      <ApplicationPage />
+                    </RequireCapability>
                   </RequireCapability>
                 }
               />
@@ -274,24 +280,21 @@ function Shell(): React.JSX.Element {
               <Route
                 path="/books/approvals"
                 element={
-                  <RequireCapability cap="books.view">
+                  <RequireAnyCapability caps={APPROVALS_ROUTE_CAPS}>
                     <ApprovalsPage />
-                  </RequireCapability>
+                  </RequireAnyCapability>
                 }
               />
-              <Route
-                path="/books/:id"
-                element={
-                  <RequireCapability cap="books.view">
-                    <BookRecordPage />
-                  </RequireCapability>
-                }
-              />
+              {/* Pending approval/reviewer assignment is row authority even
+                  without global book caps; the API owns that decision. */}
+              <Route path="/books/:id" element={<BookRecordPage />} />
               <Route
                 path="/scan-back"
                 element={
-                  <RequireCapability cap="books.edit">
-                    <ScanBackPage />
+                  <RequireCapability cap="books.view">
+                    <RequireCapability cap="books.edit">
+                      <ScanBackPage />
+                    </RequireCapability>
                   </RequireCapability>
                 }
               />

@@ -116,8 +116,8 @@ describe('BottomTabBar', () => {
       }),
     )
     mockUseCapabilities.mockReturnValue({
-      capabilities: new Set(['books.view']),
-      has: (capability) => capability === 'books.view',
+      capabilities: new Set(['books.view', 'books.approve', 'books.edit']),
+      has: (capability) => ['books.view', 'books.approve', 'books.edit'].includes(capability),
       isLoading: false,
     })
     renderDock()

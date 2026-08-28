@@ -187,6 +187,7 @@ export function LookupHeroCards({ onOpen, extraCard }: Props): React.JSX.Element
   const { t, i18n } = useTranslation()
   const lang = i18n.language
   const { has } = useCapabilities()
+  const canViewExpiry = has('expiry.view')
 
   // ── Recents (synchronous — localStorage) ─────────────────────────────────
   const recents = getRecentEmployees(3)
@@ -195,6 +196,7 @@ export function LookupHeroCards({ onOpen, extraCard }: Props): React.JSX.Element
   const expiryQuery = useQuery({
     queryKey: ['expiry', 90] as const,
     queryFn: () => api.getExpiry(90),
+    enabled: canViewExpiry,
     staleTime: 60_000,
   })
 
@@ -251,42 +253,42 @@ export function LookupHeroCards({ onOpen, extraCard }: Props): React.JSX.Element
       )}
 
       {/* ── Card 2: Soon-expiring documents ──────────────────────────────── */}
-      <HCard>
-        <HCardHead
-          icon={WarningIcon}
-          title={t('employees.lookup.expiryTitle')}
-          badge={expiryCount}
-          badgeTestId="expiry-count"
-          warn
-        />
+      {canViewExpiry ? (
+        <HCard>
+          <HCardHead
+            icon={WarningIcon}
+            title={t('employees.lookup.expiryTitle')}
+            badge={expiryCount}
+            badgeTestId="expiry-count"
+            warn
+          />
 
-        {topExpiry.length > 0 ? (
-          <div className="flex flex-col gap-1.5">
-            {topExpiry.map((item) => {
-              const name = pickEmployeeName(
-                { name_en: item.name_en, name_ar: item.name_ar },
-                lang,
-              )
-              const docLabel = t(`expiry.docType.${item.doc_type}`)
-              return (
-                <Chip
-                  key={`${item.employee_id}-${item.doc_type}`}
-                  onClick={() => onOpen(item.employee_id)}
-                  avatar={twoChars(name)}
-                  label={`${name} — ${docLabel}`}
-                  meta={t('employees.lookup.daysLeft', { count: item.days_remaining })}
-                  metaWarn
-                />
-              )
-            })}
-          </div>
-        ) : (
-          !expiryQuery.isPending && (
-            <p className="text-[12px] opacity-75">{t('employees.lookup.expiryNone')}</p>
-          )
-        )}
+          {topExpiry.length > 0 ? (
+            <div className="flex flex-col gap-1.5">
+              {topExpiry.map((item) => {
+                const name = pickEmployeeName(
+                  { name_en: item.name_en, name_ar: item.name_ar },
+                  lang,
+                )
+                const docLabel = t(`expiry.docType.${item.doc_type}`)
+                return (
+                  <Chip
+                    key={`${item.employee_id}-${item.doc_type}`}
+                    onClick={() => onOpen(item.employee_id)}
+                    avatar={twoChars(name)}
+                    label={`${name} — ${docLabel}`}
+                    meta={t('employees.lookup.daysLeft', { count: item.days_remaining })}
+                    metaWarn
+                  />
+                )
+              })}
+            </div>
+          ) : (
+            !expiryQuery.isPending && (
+              <p className="text-[12px] opacity-75">{t('employees.lookup.expiryNone')}</p>
+            )
+          )}
 
-        {has('expiry.view') ? (
           <div className="mt-[10px]">
             <Link
               to="/expiry"
@@ -295,8 +297,8 @@ export function LookupHeroCards({ onOpen, extraCard }: Props): React.JSX.Element
               {t('employees.lookup.expiryViewAll')}
             </Link>
           </div>
-        ) : null}
-      </HCard>
+        </HCard>
+      ) : null}
 
       {/* ── Card 3: Data-gap summary ──────────────────────────────────────── */}
       <HCard>

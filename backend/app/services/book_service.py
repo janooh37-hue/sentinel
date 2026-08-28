@@ -18,8 +18,8 @@ from functools import lru_cache
 from pathlib import Path, PurePath
 from typing import Any, Final, NamedTuple
 
-from sqlalchemy import Integer, and_, false, func, not_, or_, select, text
-from sqlalchemy.orm import Session, selectinload
+from sqlalchemy import Integer, and_, exists, false, func, not_, or_, select, text
+from sqlalchemy.orm import Session, aliased, selectinload
 from sqlalchemy.sql.elements import ColumnElement
 
 from app.api.errors import AppError, NotFoundError, ValidationFailedError
@@ -214,6 +214,75 @@ def user_visibility_clause(db: Session, user: User) -> ColumnElement[bool] | Non
     return and_(*clauses) if clauses else None
 
 
+def document_visibility_clause(db: Session, user: User) -> ColumnElement[bool] | None:
+    """Hide Documents whose service or owning submission category is denied."""
+    denied_services, denied_categories = perm_service.denied_record_types(db, user)
+    clauses: list[ColumnElement[bool]] = []
+    if denied_services:
+        denied_template_ids = {
+            template_id
+            for service_id in denied_services
+            if service_id != OTHER_SERVICE_ID
+            for template_id in service_template_ids(service_id)
+        }
+        if denied_template_ids:
+            clauses.append(Document.template_id.not_in(sorted(denied_template_ids)))
+        if OTHER_SERVICE_ID in denied_services:
+            named_template_ids = {
+                template_id
+                for service_id in SERVICE_IDS
+                for template_id in service_template_ids(service_id)
+            }
+            clauses.append(Document.template_id.in_(sorted(named_template_ids)))
+    if denied_categories:
+        linked_document = aliased(Document)
+        linked_to_denied_category = exists(
+            select(BookVersion.id)
+            .select_from(BookVersion)
+            .join(Book, Book.id == BookVersion.book_id)
+            .join(linked_document, linked_document.id == BookVersion.document_id)
+            .where(
+                Book.category_id.in_(sorted(denied_categories)),
+                or_(
+                    linked_document.id == Document.id,
+                    and_(
+                        Document.role == "companion",
+                        linked_document.role == "primary",
+                        linked_document.submission_id == Document.submission_id,
+                    ),
+                ),
+            )
+            .correlate(Document)
+        )
+        clauses.append(not_(linked_to_denied_category))
+    return and_(*clauses) if clauses else None
+
+
+def require_record_type_access(
+    db: Session,
+    user: User,
+    *,
+    category_id: str | None = None,
+    service_id: str | None = None,
+) -> None:
+    """Require the user's effective dynamic caps for a record type."""
+    if category_id is not None and db.get(BookCategory, category_id) is None:
+        raise NotFoundError(
+            "BOOK_CATEGORY_NOT_FOUND",
+            f"Book category {category_id!r} does not exist",
+            category_id=category_id,
+        )
+    caps = perm_service.effective_caps(db, user)
+    category_denied = category_id is not None and f"books.category.{category_id}" not in caps
+    service_denied = service_id is not None and f"books.service.{service_id}" not in caps
+    if category_denied or service_denied:
+        raise AppError(
+            "RECORD_TYPE_FORBIDDEN",
+            "You don't have access to this record type.",
+            http_status=403,
+        )
+
+
 def assert_record_type_visible(db: Session, user: User, row: Book) -> None:
     """Raise the stable 403 when ``row`` belongs to a denied record type."""
     denied_services, denied_categories = perm_service.denied_record_types(db, user)
@@ -229,6 +298,24 @@ def assert_record_type_visible(db: Session, user: User, row: Book) -> None:
             "You don't have access to this record type.",
             http_status=403,
         )
+
+
+def require_book_access(db: Session, user: User, row: Book) -> None:
+    """Require ``books.view`` plus type visibility, or a pending assignment."""
+    if not perm_service.has_capability(db, user, "books.view"):
+        if your_step_kind(row, user.id) is not None:
+            return
+        raise AppError(
+            "FORBIDDEN",
+            "Missing capability: books.view",
+            http_status=403,
+            details={"capability": "books.view"},
+        )
+    try:
+        assert_record_type_visible(db, user, row)
+    except AppError as exc:
+        if exc.code != "RECORD_TYPE_FORBIDDEN" or your_step_kind(row, user.id) is None:
+            raise
 
 
 class ServiceCount(NamedTuple):
@@ -1206,7 +1293,7 @@ def delete_annotation(
     db.commit()
 
 
-def list_awaiting(db: Session, *, user_id: int, user: User | None = None) -> list[Book]:
+def list_awaiting(db: Session, *, user_id: int) -> list[Book]:
     """Books with a pending step (approver OR reviewer) assigned to ``user_id``."""
     stmt = (
         select(Book)
@@ -1215,10 +1302,6 @@ def list_awaiting(db: Session, *, user_id: int, user: User | None = None) -> lis
         .where(Book.approval_state == "pending")
         .order_by(Book.created_at.desc())
     )
-    if user is not None:
-        visibility = user_visibility_clause(db, user)
-        if visibility is not None:
-            stmt = stmt.where(visibility)
     out: list[Book] = []
     for book in db.execute(stmt).scalars().all():
         if your_step_kind(book, user_id) is not None:
@@ -1464,33 +1547,40 @@ def approval_log_received(
     limit: int,
     offset: int,
 ) -> tuple[list[ApprovalLogItem], int]:
-    """The caller's inbox: records whose current pending step is theirs (the
-    ``list_awaiting`` semantics) plus records where their own decided step falls
-    inside the last ``APPROVAL_LOG_RECEIVED_WINDOW_DAYS`` days. Newest activity
-    first."""
-    pending_books = list_awaiting(db, user_id=user_id, user=user)
-    cutoff = datetime.now(UTC).replace(tzinfo=None) - timedelta(
-        days=APPROVAL_LOG_RECEIVED_WINDOW_DAYS
-    )
-    decided_stmt = (
-        select(BookApprovalStep.book_id)
-        .join(Book, Book.id == BookApprovalStep.book_id)
-        .where(
-            BookApprovalStep.assignee_user_id == user_id,
-            BookApprovalStep.state != "pending",
-            BookApprovalStep.decided_at.is_not(None),
-            BookApprovalStep.decided_at >= cutoff,
-            Book.deleted_at.is_(None),
+    """The caller's pending inbox, plus recent history when records are visible.
+
+    Pending current-version assignments remain visible without ``books.view``.
+    Decided assignments are history, so they require ``books.view`` and retain
+    the caller's dynamic record-type visibility filtering.
+    """
+    pending_books = list_awaiting(db, user_id=user_id)
+    decided_book_ids: list[int] = []
+    if user is None or perm_service.has_capability(db, user, "books.view"):
+        cutoff = datetime.now(UTC).replace(tzinfo=None) - timedelta(
+            days=APPROVAL_LOG_RECEIVED_WINDOW_DAYS
         )
-    )
-    visibility = user_visibility_clause(db, user) if user is not None else None
-    if visibility is not None:
-        decided_stmt = decided_stmt.where(visibility)
-    decided_book_ids = list(db.scalars(decided_stmt).all())
-    # One ordered id list: pending first (they are the actionable rows), then the
-    # recently-decided ones not already covered.
-    seen = {b.id for b in pending_books}
-    book_ids = [b.id for b in pending_books] + [i for i in decided_book_ids if i not in seen]
+        decided_stmt = (
+            select(BookApprovalStep.book_id)
+            .join(Book, Book.id == BookApprovalStep.book_id)
+            .where(
+                BookApprovalStep.assignee_user_id == user_id,
+                BookApprovalStep.state != "pending",
+                BookApprovalStep.decided_at.is_not(None),
+                BookApprovalStep.decided_at >= cutoff,
+                Book.deleted_at.is_(None),
+            )
+        )
+        visibility = user_visibility_clause(db, user) if user is not None else None
+        if visibility is not None:
+            decided_stmt = decided_stmt.where(visibility)
+        decided_book_ids = list(db.scalars(decided_stmt).all())
+
+    # Pending assignments are the actionable exception; decided ids have already
+    # passed the normal books.view and dynamic record-type gates above.
+    seen = {book.id for book in pending_books}
+    book_ids = [book.id for book in pending_books] + [
+        book_id for book_id in decided_book_ids if book_id not in seen
+    ]
     if not book_ids:
         return [], 0
     rows_stmt = (
@@ -1501,10 +1591,8 @@ def approval_log_received(
         )
         .where(Book.id.in_(book_ids))
     )
-    if visibility is not None:
-        rows_stmt = rows_stmt.where(visibility)
     rows_by_id = {book.id: book for book in db.scalars(rows_stmt).all()}
-    ordered = [rows_by_id[i] for i in book_ids if i in rows_by_id]
+    ordered = [rows_by_id[book_id] for book_id in book_ids if book_id in rows_by_id]
 
     def _activity_key(book: Book) -> datetime:
         step = _my_log_step(book, user_id)
@@ -2359,6 +2447,7 @@ __all__ = [
     "decide_step",
     "delete_book",
     "detach_attachment",
+    "document_visibility_clause",
     "get_book",
     "get_book_by_ref",
     "get_book_detail",
@@ -2374,6 +2463,8 @@ __all__ = [
     "remove_reviewer",
     "replace_attachment",
     "replace_signed_copy",
+    "require_book_access",
+    "require_record_type_access",
     "resolve_attachment_path",
     "resolve_doc_manager_user",
     "resolve_user_name_by_id",

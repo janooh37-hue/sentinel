@@ -3,7 +3,7 @@
  * means the 12 ref-number buckets in this same bar.
  */
 import { beforeEach, describe, it, expect, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 
 const capabilityState = vi.hoisted(() => ({ allowed: new Set<string>() }))
@@ -107,6 +107,43 @@ describe('BooksFilterBar service filter', () => {
 
     expect(screen.queryByText('تقرير')).not.toBeInTheDocument()
     expect(screen.getByText('other')).toBeVisible()
+  })
+
+  it('resets a selected service exactly once when that service becomes denied', async () => {
+    const onChange = vi.fn()
+    const filters = { ...BASE, serviceId: 'Report' }
+    const view = render(
+      <BooksFilterBar
+        filters={filters}
+        categories={[]}
+        services={SERVICES}
+        onChange={onChange}
+      />,
+    )
+
+    expect(onChange).not.toHaveBeenCalled()
+    capabilityState.allowed = new Set(['books.service.other'])
+    view.rerender(
+      <BooksFilterBar
+        filters={filters}
+        categories={[]}
+        services={SERVICES}
+        onChange={onChange}
+      />,
+    )
+
+    await waitFor(() =>
+      expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ serviceId: 'all' })),
+    )
+    view.rerender(
+      <BooksFilterBar
+        filters={filters}
+        categories={[]}
+        services={SERVICES}
+        onChange={onChange}
+      />,
+    )
+    expect(onChange).toHaveBeenCalledTimes(1)
   })
 
   it('counts as an active filter and Clear resets it to all', async () => {

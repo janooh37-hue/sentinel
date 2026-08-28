@@ -24,6 +24,7 @@ import { prefetchRouteForPath } from '@/lib/prefetchRoute'
 import { AaSlider } from './AaSlider'
 import { LanguageToggle } from './LanguageToggle'
 import { NAV_ITEMS } from './navItems'
+import { isNavEntryAllowed } from './navCustomization'
 import { ThemeToggle } from './ThemeToggle'
 
 interface NavDrawerProps {
@@ -83,7 +84,7 @@ export function NavDrawer({ open, onOpenChange }: NavDrawerProps): React.JSX.Ele
 
         {/* Primary nav */}
         <nav className="flex flex-col gap-0.5 px-3 py-3">
-          {NAV_ITEMS.filter((item) => !item.cap || has(item.cap)).map(({ to, key, Icon }) => (
+          {NAV_ITEMS.filter((item) => isNavEntryAllowed(item, has)).map(({ to, key, Icon }) => (
             <NavLink
               key={to}
               to={to}

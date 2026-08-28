@@ -1,12 +1,20 @@
 import { describe, it, expect, vi } from 'vitest'
-import { renderHook } from '@testing-library/react'
+import { renderHook, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createElement, type ReactNode } from 'react'
 import { toast } from 'sonner'
 
-import { ageDays, ageGroup, useFileSignedCopy } from './useScanBack'
+import { ageDays, ageGroup, useFileSignedCopy, useScanBack } from './useScanBack'
 import * as apiMod from '@/lib/api'
 
+
+const capabilityState = vi.hoisted(() => ({ allowed: new Set<string>() }))
+
+vi.mock('@/lib/useCapabilities', () => ({
+  useCapabilities: () => ({
+    has: (capability: string) => capabilityState.allowed.has(capability),
+  }),
+}))
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (k: string) => k }) }))
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
 
@@ -50,6 +58,22 @@ describe('ageGroup', () => {
     expect(ageGroup(14)).toBe('weeks')
     expect(ageGroup(13)).toBe('recent')
     expect(ageGroup(2)).toBe('recent')
+  })
+})
+
+describe('useScanBack permissions', () => {
+  it('does not query when books.edit is granted without books.view', async () => {
+    capabilityState.allowed = new Set(['books.edit'])
+    const listAwaitingScanBooks = vi
+      .spyOn(apiMod.api, 'listAwaitingScanBooks')
+      .mockResolvedValue([])
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+
+    const { result } = renderHook(() => useScanBack(), { wrapper: wrapperFor(qc) })
+    await waitFor(() => expect(qc.isFetching()).toBe(0))
+
+    expect(result.current.enabled).toBe(false)
+    expect(listAwaitingScanBooks).not.toHaveBeenCalled()
   })
 })
 

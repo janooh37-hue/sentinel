@@ -2,13 +2,13 @@
  * ApprovalsPage — the approvals log under Records (#31).
  *
  * Two tabs over GET /books/approval-log:
- *   - "Awaiting my review" (scope=received): my pending decision steps plus my
- *     own verdicts from the last 30 days. Needs `books.approve`.
- *   - "Sent by me" (scope=sent): every record I submitted for approval.
+ *   - "Awaiting my review" (scope=received): pending decision steps with
+ *     `books.approve`; recent verdicts also require `books.view`.
+ *   - "Sent by me" (scope=sent): submitted records with `books.view`.
  *
- * The default tab is the reviewer's queue when the caller holds
- * `books.approve`, else their sent list; `?tab=sent|received` overrides once
- * and is consumed + stripped (same pattern as BooksPage's ?open/?status).
+ * The default is the received queue when authorized, otherwise sent.
+ * `?tab=sent|received` is accepted only for an authorized scope, then consumed
+ * and stripped from the URL.
  *
  * Rows carry a page-1 PDF thumbnail, mono reference, subject, submitter →
  * manager route, dates, and status. Status chips filter the priority-grouped
@@ -222,19 +222,25 @@ export function ApprovalsPage(): React.JSX.Element {
   const isAr = i18n.language.startsWith('ar')
   const dfLocale = isAr ? arLocale : undefined
   const { has } = useCapabilities()
+  const canView = has('books.view')
   const canApprove = has('books.approve')
 
   // ── Tab state: ?tab= overrides once (consumed + stripped), then in-memory ──
   const [searchParams, setSearchParams] = useSearchParams()
   const [tabOverride, setTabOverride] = useState<ApprovalScope | null>(null)
   const defaultTab: ApprovalScope = canApprove ? 'received' : 'sent'
-  const tab = tabOverride ?? defaultTab
+  const overrideAuthorized =
+    (tabOverride === 'received' && canApprove) || (tabOverride === 'sent' && canView)
+  const tab = overrideAuthorized && tabOverride !== null ? tabOverride : defaultTab
 
   /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     const tabParam = searchParams.get('tab')
     if (tabParam) {
-      if (isApprovalScope(tabParam)) setTabOverride(tabParam)
+      const authorized =
+        isApprovalScope(tabParam) &&
+        ((tabParam === 'received' && canApprove) || (tabParam === 'sent' && canView))
+      setTabOverride(authorized ? tabParam : null)
       setSearchParams(
         (prev) => {
           const next = new URLSearchParams(prev)
@@ -244,8 +250,7 @@ export function ApprovalsPage(): React.JSX.Element {
         { replace: true },
       )
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchParams])
+  }, [canApprove, canView, searchParams, setSearchParams])
   /* eslint-enable react-hooks/set-state-in-effect */
 
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all')
@@ -281,7 +286,7 @@ export function ApprovalsPage(): React.JSX.Element {
 
   const tabs: Array<{ id: ApprovalScope; label: string; show: boolean }> = [
     { id: 'received', label: t('books.approvals.tabReceived'), show: canApprove },
-    { id: 'sent', label: t('books.approvals.tabSent'), show: true },
+    { id: 'sent', label: t('books.approvals.tabSent'), show: canView },
   ]
 
   return (

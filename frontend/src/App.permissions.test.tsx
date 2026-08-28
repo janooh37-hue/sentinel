@@ -66,17 +66,20 @@ vi.mock('@/lib/routeLoaders', () => ({
 import App from './App'
 
 const routes = [
-  ['/employees', 'employees.view', 'employees-page'],
-  ['/employees/G-1', 'employees.view', 'employee-detail-page'],
-  ['/application', 'documents.generate', 'application-page'],
-  ['/books', 'books.view', 'books-page'],
-  ['/books/approvals', 'books.view', 'approvals-page'],
-  ['/books/42', 'books.view', 'book-record-page'],
-  ['/leaves', 'leaves.view', 'leaves-page'],
-  ['/ledger', 'ledger.view', 'ledger-page'],
-  ['/settings', 'settings.view', 'settings-page'],
-  ['/expiry', 'expiry.view', 'expiry-page'],
-  ['/permissions', 'users.manage', 'permissions-page'],
+  ['/employees', ['employees.view'], 'employees-page'],
+  ['/employees/G-1', ['employees.view'], 'employee-detail-page'],
+  ['/application', ['documents.generate', 'books.view'], 'application-page'],
+  ['/books', ['books.view'], 'books-page'],
+  ['/scan-back', ['books.view', 'books.edit'], 'scanback-page'],
+  ['/leaves', ['leaves.view'], 'leaves-page'],
+  ['/ledger', ['ledger.view'], 'ledger-page'],
+  ['/settings', ['settings.view'], 'settings-page'],
+  ['/expiry', ['expiry.view'], 'expiry-page'],
+  ['/permissions', ['users.manage'], 'permissions-page'],
+] as const
+
+const eitherCapabilityRoutes = [
+  ['/books/approvals', 'approvals-page'],
 ] as const
 
 beforeEach(() => {
@@ -89,18 +92,84 @@ afterEach(() => {
 })
 
 describe('App route capability gates', () => {
-  it.each(routes)('denies %s without %s', async (path) => {
+  it.each(routes)('denies %s without its required capabilities', async (path) => {
     window.history.pushState({}, '', path)
     render(<App />)
 
-    expect(await screen.findByText("You don't have access to this page")).toBeVisible()
+    const denialCopy =
+      path === '/permissions'
+        ? 'Access to this area is managed by administrators and cannot be requested.'
+        : "You don't have access to this page"
+    expect(await screen.findByText(denialCopy)).toBeVisible()
   })
 
-  it.each(routes)('renders %s with %s', async (path, capability, pageText) => {
+  it.each(routes)('renders %s with all required capabilities', async (path, capabilities, pageText) => {
+    capabilityState.allowed = new Set(capabilities)
+    window.history.pushState({}, '', path)
+    render(<App />)
+
+    expect(await screen.findByText(pageText)).toBeVisible()
+  })
+
+  it.each(['documents.generate', 'books.view'])(
+    'denies /application when %s is the only granted capability',
+    async (capability) => {
+      capabilityState.allowed = new Set([capability])
+      window.history.pushState({}, '', '/application')
+      render(<App />)
+
+      expect(await screen.findByText("You don't have access to this page")).toBeVisible()
+      expect(screen.queryByText('application-page')).not.toBeInTheDocument()
+    },
+  )
+
+  it.each(['books.view', 'books.edit'])(
+    'denies /scan-back when %s is the only granted capability',
+    async (capability) => {
+      capabilityState.allowed = new Set([capability])
+      window.history.pushState({}, '', '/scan-back')
+      render(<App />)
+
+      expect(await screen.findByText("You don't have access to this page")).toBeVisible()
+      expect(screen.queryByText('scanback-page')).not.toBeInTheDocument()
+    },
+  )
+
+  it.each(eitherCapabilityRoutes)(
+    'denies %s without books.view or books.approve',
+    async (path) => {
+      window.history.pushState({}, '', path)
+      render(<App />)
+
+      expect(await screen.findByText("You don't have access to this page")).toBeVisible()
+    },
+  )
+
+  it.each(eitherCapabilityRoutes.flatMap(([path, pageText]) => [
+    [path, 'books.view', pageText],
+    [path, 'books.approve', pageText],
+  ] as const))('renders %s with %s', async (path, capability, pageText) => {
     capabilityState.allowed = new Set([capability])
     window.history.pushState({}, '', path)
     render(<App />)
 
     expect(await screen.findByText(pageText)).toBeVisible()
+  })
+
+  it('renders an assigned-record route for an authenticated user without book capabilities', async () => {
+    window.history.pushState({}, '', '/books/42')
+    render(<App />)
+
+    expect(await screen.findByText('book-record-page')).toBeVisible()
+    expect(screen.queryByText("You don't have access to this page")).not.toBeInTheDocument()
+  })
+
+  it('keeps the global books register denied with books.approve alone', async () => {
+    capabilityState.allowed = new Set(['books.approve'])
+    window.history.pushState({}, '', '/books')
+    render(<App />)
+
+    expect(await screen.findByText("You don't have access to this page")).toBeVisible()
+    expect(screen.queryByText('books-page')).not.toBeInTheDocument()
   })
 })

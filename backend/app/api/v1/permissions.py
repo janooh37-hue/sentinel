@@ -21,7 +21,7 @@ from app.schemas.permission_request import (
     DecideIn,
     PermissionRequestRead,
 )
-from app.services import book_service, permission_request_service
+from app.services import book_service, perm_service, permission_request_service
 
 router = APIRouter(prefix="/permissions", tags=["permissions"])
 
@@ -41,7 +41,7 @@ def _to_read(row: PermissionRequest, db: Session) -> PermissionRequestRead:
     # Resolve capability label from catalog
     capability_label = next(
         (c.label for c in CAPABILITIES if c.id == row.capability),
-        row.capability,
+        perm_service.dynamic_capability_label(db, row.capability),
     )
 
     return PermissionRequestRead(
