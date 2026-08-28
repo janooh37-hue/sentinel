@@ -1,17 +1,22 @@
 /**
- * App lock state — single-user, single-machine.
+ * App privacy-lock state for a shared desktop session.
  *
- * The lock state is stored in sessionStorage so it survives in-app reloads but
- * NOT a process restart (closing the window restores the unlocked default,
- * which matches the v3 "trust the desktop session" model).
+ * The explicit lock flag lives in sessionStorage so an in-app reload stays
+ * locked. The last activity timestamp lives in localStorage so closing and
+ * reopening the window after a long idle period still requires re-verification.
  *
- * The hook exposes a boolean + lock()/unlock() actions. Verification is done
- * by the caller against the /auth/verify-password endpoint.
+ * Verification remains the caller's responsibility through
+ * /auth/verify-password.
  */
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 
 const STORAGE_KEY = 'gssg.locked'
+const ACTIVITY_KEY = 'gssg.lastActivity'
+
+export const IDLE_LOCK_MS = 30 * 60_000
+const ACTIVITY_WRITE_THROTTLE_MS = 15_000
+const CHECK_INTERVAL_MS = 30_000
 
 function readInitial(): boolean {
   try {
@@ -21,12 +26,40 @@ function readInitial(): boolean {
   }
 }
 
-export function useLockState(): {
+function readActivity(): number | null {
+  try {
+    const value = window.localStorage.getItem(ACTIVITY_KEY)
+    if (value === null) return null
+    const timestamp = Number(value)
+    return Number.isFinite(timestamp) ? timestamp : null
+  } catch {
+    return null
+  }
+}
+
+function writeActivity(timestamp: number): void {
+  try {
+    window.localStorage.setItem(ACTIVITY_KEY, String(timestamp))
+  } catch {
+    // Storage may be unavailable in privacy-restricted browser contexts.
+  }
+}
+
+export function markActivity(): number {
+  const timestamp = Date.now()
+  writeActivity(timestamp)
+  return timestamp
+}
+
+export function useLockState(enabled: boolean): {
   locked: boolean
   lock: () => void
   unlock: () => void
 } {
   const [locked, setLocked] = useState<boolean>(readInitial)
+  const lastActivityRef = useRef<number | null>(null)
+  const lastStorageWriteRef = useRef<number | null>(null)
+  const wasEnabledRef = useRef(false)
 
   // Sync changes from other tabs / programmatic writes.
   useEffect(() => {
@@ -41,19 +74,97 @@ export function useLockState(): {
     try {
       window.sessionStorage.setItem(STORAGE_KEY, '1')
     } catch {
-      // ignore
+      // Storage may be unavailable in privacy-restricted browser contexts.
     }
     setLocked(true)
   }, [])
 
   const unlock = useCallback(() => {
+    const timestamp = markActivity()
+    lastActivityRef.current = timestamp
+    lastStorageWriteRef.current = timestamp
     try {
       window.sessionStorage.removeItem(STORAGE_KEY)
     } catch {
-      // ignore
+      // Storage may be unavailable in privacy-restricted browser contexts.
     }
     setLocked(false)
   }, [])
+
+  useEffect(() => {
+    if (!enabled) {
+      wasEnabledRef.current = false
+      return
+    }
+    if (wasEnabledRef.current) return
+    wasEnabledRef.current = true
+
+    const now = Date.now()
+    const stored = readActivity()
+    if (stored === null) {
+      const timestamp = markActivity()
+      lastActivityRef.current = timestamp
+      lastStorageWriteRef.current = timestamp
+      return
+    }
+
+    lastActivityRef.current = stored
+    lastStorageWriteRef.current = stored
+    if (now - stored >= IDLE_LOCK_MS) {
+      const timeout = window.setTimeout(lock, 0)
+      return () => window.clearTimeout(timeout)
+    }
+  }, [enabled, lock])
+
+  useEffect(() => {
+    if (!enabled || locked) return
+
+    function recordActivity(): void {
+      const now = Date.now()
+      lastActivityRef.current = now
+      const lastWrite = lastStorageWriteRef.current
+      if (lastWrite === null || now - lastWrite >= ACTIVITY_WRITE_THROTTLE_MS) {
+        writeActivity(now)
+        lastStorageWriteRef.current = now
+      }
+    }
+
+    const events: Array<keyof WindowEventMap> = [
+      'pointerdown',
+      'keydown',
+      'wheel',
+      'touchstart',
+    ]
+    const options: AddEventListenerOptions = { capture: true, passive: true }
+    for (const event of events) window.addEventListener(event, recordActivity, options)
+
+    return () => {
+      for (const event of events) window.removeEventListener(event, recordActivity, options)
+    }
+  }, [enabled, locked])
+
+  useEffect(() => {
+    if (!enabled || locked) return
+
+    function checkDeadline(): void {
+      const stored = readActivity()
+      const inMemory = lastActivityRef.current
+      const lastActivity =
+        stored === null ? inMemory : inMemory === null ? stored : Math.max(stored, inMemory)
+      if (lastActivity !== null && Date.now() - lastActivity >= IDLE_LOCK_MS) lock()
+    }
+
+    function onVisibilityChange(): void {
+      if (document.visibilityState === 'visible') checkDeadline()
+    }
+
+    const interval = window.setInterval(checkDeadline, CHECK_INTERVAL_MS)
+    document.addEventListener('visibilitychange', onVisibilityChange)
+    return () => {
+      window.clearInterval(interval)
+      document.removeEventListener('visibilitychange', onVisibilityChange)
+    }
+  }, [enabled, locked, lock])
 
   return { locked, lock, unlock }
 }

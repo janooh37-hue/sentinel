@@ -10,6 +10,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { api, ApiError, type SessionUser } from '@/lib/api'
 import { AuthContext, type AuthContextValue, type AuthStatus } from '@/lib/authContext'
+import { markActivity } from '@/lib/useLockState'
 
 const AUTH_KEY = ['auth-me'] as const
 
@@ -39,12 +40,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }): React
   const login = useCallback(
     async (email: string, password: string): Promise<SessionUser> => {
       const me = await api.login(email, password)
-      queryClient.setQueryData(AUTH_KEY, me)
-      // Refresh identity-aware queries (identity/me, settings, account) with
-      // the new session cookie — but leave the auth query as just-set.
-      await queryClient.invalidateQueries({
+      markActivity()
+      // A fresh session must never inherit identity-bound data from the
+      // previous account. New screens will fetch clean queries after AUTH_KEY
+      // mounts the authenticated shell.
+      queryClient.removeQueries({
         predicate: (q) => q.queryKey[0] !== 'auth-me',
       })
+      queryClient.setQueryData(AUTH_KEY, me)
       return me
     },
     [queryClient],

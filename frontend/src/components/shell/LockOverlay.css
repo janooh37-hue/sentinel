@@ -1,0 +1,674 @@
+.lock-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  overflow: hidden;
+  isolation: isolate;
+  color: white;
+  background: var(--hero-grad);
+}
+
+.lock-frost {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background:
+    linear-gradient(180deg, rgb(4 15 29 / 35%), rgb(4 15 29 / 84%)),
+    radial-gradient(circle at 50% 15%, rgb(70 125 176 / 38%), transparent 42%);
+  -webkit-backdrop-filter: blur(18px) saturate(0.82);
+  backdrop-filter: blur(18px) saturate(0.82);
+}
+
+@supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .lock-overlay {
+    background: transparent;
+  }
+}
+
+.lock-shell {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  padding: 52px clamp(40px, 5vw, 80px) 34px;
+}
+
+.lock-time-block {
+  position: relative;
+  z-index: 1;
+  justify-self: center;
+  text-align: center;
+}
+
+.lock-clock {
+  display: block;
+  font-size: clamp(88px, 8.2vw, 132px);
+  font-weight: 220;
+  line-height: 0.84;
+  letter-spacing: -0.08em;
+  font-variant-numeric: tabular-nums;
+}
+
+.lock-dates {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  margin-top: 18px;
+  color: rgb(255 255 255 / 66%);
+  font-size: 12px;
+}
+
+.lock-operations {
+  position: relative;
+  z-index: 1;
+  align-self: center;
+  justify-self: center;
+  width: min(1180px, calc(100vw - 96px));
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(260px, 0.9fr) minmax(220px, 0.75fr);
+  align-items: stretch;
+  padding-block: 21px;
+  border-block: 1px solid rgb(255 255 255 / 20%);
+}
+
+.lock-operations > * {
+  min-width: 0;
+  padding-inline: 28px;
+}
+
+.lock-operations > * + * {
+  border-inline-start: 1px solid rgb(255 255 255 / 14%);
+}
+
+.lock-overlay:not([data-layout="console"]) .lock-operations[data-sections="1"] {
+  grid-template-columns: 1fr;
+}
+
+.lock-overlay:not([data-layout="console"]) .lock-operations[data-sections="1"] > * {
+  width: min(420px, 100%);
+  justify-self: center;
+  border-inline-start: 0;
+}
+
+.lock-overlay:not([data-layout="console"]) .lock-operations[data-sections="1"] .lock-weather {
+  text-align: center;
+}
+
+.lock-overlay:not([data-layout="console"]) .lock-operations[data-sections="1"] .lock-weather-main {
+  justify-content: center;
+}
+
+.lock-shifts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 22px;
+}
+
+.lock-shifts > * + * {
+  padding-inline-start: 22px;
+  border-inline-start: 1px solid rgb(255 255 255 / 12%);
+}
+
+.lock-eyebrow {
+  display: block;
+  color: rgb(255 255 255 / 54%);
+  font-family: "IBM Plex Mono", Consolas, monospace;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+}
+
+.lock-metric strong {
+  display: block;
+  margin-top: 8px;
+  font-size: clamp(17px, 1.45vw, 23px);
+  font-weight: 300;
+  line-height: 1.15;
+  letter-spacing: -0.035em;
+}
+
+.lock-metric small,
+.lock-weather small {
+  display: block;
+  margin-top: 5px;
+  color: rgb(255 255 255 / 56%);
+  font-size: 10px;
+}
+
+.lock-digest {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  align-content: center;
+  gap: 8px;
+  text-align: center;
+}
+
+.lock-digest > small {
+  grid-column: 1 / -1;
+  margin-top: 6px;
+  color: rgb(255 255 255 / 47%);
+  font-size: 9px;
+}
+
+.lock-digest-item b {
+  display: block;
+  font-size: 24px;
+  font-weight: 280;
+}
+
+.lock-digest-item span {
+  display: block;
+  margin-top: 4px;
+  color: rgb(255 255 255 / 54%);
+  font-family: "IBM Plex Mono", Consolas, monospace;
+  font-size: 8px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.lock-weather {
+  text-align: end;
+}
+
+.lock-weather-main {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 5px;
+}
+
+.lock-weather-stats {
+  display: flex !important;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 0 5px;
+}
+
+.lock-weather-main strong {
+  font-size: 42px;
+  font-weight: 240;
+  line-height: 1;
+  letter-spacing: -0.07em;
+}
+
+.lock-weather-glyph {
+  width: 31px;
+  height: 31px;
+  color: rgb(255 255 255 / 65%);
+  stroke-width: 1.35;
+}
+
+.lock-weather-condition {
+  display: block;
+  margin-top: 4px;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.lock-unlock {
+  position: relative;
+  z-index: 2;
+  align-self: end;
+  justify-self: center;
+  width: min(410px, calc(100vw - 32px));
+  margin-bottom: 2px;
+  text-align: center;
+}
+
+.lock-grab {
+  display: none;
+}
+
+.lock-avatar {
+  width: 76px;
+  height: 76px;
+  margin: 0 auto 12px;
+  background: linear-gradient(145deg, var(--primary-soft), white);
+  color: var(--primary);
+  font-size: 20px;
+  font-weight: 800;
+  box-shadow:
+    0 0 0 3px rgb(255 255 255 / 78%),
+    0 0 0 5px rgb(13 40 69 / 16%),
+    0 14px 30px rgb(0 0 0 / 18%);
+}
+
+.lock-name {
+  margin: 0;
+  font-size: 19px;
+  font-weight: 720;
+  letter-spacing: -0.02em;
+}
+
+.lock-welcome {
+  margin: 4px 0 0;
+  color: rgb(255 255 255 / 64%);
+  font-size: 12px;
+}
+
+.lock-field {
+  position: relative;
+  margin-top: 16px;
+}
+
+.lock-field input {
+  width: 100%;
+  height: 48px;
+  padding-inline: 20px 92px;
+  border: 1px solid rgb(255 255 255 / 28%);
+  border-radius: 999px;
+  outline: none;
+  background: rgb(255 255 255 / 12%);
+  color: white;
+  backdrop-filter: blur(22px);
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.lock-field input::placeholder {
+  color: rgb(255 255 255 / 48%);
+}
+
+.lock-field input:focus {
+  border-color: rgb(255 255 255 / 64%);
+  box-shadow: 0 0 0 4px rgb(255 255 255 / 9%);
+}
+
+.lock-eye,
+.lock-submit {
+  position: absolute;
+  top: 5px;
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  border: 0;
+}
+
+.lock-eye {
+  inset-inline-end: 46px;
+  background: transparent;
+  color: rgb(255 255 255 / 65%);
+}
+
+.lock-eye svg,
+.lock-submit svg {
+  width: 16px;
+  height: 16px;
+}
+
+.lock-submit {
+  inset-inline-end: 5px;
+  border-radius: 50%;
+  background: white;
+  color: var(--primary);
+  font-size: 20px;
+}
+
+.lock-submit:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.lock-error {
+  margin: 7px 0 0;
+  color: var(--accent);
+  font-size: 11px;
+}
+
+.lock-idle {
+  margin: 11px 0 0;
+  color: rgb(255 255 255 / 51%);
+  font-size: 9px;
+}
+
+.lock-signout {
+  margin-top: 3px;
+  border: 0;
+  background: none;
+  color: white;
+  font-size: 10px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  opacity: 0.72;
+}
+
+.lock-layout-switcher {
+  position: fixed;
+  z-index: 5;
+  inset-inline-end: 24px;
+  bottom: 22px;
+  display: flex;
+  gap: 3px;
+  padding: 4px;
+  border: 1px solid rgb(255 255 255 / 16%);
+  border-radius: 999px;
+  background: rgb(5 18 34 / 48%);
+  backdrop-filter: blur(20px);
+}
+
+.lock-layout-switcher button {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: rgb(255 255 255 / 58%);
+  font-family: "IBM Plex Mono", Consolas, monospace;
+  font-size: 9px;
+  transition: background 160ms ease, color 160ms ease;
+}
+
+.lock-layout-switcher button[aria-pressed="true"] {
+  background: white;
+  color: var(--primary);
+}
+
+.lock-eye:focus-visible,
+.lock-submit:focus-visible,
+.lock-signout:focus-visible,
+.lock-layout-switcher button:focus-visible {
+  outline: 2px solid white;
+  outline-offset: 2px;
+}
+
+/* Central Stack */
+.lock-overlay[data-layout="stack"] .lock-shell {
+  width: min(1060px, calc(100vw - 64px));
+  height: calc(100% - 44px);
+  margin: 22px auto;
+  padding: 34px 48px 28px;
+  border: 1px solid rgb(255 255 255 / 13%);
+  border-radius: 34px;
+  background: rgb(5 18 34 / 25%);
+  box-shadow: 0 40px 100px rgb(0 0 0 / 15%);
+  backdrop-filter: blur(24px);
+}
+
+.lock-overlay[data-layout="stack"] .lock-clock {
+  font-size: 104px;
+}
+
+.lock-overlay[data-layout="stack"] .lock-operations {
+  width: 100%;
+  padding-block: 17px;
+}
+
+/* Briefing Console */
+.lock-overlay[data-layout="console"] .lock-shell {
+  width: min(1120px, calc(100vw - 64px));
+  height: auto;
+  min-height: 520px;
+  margin: 50vh auto 0;
+  grid-template-columns: minmax(280px, 0.82fr) minmax(0, 1.55fr);
+  grid-template-rows: auto auto;
+  column-gap: 46px;
+  transform: translateY(-50%);
+  padding: 36px 42px 30px;
+  border: 1px solid rgb(255 255 255 / 13%);
+  border-radius: 30px;
+  background: rgb(5 18 34 / 36%);
+  box-shadow: 0 38px 90px rgb(0 0 0 / 18%);
+  backdrop-filter: blur(28px);
+}
+
+.lock-overlay[data-layout="console"] .lock-time-block {
+  align-self: center;
+  justify-self: stretch;
+  padding-inline-end: 42px;
+  border-inline-end: 1px solid rgb(201 169 97 / 35%);
+  text-align: start;
+}
+
+.lock-overlay[data-layout="console"] .lock-clock {
+  font-size: 110px;
+}
+
+.lock-overlay[data-layout="console"] .lock-dates {
+  align-items: flex-start;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.lock-overlay[data-layout="console"] .lock-operations {
+  align-self: center;
+  width: 100%;
+  grid-template-columns: 1fr 1fr;
+  padding-block: 0;
+  border-block: 0;
+}
+
+.lock-overlay[data-layout="console"] .lock-shifts,
+.lock-overlay[data-layout="console"] .lock-weather {
+  padding-block: 6px 18px;
+}
+
+.lock-overlay[data-layout="console"] .lock-shifts {
+  grid-template-columns: 1fr;
+}
+
+.lock-overlay[data-layout="console"] .lock-shifts > * + * {
+  margin-top: 13px;
+  padding: 13px 0 0;
+  border-inline-start: 0;
+  border-top: 1px solid rgb(255 255 255 / 12%);
+}
+
+.lock-overlay[data-layout="console"] .lock-digest {
+  grid-column: 1 / -1;
+  padding-top: 17px;
+  border-block-start: 1px solid rgb(255 255 255 / 13%);
+  border-inline-start: 0;
+}
+
+.lock-overlay[data-layout="console"] .lock-unlock {
+  grid-column: 1 / -1;
+  margin-top: 26px;
+  padding-top: 22px;
+  border-top: 1px solid rgb(255 255 255 / 13%);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .lock-overlay {
+    animation: lock-fade-in 220ms ease-out both;
+  }
+
+  .lock-unlock {
+    animation: lock-rise-in 300ms ease-out both;
+  }
+
+  .lock-weather-glyph {
+    animation: lock-weather-turn 80s linear infinite;
+  }
+}
+
+@keyframes lock-fade-in {
+  from { opacity: 0; }
+}
+
+@keyframes lock-rise-in {
+  from { opacity: 0; transform: translateY(12px); }
+}
+
+@keyframes lock-weather-turn {
+  to { transform: rotate(360deg); }
+}
+
+@media (max-width: 760px) {
+  .lock-shell,
+  .lock-overlay[data-layout="stack"] .lock-shell,
+  .lock-overlay[data-layout="console"] .lock-shell {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    transform: none;
+    padding: 42px 17px calc(var(--lock-unlock-height, 278px) + 28px);
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+    backdrop-filter: none;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  .lock-overlay[data-layout="stack"] .lock-shell,
+  .lock-overlay[data-layout="console"] .lock-shell {
+    inset: 14px 10px auto;
+    width: auto;
+    height: min(540px, calc(100dvh - var(--lock-unlock-height, 278px) - 34px));
+    padding: 26px 16px 0;
+    border: 1px solid rgb(255 255 255 / 13%);
+    border-radius: 28px;
+    background: rgb(5 18 34 / 28%);
+  }
+
+  .lock-time-block,
+  .lock-overlay[data-layout="console"] .lock-time-block {
+    align-self: auto;
+    justify-self: auto;
+    padding: 0;
+    border: 0;
+    text-align: center;
+  }
+
+  .lock-clock,
+  .lock-overlay[data-layout="stack"] .lock-clock,
+  .lock-overlay[data-layout="console"] .lock-clock {
+    font-size: 76px;
+  }
+
+  .lock-dates,
+  .lock-overlay[data-layout="console"] .lock-dates {
+    align-items: center;
+    flex-direction: column;
+    gap: 4px;
+    margin-top: 12px;
+  }
+
+  .lock-operations,
+  .lock-overlay[data-layout="stack"] .lock-operations,
+  .lock-overlay[data-layout="console"] .lock-operations {
+    width: 100%;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    align-self: auto;
+    margin-top: 28px;
+    padding-block: 12px;
+    border-block: 1px solid rgb(255 255 255 / 18%);
+  }
+
+  .lock-operations > *,
+  .lock-overlay[data-layout="console"] .lock-operations > * {
+    padding-inline: 12px;
+  }
+
+  .lock-operations > * + * {
+    border-inline-start: 1px solid rgb(255 255 255 / 12%);
+  }
+
+  .lock-shifts,
+  .lock-overlay[data-layout="console"] .lock-shifts {
+    grid-column: 1 / -1;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0;
+    padding-bottom: 13px;
+    border-bottom: 1px solid rgb(255 255 255 / 12%);
+  }
+
+  .lock-shifts > * + *,
+  .lock-overlay[data-layout="console"] .lock-shifts > * + * {
+    margin: 0;
+    padding: 0 0 0 16px;
+    border-top: 0;
+    border-inline-start: 1px solid rgb(255 255 255 / 12%);
+  }
+
+  [dir="rtl"] .lock-shifts > * + * {
+    padding: 0 16px 0 0;
+  }
+
+  .lock-metric strong {
+    font-size: 16px;
+  }
+
+  .lock-digest {
+    grid-column: auto;
+    align-content: center;
+    padding-top: 13px;
+    border: 0;
+  }
+
+  .lock-digest > small {
+    display: none;
+  }
+
+  .lock-digest-item b {
+    font-size: 21px;
+  }
+
+  .lock-weather,
+  .lock-overlay[data-layout="console"] .lock-weather {
+    padding-top: 13px;
+    text-align: end;
+  }
+
+  .lock-weather-main strong {
+    font-size: 35px;
+  }
+
+  .lock-weather-condition {
+    font-size: 11px;
+  }
+
+  .lock-weather small {
+    font-size: 8px;
+  }
+
+  .lock-unlock,
+  .lock-overlay[data-layout="console"] .lock-unlock {
+    position: fixed;
+    inset-inline: 10px;
+    bottom: 10px;
+    width: auto;
+    margin: 0;
+    padding: 18px 20px 16px;
+    border: 1px solid rgb(255 255 255 / 18%);
+    border-radius: 26px;
+    background: rgb(5 18 34 / 52%);
+    backdrop-filter: blur(28px);
+  }
+
+  .lock-grab {
+    display: block;
+    width: 42px;
+    height: 4px;
+    margin: 0 auto 17px;
+    border-radius: 4px;
+    background: rgb(255 255 255 / 24%);
+  }
+
+  .lock-avatar {
+    width: 70px;
+    height: 70px;
+    margin-top: -52px;
+  }
+
+  .lock-layout-switcher {
+    inset-inline-end: 17px;
+    bottom: calc(var(--lock-unlock-height, 278px) - 19px);
+  }
+}

@@ -134,8 +134,8 @@ function LedgerRoute(): React.JSX.Element {
 
 function Shell(): React.JSX.Element {
   const { t } = useTranslation()
-  const { locked, lock, unlock } = useLockState()
   const { status, logout } = useAuth()
+  const { locked, lock, unlock } = useLockState(status === 'authed')
   const navigate = useNavigate()
   const location = useLocation()
   const isMobile = useIsMobile()
@@ -410,7 +410,15 @@ function Shell(): React.JSX.Element {
         <Toaster position="bottom-right" richColors closeButton />
       </div>
       <ShortcutsHelpDialog />
-      {locked && <LockOverlay onUnlocked={unlock} />}
+      {locked && (
+        <LockOverlay
+          onUnlocked={unlock}
+          onSignOut={() => {
+            unlock()
+            void logout()
+          }}
+        />
+      )}
     </>
   )
 }

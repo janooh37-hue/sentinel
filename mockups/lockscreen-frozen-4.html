@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Sentinel — Frozen Desk studies</title>
+  <style>
+    @font-face{font-family:Inter;src:local("Inter");font-display:swap}
+    @font-face{font-family:"IBM Plex Mono";src:local("IBM Plex Mono");font-display:swap}
+    :root{
+      --bg:#f5f4f1;--surface:#fff;--surface-raised:#fafaf6;--surface-tinted:#f0eee8;
+      --primary:#0d2845;--primary-hover:#1d3a5e;--primary-soft:#e8edf3;--primary-on-soft:#0d2845;--on-primary:#fff;
+      --accent:#c8102e;--accent-hover:#a30d24;--accent-soft:#fbe5e8;--smart:#6b4fb0;--smart-soft:#f1eef8;
+      --success:#047857;--success-soft:#e7f5ef;--warning:#b45309;--warning-soft:#fff4e5;--info:#1d4ed8;--info-soft:#e8effe;
+      --text:#1d2633;--text-muted:#667085;--border:#d7d9dd;--hairline:#e8e9eb;
+      --hero-grad:linear-gradient(135deg,#0a1f3a 0%,#0d2845 50%,#1d3a5e 100%);
+      --gold:#c9a961;--glass:rgba(7,21,39,.48);--glass-line:rgba(255,255,255,.18);
+    }
+    [data-theme="dark"]{
+      --bg:#0a0e18;--surface:#131826;--surface-raised:#171d2c;--surface-tinted:#1b2232;
+      --primary:#5778cf;--primary-hover:#6f8ce0;--primary-soft:#1b2945;--primary-on-soft:#b8c9f1;--on-primary:#fff;
+      --accent:#ef4858;--accent-hover:#f26773;--accent-soft:#3a1720;--smart:#a78bfa;--smart-soft:#2a2143;
+      --success:#34d399;--success-soft:#15382e;--warning:#fbbf24;--warning-soft:#3d2c10;--info:#60a5fa;--info-soft:#172f53;
+      --text:#eef1f6;--text-muted:#9ca6b6;--border:#303849;--hairline:#252c3a;
+      --hero-grad:linear-gradient(135deg,#050816 0%,#0d1428 50%,#1a2540 100%);
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%;margin:0}
+    body{font-family:Inter,"Segoe UI",Arial,sans-serif;background:#091426;color:#fff;overflow:hidden}
+    button,input{font:inherit}.scene{display:none;position:relative;width:100%;height:100svh;min-height:620px;overflow:hidden;isolation:isolate}.scene.active{display:flex}
+    .desk{position:absolute;inset:-36px;background:linear-gradient(135deg,#e9edf2,#f6f3ec);filter:blur(18px);transform:scale(1.045);opacity:.64}.desk-nav{height:76px;background:#fff;border-bottom:1px solid #ccd3db}.desk-hero{position:absolute;inset-inline:7%;top:110px;height:250px;border-radius:28px;background:linear-gradient(125deg,#0d2845,#41688f)}.desk-grid{position:absolute;inset-inline:7%;top:392px;display:grid;grid-template-columns:2fr 1fr 1fr;gap:22px}.desk-grid i{height:260px;border-radius:22px;background:#fff;box-shadow:0 8px 30px rgba(13,40,69,.1)}
+    .frost{position:absolute;inset:0;background:linear-gradient(180deg,rgba(4,15,29,.34),rgba(4,15,29,.82)),radial-gradient(circle at 20% 17%,rgba(70,125,176,.42),transparent 37%);backdrop-filter:blur(11px)}
+    .mono{font-family:"IBM Plex Mono",Consolas,monospace}.eyebrow{font:600 10px "IBM Plex Mono",Consolas,monospace;letter-spacing:.2em;text-transform:uppercase;color:rgba(255,255,255,.58)}
+    .clock{font-size:clamp(92px,9vw,150px);font-weight:250;line-height:.82;letter-spacing:-.08em}.dates{display:flex;justify-content:center;gap:16px;margin-top:22px;font-size:13px;color:rgba(255,255,255,.67)}.arabic{font-family:"Noto Sans Arabic","Segoe UI",Arial,sans-serif}
+    .corner{position:absolute;z-index:5;top:30px;inset-inline-start:34px;font:500 9px "IBM Plex Mono",monospace;letter-spacing:.15em;color:rgba(255,255,255,.5)}.corner.end{inset-inline-start:auto;inset-inline-end:34px;text-align:end}
+    .login{position:relative;z-index:6;width:min(420px,calc(100vw - 32px));text-align:center}.avatar{display:grid;place-items:center;width:82px;height:82px;margin:0 auto 13px;border-radius:50%;background:linear-gradient(145deg,#dbe7f2,#fff);color:#0d2845;font-size:22px;font-weight:800;box-shadow:0 0 0 3px rgba(255,255,255,.78),0 0 0 5px rgba(13,40,69,.16),0 14px 30px rgba(0,0,0,.18)}.name{font-size:20px;font-weight:700;letter-spacing:-.02em}.welcome{margin-top:5px;font-size:13px;color:rgba(255,255,255,.67)}
+    .field{position:relative;margin-top:18px}.field input{width:100%;height:49px;border:1px solid rgba(255,255,255,.28);border-radius:999px;background:rgba(255,255,255,.12);backdrop-filter:blur(22px);color:#fff;padding-inline:21px 54px;outline:none;letter-spacing:.08em}.field input:focus{border-color:rgba(255,255,255,.62);box-shadow:0 0 0 4px rgba(255,255,255,.09)}.unlock{position:absolute;inset-inline-end:5px;top:5px;width:39px;height:39px;border:0;border-radius:50%;background:#fff;color:#0d2845;font-size:20px;line-height:1}.idle{margin-top:13px;font-size:10px;line-height:1.45;color:rgba(255,255,255,.55)}.quiet{margin-top:3px;border:0;background:none;color:#fff;font-size:11px;text-decoration:underline;text-underline-offset:3px;opacity:.72}.grab{display:none;width:42px;height:4px;border-radius:4px;background:rgba(255,255,255,.25);margin:0 auto 18px}.error{margin-top:8px;color:#ff9daa;font-size:11px}
+    .index{display:none;width:100%;min-height:100vh;padding:64px;background:var(--bg);color:var(--text);overflow:auto}.index.active{display:block}.index h1{max-width:840px;margin:10px 0 0;font-size:54px;line-height:1;letter-spacing:-.055em;color:var(--primary)}.index p{max-width:690px;color:var(--text-muted);line-height:1.65}.index-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-top:38px}.index a{display:flex;min-height:180px;flex-direction:column;justify-content:space-between;border:1px solid var(--border);border-radius:18px;background:var(--surface);padding:19px;color:inherit;text-decoration:none;box-shadow:0 8px 24px rgba(13,40,69,.05)}.index a b{font-size:11px;color:var(--accent)}.index a strong{font-size:19px}.index a span{font-size:12px;color:var(--text-muted);line-height:1.45}
+
+    /* V1 — Monogram Focus */
+    .v1{align-items:center;justify-content:center;background:#0d2845}.v1 .focus{position:relative;z-index:3;display:flex;flex-direction:column;align-items:center;margin-top:-20px}.v1 .rings{position:absolute;z-index:-1;top:-172px;left:50%;width:510px;aspect-ratio:1;transform:translateX(-50%);border:1px solid rgba(201,169,97,.2);border-radius:50%;box-shadow:0 0 0 32px rgba(201,169,97,.025),0 0 0 33px rgba(201,169,97,.09),0 0 0 95px rgba(201,169,97,.018),0 0 0 96px rgba(201,169,97,.05)}.v1 .rings img{position:absolute;left:50%;top:50%;width:76px;transform:translate(-50%,-50%);filter:brightness(0) invert(1);opacity:.075}.v1 .clock-line{width:104px;height:1px;margin:25px 0 26px;background:linear-gradient(90deg,transparent,var(--gold),transparent)}.v1 .login{width:390px}.v1 .login .avatar{width:68px;height:68px;font-size:18px}
+
+    /* V2 — Sealed Digest */
+    .v2{align-items:stretch;justify-content:center;background:#0d2845}.v2 .clock-zone{position:absolute;z-index:3;top:60px;inset-inline-start:64px}.v2 .clock{font-size:108px}.v2 .dates{justify-content:flex-start;margin-top:16px}.v2 .login{align-self:flex-end;margin-bottom:48px}.digest{position:absolute;z-index:4;top:50%;inset-inline-end:60px;width:315px;transform:translateY(-50%)}.digest-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}.digest-lock{font-size:12px;color:rgba(255,255,255,.6)}.digest-row{display:grid;grid-template-columns:36px 1fr 18px;gap:12px;align-items:center;padding:15px 0;border-top:1px solid rgba(255,255,255,.15)}.digest-icon{display:grid;place-items:center;width:34px;height:34px;border:1px solid rgba(255,255,255,.18);border-radius:50%;font-size:14px}.digest-count{font-size:18px;font-weight:350}.digest-label{margin-top:2px;font-size:10px;color:rgba(255,255,255,.58)}.redacted{width:100%;height:5px;margin-top:7px;border-radius:9px;background:rgba(255,255,255,.36);filter:blur(4px);opacity:.55}.digest-foot{padding-top:13px;border-top:1px solid rgba(255,255,255,.15);font-size:10px;color:rgba(255,255,255,.52)}.count-strip{display:none}
+
+    /* V3 — Executive Split */
+    .v3{align-items:center;justify-content:flex-end;background:#0d2845}.split-panel{position:absolute;z-index:3;inset-block:0;inset-inline-start:0;width:38%;padding:48px 56px;background:var(--hero-grad);border-inline-end:1px solid rgba(201,169,97,.45);box-shadow:18px 0 60px rgba(2,10,20,.2)}.split-brand{display:flex;align-items:center;gap:12px;font:600 9px "IBM Plex Mono",monospace;letter-spacing:.14em;color:rgba(255,255,255,.56)}.split-brand img{width:42px;height:42px;object-fit:contain;filter:brightness(0) invert(1);opacity:.8}.split-clock{margin-top:9vh;font-size:clamp(110px,13vw,205px);font-weight:200;line-height:.7;letter-spacing:-.09em}.split-clock span{display:block}.split-dates{margin-top:40px;max-width:300px;font-size:13px;line-height:1.75;color:rgba(255,255,255,.62)}.split-foot{position:absolute;bottom:42px;font:500 9px "IBM Plex Mono",monospace;letter-spacing:.2em;color:rgba(201,169,97,.72)}.v3 .login{margin-inline-end:11%;padding:32px;border:1px solid rgba(255,255,255,.13);border-radius:28px;background:rgba(5,18,34,.35);backdrop-filter:blur(26px)}
+
+    /* V4 — Ops Glance */
+    .v4{align-items:stretch;justify-content:center;background:#0d2845}.v4 .center-clock{position:absolute;z-index:3;top:70px;left:50%;transform:translateX(-50%);text-align:center}.v4 .clock{font-size:118px}.v4 .login{align-self:flex-end;margin-bottom:40px}.wing{position:absolute;z-index:4;top:44%;width:min(300px,22vw);transform:translateY(-50%);padding-top:17px;border-top:1px solid rgba(255,255,255,.25)}.wing.shift{inset-inline-start:60px}.wing.weather{inset-inline-end:60px;text-align:end}.wing-main{margin-top:10px;font-size:clamp(24px,2.1vw,32px);font-weight:250;line-height:1.15;letter-spacing:-.04em}.wing-sub{margin-top:7px;font-size:13px;color:rgba(255,255,255,.62)}.wing-next{display:flex;align-items:baseline;gap:12px;margin-top:22px;padding-top:13px;border-top:1px solid rgba(255,255,255,.12)}.weather .wing-next{justify-content:flex-end}.temperature{display:flex;justify-content:flex-end;align-items:center;gap:12px;margin-top:7px;font-size:clamp(64px,6vw,92px);font-weight:220;line-height:1;letter-spacing:-.08em}.temperature svg{width:48px;height:48px;stroke:rgba(255,255,255,.64)}
+
+    @media(prefers-reduced-motion:no-preference){.v1 .rings{animation:breathe 8s ease-in-out infinite}.digest-lock{animation:pulse 3s ease-in-out infinite}.temperature svg{animation:sun 80s linear infinite}}@keyframes breathe{50%{opacity:.72;transform:translateX(-50%) scale(1.025)}}@keyframes pulse{50%{opacity:.42}}@keyframes sun{to{transform:rotate(360deg)}}
+
+    @media(max-width:760px){
+      .scene{min-height:100svh}.desk-grid{grid-template-columns:1fr;top:260px}.desk-grid i{height:190px}.index{padding:34px 20px}.index h1{font-size:38px}.index-grid{grid-template-columns:1fr}.corner{top:18px;inset-inline-start:18px}.corner.end{inset-inline-end:18px}.clock{font-size:74px}.dates{flex-direction:column;gap:4px;margin-top:13px}.login{align-self:flex-end!important;width:calc(100% - 20px)!important;margin:0 10px 10px!important;padding:18px 20px 16px!important;border:1px solid rgba(255,255,255,.18)!important;border-radius:26px!important;background:rgba(5,18,34,.5)!important;backdrop-filter:blur(28px)!important}.grab{display:block}.login .avatar{width:72px!important;height:72px!important;margin-top:-53px!important}.name{font-size:18px}.idle{font-size:9px}
+      .v1 .focus{position:absolute;inset:54px 0 auto;margin:0}.v1 .rings{top:-52px;width:310px}.v1 .clock-line{margin:20px 0 0}.v1 .focus .login{position:fixed;bottom:0}.v1 .focus>.dates{margin-bottom:0}
+      .v2 .clock-zone{top:54px;inset-inline:0;text-align:center}.v2 .clock{font-size:76px}.v2 .dates{justify-content:center}.digest{display:none}.count-strip{position:absolute;z-index:4;left:18px;right:18px;top:278px;display:grid;grid-template-columns:repeat(3,1fr);border-block:1px solid rgba(255,255,255,.17);padding:13px 0}.count-strip span{text-align:center;font:500 10px "IBM Plex Mono",monospace;color:rgba(255,255,255,.65)}.count-strip b{display:block;margin-bottom:2px;color:#fff;font-size:20px;font-weight:300}
+      .v3{justify-content:center}.split-panel{inset:0 0 auto;width:100%;height:330px;padding:28px 24px;border-inline-end:0;border-bottom:1px solid rgba(201,169,97,.42)}.split-brand{justify-content:center}.split-clock{display:flex;justify-content:center;gap:16px;margin-top:38px;font-size:78px;line-height:1}.split-dates{text-align:center;margin:12px auto 0;line-height:1.55}.split-foot{display:none}.v3 .login{position:absolute;bottom:0}
+      .v4 .center-clock{top:55px;width:100%;padding:0 16px}.v4 .clock{font-size:76px}.wing{top:auto;width:auto;left:18px!important;right:18px!important;transform:none;padding-top:11px}.wing.shift{top:252px}.wing.weather{top:334px;text-align:start}.wing-main{font-size:17px}.wing-next{position:absolute;right:0;top:-3px;margin:0;padding:0;border:0}.weather .wing-next{justify-content:flex-start}.temperature{position:absolute;right:0;top:12px;margin:0;font-size:44px}.temperature svg{width:30px;height:30px}.v4 .weather .wing-next{display:none}.wing.weather .wing-main{max-width:205px;font-size:16px}.wing.weather .wing-sub{max-width:205px}.v4 .login{margin-bottom:10px!important}
+    }
+  </style>
+</head>
+<body>
+  <main id="index" class="index">
+    <div class="eyebrow" style="color:var(--accent)">Sentinel / Frozen Desk study</div>
+    <h1>Four quieter ways back into your desk.</h1>
+    <p>The approved Frozen Desk language — blurred work surface, elegant clock, and frictionless re-entry — explored through four distinct information architectures.</p>
+    <div class="index-grid">
+      <a href="?v=1"><b>V1</b><strong>Monogram Focus</strong><span>One ceremonial clock, a whisper of institutional identity, and nothing else.</span></a>
+      <a href="?v=2"><b>V2</b><strong>Sealed Digest</strong><span>Useful counts without readable names, references, or notification content.</span></a>
+      <a href="?v=3"><b>V3</b><strong>Executive Split</strong><span>An editorial navy time panel beside a frozen desk and glass login.</span></a>
+      <a href="?v=4"><b>V4</b><strong>Ops Glance</strong><span>Clock at center, shifts at left, weather at right, login below.</span></a>
+    </div>
+  </main>
+
+  <section class="scene v1" data-v="1" aria-label="Monogram Focus lock screen">
+    <div class="desk" aria-hidden="true"><div class="desk-nav"></div><div class="desk-hero"></div><div class="desk-grid"><i></i><i></i><i></i></div></div><div class="frost"></div>
+    <div class="corner">LOCKED · 14:32</div><div class="corner end">FRI · 28 AUG 2026</div>
+    <div class="focus"><div class="rings" aria-hidden="true"><img src="gssg-globe.png" alt=""></div><div class="clock">14:32</div><div class="dates"><span>Friday, 28 August 2026</span><span class="arabic" dir="rtl">٢ ربيع الأول ١٤٤٨ هـ</span></div><div class="clock-line"></div>
+      <form class="login"><div class="grab"></div><div class="avatar">AA</div><div class="name">Abdulla Aldhaheri</div><div class="welcome arabic" dir="rtl">مرحباً بعودتك، عبدالله</div><div class="field"><input value="••••••••" aria-label="Password"><button class="unlock" type="button" aria-label="Unlock">→</button></div><div class="idle">Locked automatically after 30 minutes of inactivity</div><button class="quiet" type="button">Not you? Sign out</button></form>
+    </div>
+  </section>
+
+  <section class="scene v2" data-v="2" aria-label="Sealed Digest lock screen">
+    <div class="desk" aria-hidden="true"><div class="desk-nav"></div><div class="desk-hero"></div><div class="desk-grid"><i></i><i></i><i></i></div></div><div class="frost"></div>
+    <div class="corner end">DETAILS SEALED · PRIVACY MODE</div><div class="clock-zone"><div class="clock">14:32</div><div class="dates"><span>Friday, 28 August 2026</span><span class="arabic" dir="rtl">٢ ربيع الأول ١٤٤٨ هـ</span></div></div>
+    <aside class="digest"><div class="digest-head"><div><div class="eyebrow">While you were away</div></div><div class="digest-lock">⌑ LOCKED</div></div>
+      <div class="digest-row"><div class="digest-icon">✓</div><div><div class="digest-count">3 approvals waiting</div><div class="redacted">hidden record detail</div><div class="digest-label">Approval details are concealed</div></div><div>⌑</div></div>
+      <div class="digest-row"><div class="digest-icon">↗</div><div><div class="digest-count">2 inbox items</div><div class="redacted">hidden sender and subject</div><div class="digest-label">Sender and subject concealed</div></div><div>⌑</div></div>
+      <div class="digest-row"><div class="digest-icon">◇</div><div><div class="digest-count">1 document expiring</div><div class="redacted">hidden document reference</div><div class="digest-label">Document reference concealed</div></div><div>⌑</div></div>
+      <div class="digest-foot">Details stay hidden until you unlock</div>
+    </aside>
+    <div class="count-strip"><span><b>3</b>APPROVALS</span><span><b>2</b>INBOX</span><span><b>1</b>EXPIRY</span></div>
+    <form class="login"><div class="grab"></div><div class="avatar">AA</div><div class="name">Abdulla Aldhaheri</div><div class="welcome arabic" dir="rtl">مرحباً بعودتك، عبدالله</div><div class="field"><input value="••••••••" aria-label="Password"><button class="unlock" type="button" aria-label="Unlock">→</button></div><div class="error">Incorrect password — 3 attempts left</div><div class="idle">Locked automatically after 30 minutes of inactivity</div><button class="quiet" type="button">Not you? Sign out</button></form>
+  </section>
+
+  <section class="scene v3" data-v="3" aria-label="Executive Split lock screen">
+    <div class="desk" aria-hidden="true"><div class="desk-nav"></div><div class="desk-hero"></div><div class="desk-grid"><i></i><i></i><i></i></div></div><div class="frost"></div>
+    <aside class="split-panel"><div class="split-brand"><img src="gssg-globe.png" alt=""><span>GENERAL SECRETARIAT<br>OF THE NATIONAL GUARD</span></div><div class="split-clock"><span>14</span><span>32</span></div><div class="split-dates">Friday, 28 August 2026<br><span class="arabic" dir="rtl">٢ ربيع الأول ١٤٤٨ هـ</span></div><div class="split-foot">LOCKED 14:32 · SECURE DESK 04</div></aside>
+    <div class="corner end">SESSION PRESERVED · 30 MIN IDLE</div>
+    <form class="login"><div class="grab"></div><div class="avatar">AA</div><div class="name">Abdulla Aldhaheri</div><div class="welcome arabic" dir="rtl">مرحباً بعودتك، عبدالله</div><div class="field"><input value="••••••••" aria-label="Password"><button class="unlock" type="button" aria-label="Unlock">→</button></div><div class="idle">Locked automatically after 30 minutes of inactivity</div><button class="quiet" type="button">Not you? Sign out</button></form>
+  </section>
+
+  <section class="scene v4" data-v="4" aria-label="Ops Glance lock screen">
+    <div class="desk" aria-hidden="true"><div class="desk-nav"></div><div class="desk-hero"></div><div class="desk-grid"><i></i><i></i><i></i></div></div><div class="frost"></div>
+    <div class="corner">LOCKED · 14:32</div><div class="corner end">FRI · 28 AUG · ABU DHABI</div>
+    <div class="center-clock"><div class="clock">14:32</div><div class="dates"><span>Friday, 28 August 2026</span><span class="arabic" dir="rtl">٢ ربيع الأول ١٤٤٨ هـ</span></div></div>
+    <aside class="wing shift"><div class="eyebrow">On duty now</div><div class="wing-main">Shift A · 06:00 – 14:00</div><div class="wing-sub">Current working shift</div><div class="wing-next"><span class="eyebrow">Next</span><span class="wing-sub">Shift B · 14:00 – 22:00</span></div></aside>
+    <aside class="wing weather"><div class="eyebrow">Today's weather</div><div class="temperature"><svg viewBox="0 0 48 48" fill="none" aria-hidden="true"><circle cx="24" cy="24" r="8"/><path d="M24 3v8m0 26v8M3 24h8m26 0h8M9.2 9.2l5.7 5.7m18.2 18.2 5.7 5.7M38.8 9.2l-5.7 5.7M14.9 33.1l-5.7 5.7"/></svg><span>41°</span></div><div class="wing-main">Clear skies · Abu Dhabi</div><div class="wing-sub">H 43° · L 31° · Humidity 42%</div><div class="wing-next"><span class="eyebrow">Sunset</span><span class="wing-sub">18:41</span></div></aside>
+    <form class="login"><div class="grab"></div><div class="avatar">AA</div><div class="name">Abdulla Aldhaheri</div><div class="welcome arabic" dir="rtl">مرحباً بعودتك، عبدالله</div><div class="field"><input value="••••••••" aria-label="Password"><button class="unlock" type="button" aria-label="Unlock">→</button></div><div class="idle">Locked automatically after 30 minutes of inactivity</div><button class="quiet" type="button">Not you? Sign out</button></form>
+  </section>
+
+  <script>
+    const value = new URLSearchParams(location.search).get('v');
+    const target = value ? document.querySelector(`[data-v="${value}"]`) : document.getElementById('index');
+    (target || document.getElementById('index')).classList.add('active');
+    document.querySelectorAll('form').forEach(form => form.addEventListener('submit', event => event.preventDefault()));
+  </script>
+</body>
+</html>
