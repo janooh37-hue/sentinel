@@ -632,6 +632,7 @@ export function DashboardPage({ onNavigate }: DashboardPageProps): React.JSX.Ele
                 <div key={qa.id} className="anim-fade-up h-full" style={{ animationDelay: delay }}>
                   <ServiceTile
                     emoji={meta.emoji}
+                    artwork={meta.artwork}
                     title={quickActionLabels[qa.id as QuickActionId]}
                     description={quickActionDescriptions[qa.id as QuickActionId]}
                     onClick={() => navigate(meta.href)}
