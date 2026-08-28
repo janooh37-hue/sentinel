@@ -14,6 +14,7 @@ import { Link, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 
 import { AdvancedPermissionsDrawer } from '@/components/access/AdvancedPermissionsDrawer'
+import { ServiceArtwork, type ServiceArtworkId } from '@/components/ui/service-artwork'
 import { EmptyState } from '@/components/ui/empty-state'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
@@ -27,7 +28,7 @@ import {
 } from '@/lib/api'
 import { QUICK_ACTION_IDS, type QuickActionId } from '@/lib/dashboardLayout'
 import { cn } from '@/lib/utils'
-import { emojiForTemplate } from '@/pages/application/formEmoji'
+import { artworkForTemplate, emojiForTemplate } from '@/pages/application/formEmoji'
 
 type BlueprintKind = 'page' | 'service' | 'category'
 
@@ -44,6 +45,7 @@ interface BlueprintItem {
   kind: BlueprintKind
   locked?: boolean
   glyph?: string
+  artwork?: ServiceArtworkId
 }
 
 interface Beam {
@@ -169,7 +171,11 @@ function BlueprintButton({
       ) : (
         <Eye className="h-3.5 w-3.5 shrink-0" strokeWidth={1.8} aria-hidden />
       )}
-      {item.glyph ? <span aria-hidden>{item.glyph}</span> : null}
+      {item.artwork ? (
+        <ServiceArtwork artwork={item.artwork} size="row" />
+      ) : item.glyph ? (
+        <span aria-hidden>{item.glyph}</span>
+      ) : null}
       <bdi className="min-w-0 flex-1 break-words whitespace-normal text-center leading-snug" dir="auto">
         {item.label}
       </bdi>
@@ -304,7 +310,15 @@ function MirrorDevice({
                       key={service.id}
                       className="rounded-lg border border-primary-foreground/10 bg-primary-foreground/10 px-2.5 py-2 text-[0.7em]"
                     >
-                      <span className="me-1" aria-hidden>{service.glyph}</span>
+                      {service.artwork ? (
+                        <ServiceArtwork
+                          artwork={service.artwork}
+                          size="inline"
+                          className="me-1 align-text-bottom"
+                        />
+                      ) : (
+                        <span className="me-1" aria-hidden>{service.glyph}</span>
+                      )}
                       <bdi dir="auto">{service.label}</bdi>
                     </span>
                   ))}
@@ -347,7 +361,15 @@ function MirrorDevice({
                 <div className="grid grid-cols-3 gap-1.5">
                   {services.slice(0, 6).map((service) => (
                     <span key={service.id} className="rounded-md bg-primary-foreground/10 px-2 py-1.5 text-center text-[0.64em]">
-                      <span className="block text-base" aria-hidden>{service.glyph}</span>
+                      {service.artwork ? (
+                        <ServiceArtwork
+                          artwork={service.artwork}
+                          size="row"
+                          className="mx-auto mb-0.5"
+                        />
+                      ) : (
+                        <span className="block text-base" aria-hidden>{service.glyph}</span>
+                      )}
                       <bdi dir="auto">{service.label}</bdi>
                     </span>
                   ))}
@@ -525,6 +547,7 @@ export function PermissionsPage(): React.JSX.Element {
           label: (isAr ? template?.name_ar : template?.name_en) || id,
           kind: 'service' as const,
           glyph: emojiForTemplate(id),
+          artwork: artworkForTemplate(id),
         }
       }),
       {

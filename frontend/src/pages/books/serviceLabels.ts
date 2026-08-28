@@ -11,9 +11,13 @@ import { useCallback } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 
+import type { ServiceArtworkId } from '@/components/ui/service-artwork'
 import type { BookFacetsResponse } from '@/lib/api'
 import { api } from '@/lib/api'
-import { emojiForTemplate } from '@/pages/application/formEmoji'
+import {
+  artworkForTemplate,
+  emojiForTemplate,
+} from '@/pages/application/formEmoji'
 import type { RailItem } from './FormRail'
 import type { SpineState } from './StatusSpine'
 
@@ -24,6 +28,10 @@ const OTHER_GLYPH = '📄'
 
 export function serviceGlyph(serviceId: string): string {
   return serviceId === OTHER_SERVICE_ID ? OTHER_GLYPH : emojiForTemplate(serviceId)
+}
+
+export function serviceArtwork(serviceId: string): ServiceArtworkId | undefined {
+  return serviceId === OTHER_SERVICE_ID ? undefined : artworkForTemplate(serviceId)
 }
 
 /**
@@ -67,6 +75,7 @@ export function railItemsFrom(
     ...facets.services.map((s) => ({
       serviceId: s.id,
       glyph: serviceGlyph(s.id),
+      artwork: serviceArtwork(s.id),
       label: label(s.id),
       count: s.count,
       // Mini-dots: the non-draft states actually present in this service.

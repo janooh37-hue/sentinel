@@ -14,8 +14,9 @@
  * back to the gallery — same as a fresh visit.
  */
 
+import type { ServiceArtworkId } from '@/components/ui/service-artwork'
 import type { TemplateMeta } from '@/lib/api'
-import { QUICK_ACTION_META } from '@/lib/quickActions'
+import { QUICK_ACTION_META, type QuickActionMeta } from '@/lib/quickActions'
 
 const DEFAULT_EMOJI = '📄'
 
@@ -36,6 +37,12 @@ export const EXTRA_TEMPLATE_EMOJI: Record<string, string> = {}
 export function emojiForTemplate(id: string): string {
   const meta = (QUICK_ACTION_META as Record<string, { emoji: string } | undefined>)[id]
   return meta?.emoji ?? EXTRA_TEMPLATE_EMOJI[id] ?? DEFAULT_EMOJI
+}
+
+/** Calibrated artwork for a template id; undefined for ids without artwork. */
+export function artworkForTemplate(id: string): ServiceArtworkId | undefined {
+  const meta = (QUICK_ACTION_META as Record<string, QuickActionMeta | undefined>)[id]
+  return meta?.artwork
 }
 
 /**

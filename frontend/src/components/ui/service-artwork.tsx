@@ -117,7 +117,14 @@ const MOTION_BY_ARTWORK: Partial<Record<ServiceArtworkId, ServiceMotion>> = {
 interface ServiceArtworkProps {
   artwork: ServiceArtworkId
   className?: string
-  size?: 'dashboard' | 'gallery'
+  size?: 'dashboard' | 'gallery' | 'row' | 'inline'
+}
+
+const SIZE_CLASS_NAME: Record<NonNullable<ServiceArtworkProps['size']>, string> = {
+  dashboard: 'h-14 w-14',
+  gallery: 'h-8 w-8',
+  row: 'h-6 w-6',
+  inline: 'h-4 w-4',
 }
 
 export function ServiceArtwork({
@@ -126,7 +133,7 @@ export function ServiceArtwork({
   size = 'dashboard',
 }: ServiceArtworkProps): React.JSX.Element {
   const motion = MOTION_BY_ARTWORK[artwork]
-  const sizeClassName = size === 'gallery' ? 'h-8 w-8' : 'h-14 w-14'
+  const sizeClassName = SIZE_CLASS_NAME[size]
 
   return (
     <span

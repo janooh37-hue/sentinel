@@ -49,8 +49,15 @@ describe('railItemsFrom', () => {
   it('labels and glyphs each service', () => {
     const items = railItemsFrom(FACETS, 'All forms', label)
     const report = items.find((i) => i.serviceId === 'Report')
-    expect(report).toMatchObject({ label: 'L:Report', glyph: '📊', count: 6 })
+    expect(report).toMatchObject({
+      label: 'L:Report',
+      glyph: '📊',
+      artwork: 'report',
+      count: 6,
+    })
+    expect(items[0].artwork).toBeUndefined()
     expect(items.find((i) => i.serviceId === 'other')?.glyph).toBe('📄')
+    expect(items.find((i) => i.serviceId === 'other')?.artwork).toBeUndefined()
   })
 
   it('mini-dots list the non-draft states present, excluding none and zeros', () => {
@@ -95,13 +102,15 @@ describe('spineCountsFrom', () => {
 describe('FormRail', () => {
   it('shows the resolved label, not a locale key, and reports the service id', async () => {
     const onChange = vi.fn()
-    render(
+    const { container } = render(
       <FormRail
         items={railItemsFrom(FACETS, 'All forms', label)}
         active="all"
         onChange={onChange}
       />,
     )
+    expect(container.querySelector('img[src*="service-icons"]')).toBeInTheDocument()
+    expect(screen.getByText('🗂')).toBeInTheDocument()
     expect(screen.getByText('L:Report')).toBeTruthy()
     await userEvent.click(screen.getByText('L:Report'))
     expect(onChange).toHaveBeenCalledWith('Report')
