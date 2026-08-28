@@ -266,6 +266,7 @@ describe('AttendanceTab', () => {
   })
 
   it('bands the whole device record by month, and each band selects its month', async () => {
+    const yearStart = `${new Date().getUTCFullYear()}-01-01`
     // The provider holds months the roster never covered. Those months are the
     // whole point of the band: they are what gets checked against the device.
     getEmployeeAttendanceHistory.mockImplementation(
@@ -278,7 +279,7 @@ describe('AttendanceTab', () => {
         linked: true,
         truncated: false,
         days:
-          params.from_date === '2026-01-01'
+          params.from_date === yearStart
             ? [
                 sighting('2026-02-13'),
                 sighting('2026-02-14'),
@@ -296,6 +297,17 @@ describe('AttendanceTab', () => {
     expect(months).toHaveLength(3)
     expect(months[0]).toHaveTextContent('2')
     expect(months[1]).toHaveTextContent('1')
+
+    await userEvent.click(screen.getByText('‹'))
+
+    await waitFor(() =>
+      expect(within(band).getAllByRole('button')).toHaveLength(3),
+    )
+
+    const recordToDates = getEmployeeAttendanceHistory.mock.calls
+      .filter(([, params]) => params.from_date === yearStart)
+      .map(([, params]) => params.to_date)
+    expect(new Set(recordToDates).size).toBe(1)
 
     await userEvent.click(months[0])
 

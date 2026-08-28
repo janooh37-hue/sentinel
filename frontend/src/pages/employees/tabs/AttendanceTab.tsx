@@ -104,6 +104,9 @@ function monthBounds(iso: string): { from: string; to: string; year: number; mon
   }
 }
 
+/** End of the current real month: navigation must never shrink the record. */
+const RECORD_TO = monthBounds(new Date().toISOString().slice(0, 10)).to
+
 /**
  * Judge one day of this employee's month.
  *
@@ -161,13 +164,13 @@ export function AttendanceTab({
     retry: false,
   })
 
-  // The whole record, from the first day of the year the punches reach back to.
-  // Judged days only exist where a roster did, so this is the band that can be
-  // checked against the device's own dashboard: every month it saw this person.
+  // The whole-record band spans from year start (or the viewed month when earlier)
+  // through the end of the current month, and month navigation never narrows it.
+  const recordFrom = bounds.from < RECORD_FROM ? bounds.from : RECORD_FROM
   const record = useQuery({
-    queryKey: ['employee-attendance-record', employeeId, RECORD_FROM, bounds.to] as const,
+    queryKey: ['employee-attendance-record', employeeId, recordFrom, RECORD_TO] as const,
     queryFn: () =>
-      api.getEmployeeAttendanceHistory(employeeId, { from_date: RECORD_FROM, to_date: bounds.to }),
+      api.getEmployeeAttendanceHistory(employeeId, { from_date: recordFrom, to_date: RECORD_TO }),
     enabled: allowed,
     staleTime: 300_000,
     retry: false,
