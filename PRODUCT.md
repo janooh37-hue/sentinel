@@ -1,8 +1,11 @@
 # Product
 
-## Register
+<!-- impeccable:product-schema 1 -->
 
-product
+## Platform
+
+web
+
 
 ## Users
 
@@ -28,7 +31,38 @@ the way they trust the signed-paper original — they find the record,
 they generate it, they file it, and nothing in the chrome distracts from
 the integrity of the document.
 
-## Brand Personality
+## Positioning
+
+GSSG Manager is an integrated ERP and document-control system whose
+defensible distinction is continuity from an HR action through official
+document generation, correspondence, approval, permission control, and an
+auditable record. Neighboring tools may manage people or files; this product
+keeps the operational action and its document-grade evidence in one controlled
+workflow.
+
+## Operating Context
+
+Staff use the system in short, focused interactions across many employees and
+records. Work moves between employee files, leave and clearance processes,
+violations, correspondence, books, approvals, signed PDFs, permission grants,
+and generated Word documents. The application runs as a local/LAN web system
+and packaged Windows shell; its outputs are read and acted on by other staff,
+so continuity, traceability, and document integrity are operational
+requirements.
+
+## Capabilities and Constraints
+
+- Employee, leave, clearance, violation, correspondence, book, approval,
+  document-generation, and permission workflows belong to one ERP.
+- Generated DOCX/PDF records, ledger entries, approval history, and permission
+  grants are durable operational artifacts rather than presentation-only UI.
+- English and Arabic are equal operating languages.
+- The product is local/LAN-first and must preserve same-origin operation,
+  sensitive HR data boundaries, and auditable actions.
+- Microsoft Word COM remains part of document rendering and conversion in the
+  Windows operating environment.
+
+## Brand Commitments
 
 **Formal, official, document-grade.**
 
@@ -58,7 +92,15 @@ government services portal than a SaaS dashboard.
   data grids. The v4 web app is a deliberate departure, not a port of
   the look.
 
-## Design Principles
+## Evidence on Hand
+
+The repository contains real templates, generated-document workflows, ledger
+and approval structures, and production-shaped interfaces that future work may
+use as product evidence. No approved testimonials, benchmarks, measured
+outcomes, or public case-study claims have been supplied; future work must not
+fabricate them.
+
+## Product Principles
 
 1. **Document-grade gravitas — with legible wayfinding.** This app produces
    official records. The interface should carry the same weight as the
