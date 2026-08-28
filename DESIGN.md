@@ -1375,104 +1375,72 @@ color on hover.
 
 ### 3.7 LockOverlay
 
-**Source:** `components/shell/LockOverlay.tsx`.
+**Sources:** `components/shell/LockOverlay.tsx`,
+`components/shell/LockOverlay.css`, and `lib/useLockState.ts`.
 
-Full-screen modal that takes over the page when the operator locks the
-app. Rendered above all routes via `fixed inset-0 z-[100]`.
+Full-screen privacy lock rendered above all routes at `z-index: 100`. The
+authenticated session remains valid behind the overlay; unlocking re-verifies
+the signed-in user's password through `/auth/verify-password`.
 
-**Backdrop:**
+**Automatic lock:**
 
-```
-fixed inset-0 z-[100]
-flex items-center justify-center px-4
-role="dialog" aria-modal="true"
-style={{ background: 'var(--hero-grad)' }}
-```
+- `useLockState(status === 'authed')` locks after 30 minutes without
+  `pointerdown`, `keydown`, `wheel`, or `touchstart` activity.
+- `gssg.lastActivity` lives in `localStorage` so idle time is shared across
+  tabs and survives a window restart. Activity writes are throttled to 15
+  seconds; the deadline is checked every 30 seconds and whenever a hidden tab
+  becomes visible.
+- `gssg.locked` remains in `sessionStorage` so an in-app reload stays locked.
+  Unlock and fresh login both refresh the activity deadline.
 
-- Uses `--hero-grad` directly (the same gradient as the Dashboard hero,
-  exact same colors).
-- `aria-label` reads "App locked" (i18n key `lockScreen.title`).
-- `dir` is set from `isAr` at the overlay root so even if document `dir`
-  is wrong, the lock screen renders correctly.
+**Frozen Desk visual language:**
 
-**Form card:**
+- The actual application remains visible but unreadable beneath a dark
+  `--hero-grad` scrim and 14px backdrop blur.
+- A thin, tabular live clock is paired with Gregorian and Umm al-Qura Hijri
+  dates. Arabic uses the same hierarchy in RTL; shift ranges are isolated with
+  `<bdi dir="ltr">` so their chronological order never reverses.
+- The unlock surface is centered on desktop and becomes a frosted bottom sheet
+  at `≤760px`. It contains the linked employee photo/initial, localized welcome,
+  pill password field, show/hide control, circular submit control, idle note,
+  inline API error, and localized sign-out action.
+- All animation is gated by `prefers-reduced-motion: no-preference`.
 
-```
-w-full max-w-md
-rounded-2xl bg-surface
-p-8
-shadow-2xl
-flex flex-col gap-5
-```
+**Three operator-selectable layouts:**
 
-- 28rem max width (Tailwind's `max-w-md`) — scales with font-scale.
-- Heaviest shadow on the site (`shadow-2xl`) — the card must read as
-  floating above the gradient backdrop.
-- `gap-5` (1.25rem) between vertical sections.
+1. **Command band** — clock above one horizontal operations rail, unlock below.
+2. **Central stack** — the same hierarchy inside one large glass instrument
+   panel.
+3. **Briefing console** — clock and operational context share a compact
+   two-column console, with unlock integrated beneath.
 
-**Photo + welcome block:**
+The compact A/B/C switcher sits at the bottom-inline-end and uses
+`aria-pressed`. The validated preference is stored in
+`localStorage['gssg.lockLayout']`; invalid or unavailable storage falls back to
+Command band. On mobile the switcher moves immediately above the unlock sheet.
 
-```
-flex flex-col items-center gap-4
-  ├ Avatar h-20 w-20 bg-primary-soft text-primary ring-2 ring-border
-  └ flex flex-col items-center gap-1
-      ├ [Lock icon h-3 stroke 2] "APP LOCKED" (uppercase, tracking-[0.18em])
-      │   text-[0.72em] font-semibold text-muted-foreground
-      ├ "Welcome back, {name}."  (italic serif if linked, else email)
-      │   text-[1.15em] italic text-foreground
-      │   font-family: Georgia, "Noto Naskh Arabic", serif  ← only place serif appears
-      ├ Email line (text-[0.78em] text-muted-foreground) — only when linked
-      └ "Enter your email password to unlock" (mt-1 text-[0.82em] text-muted-foreground)
-```
+**Privacy-safe operational glance:**
 
-- Avatar is `h-20 w-20` (5rem; ~80px at root 16) with a 2px border-ring.
-- The welcome line is the only italic-serif text on the entire site. It's a
-  deliberate departure from the system sans so the lock screen feels
-  ceremonial rather than utilitarian. Arabic fallback is Noto Naskh
-  Arabic (note: this is the only remaining reference to Naskh; the site
-  font is Noto Sans Arabic per `--font-arabic`).
-- Microcopy is Arabic-aware: in AR, "Welcome back" becomes
-  "مرحباً بعودتك" (from i18n).
+- Current/next shift times come from the existing
+  `GET /workforce/dashboard/snapshot` projection and render only when the user
+  has `workforce.self.view` or `workforce.dashboard.view`.
+- Approvals, inbox, and expiry show aggregate counts only from already-cached
+  React Query data. Names, subjects, record references, and notification
+  details are never rendered on the lock screen.
+- Weather uses the explicitly approved client-side flow: BigDataCloud performs
+  approximate IP geolocation, then Open-Meteo receives the returned coordinates
+  for current temperature, WMO condition, daily high/low, and humidity. Both
+  requests are keyless, cached for 30 minutes, localized, abortable, and fail
+  closed by omitting weather.
 
-**Password input:**
+**Accessibility:**
 
-```
-flex flex-col gap-1.5
-  ├ <label text-[0.72em] font-semibold uppercase tracking-[0.1em]
-  │        text-muted-foreground>Password</label>
-  └ <div relative>
-       <input id="lock-pwd" autoComplete="current-password"
-              class="w-full rounded-lg
-                     border border-border bg-surface
-                     px-3.5 py-2.5 pe-10
-                     text-[0.95em] text-foreground
-                     placeholder:text-muted-foreground
-                     transition-colors
-                     focus:border-primary
-                     focus:outline-none
-                     focus:ring-3 focus:ring-primary/15
-                     disabled:cursor-not-allowed disabled:opacity-50"/>
-       <button (eye toggle) absolute inset-y-0 end-0 w-10
-               text-muted-foreground hover:text-foreground
-               tabIndex={-1}/>
-    </div>
-  └ Error line (only when set): mt-0.5 text-[0.78em] text-accent
-  └ "No account configured" hint (when no account): text-[0.78em] text-muted-foreground
-```
-
-**Notable:**
-
-- Focus state on the input uses `focus:ring-3 focus:ring-primary/15` —
-  a *thicker but transparent* ring than other inputs. Compensates for the
-  serene lock-screen aesthetic.
-- The eye toggle has `tabIndex={-1}` so Tab moves from input directly to
-  the Unlock button — the eye is mouse-only.
-- Eye icons: `Eye` / `EyeOff` from Lucide at `h-4 w-4` stroke 1.7.
-
-**Unlock pill:** See §2.5b. While submitting, the icon swaps to
-`<Loader2 animate-spin>`.
-
----
+- Root contract: `role="dialog"`, `aria-modal="true"`, localized `aria-label`,
+  explicit `dir`, and password autofocus.
+- Every icon-only control has an accessible name. Visible controls retain
+  keyboard focus rings; the layout switcher is a named `role="group"`.
+- English and Arabic keys are peers under `lockScreen`; no inline language
+  ternaries or `defaultValue` fallbacks remain.
 
 ## 4. Dashboard page
 

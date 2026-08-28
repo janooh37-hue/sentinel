@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Sentinel lock screen directions</title>
+  <style>
+    @font-face{font-family:Inter;src:local("Inter");font-display:swap}
+    @font-face{font-family:"IBM Plex Mono";src:local("IBM Plex Mono");font-display:swap}
+    :root{
+      --bg:#f5f4f1;--surface:#fff;--surface-raised:#fafaf6;--surface-tinted:#f0eee8;
+      --primary:#0d2845;--primary-hover:#1d3a5e;--primary-soft:#e8edf3;--primary-on-soft:#0d2845;--on-primary:#fff;
+      --accent:#c8102e;--accent-hover:#a30d24;--accent-soft:#fbe5e8;--smart:#6b4fb0;--smart-soft:#f1eef8;
+      --success:#047857;--success-soft:#e7f5ef;--warning:#b45309;--warning-soft:#fff4e5;--info:#1d4ed8;--info-soft:#e8effe;
+      --text:#1d2633;--text-muted:#667085;--border:#d7d9dd;--hairline:#e8e9eb;
+      --hero-grad:linear-gradient(135deg,#0a1f3a 0%,#0d2845 50%,#1d3a5e 100%);
+      --radius-sm:8px;--radius-md:12px;--radius-lg:16px;
+    }
+    [data-theme="dark"]{
+      --bg:#0a0e18;--surface:#131826;--surface-raised:#171d2c;--surface-tinted:#1b2232;
+      --primary:#5778cf;--primary-hover:#6f8ce0;--primary-soft:#1b2945;--primary-on-soft:#b8c9f1;--on-primary:#fff;
+      --accent:#ef4858;--accent-hover:#f26773;--accent-soft:#3a1720;--smart:#a78bfa;--smart-soft:#2a2143;
+      --success:#34d399;--success-soft:#15382e;--warning:#fbbf24;--warning-soft:#3d2c10;--info:#60a5fa;--info-soft:#172f53;
+      --text:#eef1f6;--text-muted:#9ca6b6;--border:#303849;--hairline:#252c3a;
+      --hero-grad:linear-gradient(135deg,#050816 0%,#0d1428 50%,#1a2540 100%);
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%;margin:0}
+    body{font-family:Inter,"Segoe UI",Arial,sans-serif;background:#091426;color:var(--text);overflow:hidden}
+    button,input{font:inherit}
+    button{cursor:pointer}
+    .scene{display:none;position:relative;width:100%;height:100vh;min-height:620px;overflow:hidden;isolation:isolate}
+    .scene.active{display:flex}
+    .mono{font-family:"IBM Plex Mono",Consolas,monospace}
+    .eyebrow{font-size:11px;font-weight:750;letter-spacing:.22em;text-transform:uppercase}
+    .identity{display:flex;align-items:center;gap:14px}
+    .avatar{display:grid;place-items:center;width:72px;height:72px;border-radius:50%;flex:0 0 auto;background:linear-gradient(145deg,#dbe7f2,#fff);color:#0d2845;font-size:20px;font-weight:800;letter-spacing:.04em;box-shadow:0 0 0 3px rgba(255,255,255,.78),0 0 0 5px rgba(13,40,69,.16),0 14px 30px rgba(0,0,0,.18)}
+    .avatar.dark{background:linear-gradient(145deg,#203b61,#10233d);color:#fff;box-shadow:0 0 0 3px rgba(255,255,255,.14),0 0 0 5px rgba(255,255,255,.08),0 14px 30px rgba(0,0,0,.25)}
+    .name{font-size:18px;font-weight:780;letter-spacing:-.02em}
+    .arabic{font-family:"Noto Sans Arabic","Segoe UI",Arial,sans-serif}
+    .meta{font-size:12px;line-height:1.55;color:var(--text-muted)}
+    .password-label{display:block;margin:0 0 7px;font-size:10px;font-weight:800;letter-spacing:.16em;text-transform:uppercase;color:var(--text-muted)}
+    .field{position:relative}
+    .field input{width:100%;height:48px;border:1px solid var(--border);border-radius:12px;background:var(--surface);color:var(--text);padding:0 46px 0 15px;outline:none;box-shadow:0 1px 2px rgba(0,0,0,.04)}
+    .field input:focus{border-color:var(--primary);box-shadow:0 0 0 4px color-mix(in srgb,var(--primary) 14%,transparent)}
+    .eye{position:absolute;inset-inline-end:4px;top:4px;width:40px;height:40px;border:0;background:transparent;color:var(--text-muted);font-size:17px}
+    .unlock{width:100%;height:48px;border:0;border-radius:999px;background:var(--primary);color:#fff;font-weight:750;box-shadow:0 10px 24px rgba(13,40,69,.22);transition:transform .18s ease,box-shadow .18s ease}
+    .unlock:hover{transform:translateY(-2px);box-shadow:0 14px 28px rgba(13,40,69,.32)}
+    .quiet{border:0;background:none;padding:5px;color:inherit;font-size:12px;text-decoration:underline;text-underline-offset:3px;opacity:.72}
+    .idle{font-size:11px;line-height:1.45;color:var(--text-muted)}
+    .error{font-size:11px;color:var(--accent);margin-top:7px}
+    .locked-at{font-size:10px;letter-spacing:.08em;color:var(--text-muted)}
+    .index{display:none;width:100%;min-height:100vh;background:var(--bg);padding:64px;color:var(--text);overflow:auto}
+    .index.active{display:block}
+    .index h1{max-width:850px;margin:0;font-size:52px;line-height:1.02;letter-spacing:-.055em;color:var(--primary)}
+    .index p{max-width:680px;color:var(--text-muted);line-height:1.6}
+    .index-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:14px;margin-top:40px}
+    .index a{display:flex;min-height:170px;flex-direction:column;justify-content:space-between;border:1px solid var(--border);border-radius:18px;background:var(--surface);padding:18px;color:inherit;text-decoration:none;box-shadow:0 8px 24px rgba(13,40,69,.05)}
+    .index a strong{font-size:19px}.index a span{font-size:12px;color:var(--text-muted);line-height:1.45}.index a b{font-size:11px;color:var(--accent)}
+
+    /* V1 — Vault Door */
+    .v1{align-items:center;justify-content:center;background:radial-gradient(circle at 50% 45%,rgba(57,100,146,.32),transparent 34%),var(--hero-grad);color:#fff}
+    .v1:before{content:"";position:absolute;inset:0;background-image:linear-gradient(rgba(255,255,255,.025) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.025) 1px,transparent 1px);background-size:46px 46px;mask-image:radial-gradient(circle,#000,transparent 78%)}
+    .vault-door{position:absolute;left:50%;top:50%;width:min(68vw,830px);aspect-ratio:1;transform:translate(-50%,-50%);border-radius:50%;border:1px solid rgba(255,255,255,.14);background:radial-gradient(circle at 42% 35%,rgba(255,255,255,.11) 0 4%,transparent 16%),radial-gradient(circle,#1d3a5e 0 18%,#142c48 18.5% 21%,#244766 21.5% 34%,#0a1d32 34.5% 35.5%,#173451 36% 49%,#081827 49.5% 51%,#193956 51.5% 65%,#0a1b2f 65.5% 67%,#244868 67.5% 74%,#071523 74.5%);box-shadow:inset 0 0 0 18px rgba(255,255,255,.02),inset 0 0 90px rgba(0,0,0,.6),0 45px 100px rgba(0,0,0,.45)}
+    .vault-wheel{position:absolute;inset:20%;border:2px solid rgba(214,225,236,.45);border-radius:50%;box-shadow:inset 0 0 0 14px rgba(255,255,255,.03),0 0 0 1px rgba(0,0,0,.5)}
+    .vault-wheel:before,.vault-wheel:after{content:"";position:absolute;left:50%;top:-12%;bottom:-12%;width:8px;border-radius:8px;background:linear-gradient(90deg,#395a77,#a9bdcc 45%,#31516d);transform:translateX(-50%);box-shadow:0 0 0 1px rgba(0,0,0,.4)}
+    .vault-wheel:after{transform:translateX(-50%) rotate(90deg)}
+    .spoke{position:absolute;left:50%;top:-12%;bottom:-12%;width:8px;border-radius:8px;background:linear-gradient(90deg,#395a77,#a9bdcc 45%,#31516d);transform:translateX(-50%) rotate(45deg)}
+    .spoke.b{transform:translateX(-50%) rotate(-45deg)}
+    .vault-hub{position:absolute;inset:36%;display:grid;place-items:center;border:1px solid rgba(255,255,255,.35);border-radius:50%;background:radial-gradient(circle at 38% 32%,#adc1cf,#5f7f98 38%,#1b3a55 72%);box-shadow:0 10px 20px rgba(0,0,0,.45);font-size:18px;font-weight:900;letter-spacing:.14em}
+    .vault-ticks{position:absolute;inset:8%;border:1px dashed rgba(255,255,255,.24);border-radius:50%}
+    .vault-card{position:relative;z-index:3;width:min(92vw,430px);margin-left:min(42vw,530px);padding:28px;border:1px solid rgba(255,255,255,.24);border-radius:22px;background:linear-gradient(145deg,rgba(11,29,49,.84),rgba(19,48,76,.72));box-shadow:0 30px 80px rgba(0,0,0,.42);backdrop-filter:blur(26px)}
+    .vault-card .identity{margin:18px 0 24px}.vault-card .meta,.vault-card .idle,.vault-card .locked-at{color:rgba(255,255,255,.62)}
+    .vault-card .field input{border-color:rgba(255,255,255,.2);background:rgba(4,15,27,.52);color:#fff;box-shadow:inset 0 0 0 1px rgba(255,255,255,.03)}
+    .vault-card .password-label{color:rgba(255,255,255,.62)}.vault-card .eye{color:rgba(255,255,255,.55)}
+    .vault-card .unlock{margin-top:12px;background:linear-gradient(180deg,#e1eaf1,#7792a8 50%,#314e68 51%,#203b55);border:1px solid rgba(255,255,255,.35);color:#061524;text-shadow:0 1px rgba(255,255,255,.5);box-shadow:0 10px 25px rgba(0,0,0,.38)}
+    .vault-footer{display:flex;align-items:center;justify-content:space-between;margin-top:15px;color:rgba(255,255,255,.7)}
+
+    /* V2 — Frozen Desk */
+    .v2{align-items:stretch;justify-content:center;color:#fff;background:#0d2845}
+    .desk{position:absolute;inset:-30px;background:linear-gradient(135deg,#e9edf2,#f6f3ec);filter:blur(17px);transform:scale(1.04);opacity:.62}
+    .desk-nav{height:76px;background:#fff;border-bottom:1px solid #ccd3db}.desk-hero{position:absolute;left:7%;right:7%;top:110px;height:250px;border-radius:28px;background:linear-gradient(125deg,#0d2845,#41688f)}
+    .desk-grid{position:absolute;left:7%;right:7%;top:392px;display:grid;grid-template-columns:2fr 1fr 1fr;gap:22px}.desk-grid i{height:260px;border-radius:22px;background:#fff;box-shadow:0 8px 30px rgba(13,40,69,.1)}
+    .frost{position:absolute;inset:0;background:linear-gradient(180deg,rgba(4,15,29,.35),rgba(4,15,29,.78)),radial-gradient(circle at 20% 20%,rgba(70,125,176,.4),transparent 35%);backdrop-filter:blur(10px)}
+    .clock-block{position:absolute;z-index:2;top:58px;left:64px}.clock{font-size:108px;font-weight:250;line-height:.92;letter-spacing:-.075em}.date{display:flex;gap:14px;margin-top:16px;font-size:14px;color:rgba(255,255,255,.74)}
+    .os-card{position:relative;z-index:3;align-self:flex-end;width:430px;margin-bottom:50px;text-align:center}.os-card .avatar{margin:0 auto 14px;width:88px;height:88px;font-size:24px}
+    .os-card .name{font-size:21px}.os-card .arabic{font-size:14px;margin-top:4px;color:rgba(255,255,255,.68)}
+    .os-field{margin-top:18px}.os-field input{border-color:rgba(255,255,255,.28);background:rgba(255,255,255,.12);color:#fff;backdrop-filter:blur(22px);border-radius:999px;padding-inline:21px 52px}.os-field .eye{color:#fff}
+    .os-unlock{position:absolute;inset-inline-end:5px;top:5px;width:38px;height:38px;border:0;border-radius:50%;background:#fff;color:#0d2845;font-size:18px}
+    .os-card .idle{margin-top:13px;color:rgba(255,255,255,.64)}.os-card .quiet{margin-top:6px;color:#fff}
+    .grab{display:none}
+
+    /* V3 — Security Badge */
+    .v3{align-items:center;justify-content:center;background:#d8d7d2;color:#142033}
+    .v3:before{content:"";position:absolute;inset:0;background:repeating-radial-gradient(ellipse at 20% 30%,transparent 0 20px,rgba(13,40,69,.045) 21px 22px,transparent 23px 28px),linear-gradient(120deg,#e6e3dc,#c7cacb)}
+    .badge-backdrop-title{position:absolute;left:48px;bottom:38px;color:rgba(13,40,69,.2);font-size:52px;font-weight:850;letter-spacing:-.05em}
+    .lanyard{position:absolute;z-index:2;left:50%;top:-18px;width:82px;height:235px;transform:translateX(-50%);background:repeating-linear-gradient(96deg,#8e0b21 0 4px,#c8102e 5px 12px,#710919 13px 16px);border-radius:0 0 12px 12px;box-shadow:inset 7px 0 10px rgba(255,255,255,.15),6px 8px 18px rgba(0,0,0,.18)}
+    .lanyard:after{content:"";position:absolute;left:18px;bottom:-28px;width:46px;height:42px;border-radius:9px 9px 17px 17px;background:linear-gradient(90deg,#92979b,#f5f6f7 45%,#777c82);box-shadow:0 3px 8px rgba(0,0,0,.3)}
+    .id-badge{position:relative;z-index:3;width:450px;min-height:600px;margin-top:120px;border:1px solid rgba(13,40,69,.18);border-radius:24px;background:linear-gradient(160deg,rgba(255,255,255,.98),rgba(246,244,237,.98));box-shadow:0 34px 70px rgba(18,31,43,.32);overflow:hidden}
+    .badge-head{height:78px;display:flex;align-items:center;justify-content:space-between;padding:0 28px;background:#0d2845;color:#fff}.badge-logo{display:flex;align-items:center;gap:10px;font-size:11px;font-weight:800;letter-spacing:.14em}.badge-logo img{width:38px;height:38px;object-fit:contain;filter:brightness(0) invert(1)}
+    .badge-chip{width:38px;height:28px;border:1px solid rgba(255,255,255,.28);border-radius:6px;background:linear-gradient(135deg,#b79b52,#f5d879,#b38a32)}
+    .badge-body{padding:26px 30px 28px}.badge-person{display:flex;gap:22px;align-items:center}.badge-person .avatar{width:112px;height:132px;border-radius:14px;font-size:27px;box-shadow:0 0 0 1px #d7d9dd,0 12px 24px rgba(13,40,69,.15)}
+    .badge-person .name{font-size:20px}.gno{display:inline-flex;margin-top:12px;padding:5px 9px;border-radius:5px;background:#e8edf3;color:#0d2845;font-family:"IBM Plex Mono";font-size:11px;font-weight:700}
+    .stamp{position:absolute;right:-20px;top:196px;transform:rotate(-9deg);border:4px double #c8102e;padding:7px 18px;color:#c8102e;font-weight:900;letter-spacing:.14em;font-size:17px;opacity:.88}
+    .badge-divider{height:1px;background:#d7d9dd;margin:25px 0}.badge-field .field input{background:#fff}.badge-field .unlock{margin-top:12px;background:#c8102e}.swipe{display:flex;align-items:center;gap:9px;justify-content:center;margin-top:10px;color:#667085;font-size:10px;text-transform:uppercase;letter-spacing:.13em}.swipe:before,.swipe:after{content:"";width:28px;height:1px;background:#cfd2d7}
+    .badge-foot{display:flex;align-items:center;justify-content:space-between;margin-top:18px}.badge-foot .idle{max-width:250px}.barcode{height:26px;width:74px;background:repeating-linear-gradient(90deg,#152130 0 2px,transparent 2px 4px,#152130 4px 5px,transparent 5px 8px)}
+
+    /* V4 — Classified Dossier */
+    .v4{align-items:center;justify-content:center;background:linear-gradient(135deg,#553f2f,#80644d);color:#1c252e}
+    .v4:before{content:"";position:absolute;inset:0;opacity:.22;background-image:repeating-linear-gradient(0deg,transparent 0 3px,rgba(255,255,255,.12) 4px),radial-gradient(circle at 18% 22%,#fff,transparent 2px)}
+    .folder{position:relative;width:min(92vw,1050px);height:690px;padding:38px;background:#c9a772;border-radius:4px 14px 14px 14px;box-shadow:0 30px 70px rgba(17,12,8,.45)}
+    .folder:before{content:"GSSG • RESTRICTED";position:absolute;left:0;top:-36px;width:300px;height:50px;padding:13px 24px;border-radius:12px 12px 0 0;background:#c9a772;color:#694f32;font:700 11px "IBM Plex Mono";letter-spacing:.13em}
+    .paper{position:relative;width:100%;height:100%;display:grid;grid-template-columns:1.08fr .92fr;gap:52px;padding:48px 54px;background:linear-gradient(98deg,rgba(255,255,255,.8),transparent 3%),repeating-linear-gradient(0deg,#f6f0df 0 28px,#ede5d1 29px);box-shadow:0 6px 16px rgba(67,43,22,.22);overflow:hidden}
+    .paper:after{content:"";position:absolute;right:0;top:0;border-style:solid;border-width:0 0 58px 58px;border-color:transparent transparent #d9cfb7 transparent;filter:drop-shadow(-3px 4px 3px rgba(0,0,0,.14))}
+    .dossier-title{font-family:Georgia,serif;font-size:48px;line-height:.95;letter-spacing:-.045em;color:#253246}.dossier-kicker{color:#a30d24;margin-bottom:18px}.dossier-intro{margin-top:22px;max-width:430px;font:13px/1.7 "IBM Plex Mono";color:#5d5a52}.case-table{margin-top:26px;border-top:2px solid #253246}.case-row{display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid rgba(37,50,70,.24);font:11px "IBM Plex Mono"}.case-row span:first-child{color:#857962}.dossier-stamp{position:absolute;left:11%;bottom:86px;transform:rotate(-7deg);border:6px double #b20f26;padding:12px 25px;color:#b20f26;font:900 25px/1 "IBM Plex Mono";letter-spacing:.12em;opacity:.86;mix-blend-mode:multiply}
+    .dossier-form{align-self:center;padding:28px;border:1px solid rgba(63,54,41,.25);background:rgba(255,252,242,.72);box-shadow:8px 8px 0 rgba(92,69,42,.11)}.dossier-form .identity{margin-bottom:22px}.dossier-form .avatar{border-radius:8px;box-shadow:0 0 0 1px #9d9179}
+    .dossier-form .unlock{margin-top:14px;border-radius:50%;width:72px;height:72px;margin-left:calc(50% - 36px);background:radial-gradient(circle at 38% 32%,#e94b5b,#a30d24 57%,#720816);border:4px double rgba(255,255,255,.28);box-shadow:0 8px 0 #650617,0 12px 20px rgba(58,19,12,.25);font-family:Georgia,serif;font-size:12px}.seal-caption{text-align:center;margin-top:13px;font:10px "IBM Plex Mono";letter-spacing:.13em;color:#756a57}.red-string{position:absolute;right:-10px;bottom:86px;width:160px;height:90px;border:3px solid #a30d24;border-radius:50%;transform:rotate(-15deg);opacity:.55}
+
+    /* V5 — Guilloché Nightwatch */
+    .v5{align-items:center;justify-content:center;background:radial-gradient(circle at 50% 38%,#192c4d,#070c15 66%);color:#f5ecd0}
+    .v5:before{content:"";position:absolute;inset:0;background-image:repeating-linear-gradient(123deg,rgba(201,169,97,.035) 0 1px,transparent 1px 7px);mask-image:radial-gradient(circle,#000 30%,transparent 80%)}
+    .guilloche{position:absolute;width:min(82vw,880px);aspect-ratio:1;border-radius:50%;opacity:.55}
+    .guilloche svg{width:100%;height:100%;overflow:visible}
+    .night-card{position:relative;z-index:3;width:410px;text-align:center}.night-logo{position:relative;width:148px;height:148px;margin:0 auto 24px;display:grid;place-items:center;border:1px solid rgba(201,169,97,.45);border-radius:50%;box-shadow:0 0 0 8px rgba(201,169,97,.04),0 0 0 9px rgba(201,169,97,.16)}
+    .night-logo img{width:90px;height:90px;object-fit:contain;filter:sepia(1) saturate(.7) brightness(1.5)}.night-logo:after{content:"NIGHTWATCH";position:absolute;bottom:-24px;font:9px "IBM Plex Mono";letter-spacing:.32em;color:#c9a961}
+    .night-welcome{margin-top:48px;font:italic 26px/1.2 Georgia,serif;color:#f8f1da}.night-ar{margin-top:8px;color:rgba(245,236,208,.6);font-size:13px}.night-meta{margin-top:12px;font:10px "IBM Plex Mono";letter-spacing:.14em;color:rgba(201,169,97,.72)}
+    .night-field{margin-top:28px;text-align:left}.night-field .password-label{color:rgba(245,236,208,.55)}.night-field .field input{border-width:0 0 1px;border-radius:0;border-color:rgba(201,169,97,.45);background:transparent;color:#fff;padding-left:0}.night-field .eye{color:#c9a961}
+    .night-unlock{width:58px;height:58px;margin:22px auto 0;border:1px solid #c9a961;border-radius:50%;background:rgba(201,169,97,.08);color:#ecdcae;font-size:21px;box-shadow:0 0 0 8px rgba(201,169,97,.025);transition:.2s}.night-unlock:hover{background:#c9a961;color:#101b2e;transform:scale(1.05)}
+    .night-card .idle{margin-top:18px;color:rgba(245,236,208,.45)}.night-card .quiet{color:#ecdcae}.night-error{margin-top:8px;color:#ff8792;font-size:11px}.night-corner{position:absolute;left:34px;top:30px;font:9px "IBM Plex Mono";letter-spacing:.18em;color:rgba(201,169,97,.55)}.night-corner.right{left:auto;right:34px;text-align:right}
+
+    @media (prefers-reduced-motion:no-preference){
+      .vault-wheel{animation:vaultTurn 60s linear infinite}.guilloche .spin-a{transform-origin:center;animation:roseTurn 120s linear infinite}.guilloche .spin-b{transform-origin:center;animation:roseTurn 150s linear reverse infinite}
+    }
+    @keyframes vaultTurn{to{transform:rotate(360deg)}}@keyframes roseTurn{to{transform:rotate(360deg)}}
+
+    @media(max-width:760px){
+      .scene{min-height:100svh}.name{font-size:17px}.meta{font-size:11px}.avatar{width:64px;height:64px}
+      .index{padding:34px 20px}.index h1{font-size:36px}.index-grid{grid-template-columns:1fr}
+      .vault-door{width:790px;left:48%;top:32%;opacity:.78}.vault-card{align-self:flex-end;width:calc(100% - 24px);margin:0 12px 12px;padding:22px;border-radius:24px}.vault-card .identity{margin:14px 0 18px}.vault-footer{margin-top:10px}.vault-card .eyebrow{text-align:center}
+      .desk-grid{grid-template-columns:1fr;top:280px}.desk-grid i{height:190px}.clock-block{left:0;right:0;top:54px;text-align:center}.clock{font-size:78px}.date{justify-content:center;flex-direction:column;gap:5px;margin-top:12px}.os-card{width:calc(100% - 20px);margin:0 10px 10px;padding:18px 20px 16px;border:1px solid rgba(255,255,255,.18);border-radius:26px;background:rgba(5,18,34,.48);backdrop-filter:blur(28px)}.os-card .avatar{width:76px;height:76px;margin-top:-55px}.grab{display:block;width:42px;height:4px;border-radius:4px;background:rgba(255,255,255,.25);margin:0 auto 18px}.os-card .name{font-size:18px}
+      .badge-backdrop-title{display:none}.lanyard{height:145px;width:66px}.lanyard:after{left:13px;width:40px}.id-badge{width:calc(100% - 24px);min-height:auto;margin:82px 12px 12px;border-radius:22px}.badge-head{height:62px;padding:0 20px}.badge-body{padding:18px 20px 20px}.badge-person{gap:15px}.badge-person .avatar{width:82px;height:100px}.badge-person .name{font-size:16px}.stamp{right:-29px;top:153px;font-size:13px}.badge-divider{margin:16px 0}.badge-foot{margin-top:12px}.badge-foot .idle{max-width:210px}.swipe{display:none}
+      .folder{width:100%;height:100%;padding:0;border-radius:0}.folder:before{display:none}.paper{display:block;padding:34px 24px 24px;background:repeating-linear-gradient(0deg,#f6f0df 0 27px,#ede5d1 28px);overflow:auto}.dossier-title{font-size:38px}.dossier-intro{margin-top:14px;font-size:11px}.case-table{margin-top:16px}.dossier-stamp{top:142px;bottom:auto;left:auto;right:-28px;font-size:16px}.dossier-form{margin-top:22px;padding:20px}.dossier-form .identity{margin-bottom:15px}.dossier-form .unlock{width:62px;height:62px;margin-left:calc(50% - 31px)}.red-string{display:none}
+      .guilloche{width:720px;top:-65px;opacity:.45}.night-card{width:calc(100% - 42px);align-self:flex-end;margin-bottom:26px}.night-logo{width:124px;height:124px;margin-bottom:16px}.night-logo img{width:74px;height:74px}.night-welcome{margin-top:39px;font-size:23px}.night-field{margin-top:22px}.night-corner{left:18px;top:18px}.night-corner.right{right:18px}.night-card .idle{margin-top:13px}
+    }
+  </style>
+</head>
+<body>
+  <main id="index" class="index">
+    <div class="eyebrow" style="color:var(--accent)">Sentinel / Lock screen study</div>
+    <h1>Five ways to make inactivity feel intentional.</h1>
+    <p>Each direction is a complete responsive lock screen, not a decoration applied to the current card. Open a concept to inspect its widescreen and mobile compositions.</p>
+    <div class="index-grid">
+      <a href="?v=1"><b>V1</b><strong>Vault Door</strong><span>Mechanical security, a monumental wheel, and machined controls.</span></a>
+      <a href="?v=2"><b>V2</b><strong>Frozen Desk</strong><span>The app itself freezes behind a cinematic OS-style lock layer.</span></a>
+      <a href="?v=3"><b>V3</b><strong>Security Badge</strong><span>The employee identity card becomes the whole authentication object.</span></a>
+      <a href="?v=4"><b>V4</b><strong>Classified Dossier</strong><span>Paper trail, restricted stamps, case metadata, and a wax seal.</span></a>
+      <a href="?v=5"><b>V5</b><strong>Guilloché Nightwatch</strong><span>Banknote linework and a ceremonial midnight security screen.</span></a>
+    </div>
+  </main>
+
+  <section class="scene v1" data-v="1" aria-label="Vault Door lockscreen">
+    <div class="vault-door" aria-hidden="true"><div class="vault-ticks"></div><div class="vault-wheel"><i class="spoke"></i><i class="spoke b"></i><div class="vault-hub">GSSG</div></div></div>
+    <form class="vault-card">
+      <div class="eyebrow" style="color:rgba(255,255,255,.64)">Security interlock / 01</div>
+      <div class="identity"><div class="avatar dark">AA</div><div><div class="name">ABDULLA ALDHAHERI</div><div class="arabic" dir="rtl" style="margin-top:4px;color:rgba(255,255,255,.67)">عبدالله الظاهري</div><div class="meta">HR Operations · a.aldhaheri@gssg.test</div></div></div>
+      <label class="password-label" for="v1pwd">Combination password</label><div class="field"><input id="v1pwd" value="••••••••" aria-label="Password"><button class="eye" type="button" aria-label="Show password">◉</button></div>
+      <button class="unlock" type="button">Release vault</button>
+      <div class="vault-footer"><span class="idle">Auto-locked after 30 minutes of inactivity</span><span class="locked-at mono">14:32</span></div>
+      <div style="text-align:center"><button class="quiet" type="button">Not you? Sign out</button></div>
+    </form>
+  </section>
+
+  <section class="scene v2" data-v="2" aria-label="Frozen Desk lockscreen">
+    <div class="desk" aria-hidden="true"><div class="desk-nav"></div><div class="desk-hero"></div><div class="desk-grid"><i></i><i></i><i></i></div></div><div class="frost"></div>
+    <div class="clock-block"><div class="clock">14:32</div><div class="date"><span>Friday, 28 August 2026</span><span class="arabic" dir="rtl">٢ ربيع الأول ١٤٤٨ هـ</span></div></div>
+    <form class="os-card"><div class="grab"></div><div class="avatar">AA</div><div class="name">Abdulla Aldhaheri</div><div class="arabic" dir="rtl">مرحباً بعودتك، عبدالله</div><div class="field os-field"><input value="••••••••" aria-label="Password"><button class="os-unlock" type="button" aria-label="Unlock">→</button></div><div class="idle">Locked automatically after 30 minutes of inactivity</div><button class="quiet" type="button">Not you? Sign out</button></form>
+  </section>
+
+  <section class="scene v3" data-v="3" aria-label="Security Badge lockscreen">
+    <div class="badge-backdrop-title">IDENTITY REQUIRED</div><div class="lanyard" aria-hidden="true"></div>
+    <form class="id-badge"><header class="badge-head"><div class="badge-logo"><img src="gssg-globe.png" alt=""><span>GENERAL SECRETARIAT<br>OF THE NATIONAL GUARD</span></div><div class="badge-chip"></div></header>
+      <div class="badge-body"><div class="badge-person"><div class="avatar">AA</div><div><div class="eyebrow" style="color:#c8102e;margin-bottom:7px">Employee credential</div><div class="name">ABDULLA<br>ALDHAHERI</div><div class="arabic" dir="rtl" style="margin-top:5px">عبدالله الظاهري</div><div class="gno">G-1042</div></div></div><div class="stamp">LOCKED · مقفل</div>
+        <div class="badge-divider"></div><div class="badge-field"><label class="password-label">Password verification</label><div class="field"><input value="••••••••" aria-label="Password"><button class="eye" type="button">◉</button></div><button class="unlock" type="button">Swipe credential to unlock</button><div class="swipe">authenticated identity</div></div>
+        <div class="badge-foot"><div><div class="idle">Auto-locked after 30 minutes of inactivity</div><button class="quiet" type="button" style="padding-left:0">Not you? Sign out</button></div><div class="barcode" aria-hidden="true"></div></div>
+      </div></form>
+  </section>
+
+  <section class="scene v4" data-v="4" aria-label="Classified Dossier lockscreen">
+    <div class="folder"><div class="paper"><div><div class="eyebrow dossier-kicker">Restricted session record</div><div class="dossier-title">ACCESS<br>SUSPENDED</div><p class="dossier-intro">This workstation was left inactive. Confirm the assigned officer's credentials to reopen the protected session.</p><div class="case-table"><div class="case-row"><span>CASE</span><b>SESSION-7D</b></div><div class="case-row"><span>INACTIVITY</span><b>30 MINUTES</b></div><div class="case-row"><span>LOCKED AT</span><b>14:32 / 28-08-2026</b></div><div class="case-row"><span>CLASSIFICATION</span><b>INTERNAL</b></div></div></div>
+      <form class="dossier-form"><div class="identity"><div class="avatar">AA</div><div><div class="name">Abdulla Aldhaheri</div><div class="arabic" dir="rtl">عبدالله الظاهري</div><div class="meta">HR Operations · G-1042</div></div></div><label class="password-label">Officer password</label><div class="field"><input value="••••••••" aria-label="Password"><button class="eye" type="button">◉</button></div><button class="unlock" type="button">UNSEAL</button><div class="seal-caption">PRESS SEAL TO RESTORE ACCESS</div><div class="idle" style="margin-top:16px;text-align:center">Locked automatically after 30 minutes of inactivity</div><div style="text-align:center"><button class="quiet" type="button">Not you? Sign out</button></div></form>
+      <div class="dossier-stamp">مقفل · LOCKED</div><div class="red-string" aria-hidden="true"></div></div></div>
+  </section>
+
+  <section class="scene v5" data-v="5" aria-label="Guilloché Nightwatch lockscreen">
+    <div class="night-corner">GSSG / SECURE CONSOLE<br>SESSION 07D</div><div class="night-corner right">LOCKED 14:32<br>28 AUG 2026</div>
+    <div class="guilloche" aria-hidden="true"><svg viewBox="0 0 800 800" fill="none"><g class="spin-a" stroke="#c9a961" stroke-width=".7"><ellipse cx="400" cy="400" rx="370" ry="92"/><ellipse cx="400" cy="400" rx="370" ry="92" transform="rotate(15 400 400)"/><ellipse cx="400" cy="400" rx="370" ry="92" transform="rotate(30 400 400)"/><ellipse cx="400" cy="400" rx="370" ry="92" transform="rotate(45 400 400)"/><ellipse cx="400" cy="400" rx="370" ry="92" transform="rotate(60 400 400)"/><ellipse cx="400" cy="400" rx="370" ry="92" transform="rotate(75 400 400)"/><ellipse cx="400" cy="400" rx="370" ry="92" transform="rotate(90 400 400)"/><ellipse cx="400" cy="400" rx="370" ry="92" transform="rotate(105 400 400)"/><ellipse cx="400" cy="400" rx="370" ry="92" transform="rotate(120 400 400)"/><ellipse cx="400" cy="400" rx="370" ry="92" transform="rotate(135 400 400)"/><ellipse cx="400" cy="400" rx="370" ry="92" transform="rotate(150 400 400)"/><ellipse cx="400" cy="400" rx="370" ry="92" transform="rotate(165 400 400)"/></g><g class="spin-b" stroke="#6f8cbb" stroke-width=".55"><ellipse cx="400" cy="400" rx="282" ry="62"/><ellipse cx="400" cy="400" rx="282" ry="62" transform="rotate(20 400 400)"/><ellipse cx="400" cy="400" rx="282" ry="62" transform="rotate(40 400 400)"/><ellipse cx="400" cy="400" rx="282" ry="62" transform="rotate(60 400 400)"/><ellipse cx="400" cy="400" rx="282" ry="62" transform="rotate(80 400 400)"/><ellipse cx="400" cy="400" rx="282" ry="62" transform="rotate(100 400 400)"/><ellipse cx="400" cy="400" rx="282" ry="62" transform="rotate(120 400 400)"/><ellipse cx="400" cy="400" rx="282" ry="62" transform="rotate(140 400 400)"/><ellipse cx="400" cy="400" rx="282" ry="62" transform="rotate(160 400 400)"/></g><circle cx="400" cy="400" r="386" stroke="#c9a961" stroke-width=".5" stroke-dasharray="2 9"/><circle cx="400" cy="400" r="195" stroke="#c9a961" stroke-width=".6"/></svg></div>
+    <form class="night-card"><div class="night-logo"><img src="gssg-globe.png" alt="GSSG"></div><div class="night-welcome">Welcome back, Abdulla.</div><div class="night-ar arabic" dir="rtl">مرحباً بعودتك، عبدالله الظاهري</div><div class="night-meta">HR OPERATIONS · G-1042</div><div class="night-field"><label class="password-label">Password / كلمة المرور</label><div class="field"><input value="••••••••" aria-label="Password"><button class="eye" type="button">◉</button></div><div class="night-error">Incorrect password — 3 attempts left</div></div><button class="night-unlock" type="button" aria-label="Unlock">→</button><div class="idle">Locked automatically after 30 minutes of inactivity</div><button class="quiet" type="button">Not you? Sign out</button></form>
+  </section>
+
+  <script>
+    const v = new URLSearchParams(location.search).get('v');
+    if (v && /^[1-5]$/.test(v)) document.querySelector(`[data-v="${v}"]`).classList.add('active');
+    else document.getElementById('index').classList.add('active');
+  </script>
+</body>
+</html>

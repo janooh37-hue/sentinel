@@ -138,7 +138,42 @@
     "title": "App locked",
     "password": "Password",
     "unlock": "Unlock",
-    "welcomeName": "Welcome back, {{name}}"
+    "welcomeName": "Welcome back, {{name}}",
+    "enterPassword": "Enter your password to unlock",
+    "idleNote": "Locked automatically after {{minutes}} minutes of inactivity",
+    "signOut": "Not you? Sign out",
+    "showPassword": "Show password",
+    "hidePassword": "Hide password",
+    "glanceTitle": "Lock screen glance",
+    "onDutyNow": "On duty now",
+    "currentShift": "Current working shift",
+    "nextShift": "Next shift",
+    "whileAway": "While you were away",
+    "detailsHidden": "Details stay hidden until you unlock",
+    "digest": {
+      "approvals": "Approvals",
+      "inbox": "Inbox",
+      "expiry": "Expiry"
+    },
+    "weather": {
+      "title": "Today's weather",
+      "clear": "Clear",
+      "cloudy": "Partly cloudy",
+      "fog": "Fog",
+      "rain": "Rain",
+      "snow": "Snow",
+      "storm": "Thunderstorms",
+      "unknown": "Current conditions",
+      "high": "H",
+      "low": "L",
+      "humidity": "Humidity"
+    },
+    "layoutTitle": "Lock screen layout",
+    "layout": {
+      "band": "Command band",
+      "stack": "Central stack",
+      "console": "Briefing console"
+    }
   },
   "common": {
     "save": "Save",
