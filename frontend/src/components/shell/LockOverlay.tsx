@@ -27,7 +27,7 @@ import { useAuth } from '@/lib/authContext'
 import { loadLockWeather, weatherCategory, type LockWeather } from '@/lib/lockWeather'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { useIdentity } from '@/lib/useIdentity'
-import { IDLE_LOCK_MS } from '@/lib/useLockState'
+import { DEFAULT_IDLE_LOCK_SECONDS } from '@/lib/useLockState'
 
 import './LockOverlay.css'
 
@@ -468,7 +468,11 @@ export function LockOverlay({ onUnlocked, onSignOut }: LockOverlayProps): React.
             </p>
           )}
           <p className="lock-idle">
-            {t('lockScreen.idleNote', { minutes: IDLE_LOCK_MS / 60_000 })}
+            {t('lockScreen.idleNote', {
+              duration: t(
+                `lockTimer.durations.${user?.idle_lock_seconds ?? DEFAULT_IDLE_LOCK_SECONDS}`,
+              ),
+            })}
           </p>
           <button className="lock-signout" type="button" onClick={onSignOut}>
             {t('lockScreen.signOut')}

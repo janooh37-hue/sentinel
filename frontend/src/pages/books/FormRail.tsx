@@ -1,10 +1,12 @@
 /**
  * Records page — form-kind rail (left pane). One item per form kind present in
  * the data (+ "All"), with count and colored mini-dots for the non-draft
- * states present in that kind. Glyphs are wayfinding (Services-tile
- * convention) — keep them.
+ * states present in that kind. Calibrated artwork provides wayfinding, with
+ * glyphs retained as the fallback for services without artwork.
  */
 import { useTranslation } from 'react-i18next'
+
+import { ServiceArtwork, type ServiceArtworkId } from '@/components/ui/service-artwork'
 
 import { cn } from '@/lib/utils'
 import { useCapabilities } from '@/lib/useCapabilities'
@@ -13,6 +15,7 @@ import { hasServiceCap } from '@/lib/dashboardLayout'
 export interface RailItem {
   serviceId: string
   glyph: string
+  artwork?: ServiceArtworkId
   /** Already-localised label (from serviceLabels.useServiceLabel). */
   label: string
   count: number
@@ -65,7 +68,11 @@ export function FormRail({
               aria-hidden
               className="grid h-8 w-8 shrink-0 place-items-center rounded-sm border border-hairline bg-surface-raised text-[1em]"
             >
-              {item.glyph}
+              {item.artwork ? (
+                <ServiceArtwork artwork={item.artwork} size="row" />
+              ) : (
+                item.glyph
+              )}
             </span>
             <span className="min-w-0 flex-1">
               <span

@@ -366,6 +366,7 @@ export interface SessionUser {
   /** Whether the user has a per-user *signing* signature on file (used when
    * approving/signing a book). Distinct from the employee-vault signature. */
   has_signature: boolean
+  idle_lock_seconds: number
 }
 
 export interface RegisterResult {
@@ -2152,6 +2153,10 @@ export const api = {
     request<RegisterResult>('POST', '/auth/register', payload),
   verifyAuthPassword: (password: string) =>
     request<void>('POST', '/auth/verify-password', { password }),
+  updateLockTimer: (idleLockSeconds: number) =>
+    request<SessionUser>('PATCH', '/auth/me/lock-timer', {
+      idle_lock_seconds: idleLockSeconds,
+    }),
   /** Link the signed-in user to their own employee record (G-number). Sets
    * `User.employee_id` — the authoritative identity source — so the link
    * picker actually flips `identity.linked`. Pass `null` to clear (admin). */

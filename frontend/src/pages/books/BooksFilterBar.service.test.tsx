@@ -31,6 +31,7 @@ vi.mock('react-i18next', () => ({
 vi.mock('./serviceLabels', () => ({
   OTHER_SERVICE_ID: 'other',
   serviceGlyph: () => '📊',
+  serviceArtwork: () => undefined,
   useServiceLabel: () => (id: string) => (id === 'Report' ? 'تقرير' : id),
 }))
 

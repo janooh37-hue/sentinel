@@ -230,6 +230,8 @@ describe('PermissionsPage Mirror editor', () => {
     })
     expect(generalBook).toHaveAttribute('aria-pressed', 'true')
     expect(generalBook).toHaveClass('bg-surface', 'text-primary')
+    expect(generalBook.querySelector('img[src*="service-icons"]')).toBeInTheDocument()
+    expect(within(generalBook).queryByText('📓')).not.toBeInTheDocument()
     expect(within(blueprint).getByRole('button', { name: /Report Deny/ })).toHaveAttribute(
       'aria-pressed',
       'false',
@@ -238,6 +240,7 @@ describe('PermissionsPage Mirror editor', () => {
     const mirror = screen.getByTestId('mirror-device')
     expect(mirror).toHaveClass('min-[900px]:sticky', 'p-2')
     expect(within(mirror).getAllByText('General Book').length).toBeGreaterThan(0)
+    expect(mirror.querySelectorAll('img[src*="service-icons"]').length).toBeGreaterThan(0)
     expect(within(mirror).queryByText('Report')).not.toBeInTheDocument()
     expect(within(mirror).getByText('Incoming')).toBeVisible()
   })

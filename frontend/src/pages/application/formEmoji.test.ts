@@ -12,7 +12,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { QUICK_ACTION_META } from '@/lib/quickActions'
-import { EXTRA_TEMPLATE_EMOJI } from './formEmoji'
+import { artworkForTemplate, EXTRA_TEMPLATE_EMOJI } from './formEmoji'
 
 describe('Services-gallery glyph registry', () => {
   it('assigns every template id a unique glyph across QUICK_ACTION_META and EXTRA_TEMPLATE_EMOJI', () => {
@@ -26,5 +26,13 @@ describe('Services-gallery glyph registry', () => {
 
     const collisions = [...idsByEmoji.entries()].filter(([, ids]) => ids.length > 1)
     expect(collisions).toEqual([])
+  })
+})
+
+describe('Services-gallery artwork registry', () => {
+  it('resolves calibrated artwork for service templates and leaves unknown ids unset', () => {
+    expect(artworkForTemplate('Report')).toBe('report')
+    expect(artworkForTemplate('Warning Form')).toBe('warning')
+    expect(artworkForTemplate('Nope')).toBeUndefined()
   })
 })

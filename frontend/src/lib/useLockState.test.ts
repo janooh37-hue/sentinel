@@ -1,15 +1,16 @@
 import { act, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { IDLE_LOCK_MS, markActivity, useLockState } from './useLockState'
+import { markActivity, useLockState } from './useLockState'
 
 const START = new Date('2026-08-28T10:00:00.000Z')
 const ACTIVITY_KEY = 'gssg.lastActivity'
 const LOCK_KEY = 'gssg.locked'
+const DEFAULT_IDLE_LOCK_MS = 30 * 60_000
 
-function renderEnabled(enabled = true) {
-  return renderHook(({ active }) => useLockState(active), {
-    initialProps: { active: enabled },
+function renderEnabled(enabled = true, timeoutMs = DEFAULT_IDLE_LOCK_MS) {
+  return renderHook(({ active, idleMs }) => useLockState(active, idleMs), {
+    initialProps: { active: enabled, idleMs: timeoutMs },
   })
 }
 
@@ -28,7 +29,7 @@ describe('useLockState idle locking', () => {
   it('locks after 30 minutes without activity', () => {
     const { result } = renderEnabled()
 
-    act(() => vi.advanceTimersByTime(IDLE_LOCK_MS))
+    act(() => vi.advanceTimersByTime(DEFAULT_IDLE_LOCK_MS))
 
     expect(result.current.locked).toBe(true)
     expect(sessionStorage.getItem(LOCK_KEY)).toBe('1')
@@ -41,7 +42,7 @@ describe('useLockState idle locking', () => {
 
     expect(localStorage.getItem(ACTIVITY_KEY)).toBe(String(START.getTime()))
 
-    act(() => vi.advanceTimersByTime(IDLE_LOCK_MS - 10_000))
+    act(() => vi.advanceTimersByTime(DEFAULT_IDLE_LOCK_MS - 10_000))
     expect(result.current.locked).toBe(false)
 
     act(() => vi.advanceTimersByTime(30_000))
@@ -88,7 +89,7 @@ describe('useLockState idle locking', () => {
 
   it('refreshes activity and clears the persisted lock when unlocked', () => {
     sessionStorage.setItem(LOCK_KEY, '1')
-    localStorage.setItem(ACTIVITY_KEY, String(START.getTime() - IDLE_LOCK_MS))
+    localStorage.setItem(ACTIVITY_KEY, String(START.getTime() - DEFAULT_IDLE_LOCK_MS))
     const { result } = renderEnabled()
     vi.setSystemTime(new Date(START.getTime() + 5_000))
 
@@ -113,7 +114,7 @@ describe('useLockState idle locking', () => {
   it('does not seed activity or lock while disabled', () => {
     const { result } = renderEnabled(false)
 
-    act(() => vi.advanceTimersByTime(IDLE_LOCK_MS * 2))
+    act(() => vi.advanceTimersByTime(DEFAULT_IDLE_LOCK_MS * 2))
 
     expect(result.current.locked).toBe(false)
     expect(localStorage.getItem(ACTIVITY_KEY)).toBeNull()
@@ -122,9 +123,30 @@ describe('useLockState idle locking', () => {
   it('checks the stored deadline when transitioning from disabled to enabled', () => {
     const { result, rerender } = renderEnabled(false)
     localStorage.setItem(ACTIVITY_KEY, String(START.getTime() - 31 * 60_000))
-
-    rerender({ active: true })
+    rerender({ active: true, idleMs: DEFAULT_IDLE_LOCK_MS })
     act(() => vi.advanceTimersByTime(0))
+
+    expect(result.current.locked).toBe(true)
+  })
+
+  it('locks within five seconds of a configured 30-second deadline', () => {
+    const { result } = renderEnabled(true, 30_000)
+
+    act(() => vi.advanceTimersByTime(35_000))
+
+    expect(result.current.locked).toBe(true)
+  })
+
+  it('defers a configured 30-second deadline after keyboard activity', () => {
+    const { result } = renderEnabled(true, 30_000)
+
+    act(() => vi.advanceTimersByTime(20_000))
+    act(() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'a' })))
+    act(() => vi.advanceTimersByTime(15_000))
+
+    expect(result.current.locked).toBe(false)
+
+    act(() => vi.advanceTimersByTime(20_000))
 
     expect(result.current.locked).toBe(true)
   })

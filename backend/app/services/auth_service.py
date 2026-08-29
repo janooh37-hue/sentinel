@@ -525,7 +525,17 @@ def to_session_user(db: Session, user: User) -> SessionUser:
         is_admin=user.role == ADMIN_ROLE,
         is_manager=user.role in (ADMIN_ROLE, MANAGER_ROLE),
         has_signature=bool(user.signature_path),
+        idle_lock_seconds=user.idle_lock_seconds,
     )
+
+
+def set_lock_timer(db: Session, user: User, seconds: int) -> User:
+    """Persist the signed-in user's lock-screen idle timeout."""
+
+    user.idle_lock_seconds = seconds
+    db.commit()
+    db.refresh(user)
+    return user
 
 
 def admin_read(db: Session, user: User) -> AdminUserRead:

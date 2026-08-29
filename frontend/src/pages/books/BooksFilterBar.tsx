@@ -11,9 +11,10 @@ import { useTranslation } from 'react-i18next'
 
 import type { BookCategoryRead, ServiceFacetRead } from '@/lib/api'
 import { Button } from '@/components/ui/button'
+import { ServiceArtwork } from '@/components/ui/service-artwork'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
-import { serviceGlyph, useServiceLabel } from './serviceLabels'
+import { serviceArtwork, serviceGlyph, useServiceLabel } from './serviceLabels'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { hasServiceCap } from '@/lib/dashboardLayout'
 
@@ -297,6 +298,7 @@ export function BooksFilterBar({
               </li>
               {visibleServices.map((s) => {
                 const checked = selectedServiceId === s.id
+                const artwork = serviceArtwork(s.id)
                 return (
                   <li key={s.id}>
                     <button
@@ -314,7 +316,11 @@ export function BooksFilterBar({
                           : 'text-foreground hover:bg-surface-tinted',
                       )}
                     >
-                      <span aria-hidden="true">{serviceGlyph(s.id)}</span>
+                      {artwork ? (
+                        <ServiceArtwork artwork={artwork} size="row" className="shrink-0" />
+                      ) : (
+                        <span aria-hidden="true">{serviceGlyph(s.id)}</span>
+                      )}
                       <span dir="auto">{serviceLabel(s.id)}</span>
                     </button>
                   </li>

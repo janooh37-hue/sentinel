@@ -15,10 +15,11 @@ type BookReadWithSnippet = BookRead & { search_snippet?: string | null }
 import { cn } from '@/lib/utils'
 
 import { BookStatusChips } from '@/components/books/BookStatusChips'
+import { ServiceArtwork } from '@/components/ui/service-artwork'
 import { signedSourceOf } from './bookStateLabel'
 import { subjectEmployeePart } from './formKind'
 import { paperCountOf } from './recordPapers'
-import { serviceGlyph, useServiceLabel } from './serviceLabels'
+import { serviceArtwork, serviceGlyph, useServiceLabel } from './serviceLabels'
 import { StateSeal } from './StateSeal'
 
 /** Parse `[token]` FTS snippet markers into React nodes with <mark>. */
@@ -84,6 +85,7 @@ export function RecordsList({
           {items.map((row) => {
             const classified = { classified: !!row.classification_code }
             const glyph = serviceGlyph(row.service_id)
+            const artwork = serviceArtwork(row.service_id)
             const label = serviceLabel(row.service_id)
             const who = subjectEmployeePart(row.subject, classified)
             const snippet = (row as BookReadWithSnippet).search_snippet
@@ -132,7 +134,11 @@ export function RecordsList({
                   aria-hidden
                   className="grid h-7 w-7 shrink-0 place-items-center rounded-sm border border-hairline bg-surface-raised text-[0.9em]"
                 >
-                  {glyph}
+                  {artwork ? (
+                    <ServiceArtwork artwork={artwork} size="row" />
+                  ) : (
+                    glyph
+                  )}
                 </span>
                 <span className={cn('w-[4.6rem] shrink-0 font-mono text-[0.7em] font-bold text-primary', row.voided_at && 'line-through')}>
                   <bdi dir="ltr">{row.ref_number}</bdi>

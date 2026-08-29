@@ -14,9 +14,9 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 const STORAGE_KEY = 'gssg.locked'
 const ACTIVITY_KEY = 'gssg.lastActivity'
 
-export const IDLE_LOCK_MS = 30 * 60_000
-const ACTIVITY_WRITE_THROTTLE_MS = 15_000
-const CHECK_INTERVAL_MS = 30_000
+export const DEFAULT_IDLE_LOCK_SECONDS = 1800
+export const LOCK_TIMER_OPTIONS = [30, 60, 120, 300, 900, 1800] as const
+export type LockTimerSeconds = (typeof LOCK_TIMER_OPTIONS)[number]
 
 function readInitial(): boolean {
   try {
@@ -51,7 +51,7 @@ export function markActivity(): number {
   return timestamp
 }
 
-export function useLockState(enabled: boolean): {
+export function useLockState(enabled: boolean, timeoutMs: number): {
   locked: boolean
   lock: () => void
   unlock: () => void
@@ -60,6 +60,8 @@ export function useLockState(enabled: boolean): {
   const lastActivityRef = useRef<number | null>(null)
   const lastStorageWriteRef = useRef<number | null>(null)
   const wasEnabledRef = useRef(false)
+  const writeThrottleMs = Math.min(15_000, Math.floor(timeoutMs / 4))
+  const checkIntervalMs = Math.min(30_000, Math.max(5_000, Math.floor(timeoutMs / 6)))
 
   // Sync changes from other tabs / programmatic writes.
   useEffect(() => {
@@ -110,11 +112,11 @@ export function useLockState(enabled: boolean): {
 
     lastActivityRef.current = stored
     lastStorageWriteRef.current = stored
-    if (now - stored >= IDLE_LOCK_MS) {
+    if (now - stored >= timeoutMs) {
       const timeout = window.setTimeout(lock, 0)
       return () => window.clearTimeout(timeout)
     }
-  }, [enabled, lock])
+  }, [enabled, lock, timeoutMs])
 
   useEffect(() => {
     if (!enabled || locked) return
@@ -123,7 +125,7 @@ export function useLockState(enabled: boolean): {
       const now = Date.now()
       lastActivityRef.current = now
       const lastWrite = lastStorageWriteRef.current
-      if (lastWrite === null || now - lastWrite >= ACTIVITY_WRITE_THROTTLE_MS) {
+      if (lastWrite === null || now - lastWrite >= writeThrottleMs) {
         writeActivity(now)
         lastStorageWriteRef.current = now
       }
@@ -141,7 +143,7 @@ export function useLockState(enabled: boolean): {
     return () => {
       for (const event of events) window.removeEventListener(event, recordActivity, options)
     }
-  }, [enabled, locked])
+  }, [enabled, locked, writeThrottleMs])
 
   useEffect(() => {
     if (!enabled || locked) return
@@ -151,20 +153,20 @@ export function useLockState(enabled: boolean): {
       const inMemory = lastActivityRef.current
       const lastActivity =
         stored === null ? inMemory : inMemory === null ? stored : Math.max(stored, inMemory)
-      if (lastActivity !== null && Date.now() - lastActivity >= IDLE_LOCK_MS) lock()
+      if (lastActivity !== null && Date.now() - lastActivity >= timeoutMs) lock()
     }
 
     function onVisibilityChange(): void {
       if (document.visibilityState === 'visible') checkDeadline()
     }
 
-    const interval = window.setInterval(checkDeadline, CHECK_INTERVAL_MS)
+    const interval = window.setInterval(checkDeadline, checkIntervalMs)
     document.addEventListener('visibilitychange', onVisibilityChange)
     return () => {
       window.clearInterval(interval)
       document.removeEventListener('visibilitychange', onVisibilityChange)
     }
-  }, [enabled, locked, lock])
+  }, [checkIntervalMs, enabled, locked, lock, timeoutMs])
 
   return { locked, lock, unlock }
 }

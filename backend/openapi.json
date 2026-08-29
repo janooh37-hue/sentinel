@@ -710,6 +710,66 @@
         }
       }
     },
+    "/api/v1/auth/me/lock-timer": {
+      "patch": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Set My Lock Timer",
+        "description": "Set the signed-in user's per-account lock-screen idle timeout.",
+        "operationId": "set_my_lock_timer_api_v1_auth_me_lock_timer_patch",
+        "parameters": [
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LockTimerRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionUser"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/auth/me/capabilities": {
       "get": {
         "tags": [
@@ -33913,6 +33973,28 @@
         "title": "LinkSelfRequest",
         "description": "Set (or clear, admin-only) the signed-in user's own employee link.\n\n``employee_id`` is the G-number to claim; ``null`` clears the link."
       },
+      "LockTimerRequest": {
+        "properties": {
+          "idle_lock_seconds": {
+            "type": "integer",
+            "enum": [
+              30,
+              60,
+              120,
+              300,
+              900,
+              1800
+            ],
+            "title": "Idle Lock Seconds"
+          }
+        },
+        "type": "object",
+        "required": [
+          "idle_lock_seconds"
+        ],
+        "title": "LockTimerRequest",
+        "description": "Set the signed-in user's lock-screen idle timeout."
+      },
       "LoginRequest": {
         "properties": {
           "email": {
@@ -37927,6 +38009,11 @@
             "type": "boolean",
             "title": "Has Signature",
             "default": false
+          },
+          "idle_lock_seconds": {
+            "type": "integer",
+            "title": "Idle Lock Seconds",
+            "default": 1800
           }
         },
         "type": "object",

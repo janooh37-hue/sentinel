@@ -42,6 +42,7 @@ from app.schemas.auth import (
     CapabilityRead,
     DefaultManagerRequest,
     LinkSelfRequest,
+    LockTimerRequest,
     LoginRequest,
     RegisterRequest,
     RegisterResult,
@@ -197,6 +198,18 @@ def delete_my_signature(
 ) -> Response:
     user_signature_service.clear_signature(db, user)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.patch("/me/lock-timer", response_model=SessionUser)
+def set_my_lock_timer(
+    body: LockTimerRequest,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> SessionUser:
+    """Set the signed-in user's per-account lock-screen idle timeout."""
+
+    updated = auth_service.set_lock_timer(db, user, body.idle_lock_seconds)
+    return auth_service.to_session_user(db, updated)
 
 
 @router.get("/me/capabilities", response_model=list[str])

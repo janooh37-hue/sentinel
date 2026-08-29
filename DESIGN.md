@@ -1352,22 +1352,22 @@ hover:bg-warning-soft/80
 
 ```
 flex flex-col py-1.5
-  ├ "Lock app"        — Lock icon + text
-  └ "Email settings"  — Settings icon + text (only when onOpenSettings is passed)
+  ├ "Lock app"          — Lock icon + text
+  ├ LockTimerControl    — Timer icon + discrete stepper
+  ├ "Settings"          — Settings icon + text (when onOpenSettings is passed)
+  └ "Sign out"          — LogOut icon + text (when onSignOut is passed)
 ```
 
-Each action button:
+Regular action buttons use `flex w-full items-center gap-2.5 px-4 py-2.5
+text-start text-[0.9em] text-foreground`, a `bg-surface-tinted` hover, and
+`h-4 w-4 text-muted-foreground` icons at stroke 1.7.
 
-```
-flex w-full items-center gap-2.5
-px-4 py-2.5
-text-start text-[0.9em] text-foreground
-transition-colors
-hover:bg-surface-tinted
-```
-
-Icons: `h-4 w-4 text-muted-foreground` stroke 1.7. The icon doesn't shift
-color on hover.
+The timer row is a `min-h-[54px]` `bg-surface-raised` band between hairline
+rules. Its compact `[-] value [+]` stepper moves only through 30 seconds, 1,
+2, 5, 15, and 30 minutes. The current value is a mono `role="status"`
+output; boundary and in-flight controls are disabled. RTL reverses the
+physical order naturally, while Arabic labels keep the app's prevailing
+Western digits.
 
 **Open/close:** Same `Escape` + outside-click pattern as NavBellPopover.
 
@@ -1384,12 +1384,16 @@ the signed-in user's password through `/auth/verify-password`.
 
 **Automatic lock:**
 
-- `useLockState(status === 'authed')` locks after 30 minutes without
-  `pointerdown`, `keydown`, `wheel`, or `touchstart` activity.
+- `useLockState(status === 'authed', timeoutMs)` reads the signed-in user's
+  server-persisted timeout. New accounts default to 30 minutes; the profile
+  stepper offers 30 seconds, 1, 2, 5, 15, or 30 minutes.
 - `gssg.lastActivity` lives in `localStorage` so idle time is shared across
-  tabs and survives a window restart. Activity writes are throttled to 15
-  seconds; the deadline is checked every 30 seconds and whenever a hidden tab
-  becomes visible.
+  tabs and survives a window restart. Activity writes are throttled to the
+  smaller of 15 seconds or one quarter of the selected timeout.
+- Deadline checks run at the smaller of 30 seconds or one sixth of the
+  selected timeout (with a 5-second floor), and whenever a hidden tab becomes
+  visible. This keeps the 30-second option responsive without waking long
+  timers unnecessarily.
 - `gssg.locked` remains in `sessionStorage` so an in-app reload stays locked.
   Unlock and fresh login both refresh the activity deadline.
 
