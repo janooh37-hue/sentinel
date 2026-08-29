@@ -14,7 +14,7 @@
         mng stop            # stop the service            (elevates if needed)
         mng restart         # restart the service         (elevates if needed)
         mng build           # rebuild the frontend bundle into backend\app\static
-        mng deploy          # backup DB + build + migrate + smoke check + restart
+        mng deploy          # backup DB (if due) + build + migrate + smoke check + restart
         mng update          # git pull; if changed -> deploy (skips build when frontend/ is untouched)
         mng logs            # tail the service log   (-Tail N, -Stderr)
         mng open            # open the app in the default browser
@@ -54,6 +54,12 @@ $StderrLog   = Join-Path $LogDir 'service-stderr.log'
 # Free commit (MB) the frontend build needs. `tsc -b` peaks a few hundred MB and
 # `vite build` ~1 GB on this project; 1800 leaves margin for the service and OS.
 $MinBuildMB  = 1800
+
+# Pre-migration DB backups copy the whole data dir (can be multi-GB) and are
+# only needed often enough to bound data loss on a failed migration - reuse a
+# recent one instead of burning disk on every update/deploy.
+$BackupDir        = Join-Path $Root 'data\backups\auto'
+$BackupMaxAgeDays = 7
 
 # -- Small helpers ------------------------------------------------------------
 function Write-Row($label, $value, $color = 'White') {
@@ -127,6 +133,17 @@ function Assert-BuildMemory {
     $msg += 'Close what you can, then rerun: mng deploy. Largest consumers: '
     $msg += (Get-TopCommitters) -join '; '
     throw $msg
+}
+
+function Get-LatestBackup([string] $destDir) {
+    # Newest gssg-backup-<timestamp> dir under $destDir, or $null if none exist
+    # yet (fresh install) or a custom backup -Dest bypasses this default path.
+    if (-not (Test-Path $destDir)) { return $null }
+    $latest = Get-ChildItem -Path $destDir -Directory -Filter 'gssg-backup-*' -ErrorAction SilentlyContinue |
+        Sort-Object Name -Descending | Select-Object -First 1
+    if (-not $latest -or $latest.Name -notmatch 'gssg-backup-(\d{8}-\d{6})') { return $null }
+    $stamp = [datetime]::ParseExact($Matches[1], 'yyyyMMdd-HHmmss', $null)
+    return [pscustomobject]@{ Name = $latest.Name; Age = (Get-Date) - $stamp }
 }
 
 function Get-AppProcesses {
@@ -257,7 +274,12 @@ function Wait-Healthy {
     }
 }
 
-function Invoke-Build {
+function Build-Frontend {
+    # Compiles the frontend into frontend\dist without touching the live
+    # backend\app\static bundle. Deploy/update publish it separately
+    # (Publish-Frontend) only after migrate + smoke check succeed, so a
+    # failure partway through never leaves a newer frontend live against an
+    # older, un-migrated backend ("shipped only the frontend").
     if (-not (Test-Path (Join-Path $FrontendDir 'node_modules\.bin'))) {
         throw "frontend\node_modules missing. Run 'pnpm install' in $FrontendDir first."
     }
@@ -290,7 +312,9 @@ function Invoke-Build {
         Pop-Location
     }
     if (-not (Test-Path $DistDir)) { throw "build produced no dist\ at $DistDir" }
+}
 
+function Publish-Frontend {
     Write-Host '  Copying dist -> backend\app\static ...' -ForegroundColor Cyan
     if (Test-Path $StaticDir) {
         Get-ChildItem -Path $StaticDir -Force | Remove-Item -Recurse -Force
@@ -301,6 +325,14 @@ function Invoke-Build {
     Write-Host '  Build complete.' -ForegroundColor Green
 }
 
+function Invoke-Build {
+    # Standalone `mng build`: compile and publish immediately (no migrate to
+    # gate on). Deploy/update call Build-Frontend / Publish-Frontend
+    # separately instead of this wrapper.
+    Build-Frontend
+    Publish-Frontend
+}
+
 function Invoke-Migrate {
     # Apply any pending Alembic migrations so a deploy that ships a new migration
     # can't leave the live DB behind the code (a mismatch that manifests as
@@ -309,28 +341,36 @@ function Invoke-Migrate {
     $venvPy = Join-Path $Root 'venv\Scripts\python.exe'
     if (-not (Test-Path $venvPy)) { throw "venv python not found at $venvPy" }
 
-    # Back up the DB first: once alembic migrates, rolling back means restoring
-    # data, and there is no other automatic copy. The CLI reads data_dir from
-    # settings and copies the DB via SQLite's online-backup API (WAL-safe while
-    # the service is running), then prunes old copies. The app package only
-    # resolves with backend\ as the working directory.
-    Write-Host '  Backing up the database before migrating ...' -ForegroundColor Cyan
-    Push-Location (Join-Path $Root 'backend')
-    try {
-        # backup_service logs to stderr; same EAP demotion as the alembic call
-        # below, judged by exit code alone.
-        $prevEAP = $ErrorActionPreference
-        $ErrorActionPreference = 'Continue'
+    $recent = Get-LatestBackup $BackupDir
+    if ($recent -and $recent.Age.TotalDays -lt $BackupMaxAgeDays) {
+        # Skipping the backup removes its implicit "DB is reachable and there is
+        # disk headroom" check, so do an explicit RAM check before migrating.
+        Assert-BuildMemory
+        Write-Host ('  Recent backup {0} is {1} old (< {2}d) - skipping a new pre-migration backup.' -f $recent.Name, (Format-Uptime $recent.Age.TotalSeconds), $BackupMaxAgeDays) -ForegroundColor DarkGray
+    } else {
+        # Back up the DB first: once alembic migrates, rolling back means restoring
+        # data, and there is no other automatic copy. The CLI reads data_dir from
+        # settings and copies the DB via SQLite's online-backup API (WAL-safe while
+        # the service is running), then prunes old copies. The app package only
+        # resolves with backend\ as the working directory.
+        Write-Host '  Backing up the database before migrating ...' -ForegroundColor Cyan
+        Push-Location (Join-Path $Root 'backend')
         try {
-            & $venvPy -m app.services.backup_service 2>&1 | ForEach-Object { Write-Host "    $_" }
+            # backup_service logs to stderr; same EAP demotion as the alembic call
+            # below, judged by exit code alone.
+            $prevEAP = $ErrorActionPreference
+            $ErrorActionPreference = 'Continue'
+            try {
+                & $venvPy -m app.services.backup_service 2>&1 | ForEach-Object { Write-Host "    $_" }
+            } finally {
+                $ErrorActionPreference = $prevEAP
+            }
+            if ($LASTEXITCODE -ne 0) { throw "pre-migration backup failed (exit $LASTEXITCODE) - migration aborted; fix the backup error above and rerun" }
         } finally {
-            $ErrorActionPreference = $prevEAP
+            Pop-Location
         }
-        if ($LASTEXITCODE -ne 0) { throw "pre-migration backup failed (exit $LASTEXITCODE) - migration aborted; fix the backup error above and rerun" }
-    } finally {
-        Pop-Location
+        Write-Host '  Pre-migration backup complete.' -ForegroundColor Green
     }
-    Write-Host '  Pre-migration backup complete.' -ForegroundColor Green
 
     Write-Host '  Applying DB migrations (alembic upgrade head) ...' -ForegroundColor Cyan
     Push-Location $Root
@@ -378,9 +418,10 @@ function Invoke-SmokeCheck {
 
 function Invoke-Deploy {
     Assert-Admin 'deploy'
-    Invoke-Build
+    Build-Frontend
     Invoke-Migrate
     Invoke-SmokeCheck
+    Publish-Frontend
     Write-Host "  Restarting $Service to load backend changes ..." -ForegroundColor Cyan
     Restart-Service -Name $Service -Force
     Wait-Healthy
@@ -409,16 +450,21 @@ function Invoke-Update {
         return
     }
     Write-Host ("  Updated {0} -> {1}. Deploying ..." -f $before.Substring(0, 7), $after.Substring(0, 7)) -ForegroundColor Cyan
+    $builtFrontend = $false
     try {
         if ($frontendFiles.Count -eq 0) {
             # The bundle in backend\app\static already matches this range, and a
             # rebuild needs commit headroom (see Assert-BuildMemory) for no gain - skip it.
             Write-Host '  No frontend changes in this range - skipping the frontend build.' -ForegroundColor DarkGray
         } else {
-            Invoke-Build
+            Build-Frontend
+            $builtFrontend = $true
         }
         Invoke-Migrate
         Invoke-SmokeCheck
+        # Publish only after migrate + smoke check succeed, so a failure never
+        # leaves a newer frontend live against an older, un-migrated backend.
+        if ($builtFrontend) { Publish-Frontend }
     } catch {
         # The pull already moved the checkout forward. If the build or migration
         # fails the service keeps serving the PREVIOUS bundle, so the code on disk
@@ -455,7 +501,7 @@ function Show-Help {
     Write-Host '    mng stop        stop the service'
     Write-Host '    mng restart     restart the service'
     Write-Host '    mng build       rebuild frontend bundle -> backend\app\static'
-    Write-Host '    mng deploy      backup DB + build + migrate + smoke check + restart'
+    Write-Host '    mng deploy      backup DB (if due) + build + migrate + smoke check + restart'
     Write-Host '    mng update      git pull; if changed -> deploy (skips build if frontend/ unchanged)'
     Write-Host '    mng logs        tail service log   (-Tail N, -Stderr)'
     Write-Host '    mng open        open the app in the browser'
