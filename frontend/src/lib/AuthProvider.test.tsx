@@ -22,6 +22,7 @@ const USER: SessionUser = {
   is_admin: false,
   is_manager: false,
   has_signature: false,
+  idle_lock_seconds: 1800,
 }
 
 function LoginButton(): React.JSX.Element {

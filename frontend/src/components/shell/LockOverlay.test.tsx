@@ -11,7 +11,7 @@ import type * as LockWeatherModule from '@/lib/lockWeather'
 import { LockOverlay } from './LockOverlay'
 
 vi.mock('@/lib/authContext', () => ({
-  useAuth: () => ({ user: { email: 'abdulla@example.test' } }),
+  useAuth: () => ({ user: { email: 'abdulla@example.test', idle_lock_seconds: 30 } }),
 }))
 vi.mock('@/lib/useIdentity', () => ({
   useIdentity: () => ({
@@ -129,6 +129,14 @@ describe('LockOverlay', () => {
     expect(screen.getAllByText('1')).not.toHaveLength(0)
     expect(screen.queryByText('Sensitive subject')).not.toBeInTheDocument()
     expect(screen.queryByText('Private sender')).not.toBeInTheDocument()
+  })
+
+  it('shows the signed-in users configured inactivity duration', () => {
+    renderOverlay()
+
+    expect(
+      screen.getByText('Locked automatically after 30 seconds of inactivity'),
+    ).toBeInTheDocument()
   })
 
   it('keeps shift time ranges chronological inside Arabic RTL', async () => {

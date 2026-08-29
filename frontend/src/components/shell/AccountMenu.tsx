@@ -11,7 +11,7 @@
  */
 
 import { useEffect, useRef, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import {
@@ -24,10 +24,13 @@ import {
 } from 'lucide-react'
 
 import { api } from '@/lib/api'
+import { LockTimerControl } from '@/components/shell/LockTimerControl'
 import type { SessionUser } from '@/lib/api'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { useIdentity } from '@/lib/useIdentity'
-import { useAuth } from '@/lib/authContext'
+import { AUTH_KEY, useAuth } from '@/lib/authContext'
+import { DEFAULT_IDLE_LOCK_SECONDS } from '@/lib/useLockState'
+import type { LockTimerSeconds } from '@/lib/useLockState'
 
 function initialsOf(email: string | undefined): string {
   if (!email) return '?'
@@ -84,6 +87,7 @@ export function AccountMenu({
   const [open, setOpen] = useState(false)
   const ref = useRef<HTMLDivElement>(null)
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
 
   const accountQuery = useQuery({
     queryKey: ['email-account'],
@@ -95,6 +99,10 @@ export function AccountMenu({
   // The signed-in account (email/role) is authoritative for "who is this" —
   // distinct from the shared mailbox below (`account`), which is install-wide.
   const { user } = useAuth()
+  const lockTimerMutation = useMutation({
+    mutationFn: (seconds: LockTimerSeconds) => api.updateLockTimer(seconds),
+    onSuccess: (nextUser) => queryClient.setQueryData(AUTH_KEY, nextUser),
+  })
 
   // Admins can review access requests from here; show the pending count.
   const usersQuery = useQuery({
@@ -263,6 +271,11 @@ export function AccountMenu({
               <Lock className="h-4 w-4 text-muted-foreground" strokeWidth={1.7} />
               {t('appBar.lockApp', { defaultValue: 'Lock app' })}
             </button>
+            <LockTimerControl
+              value={user?.idle_lock_seconds ?? DEFAULT_IDLE_LOCK_SECONDS}
+              disabled={!user || lockTimerMutation.isPending}
+              onChange={(seconds) => lockTimerMutation.mutate(seconds)}
+            />
             {onOpenSettings && (
               <button
                 type="button"

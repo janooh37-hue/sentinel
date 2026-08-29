@@ -9,10 +9,9 @@ import { useCallback } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { api, ApiError, type SessionUser } from '@/lib/api'
-import { AuthContext, type AuthContextValue, type AuthStatus } from '@/lib/authContext'
+import { AUTH_KEY, AuthContext, type AuthContextValue, type AuthStatus } from '@/lib/authContext'
 import { markActivity } from '@/lib/useLockState'
 
-const AUTH_KEY = ['auth-me'] as const
 
 export function AuthProvider({ children }: { children: React.ReactNode }): React.JSX.Element {
   const queryClient = useQueryClient()

@@ -1164,6 +1164,10 @@ class User(Base):
     # Single-holder flag (migration 0034): the manager preselected as assignee
     # when an in_app form is submitted. Swapped via the default-manager endpoint.
     is_default_manager: Mapped[bool] = mapped_column(Boolean, default=False, server_default="0")
+    # Lock-screen idle timeout; one of 30/60/120/300/900/1800 (enforced at the API edge).
+    idle_lock_seconds: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=1800, server_default="1800"
+    )
     # operator | manager | admin — stored (admin-assigned), authoritative for auth.
     role: Mapped[str] = mapped_column(
         String(16), nullable=False, default="operator", server_default="operator"

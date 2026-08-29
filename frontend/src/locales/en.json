@@ -140,7 +140,7 @@
     "unlock": "Unlock",
     "welcomeName": "Welcome back, {{name}}",
     "enterPassword": "Enter your password to unlock",
-    "idleNote": "Locked automatically after {{minutes}} minutes of inactivity",
+    "idleNote": "Locked automatically after {{duration}} of inactivity",
     "signOut": "Not you? Sign out",
     "showPassword": "Show password",
     "hidePassword": "Hide password",
@@ -173,6 +173,27 @@
       "band": "Command band",
       "stack": "Central stack",
       "console": "Briefing console"
+    }
+  },
+  "lockTimer": {
+    "title": "Screen lock timer",
+    "shorter": "Shorter lock timer",
+    "longer": "Longer lock timer",
+    "options": {
+      "30": "30 sec",
+      "60": "1 min",
+      "120": "2 min",
+      "300": "5 min",
+      "900": "15 min",
+      "1800": "30 min"
+    },
+    "durations": {
+      "30": "30 seconds",
+      "60": "1 minute",
+      "120": "2 minutes",
+      "300": "5 minutes",
+      "900": "15 minutes",
+      "1800": "30 minutes"
     }
   },
   "common": {

@@ -19,7 +19,7 @@ import { KeyboardShortcutsProvider } from '@/lib/keyboardShortcuts'
 import { AuthProvider } from '@/lib/AuthProvider'
 import { useAuth } from '@/lib/authContext'
 import { useIsMobile } from '@/lib/useIsMobile'
-import { useLockState } from '@/lib/useLockState'
+import { DEFAULT_IDLE_LOCK_SECONDS, useLockState } from '@/lib/useLockState'
 import { type Page, PAGE_PATHS, buildPagePath } from '@/lib/pageNav'
 import { useNotificationStream } from '@/hooks/useNotificationStream'
 import { TopProgressBar } from './components/refresh/TopProgressBar'
@@ -151,8 +151,9 @@ function LedgerRoute(): React.JSX.Element {
 
 function Shell(): React.JSX.Element {
   const { t } = useTranslation()
-  const { status, logout } = useAuth()
-  const { locked, lock, unlock } = useLockState(status === 'authed')
+  const { status, logout, user } = useAuth()
+  const lockTimeoutMs = (user?.idle_lock_seconds ?? DEFAULT_IDLE_LOCK_SECONDS) * 1000
+  const { locked, lock, unlock } = useLockState(status === 'authed', lockTimeoutMs)
   const navigate = useNavigate()
   const location = useLocation()
   const isMobile = useIsMobile()

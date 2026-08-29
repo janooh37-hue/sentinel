@@ -10,6 +10,7 @@ import { createContext, useContext } from 'react'
 import type { SessionUser } from '@/lib/api'
 
 export type AuthStatus = 'loading' | 'authed' | 'anon'
+export const AUTH_KEY = ['auth-me'] as const
 
 export interface AuthContextValue {
   user: SessionUser | null

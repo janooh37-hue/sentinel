@@ -268,6 +268,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/me/lock-timer": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Set My Lock Timer
+         * @description Set the signed-in user's per-account lock-screen idle timeout.
+         */
+        patch: operations["set_my_lock_timer_api_v1_auth_me_lock_timer_patch"];
+        trace?: never;
+    };
     "/api/v1/auth/me/capabilities": {
         parameters: {
             query?: never;
@@ -8877,6 +8897,17 @@ export interface components {
             /** Employee Id */
             employee_id?: string | null;
         };
+        /**
+         * LockTimerRequest
+         * @description Set the signed-in user's lock-screen idle timeout.
+         */
+        LockTimerRequest: {
+            /**
+             * Idle Lock Seconds
+             * @enum {integer}
+             */
+            idle_lock_seconds: 30 | 60 | 120 | 300 | 900 | 1800;
+        };
         /** LoginRequest */
         LoginRequest: {
             /** Email */
@@ -10135,6 +10166,11 @@ export interface components {
              * @default false
              */
             has_signature: boolean;
+            /**
+             * Idle Lock Seconds
+             * @default 1800
+             */
+            idle_lock_seconds: number;
         };
         /**
          * SetPermissionBulkRequest
@@ -11848,6 +11884,41 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_my_lock_timer_api_v1_auth_me_lock_timer_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LockTimerRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionUser"];
+                };
             };
             /** @description Validation Error */
             422: {

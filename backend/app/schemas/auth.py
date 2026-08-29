@@ -8,6 +8,7 @@ for an internal IONOS-only roster.
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -32,6 +33,12 @@ class VerifyPasswordRequest(BaseModel):
     password: str = Field(min_length=1, max_length=128)
 
 
+class LockTimerRequest(BaseModel):
+    """Set the signed-in user's lock-screen idle timeout."""
+
+    idle_lock_seconds: Literal[30, 60, 120, 300, 900, 1800]
+
+
 class SessionUser(BaseModel):
     """The signed-in user, shaped for the frontend auth context."""
 
@@ -48,6 +55,7 @@ class SessionUser(BaseModel):
     is_admin: bool = False
     is_manager: bool = False
     has_signature: bool = False
+    idle_lock_seconds: int = 1800
 
 
 class RegisterResult(BaseModel):
