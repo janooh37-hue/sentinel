@@ -21,6 +21,7 @@ import {
   type BookRead,
   type ExpirySummary,
   type UnreadRecentResponse,
+  type WorkforceCrewName,
   type WorkforceSnapshot,
 } from '@/lib/api'
 import { useAuth } from '@/lib/authContext'
@@ -124,13 +125,10 @@ function TimeBlock({ now, isAr }: { now: Date; isAr: boolean }): React.JSX.Eleme
   )
 }
 
-type CrewName = { code: string; name_en?: string | null; name_ar?: string | null }
-
-function crewLabel(crews: readonly CrewName[] | undefined, isAr: boolean): string | null {
-  const names = (crews ?? []).map(
+function crewNames(crews: readonly WorkforceCrewName[] | undefined, isAr: boolean): string[] {
+  return (crews ?? []).map(
     (crew) => (isAr ? crew.name_ar || crew.name_en : crew.name_en || crew.name_ar) || crew.code,
   )
-  return names.length > 0 ? names.join(' · ') : null
 }
 
 function OperationsBlock({
@@ -149,13 +147,24 @@ function OperationsBlock({
   const timeZone = snapshot?.timezone ?? 'Asia/Dubai'
   const weatherNumber = new Intl.NumberFormat(locale, { maximumFractionDigits: 0 })
   const currentShiftCode = snapshot?.self?.shift_code?.trim() || null
-  const currentCrews = crewLabel(snapshot?.current_shift.crews, isAr)
-  const nextCrews = crewLabel(snapshot?.next_shift.crews, isAr)
+  const currentCrewNames = crewNames(snapshot?.current_shift.crews, isAr)
+  const nextCrewNames = crewNames(snapshot?.next_shift.crews, isAr)
+  const nextShiftCodes = (snapshot?.next_shift.shift_code ?? '')
+    .split(',')
+    .map((code) => code.trim())
+    .filter((code) => code.length > 0)
   const currentShiftLabel =
-    currentCrews ?? (currentShiftCode ? t(`attendance.shift.${currentShiftCode}`, currentShiftCode) : null)
+    currentCrewNames.length > 0
+      ? currentCrewNames.join(' · ')
+      : currentShiftCode
+        ? t(`attendance.shift.${currentShiftCode}`, currentShiftCode)
+        : null
   const nextShiftLabel =
-    nextCrews ??
-    (snapshot?.next_shift.shift_name?.trim() || snapshot?.next_shift.shift_code?.trim() || null)
+    nextCrewNames.length > 0
+      ? nextCrewNames.join(' · ')
+      : nextShiftCodes.length > 0
+        ? nextShiftCodes.map((code) => t(`attendance.shift.${code}`, code)).join(' · ')
+        : null
   const currentRange = formatRange(
     snapshot?.self?.scheduled_start_at ?? snapshot?.current_shift.starts_at,
     snapshot?.self?.scheduled_end_at ?? snapshot?.current_shift.ends_at,

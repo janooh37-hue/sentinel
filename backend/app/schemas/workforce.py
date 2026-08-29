@@ -257,7 +257,6 @@ class NextShiftRead(ORMBase):
     starts_at: datetime | None = None
     ends_at: datetime | None = None
     shift_code: str | None = None
-    shift_name: str | None = None
     crews: list[CrewNameRead] = Field(default_factory=list)
     scheduled: int = Field(ge=0)
     expected: int | None = Field(default=None, ge=0)

@@ -9086,8 +9086,6 @@ export interface components {
             ends_at?: string | null;
             /** Shift Code */
             shift_code?: string | null;
-            /** Shift Name */
-            shift_name?: string | null;
             /** Crews */
             crews?: components["schemas"]["CrewNameRead"][];
             /** Scheduled */

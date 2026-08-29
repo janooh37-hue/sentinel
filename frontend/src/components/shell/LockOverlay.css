@@ -126,12 +126,15 @@
 }
 
 .lock-metric strong {
-  display: block;
+  display: -webkit-box;
   margin-top: 8px;
+  overflow: hidden;
   font-size: clamp(17px, 1.45vw, 23px);
   font-weight: 300;
   line-height: 1.15;
   letter-spacing: -0.035em;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 .lock-metric small,
@@ -602,7 +605,7 @@
   .lock-clock,
   .lock-overlay[data-layout="stack"] .lock-clock,
   .lock-overlay[data-layout="console"] .lock-clock {
-    display: none;
+    font-size: 76px;
   }
 
   .lock-dates,
@@ -610,7 +613,7 @@
     align-items: center;
     flex-direction: column;
     gap: 4px;
-    margin-top: 0;
+    margin-top: 12px;
   }
 
   .lock-operations,
@@ -727,5 +730,18 @@
   .lock-layout-switcher {
     inset-inline-end: 17px;
     bottom: calc(var(--lock-unlock-height, 278px) - 19px);
+  }
+}
+
+@media (max-width: 760px) and (pointer: coarse) {
+  .lock-clock,
+  .lock-overlay[data-layout="stack"] .lock-clock,
+  .lock-overlay[data-layout="console"] .lock-clock {
+    display: none;
+  }
+
+  .lock-dates,
+  .lock-overlay[data-layout="console"] .lock-dates {
+    margin-top: 0;
   }
 }

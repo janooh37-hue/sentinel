@@ -34475,17 +34475,6 @@
             ],
             "title": "Shift Code"
           },
-          "shift_name": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Shift Name"
-          },
           "crews": {
             "items": {
               "$ref": "#/components/schemas/CrewNameRead"

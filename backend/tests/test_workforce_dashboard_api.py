@@ -805,3 +805,78 @@ def test_snapshot_reports_bilingual_crews_for_current_and_next_shift(
     assert body["next_shift"]["crews"] == [
         {"code": "bravo", "name_en": "Second Company", "name_ar": "السرية الثانية"}
     ]
+    assert "shift_name" not in body["next_shift"]
+
+
+def test_office_hours_group_is_not_reported_as_an_on_duty_crew(
+    workforce_api_db: Session,
+) -> None:
+    from app.db.workforce_models import (
+        WorkCrew,
+        WorkCrewMembership,
+        WorkCrewSchedule,
+        WorkRotationPattern,
+        WorkShiftDefinition,
+        WorkShiftOccurrence,
+    )
+    from app.services.workforce_seed_service import OFFICE_CREW_CODE
+
+    admin = _create_user(workforce_api_db, email="office-admin@test.ae", role="admin")
+    _seed_coverage_cases(workforce_api_db, admin)
+
+    pattern = workforce_api_db.scalar(select(WorkRotationPattern))
+    morning = workforce_api_db.scalar(
+        select(WorkShiftDefinition).where(WorkShiftDefinition.code == "morning")
+    )
+    assert pattern is not None
+    assert morning is not None
+
+    office = WorkCrew(code=OFFICE_CREW_CODE, name_en="Official Hours", name_ar="الدوام الرسمي")
+    workforce_api_db.add(office)
+    workforce_api_db.flush()
+
+    office_schedule = WorkCrewSchedule(
+        crew_id=office.id,
+        pattern_id=pattern.id,
+        anchor_at=NOW - timedelta(days=5),
+        effective_from=NOW - timedelta(days=5),
+        version=1,
+        created_by_user_id=admin.id,
+    )
+    workforce_api_db.add(office_schedule)
+    workforce_api_db.flush()
+
+    office_employee = _add_employee(workforce_api_db, "G-COVERAGE-OFFICE", name="Coverage Office")
+    workforce_api_db.add(
+        WorkCrewMembership(
+            crew_id=office.id,
+            employee_id=office_employee.id,
+            effective_from=NOW - timedelta(days=5),
+            created_by_user_id=admin.id,
+            updated_by_user_id=admin.id,
+        )
+    )
+    workforce_api_db.add(
+        WorkShiftOccurrence(
+            crew_id=office.id,
+            crew_schedule_id=office_schedule.id,
+            shift_definition_id=morning.id,
+            starts_at=NOW - timedelta(hours=4),
+            ends_at=NOW + timedelta(hours=4),
+            operational_date=TODAY,
+            pattern_code_snapshot=pattern.code,
+            crew_schedule_version_snapshot=office_schedule.version,
+            source_anchor_at=office_schedule.anchor_at,
+        )
+    )
+    workforce_api_db.commit()
+
+    with _client_for(workforce_api_db, admin) as client:
+        response = client.get("/api/v1/workforce/dashboard/snapshot")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["current_shift"]["crews"] == [
+        {"code": "alpha", "name_en": "Alpha", "name_ar": None}
+    ]
+    assert all(entry["code"] != OFFICE_CREW_CODE for entry in body["current_shift"]["crews"])
