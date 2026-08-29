@@ -28,6 +28,7 @@ import { copyTable } from '@/lib/copyTable'
 import { todayIso } from '@/lib/leaveDateMath'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { Button } from '@/components/ui/button'
+import { ServiceArtwork } from '@/components/ui/service-artwork'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { Label } from '@/components/ui/label'
 import { LeaveEmployeePicker } from '@/pages/leaves/LeaveEmployeePicker'
@@ -182,7 +183,7 @@ export function AbsencesPage(): React.JSX.Element {
                 className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-surface text-[1.5em] leading-none ring-1 ring-hairline"
                 aria-hidden
               >
-                🚫
+                <ServiceArtwork artwork="employee-absence" size="gallery" />
               </span>
               <div className="min-w-0">
                 <h2 className="truncate text-[1.4em] font-bold leading-snug tracking-tight text-foreground">
