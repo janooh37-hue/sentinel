@@ -222,6 +222,40 @@ def test_regen_never_sent_stays_draft(gen_env: Session) -> None:
     assert book.approval_state == "none"
 
 
+def test_regen_draft_attributes_activity_to_editing_actor(gen_env: Session) -> None:
+    from app.schemas.permit import PermitVehicleCreate
+
+    db = gen_env
+    creator = _actor(db)
+    editor = User(
+        email="editor@x.ae",
+        password_hash="x",
+        role="admin",
+        status="active",
+    )
+    db.add(editor)
+    db.commit()
+    db.refresh(editor)
+    mgr, _ = _linked_manager(db)
+    permit = permit_service.create_permit(
+        db,
+        _payload(manager_id=mgr.id, send_for_approval=False),
+        actor=creator.email,
+    )
+    _, initial = _latest_version(db, permit.book_id)
+    assert initial.created_by_user_id == creator.id
+
+    permit_service.add_vehicle(
+        db,
+        permit.id,
+        PermitVehicleCreate(plate_no="A 1"),
+        actor=editor.email,
+    )
+
+    _, regenerated = _latest_version(db, permit.book_id)
+    assert regenerated.id == initial.id
+    assert regenerated.created_by_user_id == editor.id
+
 def test_manual_submit_happy_path(gen_env: Session) -> None:
     db = gen_env
     _actor(db)

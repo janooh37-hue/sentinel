@@ -33,11 +33,11 @@ from app.db.workforce_models import (
     WorkShiftDefinition,
     WorkShiftOccurrence,
 )
-from app.services.workforce_scope_service import normalize_scope_value, scope_allows
 from app.services.workforce_admin_service import (
     active_attendance_adjustments,
     overlay_attendance_adjustment,
 )
+from app.services.workforce_scope_service import normalize_scope_value, scope_allows
 
 _ORGANIZATION_TIMEZONE = ZoneInfo("Asia/Dubai")
 _ACTIVE_EMPLOYEE_STATUS = "active"
@@ -350,7 +350,14 @@ def _self_block(db: Session, *, employee_id: str, as_of_naive: datetime, operati
         max(cases, key=lambda item: item.scheduled_start_at, default=None),
     )
     if case is None:
-        return {"employee_id": employee_id, "presence_state": None, "reason_code": None, "scheduled_start_at": None, "scheduled_end_at": None}
+        return {
+            "employee_id": employee_id,
+            "shift_code": None,
+            "presence_state": None,
+            "reason_code": None,
+            "scheduled_start_at": None,
+            "scheduled_end_at": None,
+        }
     latest = _latest_evaluations(db, [case.id]).get(case.id)
     adjustment = active_attendance_adjustments(db, [case.id]).get(case.id)
     effective = (
@@ -363,6 +370,7 @@ def _self_block(db: Session, *, employee_id: str, as_of_naive: datetime, operati
     )
     return {
         "employee_id": employee_id,
+        "shift_code": case.shift_code_snapshot or None,
         "presence_state": effective["presence_state"] if effective else None,
         "reason_code": effective["reason_code"] if effective else None,
         "scheduled_start_at": case.scheduled_start_at,

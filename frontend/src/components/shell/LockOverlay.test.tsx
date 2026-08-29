@@ -60,6 +60,7 @@ const SNAPSHOT = {
   schedule_completeness: {},
   self: {
     employee_id: 'G100',
+    shift_code: 'A',
     presence_state: 'on_duty',
     scheduled_start_at: '2026-08-28T06:00:00Z',
     scheduled_end_at: '2026-08-28T14:00:00Z',
@@ -83,6 +84,10 @@ describe('LockOverlay', () => {
     localStorage.clear()
     await i18n.changeLanguage('en')
     vi.spyOn(api, 'getWorkforceSnapshot').mockResolvedValue(SNAPSHOT)
+    vi.spyOn(api, 'getMyDocumentActivity').mockResolvedValue({
+      documents_today: 6,
+      documents_week: 14,
+    })
     vi.spyOn(api, 'verifyAuthPassword').mockResolvedValue(undefined)
     vi.mocked(loadLockWeather).mockResolvedValue({
       location: 'Al Wathba',
@@ -96,6 +101,7 @@ describe('LockOverlay', () => {
   })
 
   afterEach(() => {
+    vi.useRealTimers()
     vi.restoreAllMocks()
   })
 
@@ -131,13 +137,84 @@ describe('LockOverlay', () => {
     expect(screen.queryByText('Private sender')).not.toBeInTheDocument()
   })
 
+  it('shows shift identity with the next shift start time', async () => {
+    renderOverlay()
+
+    await waitFor(() => {
+      expect(document.querySelector('.lock-shifts .lock-metric:first-child strong')).toHaveTextContent(
+        'A',
+      )
+      expect(
+        document.querySelector('.lock-shifts .lock-metric:first-child strong'),
+      ).not.toHaveTextContent('06:00')
+      expect(document.querySelector('.lock-shifts .lock-metric:nth-child(2) strong')).toHaveTextContent(
+        'Evening',
+      )
+      expect(
+        document.querySelector('.lock-shifts .lock-metric:first-child strong bdi'),
+      ).toHaveTextContent('A')
+      expect(
+        document.querySelector('.lock-shifts .lock-metric:nth-child(2) strong bdi'),
+      ).toHaveTextContent('Evening')
+      expect(document.querySelector('.lock-shifts .lock-metric:nth-child(2) small')).toHaveTextContent(
+        'Starts at 18:00',
+      )
+    })
+  })
+
+  it('shows todays completed documents with a milestone moment', async () => {
+    renderOverlay()
+
+    const cheer = await screen.findByText('6 documents completed today — a productive day.')
+    expect(cheer).toHaveClass('lock-cheer--milestone')
+  })
+
+  it('falls back to the weekly document count without a milestone', async () => {
+    vi.mocked(api.getMyDocumentActivity).mockResolvedValueOnce({
+      documents_today: 0,
+      documents_week: 14,
+    })
+    renderOverlay()
+
+    const cheer = await screen.findByText('14 documents completed this week.')
+    expect(cheer).not.toHaveClass('lock-cheer--milestone')
+  })
+
+  it('uses a time-of-day cheer when no document count is available', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2026-08-29T06:00:00+04:00'))
+    vi.mocked(api.getMyDocumentActivity).mockResolvedValueOnce({
+      documents_today: 0,
+      documents_week: 0,
+    })
+    renderOverlay()
+
+    expect(await screen.findByText('A fresh start to the morning.')).toBeInTheDocument()
+  })
+
+  it('shows the remaining time inside the current shift', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] })
+    vi.setSystemTime(new Date('2026-08-28T12:30:00Z'))
+    renderOverlay()
+
+    expect(
+      await screen.findByText('1h 30m left in your shift — strong finish.'),
+    ).toBeInTheDocument()
+  })
+
   it('keeps shift time ranges chronological inside Arabic RTL', async () => {
     await i18n.changeLanguage('ar')
     renderOverlay()
 
     await waitFor(() => {
-      expect(document.querySelector('.lock-shifts bdi')).toHaveAttribute('dir', 'ltr')
+      expect(document.querySelector('.lock-shifts small bdi')).toHaveAttribute('dir', 'ltr')
+      expect(document.querySelector('.lock-shifts .lock-eyebrow')).toHaveTextContent(
+        'على رأس العمل الآن',
+      )
       expect(document.querySelector('.lock-submit')).toHaveTextContent('←')
+      expect(document.querySelector('.lock-cheer')).toHaveTextContent(
+        '6 مستندات منجزة اليوم — يوم منتج.',
+      )
       const arabicTemperature = new Intl.NumberFormat('ar-AE', {
         maximumFractionDigits: 0,
       }).format(41)

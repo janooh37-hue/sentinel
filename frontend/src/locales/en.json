@@ -148,6 +148,18 @@
     "onDutyNow": "On duty now",
     "currentShift": "Current working shift",
     "nextShift": "Next shift",
+    "startsAt": "Starts at {{time}}",
+    "cheer": {
+      "docsToday_one": "1 document completed today — a productive day.",
+      "docsToday_other": "{{count}} documents completed today — a productive day.",
+      "docsWeek_one": "1 document completed this week.",
+      "docsWeek_other": "{{count}} documents completed this week.",
+      "morning": "A fresh start to the morning.",
+      "afternoon": "A fresh start to the afternoon.",
+      "evening": "A calm close to the day.",
+      "shiftRemainingHours": "{{hours}}h {{minutes}}m left in your shift — strong finish.",
+      "shiftRemainingMinutes": "{{minutes}}m left in your shift — strong finish."
+    },
     "whileAway": "While you were away",
     "detailsHidden": "Details stay hidden until you unlock",
     "digest": {

@@ -317,6 +317,7 @@ def test_correction_and_revocation_update_roster_and_every_dashboard_metric(
 
     assert corrected_roster["presence_state"] == "absent"
     assert corrected_snapshot["self"]["presence_state"] == "absent"
+    assert corrected_snapshot["self"]["shift_code"] == "morning"
     assert corrected_snapshot["current_shift"]["working"] == 1
     assert corrected_analytics["department_coverage"][0]["working"] == 1
     assert {row["duty_unit"]: row["working"] for row in corrected_coverage} == {
@@ -362,6 +363,7 @@ def test_correction_and_revocation_update_roster_and_every_dashboard_metric(
 
     assert restored_roster["presence_state"] == "on_duty"
     assert restored_snapshot["self"]["presence_state"] == "on_duty"
+    assert restored_snapshot["self"]["shift_code"] == "morning"
     assert restored_snapshot["current_shift"]["working"] == 2
     assert restored_analytics["department_coverage"][0]["working"] == 2
     assert {row["duty_unit"]: row["working"] for row in restored_coverage} == {

@@ -17,6 +17,7 @@ from datetime import UTC, date, datetime, timedelta
 from functools import lru_cache
 from pathlib import Path, PurePath
 from typing import Any, Final, NamedTuple
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import Integer, and_, exists, false, func, not_, or_, select, text
 from sqlalchemy.orm import Session, aliased, selectinload
@@ -67,6 +68,33 @@ _UNSAFE_CHARS = re.compile(r"[\\/:\*\?\"<>\|\x00-\x1f]")
 
 LIST_DEFAULT_LIMIT = 100
 LIST_MAX_LIMIT = 500
+_ORGANIZATION_TIMEZONE = ZoneInfo("Asia/Dubai")
+
+
+def count_my_generated_documents(db: Session, *, user_id: int) -> dict[str, int]:
+    now_local = datetime.now(_ORGANIZATION_TIMEZONE)
+    day_start_local = now_local.replace(hour=0, minute=0, second=0, microsecond=0)
+    week_start_local = day_start_local - timedelta(days=now_local.weekday())
+    day_start_utc = day_start_local.astimezone(UTC).replace(tzinfo=None)
+    week_start_utc = week_start_local.astimezone(UTC).replace(tzinfo=None)
+
+    def count_since(boundary: datetime) -> int:
+        count = db.scalar(
+            select(func.count())
+            .select_from(BookVersion)
+            .where(
+                BookVersion.created_by_user_id == user_id,
+                BookVersion.created_at >= boundary,
+            )
+        )
+        return int(count or 0)
+
+    return {
+        "documents_today": count_since(day_start_utc),
+        "documents_week": count_since(week_start_utc),
+    }
+
+
 
 
 # ---------------------------------------------------------------------------

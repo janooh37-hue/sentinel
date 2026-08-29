@@ -219,6 +219,7 @@ class SelfShiftRead(ORMBase):
     model_config = ConfigDict(extra="forbid")
 
     employee_id: str
+    shift_code: str | None = None
     presence_state: PresenceState | None = None
     reason_code: str | None = None
     scheduled_start_at: datetime | None = None
