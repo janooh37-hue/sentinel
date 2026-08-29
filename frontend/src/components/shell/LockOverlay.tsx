@@ -113,6 +113,26 @@ function TimeBlock({ now, isAr }: { now: Date; isAr: boolean }): React.JSX.Eleme
   )
 }
 
+function DigestList({
+  digest,
+}: {
+  digest: Array<{ key: 'approvals' | 'inbox' | 'expiry'; count: number }>
+}): React.JSX.Element | null {
+  const { t } = useTranslation()
+  if (digest.length === 0) return null
+  return (
+    <div className="lock-digest" aria-label={t('lockScreen.whileAway')}>
+      {digest.map((item) => (
+        <div className="lock-digest-item" key={item.key}>
+          <b>{item.count}</b>
+          <span>{t(`lockScreen.digest.${item.key}`)}</span>
+        </div>
+      ))}
+      <small>{t('lockScreen.detailsHidden')}</small>
+    </div>
+  )
+}
+
 function crewNames(crews: readonly WorkforceCrewName[] | undefined, isAr: boolean): string[] {
   return (crews ?? []).map(
     (crew) => (isAr ? crew.name_ar || crew.name_en : crew.name_en || crew.name_ar) || crew.code,
