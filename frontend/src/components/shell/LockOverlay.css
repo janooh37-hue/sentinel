@@ -67,7 +67,8 @@
 .lock-operations {
   position: relative;
   z-index: 1;
-  align-self: center;
+  grid-row: 3;
+  align-self: end;
   justify-self: center;
   width: min(1180px, calc(100vw - 96px));
   display: grid;
@@ -221,10 +222,10 @@
 .lock-unlock {
   position: relative;
   z-index: 2;
-  align-self: end;
+  grid-row: 2;
+  align-self: center;
   justify-self: center;
   width: min(410px, calc(100vw - 32px));
-  margin-bottom: 2px;
   text-align: center;
 }
 
@@ -357,43 +358,9 @@
   opacity: 0.72;
 }
 
-.lock-layout-switcher {
-  position: fixed;
-  z-index: 5;
-  inset-inline-end: 24px;
-  bottom: 22px;
-  display: flex;
-  gap: 3px;
-  padding: 4px;
-  border: 1px solid rgb(255 255 255 / 16%);
-  border-radius: 999px;
-  background: rgb(5 18 34 / 48%);
-  backdrop-filter: blur(20px);
-}
-
-.lock-layout-switcher button {
-  display: grid;
-  place-items: center;
-  width: 28px;
-  height: 28px;
-  border: 0;
-  border-radius: 50%;
-  background: transparent;
-  color: rgb(255 255 255 / 58%);
-  font-family: "IBM Plex Mono", Consolas, monospace;
-  font-size: 9px;
-  transition: background 160ms ease, color 160ms ease;
-}
-
-.lock-layout-switcher button[aria-pressed="true"] {
-  background: white;
-  color: var(--primary);
-}
-
 .lock-eye:focus-visible,
 .lock-submit:focus-visible,
-.lock-signout:focus-visible,
-.lock-layout-switcher button:focus-visible {
+.lock-signout:focus-visible {
   outline: 2px solid white;
   outline-offset: 2px;
 }
@@ -427,7 +394,7 @@
   min-height: 520px;
   margin: 50vh auto 0;
   grid-template-columns: minmax(280px, 0.82fr) minmax(0, 1.55fr);
-  grid-template-rows: auto auto;
+  grid-template-rows: auto auto auto;
   column-gap: 46px;
   transform: translateY(-50%);
   padding: 36px 42px 30px;
@@ -457,6 +424,8 @@
 }
 
 .lock-overlay[data-layout="console"] .lock-operations {
+  grid-row: 1;
+  grid-column: 2;
   align-self: center;
   width: 100%;
   grid-template-columns: 1fr 1fr;
@@ -480,11 +449,12 @@
   border-top: 1px solid rgb(255 255 255 / 12%);
 }
 
-.lock-overlay[data-layout="console"] .lock-digest {
+.lock-overlay[data-layout="console"] .lock-digest-strip {
+  grid-row: 3;
   grid-column: 1 / -1;
+  margin-top: 24px;
   padding-top: 17px;
-  border-block-start: 1px solid rgb(255 255 255 / 13%);
-  border-inline-start: 0;
+  border-top: 1px solid rgb(255 255 255 / 13%);
 }
 
 .lock-overlay[data-layout="console"] .lock-unlock {
@@ -505,13 +475,7 @@
     grid-column: 2;
   }
 
-  .lock-overlay[data-layout="console"] .lock-digest {
-    grid-row: 2;
-    grid-column: 1 / -1;
-  }
-
   .lock-overlay[data-layout="console"] .lock-weather:first-child,
-  .lock-overlay[data-layout="console"] .lock-digest:first-child + .lock-weather,
   .lock-overlay[data-layout="console"] .lock-shifts:has(+ .lock-digest:last-child),
   .lock-overlay[data-layout="console"] .lock-operations[data-sections="1"] > * {
     grid-column: 1 / -1;
@@ -520,8 +484,7 @@
 }
 
 @media (prefers-reduced-motion: no-preference) {
-  .lock-shell,
-  .lock-layout-switcher {
+  .lock-shell {
     animation: lock-fade-in 220ms ease-out backwards;
   }
 
@@ -660,8 +623,7 @@
     font-size: 16px;
   }
 
-  .lock-digest,
-  .lock-overlay[data-layout="console"] .lock-digest {
+  .lock-digest {
     grid-column: auto;
     align-content: center;
     padding-top: 13px;
@@ -674,6 +636,13 @@
 
   .lock-digest-item b {
     font-size: 21px;
+  }
+
+  .lock-digest-strip {
+    width: 100%;
+    margin-top: 12px;
+    padding-top: 13px;
+    border-top: 1px solid rgb(255 255 255 / 12%);
   }
 
   .lock-weather,
@@ -698,7 +667,7 @@
   .lock-overlay[data-layout="console"] .lock-unlock {
     position: fixed;
     inset-inline: 10px;
-    bottom: 10px;
+    bottom: calc(10px + var(--lock-kb-inset, 0px));
     width: auto;
     margin: 0;
     padding: 18px 20px 16px;
@@ -725,11 +694,6 @@
     width: 70px;
     height: 70px;
     margin-top: -52px;
-  }
-
-  .lock-layout-switcher {
-    inset-inline-end: 17px;
-    bottom: calc(var(--lock-unlock-height, 278px) - 19px);
   }
 }
 

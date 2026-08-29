@@ -28,7 +28,8 @@ import { useAuth } from '@/lib/authContext'
 import { loadLockWeather, weatherCategory, type LockWeather } from '@/lib/lockWeather'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { useIdentity } from '@/lib/useIdentity'
-import { DEFAULT_IDLE_LOCK_SECONDS } from '@/lib/useLockState'
+import { DEFAULT_IDLE_LOCK_SECONDS, LOCK_LAYOUTS } from '@/lib/useLockState'
+import type { LockLayout } from '@/lib/useLockState'
 
 import './LockOverlay.css'
 
@@ -37,20 +38,7 @@ interface LockOverlayProps {
   onSignOut: () => void
 }
 
-type LockLayout = 'band' | 'stack' | 'console'
-
-const LAYOUT_KEY = 'gssg.lockLayout'
-const LAYOUTS: readonly LockLayout[] = ['band', 'stack', 'console']
 const WEATHER_STALE_MS = 30 * 60_000
-
-function readLayout(): LockLayout {
-  try {
-    const stored = window.localStorage.getItem(LAYOUT_KEY)
-    return LAYOUTS.includes(stored as LockLayout) ? (stored as LockLayout) : 'band'
-  } catch {
-    return 'band'
-  }
-}
 
 function formatInstant(
   value: string | null | undefined,
@@ -231,17 +219,7 @@ function OperationsBlock({
         </div>
       )}
 
-      {digest.length > 0 && (
-        <div className="lock-digest" aria-label={t('lockScreen.whileAway')}>
-          {digest.map((item) => (
-            <div className="lock-digest-item" key={item.key}>
-              <b>{item.count}</b>
-              <span>{t(`lockScreen.digest.${item.key}`)}</span>
-            </div>
-          ))}
-          <small>{t('lockScreen.detailsHidden')}</small>
-        </div>
-      )}
+      <DigestList digest={digest} />
 
       {weather && (
         <div className="lock-weather">
@@ -285,7 +263,6 @@ export function LockOverlay({ onUnlocked, onSignOut }: LockOverlayProps): React.
   const [showPassword, setShowPassword] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [layout, setLayout] = useState<LockLayout>(readLayout)
   const [now, setNow] = useState(() => new Date())
   const inputRef = useRef<HTMLInputElement>(null)
   const overlayRef = useRef<HTMLDivElement>(null)
@@ -293,6 +270,9 @@ export function LockOverlay({ onUnlocked, onSignOut }: LockOverlayProps): React.
   const queryClient = useQueryClient()
 
   const { user } = useAuth()
+  const layout: LockLayout = LOCK_LAYOUTS.includes(user?.lock_layout as LockLayout)
+    ? (user?.lock_layout as LockLayout)
+    : 'band'
   const { identity } = useIdentity()
   const { has } = useCapabilities()
   const canViewWorkforce = has('workforce.self.view') || has('workforce.dashboard.view')
@@ -342,6 +322,24 @@ export function LockOverlay({ onUnlocked, onSignOut }: LockOverlayProps): React.
     }
   }, [])
 
+  useEffect(() => {
+    const vv = window.visualViewport
+    const overlay = overlayRef.current
+    if (!vv || !overlay) return
+    const update = (): void => {
+      const inset = Math.max(0, window.innerHeight - vv.height - vv.offsetTop)
+      overlay.style.setProperty('--lock-kb-inset', `${Math.round(inset)}px`)
+    }
+    update()
+    vv.addEventListener('resize', update)
+    vv.addEventListener('scroll', update)
+    return () => {
+      vv.removeEventListener('resize', update)
+      vv.removeEventListener('scroll', update)
+      overlay.style.removeProperty('--lock-kb-inset')
+    }
+  }, [])
+
   async function handleSubmit(event: React.FormEvent): Promise<void> {
     event.preventDefault()
     if (!password) return
@@ -353,15 +351,6 @@ export function LockOverlay({ onUnlocked, onSignOut }: LockOverlayProps): React.
     } catch (err) {
       setError(apiErrorMessage(err))
       setSubmitting(false)
-    }
-  }
-
-  function chooseLayout(next: LockLayout): void {
-    setLayout(next)
-    try {
-      window.localStorage.setItem(LAYOUT_KEY, next)
-    } catch {
-      // Cosmetic preference can safely fall back to the default layout.
     }
   }
 
@@ -431,12 +420,6 @@ export function LockOverlay({ onUnlocked, onSignOut }: LockOverlayProps): React.
       <div className="lock-frost" aria-hidden="true" />
       <div className="lock-shell">
         <TimeBlock now={now} isAr={isAr} />
-        <OperationsBlock
-          snapshot={workforceQuery.data ?? null}
-          weather={weatherQuery.data ?? null}
-          digest={digest}
-          isAr={isAr}
-        />
 
         <form ref={unlockRef} className="lock-unlock" onSubmit={handleSubmit}>
           <div className="lock-grab" aria-hidden="true" />
@@ -501,20 +484,19 @@ export function LockOverlay({ onUnlocked, onSignOut }: LockOverlayProps): React.
             {t('lockScreen.signOut')}
           </button>
         </form>
-      </div>
 
-      <div className="lock-layout-switcher" role="group" aria-label={t('lockScreen.layoutTitle')}>
-        {LAYOUTS.map((option, index) => (
-          <button
-            key={option}
-            type="button"
-            aria-label={t(`lockScreen.layout.${option}`)}
-            aria-pressed={layout === option}
-            onClick={() => chooseLayout(option)}
-          >
-            {String.fromCharCode(65 + index)}
-          </button>
-        ))}
+        <OperationsBlock
+          snapshot={workforceQuery.data ?? null}
+          weather={weatherQuery.data ?? null}
+          digest={layout === 'console' ? [] : digest}
+          isAr={isAr}
+        />
+
+        {layout === 'console' && digest.length > 0 && (
+          <div className="lock-digest-strip">
+            <DigestList digest={digest} />
+          </div>
+        )}
       </div>
     </div>
   )

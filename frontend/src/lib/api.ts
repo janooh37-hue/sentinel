@@ -15,6 +15,7 @@
 
 import type { components, paths } from './api.types'
 import type { ExtractedFieldOut } from './extraction'
+import type { LockLayout } from './useLockState'
 
 // Passport OCR extract (Task 8).
 // Re-exported from the generated schema; declared here so consumers import from
@@ -368,6 +369,7 @@ export interface SessionUser {
    * approving/signing a book). Distinct from the employee-vault signature. */
   has_signature: boolean
   idle_lock_seconds: number
+  lock_layout: string
 }
 
 export interface RegisterResult {
@@ -2157,6 +2159,10 @@ export const api = {
   updateLockTimer: (idleLockSeconds: number) =>
     request<SessionUser>('PATCH', '/auth/me/lock-timer', {
       idle_lock_seconds: idleLockSeconds,
+    }),
+  updateLockLayout: (lockLayout: LockLayout) =>
+    request<SessionUser>('PATCH', '/auth/me/lock-layout', {
+      lock_layout: lockLayout,
     }),
   /** Link the signed-in user to their own employee record (G-number). Sets
    * `User.employee_id` — the authoritative identity source — so the link

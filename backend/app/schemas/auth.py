@@ -39,6 +39,12 @@ class LockTimerRequest(BaseModel):
     idle_lock_seconds: Literal[30, 60, 120, 300, 900, 1800]
 
 
+class LockLayoutRequest(BaseModel):
+    """Set the signed-in user's lock-screen layout."""
+
+    lock_layout: Literal["band", "stack", "console"]
+
+
 class SessionUser(BaseModel):
     """The signed-in user, shaped for the frontend auth context."""
 
@@ -56,6 +62,7 @@ class SessionUser(BaseModel):
     is_manager: bool = False
     has_signature: bool = False
     idle_lock_seconds: int = 1800
+    lock_layout: str = "band"
 
 
 class RegisterResult(BaseModel):

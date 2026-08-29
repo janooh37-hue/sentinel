@@ -23,6 +23,7 @@ const USER: SessionUser = {
   is_manager: false,
   has_signature: false,
   idle_lock_seconds: 1800,
+  lock_layout: 'band',
 }
 
 function LoginButton(): React.JSX.Element {

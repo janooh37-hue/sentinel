@@ -1180,6 +1180,10 @@ class User(Base):
     idle_lock_seconds: Mapped[int] = mapped_column(
         Integer, nullable=False, default=1800, server_default="1800"
     )
+    # Lock-screen layout choice; one of band/stack/console (enforced at the API edge).
+    lock_layout: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="band", server_default="band"
+    )
     # operator | manager | admin — stored (admin-assigned), authoritative for auth.
     role: Mapped[str] = mapped_column(
         String(16), nullable=False, default="operator", server_default="operator"

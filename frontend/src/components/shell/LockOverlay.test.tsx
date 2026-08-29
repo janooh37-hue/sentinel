@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor } from '@testing-library/react'
+import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -10,8 +10,9 @@ import type * as LockWeatherModule from '@/lib/lockWeather'
 
 import { LockOverlay } from './LockOverlay'
 
+let mockUser: Record<string, unknown> = {}
 vi.mock('@/lib/authContext', () => ({
-  useAuth: () => ({ user: { email: 'abdulla@example.test', idle_lock_seconds: 30 } }),
+  useAuth: () => ({ user: mockUser }),
 }))
 vi.mock('@/lib/useIdentity', () => ({
   useIdentity: () => ({
@@ -81,7 +82,7 @@ function renderOverlay(client = new QueryClient({ defaultOptions: { queries: { r
 
 describe('LockOverlay', () => {
   beforeEach(async () => {
-    localStorage.clear()
+    mockUser = { email: 'abdulla@example.test', idle_lock_seconds: 30, lock_layout: 'band' }
     await i18n.changeLanguage('en')
     vi.spyOn(api, 'getWorkforceSnapshot').mockResolvedValue(SNAPSHOT)
     vi.spyOn(api, 'getMyDocumentActivity').mockResolvedValue({
@@ -103,20 +104,55 @@ describe('LockOverlay', () => {
   afterEach(() => {
     vi.useRealTimers()
     vi.restoreAllMocks()
+    // Window.visualViewport is typed as non-optional (VisualViewport | null), so
+    // `delete` needs an untyped view; we only ever add it via defineProperty below.
+    const globalWindow = window as unknown as Record<string, unknown>
+    delete globalWindow.visualViewport
   })
 
-  it('switches among all three layouts and remembers the choice', async () => {
-    const user = userEvent.setup()
+  it('applies the account lock layout and shows no switcher', () => {
+    mockUser.lock_layout = 'console'
     renderOverlay()
 
     const dialog = screen.getByRole('dialog')
-    expect(dialog).toHaveAttribute('data-layout', 'band')
-    expect(screen.getByRole('group', { name: 'Lock screen layout' })).toBeInTheDocument()
-
-    await user.click(screen.getByRole('button', { name: 'Briefing console' }))
-
     expect(dialog).toHaveAttribute('data-layout', 'console')
-    expect(localStorage.getItem('gssg.lockLayout')).toBe('console')
+    expect(screen.queryByRole('group', { name: 'Lock screen layout' })).not.toBeInTheDocument()
+  })
+
+  it('renders the console digest as a strip below the unlock form, and inline for band', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    client.setQueryData(['books', 'awaiting'], [{ id: 1 }, { id: 2 }, { id: 3 }])
+    client.setQueryData(['ledger', 'unread-recent'], { items: [], total_unread: 2 })
+    client.setQueryData(['expiry', 'summary'], { expired: 0, critical: 1, urgent: 1 })
+
+    mockUser.lock_layout = 'console'
+    renderOverlay(client)
+    await waitFor(() => {
+      expect(document.querySelector('.lock-digest-strip .lock-digest-item')).toBeInTheDocument()
+    })
+    cleanup()
+
+    mockUser.lock_layout = 'band'
+    renderOverlay(client)
+    await waitFor(() => {
+      expect(document.querySelector('.lock-digest-item')).toBeInTheDocument()
+    })
+    expect(document.querySelector('.lock-digest-strip')).not.toBeInTheDocument()
+  })
+
+  it('raises the mobile unlock sheet above the on-screen keyboard', () => {
+    Object.defineProperty(window, 'visualViewport', {
+      configurable: true,
+      value: Object.assign(new EventTarget(), {
+        height: window.innerHeight - 300,
+        offsetTop: 0,
+      }),
+    })
+
+    renderOverlay()
+
+    const dialog = screen.getByRole('dialog')
+    expect(dialog.style.getPropertyValue('--lock-kb-inset')).toBe('300px')
   })
 
   it('shows only privacy-safe cached digest counts', async () => {
