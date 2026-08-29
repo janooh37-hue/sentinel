@@ -38,6 +38,7 @@ from app.services.workforce_admin_service import (
     overlay_attendance_adjustment,
 )
 from app.services.workforce_scope_service import normalize_scope_value, scope_allows
+from app.services.workforce_seed_service import OFFICE_CREW_CODE
 
 _ORGANIZATION_TIMEZONE = ZoneInfo("Asia/Dubai")
 _ACTIVE_EMPLOYEE_STATUS = "active"
@@ -471,31 +472,88 @@ def _setup_readiness(
     }
 
 
-def _next_shift(
-    db: Session,
-    *,
-    as_of_naive: datetime,
-    scope: Any | None,
-    self_employee_id: str | None,
-) -> dict[str, Any]:
-    eligible_employees = {
-        employee.id: employee
+def _eligible_employee_ids(
+    db: Session, *, scope: Any | None, self_employee_id: str | None
+) -> set[str]:
+    return {
+        employee.id
         for employee in db.scalars(select(Employee))
         if _is_active_employee(employee.status)
         and (
             (scope is not None and _employee_in_scope(employee, scope))
-            or (
-                scope is None
-                and self_employee_id is not None
-                and employee.id == self_employee_id
-            )
+            or (scope is None and self_employee_id is not None and employee.id == self_employee_id)
         )
     }
+
+
+def _membership_covers(membership: WorkCrewMembership, occurrence: WorkShiftOccurrence) -> bool:
+    return (
+        membership.crew_id == occurrence.crew_id
+        and membership.effective_from <= occurrence.starts_at
+        and (membership.effective_to is None or membership.effective_to > occurrence.starts_at)
+    )
+
+
+def _crew_name(crew: WorkCrew) -> dict[str, Any]:
+    return {"code": crew.code, "name_en": crew.name_en, "name_ar": crew.name_ar}
+
+
+def _crew_entries(db: Session, occurrences: list[WorkShiftOccurrence]) -> list[dict[str, Any]]:
+    """Bilingual names for the rotation crews behind these occurrences.
+
+    The office crew is the site's official-hours group, not a guard company, so it
+    is never reported as a crew name; callers fall back to the shift code instead.
+    """
+    if not occurrences:
+        return []
+    crews = {
+        crew.id: crew
+        for crew in db.scalars(
+            select(WorkCrew).where(WorkCrew.id.in_({row.crew_id for row in occurrences}))
+        )
+    }
+    return [
+        _crew_name(crew)
+        for crew in sorted(crews.values(), key=lambda crew: crew.code)
+        if crew.code != OFFICE_CREW_CODE
+    ]
+
+
+def _current_on_duty_crews(
+    db: Session, *, as_of_naive: datetime, eligible_employees: set[str]
+) -> list[dict[str, Any]]:
+    if not eligible_employees:
+        return []
+    occurrences = list(
+        db.scalars(
+            select(WorkShiftOccurrence).where(
+                WorkShiftOccurrence.starts_at <= as_of_naive,
+                WorkShiftOccurrence.ends_at > as_of_naive,
+            )
+        )
+    )
+    if not occurrences:
+        return []
+    memberships = list(
+        db.scalars(
+            select(WorkCrewMembership).where(WorkCrewMembership.employee_id.in_(eligible_employees))
+        )
+    )
+    kept = [
+        occurrence
+        for occurrence in occurrences
+        if any(_membership_covers(membership, occurrence) for membership in memberships)
+    ]
+    return _crew_entries(db, kept)
+
+
+def _next_shift(
+    db: Session, *, as_of_naive: datetime, eligible_employees: set[str]
+) -> dict[str, Any]:
     empty: dict[str, Any] = {
         "starts_at": None,
         "ends_at": None,
         "shift_code": None,
-        "shift_name": None,
         "crews": [],
         "scheduled": 0,
         "expected": None,
@@ -506,9 +564,7 @@ def _next_shift(
 
     memberships = list(
         db.scalars(
-            select(WorkCrewMembership).where(
-                WorkCrewMembership.employee_id.in_(eligible_employees)
-            )
+            select(WorkCrewMembership).where(WorkCrewMembership.employee_id.in_(eligible_employees))
         )
     )
     occurrences = list(
@@ -522,39 +578,22 @@ def _next_shift(
     if not occurrences:
         return empty
 
-    crews = {
-        crew.id: crew
-        for crew in db.scalars(
-            select(WorkCrew).where(
-                WorkCrew.id.in_({row.crew_id for row in occurrences})
-            )
-        )
-    }
     shifts = {
         shift.id: shift
         for shift in db.scalars(
             select(WorkShiftDefinition).where(
-                WorkShiftDefinition.id.in_(
-                    {row.shift_definition_id for row in occurrences}
-                )
+                WorkShiftDefinition.id.in_({row.shift_definition_id for row in occurrences})
             )
         )
     }
 
     for start_at in dict.fromkeys(row.starts_at for row in occurrences):
-        group = [
-            row for row in occurrences if row.starts_at == start_at
-        ]
+        group = [row for row in occurrences if row.starts_at == start_at]
         scheduled_ids = {
             membership.employee_id
             for occurrence in group
             for membership in memberships
-            if membership.crew_id == occurrence.crew_id
-            and membership.effective_from <= occurrence.starts_at
-            and (
-                membership.effective_to is None
-                or membership.effective_to > occurrence.starts_at
-            )
+            if _membership_covers(membership, occurrence)
         }
         if not scheduled_ids:
             continue
@@ -569,28 +608,13 @@ def _next_shift(
                 if row.shift_definition_id in shifts
             }
         )
-        crew_names = sorted(
-            {
-                (
-                    crews[row.crew_id].name_en
-                    or crews[row.crew_id].name_ar
-                    or crews[row.crew_id].code
-                )
-                for row in group
-                if row.crew_id in crews
-            }
-        )
         return {
             "starts_at": start_at,
             "ends_at": max(row.ends_at for row in group),
             "shift_code": ", ".join(shift_codes) or None,
-            "shift_name": ", ".join(shift_codes) or None,
-            "crews": crew_names,
+            "crews": _crew_entries(db, group),
             "scheduled": len(scheduled_ids),
-            "expected": sum(
-                employee_id not in leave_by_employee
-                for employee_id in scheduled_ids
-            ),
+            "expected": sum(employee_id not in leave_by_employee for employee_id in scheduled_ids),
             "staffing_minimum": None,
         }
     return empty
@@ -608,6 +632,9 @@ def get_workforce_snapshot(
     aware_now, naive_now, operational_date = _now(now)
     sync_health = _stream_health(db, now=aware_now)
     aggregate_scope = scope if include_aggregate else None
+    eligible_employees = _eligible_employee_ids(
+        db, scope=aggregate_scope, self_employee_id=self_employee_id
+    )
     value: dict[str, Any] = {
         "as_of": aware_now,
         "operational_date": operational_date,
@@ -623,6 +650,11 @@ def get_workforce_snapshot(
         "current_shift": {
             "starts_at": None,
             "ends_at": None,
+            "crews": _current_on_duty_crews(
+                db,
+                as_of_naive=naive_now,
+                eligible_employees=eligible_employees,
+            ),
             "scheduled": 0,
             "excused": 0,
             "expected": 0,
@@ -636,8 +668,7 @@ def get_workforce_snapshot(
         "next_shift": _next_shift(
             db,
             as_of_naive=naive_now,
-            scope=aggregate_scope,
-            self_employee_id=self_employee_id,
+            eligible_employees=eligible_employees,
         ),
         "leave_today": {"annual": 0, "sick": 0, "national_service": 0, "other": 0},
         "mapping_completeness": {"verified": 0, "unmapped": 0, "conflict": 0},

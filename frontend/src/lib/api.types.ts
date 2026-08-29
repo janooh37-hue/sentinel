@@ -6624,6 +6624,15 @@ export interface components {
             /** End Reason */
             end_reason?: string | null;
         };
+        /** CrewNameRead */
+        CrewNameRead: {
+            /** Code */
+            code: string;
+            /** Name En */
+            name_en?: string | null;
+            /** Name Ar */
+            name_ar?: string | null;
+        };
         /** CrewSchedulePreviewRead */
         CrewSchedulePreviewRead: {
             /** Crew Id */
@@ -6705,6 +6714,8 @@ export interface components {
             starts_at?: string | null;
             /** Ends At */
             ends_at?: string | null;
+            /** Crews */
+            crews?: components["schemas"]["CrewNameRead"][];
             /** Scheduled */
             scheduled: number;
             /** Excused */
@@ -9075,10 +9086,8 @@ export interface components {
             ends_at?: string | null;
             /** Shift Code */
             shift_code?: string | null;
-            /** Shift Name */
-            shift_name?: string | null;
             /** Crews */
-            crews?: string[];
+            crews?: components["schemas"]["CrewNameRead"][];
             /** Scheduled */
             scheduled: number;
             /** Expected */

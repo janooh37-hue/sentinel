@@ -21,6 +21,7 @@ import {
   type BookRead,
   type ExpirySummary,
   type UnreadRecentResponse,
+  type WorkforceCrewName,
   type WorkforceSnapshot,
 } from '@/lib/api'
 import { useAuth } from '@/lib/authContext'
@@ -124,6 +125,12 @@ function TimeBlock({ now, isAr }: { now: Date; isAr: boolean }): React.JSX.Eleme
   )
 }
 
+function crewNames(crews: readonly WorkforceCrewName[] | undefined, isAr: boolean): string[] {
+  return (crews ?? []).map(
+    (crew) => (isAr ? crew.name_ar || crew.name_en : crew.name_en || crew.name_ar) || crew.code,
+  )
+}
+
 function OperationsBlock({
   snapshot,
   weather,
@@ -140,8 +147,24 @@ function OperationsBlock({
   const timeZone = snapshot?.timezone ?? 'Asia/Dubai'
   const weatherNumber = new Intl.NumberFormat(locale, { maximumFractionDigits: 0 })
   const currentShiftCode = snapshot?.self?.shift_code?.trim() || null
-  const nextShiftName =
-    snapshot?.next_shift.shift_name?.trim() || snapshot?.next_shift.shift_code?.trim() || null
+  const currentCrewNames = crewNames(snapshot?.current_shift.crews, isAr)
+  const nextCrewNames = crewNames(snapshot?.next_shift.crews, isAr)
+  const nextShiftCodes = (snapshot?.next_shift.shift_code ?? '')
+    .split(',')
+    .map((code) => code.trim())
+    .filter((code) => code.length > 0)
+  const currentShiftLabel =
+    currentCrewNames.length > 0
+      ? currentCrewNames.join(' · ')
+      : currentShiftCode
+        ? t(`attendance.shift.${currentShiftCode}`, currentShiftCode)
+        : null
+  const nextShiftLabel =
+    nextCrewNames.length > 0
+      ? nextCrewNames.join(' · ')
+      : nextShiftCodes.length > 0
+        ? nextShiftCodes.map((code) => t(`attendance.shift.${code}`, code)).join(' · ')
+        : null
   const currentRange = formatRange(
     snapshot?.self?.scheduled_start_at ?? snapshot?.current_shift.starts_at,
     snapshot?.self?.scheduled_end_at ?? snapshot?.current_shift.ends_at,
@@ -156,11 +179,11 @@ function OperationsBlock({
   )
   const nextStart = formatInstant(snapshot?.next_shift.starts_at, locale, timeZone)
   const nextStartLabel =
-    nextShiftName && nextStart ? t('lockScreen.startsAt', { time: nextStart }) : null
+    nextShiftLabel && nextStart ? t('lockScreen.startsAt', { time: nextStart }) : null
   const nextStartParts =
     nextStartLabel && nextStart ? nextStartLabel.split(nextStart) : null
-  const hasCurrentShift = currentShiftCode !== null || currentRange !== null
-  const hasNextShift = nextShiftName !== null || nextRange !== null
+  const hasCurrentShift = currentShiftLabel !== null || currentRange !== null
+  const hasNextShift = nextShiftLabel !== null || nextRange !== null
   const hasShift = hasCurrentShift || hasNextShift
   const sectionCount = Number(hasShift) + Number(digest.length > 0) + Number(weather !== null)
   if (!hasShift && !weather && digest.length === 0) return null
@@ -177,8 +200,8 @@ function OperationsBlock({
             <div className="lock-metric">
               <span className="lock-eyebrow">{t('lockScreen.onDutyNow')}</span>
               <strong>
-                {currentShiftCode ? (
-                  <bdi>{currentShiftCode}</bdi>
+                {currentShiftLabel ? (
+                  <bdi>{currentShiftLabel}</bdi>
                 ) : (
                   currentRange && <bdi dir="ltr">{currentRange}</bdi>
                 )}
@@ -190,8 +213,8 @@ function OperationsBlock({
             <div className="lock-metric">
               <span className="lock-eyebrow">{t('lockScreen.nextShift')}</span>
               <strong>
-                {nextShiftName ? (
-                  <bdi>{nextShiftName}</bdi>
+                {nextShiftLabel ? (
+                  <bdi>{nextShiftLabel}</bdi>
                 ) : (
                   nextRange && <bdi dir="ltr">{nextRange}</bdi>
                 )}

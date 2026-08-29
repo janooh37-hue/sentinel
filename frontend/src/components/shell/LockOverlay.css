@@ -45,12 +45,13 @@
 
 .lock-clock {
   display: block;
-  font-family: "Segoe UI", var(--font-sans);
+  font-family: "Segoe UI Light", "Segoe UI Semilight", "Segoe UI", var(--font-sans);
   font-size: clamp(88px, 8.2vw, 132px);
   font-weight: 300;
+  font-synthesis: none;
   font-feature-settings: normal;
-  line-height: 0.84;
-  letter-spacing: -0.08em;
+  line-height: 0.9;
+  letter-spacing: -0.02em;
   font-variant-numeric: tabular-nums;
 }
 
@@ -125,12 +126,15 @@
 }
 
 .lock-metric strong {
-  display: block;
+  display: -webkit-box;
   margin-top: 8px;
+  overflow: hidden;
   font-size: clamp(17px, 1.45vw, 23px);
   font-weight: 300;
   line-height: 1.15;
   letter-spacing: -0.035em;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 .lock-metric small,
@@ -159,21 +163,18 @@
 .lock-digest-item b {
   display: block;
   font-size: 24px;
-  font-weight: 280;
+  font-weight: 300;
 }
 
 .lock-digest-item span {
   display: block;
   margin-top: 4px;
-  color: rgb(255 255 255 / 54%);
-  font-family: "IBM Plex Mono", Consolas, monospace;
-  font-size: 8px;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
+  color: rgb(255 255 255 / 62%);
+  font-size: 12px;
+  font-weight: 500;
 }
 
-[dir="rtl"] .lock-eyebrow,
-[dir="rtl"] .lock-digest-item span {
+[dir="rtl"] .lock-eyebrow {
   letter-spacing: 0;
 }
 
@@ -729,5 +730,18 @@
   .lock-layout-switcher {
     inset-inline-end: 17px;
     bottom: calc(var(--lock-unlock-height, 278px) - 19px);
+  }
+}
+
+@media (max-width: 760px) and (pointer: coarse) {
+  .lock-clock,
+  .lock-overlay[data-layout="stack"] .lock-clock,
+  .lock-overlay[data-layout="console"] .lock-clock {
+    display: none;
+  }
+
+  .lock-dates,
+  .lock-overlay[data-layout="console"] .lock-dates {
+    margin-top: 0;
   }
 }
