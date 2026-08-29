@@ -138,4 +138,6 @@ mockups/shots/
 mockups/refreance/
 
 # Agent worktrees
+%TEMP%/
+.opencode/package-lock.json
 .worktrees/
