@@ -127,6 +127,17 @@ describe('AbsencesPage', () => {
     expect(screen.queryByRole('button', { name: 'Record absence' })).not.toBeInTheDocument()
   })
 
+  it('renders calibrated Employee Absence artwork in the service header', () => {
+    const { container } = renderPage()
+
+    expect(
+      container.querySelector(
+        'header [data-service-artwork="employee-absence"][data-service-size="gallery"] img',
+      ),
+    ).toHaveAttribute('src', expect.stringContaining('employee-absence.webp'))
+    expect(screen.queryByText('🚫')).not.toBeInTheDocument()
+  })
+
   it('saves the picked range and lists the episode register', async () => {
     listEmployeeAbsenceEpisodes.mockResolvedValue(RECORD)
     renderPage()
