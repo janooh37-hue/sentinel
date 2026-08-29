@@ -191,6 +191,7 @@
     "title": "Screen lock timer",
     "shorter": "Shorter lock timer",
     "longer": "Longer lock timer",
+    "saveError": "Could not save the screen lock timer. Try again.",
     "options": {
       "30": "30 sec",
       "60": "1 min",
