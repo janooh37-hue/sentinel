@@ -1,0 +1,484 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Sentinel — Screen lock timer controls</title>
+  <style>
+    @font-face { font-family: Inter; src: local("Inter"); font-display: swap; }
+    @font-face { font-family: "IBM Plex Mono"; src: local("IBM Plex Mono"); font-display: swap; }
+    @font-face { font-family: "Noto Sans Arabic"; src: local("Noto Sans Arabic"); font-display: swap; }
+
+    :root {
+      --bg: #f5f4f1;
+      --surface: #ffffff;
+      --surface-raised: #fafaf6;
+      --surface-tinted: #f0eee8;
+      --primary: #0d2845;
+      --primary-hover: #1d3a5e;
+      --primary-soft: #e8edf3;
+      --on-primary: #ffffff;
+      --accent: #c8102e;
+      --accent-soft: #fbe5e8;
+      --text: #1c1f24;
+      --text-muted: #5a6068;
+      --text-faint: #8b9098;
+      --border: #e6e4dd;
+      --hairline: #efece5;
+      --warning: #92400e;
+      --warning-soft: #fbedd8;
+      --shadow: 0 22px 56px rgba(13, 40, 69, 0.16), 0 3px 10px rgba(13, 40, 69, 0.08);
+      --focus-ring: 0 0 0 3px rgba(13, 40, 69, 0.2);
+    }
+
+    [data-theme="dark"] {
+      --bg: #0a0e18;
+      --surface: #131826;
+      --surface-raised: #1a2034;
+      --surface-tinted: #1f263b;
+      --primary: #5778cf;
+      --primary-hover: #7491db;
+      --primary-soft: #1c2849;
+      --on-primary: #0a0e18;
+      --accent: #ef4858;
+      --accent-soft: #3a1820;
+      --text: #e6e9f2;
+      --text-muted: #8a93a7;
+      --text-faint: #5f6678;
+      --border: #2a3148;
+      --hairline: #1f263b;
+      --warning: #fbbf24;
+      --warning-soft: #3a2a10;
+      --shadow: 0 26px 70px rgba(0, 0, 0, 0.42), 0 3px 12px rgba(0, 0, 0, 0.3);
+      --focus-ring: 0 0 0 3px rgba(87, 120, 207, 0.35);
+    }
+
+    * { box-sizing: border-box; }
+    html { min-width: 320px; background: #091426; }
+    body {
+      min-height: 100vh;
+      margin: 0;
+      background:
+        radial-gradient(circle at 16% 8%, rgba(87, 120, 207, 0.22), transparent 28%),
+        linear-gradient(145deg, #07111f 0%, #0c1f34 52%, #152f4b 100%);
+      color: #fff;
+      font-family: Inter, "Segoe UI", sans-serif;
+      -webkit-font-smoothing: antialiased;
+      text-rendering: optimizeLegibility;
+    }
+    button { font: inherit; }
+    button:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+    svg { display: block; }
+    [dir="rtl"] { font-family: "Noto Sans Arabic", "Segoe UI", sans-serif; }
+
+    .index,
+    .variant { display: none; }
+    .index.active,
+    .variant.active { display: block; }
+
+    .index {
+      min-height: 100vh;
+      padding: 72px clamp(24px, 7vw, 112px);
+      background: var(--bg);
+      color: var(--text);
+    }
+    .index-mark {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      color: var(--accent);
+      font: 600 12px "IBM Plex Mono", Consolas, monospace;
+    }
+    .index-mark::before { content: ""; width: 24px; height: 2px; background: currentColor; }
+    .index h1 {
+      max-width: 760px;
+      margin: 18px 0 14px;
+      color: var(--primary);
+      font-size: clamp(42px, 6vw, 74px);
+      line-height: 0.98;
+      letter-spacing: -0.055em;
+    }
+    .index > p { max-width: 680px; color: var(--text-muted); font-size: 18px; line-height: 1.65; }
+    .index-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-top: 48px; }
+    .index-card {
+      display: flex;
+      min-height: 250px;
+      flex-direction: column;
+      justify-content: space-between;
+      border: 1px solid var(--border);
+      border-radius: 22px;
+      background: var(--surface);
+      padding: 22px;
+      color: var(--text);
+      text-decoration: none;
+      box-shadow: 0 10px 32px rgba(13, 40, 69, 0.07);
+      transition: transform 180ms ease, box-shadow 180ms ease;
+    }
+    .index-card:hover { transform: translateY(-4px); box-shadow: 0 18px 42px rgba(13, 40, 69, 0.12); }
+    .index-card small { color: var(--accent); font: 600 11px "IBM Plex Mono", Consolas, monospace; }
+    .index-card strong { display: block; margin-top: 18px; color: var(--primary); font-size: 24px; letter-spacing: -0.03em; }
+    .index-card span { display: block; margin-top: 10px; color: var(--text-muted); line-height: 1.5; }
+    .index-card b { color: var(--text-faint); font: 500 11px "IBM Plex Mono", Consolas, monospace; }
+
+    .variant {
+      min-height: 100vh;
+      padding: 26px 28px 40px;
+      background:
+        linear-gradient(rgba(7, 17, 31, 0.84), rgba(7, 17, 31, 0.94)),
+        radial-gradient(circle at 50% 0%, #274e72, transparent 54%);
+    }
+    .variant-header {
+      display: flex;
+      align-items: end;
+      justify-content: space-between;
+      gap: 30px;
+      max-width: 1500px;
+      margin: 0 auto 22px;
+    }
+    .variant-header h1 { margin: 0; font-size: 25px; letter-spacing: -0.035em; }
+    .variant-header p { max-width: 720px; margin: 6px 0 0; color: rgba(255, 255, 255, 0.62); font-size: 13px; }
+    .variant-code { color: rgba(255, 255, 255, 0.5); font: 500 11px "IBM Plex Mono", Consolas, monospace; }
+    .board {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 14px;
+      max-width: 1500px;
+      margin: 0 auto;
+    }
+    .specimen {
+      min-width: 0;
+      border: 1px solid rgba(255, 255, 255, 0.13);
+      border-radius: 24px;
+      background: rgba(255, 255, 255, 0.06);
+      padding: 12px;
+      overflow: hidden;
+    }
+    .specimen-label {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      min-height: 30px;
+      padding: 0 3px 9px;
+      color: rgba(255, 255, 255, 0.65);
+      font: 500 10px "IBM Plex Mono", Consolas, monospace;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+    .specimen-label em { color: rgba(255, 255, 255, 0.36); font-style: normal; }
+    .desktop-frame,
+    .mobile-frame {
+      display: flex;
+      min-height: 750px;
+      justify-content: center;
+      border-radius: 16px;
+      background:
+        linear-gradient(rgba(13, 40, 69, 0.05), rgba(13, 40, 69, 0.1)),
+        var(--bg);
+      padding: 18px 10px;
+    }
+    .mobile-frame {
+      width: 360px;
+      max-width: 100%;
+      margin-inline: auto;
+      border: 5px solid #202735;
+      border-radius: 28px;
+      padding: 28px 10px 14px;
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,.1);
+    }
+
+    .menu {
+      width: 320px;
+      max-width: 100%;
+      align-self: flex-start;
+      overflow: hidden;
+      border: 1px solid var(--hairline);
+      border-radius: 16px;
+      background: var(--surface);
+      color: var(--text);
+      box-shadow: var(--shadow);
+    }
+    .identity {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      border-bottom: 1px solid var(--hairline);
+      padding: 16px;
+    }
+    .avatar {
+      display: grid;
+      width: 56px;
+      height: 56px;
+      flex: none;
+      place-items: center;
+      border: 1px solid var(--border);
+      border-radius: 50%;
+      background: var(--primary-soft);
+      color: var(--primary);
+      font-weight: 750;
+    }
+    .identity-copy { min-width: 0; flex: 1; }
+    .identity-line { display: flex; align-items: center; gap: 6px; }
+    .identity-name { min-width: 0; overflow: hidden; color: var(--text); font-size: 15px; font-weight: 650; text-overflow: ellipsis; white-space: nowrap; }
+    .role {
+      flex: none;
+      border-radius: 6px;
+      background: var(--accent-soft);
+      padding: 3px 7px;
+      color: var(--accent);
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+    .meta { display: block; margin-top: 3px; overflow: hidden; color: var(--text-muted); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+    .sync { display: flex; align-items: center; gap: 5px; margin-top: 5px; color: var(--text-muted); font-size: 12px; }
+    .sync svg { width: 12px; height: 12px; }
+    .actions { padding: 6px 0; }
+    .action {
+      display: flex;
+      width: 100%;
+      min-height: 44px;
+      align-items: center;
+      gap: 10px;
+      border: 0;
+      background: transparent;
+      padding: 10px 16px;
+      color: var(--text);
+      text-align: start;
+      cursor: pointer;
+      transition: background 120ms ease;
+    }
+    .action:hover { background: var(--surface-tinted); }
+    .action svg { width: 16px; height: 16px; flex: none; color: var(--text-muted); stroke-width: 1.7; }
+    .action-label { min-width: 0; flex: 1; font-size: 14px; }
+    .signout { border-top: 1px solid var(--hairline); }
+    .timer-zone { border-block: 1px solid var(--hairline); background: var(--surface-raised); }
+    .timer-zone + .action { border-top: 0; }
+    .timer-title { color: var(--text); font-size: 14px; font-weight: 500; }
+    .timer-value { color: var(--primary); font: 600 11px "IBM Plex Mono", Consolas, monospace; white-space: nowrap; }
+    [dir="rtl"] .timer-value { font-family: "Noto Sans Arabic", "Segoe UI", sans-serif; }
+
+    /* V1 — inline expander */
+    .expander-trigger { background: var(--surface-raised); }
+    .expander-trigger .chevron { width: 14px; height: 14px; margin-inline-start: 2px; color: var(--text-faint); transform: rotate(180deg); }
+    [dir="rtl"] .expander-trigger .chevron { transform: rotate(180deg) scaleX(-1); }
+    .radio-list { display: grid; grid-template-columns: 1fr 1fr; gap: 2px; padding: 4px 10px 10px; }
+    .radio-option {
+      display: flex;
+      min-height: 38px;
+      align-items: center;
+      gap: 8px;
+      border: 0;
+      border-radius: 8px;
+      background: transparent;
+      padding: 8px 9px;
+      color: var(--text-muted);
+      text-align: start;
+      cursor: pointer;
+    }
+    .radio-option:hover { background: var(--surface-tinted); color: var(--text); }
+    .radio-dot {
+      display: grid;
+      width: 16px;
+      height: 16px;
+      flex: none;
+      place-items: center;
+      border: 1px solid var(--border);
+      border-radius: 50%;
+      background: var(--surface);
+    }
+    .radio-dot::after { content: ""; width: 7px; height: 7px; border-radius: 50%; background: transparent; }
+    .radio-option[aria-checked="true"] { color: var(--primary); font-weight: 650; }
+    .radio-option[aria-checked="true"] .radio-dot { border-color: var(--primary); }
+    .radio-option[aria-checked="true"] .radio-dot::after { background: var(--primary); }
+    .radio-label { font-size: 12px; }
+
+    /* V2 — segmented pills */
+    .segments { padding: 12px 14px 13px; }
+    .segment-head { display: flex; align-items: center; gap: 9px; }
+    .segment-head svg { width: 16px; height: 16px; color: var(--text-muted); stroke-width: 1.7; }
+    .segment-head .timer-title { flex: 1; }
+    .pill-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 10px; }
+    .pill {
+      min-height: 33px;
+      border: 1px solid var(--border);
+      border-radius: 99px;
+      background: var(--surface);
+      color: var(--text-muted);
+      font: 600 10px "IBM Plex Mono", Consolas, monospace;
+      cursor: pointer;
+    }
+    [dir="rtl"] .pill { font-family: "Noto Sans Arabic", "Segoe UI", sans-serif; }
+    .pill:hover { border-color: var(--primary); color: var(--primary); }
+    .pill[aria-checked="true"] { border-color: var(--primary); background: var(--primary); color: var(--on-primary); }
+
+    /* V3 — stepper */
+    .stepper-row { min-height: 54px; background: var(--surface-raised); }
+    .stepper {
+      display: grid;
+      grid-template-columns: 28px minmax(54px, auto) 28px;
+      align-items: center;
+      overflow: hidden;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: var(--surface);
+    }
+    .stepper button {
+      display: grid;
+      width: 28px;
+      height: 30px;
+      place-items: center;
+      border: 0;
+      background: transparent;
+      color: var(--primary);
+      cursor: pointer;
+    }
+    .stepper button:hover:not(:disabled) { background: var(--primary-soft); }
+    .stepper button:disabled { color: var(--text-faint); cursor: not-allowed; opacity: 0.55; }
+    .stepper output {
+      min-width: 54px;
+      border-inline: 1px solid var(--hairline);
+      color: var(--text);
+      font: 600 10px "IBM Plex Mono", Consolas, monospace;
+      line-height: 30px;
+      text-align: center;
+      white-space: nowrap;
+    }
+    [dir="rtl"] .stepper output { font-family: "Noto Sans Arabic", "Segoe UI", sans-serif; }
+
+    .variant-note {
+      max-width: 1500px;
+      margin: 18px auto 0;
+      color: rgba(255, 255, 255, 0.53);
+      font-size: 12px;
+      text-align: center;
+    }
+
+    @media (max-width: 1100px) {
+      .board { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .index-grid { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 640px) {
+      .variant { padding: 18px 10px 28px; }
+      .variant-header { align-items: start; flex-direction: column; padding-inline: 8px; }
+      .board { grid-template-columns: 1fr; }
+      .desktop-frame, .mobile-frame { min-height: auto; padding-block: 14px; }
+      .index { padding: 38px 20px; }
+      .index h1 { font-size: 42px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { scroll-behavior: auto !important; transition-duration: 0.01ms !important; }
+    }
+  </style>
+</head>
+<body>
+  <main class="index" id="index">
+    <div class="index-mark">Sentinel / Account control</div>
+    <h1>Set the lock timer where the account lives.</h1>
+    <p>Three compact patterns add a per-account inactivity timer without turning the profile popover into a settings page. Each uses the existing Sentinel menu, tokens, and bilingual rhythm.</p>
+    <div class="index-grid">
+      <a class="index-card" href="?v=1"><small>V1</small><div><strong>Inline expander</strong><span>One familiar row opens a compact six-choice radio matrix.</span></div><b>QUIET · DIRECT · MOBILE-SAFE</b></a>
+      <a class="index-card" href="?v=2"><small>V2</small><div><strong>Segmented pills</strong><span>All six values stay visible in a concise, scannable control.</span></div><b>FAST · VISIBLE · TACTILE</b></a>
+      <a class="index-card" href="?v=3"><small>V3</small><div><strong>Stepper row</strong><span>A restrained instrument steps through the approved timer values.</span></div><b>COMPACT · FOCUSED · ORDERED</b></a>
+    </div>
+  </main>
+
+  <section class="variant" data-v="1" aria-label="Inline expander timer mockups">
+    <header class="variant-header"><div><h1>V1 · Inline expander</h1><p>The default menu stays one row taller; opening the row reveals the six exact choices in a two-column radio matrix.</p></div><div class="variant-code">ACCOUNT MENU / RADIO GROUP</div></header>
+    <div class="board" data-kind="expander"></div>
+    <p class="variant-note">Expanded state shown for comparison. Collapsed state is a single 44px action row.</p>
+  </section>
+
+  <section class="variant" data-v="2" aria-label="Segmented pills timer mockups">
+    <header class="variant-header"><div><h1>V2 · Segmented pills</h1><p>The approved values are visible at once. A three-by-two pill field makes frequent switching fast without another click.</p></div><div class="variant-code">ACCOUNT MENU / SEGMENTED CONTROL</div></header>
+    <div class="board" data-kind="segments"></div>
+    <p class="variant-note">The timer becomes a compact instrument panel between Lock app and Settings.</p>
+  </section>
+
+  <section class="variant" data-v="3" aria-label="Stepper timer mockups">
+    <header class="variant-header"><div><h1>V3 · Stepper row</h1><p>The current duration owns the row while minus and plus cycle through only the six permitted values.</p></div><div class="variant-code">ACCOUNT MENU / DISCRETE STEPPER</div></header>
+    <div class="board" data-kind="stepper"></div>
+    <p class="variant-note">At the 30-minute maximum the plus control is disabled; the range never exceeds policy.</p>
+  </section>
+
+  <template id="clock-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5v5l3.2 1.8"/></svg></template>
+  <template id="lock-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><rect x="5.5" y="10" width="13" height="10" rx="2"/><path d="M8.5 10V7.5a3.5 3.5 0 0 1 7 0V10"/></svg></template>
+  <template id="settings-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19 14.5l1.2 1.8-2 2-1.8-1.2a7.9 7.9 0 0 1-2.2.9l-.4 2.2H11l-.4-2.2a7.9 7.9 0 0 1-2.2-.9l-1.8 1.2-2-2L5.8 14.5a7.9 7.9 0 0 1-.9-2.2l-2.2-.4V9.1l2.2-.4a7.9 7.9 0 0 1 .9-2.2L4.6 4.7l2-2 1.8 1.2a7.9 7.9 0 0 1 2.2-.9l.4-2.2h2.8l.4 2.2a7.9 7.9 0 0 1 2.2.9l1.8-1.2 2 2L19 6.5a7.9 7.9 0 0 1 .9 2.2l2.2.4v2.8l-2.2.4a7.9 7.9 0 0 1-.9 2.2Z" transform="scale(.82) translate(2.6 2.6)"/></svg></template>
+  <template id="logout-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><path d="M10 4H5.5A1.5 1.5 0 0 0 4 5.5v13A1.5 1.5 0 0 0 5.5 20H10"/><path d="M14 8l4 4-4 4M8 12h10"/></svg></template>
+  <template id="mail-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><rect x="3.5" y="5.5" width="17" height="13" rx="2"/><path d="m4.5 7 7.5 5.5L19.5 7"/></svg></template>
+  <template id="chevron-icon"><svg class="chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" aria-hidden="true"><path d="m9 6 6 6-6 6"/></svg></template>
+
+  <script>
+    const optionValues = [30, 60, 120, 300, 900, 1800]
+    const copy = {
+      en: {
+        name: 'Abdulla Aldhaheri', role: 'Admin', meta: 'G-0001 · admin@gssg.test', sync: 'Synced just now',
+        lock: 'Lock app', timer: 'Screen lock timer', settings: 'Settings', signout: 'Sign out',
+        values: { 30: '30 sec', 60: '1 min', 120: '2 min', 300: '5 min', 900: '15 min', 1800: '30 min' }
+      },
+      ar: {
+        name: 'عبدالله الظاهري', role: 'مسؤول', meta: 'G-0001 · admin@gssg.test', sync: 'تمت المزامنة الآن',
+        lock: 'قفل التطبيق', timer: 'مؤقت قفل الشاشة', settings: 'الإعدادات', signout: 'تسجيل الخروج',
+        values: { 30: '30 ث', 60: '1 د', 120: '2 د', 300: '5 د', 900: '15 د', 1800: '30 د' }
+      }
+    }
+
+    const icon = (id) => document.getElementById(id).innerHTML
+
+    function timerControl(kind, lang) {
+      const c = copy[lang]
+      if (kind === 'expander') {
+        const choices = optionValues.map((value) => `<button class="radio-option" type="button" role="radio" aria-checked="${value === 1800}"><span class="radio-dot" aria-hidden="true"></span><span class="radio-label">${c.values[value]}</span></button>`).join('')
+        return `<div class="timer-zone"><button class="action expander-trigger" type="button" aria-expanded="true">${icon('clock-icon')}<span class="action-label timer-title">${c.timer}</span><span class="timer-value">${c.values[1800]}</span>${icon('chevron-icon')}</button><div class="radio-list" role="radiogroup" aria-label="${c.timer}">${choices}</div></div>`
+      }
+      if (kind === 'segments') {
+        const choices = optionValues.map((value) => `<button class="pill" type="button" role="radio" aria-checked="${value === 1800}">${c.values[value]}</button>`).join('')
+        return `<div class="timer-zone segments"><div class="segment-head">${icon('clock-icon')}<span class="timer-title">${c.timer}</span><span class="timer-value">${c.values[1800]}</span></div><div class="pill-grid" role="radiogroup" aria-label="${c.timer}">${choices}</div></div>`
+      }
+      return `<div class="timer-zone"><div class="action stepper-row">${icon('clock-icon')}<span class="action-label timer-title">${c.timer}</span><div class="stepper"><button type="button" aria-label="Previous duration">−</button><output aria-live="polite">${c.values[1800]}</output><button type="button" aria-label="Next duration" disabled>+</button></div></div></div>`
+    }
+
+    function menu(kind, lang, theme, mobile) {
+      const c = copy[lang]
+      const direction = lang === 'ar' ? 'rtl' : 'ltr'
+      return `<article class="${mobile ? 'mobile-frame' : 'desktop-frame'}" data-theme="${theme}" lang="${lang}" dir="${direction}"><div class="menu"><div class="identity"><div class="avatar">${lang === 'ar' ? 'عظ' : 'AA'}</div><div class="identity-copy"><div class="identity-line"><span class="identity-name">${c.name}</span><span class="role">${c.role}</span></div><span class="meta" dir="ltr">${c.meta}</span><span class="sync">${icon('mail-icon')}${c.sync}</span></div></div><div class="actions"><button class="action" type="button">${icon('lock-icon')}<span class="action-label">${c.lock}</span></button>${timerControl(kind, lang)}<button class="action" type="button">${icon('settings-icon')}<span class="action-label">${c.settings}</span></button><button class="action signout" type="button">${icon('logout-icon')}<span class="action-label">${c.signout}</span></button></div></div></article>`
+    }
+
+    function specimen(kind, label, lang, theme, mobile = false) {
+      return `<div class="specimen"><div class="specimen-label"><span>${label}</span><em>${mobile ? '360px' : 'desktop'}</em></div>${menu(kind, lang, theme, mobile)}</div>`
+    }
+
+    document.querySelectorAll('.board').forEach((board) => {
+      const kind = board.dataset.kind
+      board.innerHTML = [
+        specimen(kind, 'EN · Light', 'en', 'light'),
+        specimen(kind, 'EN · Dark', 'en', 'dark'),
+        specimen(kind, 'AR · RTL', 'ar', 'light'),
+        specimen(kind, 'Mobile', 'en', 'light', true)
+      ].join('')
+    })
+
+    document.addEventListener('click', (event) => {
+      const option = event.target.closest('[role="radio"]')
+      if (option) {
+        const group = option.closest('[role="radiogroup"]')
+        group.querySelectorAll('[role="radio"]').forEach((item) => item.setAttribute('aria-checked', String(item === option)))
+      }
+      const step = event.target.closest('.stepper button:not(:disabled)')
+      if (step) {
+        const output = step.parentElement.querySelector('output')
+        let index = optionValues.findIndex((value) => copy.en.values[value] === output.textContent || copy.ar.values[value] === output.textContent)
+        index = Math.max(0, Math.min(optionValues.length - 1, index + (step.textContent.trim() === '+' ? 1 : -1)))
+        const lang = step.closest('[lang]').lang.startsWith('ar') ? 'ar' : 'en'
+        output.textContent = copy[lang].values[optionValues[index]]
+        step.parentElement.querySelectorAll('button')[0].disabled = index === 0
+        step.parentElement.querySelectorAll('button')[1].disabled = index === optionValues.length - 1
+      }
+    })
+
+    const selected = new URLSearchParams(location.search).get('v')
+    const active = selected ? document.querySelector(`[data-v="${selected}"]`) : document.getElementById('index')
+    ;(active || document.getElementById('index')).classList.add('active')
+  </script>
+</body>
+</html>
