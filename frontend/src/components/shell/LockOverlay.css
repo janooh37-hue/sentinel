@@ -13,6 +13,7 @@
   inset: 0;
   z-index: 0;
   background:
+    linear-gradient(rgb(13 40 69 / 15%), rgb(13 40 69 / 15%)),
     linear-gradient(180deg, rgb(4 15 29 / 35%), rgb(4 15 29 / 84%)),
     radial-gradient(circle at 50% 15%, rgb(70 125 176 / 38%), transparent 42%);
   -webkit-backdrop-filter: blur(18px) saturate(0.82);
@@ -44,8 +45,10 @@
 
 .lock-clock {
   display: block;
+  font-family: "Segoe UI", var(--font-sans);
   font-size: clamp(88px, 8.2vw, 132px);
-  font-weight: 220;
+  font-weight: 300;
+  font-feature-settings: normal;
   line-height: 0.84;
   letter-spacing: -0.08em;
   font-variant-numeric: tabular-nums;
@@ -169,6 +172,11 @@
   text-transform: uppercase;
 }
 
+[dir="rtl"] .lock-eyebrow,
+[dir="rtl"] .lock-digest-item span {
+  letter-spacing: 0;
+}
+
 .lock-weather {
   text-align: end;
 }
@@ -248,6 +256,18 @@
   margin: 4px 0 0;
   color: rgb(255 255 255 / 64%);
   font-size: 12px;
+}
+
+.lock-cheer {
+  margin: 10px 0 0;
+  color: rgb(255 255 255 / 78%);
+  font-size: 12.5px;
+}
+
+.lock-cheer-shift {
+  margin: 4px 0 0;
+  color: rgb(255 255 255 / 64%);
+  font-size: 11px;
 }
 
 .lock-field {
@@ -473,13 +493,43 @@
   border-top: 1px solid rgb(255 255 255 / 13%);
 }
 
+@media (min-width: 761px) {
+  .lock-overlay[data-layout="console"] .lock-shifts {
+    grid-row: 1;
+    grid-column: 1;
+  }
+
+  .lock-overlay[data-layout="console"] .lock-weather {
+    grid-row: 1;
+    grid-column: 2;
+  }
+
+  .lock-overlay[data-layout="console"] .lock-digest {
+    grid-row: 2;
+    grid-column: 1 / -1;
+  }
+
+  .lock-overlay[data-layout="console"] .lock-weather:first-child,
+  .lock-overlay[data-layout="console"] .lock-digest:first-child + .lock-weather,
+  .lock-overlay[data-layout="console"] .lock-shifts:has(+ .lock-digest:last-child),
+  .lock-overlay[data-layout="console"] .lock-operations[data-sections="1"] > * {
+    grid-column: 1 / -1;
+    border-inline-start: 0;
+  }
+}
+
 @media (prefers-reduced-motion: no-preference) {
-  .lock-overlay {
-    animation: lock-fade-in 220ms ease-out both;
+  .lock-shell,
+  .lock-layout-switcher {
+    animation: lock-fade-in 220ms ease-out backwards;
   }
 
   .lock-unlock {
-    animation: lock-rise-in 300ms ease-out both;
+    animation: lock-rise-in 300ms ease-out backwards;
+  }
+
+  .lock-cheer--milestone {
+    animation: lock-cheer-glint 900ms ease-out backwards;
   }
 
   .lock-weather-glyph {
@@ -497,6 +547,13 @@
 
 @keyframes lock-weather-turn {
   to { transform: rotate(360deg); }
+}
+
+@keyframes lock-cheer-glint {
+  50% {
+    color: rgb(255 255 255 / 100%);
+    text-shadow: 0 0 14px rgb(201 169 97 / 50%);
+  }
 }
 
 @media (max-width: 760px) {
@@ -592,20 +649,18 @@
   .lock-shifts > * + *,
   .lock-overlay[data-layout="console"] .lock-shifts > * + * {
     margin: 0;
-    padding: 0 0 0 16px;
+    padding-block: 0;
+    padding-inline: 16px 0;
     border-top: 0;
     border-inline-start: 1px solid rgb(255 255 255 / 12%);
-  }
-
-  [dir="rtl"] .lock-shifts > * + * {
-    padding: 0 16px 0 0;
   }
 
   .lock-metric strong {
     font-size: 16px;
   }
 
-  .lock-digest {
+  .lock-digest,
+  .lock-overlay[data-layout="console"] .lock-digest {
     grid-column: auto;
     align-content: center;
     padding-top: 13px;
@@ -650,6 +705,10 @@
     border-radius: 26px;
     background: rgb(5 18 34 / 52%);
     backdrop-filter: blur(28px);
+  }
+
+  .lock-cheer {
+    margin-top: 6px;
   }
 
   .lock-grab {

@@ -6038,6 +6038,55 @@
         }
       }
     },
+    "/api/v1/documents/activity/me": {
+      "get": {
+        "tags": [
+          "documents"
+        ],
+        "summary": "Get My Document Activity",
+        "operationId": "get_my_document_activity_api_v1_documents_activity_me_get",
+        "parameters": [
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MyDocumentActivityRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/documents/{document_id}": {
       "get": {
         "tags": [
@@ -34308,6 +34357,24 @@
         ],
         "title": "MissingFieldCount"
       },
+      "MyDocumentActivityRead": {
+        "properties": {
+          "documents_today": {
+            "type": "integer",
+            "title": "Documents Today"
+          },
+          "documents_week": {
+            "type": "integer",
+            "title": "Documents Week"
+          }
+        },
+        "type": "object",
+        "required": [
+          "documents_today",
+          "documents_week"
+        ],
+        "title": "MyDocumentActivityRead"
+      },
       "NationalityDistributionRead": {
         "properties": {
           "nationality": {
@@ -37722,6 +37789,17 @@
           "employee_id": {
             "type": "string",
             "title": "Employee Id"
+          },
+          "shift_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Shift Code"
           },
           "presence_state": {
             "anyOf": [

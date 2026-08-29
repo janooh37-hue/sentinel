@@ -1493,6 +1493,7 @@ def generate_document(
                 latest.template_id = template_id
                 latest.trigger = "draft-edit"
                 latest.manager_sig_embedded = embed_mgr
+                latest.created_by_user_id = current_user.id if current_user is not None else None
                 latest.created_at = ts.replace(tzinfo=None)
                 revise_book.doc_path = _rel(docx_path) or str(docx_path)
                 db.flush()

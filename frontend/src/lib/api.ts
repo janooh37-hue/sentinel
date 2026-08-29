@@ -37,6 +37,7 @@ export type EmployeeAttendanceHistoryDay =
 export type WorkforceIntegrationStatus = components['schemas']['IntegrationStatusRead']
 export type WorkforceAccess = components['schemas']['WorkforceAccessRead']
 export type WorkforceSnapshot = components['schemas']['WorkforceSnapshotRead']
+export type MyDocumentActivity = components['schemas']['MyDocumentActivityRead']
 export type WorkforceCoverageRow = components['schemas']['CoverageRowRead']
 export type WorkforceCoveragePage = components['schemas']['CursorPage_CoverageRowRead_']
 export type AttendanceException = components['schemas']['AttendanceExceptionRead']
@@ -1192,6 +1193,8 @@ export const api = {
   getWorkforceAccess: () => request<WorkforceAccess>('GET', '/workforce/access/me'),
   getWorkforceSnapshot: () =>
     request<WorkforceSnapshot>('GET', '/workforce/dashboard/snapshot'),
+  getMyDocumentActivity: () =>
+    request<MyDocumentActivity>('GET', '/documents/activity/me'),
   getWorkforceCoverage: (params: WorkforceCoverageParams) =>
     request<WorkforceCoveragePage>('GET', `/workforce/dashboard/coverage${qs({ ...params })}`),
   getEmployeeAttendanceHistory: (employeeId: string, params: EmployeeAttendanceParams) =>

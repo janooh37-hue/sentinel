@@ -51,6 +51,20 @@ function readLayout(): LockLayout {
   }
 }
 
+function formatInstant(
+  value: string | null | undefined,
+  locale: string,
+  timeZone: string,
+): string | null {
+  if (!value) return null
+  return new Intl.DateTimeFormat(locale, {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+    timeZone,
+  }).format(new Date(value))
+}
+
 function formatRange(
   start: string | null | undefined,
   end: string | null | undefined,
@@ -58,13 +72,7 @@ function formatRange(
   timeZone: string,
 ): string | null {
   if (!start || !end) return null
-  const formatter = new Intl.DateTimeFormat(locale, {
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-    timeZone,
-  })
-  return `${formatter.format(new Date(start))} – ${formatter.format(new Date(end))}`
+  return `${formatInstant(start, locale, timeZone)} – ${formatInstant(end, locale, timeZone)}`
 }
 
 function WeatherGlyph({ weather }: { weather: LockWeather }): React.JSX.Element {
@@ -131,6 +139,9 @@ function OperationsBlock({
   const locale = isAr ? 'ar-AE' : 'en-GB'
   const timeZone = snapshot?.timezone ?? 'Asia/Dubai'
   const weatherNumber = new Intl.NumberFormat(locale, { maximumFractionDigits: 0 })
+  const currentShiftCode = snapshot?.self?.shift_code?.trim() || null
+  const nextShiftName =
+    snapshot?.next_shift.shift_name?.trim() || snapshot?.next_shift.shift_code?.trim() || null
   const currentRange = formatRange(
     snapshot?.self?.scheduled_start_at ?? snapshot?.current_shift.starts_at,
     snapshot?.self?.scheduled_end_at ?? snapshot?.current_shift.ends_at,
@@ -143,7 +154,14 @@ function OperationsBlock({
     locale,
     timeZone,
   )
-  const hasShift = currentRange !== null || nextRange !== null
+  const nextStart = formatInstant(snapshot?.next_shift.starts_at, locale, timeZone)
+  const nextStartLabel =
+    nextShiftName && nextStart ? t('lockScreen.startsAt', { time: nextStart }) : null
+  const nextStartParts =
+    nextStartLabel && nextStart ? nextStartLabel.split(nextStart) : null
+  const hasCurrentShift = currentShiftCode !== null || currentRange !== null
+  const hasNextShift = nextShiftName !== null || nextRange !== null
+  const hasShift = hasCurrentShift || hasNextShift
   const sectionCount = Number(hasShift) + Number(digest.length > 0) + Number(weather !== null)
   if (!hasShift && !weather && digest.length === 0) return null
 
@@ -155,18 +173,36 @@ function OperationsBlock({
     >
       {hasShift && (
         <div className="lock-shifts">
-          {currentRange && (
+          {hasCurrentShift && (
             <div className="lock-metric">
               <span className="lock-eyebrow">{t('lockScreen.onDutyNow')}</span>
-              <strong><bdi dir="ltr">{currentRange}</bdi></strong>
+              <strong>
+                {currentShiftCode ? (
+                  <bdi>{currentShiftCode}</bdi>
+                ) : (
+                  currentRange && <bdi dir="ltr">{currentRange}</bdi>
+                )}
+              </strong>
               <small>{t('lockScreen.currentShift')}</small>
             </div>
           )}
-          {nextRange && (
+          {hasNextShift && (
             <div className="lock-metric">
               <span className="lock-eyebrow">{t('lockScreen.nextShift')}</span>
-              <strong><bdi dir="ltr">{nextRange}</bdi></strong>
-              <small>{snapshot?.next_shift.shift_name ?? snapshot?.next_shift.shift_code}</small>
+              <strong>
+                {nextShiftName ? (
+                  <bdi>{nextShiftName}</bdi>
+                ) : (
+                  nextRange && <bdi dir="ltr">{nextRange}</bdi>
+                )}
+              </strong>
+              {nextStartParts && nextStart && (
+                <small>
+                  {nextStartParts[0]}
+                  <bdi dir="ltr">{nextStart}</bdi>
+                  {nextStartParts[1]}
+                </small>
+              )}
             </div>
           )}
         </div>
@@ -188,10 +224,10 @@ function OperationsBlock({
         <div className="lock-weather">
           <span className="lock-eyebrow">{t('lockScreen.weather.title')}</span>
           <div className="lock-weather-main">
-            <WeatherGlyph weather={weather} />
             <strong>
               <bdi dir="ltr">{weatherNumber.format(weather.temperatureC)}°</bdi>
             </strong>
+            <WeatherGlyph weather={weather} />
           </div>
           <span className="lock-weather-condition">
             {t(`lockScreen.weather.${weatherCategory(weather.weatherCode)}`)} · {weather.location}
@@ -242,6 +278,12 @@ export function LockOverlay({ onUnlocked, onSignOut }: LockOverlayProps): React.
     queryKey: ['workforce', 'snapshot'],
     queryFn: api.getWorkforceSnapshot,
     enabled: canViewWorkforce,
+    staleTime: 60_000,
+    retry: false,
+  })
+  const activityQuery = useQuery({
+    queryKey: ['lock-screen', 'doc-activity'],
+    queryFn: api.getMyDocumentActivity,
     staleTime: 60_000,
     retry: false,
   })
@@ -317,6 +359,42 @@ export function LockOverlay({ onUnlocked, onSignOut }: LockOverlayProps): React.
     return items
   }, [queryClient])
 
+  const documentsToday = activityQuery.data?.documents_today
+  const documentsWeek = activityQuery.data?.documents_week
+  const cheerText =
+    documentsToday !== undefined && documentsToday > 0
+      ? t('lockScreen.cheer.docsToday', { count: documentsToday })
+      : documentsToday === 0 && documentsWeek !== undefined && documentsWeek > 0
+        ? t('lockScreen.cheer.docsWeek', { count: documentsWeek })
+        : t(
+            now.getHours() >= 5 && now.getHours() <= 11
+              ? 'lockScreen.cheer.morning'
+              : now.getHours() >= 12 && now.getHours() <= 16
+                ? 'lockScreen.cheer.afternoon'
+                : 'lockScreen.cheer.evening',
+          )
+  const cheerMilestone = documentsToday !== undefined && documentsToday >= 5
+  const shiftStart = workforceQuery.data?.self?.scheduled_start_at
+  const shiftEnd = workforceQuery.data?.self?.scheduled_end_at
+  let shiftRemainingMinutes: number | null = null
+  if (shiftStart && shiftEnd) {
+    const startMs = new Date(shiftStart).getTime()
+    const endMs = new Date(shiftEnd).getTime()
+    const nowMs = now.getTime()
+    if (startMs <= nowMs && nowMs < endMs) {
+      shiftRemainingMinutes = Math.ceil((endMs - nowMs) / 60_000)
+    }
+  }
+  const shiftCountdown =
+    shiftRemainingMinutes === null
+      ? null
+      : shiftRemainingMinutes >= 60
+        ? t('lockScreen.cheer.shiftRemainingHours', {
+            hours: Math.floor(shiftRemainingMinutes / 60),
+            minutes: shiftRemainingMinutes % 60,
+          })
+        : t('lockScreen.cheer.shiftRemainingMinutes', { minutes: shiftRemainingMinutes })
+
   return (
     <div
       ref={overlayRef}
@@ -345,6 +423,10 @@ export function LockOverlay({ onUnlocked, onSignOut }: LockOverlayProps): React.
           </Avatar>
           <p className="lock-name">{displayName}</p>
           <p className="lock-welcome">{t('lockScreen.welcomeName', { name: displayName })}</p>
+          <p className={`lock-cheer${cheerMilestone ? ' lock-cheer--milestone' : ''}`}>
+            {cheerText}
+          </p>
+          {shiftCountdown && <p className="lock-cheer-shift">{shiftCountdown}</p>}
           <label className="sr-only" htmlFor="lock-pwd">
             {t('lockScreen.password')}
           </label>

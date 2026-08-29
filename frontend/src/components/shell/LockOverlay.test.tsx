@@ -60,6 +60,7 @@ const SNAPSHOT = {
   schedule_completeness: {},
   self: {
     employee_id: 'G100',
+    shift_code: 'A',
     presence_state: 'on_duty',
     scheduled_start_at: '2026-08-28T06:00:00Z',
     scheduled_end_at: '2026-08-28T14:00:00Z',
@@ -83,6 +84,10 @@ describe('LockOverlay', () => {
     localStorage.clear()
     await i18n.changeLanguage('en')
     vi.spyOn(api, 'getWorkforceSnapshot').mockResolvedValue(SNAPSHOT)
+    vi.spyOn(api, 'getMyDocumentActivity').mockResolvedValue({
+      documents_today: 6,
+      documents_week: 14,
+    })
     vi.spyOn(api, 'verifyAuthPassword').mockResolvedValue(undefined)
     vi.mocked(loadLockWeather).mockResolvedValue({
       location: 'Al Wathba',
@@ -96,6 +101,7 @@ describe('LockOverlay', () => {
   })
 
   afterEach(() => {
+    vi.useRealTimers()
     vi.restoreAllMocks()
   })
 
@@ -144,8 +150,14 @@ describe('LockOverlay', () => {
     renderOverlay()
 
     await waitFor(() => {
-      expect(document.querySelector('.lock-shifts bdi')).toHaveAttribute('dir', 'ltr')
+      expect(document.querySelector('.lock-shifts small bdi')).toHaveAttribute('dir', 'ltr')
+      expect(document.querySelector('.lock-shifts .lock-eyebrow')).toHaveTextContent(
+        'على رأس العمل الآن',
+      )
       expect(document.querySelector('.lock-submit')).toHaveTextContent('←')
+      expect(document.querySelector('.lock-cheer')).toHaveTextContent(
+        '6 مستندات منجزة اليوم — يوم منتج.',
+      )
       const arabicTemperature = new Intl.NumberFormat('ar-AE', {
         maximumFractionDigits: 0,
       }).format(41)

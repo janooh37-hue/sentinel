@@ -249,6 +249,10 @@ class DocumentRead(ORMBase):
     submission_id: str
     role: Literal["primary", "companion"]
 
+class MyDocumentActivityRead(BaseModel):
+    documents_today: int
+    documents_week: int
+
 
 class ApprovedViolationNameRead(BaseModel):
     name: str
@@ -532,6 +536,16 @@ def get_job_status(
         superseded_absence_dates=job.superseded_absence_dates,
         error_code=job.error_code,
         error_message=job.error_message,
+    )
+
+
+@documents_router.get("/activity/me", response_model=MyDocumentActivityRead)
+def get_my_document_activity(
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(get_current_user)],
+) -> MyDocumentActivityRead:
+    return MyDocumentActivityRead(
+        **book_service.count_my_generated_documents(db, user_id=user.id)
     )
 
 
