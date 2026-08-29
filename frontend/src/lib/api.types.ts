@@ -288,6 +288,26 @@ export interface paths {
         patch: operations["set_my_lock_timer_api_v1_auth_me_lock_timer_patch"];
         trace?: never;
     };
+    "/api/v1/auth/me/lock-layout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Set My Lock Layout
+         * @description Set the signed-in user's per-account lock-screen layout.
+         */
+        patch: operations["set_my_lock_layout_api_v1_auth_me_lock_layout_patch"];
+        trace?: never;
+    };
     "/api/v1/auth/me/capabilities": {
         parameters: {
             query?: never;
@@ -8932,6 +8952,17 @@ export interface components {
             employee_id?: string | null;
         };
         /**
+         * LockLayoutRequest
+         * @description Set the signed-in user's lock-screen layout.
+         */
+        LockLayoutRequest: {
+            /**
+             * Lock Layout
+             * @enum {string}
+             */
+            lock_layout: "band" | "stack" | "console";
+        };
+        /**
          * LockTimerRequest
          * @description Set the signed-in user's lock-screen idle timeout.
          */
@@ -10214,6 +10245,11 @@ export interface components {
              * @default 1800
              */
             idle_lock_seconds: number;
+            /**
+             * Lock Layout
+             * @default band
+             */
+            lock_layout: string;
         };
         /**
          * SetPermissionBulkRequest
@@ -11951,6 +11987,41 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["LockTimerRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SessionUser"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_my_lock_layout_api_v1_auth_me_lock_layout_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LockLayoutRequest"];
             };
         };
         responses: {

@@ -770,6 +770,66 @@
         }
       }
     },
+    "/api/v1/auth/me/lock-layout": {
+      "patch": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Set My Lock Layout",
+        "description": "Set the signed-in user's per-account lock-screen layout.",
+        "operationId": "set_my_lock_layout_api_v1_auth_me_lock_layout_patch",
+        "parameters": [
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LockLayoutRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SessionUser"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/auth/me/capabilities": {
       "get": {
         "tags": [
@@ -33973,6 +34033,25 @@
         "title": "LinkSelfRequest",
         "description": "Set (or clear, admin-only) the signed-in user's own employee link.\n\n``employee_id`` is the G-number to claim; ``null`` clears the link."
       },
+      "LockLayoutRequest": {
+        "properties": {
+          "lock_layout": {
+            "type": "string",
+            "enum": [
+              "band",
+              "stack",
+              "console"
+            ],
+            "title": "Lock Layout"
+          }
+        },
+        "type": "object",
+        "required": [
+          "lock_layout"
+        ],
+        "title": "LockLayoutRequest",
+        "description": "Set the signed-in user's lock-screen layout."
+      },
       "LockTimerRequest": {
         "properties": {
           "idle_lock_seconds": {
@@ -38014,6 +38093,11 @@
             "type": "integer",
             "title": "Idle Lock Seconds",
             "default": 1800
+          },
+          "lock_layout": {
+            "type": "string",
+            "title": "Lock Layout",
+            "default": "band"
           }
         },
         "type": "object",

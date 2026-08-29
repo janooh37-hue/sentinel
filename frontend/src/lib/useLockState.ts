@@ -18,6 +18,9 @@ export const DEFAULT_IDLE_LOCK_SECONDS = 1800
 export const LOCK_TIMER_OPTIONS = [30, 60, 120, 300, 900, 1800] as const
 export type LockTimerSeconds = (typeof LOCK_TIMER_OPTIONS)[number]
 
+export const LOCK_LAYOUTS = ['band', 'stack', 'console'] as const
+export type LockLayout = (typeof LOCK_LAYOUTS)[number]
+
 function readInitial(): boolean {
   try {
     return window.sessionStorage.getItem(STORAGE_KEY) === '1'

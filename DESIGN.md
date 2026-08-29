@@ -1404,24 +1404,30 @@ the signed-in user's password through `/auth/verify-password`.
 - A thin, tabular live clock is paired with Gregorian and Umm al-Qura Hijri
   dates. Arabic uses the same hierarchy in RTL; shift ranges are isolated with
   `<bdi dir="ltr">` so their chronological order never reverses.
-- The unlock surface is centered on desktop and becomes a frosted bottom sheet
-  at `≤760px`. It contains the linked employee photo/initial, localized welcome,
-  pill password field, show/hide control, circular submit control, idle note,
-  inline API error, and localized sign-out action.
+- The unlock surface is vertically centered on desktop in all three layouts
+  and becomes a frosted bottom sheet at `≤760px`, raised above the on-screen
+  keyboard via the Visual Viewport API. It contains the linked employee
+  photo/initial, localized welcome, pill password field, show/hide control,
+  circular submit control, idle note, inline API error, and localized
+  sign-out action.
 - All animation is gated by `prefers-reduced-motion: no-preference`.
 
-**Three operator-selectable layouts:**
+**Three per-account layouts:**
 
-1. **Command band** — clock above one horizontal operations rail, unlock below.
+1. **Command band** — clock above one horizontal operations rail, unlock
+   centered below.
 2. **Central stack** — the same hierarchy inside one large glass instrument
    panel.
 3. **Briefing console** — clock and operational context share a compact
-   two-column console, with unlock integrated beneath.
+   two-column console; unlock is centered beneath it, with the
+   approvals/inbox/expiry digest as a strip below the login.
 
-The compact A/B/C switcher sits at the bottom-inline-end and uses
-`aria-pressed`. The validated preference is stored in
-`localStorage['gssg.lockLayout']`; invalid or unavailable storage falls back to
-Command band. On mobile the switcher moves immediately above the unlock sheet.
+The layout choice is not made on the lock screen itself — it is a glyph
+segmented control (`LockLayoutControl`) grouped with the screen-lock timer in
+the account menu, persisted server-side on `User.lock_layout` (mirrors
+`idle_lock_seconds`) via `PATCH /auth/me/lock-layout`. The lock screen reads
+`SessionUser.lock_layout` once per mount; an unrecognized value falls back to
+Command band.
 
 **Privacy-safe operational glance:**
 

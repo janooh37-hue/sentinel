@@ -42,6 +42,7 @@ from app.schemas.auth import (
     CapabilityRead,
     DefaultManagerRequest,
     LinkSelfRequest,
+    LockLayoutRequest,
     LockTimerRequest,
     LoginRequest,
     RegisterRequest,
@@ -209,6 +210,18 @@ def set_my_lock_timer(
     """Set the signed-in user's per-account lock-screen idle timeout."""
 
     updated = auth_service.set_lock_timer(db, user, body.idle_lock_seconds)
+    return auth_service.to_session_user(db, updated)
+
+
+@router.patch("/me/lock-layout", response_model=SessionUser)
+def set_my_lock_layout(
+    body: LockLayoutRequest,
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> SessionUser:
+    """Set the signed-in user's per-account lock-screen layout."""
+
+    updated = auth_service.set_lock_layout(db, user, body.lock_layout)
     return auth_service.to_session_user(db, updated)
 
 

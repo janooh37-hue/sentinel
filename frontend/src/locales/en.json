@@ -181,6 +181,7 @@
       "humidity": "Humidity"
     },
     "layoutTitle": "Lock screen layout",
+    "layoutSaveError": "Could not save the lock screen layout. Try again.",
     "layout": {
       "band": "Command band",
       "stack": "Central stack",

@@ -26,12 +26,13 @@ import { toast } from 'sonner'
 
 import { api } from '@/lib/api'
 import { LockTimerControl } from '@/components/shell/LockTimerControl'
+import { LockLayoutControl } from '@/components/shell/LockLayoutControl'
 import type { SessionUser } from '@/lib/api'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { useIdentity } from '@/lib/useIdentity'
 import { AUTH_KEY, useAuth } from '@/lib/authContext'
 import { DEFAULT_IDLE_LOCK_SECONDS } from '@/lib/useLockState'
-import type { LockTimerSeconds } from '@/lib/useLockState'
+import type { LockLayout, LockTimerSeconds } from '@/lib/useLockState'
 
 function initialsOf(email: string | undefined): string {
   if (!email) return '?'
@@ -129,6 +130,35 @@ export function AccountMenu({
         )
       }
       toast.error(t('lockTimer.saveError'))
+    },
+  })
+
+  const lockLayoutMutation = useMutation({
+    mutationFn: (layout: LockLayout) => api.updateLockLayout(layout),
+    // Same rationale as lockTimerMutation: cancel any in-flight `/auth/me`
+    // refetch so it can't overwrite the just-picked layout with a stale one.
+    onMutate: async (layout) => {
+      await queryClient.cancelQueries({ queryKey: AUTH_KEY })
+      const previous = queryClient.getQueryData<SessionUser | null>(AUTH_KEY)
+      if (previous) {
+        queryClient.setQueryData<SessionUser>(AUTH_KEY, {
+          ...previous,
+          lock_layout: layout,
+        })
+      }
+      return { previous }
+    },
+    onSuccess: (nextUser) => queryClient.setQueryData(AUTH_KEY, nextUser),
+    onError: (_err, layout, context) => {
+      const previous = context?.previous
+      if (previous) {
+        queryClient.setQueryData<SessionUser | null>(AUTH_KEY, (current) =>
+          current?.id === previous.id && current.lock_layout === layout
+            ? { ...current, lock_layout: previous.lock_layout }
+            : current,
+        )
+      }
+      toast.error(t('lockScreen.layoutSaveError'))
     },
   })
 
@@ -303,6 +333,11 @@ export function AccountMenu({
               value={user?.idle_lock_seconds ?? DEFAULT_IDLE_LOCK_SECONDS}
               disabled={!user || lockTimerMutation.isPending}
               onChange={(seconds) => lockTimerMutation.mutate(seconds)}
+            />
+            <LockLayoutControl
+              value={user?.lock_layout ?? 'band'}
+              disabled={!user || lockLayoutMutation.isPending}
+              onChange={(layout) => lockLayoutMutation.mutate(layout)}
             />
             {onOpenSettings && (
               <button
