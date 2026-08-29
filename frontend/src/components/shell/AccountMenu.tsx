@@ -22,6 +22,7 @@ import {
   LinkIcon,
   ShieldCheck,
 } from 'lucide-react'
+import { toast } from 'sonner'
 
 import { api } from '@/lib/api'
 import { LockTimerControl } from '@/components/shell/LockTimerControl'
@@ -101,7 +102,34 @@ export function AccountMenu({
   const { user } = useAuth()
   const lockTimerMutation = useMutation({
     mutationFn: (seconds: LockTimerSeconds) => api.updateLockTimer(seconds),
+    // A `/auth/me` refetch already in flight (staleTime 5 min + refetch on
+    // window focus) resolves with the pre-change value and would overwrite the
+    // saved timer, so cancel it before painting the new value.
+    onMutate: async (seconds) => {
+      await queryClient.cancelQueries({ queryKey: AUTH_KEY })
+      const previous = queryClient.getQueryData<SessionUser | null>(AUTH_KEY)
+      if (previous) {
+        queryClient.setQueryData<SessionUser>(AUTH_KEY, {
+          ...previous,
+          idle_lock_seconds: seconds,
+        })
+      }
+      return { previous }
+    },
     onSuccess: (nextUser) => queryClient.setQueryData(AUTH_KEY, nextUser),
+    // Never let a failed save look like a dead button: restore the stored value
+    // and say so in the user's language.
+    onError: (_err, seconds, context) => {
+      const previous = context?.previous
+      if (previous) {
+        queryClient.setQueryData<SessionUser | null>(AUTH_KEY, (current) =>
+          current?.id === previous.id && current.idle_lock_seconds === seconds
+            ? { ...current, idle_lock_seconds: previous.idle_lock_seconds }
+            : current,
+        )
+      }
+      toast.error(t('lockTimer.saveError'))
+    },
   })
 
   // Admins can review access requests from here; show the pending count.
