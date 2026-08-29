@@ -215,6 +215,14 @@ class EvaluationHealthRead(ORMBase):
     oldest_pending_at: datetime | None = None
 
 
+class CrewNameRead(ORMBase):
+    model_config = ConfigDict(extra="forbid")
+
+    code: str
+    name_en: str | None = None
+    name_ar: str | None = None
+
+
 class SelfShiftRead(ORMBase):
     model_config = ConfigDict(extra="forbid")
 
@@ -231,6 +239,7 @@ class CurrentShiftRead(ORMBase):
 
     starts_at: datetime | None = None
     ends_at: datetime | None = None
+    crews: list[CrewNameRead] = Field(default_factory=list)
     scheduled: int = Field(ge=0)
     excused: int = Field(ge=0)
     expected: int | None = Field(default=None, ge=0)
@@ -249,7 +258,7 @@ class NextShiftRead(ORMBase):
     ends_at: datetime | None = None
     shift_code: str | None = None
     shift_name: str | None = None
-    crews: list[str] = Field(default_factory=list)
+    crews: list[CrewNameRead] = Field(default_factory=list)
     scheduled: int = Field(ge=0)
     expected: int | None = Field(default=None, ge=0)
     staffing_minimum: int | None = Field(default=None, ge=0)

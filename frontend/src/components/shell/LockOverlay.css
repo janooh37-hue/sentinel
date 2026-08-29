@@ -45,12 +45,13 @@
 
 .lock-clock {
   display: block;
-  font-family: "Segoe UI", var(--font-sans);
+  font-family: "Segoe UI Light", "Segoe UI Semilight", "Segoe UI", var(--font-sans);
   font-size: clamp(88px, 8.2vw, 132px);
   font-weight: 300;
+  font-synthesis: none;
   font-feature-settings: normal;
-  line-height: 0.84;
-  letter-spacing: -0.08em;
+  line-height: 0.9;
+  letter-spacing: -0.02em;
   font-variant-numeric: tabular-nums;
 }
 
@@ -159,21 +160,18 @@
 .lock-digest-item b {
   display: block;
   font-size: 24px;
-  font-weight: 280;
+  font-weight: 300;
 }
 
 .lock-digest-item span {
   display: block;
   margin-top: 4px;
-  color: rgb(255 255 255 / 54%);
-  font-family: "IBM Plex Mono", Consolas, monospace;
-  font-size: 8px;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
+  color: rgb(255 255 255 / 62%);
+  font-size: 12px;
+  font-weight: 500;
 }
 
-[dir="rtl"] .lock-eyebrow,
-[dir="rtl"] .lock-digest-item span {
+[dir="rtl"] .lock-eyebrow {
   letter-spacing: 0;
 }
 
@@ -604,7 +602,7 @@
   .lock-clock,
   .lock-overlay[data-layout="stack"] .lock-clock,
   .lock-overlay[data-layout="console"] .lock-clock {
-    font-size: 76px;
+    display: none;
   }
 
   .lock-dates,
@@ -612,7 +610,7 @@
     align-items: center;
     flex-direction: column;
     gap: 4px;
-    margin-top: 12px;
+    margin-top: 0;
   }
 
   .lock-operations,

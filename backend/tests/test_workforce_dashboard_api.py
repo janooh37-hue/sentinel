@@ -730,3 +730,78 @@ def test_stale_source_and_queued_recalculation_suppress_attendance_judgments(
     assert current_shift["verified_coverage_percent"] is None
     assert current_shift["staffing_status"] is None
     assert response.json()["sync_health"]["punches"]["state"] == "stale"
+
+
+def test_snapshot_reports_bilingual_crews_for_current_and_next_shift(
+    workforce_api_db: Session,
+) -> None:
+    from app.db.workforce_models import (
+        WorkCrew,
+        WorkCrewMembership,
+        WorkCrewSchedule,
+        WorkRotationPattern,
+        WorkShiftDefinition,
+        WorkShiftOccurrence,
+    )
+
+    admin = _create_user(workforce_api_db, email="crews-admin@test.ae", role="admin")
+    _seed_coverage_cases(workforce_api_db, admin)
+
+    pattern = workforce_api_db.scalar(select(WorkRotationPattern))
+    morning = workforce_api_db.scalar(
+        select(WorkShiftDefinition).where(WorkShiftDefinition.code == "morning")
+    )
+    assert pattern is not None
+    assert morning is not None
+
+    bravo = WorkCrew(code="bravo", name_en="Second Company", name_ar="السرية الثانية")
+    workforce_api_db.add(bravo)
+    workforce_api_db.flush()
+
+    bravo_schedule = WorkCrewSchedule(
+        crew_id=bravo.id,
+        pattern_id=pattern.id,
+        anchor_at=NOW - timedelta(days=5),
+        effective_from=NOW - timedelta(days=5),
+        version=1,
+        created_by_user_id=admin.id,
+    )
+    workforce_api_db.add(bravo_schedule)
+    workforce_api_db.flush()
+
+    bravo_employee = _add_employee(workforce_api_db, "G-COVERAGE-C", name="Coverage C")
+    workforce_api_db.add(
+        WorkCrewMembership(
+            crew_id=bravo.id,
+            employee_id=bravo_employee.id,
+            effective_from=NOW - timedelta(days=5),
+            created_by_user_id=admin.id,
+            updated_by_user_id=admin.id,
+        )
+    )
+    workforce_api_db.add(
+        WorkShiftOccurrence(
+            crew_id=bravo.id,
+            crew_schedule_id=bravo_schedule.id,
+            shift_definition_id=morning.id,
+            starts_at=NOW + timedelta(hours=6),
+            ends_at=NOW + timedelta(hours=14),
+            operational_date=TODAY,
+            pattern_code_snapshot=pattern.code,
+            crew_schedule_version_snapshot=bravo_schedule.version,
+            source_anchor_at=bravo_schedule.anchor_at,
+        )
+    )
+    workforce_api_db.commit()
+
+    with _client_for(workforce_api_db, admin) as client:
+        response = client.get("/api/v1/workforce/dashboard/snapshot")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["current_shift"]["crews"] == [
+        {"code": "alpha", "name_en": "Alpha", "name_ar": None}
+    ]
+    assert body["next_shift"]["crews"] == [
+        {"code": "bravo", "name_en": "Second Company", "name_ar": "السرية الثانية"}
+    ]

@@ -471,14 +471,10 @@ def _setup_readiness(
     }
 
 
-def _next_shift(
-    db: Session,
-    *,
-    as_of_naive: datetime,
-    scope: Any | None,
-    self_employee_id: str | None,
-) -> dict[str, Any]:
-    eligible_employees = {
+def _eligible_employees(
+    db: Session, *, scope: Any | None, self_employee_id: str | None
+) -> dict[str, Employee]:
+    return {
         employee.id: employee
         for employee in db.scalars(select(Employee))
         if _is_active_employee(employee.status)
@@ -491,6 +487,76 @@ def _next_shift(
             )
         )
     }
+
+
+def _crew_entries(db: Session, occurrences: list[WorkShiftOccurrence]) -> list[dict[str, Any]]:
+    if not occurrences:
+        return []
+    crews = {
+        crew.id: crew
+        for crew in db.scalars(
+            select(WorkCrew).where(
+                WorkCrew.id.in_({row.crew_id for row in occurrences})
+            )
+        )
+    }
+    return [
+        {"code": crew.code, "name_en": crew.name_en, "name_ar": crew.name_ar}
+        for crew in sorted(crews.values(), key=lambda crew: crew.code)
+    ]
+
+
+def _current_on_duty_crews(
+    db: Session,
+    *,
+    as_of_naive: datetime,
+    scope: Any | None,
+    self_employee_id: str | None,
+) -> list[dict[str, Any]]:
+    eligible_employees = _eligible_employees(db, scope=scope, self_employee_id=self_employee_id)
+    if not eligible_employees:
+        return []
+    memberships = list(
+        db.scalars(
+            select(WorkCrewMembership).where(
+                WorkCrewMembership.employee_id.in_(eligible_employees)
+            )
+        )
+    )
+    occurrences = list(
+        db.scalars(
+            select(WorkShiftOccurrence).where(
+                WorkShiftOccurrence.starts_at <= as_of_naive,
+                WorkShiftOccurrence.ends_at > as_of_naive,
+            )
+        )
+    )
+    if not occurrences:
+        return []
+    kept = [
+        occurrence
+        for occurrence in occurrences
+        if any(
+            membership.crew_id == occurrence.crew_id
+            and membership.effective_from <= occurrence.starts_at
+            and (
+                membership.effective_to is None
+                or membership.effective_to > occurrence.starts_at
+            )
+            for membership in memberships
+        )
+    ]
+    return _crew_entries(db, kept)
+
+
+def _next_shift(
+    db: Session,
+    *,
+    as_of_naive: datetime,
+    scope: Any | None,
+    self_employee_id: str | None,
+) -> dict[str, Any]:
+    eligible_employees = _eligible_employees(db, scope=scope, self_employee_id=self_employee_id)
     empty: dict[str, Any] = {
         "starts_at": None,
         "ends_at": None,
@@ -522,14 +588,6 @@ def _next_shift(
     if not occurrences:
         return empty
 
-    crews = {
-        crew.id: crew
-        for crew in db.scalars(
-            select(WorkCrew).where(
-                WorkCrew.id.in_({row.crew_id for row in occurrences})
-            )
-        )
-    }
     shifts = {
         shift.id: shift
         for shift in db.scalars(
@@ -569,23 +627,12 @@ def _next_shift(
                 if row.shift_definition_id in shifts
             }
         )
-        crew_names = sorted(
-            {
-                (
-                    crews[row.crew_id].name_en
-                    or crews[row.crew_id].name_ar
-                    or crews[row.crew_id].code
-                )
-                for row in group
-                if row.crew_id in crews
-            }
-        )
         return {
             "starts_at": start_at,
             "ends_at": max(row.ends_at for row in group),
             "shift_code": ", ".join(shift_codes) or None,
             "shift_name": ", ".join(shift_codes) or None,
-            "crews": crew_names,
+            "crews": _crew_entries(db, group),
             "scheduled": len(scheduled_ids),
             "expected": sum(
                 employee_id not in leave_by_employee
@@ -623,6 +670,12 @@ def get_workforce_snapshot(
         "current_shift": {
             "starts_at": None,
             "ends_at": None,
+            "crews": _current_on_duty_crews(
+                db,
+                as_of_naive=naive_now,
+                scope=aggregate_scope,
+                self_employee_id=self_employee_id,
+            ),
             "scheduled": 0,
             "excused": 0,
             "expected": 0,
