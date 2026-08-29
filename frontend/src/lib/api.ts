@@ -38,6 +38,7 @@ export type EmployeeAttendanceHistoryDay =
 export type WorkforceIntegrationStatus = components['schemas']['IntegrationStatusRead']
 export type WorkforceAccess = components['schemas']['WorkforceAccessRead']
 export type WorkforceSnapshot = components['schemas']['WorkforceSnapshotRead']
+export type WorkforceCrewName = components['schemas']['CrewNameRead']
 export type MyDocumentActivity = components['schemas']['MyDocumentActivityRead']
 export type WorkforceCoverageRow = components['schemas']['CoverageRowRead']
 export type WorkforceCoveragePage = components['schemas']['CursorPage_CoverageRowRead_']

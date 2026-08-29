@@ -27235,6 +27235,42 @@
         ],
         "title": "CrewMembershipWrite"
       },
+      "CrewNameRead": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "name_en": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name En"
+          },
+          "name_ar": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name Ar"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "code"
+        ],
+        "title": "CrewNameRead"
+      },
       "CrewSchedulePreviewRead": {
         "properties": {
           "crew_id": {
@@ -27423,6 +27459,13 @@
               }
             ],
             "title": "Ends At"
+          },
+          "crews": {
+            "items": {
+              "$ref": "#/components/schemas/CrewNameRead"
+            },
+            "type": "array",
+            "title": "Crews"
           },
           "scheduled": {
             "type": "integer",
@@ -34511,20 +34554,9 @@
             ],
             "title": "Shift Code"
           },
-          "shift_name": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Shift Name"
-          },
           "crews": {
             "items": {
-              "type": "string"
+              "$ref": "#/components/schemas/CrewNameRead"
             },
             "type": "array",
             "title": "Crews"
