@@ -70,14 +70,17 @@ import { clearAllDrafts, clearDraft, loadDraft, saveDraft } from '@/lib/formDraf
 import { addToBasket, basketLabel, countByFormKind, type EmailBasketItem } from '@/lib/emailBasket'
 import { useEmailBasket } from '@/hooks/useEmailBasket'
 import { isQuickActionAllowed, isQuickActionId } from '@/lib/dashboardLayout'
-import { QUICK_ACTION_META } from '@/lib/quickActions'
 import { useCapabilities } from '@/lib/useCapabilities'
 
 import { useShortcutAction } from '@/lib/useKeyboardShortcuts'
 
 import { EmployeeHeader } from './EmployeeHeader'
 import { JobStatus } from './JobStatus'
-import { emojiForTemplate, resolveTemplateIdFromSlug } from './formEmoji'
+import {
+  artworkForTemplate,
+  emojiForTemplate,
+  resolveTemplateIdFromSlug,
+} from './formEmoji'
 import {
   nowHM,
   restoreThenSeedResignationDate,
@@ -840,6 +843,9 @@ export function ApplicationPage(): React.JSX.Element {
       ? selectedMeta.name_ar
       : selectedMeta.name_en
     : ''
+  const selectedTemplateArtwork = selectedTemplate
+    ? artworkForTemplate(selectedTemplate)
+    : undefined
 
   // Gallery filter — match on either language's name or the canonical id.
   const galleryItems = useMemo(() => {
@@ -960,9 +966,7 @@ export function ApplicationPage(): React.JSX.Element {
                       name={isAr ? tpl.name_ar : tpl.name_en}
                       category={t(`application.formList.${tpl.category}`)}
                       emoji={emojiForTemplate(tpl.id)}
-                      artwork={
-                        isQuickActionId(tpl.id) ? QUICK_ACTION_META[tpl.id].artwork : undefined
-                      }
+                      artwork={artworkForTemplate(tpl.id)}
                       basketCount={basketCounts[tpl.id] ?? 0}
                       hasCode={tpl.has_code}
                       onSelect={() => handleSelectTemplate(tpl.id)}
@@ -994,7 +998,11 @@ export function ApplicationPage(): React.JSX.Element {
                   className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-surface text-[1.5em] leading-none ring-1 ring-hairline"
                   aria-hidden
                 >
-                  {emojiForTemplate(selectedTemplate)}
+                  {selectedTemplateArtwork ? (
+                    <ServiceArtwork artwork={selectedTemplateArtwork} size="gallery" />
+                  ) : (
+                    emojiForTemplate(selectedTemplate)
+                  )}
                 </span>
                 <div className="min-w-0">
                   <h2 className="truncate text-[1.4em] font-bold leading-snug tracking-tight text-foreground">

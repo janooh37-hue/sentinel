@@ -9,7 +9,12 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createElement, type ReactNode } from 'react'
 
 import { api } from '@/lib/api'
-import { OTHER_SERVICE_ID, serviceGlyph, useServiceLabel } from './serviceLabels'
+import {
+  OTHER_SERVICE_ID,
+  serviceArtwork,
+  serviceGlyph,
+  useServiceLabel,
+} from './serviceLabels'
 
 // Mutable language so one file can assert both EN and AR (vi.mock is hoisted,
 // so the holder must be created with vi.hoisted).
@@ -74,6 +79,18 @@ describe('serviceGlyph', () => {
 
   it('falls back to a generic doc for Other', () => {
     expect(serviceGlyph(OTHER_SERVICE_ID)).toBe('📄')
+  })
+})
+
+describe('serviceArtwork', () => {
+  it('uses the Services-tile artwork for real services', () => {
+    expect(serviceArtwork('Report')).toBe('report')
+    expect(serviceArtwork('Warning Form')).toBe('warning')
+  })
+
+  it('leaves Other and unknown services on the glyph fallback', () => {
+    expect(serviceArtwork(OTHER_SERVICE_ID)).toBeUndefined()
+    expect(serviceArtwork('Nope')).toBeUndefined()
   })
 })
 

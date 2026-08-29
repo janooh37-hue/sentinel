@@ -33,13 +33,14 @@ import { cn } from '@/lib/utils'
 import { canFileSignedCopy, canSendForApproval } from '@/components/books/book-detail-drawer-utils'
 
 import { BookStatusChips } from '@/components/books/BookStatusChips'
+import { ServiceArtwork } from '@/components/ui/service-artwork'
 import { BookWordActions } from '@/components/books/BookWordActions'
 import { signedSourceOf } from './bookStateLabel'
 import { IncludedPapersDialog } from './IncludedPapersDialog'
 import { isIncludedPapersOwner } from './includedPapersState'
 import { subjectEmployeePart } from './formKind'
 import { papersOf, type Paper } from './recordPapers'
-import { serviceGlyph, useServiceLabel } from './serviceLabels'
+import { serviceArtwork, serviceGlyph, useServiceLabel } from './serviceLabels'
 import { StateSeal } from './StateSeal'
 import { useAddScan } from './useAddScan'
 import { useManagePaper } from './useManagePaper'
@@ -134,6 +135,7 @@ export function RecordPane({
 
   const classified = { classified: !!book.classification_code }
   const glyph = serviceGlyph(book.service_id)
+  const artwork = serviceArtwork(book.service_id)
   const label = serviceLabel(book.service_id)
   const who = subjectEmployeePart(book.subject, classified)
   const state = book.approval_state
@@ -179,7 +181,15 @@ export function RecordPane({
         </span>
         <span className="min-w-0 flex-1">
           <span className="block truncate text-[0.82em] font-bold">
-            <span aria-hidden className="me-1">{glyph}</span>
+            {artwork ? (
+              <ServiceArtwork
+                artwork={artwork}
+                size="inline"
+                className="me-1 align-text-bottom"
+              />
+            ) : (
+              <span aria-hidden className="me-1">{glyph}</span>
+            )}
             {label}
           </span>
           <span className="block truncate text-[0.66em] text-muted-foreground" dir="auto">
