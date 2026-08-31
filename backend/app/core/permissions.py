@@ -455,9 +455,9 @@ __all__ = [
     "CATEGORY_CAP_PREFIX",
     "ROLE_DEFAULTS",
     "SERVICE_CAPABILITY_IDS",
+    "SERVICE_CAP_PREFIX",
     "SERVICE_RECORDS_CAPABILITY_IDS",
     "SERVICE_RECORDS_CAP_PREFIX",
-    "SERVICE_CAP_PREFIX",
     "Capability",
     "default_caps_for_role",
 ]
