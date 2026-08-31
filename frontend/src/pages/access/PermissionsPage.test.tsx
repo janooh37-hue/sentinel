@@ -21,6 +21,12 @@ vi.mock('@/lib/api', () => ({
 
 vi.mock('@/lib/useIsMobile', () => ({ useIsMobile: () => false }))
 
+// Write failures surface through sonner; mocking it lets the rollback test
+// assert the toast without mounting a Toaster.
+vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }))
+
+import { toast } from 'sonner'
+
 import { PermissionsPage } from './PermissionsPage'
 import {
   api,
@@ -83,9 +89,12 @@ const secondOperator: AdminUserRead = {
 }
 
 function permissionFixture(over: Partial<UserPermissionRead> = {}): UserPermissionRead {
+  // A service on "Full" holds both halves of its capability pair: creation
+  // (`books.service.*`) and record visibility (`books.servicerecords.*`).
   const defaults = [
     ...pageCaps,
     'books.service.General Book',
+    'books.servicerecords.General Book',
     'books.category.incoming',
   ]
   return {
@@ -94,9 +103,28 @@ function permissionFixture(over: Partial<UserPermissionRead> = {}): UserPermissi
     is_admin: false,
     effective: defaults,
     role_defaults: defaults,
-    overrides: { 'books.service.Report': 'deny' },
+    // Report is fully hidden: creation and records are both denied.
+    overrides: {
+      'books.service.Report': 'deny',
+      'books.servicerecords.Report': 'deny',
+    },
     ...over,
   }
+}
+
+const allServiceCaps = [
+  ...QUICK_ACTION_IDS.flatMap((id) => [
+    `books.service.${id}`,
+    `books.servicerecords.${id}`,
+  ]),
+  'books.service.other',
+  'books.servicerecords.other',
+]
+
+/** Every service on Full — nothing hidden, every tri-state control canonical. */
+function allVisibleFixture(): UserPermissionRead {
+  const caps = [...pageCaps, ...allServiceCaps, 'books.category.incoming']
+  return permissionFixture({ effective: caps, role_defaults: caps, overrides: {} })
 }
 
 const pendingRequest: PermissionRequestRead = {
@@ -216,6 +244,49 @@ function studioGrid(rail: HTMLElement): HTMLElement {
   return grid
 }
 
+const SERVICE_STATES = ['Full', 'Records only', 'Hidden'] as const
+type ServiceStateLabel = (typeof SERVICE_STATES)[number]
+
+function serviceRadio(name: string, state: ServiceStateLabel): HTMLElement {
+  return within(screen.getByRole('radiogroup', { name })).getByRole('radio', { name: state })
+}
+
+/** The control's own row: the nearest ancestor that also renders the service
+ *  name, whatever wrapper depth the layout uses. */
+function serviceRow(name: string): HTMLElement {
+  let node = screen.getByRole('radiogroup', { name }).parentElement
+  while (node != null && within(node).queryAllByText(name).length === 0) {
+    node = node.parentElement
+  }
+  if (node == null) throw new Error(`No row renders a visible name for ${name}`)
+  return node
+}
+
+/** The one checked segment of a service control — what the admin actually sees. */
+function serviceState(name: string): ServiceStateLabel {
+  const checked = SERVICE_STATES.filter(
+    (state) => serviceRadio(name, state).getAttribute('aria-checked') === 'true',
+  )
+  const [only] = checked
+  if (checked.length !== 1 || only === undefined) {
+    throw new Error(`${name} has ${checked.length} checked states: ${checked.join(', ')}`)
+  }
+  return only
+}
+
+function hiddenPill(): HTMLElement {
+  return screen.getByText(
+    (_, element) =>
+      element?.tagName === 'SPAN' &&
+      /^\d+ hidden$/.test(element.textContent?.trim() ?? '') &&
+      element.querySelector('strong') != null,
+  )
+}
+
+function hiddenTotal(): number {
+  return Number(hiddenPill().querySelector('strong')?.textContent ?? '')
+}
+
 describe('PermissionsPage Mirror editor', () => {
   beforeEach(() => vi.clearAllMocks())
   afterEach(() => vi.restoreAllMocks())
@@ -245,17 +316,28 @@ describe('PermissionsPage Mirror editor', () => {
     await userEvent.click(dashboard)
     expect(api.setUserPermission).not.toHaveBeenCalled()
 
-    const generalBook = within(blueprint).getByRole('button', {
-      name: /General Book Grant/,
-    })
-    expect(generalBook).toHaveAttribute('aria-pressed', 'true')
-    expect(generalBook).toHaveClass('bg-surface', 'text-primary')
-    expect(generalBook.querySelector('img[src*="service-icons"]')).toBeInTheDocument()
-    expect(within(generalBook).queryByText('📓')).not.toBeInTheDocument()
-    expect(within(blueprint).getByRole('button', { name: /Report Deny/ })).toHaveAttribute(
-      'aria-pressed',
-      'false',
+    // Services are tri-state: the row keeps its artwork and every segment is
+    // labelled, so state is never communicated by colour alone.
+    const generalBook = within(blueprint).getByRole('radiogroup', { name: 'General Book' })
+    const generalBookRow = serviceRow('General Book')
+    expect(within(generalBookRow).getAllByText('General Book')[0]).toBeVisible()
+    expect(generalBookRow.querySelector('img[src*="service-icons"]')).toBeInTheDocument()
+    expect(within(generalBookRow).queryByText('📓')).not.toBeInTheDocument()
+    for (const state of SERVICE_STATES) {
+      expect(within(generalBook).getByText(state)).toBeVisible()
+    }
+    expect(serviceState('General Book')).toBe('Full')
+    expect(serviceRadio('General Book', 'Full')).toHaveClass(
+      'bg-primary',
+      'text-primary-foreground',
     )
+    expect(serviceState('Report')).toBe('Hidden')
+    expect(serviceRadio('Report', 'Hidden')).toHaveClass('bg-accent-soft', 'text-accent')
+    expect(
+      within(blueprint).getByText(
+        /Full — can create it and sees its records · Records only — hidden under Services, records stay visible · Hidden — no tile, no records/,
+      ),
+    ).toBeVisible()
 
     const mirror = await openDesktopPreview()
     expect(mirror).toHaveClass('p-2')
@@ -299,51 +381,227 @@ describe('PermissionsPage Mirror editor', () => {
     expect(screen.queryByText('Always full access')).not.toBeInTheDocument()
   })
 
-  it('optimistically hides a visible service and sends a deny', async () => {
-    let resolveSave!: (value: UserPermissionRead) => void
-    const pendingSave = new Promise<UserPermissionRead>((resolve) => {
-      resolveSave = resolve
-    })
-    vi.mocked(api.setUserPermission).mockReturnValue(pendingSave)
+  it('denies a page with the single-capability write and hides it from the preview', async () => {
+    const base = permissionFixture()
+    const deferred = createDeferred<UserPermissionRead>()
     renderPage()
+    vi.mocked(api.setUserPermission).mockReturnValue(deferred.promise)
 
     const mirror = await openDesktopPreview()
+    expect(within(mirror).getByText('Employees')).toBeVisible()
 
-    const service = await screen.findByRole('button', { name: /General Book Grant/ })
-    await userEvent.click(service)
+    await userEvent.click(screen.getByRole('button', { name: /Employees Grant/ }))
 
-    expect(api.setUserPermission).toHaveBeenCalledWith(
-      operator.id,
-      'books.service.General Book',
-      'deny',
+    expect(api.setUserPermission).toHaveBeenCalledWith(operator.id, 'employees.view', 'deny')
+    expect(api.setUserPermissionsBulk).not.toHaveBeenCalled()
+    expect(within(mirror).queryByText('Employees')).not.toBeInTheDocument()
+
+    deferred.resolve(
+      permissionFixture({
+        effective: base.effective.filter((capability) => capability !== 'employees.view'),
+        overrides: { ...base.overrides, 'employees.view': 'deny' },
+      }),
     )
-    expect(within(mirror).queryByText('General Book')).not.toBeInTheDocument()
-    resolveSave(permissionFixture({
-      effective: permissionFixture().effective.filter((id) => id !== 'books.service.General Book'),
-      overrides: {
-        'books.service.General Book': 'deny',
-        'books.service.Report': 'deny',
-      },
-    }))
   })
 
-  it('clears an explicit deny when restoring a denied item', async () => {
-    const initial = permissionFixture()
-    vi.mocked(api.setUserPermission).mockResolvedValue({
-      ...initial,
-      effective: [...initial.effective, 'books.service.Report'],
-      overrides: {},
-    })
-    renderPage(initial)
+  it('clears an explicit deny when restoring a denied category', async () => {
+    const base = permissionFixture()
+    renderPage(
+      permissionFixture({
+        effective: base.effective.filter(
+          (capability) => capability !== 'books.category.incoming',
+        ),
+        overrides: { ...base.overrides, 'books.category.incoming': 'deny' },
+      }),
+    )
+    vi.mocked(api.setUserPermission).mockResolvedValue(base)
 
-    await userEvent.click(await screen.findByRole('button', { name: /Report Deny/ }))
+    await userEvent.click(await screen.findByRole('button', { name: /Incoming Deny/ }))
+
     await waitFor(() =>
       expect(api.setUserPermission).toHaveBeenCalledWith(
         operator.id,
-        'books.service.Report',
+        'books.category.incoming',
         null,
       ),
     )
+    expect(api.setUserPermissionsBulk).not.toHaveBeenCalled()
+  })
+
+  it('moves a service to Records only with one atomic creation-deny, records-reset write', async () => {
+    const base = permissionFixture()
+    const deferred = createDeferred<UserPermissionRead>()
+    renderPage()
+    vi.mocked(api.setUserPermissionsBulk).mockReturnValue(deferred.promise)
+
+    const mirror = await openDesktopPreview()
+    const before = hiddenTotal()
+    expect(within(mirror).getAllByText('General Book').length).toBeGreaterThan(0)
+
+    await userEvent.click(serviceRadio('General Book', 'Records only'))
+
+    // One atomic write, creation first, records second.
+    expect(api.setUserPermissionsBulk).toHaveBeenCalledTimes(1)
+    expect(api.setUserPermissionsBulk).toHaveBeenCalledWith(operator.id, [
+      { capability: 'books.service.General Book', effect: 'deny' },
+      { capability: 'books.servicerecords.General Book', effect: null },
+    ])
+    expect(api.setUserPermission).not.toHaveBeenCalled()
+
+    // Optimistically the tile leaves the Services preview and the hidden pill
+    // counts it, while its records stay granted.
+    await waitFor(() => expect(serviceState('General Book')).toBe('Records only'))
+    expect(serviceRadio('General Book', 'Records only')).toHaveClass(
+      'bg-warning-soft',
+      'text-warning',
+    )
+    expect(within(mirror).queryByText('General Book')).not.toBeInTheDocument()
+    expect(hiddenTotal()).toBe(before + 1)
+
+    deferred.resolve(
+      permissionFixture({
+        effective: base.effective.filter(
+          (capability) => capability !== 'books.service.General Book',
+        ),
+        overrides: { ...base.overrides, 'books.service.General Book': 'deny' },
+      }),
+    )
+  })
+
+  it('hides a service by denying creation and records together', async () => {
+    const base = permissionFixture()
+    renderPage()
+    vi.mocked(api.setUserPermissionsBulk).mockResolvedValue(
+      permissionFixture({
+        effective: base.effective.filter(
+          (capability) =>
+            capability !== 'books.service.General Book' &&
+            capability !== 'books.servicerecords.General Book',
+        ),
+        overrides: {
+          ...base.overrides,
+          'books.service.General Book': 'deny',
+          'books.servicerecords.General Book': 'deny',
+        },
+      }),
+    )
+
+    const mirror = await openDesktopPreview()
+    const before = hiddenTotal()
+
+    await userEvent.click(serviceRadio('General Book', 'Hidden'))
+
+    expect(api.setUserPermissionsBulk).toHaveBeenCalledTimes(1)
+    expect(api.setUserPermissionsBulk).toHaveBeenCalledWith(operator.id, [
+      { capability: 'books.service.General Book', effect: 'deny' },
+      { capability: 'books.servicerecords.General Book', effect: 'deny' },
+    ])
+    await waitFor(() => expect(serviceState('General Book')).toBe('Hidden'))
+    expect(within(mirror).queryByText('General Book')).not.toBeInTheDocument()
+    expect(hiddenTotal()).toBe(before + 1)
+  })
+
+  it('restores a hidden service to Full by clearing both overrides', async () => {
+    const base = permissionFixture()
+    // Report is implicitly granted by role and hidden by stored overrides.
+    const roleDefaults = [
+      ...base.role_defaults,
+      'books.service.Report',
+      'books.servicerecords.Report',
+    ]
+    const deferred = createDeferred<UserPermissionRead>()
+    renderPage(permissionFixture({ role_defaults: roleDefaults }))
+    vi.mocked(api.setUserPermissionsBulk).mockReturnValue(deferred.promise)
+
+    const mirror = await openDesktopPreview()
+    expect(serviceState('Report')).toBe('Hidden')
+    const before = hiddenTotal()
+
+    await userEvent.click(serviceRadio('Report', 'Full'))
+
+    expect(api.setUserPermissionsBulk).toHaveBeenCalledWith(operator.id, [
+      { capability: 'books.service.Report', effect: null },
+      { capability: 'books.servicerecords.Report', effect: null },
+    ])
+    await waitFor(() => expect(serviceState('Report')).toBe('Full'))
+    expect(within(mirror).getAllByText('Report').length).toBeGreaterThan(0)
+    expect(hiddenTotal()).toBe(before - 1)
+
+    deferred.resolve(
+      permissionFixture({
+        effective: roleDefaults,
+        role_defaults: roleDefaults,
+        overrides: {},
+      }),
+    )
+  })
+
+  it('shows a create-allowed, records-denied pair as Hidden and heals it on the next choice', async () => {
+    const base = permissionFixture()
+    const deferred = createDeferred<UserPermissionRead>()
+    renderPage(
+      permissionFixture({
+        effective: base.effective.filter(
+          (capability) => capability !== 'books.servicerecords.General Book',
+        ),
+        overrides: { ...base.overrides, 'books.servicerecords.General Book': 'deny' },
+      }),
+    )
+    vi.mocked(api.setUserPermissionsBulk).mockReturnValue(deferred.promise)
+
+    await screen.findByRole('region', { name: 'Permission blueprint' })
+    expect(serviceState('General Book')).toBe('Hidden')
+
+    await userEvent.click(serviceRadio('General Book', 'Records only'))
+
+    // The next choice writes the canonical pair, whatever the stored mix was.
+    expect(api.setUserPermissionsBulk).toHaveBeenCalledWith(operator.id, [
+      { capability: 'books.service.General Book', effect: 'deny' },
+      { capability: 'books.servicerecords.General Book', effect: null },
+    ])
+    await waitFor(() => expect(serviceState('General Book')).toBe('Records only'))
+
+    deferred.resolve(
+      permissionFixture({
+        effective: base.effective.filter(
+          (capability) => capability !== 'books.service.General Book',
+        ),
+        overrides: { ...base.overrides, 'books.service.General Book': 'deny' },
+      }),
+    )
+  })
+
+  it('captions each service state from the pair the person actually has', async () => {
+    const base = permissionFixture()
+    renderPage()
+    vi.mocked(api.setUserPermissionsBulk).mockResolvedValue(
+      permissionFixture({
+        effective: base.effective.filter(
+          (capability) => capability !== 'books.service.General Book',
+        ),
+        overrides: { ...base.overrides, 'books.service.General Book': 'deny' },
+      }),
+    )
+
+    await screen.findByRole('region', { name: 'Permission blueprint' })
+    fireEvent.focus(serviceRadio('General Book', 'Full'))
+    expect(
+      await screen.findByText(
+        'General Book is available under Services and its records stay visible in Records.',
+      ),
+    ).toBeVisible()
+
+    fireEvent.focus(serviceRadio('Report', 'Hidden'))
+    expect(
+      await screen.findByText('Report is hidden everywhere — no Services tile and no records.'),
+    ).toBeVisible()
+
+    await userEvent.click(serviceRadio('General Book', 'Records only'))
+    expect(
+      await screen.findByText(
+        "General Book is hidden under Services and can't be created, but its records stay visible in Records.",
+      ),
+    ).toBeVisible()
   })
 
   it('approves a selected user pending request permanently', async () => {
@@ -369,21 +627,7 @@ describe('PermissionsPage Mirror editor', () => {
     expect(within(emptyMirror).getAllByText('Nothing here for this person')).toHaveLength(3)
     first.unmount()
 
-    const allVisible = permissionFixture({
-      effective: [
-        ...pageCaps,
-        ...QUICK_ACTION_IDS.map((id) => `books.service.${id}`),
-        'books.service.other',
-        'books.category.incoming',
-      ],
-      role_defaults: [
-        ...pageCaps,
-        ...QUICK_ACTION_IDS.map((id) => `books.service.${id}`),
-        'books.service.other',
-        'books.category.incoming',
-      ],
-      overrides: {},
-    })
+    const allVisible = allVisibleFixture()
     renderPage(allVisible, { requests: [] })
     const hiddenChip = await screen.findByText(
       (_, element) =>
@@ -396,38 +640,53 @@ describe('PermissionsPage Mirror editor', () => {
     expect(hiddenChip.querySelector('strong')).toHaveTextContent('0')
   })
 
-  it('rolls back a failed optimistic write and blocks page and drawer writes until it settles', async () => {
+  it('rolls back a failed service write and blocks every other write until it settles', async () => {
     const deferred = createDeferred<UserPermissionRead>()
-    vi.mocked(api.setUserPermission).mockReturnValue(deferred.promise)
     renderPage()
-    await openDesktopPreview()
+    vi.mocked(api.setUserPermissionsBulk).mockReturnValue(deferred.promise)
+    const mirror = await openDesktopPreview()
     await userEvent.click(await screen.findByRole('button', { name: /Advanced permissions/i }))
 
-    const generalBook = screen.getByRole('button', { name: /General Book Grant/ })
-    await userEvent.click(generalBook)
+    const before = hiddenTotal()
+    const recordsOnly = serviceRadio('General Book', 'Records only')
+    await userEvent.click(recordsOnly)
+
     await waitFor(() => {
-      const report = screen.getByRole('button', { name: /Report Deny/ })
-      expect(report).not.toBeDisabled()
-      expect(report).toHaveAttribute('aria-disabled', 'true')
-      expect(generalBook).toHaveAttribute('aria-busy', 'true')
-      expect(document.activeElement).toBe(generalBook)
+      for (const name of ['General Book', 'Report', 'Other records']) {
+        for (const state of SERVICE_STATES) {
+          const radio = serviceRadio(name, state)
+          expect(radio).not.toBeDisabled()
+          expect(radio).toHaveAttribute('aria-disabled', 'true')
+        }
+      }
+      expect(screen.getByRole('button', { name: /Employees Grant/ })).toHaveAttribute(
+        'aria-disabled',
+        'true',
+      )
       for (const button of within(screen.getByRole('group', { name: 'View books' })).getAllByRole('button')) {
         expect(button).not.toBeDisabled()
         expect(button).toHaveAttribute('aria-disabled', 'true')
       }
+      expect(document.activeElement).toBe(recordsOnly)
     })
-    await userEvent.click(screen.getByRole('button', { name: /Report Deny/ }))
-    expect(api.setUserPermission).toHaveBeenCalledTimes(1)
+
+    await userEvent.click(serviceRadio('Report', 'Full'))
+    await userEvent.click(screen.getByRole('button', { name: /Employees Grant/ }))
+    expect(api.setUserPermissionsBulk).toHaveBeenCalledTimes(1)
+    expect(api.setUserPermission).not.toHaveBeenCalled()
+    expect(serviceState('General Book')).toBe('Records only')
+    expect(hiddenTotal()).toBe(before + 1)
 
     deferred.reject(new Error('save failed'))
+
     await waitFor(() => {
-      expect(within(screen.getByTestId('mirror-device')).getAllByText('General Book').length).toBeGreaterThan(0)
-      expect(screen.getByRole('button', { name: /Report Deny/ })).toHaveAttribute(
-        'aria-disabled',
-        'false',
-      )
-      expect(document.activeElement).toBe(generalBook)
+      expect(serviceState('General Book')).toBe('Full')
+      expect(within(mirror).getAllByText('General Book').length).toBeGreaterThan(0)
+      expect(serviceRadio('General Book', 'Full')).toHaveAttribute('aria-disabled', 'false')
+      expect(hiddenTotal()).toBe(before)
+      expect(document.activeElement).toBe(recordsOnly)
     })
+    expect(toast.error).toHaveBeenCalledWith("Couldn't update the permission.")
   })
 
   it('invalidates the request owner when another user is selected before the decision settles', async () => {
@@ -541,61 +800,39 @@ describe('PermissionsPage Mirror editor', () => {
     expect(within(requestStrip!).queryByText('other')).not.toBeInTheDocument()
   })
 
-  it('edits Other records in the blueprint, counts its deny, and never previews it as creatable', async () => {
-    const allVisible = permissionFixture({
-      effective: [
-        ...pageCaps,
-        ...QUICK_ACTION_IDS.map((id) => `books.service.${id}`),
-        'books.service.other',
-        'books.category.incoming',
-      ],
-      role_defaults: [
-        ...pageCaps,
-        ...QUICK_ACTION_IDS.map((id) => `books.service.${id}`),
-        'books.service.other',
-        'books.category.incoming',
-      ],
-      overrides: {},
-    })
-    vi.mocked(api.setUserPermission).mockResolvedValue({
+  it('edits Other records with the tri-state control and never previews it as creatable', async () => {
+    const allVisible = allVisibleFixture()
+    renderPage(allVisible, { requests: [] })
+    vi.mocked(api.setUserPermissionsBulk).mockResolvedValue({
       ...allVisible,
       effective: allVisible.effective.filter(
-        (capability) => capability !== 'books.service.other',
+        (capability) =>
+          capability !== 'books.service.other' &&
+          capability !== 'books.servicerecords.other',
       ),
-      overrides: { 'books.service.other': 'deny' },
+      overrides: {
+        'books.service.other': 'deny',
+        'books.servicerecords.other': 'deny',
+      },
     })
-    renderPage(allVisible, { requests: [] })
 
     const blueprint = await screen.findByRole('region', { name: 'Permission blueprint' })
-    const otherRecords = within(blueprint).getByRole('button', {
-      name: /Other records Grant/,
-    })
+    expect(within(blueprint).getByRole('radiogroup', { name: 'Other records' })).toBeVisible()
+    expect(serviceState('Other records')).toBe('Full')
     const mirror = await openDesktopPreview()
     expect(within(mirror).queryByText('Other records')).not.toBeInTheDocument()
-    expect(
-      screen.getByText(
-        (_, element) =>
-          element?.tagName === 'SPAN' &&
-          element.textContent?.trim() === '0 hidden' &&
-          element.querySelector('strong') != null,
-      ),
-    ).toBeVisible()
+    expect(hiddenTotal()).toBe(0)
 
-    await userEvent.click(otherRecords)
+    await userEvent.click(serviceRadio('Other records', 'Hidden'))
 
-    expect(api.setUserPermission).toHaveBeenCalledWith(
-      operator.id,
-      'books.service.other',
-      'deny',
-    )
-    expect(
-      await screen.findByText(
-        (_, element) =>
-          element?.tagName === 'SPAN' &&
-          element.textContent?.trim() === '1 hidden' &&
-          element.querySelector('strong') != null,
-      ),
-    ).toBeVisible()
+    expect(api.setUserPermissionsBulk).toHaveBeenCalledWith(operator.id, [
+      { capability: 'books.service.other', effect: 'deny' },
+      { capability: 'books.servicerecords.other', effect: 'deny' },
+    ])
+    await waitFor(() => expect(serviceState('Other records')).toBe('Hidden'))
+    expect(hiddenTotal()).toBe(1)
+    // Other records is never creatable, so the Services preview never listed it.
+    expect(within(mirror).queryByText('Other records')).not.toBeInTheDocument()
   })
 
   it('treats a disabled admin deep-link as unavailable instead of full access', async () => {
