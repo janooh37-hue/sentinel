@@ -645,7 +645,8 @@ describe('PermissionsPage Mirror editor', () => {
     renderPage()
     vi.mocked(api.setUserPermissionsBulk).mockReturnValue(deferred.promise)
     const mirror = await openDesktopPreview()
-    await userEvent.click(await screen.findByRole('button', { name: /Advanced permissions/i }))
+    const advanced = (await screen.findByText('Advanced permissions')).closest('aside')
+    expect(advanced).not.toBeNull()
 
     const before = hiddenTotal()
     const recordsOnly = serviceRadio('General Book', 'Records only')
@@ -663,7 +664,9 @@ describe('PermissionsPage Mirror editor', () => {
         'aria-disabled',
         'true',
       )
-      for (const button of within(screen.getByRole('group', { name: 'View books' })).getAllByRole('button')) {
+      for (const button of within(
+        within(advanced!).getByRole('group', { name: 'View books' }),
+      ).getAllByRole('button')) {
         expect(button).not.toBeDisabled()
         expect(button).toHaveAttribute('aria-disabled', 'true')
       }
@@ -902,9 +905,7 @@ describe('PermissionsPage Mirror editor', () => {
     expect(grid.parentElement).toHaveClass('max-w-[1400px]')
 
     const blueprint = await screen.findByRole('region', { name: 'Permission blueprint' })
-    const advanced = screen
-      .getByRole('button', { name: /Advanced permissions/i })
-      .closest('aside')
+    const advanced = (await screen.findByText('Advanced permissions')).closest('aside')
     expect(advanced).toHaveClass('min-[1100px]:sticky', 'min-[1100px]:top-4')
     expect(Array.from(grid.children)).toHaveLength(3)
     expect(grid.children[0]).toBe(rail)
