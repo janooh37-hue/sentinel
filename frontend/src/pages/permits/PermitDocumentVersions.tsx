@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
 
-import { BookWordActions } from '@/components/books/BookWordActions'
+import { WordReopenButton, WordSessionActions } from '@/components/books/BookWordActions'
 import { api } from '@/lib/api'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { useIsMobile } from '@/lib/useIsMobile'
@@ -29,7 +29,12 @@ export function PermitDocumentVersions({ bookId }: { bookId: number }): React.JS
       <h3 id={headingId} className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
         {t('permits.documentVersions.title')}
       </h3>
-      {has('books.edit') && <BookWordActions book={book} isMobile={isMobile} />}
+      {has('books.edit') && (
+        <div className="flex flex-wrap items-center gap-2">
+          <WordSessionActions book={book} isMobile={isMobile} />
+          <WordReopenButton book={book} isMobile={isMobile} />
+        </div>
+      )}
       <ol className="flex flex-col divide-y divide-border rounded-lg border border-border">
         {versions.map((version) => {
           const signed = Boolean(version.signed_pdf_url)

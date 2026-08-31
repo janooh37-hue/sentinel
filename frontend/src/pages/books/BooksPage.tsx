@@ -35,7 +35,7 @@ import { BooksFilterBar, type BooksFilters } from './BooksFilterBar'
 import { SubmitForApprovalDialog } from '@/components/books/SubmitForApprovalDialog'
 import { BookPreview } from '@/components/books/BookPreview'
 import { BookStatusChips } from '@/components/books/BookStatusChips'
-import { BookWordActions } from '@/components/books/BookWordActions'
+import { WordSessionActions } from '@/components/books/BookWordActions'
 import { useIsMobile } from '@/lib/useIsMobile'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { cn } from '@/lib/utils'
@@ -542,7 +542,7 @@ export function BooksPage(): React.JSX.Element {
                                 {draft.subject ?? '—'}
                               </span>
                               <BookStatusChips book={draft} noClassification />
-                              <BookWordActions book={draft} />
+                              <WordSessionActions book={draft} />
                             </div>
                           ))}
                           {draftBooks.length > 3 && (

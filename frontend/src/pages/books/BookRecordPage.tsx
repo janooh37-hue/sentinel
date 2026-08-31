@@ -58,7 +58,7 @@ import { cn } from '@/lib/utils'
 
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { BookStatusChips } from '@/components/books/BookStatusChips'
-import { BookWordActions } from '@/components/books/BookWordActions'
+import { WordReopenButton, WordSessionActions } from '@/components/books/BookWordActions'
 import { IncludedPapersDialog } from './IncludedPapersDialog'
 import { QueueNav } from './QueueNav'
 import { MarkToggle } from './MarkToggle'
@@ -668,38 +668,55 @@ export function BookRecordPage(): React.JSX.Element {
             <BookStatusChips book={book} />
           )}
         </div>
-        <div className="flex basis-full flex-wrap items-center justify-end gap-2 lg:ms-auto lg:basis-auto">
-          <HeaderBtn
-            icon={<Printer className="h-3.5 w-3.5" />}
-            label={t('books.record.print')}
-            onClick={() => window.print()}
-          />
-          {/* Admin state override — deliberately first in the cluster and next
-              to the state chips it rewrites, ahead of the normal-flow actions. */}
-          {canOverrideState && book && (
+        <div className="flex w-full flex-wrap items-center gap-2 lg:ms-auto lg:w-auto">
+          {book && <WordSessionActions book={book} isMobile={isMobile} />}
+          {action === 'decide' && !isMobile && (
+            <>
+              <HeaderBtn
+                icon={<PenLine className="h-3.5 w-3.5" />}
+                label={t('books.approval.signApprove')}
+                tone="green-solid"
+                disabled={busy}
+                onClick={() => signMutation.mutate()}
+              />
+              <HeaderBtn
+                icon={<CornerUpLeft className="h-3.5 w-3.5" />}
+                label={t('books.approval.return')}
+                tone="amber"
+                disabled={busy}
+                onClick={() => {
+                  setReason('')
+                  setDecision('return')
+                }}
+              />
+              <HeaderBtn
+                icon={<X className="h-3.5 w-3.5" strokeWidth={2.4} />}
+                label={t('books.approval.reject')}
+                tone="red"
+                disabled={busy}
+                onClick={() => {
+                  setReason('')
+                  setDecision('reject')
+                }}
+              />
+            </>
+          )}
+
+          {action === 'review' && book && (
+            <div data-testid="record-reviewer-actions">
+              <ReviewerActions bookId={book.id} onDone={() => navigate('/books')} />
+            </div>
+          )}
+
+          {action === 'revise' && (
             <HeaderBtn
-              icon={<ShieldAlert className="h-3.5 w-3.5" />}
-              label={t('books.stateOverride.trigger')}
-              tone="red"
-              testId="state-override-trigger"
-              onClick={() => setStateOverrideOpen(true)}
+              icon={<CornerUpLeft className="h-3.5 w-3.5 -scale-x-100" />}
+              label={t('books.versions.revise')}
+              tone="navy-solid"
+              grow
+              disabled={!canRevise}
+              onClick={handleRevise}
             />
-          )}
-          {canManageIncludedPapers && (
-            <HeaderBtn
-              icon={<FileStack className="h-3.5 w-3.5" />}
-              label={t('books.includedPapers.addToPdf', { defaultValue: 'Add to PDF' })}
-              onClick={() => setIncludedPapersOpen(true)}
-            />
-          )}
-          {canMark && (
-            <MarkToggle armed={armed} onToggle={() => setArmedFor(armed ? null : bookId)} />
-          )}
-          {/* Word session actions — isMobile is the REAL device check, not
-              the page identity: this full-record page opens on desktop too
-              ("Open full record"), where Edit-in-Word must stay usable. */}
-          {book && (
-            <BookWordActions book={book} isMobile={isMobile} />
           )}
 
           {showSendForApproval && (
@@ -707,6 +724,7 @@ export function BookRecordPage(): React.JSX.Element {
               icon={<Send className="h-3.5 w-3.5" />}
               label={t('books.approval.submitForApproval')}
               tone="navy-solid"
+              grow
               onClick={() => setSubmitOpen(true)}
             />
           )}
@@ -728,9 +746,6 @@ export function BookRecordPage(): React.JSX.Element {
                 onChange={(e) => {
                   const f = e.target.files?.[0]
                   if (f && book) {
-                    // as_signed=true: the backend flips the record to approved
-                    // with a scan-back signed copy. Refetch so the desk reloads
-                    // the signed PDF and the timeline lands on "Signed · scanned".
                     void addScan
                       .fileSignedCopy(f, book.ref_number)
                       .then(() => void refetch())
@@ -741,95 +756,86 @@ export function BookRecordPage(): React.JSX.Element {
             </>
           )}
 
-          {action === 'decide' && !isMobile && (
-            <>
-              <HeaderBtn
-                icon={<CornerUpLeft className="h-3.5 w-3.5" />}
-                label={t('books.approval.return')}
-                tone="amber"
-                disabled={busy}
-                onClick={() => {
-                  setReason('')
-                  setDecision('return')
-                }}
-              />
-              <HeaderBtn
-                icon={<X className="h-3.5 w-3.5" strokeWidth={2.4} />}
-                label={t('books.approval.reject')}
-                tone="red"
-                disabled={busy}
-                onClick={() => {
-                  setReason('')
-                  setDecision('reject')
-                }}
-              />
-              <HeaderBtn
-                icon={<PenLine className="h-3.5 w-3.5" />}
-                label={t('books.approval.signApprove')}
-                tone="green-solid"
-                disabled={busy}
-                onClick={() => signMutation.mutate()}
-              />
-            </>
-          )}
-
-          {action === 'review' && book && (
-            <div data-testid="record-reviewer-actions">
-              <ReviewerActions bookId={book.id} onDone={() => navigate('/books')} />
-            </div>
-          )}
-
-          {action === 'revise' && (
-            <HeaderBtn
-              icon={<CornerUpLeft className="h-3.5 w-3.5 -scale-x-100" />}
-              label={t('books.versions.revise')}
-              tone="navy-solid"
-              disabled={!canRevise}
-              onClick={handleRevise}
-            />
-          )}
 
           {state === 'approved' && current?.signed_pdf_url && (
             <a
               href={current.signed_pdf_url}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-transparent bg-primary px-3 text-[0.78em] font-semibold text-primary-foreground transition-colors hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-transparent bg-primary px-3 text-[0.78em] font-semibold text-primary-foreground transition-colors hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring max-lg:flex-1 max-lg:justify-center"
             >
               <Check className="h-3.5 w-3.5" strokeWidth={2.6} />
               {t('books.record.downloadSigned')}
             </a>
           )}
-          {/* The main canvas shows the signed copy once approved; offer the
-              original generated form separately (served via original=true). */}
+        </div>
+
+        <div className="flex w-full min-w-0 overflow-x-auto lg:w-auto lg:overflow-visible">
+          <div className="mx-auto flex w-max shrink-0 items-center gap-2">
+          {/* Isolated admin zone: state override sits between workflow actions
+              and permanent tools instead of competing with either group. */}
+          {canOverrideState && book && (
+            <>
+              <HeaderBtn
+                icon={<ShieldAlert className="h-3.5 w-3.5" />}
+                label={t('books.stateOverride.trigger')}
+                tone="red"
+                testId="state-override-trigger"
+                onClick={() => setStateOverrideOpen(true)}
+              />
+              <span className="h-6 w-px bg-border" aria-hidden="true" />
+            </>
+          )}
+
+          <HeaderBtn
+            icon={<Printer className="h-3.5 w-3.5" aria-hidden="true" />}
+            label={t('books.record.print')}
+            iconOnly
+            onClick={() => window.print()}
+          />
+          {canManageIncludedPapers && (
+            <HeaderBtn
+              icon={<FileStack className="h-3.5 w-3.5" aria-hidden="true" />}
+              label={t('books.includedPapers.addToPdf', { defaultValue: 'Add to PDF' })}
+              iconOnly
+              onClick={() => setIncludedPapersOpen(true)}
+            />
+          )}
+          {canMark && (
+            <MarkToggle armed={armed} onToggle={() => setArmedFor(armed ? null : bookId)} />
+          )}
+          {book && <WordReopenButton book={book} isMobile={isMobile} iconOnly />}
+
           {state === 'approved' && current?.signed_pdf_url && current?.document_id != null && (
             <a
               href={`/api/v1/documents/${current.document_id}/download?format=pdf&original=true`}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-hairline bg-surface px-3 text-[0.78em] font-semibold text-muted-foreground transition-colors hover:border-primary hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              aria-label={t('books.record.viewOriginal')}
+              title={t('books.record.viewOriginal')}
+              className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-hairline bg-surface text-muted-foreground transition-colors hover:border-primary hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
-              <FileText className="h-3.5 w-3.5" />
-              {t('books.record.viewOriginal')}
+              <FileText className="h-3.5 w-3.5" aria-hidden="true" />
             </a>
           )}
-          {/* Fix a wrongly-filed signed copy: replace bytes (keep approval) or
-              remove it (revert the record). books.edit only. */}
           {state === 'approved' && current?.signed_pdf_url && canEdit && (
             <>
               <HeaderBtn
-                icon={<RefreshCw className="h-3.5 w-3.5" />}
+                icon={<RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />}
                 label={t('books.pane.replacePaper')}
+                iconOnly
                 onClick={() => replaceSignedRef.current?.click()}
               />
               <HeaderBtn
-                icon={<Trash2 className="h-3.5 w-3.5" />}
+                icon={<Trash2 className="h-3.5 w-3.5" aria-hidden="true" />}
                 label={t('books.pane.unfileSignedBtn')}
                 tone="red"
+                iconOnly
                 onClick={() => setUnfileOpen(true)}
               />
             </>
           )}
+          </div>
         </div>
       </header>
 

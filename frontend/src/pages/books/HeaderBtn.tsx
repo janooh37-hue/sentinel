@@ -9,6 +9,8 @@ export function HeaderBtn({
   disabled,
   testId,
   ariaPressed,
+  iconOnly = false,
+  grow = false,
 }: {
   icon: React.ReactNode
   label: string
@@ -17,6 +19,8 @@ export function HeaderBtn({
   disabled?: boolean
   testId?: string
   ariaPressed?: boolean
+  iconOnly?: boolean
+  grow?: boolean
 }): React.JSX.Element {
   const styles: Record<BtnTone, string> = {
     plain: 'border-hairline bg-surface text-primary hover:bg-surface-tinted',
@@ -32,13 +36,17 @@ export function HeaderBtn({
       onClick={onClick}
       disabled={disabled}
       aria-pressed={ariaPressed}
+      aria-label={iconOnly ? label : undefined}
+      title={iconOnly ? label : undefined}
       className={cn(
         'inline-flex h-9 items-center gap-1.5 rounded-lg border px-3 text-[0.78em] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50',
         styles[tone],
+        iconOnly && 'w-9 shrink-0 justify-center px-0',
+        grow && 'max-lg:flex-1 max-lg:justify-center',
       )}
     >
       {icon}
-      {label}
+      {iconOnly ? null : label}
     </button>
   )
 }
