@@ -414,6 +414,7 @@ def test_creation_cap_deny_does_not_hide_existing_service_records(
     mirror_api: ApiHarness,
 ) -> None:
     _category(mirror_api.db, "OPEN", name_en="Open")
+    _category(mirror_api.db, "GS", name_en="General Services")
     visible = _book(
         mirror_api.db,
         ref_number="OPEN-1",
