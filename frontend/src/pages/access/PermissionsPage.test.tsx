@@ -341,7 +341,9 @@ describe('PermissionsPage Mirror editor', () => {
     }
     expect(serviceState('Report')).toBe('Hidden')
     const hiddenRadio = serviceRadio('Report', 'Hidden')
-    expect(hiddenRadio).toHaveClass('border-accent', 'bg-accent', 'text-white')
+    // text-background, not text-white: white on the dark accent (#ef4858) is
+    // only ~3.7:1, while the near-black background token clears AA both ways.
+    expect(hiddenRadio).toHaveClass('border-accent', 'bg-accent', 'text-background')
     expect(checkGlyph(hiddenRadio)).not.toBeNull()
     expect(checkGlyph(serviceRadio('Report', 'Full'))).toBeNull()
 
