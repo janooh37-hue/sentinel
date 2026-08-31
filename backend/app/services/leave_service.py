@@ -504,9 +504,10 @@ def file_return(
 ) -> Leave:
     """File the Duty Resumption (return) form for a returnable leave.
 
-    Generates the Duty Resumption document (auto-signature embed), attaches it
-    to THIS leave (no standalone register row), records the return date, and
-    sets status -> Completed. NS requires a certificate already on file.
+    Generates the Duty Resumption document, embedding the employee's saved
+    vault signature when present. Attaches it to THIS leave (no standalone
+    register row), records the return date, and sets status -> Completed.
+    NS requires a certificate already on file.
     """
     from app.services import document_service  # local import: avoid cycle
 
@@ -543,6 +544,7 @@ def file_return(
         template_id="Duty Resumption Form",
         fields=fields,
         manager_id=manager_id,
+        embed_signature={"employee": True},
         current_user=current_user,
         return_for_leave_id=leave_id,
     )
