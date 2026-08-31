@@ -6734,6 +6734,8 @@ export interface components {
             starts_at?: string | null;
             /** Ends At */
             ends_at?: string | null;
+            /** Shift Code */
+            shift_code?: string | null;
             /** Crews */
             crews?: components["schemas"]["CrewNameRead"][];
             /** Scheduled */
