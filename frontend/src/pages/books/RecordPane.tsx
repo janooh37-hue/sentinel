@@ -34,7 +34,7 @@ import { canFileSignedCopy, canSendForApproval } from '@/components/books/book-d
 
 import { BookStatusChips } from '@/components/books/BookStatusChips'
 import { ServiceArtwork } from '@/components/ui/service-artwork'
-import { BookWordActions } from '@/components/books/BookWordActions'
+import { WordReopenButton, WordSessionActions } from '@/components/books/BookWordActions'
 import { signedSourceOf } from './bookStateLabel'
 import { IncludedPapersDialog } from './IncludedPapersDialog'
 import { isIncludedPapersOwner } from './includedPapersState'
@@ -157,6 +157,63 @@ export function RecordPane({
   const includedDocumentId = includedDetail.data
     ? currentBookDocId(includedDetail.data)
     : undefined
+  const hasWordReopen =
+    !book.voided_at &&
+    (book.versions?.length ?? 0) > 0 &&
+    book.edit_session?.state !== 'active'
+  const hasPaneUtilities = hasWordReopen || canManageIncludedPapers || papers.length > 0
+
+  const workflowActions = [
+    state === 'none' && !isWordBook
+      ? {
+          key: 'continue',
+          label: t('books.pane.continueDraft'),
+          primary: true,
+          disabled: false,
+          onClick: () => onContinueDraft(book.id),
+        }
+      : null,
+    showSendForApproval
+      ? {
+          key: 'submit',
+          label: t('books.approval.submitForApproval'),
+          primary: false,
+          disabled: false,
+          onClick: () => onSubmit(book.id),
+        }
+      : null,
+    state === 'returned'
+      ? {
+          key: 'revise',
+          label: t('books.pane.revise'),
+          primary: true,
+          disabled: false,
+          onClick: () => onOpenRecord(book.id),
+        }
+      : null,
+    showFileSigned
+      ? {
+          key: 'scan-signed',
+          label: t('books.pane.scanSignedCopy'),
+          primary: state !== 'none',
+          disabled: addScan.busy,
+          onClick: null,
+        }
+      : null,
+    state !== 'none'
+      ? {
+          key: 'open',
+          label: t('books.pane.openRecord'),
+          primary: state !== 'returned' && !showFileSigned,
+          disabled: false,
+          onClick: () => onOpenRecord(book.id),
+        }
+      : null,
+  ].filter((action) => action !== null)
+  const orderedWorkflowActions = [
+    ...workflowActions.filter((action) => action.primary),
+    ...workflowActions.filter((action) => !action.primary),
+  ]
 
   const addScanSlot = canScan ? (
     <button
@@ -243,11 +300,34 @@ export function RecordPane({
         />
       </Suspense>
 
-      <div className="flex shrink-0 flex-wrap gap-2 border-t border-hairline px-3.5 py-2.5">
-        {/* Word session actions (Finish / Discard) — desktop, not mobile */}
-        <BookWordActions book={book} />
+      <div className="flex shrink-0 flex-wrap items-center gap-2 border-t border-hairline px-3.5 py-2.5">
+        <WordSessionActions book={book} />
+        {orderedWorkflowActions.map((action) => (
+          <PaneBtn
+            key={action.key}
+            primary={action.primary}
+            disabled={action.disabled}
+            onClick={
+              action.key === 'scan-signed'
+                ? () => fileRef.current?.click()
+                : action.onClick ?? undefined
+            }
+          >
+            {action.label}
+          </PaneBtn>
+        ))}
+
+        {hasPaneUtilities ? (
+          <>
+            <span className="ms-auto" />
+            <span className="h-5 w-px self-center bg-border" aria-hidden="true" />
+          </>
+        ) : null}
+        <WordReopenButton book={book} iconOnly />
         {canManageIncludedPapers && (
           <PaneBtn
+            iconOnly
+            label={t('books.includedPapers.addToPdf', { defaultValue: 'Add to PDF' })}
             disabled={includedDetail.isFetching}
             onClick={() => setIncludedPapersOpen(true)}
           >
@@ -256,43 +336,11 @@ export function RecordPane({
             ) : (
               <FileStack className="h-3.5 w-3.5" aria-hidden />
             )}
-            {t('books.includedPapers.addToPdf', { defaultValue: 'Add to PDF' })}
           </PaneBtn>
         )}
-        {state === 'none' && !isWordBook && (
-          <PaneBtn primary onClick={() => onContinueDraft(book.id)}>{t('books.pane.continueDraft')}</PaneBtn>
-        )}
-        {/* Send for approval (digital route): submit a draft or re-route a
-            pending request, offered alongside Scan signed copy. */}
-        {showSendForApproval && (
-          <PaneBtn onClick={() => onSubmit(book.id)}>{t('books.approval.submitForApproval')}</PaneBtn>
-        )}
-        {state === 'returned' && (
-          <PaneBtn primary onClick={() => onOpenRecord(book.id)}>{t('books.pane.revise')}</PaneBtn>
-        )}
-        {/* none / pending / awaiting_scan: file the signed copy back, via the
-            SAME hidden input as the ＋Add-scan frame. Mirrors the record page's
-            "Scan signed copy" so both surfaces offer the paper route. On a draft
-            it sits beside Continue Draft, so it's not the primary there. */}
-        {showFileSigned && (
-          <PaneBtn primary={state !== 'none'} disabled={addScan.busy} onClick={() => fileRef.current?.click()}>
-            {t('books.pane.scanSignedCopy')}
-          </PaneBtn>
-        )}
-        {state !== 'none' && (
-          <PaneBtn
-            primary={state !== 'returned' && !showFileSigned}
-            onClick={() => onOpenRecord(book.id)}
-          >
-            {t('books.pane.openRecord')}
-          </PaneBtn>
-        )}
-        {/* Add this record to the email basket — only when there's a document
-            (PDF / signed copy / scan) to attach. */}
         {papers.length > 0 && (
-          <PaneBtn onClick={() => onAddToEmail(book)}>
+          <PaneBtn iconOnly label={t('basket.add')} onClick={() => onAddToEmail(book)}>
             <Mail className="h-3.5 w-3.5" aria-hidden />
-            {t('basket.add')}
           </PaneBtn>
         )}
       </div>
@@ -463,12 +511,16 @@ export function RecordPane({
 function PaneBtn({
   primary = false,
   disabled = false,
+  iconOnly = false,
+  label,
   onClick,
   children,
 }: {
   primary?: boolean
   disabled?: boolean
-  onClick: () => void
+  iconOnly?: boolean
+  label?: string
+  onClick?: () => void
   children: React.ReactNode
 }): React.JSX.Element {
   return (
@@ -476,12 +528,15 @@ function PaneBtn({
       type="button"
       disabled={disabled}
       onClick={onClick}
+      aria-label={iconOnly ? label : undefined}
+      title={iconOnly ? label : undefined}
       className={cn(
         'inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-[0.74em] font-semibold transition-colors',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50',
         primary
           ? 'bg-primary text-primary-foreground hover:bg-primary-hover'
           : 'border border-border text-muted-foreground hover:border-primary hover:text-primary',
+        iconOnly && 'h-8 w-8 justify-center p-0',
       )}
     >
       {children}

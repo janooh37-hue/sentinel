@@ -10,7 +10,7 @@ import { createElement, type ReactNode } from 'react'
 import i18n from 'i18next'
 import { initReactI18next } from 'react-i18next'
 
-import { BookWordActions } from './BookWordActions'
+import { WordReopenButton, WordSessionActions } from './BookWordActions'
 import { BookStatusChips } from './BookStatusChips'
 import * as apiMod from '@/lib/api'
 import type { BookRead, WordSessionRead } from '@/lib/api'
@@ -145,15 +145,15 @@ function makeQc() {
   return new QueryClient({ defaultOptions: { queries: { retry: false }, mutations: { retry: false } } })
 }
 
-// ── BookWordActions ──────────────────────────────────────────────────────────
-describe('BookWordActions', () => {
+// ── Word action components ──────────────────────────────────────────────────
+describe('Word action components', () => {
   beforeEach(() => {
     vi.restoreAllMocks()
   })
 
   it('(a) renders Finish and Discard in Arabic for a book with active edit_session', () => {
     render(
-      createElement(BookWordActions, { book: ACTIVE_SESSION_BOOK }),
+      createElement(WordSessionActions, { book: ACTIVE_SESSION_BOOK }),
       { wrapper: wrapper(makeQc()) },
     )
     expect(screen.getByRole('button', { name: /إنهاء التحرير/ })).toBeInTheDocument()
@@ -162,7 +162,7 @@ describe('BookWordActions', () => {
 
   it('(b) on mobile: shows disabled "فتح في Word" with the PC hint', () => {
     render(
-      createElement(BookWordActions, { book: ACTIVE_SESSION_BOOK, isMobile: true }),
+      createElement(WordSessionActions, { book: ACTIVE_SESSION_BOOK, isMobile: true }),
       { wrapper: wrapper(makeQc()) },
     )
     const wordBtn = screen.getByRole('button', { name: /فتح في Word/ })
@@ -172,7 +172,7 @@ describe('BookWordActions', () => {
 
   it('(c) a voided book renders no action buttons', () => {
     const { container } = render(
-      createElement(BookWordActions, { book: VOIDED_BOOK }),
+      createElement(WordSessionActions, { book: VOIDED_BOOK }),
       { wrapper: wrapper(makeQc()) },
     )
     expect(container.querySelectorAll('button')).toHaveLength(0)
@@ -185,7 +185,7 @@ describe('BookWordActions', () => {
     vi.spyOn(apiMod.api, 'finishWordSession').mockResolvedValue({} as any)
 
     render(
-      createElement(BookWordActions, { book: ACTIVE_SESSION_BOOK }),
+      createElement(WordSessionActions, { book: ACTIVE_SESSION_BOOK }),
       { wrapper: wrapper(qc) },
     )
     await userEvent.click(screen.getByRole('button', { name: /إنهاء التحرير/ }))
@@ -203,7 +203,7 @@ describe('BookWordActions', () => {
     vi.spyOn(apiMod.api, 'discardWordSession').mockResolvedValue({} as any)
 
     render(
-      createElement(BookWordActions, { book: ACTIVE_SESSION_BOOK }),
+      createElement(WordSessionActions, { book: ACTIVE_SESSION_BOOK }),
       { wrapper: wrapper(qc) },
     )
     // Open the discard confirm dialog
@@ -222,7 +222,7 @@ describe('BookWordActions', () => {
 
   it('(f) finished book renders Arabic "تعديل في Word (ينشئ إصداراً جديداً)" button', () => {
     render(
-      createElement(BookWordActions, { book: FINISHED_BOOK }),
+      createElement(WordReopenButton, { book: FINISHED_BOOK }),
       { wrapper: wrapper(makeQc()) },
     )
     expect(screen.getByRole('button', { name: /تعديل في Word/ })).toBeInTheDocument()
@@ -237,7 +237,7 @@ describe('BookWordActions', () => {
     vi.spyOn(apiMod.api, 'reopenWordSession').mockResolvedValue(MOCK_SESSION)
 
     render(
-      createElement(BookWordActions, { book: FINISHED_BOOK }),
+      createElement(WordReopenButton, { book: FINISHED_BOOK }),
       { wrapper: wrapper(makeQc()) },
     )
     await userEvent.click(screen.getByRole('button', { name: /تعديل في Word/ }))
@@ -246,7 +246,7 @@ describe('BookWordActions', () => {
 
   it('(h) on mobile, editNewVersion button is disabled with needsPc hint', () => {
     render(
-      createElement(BookWordActions, { book: FINISHED_BOOK, isMobile: true }),
+      createElement(WordReopenButton, { book: FINISHED_BOOK, isMobile: true }),
       { wrapper: wrapper(makeQc()) },
     )
     const btn = screen.getByRole('button', { name: /تعديل في Word/ })
@@ -254,11 +254,21 @@ describe('BookWordActions', () => {
     expect(screen.getByText(/التحرير في Word يتطلب/)).toBeInTheDocument()
   })
 
+  it('renders the finished-book action as a labelled icon button', () => {
+    render(
+      createElement(WordReopenButton, { book: FINISHED_BOOK, iconOnly: true }),
+      { wrapper: wrapper(makeQc()) },
+    )
+    const button = screen.getByRole('button', { name: 'تعديل في Word (ينشئ إصداراً جديداً)' })
+    expect(button).toHaveAttribute('title', 'تعديل في Word (ينشئ إصداراً جديداً)')
+    expect(button).not.toHaveTextContent('تعديل في Word')
+  })
+
   it('(i) save-as-template is GONE from Records — it lives in the Word flow now', () => {
     // Moved to WordHandoffDialog's finished view (the General Book side, per
     // the 2026-07-19 template-ops relocation). Records only re-opens in Word.
     render(
-      createElement(BookWordActions, { book: FINISHED_BOOK_WITH_SUBJECT }),
+      createElement(WordReopenButton, { book: FINISHED_BOOK_WITH_SUBJECT }),
       { wrapper: wrapper(makeQc()) },
     )
     expect(screen.queryByRole('button', { name: 'حفظ كقالب' })).toBeNull()
