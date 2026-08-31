@@ -142,7 +142,7 @@ function DomainGroup({
   return (
     <Card>
       <CardHeader className="py-3">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-3">
           <button
             type="button"
             onClick={() => setOpen((value) => !value)}
@@ -186,7 +186,7 @@ function DomainGroup({
             return (
               <div
                 key={cap.id}
-                className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-start sm:justify-between"
+                className="flex flex-col gap-3 px-5 py-4"
               >
                 <div className="flex min-w-0 flex-col gap-1">
                   <span className="text-sm font-medium text-foreground">{label}</span>
