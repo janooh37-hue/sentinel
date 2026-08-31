@@ -14,7 +14,7 @@ import { useTranslation } from 'react-i18next'
 import { Link, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 
-import { AdvancedPermissionsDrawer } from '@/components/access/AdvancedPermissionsDrawer'
+import { AdvancedPermissionsPanel } from '@/components/access/AdvancedPermissionsPanel'
 import { ServiceArtwork, type ServiceArtworkId } from '@/components/ui/service-artwork'
 import { EmptyState } from '@/components/ui/empty-state'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -1321,7 +1321,7 @@ export function PermissionsPage(): React.JSX.Element {
           !capabilitiesQuery.isError &&
           !categoriesQuery.isError ? (
             <aside className="min-w-0 min-[1100px]:sticky min-[1100px]:top-4 min-[1100px]:self-start">
-              <AdvancedPermissionsDrawer
+              <AdvancedPermissionsPanel
                 user={selectedUser}
                 perms={permissions}
                 capabilities={capabilitiesQuery.data ?? []}

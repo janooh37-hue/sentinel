@@ -237,7 +237,7 @@ function DomainGroup({
   )
 }
 
-export function AdvancedPermissionsDrawer({
+export function AdvancedPermissionsPanel({
   user,
   perms,
   capabilities,
@@ -248,7 +248,6 @@ export function AdvancedPermissionsDrawer({
 }): React.JSX.Element {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
-  const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
   const [saving, setSaving] = useState<string | null>(null)
   const permissionWritesPending =
@@ -257,6 +256,7 @@ export function AdvancedPermissionsDrawer({
   const catalog = useMemo(
     () =>
       capabilities.filter((capability) => {
+        if (capability.id.startsWith('books.servicerecords.')) return false
         if (capability.id.startsWith('books.category.')) return false
         if (!capability.id.startsWith('books.service.')) return true
         const serviceId = capability.id.slice('books.service.'.length)
@@ -319,14 +319,8 @@ export function AdvancedPermissionsDrawer({
   }
 
   return (
-    <section className="overflow-hidden rounded-2xl border border-hairline bg-surface">
-      <button
-        type="button"
-        onClick={() => setOpen((value) => !value)}
-        aria-expanded={open}
-        aria-controls="advanced-permissions-body"
-        className="flex min-h-14 w-full items-center gap-3 px-5 py-3 text-start focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
-      >
+    <section className="max-h-[calc(100vh-2rem)] overflow-y-auto rounded-2xl border border-hairline bg-surface">
+      <header className="flex min-h-14 items-center gap-3 px-5 py-3">
         <ShieldCheck className="h-5 w-5 shrink-0 text-primary" strokeWidth={1.7} aria-hidden />
         <span className="min-w-0 flex-1">
           <span className="block font-semibold text-foreground">
@@ -339,74 +333,63 @@ export function AdvancedPermissionsDrawer({
         <span className="rounded-full bg-primary-soft px-2.5 py-1 font-mono text-[0.72em] font-semibold text-primary">
           {catalog.length}
         </span>
-        <ChevronDown
-          className={cn(
-            'h-4 w-4 text-muted-foreground transition-transform motion-reduce:transition-none',
-            open && 'rotate-180',
-          )}
-          strokeWidth={1.8}
-          aria-hidden
-        />
-      </button>
+      </header>
 
-      {open ? (
-        <div id="advanced-permissions-body" className="border-t border-hairline">
-          <div className="sticky top-0 z-10 border-b border-border bg-background px-5 py-3">
-            <div className="flex min-h-11 items-center gap-2.5 rounded-lg border border-border bg-surface px-3 focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/10">
-              <Search className="h-4 w-4 shrink-0 text-muted-foreground" strokeWidth={1.8} aria-hidden />
-              <input
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder={t('access.permissions.searchPlaceholder')}
-                aria-label={t('access.permissions.searchPlaceholder')}
-                className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
-              />
-              {query.trim() ? (
-                <button
-                  type="button"
-                  onClick={() => setQuery('')}
-                  className="flex min-h-9 items-center gap-1 rounded px-2 text-xs font-medium text-muted-foreground hover:text-foreground max-sm:min-h-11"
-                  aria-label={t('access.permissions.clearSearch')}
-                >
-                  <X className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
-                  {t('access.permissions.clearSearch')}
-                </button>
-              ) : null}
-            </div>
+      <div className="border-t border-hairline">
+        <div className="sticky top-0 z-10 border-b border-border bg-background px-5 py-3">
+          <div className="flex min-h-11 items-center gap-2.5 rounded-lg border border-border bg-surface px-3 focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/10">
+            <Search className="h-4 w-4 shrink-0 text-muted-foreground" strokeWidth={1.8} aria-hidden />
+            <input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder={t('access.permissions.searchPlaceholder')}
+              aria-label={t('access.permissions.searchPlaceholder')}
+              className="min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+            />
             {query.trim() ? (
-              <p role="status" className="mt-2 text-xs text-muted-foreground">
-                {t('access.permissions.results', { count: visibleCount })}
-              </p>
+              <button
+                type="button"
+                onClick={() => setQuery('')}
+                className="flex min-h-9 items-center gap-1 rounded px-2 text-xs font-medium text-muted-foreground hover:text-foreground max-sm:min-h-11"
+                aria-label={t('access.permissions.clearSearch')}
+              >
+                <X className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
+                {t('access.permissions.clearSearch')}
+              </button>
             ) : null}
           </div>
-
-          <div className="space-y-4 p-5">
-
-            {query.trim() && visibleCount === 0 ? (
-              <EmptyState
-                message={t('access.permissions.noResults')}
-                description={t('access.permissions.noResultsHint')}
-                actionLabel={t('access.permissions.clearSearch')}
-                onAction={() => setQuery('')}
-              />
-            ) : (
-              grouped.map(({ domain, caps }) => (
-                <DomainGroup
-                  key={domain}
-                  domain={domain}
-                  caps={caps}
-                  perms={perms}
-                  onSet={handleSet}
-                  onBulk={handleBulk}
-                  saving={saving}
-                  writePending={permissionWritesPending}
-                  query={query}
-                />
-              ))
-            )}
-          </div>
+          {query.trim() ? (
+            <p role="status" className="mt-2 text-xs text-muted-foreground">
+              {t('access.permissions.results', { count: visibleCount })}
+            </p>
+          ) : null}
         </div>
-      ) : null}
+
+        <div className="space-y-4 p-5">
+          {query.trim() && visibleCount === 0 ? (
+            <EmptyState
+              message={t('access.permissions.noResults')}
+              description={t('access.permissions.noResultsHint')}
+              actionLabel={t('access.permissions.clearSearch')}
+              onAction={() => setQuery('')}
+            />
+          ) : (
+            grouped.map(({ domain, caps }) => (
+              <DomainGroup
+                key={domain}
+                domain={domain}
+                caps={caps}
+                perms={perms}
+                onSet={handleSet}
+                onBulk={handleBulk}
+                saving={saving}
+                writePending={permissionWritesPending}
+                query={query}
+              />
+            ))
+          )}
+        </div>
+      </div>
     </section>
   )
 }
