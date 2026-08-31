@@ -680,7 +680,7 @@ describe('PermissionsPage Mirror editor', () => {
 
     const rail = await findPeopleRail()
     const workspace = studioGrid(rail).children[1] as HTMLElement
-    const pill = within(workspace).getByText(
+    const pill = await within(workspace).findByText(
       (_, element) =>
         element?.tagName === 'SPAN' &&
         /^\d+ hidden$/.test(element.textContent?.trim() ?? '') &&
