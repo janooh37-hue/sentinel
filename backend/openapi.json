@@ -27460,17 +27460,6 @@
             ],
             "title": "Ends At"
           },
-          "shift_code": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Shift Code"
-          },
           "crews": {
             "items": {
               "$ref": "#/components/schemas/CrewNameRead"

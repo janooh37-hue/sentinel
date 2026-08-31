@@ -42,7 +42,6 @@ const SNAPSHOT = {
   current_shift: {
     starts_at: '2026-08-28T06:00:00Z',
     ends_at: '2026-08-28T14:00:00Z',
-    shift_code: 'morning',
     crews: [{ code: 'crew_1', name_en: 'First Company', name_ar: 'السرية الأولى' }],
     scheduled: 8,
     excused: 0,
@@ -202,64 +201,54 @@ describe('LockOverlay', () => {
         `${arabicTemperature}°`,
       )
       expect(document.querySelectorAll('.lock-weather bdi[dir="ltr"]')).toHaveLength(4)
-      expect(document.querySelector('.lock-shifts')).toHaveTextContent('الصباحية')
-      expect(document.querySelector('.lock-shifts')).toHaveTextContent('الظهيرة')
+      expect(document.querySelector('.lock-shifts')).toHaveTextContent('السرية الأولى')
+      expect(document.querySelector('.lock-shifts')).toHaveTextContent('السرية الثانية')
+      expect(document.querySelector('.lock-shifts')).not.toHaveTextContent('الصباحية')
+      expect(document.querySelector('.lock-shifts')).not.toHaveTextContent('الظهيرة')
     })
   })
 
-  it('shows translated shift names for the current and next shift', async () => {
+  it('shows workforce crew names instead of time-of-day shift names', async () => {
+    renderOverlay()
+
+    await waitFor(() => {
+      expect(document.querySelector('.lock-shifts')).toHaveTextContent('First Company')
+      expect(document.querySelector('.lock-shifts')).toHaveTextContent('Second Company')
+      expect(document.querySelector('.lock-shifts')).not.toHaveTextContent('Morning')
+      expect(document.querySelector('.lock-shifts')).not.toHaveTextContent('Noon')
+    })
+  })
+
+
+  it('falls back to the translated shift name when no crew is on duty', async () => {
+    vi.spyOn(api, 'getWorkforceSnapshot').mockResolvedValue({
+      ...SNAPSHOT,
+      current_shift: { ...SNAPSHOT.current_shift, crews: [] },
+      next_shift: { ...SNAPSHOT.next_shift, crews: [] },
+    })
     renderOverlay()
 
     await waitFor(() => {
       expect(document.querySelector('.lock-shifts')).toHaveTextContent('Morning')
       expect(document.querySelector('.lock-shifts')).toHaveTextContent('Noon')
       expect(document.querySelector('.lock-shifts')).not.toHaveTextContent('First Company')
-      expect(document.querySelector('.lock-shifts')).not.toHaveTextContent('Second Company')
+      expect(document.querySelector('.lock-shifts')).not.toHaveTextContent('noon')
     })
   })
 
-  it('uses the translated self shift before current crew names when current shift code is absent', async () => {
-    vi.spyOn(api, 'getWorkforceSnapshot').mockResolvedValue({
-      ...SNAPSHOT,
-      current_shift: { ...SNAPSHOT.current_shift, shift_code: null },
-    })
-    renderOverlay()
-
-    await waitFor(() => {
-      const currentShift = document.querySelector('.lock-shifts .lock-metric')
-      expect(currentShift).toHaveTextContent('Morning')
-      expect(currentShift).not.toHaveTextContent('First Company')
-    })
-  })
-
-  it('falls back to crew names when no shift code exists', async () => {
-    vi.spyOn(api, 'getWorkforceSnapshot').mockResolvedValue({
-      ...SNAPSHOT,
-      current_shift: { ...SNAPSHOT.current_shift, shift_code: null },
-      next_shift: { ...SNAPSHOT.next_shift, shift_code: null },
-      self: { ...SNAPSHOT.self, shift_code: null },
-    })
-    renderOverlay()
-
-    await waitFor(() => {
-      expect(document.querySelector('.lock-shifts')).toHaveTextContent('First Company')
-      expect(document.querySelector('.lock-shifts')).toHaveTextContent('Second Company')
-    })
-  })
-
-  it('falls back to Arabic crew names when no shift code exists', async () => {
+  it('falls back to the translated Arabic shift name when no crew is on duty', async () => {
     await i18n.changeLanguage('ar')
     vi.spyOn(api, 'getWorkforceSnapshot').mockResolvedValue({
       ...SNAPSHOT,
-      current_shift: { ...SNAPSHOT.current_shift, shift_code: null },
-      next_shift: { ...SNAPSHOT.next_shift, shift_code: null },
-      self: { ...SNAPSHOT.self, shift_code: null },
+      current_shift: { ...SNAPSHOT.current_shift, crews: [] },
+      next_shift: { ...SNAPSHOT.next_shift, crews: [] },
     })
     renderOverlay()
 
     await waitFor(() => {
-      expect(document.querySelector('.lock-shifts')).toHaveTextContent('السرية الأولى')
-      expect(document.querySelector('.lock-shifts')).toHaveTextContent('السرية الثانية')
+      expect(document.querySelector('.lock-shifts')).toHaveTextContent('الصباحية')
+      expect(document.querySelector('.lock-shifts')).toHaveTextContent('الظهيرة')
+      expect(document.querySelector('.lock-shifts')).not.toHaveTextContent('السرية الأولى')
     })
   })
 

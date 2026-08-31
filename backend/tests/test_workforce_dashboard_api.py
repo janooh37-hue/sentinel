@@ -802,7 +802,6 @@ def test_snapshot_reports_bilingual_crews_for_current_and_next_shift(
     assert body["current_shift"]["crews"] == [
         {"code": "alpha", "name_en": "Alpha", "name_ar": None}
     ]
-    assert body["current_shift"]["shift_code"] == "morning"
     assert body["next_shift"]["crews"] == [
         {"code": "bravo", "name_en": "Second Company", "name_ar": "السرية الثانية"}
     ]
