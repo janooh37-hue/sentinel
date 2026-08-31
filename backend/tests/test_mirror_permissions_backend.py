@@ -449,6 +449,13 @@ def test_creation_cap_deny_does_not_hide_existing_service_records(
     detail = mirror_api.client.get(f"/api/v1/books/{visible.id}")
     assert detail.status_code == 200, detail.text
 
+    generated = mirror_api.client.post(
+        "/api/v1/documents/generate",
+        json={"template_id": "General Book", "fields": {}},
+    )
+    assert generated.status_code == 403, generated.text
+    assert _error_code(generated) == "RECORD_TYPE_FORBIDDEN"
+
 
 def test_record_type_denies_hide_list_query_facets_categories_and_details(
     mirror_api: ApiHarness,
@@ -483,6 +490,7 @@ def test_record_type_denies_hide_list_query_facets_categories_and_details(
         mirror_api.db,
         operator.id,
         [
+            ("books.service.General Book", "deny", None),
             ("books.servicerecords.General Book", "deny", None),
             ("books.category.HIDDEN", "deny", None),
         ],
@@ -718,7 +726,7 @@ def test_assigned_pending_approvals_bypass_record_type_denies_but_history_does_n
     perm_service.set_user_override(
         mirror_api.db,
         manager.id,
-        "books.service.General Book",
+        "books.servicerecords.General Book",
         "deny",
         actor=admin,
     )
@@ -942,7 +950,7 @@ def test_old_version_pending_assignment_does_not_bypass_record_type_denial(
     perm_service.set_user_override(
         mirror_api.db,
         manager.id,
-        "books.service.General Book",
+        "books.servicerecords.General Book",
         "deny",
         actor=mirror_api.actor,
     )
@@ -981,7 +989,7 @@ def test_dashboard_book_totals_hide_denied_record_types(
     perm_service.set_user_override(
         mirror_api.db,
         operator.id,
-        "books.service.General Book",
+        "books.servicerecords.General Book",
         "deny",
         actor=mirror_api.actor,
     )
@@ -1387,7 +1395,7 @@ def test_denied_record_type_blocks_id_addressed_book_mutations_and_files(
     perm_service.set_user_override(
         mirror_api.db,
         manager.id,
-        "books.service.General Book",
+        "books.servicerecords.General Book",
         "deny",
         actor=mirror_api.actor,
     )
@@ -1681,7 +1689,7 @@ def test_dashboard_document_stats_exclude_denied_service_and_category(
         mirror_api.db,
         manager.id,
         [
-            ("books.service.General Book", "deny", None),
+            ("books.servicerecords.General Book", "deny", None),
             ("books.category.HIDDEN", "deny", None),
         ],
         actor=mirror_api.actor,
