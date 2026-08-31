@@ -26,6 +26,8 @@ from app.core.permissions import (
     ROLE_DEFAULTS,
     SERVICE_CAP_PREFIX,
     SERVICE_CAPABILITY_IDS,
+    SERVICE_RECORDS_CAP_PREFIX,
+    SERVICE_RECORDS_CAPABILITY_IDS,
     default_caps_for_role,
 )
 from app.core.roles import ADMIN_ROLE
@@ -52,7 +54,7 @@ def _role_and_dynamic_caps(db: Session, role: str) -> tuple[set[str], set[str]]:
         ),
     )
     role_caps: set[str] = set()
-    dynamic_caps = set(SERVICE_CAPABILITY_IDS)
+    dynamic_caps = set(SERVICE_CAPABILITY_IDS) | set(SERVICE_RECORDS_CAPABILITY_IDS)
     for capability, is_dynamic in db.execute(tagged_caps):
         if is_dynamic:
             dynamic_caps.add(capability)
@@ -79,7 +81,11 @@ def category_capability_ids(db: Session) -> set[str]:
 
 def dynamic_capability_ids(db: Session) -> set[str]:
     """Implicitly granted service and category capabilities."""
-    return set(SERVICE_CAPABILITY_IDS) | category_capability_ids(db)
+    return (
+        set(SERVICE_CAPABILITY_IDS)
+        | set(SERVICE_RECORDS_CAPABILITY_IDS)
+        | category_capability_ids(db)
+    )
 
 
 def dynamic_capability_label(db: Session, capability_id: str) -> str:
@@ -90,6 +96,13 @@ def dynamic_capability_label(db: Session, capability_id: str) -> str:
         if category is None:
             return category_id
         return category.name_en or category_id
+    if capability_id.startswith(SERVICE_RECORDS_CAP_PREFIX):
+        service_id = capability_id.removeprefix(SERVICE_RECORDS_CAP_PREFIX)
+        service_label = dynamic_capability_label(
+            db,
+            f"{SERVICE_CAP_PREFIX}{service_id}",
+        )
+        return f"Records: {service_label}"
     if capability_id.startswith(SERVICE_CAP_PREFIX):
         return capability_id.removeprefix(SERVICE_CAP_PREFIX)
     return capability_id
@@ -334,9 +347,9 @@ def denied_record_types(db: Session, user: User) -> tuple[set[str], set[str]]:
     """Return bare service/category ids explicitly hidden from ``user``."""
     denied = dynamic_capability_ids(db) - effective_caps(db, user)
     denied_services = {
-        capability.removeprefix(SERVICE_CAP_PREFIX)
+        capability.removeprefix(SERVICE_RECORDS_CAP_PREFIX)
         for capability in denied
-        if capability.startswith(SERVICE_CAP_PREFIX)
+        if capability.startswith(SERVICE_RECORDS_CAP_PREFIX)
     }
     denied_categories = {
         capability.removeprefix(CATEGORY_CAP_PREFIX)
