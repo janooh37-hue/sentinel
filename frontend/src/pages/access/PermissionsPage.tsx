@@ -54,7 +54,8 @@ const SERVICE_STATE_KEY: Record<ServiceAccessState, string> = {
 const SERVICE_STATE_TONE: Record<ServiceAccessState, string> = {
   full: 'border-primary bg-primary text-primary-foreground',
   records: 'border-warning bg-warning text-warning-foreground',
-  hidden: 'border-accent bg-accent text-white',
+  // text-background, not white: white on the dark accent (#ef4858) is ~3.7:1.
+  hidden: 'border-accent bg-accent text-background',
 }
 
 // One legend explains all three states; every radiogroup describes itself with
