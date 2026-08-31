@@ -197,8 +197,12 @@ def test_dynamic_capabilities_are_implicit_defaults_and_never_seeded(
     service_caps = {
         f"books.service.{service_id}" for service_id in (*SERVICE_IDS, OTHER_SERVICE_ID)
     }
+    service_record_caps = {
+        f"books.servicerecords.{service_id}"
+        for service_id in (*SERVICE_IDS, OTHER_SERVICE_ID)
+    }
     category_cap = f"books.category.{category.id}"
-    expected_dynamic = service_caps | {category_cap}
+    expected_dynamic = service_caps | service_record_caps | {category_cap}
 
     assert perm_service.dynamic_capability_ids(db_session) == expected_dynamic
     assert expected_dynamic <= perm_service.effective_caps(db_session, operator)
@@ -209,7 +213,7 @@ def test_dynamic_capabilities_are_implicit_defaults_and_never_seeded(
     seeded = set(db_session.scalars(select(RolePermission.capability)).all())
     assert expected_dynamic.isdisjoint(seeded)
 
-    denied_cap = "books.service.General Book"
+    denied_cap = "books.servicerecords.General Book"
     perm_service.set_user_override(db_session, operator.id, denied_cap, "deny", actor=admin)
     assert denied_cap not in perm_service.effective_caps(db_session, operator)
     denied_services, denied_categories = perm_service.denied_record_types(db_session, operator)
@@ -380,6 +384,46 @@ def test_dynamic_permission_request_can_be_approved_to_restore_access(
     assert capability in perm_service.effective_caps(mirror_api.db, operator)
 
 
+def test_creation_cap_deny_does_not_hide_existing_service_records(
+    mirror_api: ApiHarness,
+) -> None:
+    _category(mirror_api.db, "OPEN", name_en="Open")
+    visible = _book(
+        mirror_api.db,
+        ref_number="OPEN-1",
+        category_id="OPEN",
+        service_id="General Book",
+    )
+    operator = _user(
+        mirror_api.db,
+        role="operator",
+        email="creation-only-deny-op@test.ae",
+    )
+    perm_service.set_user_override(
+        mirror_api.db,
+        operator.id,
+        "books.service.General Book",
+        "deny",
+        actor=mirror_api.actor,
+    )
+    mirror_api.as_user(operator)
+
+    listed = mirror_api.client.get("/api/v1/books")
+    assert listed.status_code == 200, listed.text
+    assert listed.json()["total"] == 1
+    assert [item["ref_number"] for item in listed.json()["items"]] == [
+        visible.ref_number
+    ]
+
+    facets = mirror_api.client.get("/api/v1/books/facets")
+    assert facets.status_code == 200, facets.text
+    assert facets.json()["total"] == 1
+    assert [item["id"] for item in facets.json()["services"]] == ["General Book"]
+
+    detail = mirror_api.client.get(f"/api/v1/books/{visible.id}")
+    assert detail.status_code == 200, detail.text
+
+
 def test_record_type_denies_hide_list_query_facets_categories_and_details(
     mirror_api: ApiHarness,
 ) -> None:
@@ -413,7 +457,7 @@ def test_record_type_denies_hide_list_query_facets_categories_and_details(
         mirror_api.db,
         operator.id,
         [
-            ("books.service.General Book", "deny", None),
+            ("books.servicerecords.General Book", "deny", None),
             ("books.category.HIDDEN", "deny", None),
         ],
         actor=admin,
@@ -1995,4 +2039,12 @@ def test_dynamic_capability_labels_use_category_name_and_bare_service(
             "books.service.General Book",
         )
         == "General Book"
+    )
+
+    assert (
+        perm_service.dynamic_capability_label(
+            db_session,
+            "books.servicerecords.General Book",
+        )
+        == "Records: General Book"
     )
