@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom'
 import { useIsMutating, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   AlertTriangle,
+  Check,
   ChevronDown,
   Eye,
   EyeOff,
@@ -48,11 +49,17 @@ const SERVICE_STATE_KEY: Record<ServiceAccessState, string> = {
   hidden: 'svcHidden',
 }
 
+// Selection is never hue-only: the active segment fills solid (luminance shift
+// + AA-safe foreground) and carries a check glyph, per PRODUCT.md's WCAG rule.
 const SERVICE_STATE_TONE: Record<ServiceAccessState, string> = {
-  full: 'border-transparent bg-primary text-primary-foreground',
-  records: 'border-transparent bg-warning-soft text-warning',
-  hidden: 'border-transparent bg-accent-soft text-accent',
+  full: 'border-primary bg-primary text-primary-foreground',
+  records: 'border-warning bg-warning text-warning-foreground',
+  hidden: 'border-accent bg-accent text-white',
 }
+
+// One legend explains all three states; every radiogroup describes itself with
+// it, so screen-reader users reach the explanation from the control.
+const SERVICE_LEGEND_ID = 'permissions-service-legend'
 
 const SERVICE_CAPTION_KEY: Record<ServiceAccessState, string> = {
   full: 'svcFullCaption',
@@ -223,12 +230,14 @@ function ServiceTriState({
   item,
   state,
   saving,
+  legendId,
   onFocus,
   onSelect,
 }: {
   item: BlueprintItem
   state: ServiceAccessState
   saving: boolean
+  legendId: string
   onFocus: () => void
   onSelect: (state: ServiceAccessState, event: React.MouseEvent<HTMLButtonElement>) => void
 }): React.JSX.Element {
@@ -284,6 +293,7 @@ function ServiceTriState({
         ref={groupRef}
         role="radiogroup"
         aria-labelledby={nameId}
+        aria-describedby={legendId}
         onKeyDown={moveFocus}
         className="grid grid-cols-3 gap-1"
       >
@@ -295,6 +305,7 @@ function ServiceTriState({
             aria-checked={option === state}
             tabIndex={option === state ? 0 : -1}
             aria-disabled={saving}
+            aria-busy={saving}
             onFocus={onFocus}
             onMouseDown={(event) => {
               if (saving) event.preventDefault()
@@ -303,13 +314,16 @@ function ServiceTriState({
               if (!saving) onSelect(option, event)
             }}
             className={cn(
-              'min-h-9 rounded-md border px-1 text-[0.68em] font-medium leading-tight transition-[background-color,border-color,color] duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface motion-reduce:transition-none',
+              'flex min-h-9 flex-col items-center justify-center gap-0.5 rounded-md border px-1 text-[0.68em] font-medium leading-tight transition-[background-color,border-color,color] duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface motion-reduce:transition-none',
               option === state
                 ? SERVICE_STATE_TONE[option]
                 : 'border-hairline bg-surface text-muted-foreground hover:bg-surface-tinted',
               saving && 'cursor-wait opacity-60',
             )}
           >
+            {option === state ? (
+              <Check className="h-3 w-3 shrink-0" strokeWidth={2.5} aria-hidden />
+            ) : null}
             {t(`access.permissions.mirror.${SERVICE_STATE_KEY[option]}`)}
           </button>
         ))}
@@ -964,7 +978,7 @@ export function PermissionsPage(): React.JSX.Element {
             className="rounded-2xl border border-hairline bg-surface p-3 min-[1100px]:sticky min-[1100px]:top-4 min-[1100px]:self-start"
           >
             <div className="flex items-center justify-between gap-2">
-              <h2 className="text-[0.7em] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+              <h2 className="text-[0.7em] font-semibold uppercase tracking-[0.08em] rtl:tracking-normal text-muted-foreground">
                 {t('access.permissions.mirror.people')}
               </h2>
               <button
@@ -1006,7 +1020,7 @@ export function PermissionsPage(): React.JSX.Element {
               </div>
 
               {filteredUsers.length === 0 ? (
-                <p className="px-1 py-4 text-[0.78em] text-muted-foreground">
+                <p role="status" className="px-1 py-4 text-[0.78em] text-muted-foreground">
                   {t('common.noResults')}
                 </p>
               ) : (
@@ -1162,7 +1176,7 @@ export function PermissionsPage(): React.JSX.Element {
                     >
                       <div className="space-y-5 p-4 sm:p-5">
                         <div>
-                          <h3 className="mb-2 text-[0.7em] font-semibold uppercase tracking-[0.08em] text-primary">
+                          <h3 className="mb-2 text-[0.7em] font-semibold uppercase tracking-[0.08em] rtl:tracking-normal text-primary">
                             {t('access.permissions.mirror.blueprintPages')}
                           </h3>
                           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
@@ -1180,7 +1194,7 @@ export function PermissionsPage(): React.JSX.Element {
                         </div>
 
                         <div>
-                          <h3 className="mb-2 text-[0.7em] font-semibold uppercase tracking-[0.08em] text-primary">
+                          <h3 className="mb-2 text-[0.7em] font-semibold uppercase tracking-[0.08em] rtl:tracking-normal text-primary">
                             {t('access.permissions.mirror.blueprintServices')}
                           </h3>
                           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3">
@@ -1189,19 +1203,23 @@ export function PermissionsPage(): React.JSX.Element {
                                 key={item.id}
                                 item={item}
                                 state={serviceStates[item.id] ?? 'full'}
+                                legendId={SERVICE_LEGEND_ID}
                                 saving={permissionWritesPending}
                                 onFocus={() => setCaptionItem(item)}
                                 onSelect={(next, event) => selectServiceState(item, next, event)}
                               />
                             ))}
                           </div>
-                          <p className="mt-2 text-[0.68em] leading-relaxed text-muted-foreground">
+                          <p
+                            id={SERVICE_LEGEND_ID}
+                            className="mt-2 text-[0.72em] leading-relaxed text-muted-foreground"
+                          >
                             {t('access.permissions.mirror.svcLegend')}
                           </p>
                         </div>
 
                         <div>
-                          <h3 className="mb-2 text-[0.7em] font-semibold uppercase tracking-[0.08em] text-primary">
+                          <h3 className="mb-2 text-[0.7em] font-semibold uppercase tracking-[0.08em] rtl:tracking-normal text-primary">
                             {t('access.permissions.mirror.blueprintCategories')}
                           </h3>
                           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
@@ -1249,6 +1267,7 @@ export function PermissionsPage(): React.JSX.Element {
                         <button
                           type="button"
                           aria-expanded={previewOpen}
+                          aria-controls="permissions-mirror-preview"
                           onClick={() => setPreviewOpen((value) => !value)}
                           className="inline-flex min-h-9 shrink-0 items-center rounded-full border border-hairline bg-surface-tinted px-3.5 text-[0.74em] font-medium text-primary transition-colors hover:bg-primary-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                         >
@@ -1259,7 +1278,7 @@ export function PermissionsPage(): React.JSX.Element {
                       </div>
 
                       {previewOpen ? (
-                        <div className="mt-3">
+                        <div id="permissions-mirror-preview" className="mt-3">
                           <MirrorDevice
                             user={selectedUser}
                             roleLabel={t(`access.roleName.${selectedUser.role}`)}
