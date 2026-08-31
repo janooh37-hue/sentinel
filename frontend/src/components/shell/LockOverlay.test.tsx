@@ -218,6 +218,20 @@ describe('LockOverlay', () => {
     })
   })
 
+  it('uses the translated self shift before current crew names when current shift code is absent', async () => {
+    vi.spyOn(api, 'getWorkforceSnapshot').mockResolvedValue({
+      ...SNAPSHOT,
+      current_shift: { ...SNAPSHOT.current_shift, shift_code: null },
+    })
+    renderOverlay()
+
+    await waitFor(() => {
+      const currentShift = document.querySelector('.lock-shifts .lock-metric')
+      expect(currentShift).toHaveTextContent('Morning')
+      expect(currentShift).not.toHaveTextContent('First Company')
+    })
+  })
+
   it('falls back to crew names when no shift code exists', async () => {
     vi.spyOn(api, 'getWorkforceSnapshot').mockResolvedValue({
       ...SNAPSHOT,
