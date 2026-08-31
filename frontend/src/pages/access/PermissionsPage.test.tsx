@@ -196,6 +196,26 @@ function renderPage(
   return { client, ...view }
 }
 
+// The desktop mirror is no longer mounted with the workspace: it only appears
+// after the person editing opens the preview strip at the bottom of the card.
+async function openDesktopPreview(): Promise<HTMLElement> {
+  const toggle = await screen.findByRole('button', { name: 'Open preview' })
+  expect(toggle).toHaveAttribute('aria-expanded', 'false')
+  expect(screen.queryByTestId('mirror-device')).not.toBeInTheDocument()
+  await userEvent.click(toggle)
+  return screen.getByTestId('mirror-device')
+}
+
+async function findPeopleRail(): Promise<HTMLElement> {
+  return await screen.findByRole('complementary', { name: 'People' })
+}
+
+function studioGrid(rail: HTMLElement): HTMLElement {
+  const grid = rail.parentElement
+  if (grid == null) throw new Error('People rail is not a child of the studio grid')
+  return grid
+}
+
 describe('PermissionsPage Mirror editor', () => {
   beforeEach(() => vi.clearAllMocks())
   afterEach(() => vi.restoreAllMocks())
@@ -205,7 +225,7 @@ describe('PermissionsPage Mirror editor', () => {
 
     expect(await screen.findByRole('heading', { name: 'Permissions studio' })).toBeVisible()
     expect(screen.getAllByRole('heading', { name: 'Permissions studio' })).toHaveLength(1)
-    expect(screen.getByRole('region', { name: 'Choose who to edit' })).toBeVisible()
+    expect(await findPeopleRail()).toBeVisible()
     expect(screen.getByRole('button', { name: /Mariam Hassan/ })).toHaveAttribute(
       'aria-pressed',
       'true',
@@ -237,8 +257,8 @@ describe('PermissionsPage Mirror editor', () => {
       'false',
     )
 
-    const mirror = screen.getByTestId('mirror-device')
-    expect(mirror).toHaveClass('min-[900px]:sticky', 'p-2')
+    const mirror = await openDesktopPreview()
+    expect(mirror).toHaveClass('p-2')
     expect(within(mirror).getAllByText('General Book').length).toBeGreaterThan(0)
     expect(mirror.querySelectorAll('img[src*="service-icons"]').length).toBeGreaterThan(0)
     expect(within(mirror).queryByText('Report')).not.toBeInTheDocument()
@@ -254,6 +274,7 @@ describe('PermissionsPage Mirror editor', () => {
     expect(screen.queryByText('No users to manage yet.')).not.toBeInTheDocument()
     expect(screen.getAllByText('Always full access').length).toBeGreaterThan(0)
     expect(screen.queryByTestId('mirror-device')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Open preview' })).not.toBeInTheDocument()
   })
 
   it('shows an unknown-user recovery link without falling back', async () => {
@@ -286,6 +307,8 @@ describe('PermissionsPage Mirror editor', () => {
     vi.mocked(api.setUserPermission).mockReturnValue(pendingSave)
     renderPage()
 
+    const mirror = await openDesktopPreview()
+
     const service = await screen.findByRole('button', { name: /General Book Grant/ })
     await userEvent.click(service)
 
@@ -294,7 +317,7 @@ describe('PermissionsPage Mirror editor', () => {
       'books.service.General Book',
       'deny',
     )
-    expect(within(screen.getByTestId('mirror-device')).queryByText('General Book')).not.toBeInTheDocument()
+    expect(within(mirror).queryByText('General Book')).not.toBeInTheDocument()
     resolveSave(permissionFixture({
       effective: permissionFixture().effective.filter((id) => id !== 'books.service.General Book'),
       overrides: {
@@ -342,7 +365,7 @@ describe('PermissionsPage Mirror editor', () => {
       overrides: {},
     })
     const first = renderPage(emptyGroups, { requests: [] })
-    const emptyMirror = await screen.findByTestId('mirror-device')
+    const emptyMirror = await openDesktopPreview()
     expect(within(emptyMirror).getAllByText('Nothing here for this person')).toHaveLength(3)
     first.unmount()
 
@@ -377,6 +400,7 @@ describe('PermissionsPage Mirror editor', () => {
     const deferred = createDeferred<UserPermissionRead>()
     vi.mocked(api.setUserPermission).mockReturnValue(deferred.promise)
     renderPage()
+    await openDesktopPreview()
     await userEvent.click(await screen.findByRole('button', { name: /Advanced permissions/i }))
 
     const generalBook = screen.getByRole('button', { name: /General Book Grant/ })
@@ -449,6 +473,8 @@ describe('PermissionsPage Mirror editor', () => {
       'z-[45]',
       '[bottom:calc(4.875rem+env(safe-area-inset-bottom))]',
     )
+    expect(screen.queryByRole('button', { name: 'Open preview' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Close preview' })).not.toBeInTheDocument()
     await userEvent.click(within(mirror).getByRole('button', { name: /Viewing as/ }))
     expect(document.getElementById('mirror-device-screen')).toHaveClass(
       'min-h-0',
@@ -486,7 +512,7 @@ describe('PermissionsPage Mirror editor', () => {
     })
     renderPage(noRecordsView, { requests: [] })
 
-    const mirror = await screen.findByTestId('mirror-device')
+    const mirror = await openDesktopPreview()
     expect(within(mirror).queryByRole('heading', { name: 'Services' })).not.toBeInTheDocument()
     expect(within(mirror).queryByRole('heading', { name: 'Quick actions' })).not.toBeInTheDocument()
     expect(
@@ -544,7 +570,8 @@ describe('PermissionsPage Mirror editor', () => {
     const otherRecords = within(blueprint).getByRole('button', {
       name: /Other records Grant/,
     })
-    expect(within(screen.getByTestId('mirror-device')).queryByText('Other records')).not.toBeInTheDocument()
+    const mirror = await openDesktopPreview()
+    expect(within(mirror).queryByText('Other records')).not.toBeInTheDocument()
     expect(
       screen.getByText(
         (_, element) =>
@@ -583,5 +610,142 @@ describe('PermissionsPage Mirror editor', () => {
     ).toBeVisible()
     expect(screen.queryByText('Always full access')).not.toBeInTheDocument()
     expect(api.getUserPermissions).not.toHaveBeenCalled()
+  })
+
+  it('keeps the desktop mirror unmounted until the workspace preview strip is opened', async () => {
+    renderPage()
+
+    const blueprint = await screen.findByRole('region', { name: 'Permission blueprint' })
+    expect(screen.queryByTestId('mirror-device')).not.toBeInTheDocument()
+
+    const openToggle = screen.getByRole('button', { name: 'Open preview' })
+    expect(openToggle).toHaveAttribute('aria-expanded', 'false')
+    expect(
+      blueprint.compareDocumentPosition(openToggle) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy()
+    expect(within(openToggle.parentElement!).getByText(/Viewing as Mariam Hassan/)).toBeVisible()
+
+    await userEvent.click(openToggle)
+
+    const mirror = screen.getByTestId('mirror-device')
+    expect(mirror).toBeVisible()
+    expect(within(mirror).getAllByText('General Book').length).toBeGreaterThan(0)
+    const closeToggle = screen.getByRole('button', { name: 'Close preview' })
+    expect(closeToggle).toHaveAttribute('aria-expanded', 'true')
+    expect(screen.queryByRole('button', { name: 'Open preview' })).not.toBeInTheDocument()
+    expect(
+      closeToggle.compareDocumentPosition(mirror) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy()
+
+    await userEvent.click(closeToggle)
+
+    expect(screen.queryByTestId('mirror-device')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Open preview' })).toBeVisible()
+  })
+
+  it('lays out people, workspace and advanced permissions as one three-column studio grid', async () => {
+    renderPage()
+
+    const rail = await findPeopleRail()
+    expect(rail).toHaveClass(
+      'bg-surface',
+      'border-hairline',
+      'rounded-2xl',
+      'min-[1100px]:sticky',
+      'min-[1100px]:top-4',
+    )
+
+    const grid = studioGrid(rail)
+    expect(grid).toHaveClass(
+      'grid',
+      'grid-cols-1',
+      'gap-4',
+      'min-[1100px]:[grid-template-columns:250px_minmax(0,1fr)_340px]',
+    )
+    expect(grid.parentElement).toHaveClass('max-w-[1400px]')
+
+    const blueprint = await screen.findByRole('region', { name: 'Permission blueprint' })
+    const advanced = screen
+      .getByRole('button', { name: /Advanced permissions/i })
+      .closest('aside')
+    expect(advanced).toHaveClass('min-[1100px]:sticky', 'min-[1100px]:top-4')
+    expect(Array.from(grid.children)).toHaveLength(3)
+    expect(grid.children[0]).toBe(rail)
+    expect(grid.children[1] as HTMLElement).toContainElement(blueprint)
+    expect(grid.children[2]).toBe(advanced)
+  })
+
+  it('shows the selected person in the workspace header next to the hidden-count pill', async () => {
+    renderPage()
+
+    const rail = await findPeopleRail()
+    const workspace = studioGrid(rail).children[1] as HTMLElement
+    const pill = within(workspace).getByText(
+      (_, element) =>
+        element?.tagName === 'SPAN' &&
+        /^\d+ hidden$/.test(element.textContent?.trim() ?? '') &&
+        element.querySelector('strong') != null,
+    )
+    const header = pill.parentElement as HTMLElement
+    expect(within(header).getByText('Mariam Hassan')).toBeVisible()
+    expect(within(header).getByText('Operator')).toBeVisible()
+  })
+
+  it('filters the People rail by name and keeps the active-account count truthful', async () => {
+    const many = renderPage(permissionFixture(), { users: [operator, secondOperator, admin] })
+
+    const rail = await findPeopleRail()
+    expect(within(rail).getByRole('heading', { level: 2, name: 'People' })).toBeVisible()
+    expect(within(rail).getByText('3 active accounts')).toBeVisible()
+
+    const search = within(rail).getByRole('textbox', { name: 'Search people…' })
+    await userEvent.type(search, 'SECOND')
+
+    expect(within(rail).getByRole('button', { name: /Second User/ })).toBeVisible()
+    expect(within(rail).queryByRole('button', { name: /Mariam Hassan/ })).not.toBeInTheDocument()
+    expect(within(rail).queryByRole('button', { name: /System Admin/ })).not.toBeInTheDocument()
+    expect(within(rail).getByText('3 active accounts')).toBeVisible()
+
+    const workspace = studioGrid(rail).children[1] as HTMLElement
+    expect(within(workspace).getByText('Mariam Hassan')).toBeVisible()
+
+    await userEvent.clear(search)
+    await userEvent.type(search, 'zzz')
+
+    expect(within(rail).getByText('No results')).toBeVisible()
+    expect(within(rail).queryAllByRole('button', { pressed: true })).toHaveLength(0)
+    expect(within(rail).queryAllByRole('button', { pressed: false })).toHaveLength(0)
+    many.unmount()
+
+    renderPage(permissionFixture(), { users: [operator] })
+    expect(within(await findPeopleRail()).getByText('1 active account')).toBeVisible()
+  })
+
+  it('collapses the People rail below the studio breakpoint and forces it open on desktop', async () => {
+    renderPage()
+
+    const rail = await findPeopleRail()
+    const toggle = within(rail).getByRole('button', { name: 'People' })
+    expect(toggle).toHaveClass('min-[1100px]:hidden')
+    expect(toggle).toHaveAttribute('aria-expanded', 'true')
+
+    const bodyId = toggle.getAttribute('aria-controls')
+    expect(bodyId).toBeTruthy()
+    const body = document.getElementById(bodyId!)
+    expect(body).not.toBeNull()
+    expect(within(body!).getByRole('textbox', { name: 'Search people…' })).toBeVisible()
+    expect(within(body!).getByRole('button', { name: /Mariam Hassan/ })).toBeVisible()
+    expect(within(body!).getByText('2 active accounts')).toBeVisible()
+    expect(body).not.toHaveClass('hidden')
+
+    await userEvent.click(toggle)
+
+    expect(toggle).toHaveAttribute('aria-expanded', 'false')
+    expect(body).toHaveClass('hidden', 'min-[1100px]:block')
+
+    await userEvent.click(toggle)
+
+    expect(toggle).toHaveAttribute('aria-expanded', 'true')
+    expect(body).not.toHaveClass('hidden')
   })
 })
