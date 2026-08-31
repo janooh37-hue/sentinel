@@ -326,6 +326,32 @@ def test_auth_catalog_and_user_defaults_include_dynamic_capabilities(
         "manager",
         "admin",
     ]
+    service_record_items = [
+        item
+        for item in response.json()
+        if item["id"].startswith(permissions.SERVICE_RECORDS_CAP_PREFIX)
+    ]
+    expected_service_record_items = {
+        f"{permissions.SERVICE_RECORDS_CAP_PREFIX}{service_id}": {
+            "id": f"{permissions.SERVICE_RECORDS_CAP_PREFIX}{service_id}",
+            "domain": "books",
+            "label": (
+                "Records: Other"
+                if service_id == OTHER_SERVICE_ID
+                else f"Records: {service_id}"
+            ),
+            "description": "",
+            "default_roles": ["operator", "manager", "admin"],
+        }
+        for service_id in (*SERVICE_IDS, OTHER_SERVICE_ID)
+    }
+    assert len(service_record_items) == len(expected_service_record_items)
+    assert {item["id"] for item in service_record_items} == set(
+        expected_service_record_items
+    )
+    assert {
+        item["id"]: item for item in service_record_items
+    } == expected_service_record_items
     assert catalog[f"books.category.{category.id}"] == {
         "id": f"books.category.{category.id}",
         "domain": "categories",
