@@ -3561,7 +3561,14 @@
         "approve": "Approve",
         "refuse": "Refuse",
         "advanced": "Advanced permissions",
-        "advancedCaption": "Full per-action overrides"
+        "advancedCaption": "Full per-action overrides",
+        "svcFull": "Full",
+        "svcRecordsOnly": "Records only",
+        "svcHidden": "Hidden",
+        "svcLegend": "Full — can create it and sees its records · Records only — hidden under Services, records stay visible · Hidden — no tile, no records",
+        "svcFullCaption": "{{name}} is available under Services and its records stay visible in Records.",
+        "svcRecordsOnlyCaption": "{{name}} is hidden under Services and can't be created, but its records stay visible in Records.",
+        "svcHiddenCaption": "{{name}} is hidden everywhere — no Services tile and no records."
       },
       "pages": {
         "settings": "Settings",

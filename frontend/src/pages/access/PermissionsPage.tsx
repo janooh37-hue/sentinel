@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useIsMutating, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
@@ -32,6 +32,33 @@ import { cn } from '@/lib/utils'
 import { artworkForTemplate, emojiForTemplate } from '@/pages/application/formEmoji'
 
 type BlueprintKind = 'page' | 'service' | 'category'
+
+/**
+ * A service is gated by a pair of capabilities: `books.service.<id>` decides
+ * whether it can be created, `books.servicerecords.<id>` whether its records
+ * stay readable. The three states are the only combinations worth offering.
+ */
+type ServiceAccessState = 'full' | 'records' | 'hidden'
+
+const SERVICE_STATE_ORDER: readonly ServiceAccessState[] = ['full', 'records', 'hidden']
+
+const SERVICE_STATE_KEY: Record<ServiceAccessState, string> = {
+  full: 'svcFull',
+  records: 'svcRecordsOnly',
+  hidden: 'svcHidden',
+}
+
+const SERVICE_STATE_TONE: Record<ServiceAccessState, string> = {
+  full: 'border-transparent bg-primary text-primary-foreground',
+  records: 'border-transparent bg-warning-soft text-warning',
+  hidden: 'border-transparent bg-accent-soft text-accent',
+}
+
+const SERVICE_CAPTION_KEY: Record<ServiceAccessState, string> = {
+  full: 'svcFullCaption',
+  records: 'svcRecordsOnlyCaption',
+  hidden: 'svcHiddenCaption',
+}
 
 interface PageBlueprintItem {
   key: string
@@ -189,6 +216,105 @@ function BlueprintButton({
             : t('access.permissions.state.grant')}
       </span>
     </button>
+  )
+}
+
+function ServiceTriState({
+  item,
+  state,
+  saving,
+  onFocus,
+  onSelect,
+}: {
+  item: BlueprintItem
+  state: ServiceAccessState
+  saving: boolean
+  onFocus: () => void
+  onSelect: (state: ServiceAccessState, event: React.MouseEvent<HTMLButtonElement>) => void
+}): React.JSX.Element {
+  const { t } = useTranslation()
+  // Service ids contain spaces ("General Book"), which aria-labelledby would
+  // read as a list of two ids — generate the label id instead.
+  const nameId = useId()
+  const groupRef = useRef<HTMLDivElement>(null)
+  // Arrow keys walk the segments (mirrored in RTL); selection stays manual
+  // because every choice is a write, not a local toggle.
+  const moveFocus = (event: React.KeyboardEvent<HTMLDivElement>): void => {
+    const radios = Array.from(
+      groupRef.current?.querySelectorAll<HTMLButtonElement>('[role="radio"]') ?? [],
+    )
+    const index = radios.indexOf(document.activeElement as HTMLButtonElement)
+    if (index === -1) return
+    const rtl = getComputedStyle(event.currentTarget).direction === 'rtl'
+    const step =
+      event.key === 'ArrowDown'
+        ? 1
+        : event.key === 'ArrowUp'
+          ? -1
+          : event.key === 'ArrowRight'
+            ? rtl
+              ? -1
+              : 1
+            : event.key === 'ArrowLeft'
+              ? rtl
+                ? 1
+                : -1
+              : 0
+    if (step === 0) return
+    event.preventDefault()
+    radios[(index + step + radios.length) % radios.length]?.focus()
+  }
+  return (
+    <div className="rounded-lg border border-hairline bg-surface p-2">
+      <div className="mb-1.5 flex min-h-8 items-center gap-2 px-1">
+        {item.artwork ? (
+          <ServiceArtwork artwork={item.artwork} size="row" />
+        ) : item.glyph ? (
+          <span aria-hidden>{item.glyph}</span>
+        ) : null}
+        <bdi
+          id={nameId}
+          className="min-w-0 flex-1 break-words whitespace-normal text-[0.8em] font-medium leading-snug text-foreground"
+          dir="auto"
+        >
+          {item.label}
+        </bdi>
+      </div>
+      <div
+        ref={groupRef}
+        role="radiogroup"
+        aria-labelledby={nameId}
+        onKeyDown={moveFocus}
+        className="grid grid-cols-3 gap-1"
+      >
+        {SERVICE_STATE_ORDER.map((option) => (
+          <button
+            key={option}
+            type="button"
+            role="radio"
+            aria-checked={option === state}
+            tabIndex={option === state ? 0 : -1}
+            aria-disabled={saving}
+            onFocus={onFocus}
+            onMouseDown={(event) => {
+              if (saving) event.preventDefault()
+            }}
+            onClick={(event) => {
+              if (!saving) onSelect(option, event)
+            }}
+            className={cn(
+              'min-h-9 rounded-md border px-1 text-[0.68em] font-medium leading-tight transition-[background-color,border-color,color] duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface motion-reduce:transition-none',
+              option === state
+                ? SERVICE_STATE_TONE[option]
+                : 'border-hairline bg-surface text-muted-foreground hover:bg-surface-tinted',
+              saving && 'cursor-wait opacity-60',
+            )}
+          >
+            {t(`access.permissions.mirror.${SERVICE_STATE_KEY[option]}`)}
+          </button>
+        ))}
+      </div>
+    </div>
   )
 }
 
@@ -581,6 +707,19 @@ export function PermissionsPage(): React.JSX.Element {
     [categoriesQuery.data, isAr],
   )
 
+  // Records visibility is the stronger gate: without it the service is gone
+  // from Records too, so a stray create-allowed/records-denied pair reads as
+  // Hidden until the next choice rewrites the canonical pair.
+  const serviceStates = useMemo(() => {
+    const states: Record<string, ServiceAccessState> = {}
+    for (const item of serviceItems) {
+      const recordsDenied = !effective.has(`books.servicerecords.${item.id}`)
+      const createDenied = item.capability == null || !effective.has(item.capability)
+      states[item.id] = recordsDenied ? 'hidden' : createDenied ? 'records' : 'full'
+    }
+    return states
+  }, [effective, serviceItems])
+
   const editableItems = useMemo(
     () => [...pageItems.filter((item) => !item.locked), ...serviceItems, ...categoryItems],
     [categoryItems, pageItems, serviceItems],
@@ -632,6 +771,38 @@ export function PermissionsPage(): React.JSX.Element {
       const previous = queryClient.getQueryData<UserPermissionRead>(queryKey)
       if (previous) {
         queryClient.setQueryData(queryKey, updatePermissionOptimistically(previous, capability, effect))
+      }
+      return { previous, queryKey }
+    },
+    onError: (_error, _variables, context) => {
+      if (context?.previous) queryClient.setQueryData(context.queryKey, context.previous)
+      toast.error(t('access.permissions.saveError'))
+    },
+    onSuccess: (data, variables) => {
+      queryClient.setQueryData(['user-permissions', variables.userId], data)
+    },
+  })
+
+  const serviceTriMutation = useMutation({
+    mutationKey: ['user-permission-write', selectedId],
+    scope: { id: `user-permission-write:${selectedId ?? 'none'}` },
+    mutationFn: ({
+      userId,
+      items,
+    }: {
+      userId: number
+      items: Array<{ capability: string; effect: PermissionEffect | null }>
+    }) => api.setUserPermissionsBulk(userId, items),
+    onMutate: async ({ userId, items }) => {
+      const queryKey = ['user-permissions', userId] as const
+      await queryClient.cancelQueries({ queryKey })
+      const previous = queryClient.getQueryData<UserPermissionRead>(queryKey)
+      if (previous) {
+        let next = previous
+        for (const item of items) {
+          next = updatePermissionOptimistically(next, item.capability, item.effect)
+        }
+        queryClient.setQueryData(queryKey, next)
       }
       return { previous, queryKey }
     },
@@ -705,15 +876,43 @@ export function PermissionsPage(): React.JSX.Element {
     toggleMutation.mutate({ userId: selectedUser.id, capability: item.capability, effect })
   }
 
+  // One atomic write per choice: creation first, records second, so a partial
+  // failure can never leave the person with records they cannot reach.
+  const selectServiceState = (
+    item: BlueprintItem,
+    next: ServiceAccessState,
+    event: React.MouseEvent<HTMLButtonElement>,
+  ): void => {
+    setCaptionItem(item)
+    if (!permissions || !selectedUser || !item.capability) return
+    flashBeam(event.currentTarget, item.kind)
+    serviceTriMutation.mutate({
+      userId: selectedUser.id,
+      items: [
+        { capability: item.capability, effect: next === 'full' ? null : 'deny' },
+        {
+          capability: `books.servicerecords.${item.id}`,
+          effect: next === 'hidden' ? 'deny' : null,
+        },
+      ],
+    })
+  }
+
   const caption = (() => {
     if (!captionItem || !permissions) return t('access.permissions.mirror.hint')
     if (captionItem.locked) return t('access.permissions.mirror.always')
     if (!captionItem.capability) return t('access.permissions.mirror.always')
+    if (captionItem.kind === 'service') {
+      const state = serviceStates[captionItem.id] ?? 'full'
+      return t(`access.permissions.mirror.${SERVICE_CAPTION_KEY[state]}`, {
+        name: captionItem.label,
+      })
+    }
     const denied = !effective.has(captionItem.capability)
     if (denied && captionItem.capability === 'books.view') {
       return t('access.permissions.mirror.consequenceRecords')
     }
-    if (denied && (captionItem.kind === 'service' || captionItem.kind === 'category')) {
+    if (denied && captionItem.kind === 'category') {
       return t('access.permissions.mirror.consequence')
     }
     if (denied) return t('access.permissions.mirror.deniedForUser')
@@ -962,45 +1161,62 @@ export function PermissionsPage(): React.JSX.Element {
                       className="overflow-hidden rounded-xl border-[1.5px] border-primary bg-surface text-foreground"
                     >
                       <div className="space-y-5 p-4 sm:p-5">
-                        {[
-                          {
-                            label: t('access.permissions.mirror.blueprintPages'),
-                            items: pageItems,
-                            columns: 'grid-cols-2 sm:grid-cols-3',
-                          },
-                          {
-                            label: t('access.permissions.mirror.blueprintServices'),
-                            items: serviceItems,
-                            columns: 'grid-cols-2 sm:grid-cols-3 xl:grid-cols-4',
-                          },
-                          {
-                            label: t('access.permissions.mirror.blueprintCategories'),
-                            items: categoryItems,
-                            columns: 'grid-cols-2 sm:grid-cols-3',
-                          },
-                        ].map((group) => (
-                          <div key={group.label}>
-                            <h3 className="mb-2 text-[0.7em] font-semibold uppercase tracking-[0.08em] text-primary">
-                              {group.label}
-                            </h3>
-                            <div className={cn('grid gap-2', group.columns)}>
-                              {group.items.map((item) => {
-                                const denied =
-                                  item.capability != null && !effective.has(item.capability)
-                                return (
-                                  <BlueprintButton
-                                    key={item.id}
-                                    item={item}
-                                    denied={denied}
-                                    saving={permissionWritesPending}
-                                    onFocus={() => setCaptionItem(item)}
-                                    onToggle={(event) => toggleItem(item, event)}
-                                  />
-                                )
-                              })}
-                            </div>
+                        <div>
+                          <h3 className="mb-2 text-[0.7em] font-semibold uppercase tracking-[0.08em] text-primary">
+                            {t('access.permissions.mirror.blueprintPages')}
+                          </h3>
+                          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                            {pageItems.map((item) => (
+                              <BlueprintButton
+                                key={item.id}
+                                item={item}
+                                denied={item.capability != null && !effective.has(item.capability)}
+                                saving={permissionWritesPending}
+                                onFocus={() => setCaptionItem(item)}
+                                onToggle={(event) => toggleItem(item, event)}
+                              />
+                            ))}
                           </div>
-                        ))}
+                        </div>
+
+                        <div>
+                          <h3 className="mb-2 text-[0.7em] font-semibold uppercase tracking-[0.08em] text-primary">
+                            {t('access.permissions.mirror.blueprintServices')}
+                          </h3>
+                          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                            {serviceItems.map((item) => (
+                              <ServiceTriState
+                                key={item.id}
+                                item={item}
+                                state={serviceStates[item.id] ?? 'full'}
+                                saving={permissionWritesPending}
+                                onFocus={() => setCaptionItem(item)}
+                                onSelect={(next, event) => selectServiceState(item, next, event)}
+                              />
+                            ))}
+                          </div>
+                          <p className="mt-2 text-[0.68em] leading-relaxed text-muted-foreground">
+                            {t('access.permissions.mirror.svcLegend')}
+                          </p>
+                        </div>
+
+                        <div>
+                          <h3 className="mb-2 text-[0.7em] font-semibold uppercase tracking-[0.08em] text-primary">
+                            {t('access.permissions.mirror.blueprintCategories')}
+                          </h3>
+                          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                            {categoryItems.map((item) => (
+                              <BlueprintButton
+                                key={item.id}
+                                item={item}
+                                denied={item.capability != null && !effective.has(item.capability)}
+                                saving={permissionWritesPending}
+                                onFocus={() => setCaptionItem(item)}
+                                onToggle={(event) => toggleItem(item, event)}
+                              />
+                            ))}
+                          </div>
+                        </div>
                       </div>
 
                       <RequestStrip
