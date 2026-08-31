@@ -101,6 +101,23 @@ describe('AdvancedPermissionsPanel', () => {
     expect(screen.getByText('leaves.view')).toBeVisible()
   })
 
+  it('keeps domain headers and capability rows stacked inside the narrow panel', () => {
+    renderPanel()
+
+    const domainHeader = screen.getByRole('group', { name: 'Apply to all Books' }).parentElement
+    expect(domainHeader).toHaveClass('flex', 'flex-col')
+    expect(domainHeader).not.toHaveClass('sm:flex-row')
+    expect(domainHeader).not.toHaveClass('sm:items-center')
+    expect(domainHeader).not.toHaveClass('sm:justify-between')
+
+    const capabilityRow = screen.getByRole('group', { name: 'View books' }).parentElement
+      ?.parentElement
+    expect(capabilityRow).toHaveClass('flex', 'flex-col')
+    expect(capabilityRow).not.toHaveClass('sm:flex-row')
+    expect(capabilityRow).not.toHaveClass('sm:items-start')
+    expect(capabilityRow).not.toHaveClass('sm:justify-between')
+  })
+
   it('keeps the tri-state row editor and excludes blueprint-owned domains', async () => {
     renderPanel()
 
