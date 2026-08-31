@@ -16,7 +16,7 @@ import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
 import { serviceArtwork, serviceGlyph, useServiceLabel } from './serviceLabels'
 import { useCapabilities } from '@/lib/useCapabilities'
-import { hasServiceCap } from '@/lib/dashboardLayout'
+import { hasServiceRecordsCap } from '@/lib/dashboardLayout'
 
 export interface BooksFilters {
   categoryIds: string[]
@@ -46,9 +46,9 @@ export function BooksFilterBar({
   const isAr = i18n.language.startsWith('ar')
   const serviceLabel = useServiceLabel()
   const { has } = useCapabilities()
-  const visibleServices = services.filter((service) => hasServiceCap(service.id, has))
+  const visibleServices = services.filter((service) => hasServiceRecordsCap(service.id, has))
   const selectedServiceAllowed =
-    filters.serviceId === 'all' || hasServiceCap(filters.serviceId, has)
+    filters.serviceId === 'all' || hasServiceRecordsCap(filters.serviceId, has)
   const selectedServiceId = selectedServiceAllowed ? filters.serviceId : 'all'
   const resetDeniedServiceRef = useRef<string | null>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
