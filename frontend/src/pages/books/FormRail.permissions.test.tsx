@@ -25,10 +25,13 @@ const items: RailItem[] = [
 
 describe('FormRail service permissions', () => {
   beforeEach(() => {
-    capabilityState.allowed = new Set(['books.service.General Book'])
+    capabilityState.allowed = new Set([
+      'books.servicerecords.General Book',
+      'books.service.Report',
+    ])
   })
 
-  it('keeps All and hides denied service filter options', () => {
+  it('shows a records-visible service and hides a creation-only service', () => {
     render(<FormRail items={items} active="all" onChange={vi.fn()} />)
 
     expect(screen.getByRole('button', { name: /All/ })).toBeVisible()

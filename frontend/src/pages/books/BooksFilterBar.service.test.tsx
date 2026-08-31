@@ -75,8 +75,8 @@ function setup(filters: Partial<BooksFilters> = {}) {
 
 beforeEach(() => {
   capabilityState.allowed = new Set([
-    'books.service.Report',
-    'books.service.other',
+    'books.servicerecords.Report',
+    'books.servicerecords.other',
   ])
 })
 describe('BooksFilterBar service filter', () => {
@@ -94,15 +94,18 @@ describe('BooksFilterBar service filter', () => {
     expect(screen.getByTestId('service-filter').textContent).not.toContain('Service')
   })
 
-  it('selecting a service reports its id', async () => {
+  it('keeps a records-visible service selectable without creation access', async () => {
     const { onChange } = setup()
     await userEvent.click(screen.getByTestId('service-filter'))
     await userEvent.click(screen.getByText('تقرير'))
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ serviceId: 'Report' }))
   })
 
-  it('hides services denied by capability', async () => {
-    capabilityState.allowed = new Set(['books.service.other'])
+  it('hides a records-denied service even when creation access is granted', async () => {
+    capabilityState.allowed = new Set([
+      'books.servicerecords.other',
+      'books.service.Report',
+    ])
     setup()
     await userEvent.click(screen.getByTestId('service-filter'))
 
@@ -123,7 +126,10 @@ describe('BooksFilterBar service filter', () => {
     )
 
     expect(onChange).not.toHaveBeenCalled()
-    capabilityState.allowed = new Set(['books.service.other'])
+    capabilityState.allowed = new Set([
+      'books.servicerecords.other',
+      'books.service.Report',
+    ])
     view.rerender(
       <BooksFilterBar
         filters={filters}
