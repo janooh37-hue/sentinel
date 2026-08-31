@@ -458,6 +458,7 @@ describe('PermissionsPage Mirror editor', () => {
 
     const mirror = await openDesktopPreview()
     const before = hiddenTotal()
+    expect(within(mirror).getByText('Incoming')).toBeVisible()
     expect(within(mirror).getAllByText('General Book').length).toBeGreaterThan(0)
 
     await userEvent.click(serviceRadio('General Book', 'Records only'))
@@ -478,6 +479,7 @@ describe('PermissionsPage Mirror editor', () => {
     expect(checkGlyph(recordsRadio)).not.toBeNull()
     expect(checkGlyph(serviceRadio('General Book', 'Full'))).toBeNull()
     expect(within(mirror).queryByText('General Book')).not.toBeInTheDocument()
+    expect(within(mirror).getByText('Incoming')).toBeVisible()
     expect(hiddenTotal()).toBe(before + 1)
 
     deferred.resolve(
