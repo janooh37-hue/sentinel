@@ -519,11 +519,11 @@ def _crew_entries(db: Session, occurrences: list[WorkShiftOccurrence]) -> list[d
     ]
 
 
-def _current_on_duty_crews(
+def _current_on_duty(
     db: Session, *, as_of_naive: datetime, eligible_employees: set[str]
-) -> list[dict[str, Any]]:
+) -> dict[str, Any]:
     if not eligible_employees:
-        return []
+        return {"crews": [], "shift_code": None}
     occurrences = list(
         db.scalars(
             select(WorkShiftOccurrence).where(
@@ -533,7 +533,7 @@ def _current_on_duty_crews(
         )
     )
     if not occurrences:
-        return []
+        return {"crews": [], "shift_code": None}
     memberships = list(
         db.scalars(
             select(WorkCrewMembership).where(WorkCrewMembership.employee_id.in_(eligible_employees))
@@ -544,7 +544,25 @@ def _current_on_duty_crews(
         for occurrence in occurrences
         if any(_membership_covers(membership, occurrence) for membership in memberships)
     ]
-    return _crew_entries(db, kept)
+    shifts = {
+        shift.id: shift
+        for shift in db.scalars(
+            select(WorkShiftDefinition).where(
+                WorkShiftDefinition.id.in_({row.shift_definition_id for row in kept})
+            )
+        )
+    }
+    shift_codes = sorted(
+        {
+            shifts[row.shift_definition_id].code
+            for row in kept
+            if row.shift_definition_id in shifts
+        }
+    )
+    return {
+        "crews": _crew_entries(db, kept),
+        "shift_code": ", ".join(shift_codes) or None,
+    }
 
 
 def _next_shift(
@@ -635,6 +653,11 @@ def get_workforce_snapshot(
     eligible_employees = _eligible_employee_ids(
         db, scope=aggregate_scope, self_employee_id=self_employee_id
     )
+    on_duty = _current_on_duty(
+        db,
+        as_of_naive=naive_now,
+        eligible_employees=eligible_employees,
+    )
     value: dict[str, Any] = {
         "as_of": aware_now,
         "operational_date": operational_date,
@@ -650,11 +673,8 @@ def get_workforce_snapshot(
         "current_shift": {
             "starts_at": None,
             "ends_at": None,
-            "crews": _current_on_duty_crews(
-                db,
-                as_of_naive=naive_now,
-                eligible_employees=eligible_employees,
-            ),
+            "crews": on_duty["crews"],
+            "shift_code": on_duty["shift_code"],
             "scheduled": 0,
             "excused": 0,
             "expected": 0,

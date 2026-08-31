@@ -239,6 +239,7 @@ class CurrentShiftRead(ORMBase):
 
     starts_at: datetime | None = None
     ends_at: datetime | None = None
+    shift_code: str | None = None
     crews: list[CrewNameRead] = Field(default_factory=list)
     scheduled: int = Field(ge=0)
     excused: int = Field(ge=0)
