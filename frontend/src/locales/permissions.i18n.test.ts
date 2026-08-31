@@ -92,6 +92,17 @@ describe('Mirror editor bilingual copy', () => {
       'access.permissions.mirror.viewPrereqWarning',
       'access.permissions.mirror.consequenceRecords',
       'access.permissions.mirror.serviceOther',
+      'access.permissions.mirror.people',
+      'access.permissions.mirror.searchPeople',
+      'access.permissions.mirror.openPreview',
+      'access.permissions.mirror.closePreview',
+      'access.permissions.mirror.svcFull',
+      'access.permissions.mirror.svcRecordsOnly',
+      'access.permissions.mirror.svcHidden',
+      'access.permissions.mirror.svcLegend',
+      'access.permissions.mirror.svcFullCaption',
+      'access.permissions.mirror.svcRecordsOnlyCaption',
+      'access.permissions.mirror.svcHiddenCaption',
       'requireCap.notRequestable',
       'access.permissions.caps.books.service.other',
     ]
@@ -107,6 +118,9 @@ describe('Mirror editor bilingual copy', () => {
       if (!get(en as unknown as Rec, `access.permissions.mirror.hiddenLabel_${suffix}`)) {
         missing.push(`en hiddenLabel_${suffix}`)
       }
+      if (!get(en as unknown as Rec, `access.permissions.mirror.peopleCount_${suffix}`)) {
+        missing.push(`en peopleCount_${suffix}`)
+      }
     }
     for (const suffix of ['zero', 'one', 'two', 'few', 'many', 'other']) {
       if (!get(ar as unknown as Rec, `access.permissions.mirror.availableCount_${suffix}`)) {
@@ -115,8 +129,25 @@ describe('Mirror editor bilingual copy', () => {
       if (!get(ar as unknown as Rec, `access.permissions.mirror.hiddenLabel_${suffix}`)) {
         missing.push(`ar hiddenLabel_${suffix}`)
       }
+      if (!get(ar as unknown as Rec, `access.permissions.mirror.peopleCount_${suffix}`)) {
+        missing.push(`ar peopleCount_${suffix}`)
+      }
     }
     expect(missing).toEqual([])
+  })
+
+  // The Services tile is a card (بطاقة); أيقونة is the emoji inside it, so the
+  // legend and the Hidden caption must not promise the wrong thing.
+  it('calls the Services tile a card in Arabic, not an icon', () => {
+    const legend = String(get(ar as unknown as Rec, 'access.permissions.mirror.svcLegend'))
+    const hiddenCaption = String(
+      get(ar as unknown as Rec, 'access.permissions.mirror.svcHiddenCaption'),
+    )
+
+    expect(legend).toContain('بطاقة')
+    expect(legend).not.toContain('أيقونة')
+    expect(hiddenCaption).toContain('بطاقة')
+    expect(hiddenCaption).not.toContain('أيقونة')
   })
 
   it('describes the Records prerequisite and assignee exception truthfully in both languages', () => {

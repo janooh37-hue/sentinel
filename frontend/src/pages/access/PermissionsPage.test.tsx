@@ -274,6 +274,12 @@ function serviceState(name: string): ServiceStateLabel {
   return only
 }
 
+/** Selection must carry a shape, not only a hue: the active segment renders a
+ *  check glyph (WCAG 1.4.1 — never state by colour alone). */
+function checkGlyph(radio: HTMLElement): Element | null {
+  return radio.querySelector('svg.lucide-check')
+}
+
 function hiddenPill(): HTMLElement {
   return screen.getByText(
     (_, element) =>
@@ -327,17 +333,31 @@ describe('PermissionsPage Mirror editor', () => {
       expect(within(generalBook).getByText(state)).toBeVisible()
     }
     expect(serviceState('General Book')).toBe('Full')
-    expect(serviceRadio('General Book', 'Full')).toHaveClass(
-      'bg-primary',
-      'text-primary-foreground',
-    )
+    const fullRadio = serviceRadio('General Book', 'Full')
+    expect(fullRadio).toHaveClass('border-primary', 'bg-primary', 'text-primary-foreground')
+    expect(checkGlyph(fullRadio)).not.toBeNull()
+    for (const state of ['Records only', 'Hidden'] as const) {
+      expect(checkGlyph(serviceRadio('General Book', state))).toBeNull()
+    }
     expect(serviceState('Report')).toBe('Hidden')
-    expect(serviceRadio('Report', 'Hidden')).toHaveClass('bg-accent-soft', 'text-accent')
-    expect(
-      within(blueprint).getByText(
-        /Full — can create it and sees its records · Records only — hidden under Services, records stay visible · Hidden — no tile, no records/,
-      ),
-    ).toBeVisible()
+    const hiddenRadio = serviceRadio('Report', 'Hidden')
+    expect(hiddenRadio).toHaveClass('border-accent', 'bg-accent', 'text-white')
+    expect(checkGlyph(hiddenRadio)).not.toBeNull()
+    expect(checkGlyph(serviceRadio('Report', 'Full'))).toBeNull()
+
+    // The legend is the only place the three states are explained, so every
+    // radiogroup has to point at it instead of leaving it visually adjacent.
+    const legend = within(blueprint).getByText(
+      /Full — can create it and sees its records · Records only — hidden under Services, records stay visible · Hidden — no tile, no records/,
+    )
+    expect(legend).toBeVisible()
+    expect(legend).toHaveClass('text-[0.72em]')
+    expect(legend.id).toBeTruthy()
+    expect(generalBook).toHaveAttribute('aria-describedby', legend.id)
+    expect(within(blueprint).getByRole('radiogroup', { name: 'Report' })).toHaveAttribute(
+      'aria-describedby',
+      legend.id,
+    )
 
     const mirror = await openDesktopPreview()
     expect(mirror).toHaveClass('p-2')
@@ -451,10 +471,10 @@ describe('PermissionsPage Mirror editor', () => {
     // Optimistically the tile leaves the Services preview and the hidden pill
     // counts it, while its records stay granted.
     await waitFor(() => expect(serviceState('General Book')).toBe('Records only'))
-    expect(serviceRadio('General Book', 'Records only')).toHaveClass(
-      'bg-warning-soft',
-      'text-warning',
-    )
+    const recordsRadio = serviceRadio('General Book', 'Records only')
+    expect(recordsRadio).toHaveClass('border-warning', 'bg-warning', 'text-warning-foreground')
+    expect(checkGlyph(recordsRadio)).not.toBeNull()
+    expect(checkGlyph(serviceRadio('General Book', 'Full'))).toBeNull()
     expect(within(mirror).queryByText('General Book')).not.toBeInTheDocument()
     expect(hiddenTotal()).toBe(before + 1)
 
@@ -658,6 +678,7 @@ describe('PermissionsPage Mirror editor', () => {
           const radio = serviceRadio(name, state)
           expect(radio).not.toBeDisabled()
           expect(radio).toHaveAttribute('aria-disabled', 'true')
+          expect(radio).toHaveAttribute('aria-busy', 'true')
         }
       }
       expect(screen.getByRole('button', { name: /Employees Grant/ })).toHaveAttribute(
@@ -686,6 +707,7 @@ describe('PermissionsPage Mirror editor', () => {
       expect(serviceState('General Book')).toBe('Full')
       expect(within(mirror).getAllByText('General Book').length).toBeGreaterThan(0)
       expect(serviceRadio('General Book', 'Full')).toHaveAttribute('aria-disabled', 'false')
+      expect(serviceRadio('General Book', 'Full')).toHaveAttribute('aria-busy', 'false')
       expect(hiddenTotal()).toBe(before)
       expect(document.activeElement).toBe(recordsOnly)
     })
@@ -860,6 +882,9 @@ describe('PermissionsPage Mirror editor', () => {
 
     const openToggle = screen.getByRole('button', { name: 'Open preview' })
     expect(openToggle).toHaveAttribute('aria-expanded', 'false')
+    const previewId = openToggle.getAttribute('aria-controls')
+    expect(previewId).toBeTruthy()
+    expect(document.getElementById(previewId!)).toBeNull()
     expect(
       blueprint.compareDocumentPosition(openToggle) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy()
@@ -872,6 +897,10 @@ describe('PermissionsPage Mirror editor', () => {
     expect(within(mirror).getAllByText('General Book').length).toBeGreaterThan(0)
     const closeToggle = screen.getByRole('button', { name: 'Close preview' })
     expect(closeToggle).toHaveAttribute('aria-expanded', 'true')
+    expect(closeToggle).toHaveAttribute('aria-controls', previewId!)
+    const revealed = document.getElementById(previewId!)
+    expect(revealed).not.toBeNull()
+    expect(revealed).toContainElement(mirror)
     expect(screen.queryByRole('button', { name: 'Open preview' })).not.toBeInTheDocument()
     expect(
       closeToggle.compareDocumentPosition(mirror) & Node.DOCUMENT_POSITION_FOLLOWING,
@@ -894,6 +923,13 @@ describe('PermissionsPage Mirror editor', () => {
       'min-[1100px]:sticky',
       'min-[1100px]:top-4',
     )
+    // Arabic is cursive: letter-spacing on an uppercase micro-label breaks the
+    // joins, so every new uppercase heading opts out under dir=rtl.
+    expect(within(rail).getByRole('heading', { level: 2, name: 'People' })).toHaveClass(
+      'uppercase',
+      'tracking-[0.08em]',
+      'rtl:tracking-normal',
+    )
 
     const grid = studioGrid(rail)
     expect(grid).toHaveClass(
@@ -905,6 +941,11 @@ describe('PermissionsPage Mirror editor', () => {
     expect(grid.parentElement).toHaveClass('max-w-[1400px]')
 
     const blueprint = await screen.findByRole('region', { name: 'Permission blueprint' })
+    for (const name of ['Pages', 'Services', 'Record categories']) {
+      expect(within(blueprint).getByRole('heading', { level: 3, name })).toHaveClass(
+        'rtl:tracking-normal',
+      )
+    }
     const advanced = (await screen.findByText('Advanced permissions')).closest('aside')
     expect(advanced).toHaveClass('min-[1100px]:sticky', 'min-[1100px]:top-4')
     expect(Array.from(grid.children)).toHaveLength(3)
@@ -950,7 +991,8 @@ describe('PermissionsPage Mirror editor', () => {
     await userEvent.clear(search)
     await userEvent.type(search, 'zzz')
 
-    expect(within(rail).getByText('No results')).toBeVisible()
+    const noResults = within(rail).getByRole('status')
+    expect(noResults).toHaveTextContent('No results')
     expect(within(rail).queryAllByRole('button', { pressed: true })).toHaveLength(0)
     expect(within(rail).queryAllByRole('button', { pressed: false })).toHaveLength(0)
     many.unmount()
