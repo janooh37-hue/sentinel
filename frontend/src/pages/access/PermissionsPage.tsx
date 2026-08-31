@@ -7,6 +7,7 @@ import {
   Eye,
   EyeOff,
   LockKeyhole,
+  Search,
   ShieldCheck,
 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
@@ -464,9 +465,12 @@ export function PermissionsPage(): React.JSX.Element {
   const requestedUserId = requestedUserParam === null ? null : Number(requestedUserParam)
   const [captionItem, setCaptionItem] = useState<BlueprintItem | null>(null)
   const [mirrorExpanded, setMirrorExpanded] = useState(false)
+  const [previewOpen, setPreviewOpen] = useState(false)
+  const [peopleOpen, setPeopleOpen] = useState(true)
+  const [peopleQuery, setPeopleQuery] = useState('')
   const [decidingId, setDecidingId] = useState<number | null>(null)
   const [beam, setBeam] = useState<Beam | null>(null)
-  const workspaceRef = useRef<HTMLDivElement>(null)
+  const workspaceRef = useRef<HTMLElement>(null)
   const beamTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const mobile = useMirrorMobile()
   const isAr = i18n.language.startsWith('ar')
@@ -494,6 +498,13 @@ export function PermissionsPage(): React.JSX.Element {
     () => (usersQuery.data ?? []).filter((user) => user.status === 'active'),
     [usersQuery.data],
   )
+  // The rail filter narrows who is listed, never who is being edited: the
+  // selection lives in `?user=` so a filtered-out person keeps their workspace.
+  const filteredUsers = useMemo(() => {
+    const needle = peopleQuery.trim().toLowerCase()
+    if (!needle) return users
+    return users.filter((user) => userLabel(user).toLowerCase().includes(needle))
+  }, [peopleQuery, users])
   const selectedUser =
     requestedUserId === null
       ? (users.find((user) => user.role !== 'admin') ?? null)
@@ -739,7 +750,7 @@ export function PermissionsPage(): React.JSX.Element {
 
   return (
     <div className="flex flex-1 flex-col overflow-auto bg-background">
-      <div className="mx-auto w-full max-w-[1280px] flex-1 px-4 pb-24 pt-5 sm:px-8 sm:pb-12">
+      <div className="mx-auto w-full max-w-[1400px] flex-1 px-4 pb-24 pt-5 sm:px-8 sm:pb-12">
         <header className="mb-5">
           <h1 className="text-[1.7em] font-bold tracking-tight text-foreground">
             {t('access.permissions.mirror.title')}
@@ -748,173 +759,328 @@ export function PermissionsPage(): React.JSX.Element {
             {t('access.permissions.mirror.help')}
           </p>
         </header>
-        <section aria-label={t('access.permissions.mirror.pickUser')} className="mb-5 overflow-x-auto rounded-2xl border border-hairline bg-surface p-2 [scrollbar-width:thin]">
-          <div className="flex min-w-max gap-2">
-            {users.map((user) => {
-              const selected = user.id === selectedUser?.id
-              const adminUser = user.role === 'admin'
-              return (
-                <button
-                  key={user.id}
-                  type="button"
-                  disabled={adminUser}
-                  onClick={() => selectUser(user)}
-                  aria-pressed={selected}
-                  title={adminUser ? t('access.permissions.mirror.adminNote') : undefined}
-                  className={cn(
-                    'flex min-h-12 min-w-[190px] items-center gap-2.5 rounded-xl border px-3 py-2 text-start transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                    selected
-                      ? 'border-primary bg-primary-soft'
-                      : 'border-transparent hover:border-border hover:bg-surface-tinted',
-                    adminUser && 'cursor-not-allowed opacity-60',
-                  )}
-                >
-                  <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-primary text-[0.72em] font-bold text-primary-foreground">
-                    {initialsOf(user)}
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <bdi className="block truncate text-[0.82em] font-semibold text-foreground" dir="auto">
-                      {userLabel(user)}
-                    </bdi>
-                    <span className={cn('mt-0.5 inline-flex rounded-full px-2 py-0.5 text-[0.62em] font-semibold', roleTone(user.role))}>
-                      {t(`access.roleName.${user.role}`)}
-                    </span>
-                    {adminUser ? (
-                      <span className="ms-1 text-[0.62em] text-muted-foreground">
-                        {t('access.permissions.mirror.adminNote')}
-                      </span>
-                    ) : null}
-                  </span>
-                </button>
-              )
-            })}
-          </div>
-        </section>
-
-        {!selectedUser ? (
-          requestedAdmin ? (
-            <EmptyState icon={ShieldCheck} message={t('access.permissions.mirror.adminNote')} />
-          ) : requestedUserMissing ? (
-            <div className="flex flex-col items-center gap-3">
-              <EmptyState
-                icon={ShieldCheck}
-                message={t('access.permissions.mirror.userNotFound')}
-              />
-              <Link
-                to="/access-requests"
-                className="inline-flex min-h-11 items-center rounded-full border border-hairline bg-surface px-4 text-[0.82em] font-medium text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        <div className="grid grid-cols-1 gap-4 min-[1100px]:[grid-template-columns:250px_minmax(0,1fr)_340px]">
+          <aside
+            aria-label={t('access.permissions.mirror.people')}
+            className="rounded-2xl border border-hairline bg-surface p-3 min-[1100px]:sticky min-[1100px]:top-4 min-[1100px]:self-start"
+          >
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="text-[0.7em] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                {t('access.permissions.mirror.people')}
+              </h2>
+              <button
+                type="button"
+                aria-label={t('access.permissions.mirror.people')}
+                aria-expanded={peopleOpen}
+                aria-controls="permissions-people-list"
+                onClick={() => setPeopleOpen((value) => !value)}
+                className="grid h-9 w-9 shrink-0 place-items-center rounded-lg text-muted-foreground transition-colors hover:bg-surface-tinted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring min-[1100px]:hidden"
               >
-                {t('access.title')}
-              </Link>
-            </div>
-          ) : (
-            <EmptyState
-              icon={ShieldCheck}
-              message={t('access.permissions.empty')}
-            />
-          )
-        ) : permissionsQuery.isError || capabilitiesQuery.isError || categoriesQuery.isError ? (
-          <EmptyState message={t('access.permissions.loadError')} />
-        ) : permissionsQuery.isLoading || !permissions ? (
-          <Skeleton className="h-[520px] w-full rounded-2xl" />
-        ) : (
-          <>
-            <section className="overflow-hidden rounded-2xl border border-hairline bg-surface shadow-sm">
-              <div className="flex flex-col gap-3 border-b border-hairline px-5 py-3 sm:flex-row sm:items-center sm:justify-between">
-                {showViewPrereqWarning ? (
-                  <div
-                    role="note"
-                    className="flex min-w-0 items-start gap-2 rounded-lg border border-warning/30 bg-warning-soft px-3 py-2 text-start text-[0.78em] leading-relaxed text-foreground"
-                  >
-                    <AlertTriangle
-                      className="mt-0.5 h-4 w-4 shrink-0 text-warning"
-                      strokeWidth={1.8}
-                      aria-hidden
-                    />
-                    <span className="min-w-0">
-                      {t('access.permissions.mirror.viewPrereqWarning')}
-                    </span>
-                  </div>
-                ) : null}
-                <span
+                <ChevronDown
                   className={cn(
-                    'shrink-0 self-start rounded-full px-3 py-1.5 text-[0.72em] sm:self-auto',
-                    !showViewPrereqWarning && 'sm:ms-auto',
-                    hiddenCount > 0
-                      ? 'bg-accent-soft text-accent'
-                      : 'bg-surface-tinted text-muted-foreground',
+                    'h-4 w-4 transition-transform motion-reduce:transition-none',
+                    peopleOpen && 'rotate-180',
                   )}
-                >
-                  <strong className="font-mono">{hiddenCount}</strong>{' '}
-                  {t('access.permissions.mirror.hiddenLabel', { count: hiddenCount })}
-                </span>
+                  strokeWidth={1.8}
+                  aria-hidden
+                />
+              </button>
+            </div>
+
+            <div
+              id="permissions-people-list"
+              className={cn('mt-2.5', !peopleOpen && 'hidden min-[1100px]:block')}
+            >
+              <div className="flex min-h-11 items-center gap-2 rounded-lg border border-border bg-surface px-2.5 focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/10">
+                <Search
+                  className="h-4 w-4 shrink-0 text-muted-foreground"
+                  strokeWidth={1.8}
+                  aria-hidden
+                />
+                <input
+                  value={peopleQuery}
+                  onChange={(event) => setPeopleQuery(event.target.value)}
+                  placeholder={t('access.permissions.mirror.searchPeople')}
+                  aria-label={t('access.permissions.mirror.searchPeople')}
+                  className="min-w-0 flex-1 bg-transparent text-[0.82em] outline-none placeholder:text-muted-foreground"
+                />
               </div>
 
-              <div
-                ref={workspaceRef}
-                className="relative grid grid-cols-1 gap-4 p-4 min-[900px]:[grid-template-columns:minmax(0,1.22fr)_minmax(350px,1fr)]"
-              >
-                <section
-                  aria-label={t('access.permissions.mirror.blueprintLabel')}
-                  className="overflow-hidden rounded-xl border-[1.5px] border-primary bg-surface text-foreground"
+              {filteredUsers.length === 0 ? (
+                <p className="px-1 py-4 text-[0.78em] text-muted-foreground">
+                  {t('common.noResults')}
+                </p>
+              ) : (
+                <div
+                  role="group"
+                  aria-label={t('access.permissions.mirror.pickUser')}
+                  className="mt-2 flex flex-col gap-1 min-[1100px]:max-h-[min(60vh,32rem)] min-[1100px]:overflow-y-auto min-[1100px]:[scrollbar-width:thin]"
                 >
-                  <div className="space-y-5 p-4 sm:p-5">
-                    {[
-                      {
-                        label: t('access.permissions.mirror.blueprintPages'),
-                        items: pageItems,
-                        columns: 'grid-cols-2 sm:grid-cols-3',
-                      },
-                      {
-                        label: t('access.permissions.mirror.blueprintServices'),
-                        items: serviceItems,
-                        columns: 'grid-cols-2 xl:grid-cols-3',
-                      },
-                      {
-                        label: t('access.permissions.mirror.blueprintCategories'),
-                        items: categoryItems,
-                        columns: 'grid-cols-2 sm:grid-cols-3',
-                      },
-                    ].map((group) => (
-                      <div key={group.label}>
-                        <h3 className="mb-2 text-[0.7em] font-semibold uppercase tracking-[0.08em] text-primary">
-                          {group.label}
-                        </h3>
-                        <div className={cn('grid gap-2', group.columns)}>
-                          {group.items.map((item) => {
-                            const denied = item.capability != null && !effective.has(item.capability)
-                            return (
-                              <BlueprintButton
-                                key={item.id}
-                                item={item}
-                                denied={denied}
-                                saving={permissionWritesPending}
-                                onFocus={() => setCaptionItem(item)}
-                                onToggle={(event) => toggleItem(item, event)}
-                              />
-                            )
-                          })}
-                        </div>
+                  {filteredUsers.map((user) => {
+                    const selected = user.id === selectedUser?.id
+                    const adminUser = user.role === 'admin'
+                    return (
+                      <button
+                        key={user.id}
+                        type="button"
+                        disabled={adminUser}
+                        onClick={() => selectUser(user)}
+                        aria-pressed={selected}
+                        title={adminUser ? t('access.permissions.mirror.adminNote') : undefined}
+                        className={cn(
+                          'flex min-h-12 w-full items-center gap-2.5 rounded-xl border px-2.5 py-2 text-start transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                          selected
+                            ? 'border-primary bg-primary-soft'
+                            : 'border-transparent hover:border-border hover:bg-surface-tinted',
+                          adminUser && 'cursor-not-allowed opacity-60',
+                        )}
+                      >
+                        <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-primary text-[0.72em] font-bold text-primary-foreground">
+                          {initialsOf(user)}
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <bdi
+                            className="block truncate text-[0.82em] font-semibold text-foreground"
+                            dir="auto"
+                          >
+                            {userLabel(user)}
+                          </bdi>
+                          <span
+                            className={cn(
+                              'mt-0.5 inline-flex rounded-full px-2 py-0.5 text-[0.62em] font-semibold',
+                              roleTone(user.role),
+                            )}
+                          >
+                            {t(`access.roleName.${user.role}`)}
+                          </span>
+                          {adminUser ? (
+                            <span className="ms-1 text-[0.62em] text-muted-foreground">
+                              {t('access.permissions.mirror.adminNote')}
+                            </span>
+                          ) : null}
+                        </span>
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+
+              <p className="mt-2.5 border-t border-hairline pt-2.5 text-[0.7em] text-muted-foreground">
+                {t('access.permissions.mirror.peopleCount', { count: users.length })}
+              </p>
+            </div>
+          </aside>
+
+          <div className="min-w-0">
+            {!selectedUser ? (
+              requestedAdmin ? (
+                <EmptyState
+                  icon={ShieldCheck}
+                  message={t('access.permissions.mirror.adminNote')}
+                />
+              ) : requestedUserMissing ? (
+                <div className="flex flex-col items-center gap-3">
+                  <EmptyState
+                    icon={ShieldCheck}
+                    message={t('access.permissions.mirror.userNotFound')}
+                  />
+                  <Link
+                    to="/access-requests"
+                    className="inline-flex min-h-11 items-center rounded-full border border-hairline bg-surface px-4 text-[0.82em] font-medium text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    {t('access.title')}
+                  </Link>
+                </div>
+              ) : (
+                <EmptyState icon={ShieldCheck} message={t('access.permissions.empty')} />
+              )
+            ) : permissionsQuery.isError ||
+              capabilitiesQuery.isError ||
+              categoriesQuery.isError ? (
+              <EmptyState message={t('access.permissions.loadError')} />
+            ) : permissionsQuery.isLoading || !permissions ? (
+              <Skeleton className="h-[520px] w-full rounded-2xl" />
+            ) : (
+              <>
+                <section
+                  ref={workspaceRef}
+                  className="relative overflow-hidden rounded-2xl border border-hairline bg-surface shadow-sm"
+                >
+                  <div className="flex flex-col gap-3 border-b border-hairline px-5 py-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex min-w-0 items-center gap-2.5">
+                      <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-primary text-[0.74em] font-bold text-primary-foreground">
+                        {initialsOf(selectedUser)}
+                      </span>
+                      <span className="min-w-0">
+                        <bdi
+                          className="block truncate text-[0.84em] font-semibold text-foreground"
+                          dir="auto"
+                        >
+                          {userLabel(selectedUser)}
+                        </bdi>
+                        <span
+                          className={cn(
+                            'mt-0.5 inline-flex rounded-full px-2 py-0.5 text-[0.62em] font-semibold',
+                            roleTone(selectedUser.role),
+                          )}
+                        >
+                          {t(`access.roleName.${selectedUser.role}`)}
+                        </span>
+                      </span>
+                    </div>
+                    {showViewPrereqWarning ? (
+                      <div
+                        role="note"
+                        className="flex min-w-0 items-start gap-2 rounded-lg border border-warning/30 bg-warning-soft px-3 py-2 text-start text-[0.78em] leading-relaxed text-foreground"
+                      >
+                        <AlertTriangle
+                          className="mt-0.5 h-4 w-4 shrink-0 text-warning"
+                          strokeWidth={1.8}
+                          aria-hidden
+                        />
+                        <span className="min-w-0">
+                          {t('access.permissions.mirror.viewPrereqWarning')}
+                        </span>
                       </div>
-                    ))}
+                    ) : null}
+                    <span
+                      className={cn(
+                        'shrink-0 self-start rounded-full px-3 py-1.5 text-[0.72em] sm:self-auto',
+                        hiddenCount > 0
+                          ? 'bg-accent-soft text-accent'
+                          : 'bg-surface-tinted text-muted-foreground',
+                      )}
+                    >
+                      <strong className="font-mono">{hiddenCount}</strong>{' '}
+                      {t('access.permissions.mirror.hiddenLabel', { count: hiddenCount })}
+                    </span>
                   </div>
 
-                  <RequestStrip
-                    requests={selectedRequests}
-                    decidingId={decidingId}
-                    onDecide={(id, userId, decision) =>
-                      decideMutation.mutate({ id, userId, decision })
-                    }
-                  />
-                  <div
-                    aria-live="polite"
-                    className="border-t border-primary/15 bg-primary-soft px-4 py-3 text-[0.74em] leading-relaxed text-foreground"
-                  >
-                    {caption}
+                  <div className="p-4">
+                    <section
+                      aria-label={t('access.permissions.mirror.blueprintLabel')}
+                      className="overflow-hidden rounded-xl border-[1.5px] border-primary bg-surface text-foreground"
+                    >
+                      <div className="space-y-5 p-4 sm:p-5">
+                        {[
+                          {
+                            label: t('access.permissions.mirror.blueprintPages'),
+                            items: pageItems,
+                            columns: 'grid-cols-2 sm:grid-cols-3',
+                          },
+                          {
+                            label: t('access.permissions.mirror.blueprintServices'),
+                            items: serviceItems,
+                            columns: 'grid-cols-2 sm:grid-cols-3 xl:grid-cols-4',
+                          },
+                          {
+                            label: t('access.permissions.mirror.blueprintCategories'),
+                            items: categoryItems,
+                            columns: 'grid-cols-2 sm:grid-cols-3',
+                          },
+                        ].map((group) => (
+                          <div key={group.label}>
+                            <h3 className="mb-2 text-[0.7em] font-semibold uppercase tracking-[0.08em] text-primary">
+                              {group.label}
+                            </h3>
+                            <div className={cn('grid gap-2', group.columns)}>
+                              {group.items.map((item) => {
+                                const denied =
+                                  item.capability != null && !effective.has(item.capability)
+                                return (
+                                  <BlueprintButton
+                                    key={item.id}
+                                    item={item}
+                                    denied={denied}
+                                    saving={permissionWritesPending}
+                                    onFocus={() => setCaptionItem(item)}
+                                    onToggle={(event) => toggleItem(item, event)}
+                                  />
+                                )
+                              })}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+
+                      <RequestStrip
+                        requests={selectedRequests}
+                        decidingId={decidingId}
+                        onDecide={(id, userId, decision) =>
+                          decideMutation.mutate({ id, userId, decision })
+                        }
+                      />
+                      <div
+                        aria-live="polite"
+                        className="border-t border-primary/15 bg-primary-soft px-4 py-3 text-[0.74em] leading-relaxed text-foreground"
+                      >
+                        {caption}
+                      </div>
+                    </section>
                   </div>
+
+                  {!mobile ? (
+                    <div className="border-t border-hairline px-4 py-3">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span className="inline-flex min-w-0 items-center gap-2 text-[0.74em] text-muted-foreground">
+                          <Eye className="h-4 w-4 shrink-0" strokeWidth={1.7} aria-hidden />
+                          <bdi className="truncate" dir="auto">
+                            {t('access.permissions.mirror.viewingAs', {
+                              name: userLabel(selectedUser),
+                            })}
+                          </bdi>
+                        </span>
+                        <button
+                          type="button"
+                          aria-expanded={previewOpen}
+                          onClick={() => setPreviewOpen((value) => !value)}
+                          className="inline-flex min-h-9 shrink-0 items-center rounded-full border border-hairline bg-surface-tinted px-3.5 text-[0.74em] font-medium text-primary transition-colors hover:bg-primary-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        >
+                          {previewOpen
+                            ? t('access.permissions.mirror.closePreview')
+                            : t('access.permissions.mirror.openPreview')}
+                        </button>
+                      </div>
+
+                      {previewOpen ? (
+                        <div className="mt-3">
+                          <MirrorDevice
+                            user={selectedUser}
+                            roleLabel={t(`access.roleName.${selectedUser.role}`)}
+                            hiddenCount={hiddenCount}
+                            pages={visiblePages}
+                            services={visibleServices}
+                            categories={visibleCategories}
+                            showCreation={canCreateRecords}
+                            showRecords={canViewRecords}
+                            expanded
+                            mobile={false}
+                            onExpandedChange={() => {}}
+                          />
+                        </div>
+                      ) : null}
+                    </div>
+                  ) : null}
+
+                  {beam ? (
+                    <svg
+                      className="pointer-events-none absolute inset-0 z-20 h-full w-full text-accent"
+                      aria-hidden
+                    >
+                      <line
+                        x1={beam.x1}
+                        y1={beam.y1}
+                        x2={beam.x2}
+                        y2={beam.y2}
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeDasharray="5 5"
+                      />
+                    </svg>
+                  ) : null}
                 </section>
 
-                {!mobile ? (
+                {mobile ? (
                   <MirrorDevice
                     user={selectedUser}
                     roleLabel={t(`access.roleName.${selectedUser.role}`)}
@@ -924,56 +1090,29 @@ export function PermissionsPage(): React.JSX.Element {
                     categories={visibleCategories}
                     showCreation={canCreateRecords}
                     showRecords={canViewRecords}
-                    expanded
-                    mobile={false}
-                    onExpandedChange={() => {}}
+                    expanded={mirrorExpanded}
+                    mobile
+                    onExpandedChange={setMirrorExpanded}
                   />
                 ) : null}
+              </>
+            )}
+          </div>
 
-                {beam ? (
-                  <svg
-                    className="pointer-events-none absolute inset-0 z-20 h-full w-full text-accent"
-                    aria-hidden
-                  >
-                    <line
-                      x1={beam.x1}
-                      y1={beam.y1}
-                      x2={beam.x2}
-                      y2={beam.y2}
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      strokeDasharray="5 5"
-                    />
-                  </svg>
-                ) : null}
-              </div>
-            </section>
-
-            <div className="mt-5">
+          {selectedUser != null &&
+          permissions != null &&
+          !permissionsQuery.isError &&
+          !capabilitiesQuery.isError &&
+          !categoriesQuery.isError ? (
+            <aside className="min-w-0 min-[1100px]:sticky min-[1100px]:top-4 min-[1100px]:self-start">
               <AdvancedPermissionsDrawer
                 user={selectedUser}
                 perms={permissions}
                 capabilities={capabilitiesQuery.data ?? []}
               />
-            </div>
-
-            {mobile ? (
-              <MirrorDevice
-                user={selectedUser}
-                roleLabel={t(`access.roleName.${selectedUser.role}`)}
-                hiddenCount={hiddenCount}
-                pages={visiblePages}
-                services={visibleServices}
-                categories={visibleCategories}
-                showCreation={canCreateRecords}
-                showRecords={canViewRecords}
-                expanded={mirrorExpanded}
-                mobile
-                onExpandedChange={setMirrorExpanded}
-              />
-            ) : null}
-          </>
-        )}
+            </aside>
+          ) : null}
+        </div>
       </div>
     </div>
   )
