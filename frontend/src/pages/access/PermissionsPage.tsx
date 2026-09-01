@@ -948,8 +948,8 @@ export function PermissionsPage(): React.JSX.Element {
   if (usersQuery.isLoading) {
     return (
       <div className="flex flex-1 flex-col overflow-auto bg-background p-6">
-        <Skeleton className="mx-auto h-10 w-full max-w-[1280px]" />
-        <Skeleton className="mx-auto mt-5 h-[520px] w-full max-w-[1280px] rounded-2xl" />
+        <Skeleton className="mx-auto h-10 w-full max-w-[1680px]" />
+        <Skeleton className="mx-auto mt-5 h-[520px] w-full max-w-[1680px] rounded-2xl" />
       </div>
     )
   }
@@ -964,7 +964,7 @@ export function PermissionsPage(): React.JSX.Element {
 
   return (
     <div className="flex flex-1 flex-col overflow-auto bg-background">
-      <div className="mx-auto w-full max-w-[1400px] flex-1 px-4 pb-24 pt-5 sm:px-8 sm:pb-12">
+      <div className="mx-auto w-full max-w-[1680px] flex-1 px-4 pb-24 pt-5 sm:px-8 sm:pb-12">
         <header className="mb-5">
           <h1 className="text-[1.7em] font-bold tracking-tight text-foreground">
             {t('access.permissions.mirror.title')}
