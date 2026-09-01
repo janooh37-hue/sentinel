@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Self
+from typing import Literal, Self
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -99,3 +99,8 @@ class EmailSendResult(BaseModel):
     sent: bool
     message_id: str
     ledger_entry_id: int
+
+
+class EmailHandoffResult(BaseModel):
+    ledger_entry_id: int
+    mode: Literal["mailto", "draft"]

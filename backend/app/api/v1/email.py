@@ -31,12 +31,13 @@ from app.db.session import get_db
 from app.schemas.email import (
     EmailAccountRead,
     EmailAccountUpsert,
+    EmailHandoffResult,
     EmailSendRequest,
     EmailSendResult,
     EmailSyncResult,
     EmailSyncStatus,
 )
-from app.services import email_service, scheduler_service
+from app.services import email_service, outlook_handoff_service, scheduler_service
 
 log = logging.getLogger(__name__)
 
@@ -56,6 +57,7 @@ def _to_read(account: object) -> EmailAccountRead:
         smtp_port=account.smtp_port,  # type: ignore[attr-defined]
         smtp_use_tls=account.smtp_use_tls,  # type: ignore[attr-defined]
         sent_folder=account.sent_folder,  # type: ignore[attr-defined]
+        drafts_folder=account.drafts_folder,  # type: ignore[attr-defined]
         inbox_folder=account.inbox_folder,  # type: ignore[attr-defined]
         enabled=account.enabled,  # type: ignore[attr-defined]
         sync_interval_minutes=account.sync_interval_minutes,  # type: ignore[attr-defined]
@@ -140,6 +142,62 @@ def sync_status(
 ) -> EmailSyncStatus:
     """Read-only — any signed-in user can see their own mailbox's sync state."""
     return email_service.get_sync_status(db, owner_user_id=current_user.id)
+
+
+@router.post(
+    "/handoff",
+    response_model=EmailHandoffResult,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_handoff(
+    db: Annotated[Session, Depends(get_db)],
+    current_user: Annotated[User, Depends(require_capability("ledger.send"))],
+    to: Annotated[str, Form()],
+    subject: Annotated[str, Form()],
+    html: Annotated[str, Form()],
+    mode: Annotated[str, Form()],
+    cc: Annotated[str, Form()] = "",
+    related_book_id: Annotated[int | None, Form()] = None,
+    related_employee_id: Annotated[str | None, Form()] = None,
+    in_reply_to: Annotated[str | None, Form()] = None,
+    references: Annotated[str | None, Form()] = None,
+    use_signature: Annotated[bool, Form()] = True,
+    files: Annotated[list[UploadFile] | None, File()] = None,
+) -> EmailHandoffResult:
+    """Create a pending ledger row and optionally push a draft to Outlook."""
+    to_list = [address.strip() for address in to.split(",") if address.strip()]
+    cc_list = [address.strip() for address in cc.split(",") if address.strip()]
+    attachments: list[outlook_handoff_service.HandoffAttachment] = []
+    if files:
+        for upload in files:
+            data = await upload.read()
+            if data:
+                attachments.append(
+                    (upload.filename or "attachment", upload.content_type, data)
+                )
+    try:
+        entry = outlook_handoff_service.create_handoff(
+            db,
+            owner_user_id=current_user.id,
+            to=to_list,
+            cc=cc_list,
+            subject=subject,
+            html=html,
+            mode=mode,
+            related_book_id=related_book_id,
+            related_employee_id=related_employee_id,
+            in_reply_to=in_reply_to,
+            references=references,
+            use_signature=use_signature,
+            attachments=attachments,
+        )
+    except outlook_handoff_service.HandoffValidationError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except outlook_handoff_service.HandoffDeliveryError as exc:
+        log.exception("Outlook draft handoff failed")
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    result_mode = "draft" if mode == "draft" else "mailto"
+    return EmailHandoffResult(ledger_entry_id=entry.id, mode=result_mode)
 
 
 @router.post("/send", response_model=EmailSendResult)

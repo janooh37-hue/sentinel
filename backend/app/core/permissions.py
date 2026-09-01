@@ -259,8 +259,8 @@ CAPABILITIES: Final[tuple[Capability, ...]] = (
     Capability(
         "ledger.send",
         "ledger",
-        "Send email from the ledger",
-        "Send email messages from the ledger as yourself.",
+        "Hand off email to Outlook",
+        "Hand off email to Outlook or push prepared drafts to your Outlook Drafts folder.",
     ),
     Capability(
         "ledger.delete",

@@ -301,6 +301,7 @@ def upsert_account(
             smtp_port=payload.smtp_port,
             smtp_use_tls=payload.smtp_use_tls,
             sent_folder=payload.sent_folder,
+            drafts_folder=payload.drafts_folder,
             inbox_folder=payload.inbox_folder,
             enabled=payload.enabled,
             sync_interval_minutes=payload.sync_interval_minutes,
@@ -319,6 +320,7 @@ def upsert_account(
         existing.smtp_port = payload.smtp_port
         existing.smtp_use_tls = payload.smtp_use_tls
         existing.sent_folder = payload.sent_folder
+        existing.drafts_folder = payload.drafts_folder
         existing.inbox_folder = payload.inbox_folder
         existing.enabled = payload.enabled
         existing.sync_interval_minutes = payload.sync_interval_minutes
