@@ -632,3 +632,11 @@ def test_existing_message_ids_exclude_pending_handoffs_but_keep_confirmed_mail(
     assert pending_tag not in existing
     assert existing[confirmed_tag] == (confirmed.id, 0)
     assert pending.id != confirmed.id
+
+
+def test_openapi_exposes_only_outlook_handoff_compose_contract() -> None:
+    paths = create_app().openapi()["paths"]
+
+    assert "post" in paths["/api/v1/email/handoff"]
+    assert "/api/v1/email/send" not in paths
+    assert not any(path.startswith("/api/v1/ledger/drafts") for path in paths)
