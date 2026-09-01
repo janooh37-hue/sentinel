@@ -23,6 +23,7 @@ class EmailAccountRead(ORMBase):
     smtp_port: int
     smtp_use_tls: bool
     sent_folder: str
+    drafts_folder: str = "Drafts"
     inbox_folder: str
     enabled: bool
     linked_employee_id: str | None = None
@@ -48,6 +49,7 @@ class EmailAccountUpsert(BaseModel):
     smtp_port: int = Field(default=587, ge=1, le=65535)
     smtp_use_tls: bool = True
     sent_folder: str = "Sent"
+    drafts_folder: str = "Drafts"
     inbox_folder: str = "INBOX"
     enabled: bool = True
     sync_interval_minutes: int = Field(default=5, ge=0, le=1440)
