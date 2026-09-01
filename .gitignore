@@ -126,6 +126,12 @@ directory.csv
 passport-sample-report.txt
 pytest_output.txt
 backend/scripts/_run_sample_report.bat
+# Vehicle-fines source docs at repo root — real plates, employee names and
+# license scans (PII in a public repo). The tokenized production template will
+# live in backend/templates/ in a later round, sanitized.
+/PLATE NUMBER.docx
+/project vhicels.xlsx
+~$*.docx
 
 # Local agent/tooling state
 .playwright-cli/
