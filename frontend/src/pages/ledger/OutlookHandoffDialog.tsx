@@ -860,6 +860,7 @@ export function OutlookHandoffDialog({
                     {t('ledger.outlook.handoff.modeLegend')}
                   </legend>
                   <ModeOption
+                    id="handoff-mode-draft"
                     checked={effectiveMode === 'draft'}
                     disabled={!draftAvailable}
                     label={t('ledger.outlook.handoff.modeDraft')}
@@ -867,6 +868,7 @@ export function OutlookHandoffDialog({
                     onSelect={() => setChosenMode('draft')}
                   />
                   <ModeOption
+                    id="handoff-mode-mailto"
                     checked={effectiveMode === 'mailto'}
                     disabled={draftAvailable && forcedDraftReason !== null}
                     label={t('ledger.outlook.handoff.modeMailto')}
@@ -1085,20 +1087,29 @@ export function OutlookHandoffDialog({
  * One handoff mode. A real radio (not a styled div) so the group is a single
  * arrow-key stop and screen readers announce "1 of 2"; the checkmark backs the
  * colour up so selection is never colour-only.
+ *
+ * The wrapping <label> would otherwise fold the consequence line into the
+ * radio's accessible name ("Draft in Outlook Full formatting, your signature…").
+ * An explicit `aria-label` keeps the name exactly the visible mode label and
+ * `aria-describedby` hands the consequence over as a description, which is
+ * where assistive tech expects it.
  */
 function ModeOption({
+  id,
   checked,
   disabled,
   label,
   hint,
   onSelect,
 }: {
+  id: string
   checked: boolean
   disabled: boolean
   label: string
   hint: string
   onSelect: () => void
 }): React.JSX.Element {
+  const hintId = `${id}-hint`
   return (
     <label
       className={cn(
@@ -1112,6 +1123,8 @@ function ModeOption({
         checked={checked}
         disabled={disabled}
         onChange={onSelect}
+        aria-label={label}
+        aria-describedby={hintId}
         className="mt-0.5 h-3.5 w-3.5 shrink-0 accent-primary"
       />
       <span className="min-w-0">
@@ -1119,7 +1132,11 @@ function ModeOption({
           {label}
           {checked && <Check className="h-3 w-3 text-primary" strokeWidth={2.6} aria-hidden />}
         </span>
-        <span className="mt-px block text-[0.76em] leading-snug text-muted-foreground" dir="auto">
+        <span
+          id={hintId}
+          className="mt-px block text-[0.76em] leading-snug text-muted-foreground"
+          dir="auto"
+        >
           {hint}
         </span>
       </span>

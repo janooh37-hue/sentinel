@@ -79,6 +79,9 @@ const draftRadio = (): HTMLElement => screen.getByRole('radio', { name: /Draft i
 const mailtoRadio = (): HTMLElement => screen.getByRole('radio', { name: /Open Outlook now/ })
 
 beforeEach(() => {
+  // Call history, not just implementations — the no-recipient test asserts
+  // `emailHandoff` was never reached.
+  vi.clearAllMocks()
   vi.mocked(api.getEmailAccount).mockResolvedValue({ enabled: true } as never)
   vi.mocked(api.emailHandoff).mockResolvedValue({ ledger_entry_id: 77, mode: 'mailto' })
   vi.mocked(api.listLedgerContacts).mockResolvedValue([])

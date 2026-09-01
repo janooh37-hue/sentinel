@@ -10,7 +10,7 @@
  * phone and desktop, so there is nothing to assert twice.
  */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { describe, it, expect, vi, beforeAll, beforeEach, afterAll } from 'vitest'
@@ -209,8 +209,10 @@ describe('BookRecordPage — Email via Outlook', () => {
     vi.mocked(api.getBook).mockResolvedValue(recordFixture() as never)
     renderRecord()
 
+    // The header paints before the book query resolves, so the action exists
+    // (disabled) from the first frame. Wait for eligibility, not for the node.
     const action = await screen.findByRole('button', { name: 'Email via Outlook' })
-    expect(action).toBeEnabled()
+    await waitFor(() => expect(action).toBeEnabled())
     await userEvent.click(action)
 
     const state = JSON.parse(
