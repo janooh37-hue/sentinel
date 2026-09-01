@@ -42,3 +42,10 @@ export const PERSONAL_FOLDERS: readonly PersonalFolderDef[] = [
 
 /** The default view when the Ledger opens. */
 export const DEFAULT_MAILBOX_VIEW: MailboxView = { kind: 'folder', folder: 'inbox' }
+
+/**
+ * Tag the backend puts on a handoff's pending ledger row until the Sent-folder
+ * sync confirms the real message. Mirrors
+ * `outlook_handoff_service.HANDOFF_TAG` — keep the two in sync.
+ */
+export const OUTLOOK_PENDING_TAG = 'outlook-pending'

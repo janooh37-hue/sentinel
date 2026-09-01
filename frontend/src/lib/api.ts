@@ -342,6 +342,24 @@ export interface EmailSendRequest {
   use_signature?: boolean
 }
 export type EmailSendResult = components['schemas']['EmailSendResult']
+// ``/email/handoff`` is multipart as well — same hand-mirroring as above.
+export interface EmailHandoffRequest {
+  to: string[]
+  cc?: string[]
+  subject: string
+  html: string
+  /** `draft` IMAP-APPENDs a full MIME draft (HTML + signature + attachments)
+   *  into the user's Outlook Drafts folder; `mailto` only records the pending
+   *  ledger row — the caller opens the `mailto:` URL itself. */
+  mode: 'draft' | 'mailto'
+  related_book_id?: number | null
+  related_employee_id?: string | null
+  in_reply_to?: string | null
+  references?: string | null
+  /** Draft mode only. Mailto relies on Outlook's own signature. */
+  use_signature?: boolean
+}
+export type EmailHandoffResult = components['schemas']['EmailHandoffResult']
 
 // Phase 14 — Identity linking. `email` was added to the backend schema
 // (2026-05-26 identity collapse) but openapi-typescript hasn't regenerated yet,
@@ -2128,6 +2146,27 @@ export const api = {
     }
     for (const f of files) form.append('files', f)
     return multipart<EmailSendResult>('/email/send', form)
+  },
+  emailHandoff: (body: EmailHandoffRequest, files: File[] = []) => {
+    const form = new FormData()
+    form.set('to', body.to.join(','))
+    form.set('cc', (body.cc ?? []).join(','))
+    form.set('subject', body.subject)
+    form.set('html', body.html)
+    form.set('mode', body.mode)
+    if (body.related_book_id != null) {
+      form.set('related_book_id', String(body.related_book_id))
+    }
+    if (body.related_employee_id) {
+      form.set('related_employee_id', body.related_employee_id)
+    }
+    if (body.in_reply_to) form.set('in_reply_to', body.in_reply_to)
+    if (body.references) form.set('references', body.references)
+    if (body.use_signature !== undefined) {
+      form.set('use_signature', body.use_signature ? 'true' : 'false')
+    }
+    for (const f of files) form.append('files', f)
+    return multipart<EmailHandoffResult>('/email/handoff', form)
   },
 
   // --- email signature (Phase 15) ---

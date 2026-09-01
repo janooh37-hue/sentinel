@@ -334,6 +334,25 @@ export function EmailSection(): React.JSX.Element {
             className={INPUT_BASE}
           />
         </div>
+
+        <div className="flex flex-col gap-1.5">
+          <label
+            htmlFor="email-drafts"
+            className="text-[0.72em] font-semibold uppercase tracking-[0.1em] text-muted-foreground rtl:tracking-normal"
+          >
+            {t('settings.email.draftsFolder', { defaultValue: 'Drafts folder' })}
+          </label>
+          <input
+            id="email-drafts"
+            value={form.drafts_folder}
+            onChange={(e) => update('drafts_folder', e.target.value)}
+            aria-describedby="email-drafts-hint"
+            className={INPUT_BASE}
+          />
+          <p id="email-drafts-hint" className="text-[0.76em] leading-snug text-muted-foreground">
+            {t('settings.email.draftsFolderHint')}
+          </p>
+        </div>
       </div>
 
       <div className="mt-4 flex flex-col gap-3">

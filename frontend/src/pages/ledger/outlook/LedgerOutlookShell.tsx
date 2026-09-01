@@ -30,7 +30,7 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { ArrowLeft, FolderOpen, Users } from 'lucide-react'
@@ -39,7 +39,8 @@ import { api } from '@/lib/api'
 import type { LedgerEntryRead, LedgerListItem, LedgerSearchResponse } from '@/lib/api'
 import { useIsMobile } from '@/lib/useIsMobile'
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
-import { LedgerEmailCompose } from '../LedgerEmailCompose'
+import { OutlookHandoffDialog } from '../OutlookHandoffDialog'
+import type { ComposeReference } from '@/components/ledger/ReferencePicker'
 import { ContextPanel } from './ContextPanel'
 import { useContextSource } from './useContextSource'
 import { useSyncStatus } from './useSyncStatus'
@@ -80,18 +81,16 @@ interface LedgerOutlookShellProps {
 
 /** The compose overlay state. `source` is optional for `new`-mode composes. */
 interface ComposeState {
-  mode: 'new' | 'reply' | 'replyall' | 'forward' | 'draft-edit'
+  mode: 'new' | 'reply' | 'replyall' | 'forward'
   source?: LedgerEntryRead
-  /** When mode === 'draft-edit', the existing draft entry to resume. */
-  draft?: LedgerEntryRead
-  /** Optional prefill for `new`-mode composes (e.g. from Leaves batch confirm
-   *  or the email basket). */
+  /** Optional prefill for `new`-mode composes (e.g. from Leaves batch confirm,
+   *  the email basket, or a record's "Email via Outlook" action). */
   prefill?: {
     to?: string[]
     cc?: string[]
     subject?: string
     bodyHtml?: string
-    references?: import('@/components/ledger/ReferencePicker').ComposeReference[]
+    references?: ComposeReference[]
     attachRefPdf?: boolean
     basketKey?: string
   }
@@ -359,34 +358,11 @@ export function LedgerOutlookShell({ onNavigate }: LedgerOutlookShellProps = {})
     navigate(location.pathname, { replace: true, state: null })
   }, [location, navigate, handleSelectView])
 
-  // Resume a draft: the list rows are lightweight `LedgerListItem`s, so fetch the
-  // full entry (subject + draft_meta to/cc + notes_html body) and open compose in
-  // `draft-edit` mode — restoring the pre-Outlook click-to-edit behaviour the
-  // shell redesign dropped. Routes through openCompose so clicking a draft row
-  // while another compose is open shows the toast instead of clobbering.
-  // NOTE: editDraftMut is defined AFTER openCompose (which depends on `compose`
-  // state). The mutation's onSuccess is a stable closure that calls openCompose —
-  // this is fine because mutations fire asynchronously (user event → network →
-  // callback), so openCompose is always re-captured from the latest render.
-  const editDraftMut = useMutation({
-    mutationFn: (id: number) => api.getLedgerEntry(id),
-    onSuccess: (draft) => openCompose({ mode: 'draft-edit', draft }),
-    onError: () =>
-      toast.error(
-        t('ledger.outlook.draftOpenError', { defaultValue: "Couldn't open this draft" }),
-      ),
-  })
-
-  // Row click: a draft (tag=draft) resumes editing in the compose window;
-  // everything else opens read-only in the reading pane. Plain fn — `messageList`
-  // is rebuilt every render anyway, so a stable identity buys nothing and a
-  // useCallback dep on the per-render `mailItems` array would only churn.
+  // Row click opens the entry read-only in the reading pane. Plain fn —
+  // `messageList` is rebuilt every render anyway, so a stable identity buys
+  // nothing and a useCallback dep on the per-render `mailItems` array would
+  // only churn.
   const handleSelectRow = (id: number): void => {
-    const item = mailItems.find((m) => m.id === id)
-    if (item?.tags.includes('draft')) {
-      editDraftMut.mutate(id)
-      return
-    }
     setSelectedId(id)
   }
 
@@ -432,8 +408,8 @@ export function LedgerOutlookShell({ onNavigate }: LedgerOutlookShellProps = {})
     setCompose(null)
   }, [queryClient])
 
-  // Closing compose may leave a freshly auto-saved (or edited) draft behind —
-  // refresh so the Drafts list reflects it.
+  // Closing may follow a handoff that already wrote a pending row — refresh so
+  // the list shows it without waiting for the next poll.
   const handleComposeClose = useCallback(() => {
     void queryClient.invalidateQueries({ queryKey: ['ledger'] })
     setCompose(null)
@@ -550,19 +526,18 @@ export function LedgerOutlookShell({ onNavigate }: LedgerOutlookShellProps = {})
 
   // Desktop: a non-modal Outlook-style window docked bottom-right (the mailbox
   // behind stays clickable); the render-prop hands min/max/restore controls to
-  // the compose surface. Mobile: full-screen page chrome (header + Back).
+  // the handoff surface. Mobile: full-screen page chrome (header + Back).
   const composeOverlay = compose && (
     <ComposeWindow fullScreen={isMobile}>
       {(win) => (
-        <LedgerEmailCompose
+        <OutlookHandoffDialog
           mode={compose.mode}
           source={compose.source}
-          draft={compose.draft}
           prefill={compose.prefill}
           chrome={isMobile ? 'page' : 'window'}
           windowControls={win}
           onClose={handleComposeClose}
-          onSent={handleComposeSent}
+          onHandedOff={handleComposeSent}
         />
       )}
     </ComposeWindow>

@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, useLocation } from 'react-router-dom'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { LedgerEntryRead, LedgerListItem } from '@/lib/api'
 import { api } from '@/lib/api'
 import { LedgerOutlookShell } from './LedgerOutlookShell'
@@ -17,12 +17,29 @@ vi.mock('@/lib/api', async (orig) => {
       listLedger: vi.fn(),
       getLedgerEntry: vi.fn(),
       getSmartFolderSuggestions: vi.fn().mockResolvedValue([]),
+      // Reached through the hosted handoff dialog.
+      listLedgerContacts: vi.fn().mockResolvedValue([]),
+      listRecipientLists: vi.fn().mockResolvedValue([]),
+      listEmployees: vi.fn().mockResolvedValue({ items: [], total: 0 }),
+      getEmailAccount: vi.fn().mockResolvedValue({ enabled: true }),
+      emailHandoff: vi.fn(),
     },
   }
 })
-vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key }) }))
+vi.mock('react-i18next', () => ({
+  useTranslation: () => ({ t: (key: string) => key, i18n: { language: 'en' } }),
+}))
+vi.mock('@/lib/useIdentity', () => ({
+  useIdentity: () => ({ identity: { email: 'me@gssg.ae' }, isAdmin: false }),
+}))
+// HugeRTE can't mount in jsdom — sentinel div (repo-wide convention).
+vi.mock('@/components/ui/rich-editor', () => ({
+  RichEditor: ({ name }: { name: string }) => <div data-testid={`rich-editor-${name}`} />,
+}))
 vi.mock('@/lib/useIsMobile', () => ({ useIsMobile: () => false }))
-vi.mock('sonner', () => ({ toast: vi.fn() }))
+vi.mock('sonner', () => ({
+  toast: Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn() }),
+}))
 vi.mock('./useSyncStatus', () => ({ useSyncStatus: () => ({ status: null }) }))
 vi.mock('./useContextSource', () => ({ useContextSource: () => ({ peopleCount: 0, entry: null }) }))
 vi.mock('./useDeferredDelete', () => ({ useDeferredDelete: () => ({ pendingIds: new Set(), scheduleDelete: vi.fn() }) }))
@@ -41,13 +58,7 @@ vi.mock('./MessageList', () => ({ MessageList: ({ items, onSelect }: { items: Le
     {items.map((item) => <button type="button" key={item.id} onClick={() => onSelect(item.id)}>{item.id}</button>)}
   </div>
 ) }))
-// The legacy SMTP composer stands in for its own submit wording only. Rendering
-// the real module would drag in TipTap + react-hook-form and make the wording
-// assertion below fail for setup reasons instead of behaviour. Task 5 deletes
-// the module and this mock together.
-vi.mock('../LedgerEmailCompose', () => ({
-  LedgerEmailCompose: () => <button type="button">compose.send</button>,
-}))
+// (the retired SMTP composer is no longer rendered by the shell)
 // Render-prop passthrough: the frame's drag/minimize chrome is not under test,
 // but the compose surface it hosts is.
 vi.mock('./ComposeWindow', () => ({
@@ -160,6 +171,13 @@ describe('LedgerOutlookShell Outlook handoff surface', () => {
     vi.mocked(api.listLedger).mockResolvedValue({ items: [], total: 0, limit: 500, offset: 0 })
     vi.mocked(api.getSmartFolderSuggestions).mockResolvedValue([])
     vi.mocked(api.getLedgerEntry).mockReset()
+    // The reference-PDF prefetch is a real `fetch` against a relative URL; keep
+    // it offline so the dialog exercises its skip-on-failure path.
+    vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline')))
+  })
+
+  afterEach(() => {
+    vi.unstubAllGlobals()
   })
 
   it('New email opens the handoff surface with both modes, not the SMTP composer', async () => {

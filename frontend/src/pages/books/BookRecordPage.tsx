@@ -23,6 +23,7 @@ import {
   FileText,
   FileStack,
   Loader2,
+  Mail,
   PenLine,
   Printer,
   RefreshCw,
@@ -66,6 +67,10 @@ import { RecordDecisionActions } from './RecordDecisionActions'
 import { isIncludedPapersOwner } from './includedPapersState'
 import { HeaderBtn } from './HeaderBtn'
 import { nextAfterDecision, useAwaitingQueue } from './useAwaitingQueue'
+import { buildRecordBasketItem } from './recordsBasket'
+import { buildBasketPrefill } from '@/lib/basketEmail'
+import { getRecentRecipientsForForm } from '@/lib/recentRecipients'
+import { basketKey } from '@/lib/emailBasket'
 
 import { useIsMobile } from '@/lib/useIsMobile'
 import { smsDeliveryTone } from '@/lib/smsDelivery'
@@ -529,6 +534,32 @@ export function BookRecordPage(): React.JSX.Element {
     })
   }
 
+  // "Email via Outlook" — the record's own handoff entry point. It builds the
+  // SAME one-item basket prefill the tray builds (subject/body templates,
+  // reference PDF, book link) and routes to /ledger, where the handoff dialog
+  // consumes it. A record with no generated document has nothing to attach, so
+  // the action stays disabled rather than producing an empty email.
+  const recordHasPapers = current?.document_id != null
+  const [emailingRecord, setEmailingRecord] = useState(false)
+
+  async function handleEmailViaOutlook(): Promise<void> {
+    if (!book || !recordHasPapers || emailingRecord) return
+    setEmailingRecord(true)
+    try {
+      const item = await buildRecordBasketItem(book)
+      if (!item) {
+        toast.error(t('basket.addError'))
+        return
+      }
+      const prefill = buildBasketPrefill([item], getRecentRecipientsForForm(basketKey(item)))
+      navigate('/ledger', { state: { composePrefill: prefill } })
+    } catch (err) {
+      toast.error(apiErrorMessage(err))
+    } finally {
+      setEmailingRecord(false)
+    }
+  }
+
   const busy = decideMutation.isPending || signMutation.isPending
   const canRevise = Boolean(current?.template_id && current?.has_fields && canGenerate)
   const reasonValid = reason.trim().length > 0 || hasCommentBearingMark(annotations)
@@ -798,6 +829,24 @@ export function BookRecordPage(): React.JSX.Element {
             label={t('books.record.print')}
             iconOnly
             onClick={() => window.print()}
+          />
+          {/* Hand this record to Outlook. Same one-item basket prefill the tray
+              builds, so subject/body/reference PDF and the book link are
+              identical whether you email one record or a whole basket. Lives in
+              the permanent-tools row, which reflows for phone and desktop — one
+              action, both surfaces. */}
+          <HeaderBtn
+            icon={
+              emailingRecord ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+              ) : (
+                <Mail className="h-3.5 w-3.5" aria-hidden="true" />
+              )
+            }
+            label={t('books.record.emailViaOutlook')}
+            iconOnly
+            disabled={!recordHasPapers || emailingRecord}
+            onClick={() => void handleEmailViaOutlook()}
           />
           {canManageIncludedPapers && (
             <HeaderBtn
