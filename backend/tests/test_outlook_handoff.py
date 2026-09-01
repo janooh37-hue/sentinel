@@ -202,6 +202,8 @@ def test_draft_handoff_appends_prefilled_mime_with_signature_and_attachment(
     assert len(html_parts) == 1
     assert "Hello <strong>Outlook</strong>" in html_parts[0]
     assert signature in html_parts[0]
+    assert "<!-- gssg-signature -->" in html_parts[0]
+    assert "data-gssg-signature" in html_parts[0]
     attachment = next(part for part in message.iter_attachments() if part.get_filename() == "record.pdf")
     assert attachment.get_content_type() == "application/pdf"
     assert attachment.get_payload(decode=True) == b"%PDF-1.4 handoff attachment"
@@ -210,6 +212,8 @@ def test_draft_handoff_appends_prefilled_mime_with_signature_and_attachment(
     assert entry is not None
     assert entry.message_id == message["Message-ID"]
     assert "outlook-pending" in entry.tags
+    assert "<!-- gssg-signature -->" in (entry.notes_html or "")
+    assert "data-gssg-signature" in (entry.notes_html or "")
     assert entry.attachment_paths
     assert (isolated_data_dir / entry.attachment_paths[0]).read_bytes() == b"%PDF-1.4 handoff attachment"
 
