@@ -136,7 +136,10 @@ describe('ViolationsTab deep-link targeting', () => {
       />,
     )
 
-    fireEvent.click(screen.getByTestId('violation-row-41'))
+    const row = screen.getByTestId('violation-row-41')
+    expect(row).toHaveClass('focus-visible:ring-inset')
+    expect(row).not.toHaveClass('focus-visible:ring-offset-1')
+    fireEvent.click(row)
 
     expect(onPreviewDocs).toHaveBeenCalledWith([
       { id: 91, name: 'violation_notice' },

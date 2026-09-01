@@ -88,7 +88,7 @@ export function LeavesTab({
           <button
             key={l.id}
             type="button"
-            className={`${rowClassName} text-start transition-colors hover:bg-surface-tinted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1`}
+            className={`${rowClassName} text-start transition-colors hover:bg-surface-tinted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring`}
             onClick={() =>
               onPreviewDocs(
                 linkedDocuments.map((document) => ({

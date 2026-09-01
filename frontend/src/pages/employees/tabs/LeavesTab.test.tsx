@@ -57,6 +57,8 @@ describe('LeavesTab', () => {
 
     const row = screen.getByText('leaves.type.Annual Leave').closest('button')
     expect(row).toHaveAttribute('type', 'button')
+    expect(row).toHaveClass('focus-visible:ring-inset')
+    expect(row).not.toHaveClass('focus-visible:ring-offset-1')
     fireEvent.click(row!)
     expect(onPreviewDocs).toHaveBeenCalledWith([
       { id: 81, name: 'leave_application' },
