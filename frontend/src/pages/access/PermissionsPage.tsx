@@ -275,8 +275,8 @@ function ServiceTriState({
     radios[(index + step + radios.length) % radios.length]?.focus()
   }
   return (
-    <div className="rounded-lg border border-hairline bg-surface p-2">
-      <div className="mb-1.5 flex min-h-8 items-center gap-2 px-1">
+    <div className="rounded-lg border border-hairline bg-surface p-3">
+      <div className="mb-2 flex min-h-8 items-center gap-2 px-1">
         {item.artwork ? (
           <ServiceArtwork artwork={item.artwork} size="row" />
         ) : item.glyph ? (
@@ -284,7 +284,7 @@ function ServiceTriState({
         ) : null}
         <bdi
           id={nameId}
-          className="min-w-0 flex-1 break-words whitespace-normal text-[0.8em] font-medium leading-snug text-foreground"
+          className="min-w-0 flex-1 break-words whitespace-normal text-[0.84em] font-medium leading-snug text-foreground"
           dir="auto"
         >
           {item.label}
@@ -296,7 +296,7 @@ function ServiceTriState({
         aria-labelledby={nameId}
         aria-describedby={legendId}
         onKeyDown={moveFocus}
-        className="grid grid-cols-3 gap-1"
+        className="grid grid-cols-3 gap-1.5"
       >
         {SERVICE_STATE_ORDER.map((option) => (
           <button
@@ -315,7 +315,7 @@ function ServiceTriState({
               if (!saving) onSelect(option, event)
             }}
             className={cn(
-              'flex min-h-9 flex-col items-center justify-center gap-0.5 rounded-md border px-1 text-[0.68em] font-medium leading-tight transition-[background-color,border-color,color] duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface motion-reduce:transition-none',
+              'flex min-h-10 flex-col items-center justify-center gap-0.5 rounded-md border px-2 text-[0.74em] font-medium leading-tight transition-[background-color,border-color,color] duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface motion-reduce:transition-none',
               option === state
                 ? SERVICE_STATE_TONE[option]
                 : 'border-hairline bg-surface text-muted-foreground hover:bg-surface-tinted',
@@ -1198,7 +1198,7 @@ export function PermissionsPage(): React.JSX.Element {
                           <h3 className="mb-2 text-[0.7em] font-semibold uppercase tracking-[0.08em] rtl:tracking-normal text-primary">
                             {t('access.permissions.mirror.blueprintServices')}
                           </h3>
-                          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                             {serviceItems.map((item) => (
                               <ServiceTriState
                                 key={item.id}
@@ -1213,7 +1213,7 @@ export function PermissionsPage(): React.JSX.Element {
                           </div>
                           <p
                             id={SERVICE_LEGEND_ID}
-                            className="mt-2 text-[0.72em] leading-relaxed text-muted-foreground"
+                            className="mt-3 text-[0.72em] leading-relaxed text-muted-foreground"
                           >
                             {t('access.permissions.mirror.svcLegend')}
                           </p>
