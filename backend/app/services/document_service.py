@@ -33,7 +33,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import func, select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import InstrumentedAttribute, Session
 
 from app.api.errors import AppError, NotFoundError, ValidationFailedError
 from app.config import get_settings
@@ -63,6 +63,7 @@ from app.db.models import (
 from app.db.repos.classified_refs_repo import allocate_classified_serial
 from app.db.repos.refs_repo import allocate_ref_with_retry
 from app.schemas.employee import EMPLOYEE_STATUS_ACTIVE, EMPLOYEE_STATUS_RESIGNED
+from app.schemas.linked_document import LinkedDocumentRead
 from app.services import absence_service
 from app.services._pdf_executor import convert_docx_to_pdf as convert_docx_to_pdf
 
@@ -457,6 +458,45 @@ def _unlink_document_files(doc: Document, data_dir: Path) -> None:
             continue
         with contextlib.suppress(OSError):
             p.unlink(missing_ok=True)
+
+
+def _linked_documents(
+    db: Session,
+    fk_column: InstrumentedAttribute[int | None],
+    ids: Sequence[int],
+) -> dict[int, list[LinkedDocumentRead]]:
+    if not ids:
+        return {}
+
+    rows = db.scalars(
+        select(Document)
+        .where(
+            fk_column.in_(ids),
+            Document.ref_number != "DRAFT",
+        )
+        .order_by(Document.created_at.asc(), Document.id.asc())
+    )
+    linked_by_record_id: dict[int, list[LinkedDocumentRead]] = {}
+    for document in rows:
+        record_id = getattr(document, fk_column.key)
+        if record_id is None:
+            continue
+        linked_by_record_id.setdefault(record_id, []).append(
+            LinkedDocumentRead.model_validate(document)
+        )
+    return linked_by_record_id
+
+
+def documents_for_leaves(
+    db: Session, leave_ids: Sequence[int]
+) -> dict[int, list[LinkedDocumentRead]]:
+    return _linked_documents(db, Document.leave_id, leave_ids)
+
+
+def documents_for_violations(
+    db: Session, violation_ids: Sequence[int]
+) -> dict[int, list[LinkedDocumentRead]]:
+    return _linked_documents(db, Document.violation_id, violation_ids)
 
 
 def _purge_superseded_drafts(

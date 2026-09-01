@@ -54,6 +54,7 @@ from app.schemas.vault_file import VaultEntry, VaultTree
 from app.schemas.violation import ViolationCreate, ViolationRead, ViolationUpdate
 from app.services import (
     absence_service,
+    document_service,
     employee_activity_service,
     employee_detail_service,
     employee_service,
@@ -237,7 +238,13 @@ def list_employee_leaves(
     _user: Annotated[User, Depends(require_capability("employees.view"))],
 ) -> list[LeaveRead]:
     rows = leave_service.list_for_employee(db, employee_id)
-    return [LeaveRead.model_validate(r) for r in rows]
+    linked_documents = document_service.documents_for_leaves(db, [row.id for row in rows])
+    return [
+        LeaveRead.model_validate(row).model_copy(
+            update={"linked_documents": linked_documents.get(row.id, [])}
+        )
+        for row in rows
+    ]
 
 
 @router.get("/{employee_id}/leave-balance", response_model=LeaveBalanceRead)
@@ -261,7 +268,15 @@ def list_employee_violations(
     _user: Annotated[User, Depends(require_capability("violations.view"))],
 ) -> list[ViolationRead]:
     rows = violation_service.list_for_employee(db, employee_id)
-    return [ViolationRead.model_validate(r) for r in rows]
+    linked_documents = document_service.documents_for_violations(
+        db, [row.id for row in rows]
+    )
+    return [
+        ViolationRead.model_validate(row).model_copy(
+            update={"linked_documents": linked_documents.get(row.id, [])}
+        )
+        for row in rows
+    ]
 
 
 @router.post(

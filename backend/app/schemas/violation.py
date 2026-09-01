@@ -15,6 +15,7 @@ from datetime import datetime
 from pydantic import BaseModel, Field
 
 from app.schemas._base import ORMBase
+from app.schemas.linked_document import LinkedDocumentRead
 
 
 class ViolationCreate(BaseModel):
@@ -49,3 +50,4 @@ class ViolationRead(ORMBase):
     status: str
     doc_path: str | None
     created_at: datetime
+    linked_documents: list[LinkedDocumentRead] = Field(default_factory=list)

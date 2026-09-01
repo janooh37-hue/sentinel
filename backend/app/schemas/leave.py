@@ -8,6 +8,7 @@ from typing import Literal
 from pydantic import BaseModel, Field, field_validator
 
 from app.schemas._base import ORMBase
+from app.schemas.linked_document import LinkedDocumentRead
 
 # Canonical status values. "Generated" was retired by migration 0034 (old rows
 # became Approved). Completed is National-Service-only and is set by the
@@ -87,6 +88,7 @@ class LeaveRead(ORMBase):
     return_date: date | None = None
     created_at: datetime
     updated_at: datetime | None = None
+    linked_documents: list[LinkedDocumentRead] = Field(default_factory=list)
 
 
 class LeaveListItem(ORMBase):

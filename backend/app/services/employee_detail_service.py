@@ -24,7 +24,7 @@ from app.db import models
 from app.schemas import employee_detail as sx
 from app.schemas.employee import EmployeeRead
 from app.schemas.employee_completeness import CompletenessRead
-from app.services import photo_service
+from app.services import document_service, photo_service
 
 # Cap each recent-* array. The Employee Detail page paginates the per-tab
 # views via dedicated endpoints; this aggregate is for the at-a-glance hero.
@@ -155,6 +155,23 @@ def get_employee_detail(db: Session, employee_id: str) -> sx.EmployeeDetailRead 
             .limit(RECENT_LIMIT)
         )
     ]
+    leave_documents = document_service.documents_for_leaves(
+        db, [leave.id for leave in recent_leaves]
+    )
+    violation_documents = document_service.documents_for_violations(
+        db, [violation.id for violation in recent_violations]
+    )
+    recent_leaves = [
+        leave.model_copy(update={"linked_documents": leave_documents.get(leave.id, [])})
+        for leave in recent_leaves
+    ]
+    recent_violations = [
+        violation.model_copy(
+            update={"linked_documents": violation_documents.get(violation.id, [])}
+        )
+        for violation in recent_violations
+    ]
+
 
     recent_absences = [
         sx.RecentAbsenceRead.model_validate(a)
