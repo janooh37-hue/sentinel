@@ -976,7 +976,7 @@ export function PermissionsPage(): React.JSX.Element {
         <div className="grid grid-cols-1 gap-4 min-[1100px]:gap-6 min-[1100px]:[grid-template-columns:280px_minmax(0,1fr)_360px]">
           <aside
             aria-label={t('access.permissions.mirror.people')}
-            className="rounded-2xl border border-hairline bg-surface p-3 min-[1100px]:sticky min-[1100px]:top-4 min-[1100px]:self-start"
+            className="rounded-2xl border border-hairline bg-surface p-4 min-[1100px]:sticky min-[1100px]:top-4 min-[1100px]:self-start"
           >
             <div className="flex items-center justify-between gap-2">
               <h2 className="text-[0.7em] font-semibold uppercase tracking-[0.08em] rtl:tracking-normal text-muted-foreground">
@@ -1028,7 +1028,7 @@ export function PermissionsPage(): React.JSX.Element {
                 <div
                   role="group"
                   aria-label={t('access.permissions.mirror.pickUser')}
-                  className="mt-2 flex flex-col gap-1 min-[1100px]:max-h-[min(60vh,32rem)] min-[1100px]:overflow-y-auto min-[1100px]:[scrollbar-width:thin]"
+                  className="mt-2 flex flex-col gap-1.5 min-[1100px]:max-h-[min(60vh,32rem)] min-[1100px]:overflow-y-auto min-[1100px]:[scrollbar-width:thin]"
                 >
                   {filteredUsers.map((user) => {
                     const selected = user.id === selectedUser?.id
