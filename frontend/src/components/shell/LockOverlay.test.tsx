@@ -203,17 +203,22 @@ describe('LockOverlay', () => {
       expect(document.querySelectorAll('.lock-weather bdi[dir="ltr"]')).toHaveLength(4)
       expect(document.querySelector('.lock-shifts')).toHaveTextContent('السرية الأولى')
       expect(document.querySelector('.lock-shifts')).toHaveTextContent('السرية الثانية')
+      expect(document.querySelector('.lock-shifts')).not.toHaveTextContent('الصباحية')
+      expect(document.querySelector('.lock-shifts')).not.toHaveTextContent('الظهيرة')
     })
   })
 
-  it('shows workforce crew names for the current and next shift', async () => {
+  it('shows workforce crew names instead of time-of-day shift names', async () => {
     renderOverlay()
 
     await waitFor(() => {
       expect(document.querySelector('.lock-shifts')).toHaveTextContent('First Company')
       expect(document.querySelector('.lock-shifts')).toHaveTextContent('Second Company')
+      expect(document.querySelector('.lock-shifts')).not.toHaveTextContent('Morning')
+      expect(document.querySelector('.lock-shifts')).not.toHaveTextContent('Noon')
     })
   })
+
 
   it('falls back to the translated shift name when no crew is on duty', async () => {
     vi.spyOn(api, 'getWorkforceSnapshot').mockResolvedValue({

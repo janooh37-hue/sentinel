@@ -43,7 +43,7 @@
   text-align: center;
 }
 
-.lock-clock {
+.lock-overlay .lock-clock {
   display: block;
   font-family: "Segoe UI Light", "Segoe UI Semilight", "Segoe UI", var(--font-sans);
   font-size: clamp(88px, 8.2vw, 132px);
