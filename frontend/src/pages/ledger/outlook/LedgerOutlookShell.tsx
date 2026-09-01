@@ -138,7 +138,6 @@ export function LedgerOutlookShell({ onNavigate }: LedgerOutlookShellProps = {})
   const [reviewOpen, setReviewOpen] = useState(false)
   const [createSuggestion, setCreateSuggestion] = useState<SmartFolderSuggestion | null>(null)
 
-  const isDrafts = activeView.kind === 'folder' && activeView.folder === 'drafts'
   const isSearching = search.trim().length > 0
   const requestedOpenId = (() => {
     const raw = new URLSearchParams(location.search).get('open')
@@ -419,42 +418,36 @@ export function LedgerOutlookShell({ onNavigate }: LedgerOutlookShellProps = {})
     delayMs: UNDO_DELAY_MS,
     onCommit: async (p: PendingDelete) => {
       try {
-        if (p.kind === 'draft') await api.deleteDraft(p.id)
-        else await api.deleteLedgerEntry(p.id)
+        await api.deleteLedgerEntry(p.id)
       } finally {
         void queryClient.invalidateQueries({ queryKey: ['ledger'] })
       }
     },
-    notify: ({ pending, onUndo }) => {
-      toast(
-        pending.kind === 'draft'
-          ? t('ledger.outlook.draftDeleted', { defaultValue: 'Draft deleted' })
-          : t('ledger.outlook.movedToTrash', { defaultValue: 'Moved to Trash' }),
-        {
-          duration: UNDO_DELAY_MS,
-          action: { label: t('common.undo', { defaultValue: 'Undo' }), onClick: onUndo },
-        },
-      )
+    notify: ({ onUndo }) => {
+      toast(t('ledger.outlook.movedToTrash', { defaultValue: 'Moved to Trash' }), {
+        duration: UNDO_DELAY_MS,
+        action: { label: t('common.undo', { defaultValue: 'Undo' }), onClick: onUndo },
+      })
     },
   })
 
   const handleDelete = useCallback(
     (entry: { id: number }) => {
-      scheduleDelete({ id: entry.id, kind: isDrafts ? 'draft' : 'entry' })
+      scheduleDelete({ id: entry.id })
       // If the deleted entry is the one open in the pane, clear the selection.
       setSelectedId((cur) => (cur === entry.id ? null : cur))
     },
-    [scheduleDelete, isDrafts],
+    [scheduleDelete],
   )
 
   // Bulk Trash (D4) — schedule each id through the same deferred-delete so every
   // entry gets its own Undo toast, identical to the per-row Trash.
   const handleBulkTrash = useCallback(
     (ids: number[]) => {
-      ids.forEach((id) => scheduleDelete({ id, kind: isDrafts ? 'draft' : 'entry' }))
+      ids.forEach((id) => scheduleDelete({ id }))
       setSelectedId((cur) => (cur != null && ids.includes(cur) ? null : cur))
     },
-    [scheduleDelete, isDrafts],
+    [scheduleDelete],
   )
 
   // Hide optimistically-deleted rows from the list until the timer commits.

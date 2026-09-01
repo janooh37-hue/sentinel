@@ -456,13 +456,12 @@ function ListSkeleton(): React.JSX.Element {
 }
 
 /**
- * Empty-state message per folder (drafts/trash get a tailored line, everything
- * else falls back to a generic one) — matches the prototype's renderList copy.
+ * Empty-state message per folder (Trash gets a tailored line; everything else
+ * falls back to a generic one) — matches the prototype's renderList copy.
  */
 function emptyMessage(view: MailboxView, t: (k: string) => string): string {
   if (view.kind === 'followups') return t('ledger.followups.empty')
   if (view.kind === 'smart') return t('ledger.smart.folderEmpty')
-  if (view.kind === 'folder' && view.folder === 'drafts') return t('ledger.outlook.empty.drafts')
   if (view.kind === 'folder' && view.folder === 'trash') return t('ledger.outlook.empty.trash')
   return t('ledger.outlook.empty.default')
 }
