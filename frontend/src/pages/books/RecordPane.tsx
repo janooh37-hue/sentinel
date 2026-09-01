@@ -6,7 +6,18 @@
  */
 import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { FileStack, FileText, Loader2, Mail, Plus } from 'lucide-react'
+import {
+  CornerUpLeft,
+  ExternalLink,
+  FileStack,
+  FileText,
+  Loader2,
+  Mail,
+  PenLine,
+  Plus,
+  Send,
+  Upload,
+} from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
 
@@ -168,6 +179,7 @@ export function RecordPane({
       ? {
           key: 'continue',
           label: t('books.pane.continueDraft'),
+          icon: <PenLine className="h-3.5 w-3.5" />,
           primary: true,
           disabled: false,
           onClick: () => onContinueDraft(book.id),
@@ -177,6 +189,7 @@ export function RecordPane({
       ? {
           key: 'submit',
           label: t('books.approval.submitForApproval'),
+          icon: <Send className="h-3.5 w-3.5" />,
           primary: false,
           disabled: false,
           onClick: () => onSubmit(book.id),
@@ -186,6 +199,7 @@ export function RecordPane({
       ? {
           key: 'revise',
           label: t('books.pane.revise'),
+          icon: <CornerUpLeft className="h-3.5 w-3.5 -scale-x-100" />,
           primary: true,
           disabled: false,
           onClick: () => onOpenRecord(book.id),
@@ -195,6 +209,7 @@ export function RecordPane({
       ? {
           key: 'scan-signed',
           label: t('books.pane.scanSignedCopy'),
+          icon: <Upload className="h-3.5 w-3.5" />,
           primary: state !== 'none',
           disabled: addScan.busy,
           onClick: null,
@@ -204,6 +219,7 @@ export function RecordPane({
       ? {
           key: 'open',
           label: t('books.pane.openRecord'),
+          icon: <ExternalLink className="h-3.5 w-3.5" />,
           primary: state !== 'returned' && !showFileSigned,
           disabled: false,
           onClick: () => onOpenRecord(book.id),
@@ -305,6 +321,8 @@ export function RecordPane({
         {orderedWorkflowActions.map((action) => (
           <PaneBtn
             key={action.key}
+            iconOnly
+            label={action.label}
             primary={action.primary}
             disabled={action.disabled}
             onClick={
@@ -313,7 +331,7 @@ export function RecordPane({
                 : action.onClick ?? undefined
             }
           >
-            {action.label}
+            {action.icon}
           </PaneBtn>
         ))}
 

@@ -1483,7 +1483,7 @@
       "preparedBy": "Prepared by",
       "draft": "Draft — number reserved",
       "editing": "Editing",
-      "editingBy": "Editing in Word by {{name}}",
+      "editingBy": "Editing in Word — {{name}}",
       "voided": "Voided",
       "needsPc": "Editing in Word needs a PC with Word installed",
       "openInWord": "Open in Word",

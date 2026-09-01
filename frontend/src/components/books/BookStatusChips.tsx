@@ -61,9 +61,17 @@ export function BookStatusChips({ book, noClassification }: Props): React.JSX.El
       <span
         key="editing"
         className="inline-flex items-center rounded-full bg-info-soft px-2.5 py-0.5 text-[0.72em] font-semibold uppercase tracking-[0.06em] text-info"
+        title={holderName || undefined}
+        aria-label={
+          holderName
+            ? t('books.word.editingBy', { name: bidi(holderName) })
+            : undefined
+        }
       >
         {holderName
-          ? t('books.word.editingBy', { name: bidi(holderName) })
+          ? t('books.word.editingBy', {
+              name: bidi(holderName.trim().split(/\s+/)[0]),
+            })
           : t('books.word.editing')}
       </span>,
     )
