@@ -57,7 +57,7 @@ def _normalize_subject(subject: str) -> str:
     return normalise_subject(subject)
 
 
-_DRAFT_TAG = "draft"
+DRAFT_TAG = "draft"
 
 
 def _utcnow() -> datetime:
@@ -302,8 +302,8 @@ def list_entries(
         stmt = stmt.where(tag_member)
         count_stmt = count_stmt.where(tag_member)
 
-    if not include_drafts and tag != _DRAFT_TAG:
-        no_draft = _tags_contain(_DRAFT_TAG, negate=True)
+    if not include_drafts and tag != DRAFT_TAG:
+        no_draft = _tags_contain(DRAFT_TAG, negate=True)
         stmt = stmt.where(no_draft)
         count_stmt = count_stmt.where(no_draft)
 
@@ -930,6 +930,7 @@ def list_counterparties(
 
 
 __all__ = [
+    "DRAFT_TAG",
     "LIST_DEFAULT_LIMIT",
     "LIST_MAX_LIMIT",
     "MAX_ATTACHMENT_BYTES",
