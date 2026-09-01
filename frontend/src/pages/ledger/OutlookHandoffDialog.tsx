@@ -65,24 +65,24 @@ import {
   AlertDialogAction,
   AlertDialogCancel,
 } from '@/components/ui/alert-dialog'
+import {
+  browserNavigation,
+  buildMailtoUrl,
+  htmlToPlainText,
+  MAILTO_MAX,
+  QUOTE_ATTR,
+  stripQuote,
+} from './outlookHandoffUtils'
 
 /** Handoff mechanism. Not the compose mode (`new`/`reply`/…). */
 export type HandoffMode = 'draft' | 'mailto'
 
-/**
- * Practical ceiling for a `mailto:` URL. Windows caps the command line that
- * launches Outlook well below the theoretical URL limit, and a truncated body
- * is worse than a draft — so we switch modes before we get near it.
- */
-export const MAILTO_MAX = 1800
 
 /** Attachment guard — the draft is APPENDed over IMAP, same ballpark as SMTP. */
 const MAX_ATTACHMENTS_BYTES = 20 * 1024 * 1024
 
 const SIGNATURE_MARKER = '<!-- gssg-signature -->'
 
-/** Marks the quoted-original block so mailto mode can drop it again. */
-const QUOTE_ATTR = 'data-gssg-quote'
 
 const EMAIL_LIKE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
@@ -148,7 +148,7 @@ function stripSignatureBlock(html: string): string {
 }
 
 /** The quoted original, tagged so `stripQuote` can find it again. */
-export function quoteOriginal(
+function quoteOriginal(
   entry: LedgerEntryRead,
   t: (key: string, options?: Record<string, unknown>) => string,
 ): string {
@@ -165,70 +165,11 @@ export function quoteOriginal(
   )
 }
 
-/** Mailto carries no quote — Outlook has the thread already. */
-export function stripQuote(html: string): string {
-  if (!html.includes(QUOTE_ATTR)) return html
-  const doc = new DOMParser().parseFromString(html, 'text/html')
-  doc.querySelector(`[${QUOTE_ATTR}]`)?.remove()
-  return doc.body.innerHTML
-}
 
 function prefixOnce(subject: string, prefix: string): string {
   return subject.match(/^\s*(re|fwd?|fw|رد|توجيه):/i) ? subject : `${prefix} ${subject}`
 }
 
-/**
- * HTML → readable plain text via a detached element: block boundaries become
- * newlines, then `textContent` decodes entities and drops every tag.
- */
-export function htmlToPlainText(html: string): string {
-  const holder = document.createElement('div')
-  holder.innerHTML = html
-  for (const br of Array.from(holder.querySelectorAll('br'))) br.replaceWith('\n')
-  for (const block of Array.from(
-    holder.querySelectorAll('p, div, tr, li, h1, h2, h3, h4, h5, h6'),
-  )) {
-    block.append('\n')
-  }
-  return (holder.textContent ?? '')
-    .replace(/\u00a0/g, ' ')
-    .replace(/[ \t]+\n/g, '\n')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim()
-}
-
-/**
- * Percent-encode ONE address. `encodeURIComponent` escapes everything that
- * could end the path early or invent a query parameter (`?`, `&`, spaces, `#`),
- * then `@` is put back: it is legal unescaped in both a mailto path and a query
- * and Outlook shows `%40` verbatim in the To field, which reads as a typo.
- *
- * The comma that separates addresses is added by the caller and never by this
- * function, so a comma *inside* an address stays encoded and cannot split one
- * recipient into two.
- */
-function encodeMailtoAddress(address: string): string {
-  return encodeURIComponent(address.trim()).replace(/%40/g, '@')
-}
-
-/**
- * `mailto:` per RFC 6068 — addresses are encoded per segment with literal `,`
- * separators; subject and body are opaque query values, so they are encoded
- * whole.
- */
-export function buildMailtoUrl(
-  to: string[],
-  cc: string[],
-  subject: string,
-  body: string,
-): string {
-  const params: string[] = []
-  if (cc.length > 0) params.push(`cc=${cc.map(encodeMailtoAddress).join(',')}`)
-  if (subject) params.push(`subject=${encodeURIComponent(subject)}`)
-  if (body) params.push(`body=${encodeURIComponent(body)}`)
-  const query = params.length > 0 ? `?${params.join('&')}` : ''
-  return `mailto:${to.map(encodeMailtoAddress).join(',')}${query}`
-}
 
 function formatBytes(b: number): string {
   if (b < 1024) return `${b} B`
@@ -236,16 +177,6 @@ function formatBytes(b: number): string {
   return `${(b / 1024 / 1024).toFixed(1)} MB`
 }
 
-/**
- * Handing off in mailto mode leaves the SPA — jsdom forbids assigning
- * `window.location`, so the one navigation this component performs goes through
- * a named seam that tests can spy on.
- */
-export const browserNavigation = {
-  assign(url: string): void {
-    window.location.href = url
-  },
-}
 
 function refTokenLine(ref: ComposeReference, label: string): string {
   return `<div data-gssg-ref="${ref.kind}:${ref.id}">${label}: ${ref.token}</div>`

@@ -13,14 +13,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type * as ApiModule from '@/lib/api'
 import { api } from '@/lib/api'
+import { OutlookHandoffDialog } from './OutlookHandoffDialog'
 import {
-  OutlookHandoffDialog,
   browserNavigation,
   buildMailtoUrl,
   htmlToPlainText,
-  stripQuote,
   MAILTO_MAX,
-} from './OutlookHandoffDialog'
+  stripQuote,
+} from './outlookHandoffUtils'
 
 vi.mock('@/lib/api', async (orig) => {
   const real = await orig<typeof ApiModule>()

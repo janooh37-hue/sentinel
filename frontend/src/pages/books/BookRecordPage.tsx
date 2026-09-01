@@ -556,11 +556,9 @@ export function BookRecordPage(): React.JSX.Element {
       // seeded the same way a basket send would seed it. The key itself is then
       // dropped: this is not a basket send, and carrying it would let a
       // successful handoff clear a same-kind basket the operator is still
-      // filling. (`basketKey` is discarded via rest-destructuring.)
-      const { basketKey: _notABasketSend, ...prefill } = buildBasketPrefill(
-        [item],
-        getRecentRecipientsForForm(key),
-      )
+      // filling. Clear only the persisted-basket identity, not the prefill.
+      const prefill = buildBasketPrefill([item], getRecentRecipientsForForm(key))
+      prefill.basketKey = undefined
       navigate('/ledger', { state: { composePrefill: prefill } })
     } catch (err) {
       toast.error(apiErrorMessage(err))

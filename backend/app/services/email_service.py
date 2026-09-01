@@ -24,7 +24,7 @@ import logging
 import re
 import ssl
 import threading
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from email.header import decode_header, make_header
 from email.message import Message
 from email.utils import getaddresses, parsedate_to_datetime

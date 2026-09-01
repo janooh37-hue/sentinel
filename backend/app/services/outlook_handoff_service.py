@@ -7,11 +7,12 @@ import imaplib
 import logging
 import re
 import time
+from contextlib import suppress
 from datetime import UTC, date, datetime, timedelta
 from email.message import EmailMessage, Message
 from email.utils import make_msgid
 from pathlib import Path
-from typing import Any, Final, Literal, TypeAlias
+from typing import Any, Final, Literal
 
 from sqlalchemy import select, text
 from sqlalchemy.orm import Session
@@ -34,8 +35,8 @@ HANDOFF_TAG: Final[str] = "outlook-pending"
 STALE_TAG: Final[str] = "outlook-stale"
 HANDOFF_HEADER: Final[str] = "X-GSSG-Handoff"
 
-HandoffMode: TypeAlias = Literal["mailto", "draft"]
-HandoffAttachment: TypeAlias = tuple[str, str | None, bytes]
+type HandoffMode = Literal["mailto", "draft"]
+type HandoffAttachment = tuple[str, str | None, bytes]
 
 
 log = logging.getLogger(__name__)
@@ -88,15 +89,11 @@ def _remove_saved_attachments(paths: list[str]) -> None:
         except ValueError:
             continue
         parents.add(path.parent)
-        try:
+        with suppress(OSError):
             path.unlink(missing_ok=True)
-        except OSError:
-            pass
     for parent in parents:
-        try:
+        with suppress(OSError):
             parent.rmdir()
-        except OSError:
-            pass
 
 
 def _append_draft(account: EmailAccount, message: EmailMessage) -> None:
@@ -115,10 +112,8 @@ def _append_draft(account: EmailAccount, message: EmailMessage) -> None:
         if not _is_ok(conn.append(*append_args)):
             raise HandoffDeliveryError("could not append the message to Outlook Drafts")
     finally:
-        try:
+        with suppress(Exception):
             conn.logout()
-        except Exception:
-            pass
 
 
 def create_handoff(
