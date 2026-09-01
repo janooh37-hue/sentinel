@@ -3,11 +3,11 @@
  */
 
 import { useMemo } from 'react'
-import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 
 import { DocumentTile, type TileAccent, type TileVariant } from '@/components/ui/document-tile'
 import type { RecentDocumentRead } from '@/lib/api'
+import type { PreviewDoc } from '@/lib/docPreview'
 
 const STATE_CHIP: Record<string, string> = {
   none: 'bg-warning-soft text-warning',
@@ -43,11 +43,16 @@ interface Props {
   docs: RecentDocumentRead[]
   employeeName: string
   totalCount?: number
+  onPreviewDocs: (docs: PreviewDoc[], index?: number) => void
 }
 
-export function DocumentsTab({ docs, employeeName, totalCount }: Props): React.JSX.Element {
+export function DocumentsTab({
+  docs,
+  employeeName,
+  totalCount,
+  onPreviewDocs,
+}: Props): React.JSX.Element {
   const { t, i18n } = useTranslation()
-  const navigate = useNavigate()
   const dateFmt = useMemo(
     () => new Intl.DateTimeFormat(i18n.language, { year: 'numeric', month: 'short', day: 'numeric' }),
     [i18n.language],
@@ -86,7 +91,9 @@ export function DocumentsTab({ docs, employeeName, totalCount }: Props): React.J
               title={d.ref_number || d.template_id}
               meta={dateFmt.format(new Date(d.created_at))}
               statusChip={chip}
-              onClick={d.book_id != null ? () => navigate(`/books?open=${d.book_id}`) : undefined}
+              onClick={() =>
+                onPreviewDocs([{ id: d.id, name: d.ref_number || d.template_id }])
+              }
             />
           )
         })}

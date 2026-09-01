@@ -20,6 +20,7 @@ import type {
   ViolationRead,
   ViolationUpdate,
 } from '@/lib/api'
+import type { PreviewDoc } from '@/lib/docPreview'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { cn } from '@/lib/utils'
 
@@ -29,6 +30,7 @@ interface Props {
   totalCount?: number
   openId?: number | null
   onOpenConsumed?: () => void
+  onPreviewDocs: (docs: PreviewDoc[], index?: number) => void
 }
 
 type ViolationTargetState = {
@@ -116,11 +118,13 @@ function ViolationsReadOnly({
   totalCount,
   highlightedId,
   targetNotFound,
+  onPreviewDocs,
 }: {
   violations: RecentViolationRead[]
   totalCount?: number
   highlightedId: number | null
   targetNotFound: boolean
+  onPreviewDocs: (docs: PreviewDoc[], index?: number) => void
 }): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const dateFmt = useMemo(
@@ -151,29 +155,58 @@ function ViolationsReadOnly({
   return (
     <>
       <div className="overflow-hidden rounded-2xl border border-hairline bg-surface">
-        {violations.map((v) => (
-          <div
-            key={v.id}
-            data-testid={`violation-row-${v.id}`}
-            data-violation-row-id={v.id}
-            data-highlighted={highlightedId === v.id ? 'true' : 'false'}
-            className={cn(
-              'grid grid-cols-[120px_140px_1fr_100px] items-center gap-4 border-b border-hairline px-4 py-2.5 last:border-b-0',
-              highlightedId === v.id && 'bg-primary-soft ring-2 ring-inset ring-primary',
-            )}
-          >
-            <div className="font-mono text-[0.86em] text-muted-foreground">
-              {dateFmt.format(new Date(v.date))}
+        {violations.map((v) => {
+          const linkedDocuments = v.linked_documents ?? []
+          const rowClassName = cn(
+            'grid w-full grid-cols-[120px_140px_1fr_100px] items-center gap-4 border-b border-hairline px-4 py-2.5 last:border-b-0',
+            highlightedId === v.id && 'bg-primary-soft ring-2 ring-inset ring-primary',
+          )
+          const content = (
+            <>
+              <div className="font-mono text-[0.86em] text-muted-foreground">
+                {dateFmt.format(new Date(v.date))}
+              </div>
+              <div className="text-[0.92em] font-medium">{v.violation_type}</div>
+              <div className="truncate text-[0.86em] text-muted-foreground">
+                {v.description || '—'}
+              </div>
+              <span className="rounded-full bg-accent-soft px-3 py-0.5 text-center text-[0.72em] font-semibold text-accent">
+                {v.status}
+              </span>
+            </>
+          )
+
+          return linkedDocuments.length > 0 ? (
+            <button
+              key={v.id}
+              type="button"
+              data-testid={`violation-row-${v.id}`}
+              data-violation-row-id={v.id}
+              data-highlighted={highlightedId === v.id ? 'true' : 'false'}
+              className={`${rowClassName} text-start transition-colors hover:bg-surface-tinted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1`}
+              onClick={() =>
+                onPreviewDocs(
+                  linkedDocuments.map((document) => ({
+                    id: document.id,
+                    name: document.template_id,
+                  })),
+                )
+              }
+            >
+              {content}
+            </button>
+          ) : (
+            <div
+              key={v.id}
+              data-testid={`violation-row-${v.id}`}
+              data-violation-row-id={v.id}
+              data-highlighted={highlightedId === v.id ? 'true' : 'false'}
+              className={rowClassName}
+            >
+              {content}
             </div>
-            <div className="text-[0.92em] font-medium">{v.violation_type}</div>
-            <div className="truncate text-[0.86em] text-muted-foreground">
-              {v.description || '—'}
-            </div>
-            <span className="rounded-full bg-accent-soft px-3 py-0.5 text-center text-[0.72em] font-semibold text-accent">
-              {v.status}
-            </span>
-          </div>
-        ))}
+          )
+        })}
       </div>
       {isPartial && (
         <div className="mt-3 text-center text-[0.8em] text-muted-foreground">
@@ -196,6 +229,7 @@ function ViolationsManage({
   canCreate,
   canEdit,
   canDelete,
+  onPreviewDocs,
 }: {
   employeeId: string
   rows: ViolationRead[]
@@ -204,6 +238,7 @@ function ViolationsManage({
   canCreate: boolean
   canEdit: boolean
   canDelete: boolean
+  onPreviewDocs: (docs: PreviewDoc[], index?: number) => void
 }): React.JSX.Element {
   const { t } = useTranslation()
   const qc = useQueryClient()
@@ -245,6 +280,7 @@ function ViolationsManage({
       canCreate={canCreate}
       canEdit={canEdit}
       canDelete={canDelete}
+      onPreviewDocs={onPreviewDocs}
       onCreate={async (v) => {
         await createMut.mutateAsync(v)
       }}
@@ -261,6 +297,7 @@ export function ViolationsTab({
   totalCount,
   openId,
   onOpenConsumed,
+  onPreviewDocs,
 }: Props): React.JSX.Element {
   const { has } = useCapabilities()
   const { t } = useTranslation()
@@ -319,6 +356,7 @@ export function ViolationsTab({
         canCreate={canCreate}
         canEdit={canEdit}
         canDelete={canDelete}
+        onPreviewDocs={onPreviewDocs}
       />
     )
   }
@@ -328,6 +366,7 @@ export function ViolationsTab({
       totalCount={totalCount}
       highlightedId={highlightedId}
       targetNotFound={targetNotFound}
+      onPreviewDocs={onPreviewDocs}
     />
   )
 }

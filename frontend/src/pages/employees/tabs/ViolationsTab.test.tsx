@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -48,7 +48,16 @@ import type { RecentViolationRead, ViolationRead } from '@/lib/api'
 import { ViolationsTab } from './ViolationsTab'
 
 const snapshotRows: RecentViolationRead[] = [
-  { id: 41, date: '2026-07-01', violation_type: 'Late arrival', status: 'Open', description: null },
+  {
+    id: 41,
+    date: '2026-07-01',
+    violation_type: 'Late arrival',
+    status: 'Open',
+    description: null,
+    linked_documents: [
+      { id: 91, template_id: 'violation_notice', created_at: '2026-07-01T00:00:00Z' },
+    ],
+  },
 ]
 const fullRows: ViolationRead[] = [
   {
@@ -62,6 +71,9 @@ const fullRows: ViolationRead[] = [
     status: 'Open',
     doc_path: null,
     created_at: '2026-07-01T00:00:00Z',
+    linked_documents: [
+      { id: 91, template_id: 'violation_notice', created_at: '2026-07-01T00:00:00Z' },
+    ],
   },
   {
     id: 42,
@@ -74,8 +86,11 @@ const fullRows: ViolationRead[] = [
     status: 'Closed',
     doc_path: null,
     created_at: '2026-07-02T00:00:00Z',
+    linked_documents: [],
   },
 ]
+
+const onPreviewDocs = vi.fn()
 
 const originalRequestAnimationFrame = globalThis.requestAnimationFrame
 const originalCancelAnimationFrame = globalThis.cancelAnimationFrame
@@ -112,6 +127,39 @@ afterEach(() => {
 })
 
 describe('ViolationsTab deep-link targeting', () => {
+  it('previews a linked row in read-only mode', () => {
+    wrap(
+      <ViolationsTab
+        employeeId="G100"
+        violations={snapshotRows}
+        onPreviewDocs={onPreviewDocs}
+      />,
+    )
+
+    fireEvent.click(screen.getByTestId('violation-row-41'))
+
+    expect(onPreviewDocs).toHaveBeenCalledWith([
+      { id: 91, name: 'violation_notice' },
+    ])
+  })
+
+  it('offers the preview action in managed mode', async () => {
+    capabilityState.canManage = true
+    wrap(
+      <ViolationsTab
+        employeeId="G100"
+        violations={snapshotRows}
+        onPreviewDocs={onPreviewDocs}
+      />,
+    )
+
+    fireEvent.click(await screen.findByRole('button', { name: 'common.preview' }))
+
+    expect(onPreviewDocs).toHaveBeenCalledWith([
+      { id: 91, name: 'violation_notice' },
+    ])
+  })
+
   it.each([false, true])('scrolls to and consumes exact violation in manage=%s mode', async (canManage) => {
     capabilityState.canManage = canManage
     const onConsumed = vi.fn()
@@ -119,6 +167,7 @@ describe('ViolationsTab deep-link targeting', () => {
       <ViolationsTab
         employeeId="G100"
         violations={snapshotRows}
+        onPreviewDocs={onPreviewDocs}
         openId={42}
         onOpenConsumed={onConsumed}
       />,
@@ -138,6 +187,7 @@ describe('ViolationsTab deep-link targeting', () => {
       <ViolationsTab
         employeeId="G100"
         violations={snapshotRows}
+        onPreviewDocs={onPreviewDocs}
         openId={42}
         onOpenConsumed={onConsumed}
       />,
@@ -153,6 +203,7 @@ describe('ViolationsTab deep-link targeting', () => {
       <ViolationsTab
         employeeId="G100"
         violations={snapshotRows}
+        onPreviewDocs={onPreviewDocs}
         openId={999}
         onOpenConsumed={onConsumed}
       />,
@@ -173,6 +224,7 @@ describe('ViolationsTab deep-link targeting', () => {
       <ViolationsTab
         employeeId="G100"
         violations={snapshotRows}
+        onPreviewDocs={onPreviewDocs}
         openId={42}
         onOpenConsumed={onConsumed}
       />,
@@ -192,6 +244,7 @@ describe('ViolationsTab deep-link targeting', () => {
         <ViolationsTab
           employeeId="G100"
           violations={snapshotRows}
+          onPreviewDocs={onPreviewDocs}
           openId={42}
           onOpenConsumed={onConsumed}
         />
@@ -208,7 +261,12 @@ describe('ViolationsTab deep-link targeting', () => {
     vi.mocked(api.listViolations).mockRejectedValue(new Error('load failed'))
     render(
       <QueryClientProvider client={client}>
-        <ViolationsTab employeeId="G100" violations={snapshotRows} openId={42} />
+        <ViolationsTab
+          employeeId="G100"
+          violations={snapshotRows}
+          openId={42}
+          onPreviewDocs={onPreviewDocs}
+        />
       </QueryClientProvider>,
     )
     expect(await screen.findByRole('button', { name: 'إعادة المحاولة' })).toBeInTheDocument()
@@ -221,7 +279,11 @@ describe('ViolationsTab deep-link targeting', () => {
     vi.mocked(api.listViolations).mockClear().mockRejectedValue(new Error('background failed'))
     render(
       <QueryClientProvider client={client}>
-        <ViolationsTab employeeId="G100" violations={snapshotRows} />
+        <ViolationsTab
+          employeeId="G100"
+          violations={snapshotRows}
+          onPreviewDocs={onPreviewDocs}
+        />
       </QueryClientProvider>,
     )
     await waitFor(() => expect(api.listViolations).toHaveBeenCalledOnce())
@@ -248,6 +310,7 @@ describe('ViolationsTab deep-link targeting', () => {
         <ViolationsTab
           employeeId="G100"
           violations={snapshotRows}
+          onPreviewDocs={onPreviewDocs}
           openId={42}
           onOpenConsumed={onFirstConsumed}
         />
@@ -262,6 +325,7 @@ describe('ViolationsTab deep-link targeting', () => {
         <ViolationsTab
           employeeId="G100"
           violations={snapshotRows}
+          onPreviewDocs={onPreviewDocs}
           openId={42}
           onOpenConsumed={onRetriedConsumed}
         />
@@ -281,6 +345,7 @@ describe('ViolationsTab deep-link targeting', () => {
       <QueryClientProvider client={client}>
         <ViolationsTab
           employeeId="G100"
+          onPreviewDocs={onPreviewDocs}
           violations={snapshotRows}
           openId={42}
           onOpenConsumed={onConsumed}
@@ -295,6 +360,7 @@ describe('ViolationsTab deep-link targeting', () => {
       <QueryClientProvider client={client}>
         <ViolationsTab
           employeeId="G100"
+          onPreviewDocs={onPreviewDocs}
           violations={snapshotRows}
           openId={999}
           onOpenConsumed={onConsumed}
