@@ -766,29 +766,33 @@ def _get_flag(db: Session, *, entry_id: int, user_id: int) -> LedgerFlag | None:
     ).scalar_one_or_none()
 
 
-def set_flag(
+def _upsert_flag(
     db: Session, *, entry_id: int, user_id: int, due: date | None
 ) -> LedgerEntry:
-    """Upsert the caller's flag for ``entry_id``: set ``flagged_at=now`` and
-    ``followup_due=due`` (None clears the date but keeps the flag).
-
-    Returns the (unchanged) ledger entry so the caller can re-project the
-    per-user flag fields onto a ``LedgerEntryRead``.
-    """
+    """Apply the flag upsert without choosing the caller's transaction boundary."""
     row = get_entry(db, entry_id)
     flag = _get_flag(db, entry_id=entry_id, user_id=user_id)
+    now = _utcnow()
     if flag is None:
         flag = LedgerFlag(
             user_id=user_id,
             entry_id=entry_id,
-            flagged_at=_utcnow(),
+            flagged_at=now,
             followup_due=due,
-            created_at=_utcnow(),
+            created_at=now,
         )
         db.add(flag)
     else:
-        flag.flagged_at = _utcnow()
+        flag.flagged_at = now
         flag.followup_due = due
+    return row
+
+
+def set_flag(
+    db: Session, *, entry_id: int, user_id: int, due: date | None
+) -> LedgerEntry:
+    """Upsert the caller's flag and commit the standalone API operation."""
+    row = _upsert_flag(db, entry_id=entry_id, user_id=user_id, due=due)
     db.commit()
     return row
 

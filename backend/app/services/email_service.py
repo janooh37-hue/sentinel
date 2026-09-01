@@ -699,16 +699,24 @@ def _msgid_tag(msg_id: str) -> str:
 
 
 def _existing_msgids(db: Session) -> dict[str, tuple[int, int]]:
-    """Map ``msgid_tag → (entry_id, current_attachment_count)``.
+    """Map confirmed ``msgid_tag → (entry_id, attachment_count)``.
 
-    Used both for dedup (presence check) and for cheap attachment backfill
-    (an entry with 0 attachments on a re-sync gets its attachments populated
-    even though we skip re-inserting the row).
+    Pending Outlook drafts are deliberately excluded: Outlook may preserve the
+    draft Message-ID when sending, and that Sent-folder copy still has to be
+    imported before reconciliation can replace the pending row.
     """
+    from app.services.outlook_handoff_service import HANDOFF_TAG
+
     rows = db.execute(
         select(LedgerEntry.id, LedgerEntry.tags, LedgerEntry.attachment_paths)
         .where(LedgerEntry.channel == "email")
         .where(LedgerEntry.deleted_at.is_(None))
+        .where(
+            text(
+                "NOT EXISTS (SELECT 1 FROM json_each(ledger_entries.tags) "
+                "WHERE json_each.value = :pending_handoff_tag)"
+            ).bindparams(pending_handoff_tag=HANDOFF_TAG)
+        )
     ).all()
     out: dict[str, tuple[int, int]] = {}
     for entry_id, tags, paths in rows:
@@ -1116,13 +1124,22 @@ def _sync_account_locked(db: Session, account: EmailAccount) -> EmailSyncResult:
                     if cid_map:
                         entry.inline_images = cid_map
 
-                    # Commit per-row so the write transaction is tiny and
-                    # concurrent HTTP requests (link employee, save settings,
-                    # add ledger entry) don't see SQLite "database is locked".
+                    # Commit the imported row before reconciliation so a
+                    # correlation failure cannot roll back or duplicate real
+                    # Sent-folder mail.
                     db.commit()
-
                     existing_msgids[tag] = (entry.id, len(saved_paths))
                     imported += 1
+
+                    if direction != "incoming":
+                        from app.services import outlook_handoff_service
+
+                        outlook_handoff_service.reconcile_sent_entry(
+                            db,
+                            entry=entry,
+                            msg=msg,
+                            account=account,
+                        )
                 except Exception as e:
                     errors.append(f"parse {msg_id}: {e!s}")
                     db.rollback()
@@ -1131,6 +1148,14 @@ def _sync_account_locked(db: Session, account: EmailAccount) -> EmailSyncResult:
             conn.logout()
         except Exception:
             pass
+
+    try:
+        from app.services import outlook_handoff_service
+
+        outlook_handoff_service.flag_stale_handoffs(db, account=account)
+    except Exception as e:
+        errors.append(f"stale Outlook handoffs: {e!s}")
+        db.rollback()
 
     # Cheap backfill: any previously-imported email entry whose counterparty
     # is clearly on the operator's domain is almost certainly internal — flip
