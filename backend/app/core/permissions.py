@@ -247,8 +247,8 @@ CAPABILITIES: Final[tuple[Capability, ...]] = (
     Capability(
         "ledger.create",
         "ledger",
-        "Create entries & drafts",
-        "Compose new entries, drafts, contacts, and recipient lists.",
+        "Create entries, contacts & recipient lists",
+        "Create ledger entries, contacts, and recipient lists.",
     ),
     Capability(
         "ledger.edit",
@@ -265,8 +265,8 @@ CAPABILITIES: Final[tuple[Capability, ...]] = (
     Capability(
         "ledger.delete",
         "ledger",
-        "Delete entries & drafts",
-        "Remove entries, drafts, contacts, and lists.",
+        "Delete entries, contacts & recipient lists",
+        "Remove ledger entries, contacts, and recipient lists.",
     ),
     Capability(
         "email.manage",
