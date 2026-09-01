@@ -940,9 +940,10 @@ describe('PermissionsPage Mirror editor', () => {
       'grid',
       'grid-cols-1',
       'gap-4',
-      'min-[1100px]:[grid-template-columns:250px_minmax(0,1fr)_340px]',
+      'min-[1100px]:gap-6',
+      'min-[1100px]:[grid-template-columns:280px_minmax(0,1fr)_360px]',
     )
-    expect(grid.parentElement).toHaveClass('max-w-[1400px]')
+    expect(grid.parentElement).toHaveClass('max-w-[1680px]')
 
     const blueprint = await screen.findByRole('region', { name: 'Permission blueprint' })
     for (const name of ['Pages', 'Services', 'Record categories']) {

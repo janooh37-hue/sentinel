@@ -275,8 +275,8 @@ function ServiceTriState({
     radios[(index + step + radios.length) % radios.length]?.focus()
   }
   return (
-    <div className="rounded-lg border border-hairline bg-surface p-2">
-      <div className="mb-1.5 flex min-h-8 items-center gap-2 px-1">
+    <div className="rounded-lg border border-hairline bg-surface p-3">
+      <div className="mb-2 flex min-h-8 items-center gap-2 px-1">
         {item.artwork ? (
           <ServiceArtwork artwork={item.artwork} size="row" />
         ) : item.glyph ? (
@@ -284,7 +284,7 @@ function ServiceTriState({
         ) : null}
         <bdi
           id={nameId}
-          className="min-w-0 flex-1 break-words whitespace-normal text-[0.8em] font-medium leading-snug text-foreground"
+          className="min-w-0 flex-1 break-words whitespace-normal text-[0.84em] font-medium leading-snug text-foreground"
           dir="auto"
         >
           {item.label}
@@ -296,7 +296,7 @@ function ServiceTriState({
         aria-labelledby={nameId}
         aria-describedby={legendId}
         onKeyDown={moveFocus}
-        className="grid grid-cols-3 gap-1"
+        className="grid grid-cols-3 gap-1.5"
       >
         {SERVICE_STATE_ORDER.map((option) => (
           <button
@@ -315,7 +315,7 @@ function ServiceTriState({
               if (!saving) onSelect(option, event)
             }}
             className={cn(
-              'flex min-h-9 flex-col items-center justify-center gap-0.5 rounded-md border px-1 text-[0.68em] font-medium leading-tight transition-[background-color,border-color,color] duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface motion-reduce:transition-none',
+              'flex min-h-10 flex-col items-center justify-center gap-0.5 rounded-md border px-2 text-[0.74em] font-medium leading-tight transition-[background-color,border-color,color] duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface motion-reduce:transition-none',
               option === state
                 ? SERVICE_STATE_TONE[option]
                 : 'border-hairline bg-surface text-muted-foreground hover:bg-surface-tinted',
@@ -948,8 +948,8 @@ export function PermissionsPage(): React.JSX.Element {
   if (usersQuery.isLoading) {
     return (
       <div className="flex flex-1 flex-col overflow-auto bg-background p-6">
-        <Skeleton className="mx-auto h-10 w-full max-w-[1280px]" />
-        <Skeleton className="mx-auto mt-5 h-[520px] w-full max-w-[1280px] rounded-2xl" />
+        <Skeleton className="mx-auto h-10 w-full max-w-[1680px]" />
+        <Skeleton className="mx-auto mt-5 h-[520px] w-full max-w-[1680px] rounded-2xl" />
       </div>
     )
   }
@@ -964,7 +964,7 @@ export function PermissionsPage(): React.JSX.Element {
 
   return (
     <div className="flex flex-1 flex-col overflow-auto bg-background">
-      <div className="mx-auto w-full max-w-[1400px] flex-1 px-4 pb-24 pt-5 sm:px-8 sm:pb-12">
+      <div className="mx-auto w-full max-w-[1680px] flex-1 px-4 pb-24 pt-5 sm:px-8 sm:pb-12">
         <header className="mb-5">
           <h1 className="text-[1.7em] font-bold tracking-tight text-foreground">
             {t('access.permissions.mirror.title')}
@@ -973,10 +973,10 @@ export function PermissionsPage(): React.JSX.Element {
             {t('access.permissions.mirror.help')}
           </p>
         </header>
-        <div className="grid grid-cols-1 gap-4 min-[1100px]:[grid-template-columns:250px_minmax(0,1fr)_340px]">
+        <div className="grid grid-cols-1 gap-4 min-[1100px]:gap-6 min-[1100px]:[grid-template-columns:280px_minmax(0,1fr)_360px]">
           <aside
             aria-label={t('access.permissions.mirror.people')}
-            className="rounded-2xl border border-hairline bg-surface p-3 min-[1100px]:sticky min-[1100px]:top-4 min-[1100px]:self-start"
+            className="rounded-2xl border border-hairline bg-surface p-4 min-[1100px]:sticky min-[1100px]:top-4 min-[1100px]:self-start"
           >
             <div className="flex items-center justify-between gap-2">
               <h2 className="text-[0.7em] font-semibold uppercase tracking-[0.08em] rtl:tracking-normal text-muted-foreground">
@@ -1028,7 +1028,7 @@ export function PermissionsPage(): React.JSX.Element {
                 <div
                   role="group"
                   aria-label={t('access.permissions.mirror.pickUser')}
-                  className="mt-2 flex flex-col gap-1 min-[1100px]:max-h-[min(60vh,32rem)] min-[1100px]:overflow-y-auto min-[1100px]:[scrollbar-width:thin]"
+                  className="mt-2 flex flex-col gap-1.5 min-[1100px]:max-h-[min(60vh,32rem)] min-[1100px]:overflow-y-auto min-[1100px]:[scrollbar-width:thin]"
                 >
                   {filteredUsers.map((user) => {
                     const selected = user.id === selectedUser?.id
@@ -1120,7 +1120,7 @@ export function PermissionsPage(): React.JSX.Element {
                   ref={workspaceRef}
                   className="relative overflow-hidden rounded-2xl border border-hairline bg-surface shadow-sm"
                 >
-                  <div className="flex flex-col gap-3 border-b border-hairline px-5 py-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex flex-col gap-3 border-b border-hairline px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
                     <div className="flex min-w-0 items-center gap-2.5">
                       <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-primary text-[0.74em] font-bold text-primary-foreground">
                         {initialsOf(selectedUser)}
@@ -1170,17 +1170,17 @@ export function PermissionsPage(): React.JSX.Element {
                     </span>
                   </div>
 
-                  <div className="p-4">
+                  <div className="p-5 sm:p-6">
                     <section
                       aria-label={t('access.permissions.mirror.blueprintLabel')}
                       className="overflow-hidden rounded-xl border-[1.5px] border-primary bg-surface text-foreground"
                     >
-                      <div className="space-y-5 p-4 sm:p-5">
+                      <div className="space-y-7 p-5 sm:p-6">
                         <div>
-                          <h3 className="mb-2 text-[0.7em] font-semibold uppercase tracking-[0.08em] rtl:tracking-normal text-primary">
+                          <h3 className="mb-3 text-[0.7em] font-semibold uppercase tracking-[0.08em] rtl:tracking-normal text-primary">
                             {t('access.permissions.mirror.blueprintPages')}
                           </h3>
-                          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                          <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
                             {pageItems.map((item) => (
                               <BlueprintButton
                                 key={item.id}
@@ -1195,10 +1195,10 @@ export function PermissionsPage(): React.JSX.Element {
                         </div>
 
                         <div>
-                          <h3 className="mb-2 text-[0.7em] font-semibold uppercase tracking-[0.08em] rtl:tracking-normal text-primary">
+                          <h3 className="mb-3 text-[0.7em] font-semibold uppercase tracking-[0.08em] rtl:tracking-normal text-primary">
                             {t('access.permissions.mirror.blueprintServices')}
                           </h3>
-                          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-3">
+                          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                             {serviceItems.map((item) => (
                               <ServiceTriState
                                 key={item.id}
@@ -1213,17 +1213,17 @@ export function PermissionsPage(): React.JSX.Element {
                           </div>
                           <p
                             id={SERVICE_LEGEND_ID}
-                            className="mt-2 text-[0.72em] leading-relaxed text-muted-foreground"
+                            className="mt-3 text-[0.72em] leading-relaxed text-muted-foreground"
                           >
                             {t('access.permissions.mirror.svcLegend')}
                           </p>
                         </div>
 
                         <div>
-                          <h3 className="mb-2 text-[0.7em] font-semibold uppercase tracking-[0.08em] rtl:tracking-normal text-primary">
+                          <h3 className="mb-3 text-[0.7em] font-semibold uppercase tracking-[0.08em] rtl:tracking-normal text-primary">
                             {t('access.permissions.mirror.blueprintCategories')}
                           </h3>
-                          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                          <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
                             {categoryItems.map((item) => (
                               <BlueprintButton
                                 key={item.id}
