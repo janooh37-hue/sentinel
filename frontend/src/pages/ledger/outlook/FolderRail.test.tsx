@@ -56,12 +56,12 @@ describe('FolderRail personal folders after the Outlook cutover', () => {
   it('keeps the supported English folders and removes Drafts', async () => {
     await renderRail('en')
 
-    const inbox = screen.getByRole('button', { name: 'Inbox' })
+    const inbox = screen.getByRole('button', { name: /^Inbox/ })
     expect(await within(inbox).findByText('7')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Sent' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Starred' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Trash' })).toBeInTheDocument()
-    const followups = screen.getByRole('button', { name: 'Follow-ups' })
+    const followups = screen.getByRole('button', { name: /^Follow-ups/ })
     expect(await within(followups).findByText('2')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Drafts' })).not.toBeInTheDocument()
   })
@@ -69,12 +69,12 @@ describe('FolderRail personal folders after the Outlook cutover', () => {
   it('keeps the supported Arabic folders and removes Drafts', async () => {
     await renderRail('ar')
 
-    const inbox = screen.getByRole('button', { name: 'الوارد' })
+    const inbox = screen.getByRole('button', { name: /^الوارد/ })
     expect(await within(inbox).findByText('7')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'المُرسَل' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'المميّزة' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'المهملات' })).toBeInTheDocument()
-    const followups = screen.getByRole('button', { name: 'للمتابعة' })
+    const followups = screen.getByRole('button', { name: /^للمتابعة/ })
     expect(await within(followups).findByText('2')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'المسودّات' })).not.toBeInTheDocument()
   })
