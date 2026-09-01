@@ -32,8 +32,6 @@ from app.schemas.email import (
     EmailAccountRead,
     EmailAccountUpsert,
     EmailHandoffResult,
-    EmailSendRequest,
-    EmailSendResult,
     EmailSyncResult,
     EmailSyncStatus,
 )
@@ -200,41 +198,3 @@ async def create_handoff(
     return EmailHandoffResult(ledger_entry_id=entry.id, mode=result_mode)
 
 
-@router.post("/send", response_model=EmailSendResult)
-async def send_email(
-    db: Annotated[Session, Depends(get_db)],
-    current_user: Annotated[User, Depends(require_capability("ledger.send"))],
-    to: Annotated[str, Form()],
-    subject: Annotated[str, Form()],
-    html: Annotated[str, Form()],
-    cc: Annotated[str, Form()] = "",
-    in_reply_to: Annotated[str | None, Form()] = None,
-    references: Annotated[str | None, Form()] = None,
-    use_signature: Annotated[bool, Form()] = True,
-    files: Annotated[list[UploadFile] | None, File()] = None,
-) -> EmailSendResult:
-    """Multipart endpoint. ``to`` / ``cc`` are comma-separated lists of
-    addresses; ``files`` carries optional attachments."""
-    to_list = [s.strip() for s in to.split(",") if s.strip()]
-    cc_list = [s.strip() for s in cc.split(",") if s.strip()]
-    payload = EmailSendRequest(
-        to=to_list,
-        cc=cc_list,
-        subject=subject,
-        html=html,
-        in_reply_to=in_reply_to,
-        references=references,
-        use_signature=use_signature,
-    )
-    attachments: list[tuple[str, bytes]] = []
-    if files:
-        for up in files:
-            data = await up.read()
-            if data:
-                attachments.append((up.filename or "attachment", data))
-    try:
-        return email_service.send_email(db, payload, owner_user_id=current_user.id, attachments=attachments)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"send failed: {e!s}") from e

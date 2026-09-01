@@ -149,28 +149,9 @@ class LedgerListResponse(BaseModel):
     offset: int
 
 
-class DraftWrite(BaseModel):
-    """Payload for creating or updating an email draft.
-
-    Drafts borrow the LedgerEntry shape (channel='email', direction='outgoing',
-    tag='draft'). ``to``/``cc``/``in_reply_to``/``references`` aren't first-
-    class on LedgerEntry, so they're persisted as ``draft_meta`` JSON.
-    ``subject`` and ``html`` map to ``subject`` and ``notes_html``.
-    ``use_signature`` is persisted in draft_meta and forwarded to
-    ``email_service.send_email`` when the draft is promoted to sent.
-    """
-
-    to: list[str] = Field(default_factory=list)
-    cc: list[str] = Field(default_factory=list)
-    subject: str = ""
-    html: str = ""
-    in_reply_to: str | None = None
-    references: str | None = None
-    use_signature: bool = True
 
 
 __all__ = [
-    "DraftWrite",
     "LedgerAddress",
     "LedgerAttachmentMeta",
     "LedgerChannel",

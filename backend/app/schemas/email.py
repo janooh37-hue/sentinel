@@ -85,21 +85,6 @@ class EmailSyncStatus(ORMBase):
     interval_minutes: int
 
 
-class EmailSendRequest(BaseModel):
-    to: list[str] = Field(min_length=1)
-    cc: list[str] = Field(default_factory=list)
-    subject: str
-    html: str
-    in_reply_to: str | None = None  # Message-Id of the email being replied to
-    references: str | None = None  # threading: full References header
-    use_signature: bool = True
-
-
-class EmailSendResult(BaseModel):
-    sent: bool
-    message_id: str
-    ledger_entry_id: int
-
 
 class EmailHandoffResult(BaseModel):
     ledger_entry_id: int

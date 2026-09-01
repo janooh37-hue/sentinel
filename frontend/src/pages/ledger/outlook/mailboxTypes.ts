@@ -8,8 +8,8 @@
  * CLAUDE.md principle #1 — keep them.
  */
 
-/** The five personal mailbox folders in the rail. */
-export type PersonalFolder = 'inbox' | 'drafts' | 'sent' | 'starred' | 'trash'
+/** The four personal mailbox folders in the rail. */
+export type PersonalFolder = 'inbox' | 'sent' | 'starred' | 'trash'
 
 /**
  * The shell's active selection: one of the personal folders, the per-user
@@ -34,7 +34,6 @@ export interface PersonalFolderDef {
 /** Personal folders in rail order (Inbox first), with their wayfinding emoji. */
 export const PERSONAL_FOLDERS: readonly PersonalFolderDef[] = [
   { key: 'inbox', emoji: '📥', i18nKey: 'inbox' },
-  { key: 'drafts', emoji: '📝', i18nKey: 'drafts' },
   { key: 'sent', emoji: '📤', i18nKey: 'sent' },
   { key: 'starred', emoji: '⭐', i18nKey: 'starred' },
   { key: 'trash', emoji: '🗑️', i18nKey: 'trash' },
