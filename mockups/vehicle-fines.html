@@ -105,8 +105,8 @@
     .thumb{inline-size:56px;block-size:38px;border:1px solid var(--border);border-radius:7px;object-fit:cover;background:var(--tinted)}
     .empty{padding:34px 18px;text-align:center;color:var(--muted)}
     .empty strong{display:block;margin-block-end:5px;color:var(--navy)}
-    .mobile-only{display:none}
-    .phone .desktop-only{display:none!important}.phone .mobile-only{display:block}
+    .workspace:not(.phone) .mobile-only{display:none}
+    .phone .desktop-only{display:none}.phone .mobile-only{display:block}
     .vehicle-cards{display:grid;gap:9px}
     .vehicle-card{padding:12px;border:1px solid var(--border);border-radius:12px;background:var(--surface)}
     .vehicle-card-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-block-end:10px}
@@ -129,6 +129,7 @@
     .ledger th,.ledger td{padding-block:9px}
     .seq{inline-size:36px;color:var(--muted);font-family:var(--mono)}
     .fine-cards{display:grid;gap:8px;padding:10px}
+    .phone .vehicle-cards,.phone .fine-cards{display:grid}
     .fine-card{padding:10px;border:1px solid var(--hairline);border-radius:10px;background:var(--raised)}
     .fine-card-head{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
     .fine-card h4{margin:0;font-size:.78rem}.fine-card p{margin:2px 0 0;color:var(--muted);font:.68rem var(--mono)}
