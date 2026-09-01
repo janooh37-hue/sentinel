@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { FilePenLine } from 'lucide-react'
+import { Check, FilePenLine, Trash2 } from 'lucide-react'
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -73,18 +73,22 @@ export function WordSessionActions({
         type="button"
         disabled={busy}
         onClick={() => finishMutation.mutate()}
-        className="inline-flex items-center gap-1.5 rounded-lg border border-transparent bg-primary px-3 py-2 text-[0.82em] font-semibold text-primary-foreground transition-colors hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+        className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-transparent bg-primary p-0 text-[0.82em] font-semibold text-primary-foreground transition-colors hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+        aria-label={t('books.word.finish')}
+        title={t('books.word.finish')}
       >
-        {t('books.word.finish')}
+        <Check className="h-3.5 w-3.5" />
       </button>
 
       <button
         type="button"
         disabled={busy}
         onClick={() => setDiscardOpen(true)}
-        className="inline-flex items-center gap-1.5 rounded-lg border border-accent/40 px-3 py-2 text-[0.82em] font-semibold text-accent transition-colors hover:bg-accent/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+        className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-accent/40 p-0 text-[0.82em] font-semibold text-accent transition-colors hover:bg-accent/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+        aria-label={t('books.word.discard')}
+        title={t('books.word.discard')}
       >
-        {t('books.word.discard')}
+        <Trash2 className="h-3.5 w-3.5" />
       </button>
 
       <ConfirmDialog

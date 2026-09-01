@@ -675,6 +675,7 @@ export function BookRecordPage(): React.JSX.Element {
               <HeaderBtn
                 icon={<PenLine className="h-3.5 w-3.5" />}
                 label={t('books.approval.signApprove')}
+                iconOnly
                 tone="green-solid"
                 disabled={busy}
                 onClick={() => signMutation.mutate()}
@@ -682,6 +683,7 @@ export function BookRecordPage(): React.JSX.Element {
               <HeaderBtn
                 icon={<CornerUpLeft className="h-3.5 w-3.5" />}
                 label={t('books.approval.return')}
+                iconOnly
                 tone="amber"
                 disabled={busy}
                 onClick={() => {
@@ -692,6 +694,7 @@ export function BookRecordPage(): React.JSX.Element {
               <HeaderBtn
                 icon={<X className="h-3.5 w-3.5" strokeWidth={2.4} />}
                 label={t('books.approval.reject')}
+                iconOnly
                 tone="red"
                 disabled={busy}
                 onClick={() => {
@@ -713,7 +716,7 @@ export function BookRecordPage(): React.JSX.Element {
               icon={<CornerUpLeft className="h-3.5 w-3.5 -scale-x-100" />}
               label={t('books.versions.revise')}
               tone="navy-solid"
-              grow
+              iconOnly
               disabled={!canRevise}
               onClick={handleRevise}
             />
@@ -724,7 +727,7 @@ export function BookRecordPage(): React.JSX.Element {
               icon={<Send className="h-3.5 w-3.5" />}
               label={t('books.approval.submitForApproval')}
               tone="navy-solid"
-              grow
+              iconOnly
               onClick={() => setSubmitOpen(true)}
             />
           )}
@@ -734,6 +737,7 @@ export function BookRecordPage(): React.JSX.Element {
               <HeaderBtn
                 icon={<Upload className="h-3.5 w-3.5" />}
                 label={t('books.pane.scanSignedCopy')}
+                iconOnly
                 tone="plain"
                 disabled={addScan.busy}
                 onClick={() => fileSignedRef.current?.click()}
@@ -762,10 +766,11 @@ export function BookRecordPage(): React.JSX.Element {
               href={current.signed_pdf_url}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-transparent bg-primary px-3 text-[0.78em] font-semibold text-primary-foreground transition-colors hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring max-lg:flex-1 max-lg:justify-center"
+              aria-label={t('books.record.downloadSigned')}
+              title={t('books.record.downloadSigned')}
+              className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-transparent bg-primary px-0 text-[0.78em] font-semibold text-primary-foreground transition-colors hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               <Check className="h-3.5 w-3.5" strokeWidth={2.6} />
-              {t('books.record.downloadSigned')}
             </a>
           )}
         </div>
@@ -779,6 +784,7 @@ export function BookRecordPage(): React.JSX.Element {
               <HeaderBtn
                 icon={<ShieldAlert className="h-3.5 w-3.5" />}
                 label={t('books.stateOverride.trigger')}
+                iconOnly
                 tone="red"
                 testId="state-override-trigger"
                 onClick={() => setStateOverrideOpen(true)}

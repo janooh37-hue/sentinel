@@ -26,7 +26,7 @@ void i18n.use(initReactI18next).init({
         'books.word.discardConfirm': 'سيصبح الكتاب ملغياً ويبقى رقمه محفوظاً في السجل. متابعة؟',
         'books.word.draft': 'مسودة — رقم محجوز',
         'books.word.editing': 'قيد التحرير',
-        'books.word.editingBy': 'قيد التحرير في Word بواسطة {{name}}',
+        'books.word.editingBy': 'قيد التحرير في Word — {{name}}',
         'books.word.voided': 'ملغي',
         'books.word.needsPc': 'التحرير في Word يتطلب جهاز كمبيوتر مثبّت عليه Word',
         'books.word.openInWord': 'فتح في Word',
@@ -151,13 +151,17 @@ describe('Word action components', () => {
     vi.restoreAllMocks()
   })
 
-  it('(a) renders Finish and Discard in Arabic for a book with active edit_session', () => {
+  it('(a) renders labelled icon-only Finish and Discard actions in Arabic', () => {
     render(
       createElement(WordSessionActions, { book: ACTIVE_SESSION_BOOK }),
       { wrapper: wrapper(makeQc()) },
     )
-    expect(screen.getByRole('button', { name: /إنهاء التحرير/ })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /تجاهل/ })).toBeInTheDocument()
+    const finish = screen.getByRole('button', { name: 'إنهاء التحرير' })
+    const discard = screen.getByRole('button', { name: 'تجاهل' })
+    expect(finish).toHaveAttribute('title', 'إنهاء التحرير')
+    expect(discard).toHaveAttribute('title', 'تجاهل')
+    expect(finish).not.toHaveTextContent('إنهاء التحرير')
+    expect(discard).not.toHaveTextContent('تجاهل')
   })
 
   it('(b) on mobile: shows disabled "فتح في Word" with the PC hint', () => {
@@ -285,17 +289,18 @@ describe('BookStatusChips', () => {
     expect(screen.getByText('مسودة — رقم محجوز')).toBeInTheDocument()
   })
 
-  it('shows editingBy with holder name for a book with active edit_session and user_name', () => {
+  it('shows editingBy with the holder first name and full name tooltip', () => {
     render(
       createElement(BookStatusChips, { book: ACTIVE_SESSION_BOOK }),
       { wrapper: wrapper(makeQc()) },
     )
     // Bidi-isolate chars wrap the name; strip them before comparing visible text
     const chip = screen.getByText((content) =>
-      content.replace(/[⁨⁩]/g, '').includes('قيد التحرير في Word بواسطة أحمد العلي'),
+      content.replace(/[⁨⁩]/g, '').includes('قيد التحرير في Word — أحمد'),
     )
-    expect(chip).toBeInTheDocument()
-    // Confirm the bidi isolate is present (fix 6)
+    expect(chip).toHaveAttribute('title', 'أحمد العلي')
+    expect(chip).toHaveAccessibleName('قيد التحرير في Word — ⁨أحمد العلي⁩')
+    expect(chip.textContent?.replace(/[⁨⁩]/g, '')).not.toContain('أحمد العلي')
     expect(chip.textContent).toContain('⁨')
   })
 

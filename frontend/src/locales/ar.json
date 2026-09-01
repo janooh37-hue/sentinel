@@ -1607,7 +1607,7 @@
       "preparedBy": "المُعِدّ",
       "draft": "مسودة — رقم محجوز",
       "editing": "قيد التحرير",
-      "editingBy": "قيد التحرير في Word بواسطة {{name}}",
+      "editingBy": "قيد التحرير في Word — {{name}}",
       "voided": "ملغي",
       "needsPc": "التحرير في Word يتطلب جهاز كمبيوتر مثبّت عليه Word",
       "openInWord": "فتح في Word",
