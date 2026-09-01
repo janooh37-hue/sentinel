@@ -197,7 +197,25 @@ export function htmlToPlainText(html: string): string {
     .trim()
 }
 
-/** `mailto:` per RFC 6068 — addresses stay literal, query values are encoded. */
+/**
+ * Percent-encode ONE address. `encodeURIComponent` escapes everything that
+ * could end the path early or invent a query parameter (`?`, `&`, spaces, `#`),
+ * then `@` is put back: it is legal unescaped in both a mailto path and a query
+ * and Outlook shows `%40` verbatim in the To field, which reads as a typo.
+ *
+ * The comma that separates addresses is added by the caller and never by this
+ * function, so a comma *inside* an address stays encoded and cannot split one
+ * recipient into two.
+ */
+function encodeMailtoAddress(address: string): string {
+  return encodeURIComponent(address.trim()).replace(/%40/g, '@')
+}
+
+/**
+ * `mailto:` per RFC 6068 — addresses are encoded per segment with literal `,`
+ * separators; subject and body are opaque query values, so they are encoded
+ * whole.
+ */
 export function buildMailtoUrl(
   to: string[],
   cc: string[],
@@ -205,11 +223,11 @@ export function buildMailtoUrl(
   body: string,
 ): string {
   const params: string[] = []
-  if (cc.length > 0) params.push(`cc=${encodeURIComponent(cc.join(','))}`)
+  if (cc.length > 0) params.push(`cc=${cc.map(encodeMailtoAddress).join(',')}`)
   if (subject) params.push(`subject=${encodeURIComponent(subject)}`)
   if (body) params.push(`body=${encodeURIComponent(body)}`)
   const query = params.length > 0 ? `?${params.join('&')}` : ''
-  return `mailto:${to.join(',')}${query}`
+  return `mailto:${to.map(encodeMailtoAddress).join(',')}${query}`
 }
 
 function formatBytes(b: number): string {
@@ -460,6 +478,27 @@ export function OutlookHandoffDialog({
     staleTime: 60_000,
   })
   const draftAvailable = Boolean(accountQuery.data?.enabled)
+
+  // Reply-all builds its recipient set at mount, from the source thread, before
+  // `getEmailAccount` has resolved — so the mailbox this reply will be sent
+  // FROM can still be sitting in To or Cc. Prune it once, as soon as the
+  // address is known. Only that one address is removed, case-insensitively, so
+  // anything the operator typed in the meantime survives.
+  const accountEmail = accountQuery.data?.email
+  const prunedSelf = useRef(false)
+  useEffect(() => {
+    if (mode !== 'replyall' || prunedSelf.current) return
+    const me = accountEmail?.trim().toLowerCase()
+    if (!me) return
+    prunedSelf.current = true
+    for (const field of ['to', 'cc'] as const) {
+      const current = getValues(field) ?? []
+      const next = current.filter((address) => address.trim().toLowerCase() !== me)
+      if (next.length !== current.length) {
+        setValue(field, next, { shouldDirty: false })
+      }
+    }
+  }, [mode, accountEmail, getValues, setValue])
 
   const watchedTo = watch('to') ?? []
   const watchedCc = watch('cc') ?? []

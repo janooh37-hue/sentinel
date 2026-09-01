@@ -208,7 +208,8 @@ describe('OutlookHandoffDialog submit', () => {
     const url = assign.mock.calls[0][0]
     expect(url.startsWith('mailto:hr@gssg.ae?')).toBe(true)
     expect(url).toContain(`subject=${encodeURIComponent('كتاب رقم GS-0048')}`)
-    expect(url).toContain(`cc=${encodeURIComponent('ops@gssg.ae')}`)
+    // Cc addresses are encoded per segment now, so `@` stays readable.
+    expect(url).toContain('cc=ops@gssg.ae')
     expect(url).toContain(encodeURIComponent('Please find the record attached.'))
     expect(url.length).toBeLessThanOrEqual(MAILTO_MAX)
     expect(onHandedOff).toHaveBeenCalledWith(77)

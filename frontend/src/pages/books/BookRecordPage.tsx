@@ -551,7 +551,16 @@ export function BookRecordPage(): React.JSX.Element {
         toast.error(t('basket.addError'))
         return
       }
-      const prefill = buildBasketPrefill([item], getRecentRecipientsForForm(basketKey(item)))
+      const key = basketKey(item)
+      // Learned recipients are still keyed by form kind, so the To field is
+      // seeded the same way a basket send would seed it. The key itself is then
+      // dropped: this is not a basket send, and carrying it would let a
+      // successful handoff clear a same-kind basket the operator is still
+      // filling. (`basketKey` is discarded via rest-destructuring.)
+      const { basketKey: _notABasketSend, ...prefill } = buildBasketPrefill(
+        [item],
+        getRecentRecipientsForForm(key),
+      )
       navigate('/ledger', { state: { composePrefill: prefill } })
     } catch (err) {
       toast.error(apiErrorMessage(err))
