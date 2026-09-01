@@ -26,7 +26,14 @@ vi.mock('sonner', () => ({ toast: vi.fn() }))
 vi.mock('./useSyncStatus', () => ({ useSyncStatus: () => ({ status: null }) }))
 vi.mock('./useContextSource', () => ({ useContextSource: () => ({ peopleCount: 0, entry: null }) }))
 vi.mock('./useDeferredDelete', () => ({ useDeferredDelete: () => ({ pendingIds: new Set(), scheduleDelete: vi.fn() }) }))
-vi.mock('./FolderRail', () => ({ FolderRail: () => null }))
+// Stubbed down to the one shell-relevant affordance: the ＋New email button.
+// The stub reproduces the real rail's accessible name (`aria-label` →
+// `ledger.outlook.newEmail`) so the click target is the same one users hit.
+vi.mock('./FolderRail', () => ({
+  FolderRail: ({ onNewEmail }: { onNewEmail?: () => void }) => (
+    <button type="button" onClick={() => onNewEmail?.()}>ledger.outlook.newEmail</button>
+  ),
+}))
 vi.mock('./ContextPanel', () => ({ ContextPanel: () => null }))
 vi.mock('./ReadingPaneSlot', () => ({ ReadingPaneSlot: ({ selectedId }: { selectedId: number | null }) => <div data-testid="reading-pane">{selectedId ?? 'none'}</div> }))
 vi.mock('./MessageList', () => ({ MessageList: ({ items, onSelect }: { items: LedgerListItem[]; onSelect: (id: number) => void }) => (
@@ -34,8 +41,28 @@ vi.mock('./MessageList', () => ({ MessageList: ({ items, onSelect }: { items: Le
     {items.map((item) => <button type="button" key={item.id} onClick={() => onSelect(item.id)}>{item.id}</button>)}
   </div>
 ) }))
-vi.mock('../LedgerEmailCompose', () => ({ LedgerEmailCompose: () => null }))
-vi.mock('./ComposeWindow', () => ({ ComposeWindow: () => null }))
+// The legacy SMTP composer stands in for its own submit wording only. Rendering
+// the real module would drag in TipTap + react-hook-form and make the wording
+// assertion below fail for setup reasons instead of behaviour. Task 5 deletes
+// the module and this mock together.
+vi.mock('../LedgerEmailCompose', () => ({
+  LedgerEmailCompose: () => <button type="button">compose.send</button>,
+}))
+// Render-prop passthrough: the frame's drag/minimize chrome is not under test,
+// but the compose surface it hosts is.
+vi.mock('./ComposeWindow', () => ({
+  ComposeWindow: ({ children }: { children: (win: unknown) => React.ReactNode }) => (
+    <div data-testid="compose-window">
+      {children({
+        state: 'maximized',
+        minimize: () => {},
+        maximize: () => {},
+        restore: () => {},
+        dragHandleProps: { onPointerDown: () => {} },
+      })}
+    </div>
+  ),
+}))
 vi.mock('./SuggestionBanner', () => ({ SuggestionBanner: () => null }))
 vi.mock('./ReviewSuggestionsSheet', () => ({ ReviewSuggestionsSheet: () => null }))
 vi.mock('./CreateSmartFolderDialog', () => ({ CreateSmartFolderDialog: () => null }))
@@ -64,11 +91,14 @@ function LocationProbe(): React.JSX.Element {
   return <output data-testid="location">{location.search}</output>
 }
 
-function renderShell(initialEntry: string): void {
+function renderShell(initialEntry: string, state?: Record<string, unknown>): void {
+  const [pathname, search] = initialEntry.split('?')
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   render(
     <QueryClientProvider client={queryClient}>
-      <MemoryRouter initialEntries={[initialEntry]}>
+      <MemoryRouter
+        initialEntries={[{ pathname, search: search ? `?${search}` : '', state: state ?? null }]}
+      >
         <LedgerOutlookShell />
         <LocationProbe />
       </MemoryRouter>
@@ -115,6 +145,58 @@ describe('LedgerOutlookShell activity deep links', () => {
     await userEvent.click(retry)
     await waitFor(() => expect(screen.getByTestId('reading-pane')).toHaveTextContent('42'))
     await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent('?keep=1'))
+  })
+})
+
+/**
+ * The compose entry point now hands the mail off to the user's Outlook instead
+ * of sending over SMTP, so the surface the shell opens must offer the two
+ * handoff modes and a handoff submit — never the composer's "Send".
+ * `t` is stubbed key-as-text above, so the names asserted here are the i18n
+ * keys the dialog must use (same convention as `common.retry` above).
+ */
+describe('LedgerOutlookShell Outlook handoff surface', () => {
+  beforeEach(() => {
+    vi.mocked(api.listLedger).mockResolvedValue({ items: [], total: 0, limit: 500, offset: 0 })
+    vi.mocked(api.getSmartFolderSuggestions).mockResolvedValue([])
+    vi.mocked(api.getLedgerEntry).mockReset()
+  })
+
+  it('New email opens the handoff surface with both modes, not the SMTP composer', async () => {
+    renderShell('/ledger')
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'ledger.outlook.newEmail' }),
+    )
+    // Two mutually exclusive modes, explicitly chosen — never a hidden default.
+    expect(
+      await screen.findByRole('radio', { name: 'ledger.outlook.handoff.modeDraft' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('radio', { name: 'ledger.outlook.handoff.modeMailto' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: 'ledger.outlook.handoff.submit' }),
+    ).toBeInTheDocument()
+    // This surface hands off; it never sends. The composer's Send must be gone.
+    expect(screen.queryByRole('button', { name: 'compose.send' })).not.toBeInTheDocument()
+  })
+
+  it('consumes a route-state basket prefill into the handoff surface', async () => {
+    // Exactly what BookRecordPage / EmailBasketTray push through navigate state.
+    renderShell('/ledger', {
+      composePrefill: {
+        to: ['hr@gssg.ae'],
+        subject: 'طلب اجازة سنوية',
+        bodyHtml: '<p>body</p>',
+        references: [
+          { kind: 'book', id: 48, label: 'GS-0048', token: 'GS-0048', docId: 900 },
+        ],
+        attachRefPdf: true,
+      },
+    })
+    expect(await screen.findByDisplayValue('طلب اجازة سنوية')).toBeInTheDocument()
+    expect(screen.getByText('hr@gssg.ae')).toBeInTheDocument()
+    expect(screen.getByText('GS-0048')).toBeInTheDocument()
   })
 })
 
