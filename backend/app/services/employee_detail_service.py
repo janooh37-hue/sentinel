@@ -166,12 +166,9 @@ def get_employee_detail(db: Session, employee_id: str) -> sx.EmployeeDetailRead 
         for leave in recent_leaves
     ]
     recent_violations = [
-        violation.model_copy(
-            update={"linked_documents": violation_documents.get(violation.id, [])}
-        )
+        violation.model_copy(update={"linked_documents": violation_documents.get(violation.id, [])})
         for violation in recent_violations
     ]
-
 
     recent_absences = [
         sx.RecentAbsenceRead.model_validate(a)
@@ -198,9 +195,7 @@ def get_employee_detail(db: Session, employee_id: str) -> sx.EmployeeDetailRead 
         db.scalars(
             select(models.DutyAssignmentEvent)
             .where(models.DutyAssignmentEvent.employee_id == emp.id)
-            .where(
-                models.DutyAssignmentEvent.event_type.in_(("initial_placement", "transfer"))
-            )
+            .where(models.DutyAssignmentEvent.event_type.in_(("initial_placement", "transfer")))
             .order_by(models.DutyAssignmentEvent.effective_at.desc())
             .limit(ACTIVITY_LIMIT)
         )
