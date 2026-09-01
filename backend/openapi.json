@@ -14874,6 +14874,66 @@
         }
       }
     },
+    "/api/v1/email/handoff": {
+      "post": {
+        "tags": [
+          "email"
+        ],
+        "summary": "Create Handoff",
+        "description": "Create a pending ledger row and optionally push a draft to Outlook.",
+        "operationId": "create_handoff_api_v1_email_handoff_post",
+        "parameters": [
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_create_handoff_api_v1_email_handoff_post"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmailHandoffResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/email/send": {
       "post": {
         "tags": [
@@ -24696,6 +24756,103 @@
         ],
         "title": "Body_create_extraction_api_v1_extractions_post"
       },
+      "Body_create_handoff_api_v1_email_handoff_post": {
+        "properties": {
+          "to": {
+            "type": "string",
+            "title": "To"
+          },
+          "subject": {
+            "type": "string",
+            "title": "Subject"
+          },
+          "html": {
+            "type": "string",
+            "title": "Html"
+          },
+          "mode": {
+            "type": "string",
+            "title": "Mode"
+          },
+          "cc": {
+            "type": "string",
+            "title": "Cc",
+            "default": ""
+          },
+          "related_book_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Related Book Id"
+          },
+          "related_employee_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Related Employee Id"
+          },
+          "in_reply_to": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "In Reply To"
+          },
+          "references": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "References"
+          },
+          "use_signature": {
+            "type": "boolean",
+            "title": "Use Signature",
+            "default": true
+          },
+          "files": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string",
+                  "format": "binary"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Files"
+          }
+        },
+        "type": "object",
+        "required": [
+          "to",
+          "subject",
+          "html",
+          "mode"
+        ],
+        "title": "Body_create_handoff_api_v1_email_handoff_post"
+      },
       "Body_inspect_approved_violation_api_v1_documents_inmate_violations_approved_imports_inspect_post": {
         "properties": {
           "upload": {
@@ -29419,6 +29576,11 @@
             "type": "string",
             "title": "Sent Folder"
           },
+          "drafts_folder": {
+            "type": "string",
+            "title": "Drafts Folder",
+            "default": "Drafts"
+          },
           "inbox_folder": {
             "type": "string",
             "title": "Inbox Folder"
@@ -29568,6 +29730,11 @@
             "title": "Sent Folder",
             "default": "Sent"
           },
+          "drafts_folder": {
+            "type": "string",
+            "title": "Drafts Folder",
+            "default": "Drafts"
+          },
           "inbox_folder": {
             "type": "string",
             "title": "Inbox Folder",
@@ -29604,6 +29771,28 @@
         ],
         "title": "EmailAccountUpsert",
         "description": "Write payload. ``password`` is optional on PATCH — only set when\nrotating credentials."
+      },
+      "EmailHandoffResult": {
+        "properties": {
+          "ledger_entry_id": {
+            "type": "integer",
+            "title": "Ledger Entry Id"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "mailto",
+              "draft"
+            ],
+            "title": "Mode"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ledger_entry_id",
+          "mode"
+        ],
+        "title": "EmailHandoffResult"
       },
       "EmailSendResult": {
         "properties": {

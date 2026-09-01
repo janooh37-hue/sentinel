@@ -3426,6 +3426,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/email/handoff": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Handoff
+         * @description Create a pending ledger row and optionally push a draft to Outlook.
+         */
+        post: operations["create_handoff_api_v1_email_handoff_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/email/send": {
         parameters: {
             query?: never;
@@ -5758,6 +5778,37 @@ export interface components {
              */
             file: string;
         };
+        /** Body_create_handoff_api_v1_email_handoff_post */
+        Body_create_handoff_api_v1_email_handoff_post: {
+            /** To */
+            to: string;
+            /** Subject */
+            subject: string;
+            /** Html */
+            html: string;
+            /** Mode */
+            mode: string;
+            /**
+             * Cc
+             * @default
+             */
+            cc: string;
+            /** Related Book Id */
+            related_book_id?: number | null;
+            /** Related Employee Id */
+            related_employee_id?: string | null;
+            /** In Reply To */
+            in_reply_to?: string | null;
+            /** References */
+            references?: string | null;
+            /**
+             * Use Signature
+             * @default true
+             */
+            use_signature: boolean;
+            /** Files */
+            files?: string[] | null;
+        };
         /** Body_inspect_approved_violation_api_v1_documents_inmate_violations_approved_imports_inspect_post */
         Body_inspect_approved_violation_api_v1_documents_inmate_violations_approved_imports_inspect_post: {
             /**
@@ -7407,6 +7458,11 @@ export interface components {
             smtp_use_tls: boolean;
             /** Sent Folder */
             sent_folder: string;
+            /**
+             * Drafts Folder
+             * @default Drafts
+             */
+            drafts_folder: string;
             /** Inbox Folder */
             inbox_folder: string;
             /** Enabled */
@@ -7474,6 +7530,11 @@ export interface components {
              */
             sent_folder: string;
             /**
+             * Drafts Folder
+             * @default Drafts
+             */
+            drafts_folder: string;
+            /**
              * Inbox Folder
              * @default INBOX
              */
@@ -7490,6 +7551,16 @@ export interface components {
             sync_interval_minutes: number;
             /** Linked Employee Id */
             linked_employee_id?: string | null;
+        };
+        /** EmailHandoffResult */
+        EmailHandoffResult: {
+            /** Ledger Entry Id */
+            ledger_entry_id: number;
+            /**
+             * Mode
+             * @enum {string}
+             */
+            mode: "mailto" | "draft";
         };
         /** EmailSendResult */
         EmailSendResult: {
@@ -19333,6 +19404,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EmailSyncStatus"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_handoff_api_v1_email_handoff_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_create_handoff_api_v1_email_handoff_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmailHandoffResult"];
                 };
             };
             /** @description Validation Error */
