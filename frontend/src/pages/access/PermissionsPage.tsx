@@ -973,7 +973,7 @@ export function PermissionsPage(): React.JSX.Element {
             {t('access.permissions.mirror.help')}
           </p>
         </header>
-        <div className="grid grid-cols-1 gap-4 min-[1100px]:[grid-template-columns:250px_minmax(0,1fr)_340px]">
+        <div className="grid grid-cols-1 gap-4 min-[1100px]:gap-6 min-[1100px]:[grid-template-columns:280px_minmax(0,1fr)_360px]">
           <aside
             aria-label={t('access.permissions.mirror.people')}
             className="rounded-2xl border border-hairline bg-surface p-3 min-[1100px]:sticky min-[1100px]:top-4 min-[1100px]:self-start"
