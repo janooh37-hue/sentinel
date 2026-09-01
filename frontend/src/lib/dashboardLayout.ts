@@ -156,6 +156,13 @@ export function hasServiceCap(
   return has(`books.service.${id}`)
 }
 
+export function hasServiceRecordsCap(
+  id: string,
+  has: (capability: string) => boolean,
+): boolean {
+  return has(`books.servicerecords.${id}`)
+}
+
 export function isQuickActionAllowed(
   id: string,
   has: (capability: string) => boolean,

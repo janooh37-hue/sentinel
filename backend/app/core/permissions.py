@@ -17,9 +17,14 @@ from app.core.form_kind import OTHER_SERVICE_ID, SERVICE_IDS
 from app.core.roles import ADMIN_ROLE, MANAGER_ROLE, OPERATOR_ROLE
 
 SERVICE_CAP_PREFIX: Final[str] = "books.service."
+SERVICE_RECORDS_CAP_PREFIX: Final[str] = "books.servicerecords."
 CATEGORY_CAP_PREFIX: Final[str] = "books.category."
 SERVICE_CAPABILITY_IDS: Final[frozenset[str]] = frozenset(
     f"{SERVICE_CAP_PREFIX}{service_id}" for service_id in (*SERVICE_IDS, OTHER_SERVICE_ID)
+)
+SERVICE_RECORDS_CAPABILITY_IDS: Final[frozenset[str]] = frozenset(
+    f"{SERVICE_RECORDS_CAP_PREFIX}{service_id}"
+    for service_id in (*SERVICE_IDS, OTHER_SERVICE_ID)
 )
 
 
@@ -451,6 +456,8 @@ __all__ = [
     "ROLE_DEFAULTS",
     "SERVICE_CAPABILITY_IDS",
     "SERVICE_CAP_PREFIX",
+    "SERVICE_RECORDS_CAPABILITY_IDS",
+    "SERVICE_RECORDS_CAP_PREFIX",
     "Capability",
     "default_caps_for_role",
 ]

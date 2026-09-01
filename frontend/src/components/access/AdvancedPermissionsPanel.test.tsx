@@ -15,7 +15,7 @@ vi.mock('@/lib/api', () => ({
   },
 }))
 
-import { AdvancedPermissionsDrawer } from './AdvancedPermissionsDrawer'
+import { AdvancedPermissionsPanel } from './AdvancedPermissionsPanel'
 import { api, type AdminUserRead, type CapabilityRead, type UserPermissionRead } from '@/lib/api'
 
 function createDeferred<T>() {
@@ -51,6 +51,7 @@ const capabilities = [
   cap('books.edit', 'books', 'Edit books'),
   cap('leaves.view', 'leaves', 'View leaves'),
   cap('books.service.General Book', 'services', 'General Book'),
+  cap('books.servicerecords.General Book', 'services', 'Records: General Book'),
   cap('books.category.incoming', 'categories', 'Incoming'),
   cap('books.service.other', 'services', 'Other'),
 ]
@@ -66,30 +67,63 @@ function perms(overrides: UserPermissionRead['overrides'] = {}): UserPermissionR
   }
 }
 
-function renderDrawer(permissionData = perms()) {
+function renderPanel(permissionData = perms()) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   })
   return render(
     <QueryClientProvider client={client}>
-      <AdvancedPermissionsDrawer user={user} perms={permissionData} capabilities={capabilities} />
+      <AdvancedPermissionsPanel user={user} perms={permissionData} capabilities={capabilities} />
     </QueryClientProvider>,
   )
 }
 
-describe('AdvancedPermissionsDrawer', () => {
+describe('AdvancedPermissionsPanel', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     vi.mocked(api.setUserPermission).mockResolvedValue(perms({ 'books.view': 'deny' }))
     vi.mocked(api.setUserPermissionsBulk).mockResolvedValue(perms())
   })
 
+  it('renders the fixed header, search, domains, and scroll contract immediately', () => {
+    const { container } = renderPanel()
+
+    expect(container.firstElementChild).toHaveClass(
+      'max-h-[calc(100vh-2rem)]',
+      'overflow-y-auto',
+    )
+    expect(screen.getByText('Advanced permissions')).toBeVisible()
+    expect(screen.queryByRole('button', { name: 'Advanced permissions' })).not.toBeInTheDocument()
+    expect(screen.getByPlaceholderText('Search permissions…')).toBeVisible()
+    expect(screen.getByText('Books')).toBeVisible()
+    expect(screen.getByText('Leaves')).toBeVisible()
+    expect(screen.getByText('books.view')).toBeVisible()
+    expect(screen.getByText('leaves.view')).toBeVisible()
+  })
+
+  it('keeps domain headers and capability rows stacked inside the narrow panel', () => {
+    renderPanel()
+
+    const domainHeader = screen.getByRole('group', { name: 'Apply to all Books' }).parentElement
+    expect(domainHeader).toHaveClass('flex', 'flex-col')
+    expect(domainHeader).not.toHaveClass('sm:flex-row')
+    expect(domainHeader).not.toHaveClass('sm:items-center')
+    expect(domainHeader).not.toHaveClass('sm:justify-between')
+
+    const capabilityRow = screen.getByRole('group', { name: 'View books' }).parentElement
+      ?.parentElement
+    expect(capabilityRow).toHaveClass('flex', 'flex-col')
+    expect(capabilityRow).not.toHaveClass('sm:flex-row')
+    expect(capabilityRow).not.toHaveClass('sm:items-start')
+    expect(capabilityRow).not.toHaveClass('sm:justify-between')
+  })
+
   it('keeps the tri-state row editor and excludes blueprint-owned domains', async () => {
-    renderDrawer()
-    await userEvent.click(screen.getByRole('button', { name: /advanced/i }))
+    renderPanel()
 
     expect(screen.queryByText('General Book')).not.toBeInTheDocument()
     expect(screen.queryByText('Incoming')).not.toBeInTheDocument()
+    expect(screen.queryByText('Records: General Book')).not.toBeInTheDocument()
 
     const rowToggle = screen.getByRole('group', { name: 'View books' })
     await userEvent.click(within(rowToggle).getByRole('button', { name: 'Deny' }))
@@ -100,8 +134,7 @@ describe('AdvancedPermissionsDrawer', () => {
   })
 
   it('leaves Other records with the blueprint alongside named services and categories', async () => {
-    renderDrawer()
-    await userEvent.click(screen.getByRole('button', { name: /advanced/i }))
+    renderPanel()
 
     expect(screen.queryByText('General Book')).not.toBeInTheDocument()
     expect(screen.queryByText('Incoming')).not.toBeInTheDocument()
@@ -110,8 +143,7 @@ describe('AdvancedPermissionsDrawer', () => {
   })
 
   it('filters by raw capability id and clears an empty result', async () => {
-    renderDrawer()
-    await userEvent.click(screen.getByRole('button', { name: /advanced/i }))
+    renderPanel()
 
     const input = screen.getByPlaceholderText('Search permissions…')
     await userEvent.type(input, 'leaves.view')
@@ -127,8 +159,7 @@ describe('AdvancedPermissionsDrawer', () => {
   })
 
   it('applies a domain-wide deny in one bulk request', async () => {
-    renderDrawer()
-    await userEvent.click(screen.getByRole('button', { name: /advanced/i }))
+    renderPanel()
 
     const bulkToggle = screen.getByRole('group', { name: 'Apply to all Books' })
     await userEvent.click(within(bulkToggle).getByRole('button', { name: 'Deny' }))
@@ -145,8 +176,7 @@ describe('AdvancedPermissionsDrawer', () => {
   it('keeps every tri-state control focusable but non-actionable while a write is pending', async () => {
     const deferred = createDeferred<UserPermissionRead>()
     vi.mocked(api.setUserPermission).mockReturnValue(deferred.promise)
-    renderDrawer()
-    await userEvent.click(screen.getByRole('button', { name: /advanced/i }))
+    renderPanel()
 
     const booksView = screen.getByRole('group', { name: 'View books' })
     const activeDeny = within(booksView).getByRole('button', { name: 'Deny' })

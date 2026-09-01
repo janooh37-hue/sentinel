@@ -32,6 +32,7 @@ from app.core.permissions import (
     CATEGORY_CAP_PREFIX,
     ROLE_DEFAULTS,
     SERVICE_CAP_PREFIX,
+    SERVICE_RECORDS_CAP_PREFIX,
 )
 from app.db.models import BookCategory, User
 from app.db.session import get_db
@@ -367,6 +368,20 @@ def list_capabilities(
         )
         for service_id in (*SERVICE_IDS, OTHER_SERVICE_ID)
     ]
+    service_records = [
+        CapabilityRead(
+            id=f"{SERVICE_RECORDS_CAP_PREFIX}{service_id}",
+            domain="books",
+            label=(
+                "Records: Other"
+                if service_id == OTHER_SERVICE_ID
+                else f"Records: {service_id}"
+            ),
+            description="",
+            default_roles=default_roles,
+        )
+        for service_id in (*SERVICE_IDS, OTHER_SERVICE_ID)
+    ]
     categories = [
         CapabilityRead(
             id=f"{CATEGORY_CAP_PREFIX}{row.id}",
@@ -377,7 +392,7 @@ def list_capabilities(
         )
         for row in db.scalars(select(BookCategory).order_by(BookCategory.id)).all()
     ]
-    return [*static, *services, *categories]
+    return [*static, *services, *service_records, *categories]
 
 
 @router.get("/users/{user_id}/permissions", response_model=UserPermissionRead)

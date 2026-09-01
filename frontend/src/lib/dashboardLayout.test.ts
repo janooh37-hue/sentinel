@@ -11,6 +11,7 @@ import {
   resolveLayout,
   isQuickActionAllowed,
   hasServiceCap,
+  hasServiceRecordsCap,
   mergeQuickActionsPreservingDenied,
   type QuickActionId,
 } from './dashboardLayout'
@@ -72,6 +73,24 @@ describe('dynamic service capabilities', () => {
     expect(checked).toEqual([
       'books.service.Report',
       'books.service.General Book',
+    ])
+  })
+
+  it('checks the exact records capability independently from creation access', () => {
+    const checked: string[] = []
+    const has = (capability: string): boolean => {
+      checked.push(capability)
+      return (
+        capability === 'books.servicerecords.General Book' ||
+        capability === 'books.service.Report'
+      )
+    }
+
+    expect(hasServiceRecordsCap('General Book', has)).toBe(true)
+    expect(hasServiceRecordsCap('Report', has)).toBe(false)
+    expect(checked).toEqual([
+      'books.servicerecords.General Book',
+      'books.servicerecords.Report',
     ])
   })
 })
