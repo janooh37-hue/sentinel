@@ -1120,7 +1120,7 @@ export function PermissionsPage(): React.JSX.Element {
                   ref={workspaceRef}
                   className="relative overflow-hidden rounded-2xl border border-hairline bg-surface shadow-sm"
                 >
-                  <div className="flex flex-col gap-3 border-b border-hairline px-5 py-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex flex-col gap-3 border-b border-hairline px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
                     <div className="flex min-w-0 items-center gap-2.5">
                       <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-primary text-[0.74em] font-bold text-primary-foreground">
                         {initialsOf(selectedUser)}
@@ -1170,17 +1170,17 @@ export function PermissionsPage(): React.JSX.Element {
                     </span>
                   </div>
 
-                  <div className="p-4">
+                  <div className="p-5 sm:p-6">
                     <section
                       aria-label={t('access.permissions.mirror.blueprintLabel')}
                       className="overflow-hidden rounded-xl border-[1.5px] border-primary bg-surface text-foreground"
                     >
-                      <div className="space-y-5 p-4 sm:p-5">
+                      <div className="space-y-7 p-5 sm:p-6">
                         <div>
-                          <h3 className="mb-2 text-[0.7em] font-semibold uppercase tracking-[0.08em] rtl:tracking-normal text-primary">
+                          <h3 className="mb-3 text-[0.7em] font-semibold uppercase tracking-[0.08em] rtl:tracking-normal text-primary">
                             {t('access.permissions.mirror.blueprintPages')}
                           </h3>
-                          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                          <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
                             {pageItems.map((item) => (
                               <BlueprintButton
                                 key={item.id}
@@ -1195,7 +1195,7 @@ export function PermissionsPage(): React.JSX.Element {
                         </div>
 
                         <div>
-                          <h3 className="mb-2 text-[0.7em] font-semibold uppercase tracking-[0.08em] rtl:tracking-normal text-primary">
+                          <h3 className="mb-3 text-[0.7em] font-semibold uppercase tracking-[0.08em] rtl:tracking-normal text-primary">
                             {t('access.permissions.mirror.blueprintServices')}
                           </h3>
                           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -1220,10 +1220,10 @@ export function PermissionsPage(): React.JSX.Element {
                         </div>
 
                         <div>
-                          <h3 className="mb-2 text-[0.7em] font-semibold uppercase tracking-[0.08em] rtl:tracking-normal text-primary">
+                          <h3 className="mb-3 text-[0.7em] font-semibold uppercase tracking-[0.08em] rtl:tracking-normal text-primary">
                             {t('access.permissions.mirror.blueprintCategories')}
                           </h3>
-                          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                          <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
                             {categoryItems.map((item) => (
                               <BlueprintButton
                                 key={item.id}
