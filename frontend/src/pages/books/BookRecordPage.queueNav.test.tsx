@@ -217,7 +217,14 @@ describe('BookRecordPage — Email via Outlook', () => {
 
     const state = JSON.parse(
       (await screen.findByTestId('ledger-state')).textContent || 'null',
-    ) as { composePrefill: { references: unknown[]; attachRefPdf: boolean; subject: string } }
+    ) as {
+      composePrefill: {
+        references: unknown[]
+        attachRefPdf: boolean
+        subject: string
+        basketKey?: string
+      }
+    }
     // Exactly the basket flow with this record as the single item: the book
     // reference carries the ref token plus the backing document, and the
     // reference PDF rides along (which is what forces draft mode downstream).
@@ -233,6 +240,10 @@ describe('BookRecordPage — Email via Outlook', () => {
     ])
     expect(state.composePrefill.attachRefPdf).toBe(true)
     expect(state.composePrefill.subject).not.toBe('')
+    // A record emailed from its own page is NOT a basket send. Naming a basket
+    // here would let a successful handoff clear a same-kind basket the operator
+    // is still filling, so the synthetic prefill must not carry one.
+    expect(state.composePrefill.basketKey).toBeFalsy()
   })
 
   it('disables the action for a record with no papers to attach', async () => {

@@ -56,8 +56,10 @@ const BOOK_REF = {
   fileName: 'GS-0048.pdf',
 }
 
+type DialogProps = Parameters<typeof OutlookHandoffDialog>[0]
+
 function renderDialog(
-  prefill: Parameters<typeof OutlookHandoffDialog>[0]['prefill'] = {},
+  opts: { mode?: DialogProps['mode']; source?: DialogProps['source']; prefill?: DialogProps['prefill'] } = {},
 ): { onClose: () => void; onHandedOff: (id: number) => void } {
   const onClose = vi.fn()
   const onHandedOff = vi.fn()
@@ -65,8 +67,9 @@ function renderDialog(
   render(
     <QueryClientProvider client={queryClient}>
       <OutlookHandoffDialog
-        mode="new"
-        prefill={prefill}
+        mode={opts.mode ?? 'new'}
+        source={opts.source}
+        prefill={opts.prefill ?? {}}
         onClose={onClose}
         onHandedOff={onHandedOff}
       />
@@ -100,12 +103,14 @@ afterEach(() => {
 describe('OutlookHandoffDialog prefill', () => {
   it('renders the To, Cc, subject and reference a basket prefill carried in', async () => {
     renderDialog({
-      to: ['hr@gssg.ae'],
-      cc: ['ops@gssg.ae'],
-      subject: 'طلب اجازة سنوية',
-      bodyHtml: '<p>letter</p>',
-      references: [BOOK_REF],
-      attachRefPdf: true,
+      prefill: {
+        to: ['hr@gssg.ae'],
+        cc: ['ops@gssg.ae'],
+        subject: 'طلب اجازة سنوية',
+        bodyHtml: '<p>letter</p>',
+        references: [BOOK_REF],
+        attachRefPdf: true,
+      },
     })
 
     expect(await screen.findByDisplayValue('طلب اجازة سنوية')).toBeInTheDocument()
@@ -118,7 +123,7 @@ describe('OutlookHandoffDialog prefill', () => {
 
 describe('OutlookHandoffDialog mode rules', () => {
   it('defaults to a draft and offers both modes when a mailbox is configured', async () => {
-    renderDialog({ to: ['hr@gssg.ae'], subject: 'Transfer', bodyHtml: '<p>short</p>' })
+    renderDialog({ prefill: { to: ['hr@gssg.ae'], subject: 'Transfer', bodyHtml: '<p>short</p>' } })
     await waitFor(() => expect(draftRadio()).toBeChecked())
     expect(draftRadio()).toBeEnabled()
     expect(mailtoRadio()).toBeEnabled()
@@ -126,7 +131,7 @@ describe('OutlookHandoffDialog mode rules', () => {
 
   it('leaves mailto as the only option and points at Settings when no mailbox is configured', async () => {
     vi.mocked(api.getEmailAccount).mockResolvedValue(null)
-    renderDialog({ to: ['hr@gssg.ae'], subject: 'Transfer', bodyHtml: '<p>short</p>' })
+    renderDialog({ prefill: { to: ['hr@gssg.ae'], subject: 'Transfer', bodyHtml: '<p>short</p>' } })
 
     await waitFor(() => expect(mailtoRadio()).toBeChecked())
     expect(draftRadio()).toBeDisabled()
@@ -139,11 +144,13 @@ describe('OutlookHandoffDialog mode rules', () => {
       vi.fn().mockResolvedValue({ ok: true, text: () => Promise.resolve(btoa('%PDF-1.4')) }),
     )
     renderDialog({
-      to: ['hr@gssg.ae'],
-      subject: 'Transfer',
-      bodyHtml: '<p>short</p>',
-      references: [BOOK_REF],
-      attachRefPdf: true,
+      prefill: {
+        to: ['hr@gssg.ae'],
+        subject: 'Transfer',
+        bodyHtml: '<p>short</p>',
+        references: [BOOK_REF],
+        attachRefPdf: true,
+      },
     })
 
     await waitFor(() => expect(mailtoRadio()).toBeDisabled())
@@ -154,9 +161,11 @@ describe('OutlookHandoffDialog mode rules', () => {
 
   it('forces a draft when the message outgrows a mailto link', async () => {
     renderDialog({
-      to: ['hr@gssg.ae'],
-      subject: 'Transfer',
-      bodyHtml: `<p>${'x'.repeat(MAILTO_MAX + 200)}</p>`,
+      prefill: {
+        to: ['hr@gssg.ae'],
+        subject: 'Transfer',
+        bodyHtml: `<p>${'x'.repeat(MAILTO_MAX + 200)}</p>`,
+      },
     })
 
     await waitFor(() => expect(mailtoRadio()).toBeDisabled())
@@ -170,11 +179,13 @@ describe('OutlookHandoffDialog submit', () => {
     vi.mocked(api.getEmailAccount).mockResolvedValue(null)
     const assign = vi.spyOn(browserNavigation, 'assign').mockImplementation(() => {})
     const { onHandedOff } = renderDialog({
-      to: ['hr@gssg.ae'],
-      cc: ['ops@gssg.ae'],
-      subject: 'كتاب رقم GS-0048',
-      bodyHtml: '<p>Please find the record attached.</p>',
-      references: [BOOK_REF],
+      prefill: {
+        to: ['hr@gssg.ae'],
+        cc: ['ops@gssg.ae'],
+        subject: 'كتاب رقم GS-0048',
+        bodyHtml: '<p>Please find the record attached.</p>',
+        references: [BOOK_REF],
+      },
     })
 
     await waitFor(() => expect(mailtoRadio()).toBeChecked())
@@ -204,19 +215,80 @@ describe('OutlookHandoffDialog submit', () => {
   })
 
   it('refuses to hand off without a recipient', async () => {
-    renderDialog({ subject: 'Transfer', bodyHtml: '<p>short</p>' })
+    renderDialog({ prefill: { subject: 'Transfer', bodyHtml: '<p>short</p>' } })
     await userEvent.click(screen.getByRole('button', { name: /Hand off to Outlook/ }))
     expect(await screen.findByText('At least one recipient is required')).toBeInTheDocument()
     expect(api.emailHandoff).not.toHaveBeenCalled()
   })
 })
 
+describe('OutlookHandoffDialog reply all', () => {
+  const source = {
+    id: 5,
+    entry_date: '2026-08-10',
+    direction: 'incoming',
+    channel: 'email',
+    counterparty: 'Sender <sender@x.ae>',
+    subject: 'Original',
+    tags: [],
+    notes_html: '<p>original</p>',
+    to_recipients: [
+      { name: '', address: 'ops@gssg.ae' },
+      { name: '', address: 'peer@x.ae' },
+    ],
+    cc_recipients: [{ name: '', address: 'cc1@x.ae' }],
+    email_references: null,
+  } as unknown as DialogProps['source']
+
+  it('drops the configured mailbox address, not just the signed-in identity', async () => {
+    // The signed-in identity ('me@gssg.ae', from the module mock) is nowhere in
+    // this thread, so only the CONFIGURED account address can explain
+    // 'ops@gssg.ae' disappearing — which is the point: replying all must not
+    // mail the mailbox the reply is sent from.
+    vi.mocked(api.getEmailAccount).mockResolvedValue({
+      enabled: true,
+      email: 'ops@gssg.ae',
+    } as never)
+
+    renderDialog({ mode: 'replyall', source })
+
+    expect(await screen.findByText('sender@x.ae')).toBeInTheDocument()
+    expect(screen.getByText('peer@x.ae')).toBeInTheDocument()
+    expect(screen.getByText('cc1@x.ae')).toBeInTheDocument()
+    await waitFor(() =>
+      expect(screen.queryByText('ops@gssg.ae')).not.toBeInTheDocument(),
+    )
+  })
+})
+
 describe('OutlookHandoffDialog mailto encoding helpers', () => {
-  it('keeps addresses literal and encodes every query value', () => {
+  it('leaves ordinary addresses readable and encodes every query value', () => {
     const url = buildMailtoUrl(['a@x.ae', 'b@x.ae'], ['c@x.ae'], 'رقم GS-0048', 'line one\nline two')
     expect(url.startsWith('mailto:a@x.ae,b@x.ae?')).toBe(true)
     expect(url).toContain(`subject=${encodeURIComponent('رقم GS-0048')}`)
     expect(url).toContain(`body=${encodeURIComponent('line one\nline two')}`)
+  })
+
+  it('percent-encodes reserved characters inside an address but not the separators', () => {
+    // A display-name-free address can still carry characters that would end the
+    // mailto path early ("?" starts the query, "&" splits params). Encoding
+    // them keeps one address one address; the comma separators and the literal
+    // "@" stay put so Outlook still parses the list.
+    const url = buildMailtoUrl(['a?b&c@x.ae', 'b@x.ae'], [], 'Transfer', '')
+    const path = url.slice('mailto:'.length).split('?')[0]
+    expect(path.split(',')).toHaveLength(2)
+    expect(path).toContain('@x.ae')
+    expect(path).not.toContain('&')
+    expect(decodeURIComponent(path.split(',')[0])).toBe('a?b&c@x.ae')
+    expect(decodeURIComponent(path.split(',')[1])).toBe('b@x.ae')
+    // The query still starts exactly once, at the real boundary.
+    expect(url.split('?')).toHaveLength(2)
+    expect(url).toContain('subject=Transfer')
+  })
+
+  it('percent-encodes a space rather than emitting a broken URL', () => {
+    const url = buildMailtoUrl(['od d@x.ae'], [], '', '')
+    expect(url).toBe('mailto:od%20d@x.ae')
   })
 
   it('renders HTML as readable plain text with block boundaries preserved', () => {
