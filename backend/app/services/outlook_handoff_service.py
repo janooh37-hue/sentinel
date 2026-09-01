@@ -153,8 +153,8 @@ def create_handoff(
 
     final_html = email_service._sanitize_html(html)
     if mode == "draft" and use_signature:
-        final_html = email_service._sanitize_html(
-            email_service._apply_signature(final_html, email_service._get_signature(db))
+        final_html = email_service._apply_signature(
+            final_html, email_service._get_signature(db)
         )
 
     new_message_id: str | None = None
