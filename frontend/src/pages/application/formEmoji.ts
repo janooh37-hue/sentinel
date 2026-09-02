@@ -30,6 +30,12 @@ export const EXTRA_TEMPLATE_EMOJI: Record<string, string> = {
   'Vehicle Accident Report': '🚧',
 }
 
+/** Calibrated artwork for feature-minted templates that are not dashboard quick actions. */
+export const EXTRA_TEMPLATE_ARTWORK: Record<string, ServiceArtworkId> = {
+  'Vehicle Fines': 'vehicle-fines',
+  'Vehicle Accident Report': 'vehicle-accident',
+}
+
 /**
  * Look up the emoji for a template id. The id is the canonical name used by
  * `TEMPLATE_FILES` in `backend/app/core/constants.py`, which matches the
@@ -43,7 +49,7 @@ export function emojiForTemplate(id: string): string {
 /** Calibrated artwork for a template id; undefined for ids without artwork. */
 export function artworkForTemplate(id: string): ServiceArtworkId | undefined {
   const meta = (QUICK_ACTION_META as Record<string, QuickActionMeta | undefined>)[id]
-  return meta?.artwork
+  return meta?.artwork ?? EXTRA_TEMPLATE_ARTWORK[id]
 }
 
 /**

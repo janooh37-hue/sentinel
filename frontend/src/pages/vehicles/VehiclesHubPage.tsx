@@ -286,7 +286,7 @@ export function VehiclesHubPage(): React.JSX.Element {
           aria-label={t('vehicles.heroTitle')}
         >
           <ServiceCard
-            icon="fines"
+            artwork="vehicle-fines"
             to="/vehicles/fines-report"
             title={t('vehicles.finesService')}
             description={t('vehicles.finesServiceDesc')}
@@ -294,7 +294,7 @@ export function VehiclesHubPage(): React.JSX.Element {
             countLabel={t('vehicles.fines')}
           />
           <ServiceCard
-            icon="renew"
+            artwork="vehicle-licence-renewal"
             onClick={showLicenseAttention}
             title={t('vehicles.renewService')}
             description={t('vehicles.renewServiceDesc')}
@@ -302,7 +302,7 @@ export function VehiclesHubPage(): React.JSX.Element {
             countLabel={t('vehicles.attention')}
           />
           <ServiceCard
-            icon="accident"
+            artwork="vehicle-accident"
             to="/vehicles/accidents"
             title={t('vehicles.accidentService')}
             description={t('vehicles.accidentServiceDesc')}
@@ -310,7 +310,7 @@ export function VehiclesHubPage(): React.JSX.Element {
             countLabel={`${t('vehicles.accidentsTitle')} · ${t('vehicles.openStatus')}`}
           />
           <ServiceCard
-            icon="maintenance"
+            artwork="vehicle-maintenance"
             to="/vehicles/maintenance"
             title={t('vehicles.maintenanceService')}
             description={t('vehicles.maintenanceServiceDesc')}
@@ -319,7 +319,7 @@ export function VehiclesHubPage(): React.JSX.Element {
           />
           {canEdit && (
             <ServiceCard
-              icon="vehicle"
+              artwork="vehicle-register"
               onClick={() => setAddOpen(true)}
               title={t('vehicles.addVehicleService')}
               description={t('vehicles.addVehicleServiceDesc')}
@@ -329,7 +329,7 @@ export function VehiclesHubPage(): React.JSX.Element {
           )}
           {canEdit && (
             <ServiceCard
-              icon="sites"
+              artwork="vehicle-sites"
               onClick={() => setSitesOpen(true)}
               title={t('vehicles.sitesService')}
               description={t('vehicles.sitesServiceDesc')}

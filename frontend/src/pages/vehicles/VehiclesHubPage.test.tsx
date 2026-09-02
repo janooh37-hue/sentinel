@@ -195,6 +195,15 @@ describe('VehiclesHubPage', () => {
     expect(within(sites).getByText('2')).toBeInTheDocument()
   })
 
+  it('renders shared service artwork without legacy inline icons', async () => {
+    const { container } = renderPage()
+
+    await screen.findByRole('heading', { name: 'Vehicle Services' })
+
+    expect(container.querySelectorAll('img[src*="service-icons"]').length).toBe(6)
+    expect(container.querySelector('svg[viewBox="0 0 64 64"]')).toBeNull()
+  })
+
   it('filters the grouped fleet ledger with a site chip', async () => {
     const user = userEvent.setup()
     renderPage()
