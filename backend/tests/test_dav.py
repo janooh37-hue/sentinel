@@ -2,11 +2,14 @@
 
 from __future__ import annotations
 
+from unittest.mock import patch
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
+from app.api import dav as dav_api
 from app.db import session as session_mod
 from app.db.models import Base, Book, BookCategory, BookEditSession
 from app.db.session import attach_sqlite_pragmas, get_db
@@ -35,6 +38,7 @@ def api_db(monkeypatch, tmp_path) -> Session:
     perm_service.seed_role_defaults(db)
     yield db
     db.close()
+    eng.dispose()
 
 
 @pytest.fixture()
@@ -208,14 +212,14 @@ def test_dav_file_propfind_has_supportedlock(client: TestClient, api_db: Session
 
 
 def test_dav_diagnostic_event_is_structured_and_redacted(
-    client: TestClient, api_db: Session, tmp_path, caplog
+    client: TestClient, api_db: Session, tmp_path
 ):
     p = tmp_path / "secret-name.docx"
     p.write_bytes(b"PK")
     sess = _make_session(api_db, working_path=str(p), token="secret-token")
     body = b'<D:propfind xmlns:D="DAV:"><D:prop><D:getetag/></D:prop></D:propfind>'
 
-    with caplog.at_level("INFO", logger="app.api.dav"):
+    with patch.object(dav_api.log, "info") as log_info:
         response = client.request(
             "PROPFIND",
             "/dav/secret-token/secret-name.docx",
@@ -224,18 +228,21 @@ def test_dav_diagnostic_event_is_structured_and_redacted(
         )
 
     assert response.status_code == 207
-    record = next(record for record in caplog.records if record.msg == "webdav_request")
-    assert record.dav_session_id == sess.id
-    assert record.dav_method == "PROPFIND"
-    assert record.dav_path_shape == "file"
-    assert record.dav_status == 207
-    assert record.dav_depth == "0"
-    assert record.dav_propfind_properties == ["getetag"]
-    assert record.dav_body_length == len(body)
-    assert record.dav_if_present is True
-    assert record.dav_lock_token_present is True
-    assert record.dav_response_content_type_present is True
-    assert "secret-token" not in record.getMessage()
-    assert "secret-name" not in record.getMessage()
-    assert "secret-if-value" not in record.getMessage()
-    assert "secret-lock" not in record.getMessage()
+    log_info.assert_called_once()
+    assert log_info.call_args.args == ("webdav_request",)
+    event = log_info.call_args.kwargs["extra"]
+    assert event["dav_session_id"] == sess.id
+    assert event["dav_method"] == "PROPFIND"
+    assert event["dav_path_shape"] == "file"
+    assert event["dav_status"] == 207
+    assert event["dav_depth"] == "0"
+    assert event["dav_propfind_properties"] == ["getetag"]
+    assert event["dav_body_length"] == len(body)
+    assert event["dav_if_present"] is True
+    assert event["dav_lock_token_present"] is True
+    assert event["dav_response_content_type_present"] is True
+    diagnostic = repr(log_info.call_args)
+    assert "secret-token" not in diagnostic
+    assert "secret-name" not in diagnostic
+    assert "secret-if-value" not in diagnostic
+    assert "secret-lock" not in diagnostic

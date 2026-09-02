@@ -230,8 +230,7 @@ def test_canonical_rotation_has_no_drift_across_repeated_120_hour_cycles(db_sess
     )
 
     assert [
-        (occurrence.shift_definition_id, _utc(occurrence.starts_at))
-        for occurrence in occurrences
+        (occurrence.shift_definition_id, _utc(occurrence.starts_at)) for occurrence in occurrences
     ] == expected
     assert all(
         _utc(occurrence.ends_at) - _utc(occurrence.starts_at) == SHIFT_DURATION
@@ -262,8 +261,12 @@ def test_night_assignment_uses_its_dubai_start_date_and_unassigned_employee_is_u
     assignment = resolve_assignment(db_session, employee_id=scheduled.id, at=night_start)
     assert assignment.presence == "scheduled"
     assert assignment.occurrence.operational_date == date(2026, 8, 18)
-    assert _utc(assignment.occurrence.starts_at).astimezone(DUBAI) == datetime(2026, 8, 18, 20, tzinfo=DUBAI)
-    assert _utc(assignment.occurrence.ends_at).astimezone(DUBAI) == datetime(2026, 8, 19, 4, tzinfo=DUBAI)
+    assert _utc(assignment.occurrence.starts_at).astimezone(DUBAI) == datetime(
+        2026, 8, 18, 20, tzinfo=DUBAI
+    )
+    assert _utc(assignment.occurrence.ends_at).astimezone(DUBAI) == datetime(
+        2026, 8, 19, 4, tzinfo=DUBAI
+    )
 
     no_membership = resolve_assignment(db_session, employee_id=unassigned.id, at=night_start)
     assert no_membership.presence == "unknown"
@@ -304,6 +307,7 @@ def test_replacing_future_anchor_preserves_occurrences_generated_by_prior_schedu
         anchor_at=future_boundary,
         effective_from=future_boundary,
         expected_version=first_schedule.version,
+        now=past_end,
     )
     db_session.commit()
 

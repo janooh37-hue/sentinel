@@ -48,6 +48,7 @@ def db_session(monkeypatch) -> Session:
         yield db
     finally:
         db.close()
+        eng.dispose()
 
 
 class _QueryCounter:
