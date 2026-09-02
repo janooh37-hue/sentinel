@@ -16,12 +16,20 @@ import { useTranslation } from 'react-i18next'
 import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 
+import {
+  DocumentViewerDialog,
+  type DocViewerItem,
+} from '@/components/ui/document-viewer-dialog'
 import { api } from '@/lib/api'
 import type { EmployeeFormOutput } from '@/components/employees/schema'
 import type { ExtractionResponse } from '@/lib/extraction'
 import { EmployeeForm } from '@/components/employees/EmployeeForm'
 import { pickEmployeeName } from '@/lib/employeeName'
 import { recordRecentEmployee } from '@/lib/employeeRecents'
+import {
+  generatedDocViewerItem,
+  type PreviewDoc,
+} from '@/lib/docPreview'
 import { useEmployeeSheetDownload } from '@/pages/timesheet/useTimesheet'
 
 import { EmployeeGapsCard } from './EmployeeGapsCard'
@@ -87,6 +95,28 @@ export function EmployeeDetailPage(): React.JSX.Element {
       return next
     }, { replace: true })
   }, [setSearchParams])
+  const openViolation = useCallback(
+    (violationId: number) => {
+      setSearchParams((previous) => {
+        const next = new URLSearchParams(previous)
+        next.set('tab', 'violations')
+        next.set('open', String(violationId))
+        return next
+      })
+    },
+    [setSearchParams],
+  )
+  const [preview, setPreview] = useState<{
+    items: DocViewerItem[]
+    index: number
+  } | null>(null)
+  const openDocPreview = useCallback((docs: PreviewDoc[], index = 0) => {
+    if (docs.length === 0) return
+    setPreview({
+      items: docs.map(generatedDocViewerItem),
+      index,
+    })
+  }, [])
   const [editing, setEditing] = useState(false)
   const [statusOpen, setStatusOpen] = useState(false)
   // Gaps-card → ProfileTab handoff: which field to open an inline editor for.
@@ -318,10 +348,15 @@ export function EmployeeDetailPage(): React.JSX.Element {
                 docs={data.recent_documents}
                 employeeName={name}
                 totalCount={data.stats.documents}
+                onPreviewDocs={openDocPreview}
               />
             )}
             {tab === 'leaves' && (
-              <LeavesTab employeeId={data.employee.id} leaves={data.recent_leaves} />
+              <LeavesTab
+                employeeId={data.employee.id}
+                leaves={data.recent_leaves}
+                onPreviewDocs={openDocPreview}
+              />
             )}
             {tab === 'absences' && <AbsencesTab employeeId={data.employee.id} />}
             {tab === 'violations' && (
@@ -331,9 +366,19 @@ export function EmployeeDetailPage(): React.JSX.Element {
                 totalCount={data.stats.violations}
                 openId={violationOpenId}
                 onOpenConsumed={consumeViolationOpen}
+                onPreviewDocs={openDocPreview}
               />
             )}
-            {tab === 'activity' && <ActivityTab activity={data.recent_activity} />}
+            {tab === 'activity' && (
+              <ActivityTab
+                activity={data.recent_activity}
+                leaves={data.recent_leaves}
+                violations={data.recent_violations}
+                onPreviewDocs={openDocPreview}
+                onOpenViolation={openViolation}
+                onOpenTab={handleTabChange}
+              />
+            )}
             {tab === 'attendance' && id && <AttendanceTab employeeId={id} />}
             {tab === 'messages' && (
               <MessagesTab
@@ -350,6 +395,13 @@ export function EmployeeDetailPage(): React.JSX.Element {
       {statusOpen && (
         <StatusDialog open employee={data.employee} onOpenChange={setStatusOpen} />
       )}
+      {preview ? (
+        <DocumentViewerDialog
+          items={preview.items}
+          startIndex={preview.index}
+          onClose={() => setPreview(null)}
+        />
+      ) : null}
     </div>
   )
 }

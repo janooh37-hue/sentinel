@@ -33208,6 +33208,13 @@
               }
             ],
             "title": "Updated At"
+          },
+          "linked_documents": {
+            "items": {
+              "$ref": "#/components/schemas/LinkedDocumentRead"
+            },
+            "type": "array",
+            "title": "Linked Documents"
           }
         },
         "type": "object",
@@ -34075,6 +34082,31 @@
         "type": "object",
         "title": "LinkSelfRequest",
         "description": "Set (or clear, admin-only) the signed-in user's own employee link.\n\n``employee_id`` is the G-number to claim; ``null`` clears the link."
+      },
+      "LinkedDocumentRead": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "template_id": {
+            "type": "string",
+            "title": "Template Id"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "template_id",
+          "created_at"
+        ],
+        "title": "LinkedDocumentRead",
+        "description": "A committed generated Document attached to a leave/violation."
       },
       "LockLayoutRequest": {
         "properties": {
@@ -36908,6 +36940,13 @@
           "status": {
             "type": "string",
             "title": "Status"
+          },
+          "linked_documents": {
+            "items": {
+              "$ref": "#/components/schemas/LinkedDocumentRead"
+            },
+            "type": "array",
+            "title": "Linked Documents"
           }
         },
         "type": "object",
@@ -36990,6 +37029,13 @@
               }
             ],
             "title": "Description"
+          },
+          "linked_documents": {
+            "items": {
+              "$ref": "#/components/schemas/LinkedDocumentRead"
+            },
+            "type": "array",
+            "title": "Linked Documents"
           }
         },
         "type": "object",
@@ -40239,6 +40285,13 @@
             "type": "string",
             "format": "date-time",
             "title": "Created At"
+          },
+          "linked_documents": {
+            "items": {
+              "$ref": "#/components/schemas/LinkedDocumentRead"
+            },
+            "type": "array",
+            "title": "Linked Documents"
           }
         },
         "type": "object",

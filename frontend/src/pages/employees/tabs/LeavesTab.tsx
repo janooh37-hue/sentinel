@@ -13,17 +13,26 @@ import { api } from '@/lib/api'
 import type { LeaveRead, RecentLeaveRead } from '@/lib/api'
 import { splitBilingual } from '@/lib/bilingualValue'
 import { StatusBadge } from '@/pages/leaves/StatusBadge'
+import type { PreviewDoc } from '@/lib/docPreview'
 
 /** Shared leave row shape used by both LeaveRead and RecentLeaveRead. */
-type LeaveRow = Pick<LeaveRead | RecentLeaveRead, 'id' | 'leave_type' | 'start_date' | 'end_date' | 'days' | 'status'>
+type LeaveRow = Pick<
+  LeaveRead | RecentLeaveRead,
+  'id' | 'leave_type' | 'start_date' | 'end_date' | 'days' | 'status' | 'linked_documents'
+>
 
 interface Props {
   employeeId: string
   /** Initial snapshot from the aggregate response (shown while the full list loads). */
   leaves: RecentLeaveRead[]
+  onPreviewDocs: (docs: PreviewDoc[], index?: number) => void
 }
 
-export function LeavesTab({ employeeId, leaves }: Props): React.JSX.Element {
+export function LeavesTab({
+  employeeId,
+  leaves,
+  onPreviewDocs,
+}: Props): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const dateFmt = useMemo(
     () =>
@@ -51,28 +60,52 @@ export function LeavesTab({ employeeId, leaves }: Props): React.JSX.Element {
   }
   return (
     <div className="overflow-hidden rounded-2xl border border-hairline bg-surface">
-      {rows.map((l) => (
-        <div
-          key={l.id}
-          className="grid grid-cols-[1fr_120px_120px_60px_100px] items-center gap-4 border-b border-hairline px-4 py-2.5 last:border-b-0"
-        >
-          <div className="text-[0.92em] font-medium">
-            {t(`leaves.type.${l.leave_type}`, {
-              defaultValue: splitBilingual(l.leave_type, i18n.language),
-            })}
+      {rows.map((l) => {
+        const linkedDocuments = l.linked_documents ?? []
+        const rowClassName =
+          'grid w-full grid-cols-[1fr_120px_120px_60px_100px] items-center gap-4 border-b border-hairline px-4 py-2.5 last:border-b-0'
+        const content = (
+          <>
+            <div className="text-[0.92em] font-medium">
+              {t(`leaves.type.${l.leave_type}`, {
+                defaultValue: splitBilingual(l.leave_type, i18n.language),
+              })}
+            </div>
+            <div className="font-mono text-[0.86em] text-muted-foreground">
+              {dateFmt.format(new Date(l.start_date))}
+            </div>
+            <div className="font-mono text-[0.86em] text-muted-foreground">
+              {dateFmt.format(new Date(l.end_date))}
+            </div>
+            <div className="text-end text-[0.86em] font-semibold">{l.days}d</div>
+            <div className="text-center">
+              <StatusBadge status={l.status} />
+            </div>
+          </>
+        )
+
+        return linkedDocuments.length > 0 ? (
+          <button
+            key={l.id}
+            type="button"
+            className={`${rowClassName} text-start transition-colors hover:bg-surface-tinted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring`}
+            onClick={() =>
+              onPreviewDocs(
+                linkedDocuments.map((document) => ({
+                  id: document.id,
+                  name: document.template_id,
+                })),
+              )
+            }
+          >
+            {content}
+          </button>
+        ) : (
+          <div key={l.id} className={rowClassName}>
+            {content}
           </div>
-          <div className="font-mono text-[0.86em] text-muted-foreground">
-            {dateFmt.format(new Date(l.start_date))}
-          </div>
-          <div className="font-mono text-[0.86em] text-muted-foreground">
-            {dateFmt.format(new Date(l.end_date))}
-          </div>
-          <div className="text-end text-[0.86em] font-semibold">{l.days}d</div>
-          <div className="text-center">
-            <StatusBadge status={l.status} />
-          </div>
-        </div>
-      ))}
+        )
+      })}
     </div>
   )
 }

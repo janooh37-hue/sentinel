@@ -23,6 +23,10 @@ vi.mock('@/lib/api', () => ({
     getEmployeeDetail: vi.fn(),
     updateEmployee: vi.fn(),
     fetchTimesheetEmployeeExport: vi.fn(),
+    documentDownloadUrl: vi.fn(
+      (documentId: number, format: 'docx' | 'pdf') =>
+        `/api/v1/documents/${documentId}/download?format=${format}`,
+    ),
   },
   apiErrorMessage: (e: unknown) => String(e),
 }))
@@ -57,7 +61,20 @@ vi.mock('./EmployeeTabChips', () => ({
     <div data-testid="tab-chips" data-active={active} />
   ),
 }))
-vi.mock('./tabs/DocumentsTab', () => ({ DocumentsTab: () => null }))
+vi.mock('./tabs/DocumentsTab', () => ({
+  DocumentsTab: ({
+    onPreviewDocs,
+  }: {
+    onPreviewDocs: (docs: { id: number; name: string }[], index?: number) => void
+  }) => (
+    <button
+      type="button"
+      onClick={() => onPreviewDocs([{ id: 73, name: 'Leave application' }])}
+    >
+      open-document-preview
+    </button>
+  ),
+}))
 vi.mock('./tabs/ProfileTab', () => ({ ProfileTab: () => null }))
 vi.mock('./tabs/LeavesTab', () => ({ LeavesTab: () => null }))
 vi.mock('./tabs/ViolationsTab', () => ({
@@ -74,6 +91,35 @@ vi.mock('./tabs/ViolationsTab', () => ({
   ),
 }))
 vi.mock('./tabs/ActivityTab', () => ({ ActivityTab: () => null }))
+vi.mock('@/components/ui/document-viewer-dialog', () => ({
+  DocumentViewerDialog: ({
+    items,
+    startIndex,
+    onClose,
+  }: {
+    items: Array<{
+      name: string
+      kind: string
+      pdfBase64Url?: string
+      openUrl?: string
+      downloadUrl: string
+    }>
+    startIndex?: number
+    onClose: () => void
+  }) => (
+    <section
+      data-testid="document-viewer"
+      data-name={items[0]?.name}
+      data-kind={items[0]?.kind}
+      data-pdf-base64-url={items[0]?.pdfBase64Url}
+      data-open-url={items[0]?.openUrl}
+      data-download-url={items[0]?.downloadUrl}
+      data-start-index={startIndex}
+    >
+      <button type="button" onClick={onClose}>close-preview</button>
+    </section>
+  ),
+}))
 vi.mock('./tabs/MessagesTab', () => ({ MessagesTab: () => null }))
 vi.mock('@/components/employees/EmployeeForm', () => ({
   EmployeeForm: ({ mode }: any) => <div data-testid="employee-form" data-mode={mode} />,
@@ -160,6 +206,33 @@ test('violation deep link activates the tab and forwards the exact row id', asyn
   renderPage('/employees/G100?tab=violations&open=42')
   expect(await screen.findByTestId('tab-chips')).toHaveAttribute('data-active', 'violations')
   expect(screen.getByTestId('violations-tab')).toHaveAttribute('data-open-id', '42')
+})
+
+test('document tab callback opens and closes the shared generated-PDF viewer', async () => {
+  vi.mocked(api.getEmployeeDetail).mockResolvedValue(detail as never)
+  renderPage('/employees/G100?tab=documents')
+
+  fireEvent.click(await screen.findByRole('button', { name: 'open-document-preview' }))
+
+  const viewer = screen.getByTestId('document-viewer')
+  expect(viewer).toHaveAttribute('data-name', 'Leave application')
+  expect(viewer).toHaveAttribute('data-kind', 'pdf')
+  expect(viewer).toHaveAttribute(
+    'data-pdf-base64-url',
+    '/api/v1/documents/73/download?format=pdf&encoding=base64',
+  )
+  expect(viewer).toHaveAttribute(
+    'data-open-url',
+    '/api/v1/documents/73/download?format=pdf',
+  )
+  expect(viewer).toHaveAttribute(
+    'data-download-url',
+    '/api/v1/documents/73/download?format=pdf',
+  )
+  expect(viewer).toHaveAttribute('data-start-index', '0')
+
+  fireEvent.click(screen.getByRole('button', { name: 'close-preview' }))
+  expect(screen.queryByTestId('document-viewer')).not.toBeInTheDocument()
 })
 
 test('the card time-sheet action exports that employee, with the span the card chose', async () => {

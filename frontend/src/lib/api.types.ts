@@ -8681,6 +8681,8 @@ export interface components {
             created_at: string;
             /** Updated At */
             updated_at?: string | null;
+            /** Linked Documents */
+            linked_documents?: components["schemas"]["LinkedDocumentRead"][];
         };
         /**
          * LeaveReturnRequest
@@ -8961,6 +8963,21 @@ export interface components {
         LinkSelfRequest: {
             /** Employee Id */
             employee_id?: string | null;
+        };
+        /**
+         * LinkedDocumentRead
+         * @description A committed generated Document attached to a leave/violation.
+         */
+        LinkedDocumentRead: {
+            /** Id */
+            id: number;
+            /** Template Id */
+            template_id: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
         };
         /**
          * LockLayoutRequest
@@ -9858,6 +9875,8 @@ export interface components {
             days: number;
             /** Status */
             status: string;
+            /** Linked Documents */
+            linked_documents?: components["schemas"]["LinkedDocumentRead"][];
         };
         /** RecentLedgerRead */
         RecentLedgerRead: {
@@ -9890,6 +9909,8 @@ export interface components {
             status: string;
             /** Description */
             description?: string | null;
+            /** Linked Documents */
+            linked_documents?: components["schemas"]["LinkedDocumentRead"][];
         };
         /** RecipientCreate */
         RecipientCreate: {
@@ -11034,6 +11055,8 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+            /** Linked Documents */
+            linked_documents?: components["schemas"]["LinkedDocumentRead"][];
         };
         /** ViolationUpdate */
         ViolationUpdate: {
