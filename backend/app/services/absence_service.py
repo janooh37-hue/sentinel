@@ -17,9 +17,11 @@ Two write paths exist, deliberately separate:
 
 from __future__ import annotations
 
+import itertools
+
 from dataclasses import dataclass
 from datetime import date, timedelta
-from typing import Final
+from typing import Final, Iterable
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -247,6 +249,17 @@ class Episode:
         return "; ".join(seen) if seen else None
 
 
+def _group_episodes(rows: Iterable[Absence]) -> list[Episode]:
+    """Group date-ordered absence rows into contiguous episodes."""
+    episodes: list[Episode] = []
+    for row in rows:
+        if episodes and row.date == episodes[-1].end + timedelta(days=1):
+            episodes[-1].rows.append(row)
+        else:
+            episodes.append(Episode(rows=[row]))
+    return episodes
+
+
 def list_episodes(db: Session, employee_id: str) -> list[Episode]:
     """Group the employee's absence days into contiguous episodes.
 
@@ -260,13 +273,24 @@ def list_episodes(db: Session, employee_id: str) -> list[Episode]:
             select(Absence).where(Absence.employee_id == employee_id).order_by(Absence.date)
         ).scalars()
     )
-    episodes: list[Episode] = []
-    for row in rows:
-        if episodes and row.date == episodes[-1].end + timedelta(days=1):
-            episodes[-1].rows.append(row)
-        else:
-            episodes.append(Episode(rows=[row]))
-    return episodes
+    return _group_episodes(rows)
+
+
+def list_register(db: Session) -> list[tuple[Employee, Episode]]:
+    """Every employee's episodes, newest last day first (ties: employee id)."""
+    pairs = db.execute(
+        select(Absence, Employee)
+        .join(Employee, Employee.id == Absence.employee_id)
+        .order_by(Absence.employee_id, Absence.date)
+    ).all()
+    out: list[tuple[Employee, Episode]] = []
+    for employee, group in itertools.groupby(pairs, key=lambda pair: pair[1]):
+        out.extend(
+            (employee, episode)
+            for episode in _group_episodes(row for row, _ in group)
+        )
+    out.sort(key=lambda pair: (-pair[1].end.toordinal(), pair[0].id))
+    return out
 
 
 def delete_range(db: Session, employee_id: str, start: date, end: date) -> int:
@@ -332,6 +356,7 @@ __all__ = [
     "delete_absences_covered_by",
     "delete_range",
     "list_episodes",
+    "list_register",
     "list_for_employee",
     "replace_episode",
     "supersedes_absence",
