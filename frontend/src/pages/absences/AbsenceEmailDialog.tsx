@@ -47,7 +47,6 @@ export function AbsenceEmailDialog({ open, rows, onOpenChange }: Props): React.J
 
     const today = todayIso()
     // Opening is the intentional synchronization point for dialog-local draft state.
-    // eslint-disable-next-line react-hooks/set-state-in-effect
     setCases(
       Object.fromEntries(rows.map((row) => [rowKey(row), defaultCase(row, today)])),
     )
