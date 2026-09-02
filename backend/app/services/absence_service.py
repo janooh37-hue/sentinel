@@ -18,10 +18,10 @@ Two write paths exist, deliberately separate:
 from __future__ import annotations
 
 import itertools
-
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import date, timedelta
-from typing import Final, Iterable
+from typing import Final
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -30,7 +30,6 @@ from app.api.errors import NotFoundError, ValidationFailedError
 from app.core.leave_lifecycle import english_part
 from app.core.timesheet_codes import UNKNOWN_LEAVE, in_roster, is_void
 from app.db.models import Absence, Employee, Leave
-
 
 #: English leave types whose record explains an absence and therefore removes it.
 SUPERSEDING_LEAVE_TYPES: Final[frozenset[str]] = frozenset(
@@ -195,9 +194,7 @@ def replace_episode(
     """
 
     if old_end < old_start or end < start:
-        invalid_start, invalid_end = (
-            (old_start, old_end) if old_end < old_start else (start, end)
-        )
+        invalid_start, invalid_end = (old_start, old_end) if old_end < old_start else (start, end)
         raise ValidationFailedError(
             "ABSENCE_RANGE_INVERTED",
             f"End date {invalid_end:%Y-%m-%d} is before start date {invalid_start:%Y-%m-%d}.",
@@ -217,8 +214,6 @@ def replace_episode(
     )
     db.commit()
     return result
-
-
 
 
 @dataclass
@@ -285,10 +280,7 @@ def list_register(db: Session) -> list[tuple[Employee, Episode]]:
     ).all()
     out: list[tuple[Employee, Episode]] = []
     for employee, group in itertools.groupby(pairs, key=lambda pair: pair[1]):
-        out.extend(
-            (employee, episode)
-            for episode in _group_episodes(row for row, _ in group)
-        )
+        out.extend((employee, episode) for episode in _group_episodes(row for row, _ in group))
     out.sort(key=lambda pair: (-pair[1].end.toordinal(), pair[0].id))
     return out
 
@@ -356,8 +348,8 @@ __all__ = [
     "delete_absences_covered_by",
     "delete_range",
     "list_episodes",
-    "list_register",
     "list_for_employee",
+    "list_register",
     "replace_episode",
     "supersedes_absence",
 ]

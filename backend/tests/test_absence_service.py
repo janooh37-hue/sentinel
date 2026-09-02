@@ -344,15 +344,9 @@ def test_list_episodes_unknown_employee(db_session):
 def test_list_register_orders_newest_last_day_first_across_employees(db_session):
     _emp(db_session, "G1001")
     _emp(db_session, "G1002")
-    absence_service.add_range(
-        db_session, "G1001", start=date(2026, 7, 1), end=date(2026, 7, 2)
-    )
-    absence_service.add_range(
-        db_session, "G1001", start=date(2026, 7, 20), end=date(2026, 7, 20)
-    )
-    absence_service.add_range(
-        db_session, "G1002", start=date(2026, 7, 10), end=date(2026, 7, 10)
-    )
+    absence_service.add_range(db_session, "G1001", start=date(2026, 7, 1), end=date(2026, 7, 2))
+    absence_service.add_range(db_session, "G1001", start=date(2026, 7, 20), end=date(2026, 7, 20))
+    absence_service.add_range(db_session, "G1002", start=date(2026, 7, 10), end=date(2026, 7, 10))
 
     register = absence_service.list_register(db_session)
 
@@ -366,12 +360,8 @@ def test_list_register_orders_newest_last_day_first_across_employees(db_session)
 def test_list_register_breaks_equal_end_dates_by_employee_id(db_session):
     _emp(db_session, "G1002")
     _emp(db_session, "G1001")
-    absence_service.add_range(
-        db_session, "G1002", start=date(2026, 7, 10), end=date(2026, 7, 10)
-    )
-    absence_service.add_range(
-        db_session, "G1001", start=date(2026, 7, 10), end=date(2026, 7, 10)
-    )
+    absence_service.add_range(db_session, "G1002", start=date(2026, 7, 10), end=date(2026, 7, 10))
+    absence_service.add_range(db_session, "G1001", start=date(2026, 7, 10), end=date(2026, 7, 10))
 
     register = absence_service.list_register(db_session)
 

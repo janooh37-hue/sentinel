@@ -1010,9 +1010,7 @@ def test_generating_a_leave_permit_clears_the_absence(client, db_session, genera
     assert db_session.query(Absence).count() == 0
 
 
-def test_generating_an_administrative_leave_clears_the_absence(
-    client, db_session, generation_env
-):
+def test_generating_an_administrative_leave_clears_the_absence(client, db_session, generation_env):
     _guard(db_session)
     for day in (9, 10):
         client.put(
