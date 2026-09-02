@@ -21,7 +21,7 @@ import { basketKey, filenameForItem, type BasketKey, type EmailBasketItem } from
 
 // ── escaping & formatting ────────────────────────────────────────────────────
 
-function esc(s: string): string {
+export function esc(s: string): string {
   return s
     .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
@@ -57,16 +57,16 @@ function positionArOf(i: EmailBasketItem): string {
 // ── shared styling (inline so it survives SMTP + the recipient's client) ──────
 
 const HEADER_BLUE = '#4472C4'
-const HEADER_RED = '#C00000'
-const TD_STYLE = 'border:1px solid #000000;padding:4px 9px;text-align:center'
+export const HEADER_RED = '#C00000'
+export const TD_STYLE = 'border:1px solid #000000;padding:4px 9px;text-align:center'
 const P_STYLE =
   'margin:0 0 8pt;font-family:Arial,sans-serif;font-size:14pt;text-align:right;direction:rtl'
 
-function thStyle(bg: string): string {
+export function thStyle(bg: string): string {
   return `border:1px solid #000000;background:${bg};color:#ffffff;padding:4px 9px;text-align:center;font-weight:bold`
 }
 
-function p(html: string): string {
+export function p(html: string): string {
   return `<p dir="rtl" style="${P_STYLE}">${html}</p>`
 }
 
@@ -108,7 +108,7 @@ function closingLine(html: string, align: 'right' | 'center'): string {
 
 /** Closing block: a blank line off the table, then each sentence on its own
  *  line — right-aligned, with the final regards line centered. */
-function buildClosing(lines: string[]): string {
+export function buildClosing(lines: string[]): string {
   const spacer = closingLine('&nbsp;', 'right') // one blank line after the table
   const body = lines
     .map((line, i) => closingLine(line, i === lines.length - 1 ? 'center' : 'right'))
@@ -126,7 +126,7 @@ const TRANSFER_SUBJECT = 'النقل' // General Book subject minted by /duty/tr
 
 /** ISO → DD/MM/YYYY, ZERO-PADDED (the office writes transfers as 11/06/2026).
  *  Note: the shared `dmy()` strips leading zeros, so it must NOT be used here. */
-function dmyPad(iso: string): string {
+export function dmyPad(iso: string): string {
   const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso)
   return m ? `${m[3]}/${m[2]}/${m[1]}` : iso
 }
