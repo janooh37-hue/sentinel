@@ -3,35 +3,53 @@
  *
  * Records day-level absence rows on the employee: pick an employee, a first
  * and last day, an optional note, Save. No template, no document — the record
- * is the deliverable, and the time sheet reads it as `AB`. A later sick leave
- * covering the same days supersedes the rows (announced on the generation
- * side, see ApplicationPage's job-done toast).
+ * is the deliverable, and the time sheet reads it as `AB`. A superseding
+ * leave covering the same days removes those rows.
  *
- * Below the form, the employee's recorded absences are listed newest-first
- * with a per-row remove (ConfirmDialog — window.confirm is dead inside the
- * pywebview shell).
+ * Below the form, the global absence register is searchable, selectable, and
+ * supports copy, email, edit, extend-through-today, and confirmed removal
+ * actions.
  *
  * Deep-link: `?employee_id=<G-id>` pre-selects the employee (same convention
  * as /application).
  */
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { useNavigate, useSearchParams } from 'react-router-dom'
-import { ChevronLeft, ChevronRight, ClipboardCopy, Trash2 } from 'lucide-react'
+import {
+  CalendarPlus,
+  ChevronLeft,
+  ChevronRight,
+  ClipboardCopy,
+  Mail,
+  Pencil,
+  Trash2,
+} from 'lucide-react'
 import { toast } from 'sonner'
 
 import { api, apiErrorMessage } from '@/lib/api'
-import type { AbsenceEpisodeRead, AbsenceRecordRead } from '@/lib/api'
+import type { AbsenceRegisterRowRead } from '@/lib/api'
 import { copyTable } from '@/lib/copyTable'
-import { todayIso } from '@/lib/leaveDateMath'
+import { computeEndDate, todayIso } from '@/lib/leaveDateMath'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { Button } from '@/components/ui/button'
 import { ServiceArtwork } from '@/components/ui/service-artwork'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { Label } from '@/components/ui/label'
+import {
+  ABSENCE_TABLE_HEADERS,
+  absenceTableCells,
+  buildAbsenceTableHtml,
+} from '@/pages/absences/absenceEmail'
+import { AbsenceEmailDialog } from '@/pages/absences/AbsenceEmailDialog'
+import { EditAbsenceDialog } from '@/pages/absences/EditAbsenceDialog'
 import { LeaveEmployeePicker } from '@/pages/leaves/LeaveEmployeePicker'
+
+function rowKey(row: AbsenceRegisterRowRead): string {
+  return `${row.employee_id}|${row.start_date}|${row.end_date}`
+}
 
 export function AbsencesPage(): React.JSX.Element {
   const { t, i18n } = useTranslation()
@@ -48,7 +66,11 @@ export function AbsencesPage(): React.JSX.Element {
   const [start, setStart] = useState(todayIso)
   const [end, setEnd] = useState(todayIso)
   const [note, setNote] = useState('')
-  const [deleting, setDeleting] = useState<AbsenceEpisodeRead | null>(null)
+  const [search, setSearch] = useState('')
+  const [selected, setSelected] = useState<Set<string>>(() => new Set())
+  const [editing, setEditing] = useState<AbsenceRegisterRowRead | null>(null)
+  const [emailOpen, setEmailOpen] = useState(false)
+  const [deleting, setDeleting] = useState<AbsenceRegisterRowRead | null>(null)
 
   // Register tables want compact dates; the weekday makes cells too wide.
   const dateFmt = useMemo(
@@ -61,25 +83,38 @@ export function AbsencesPage(): React.JSX.Element {
     [i18n.language],
   )
 
-  const absencesQuery = useQuery({
-    queryKey: ['employee-absence-episodes', employeeId],
-    queryFn: () => api.listEmployeeAbsenceEpisodes(employeeId as string),
-    enabled: !!employeeId,
+  const registerQuery = useQuery({
+    queryKey: ['absence-register'],
+    queryFn: () => api.listAbsenceRegister(),
   })
 
+  useEffect(() => {
+    if (registerQuery.error) {
+      toast.error(apiErrorMessage(registerQuery.error))
+    }
+  }, [registerQuery.error])
+
+  const invalidateAbsences = (targetEmployeeId: string): void => {
+    void qc.invalidateQueries({ queryKey: ['absence-register'] })
+    void qc.invalidateQueries({
+      queryKey: ['employee-absence-episodes', targetEmployeeId],
+    })
+    void qc.invalidateQueries({ queryKey: ['employee-absences', targetEmployeeId] })
+    void qc.invalidateQueries({ queryKey: ['employee-detail', targetEmployeeId] })
+  }
+
   const createMutation = useMutation({
-    mutationFn: () =>
-      api.createEmployeeAbsences(employeeId as string, {
+    mutationFn: (targetEmployeeId: string) =>
+      api.createEmployeeAbsences(targetEmployeeId, {
         start_date: start,
         end_date: end,
         note: note.trim() || null,
       }),
-    onSuccess: (result) => {
-      void qc.invalidateQueries({ queryKey: ['employee-absence-episodes', employeeId] })
-      void qc.invalidateQueries({ queryKey: ['employee-absences', employeeId] })
-      void qc.invalidateQueries({ queryKey: ['employee-detail', employeeId] })
+    onSuccess: (result, targetEmployeeId) => {
+      invalidateAbsences(targetEmployeeId)
       const created = result.created.length
       const skipped = result.skipped_off_roster.length
+      const skippedOnLeave = result.skipped_on_leave ?? []
       if (created > 0 && skipped > 0) {
         toast.success(t('absences.savedWithSkips', { count: created, skipped }))
       } else if (created > 0) {
@@ -89,18 +124,52 @@ export function AbsencesPage(): React.JSX.Element {
       } else {
         toast.info(t('absences.nothingToSave'))
       }
+      if (skippedOnLeave.length > 0) {
+        toast.warning(t('absences.skippedOnLeave', { count: skippedOnLeave.length }))
+      }
       setNote('')
     },
     onError: (err) => toast.error(apiErrorMessage(err)),
   })
 
+  const extendMutation = useMutation({
+    mutationFn: (row: AbsenceRegisterRowRead) =>
+      api.createEmployeeAbsences(row.employee_id, {
+        start_date: computeEndDate(row.end_date, 2),
+        end_date: todayIso(),
+        note: null,
+      }),
+    onSuccess: (result, row) => {
+      invalidateAbsences(row.employee_id)
+      const created = result.created.length
+      const skippedOffRoster = result.skipped_off_roster.length
+      const skippedOnLeave = result.skipped_on_leave ?? []
+      if (created > 0) {
+        toast.success(t('absences.extended', { count: created }))
+      }
+      if (skippedOnLeave.length > 0) {
+        toast.warning(t('absences.skippedOnLeave', { count: skippedOnLeave.length }))
+      }
+      if (skippedOffRoster > 0) {
+        toast.warning(
+          t('absences.savedWithSkips', {
+            count: created,
+            skipped: skippedOffRoster,
+          }),
+        )
+      }
+      if (created === 0 && skippedOnLeave.length === 0 && skippedOffRoster === 0) {
+        toast.info(t('absences.nothingToSave'))
+      }
+    },
+    onError: (err) => toast.error(apiErrorMessage(err)),
+  })
+
   const deleteMutation = useMutation({
-    mutationFn: (episode: AbsenceEpisodeRead) =>
-      api.deleteEmployeeAbsenceRange(employeeId as string, episode.start_date, episode.end_date),
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ['employee-absence-episodes', employeeId] })
-      void qc.invalidateQueries({ queryKey: ['employee-absences', employeeId] })
-      void qc.invalidateQueries({ queryKey: ['employee-detail', employeeId] })
+    mutationFn: (row: AbsenceRegisterRowRead) =>
+      api.deleteEmployeeAbsenceRange(row.employee_id, row.start_date, row.end_date),
+    onSuccess: (_result, row) => {
+      invalidateAbsences(row.employee_id)
       toast.success(t('absences.deleted'))
     },
     onError: (err) => toast.error(apiErrorMessage(err)),
@@ -108,58 +177,20 @@ export function AbsencesPage(): React.JSX.Element {
 
   const canSubmit =
     !!employeeId && !!start && !!end && start <= end && canEdit && !createMutation.isPending
-  const record: AbsenceRecordRead | undefined = absencesQuery.data
-  const episodes = record?.episodes ?? []
-  const employeeName = isAr
-    ? (record?.employee_name_ar ?? record?.employee_name_en ?? '')
-    : (record?.employee_name_en ?? '')
-  const postUnit = [record?.duty_post, record?.duty_unit].filter(Boolean).join(' / ')
-
-  /** Register copy for the clipboard: HTML keeps the blue header on paste
-   * into Word/Excel; the TSV twin keeps plain editors usable. */
-  const buildRegisterCopy = (): { html: string; text: string } => {
-    const esc = (s: string) =>
-      s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-    const headers = [
-      '#',
-      t('absences.table.id'),
-      t('absences.table.name'),
-      t('absences.table.start'),
-      t('absences.table.end'),
-      t('absences.table.totalDays'),
-      t('absences.table.postUnit'),
-      t('absences.table.notes'),
-    ]
-    const rows = episodes.map((e, i) => [
-      String(i + 1),
-      record?.employee_id ?? '',
-      employeeName,
-      dateFmt.format(new Date(`${e.start_date}T00:00:00`)),
-      dateFmt.format(new Date(`${e.end_date}T00:00:00`)),
-      String(e.days),
-      postUnit,
-      e.notes ?? '',
-    ])
-    const cell = (v: string, extra = '') =>
-      `<td style="border:1px solid #d1d5db;padding:6px 12px;color:#000;background:#fff;${extra}">${esc(v)}</td>`
-    const head = headers
-      .map(
-        (h) =>
-          `<th style="border:1px solid #1d4ed8;background:#1d4ed8;color:#ffffff;padding:6px 12px;text-align:start">${esc(h)}</th>`,
+  const rows = registerQuery.data?.rows ?? []
+  const normalizedSearch = search.trim().toLowerCase()
+  const filteredRows = normalizedSearch
+    ? rows.filter(
+        (row) =>
+          row.employee_id.toLowerCase().includes(normalizedSearch) ||
+          (row.employee_name_en ?? '').toLowerCase().includes(normalizedSearch) ||
+          (row.employee_name_ar ?? '').toLowerCase().includes(normalizedSearch),
       )
-      .join('')
-    const body = rows
-      .map((r) => {
-        const [num, id, name, startD, endD, total, unit, notes] = r
-        // The name column is black on white by request, same as the rest of
-        // the body — stated explicitly so a pasted theme can't restyle it.
-        return `<tr>${cell(num)}${cell(id, 'font-family:Consolas,monospace')}${cell(name)}${cell(startD)}${cell(endD)}${cell(total)}${cell(unit)}${cell(notes)}</tr>`
-      })
-      .join('')
-    const html = `<table dir="${isAr ? 'rtl' : 'ltr'}" style="border-collapse:collapse;font-family:'Segoe UI',Arial,sans-serif;font-size:11pt"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`
-    const text = [headers, ...rows].map((r) => r.join('\t')).join('\n')
-    return { html, text }
-  }
+    : rows
+  const selectedRows = filteredRows.filter((row) => selected.has(rowKey(row)))
+  const allFilteredSelected =
+    filteredRows.length > 0 && filteredRows.every((row) => selected.has(rowKey(row)))
+  const today = todayIso()
 
   return (
     <div className="flex flex-1 flex-col overflow-auto bg-background">
@@ -250,7 +281,7 @@ export function AbsencesPage(): React.JSX.Element {
                     <Button
                       type="button"
                       disabled={!canSubmit}
-                      onClick={() => createMutation.mutate()}
+                      onClick={() => createMutation.mutate(employeeId as string)}
                     >
                       {t('absences.form.save')}
                     </Button>
@@ -261,19 +292,33 @@ export function AbsencesPage(): React.JSX.Element {
 
           </div>
 
-          {employeeId && (
-            <section className="mt-8" aria-label={t('absences.list.title')}>
-              <div className="mb-2 flex items-center justify-between gap-3">
-                <h3 className="text-[0.95em] font-semibold text-foreground">
-                  {t('absences.list.title')}
-                </h3>
-                {episodes.length > 0 && (
+          <section className="mt-8" aria-label={t('absences.list.title')}>
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-3">
+              <h3 className="text-[0.95em] font-semibold text-foreground">
+                {t('absences.list.title')}
+              </h3>
+              <div className="flex w-full flex-wrap items-center justify-end gap-2 sm:w-auto">
+                <input
+                  type="search"
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                  aria-label={t('absences.list.search')}
+                  placeholder={t('absences.list.search')}
+                  className="h-9 min-w-0 flex-1 rounded-md border border-input bg-surface px-3 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:w-64 sm:flex-none"
+                />
+                {rows.length > 0 && (
                   <Button
                     type="button"
                     variant="outline"
                     className="h-8 gap-1.5 px-3 text-[0.82em]"
                     onClick={async () => {
-                      await copyTable(buildRegisterCopy())
+                      const copyRows = selectedRows.length > 0 ? selectedRows : filteredRows
+                      await copyTable({
+                        html: buildAbsenceTableHtml(copyRows),
+                        text: [ABSENCE_TABLE_HEADERS, ...absenceTableCells(copyRows)]
+                          .map((row) => row.join('\t'))
+                          .join('\n'),
+                      })
                       toast.success(t('absences.copied'))
                     }}
                   >
@@ -281,60 +326,202 @@ export function AbsencesPage(): React.JSX.Element {
                     {t('absences.copy')}
                   </Button>
                 )}
+                {selectedRows.length > 0 && has('ledger.send') && (
+                  <Button
+                    type="button"
+                    variant="default"
+                    className="h-8 gap-1.5 px-3 text-[0.82em]"
+                    onClick={() => setEmailOpen(true)}
+                  >
+                    <Mail className="h-4 w-4" strokeWidth={1.8} aria-hidden />
+                    {t('absences.email.button', { count: selectedRows.length })}
+                  </Button>
+                )}
               </div>
-              {episodes.length === 0 ? (
-                <div className="rounded-2xl bg-surface p-8 text-center text-[0.9em] text-muted-foreground">
-                  {t('absences.list.empty')}
-                </div>
-              ) : (
-                <div className="overflow-x-auto rounded-2xl border border-hairline bg-surface">
-                  <table className="w-full min-w-[720px] border-collapse text-[0.86em]">
-                    <thead>
-                      <tr className="border-b border-hairline bg-primary text-primary-foreground">
-                        <th className="px-3 py-2 text-start font-semibold">#</th>
-                        <th className="px-3 py-2 text-start font-semibold">{t('absences.table.id')}</th>
-                        <th className="px-3 py-2 text-start font-semibold">{t('absences.table.name')}</th>
-                        <th className="px-3 py-2 text-start font-semibold">{t('absences.table.start')}</th>
-                        <th className="px-3 py-2 text-start font-semibold">{t('absences.table.end')}</th>
-                        <th className="px-3 py-2 text-start font-semibold">{t('absences.table.totalDays')}</th>
-                        <th className="px-3 py-2 text-start font-semibold">{t('absences.table.postUnit')}</th>
-                        <th className="px-3 py-2 text-start font-semibold">{t('absences.table.notes')}</th>
-                        {canEdit && <th className="px-3 py-2" aria-label={t('common.delete')} />}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {episodes.map((e, i) => (
-                        <tr key={`${e.start_date}-${e.end_date}`} className="border-b border-hairline last:border-b-0">
-                          <td className="px-3 py-2 text-muted-foreground">{i + 1}</td>
-                          <td className="px-3 py-2 font-mono">{record?.employee_id}</td>
-                          <td className="px-3 py-2" dir="auto">{employeeName}</td>
-                          <td className="px-3 py-2 font-mono">{dateFmt.format(new Date(`${e.start_date}T00:00:00`))}</td>
-                          <td className="px-3 py-2 font-mono">{dateFmt.format(new Date(`${e.end_date}T00:00:00`))}</td>
-                          <td className="px-3 py-2 font-mono">{e.days}</td>
-                          <td className="px-3 py-2" dir="auto">{postUnit}</td>
-                          <td className="max-w-[240px] truncate px-3 py-2 text-muted-foreground" dir="auto">{e.notes ?? ''}</td>
+            </div>
+            {rows.length === 0 ? (
+              <div className="rounded-2xl bg-surface p-8 text-center text-[0.9em] text-muted-foreground">
+                {t('absences.list.empty')}
+              </div>
+            ) : filteredRows.length === 0 ? (
+              <div className="rounded-2xl bg-surface p-8 text-center text-[0.9em] text-muted-foreground">
+                {t('absences.list.noMatch')}
+              </div>
+            ) : (
+              <div className="overflow-x-auto rounded-2xl border border-hairline bg-surface">
+                <table className="w-full min-w-[880px] border-collapse text-[0.86em]">
+                  <thead>
+                    <tr className="border-b border-hairline bg-primary text-primary-foreground">
+                      <th className="px-3 py-2 text-start font-semibold">
+                        <input
+                          type="checkbox"
+                          checked={allFilteredSelected}
+                          onChange={(event) => {
+                            const checked = event.target.checked
+                            setSelected((current) => {
+                              const next = new Set(current)
+                              filteredRows.forEach((row) => {
+                                const key = rowKey(row)
+                                if (checked) next.add(key)
+                                else next.delete(key)
+                              })
+                              return next
+                            })
+                          }}
+                          aria-label={t('absences.list.selectAll')}
+                          className="h-4 w-4 accent-primary"
+                        />
+                      </th>
+                      <th className="px-3 py-2 text-start font-semibold">#</th>
+                      <th className="px-3 py-2 text-start font-semibold">
+                        {t('absences.table.id')}
+                      </th>
+                      <th className="px-3 py-2 text-start font-semibold">
+                        {t('absences.table.name')}
+                      </th>
+                      <th className="px-3 py-2 text-start font-semibold">
+                        {t('absences.table.unit')}
+                      </th>
+                      <th className="px-3 py-2 text-start font-semibold">
+                        {t('absences.table.start')}
+                      </th>
+                      <th className="px-3 py-2 text-start font-semibold">
+                        {t('absences.table.end')}
+                      </th>
+                      <th className="px-3 py-2 text-start font-semibold">
+                        {t('absences.table.totalDays')}
+                      </th>
+                      <th className="px-3 py-2 text-start font-semibold">
+                        {t('absences.table.notes')}
+                      </th>
+                      {canEdit && (
+                        <th className="px-3 py-2" aria-label={t('common.actions')} />
+                      )}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredRows.map((row, index) => {
+                      const key = rowKey(row)
+                      const displayName = isAr
+                        ? (row.employee_name_ar ?? row.employee_name_en ?? '')
+                        : (row.employee_name_en ?? '')
+                      const isSelected = selected.has(key)
+                      const upToDate = row.end_date >= today
+                      return (
+                        <tr
+                          key={key}
+                          className={`border-b border-hairline last:border-b-0 ${
+                            isSelected ? 'bg-primary-soft' : ''
+                          }`}
+                        >
+                          <td className="px-3 py-2">
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={(event) => {
+                                const checked = event.target.checked
+                                setSelected((current) => {
+                                  const next = new Set(current)
+                                  if (checked) next.add(key)
+                                  else next.delete(key)
+                                  return next
+                                })
+                              }}
+                              aria-label={t('absences.list.selectRow', {
+                                name: displayName,
+                              })}
+                              className="h-4 w-4 accent-primary"
+                            />
+                          </td>
+                          <td className="px-3 py-2 text-muted-foreground">{index + 1}</td>
+                          <td className="px-3 py-2 font-mono">{row.employee_id}</td>
+                          <td className="px-3 py-2" dir="auto">
+                            {displayName}
+                          </td>
+                          <td className="px-3 py-2" dir="auto">
+                            {row.duty_unit ?? ''}
+                          </td>
+                          <td className="px-3 py-2 font-mono">
+                            {dateFmt.format(new Date(`${row.start_date}T00:00:00`))}
+                          </td>
+                          <td className="px-3 py-2 font-mono">
+                            {dateFmt.format(new Date(`${row.end_date}T00:00:00`))}
+                          </td>
+                          <td className="px-3 py-2 font-mono">{row.days}</td>
+                          <td
+                            className="max-w-[240px] truncate px-3 py-2 text-muted-foreground"
+                            dir="auto"
+                          >
+                            {row.notes ?? ''}
+                          </td>
                           {canEdit && (
                             <td className="px-3 py-2 text-end">
-                              <button
-                                type="button"
-                                onClick={() => setDeleting(e)}
-                                aria-label={t('common.delete')}
-                                className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                              >
-                                <Trash2 className="h-4 w-4" strokeWidth={1.8} aria-hidden />
-                              </button>
+                              <div className="inline-flex items-center justify-end gap-1">
+                                <button
+                                  type="button"
+                                  onClick={() => setEditing(row)}
+                                  aria-label={t('absences.actions.edit')}
+                                  className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-surface-tinted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                >
+                                  <Pencil
+                                    className="h-4 w-4"
+                                    strokeWidth={1.8}
+                                    aria-hidden
+                                  />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => extendMutation.mutate(row)}
+                                  disabled={upToDate || extendMutation.isPending}
+                                  title={
+                                    upToDate
+                                      ? t('absences.actions.stillAbsentUpToDate')
+                                      : undefined
+                                  }
+                                  aria-label={t('absences.actions.stillAbsent')}
+                                  className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-surface-tinted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
+                                >
+                                  <CalendarPlus
+                                    className="h-4 w-4"
+                                    strokeWidth={1.8}
+                                    aria-hidden
+                                  />
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setDeleting(row)}
+                                  aria-label={t('common.delete')}
+                                  className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                >
+                                  <Trash2
+                                    className="h-4 w-4"
+                                    strokeWidth={1.8}
+                                    aria-hidden
+                                  />
+                                </button>
+                              </div>
                             </td>
                           )}
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </section>
-          )}
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
         </div>
       </div>
+
+      <EditAbsenceDialog
+        open={editing !== null}
+        row={editing}
+        onOpenChange={(open) => {
+          if (!open) setEditing(null)
+        }}
+        onSaved={invalidateAbsences}
+      />
+      <AbsenceEmailDialog open={emailOpen} rows={selectedRows} onOpenChange={setEmailOpen} />
 
       <ConfirmDialog
         open={deleting !== null}
