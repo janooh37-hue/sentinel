@@ -53,6 +53,7 @@ const templates = {
       signing_path: 'auto' as const,
       has_code: false,
       notifies_employee: false,
+      feature_minted: false,
     },
     {
       id: 'Demo companion',
@@ -63,6 +64,7 @@ const templates = {
       signing_path: 'auto' as const,
       has_code: false,
       notifies_employee: false,
+      feature_minted: false,
     },
   ],
 }

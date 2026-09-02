@@ -239,6 +239,25 @@ CAPABILITIES: Final[tuple[Capability, ...]] = (
         "Remove permit records.",
     ),
     Capability(
+        "vehicles.view",
+        "vehicles",
+        "View vehicles",
+        "See the fleet hub, vehicle files, fines, accidents, maintenance, and reports.",
+    ),
+    Capability(
+        "vehicles.edit",
+        "vehicles",
+        "Manage vehicles",
+        "Add and renew vehicles, manage sites, record fines, accidents, maintenance "
+        "and photos, fetch fines from EVG, and generate vehicle letters.",
+    ),
+    Capability(
+        "vehicles.delete",
+        "vehicles",
+        "Delete vehicle records",
+        "Delete fines, accidents, maintenance rows, and gallery photos.",
+    ),
+    Capability(
         "ledger.view",
         "ledger",
         "View correspondence log",

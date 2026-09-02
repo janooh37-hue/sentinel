@@ -63,6 +63,7 @@ _DEFAULTS: dict[str, object] = {
     "settings.sms_autosend_enabled": True,
     "settings.signature_size_mm": 45,
     "settings.signature_boldness": 1,
+    "settings.vehicles_notify_days": 30,
 }
 
 # ---------------------------------------------------------------------------
@@ -182,6 +183,28 @@ def get_settings(db: Session) -> AppSettingsRead:
     except (TypeError, ValueError):
         raw["font_scale"] = 16
     return AppSettingsRead.model_validate(raw)
+
+
+def get_vehicle_notify_days(db: Session) -> int:
+    """Return the fleet reminder window, clamped to one year."""
+    raw = _get(
+        db,
+        "settings.vehicles_notify_days",
+        _DEFAULTS["settings.vehicles_notify_days"],
+    )
+    try:
+        days = int(str(raw))
+    except ValueError:
+        days = 30
+    return max(1, min(days, 365))
+
+
+def set_vehicle_notify_days(db: Session, days: int) -> int:
+    """Persist and return the fleet reminder window, clamped to 1..365."""
+    clamped = max(1, min(int(days), 365))
+    _set(db, "settings.vehicles_notify_days", clamped)
+    db.commit()
+    return clamped
 
 
 def update_settings(db: Session, payload: AppSettingsUpdate) -> AppSettingsRead:

@@ -14,6 +14,8 @@ docxtpl>=0.18,<1.0
 bcrypt>=4.2,<6.0
 nh3>=0.2,<1.0  # HTML sanitiser for inbound email bodies (stored-XSS guard)
 openpyxl>=3.1,<4.0  # monthly time sheet: fills the .xlsx template (logo + styles round-trip)
+hijri-converter>=2.3,<3.0  # vehicle letters: Umm al-Qura date line
+playwright>=1.47,<2.0  # EVG fines fetch (headless Chromium)
 
 # OCR / document extraction
 PyMuPDF>=1.24,<2.0

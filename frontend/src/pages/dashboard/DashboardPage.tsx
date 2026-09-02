@@ -75,6 +75,7 @@ import {
   type WidgetId,
   type WidgetZone,
 } from '@/lib/dashboardLayout'
+import { hijriToday } from '@/lib/hijri'
 import { useAuth } from '@/lib/authContext'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { QUICK_ACTION_META } from '@/lib/quickActions'
@@ -138,21 +139,6 @@ function heroGreetingKey(): 'morning' | 'afternoon' | 'evening' {
   if (h < 12) return 'morning'
   if (h < 17) return 'afternoon'
   return 'evening'
-}
-
-/** Today's Hijri date in Arabic-Indic numerals (umm al-qura), regardless of
- *  UI language — the UAE context stays present even in the English hero.
- *  Returns '' if the runtime lacks the islamic calendar (graceful omit). */
-function hijriToday(): string {
-  try {
-    return new Intl.DateTimeFormat('ar-SA-u-ca-islamic-umalqura', {
-      day: 'numeric',
-      month: 'long',
-      year: 'numeric',
-    }).format(new Date())
-  } catch {
-    return ''
-  }
 }
 
 /** Join names with a locale-aware list conjunction ("A, B and C" / "A، B و C"). */

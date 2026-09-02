@@ -1814,14 +1814,47 @@ body {
     size: A4;
     margin: 0;
   }
-  /* The permits register is text on blank paper, so it needs a real per-sheet
-     margin — element padding would only inset the first and last sheet. */
+  /* The permits register and the vehicles fines report are text on blank
+     paper, so they need a real per-sheet margin — element padding would only
+     inset the first and last sheet. */
   @page register {
     size: A4;
     margin: 12mm;
   }
-  .print-register {
+  .print-register,
+  .print-vehicle-report {
     page: register;
+  }
+  /* The fines report is the only document printed from the DOM as a
+     letterhead sheet (every other one prints a rendered PDF), and the sheet's
+     own crest line and provenance line are a <header> and a <footer> inside
+     it — which the app-chrome rule below deletes. Re-declare their display
+     (both are flex rows) only inside the printed report. */
+  .print-vehicle-report header,
+  .print-vehicle-report footer {
+    display: flex !important;
+  }
+  /* Same document, second exemption: `#root *:not(canvas)` below flattens
+     EVERY background with !important so the shell's tints (bg-background, the
+     desk's gradient) cannot ink a sheet. A rendered-PDF document needs nothing
+     back — its canvas is exempt — but this one is real DOM, and four of its
+     fills are part of the document rather than chrome: the paper ground, the
+     withheld-names notice, the scope strip that states which site and dates
+     the copy covers, and each vehicle's group header. They are re-declared
+     here, one explicit colour per named hook, and `#root` is in each selector
+     because the flatten rule carries an id and would otherwise out-specify
+     them. Nothing else in the sheet is given a fill back. */
+  #root .print-vehicle-report .print-report-sheet {
+    background: #fffdf8 !important;
+  }
+  #root .print-vehicle-report .print-report-note > p {
+    background: #fff7d8 !important;
+  }
+  #root .print-vehicle-report .print-report-scope {
+    background: #fafafa !important;
+  }
+  #root .print-vehicle-report .print-report-group {
+    background: #f0efe9 !important;
   }
   /* The duty register is a wide document: shift, unit, post, G-number and a
      clock all have to sit on one line, and four name columns only fit across

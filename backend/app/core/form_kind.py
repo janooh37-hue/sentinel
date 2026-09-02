@@ -40,6 +40,13 @@ LEGACY_SUBJECT_ALIASES: Final[Mapping[str, str]] = MappingProxyType(
 #: bucket, exactly where they were before the paper was split out.
 SERVICE_ALIASES: Final[Mapping[str, str]] = MappingProxyType({"Security Permit": "General Book"})
 
+#: Letterhead forms minted only by feature modules. They keep their own Records
+#: rail entries and dynamic ``books.service.*`` capabilities, but manual form
+#: generators must not offer them. They are deliberately not service aliases.
+FEATURE_MINTED_TEMPLATE_IDS: Final[frozenset[str]] = frozenset(
+    {"Vehicle Fines", "Vehicle Accident Report"}
+)
+
 #: Every service that can own a rail entry: registered templates minus the two
 #: companions (which exist only attached to a primary) and the aliased ids
 #: (which report as their target). `TEMPLATE_FILES` order is preserved — it is

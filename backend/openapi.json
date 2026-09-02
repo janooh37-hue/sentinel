@@ -18418,6 +18418,1825 @@
         }
       }
     },
+    "/api/v1/vehicles/summary": {
+      "get": {
+        "tags": [
+          "vehicles"
+        ],
+        "summary": "Vehicles Summary",
+        "operationId": "vehicles_summary_api_v1_vehicles_summary_get",
+        "parameters": [
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VehiclesSummary"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/vehicles/notify-days": {
+      "put": {
+        "tags": [
+          "vehicles"
+        ],
+        "summary": "Update Notify Days",
+        "operationId": "update_notify_days_api_v1_vehicles_notify_days_put",
+        "parameters": [
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NotifyDaysUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VehiclesSummary"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/vehicles/sites": {
+      "get": {
+        "tags": [
+          "vehicles"
+        ],
+        "summary": "List Vehicle Sites",
+        "operationId": "list_vehicle_sites_api_v1_vehicles_sites_get",
+        "parameters": [
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/VehicleSiteRead"
+                  },
+                  "title": "Response List Vehicle Sites Api V1 Vehicles Sites Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "vehicles"
+        ],
+        "summary": "Create Vehicle Site",
+        "operationId": "create_vehicle_site_api_v1_vehicles_sites_post",
+        "parameters": [
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VehicleSiteCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VehicleSiteRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/vehicles/sites/{site_id}": {
+      "patch": {
+        "tags": [
+          "vehicles"
+        ],
+        "summary": "Update Vehicle Site",
+        "operationId": "update_vehicle_site_api_v1_vehicles_sites__site_id__patch",
+        "parameters": [
+          {
+            "name": "site_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Site Id"
+            }
+          },
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VehicleSiteUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VehicleSiteRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/vehicles/fines": {
+      "get": {
+        "tags": [
+          "vehicles"
+        ],
+        "summary": "List Vehicle Fines",
+        "operationId": "list_vehicle_fines_api_v1_vehicles_fines_get",
+        "parameters": [
+          {
+            "name": "site_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Site Id"
+            }
+          },
+          {
+            "name": "date_from",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Date From"
+            }
+          },
+          {
+            "name": "date_to",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Date To"
+            }
+          },
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/VehicleFineRead"
+                  },
+                  "title": "Response List Vehicle Fines Api V1 Vehicles Fines Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/vehicles/fines/evg/preview": {
+      "post": {
+        "tags": [
+          "vehicles"
+        ],
+        "summary": "Preview Evg Fines",
+        "operationId": "preview_evg_fines_api_v1_vehicles_fines_evg_preview_post",
+        "parameters": [
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EvgPreviewRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EvgPreviewResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/vehicles/fines/evg/confirm": {
+      "post": {
+        "tags": [
+          "vehicles"
+        ],
+        "summary": "Confirm Evg Fines",
+        "operationId": "confirm_evg_fines_api_v1_vehicles_fines_evg_confirm_post",
+        "parameters": [
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EvgConfirmRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EvgConfirmResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/vehicles/accidents": {
+      "get": {
+        "tags": [
+          "vehicles"
+        ],
+        "summary": "List Vehicle Accidents",
+        "operationId": "list_vehicle_accidents_api_v1_vehicles_accidents_get",
+        "parameters": [
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/VehicleAccidentRead"
+                  },
+                  "title": "Response List Vehicle Accidents Api V1 Vehicles Accidents Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "vehicles"
+        ],
+        "summary": "Create Vehicle Accident",
+        "operationId": "create_vehicle_accident_api_v1_vehicles_accidents_post",
+        "parameters": [
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VehicleAccidentCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VehicleAccidentRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/vehicles/maintenance": {
+      "get": {
+        "tags": [
+          "vehicles"
+        ],
+        "summary": "List Vehicle Maintenance",
+        "operationId": "list_vehicle_maintenance_api_v1_vehicles_maintenance_get",
+        "parameters": [
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/VehicleMaintenanceRead"
+                  },
+                  "title": "Response List Vehicle Maintenance Api V1 Vehicles Maintenance Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "vehicles"
+        ],
+        "summary": "Create Vehicle Maintenance",
+        "operationId": "create_vehicle_maintenance_api_v1_vehicles_maintenance_post",
+        "parameters": [
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VehicleMaintenanceCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VehicleMaintenanceRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/vehicles": {
+      "get": {
+        "tags": [
+          "vehicles"
+        ],
+        "summary": "List Vehicles",
+        "operationId": "list_vehicles_api_v1_vehicles_get",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
+            }
+          },
+          {
+            "name": "site_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Site Id"
+            }
+          },
+          {
+            "name": "expiry",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "pattern": "^(?:all|attention|valid|due|expired)$",
+              "default": "all",
+              "title": "Expiry"
+            }
+          },
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/VehicleListItem"
+                  },
+                  "title": "Response List Vehicles Api V1 Vehicles Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "vehicles"
+        ],
+        "summary": "Create Vehicle",
+        "operationId": "create_vehicle_api_v1_vehicles_post",
+        "parameters": [
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VehicleCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VehicleRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/vehicles/{vehicle_id}": {
+      "get": {
+        "tags": [
+          "vehicles"
+        ],
+        "summary": "Get Vehicle",
+        "operationId": "get_vehicle_api_v1_vehicles__vehicle_id__get",
+        "parameters": [
+          {
+            "name": "vehicle_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Vehicle Id"
+            }
+          },
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VehicleRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "vehicles"
+        ],
+        "summary": "Update Vehicle",
+        "operationId": "update_vehicle_api_v1_vehicles__vehicle_id__patch",
+        "parameters": [
+          {
+            "name": "vehicle_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Vehicle Id"
+            }
+          },
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VehicleUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VehicleRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/vehicles/{vehicle_id}/renew": {
+      "post": {
+        "tags": [
+          "vehicles"
+        ],
+        "summary": "Renew Vehicle License",
+        "operationId": "renew_vehicle_license_api_v1_vehicles__vehicle_id__renew_post",
+        "parameters": [
+          {
+            "name": "vehicle_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Vehicle Id"
+            }
+          },
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LicenseRenewCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VehicleRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/vehicles/{vehicle_id}/files": {
+      "post": {
+        "tags": [
+          "vehicles"
+        ],
+        "summary": "Upload Vehicle File",
+        "operationId": "upload_vehicle_file_api_v1_vehicles__vehicle_id__files_post",
+        "parameters": [
+          {
+            "name": "vehicle_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Vehicle Id"
+            }
+          },
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_upload_vehicle_file_api_v1_vehicles__vehicle_id__files_post"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VehicleFileRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/vehicles/{vehicle_id}/files/{file_id}": {
+      "get": {
+        "tags": [
+          "vehicles"
+        ],
+        "summary": "Get Vehicle File",
+        "operationId": "get_vehicle_file_api_v1_vehicles__vehicle_id__files__file_id__get",
+        "parameters": [
+          {
+            "name": "vehicle_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Vehicle Id"
+            }
+          },
+          {
+            "name": "file_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "File Id"
+            }
+          },
+          {
+            "name": "encoding",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Encoding"
+            }
+          },
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "vehicles"
+        ],
+        "summary": "Delete Vehicle File",
+        "operationId": "delete_vehicle_file_api_v1_vehicles__vehicle_id__files__file_id__delete",
+        "parameters": [
+          {
+            "name": "vehicle_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Vehicle Id"
+            }
+          },
+          {
+            "name": "file_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "File Id"
+            }
+          },
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/vehicles/{vehicle_id}/fines": {
+      "post": {
+        "tags": [
+          "vehicles"
+        ],
+        "summary": "Add Vehicle Fine",
+        "operationId": "add_vehicle_fine_api_v1_vehicles__vehicle_id__fines_post",
+        "parameters": [
+          {
+            "name": "vehicle_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Vehicle Id"
+            }
+          },
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VehicleFineCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VehicleRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/vehicles/{vehicle_id}/fines/letter": {
+      "post": {
+        "tags": [
+          "vehicles"
+        ],
+        "summary": "Generate Vehicle Fines Letter",
+        "operationId": "generate_vehicle_fines_letter_api_v1_vehicles__vehicle_id__fines_letter_post",
+        "parameters": [
+          {
+            "name": "vehicle_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Vehicle Id"
+            }
+          },
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FinesLetterRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LetterResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/vehicles/{vehicle_id}/fines/{fine_id}": {
+      "patch": {
+        "tags": [
+          "vehicles"
+        ],
+        "summary": "Update Vehicle Fine",
+        "operationId": "update_vehicle_fine_api_v1_vehicles__vehicle_id__fines__fine_id__patch",
+        "parameters": [
+          {
+            "name": "vehicle_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Vehicle Id"
+            }
+          },
+          {
+            "name": "fine_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Fine Id"
+            }
+          },
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VehicleFineUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VehicleRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "vehicles"
+        ],
+        "summary": "Delete Vehicle Fine",
+        "operationId": "delete_vehicle_fine_api_v1_vehicles__vehicle_id__fines__fine_id__delete",
+        "parameters": [
+          {
+            "name": "vehicle_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Vehicle Id"
+            }
+          },
+          {
+            "name": "fine_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Fine Id"
+            }
+          },
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VehicleRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/vehicles/{vehicle_id}/accidents/{accident_id}/letter": {
+      "post": {
+        "tags": [
+          "vehicles"
+        ],
+        "summary": "Generate Vehicle Accident Letter",
+        "operationId": "generate_vehicle_accident_letter_api_v1_vehicles__vehicle_id__accidents__accident_id__letter_post",
+        "parameters": [
+          {
+            "name": "vehicle_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Vehicle Id"
+            }
+          },
+          {
+            "name": "accident_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Accident Id"
+            }
+          },
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LetterResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/vehicles/{vehicle_id}/accidents/{accident_id}": {
+      "patch": {
+        "tags": [
+          "vehicles"
+        ],
+        "summary": "Update Vehicle Accident Status",
+        "operationId": "update_vehicle_accident_status_api_v1_vehicles__vehicle_id__accidents__accident_id__patch",
+        "parameters": [
+          {
+            "name": "vehicle_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Vehicle Id"
+            }
+          },
+          {
+            "name": "accident_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Accident Id"
+            }
+          },
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VehicleAccidentStatusUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VehicleAccidentRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "vehicles"
+        ],
+        "summary": "Delete Vehicle Accident",
+        "operationId": "delete_vehicle_accident_api_v1_vehicles__vehicle_id__accidents__accident_id__delete",
+        "parameters": [
+          {
+            "name": "vehicle_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Vehicle Id"
+            }
+          },
+          {
+            "name": "accident_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Accident Id"
+            }
+          },
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/vehicles/{vehicle_id}/maintenance/{maintenance_id}": {
+      "delete": {
+        "tags": [
+          "vehicles"
+        ],
+        "summary": "Delete Vehicle Maintenance",
+        "operationId": "delete_vehicle_maintenance_api_v1_vehicles__vehicle_id__maintenance__maintenance_id__delete",
+        "parameters": [
+          {
+            "name": "vehicle_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Vehicle Id"
+            }
+          },
+          {
+            "name": "maintenance_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Maintenance Id"
+            }
+          },
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/workforce/dashboard/snapshot": {
       "get": {
         "tags": [
@@ -25071,6 +26890,47 @@
         ],
         "title": "Body_upload_vehicle_document_api_v1_permits__permit_id__vehicles__vehicle_id__document_post"
       },
+      "Body_upload_vehicle_file_api_v1_vehicles__vehicle_id__files_post": {
+        "properties": {
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "file": {
+            "type": "string",
+            "format": "binary",
+            "title": "File"
+          },
+          "label_ar": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label Ar"
+          },
+          "label_en": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label En"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kind",
+          "file"
+        ],
+        "title": "Body_upload_vehicle_file_api_v1_vehicles__vehicle_id__files_post"
+      },
       "BookAnnotationCreate": {
         "properties": {
           "page": {
@@ -31641,6 +33501,343 @@
         ],
         "title": "EvaluationQueueRead"
       },
+      "EvgConfirmRequest": {
+        "properties": {
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/EvgConfirmRow"
+            },
+            "type": "array",
+            "title": "Rows"
+          }
+        },
+        "type": "object",
+        "required": [
+          "rows"
+        ],
+        "title": "EvgConfirmRequest"
+      },
+      "EvgConfirmResult": {
+        "properties": {
+          "created": {
+            "type": "integer",
+            "title": "Created"
+          },
+          "skipped": {
+            "type": "integer",
+            "title": "Skipped"
+          }
+        },
+        "type": "object",
+        "required": [
+          "created",
+          "skipped"
+        ],
+        "title": "EvgConfirmResult"
+      },
+      "EvgConfirmRow": {
+        "properties": {
+          "ticket_no": {
+            "type": "string",
+            "title": "Ticket No"
+          },
+          "date": {
+            "type": "string",
+            "format": "date",
+            "title": "Date"
+          },
+          "time": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Time"
+          },
+          "location": {
+            "type": "string",
+            "title": "Location"
+          },
+          "plate_number": {
+            "type": "string",
+            "title": "Plate Number"
+          },
+          "plate_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Plate Code"
+          },
+          "amount": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Amount"
+          },
+          "amount_after_discount": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Amount After Discount"
+          },
+          "black_points": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Black Points"
+          },
+          "fine_type": {
+            "type": "string",
+            "title": "Fine Type"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "vehicle_id": {
+            "type": "integer",
+            "title": "Vehicle Id"
+          },
+          "match": {
+            "type": "string",
+            "enum": [
+              "matched",
+              "ambiguous",
+              "unmatched",
+              "already_imported"
+            ],
+            "title": "Match"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ticket_no",
+          "date",
+          "time",
+          "location",
+          "plate_number",
+          "plate_code",
+          "amount",
+          "black_points",
+          "fine_type",
+          "description",
+          "vehicle_id",
+          "match"
+        ],
+        "title": "EvgConfirmRow"
+      },
+      "EvgPreviewRequest": {
+        "properties": {
+          "traffic_codes": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Traffic Codes"
+          }
+        },
+        "type": "object",
+        "title": "EvgPreviewRequest"
+      },
+      "EvgPreviewResponse": {
+        "properties": {
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/EvgPreviewRow"
+            },
+            "type": "array",
+            "title": "Rows"
+          },
+          "traffic_codes": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Traffic Codes"
+          },
+          "fetched_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Fetched At"
+          },
+          "vehicles": {
+            "items": {
+              "$ref": "#/components/schemas/EvgVehicleOption"
+            },
+            "type": "array",
+            "title": "Vehicles"
+          }
+        },
+        "type": "object",
+        "required": [
+          "rows",
+          "traffic_codes",
+          "fetched_at",
+          "vehicles"
+        ],
+        "title": "EvgPreviewResponse"
+      },
+      "EvgPreviewRow": {
+        "properties": {
+          "ticket_no": {
+            "type": "string",
+            "title": "Ticket No"
+          },
+          "date": {
+            "type": "string",
+            "format": "date",
+            "title": "Date"
+          },
+          "time": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Time"
+          },
+          "location": {
+            "type": "string",
+            "title": "Location"
+          },
+          "plate_number": {
+            "type": "string",
+            "title": "Plate Number"
+          },
+          "plate_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Plate Code"
+          },
+          "amount": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Amount"
+          },
+          "amount_after_discount": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Amount After Discount"
+          },
+          "black_points": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Black Points"
+          },
+          "fine_type": {
+            "type": "string",
+            "title": "Fine Type"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "vehicle_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vehicle Id"
+          },
+          "match": {
+            "type": "string",
+            "enum": [
+              "matched",
+              "ambiguous",
+              "unmatched",
+              "already_imported"
+            ],
+            "title": "Match"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ticket_no",
+          "date",
+          "time",
+          "location",
+          "plate_number",
+          "plate_code",
+          "amount",
+          "black_points",
+          "fine_type",
+          "description",
+          "vehicle_id",
+          "match"
+        ],
+        "title": "EvgPreviewRow"
+      },
+      "EvgVehicleOption": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "plate_label": {
+            "type": "string",
+            "title": "Plate Label"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "plate_label"
+        ],
+        "title": "EvgVehicleOption"
+      },
       "ExpiryItemOut": {
         "properties": {
           "employee_id": {
@@ -31917,6 +34114,28 @@
           "document_type_confidence"
         ],
         "title": "ExtractionResponse"
+      },
+      "FinesLetterRequest": {
+        "properties": {
+          "fine_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Fine Ids"
+          },
+          "hide_names": {
+            "type": "boolean",
+            "title": "Hide Names",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "fine_ids"
+        ],
+        "title": "FinesLetterRequest"
       },
       "FlagCountResponse": {
         "properties": {
@@ -34057,6 +36276,125 @@
         ],
         "title": "LedgerListResponse"
       },
+      "LetterResult": {
+        "properties": {
+          "book_id": {
+            "type": "integer",
+            "title": "Book Id"
+          },
+          "document_id": {
+            "type": "integer",
+            "title": "Document Id"
+          },
+          "ref_number": {
+            "type": "string",
+            "title": "Ref Number"
+          },
+          "pdf_available": {
+            "type": "boolean",
+            "title": "Pdf Available"
+          }
+        },
+        "type": "object",
+        "required": [
+          "book_id",
+          "document_id",
+          "ref_number",
+          "pdf_available"
+        ],
+        "title": "LetterResult"
+      },
+      "LicenseRenewCreate": {
+        "properties": {
+          "start": {
+            "type": "string",
+            "format": "date",
+            "title": "Start"
+          },
+          "expiry": {
+            "type": "string",
+            "format": "date",
+            "title": "Expiry"
+          },
+          "cost": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Cost"
+          },
+          "scan_file_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scan File Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "start",
+          "expiry",
+          "cost"
+        ],
+        "title": "LicenseRenewCreate"
+      },
+      "LicenseRenewalRead": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "start": {
+            "type": "string",
+            "format": "date",
+            "title": "Start"
+          },
+          "expiry": {
+            "type": "string",
+            "format": "date",
+            "title": "Expiry"
+          },
+          "renewed_on": {
+            "type": "string",
+            "format": "date",
+            "title": "Renewed On"
+          },
+          "cost": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cost"
+          },
+          "scan_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scan Url"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "start",
+          "expiry",
+          "renewed_on",
+          "cost"
+        ],
+        "title": "LicenseRenewalRead"
+      },
       "LinkSelfRequest": {
         "properties": {
           "employee_id": {
@@ -34625,6 +36963,21 @@
           "emails"
         ],
         "title": "NotificationCounts"
+      },
+      "NotifyDaysUpdate": {
+        "properties": {
+          "days": {
+            "type": "integer",
+            "maximum": 365.0,
+            "minimum": 1.0,
+            "title": "Days"
+          }
+        },
+        "type": "object",
+        "required": [
+          "days"
+        ],
+        "title": "NotifyDaysUpdate"
       },
       "NotifyMessageRead": {
         "properties": {
@@ -38997,6 +41350,10 @@
             "type": "boolean",
             "title": "Has Code"
           },
+          "feature_minted": {
+            "type": "boolean",
+            "title": "Feature Minted"
+          },
           "notifies_employee": {
             "type": "boolean",
             "title": "Notifies Employee"
@@ -39011,6 +41368,7 @@
           "category",
           "signing_path",
           "has_code",
+          "feature_minted",
           "notifies_employee"
         ],
         "title": "TemplateMeta"
@@ -39984,6 +42342,863 @@
         "title": "VaultTree",
         "description": "Tree returned by ``GET /employees/{id}/vault``.\n\nEach key is a :class:`VaultKind` and the value is the file list. Order is\nstable: ``uae_id``, ``passport``, ``other``, ``leaves``, ``violations``."
       },
+      "VehicleAccidentCreate": {
+        "properties": {
+          "vehicle_id": {
+            "type": "integer",
+            "title": "Vehicle Id"
+          },
+          "employee_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Employee Id"
+          },
+          "date": {
+            "type": "string",
+            "format": "date",
+            "title": "Date"
+          },
+          "time": {
+            "type": "string",
+            "pattern": "^(?:[01]\\d|2[0-3]):[0-5]\\d$",
+            "title": "Time"
+          },
+          "location_ar": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Location Ar"
+          },
+          "location_en": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location En"
+          },
+          "description_ar": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Description Ar"
+          },
+          "description_en": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description En"
+          },
+          "police_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Police Ref"
+          },
+          "damage_cost": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Damage Cost",
+            "default": 0
+          },
+          "photo_file_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Photo File Ids"
+          }
+        },
+        "type": "object",
+        "required": [
+          "vehicle_id",
+          "date",
+          "time",
+          "location_ar",
+          "description_ar"
+        ],
+        "title": "VehicleAccidentCreate"
+      },
+      "VehicleAccidentRead": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "vehicle_id": {
+            "type": "integer",
+            "title": "Vehicle Id"
+          },
+          "employee_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Employee Id"
+          },
+          "employee_name_ar": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Employee Name Ar"
+          },
+          "employee_name_en": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Employee Name En"
+          },
+          "date": {
+            "type": "string",
+            "format": "date",
+            "title": "Date"
+          },
+          "time": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Time"
+          },
+          "location_ar": {
+            "type": "string",
+            "title": "Location Ar"
+          },
+          "location_en": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location En"
+          },
+          "description_ar": {
+            "type": "string",
+            "title": "Description Ar"
+          },
+          "description_en": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description En"
+          },
+          "police_ref": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Police Ref"
+          },
+          "damage_cost": {
+            "type": "integer",
+            "title": "Damage Cost"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "open",
+              "closed"
+            ],
+            "title": "Status"
+          },
+          "photo_file_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Photo File Ids"
+          },
+          "photos": {
+            "items": {
+              "$ref": "#/components/schemas/VehicleFileRead"
+            },
+            "type": "array",
+            "title": "Photos"
+          },
+          "letter_book_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Letter Book Id"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          },
+          "vehicle_plate_label": {
+            "type": "string",
+            "title": "Vehicle Plate Label",
+            "default": ""
+          },
+          "vehicle_type_ar": {
+            "type": "string",
+            "title": "Vehicle Type Ar",
+            "default": ""
+          },
+          "vehicle_type_en": {
+            "type": "string",
+            "title": "Vehicle Type En",
+            "default": ""
+          },
+          "vehicle_vin": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vehicle Vin"
+          },
+          "vehicle_site_id": {
+            "type": "integer",
+            "title": "Vehicle Site Id",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "vehicle_id",
+          "employee_id",
+          "date",
+          "time",
+          "location_ar",
+          "location_en",
+          "description_ar",
+          "description_en",
+          "police_ref",
+          "damage_cost",
+          "status",
+          "photo_file_ids",
+          "letter_book_id",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "VehicleAccidentRead"
+      },
+      "VehicleAccidentStatusUpdate": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "open",
+              "closed"
+            ],
+            "title": "Status"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "title": "VehicleAccidentStatusUpdate"
+      },
+      "VehicleCreate": {
+        "properties": {
+          "plate_code": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^\\d{1,3}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Plate Code"
+          },
+          "plate_number": {
+            "type": "string",
+            "pattern": "^\\d{1,6}$",
+            "title": "Plate Number"
+          },
+          "traffic_code": {
+            "type": "string",
+            "pattern": "^\\d{4,12}$",
+            "title": "Traffic Code"
+          },
+          "type_ar": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Type Ar"
+          },
+          "type_en": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Type En"
+          },
+          "class_ar": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Class Ar"
+          },
+          "class_en": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Class En"
+          },
+          "vin": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vin"
+          },
+          "site_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Site Id"
+          },
+          "new_site": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VehicleSiteCreate"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "contract_note_ar": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contract Note Ar"
+          },
+          "contract_note_en": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contract Note En"
+          },
+          "license_start": {
+            "type": "string",
+            "format": "date",
+            "title": "License Start"
+          },
+          "license_expiry": {
+            "type": "string",
+            "format": "date",
+            "title": "License Expiry"
+          },
+          "photo_file_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Photo File Id"
+          },
+          "license_file_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "License File Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "plate_number",
+          "traffic_code",
+          "type_ar",
+          "type_en",
+          "class_ar",
+          "class_en",
+          "license_start",
+          "license_expiry"
+        ],
+        "title": "VehicleCreate"
+      },
+      "VehicleFileRead": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "photo",
+              "license",
+              "gallery",
+              "accident",
+              "receipt"
+            ],
+            "title": "Kind"
+          },
+          "label_ar": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label Ar"
+          },
+          "label_en": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label En"
+          },
+          "original_name": {
+            "type": "string",
+            "title": "Original Name"
+          },
+          "media_type": {
+            "type": "string",
+            "title": "Media Type"
+          },
+          "url": {
+            "type": "string",
+            "title": "Url",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "kind",
+          "label_ar",
+          "label_en",
+          "original_name",
+          "media_type"
+        ],
+        "title": "VehicleFileRead"
+      },
+      "VehicleFineCreate": {
+        "properties": {
+          "employee_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Employee Id"
+          },
+          "date": {
+            "type": "string",
+            "format": "date",
+            "title": "Date"
+          },
+          "time": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Time"
+          },
+          "amount": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Amount"
+          },
+          "black_points": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Black Points",
+            "default": 0
+          },
+          "location": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          }
+        },
+        "type": "object",
+        "required": [
+          "date",
+          "amount"
+        ],
+        "title": "VehicleFineCreate"
+      },
+      "VehicleFineRead": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "vehicle_id": {
+            "type": "integer",
+            "title": "Vehicle Id"
+          },
+          "employee_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Employee Id"
+          },
+          "employee_name_ar": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Employee Name Ar"
+          },
+          "employee_name_en": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Employee Name En"
+          },
+          "date": {
+            "type": "string",
+            "format": "date",
+            "title": "Date"
+          },
+          "time": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Time"
+          },
+          "amount": {
+            "type": "integer",
+            "title": "Amount"
+          },
+          "amount_after_discount": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Amount After Discount"
+          },
+          "black_points": {
+            "type": "integer",
+            "title": "Black Points"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "manual",
+              "evg"
+            ],
+            "title": "Source"
+          },
+          "evg_ticket_no": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Evg Ticket No"
+          },
+          "location": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "fine_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fine Type"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "vehicle_plate_label": {
+            "type": "string",
+            "title": "Vehicle Plate Label",
+            "default": ""
+          },
+          "vehicle_type_ar": {
+            "type": "string",
+            "title": "Vehicle Type Ar",
+            "default": ""
+          },
+          "vehicle_type_en": {
+            "type": "string",
+            "title": "Vehicle Type En",
+            "default": ""
+          },
+          "vehicle_site_id": {
+            "type": "integer",
+            "title": "Vehicle Site Id",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "vehicle_id",
+          "employee_id",
+          "date",
+          "time",
+          "amount",
+          "amount_after_discount",
+          "black_points",
+          "source",
+          "evg_ticket_no",
+          "location",
+          "description",
+          "fine_type",
+          "created_at"
+        ],
+        "title": "VehicleFineRead"
+      },
+      "VehicleFineUpdate": {
+        "properties": {
+          "employee_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Employee Id"
+          },
+          "date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date"
+          },
+          "time": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Time"
+          },
+          "amount": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Amount"
+          },
+          "black_points": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Black Points"
+          },
+          "location": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Location"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          }
+        },
+        "type": "object",
+        "title": "VehicleFineUpdate"
+      },
       "VehicleLicenceScan": {
         "properties": {
           "plate_no": {
@@ -40090,6 +43305,904 @@
         "type": "object",
         "title": "VehicleLicenceScan",
         "description": "OCR pre-fill result for a vehicle licence (mulkiya). All optional; the\noperator confirms/edits every field before saving."
+      },
+      "VehicleListItem": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "plate_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Plate Code"
+          },
+          "plate_number": {
+            "type": "string",
+            "title": "Plate Number"
+          },
+          "plate_label": {
+            "type": "string",
+            "title": "Plate Label",
+            "default": ""
+          },
+          "traffic_code": {
+            "type": "string",
+            "title": "Traffic Code"
+          },
+          "type_ar": {
+            "type": "string",
+            "title": "Type Ar"
+          },
+          "type_en": {
+            "type": "string",
+            "title": "Type En"
+          },
+          "class_ar": {
+            "type": "string",
+            "title": "Class Ar"
+          },
+          "class_en": {
+            "type": "string",
+            "title": "Class En"
+          },
+          "vin": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vin"
+          },
+          "site_id": {
+            "type": "integer",
+            "title": "Site Id"
+          },
+          "license_start": {
+            "type": "string",
+            "format": "date",
+            "title": "License Start"
+          },
+          "license_expiry": {
+            "type": "string",
+            "format": "date",
+            "title": "License Expiry"
+          },
+          "expiry_status": {
+            "type": "string",
+            "enum": [
+              "valid",
+              "due",
+              "expired"
+            ],
+            "title": "Expiry Status",
+            "default": "valid"
+          },
+          "days_to_expiry": {
+            "type": "integer",
+            "title": "Days To Expiry",
+            "default": 0
+          },
+          "fines_count": {
+            "type": "integer",
+            "title": "Fines Count",
+            "default": 0
+          },
+          "fines_amount": {
+            "type": "integer",
+            "title": "Fines Amount",
+            "default": 0
+          },
+          "black_points": {
+            "type": "integer",
+            "title": "Black Points",
+            "default": 0
+          },
+          "photo_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Photo Url"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "plate_code",
+          "plate_number",
+          "traffic_code",
+          "type_ar",
+          "type_en",
+          "class_ar",
+          "class_en",
+          "vin",
+          "site_id",
+          "license_start",
+          "license_expiry"
+        ],
+        "title": "VehicleListItem"
+      },
+      "VehicleMaintenanceCreate": {
+        "properties": {
+          "vehicle_id": {
+            "type": "integer",
+            "title": "Vehicle Id"
+          },
+          "date": {
+            "type": "string",
+            "format": "date",
+            "title": "Date"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "service",
+              "repair",
+              "tires",
+              "other"
+            ],
+            "title": "Type"
+          },
+          "odometer_km": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Odometer Km"
+          },
+          "cost": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Cost",
+            "default": 0
+          },
+          "vendor_ar": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vendor Ar"
+          },
+          "vendor_en": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vendor En"
+          },
+          "next_due": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Due"
+          },
+          "receipt_file_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Receipt File Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "vehicle_id",
+          "date",
+          "type"
+        ],
+        "title": "VehicleMaintenanceCreate"
+      },
+      "VehicleMaintenanceRead": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "vehicle_id": {
+            "type": "integer",
+            "title": "Vehicle Id"
+          },
+          "date": {
+            "type": "string",
+            "format": "date",
+            "title": "Date"
+          },
+          "type": {
+            "type": "string",
+            "enum": [
+              "service",
+              "repair",
+              "tires",
+              "other"
+            ],
+            "title": "Type"
+          },
+          "odometer_km": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Odometer Km"
+          },
+          "cost": {
+            "type": "integer",
+            "title": "Cost"
+          },
+          "vendor_ar": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vendor Ar"
+          },
+          "vendor_en": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vendor En"
+          },
+          "next_due": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Due"
+          },
+          "receipt_file_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Receipt File Id"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "due_state": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "overdue",
+                  "due",
+                  "scheduled"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due State"
+          },
+          "receipt_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Receipt Url"
+          },
+          "vehicle_plate_label": {
+            "type": "string",
+            "title": "Vehicle Plate Label",
+            "default": ""
+          },
+          "vehicle_type_ar": {
+            "type": "string",
+            "title": "Vehicle Type Ar",
+            "default": ""
+          },
+          "vehicle_type_en": {
+            "type": "string",
+            "title": "Vehicle Type En",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "vehicle_id",
+          "date",
+          "type",
+          "odometer_km",
+          "cost",
+          "vendor_ar",
+          "vendor_en",
+          "next_due",
+          "receipt_file_id",
+          "created_at"
+        ],
+        "title": "VehicleMaintenanceRead"
+      },
+      "VehicleRead": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "plate_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Plate Code"
+          },
+          "plate_number": {
+            "type": "string",
+            "title": "Plate Number"
+          },
+          "plate_label": {
+            "type": "string",
+            "title": "Plate Label",
+            "default": ""
+          },
+          "traffic_code": {
+            "type": "string",
+            "title": "Traffic Code"
+          },
+          "type_ar": {
+            "type": "string",
+            "title": "Type Ar"
+          },
+          "type_en": {
+            "type": "string",
+            "title": "Type En"
+          },
+          "class_ar": {
+            "type": "string",
+            "title": "Class Ar"
+          },
+          "class_en": {
+            "type": "string",
+            "title": "Class En"
+          },
+          "vin": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vin"
+          },
+          "site_id": {
+            "type": "integer",
+            "title": "Site Id"
+          },
+          "license_start": {
+            "type": "string",
+            "format": "date",
+            "title": "License Start"
+          },
+          "license_expiry": {
+            "type": "string",
+            "format": "date",
+            "title": "License Expiry"
+          },
+          "expiry_status": {
+            "type": "string",
+            "enum": [
+              "valid",
+              "due",
+              "expired"
+            ],
+            "title": "Expiry Status",
+            "default": "valid"
+          },
+          "days_to_expiry": {
+            "type": "integer",
+            "title": "Days To Expiry",
+            "default": 0
+          },
+          "fines_count": {
+            "type": "integer",
+            "title": "Fines Count",
+            "default": 0
+          },
+          "fines_amount": {
+            "type": "integer",
+            "title": "Fines Amount",
+            "default": 0
+          },
+          "black_points": {
+            "type": "integer",
+            "title": "Black Points",
+            "default": 0
+          },
+          "photo_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Photo Url"
+          },
+          "contract_note_ar": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contract Note Ar"
+          },
+          "contract_note_en": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contract Note En"
+          },
+          "license_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "License Url"
+          },
+          "fines": {
+            "items": {
+              "$ref": "#/components/schemas/VehicleFineRead"
+            },
+            "type": "array",
+            "title": "Fines"
+          },
+          "renewals": {
+            "items": {
+              "$ref": "#/components/schemas/LicenseRenewalRead"
+            },
+            "type": "array",
+            "title": "Renewals"
+          },
+          "accidents": {
+            "items": {
+              "$ref": "#/components/schemas/VehicleAccidentRead"
+            },
+            "type": "array",
+            "title": "Accidents"
+          },
+          "maintenance": {
+            "items": {
+              "$ref": "#/components/schemas/VehicleMaintenanceRead"
+            },
+            "type": "array",
+            "title": "Maintenance"
+          },
+          "photos": {
+            "items": {
+              "$ref": "#/components/schemas/VehicleFileRead"
+            },
+            "type": "array",
+            "title": "Photos"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "plate_code",
+          "plate_number",
+          "traffic_code",
+          "type_ar",
+          "type_en",
+          "class_ar",
+          "class_en",
+          "vin",
+          "site_id",
+          "license_start",
+          "license_expiry",
+          "contract_note_ar",
+          "contract_note_en"
+        ],
+        "title": "VehicleRead"
+      },
+      "VehicleSiteCreate": {
+        "properties": {
+          "name_ar": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Name Ar"
+          },
+          "name_en": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Name En"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name_ar",
+          "name_en"
+        ],
+        "title": "VehicleSiteCreate"
+      },
+      "VehicleSiteRead": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "name_ar": {
+            "type": "string",
+            "title": "Name Ar"
+          },
+          "name_en": {
+            "type": "string",
+            "title": "Name En"
+          },
+          "active": {
+            "type": "boolean",
+            "title": "Active"
+          },
+          "vehicle_count": {
+            "type": "integer",
+            "title": "Vehicle Count",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name_ar",
+          "name_en",
+          "active"
+        ],
+        "title": "VehicleSiteRead"
+      },
+      "VehicleSiteUpdate": {
+        "properties": {
+          "name_ar": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name Ar"
+          },
+          "name_en": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name En"
+          },
+          "active": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Active"
+          }
+        },
+        "type": "object",
+        "title": "VehicleSiteUpdate"
+      },
+      "VehicleUpdate": {
+        "properties": {
+          "plate_code": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^\\d{1,3}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Plate Code"
+          },
+          "plate_number": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^\\d{1,6}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Plate Number"
+          },
+          "traffic_code": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^\\d{4,12}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Traffic Code"
+          },
+          "type_ar": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Type Ar"
+          },
+          "type_en": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Type En"
+          },
+          "class_ar": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Class Ar"
+          },
+          "class_en": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Class En"
+          },
+          "vin": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vin"
+          },
+          "site_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Site Id"
+          },
+          "contract_note_ar": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contract Note Ar"
+          },
+          "contract_note_en": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contract Note En"
+          },
+          "license_start": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "License Start"
+          },
+          "license_expiry": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "License Expiry"
+          },
+          "photo_file_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Photo File Id"
+          },
+          "license_file_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "License File Id"
+          }
+        },
+        "type": "object",
+        "title": "VehicleUpdate"
+      },
+      "VehiclesSummary": {
+        "properties": {
+          "vehicles": {
+            "type": "integer",
+            "title": "Vehicles"
+          },
+          "fines_count": {
+            "type": "integer",
+            "title": "Fines Count"
+          },
+          "fines_amount": {
+            "type": "integer",
+            "title": "Fines Amount"
+          },
+          "black_points": {
+            "type": "integer",
+            "title": "Black Points"
+          },
+          "license_attention": {
+            "type": "integer",
+            "title": "License Attention"
+          },
+          "open_accidents": {
+            "type": "integer",
+            "title": "Open Accidents"
+          },
+          "maintenance_due": {
+            "type": "integer",
+            "title": "Maintenance Due"
+          },
+          "active_sites": {
+            "type": "integer",
+            "title": "Active Sites"
+          },
+          "notify_days": {
+            "type": "integer",
+            "title": "Notify Days"
+          }
+        },
+        "type": "object",
+        "required": [
+          "vehicles",
+          "fines_count",
+          "fines_amount",
+          "black_points",
+          "license_attention",
+          "open_accidents",
+          "maintenance_due",
+          "active_sites",
+          "notify_days"
+        ],
+        "title": "VehiclesSummary"
       },
       "VerifyPasswordRequest": {
         "properties": {

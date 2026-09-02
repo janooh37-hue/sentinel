@@ -277,6 +277,31 @@ export type PersonIdScan = components['schemas']['PersonIdScan']
 export type PermitUpdate = components['schemas']['PermitUpdate']
 export type PermitSummary = components['schemas']['PermitSummary']
 
+// ─── Fleet vehicles ──────────────────────────────────────────────────────────
+export type VehicleListItem = components['schemas']['VehicleListItem']
+export type VehicleRead = components['schemas']['VehicleRead']
+export type VehicleCreate = components['schemas']['VehicleCreate']
+export type VehicleUpdate = components['schemas']['VehicleUpdate']
+export type VehicleSiteRead = components['schemas']['VehicleSiteRead']
+export type VehicleSiteCreate = components['schemas']['VehicleSiteCreate']
+export type VehicleSiteUpdate = components['schemas']['VehicleSiteUpdate']
+export type VehicleFileRead = components['schemas']['VehicleFileRead']
+export type VehicleFineCreate = components['schemas']['VehicleFineCreate']
+export type VehicleFineUpdate = components['schemas']['VehicleFineUpdate']
+export type VehicleFineRead = components['schemas']['VehicleFineRead']
+export type LicenseRenewCreate = components['schemas']['LicenseRenewCreate']
+export type VehicleAccidentCreate = components['schemas']['VehicleAccidentCreate']
+export type VehicleAccidentRead = components['schemas']['VehicleAccidentRead']
+export type VehicleMaintenanceCreate = components['schemas']['VehicleMaintenanceCreate']
+export type VehicleMaintenanceRead = components['schemas']['VehicleMaintenanceRead']
+export type VehiclesSummary = components['schemas']['VehiclesSummary']
+export type FinesLetterRequest = components['schemas']['FinesLetterRequest']
+export type LetterResult = components['schemas']['LetterResult']
+export type EvgPreviewResponse = components['schemas']['EvgPreviewResponse']
+export type EvgPreviewRow = components['schemas']['EvgPreviewRow']
+export type EvgConfirmRequest = components['schemas']['EvgConfirmRequest']
+export type EvgConfirmResult = components['schemas']['EvgConfirmResult']
+
 export interface LeaveReturnBody {
   resumption_date: string // ISO yyyy-mm-dd
   delay_reason?: string
@@ -1350,6 +1375,89 @@ export const api = {
     form.append('file', file)
     return multipart<PersonIdScan>('/permits/scan-emirates-id', form)
   },
+
+  // --- fleet vehicles ---
+  vehiclesSummary: () => request<VehiclesSummary>('GET', '/vehicles/summary'),
+  setVehicleNotifyDays: (days: number) =>
+    request<VehiclesSummary>('PUT', '/vehicles/notify-days', { days }),
+  listVehicleSites: () => request<VehicleSiteRead[]>('GET', '/vehicles/sites'),
+  createVehicleSite: (body: VehicleSiteCreate) =>
+    request<VehicleSiteRead>('POST', '/vehicles/sites', body),
+  updateVehicleSite: (siteId: number, body: VehicleSiteUpdate) =>
+    request<VehicleSiteRead>('PATCH', `/vehicles/sites/${siteId}`, body),
+  listVehicles: (
+    params: {
+      q?: string
+      site_id?: number
+      expiry?: 'all' | 'attention' | 'valid' | 'due' | 'expired'
+    } = {},
+  ) => request<VehicleListItem[]>('GET', `/vehicles${qs({ ...params })}`),
+  createVehicle: (body: VehicleCreate) =>
+    request<VehicleRead>('POST', '/vehicles', body),
+  getVehicle: (id: number) => request<VehicleRead>('GET', `/vehicles/${id}`),
+  updateVehicle: (id: number, body: VehicleUpdate) =>
+    request<VehicleRead>('PATCH', `/vehicles/${id}`, body),
+  renewVehicleLicense: (id: number, body: LicenseRenewCreate) =>
+    request<VehicleRead>('POST', `/vehicles/${id}/renew`, body),
+  uploadVehicleFile: (
+    id: number,
+    kind: VehicleFileRead['kind'],
+    file: File,
+    labels: { label_ar?: string; label_en?: string } = {},
+  ) => {
+    const form = new FormData()
+    form.append('file', file)
+    form.append('kind', kind)
+    if (labels.label_ar !== undefined) form.append('label_ar', labels.label_ar)
+    if (labels.label_en !== undefined) form.append('label_en', labels.label_en)
+    return multipart<VehicleFileRead>(`/vehicles/${id}/files`, form)
+  },
+  deleteVehicleFile: (id: number, fileId: number) =>
+    request<void>('DELETE', `/vehicles/${id}/files/${fileId}`),
+  vehicleFileUrl: (id: number, fileId: number) =>
+    `${BASE}/vehicles/${id}/files/${fileId}`,
+  addVehicleFine: (id: number, body: VehicleFineCreate) =>
+    request<VehicleRead>('POST', `/vehicles/${id}/fines`, body),
+  updateVehicleFine: (id: number, fineId: number, body: VehicleFineUpdate) =>
+    request<VehicleRead>('PATCH', `/vehicles/${id}/fines/${fineId}`, body),
+  deleteVehicleFine: (id: number, fineId: number) =>
+    request<VehicleRead>('DELETE', `/vehicles/${id}/fines/${fineId}`),
+  generateFinesLetter: (id: number, body: FinesLetterRequest) =>
+    request<LetterResult>('POST', `/vehicles/${id}/fines/letter`, body),
+  listVehicleFines: (
+    params: { site_id?: number; date_from?: string; date_to?: string } = {},
+  ) => request<VehicleFineRead[]>('GET', `/vehicles/fines${qs({ ...params })}`),
+  evgPreview: (body: { traffic_codes?: string[] | null }) =>
+    request<EvgPreviewResponse>('POST', '/vehicles/fines/evg/preview', body),
+  evgConfirm: (body: EvgConfirmRequest) =>
+    request<EvgConfirmResult>('POST', '/vehicles/fines/evg/confirm', body),
+  listVehicleAccidents: () =>
+    request<VehicleAccidentRead[]>('GET', '/vehicles/accidents'),
+  createVehicleAccident: (body: VehicleAccidentCreate) =>
+    request<VehicleAccidentRead>('POST', '/vehicles/accidents', body),
+  setAccidentStatus: (
+    vehicleId: number,
+    accidentId: number,
+    status: VehicleAccidentRead['status'],
+  ) =>
+    request<VehicleAccidentRead>(
+      'PATCH',
+      `/vehicles/${vehicleId}/accidents/${accidentId}`,
+      { status },
+    ),
+  deleteVehicleAccident: (vehicleId: number, accidentId: number) =>
+    request<void>('DELETE', `/vehicles/${vehicleId}/accidents/${accidentId}`),
+  generateAccidentLetter: (vehicleId: number, accidentId: number) =>
+    request<LetterResult>(
+      'POST',
+      `/vehicles/${vehicleId}/accidents/${accidentId}/letter`,
+    ),
+  listVehicleMaintenance: () =>
+    request<VehicleMaintenanceRead[]>('GET', '/vehicles/maintenance'),
+  createVehicleMaintenance: (body: VehicleMaintenanceCreate) =>
+    request<VehicleMaintenanceRead>('POST', '/vehicles/maintenance', body),
+  deleteVehicleMaintenance: (vehicleId: number, maintenanceId: number) =>
+    request<void>('DELETE', `/vehicles/${vehicleId}/maintenance/${maintenanceId}`),
   uploadLeaveCertificate: (id: number, file: File) => {
     const form = new FormData()
     form.append('file', file)

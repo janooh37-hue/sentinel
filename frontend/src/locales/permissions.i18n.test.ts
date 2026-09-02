@@ -81,6 +81,13 @@ describe('permission catalog i18n completeness', () => {
   })
 })
 
+describe('vehicle navigation i18n', () => {
+  it('provides the Vehicles label in English and Arabic', () => {
+    expect(get(en as unknown as Rec, 'nav.vehicles')).toBe('Vehicles')
+    expect(get(ar as unknown as Rec, 'nav.vehicles')).toBe('المركبات')
+  })
+})
+
 describe('Mirror editor bilingual copy', () => {
   it('ships every new EN/AR label and complete count plurals', () => {
     const missing: string[] = []

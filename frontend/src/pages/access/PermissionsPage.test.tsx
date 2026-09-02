@@ -76,6 +76,7 @@ const pageCaps = [
   'documents.generate',
   'books.view',
   'permits.view',
+  'vehicles.view',
   'settings.view',
   'expiry.view',
 ]
@@ -174,6 +175,7 @@ function configure(
         signing_path: 'auto',
         has_code: false,
         notifies_employee: false,
+        feature_minted: false,
       },
       {
         id: 'Report',
@@ -184,6 +186,7 @@ function configure(
         signing_path: 'auto',
         has_code: false,
         notifies_employee: false,
+        feature_minted: false,
       },
     ],
   })
@@ -424,6 +427,24 @@ describe('PermissionsPage Mirror editor', () => {
         overrides: { ...base.overrides, 'employees.view': 'deny' },
       }),
     )
+  })
+
+  it('maps Vehicles page visibility to vehicles.view', async () => {
+    const base = permissionFixture()
+    renderPage()
+    vi.mocked(api.setUserPermission).mockResolvedValue(
+      permissionFixture({
+        effective: base.effective.filter((capability) => capability !== 'vehicles.view'),
+        overrides: { ...base.overrides, 'vehicles.view': 'deny' },
+      }),
+    )
+
+    await userEvent.click(await screen.findByRole('button', { name: /Vehicles Grant/ }))
+
+    await waitFor(() =>
+      expect(api.setUserPermission).toHaveBeenCalledWith(operator.id, 'vehicles.view', 'deny'),
+    )
+    expect(api.setUserPermissionsBulk).not.toHaveBeenCalled()
   })
 
   it('clears an explicit deny when restoring a denied category', async () => {
