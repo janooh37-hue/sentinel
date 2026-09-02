@@ -429,6 +429,19 @@ describe('AbsencesPage', () => {
     )
   })
 
+  it('keeps the email handoff hidden without ledger.view', async () => {
+    hasCapability.mockImplementation((cap) => cap !== 'ledger.view')
+    listAbsenceRegister.mockResolvedValue(REGISTER)
+    renderPage()
+    const user = userEvent.setup()
+
+    const rowCheckboxes = await screen.findAllByRole('checkbox', { name: /Select John Doe/ })
+    await user.click(rowCheckboxes[0])
+
+    expect(rowCheckboxes[0]).toBeChecked()
+    expect(screen.queryByRole('button', { name: 'Send by email (1)' })).not.toBeInTheDocument()
+  })
+
   it('offers no write affordances without leaves.edit', async () => {
     hasCapability.mockImplementation((cap) => cap !== 'leaves.edit')
     listAbsenceRegister.mockResolvedValue(REGISTER)

@@ -326,7 +326,7 @@ export function AbsencesPage(): React.JSX.Element {
                     {t('absences.copy')}
                   </Button>
                 )}
-                {selectedRows.length > 0 && has('ledger.send') && (
+                {selectedRows.length > 0 && has('ledger.send') && has('ledger.view') && (
                   <Button
                     type="button"
                     variant="default"

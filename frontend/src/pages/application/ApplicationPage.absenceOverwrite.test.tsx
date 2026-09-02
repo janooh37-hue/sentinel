@@ -98,13 +98,14 @@ function previewJob(jobId: string, superseded: string[]): JobStatusResponse {
 
 function renderPage() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  return render(
+  const rendered = render(
     <QueryClientProvider client={queryClient}>
       <MemoryRouter initialEntries={['/application?form=Demo&employee_id=G1']}>
         <ApplicationPage />
       </MemoryRouter>
     </QueryClientProvider>,
   )
+  return { ...rendered, queryClient }
 }
 
 /** Render, start a preview generation, and return its job-done handler. */
@@ -174,6 +175,42 @@ describe('ApplicationPage absence overwrite announcement', () => {
     expect(message).toContain('overwrote 2 recorded absence day(s)')
     expect(message).toContain('Jul 9, 2026')
     expect(message).toContain('Jul 10, 2026')
+  })
+
+  it('invalidates the global absence register after an overwrite', async () => {
+    const queryClient = new QueryClient()
+    queryClient.setQueryData(['absence-register'], { rows: [{ employee_id: 'G1' }] })
+    const invalidate = vi.spyOn(queryClient, 'invalidateQueries')
+    const rendered = render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={['/application?form=Demo&employee_id=G1']}>
+          <ApplicationPage />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    )
+    const user = userEvent.setup()
+    await waitFor(() =>
+      expect(
+        screen
+          .getAllByRole('button', { name: /^Preview$/ })
+          .some((button) => !button.hasAttribute('disabled')),
+      ).toBe(true),
+    )
+    const previewButton = screen
+      .getAllByRole('button', { name: /^Preview$/ })
+      .filter((button) => !button.hasAttribute('disabled'))
+      .pop()
+    await user.click(previewButton!)
+    await waitFor(() => expect(jobStatusState.handlers.has('job-1')).toBe(true))
+
+    await act(async () =>
+      jobStatusState.handlers.get('job-1')!(
+        previewJob('job-1', ['2026-07-09', '2026-07-10']),
+      ),
+    )
+
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['absence-register'] })
+    rendered.unmount()
   })
 
   it('stays silent when the leave overwrote nothing', async () => {

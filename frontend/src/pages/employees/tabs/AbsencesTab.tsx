@@ -52,6 +52,7 @@ export function AbsencesTab({ employeeId }: Props): React.JSX.Element {
       void qc.invalidateQueries({ queryKey: ['employee-absence-episodes', employeeId] })
       void qc.invalidateQueries({ queryKey: ['employee-absences', employeeId] })
       void qc.invalidateQueries({ queryKey: ['employee-detail', employeeId] })
+      void qc.invalidateQueries({ queryKey: ['absence-register'] })
       toast.success(t('absences.deleted'))
     },
     onError: (err) => toast.error(apiErrorMessage(err)),
