@@ -221,6 +221,9 @@ export type AbsenceCreateResult = components['schemas']['AbsenceCreateResult']
 export type AbsenceEpisodeRead = components['schemas']['AbsenceEpisodeRead']
 export type AbsenceRecordRead = components['schemas']['AbsenceRecordRead']
 export type RecentAbsenceRead = components['schemas']['RecentAbsenceRead']
+export type AbsenceEpisodeUpdate = components['schemas']['AbsenceEpisodeUpdate']
+export type AbsenceRegisterRowRead = components['schemas']['AbsenceRegisterRowRead']
+export type AbsenceRegisterRead = components['schemas']['AbsenceRegisterRead']
 
 // The backend now returns the employee's bilingual name alongside each leave
 // row so the Records table can render a name instead of a raw G-number. These
@@ -1249,6 +1252,13 @@ export const api = {
       'DELETE',
       `/employees/${encodeURIComponent(employeeId)}/absences?start_date=${startDate}&end_date=${endDate}`,
     ),
+  updateEmployeeAbsenceEpisode: (employeeId: string, body: AbsenceEpisodeUpdate) =>
+    request<AbsenceCreateResult>(
+      'PUT',
+      `/employees/${encodeURIComponent(employeeId)}/absences/episodes`,
+      body,
+    ),
+  listAbsenceRegister: () => request<AbsenceRegisterRead>('GET', '/absences/episodes'),
 
   // --- leaves (Phase 06 — standalone collection) ---
   listLeaves: (params: {
