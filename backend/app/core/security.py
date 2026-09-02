@@ -31,8 +31,8 @@ def verify_password(password: str, password_hash: str) -> bool:
         return False
 
 
-def new_session_token() -> str:
-    """A fresh opaque session token for the ``gssg_session`` cookie."""
+def new_opaque_token() -> str:
+    """32 random bytes, url-safe; used for session cookies and one-time email links."""
     return secrets.token_urlsafe(32)
 
 
@@ -40,4 +40,4 @@ def hash_token(raw: str) -> str:
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
-__all__ = ["hash_password", "hash_token", "new_session_token", "verify_password"]
+__all__ = ["hash_password", "hash_token", "new_opaque_token", "verify_password"]

@@ -449,6 +449,191 @@
         }
       }
     },
+    "/api/v1/auth/features": {
+      "get": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Auth Features",
+        "operationId": "auth_features_api_v1_auth_features_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AuthFeatures"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/verify-email/request": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Request Email Verification",
+        "operationId": "request_email_verification_api_v1_auth_verify_email_request_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmailLinkRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AcceptedResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/verify-email": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Verify Email",
+        "operationId": "verify_email_api_v1_auth_verify_email_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TokenRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VerifyEmailResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/password-reset/request": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Request Password Reset",
+        "operationId": "request_password_reset_api_v1_auth_password_reset_request_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmailLinkRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AcceptedResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/password-reset/complete": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Complete Password Reset",
+        "operationId": "complete_password_reset_api_v1_auth_password_reset_complete_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PasswordResetCompleteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PasswordResetCompleteResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/auth/me": {
       "get": {
         "tags": [
@@ -22340,6 +22525,18 @@
         "title": "AbsenceRecordRead",
         "description": "The employee's absence register: who, and the episode rows."
       },
+      "AcceptedResult": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "const": "accepted",
+            "title": "Status",
+            "default": "accepted"
+          }
+        },
+        "type": "object",
+        "title": "AcceptedResult"
+      },
       "ActivityItemRead": {
         "properties": {
           "when": {
@@ -22645,6 +22842,18 @@
             "type": "boolean",
             "title": "Is Default Manager",
             "default": false
+          },
+          "email_verified_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email Verified At"
           }
         },
         "type": "object",
@@ -24648,6 +24857,20 @@
         ],
         "title": "AuditEntryRead",
         "description": "One user-management event, projected for the History tab."
+      },
+      "AuthFeatures": {
+        "properties": {
+          "account_mail": {
+            "type": "boolean",
+            "title": "Account Mail"
+          }
+        },
+        "type": "object",
+        "required": [
+          "account_mail"
+        ],
+        "title": "AuthFeatures",
+        "description": "Feature flags the login page needs before a session exists."
       },
       "Body_add_attachment_api_v1_ledger__entry_id__attachments_post": {
         "properties": {
@@ -29604,6 +29827,31 @@
         ],
         "title": "EmailAccountUpsert",
         "description": "Write payload. ``password`` is optional on PATCH — only set when\nrotating credentials."
+      },
+      "EmailLinkRequest": {
+        "properties": {
+          "email": {
+            "type": "string",
+            "maxLength": 256,
+            "minLength": 3,
+            "title": "Email"
+          },
+          "locale": {
+            "type": "string",
+            "enum": [
+              "en",
+              "ar"
+            ],
+            "title": "Locale",
+            "default": "en"
+          }
+        },
+        "type": "object",
+        "required": [
+          "email"
+        ],
+        "title": "EmailLinkRequest",
+        "description": "Request a verify or password-reset link be emailed to ``email``."
       },
       "EmailSendResult": {
         "properties": {
@@ -35167,6 +35415,47 @@
         ],
         "title": "PassportSuggestion"
       },
+      "PasswordResetCompleteRequest": {
+        "properties": {
+          "token": {
+            "type": "string",
+            "maxLength": 256,
+            "minLength": 32,
+            "title": "Token"
+          },
+          "password": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 8,
+            "title": "Password"
+          },
+          "password_confirmation": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 8,
+            "title": "Password Confirmation"
+          }
+        },
+        "type": "object",
+        "required": [
+          "token",
+          "password",
+          "password_confirmation"
+        ],
+        "title": "PasswordResetCompleteRequest"
+      },
+      "PasswordResetCompleteResult": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "const": "reset",
+            "title": "Status",
+            "default": "reset"
+          }
+        },
+        "type": "object",
+        "title": "PasswordResetCompleteResult"
+      },
       "PermissionRequestRead": {
         "properties": {
           "id": {
@@ -37226,6 +37515,15 @@
               }
             ],
             "title": "Display Name"
+          },
+          "locale": {
+            "type": "string",
+            "enum": [
+              "en",
+              "ar"
+            ],
+            "title": "Locale",
+            "default": "en"
           }
         },
         "type": "object",
@@ -37263,7 +37561,7 @@
           "is_first"
         ],
         "title": "RegisterResult",
-        "description": "Outcome of ``POST /auth/register``.\n\n``status='active'`` means the account was the first one and was\nauto-promoted to admin (``user`` is populated + a session is set);\n``status='pending'`` means it awaits admin approval."
+        "description": "Outcome of ``POST /auth/register``.\n\n``status='active'`` means the account was the first one and was\nauto-promoted to admin (``user`` is populated + a session is set);\n``status='pending'`` means it awaits admin approval;\n``status='verify_email'`` means the account was created and a\nconfirmation link was sent — no session, no admin queue entry yet."
       },
       "RejectRequest": {
         "properties": {
@@ -39608,6 +39906,21 @@
         "title": "TimesheetStartAckRequest",
         "description": "Accept a mid-month joiner's starting point. Changes no cell."
       },
+      "TokenRequest": {
+        "properties": {
+          "token": {
+            "type": "string",
+            "maxLength": 256,
+            "minLength": 32,
+            "title": "Token"
+          }
+        },
+        "type": "object",
+        "required": [
+          "token"
+        ],
+        "title": "TokenRequest"
+      },
       "TransferAdminRequest": {
         "properties": {
           "employee_id": {
@@ -40090,6 +40403,18 @@
         "type": "object",
         "title": "VehicleLicenceScan",
         "description": "OCR pre-fill result for a vehicle licence (mulkiya). All optional; the\noperator confirms/edits every field before saving."
+      },
+      "VerifyEmailResult": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "const": "verified",
+            "title": "Status",
+            "default": "verified"
+          }
+        },
+        "type": "object",
+        "title": "VerifyEmailResult"
       },
       "VerifyPasswordRequest": {
         "properties": {

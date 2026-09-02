@@ -40,6 +40,7 @@ const user: AdminUserRead = {
   last_login_at: null,
   created_at: null,
   is_default_manager: false,
+  email_verified_at: null,
 }
 
 function cap(id: string, domain = id.split('.')[0], label = id): CapabilityRead {

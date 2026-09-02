@@ -56,7 +56,34 @@
     "emailRequired": "Email is required.",
     "smallPrint": "By signing in you agree to GSSG's acceptable use policy.",
     "signOut": "Sign out",
-    "langToggle": "العربية"
+    "langToggle": "العربية",
+    "stepVerify": "Confirm email",
+    "verifySentTitle": "Check your inbox",
+    "verifySentText": "We sent a confirmation link to {{email}}. Click it to confirm your address — an admin reviews your request once it's confirmed.",
+    "resend": "Resend email",
+    "resent": "Sent",
+    "unverifiedTitle": "Confirm your email",
+    "unverifiedText": "{{email}} hasn't been confirmed yet. Check your inbox for the confirmation link, or send a new one below.",
+    "sendResetLink": "Send reset link",
+    "sendingResetLink": "Sending…",
+    "sending": "Sending…",
+    "settingPassword": "Setting password…",
+    "forgotSubMail": "Enter your account email and we'll send you a link to choose a new password.",
+    "resetSentTitle": "Check your inbox",
+    "resetSentText": "If an account matches, we've sent a password reset link. It expires in 30 minutes.",
+    "mailUnavailable": "Email delivery is unavailable right now. Contact IT for help.",
+    "verifying": "Confirming your email…",
+    "verifiedTitle": "Email confirmed",
+    "verifiedText": "Email confirmed. Your request is now with the admin team; you'll be able to sign in once approved.",
+    "linkInvalidTitle": "Link expired or invalid",
+    "linkInvalidText": "This link is no longer valid. Enter your email to request a new one.",
+    "newPassword": "New password",
+    "resetTitle": "Choose a new password",
+    "resetSub": "Pick a new password for your account.",
+    "setNewPassword": "Set new password",
+    "resetDoneTitle": "Password updated",
+    "resetDoneText": "Your password has been changed. Sign in with your new password.",
+    "resetLinkInvalidText": "This reset link is invalid, expired, or already used. Request a new one."
   },
   "app": {
     "title": "GSSG Manager"
@@ -3406,6 +3433,7 @@
       "linked": "Linked employee",
       "notLinked": "Not linked to an employee",
       "unverifiedLink": "Self-claimed — verify before approving",
+      "emailUnverified": "Email not confirmed",
       "rolePrompt": "Approve as",
       "approve": "Approve",
       "approving": "Approving…",
@@ -3486,7 +3514,8 @@
       "roleChanged": "Role updated",
       "passwordReset": "Password reset",
       "suspended": "User suspended",
-      "reactivated": "User reactivated"
+      "reactivated": "User reactivated",
+      "emailNotVerified": "This user hasn't confirmed their email yet."
     },
     "bell": {
       "requestPrefix": "Access request",

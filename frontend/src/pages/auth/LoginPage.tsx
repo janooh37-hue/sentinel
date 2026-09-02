@@ -3,12 +3,17 @@
  *
  * Faithful port of the Claude Design handoff (project/Login.html, hero layout)
  * wired to the real auth API. States: account picker, sign-in form, request
- * access, request-sent, forgot password, locked-out. EN/AR + RTL + light/dark
- * all follow the existing token + i18n machinery.
+ * access, request-sent, forgot password, locked-out, unverified email, and —
+ * when mounted via `PublicAuthRoute` for a mailed link — email verification
+ * and self-service password reset. EN/AR + RTL + light/dark all follow the
+ * existing token + i18n machinery.
  */
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import type { TFunction } from 'i18next'
 import { useTranslation } from 'react-i18next'
+import { useNavigate } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
 import {
   AlertCircle,
   AlertTriangle,
@@ -30,13 +35,30 @@ import { useAuth } from '@/lib/authContext'
 import { copyToClipboard } from '@/lib/clipboard'
 import './LoginPage.css'
 
-type Screen = 'picker' | 'form' | 'request' | 'requestSent' | 'forgot' | 'locked'
+type Screen =
+  | 'picker'
+  | 'form'
+  | 'request'
+  | 'requestSent'
+  | 'forgot'
+  | 'forgotSent'
+  | 'locked'
+  | 'unverified'
+  | 'verifyEmail'
+  | 'resetPassword'
+  | 'resetDone'
 
 interface KnownAccount {
   email: string
   name: string
   g: string | null
   ts: number
+}
+
+/** How `LoginPage` was entered when mounted from a mailed verify/reset link. */
+export interface LoginPageEntry {
+  kind: 'verify' | 'reset'
+  token: string
 }
 
 const KNOWN_KEY = 'gssg.knownAccounts'
@@ -91,13 +113,30 @@ interface FieldError {
   msg: string
 }
 
-export function LoginPage(): React.JSX.Element {
+export function LoginPage({ entry }: { entry?: LoginPageEntry } = {}): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const isAr = i18n.language.startsWith('ar')
-  const { login, setUser } = useAuth()
+  const locale: 'en' | 'ar' = isAr ? 'ar' : 'en'
+  const { login, setUser, refetch } = useAuth()
+  const navigate = useNavigate()
+
+  const features = useQuery({
+    queryKey: ['auth-features'],
+    queryFn: () => api.authFeatures(),
+    staleTime: Infinity,
+  })
+  const mail = features.data?.account_mail === true
 
   const known = useMemo(() => readKnown(), [])
-  const [screen, setScreen] = useState<Screen>(known.length > 0 ? 'picker' : 'form')
+  const initialScreen: Screen =
+    entry?.kind === 'verify'
+      ? 'verifyEmail'
+      : entry?.kind === 'reset'
+        ? 'resetPassword'
+        : known.length > 0
+          ? 'picker'
+          : 'form'
+  const [screen, setScreen] = useState<Screen>(initialScreen)
   const [picked, setPicked] = useState<KnownAccount | null>(null)
 
   const [email, setEmail] = useState('')
@@ -121,6 +160,14 @@ export function LoginPage(): React.JSX.Element {
     setPassword('')
     setError(null)
     setScreen(known.length > 0 ? 'picker' : 'form')
+  }
+
+  // Leaving a link-entry screen (verify/reset) also drops the entry route so
+  // the app returns to the normal session-gated Shell instead of re-mounting
+  // PublicAuthRoute on every re-render.
+  function backToSignIn(): void {
+    if (entry) navigate('/', { replace: true })
+    goPicker()
   }
 
   function pick(acc: KnownAccount): void {
@@ -151,6 +198,11 @@ export function LoginPage(): React.JSX.Element {
         if (err.code === 'ACCOUNT_LOCKED') {
           setLockedName(picked?.name ?? loginEmail)
           setScreen('locked')
+          setSubmitting(false)
+          return
+        }
+        if (err.code === 'ACCOUNT_EMAIL_UNVERIFIED') {
+          setScreen('unverified')
           setSubmitting(false)
           return
         }
@@ -192,6 +244,7 @@ export function LoginPage(): React.JSX.Element {
         email: rEmail,
         password: rPwd,
         g_number: rG || null,
+        locale,
       })
       if (result.is_first && result.user) {
         setUser(result.user) // first account → straight into the app as admin
@@ -283,14 +336,51 @@ export function LoginPage(): React.JSX.Element {
               />
             )}
             {screen === 'requestSent' && (
-              <RequestSentScreen t={t} email={rEmail} onBack={goPicker} />
+              <RequestSentScreen t={t} email={rEmail} mail={mail} locale={locale} onBack={goPicker} />
             )}
             {screen === 'forgot' && (
-              <ForgotScreen t={t} onBack={goPicker} onCopy={copyEmail} copied={copied} />
+              <ForgotScreen
+                t={t}
+                mail={mail}
+                locale={locale}
+                initialEmail={picked?.email ?? email}
+                onBack={goPicker}
+                onSent={() => setScreen('forgotSent')}
+                onCopy={copyEmail}
+                copied={copied}
+              />
             )}
+            {screen === 'forgotSent' && <ForgotSentScreen t={t} onBack={goPicker} />}
             {screen === 'locked' && (
               <LockedScreen t={t} isAr={isAr} name={lockedName} onBack={goPicker} onCopy={copyEmail} copied={copied} />
             )}
+            {screen === 'unverified' && (
+              <UnverifiedScreen
+                t={t}
+                email={picked?.email ?? email}
+                locale={locale}
+                onBack={goPicker}
+              />
+            )}
+            {screen === 'verifyEmail' && (
+              <VerifyEmailScreen t={t} token={entry?.token ?? ''} locale={locale} onBack={backToSignIn} />
+            )}
+            {screen === 'resetPassword' && (
+              <ResetPasswordScreen
+                t={t}
+                token={entry?.token ?? ''}
+                onDone={async () => {
+                  await refetch()
+                  setScreen('resetDone')
+                }}
+                onGoForgot={() => {
+                  if (entry) navigate('/', { replace: true })
+                  setScreen('forgot')
+                }}
+                onBack={backToSignIn}
+              />
+            )}
+            {screen === 'resetDone' && <ResetDoneScreen t={t} onBack={backToSignIn} />}
           </div>
           <div className="small-print">{t('auth.smallPrint')}</div>
         </div>
@@ -306,16 +396,13 @@ export function LoginPage(): React.JSX.Element {
 /* -------------------------------------------------------------------------- */
 /* Shared field atoms                                                         */
 /* -------------------------------------------------------------------------- */
-
-type TFn = ReturnType<typeof useTranslation>['t']
-
 function PasswordField({
   id, value, onChange, t, show, setShow, error, autoFocus, label,
 }: {
   id: string
   value: string
   onChange: (v: string) => void
-  t: TFn
+  t: TFunction
   show: boolean
   setShow: (v: boolean) => void
   error?: string | null
@@ -364,7 +451,7 @@ function EmailField({
 }: {
   value: string
   onChange: (v: string) => void
-  t: TFn
+  t: TFunction
   autoFocus?: boolean
 }): React.JSX.Element {
   return (
@@ -400,7 +487,7 @@ function PickerScreen({
   onOther: () => void
   onRequest: () => void
   isAr: boolean
-  t: TFn
+  t: TFunction
 }): React.JSX.Element {
   return (
     <>
@@ -442,7 +529,7 @@ function PickerScreen({
 }
 
 function SignInScreen(props: {
-  t: TFn
+  t: TFunction
   isAr: boolean
   picked: KnownAccount | null
   email: string
@@ -541,7 +628,7 @@ function SignInScreen(props: {
 }
 
 function RequestScreen(props: {
-  t: TFn
+  t: TFunction
   rEmail: string; setREmail: (v: string) => void
   rG: string; setRG: (v: string) => void
   rPwd: string; setRPwd: (v: string) => void
@@ -613,29 +700,81 @@ function RequestScreen(props: {
 }
 
 function RequestSentScreen({
-  t, email, onBack,
+  t, email, mail, locale, onBack,
 }: {
-  t: TFn
+  t: TFunction
   email: string
+  mail: boolean
+  locale: 'en' | 'ar'
   onBack: () => void
 }): React.JSX.Element {
+  const [resending, setResending] = useState(false)
+  const [resent, setResent] = useState(false)
+
+  async function handleResend(): Promise<void> {
+    setResending(true)
+    try {
+      await api.requestEmailVerification(email, locale)
+      setResent(true)
+      window.setTimeout(() => setResent(false), 5000)
+    } finally {
+      setResending(false)
+    }
+  }
+
   return (
     <>
       <div className="card__head">
         <span className="card__eyebrow">{t('auth.cardEyebrow')}</span>
-        <span className="card__title">{t('auth.requestSentTitle')}</span>
+        <span className="card__title">
+          {mail ? t('auth.verifySentTitle') : t('auth.requestSentTitle')}
+        </span>
       </div>
-      <div className="steps">
-        <span data-active="true">{t('auth.step1')}</span>
-        <span className="steps__sep" />
-        <span data-active="true">{t('auth.step2')}</span>
-        <span className="steps__sep" />
-        <span>{t('auth.step3')}</span>
-      </div>
+      {mail ? (
+        <div className="steps">
+          <span data-active="true">{t('auth.step1')}</span>
+          <span className="steps__sep" />
+          <span data-active="true">{t('auth.stepVerify')}</span>
+          <span className="steps__sep" />
+          <span>{t('auth.step2')}</span>
+          <span className="steps__sep" />
+          <span>{t('auth.step3')}</span>
+        </div>
+      ) : (
+        <div className="steps">
+          <span data-active="true">{t('auth.step1')}</span>
+          <span className="steps__sep" />
+          <span data-active="true">{t('auth.step2')}</span>
+          <span className="steps__sep" />
+          <span>{t('auth.step3')}</span>
+        </div>
+      )}
       <div className="info info--ok">
         <span className="info__icon"><Check size={18} strokeWidth={1.8} /></span>
-        <span className="info__text">{t('auth.requestSentText', { email })}</span>
+        <span className="info__text">
+          {mail ? t('auth.verifySentText', { email }) : t('auth.requestSentText', { email })}
+        </span>
       </div>
+      {mail && (
+        <button
+          className="btn btn--ghost"
+          type="button"
+          disabled={resending}
+          onClick={() => void handleResend()}
+          style={{ alignSelf: 'center' }}
+        >
+          {resending ? (
+            <>
+              <span className="spin" aria-hidden="true" />
+              {t('auth.sending')}
+            </>
+          ) : resent ? (
+            t('auth.resent')
+          ) : (
+            t('auth.resend')
+          )}
+        </button>
+      )}
       <button className="btn btn--ghost" type="button" onClick={onBack} style={{ alignSelf: 'center' }}>
         {t('auth.backToSignIn')}
       </button>
@@ -644,21 +783,381 @@ function RequestSentScreen({
 }
 
 function ForgotScreen({
-  t, onBack, onCopy, copied,
+  t, mail, locale, initialEmail, onBack, onSent, onCopy, copied,
 }: {
-  t: TFn
+  t: TFunction
+  mail: boolean
+  locale: 'en' | 'ar'
+  initialEmail: string
   onBack: () => void
+  onSent: () => void
   onCopy: () => void
   copied: boolean
 }): React.JSX.Element {
+  const [email, setEmail] = useState(initialEmail)
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function handleSubmit(e: React.FormEvent): Promise<void> {
+    e.preventDefault()
+    if (!email) return
+    setSubmitting(true)
+    setError(null)
+    try {
+      await api.requestPasswordReset(email, locale)
+      onSent()
+    } catch (err) {
+      if (err instanceof ApiError && (err.code === 'ACCOUNT_MAIL_DISABLED' || err.status >= 500)) {
+        setError(t('auth.mailUnavailable'))
+      } else {
+        setError(err instanceof ApiError ? err.message : t('auth.errGeneric'))
+      }
+      setSubmitting(false)
+    }
+  }
+
+  if (!mail) {
+    return (
+      <>
+        <div className="card__head">
+          <span className="card__eyebrow">{t('auth.cardEyebrow')}</span>
+          <span className="card__title">{t('auth.forgotTitle')}</span>
+          <span className="card__sub">{t('auth.forgotSub')}</span>
+        </div>
+        <ItContact t={t} onCopy={onCopy} copied={copied} />
+        <button className="btn btn--ghost" type="button" onClick={onBack} style={{ alignSelf: 'center' }}>
+          {t('auth.backToSignIn')}
+        </button>
+      </>
+    )
+  }
+
+  return (
+    <form onSubmit={(e) => void handleSubmit(e)}>
+      <div className="card__head">
+        <span className="card__eyebrow">{t('auth.cardEyebrow')}</span>
+        <span className="card__title">{t('auth.forgotTitle')}</span>
+        <span className="card__sub">{t('auth.forgotSubMail')}</span>
+      </div>
+      <EmailField value={email} onChange={setEmail} t={t} autoFocus />
+      {error && (
+        <div className="field__err" style={{ marginTop: 12 }}>
+          <AlertCircle size={13} strokeWidth={1.8} />
+          <span>{error}</span>
+        </div>
+      )}
+      <div style={{ height: 18 }} />
+      <button className="btn btn--primary" type="submit" disabled={submitting}>
+        {submitting ? (
+          <>
+            <span className="spin" aria-hidden="true" />
+            {t('auth.sendingResetLink')}
+          </>
+        ) : (
+          t('auth.sendResetLink')
+        )}
+      </button>
+      <div className="card__foot">
+        <button className="btn btn--link" type="button" onClick={onBack}>
+          {t('auth.backToSignIn')}
+        </button>
+      </div>
+    </form>
+  )
+}
+
+function ForgotSentScreen({ t, onBack }: { t: TFunction; onBack: () => void }): React.JSX.Element {
   return (
     <>
       <div className="card__head">
         <span className="card__eyebrow">{t('auth.cardEyebrow')}</span>
-        <span className="card__title">{t('auth.forgotTitle')}</span>
-        <span className="card__sub">{t('auth.forgotSub')}</span>
+        <span className="card__title">{t('auth.resetSentTitle')}</span>
       </div>
-      <ItContact t={t} onCopy={onCopy} copied={copied} />
+      <div className="info info--ok">
+        <span className="info__icon"><Check size={18} strokeWidth={1.8} /></span>
+        <span className="info__text">{t('auth.resetSentText')}</span>
+      </div>
+      <button className="btn btn--ghost" type="button" onClick={onBack} style={{ alignSelf: 'center' }}>
+        {t('auth.backToSignIn')}
+      </button>
+    </>
+  )
+}
+
+function UnverifiedScreen({
+  t, email, locale, onBack,
+}: {
+  t: TFunction
+  email: string
+  locale: 'en' | 'ar'
+  onBack: () => void
+}): React.JSX.Element {
+  const [resending, setResending] = useState(false)
+  const [resent, setResent] = useState(false)
+
+  async function handleResend(): Promise<void> {
+    setResending(true)
+    try {
+      await api.requestEmailVerification(email, locale)
+      setResent(true)
+      window.setTimeout(() => setResent(false), 5000)
+    } finally {
+      setResending(false)
+    }
+  }
+
+  return (
+    <>
+      <div className="card__head">
+        <span className="card__eyebrow">{t('auth.cardEyebrow')}</span>
+        <span className="card__title">{t('auth.unverifiedTitle')}</span>
+      </div>
+      <div className="info">
+        <span className="info__icon"><AlertTriangle size={18} strokeWidth={1.8} /></span>
+        <span className="info__text">{t('auth.unverifiedText', { email })}</span>
+      </div>
+      <button
+        className="btn btn--primary"
+        type="button"
+        disabled={resending}
+        onClick={() => void handleResend()}
+      >
+        {resending ? (
+          <>
+            <span className="spin" aria-hidden="true" />
+            {t('auth.sending')}
+          </>
+        ) : resent ? (
+          t('auth.resent')
+        ) : (
+          t('auth.resend')
+        )}
+      </button>
+      <button className="btn btn--ghost" type="button" onClick={onBack} style={{ alignSelf: 'center', marginTop: 12 }}>
+        {t('auth.backToSignIn')}
+      </button>
+    </>
+  )
+}
+
+function VerifyEmailScreen({
+  t, token, locale, onBack,
+}: {
+  t: TFunction
+  token: string
+  locale: 'en' | 'ar'
+  onBack: () => void
+}): React.JSX.Element {
+  const [state, setState] = useState<'pending' | 'success' | 'failure'>(token ? 'pending' : 'failure')
+  const [resendEmail, setResendEmail] = useState('')
+  const [resending, setResending] = useState(false)
+  const [resent, setResent] = useState(false)
+  const ranRef = useRef(false)
+
+  useEffect(() => {
+    if (!token || ranRef.current) return
+    ranRef.current = true
+    api
+      .verifyEmail(token)
+      .then(() => setState('success'))
+      .catch(() => setState('failure'))
+  }, [token])
+
+  async function handleResend(): Promise<void> {
+    if (!resendEmail) return
+    setResending(true)
+    try {
+      await api.requestEmailVerification(resendEmail, locale)
+      setResent(true)
+      window.setTimeout(() => setResent(false), 5000)
+    } finally {
+      setResending(false)
+    }
+  }
+
+  if (state === 'pending') {
+    return (
+      <>
+        <div className="card__head">
+          <span className="card__eyebrow">{t('auth.cardEyebrow')}</span>
+          <span className="card__title">{t('auth.verifying')}</span>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'center', padding: '24px 0' }}>
+          <span className="spin" aria-hidden="true" />
+        </div>
+      </>
+    )
+  }
+
+  if (state === 'success') {
+    return (
+      <>
+        <div className="card__head">
+          <span className="card__eyebrow">{t('auth.cardEyebrow')}</span>
+          <span className="card__title">{t('auth.verifiedTitle')}</span>
+        </div>
+        <div className="info info--ok">
+          <span className="info__icon"><Check size={18} strokeWidth={1.8} /></span>
+          <span className="info__text">{t('auth.verifiedText')}</span>
+        </div>
+        <button className="btn btn--ghost" type="button" onClick={onBack} style={{ alignSelf: 'center' }}>
+          {t('auth.backToSignIn')}
+        </button>
+      </>
+    )
+  }
+
+  return (
+    <>
+      <div className="card__head">
+        <span className="card__eyebrow">{t('auth.cardEyebrow')}</span>
+        <span className="card__title">{t('auth.linkInvalidTitle')}</span>
+        <span className="card__sub">{t('auth.linkInvalidText')}</span>
+      </div>
+      <EmailField value={resendEmail} onChange={setResendEmail} t={t} autoFocus />
+      <div style={{ height: 18 }} />
+      <button
+        className="btn btn--primary"
+        type="button"
+        disabled={resending || !resendEmail}
+        onClick={() => void handleResend()}
+      >
+        {resending ? (
+          <>
+            <span className="spin" aria-hidden="true" />
+            {t('auth.sending')}
+          </>
+        ) : resent ? (
+          t('auth.resent')
+        ) : (
+          t('auth.resend')
+        )}
+      </button>
+      <button className="btn btn--ghost" type="button" onClick={onBack} style={{ alignSelf: 'center', marginTop: 12 }}>
+        {t('auth.backToSignIn')}
+      </button>
+    </>
+  )
+}
+
+function ResetPasswordScreen({
+  t, token, onDone, onGoForgot, onBack,
+}: {
+  t: TFunction
+  token: string
+  onDone: () => Promise<void>
+  onGoForgot: () => void
+  onBack: () => void
+}): React.JSX.Element {
+  const [pwd, setPwd] = useState('')
+  const [pwd2, setPwd2] = useState('')
+  const [showPwd, setShowPwd] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [invalidLink, setInvalidLink] = useState(!token)
+
+  async function handleSubmit(e: React.FormEvent): Promise<void> {
+    e.preventDefault()
+    if (pwd.length < 8) {
+      setError(t('auth.passwordTooShort'))
+      return
+    }
+    if (pwd !== pwd2) {
+      setError(t('auth.passwordsMismatch'))
+      return
+    }
+    setSubmitting(true)
+    setError(null)
+    try {
+      await api.completePasswordReset(token, pwd, pwd2)
+      await onDone()
+    } catch (err) {
+      if (err instanceof ApiError && err.code === 'PASSWORD_RESET_LINK_INVALID') {
+        setInvalidLink(true)
+      } else {
+        setError(err instanceof ApiError ? err.message : t('auth.errGeneric'))
+      }
+      setSubmitting(false)
+    }
+  }
+
+  if (invalidLink) {
+    return (
+      <>
+        <div className="card__head">
+          <span className="card__eyebrow">{t('auth.cardEyebrow')}</span>
+          <span className="card__title">{t('auth.linkInvalidTitle')}</span>
+          <span className="card__sub">{t('auth.resetLinkInvalidText')}</span>
+        </div>
+        <button className="btn btn--primary" type="button" onClick={onGoForgot}>
+          {t('auth.sendResetLink')}
+        </button>
+        <button className="btn btn--ghost" type="button" onClick={onBack} style={{ alignSelf: 'center', marginTop: 12 }}>
+          {t('auth.backToSignIn')}
+        </button>
+      </>
+    )
+  }
+
+  return (
+    <form onSubmit={(e) => void handleSubmit(e)}>
+      <div className="card__head">
+        <span className="card__eyebrow">{t('auth.cardEyebrow')}</span>
+        <span className="card__title">{t('auth.resetTitle')}</span>
+        <span className="card__sub">{t('auth.resetSub')}</span>
+      </div>
+      <PasswordField
+        id="reset-pwd"
+        value={pwd}
+        onChange={setPwd}
+        t={t}
+        show={showPwd}
+        setShow={setShowPwd}
+        label={t('auth.newPassword')}
+        autoFocus
+      />
+      <div style={{ height: 18 }} />
+      <PasswordField
+        id="reset-pwd2"
+        value={pwd2}
+        onChange={setPwd2}
+        t={t}
+        show={showPwd}
+        setShow={setShowPwd}
+        label={t('auth.confirmPassword')}
+      />
+      {error && (
+        <div className="field__err" style={{ marginTop: 12 }}>
+          <AlertCircle size={13} strokeWidth={1.8} />
+          <span>{error}</span>
+        </div>
+      )}
+      <div style={{ height: 18 }} />
+      <button className="btn btn--primary" type="submit" disabled={submitting}>
+        {submitting ? (
+          <>
+            <span className="spin" aria-hidden="true" />
+            {t('auth.settingPassword')}
+          </>
+        ) : (
+          t('auth.setNewPassword')
+        )}
+      </button>
+    </form>
+  )
+}
+
+function ResetDoneScreen({ t, onBack }: { t: TFunction; onBack: () => void }): React.JSX.Element {
+  return (
+    <>
+      <div className="card__head">
+        <span className="card__eyebrow">{t('auth.cardEyebrow')}</span>
+        <span className="card__title">{t('auth.resetDoneTitle')}</span>
+      </div>
+      <div className="info info--ok">
+        <span className="info__icon"><Check size={18} strokeWidth={1.8} /></span>
+        <span className="info__text">{t('auth.resetDoneText')}</span>
+      </div>
       <button className="btn btn--ghost" type="button" onClick={onBack} style={{ alignSelf: 'center' }}>
         {t('auth.backToSignIn')}
       </button>
@@ -669,7 +1168,7 @@ function ForgotScreen({
 function LockedScreen({
   t, isAr, name, onBack, onCopy, copied,
 }: {
-  t: TFn
+  t: TFunction
   isAr: boolean
   name: string
   onBack: () => void
@@ -717,7 +1216,7 @@ function LockedScreen({
 function ItContact({
   t, onCopy, copied,
 }: {
-  t: TFn
+  t: TFunction
   onCopy: () => void
   copied: boolean
 }): React.JSX.Element {

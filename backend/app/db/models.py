@@ -1197,6 +1197,9 @@ class User(Base):
     )
     locked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    # Set once by /auth/verify-email; NULL = unconfirmed. Enforced only while
+    # settings.account_mail_enabled.
+    email_verified_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
     updated_at: Mapped[datetime | None] = mapped_column(DateTime, default=_utcnow, onupdate=_utcnow)
 
@@ -1233,6 +1236,25 @@ class AuthSession(Base):
     __table_args__ = (
         Index("ix_auth_sessions_token_hash", "token_hash", unique=True),
         Index("ix_auth_sessions_user_id", "user_id"),
+    )
+
+
+class AccountEmailToken(Base):
+    """One-time email link (verify / reset). Only the sha256 of the raw token is stored."""
+
+    __tablename__ = "account_email_tokens"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    purpose: Mapped[str] = mapped_column(String(16), nullable=False)  # verify | reset
+    token_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    used_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    __table_args__ = (
+        Index("ix_account_email_tokens_token_hash", "token_hash", unique=True),
+        Index("ix_account_email_tokens_user_purpose", "user_id", "purpose"),
     )
 
 

@@ -23,12 +23,13 @@ from sqlalchemy import CursorResult, func, select, update
 from sqlalchemy.orm import Session
 
 from app.api.errors import AppError, ValidationFailedError
+from app.config import get_settings
 from app.core import security
 from app.core.roles import ADMIN_ROLE, MANAGER_ROLE, OPERATOR_ROLE
 from app.db.models import AuditLog, Employee, User
 from app.db.models import AuthSession as AuthSessionModel
 from app.schemas.auth import AdminUserRead, AuditEntryRead, SessionUser
-from app.services import identity_service, perm_service
+from app.services import account_mailer, account_token_service, identity_service, perm_service
 
 log = logging.getLogger(__name__)
 
@@ -47,17 +48,24 @@ def _utcnow() -> datetime:
     return datetime.now(UTC).replace(tzinfo=None)
 
 
-def _normalize_email(email: str) -> str:
+def normalize_email(email: str) -> str:
     return email.strip().lower()
+
+
+def _verification_required(user: User) -> bool:
+    """True when ``user`` must confirm their email before signing in/approval.
+
+    Gated on ``settings.account_mail_enabled`` — while the flag is off,
+    verification is not enforced anywhere (today's behaviour).
+    """
+    return get_settings().account_mail_enabled and user.email_verified_at is None
 
 
 # ─── Lookups ──────────────────────────────────────────────────────────────────
 
 
 def get_by_email(db: Session, email: str) -> User | None:
-    return db.execute(
-        select(User).where(User.email == _normalize_email(email))
-    ).scalar_one_or_none()
+    return db.execute(select(User).where(User.email == normalize_email(email))).scalar_one_or_none()
 
 
 def count_users(db: Session) -> int:
@@ -94,7 +102,7 @@ def register(
     First account → active + admin + fills the admin slot. Otherwise pending.
     Raises ``AppError`` on bad email or a taken address.
     """
-    normalized = _normalize_email(email)
+    normalized = normalize_email(email)
     if "@" not in normalized or normalized.startswith("@") or normalized.endswith("@"):
         raise AppError("INVALID_EMAIL", "Enter a valid email address.")
     if get_by_email(db, normalized) is not None:
@@ -138,6 +146,12 @@ def approve_user(
     actor: str | None = None,
 ) -> User:
     user = _require_user(db, user_id)
+    if _verification_required(user):
+        raise AppError(
+            "EMAIL_NOT_VERIFIED",
+            "This user has not confirmed their email address yet.",
+            http_status=409,
+        )
     _validate_role(role)
     if employee_id:
         g = employee_id.strip().upper()
@@ -288,10 +302,7 @@ def set_default_manager(
     return user
 
 
-def reset_password(
-    db: Session, user_id: int, new_password: str, *, actor: str | None = None
-) -> User:
-    user = _require_user(db, user_id)
+def _apply_password_reset(db: Session, user: User, new_password: str, *, actor: str | None) -> None:
     user.password_hash = security.hash_password(new_password)
     user.failed_attempts = 0
     user.locked_at = None
@@ -302,6 +313,13 @@ def reset_password(
     db.refresh(user)
     # Kill any live sessions so the old password's cookies can't keep a seat.
     revoke_user_sessions(db, user.id)
+
+
+def reset_password(
+    db: Session, user_id: int, new_password: str, *, actor: str | None = None
+) -> User:
+    user = _require_user(db, user_id)
+    _apply_password_reset(db, user, new_password, actor=actor)
     return user
 
 
@@ -387,6 +405,12 @@ def authenticate(db: Session, email: str, password: str) -> User:
 
     # Password is correct — now it is safe to disclose a non-active state to the
     # principal who proved ownership of the account.
+    if _verification_required(user):
+        raise AppError(
+            "ACCOUNT_EMAIL_UNVERIFIED",
+            "Confirm your email address first — check your inbox for the verification link.",
+            http_status=403,
+        )
     if user.status == "pending":
         raise AppError(
             "ACCOUNT_PENDING",
@@ -440,7 +464,7 @@ def verify_password_for(db: Session, user: User, password: str) -> None:
 
 def start_session(db: Session, user: User, *, user_agent: str | None = None) -> str:
     """Create a session row and return the raw cookie token."""
-    raw = security.new_session_token()
+    raw = security.new_opaque_token()
     db.add(
         AuthSessionModel(
             user_id=user.id,
@@ -465,7 +489,7 @@ def resolve_session(db: Session, raw_token: str) -> User | None:
     if row is None or row.revoked or row.expires_at < _utcnow():
         return None
     user = db.get(User, row.user_id)
-    if user is None or user.status != "active":
+    if user is None or user.status != "active" or _verification_required(user):
         return None
     # Throttle the last_seen_at write so we don't commit on every request.
     now = _utcnow()
@@ -504,6 +528,108 @@ def revoke_session(db: Session, raw_token: str) -> None:
     if row is not None and not row.revoked:
         row.revoked = True
         db.commit()
+
+
+# ─── Email verification / password reset ───────────────────────────────────────
+
+
+def verify_email(db: Session, raw_token: str) -> User:
+    """Consume a verify-purpose link token and mark the owning user confirmed.
+
+    Idempotent: a user already verified by an earlier link still gets a 200 —
+    the token claim (and its ``used_at`` write) is committed either way.
+    """
+    row = account_token_service.claim(db, raw_token, account_token_service.PURPOSE_VERIFY)
+    if row is None:
+        raise AppError(
+            "EMAIL_LINK_INVALID",
+            "This link is invalid or has expired. Request a new one.",
+            http_status=400,
+        )
+    user = db.get(User, row.user_id)
+    if user is None:
+        raise AppError(
+            "EMAIL_LINK_INVALID",
+            "This link is invalid or has expired. Request a new one.",
+            http_status=400,
+        )
+    if user.email_verified_at is None:
+        user.email_verified_at = _utcnow()
+        _audit(db, "self-service", "email_verified", user)
+    db.commit()
+    db.refresh(user)
+    return user
+
+
+def complete_password_reset(db: Session, raw_token: str, new_password: str) -> User:
+    """Consume a reset-purpose link token and set the owning user's password.
+
+    Never creates a session — the caller (route layer) drops any existing
+    cookie instead, since ``_apply_password_reset`` already revokes every
+    live session for the account.
+    """
+    row = account_token_service.claim(db, raw_token, account_token_service.PURPOSE_RESET)
+    invalid = AppError(
+        "PASSWORD_RESET_LINK_INVALID",
+        "This reset link is invalid, expired or already used.",
+        http_status=400,
+    )
+    if row is None:
+        db.rollback()
+        raise invalid
+    user = db.get(User, row.user_id)
+    if user is None or user.status not in ("active", "locked") or user.email_verified_at is None:
+        db.rollback()
+        raise invalid
+    # Defensive: also close out any other open reset tokens for this user.
+    account_token_service.invalidate_open(
+        db, user.id, account_token_service.PURPOSE_RESET, now=_utcnow()
+    )
+    _apply_password_reset(db, user, new_password, actor="self-service")
+    return user
+
+
+def request_email_link(email: str, purpose: str, locale: str) -> None:
+    """Background-task entry: issue + mail a one-time link. Opens its own session.
+
+    Silent on every ineligible input (unknown address, already-verified user
+    requesting ``verify``, unverified/rejected/pending user requesting
+    ``reset``) — the route layer always returns 202 so this never becomes an
+    email-enumeration oracle. A mailer failure invalidates the just-issued
+    token (so a retry mints a fresh one) and logs a sanitized warning — never
+    the recipient, token, or URL.
+    """
+    from app.db.session import SessionLocal
+
+    with SessionLocal() as db:
+        user = get_by_email(db, email)
+        if user is None:
+            return
+        if purpose == account_token_service.PURPOSE_VERIFY:
+            eligible = user.email_verified_at is None
+        else:
+            eligible = user.status in ("active", "locked") and user.email_verified_at is not None
+        if not eligible:
+            return
+        raw = account_token_service.issue(db, user, purpose)
+        try:
+            if purpose == account_token_service.PURPOSE_VERIFY:
+                account_mailer.send_verification_email(
+                    recipient=user.email, raw_token=raw, locale=locale
+                )
+            else:
+                account_mailer.send_password_reset_email(
+                    recipient=user.email, raw_token=raw, locale=locale
+                )
+        except Exception as exc:  # mailer failure must not raise into the background-task queue
+            account_token_service.invalidate_open(db, user.id, purpose, now=_utcnow())
+            db.commit()
+            log.warning(
+                "account mail: %s link not delivered (user_id=%s): %s",
+                purpose,
+                user.id,
+                exc.__class__.__name__,
+            )
 
 
 # ─── Projection ─────────────────────────────────────────────────────────────────
@@ -562,6 +688,7 @@ def admin_read(db: Session, user: User) -> AdminUserRead:
         last_login_at=user.last_login_at,
         created_at=user.created_at,
         is_default_manager=user.is_default_manager,
+        email_verified_at=user.email_verified_at,
     )
 
 
@@ -679,14 +806,17 @@ __all__ = [
     "approve_user",
     "audit_permission_change",
     "authenticate",
+    "complete_password_reset",
     "count_active_admins",
     "count_users",
     "get_by_email",
     "link_self",
     "list_audit",
     "list_users",
+    "normalize_email",
     "register",
     "reject_user",
+    "request_email_link",
     "require_user",
     "reset_password",
     "resolve_session",
@@ -696,5 +826,6 @@ __all__ = [
     "set_status",
     "start_session",
     "to_session_user",
+    "verify_email",
     "verify_password_for",
 ]

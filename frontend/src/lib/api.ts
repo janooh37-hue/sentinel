@@ -373,7 +373,7 @@ export interface SessionUser {
 }
 
 export interface RegisterResult {
-  status: 'active' | 'pending'
+  status: 'active' | 'pending' | 'verify_email'
   is_first: boolean
   user: SessionUser | null
 }
@@ -392,6 +392,9 @@ export interface AdminUserRead {
   /** Single-holder flag — this user receives auto-submitted `in_app` forms
    * (forms signing paths, 2026-06-11). Set via `api.setDefaultManager`. */
   is_default_manager: boolean
+  /** Set once the account's email is confirmed; `null` while unconfirmed.
+   * Only enforced while the `account_mail` feature flag is on. */
+  email_verified_at: string | null
 }
 
 export interface AuditEntryRead {
@@ -411,6 +414,17 @@ export interface RegisterRequest {
   password: string
   g_number?: string | null
   display_name?: string | null
+  locale: 'en' | 'ar'
+}
+
+// Email verification + self-service password reset (account-mail feature).
+// Hand-mirrored from backend/app/schemas/auth.py.
+export interface AuthFeatures {
+  account_mail: boolean
+}
+
+export interface AcceptedResult {
+  status: 'accepted'
 }
 
 // Granular permission system (2026-05-26). Hand-mirrored from
@@ -2154,6 +2168,19 @@ export const api = {
   logout: () => request<void>('POST', '/auth/logout'),
   register: (payload: RegisterRequest) =>
     request<RegisterResult>('POST', '/auth/register', payload),
+  authFeatures: () => request<AuthFeatures>('GET', '/auth/features'),
+  requestEmailVerification: (email: string, locale: 'en' | 'ar') =>
+    request<AcceptedResult>('POST', '/auth/verify-email/request', { email, locale }),
+  verifyEmail: (token: string) =>
+    request<{ status: 'verified' }>('POST', '/auth/verify-email', { token }),
+  requestPasswordReset: (email: string, locale: 'en' | 'ar') =>
+    request<AcceptedResult>('POST', '/auth/password-reset/request', { email, locale }),
+  completePasswordReset: (token: string, password: string, password_confirmation: string) =>
+    request<{ status: 'reset' }>('POST', '/auth/password-reset/complete', {
+      token,
+      password,
+      password_confirmation,
+    }),
   verifyAuthPassword: (password: string) =>
     request<void>('POST', '/auth/verify-password', { password }),
   updateLockTimer: (idleLockSeconds: number) =>

@@ -17,6 +17,7 @@ import { ErrorBoundary } from '@/components/ui/error-boundary'
 import { ShortcutsHelpDialog } from '@/components/ui/shortcuts-help'
 import { EmployeeLookupPage } from '@/pages/employees/EmployeeLookupPage'
 import { LoginPage } from '@/pages/auth/LoginPage'
+import { PublicAuthRoute } from '@/pages/auth/PublicAuthRoute'
 import { MigrationGate } from '@/pages/system/MigrationWizard'
 import { KeyboardShortcutsProvider } from '@/lib/keyboardShortcuts'
 import { AuthProvider } from '@/lib/AuthProvider'
@@ -86,6 +87,14 @@ const ScanInboxPage = lazy(loadScanInboxPage)
 const SendToGroupPage = lazy(loadSendToGroupPage)
 const ScanBackPage = lazy(loadScanBackPage)
 const APPROVALS_ROUTE_CAPS = ['books.view', 'books.approve'] as const
+
+// Public, unauthenticated routes for account-mail links (verify / reset).
+// Checked before the session gate so they work even mid-load or while a
+// (possibly stale) session is already held.
+const PUBLIC_AUTH_PATHS: Record<string, 'verify' | 'reset'> = {
+  '/verify-email': 'verify',
+  '/reset-password': 'reset',
+}
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -161,6 +170,18 @@ function Shell(): React.JSX.Element {
     navigator.serviceWorker.addEventListener('message', onMessage)
     return () => navigator.serviceWorker.removeEventListener('message', onMessage)
   }, [navigate])
+
+  // Verify-email / reset-password links: public, checked before the session
+  // gate so they work even while a session is loading or already held.
+  const publicAuth = PUBLIC_AUTH_PATHS[location.pathname]
+  if (publicAuth) {
+    return (
+      <>
+        <PublicAuthRoute kind={publicAuth} />
+        <Toaster position="bottom-right" richColors closeButton />
+      </>
+    )
+  }
 
   // Auth gate: resolve the session before showing the app chrome.
   if (status === 'loading') {

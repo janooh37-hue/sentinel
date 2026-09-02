@@ -27,6 +27,10 @@ EMAIL_VERIFY_MAX_HITS = 5
 EMAIL_VERIFY_WINDOW_SECONDS = 60
 REGISTER_MAX_HITS = 5
 REGISTER_WINDOW_SECONDS = 60
+PASSWORD_RESET_MAX_HITS = 20
+PASSWORD_RESET_WINDOW_SECONDS = 900
+EMAIL_ADDRESS_MAX_HITS = 3
+EMAIL_ADDRESS_WINDOW_SECONDS = 900
 
 
 class RateLimiter:
@@ -78,18 +82,32 @@ email_verify_limiter = RateLimiter(
     max_hits=EMAIL_VERIFY_MAX_HITS, window_seconds=EMAIL_VERIFY_WINDOW_SECONDS
 )
 register_limiter = RateLimiter(max_hits=REGISTER_MAX_HITS, window_seconds=REGISTER_WINDOW_SECONDS)
+password_reset_limiter = RateLimiter(
+    max_hits=PASSWORD_RESET_MAX_HITS, window_seconds=PASSWORD_RESET_WINDOW_SECONDS
+)
+# Keyed by normalised email (not IP) — shared by verify-email/request and
+# password-reset/request so one address can't be spammed via either route.
+email_address_limiter = RateLimiter(
+    max_hits=EMAIL_ADDRESS_MAX_HITS, window_seconds=EMAIL_ADDRESS_WINDOW_SECONDS
+)
 
 
 __all__ = [
+    "EMAIL_ADDRESS_MAX_HITS",
+    "EMAIL_ADDRESS_WINDOW_SECONDS",
     "EMAIL_VERIFY_MAX_HITS",
     "EMAIL_VERIFY_WINDOW_SECONDS",
     "LOGIN_MAX_HITS",
     "LOGIN_WINDOW_SECONDS",
+    "PASSWORD_RESET_MAX_HITS",
+    "PASSWORD_RESET_WINDOW_SECONDS",
     "REGISTER_MAX_HITS",
     "REGISTER_WINDOW_SECONDS",
     "RateLimiter",
+    "email_address_limiter",
     "email_verify_limiter",
     "enforce",
     "login_limiter",
+    "password_reset_limiter",
     "register_limiter",
 ]

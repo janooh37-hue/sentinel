@@ -25,6 +25,7 @@ function user(over: Partial<AdminUserRead> = {}): AdminUserRead {
     last_login_at: null,
     created_at: null,
     is_default_manager: false,
+    email_verified_at: null,
     ...over,
   }
 }
@@ -76,6 +77,7 @@ describe('AccessRequestsPage permission cache coherence', () => {
   it('invalidates the changed user permission query after a role change', async () => {
     const target = user()
     vi.spyOn(api, 'listAuthUsers').mockResolvedValue([target])
+    vi.spyOn(api, 'authFeatures').mockResolvedValue({ account_mail: false })
     vi.spyOn(api, 'setAuthUserRole').mockResolvedValue({ ...target, role: 'manager' })
     const client = new QueryClient({
       defaultOptions: { queries: { retry: false }, mutations: { retry: false } },

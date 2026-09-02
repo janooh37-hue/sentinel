@@ -7,7 +7,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
-from pydantic import Field
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -91,6 +91,16 @@ class Settings(BaseSettings):
     openwa_session: str = "default"  # OpenWA sessionId holding the logged-in number
     openwa_country_code: str = "971"  # default CC for normalizing contact
 
+    # --- Account mail (verification + password-reset links via Microsoft Graph) ---
+    # All GSSG_ACCOUNT_MAIL_* / GSSG_MICROSOFT_* env vars. Off by default: while
+    # off, no verification is required and no mail is sent (today's behaviour).
+    account_mail_enabled: bool = False
+    microsoft_tenant_id: str = ""
+    microsoft_client_id: str = ""
+    microsoft_client_secret: str = ""  # secret; env-only, never DB/API/logs
+    account_mail_sender: str = "security@gssg.app"
+    account_mail_link_base_url: str = ""  # e.g. https://gssg.app — links in mail use this, NOT public_base_url (that one is the LAN WebDAV host)
+
     # --- Attendance provider: installed ZKTeco BioTime -----------------------
     # All GSSG_BIOTIME_* env vars. Disabled by default: the scheduler resolves
     # no provider until a base URL and credentials are present, so an unset
@@ -146,6 +156,22 @@ class Settings(BaseSettings):
     def ensure_dirs(self) -> None:
         for d in (self.data_dir, self.vault_dir, self.logs_dir):
             d.mkdir(parents=True, exist_ok=True)
+
+    @model_validator(mode="after")
+    def _validate_account_mail(self) -> Settings:
+        if self.account_mail_enabled and (
+            not self.microsoft_tenant_id
+            or not self.microsoft_client_id
+            or not self.microsoft_client_secret
+            or not self.account_mail_sender
+            or not self.account_mail_link_base_url.startswith("https://")
+        ):
+            raise ValueError(
+                "GSSG_ACCOUNT_MAIL_ENABLED=1 requires GSSG_MICROSOFT_TENANT_ID, "
+                "GSSG_MICROSOFT_CLIENT_ID, GSSG_MICROSOFT_CLIENT_SECRET, "
+                "GSSG_ACCOUNT_MAIL_SENDER and an https GSSG_ACCOUNT_MAIL_LINK_BASE_URL"
+            )
+        return self
 
 
 @lru_cache(maxsize=1)

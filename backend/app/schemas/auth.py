@@ -10,7 +10,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from app.schemas._base import ORMBase
 
@@ -22,6 +22,7 @@ class RegisterRequest(BaseModel):
     g_number: str | None = Field(default=None, max_length=16)
     password: str = Field(min_length=8, max_length=128)
     display_name: str | None = Field(default=None, max_length=256)
+    locale: Literal["en", "ar"] = "en"
 
 
 class LoginRequest(BaseModel):
@@ -70,7 +71,9 @@ class RegisterResult(BaseModel):
 
     ``status='active'`` means the account was the first one and was
     auto-promoted to admin (``user`` is populated + a session is set);
-    ``status='pending'`` means it awaits admin approval.
+    ``status='pending'`` means it awaits admin approval;
+    ``status='verify_email'`` means the account was created and a
+    confirmation link was sent — no session, no admin queue entry yet.
     """
 
     status: str
@@ -90,6 +93,7 @@ class AdminUserRead(ORMBase):
     last_login_at: datetime | None = None
     created_at: datetime | None = None
     is_default_manager: bool = False
+    email_verified_at: datetime | None = None
 
 
 class ApproveRequest(BaseModel):
@@ -118,6 +122,50 @@ class DefaultManagerRequest(BaseModel):
 
 class ResetPasswordRequest(BaseModel):
     password: str = Field(min_length=8, max_length=128)
+
+
+# ─── Email verification / password reset (self-service, public routes) ─────
+
+
+class AuthFeatures(BaseModel):
+    """Feature flags the login page needs before a session exists."""
+
+    account_mail: bool
+
+
+class EmailLinkRequest(BaseModel):
+    """Request a verify or password-reset link be emailed to ``email``."""
+
+    email: str = Field(min_length=3, max_length=256)
+    locale: Literal["en", "ar"] = "en"
+
+
+class AcceptedResult(BaseModel):
+    status: Literal["accepted"] = "accepted"
+
+
+class TokenRequest(BaseModel):
+    token: str = Field(min_length=32, max_length=256)
+
+
+class VerifyEmailResult(BaseModel):
+    status: Literal["verified"] = "verified"
+
+
+class PasswordResetCompleteRequest(BaseModel):
+    token: str = Field(min_length=32, max_length=256)
+    password: str = Field(min_length=8, max_length=128)
+    password_confirmation: str = Field(min_length=8, max_length=128)
+
+    @model_validator(mode="after")
+    def _passwords_match(self) -> PasswordResetCompleteRequest:
+        if self.password != self.password_confirmation:
+            raise ValueError("Passwords don't match.")
+        return self
+
+
+class PasswordResetCompleteResult(BaseModel):
+    status: Literal["reset"] = "reset"
 
 
 class RejectRequest(BaseModel):
@@ -192,12 +240,17 @@ class SetPermissionBulkRequest(BaseModel):
 
 
 __all__ = [
+    "AcceptedResult",
     "AdminUserRead",
     "ApproveRequest",
     "AuditEntryRead",
+    "AuthFeatures",
     "CapabilityRead",
+    "EmailLinkRequest",
     "LinkSelfRequest",
     "LoginRequest",
+    "PasswordResetCompleteRequest",
+    "PasswordResetCompleteResult",
     "RegisterRequest",
     "RegisterResult",
     "RejectRequest",
@@ -206,6 +259,8 @@ __all__ = [
     "SetPermissionBulkRequest",
     "SetPermissionRequest",
     "SetRoleRequest",
+    "TokenRequest",
     "UserPermissionRead",
+    "VerifyEmailResult",
     "VerifyPasswordRequest",
 ]
