@@ -175,6 +175,50 @@ def add_range(
     return AddRangeResult(created, skipped_off_roster, skipped_on_leave)
 
 
+def replace_episode(
+    db: Session,
+    employee_id: str,
+    *,
+    old_start: date,
+    old_end: date,
+    start: date,
+    end: date,
+    note: str | None,
+    user_id: int | None,
+) -> AddRangeResult:
+    """Drop the days a register row spans, then record its new span — one commit.
+
+    The note is written to every day of the new span (a row shows one note);
+    days that already exist outside the old span keep theirs.
+    """
+
+    if old_end < old_start or end < start:
+        invalid_start, invalid_end = (
+            (old_start, old_end) if old_end < old_start else (start, end)
+        )
+        raise ValidationFailedError(
+            "ABSENCE_RANGE_INVERTED",
+            f"End date {invalid_end:%Y-%m-%d} is before start date {invalid_start:%Y-%m-%d}.",
+            start=invalid_start.isoformat(),
+            end=invalid_end.isoformat(),
+        )
+    _get_employee_or_404(db, employee_id)
+    delete_absences_covered_by(db, employee_id, old_start, old_end, commit=False)
+    result = add_range(
+        db,
+        employee_id,
+        start=start,
+        end=end,
+        note=note,
+        user_id=user_id,
+        commit=False,
+    )
+    db.commit()
+    return result
+
+
+
+
 @dataclass
 class Episode:
     """A contiguous run of absence days — one row in the register table."""
@@ -289,5 +333,6 @@ __all__ = [
     "delete_range",
     "list_episodes",
     "list_for_employee",
+    "replace_episode",
     "supersedes_absence",
 ]

@@ -178,6 +178,61 @@ def test_add_range_unknown_employee(db_session):
         absence_service.add_range(db_session, "G9999", start=date(2026, 7, 9), end=date(2026, 7, 9))
 
 
+def test_replace_episode_redraws_the_row_in_one_unit(db_session):
+    _emp(db_session)
+    absence_service.add_range(
+        db_session,
+        "G1001",
+        start=date(2026, 7, 9),
+        end=date(2026, 7, 11),
+        note="a",
+    )
+
+    absence_service.replace_episode(
+        db_session,
+        "G1001",
+        old_start=date(2026, 7, 9),
+        old_end=date(2026, 7, 11),
+        start=date(2026, 7, 10),
+        end=date(2026, 7, 12),
+        note="b",
+        user_id=17,
+    )
+
+    rows = db_session.query(Absence).order_by(Absence.date).all()
+    assert _dates(rows) == [date(2026, 7, 10), date(2026, 7, 11), date(2026, 7, 12)]
+    assert [row.note for row in rows] == ["b", "b", "b"]
+    assert [row.created_by for row in rows] == [17, 17, 17]
+
+
+def test_replace_episode_rejects_an_inverted_new_range(db_session):
+    _emp(db_session)
+    absence_service.add_range(
+        db_session,
+        "G1001",
+        start=date(2026, 7, 9),
+        end=date(2026, 7, 11),
+        note="a",
+    )
+
+    with pytest.raises(ValidationFailedError) as error:
+        absence_service.replace_episode(
+            db_session,
+            "G1001",
+            old_start=date(2026, 7, 9),
+            old_end=date(2026, 7, 11),
+            start=date(2026, 7, 12),
+            end=date(2026, 7, 10),
+            note="b",
+            user_id=17,
+        )
+
+    assert error.value.code == "ABSENCE_RANGE_INVERTED"
+    rows = db_session.query(Absence).order_by(Absence.date).all()
+    assert _dates(rows) == [date(2026, 7, 9), date(2026, 7, 10), date(2026, 7, 11)]
+    assert [row.note for row in rows] == ["a", "a", "a"]
+
+
 def test_list_for_employee_is_newest_first(db_session):
     _emp(db_session)
     absence_service.add_range(db_session, "G1001", start=date(2026, 7, 9), end=date(2026, 7, 11))
