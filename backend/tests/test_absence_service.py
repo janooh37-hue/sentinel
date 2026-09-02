@@ -12,7 +12,7 @@ from datetime import date
 import pytest
 
 from app.api.errors import NotFoundError, ValidationFailedError
-from app.db.models import Absence, Employee
+from app.db.models import Absence, Employee, Leave
 from app.services import absence_service
 
 
@@ -90,6 +90,61 @@ def test_add_range_skips_days_already_marked(db_session):
     assert db_session.query(Absence).count() == 3
     kept = db_session.query(Absence).filter(Absence.date == date(2026, 7, 10)).one()
     assert kept.note == "earlier"
+
+
+def test_add_range_skips_and_reports_days_inside_a_superseding_leave(db_session):
+    _emp(db_session)
+    db_session.add(
+        Leave(
+            employee_id="G1001",
+            leave_type="Sick Leave",
+            start_date=date(2026, 7, 10),
+            end_date=date(2026, 7, 10),
+            days=1,
+            status="Approved",
+        )
+    )
+    db_session.commit()
+
+    result = absence_service.add_range(
+        db_session, "G1001", start=date(2026, 7, 9), end=date(2026, 7, 11)
+    )
+
+    assert _dates(result.created) == [date(2026, 7, 9), date(2026, 7, 11)]
+    assert result.skipped_on_leave == [date(2026, 7, 10)]
+    assert result.skipped_off_roster == []
+
+
+def test_add_range_ignores_non_superseding_and_void_leaves(db_session):
+    _emp(db_session)
+    db_session.add_all(
+        [
+            Leave(
+                employee_id="G1001",
+                leave_type="Passport Release",
+                start_date=date(2026, 7, 10),
+                end_date=date(2026, 7, 10),
+                days=1,
+                status="Approved",
+            ),
+            Leave(
+                employee_id="G1001",
+                leave_type="Sick Leave",
+                start_date=date(2026, 7, 11),
+                end_date=date(2026, 7, 11),
+                days=1,
+                status="Cancelled",
+            ),
+        ]
+    )
+    db_session.commit()
+
+    result = absence_service.add_range(
+        db_session, "G1001", start=date(2026, 7, 9), end=date(2026, 7, 11)
+    )
+
+    assert _dates(result.created) == [date(2026, 7, 9), date(2026, 7, 10), date(2026, 7, 11)]
+    assert result.skipped_on_leave == []
 
 
 def test_add_range_skips_and_reports_days_before_joining(db_session):

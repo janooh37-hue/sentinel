@@ -26,7 +26,7 @@ from sqlalchemy.orm import Session
 
 from app.api.errors import NotFoundError, ValidationFailedError
 from app.core.leave_lifecycle import english_part
-from app.core.timesheet_codes import UNKNOWN_LEAVE, in_roster
+from app.core.timesheet_codes import UNKNOWN_LEAVE, in_roster, is_void
 from app.db.models import Absence, Employee, Leave
 
 
@@ -53,10 +53,14 @@ class AddRangeResult:
     ``skipped_off_roster`` holds the requested days outside the employee's
     roster window (before joining / after departure) — an absence there could
     never render on a sheet, so it is reported rather than recorded.
+    ``skipped_on_leave`` holds days inside a non-void leave for which
+    ``supersedes_absence`` is true; the leave already explains the day, so
+    absence creation is refused and reported.
     """
 
     created: list[Absence]
     skipped_off_roster: list[date]
+    skipped_on_leave: list[date]
 
 
 def _get_employee_or_404(db: Session, employee_id: str) -> Employee:
@@ -74,6 +78,27 @@ def _covers_day(employee: Employee, day: date) -> bool:
     """Same roster window the time sheet computes, narrowed to one day."""
 
     return in_roster(doj=employee.doj, end_date=employee.end_date, month_start=day, month_end=day)
+
+
+def _days_on_leave(db: Session, employee_id: str, start: date, end: date) -> set[date]:
+    """Days in ``[start, end]`` inside a live leave that supersedes absence."""
+    rows = db.execute(
+        select(Leave.leave_type, Leave.status, Leave.start_date, Leave.end_date).where(
+            Leave.employee_id == employee_id,
+            Leave.deleted_at.is_(None),
+            Leave.start_date <= end,
+            Leave.end_date >= start,
+        )
+    ).all()
+    covered: set[date] = set()
+    for leave_type, status, leave_start, leave_end in rows:
+        if is_void(status) or not supersedes_absence(leave_type):
+            continue
+        day = max(leave_start, start)
+        while day <= min(leave_end, end):
+            covered.add(day)
+            day += timedelta(days=1)
+    return covered
 
 
 def list_for_employee(db: Session, employee_id: str) -> list[Absence]:
@@ -97,6 +122,7 @@ def add_range(
     end: date,
     note: str | None = None,
     user_id: int | None = None,
+    commit: bool = True,
 ) -> AddRangeResult:
     """Record an absence for every day in ``[start, end]`` (inclusive).
 
@@ -127,22 +153,26 @@ def add_range(
         .scalars()
         .all()
     )
+    on_leave = _days_on_leave(db, employee_id, start, end)
 
     created: list[Absence] = []
-    skipped: list[date] = []
+    skipped_off_roster: list[date] = []
+    skipped_on_leave: list[date] = []
     day = start
     while day <= end:
         if day in existing:
             pass
         elif not _covers_day(employee, day):
-            skipped.append(day)
+            skipped_off_roster.append(day)
+        elif day in on_leave:
+            skipped_on_leave.append(day)
         else:
             row = Absence(employee_id=employee_id, date=day, note=note, created_by=user_id)
             db.add(row)
             created.append(row)
         day += timedelta(days=1)
-    db.commit()
-    return AddRangeResult(created=created, skipped_off_roster=skipped)
+    db.commit() if commit else db.flush()
+    return AddRangeResult(created, skipped_off_roster, skipped_on_leave)
 
 
 @dataclass
