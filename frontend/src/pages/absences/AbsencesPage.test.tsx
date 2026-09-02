@@ -205,6 +205,10 @@ describe('AbsencesPage', () => {
     expect(screen.getAllByText('G1001')).toHaveLength(2)
 
     await user.clear(search)
+    await user.type(search, 'John Doe')
+    expect(screen.getAllByText('John Doe')).toHaveLength(2)
+
+    await user.clear(search)
     await user.type(search, 'zzz')
     expect(screen.getByText('No absences match the search.')).toBeInTheDocument()
   })
@@ -363,6 +367,9 @@ describe('AbsencesPage', () => {
     const probe = await screen.findByTestId('ledger-probe')
     expect(probe).toHaveTextContent('"subject":"التغيب عن العمل"')
     expect(probe).toHaveTextContent('"basketKey":"absence"')
+    expect(probe.textContent).toMatch(/"bodyHtml":"[^"]+/)
+    expect(probe).toHaveTextContent('جون دو')
+    expect(probe).toHaveTextContent('09/07/2026')
   })
 
   it('asks before removing an episode, then deletes its day range', async () => {
@@ -381,6 +388,27 @@ describe('AbsencesPage', () => {
 
     await waitFor(() =>
       expect(deleteEmployeeAbsenceRange).toHaveBeenCalledWith('G1001', '2026-07-09', '2026-07-10'),
+    )
+  })
+
+  it('keeps selection and copy available without ledger.send', async () => {
+    hasCapability.mockImplementation((cap) => cap !== 'ledger.send')
+    listAbsenceRegister.mockResolvedValue(REGISTER)
+    renderPage()
+    const user = userEvent.setup()
+
+    const rowCheckboxes = await screen.findAllByRole('checkbox', { name: 'Select John Doe' })
+    await user.click(rowCheckboxes[0])
+
+    expect(rowCheckboxes[0]).toBeChecked()
+    expect(screen.queryByRole('button', { name: 'Send by email (1)' })).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Copy table' }))
+    await waitFor(() => expect(copyTable).toHaveBeenCalledTimes(1))
+    const copyPayload = copyTable.mock.calls[0][0] as { text: string }
+    const copiedText = copyPayload.text
+    expect(copiedText.split('\n')).toHaveLength(2)
+    expect(copiedText).toContain(
+      '1\tG1001\tجون دو\tالثالثة\t09/07/2026\t10/07/2026\t2\tno call',
     )
   })
 
