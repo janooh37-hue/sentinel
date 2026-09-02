@@ -33,6 +33,23 @@ def _dates(rows) -> list[date]:
     return [row.date for row in rows]
 
 
+@pytest.mark.parametrize(
+    ("leave_type", "expected"),
+    [
+        ("Sick Leave - الإجازة المرضية", True),
+        ("Annual Leave", True),
+        ("Leave Permit", True),
+        ("Administrative Leave", True),
+        ("Unknown", True),
+        ("Passport Release", False),
+        ("Duty Resumption", False),
+        ("Duty Leave", False),
+    ],
+)
+def test_supersedes_absence_matrix(leave_type, expected):
+    assert absence_service.supersedes_absence(leave_type) is expected
+
+
 def test_add_range_creates_one_row_per_day_inclusive(db_session):
     _emp(db_session)
     result = absence_service.add_range(

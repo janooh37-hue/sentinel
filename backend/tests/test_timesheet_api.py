@@ -995,8 +995,46 @@ def test_regenerating_the_same_certificate_supersedes_it_again(client, db_sessio
     assert db_session.query(Absence).count() == 0
 
 
+def test_generating_a_leave_permit_clears_the_absence(client, db_session, generation_env):
+    _guard(db_session)
+    client.put(
+        "/api/v1/timesheet/2026/7/cell", json={"employee_id": "G1001", "day": 9, "code": "AB"}
+    )
+    generation_env.generate_document(
+        db_session,
+        employee_id="G1001",
+        template_id="Leave Permit Form",
+        fields={"date": "2026-07-09"},
+        commit=True,
+    )
+    assert db_session.query(Absence).count() == 0
+
+
+def test_generating_an_administrative_leave_clears_the_absence(
+    client, db_session, generation_env
+):
+    _guard(db_session)
+    for day in (9, 10):
+        client.put(
+            "/api/v1/timesheet/2026/7/cell",
+            json={"employee_id": "G1001", "day": day, "code": "AB"},
+        )
+    generation_env.generate_document(
+        db_session,
+        employee_id="G1001",
+        template_id="Administrative Leave Form",
+        fields={
+            "start_date": "2026-07-09",
+            "end_date": "2026-07-10",
+            "duration": 2,
+        },
+        commit=True,
+    )
+    assert db_session.query(Absence).count() == 0
+
+
 def test_a_leave_that_is_no_day_code_leaves_the_absence_alone(client, db_session, generation_env):
-    """The gate is ``leave_code``, so a Passport Release supersedes nothing."""
+    """The gate is supersedes_absence, so a Passport Release supersedes nothing."""
 
     _guard(db_session)
     client.put(

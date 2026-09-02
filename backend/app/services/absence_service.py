@@ -19,13 +19,31 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import date, timedelta
+from typing import Final
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.errors import NotFoundError, ValidationFailedError
-from app.core.timesheet_codes import in_roster
-from app.db.models import Absence, Employee
+from app.core.leave_lifecycle import english_part
+from app.core.timesheet_codes import UNKNOWN_LEAVE, in_roster
+from app.db.models import Absence, Employee, Leave
+
+
+#: English leave types whose record explains an absence and therefore removes it.
+SUPERSEDING_LEAVE_TYPES: Final[frozenset[str]] = frozenset(
+    {"Sick Leave", "Annual Leave", "Leave Permit", "Administrative Leave"}
+)
+
+
+def supersedes_absence(leave_type: str) -> bool:
+    """True for a leave whose paper explains the absence days it covers.
+
+    Bilingual labels collapse via ``english_part``; ``"Unknown"`` keeps today's
+    behaviour (treated as annual leave by ``timesheet_codes.leave_code``).
+    """
+    english = english_part(leave_type)
+    return english == UNKNOWN_LEAVE or english in SUPERSEDING_LEAVE_TYPES
 
 
 @dataclass
@@ -233,6 +251,7 @@ def delete_absences_covered_by(
 
 
 __all__ = [
+    "SUPERSEDING_LEAVE_TYPES",
     "AddRangeResult",
     "Episode",
     "add_range",
@@ -240,4 +259,5 @@ __all__ = [
     "delete_range",
     "list_episodes",
     "list_for_employee",
+    "supersedes_absence",
 ]

@@ -1772,7 +1772,7 @@ def generate_document(
     # 12. Leave forms — insert Leave row (primary only)
     # ------------------------------------------------------------------
     leave_id: int | None = None
-    #: Days whose absence rows a generated sick/annual leave overwrote.
+    #: Days whose absence rows a generated superseding leave overwrote.
     superseded_absences: list[date] = []
     if return_for_leave_id is not None:
         # Return-form filing: attach to the existing leave; no new register row.
@@ -1802,18 +1802,13 @@ def generate_document(
             doc_row.leave_id = leave_row.id
             leave_id = leave_row.id
 
-        # A generated sick or annual leave supersedes the manual absences it now
-        # explains: the employee produced the paper, so the AB rows are removed
-        # rather than left to argue with the leave on the time sheet. Outside the
-        # if/else on purpose — the dedup branch above reuses an existing row and
-        # never calls ``db.add``, and a re-generated certificate is exactly when
-        # an operator expects the correction to land. Gated on ``leave_code``, not
-        # a string compare, because the same column holds ``"Sick Leave"``,
-        # ``"Sick Leave - الإجازة المرضية"`` and ``"Sick"``.
-        if timesheet_codes.leave_code(leave_row.leave_type) in (
-            timesheet_codes.CODE_SICK,
-            timesheet_codes.CODE_ANNUAL,
-        ):
+        # The rule lives in ``absence_service.SUPERSEDING_LEAVE_TYPES``: Sick,
+        # Annual, Leave Permit, and Administrative Leave supersede; Passport
+        # Release and Duty Resumption never supersede. Outside the if/else on
+        # purpose — the dedup branch above reuses an existing row and never calls
+        # ``db.add``, and a re-generated certificate is exactly when an operator
+        # expects the correction to land.
+        if absence_service.supersedes_absence(leave_row.leave_type):
             # ``commit=False``: this is part of the document's unit of work, so a
             # failure in step 13 or later takes the supersede back with the rest.
             superseded_absences = absence_service.delete_absences_covered_by(
