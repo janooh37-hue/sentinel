@@ -194,6 +194,23 @@ describe('AbsencesPage', () => {
     expect(screen.queryByLabelText('First day')).not.toBeInTheDocument()
   })
 
+  it('gives repeated employee episodes distinct checkbox names with ID and dates', async () => {
+    listAbsenceRegister.mockResolvedValue(REGISTER)
+    renderPage()
+
+    const rowCheckboxes = (await screen.findAllByRole('checkbox')).filter((checkbox) =>
+      checkbox.getAttribute('aria-label')?.startsWith('Select John Doe'),
+    )
+    expect(rowCheckboxes).toHaveLength(2)
+    expect(rowCheckboxes[0]).toHaveAccessibleName(
+      /Select John Doe.*G1001.*Jul 9, 2026.*Jul 10, 2026/,
+    )
+    expect(rowCheckboxes[1]).toHaveAccessibleName(
+      /Select John Doe.*G1001.*Jul 12, 2026.*Jul 12, 2026/,
+    )
+    expect(rowCheckboxes[0]).not.toHaveAccessibleName(rowCheckboxes[1].getAttribute('aria-label')!)
+  })
+
   it('filters the register by ID or name', async () => {
     listAbsenceRegister.mockResolvedValue(REGISTER)
     renderPage()
@@ -356,7 +373,7 @@ describe('AbsencesPage', () => {
     renderPageWithLedgerProbe()
     const user = userEvent.setup()
 
-    const rowCheckboxes = await screen.findAllByRole('checkbox', { name: 'Select John Doe' })
+    const rowCheckboxes = await screen.findAllByRole('checkbox', { name: /Select John Doe/ })
     await user.click(rowCheckboxes[0])
     await user.click(screen.getByRole('button', { name: 'Send by email (1)' }))
 
@@ -397,7 +414,7 @@ describe('AbsencesPage', () => {
     renderPage()
     const user = userEvent.setup()
 
-    const rowCheckboxes = await screen.findAllByRole('checkbox', { name: 'Select John Doe' })
+    const rowCheckboxes = await screen.findAllByRole('checkbox', { name: /Select John Doe/ })
     await user.click(rowCheckboxes[0])
 
     expect(rowCheckboxes[0]).toBeChecked()

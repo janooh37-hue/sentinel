@@ -3425,7 +3425,7 @@
       "search": "ابحث بالرقم أو الاسم",
       "noMatch": "لا توجد غيابات مطابقة للبحث.",
       "selectAll": "تحديد كل الصفوف",
-      "selectRow": "تحديد {{name}}",
+      "selectRow": "تحديد {{name}} ({{id}})، من {{start}} إلى {{end}}",
       "confirmDeleteRange": "إزالة غياب من {{start}} إلى {{end}} (عدد الأيام: {{count}})؟"
     },
     "actions": {
@@ -3461,9 +3461,14 @@
       "title": "معاينة البريد",
       "description": "راجع الخطاب ثم افتحه في نافذة الإرسال لاختيار المستلمين والإرسال.",
       "case": "الحالة",
+      "caseRow": "حالة {{name}} ({{id}})، من {{start}} إلى {{end}}",
       "caseAbsent": "ما زال متغيبًا",
       "caseReturned": "عاد وباشر عمله",
-      "violationAttached": "مرفق مخالفة موقّعة من قبله",
+      "violationAttached_one": "مرفق مخالفة موقّعة من قبله",
+      "violationAttached_two": "مرفق مخالفتان موقّعتان من قبلهما",
+      "violationAttached_few": "مرفق {{count}} مخالفات موقّعة من قبلهم",
+      "violationAttached_many": "مرفق {{count}} مخالفة موقّعة من قبلهم",
+      "violationAttached_other": "مرفق {{count}} مخالفة موقّعة من قبلهم",
       "subjectLabel": "الموضوع",
       "open": "فتح في البريد"
     }

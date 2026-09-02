@@ -3171,7 +3171,7 @@
       "search": "Search by ID or name",
       "noMatch": "No absences match the search.",
       "selectAll": "Select all rows",
-      "selectRow": "Select {{name}}",
+      "selectRow": "Select {{name}} ({{id}}), {{start}} to {{end}}",
       "confirmDeleteRange": "Remove the absence from {{start}} to {{end}} ({{count}} day(s))?"
     },
     "actions": {
@@ -3203,9 +3203,11 @@
       "title": "Email preview",
       "description": "Check the letter, then open it in the composer to choose recipients and send.",
       "case": "Case",
+      "caseRow": "Case for {{name}} ({{id}}), {{start}} to {{end}}",
       "caseAbsent": "Still absent",
       "caseReturned": "Returned to work",
-      "violationAttached": "A signed violation form is attached",
+      "violationAttached_one": "A signed violation form is attached",
+      "violationAttached_other": "Signed violation forms are attached",
       "subjectLabel": "Subject",
       "open": "Open in email"
     }

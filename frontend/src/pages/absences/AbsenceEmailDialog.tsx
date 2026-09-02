@@ -33,6 +33,10 @@ function rowKey(row: AbsenceRegisterRowRead): string {
   return `${row.employee_id}|${row.start_date}|${row.end_date}`
 }
 
+function caseSelectId(row: AbsenceRegisterRowRead): string {
+  return `absence-email-case-${encodeURIComponent(rowKey(row))}`
+}
+
 export function AbsenceEmailDialog({ open, rows, onOpenChange }: Props): React.JSX.Element {
   const { t } = useTranslation()
   const navigate = useNavigate()
@@ -93,6 +97,9 @@ export function AbsenceEmailDialog({ open, rows, onOpenChange }: Props): React.J
             {rows.map((row) => {
               const key = rowKey(row)
               const name = letterName(row)
+              const startDate = dmyPad(row.start_date)
+              const endDate = dmyPad(row.end_date)
+              const selectId = caseSelectId(row)
               return (
                 <li
                   key={key}
@@ -106,17 +113,25 @@ export function AbsenceEmailDialog({ open, rows, onOpenChange }: Props): React.J
                       <span className="font-mono">{row.employee_id}</span>
                       <span aria-hidden>·</span>
                       <span className="font-mono" dir="ltr">
-                        {dmyPad(row.start_date)} – {dmyPad(row.end_date)}
+                        {startDate} – {endDate}
                       </span>
                     </p>
                   </div>
+                  <label htmlFor={selectId} className="sr-only">
+                    {t('absences.email.caseRow', {
+                      name,
+                      id: row.employee_id,
+                      start: startDate,
+                      end: endDate,
+                    })}
+                  </label>
                   <select
+                    id={selectId}
                     value={cases[key] ?? defaultCase(row, today)}
                     onChange={(event) => {
                       const nextCase = event.target.value as AbsenceCase
                       setCases((current) => ({ ...current, [key]: nextCase }))
                     }}
-                    aria-label={t('absences.email.case')}
                     className="h-9 shrink-0 rounded-md border border-input bg-surface px-3 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
                     <option value="absent">{t('absences.email.caseAbsent')}</option>
@@ -138,7 +153,7 @@ export function AbsenceEmailDialog({ open, rows, onOpenChange }: Props): React.J
               onChange={(event) => setViolationAttached(event.target.checked)}
               className="h-4 w-4 accent-primary"
             />
-            {t('absences.email.violationAttached')}
+            {t('absences.email.violationAttached', { count: rows.length })}
           </label>
 
           <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1 rounded-lg bg-surface-tinted px-3 py-2">

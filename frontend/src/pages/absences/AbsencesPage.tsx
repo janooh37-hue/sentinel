@@ -407,6 +407,10 @@ export function AbsencesPage(): React.JSX.Element {
                         : (row.employee_name_en ?? '')
                       const isSelected = selected.has(key)
                       const upToDate = row.end_date >= today
+                      const displayStart = dateFmt.format(
+                        new Date(`${row.start_date}T00:00:00`),
+                      )
+                      const displayEnd = dateFmt.format(new Date(`${row.end_date}T00:00:00`))
                       return (
                         <tr
                           key={key}
@@ -429,6 +433,9 @@ export function AbsencesPage(): React.JSX.Element {
                               }}
                               aria-label={t('absences.list.selectRow', {
                                 name: displayName,
+                                id: row.employee_id,
+                                start: displayStart,
+                                end: displayEnd,
                               })}
                               className="h-4 w-4 accent-primary"
                             />
@@ -441,12 +448,8 @@ export function AbsencesPage(): React.JSX.Element {
                           <td className="px-3 py-2" dir="auto">
                             {row.duty_unit ?? ''}
                           </td>
-                          <td className="px-3 py-2 font-mono">
-                            {dateFmt.format(new Date(`${row.start_date}T00:00:00`))}
-                          </td>
-                          <td className="px-3 py-2 font-mono">
-                            {dateFmt.format(new Date(`${row.end_date}T00:00:00`))}
-                          </td>
+                          <td className="px-3 py-2 font-mono">{displayStart}</td>
+                          <td className="px-3 py-2 font-mono">{displayEnd}</td>
                           <td className="px-3 py-2 font-mono">{row.days}</td>
                           <td
                             className="max-w-[240px] truncate px-3 py-2 text-muted-foreground"
