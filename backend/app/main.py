@@ -18,6 +18,7 @@ from app import __version__
 from app.api import dav
 from app.api.deps import get_current_user
 from app.api.errors import install_handlers
+from app.api.v1 import absences as absences_v1
 from app.api.v1 import announcements as announcements_v1
 from app.api.v1 import auth as auth_v1
 from app.api.v1 import books as books_v1
@@ -207,6 +208,7 @@ def create_app() -> FastAPI:
     app.include_router(settings_v1.router, prefix="/api/v1", dependencies=auth_gate)
     app.include_router(employees_v1.router, prefix="/api/v1", dependencies=auth_gate)
     app.include_router(employees_v1.violations_router, prefix="/api/v1", dependencies=auth_gate)
+    app.include_router(absences_v1.router, prefix="/api/v1", dependencies=auth_gate)
     app.include_router(leaves_v1.router, prefix="/api/v1", dependencies=auth_gate)
     app.include_router(timesheet_v1.router, prefix="/api/v1", dependencies=auth_gate)
     app.include_router(templates_v1.router, prefix="/api/v1", dependencies=auth_gate)

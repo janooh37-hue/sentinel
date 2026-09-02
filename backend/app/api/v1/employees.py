@@ -38,6 +38,7 @@ from app.schemas.absence import (
     AbsenceCreate,
     AbsenceCreateResult,
     AbsenceEpisodeRead,
+    AbsenceEpisodeUpdate,
     AbsenceRead,
     AbsenceRecordRead,
 )
@@ -362,6 +363,7 @@ def create_employee_absences(
     return AbsenceCreateResult(
         created=[AbsenceRead.model_validate(r) for r in result.created],
         skipped_off_roster=result.skipped_off_roster,
+        skipped_on_leave=result.skipped_on_leave,
     )
 
 
@@ -376,6 +378,31 @@ def delete_employee_absences(
     """Un-mark a whole episode (any day range) from the register."""
     absence_service.delete_range(db, employee_id, start_date, end_date)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.put("/{employee_id}/absences/episodes", response_model=AbsenceCreateResult)
+def update_employee_absence_episode(
+    employee_id: str,
+    payload: AbsenceEpisodeUpdate,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(require_capability("leaves.edit"))],
+) -> AbsenceCreateResult:
+    """Redraw one register row (dates and note) in a single unit of work."""
+    result = absence_service.replace_episode(
+        db,
+        employee_id,
+        old_start=payload.start_date,
+        old_end=payload.end_date,
+        start=payload.new_start_date,
+        end=payload.new_end_date,
+        note=payload.note,
+        user_id=user.id,
+    )
+    return AbsenceCreateResult(
+        created=[AbsenceRead.model_validate(row) for row in result.created],
+        skipped_off_roster=result.skipped_off_roster,
+        skipped_on_leave=result.skipped_on_leave,
+    )
 
 
 # --- Vault -------------------------------------------------------------------

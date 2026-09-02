@@ -36,6 +36,17 @@ class AbsenceCreateResult(BaseModel):
 
     created: list[AbsenceRead]
     skipped_off_roster: list[date_t]
+    skipped_on_leave: list[date_t] = Field(default_factory=list)
+
+
+class AbsenceEpisodeUpdate(BaseModel):
+    """Redraw one register row: the span it has, then the span it should have."""
+
+    start_date: date_t
+    end_date: date_t
+    new_start_date: date_t
+    new_end_date: date_t
+    note: str | None = Field(default=None, max_length=2000)
 
 
 class AbsenceEpisodeRead(BaseModel):
@@ -58,10 +69,31 @@ class AbsenceRecordRead(BaseModel):
     episodes: list[AbsenceEpisodeRead]
 
 
+class AbsenceRegisterRowRead(BaseModel):
+    """One register row across all employees: who, plus the episode."""
+
+    employee_id: str
+    employee_name_en: str | None = None
+    employee_name_ar: str | None = None
+    duty_post: str | None = None
+    duty_unit: str | None = None
+    start_date: date_t
+    end_date: date_t
+    days: int
+    notes: str | None = None
+
+
+class AbsenceRegisterRead(BaseModel):
+    rows: list[AbsenceRegisterRowRead]
+
+
 __all__ = [
     "AbsenceCreate",
     "AbsenceCreateResult",
     "AbsenceEpisodeRead",
+    "AbsenceEpisodeUpdate",
     "AbsenceRead",
     "AbsenceRecordRead",
+    "AbsenceRegisterRead",
+    "AbsenceRegisterRowRead",
 ]
