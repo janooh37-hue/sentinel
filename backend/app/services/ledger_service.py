@@ -30,7 +30,7 @@ from app.api.errors import AppError, NotFoundError, ValidationFailedError
 from app.config import get_settings
 from app.core.constants import ALLOWED_DOC_EXTS
 from app.db.models import Book, Employee, LedgerEntry, LedgerFlag
-from app.schemas.ledger import DraftWrite, LedgerEntryCreate, LedgerEntryUpdate
+from app.schemas.ledger import LedgerEntryCreate, LedgerEntryUpdate
 
 log = logging.getLogger(__name__)
 
@@ -766,29 +766,33 @@ def _get_flag(db: Session, *, entry_id: int, user_id: int) -> LedgerFlag | None:
     ).scalar_one_or_none()
 
 
-def set_flag(
+def _upsert_flag(
     db: Session, *, entry_id: int, user_id: int, due: date | None
 ) -> LedgerEntry:
-    """Upsert the caller's flag for ``entry_id``: set ``flagged_at=now`` and
-    ``followup_due=due`` (None clears the date but keeps the flag).
-
-    Returns the (unchanged) ledger entry so the caller can re-project the
-    per-user flag fields onto a ``LedgerEntryRead``.
-    """
+    """Apply the flag upsert without choosing the caller's transaction boundary."""
     row = get_entry(db, entry_id)
     flag = _get_flag(db, entry_id=entry_id, user_id=user_id)
+    now = _utcnow()
     if flag is None:
         flag = LedgerFlag(
             user_id=user_id,
             entry_id=entry_id,
-            flagged_at=_utcnow(),
+            flagged_at=now,
             followup_due=due,
-            created_at=_utcnow(),
+            created_at=now,
         )
         db.add(flag)
     else:
-        flag.flagged_at = _utcnow()
+        flag.flagged_at = now
         flag.followup_due = due
+    return row
+
+
+def set_flag(
+    db: Session, *, entry_id: int, user_id: int, due: date | None
+) -> LedgerEntry:
+    """Upsert the caller's flag and commit the standalone API operation."""
+    row = _upsert_flag(db, entry_id=entry_id, user_id=user_id, due=due)
     db.commit()
     return row
 
@@ -923,143 +927,6 @@ def list_counterparties(
     return [r.counterparty for r in rows]
 
 
-# ---------------------------------------------------------------------------
-# Draft helpers — Phase 16
-# ---------------------------------------------------------------------------
-
-
-def _draft_meta_payload(payload: DraftWrite) -> dict[str, Any]:
-    return {
-        "to": list(payload.to),
-        "cc": list(payload.cc),
-        "in_reply_to": payload.in_reply_to,
-        "references": payload.references,
-        "use_signature": payload.use_signature,
-    }
-
-
-def _assert_is_draft(row: LedgerEntry) -> None:
-    if DRAFT_TAG not in (row.tags or []):
-        raise ValidationFailedError(
-            "LEDGER_NOT_A_DRAFT",
-            f"Ledger entry {row.id} is not a draft",
-            id=row.id,
-        )
-
-
-def upsert_draft(
-    db: Session,
-    draft_id: int | None,
-    payload: DraftWrite,
-    author_employee_id: str | None = None,
-    owner_user_id: int | None = None,
-) -> LedgerEntry:
-    """Create a new draft or update an existing one in place."""
-    from datetime import date as _date
-
-    primary_counterparty = (payload.to[0] if payload.to else "").strip()
-    if not primary_counterparty:
-        primary_counterparty = "(draft)"
-
-    if draft_id is None:
-        row = LedgerEntry(
-            entry_date=_date.today(),
-            direction="outgoing",
-            channel="email",
-            counterparty=primary_counterparty[:255],
-            subject=(payload.subject or "(no subject)")[:255],
-            notes_html=payload.html or "",
-            attachment_paths=[],
-            tags=[DRAFT_TAG],
-            draft_meta=_draft_meta_payload(payload),
-            created_at=_utcnow(),
-            created_by=author_employee_id,
-            owner_user_id=owner_user_id,
-        )
-        db.add(row)
-        db.commit()
-        db.refresh(row)
-        return row
-
-    row = get_entry(db, draft_id, owner_user_id=owner_user_id)
-    _assert_is_draft(row)
-    row.counterparty = primary_counterparty[:255]
-    row.subject = (payload.subject or "(no subject)")[:255]
-    row.notes_html = payload.html or ""
-    row.draft_meta = _draft_meta_payload(payload)
-    row.updated_at = _utcnow()
-    db.commit()
-    db.refresh(row)
-    return row
-
-
-def delete_draft(db: Session, draft_id: int) -> None:
-    """Hard-delete a draft row (drafts are never soft-deleted)."""
-    row = get_entry(db, draft_id)
-    _assert_is_draft(row)
-    db.delete(row)
-    db.commit()
-
-
-def promote_draft_to_sent(db: Session, draft_id: int) -> LedgerEntry:
-    """Send the draft via SMTP and remove the draft row.
-
-    ``email_service.send_email`` writes a new outgoing ``LedgerEntry`` itself,
-    so the cleanest contract here is: delete the draft, return the freshly-
-    inserted sent entry. Caller never sees the draft id again.
-    """
-    from app.schemas.email import EmailSendRequest
-    from app.services import email_service
-
-    row = get_entry(db, draft_id)
-    _assert_is_draft(row)
-
-    meta = row.draft_meta or {}
-    raw_to = meta.get("to") or []
-    raw_cc = meta.get("cc") or []
-    to_list = [s for s in (raw_to if isinstance(raw_to, list) else []) if isinstance(s, str) and s.strip()]
-    cc_list = [s for s in (raw_cc if isinstance(raw_cc, list) else []) if isinstance(s, str) and s.strip()]
-    if not to_list:
-        raise ValidationFailedError(
-            "LEDGER_DRAFT_NO_RECIPIENTS",
-            "Draft has no recipients",
-            id=draft_id,
-        )
-
-    in_reply_to = meta.get("in_reply_to")
-    references = meta.get("references")
-    use_signature = meta.get("use_signature")
-
-    send_payload = EmailSendRequest(
-        to=to_list,
-        cc=cc_list,
-        subject=row.subject,
-        html=row.notes_html or "",
-        in_reply_to=in_reply_to if isinstance(in_reply_to, str) else None,
-        references=references if isinstance(references, str) else None,
-        use_signature=bool(use_signature) if use_signature is not None else True,
-    )
-
-    owner_id = row.owner_user_id
-    if owner_id is None:
-        raise AppError(
-            "LEDGER_DRAFT_NO_OWNER",
-            "Draft has no owner; cannot determine which mailbox to send from",
-            http_status=400,
-        )
-    result = email_service.send_email(db, send_payload, owner_user_id=owner_id)
-
-    db.delete(row)
-    db.commit()
-
-    sent = db.get(LedgerEntry, result.ledger_entry_id)
-    if sent is None:
-        raise AppError(
-            "LEDGER_SEND_LOST",
-            "Send succeeded but the resulting ledger entry could not be loaded",
-            http_status=500,
-        )
-    return sent
 
 
 __all__ = [
@@ -1071,7 +938,6 @@ __all__ = [
     "add_attachment",
     "clear_flag",
     "create_entry",
-    "delete_draft",
     "derive_inline_map",
     "flag_count",
     "flags_for",
@@ -1083,7 +949,6 @@ __all__ = [
     "mark_entry_read",
     "mark_entry_unread",
     "non_inline_attachments",
-    "promote_draft_to_sent",
     "resolve_attachment_path",
     "set_flag",
     "soft_delete_entry",
@@ -1092,5 +957,4 @@ __all__ = [
     "unread_email_ids",
     "unread_emails",
     "update_entry",
-    "upsert_draft",
 ]

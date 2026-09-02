@@ -43,6 +43,7 @@ const DEFAULTS: EmailAccountUpsert = {
   smtp_port: 587,
   smtp_use_tls: true,
   sent_folder: 'Sent',
+  drafts_folder: 'Drafts',
   inbox_folder: 'INBOX',
   enabled: true,
   sync_interval_minutes: 5,
@@ -98,6 +99,7 @@ export function EmailSection(): React.JSX.Element {
         smtp_port: accountQuery.data.smtp_port,
         smtp_use_tls: accountQuery.data.smtp_use_tls,
         sent_folder: accountQuery.data.sent_folder,
+        drafts_folder: accountQuery.data.drafts_folder,
         inbox_folder: accountQuery.data.inbox_folder,
         enabled: accountQuery.data.enabled,
         sync_interval_minutes: accountQuery.data.sync_interval_minutes,
@@ -331,6 +333,25 @@ export function EmailSection(): React.JSX.Element {
             onChange={(e) => update('sent_folder', e.target.value)}
             className={INPUT_BASE}
           />
+        </div>
+
+        <div className="flex flex-col gap-1.5">
+          <label
+            htmlFor="email-drafts"
+            className="text-[0.72em] font-semibold uppercase tracking-[0.1em] text-muted-foreground rtl:tracking-normal"
+          >
+            {t('settings.email.draftsFolder', { defaultValue: 'Drafts folder' })}
+          </label>
+          <input
+            id="email-drafts"
+            value={form.drafts_folder}
+            onChange={(e) => update('drafts_folder', e.target.value)}
+            aria-describedby="email-drafts-hint"
+            className={INPUT_BASE}
+          />
+          <p id="email-drafts-hint" className="text-[0.76em] leading-snug text-muted-foreground">
+            {t('settings.email.draftsFolderHint')}
+          </p>
         </div>
       </div>
 

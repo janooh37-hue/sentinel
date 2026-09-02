@@ -2937,59 +2937,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/ledger/drafts": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List Drafts */
-        get: operations["list_drafts_api_v1_ledger_drafts_get"];
-        put?: never;
-        /** Create Draft */
-        post: operations["create_draft_api_v1_ledger_drafts_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/ledger/drafts/{draft_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /** Delete Draft */
-        delete: operations["delete_draft_api_v1_ledger_drafts__draft_id__delete"];
-        options?: never;
-        head?: never;
-        /** Update Draft */
-        patch: operations["update_draft_api_v1_ledger_drafts__draft_id__patch"];
-        trace?: never;
-    };
-    "/api/v1/ledger/drafts/{draft_id}/send": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Send Draft */
-        post: operations["send_draft_api_v1_ledger_drafts__draft_id__send_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/ledger/flag-count": {
         parameters: {
             query?: never;
@@ -3426,7 +3373,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/email/send": {
+    "/api/v1/email/handoff": {
         parameters: {
             query?: never;
             header?: never;
@@ -3436,11 +3383,10 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Send Email
-         * @description Multipart endpoint. ``to`` / ``cc`` are comma-separated lists of
-         *     addresses; ``files`` carries optional attachments.
+         * Create Handoff
+         * @description Create a pending ledger row and optionally push a draft to Outlook.
          */
-        post: operations["send_email_api_v1_email_send_post"];
+        post: operations["create_handoff_api_v1_email_handoff_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -5758,6 +5704,37 @@ export interface components {
              */
             file: string;
         };
+        /** Body_create_handoff_api_v1_email_handoff_post */
+        Body_create_handoff_api_v1_email_handoff_post: {
+            /** To */
+            to: string;
+            /** Subject */
+            subject: string;
+            /** Html */
+            html: string;
+            /** Mode */
+            mode: string;
+            /**
+             * Cc
+             * @default
+             */
+            cc: string;
+            /** Related Book Id */
+            related_book_id?: number | null;
+            /** Related Employee Id */
+            related_employee_id?: string | null;
+            /** In Reply To */
+            in_reply_to?: string | null;
+            /** References */
+            references?: string | null;
+            /**
+             * Use Signature
+             * @default true
+             */
+            use_signature: boolean;
+            /** Files */
+            files?: string[] | null;
+        };
         /** Body_inspect_approved_violation_api_v1_documents_inmate_violations_approved_imports_inspect_post */
         Body_inspect_approved_violation_api_v1_documents_inmate_violations_approved_imports_inspect_post: {
             /**
@@ -5823,31 +5800,6 @@ export interface components {
             file?: string | null;
             /** Mentions */
             mentions?: string[] | null;
-        };
-        /** Body_send_email_api_v1_email_send_post */
-        Body_send_email_api_v1_email_send_post: {
-            /** To */
-            to: string;
-            /** Subject */
-            subject: string;
-            /** Html */
-            html: string;
-            /**
-             * Cc
-             * @default
-             */
-            cc: string;
-            /** In Reply To */
-            in_reply_to?: string | null;
-            /** References */
-            references?: string | null;
-            /**
-             * Use Signature
-             * @default true
-             */
-            use_signature: boolean;
-            /** Files */
-            files?: string[] | null;
         };
         /** Body_stage_attachment_api_v1_documents_attachments_stage_post */
         Body_stage_attachment_api_v1_documents_attachments_stage_post: {
@@ -7192,42 +7144,6 @@ export interface components {
              */
             role: "primary" | "companion";
         };
-        /**
-         * DraftWrite
-         * @description Payload for creating or updating an email draft.
-         *
-         *     Drafts borrow the LedgerEntry shape (channel='email', direction='outgoing',
-         *     tag='draft'). ``to``/``cc``/``in_reply_to``/``references`` aren't first-
-         *     class on LedgerEntry, so they're persisted as ``draft_meta`` JSON.
-         *     ``subject`` and ``html`` map to ``subject`` and ``notes_html``.
-         *     ``use_signature`` is persisted in draft_meta and forwarded to
-         *     ``email_service.send_email`` when the draft is promoted to sent.
-         */
-        DraftWrite: {
-            /** To */
-            to?: string[];
-            /** Cc */
-            cc?: string[];
-            /**
-             * Subject
-             * @default
-             */
-            subject: string;
-            /**
-             * Html
-             * @default
-             */
-            html: string;
-            /** In Reply To */
-            in_reply_to?: string | null;
-            /** References */
-            references?: string | null;
-            /**
-             * Use Signature
-             * @default true
-             */
-            use_signature: boolean;
-        };
         /** DutyAssignmentEventRead */
         DutyAssignmentEventRead: {
             /** Id */
@@ -7407,6 +7323,11 @@ export interface components {
             smtp_use_tls: boolean;
             /** Sent Folder */
             sent_folder: string;
+            /**
+             * Drafts Folder
+             * @default Drafts
+             */
+            drafts_folder: string;
             /** Inbox Folder */
             inbox_folder: string;
             /** Enabled */
@@ -7474,6 +7395,11 @@ export interface components {
              */
             sent_folder: string;
             /**
+             * Drafts Folder
+             * @default Drafts
+             */
+            drafts_folder: string;
+            /**
              * Inbox Folder
              * @default INBOX
              */
@@ -7491,14 +7417,15 @@ export interface components {
             /** Linked Employee Id */
             linked_employee_id?: string | null;
         };
-        /** EmailSendResult */
-        EmailSendResult: {
-            /** Sent */
-            sent: boolean;
-            /** Message Id */
-            message_id: string;
+        /** EmailHandoffResult */
+        EmailHandoffResult: {
             /** Ledger Entry Id */
             ledger_entry_id: number;
+            /**
+             * Mode
+             * @enum {string}
+             */
+            mode: "mailto" | "draft";
         };
         /** EmailSyncResult */
         EmailSyncResult: {
@@ -18015,176 +17942,6 @@ export interface operations {
             };
         };
     };
-    list_drafts_api_v1_ledger_drafts_get: {
-        parameters: {
-            query?: {
-                limit?: number;
-                offset?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: {
-                gssg_session?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["LedgerEntryRead"][];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    create_draft_api_v1_ledger_drafts_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: {
-                gssg_session?: string | null;
-            };
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["DraftWrite"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["LedgerEntryRead"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    delete_draft_api_v1_ledger_drafts__draft_id__delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                draft_id: number;
-            };
-            cookie?: {
-                gssg_session?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    update_draft_api_v1_ledger_drafts__draft_id__patch: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                draft_id: number;
-            };
-            cookie?: {
-                gssg_session?: string | null;
-            };
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["DraftWrite"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["LedgerEntryRead"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    send_draft_api_v1_ledger_drafts__draft_id__send_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                draft_id: number;
-            };
-            cookie?: {
-                gssg_session?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["LedgerEntryRead"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     get_flag_count_api_v1_ledger_flag_count_get: {
         parameters: {
             query?: never;
@@ -19369,7 +19126,7 @@ export interface operations {
             };
         };
     };
-    send_email_api_v1_email_send_post: {
+    create_handoff_api_v1_email_handoff_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -19380,17 +19137,17 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "multipart/form-data": components["schemas"]["Body_send_email_api_v1_email_send_post"];
+                "multipart/form-data": components["schemas"]["Body_create_handoff_api_v1_email_handoff_post"];
             };
         };
         responses: {
             /** @description Successful Response */
-            200: {
+            201: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["EmailSendResult"];
+                    "application/json": components["schemas"]["EmailHandoffResult"];
                 };
             };
             /** @description Validation Error */

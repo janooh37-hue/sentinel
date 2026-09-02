@@ -106,7 +106,7 @@ def test_scan_helpers_need_permits_edit(api_db):
 
 
 def test_ledger_creates_use_ledger_create(api_db):
-    """Deny ledger.create: contacts/recipient-lists/drafts/entries POST close."""
+    """Deny ledger.create: contacts/recipient-lists/entries POST close."""
     u = _user(api_db, "manager", "lc@x.ae")
     api_db.add(UserPermission(user_id=u.id, capability="ledger.create", effect="deny"))
     api_db.commit()
@@ -114,7 +114,6 @@ def test_ledger_creates_use_ledger_create(api_db):
     create_routes = [
         "/api/v1/ledger/contacts",
         "/api/v1/ledger/recipient-lists",
-        "/api/v1/ledger/drafts",
         "/api/v1/ledger",
     ]
     for url in create_routes:
@@ -149,7 +148,6 @@ def test_ledger_mutation_keeps_literal_edit_gate(api_db):
     c = _client(api_db, u)
     edit_routes = [
         ("patch", "/api/v1/ledger/recipient-lists/1", {}),
-        ("patch", "/api/v1/ledger/drafts/1", {}),
         ("post", "/api/v1/ledger/1/flag", {}),
         ("post", "/api/v1/ledger/entries/1/star", None),
     ]
@@ -159,6 +157,24 @@ def test_ledger_mutation_keeps_literal_edit_gate(api_db):
         assert r.json()["error"]["details"]["capability"] == "ledger.edit", url
     # create untouched by the edit deny (operator holds ledger.create)
     assert c.post("/api/v1/ledger", json={}).status_code in (201, 422)
+
+
+def test_outlook_handoff_uses_ledger_send(api_db):
+    u = _user(api_db, "manager", "lhs@x.ae")
+    api_db.add(UserPermission(user_id=u.id, capability="ledger.send", effect="deny"))
+    api_db.commit()
+    r = _client(api_db, u).post(
+        "/api/v1/email/handoff",
+        data={
+            "to": "recipient@x.ae",
+            "subject": "Permission gate",
+            "html": "<p>Permission gate</p>",
+            "mode": "mailto",
+        },
+        files={"files": ("empty.txt", b"", "text/plain")},
+    )
+    assert r.status_code == 403
+    assert r.json()["error"]["details"]["capability"] == "ledger.send"
 
 
 def test_smart_folder_create_uses_ledger_create(api_db):

@@ -21,8 +21,8 @@
  * `[data-ledger-chrome] dir="ltr"` — it does NOT mirror; only the body renders
  * in its own source direction (handled by EmailBody, Task 3).
  *
- * Reply / Reply All / Forward are surfaced as callbacks (wired to the existing
- * LedgerEmailCompose by the shell in Task 8). Smart-link clicks bubble via
+ * Reply / Reply All / Forward are surfaced as callbacks (the shell opens the
+ * Outlook handoff dialog with them). Smart-link clicks bubble via
  * `onNavigate` (employee → 'employees', book → 'books').
  */
 
@@ -34,6 +34,7 @@ import {
   ReplyAll as ReplyAllIcon,
   Forward as ForwardIcon,
   Trash2 as TrashIcon,
+  Clock as ClockIcon,
 } from 'lucide-react'
 
 import { api } from '@/lib/api'
@@ -44,6 +45,7 @@ import { LedgerAttachments } from '@/components/ledger/LedgerAttachments'
 import { EmailBody } from '@/components/ledger/EmailBody'
 import { LedgerThread } from '@/components/ledger/LedgerThread'
 import { StarButton } from '@/components/ledger/StarButton'
+import { OUTLOOK_PENDING_TAG } from './mailboxTypes'
 
 /** Coarse page targets the shell's `onNavigate` seam understands. */
 type NavPage = 'employees' | 'books'
@@ -139,12 +141,21 @@ export function ReadingPane({
       <div className="flex flex-1 flex-col overflow-y-auto">
         {/* ── rp-top: subject + actions column (buttons, date beneath) ── */}
         <div className="flex items-start justify-between gap-4 border-b border-hairline px-6 py-4">
-          <h1
-            className="text-xl font-bold leading-snug tracking-tight text-foreground"
-            dir="auto"
-          >
-            {entry.subject}
-          </h1>
+          <div className="min-w-0">
+            <h1
+              className="text-xl font-bold leading-snug tracking-tight text-foreground"
+              dir="auto"
+            >
+              {entry.subject}
+            </h1>
+            {/* Handed to Outlook, not yet confirmed by the Sent-folder sync. */}
+            {entry.tags.includes(OUTLOOK_PENDING_TAG) && (
+              <span className="mt-1.5 inline-flex items-center gap-1.5 rounded-md bg-warning-soft px-2 py-0.5 text-[0.72em] font-semibold text-warning">
+                <ClockIcon className="h-3 w-3" strokeWidth={2.4} aria-hidden="true" />
+                <span dir="auto">{t('ledger.outlook.handoff.pending')}</span>
+              </span>
+            )}
+          </div>
           <div className="flex flex-none flex-col items-end gap-2 rtl:items-start">
             <div className="flex items-center gap-1.5">
               <Button

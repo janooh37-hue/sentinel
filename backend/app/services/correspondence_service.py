@@ -43,7 +43,7 @@ DEFAULT_RULES: tuple[tuple[str, dict[str, str], str, bool, int], ...] = (
     ("document_generated", {"category": "HR"}, "hr_letters", True, 10),
     ("document_generated", {"category": "NAT"}, "gov_nat", True, 20),
     ("intake_classified", {"kind": "incoming"}, "incoming_stamped", True, 30),
-    ("email_sent", {}, "hr_letters", False, 40),
+    ("email_sent", {}, "hr_letters", True, 40),
 )
 
 

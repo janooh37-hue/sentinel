@@ -1025,6 +1025,9 @@ class EmailAccount(Base):
     smtp_use_tls: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     # Sent-mail folder for outgoing classification; defaults to "Sent".
     sent_folder: Mapped[str] = mapped_column(String(64), nullable=False, default="Sent")
+    drafts_folder: Mapped[str] = mapped_column(
+        String(64), nullable=False, default="Drafts", server_default="Drafts"
+    )
     inbox_folder: Mapped[str] = mapped_column(String(64), nullable=False, default="INBOX")
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     # 0 disables the background scheduler; positive int = minutes between runs.

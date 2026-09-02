@@ -22,13 +22,12 @@ import email as stdlib_email
 import imaplib
 import logging
 import re
-import smtplib
 import ssl
 import threading
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from email.header import decode_header, make_header
-from email.message import EmailMessage, Message
-from email.utils import getaddresses, make_msgid, parsedate_to_datetime
+from email.message import Message
+from email.utils import getaddresses, parsedate_to_datetime
 from pathlib import Path
 from typing import Final
 
@@ -41,8 +40,6 @@ from app.core import crypto
 from app.db.models import EmailAccount, LedgerEntry
 from app.schemas.email import (
     EmailAccountUpsert,
-    EmailSendRequest,
-    EmailSendResult,
     EmailSyncResult,
     EmailSyncStatus,
 )
@@ -301,6 +298,7 @@ def upsert_account(
             smtp_port=payload.smtp_port,
             smtp_use_tls=payload.smtp_use_tls,
             sent_folder=payload.sent_folder,
+            drafts_folder=payload.drafts_folder,
             inbox_folder=payload.inbox_folder,
             enabled=payload.enabled,
             sync_interval_minutes=payload.sync_interval_minutes,
@@ -319,6 +317,7 @@ def upsert_account(
         existing.smtp_port = payload.smtp_port
         existing.smtp_use_tls = payload.smtp_use_tls
         existing.sent_folder = payload.sent_folder
+        existing.drafts_folder = payload.drafts_folder
         existing.inbox_folder = payload.inbox_folder
         existing.enabled = payload.enabled
         existing.sync_interval_minutes = payload.sync_interval_minutes
@@ -383,164 +382,6 @@ def test_connection(account: EmailAccount) -> None:
             pass
 
 
-# ─── SMTP send ─────────────────────────────────────────────────────────────
-
-
-def send_email(
-    db: Session,
-    payload: EmailSendRequest,
-    *,
-    owner_user_id: int,
-    attachments: list[tuple[str, bytes]] | None = None,
-) -> EmailSendResult:
-    """Send an email via SMTP using the caller's own account, then record a
-    ledger entry with direction=outgoing (or internal when both ends are in
-    the operator's domain) so the message shows up immediately.
-
-    ``owner_user_id`` is required and keyword-only — it identifies the sending
-    user. The ledger entry is stamped with the same owner so the message
-    appears in **their** mailbox, not the lowest-id account.
-
-    ``attachments`` is a list of ``(filename, bytes)`` pairs to attach to
-    both the MIME message and the resulting ledger entry's vault."""
-    attachments = attachments or []
-    account = get_account(db, owner_user_id=owner_user_id)
-    if account is None:
-        raise ValueError("no email account configured")
-    if not account.enabled:
-        raise ValueError("email account is disabled")
-
-    if not payload.to:
-        raise ValueError("at least one recipient is required")
-    if not payload.subject.strip():
-        raise ValueError("subject is required")
-
-    password = crypto.decrypt(account.password_encrypted)
-    account_domain = _domain_of(account.email)
-
-    final_html = payload.html
-    if payload.use_signature:
-        final_html = _apply_signature(final_html, _get_signature(db))
-
-    # Build the multipart message. We emit both HTML and a plain-text fallback.
-    msg = EmailMessage()
-    msg["From"] = account.email
-    msg["To"] = ", ".join(payload.to)
-    if payload.cc:
-        msg["Cc"] = ", ".join(payload.cc)
-    msg["Subject"] = payload.subject
-    msg["Date"] = stdlib_email.utils.formatdate(localtime=True)
-    new_msg_id = make_msgid(domain=account_domain or None)
-    msg["Message-ID"] = new_msg_id
-    if payload.in_reply_to:
-        msg["In-Reply-To"] = payload.in_reply_to
-    if payload.references:
-        msg["References"] = payload.references
-
-    # Plain-text fallback: strip tags very loosely.
-    text_fallback = re.sub(r"<br\s*/?>", "\n", final_html, flags=re.IGNORECASE)
-    text_fallback = re.sub(r"</p>", "\n\n", text_fallback, flags=re.IGNORECASE)
-    text_fallback = re.sub(r"<[^>]+>", "", text_fallback).strip()
-    msg.set_content(text_fallback or " ")
-    msg.add_alternative(final_html, subtype="html")
-
-    # Attachments
-    for fname, data in attachments:
-        maintype, subtype = "application", "octet-stream"
-        ext = Path(fname).suffix.lower()
-        if ext in {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp"}:
-            maintype = "image"
-            subtype = ext.lstrip(".") if ext != ".jpg" else "jpeg"
-        elif ext == ".pdf":
-            subtype = "pdf"
-        elif ext in {".txt", ".csv", ".md", ".html", ".htm"}:
-            maintype = "text"
-            subtype = "plain" if ext in {".txt", ".md", ".csv"} else "html"
-        msg.add_attachment(
-            data, maintype=maintype, subtype=subtype, filename=_safe_email_filename(fname)
-        )
-
-    # Hand off to SMTP.
-    if account.smtp_use_tls:
-        ctx = ssl.create_default_context()
-        with smtplib.SMTP(account.smtp_host, account.smtp_port, timeout=30) as smtp:
-            smtp.ehlo()
-            smtp.starttls(context=ctx)
-            smtp.ehlo()
-            smtp.login(account.username, password)
-            smtp.send_message(msg)
-    else:
-        ctx = ssl.create_default_context()
-        with smtplib.SMTP_SSL(
-            account.smtp_host, account.smtp_port, timeout=30, context=ctx
-        ) as smtp:
-            smtp.login(account.username, password)
-            smtp.send_message(msg)
-
-    # Persist as a ledger entry so the user sees it immediately. Subsequent
-    # IMAP sync from Sent folder will dedup via the Message-Id tag.
-    direction = "outgoing"
-    if account_domain:
-        recipient_addrs = payload.to + payload.cc
-        recipient_domains = {_domain_of(a) for a in recipient_addrs if a}
-        if recipient_domains and recipient_domains == {account_domain}:
-            direction = "internal"
-
-    counterparty = payload.to[0] if payload.to else "(unknown)"
-    entry = LedgerEntry(
-        entry_date=date.today(),
-        direction=direction,
-        channel="email",
-        counterparty=counterparty[:256],
-        subject=payload.subject[:256],
-        notes_html=final_html,
-        tags=["email", "sent-from-app", _msgid_tag(new_msg_id)],
-        attachment_paths=[],
-        owner_user_id=account.owner_user_id,
-        to_recipients=[{"name": "", "address": a} for a in payload.to],
-        cc_recipients=[{"name": "", "address": a} for a in payload.cc],
-        bcc_recipients=[],
-        message_id=new_msg_id,
-        in_reply_to=payload.in_reply_to,
-        email_references=payload.references,
-        # We authored & sent it — never "unread" (also keeps internal-sent mail
-        # out of the unread badge, which now counts internal as received).
-        read_at=datetime.now(UTC).replace(tzinfo=None),
-    )
-    db.add(entry)
-    db.flush()  # need entry.id to name the attachment folder
-
-    saved_paths: list[str] = []
-    for fname, data in attachments:
-        rel = _save_email_attachment(entry.id, fname, data)
-        if rel:
-            saved_paths.append(rel)
-    if saved_paths:
-        entry.attachment_paths = saved_paths
-
-    # ── Phase 3: optional shared Correspondence Log row (default rule OFF). ──
-    try:
-        from app.services import correspondence_service
-
-        correspondence_service.log_event(
-            db,
-            trigger="email_sent",
-            source_kind="sent_email",
-            source_book_id=None,
-            subject=payload.subject[:255],
-            employee_id=None,
-            submitter=None,
-            entry_date=date.today(),
-            condition_fields={"direction": direction},
-            direction="outgoing",
-        )
-    except Exception:
-        log.warning("correspondence auto-log failed on email send", exc_info=True)
-
-    db.commit()
-    db.refresh(entry)
-
-    return EmailSendResult(sent=True, message_id=new_msg_id, ledger_entry_id=entry.id)
 
 
 # ─── Sync ───────────────────────────────────────────────────────────────────
@@ -697,16 +538,24 @@ def _msgid_tag(msg_id: str) -> str:
 
 
 def _existing_msgids(db: Session) -> dict[str, tuple[int, int]]:
-    """Map ``msgid_tag → (entry_id, current_attachment_count)``.
+    """Map confirmed ``msgid_tag → (entry_id, attachment_count)``.
 
-    Used both for dedup (presence check) and for cheap attachment backfill
-    (an entry with 0 attachments on a re-sync gets its attachments populated
-    even though we skip re-inserting the row).
+    Pending Outlook drafts are deliberately excluded: Outlook may preserve the
+    draft Message-ID when sending, and that Sent-folder copy still has to be
+    imported before reconciliation can replace the pending row.
     """
+    from app.services.outlook_handoff_service import HANDOFF_TAG
+
     rows = db.execute(
         select(LedgerEntry.id, LedgerEntry.tags, LedgerEntry.attachment_paths)
         .where(LedgerEntry.channel == "email")
         .where(LedgerEntry.deleted_at.is_(None))
+        .where(
+            text(
+                "NOT EXISTS (SELECT 1 FROM json_each(ledger_entries.tags) "
+                "WHERE json_each.value = :pending_handoff_tag)"
+            ).bindparams(pending_handoff_tag=HANDOFF_TAG)
+        )
     ).all()
     out: dict[str, tuple[int, int]] = {}
     for entry_id, tags, paths in rows:
@@ -1114,13 +963,22 @@ def _sync_account_locked(db: Session, account: EmailAccount) -> EmailSyncResult:
                     if cid_map:
                         entry.inline_images = cid_map
 
-                    # Commit per-row so the write transaction is tiny and
-                    # concurrent HTTP requests (link employee, save settings,
-                    # add ledger entry) don't see SQLite "database is locked".
+                    # Commit the imported row before reconciliation so a
+                    # correlation failure cannot roll back or duplicate real
+                    # Sent-folder mail.
                     db.commit()
-
                     existing_msgids[tag] = (entry.id, len(saved_paths))
                     imported += 1
+
+                    if direction != "incoming":
+                        from app.services import outlook_handoff_service
+
+                        outlook_handoff_service.reconcile_sent_entry(
+                            db,
+                            entry=entry,
+                            msg=msg,
+                            account=account,
+                        )
                 except Exception as e:
                     errors.append(f"parse {msg_id}: {e!s}")
                     db.rollback()
@@ -1129,6 +987,14 @@ def _sync_account_locked(db: Session, account: EmailAccount) -> EmailSyncResult:
             conn.logout()
         except Exception:
             pass
+
+    try:
+        from app.services import outlook_handoff_service
+
+        outlook_handoff_service.flag_stale_handoffs(db, account=account)
+    except Exception as e:
+        errors.append(f"stale Outlook handoffs: {e!s}")
+        db.rollback()
 
     # Cheap backfill: any previously-imported email entry whose counterparty
     # is clearly on the operator's domain is almost certainly internal — flip

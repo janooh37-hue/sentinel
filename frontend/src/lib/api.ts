@@ -323,25 +323,29 @@ export type EditorTemplateListResponse = components['schemas']['EditorTemplateLi
 export type EditorTemplateCreate = components['schemas']['EditorTemplateCreate']
 export type EditorTemplateUpdate = components['schemas']['EditorTemplateUpdate']
 
-// Phase 13 — Email integration (IMAP → ledger auto-create + SMTP send)
+// Phase 13 — Email integration (IMAP sync + Outlook handoff)
 export type EmailAccountRead = components['schemas']['EmailAccountRead']
 export type EmailAccountUpsert = components['schemas']['EmailAccountUpsert']
 export type EmailSyncResult = components['schemas']['EmailSyncResult']
 export type EmailSyncStatus = components['schemas']['EmailSyncStatus']
-// ``/email/send`` is a multipart endpoint so openapi-typescript can't infer
-// its body shape. Mirror the Pydantic schema by hand.
-export interface EmailSendRequest {
+// ``/email/handoff`` is multipart as well — same hand-mirroring as above.
+export interface EmailHandoffRequest {
   to: string[]
   cc?: string[]
   subject: string
   html: string
+  /** `draft` IMAP-APPENDs a full MIME draft (HTML + signature + attachments)
+   *  into the user's Outlook Drafts folder; `mailto` only records the pending
+   *  ledger row — the caller opens the `mailto:` URL itself. */
+  mode: 'draft' | 'mailto'
+  related_book_id?: number | null
+  related_employee_id?: string | null
   in_reply_to?: string | null
   references?: string | null
-  /** Phase 15 — when true (default) the backend appends the configured
-   * `settings.email_signature` to the outgoing HTML body. */
+  /** Draft mode only. Mailto relies on Outlook's own signature. */
   use_signature?: boolean
 }
-export type EmailSendResult = components['schemas']['EmailSendResult']
+export type EmailHandoffResult = components['schemas']['EmailHandoffResult']
 
 // Phase 14 — Identity linking. `email` was added to the backend schema
 // (2026-05-26 identity collapse) but openapi-typescript hasn't regenerated yet,
@@ -449,15 +453,7 @@ export interface UserPermissionRead {
 }
 
 // Phase 07 — Ledger
-// `inline_images` (Phase 15) + `draft_meta` (Phase 16) are added to the backend
-// schema; openapi-typescript may not yet have regenerated it. Hand-merge until
-// `npm run gen:api` runs.
-export interface LedgerDraftMeta {
-  to?: string[]
-  cc?: string[]
-  in_reply_to?: string | null
-  references?: string | null
-}
+// `inline_images` is hand-merged until `npm run gen:api` runs.
 /** Per-attachment metadata (name + byte size) returned by GET /ledger/{id}.
  * Hand-typed until backend regenerates openapi.json. `size` is 0 when the
  * file is missing on disk. */
@@ -470,7 +466,6 @@ export interface LedgerAttachmentMeta {
 }
 export type LedgerEntryRead = components['schemas']['LedgerEntryRead'] & {
   inline_images?: Record<string, string>
-  draft_meta?: LedgerDraftMeta | null
   /** Phase 17 — `read_at` is set the first time an incoming email entry is
    * opened in the drawer. NULL means the entry is unread and counts toward
    * the NavBell badge total. Hand-typed until backend regenerates openapi. */
@@ -509,8 +504,7 @@ export interface UnreadRecentResponse {
   total_unread: number
 }
 
-// Phase 16 — Search + drafts + send-to-vault.
-// Hand-typed until backend regenerates openapi.json.
+// Phase 16 — Search + send-to-vault.
 export interface LedgerSearchHit {
   entry: LedgerEntryRead
   snippet: string
@@ -519,14 +513,6 @@ export interface LedgerSearchHit {
 export interface LedgerSearchResponse {
   hits: LedgerSearchHit[]
   total: number
-}
-export interface DraftWrite {
-  to: string[]
-  cc?: string[]
-  subject: string
-  html: string
-  in_reply_to?: string | null
-  references?: string | null
 }
 export type LedgerEntryCreate = components['schemas']['LedgerEntryCreate']
 export type LedgerEntryUpdate = components['schemas']['LedgerEntryUpdate']
@@ -1869,9 +1855,6 @@ export const api = {
     has_attachment?: boolean
     /** Phase 15 — entries on or after this ISO date (inclusive). */
     since?: string
-    /** Phase 16 — when true, draft entries (tag=draft) are included. The list
-     * endpoint defaults to excluding them. */
-    include_drafts?: boolean
     /** Phase 6 — 'all' (admin only) widens to the whole-office inbox; default own. */
     scope?: 'mine' | 'all'
     /** Phase 2 (D1) — quick filters. `unread` keeps only unread entries;
@@ -2027,19 +2010,6 @@ export const api = {
   deleteRecipientList: (id: number) =>
     request<void>('DELETE', `/ledger/recipient-lists/${id}`),
 
-  // --- Phase 16: drafts ---
-  createDraft: (body: DraftWrite) =>
-    request<LedgerEntryRead>('POST', '/ledger/drafts', body),
-  updateDraft: (id: number, body: DraftWrite) =>
-    request<LedgerEntryRead>('PATCH', `/ledger/drafts/${id}`, body),
-  /** Upsert helper — POST when id is null, PATCH otherwise. */
-  upsertDraft: (id: number | null, body: DraftWrite) =>
-    id == null
-      ? request<LedgerEntryRead>('POST', '/ledger/drafts', body)
-      : request<LedgerEntryRead>('PATCH', `/ledger/drafts/${id}`, body),
-  deleteDraft: (id: number) => request<void>('DELETE', `/ledger/drafts/${id}`),
-  sendDraft: (id: number) =>
-    request<LedgerEntryRead>('POST', `/ledger/drafts/${id}/send`),
 
   // --- Phase 16: send attachment to vault ---
   sendAttachmentToVault: (
@@ -2115,19 +2085,26 @@ export const api = {
   testEmailConnection: () => request<void>('POST', '/email/test'),
   syncEmail: () => request<EmailSyncResult>('POST', '/email/sync'),
   getEmailSyncStatus: () => request<EmailSyncStatus>('GET', '/email/sync/status'),
-  sendEmail: (body: EmailSendRequest, files: File[] = []) => {
+  emailHandoff: (body: EmailHandoffRequest, files: File[] = []) => {
     const form = new FormData()
-    form.set('to', (body.to ?? []).join(','))
+    form.set('to', body.to.join(','))
     form.set('cc', (body.cc ?? []).join(','))
     form.set('subject', body.subject)
     form.set('html', body.html)
+    form.set('mode', body.mode)
+    if (body.related_book_id != null) {
+      form.set('related_book_id', String(body.related_book_id))
+    }
+    if (body.related_employee_id) {
+      form.set('related_employee_id', body.related_employee_id)
+    }
     if (body.in_reply_to) form.set('in_reply_to', body.in_reply_to)
     if (body.references) form.set('references', body.references)
     if (body.use_signature !== undefined) {
       form.set('use_signature', body.use_signature ? 'true' : 'false')
     }
     for (const f of files) form.append('files', f)
-    return multipart<EmailSendResult>('/email/send', form)
+    return multipart<EmailHandoffResult>('/email/handoff', form)
   },
 
   // --- email signature (Phase 15) ---

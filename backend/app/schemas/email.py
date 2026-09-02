@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Self
+from typing import Literal, Self
 
 from pydantic import BaseModel, Field, model_validator
 
@@ -23,6 +23,7 @@ class EmailAccountRead(ORMBase):
     smtp_port: int
     smtp_use_tls: bool
     sent_folder: str
+    drafts_folder: str = "Drafts"
     inbox_folder: str
     enabled: bool
     linked_employee_id: str | None = None
@@ -48,6 +49,7 @@ class EmailAccountUpsert(BaseModel):
     smtp_port: int = Field(default=587, ge=1, le=65535)
     smtp_use_tls: bool = True
     sent_folder: str = "Sent"
+    drafts_folder: str = "Drafts"
     inbox_folder: str = "INBOX"
     enabled: bool = True
     sync_interval_minutes: int = Field(default=5, ge=0, le=1440)
@@ -83,17 +85,7 @@ class EmailSyncStatus(ORMBase):
     interval_minutes: int
 
 
-class EmailSendRequest(BaseModel):
-    to: list[str] = Field(min_length=1)
-    cc: list[str] = Field(default_factory=list)
-    subject: str
-    html: str
-    in_reply_to: str | None = None  # Message-Id of the email being replied to
-    references: str | None = None  # threading: full References header
-    use_signature: bool = True
 
-
-class EmailSendResult(BaseModel):
-    sent: bool
-    message_id: str
+class EmailHandoffResult(BaseModel):
     ledger_entry_id: int
+    mode: Literal["mailto", "draft"]

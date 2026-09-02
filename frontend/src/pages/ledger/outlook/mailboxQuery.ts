@@ -17,7 +17,6 @@ import type { MailboxView } from './mailboxTypes'
 export type LedgerQueryParams = {
   direction?: 'incoming' | 'outgoing'
   tag?: string
-  include_drafts?: boolean
   include_deleted?: boolean
   /** Phase 2 (D1) quick filters + (D3b) follow-up view. */
   unread?: boolean
@@ -69,8 +68,6 @@ export function mailboxToLedgerParams(view: MailboxView): LedgerQueryParams {
       return { direction: 'outgoing' }
     case 'starred':
       return { tag: 'starred' }
-    case 'drafts':
-      return { include_drafts: true, tag: 'draft' }
     case 'trash':
       return { include_deleted: true }
   }

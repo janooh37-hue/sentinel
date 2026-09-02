@@ -3,7 +3,7 @@
  *
  * Matches the prototype's `.rail` (docs/prototypes/ledger-outlook-redesign.html):
  *   [collapse toggle] → [＋ New email] → [account header] → personal folders
- *   (Inbox badge · Drafts · Sent · Starred · Trash) → a divider where the future
+ *   (Inbox badge · Sent · Starred · Trash) → a divider where the future
  *   Smart-folders section will go.
  *
  * (The Correspondence-Log accordion + ⚙️ Rules stub were removed 2026-06-25 —

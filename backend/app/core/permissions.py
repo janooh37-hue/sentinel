@@ -247,8 +247,8 @@ CAPABILITIES: Final[tuple[Capability, ...]] = (
     Capability(
         "ledger.create",
         "ledger",
-        "Create entries & drafts",
-        "Compose new entries, drafts, contacts, and recipient lists.",
+        "Create entries, contacts & recipient lists",
+        "Create ledger entries, contacts, and recipient lists.",
     ),
     Capability(
         "ledger.edit",
@@ -259,14 +259,14 @@ CAPABILITIES: Final[tuple[Capability, ...]] = (
     Capability(
         "ledger.send",
         "ledger",
-        "Send email from the ledger",
-        "Send email messages from the ledger as yourself.",
+        "Hand off email to Outlook",
+        "Hand off email to Outlook or push prepared drafts to your Outlook Drafts folder.",
     ),
     Capability(
         "ledger.delete",
         "ledger",
-        "Delete entries & drafts",
-        "Remove entries, drafts, contacts, and lists.",
+        "Delete entries, contacts & recipient lists",
+        "Remove ledger entries, contacts, and recipient lists.",
     ),
     Capability(
         "email.manage",
@@ -374,9 +374,9 @@ ALL_CAPABILITIES: Final[frozenset[str]] = CAPABILITY_IDS
 
 # ─── Role presets ───────────────────────────────────────────────────────────────
 # Operator: read-only across the app + the daily-work write surfaces (document
-# generation, ledger entries/drafts incl. their deletion — ledger.delete was
-# held pre-split and is preserved). Manager: adds the management writes.
-# Admin: everything.
+# generation, ledger entries, and Outlook handoff, including entry deletion —
+# ledger.delete was held pre-split and is preserved).
+# Manager: adds the management writes. Admin: everything.
 _OPERATOR_CAPS: Final[frozenset[str]] = frozenset(
     {
         "app.access",
