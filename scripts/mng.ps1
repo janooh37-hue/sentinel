@@ -14,8 +14,8 @@
         mng stop            # stop the service            (elevates if needed)
         mng restart         # restart the service         (elevates if needed)
         mng build           # rebuild the frontend bundle into backend\app\static
-        mng deploy          # backup DB (if due) + build + migrate + smoke check + restart
-        mng update          # git pull; if changed -> deploy (skips build when frontend/ is untouched)
+        mng deploy          # sync deps + backup DB (if due) + build + migrate + smoke check + restart
+        mng update          # git pull; if changed -> sync deps + deploy (skips untouched frontend)
         mng logs            # tail the service log   (-Tail N, -Stderr)
         mng open            # open the app in the default browser
         mng help            # this help
@@ -274,6 +274,27 @@ function Wait-Healthy {
     }
 }
 
+function Sync-BackendDependencies {
+    $venvPy      = Join-Path $Root 'venv\Scripts\python.exe'
+    $requirements = Join-Path $Root 'requirements.txt'
+    if (-not (Test-Path $venvPy)) { throw "venv python not found at $venvPy" }
+    if (-not (Test-Path $requirements)) { throw "requirements file not found at $requirements" }
+
+    Write-Host '  Syncing backend dependencies (pip install -r requirements.txt) ...' -ForegroundColor Cyan
+    $prevEAP = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    try {
+        & $venvPy -m pip install --disable-pip-version-check -r $requirements 2>&1 |
+            ForEach-Object { Write-Host "    $_" }
+    } finally {
+        $ErrorActionPreference = $prevEAP
+    }
+    if ($LASTEXITCODE -ne 0) {
+        throw "backend dependency sync failed (exit $LASTEXITCODE) - service not restarted"
+    }
+    Write-Host '  Backend dependencies ready.' -ForegroundColor Green
+}
+
 function Build-Frontend {
     # Compiles the frontend into frontend\dist without touching the live
     # backend\app\static bundle. Deploy/update publish it separately
@@ -418,6 +439,7 @@ function Invoke-SmokeCheck {
 
 function Invoke-Deploy {
     Assert-Admin 'deploy'
+    Sync-BackendDependencies
     Build-Frontend
     Invoke-Migrate
     Invoke-SmokeCheck
@@ -452,6 +474,7 @@ function Invoke-Update {
     Write-Host ("  Updated {0} -> {1}. Deploying ..." -f $before.Substring(0, 7), $after.Substring(0, 7)) -ForegroundColor Cyan
     $builtFrontend = $false
     try {
+        Sync-BackendDependencies
         if ($frontendFiles.Count -eq 0) {
             # The bundle in backend\app\static already matches this range, and a
             # rebuild needs commit headroom (see Assert-BuildMemory) for no gain - skip it.
@@ -501,8 +524,8 @@ function Show-Help {
     Write-Host '    mng stop        stop the service'
     Write-Host '    mng restart     restart the service'
     Write-Host '    mng build       rebuild frontend bundle -> backend\app\static'
-    Write-Host '    mng deploy      backup DB (if due) + build + migrate + smoke check + restart'
-    Write-Host '    mng update      git pull; if changed -> deploy (skips build if frontend/ unchanged)'
+    Write-Host '    mng deploy      sync deps + backup + build + migrate + smoke check + restart'
+    Write-Host '    mng update      git pull; if changed -> sync deps + deploy (skips untouched frontend)'
     Write-Host '    mng logs        tail service log   (-Tail N, -Stderr)'
     Write-Host '    mng open        open the app in the browser'
     Write-Host ''
