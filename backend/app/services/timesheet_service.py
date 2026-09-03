@@ -656,8 +656,10 @@ def _leave_change_issues(
         .order_by(AuditLog.ts, AuditLog.id)
     ).scalars()
     audits: dict[tuple[str, str], AuditLog] = {}
-    for audit in audit_rows:
-        audits[(audit.entity_id, audit.action)] = audit
+    for audit_row in audit_rows:
+        if audit_row.entity_id is None:
+            continue
+        audits[(audit_row.entity_id, audit_row.action)] = audit_row
 
     actor_emails = {audit.actor for audit in audits.values() if audit.actor is not None}
     actor_names: dict[str, str] = {}
@@ -674,27 +676,27 @@ def _leave_change_issues(
     for employee_id, row, kind in candidates:
         employee = employees[employee_id]
         action = "leave.deleted" if kind == "deleted_leave" else "leave.amended"
-        audit = audits.get((str(row.id), action))
+        change_audit = audits.get((str(row.id), action))
         if kind == "deleted_leave":
-            when = audit.ts if audit is not None else row.deleted_at
+            when = change_audit.ts if change_audit is not None else row.deleted_at
             assert when is not None
             detail = (
                 f"{employee.name_en}: {english_part(row.leave_type)} "
                 f"{row.start_date:%Y-%m-%d} → {row.end_date:%Y-%m-%d} "
-                f"({canonical_status(row.status)}) was deleted by {who(audit)} "
+                f"({canonical_status(row.status)}) was deleted by {who(change_audit)} "
                 f"on {when:%Y-%m-%d}."
             )
         else:
-            if audit is None:
+            if change_audit is None:
                 continue
-            data = json.loads(audit.payload or "{}")
+            data = json.loads(change_audit.payload or "{}")
             old = data.get("from", {}).get("end")
             new = data.get("to", {}).get("end")
             reason = data.get("reason") or ""
             detail = (
                 f"{employee.name_en}: {english_part(row.leave_type)} "
-                f"from {row.start_date:%Y-%m-%d} was amended by {who(audit)} "
-                f"on {audit.ts:%Y-%m-%d}: end {old} → {new}"
+                f"from {row.start_date:%Y-%m-%d} was amended by {who(change_audit)} "
+                f"on {change_audit.ts:%Y-%m-%d}: end {old} → {new}"
                 f"{f' ({reason})' if reason else ''}. The printed form still shows {old}."
             )
         issues.append((employee_id, row.start_date, row.id, Issue(employee_id, kind, detail)))
