@@ -41,6 +41,13 @@ import {
   loadLeavesPage,
   loadLedgerPage,
   loadPermitsPage,
+  loadVehicleAccidentLetterPage,
+  loadVehicleAccidentsPage,
+  loadVehicleDetailPage,
+  loadVehicleFinesLetterPage,
+  loadVehicleFinesReportPage,
+  loadVehicleMaintenancePage,
+  loadVehiclesHubPage,
   loadScanBackPage,
   loadScanInboxPage,
   loadSendToGroupPage,
@@ -65,6 +72,13 @@ const ApprovalsPage = lazy(loadApprovalsPage)
 const BookRecordPage = lazy(loadBookRecordPage)
 const LeavesPage = lazy(loadLeavesPage)
 const PermitsPage = lazy(loadPermitsPage)
+const VehiclesHubPage = lazy(loadVehiclesHubPage)
+const VehicleDetailPage = lazy(loadVehicleDetailPage)
+const VehicleFinesLetterPage = lazy(loadVehicleFinesLetterPage)
+const VehicleFinesReportPage = lazy(loadVehicleFinesReportPage)
+const VehicleAccidentsPage = lazy(loadVehicleAccidentsPage)
+const VehicleAccidentLetterPage = lazy(loadVehicleAccidentLetterPage)
+const VehicleMaintenancePage = lazy(loadVehicleMaintenancePage)
 const LedgerPage = lazy(loadLedgerPage)
 const SettingsPage = lazy(loadSettingsPage)
 const DashboardPage = lazy(loadDashboardPage)
@@ -320,6 +334,62 @@ function Shell(): React.JSX.Element {
                 element={
                   <RequireCapability cap="permits.view">
                     <PermitsPage />
+                  </RequireCapability>
+                }
+              />
+              <Route
+                path="/vehicles"
+                element={
+                  <RequireCapability cap="vehicles.view">
+                    <VehiclesHubPage />
+                  </RequireCapability>
+                }
+              />
+              <Route
+                path="/vehicles/fines-report"
+                element={
+                  <RequireCapability cap="vehicles.view">
+                    <VehicleFinesReportPage />
+                  </RequireCapability>
+                }
+              />
+              <Route
+                path="/vehicles/accidents"
+                element={
+                  <RequireCapability cap="vehicles.view">
+                    <VehicleAccidentsPage />
+                  </RequireCapability>
+                }
+              />
+              <Route
+                path="/vehicles/accidents/:accidentId/letter"
+                element={
+                  <RequireCapability cap="vehicles.view">
+                    <VehicleAccidentLetterPage />
+                  </RequireCapability>
+                }
+              />
+              <Route
+                path="/vehicles/maintenance"
+                element={
+                  <RequireCapability cap="vehicles.view">
+                    <VehicleMaintenancePage />
+                  </RequireCapability>
+                }
+              />
+              <Route
+                path="/vehicles/:id"
+                element={
+                  <RequireCapability cap="vehicles.view">
+                    <VehicleDetailPage />
+                  </RequireCapability>
+                }
+              />
+              <Route
+                path="/vehicles/:id/fines-letter"
+                element={
+                  <RequireCapability cap="vehicles.view">
+                    <VehicleFinesLetterPage />
                   </RequireCapability>
                 }
               />

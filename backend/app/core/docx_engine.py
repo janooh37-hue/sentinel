@@ -86,6 +86,8 @@ _AZTEC_TOP_RIGHT: frozenset[str] = frozenset(
         "Administrative Leave Form",
         "Leave Permit Form",
         "Inmate Conduct Violations",
+        "Vehicle Fines",
+        "Vehicle Accident Report",
     }
 )
 
@@ -911,6 +913,8 @@ _FORM_REGISTRY: dict[str, dict[str, Any]] = {
     # and post-process as General Book (body + footer pipeline).
     "Report": {"adapter": _adapt_general_book, "post_process": _pp_general_book},
     "Inmate Conduct Violations": {"adapter": _adapt_common, "post_process": None},
+    "Vehicle Fines": {"adapter": _adapt_common, "post_process": None},
+    "Vehicle Accident Report": {"adapter": _adapt_common, "post_process": None},
 }
 
 

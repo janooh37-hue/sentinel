@@ -242,7 +242,9 @@ export function ApplicationPage(): React.JSX.Element {
   const templates = useMemo(
     () =>
       allTemplates.filter(
-        (template) => !isQuickActionId(template.id) || isQuickActionAllowed(template.id, has),
+        (template) =>
+          !template.feature_minted &&
+          (!isQuickActionId(template.id) || isQuickActionAllowed(template.id, has)),
       ),
     [allTemplates, has],
   )

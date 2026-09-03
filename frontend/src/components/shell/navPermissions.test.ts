@@ -6,6 +6,7 @@ import { isNavEntryAllowed, SECTION_ENTRIES, SIGNAL_ENTRIES } from './navCustomi
 const expectedPrimaryCaps: Record<string, string | undefined> = {
   '/': undefined,
   '/employees': 'employees.view',
+  '/vehicles': 'vehicles.view',
   '/ledger': 'ledger.view',
   '/leaves': 'leaves.view',
   '/application': 'documents.generate',
@@ -18,6 +19,7 @@ describe('permission-aware navigation', () => {
     expect(Object.fromEntries(NAV_ITEMS.map((item) => [item.to, item.cap]))).toEqual(
       expectedPrimaryCaps,
     )
+    expect(NAV_ITEMS.map((item) => item.to)).toEqual(Object.keys(expectedPrimaryCaps))
   })
 
   it('gates settings and waiting signals with every destination capability', () => {

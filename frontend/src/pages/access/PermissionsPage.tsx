@@ -99,6 +99,7 @@ const PAGE_BLUEPRINT: readonly PageBlueprintItem[] = [
   { key: 'nav.services', capability: 'documents.generate' },
   { key: 'nav.records', capability: 'books.view' },
   { key: 'nav.permits', capability: 'permits.view' },
+  { key: 'nav.vehicles', capability: 'vehicles.view' },
   { key: 'access.permissions.pages.settings', capability: 'settings.view' },
   { key: 'access.permissions.pages.expiry', capability: 'expiry.view' },
 ]

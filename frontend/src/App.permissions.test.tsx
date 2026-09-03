@@ -12,7 +12,10 @@ vi.mock('@/lib/useCapabilities', () => ({
   }),
 }))
 vi.mock('@/lib/api', () => ({
-  api: { listCapabilities: vi.fn().mockResolvedValue([]) },
+  api: {
+    listCapabilities: vi.fn().mockResolvedValue([]),
+    postCrashReport: vi.fn().mockResolvedValue(undefined),
+  },
 }))
 vi.mock('@/lib/AuthProvider', () => ({ AuthProvider: ({ children }: { children: React.ReactNode }) => children }))
 vi.mock('@/lib/authContext', () => ({
@@ -57,6 +60,13 @@ vi.mock('@/lib/routeLoaders', () => ({
   loadLedgerPage: () => Promise.resolve({ default: () => <div>ledger-page</div> }),
   loadPermissionsPage: () => Promise.resolve({ default: () => <div>permissions-page</div> }),
   loadPermitsPage: () => Promise.resolve({ default: () => <div>permits-page</div> }),
+  loadVehicleAccidentLetterPage: () => Promise.resolve({ default: () => <div>vehicle-accident-letter-page</div> }),
+  loadVehicleAccidentsPage: () => Promise.resolve({ default: () => <div>vehicle-accidents-page</div> }),
+  loadVehicleDetailPage: () => Promise.resolve({ default: () => <div>vehicle-detail-page</div> }),
+  loadVehicleFinesLetterPage: () => Promise.resolve({ default: () => <div>vehicle-fines-letter-page</div> }),
+  loadVehicleFinesReportPage: () => Promise.resolve({ default: () => <div>vehicle-fines-report-page</div> }),
+  loadVehicleMaintenancePage: () => Promise.resolve({ default: () => <div>vehicle-maintenance-page</div> }),
+  loadVehiclesHubPage: () => Promise.resolve({ default: () => <div>vehicles-hub-page</div> }),
   loadScanBackPage: () => Promise.resolve({ default: () => <div>scanback-page</div> }),
   loadScanInboxPage: () => Promise.resolve({ default: () => <div>scan-inbox-page</div> }),
   loadSendToGroupPage: () => Promise.resolve({ default: () => <div>send-page</div> }),
@@ -77,6 +87,13 @@ const routes = [
   ['/settings', ['settings.view'], 'settings-page'],
   ['/expiry', ['expiry.view'], 'expiry-page'],
   ['/permissions', ['users.manage'], 'permissions-page'],
+  ['/vehicles', ['vehicles.view'], 'vehicles-hub-page'],
+  ['/vehicles/fines-report', ['vehicles.view'], 'vehicle-fines-report-page'],
+  ['/vehicles/accidents', ['vehicles.view'], 'vehicle-accidents-page'],
+  ['/vehicles/accidents/17/letter', ['vehicles.view'], 'vehicle-accident-letter-page'],
+  ['/vehicles/maintenance', ['vehicles.view'], 'vehicle-maintenance-page'],
+  ['/vehicles/42', ['vehicles.view'], 'vehicle-detail-page'],
+  ['/vehicles/42/fines-letter', ['vehicles.view'], 'vehicle-fines-letter-page'],
 ] as const
 
 const eitherCapabilityRoutes = [

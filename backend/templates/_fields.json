@@ -865,5 +865,19 @@
       {"key": "manager_id", "type": "manager_picker", "label_en": "Signing manager", "label_ar": "المُوقِّع", "required": false},
       {"key": "hand_sign_manager", "type": "hand_sign_checkbox", "label_en": "Embed manager's saved signature", "label_ar": "تضمين توقيع المدير المحفوظ", "required": false, "default": "true"}
     ]
+  },
+  "Vehicle Fines": {
+    "category": "admin",
+    "name_en": "Vehicle Fines",
+    "name_ar": "مخالفات المركبات",
+    "form_number": "300-001",
+    "fields": []
+  },
+  "Vehicle Accident Report": {
+    "category": "admin",
+    "name_en": "Vehicle Accident Report",
+    "name_ar": "بلاغ حادث مركبة",
+    "form_number": "300-001",
+    "fields": []
   }
 }

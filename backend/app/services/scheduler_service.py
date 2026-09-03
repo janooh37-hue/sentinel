@@ -54,6 +54,7 @@ from app.services import (
     push_service,
     scan_inbox_service,
     settings_service,
+    vehicle_reminder_service,
     workforce_retention_service,
     workforce_schedule_service,
     workforce_seed_service,
@@ -83,6 +84,7 @@ _WORKFORCE_ATTENDANCE_SYNC_JOB_ID = "workforce-attendance-sync"
 _WORKFORCE_QUEUE_DRAIN_JOB_ID = "workforce-evaluation-queue-drain"
 _WORKFORCE_RETENTION_JOB_ID = "workforce-retention"
 _WORKFORCE_PROFILE_JOB_ID = "workforce-punch-profiles"
+_VEHICLE_REMINDER_JOB_ID = "vehicle_reminders"
 _WORKFORCE_OCCURRENCE_INTERVAL_MINUTES = 15
 _WORKFORCE_QUEUE_DRAIN_INTERVAL_MINUTES = 1
 _WORKFORCE_OCCURRENCE_HISTORY = timedelta(days=7)
@@ -679,6 +681,20 @@ def _run_leave_ending_reminder() -> None:
             log.exception("scheduler: leave-ending reminder failed")
 
 
+def _run_vehicle_reminders() -> None:
+    """Daily 09:10 Asia/Dubai — send due vehicle licence and maintenance pushes."""
+    with SessionLocal() as session:
+        try:
+            n = vehicle_reminder_service.send_due_reminders(
+                session,
+                today=datetime.now(ZoneInfo("Asia/Dubai")).date(),
+            )
+            if n:
+                log.info("scheduler: %d vehicle reminder(s) sent", n)
+        except Exception:
+            log.exception("scheduler: vehicle reminders failed")
+
+
 _DEPARTURE_LABELS: Final[dict[str, tuple[str, str]]] = {
     EMPLOYEE_STATUS_RESIGNED: ("Resigned", "مستقيل"),
     EMPLOYEE_STATUS_TERMINATED: ("Terminated", "مفصول"),
@@ -886,6 +902,13 @@ def start() -> None:
                 replace_existing=True,
             )
             log.info("scheduler: pending-departure flip daily at 09:05 Asia/Dubai")
+            _scheduler.add_job(
+                _run_vehicle_reminders,
+                trigger=CronTrigger(hour=9, minute=10, timezone="Asia/Dubai"),
+                id=_VEHICLE_REMINDER_JOB_ID,
+                replace_existing=True,
+            )
+            log.info("scheduler: vehicle reminders daily at 09:10 Asia/Dubai")
     reschedule_workforce_sync()
 
 

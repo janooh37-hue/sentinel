@@ -40,7 +40,7 @@ vi.mock('@/lib/api', () => ({ api: { listTemplates: vi.fn() } }))
 // are irrelevant to serviceLabels but required for api.listTemplates' real return
 // type, since this fixture now also backs a typed mockResolvedValue below.
 function tpl(id: string, name_en: string, name_ar: string, notifies_employee: boolean) {
-  return { id, name_en, name_ar, form_number: '', category: 'personnel' as const, signing_path: 'auto' as const, has_code: false, notifies_employee }
+  return { id, name_en, name_ar, form_number: '', category: 'personnel' as const, signing_path: 'auto' as const, has_code: false, notifies_employee, feature_minted: false }
 }
 
 const TEMPLATES = {

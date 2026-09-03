@@ -1,0 +1,315 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>مخالفات المركبات — GSSG Manager</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&family=Noto+Sans+Arabic:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root{
+      --bg:#f5f4f1;--surface:#ffffff;--raised:#fafaf6;--tinted:#f0eee8;
+      --navy:#0d2845;--navy-hover:#1d3a5e;--navy-soft:#e8edf3;--red:#c8102e;
+      --red-soft:#fbe5e8;--success:#047857;--success-soft:#d6f0e4;
+      --warning:#92400e;--warning-soft:#fbedd8;--info:#1d4ed8;--info-soft:#e0e8f8;
+      --text:#1c1f24;--muted:#5a6068;--faint:#8b9098;--border:#e6e4dd;--hairline:#efece5;
+      --sans:Inter,"Noto Sans Arabic",sans-serif;--arabic:"Noto Sans Arabic",Inter,sans-serif;
+      --mono:"IBM Plex Mono","Noto Sans Arabic",monospace;--focus-ring:var(--navy);
+      --shadow:0 12px 34px rgba(13,40,69,.12);
+    }
+    *{box-sizing:border-box}
+    html{background:var(--bg);scroll-behavior:smooth}
+    body{min-width:320px;min-height:100vh;margin:0;padding-block-start:72px;background:var(--bg);color:var(--text);font:14px/1.5 var(--sans)}
+    [dir=rtl] body{font-family:var(--arabic)}
+    button,input,select{font:inherit;color:inherit}
+    button{cursor:pointer}
+    button:disabled{cursor:not-allowed;opacity:.48}
+    :focus-visible{outline:3px solid color-mix(in srgb,var(--focus-ring) 44%,transparent);outline-offset:2px}
+    img,svg{display:block}
+    h1,h2,h3,p{margin-block-start:0}
+    .mono{font-family:var(--mono);font-variant-numeric:tabular-nums;direction:ltr;unicode-bidi:isolate}
+    .sr-only{position:absolute;inline-size:1px;block-size:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+    .topbar{position:fixed;inset-block-start:0;inset-inline:0;z-index:50;display:flex;align-items:center;gap:14px;min-block-size:64px;padding:10px 20px;border-block-end:1px solid var(--border);background:var(--surface);box-shadow:0 1px 6px rgba(13,40,69,.05)}
+    .brand{display:flex;align-items:center;gap:10px;min-inline-size:0}
+    .brand img{inline-size:36px;block-size:36px;object-fit:contain}
+    .brand-copy{display:grid;line-height:1.15}
+    .brand-copy strong{color:var(--navy);font-size:.9rem}
+    .brand-copy small{margin-block-start:3px;color:var(--muted);font-size:.68rem}
+    .mock-label{margin-inline-start:auto;color:var(--muted);font-size:.72rem;white-space:nowrap}
+    .switches{display:flex;align-items:center;gap:8px}
+    .segmented{display:inline-flex;padding:3px;border:1px solid var(--border);border-radius:10px;background:var(--raised)}
+    .segmented button{min-block-size:34px;padding:5px 11px;border:0;border-radius:8px;background:transparent;color:var(--muted);font-size:.75rem;font-weight:650}
+    .segmented button[aria-pressed=true]{background:var(--navy);color:#fff;box-shadow:0 1px 3px rgba(13,40,69,.18)}
+    #app{min-block-size:calc(100vh - 72px)}
+    .workspace{inline-size:min(1480px,100%);margin-inline:auto;padding:24px 24px 64px;transition:inline-size 180ms ease,padding 180ms ease}
+    .workspace.phone{inline-size:min(390px,calc(100vw - 24px));margin-block:22px;padding:0;overflow:hidden;border:1px solid #d8d5cd;border-radius:24px;background:var(--bg);box-shadow:0 24px 52px rgba(13,40,69,.18)}
+    .phone .phone-cap{display:flex}.phone-cap{display:none;align-items:center;justify-content:center;block-size:24px;border-block-end:1px solid var(--hairline);background:var(--surface)}
+    .phone-cap::after{content:"";inline-size:72px;block-size:5px;border-radius:999px;background:#d8d5cd}
+    .phone .screen{max-block-size:760px;overflow:auto;padding:14px 12px 40px}
+    .screen{min-inline-size:0}
+    .service-strip{display:flex;align-items:center;gap:16px;margin-block-end:18px;padding:14px 16px;border:1px solid var(--border);border-radius:16px;background:var(--surface)}
+    .service-art{display:grid;place-items:center;inline-size:68px;block-size:68px;flex:none;border-radius:16px;background:var(--navy-soft)}
+    .service-art svg{inline-size:58px;block-size:58px;filter:drop-shadow(0 3px 2px rgba(13,40,69,.16))}
+    .service-copy{min-inline-size:0}
+    .eyebrow{margin-block-end:4px;color:var(--muted);font-size:.68rem;font-weight:700;letter-spacing:.07em;text-transform:uppercase}
+    [lang=ar] .eyebrow{letter-spacing:0;text-transform:none}
+    .service-copy h1{margin:0;color:var(--navy);font-size:1.35rem;line-height:1.3}
+    .service-copy p{margin:3px 0 0;color:var(--muted);font-size:.78rem}
+    .service-code{margin-inline-start:auto;align-self:flex-start;padding:5px 8px;border-radius:8px;background:var(--tinted);color:var(--muted);font-size:.65rem}
+    .page-head{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;margin-block:20px 14px}
+    .page-head h2{margin-block-end:4px;color:var(--navy);font-size:1.45rem;line-height:1.25}
+    .page-head p{margin:0;color:var(--muted);font-size:.82rem}
+    .head-actions,.action-row{display:flex;align-items:center;flex-wrap:wrap;gap:8px}
+    .btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;min-block-size:39px;padding:7px 13px;border:1px solid var(--border);border-radius:10px;background:var(--surface);color:var(--navy);font-weight:650;font-size:.78rem}
+    .btn:hover{border-color:#cfd5dc;background:var(--raised)}
+    .btn.primary{border-color:var(--navy);background:var(--navy);color:#fff}
+    .btn.primary:hover{background:var(--navy-hover)}
+    .btn.danger{border-color:#efc6ce;color:var(--red)}
+    .btn.icon-only{inline-size:34px;min-block-size:34px;padding:0}
+    .btn.subtle{background:transparent}
+    .btn .icon{font-size:1rem;line-height:1}
+    .back-icon{display:inline-block}.ltr-only-flip{transform:none}
+    [dir=ltr] .ltr-only-flip,[dir=ltr] .back-icon:not(.ltr-only-flip){transform:scaleX(-1)}
+    .filterbar{display:grid;grid-template-columns:minmax(220px,1.35fr) auto minmax(160px,.5fr) auto;gap:10px;align-items:center;margin-block-end:14px;padding:12px;border:1px solid var(--border);border-radius:12px;background:var(--surface)}
+    .field-shell{display:flex;align-items:center;gap:8px;min-block-size:40px;padding-inline:11px;border:1px solid var(--border);border-radius:9px;background:var(--raised)}
+    .field-shell:focus-within{border-color:var(--focus-ring);box-shadow:0 0 0 3px color-mix(in srgb,var(--focus-ring) 14%,transparent)}
+    .field-shell input,.field-shell select{min-inline-size:0;inline-size:100%;border:0;outline:0;background:transparent}
+    .site-chips{display:flex;align-items:center;gap:6px;overflow:auto}
+    .chip{min-block-size:36px;padding:5px 10px;border:1px solid var(--border);border-radius:999px;background:var(--raised);color:var(--muted);font-size:.72rem;white-space:nowrap}
+    .chip[aria-pressed=true]{border-color:var(--navy);background:var(--navy-soft);color:var(--navy);font-weight:700}
+    .notification{display:flex;align-items:center;gap:7px;min-block-size:40px;padding:5px 9px;border:1px solid var(--border);border-radius:9px;background:var(--raised);color:var(--muted);font-size:.72rem;white-space:nowrap}
+    .notification input{inline-size:52px;padding:4px;border:1px solid var(--border);border-radius:7px;background:var(--surface);font-family:var(--mono);text-align:center}
+    .group{margin-block-end:17px;border:1px solid var(--border);border-radius:14px;background:var(--surface);overflow:hidden}
+    .group-head{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 14px;border-block-end:1px solid var(--hairline);background:var(--raised)}
+    .group-title{display:flex;align-items:center;gap:9px;min-inline-size:0}
+    .group-title h3{margin:0;color:var(--navy);font-size:.88rem}
+    .count-pill{display:inline-grid;place-items:center;min-inline-size:25px;min-block-size:25px;padding-inline:6px;border-radius:999px;background:var(--navy-soft);color:var(--navy);font:600 .68rem var(--mono)}
+    .group-meta{color:var(--muted);font-size:.7rem}
+    .table-wrap{overflow:auto}
+    table{inline-size:100%;border-collapse:collapse}
+    th{padding:9px 10px;border-block-end:1px solid var(--border);background:var(--surface);color:var(--muted);font-size:.67rem;font-weight:700;text-align:start;white-space:nowrap}
+    td{padding:10px;border-block-end:1px solid var(--hairline);vertical-align:middle;font-size:.75rem}
+    tbody tr:last-child td{border-block-end:0}
+    tbody tr:hover{background:#fdfdfb}
+    .vehicle-type strong{display:block;color:var(--text);font-size:.78rem}.vehicle-type small{color:var(--muted)}
+    .plate{display:inline-flex;align-items:center;justify-content:center;min-inline-size:88px;padding:6px 8px;border:1px solid #cfd5dc;border-radius:8px;background:var(--raised);color:var(--navy);font:600 .76rem var(--mono);direction:ltr;unicode-bidi:isolate}
+    .badge{display:inline-flex;align-items:center;gap:5px;min-block-size:28px;padding:4px 8px;border-radius:999px;font-size:.68rem;font-weight:700;white-space:nowrap}
+    .badge::before{content:"";inline-size:7px;block-size:7px;border-radius:50%;background:currentColor}
+    .badge.valid{background:var(--success-soft);color:var(--success)}
+    .badge.due{background:var(--warning-soft);color:var(--warning)}
+    .badge.expired{background:var(--red-soft);color:var(--red)}
+    .badge.matched{background:var(--success-soft);color:var(--success)}
+    .badge.unmatched{background:var(--red-soft);color:var(--red)}
+    .fine-summary{display:grid;gap:2px;white-space:nowrap}.fine-summary strong{font-family:var(--mono);font-size:.72rem}.fine-summary small{color:var(--muted);font-size:.64rem}
+    .thumb{inline-size:56px;block-size:38px;border:1px solid var(--border);border-radius:7px;object-fit:cover;background:var(--tinted)}
+    .empty{padding:34px 18px;text-align:center;color:var(--muted)}
+    .empty strong{display:block;margin-block-end:5px;color:var(--navy)}
+    .workspace:not(.phone) .mobile-only{display:none}
+    .phone .desktop-only{display:none}.phone .mobile-only{display:block}
+    .vehicle-cards{display:grid;gap:9px}
+    .vehicle-card{padding:12px;border:1px solid var(--border);border-radius:12px;background:var(--surface)}
+    .vehicle-card-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-block-end:10px}
+    .vehicle-card h3{margin:0;font-size:.84rem}.vehicle-card p{margin:3px 0 0;color:var(--muted);font-size:.72rem}
+    .card-facts{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-block:10px;padding-block:10px;border-block:1px solid var(--hairline)}
+    .fact{min-inline-size:0}.fact span{display:block;color:var(--muted);font-size:.62rem}.fact strong{display:block;margin-block-start:2px;font-size:.72rem}
+    .card-footer{display:flex;align-items:center;justify-content:space-between;gap:8px}.card-footer small{color:var(--muted)}
+    .detail-grid{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(260px,.65fr);gap:14px;margin-block-end:14px}
+    .panel{border:1px solid var(--border);border-radius:14px;background:var(--surface)}
+    .panel-head{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 14px;border-block-end:1px solid var(--hairline)}
+    .panel-head h3{margin:0;color:var(--navy);font-size:.88rem}.panel-head small{color:var(--muted)}
+    .info-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:0;padding:4px 14px 10px}
+    .info-item{min-inline-size:0;padding:11px 8px;border-block-end:1px solid var(--hairline)}
+    .info-item span{display:block;margin-block-end:4px;color:var(--muted);font-size:.64rem}
+    .info-item strong{display:block;overflow-wrap:anywhere;font-size:.76rem}
+    .scan-preview{display:grid;place-items:center;min-block-size:240px;padding:18px;background:var(--raised)}
+    .scan-preview img{inline-size:min(240px,100%);border:1px solid var(--border);border-radius:10px;background:var(--tinted)}
+    .scan-note{padding:10px 13px;border-block-start:1px solid var(--hairline);color:var(--muted);font-size:.68rem}
+    .ledger .panel-head{padding-block:11px}
+    .ledger th,.ledger td{padding-block:9px}
+    .seq{inline-size:36px;color:var(--muted);font-family:var(--mono)}
+    .fine-cards{display:grid;gap:8px;padding:10px}
+    .phone .vehicle-cards,.phone .fine-cards{display:grid}
+    .fine-card{padding:10px;border:1px solid var(--hairline);border-radius:10px;background:var(--raised)}
+    .fine-card-head{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}
+    .fine-card h4{margin:0;font-size:.78rem}.fine-card p{margin:2px 0 0;color:var(--muted);font:.68rem var(--mono)}
+    .fine-card-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:7px;margin-block-start:9px}
+    .overlay{position:fixed;inset:0;z-index:80;display:grid;place-items:center;padding:18px;background:rgba(13,40,69,.48)}
+    .dialog{inline-size:min(660px,100%);max-block-size:min(760px,calc(100vh - 36px));overflow:auto;border:1px solid var(--border);border-radius:16px;background:var(--surface);box-shadow:var(--shadow)}
+    .dialog.wide{inline-size:min(900px,100%)}
+    .dialog-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:16px 18px;border-block-end:1px solid var(--border)}
+    .dialog-head h2{margin-block-end:3px;color:var(--navy);font-size:1.15rem}.dialog-head p{margin:0;color:var(--muted);font-size:.75rem}
+    .dialog-body{padding:17px 18px}.dialog-actions{display:flex;align-items:center;justify-content:flex-end;gap:8px;padding:13px 18px;border-block-start:1px solid var(--border);background:var(--raised)}
+    .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:13px}
+    .form-field{display:grid;gap:6px}.form-field.full{grid-column:1/-1}.form-field label,.field-label{color:var(--navy);font-size:.72rem;font-weight:700}
+    .form-field input,.form-field select{inline-size:100%;min-block-size:42px;padding:8px 10px;border:1px solid var(--border);border-radius:9px;background:var(--raised);outline:0}
+    .form-field input:focus,.form-field select:focus{border-color:var(--focus-ring);box-shadow:0 0 0 3px color-mix(in srgb,var(--focus-ring) 13%,transparent)}
+    .readonly{color:var(--muted)}
+    .employee-picker{position:relative}.employee-list{display:grid;gap:4px;max-block-size:164px;margin:4px 0 0;padding:5px;overflow:auto;border:1px solid var(--border);border-radius:10px;background:var(--surface)}
+    .employee-option{display:flex;align-items:center;justify-content:space-between;gap:9px;min-block-size:40px;padding:7px 9px;border:1px solid transparent;border-radius:8px;background:transparent;text-align:start}
+    .employee-option:hover,.employee-option[aria-selected=true]{border-color:#cfd5dc;background:var(--navy-soft)}
+    .employee-option strong{display:block;font-size:.73rem}.employee-option small{color:var(--muted);font:.66rem var(--mono)}
+    .dropzone{display:grid;place-items:center;min-block-size:120px;padding:18px;border:2px dashed #bdc5ce;border-radius:12px;background:var(--raised);text-align:center}
+    .dropzone.dragging{border-color:var(--navy);background:var(--navy-soft)}
+    .dropzone strong{display:block;margin-block:6px 3px;color:var(--navy)}.dropzone span{color:var(--muted);font-size:.72rem}.dropzone input{margin-block-start:10px;max-inline-size:100%}
+    .import-preview{margin-block-start:16px}.import-preview h3{margin-block-end:8px;color:var(--navy);font-size:.85rem}.import-preview select{max-inline-size:180px;min-block-size:34px;border:1px solid var(--border);border-radius:8px;background:var(--raised);font-size:.7rem}
+    .wizard-head{display:flex;align-items:center;gap:8px;margin-block-end:14px}
+    .step{display:flex;align-items:center;gap:7px;color:var(--muted);font-size:.72rem}.step b{display:grid;place-items:center;inline-size:26px;block-size:26px;border-radius:50%;background:var(--tinted);font:600 .7rem var(--mono)}
+    .step.active{color:var(--navy);font-weight:700}.step.active b{background:var(--navy);color:#fff}.step-line{inline-size:44px;block-size:1px;background:var(--border)}
+    .generate-layout{display:grid;grid-template-columns:minmax(260px,.55fr) minmax(0,1.45fr);gap:14px}
+    .checklist{padding:8px 12px}.check-row{display:grid;grid-template-columns:auto 1fr auto;gap:9px;align-items:center;padding:10px 4px;border-block-end:1px solid var(--hairline)}.check-row:last-child{border-block-end:0}.check-row input{inline-size:17px;block-size:17px;accent-color:var(--navy)}.check-row strong{display:block;font-size:.73rem}.check-row small{color:var(--muted);font:.64rem var(--mono)}.check-amount{font:600 .7rem var(--mono);white-space:nowrap}
+    .selection-summary{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:11px 14px;border-block-start:1px solid var(--border);background:var(--raised)}.selection-summary span{color:var(--muted);font-size:.7rem}.selection-summary strong{font:.78rem var(--mono)}
+    .paper-shell{padding:18px;background:var(--tinted);overflow:auto}
+    .paper{inline-size:min(720px,100%);min-block-size:670px;margin-inline:auto;padding:32px 34px 28px;border:1px solid #d8d5cd;background:#fff;box-shadow:0 5px 18px rgba(13,40,69,.1);color:#111;font-family:"Noto Sans Arabic",Inter,sans-serif}
+    .paper-company{display:flex;align-items:center;justify-content:space-between;gap:16px;padding-block-end:12px;border-block-end:2px solid var(--navy)}
+    .paper-company img{inline-size:58px;block-size:58px;object-fit:contain}.paper-company div{text-align:center}.paper-company strong{display:block;color:var(--navy);font-size:.82rem}.paper-company small{display:block;margin-block-start:3px;font-size:.67rem}
+    .paper-meta{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-block:16px;font-size:.68rem}.paper-meta p{margin-block-end:5px}.paper-meta .dates{text-align:end}
+    .paper h2{margin-block:18px;text-align:center;color:var(--navy);font-size:1.08rem;text-decoration:underline;text-underline-offset:5px}
+    .plate-box{display:flex;align-items:center;justify-content:center;gap:10px;margin-block-end:16px;padding:9px;border:1px solid #333;background:#fafafa;font-size:.72rem}.plate-box strong{font:700 .85rem var(--mono);direction:ltr}
+    .paper table{border:1px solid #333}.paper th,.paper td{padding:6px;border:1px solid #444;background:#fff;color:#111;font-size:.59rem;text-align:center}.paper th{font-weight:700}.paper-empty{padding:20px!important;color:#555!important}
+    .paper-footer{display:flex;align-items:flex-end;justify-content:space-between;gap:14px;margin-block-start:30px;padding-block-start:10px;border-block-start:1px solid #777;font-size:.61rem}.paper-footer .submitter{text-align:end}.paper-footer strong{display:block;margin-block-start:2px;font-family:var(--mono)}
+    .generate-actions{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-block-start:14px}
+    .toast{position:fixed;inset-inline-end:22px;inset-block-end:22px;z-index:100;display:flex;align-items:center;gap:8px;max-inline-size:min(380px,calc(100vw - 30px));padding:11px 14px;border-radius:10px;background:var(--navy);color:#fff;box-shadow:var(--shadow);font-size:.76rem;opacity:0;transform:translateY(12px);pointer-events:none;transition:opacity 160ms ease,transform 160ms ease}.toast.show{opacity:1;transform:translateY(0)}
+    .phone .service-strip{gap:10px;padding:10px}.phone .service-art{inline-size:50px;block-size:50px;border-radius:12px}.phone .service-art svg{inline-size:44px;block-size:44px}.phone .service-copy h1{font-size:1rem}.phone .service-copy p,.phone .service-code{display:none}
+    .phone .page-head{align-items:flex-start;flex-direction:column;margin-block:15px 10px}.phone .page-head h2{font-size:1.15rem}.phone .head-actions{inline-size:100%}.phone .head-actions .btn{flex:1}
+    .phone .filterbar{display:grid;grid-template-columns:1fr;gap:8px;padding:9px}.phone .site-chips{padding-block-end:2px}.phone .notification{white-space:normal}.phone .group{border:0;background:transparent;overflow:visible}.phone .group-head{border:1px solid var(--border);border-radius:10px}.phone .vehicle-cards{margin-block-start:8px}.phone .detail-grid{grid-template-columns:1fr}.phone .info-grid{grid-template-columns:1fr 1fr}.phone .scan-preview{min-block-size:180px}.phone .scan-preview img{inline-size:190px}.phone .panel-head{align-items:flex-start}.phone .panel-head .action-row{justify-content:flex-end}.phone .fine-card-grid{grid-template-columns:1fr 1fr}.phone .generate-layout{grid-template-columns:1fr}.phone .paper-shell{padding:8px}.phone .paper{min-inline-size:640px}.phone .generate-actions{align-items:stretch;flex-direction:column}.phone .generate-actions .action-row{inline-size:100%}.phone .generate-actions .btn{flex:1}
+    @media(max-width:900px){.mock-label{display:none}.filterbar{grid-template-columns:1fr 1fr}.notification{white-space:normal}.detail-grid{grid-template-columns:1fr}.generate-layout{grid-template-columns:1fr}}
+    @media(max-width:650px){body{padding-block-start:114px}.topbar{align-content:center;flex-wrap:wrap;padding:8px 10px}.brand-copy small{display:none}.switches{inline-size:100%;justify-content:space-between}.segmented{flex:1}.segmented button{flex:1}.workspace:not(.phone){padding-inline:12px}.filterbar{grid-template-columns:1fr}.page-head{align-items:flex-start;flex-direction:column}.form-grid{grid-template-columns:1fr}.form-field.full{grid-column:auto}.dialog{max-block-size:calc(100vh - 24px)}.info-grid{grid-template-columns:1fr 1fr}.generate-layout{grid-template-columns:1fr}}
+    @media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}.workspace,.toast{transition:none}}
+  </style>
+</head>
+<body>
+<!--
+THESIS: Vehicle fines are a fleet ledger first and a document workflow second; expiry risk and open fines must be readable before decoration.
+STORY: Operators scan two sites, filter license risk, open one vehicle, maintain its fines, then generate an official selected-fines letter.
+FIRST VIEWPORT: A compact service tile leads directly into the grouped fleet table with all three expiry states and operational filters visible.
+FORM: Standalone bilingual interaction mockup using the established GSSG cream, navy, paper, mono-data, and restrained semantic-state vocabulary.
+FINISH: Every view is keyboard reachable, every visible label has Arabic and English copy, and all records are fabricated for safe public review.
+-->
+<header class="topbar">
+  <div class="brand">
+    <img src="gssg-logo.png" alt="GSSG">
+    <span class="brand-copy"><strong>GSSG Manager</strong><small id="brand-sub">نموذج واجهة مستقل</small></span>
+  </div>
+  <span class="mock-label" id="mock-label">مراجعة تصميم الخدمة</span>
+  <div class="switches" aria-label="عناصر تحكم النموذج">
+    <div class="segmented" id="language-toggle" aria-label="اللغة">
+      <button type="button" data-lang="ar" aria-pressed="true">AR · العربية</button>
+      <button type="button" data-lang="en" aria-pressed="false">EN · English</button>
+    </div>
+    <div class="segmented" id="device-toggle" aria-label="حجم العرض">
+      <button type="button" data-device="desktop" aria-pressed="true">سطح المكتب</button>
+      <button type="button" data-device="mobile" aria-pressed="false">الهاتف</button>
+    </div>
+  </div>
+</header>
+<main id="app"></main>
+<div class="toast" id="toast" role="status" aria-live="polite"><span aria-hidden="true">✓</span><span id="toast-text"></span></div>
+<script>
+const COPY={
+  ar:{dir:'rtl',title:'مخالفات المركبات — GSSG Manager',brandSub:'نموذج واجهة مستقل',mockLabel:'مراجعة تصميم الخدمة',controls:'عناصر تحكم النموذج',language:'اللغة',device:'حجم العرض',desktop:'سطح المكتب',mobile:'الهاتف',services:'الخدمات',serviceTitle:'مخالفات المركبات',serviceDesc:'إدارة تراخيص المركبات والمخالفات وإصدار المستندات',prototype:'نموذج خدمة',fleet:'سجل المركبات',fleetDesc:'المركبات المرخصة حسب الموقع وحالة انتهاء الترخيص',search:'ابحث باللوحة أو النوع أو الرمز المروري',allSites:'كل المواقع',allExpiry:'كل حالات الترخيص',valid:'ساري',due:'ينتهي قريباً',expired:'منتهي',importFines:'استيراد مخالفات',notifyBefore:'تنبيه قبل انتهاء الترخيص:',days:'يوماً',plate:'رقم اللوحة',type:'نوع المركبة',class:'الفئة',trafficCode:'الرمز المروري',licenseStart:'بداية الترخيص',licenseExpiry:'انتهاء الترخيص',fines:'المخالفات',licenseScan:'صورة الترخيص',action:'الإجراء',open:'فتح',fineCount:'مخالفة',aed:'د.إ',points:'نقطة',vehicles:'مركبات',asOf:'الحالة في 01/09/2026',noVehicles:'لا توجد مركبات مطابقة',adjustFilters:'غيّر البحث أو عوامل التصفية لعرض مركبات أخرى.',vehicleDetail:'تفاصيل المركبة',detailDesc:'بيانات الترخيص وسجل المخالفات للمركبة المحددة',backFleet:'العودة إلى المركبات',vehicleInfo:'بيانات المركبة',vin:'رقم القاعدة',site:'الموقع',contractNote:'تفاصيل العقد',scanPreview:'معاينة صورة الترخيص',placeholderScan:'صورة ترخيص تجريبية — لا تحتوي على بيانات حقيقية',fineLedger:'سجل المخالفات',employee:'اسم الموظف',gNumber:'الرقم الوظيفي',date:'التاريخ',amount:'المبلغ بالدرهم',blackPoints:'النقاط السوداء',delete:'حذف',addFine:'إضافة مخالفة',generateDocument:'إنشاء مستند',noFines:'لا توجد مخالفات لهذه المركبة.',addFineTitle:'إضافة مخالفة',addFineDesc:'تُضاف المخالفة إلى بيانات النموذج المؤقتة فقط.',selectedVehicle:'المركبة المحددة',amountAed:'المبلغ (د.إ)',employeePicker:'الموظف',employeeSearch:'ابحث بالاسم أو الرقم الوظيفي',save:'حفظ',cancel:'إلغاء',requiredFields:'أكمل جميع الحقول المطلوبة.',fineAdded:'تمت إضافة المخالفة إلى النموذج.',fineDeleted:'تم حذف المخالفة من النموذج.',importTitle:'استيراد مخالفات',importDesc:'معاينة تجريبية لملف Excel أو CSV صادر من موقع المرور.',dropFile:'اسحب الملف هنا أو اختره من جهازك',acceptedFiles:'Excel أو CSV — لن يُرفع أي ملف في هذا النموذج',parsedPreview:'معاينة المطابقة',sourceRow:'صف الملف',matchedVehicle:'المركبة المطابقة',matchStatus:'حالة المطابقة',matched:'مطابقة',unmatched:'غير مطابقة',chooseVehicle:'اختر مركبة بديلة',willAdd:n=>`سيتم إضافة ${n} مخالفة`,importReady:'تم تأكيد المعاينة التجريبية دون حفظ.',fileSelected:'الملف المحدد',generateTitle:'إنشاء مستند مخالفات المركبة',generateDesc:'اختر المخالفات أولاً، ثم راجع الخطاب قبل الحفظ.',stepSelect:'اختيار المخالفات',stepPreview:'معاينة المستند',selectedFines:'المخالفات المحددة',selectedSummary:(n,total)=>`${n} محددة · ${total} د.إ`,preview:'معاينة',previewDocument:'معاينة المستند',paperPreview:'معاينة الخطاب',previous:'السابق',saveDocument:'حفظ المستند',documentSaved:'تم حفظ المستند تجريبياً.',previewReady:'المعاينة محدثة بالمخالفات المحددة.',companyAr:'مجموعة خدمات الأمن العالمية',companyEn:'GLOBAL SECURITY SERVICES GROUP',reference:'الرقم',gregorian:'التاريخ',hijri:'الموافق',documentTitle:'مخالفات المركبات',sequence:'ت',loggedSubmitter:'الموظف المُصدِر',loggedHint:'المستخدم المسجل دخوله',noSelected:'لم تُحدد أي مخالفة',close:'إغلاق',file:'ملف',all:'الكل'},
+  en:{dir:'ltr',title:'Vehicle Fines — GSSG Manager',brandSub:'Standalone interface mockup',mockLabel:'Service design review',controls:'Mockup controls',language:'Language',device:'Viewport',desktop:'Desktop',mobile:'Mobile',services:'Services',serviceTitle:'Vehicle Fines',serviceDesc:'Manage vehicle licenses, fines, and generated documents',prototype:'Service mockup',fleet:'Fleet ledger',fleetDesc:'Licensed vehicles grouped by site and license-expiry status',search:'Search plate, type, or traffic code',allSites:'All sites',allExpiry:'All license states',valid:'Valid',due:'Due soon',expired:'Expired',importFines:'Import fines',notifyBefore:'Notify before license expiry:',days:'days',plate:'Plate',type:'Vehicle type',class:'Class',trafficCode:'Traffic code',licenseStart:'License start',licenseExpiry:'License expiry',fines:'Fines',licenseScan:'License scan',action:'Action',open:'Open',fineCount:'fines',aed:'AED',points:'points',vehicles:'vehicles',asOf:'Status as of 01/09/2026',noVehicles:'No matching vehicles',adjustFilters:'Change the search or filters to show other vehicles.',vehicleDetail:'Vehicle details',detailDesc:'License information and fine ledger for the selected vehicle',backFleet:'Back to fleet',vehicleInfo:'Vehicle information',vin:'VIN / chassis number',site:'Site',contractNote:'Contract note',scanPreview:'License scan preview',placeholderScan:'Fabricated license placeholder — no real data',fineLedger:'Fine ledger',employee:'Employee name',gNumber:'G-number',date:'Date',amount:'Amount (AED)',blackPoints:'Black points',delete:'Delete',addFine:'Add fine',generateDocument:'Generate document',noFines:'This vehicle has no fines.',addFineTitle:'Add fine',addFineDesc:'The fine is added to temporary mockup data only.',selectedVehicle:'Selected vehicle',amountAed:'Amount (AED)',employeePicker:'Employee',employeeSearch:'Search by name or G-number',save:'Save',cancel:'Cancel',requiredFields:'Complete all required fields.',fineAdded:'Fine added to the mockup.',fineDeleted:'Fine removed from the mockup.',importTitle:'Import fines',importDesc:'Fabricated preview for an Excel or CSV export from the traffic site.',dropFile:'Drop a file here or choose from your device',acceptedFiles:'Excel or CSV — no file is uploaded in this mockup',parsedPreview:'Match preview',sourceRow:'File row',matchedVehicle:'Matched vehicle',matchStatus:'Match status',matched:'Matched',unmatched:'Unmatched',chooseVehicle:'Choose fallback vehicle',willAdd:n=>`${n} fines will be added`,importReady:'Mock import confirmed without persistence.',fileSelected:'Selected file',generateTitle:'Generate vehicle fines document',generateDesc:'Select fines first, then review the letter before saving.',stepSelect:'Select fines',stepPreview:'Document preview',selectedFines:'Selected fines',selectedSummary:(n,total)=>`${n} selected · AED ${total}`,preview:'Preview',previewDocument:'Preview document',paperPreview:'Letter preview',previous:'Previous',saveDocument:'Save document',documentSaved:'Document saved in the mockup.',previewReady:'Preview reflects the selected fines.',companyAr:'مجموعة خدمات الأمن العالمية',companyEn:'GLOBAL SECURITY SERVICES GROUP',reference:'Reference',gregorian:'Gregorian date',hijri:'Hijri date',documentTitle:'Vehicle Fines',sequence:'No.',loggedSubmitter:'Logged-in submitter',loggedHint:'Current signed-in user',noSelected:'No fines selected',close:'Close',file:'File',all:'All'}
+};
+const LICENSE_THUMB='data:image/svg+xml;charset=UTF-8,'+encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 210"><rect width="320" height="210" rx="14" fill="#ebe9e4"/><rect x="18" y="18" width="284" height="174" rx="9" fill="#f8f7f4" stroke="#b8b6b0" stroke-width="3"/><rect x="34" y="38" width="72" height="88" rx="6" fill="#d3d1cb"/><circle cx="70" cy="68" r="18" fill="#aaa8a2"/><path d="M43 111c5-21 48-21 54 0" fill="#aaa8a2"/><path d="M128 48h140M128 70h112M128 96h140M34 151h234M34 171h180" stroke="#a7a59f" stroke-width="8" stroke-linecap="round"/><circle cx="275" cy="157" r="16" fill="none" stroke="#aaa8a2" stroke-width="5"/></svg>`);
+const EMPLOYEES=[
+  {id:'e1',ar:'راشد الكتبي',en:'Rashed Al Ketbi',g:'G7812'},
+  {id:'e2',ar:'مريم السويدي',en:'Maryam Al Suwaidi',g:'G6157'},
+  {id:'e3',ar:'سالم النقبي',en:'Salem Al Naqbi',g:'G8921'},
+  {id:'e4',ar:'نورة المهيري',en:'Noura Al Muhairi',g:'G7346'},
+  {id:'e5',ar:'حمد الشامسي',en:'Hamad Al Shamsi',g:'G5608'}
+];
+const vehicles=[
+  {id:'v1',plate:'14 \\ 58216',traffic:'7710002101',start:'2026-01-12',expiry:'2027-01-11',type:{ar:'تويوتا\\فورشنر',en:'Toyota \\ Fortuner'},class:{ar:'مركبة خفيفة',en:'Light vehicle'},vin:'JTD-FX62A-71K20518',site:'wathba',contract:{ar:'ملحق تعاقدي تجريبي',en:'Fabricated contract addendum'},thumb:LICENSE_THUMB,fines:[{id:'f101',date:'2026-08-14',amount:420,points:4,employee:'e1'},{id:'f102',date:'2026-08-22',amount:300,points:2,employee:'e2'}]},
+  {id:'v2',plate:'07 \\ 64125',traffic:'7710002102',start:'2025-10-03',expiry:'2026-10-03',type:{ar:'تويوتا\\كوستر',en:'Toyota \\ Coaster'},class:{ar:'باص ثقيل',en:'Heavy bus'},vin:'JTG-CS19B-52M64107',site:'wathba',contract:{ar:'ضمن العقد التجريبي',en:'Included in the fabricated contract'},thumb:LICENSE_THUMB,fines:[{id:'f201',date:'2026-07-19',amount:600,points:6,employee:'e3'},{id:'f202',date:'2026-08-02',amount:250,points:0,employee:'e4'},{id:'f203',date:'2026-08-27',amount:360,points:3,employee:'e1'}]},
+  {id:'v3',plate:'22 \\ 71840',traffic:'7710002103',start:'2025-07-18',expiry:'2026-07-17',type:{ar:'تويوتا\\هايس',en:'Toyota \\ Hiace'},class:{ar:'باص خفيف',en:'Light bus'},vin:'JTJ-HS44C-86N71829',site:'wathba',contract:{ar:'غير مسجلة في العقد التجريبي',en:'Not registered in the fabricated contract'},thumb:LICENSE_THUMB,fines:[{id:'f301',date:'2026-06-11',amount:500,points:4,employee:'e5'}]},
+  {id:'v4',plate:'09 \\ 47218',traffic:'7710002104',start:'2026-03-20',expiry:'2027-03-19',type:{ar:'فورد\\استيشن',en:'Ford \\ Station Wagon'},class:{ar:'مركبة خفيفة',en:'Light vehicle'},vin:'MNB-FS73D-39P47261',site:'wathba',contract:{ar:'ضمن العقد التجريبي',en:'Included in the fabricated contract'},thumb:LICENSE_THUMB,fines:[]},
+  {id:'v5',plate:'16 \\ 82541',traffic:'7710002105',start:'2025-09-23',expiry:'2026-09-22',type:{ar:'نيسان\\بيك أب',en:'Nissan \\ Pickup'},class:{ar:'بيك أب',en:'Pickup'},vin:'JN1-PK28E-64R82513',site:'wathba',contract:{ar:'ملحق تعاقدي تجريبي',en:'Fabricated contract addendum'},thumb:LICENSE_THUMB,fines:[{id:'f501',date:'2026-05-08',amount:200,points:0,employee:'e2'},{id:'f502',date:'2026-06-24',amount:450,points:4,employee:'e3'},{id:'f503',date:'2026-07-30',amount:180,points:0,employee:'e4'},{id:'f504',date:'2026-08-18',amount:700,points:8,employee:'e5'},{id:'f505',date:'2026-08-29',amount:320,points:2,employee:'e1'}]},
+  {id:'v6',plate:'31 \\ 69402',traffic:'7710002106',start:'2025-12-01',expiry:'2026-11-30',type:{ar:'تويوتا\\لاندكروزر',en:'Toyota \\ Land Cruiser'},class:{ar:'فرع الأمن',en:'Security branch'},vin:'JTE-LC91F-27S69435',site:'wathba',contract:{ar:'ضمن العقد التجريبي',en:'Included in the fabricated contract'},thumb:LICENSE_THUMB,fines:[{id:'f601',date:'2026-08-05',amount:260,points:2,employee:'e4'}]},
+  {id:'v7',plate:'05 \\ 78124',traffic:'7710002201',start:'2025-08-28',expiry:'2026-08-27',type:{ar:'ميتسوبيشي\\باجيرو',en:'Mitsubishi \\ Pajero'},class:{ar:'مركبة خفيفة',en:'Light vehicle'},vin:'JMB-PJ35G-18T78146',site:'pretrial',contract:{ar:'غير مسجلة في العقد التجريبي',en:'Not registered in the fabricated contract'},thumb:LICENSE_THUMB,fines:[{id:'f701',date:'2026-07-02',amount:410,points:4,employee:'e1'},{id:'f702',date:'2026-08-12',amount:220,points:0,employee:'e5'}]},
+  {id:'v8',plate:'28 \\ 61579',traffic:'7710002202',start:'2026-02-07',expiry:'2027-02-06',type:{ar:'تويوتا\\فورشنر',en:'Toyota \\ Fortuner'},class:{ar:'مركبة خفيفة',en:'Light vehicle'},vin:'JTD-FX47H-63U61592',site:'pretrial',contract:{ar:'ضمن العقد التجريبي',en:'Included in the fabricated contract'},thumb:LICENSE_THUMB,fines:[{id:'f801',date:'2026-08-09',amount:350,points:3,employee:'e2'},{id:'f802',date:'2026-08-25',amount:290,points:2,employee:'e3'}]},
+  {id:'v9',plate:'12 \\ 43821',traffic:'7710002203',start:'2025-10-14',expiry:'2026-10-13',type:{ar:'تويوتا\\هايس',en:'Toyota \\ Hiace'},class:{ar:'باص خفيف',en:'Light bus'},vin:'JTJ-HS58J-91V43867',site:'pretrial',contract:{ar:'ملحق تعاقدي تجريبي',en:'Fabricated contract addendum'},thumb:LICENSE_THUMB,fines:[{id:'f901',date:'2026-06-21',amount:520,points:6,employee:'e4'},{id:'f902',date:'2026-07-11',amount:240,points:0,employee:'e5'},{id:'f903',date:'2026-08-03',amount:330,points:2,employee:'e1'},{id:'f904',date:'2026-08-20',amount:610,points:6,employee:'e2'}]},
+  {id:'v10',plate:'24 \\ 75916',traffic:'7710002204',start:'2026-04-16',expiry:'2027-04-15',type:{ar:'فورد\\ترانزيت',en:'Ford \\ Transit'},class:{ar:'مندوب',en:'Messenger vehicle'},vin:'WF0-TR62K-44W75938',site:'pretrial',contract:{ar:'ضمن العقد التجريبي',en:'Included in the fabricated contract'},thumb:LICENSE_THUMB,fines:[]}
+];
+const SITES={wathba:{ar:'مشروع الوثبة -2',en:'Wathba Project - 2'},pretrial:{ar:'الحبس الاحتياطي -2',en:'Pretrial Detention - 2'}};
+const importRows=[
+  {row:2,plate:'14 \\ 58216',date:'2026-08-31',amount:280,matched:'v1'},
+  {row:3,plate:'33 \\ 44672',date:'2026-08-30',amount:450,matched:null},
+  {row:4,plate:'28 \\ 61579',date:'2026-08-29',amount:310,matched:'v8'}
+];
+const state={lang:'ar',device:'desktop',view:'fleet',selectedVehicle:'v1',query:'',site:'all',expiry:'all',notificationDays:30,dialog:null,documentStep:1,selectedFineIds:new Set(),employeeId:'e1',fileName:'',toastTimer:null};
+const $=selector=>document.querySelector(selector);
+const $$=selector=>[...document.querySelectorAll(selector)];
+const t=()=>COPY[state.lang];
+const local=value=>typeof value==='object'?value[state.lang]:value;
+const esc=value=>String(value??'').replace(/[&<>'"]/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[char]));
+const money=value=>new Intl.NumberFormat(state.lang==='ar'?'ar-AE':'en-AE',{maximumFractionDigits:0}).format(value);
+function getVehicle(id=state.selectedVehicle){return vehicles.find(vehicle=>vehicle.id===id)}
+function getEmployee(id){return EMPLOYEES.find(employee=>employee.id===id)||EMPLOYEES[0]}
+function statusFor(expiry){const mockNow=Date.UTC(2026,8,1);const end=Date.parse(`${expiry}T00:00:00Z`);const days=Math.ceil((end-mockNow)/86400000);return days<0?'expired':days<=60?'due':'valid'}
+function totals(vehicle){return vehicle.fines.reduce((sum,fine)=>({amount:sum.amount+fine.amount,points:sum.points+fine.points}),{amount:0,points:0})}
+function serviceStrip(){const T=t();return `<section class="service-strip" aria-labelledby="service-title"><span class="service-art" aria-hidden="true"><svg viewBox="0 0 72 72"><path d="M13 38h46l-4-12c-1-3-4-5-7-5H25c-4 0-6 2-8 6l-4 11Z" fill="#2f6fed" stroke="#102a43" stroke-width="2.5"/><path d="M18 38h38c4 0 7 3 7 7v10H9V47c0-5 4-9 9-9Z" fill="#20b8a6" stroke="#102a43" stroke-width="2.5"/><path d="M22 27h24l4 11H18l4-11Z" fill="#dff3ff" stroke="#102a43" stroke-width="2"/><circle cx="20" cy="54" r="6" fill="#ffc928" stroke="#102a43" stroke-width="2.5"/><circle cx="52" cy="54" r="6" fill="#ffc928" stroke="#102a43" stroke-width="2.5"/><rect x="43" y="5" width="21" height="27" rx="4" fill="#fff4cf" stroke="#102a43" stroke-width="2.5"/><path d="M49 13h9M49 18h9M49 23h6" stroke="#c8102e" stroke-width="2.5" stroke-linecap="round"/></svg></span><div class="service-copy"><p class="eyebrow">${T.services}</p><h1 id="service-title">${T.serviceTitle}</h1><p>${T.serviceDesc}</p></div><span class="service-code mono">${T.prototype}</span></section>`}
+function statusBadge(vehicle){const status=statusFor(vehicle.expiry);return `<span class="badge ${status}">${t()[status]}</span>`}
+function fleetFilters(){const T=t();return `<section class="filterbar" aria-label="${T.fleet}"><label class="field-shell"><span aria-hidden="true">⌕</span><span class="sr-only">${T.search}</span><input id="fleet-search" type="search" value="${esc(state.query)}" placeholder="${T.search}"></label><div class="site-chips" aria-label="${T.site}"><button class="chip" type="button" data-site="all" aria-pressed="${state.site==='all'}">${T.allSites}</button>${Object.entries(SITES).map(([id,site])=>`<button class="chip" type="button" data-site="${id}" aria-pressed="${state.site===id}">${site[state.lang]}</button>`).join('')}</div><label class="field-shell"><span class="sr-only">${T.licenseExpiry}</span><select id="expiry-filter"><option value="all" ${state.expiry==='all'?'selected':''}>${T.allExpiry}</option><option value="valid" ${state.expiry==='valid'?'selected':''}>${T.valid}</option><option value="due" ${state.expiry==='due'?'selected':''}>${T.due}</option><option value="expired" ${state.expiry==='expired'?'selected':''}>${T.expired}</option></select></label><label class="notification"><span>${T.notifyBefore}</span><input id="notify-days" type="number" min="1" max="365" value="${state.notificationDays}" aria-label="${T.notifyBefore}"><span>${T.days}</span></label></section>`}
+function filteredVehicles(){const query=state.query.trim().toLowerCase();return vehicles.filter(vehicle=>{const haystack=[vehicle.plate,vehicle.traffic,vehicle.vin,vehicle.type.ar,vehicle.type.en,vehicle.class.ar,vehicle.class.en,SITES[vehicle.site].ar,SITES[vehicle.site].en].join(' ').toLowerCase();return (!query||haystack.includes(query))&&(state.site==='all'||vehicle.site===state.site)&&(state.expiry==='all'||statusFor(vehicle.expiry)===state.expiry)})}
+function desktopVehicleRow(vehicle){const T=t(),sum=totals(vehicle);return `<tr><td><span class="plate">${esc(vehicle.plate)}</span></td><td class="vehicle-type"><strong>${esc(local(vehicle.type))}</strong><small class="mono">${esc(vehicle.vin)}</small></td><td>${esc(local(vehicle.class))}</td><td class="mono">${esc(vehicle.traffic)}</td><td class="mono">${esc(vehicle.start)}</td><td><div class="vehicle-type"><strong class="mono">${esc(vehicle.expiry)}</strong><small>${statusBadge(vehicle)}</small></div></td><td><span class="fine-summary"><strong>${vehicle.fines.length} · ${money(sum.amount)} ${T.aed}</strong><small>${sum.points} ${T.points}</small></span></td><td><img class="thumb" src="${vehicle.thumb}" alt="${T.placeholderScan}"></td><td><button class="btn" type="button" data-open-vehicle="${vehicle.id}">${T.open}<span class="back-icon ltr-only-flip" aria-hidden="true">←</span></button></td></tr>`}
+function mobileVehicleCard(vehicle){const T=t(),sum=totals(vehicle);return `<article class="vehicle-card"><div class="vehicle-card-head"><span class="plate">${esc(vehicle.plate)}</span>${statusBadge(vehicle)}</div><h3>${esc(local(vehicle.type))}</h3><p>${esc(local(vehicle.class))}</p><div class="card-facts"><div class="fact"><span>${T.licenseExpiry}</span><strong class="mono">${esc(vehicle.expiry)}</strong></div><div class="fact"><span>${T.fines}</span><strong>${vehicle.fines.length} · ${money(sum.amount)} ${T.aed}</strong></div></div><div class="card-footer"><small>${sum.points} ${T.points}</small><button class="btn" type="button" data-open-vehicle="${vehicle.id}">${T.open}</button></div></article>`}
+function fleetView(){const T=t(),filtered=filteredVehicles();return `${serviceStrip()}<header class="page-head"><div><h2>${T.fleet}</h2><p>${T.fleetDesc} · ${T.asOf}</p></div><div class="head-actions"><button class="btn primary" type="button" data-dialog="import"><span class="icon" aria-hidden="true">⇧</span>${T.importFines}</button></div></header>${fleetFilters()}${filtered.length?Object.entries(SITES).map(([siteId,site])=>{const list=filtered.filter(vehicle=>vehicle.site===siteId);if(!list.length)return '';return `<section class="group" aria-labelledby="group-${siteId}"><header class="group-head"><div class="group-title"><h3 id="group-${siteId}">${site[state.lang]}</h3><span class="count-pill">${list.length}</span></div><span class="group-meta">${list.length} ${T.vehicles}</span></header><div class="table-wrap desktop-only"><table><thead><tr><th>${T.plate}</th><th>${T.type}</th><th>${T.class}</th><th>${T.trafficCode}</th><th>${T.licenseStart}</th><th>${T.licenseExpiry}</th><th>${T.fines}</th><th>${T.licenseScan}</th><th>${T.action}</th></tr></thead><tbody>${list.map(desktopVehicleRow).join('')}</tbody></table></div><div class="vehicle-cards mobile-only">${list.map(mobileVehicleCard).join('')}</div></section>`}).join(''):`<section class="panel empty"><strong>${T.noVehicles}</strong>${T.adjustFilters}</section>`}`}
+function infoItem(label,value,mono=false){return `<div class="info-item"><span>${label}</span><strong class="${mono?'mono':''}">${esc(value)}</strong></div>`}
+function desktopFineRows(vehicle){const T=t();return vehicle.fines.map((fine,index)=>{const employee=getEmployee(fine.employee);return `<tr><td class="seq">${index+1}</td><td>${esc(employee[state.lang])}</td><td class="mono">${esc(employee.g)}</td><td class="mono">${esc(fine.date)}</td><td class="mono">${money(fine.amount)} ${T.aed}</td><td class="mono">${fine.points}</td><td><button class="btn danger icon-only" type="button" data-delete-fine="${fine.id}" aria-label="${T.delete} ${index+1}">×</button></td></tr>`}).join('')}
+function mobileFineCards(vehicle){const T=t();return vehicle.fines.map((fine,index)=>{const employee=getEmployee(fine.employee);return `<article class="fine-card"><div class="fine-card-head"><div><h4>${index+1}. ${esc(employee[state.lang])}</h4><p>${esc(employee.g)}</p></div><button class="btn danger icon-only" type="button" data-delete-fine="${fine.id}" aria-label="${T.delete} ${index+1}">×</button></div><div class="fine-card-grid"><div class="fact"><span>${T.date}</span><strong class="mono">${fine.date}</strong></div><div class="fact"><span>${T.amount}</span><strong class="mono">${money(fine.amount)} ${T.aed}</strong></div><div class="fact"><span>${T.blackPoints}</span><strong class="mono">${fine.points}</strong></div></div></article>`}).join('')}
+function detailView(){const T=t(),vehicle=getVehicle(),sum=totals(vehicle);return `${serviceStrip()}<header class="page-head"><div><button class="btn subtle" type="button" data-back-fleet><span class="back-icon" aria-hidden="true">→</span>${T.backFleet}</button><h2>${T.vehicleDetail} · <span class="mono">${esc(vehicle.plate)}</span></h2><p>${T.detailDesc}</p></div><div class="head-actions"><button class="btn" type="button" data-dialog="add"><span aria-hidden="true">＋</span>${T.addFine}</button><button class="btn primary" type="button" data-generate>${T.generateDocument}</button></div></header><section class="detail-grid"><article class="panel"><header class="panel-head"><h3>${T.vehicleInfo}</h3>${statusBadge(vehicle)}</header><div class="info-grid">${infoItem(T.plate,vehicle.plate,true)}${infoItem(T.type,local(vehicle.type))}${infoItem(T.class,local(vehicle.class))}${infoItem(T.trafficCode,vehicle.traffic,true)}${infoItem(T.licenseStart,vehicle.start,true)}${infoItem(T.licenseExpiry,vehicle.expiry,true)}${infoItem(T.vin,vehicle.vin,true)}${infoItem(T.site,SITES[vehicle.site][state.lang])}${infoItem(T.contractNote,local(vehicle.contract))}</div></article><aside class="panel"><header class="panel-head"><h3>${T.scanPreview}</h3><small>${T.licenseScan}</small></header><div class="scan-preview"><img src="${vehicle.thumb}" alt="${T.placeholderScan}"></div><div class="scan-note">${T.placeholderScan}</div></aside></section><section class="panel ledger"><header class="panel-head"><div><h3>${T.fineLedger}</h3><small>${vehicle.fines.length} ${T.fineCount} · ${money(sum.amount)} ${T.aed} · ${sum.points} ${T.points}</small></div><div class="action-row"><button class="btn" type="button" data-dialog="add">${T.addFine}</button><button class="btn primary" type="button" data-generate>${T.generateDocument}</button></div></header>${vehicle.fines.length?`<div class="table-wrap desktop-only"><table><thead><tr><th>${T.sequence}</th><th>${T.employee}</th><th>${T.gNumber}</th><th>${T.date}</th><th>${T.amount}</th><th>${T.blackPoints}</th><th>${T.action}</th></tr></thead><tbody>${desktopFineRows(vehicle)}</tbody></table></div><div class="fine-cards mobile-only">${mobileFineCards(vehicle)}</div>`:`<div class="empty">${T.noFines}</div>`}</section>`}
+function selectionData(){const vehicle=getVehicle();const fines=vehicle.fines.filter(fine=>state.selectedFineIds.has(fine.id));return {fines,total:fines.reduce((sum,fine)=>sum+fine.amount,0)}}
+function fineChecklist(compact=false){const T=t(),vehicle=getVehicle(),selection=selectionData();return `<section class="panel"><header class="panel-head"><h3>${T.selectedFines}</h3><small>${vehicle.fines.length} ${T.fineCount}</small></header><div class="checklist">${vehicle.fines.length?vehicle.fines.map(fine=>{const employee=getEmployee(fine.employee);return `<label class="check-row"><input type="checkbox" data-fine-check="${fine.id}" ${state.selectedFineIds.has(fine.id)?'checked':''}><span><strong>${esc(employee[state.lang])}</strong><small>${fine.date} · ${employee.g}${compact?'':` · ${fine.points} ${T.points}`}</small></span><span class="check-amount">${money(fine.amount)} ${T.aed}</span></label>`}).join(''):`<div class="empty">${T.noFines}</div>`}</div><footer class="selection-summary"><span>${T.selectedSummary(selection.fines.length,money(selection.total))}</span><strong>${money(selection.total)} ${T.aed}</strong></footer></section>`}
+function paperPreview(){const T=t(),vehicle=getVehicle(),selection=selectionData();return `<section class="panel"><header class="panel-head"><h3>${T.paperPreview}</h3><small class="mono">VF-0231</small></header><div class="paper-shell"><article class="paper" aria-label="${T.paperPreview}"><header class="paper-company"><img src="gssg-logo.png" alt="GSSG"><div><strong>${T.companyAr}</strong><small>${T.companyEn}</small></div><span class="mono">GSSG</span></header><div class="paper-meta"><div><p>${T.reference}: <strong class="mono">VF-0231</strong></p></div><div class="dates"><p>${T.gregorian}: <strong class="mono">${state.lang==='ar'?'01/09/2026 م':'01/09/2026'}</strong></p><p>${T.hijri}: <strong>${state.lang==='ar'?'19 ربيع الأول، 1448 هـ':"19 Rabi' al-Awwal 1448 AH"}</strong></p></div></div><h2>${T.documentTitle}</h2><div class="plate-box"><span>${T.plate}</span><strong>${esc(vehicle.plate)}</strong></div><table><thead><tr><th>${T.sequence}</th><th>${T.employee}</th><th>${T.gNumber}</th><th>${T.date}</th><th>${T.amount}</th><th>${T.blackPoints}</th></tr></thead><tbody>${selection.fines.length?selection.fines.map((fine,index)=>{const employee=getEmployee(fine.employee);return `<tr><td>${index+1}</td><td>${esc(employee[state.lang])}</td><td class="mono">${employee.g}</td><td class="mono">${fine.date}</td><td class="mono">${money(fine.amount)} ${T.aed}</td><td class="mono">${fine.points}</td></tr>`}).join(''):`<tr><td class="paper-empty" colspan="6">${T.noSelected}</td></tr>`}</tbody></table><footer class="paper-footer"><span class="mono">www.gssg.app</span><span class="submitter">${T.loggedSubmitter}<small> — ${T.loggedHint}</small><strong>G7186</strong></span></footer></article></div></section>`}
+function generateView(){const T=t();return `${serviceStrip()}<header class="page-head"><div><button class="btn subtle" type="button" data-back-detail><span class="back-icon" aria-hidden="true">→</span>${T.vehicleDetail}</button><h2>${T.generateTitle}</h2><p>${T.generateDesc}</p></div></header><div class="wizard-head" aria-label="${T.generateTitle}"><span class="step ${state.documentStep===1?'active':''}"><b>1</b>${T.stepSelect}</span><span class="step-line" aria-hidden="true"></span><span class="step ${state.documentStep===2?'active':''}"><b>2</b>${T.stepPreview}</span></div>${state.documentStep===1?`${fineChecklist()}<div class="generate-actions"><span></span><button class="btn primary" type="button" data-doc-step="2">${T.previewDocument}<span class="ltr-only-flip" aria-hidden="true">←</span></button></div>`:`<div class="generate-layout">${fineChecklist(true)}${paperPreview()}</div><div class="generate-actions"><button class="btn" type="button" data-doc-step="1">${T.previous}</button><div class="action-row"><button class="btn" type="button" data-preview-toast>${T.preview}</button><button class="btn primary" type="button" data-save-document>${T.saveDocument}</button></div></div>`}`}
+function addDialog(){const T=t(),vehicle=getVehicle();return `<div class="overlay" data-overlay role="presentation"><section class="dialog" role="dialog" aria-modal="true" aria-labelledby="add-title"><header class="dialog-head"><div><h2 id="add-title">${T.addFineTitle}</h2><p>${T.addFineDesc}</p></div><button class="btn icon-only" type="button" data-close-dialog aria-label="${T.close}">×</button></header><form id="add-fine-form"><div class="dialog-body"><div class="form-grid"><div class="form-field full"><label for="fine-plate">${T.selectedVehicle}</label><input class="mono readonly" id="fine-plate" value="${esc(vehicle.plate)}" readonly></div><div class="form-field"><label for="fine-date">${T.date}</label><input class="mono" id="fine-date" name="date" type="date" value="2026-09-01" required></div><div class="form-field"><label for="fine-amount">${T.amountAed}</label><input class="mono" id="fine-amount" name="amount" type="number" min="1" step="1" value="300" required></div><div class="form-field"><label for="fine-points">${T.blackPoints}</label><input class="mono" id="fine-points" name="points" type="number" min="0" step="1" value="0" required></div><div class="form-field full employee-picker"><label for="employee-search">${T.employeePicker}</label><input id="employee-search" role="combobox" aria-autocomplete="list" aria-expanded="true" aria-controls="employee-list" placeholder="${T.employeeSearch}" autocomplete="off"><div class="employee-list" id="employee-list" role="listbox">${EMPLOYEES.map(employee=>`<button class="employee-option" type="button" role="option" data-employee="${employee.id}" aria-selected="${state.employeeId===employee.id}"><span><strong>${esc(employee[state.lang])}</strong><small>${esc(employee[state.lang==='ar'?'en':'ar'])}</small></span><small>${employee.g}</small></button>`).join('')}</div></div></div></div><footer class="dialog-actions"><button class="btn" type="button" data-close-dialog>${T.cancel}</button><button class="btn primary" type="submit">${T.save}</button></footer></form></section></div>`}
+function importDialog(){const T=t();return `<div class="overlay" data-overlay role="presentation"><section class="dialog wide" role="dialog" aria-modal="true" aria-labelledby="import-title"><header class="dialog-head"><div><h2 id="import-title">${T.importTitle}</h2><p>${T.importDesc}</p></div><button class="btn icon-only" type="button" data-close-dialog aria-label="${T.close}">×</button></header><div class="dialog-body"><label class="dropzone" id="dropzone" for="import-file"><span aria-hidden="true">⇩</span><strong>${T.dropFile}</strong><span>${state.fileName?`${T.fileSelected}: ${esc(state.fileName)}`:T.acceptedFiles}</span><input id="import-file" type="file" accept=".xlsx,.xls,.csv,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"></label><section class="import-preview"><h3>${T.parsedPreview}</h3><div class="table-wrap"><table><thead><tr><th>${T.sourceRow}</th><th>${T.plate}</th><th>${T.date}</th><th>${T.amount}</th><th>${T.matchedVehicle}</th><th>${T.matchStatus}</th></tr></thead><tbody>${importRows.map(row=>{const vehicle=row.matched?getVehicle(row.matched):null;return `<tr><td class="mono">${row.row}</td><td><span class="plate">${row.plate}</span></td><td class="mono">${row.date}</td><td class="mono">${row.amount} ${T.aed}</td><td>${vehicle?`<span class="mono">${vehicle.plate}</span>`:`<label><span class="sr-only">${T.chooseVehicle}</span><select id="import-fallback-${row.row}" name="import-fallback-${row.row}" aria-label="${T.chooseVehicle}"><option value="">${T.chooseVehicle}</option>${vehicles.map(item=>`<option value="${item.id}">${item.plate} · ${local(item.type)}</option>`).join('')}</select></label>`}</td><td><span class="badge ${vehicle?'matched':'unmatched'}">${vehicle?T.matched:T.unmatched}</span></td></tr>`}).join('')}</tbody></table></div></section></div><footer class="dialog-actions"><button class="btn" type="button" data-close-dialog>${T.cancel}</button><button class="btn primary" type="button" data-confirm-import>${T.willAdd(importRows.length)}</button></footer></section></div>`}
+function dialogMarkup(){return state.dialog==='add'?addDialog():state.dialog==='import'?importDialog():''}
+function render(){const T=t();document.documentElement.lang=state.lang;document.documentElement.dir=T.dir;document.title=T.title;$('#brand-sub').textContent=T.brandSub;$('#mock-label').textContent=T.mockLabel;$('#language-toggle').setAttribute('aria-label',T.language);$('#device-toggle').setAttribute('aria-label',T.device);$$('[data-lang]').forEach(button=>button.setAttribute('aria-pressed',button.dataset.lang===state.lang));$$('[data-device]').forEach(button=>{button.setAttribute('aria-pressed',button.dataset.device===state.device);button.textContent=button.dataset.device==='desktop'?T.desktop:T.mobile});const content=state.view==='fleet'?fleetView():state.view==='detail'?detailView():generateView();$('#app').innerHTML=`<div class="workspace ${state.device==='mobile'?'phone':''}"><div class="phone-cap" aria-hidden="true"></div><div class="screen">${content}</div></div>${dialogMarkup()}`;bind();if(state.dialog){setTimeout(()=>$('.dialog button,.dialog input,.dialog select')?.focus(),0)}}
+function showToast(message){const toast=$('#toast'),text=$('#toast-text');text.textContent=message;toast.classList.add('show');clearTimeout(state.toastTimer);state.toastTimer=setTimeout(()=>toast.classList.remove('show'),1900)}
+function closeDialog(){state.dialog=null;render()}
+function openGenerate(){const vehicle=getVehicle();state.selectedFineIds=new Set(vehicle.fines.map(fine=>fine.id));state.documentStep=1;state.view='generate';render()}
+function bind(){
+  $('#fleet-search')?.addEventListener('input',event=>{state.query=event.target.value;render();requestAnimationFrame(()=>{const input=$('#fleet-search');if(input){input.focus();input.setSelectionRange(state.query.length,state.query.length)}})});
+  $('#expiry-filter')?.addEventListener('change',event=>{state.expiry=event.target.value;render()});
+  $('#notify-days')?.addEventListener('change',event=>{state.notificationDays=Math.max(1,Math.min(365,Number(event.target.value)||30));render()});
+  $$('[data-site]').forEach(button=>button.addEventListener('click',()=>{state.site=button.dataset.site;render()}));
+  $$('[data-open-vehicle]').forEach(button=>button.addEventListener('click',()=>{state.selectedVehicle=button.dataset.openVehicle;state.view='detail';render()}));
+  $$('[data-back-fleet]').forEach(button=>button.addEventListener('click',()=>{state.view='fleet';render()}));
+  $$('[data-back-detail]').forEach(button=>button.addEventListener('click',()=>{state.view='detail';render()}));
+  $$('[data-dialog]').forEach(button=>button.addEventListener('click',()=>{state.dialog=button.dataset.dialog;state.employeeId='e1';state.fileName='';render()}));
+  $$('[data-close-dialog]').forEach(button=>button.addEventListener('click',closeDialog));
+  $('[data-overlay]')?.addEventListener('click',event=>{if(event.target===event.currentTarget)closeDialog()});
+  $$('[data-generate]').forEach(button=>button.addEventListener('click',openGenerate));
+  $$('[data-delete-fine]').forEach(button=>button.addEventListener('click',()=>{const vehicle=getVehicle();vehicle.fines=vehicle.fines.filter(fine=>fine.id!==button.dataset.deleteFine);state.selectedFineIds.delete(button.dataset.deleteFine);render();showToast(t().fineDeleted)}));
+  $$('[data-fine-check]').forEach(input=>input.addEventListener('change',()=>{input.checked?state.selectedFineIds.add(input.dataset.fineCheck):state.selectedFineIds.delete(input.dataset.fineCheck);render()}));
+  $$('[data-doc-step]').forEach(button=>button.addEventListener('click',()=>{state.documentStep=Number(button.dataset.docStep);render()}));
+  $('[data-preview-toast]')?.addEventListener('click',()=>showToast(t().previewReady));
+  $('[data-save-document]')?.addEventListener('click',()=>showToast(t().documentSaved));
+  $('[data-confirm-import]')?.addEventListener('click',()=>{closeDialog();showToast(t().importReady)});
+  const fileInput=$('#import-file');fileInput?.addEventListener('change',()=>{state.fileName=fileInput.files?.[0]?.name||'';render()});
+  const dropzone=$('#dropzone');if(dropzone){dropzone.addEventListener('dragover',event=>{event.preventDefault();dropzone.classList.add('dragging')});dropzone.addEventListener('dragleave',()=>dropzone.classList.remove('dragging'));dropzone.addEventListener('drop',event=>{event.preventDefault();state.fileName=event.dataTransfer.files?.[0]?.name||'traffic-fines.csv';render()})}
+  $$('#employee-list [data-employee]').forEach(button=>button.addEventListener('click',()=>{state.employeeId=button.dataset.employee;$$('#employee-list [data-employee]').forEach(option=>option.setAttribute('aria-selected',option===button));$('#employee-search').value=`${getEmployee(state.employeeId)[state.lang]} · ${getEmployee(state.employeeId).g}`}));
+  $('#employee-search')?.addEventListener('input',event=>{const query=event.target.value.toLowerCase();$$('#employee-list [data-employee]').forEach(option=>{const employee=getEmployee(option.dataset.employee);option.hidden=!`${employee.ar} ${employee.en} ${employee.g}`.toLowerCase().includes(query)})});
+  $('#add-fine-form')?.addEventListener('submit',event=>{event.preventDefault();const form=new FormData(event.currentTarget),date=form.get('date'),amount=Number(form.get('amount')),points=Number(form.get('points'));if(!date||!Number.isInteger(amount)||amount<1||!Number.isInteger(points)||points<0){showToast(t().requiredFields);return}const vehicle=getVehicle();vehicle.fines.push({id:`f${Date.now()}`,date:String(date),amount,points,employee:state.employeeId});closeDialog();showToast(t().fineAdded)});
+  const selectedEmployee=getEmployee(state.employeeId),employeeInput=$('#employee-search');
+  if(employeeInput)employeeInput.value=`${selectedEmployee[state.lang]} · ${selectedEmployee.g}`;
+}
+function trapDialogFocus(event){
+  if(event.key!=='Tab'||!state.dialog)return;
+  const dialog=$('[role="dialog"][aria-modal="true"]');
+  if(!dialog)return;
+  const focusable=[...dialog.querySelectorAll('button:not([disabled]),input:not([disabled]),select:not([disabled]),[tabindex]:not([tabindex="-1"])')].filter(element=>!element.hidden);
+  if(!focusable.length)return;
+  const first=focusable[0],last=focusable[focusable.length-1],active=document.activeElement;
+  if(!dialog.contains(active)){event.preventDefault();(event.shiftKey?last:first).focus()}
+  else if(event.shiftKey&&active===first){event.preventDefault();last.focus()}
+  else if(!event.shiftKey&&active===last){event.preventDefault();first.focus()}
+}
+$$('[data-lang]').forEach(button=>button.addEventListener('click',()=>{state.lang=button.dataset.lang;render()}));
+$$('[data-device]').forEach(button=>button.addEventListener('click',()=>{state.device=button.dataset.device;render()}));
+document.addEventListener('keydown',event=>{if(event.key==='Escape'&&state.dialog)closeDialog();else trapDialogFocus(event)});
+render();
+</script>
+</body>
+</html>

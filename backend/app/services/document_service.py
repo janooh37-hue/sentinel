@@ -41,7 +41,12 @@ from app.core import form_policy, leave_lifecycle
 from app.core import signature as signature_core
 from app.core.book_text import build_search_text, html_to_text
 from app.core.classifications import classified_ref, get_classification
-from app.core.constants import CLASSIFIED_BOOK_FORMS, STAMP_STYLE_HEADER, TEMPLATE_FILES
+from app.core.constants import (
+    CLASSIFIED_BOOK_FORMS,
+    STAMP_STYLE_HEADER,
+    TEMPLATE_FILES,
+    VEHICLE_LETTER_FORMS,
+)
 from app.core.dateutils import excel_date_to_datetime
 from app.core.docx_engine import DocxEngine, aztec_corner_for
 from app.core.docx_render import _arabic_clock, _arabic_weekday
@@ -100,6 +105,8 @@ _FORM_CATEGORY: dict[str, str] = {
     "Administrative Leave Form": "HR",
     "Passport Release List": "HR",
     "Inmate Conduct Violations": "NAT",
+    "Vehicle Fines": "VF",
+    "Vehicle Accident Report": "VA",
 }
 
 
@@ -139,6 +146,8 @@ _FORM_SHORT_NAME: dict[str, str] = {
     "Security Permit": "SecurityPermit",
     "Passport Release List": "PassportReleaseList",
     "Inmate Conduct Violations": "InmateViolations",
+    "Vehicle Fines": "VehicleFines",
+    "Vehicle Accident Report": "VehicleAccident",
 }
 
 # Forms that create a Leave row in the DB
@@ -824,16 +833,22 @@ def _build_template_data(
         data.pop("sig1_path", None)
 
     # ------------------------------------------------------------------
-    # 4b. Submitter G-number for the document footer — the classified papers
-    # and Inmate Conduct Violations footers consume `{{ submitter_g }}`. Scoped
-    # to these templates so other forms don't silently emit the caller's
-    # G-number. Resolves to the authenticated caller's `employee_id`
-    # (G-number); empty string when the user is unlinked or no auth context
-    # was threaded through — the footer token is bare (no Jinja guard), so
-    # that renders as a blank G-number, not a hidden line.
+    # 4b. Submitter G-number for the document footer — the classified papers,
+    # vehicle letters, and Inmate Conduct Violations consume
+    # `{{ submitter_g }}`. Scoped to these templates so other forms don't
+    # silently emit the caller's G-number. Resolves to the authenticated
+    # caller's `employee_id` (G-number); empty string when the user is unlinked
+    # or no auth context was threaded through — the footer token is bare (no
+    # Jinja guard), so that renders as a blank G-number, not a hidden line.
     # ------------------------------------------------------------------
-    if template_id in CLASSIFIED_BOOK_FORMS or template_id == "Inmate Conduct Violations":
-        data["submitter_g"] = (current_user.employee_id or "") if current_user is not None else ""
+    if (
+        template_id in CLASSIFIED_BOOK_FORMS
+        or template_id in VEHICLE_LETTER_FORMS
+        or template_id == "Inmate Conduct Violations"
+    ):
+        data["submitter_g"] = (
+            (current_user.employee_id or "") if current_user is not None else ""
+        )
 
     # ------------------------------------------------------------------
     # 4b-2. Inmate Conduct Violations — the "بيانات مقدم التقرير" row names the
@@ -1365,10 +1380,12 @@ def generate_document(
         current_user=current_user,
     )
 
-    # Classified papers: the ref renders as the Arabic body line (الرقم: …) —
-    # commit-only, so previews stay serial-free. Replaces the English header
-    # stamp for these forms.
-    if commit and template_id in CLASSIFIED_BOOK_FORMS:
+    # Classified and vehicle letterhead papers render the ref in the Arabic
+    # body line (الرقم: …) — commit-only, so previews stay serial-free. This
+    # replaces the English header stamp for these forms.
+    if commit and (
+        template_id in CLASSIFIED_BOOK_FORMS or template_id in VEHICLE_LETTER_FORMS
+    ):
         data["ref"] = raw_ref
 
     # Truthful embed flag: ``sig1_path`` survives _build_template_data only
@@ -1437,7 +1454,10 @@ def generate_document(
     # "DRAFT" string in the header (it would just be visual noise).
     # ------------------------------------------------------------------
     if commit:
-        if template_id not in CLASSIFIED_BOOK_FORMS:
+        if (
+            template_id not in CLASSIFIED_BOOK_FORMS
+            and template_id not in VEHICLE_LETTER_FORMS
+        ):
             DocxEngine.stamp_ref_number(docx_path, raw_ref, STAMP_STYLE_HEADER)
         DocxEngine.stamp_aztec_code(docx_path, raw_ref, corner=aztec_corner_for(template_id))
 
@@ -2212,7 +2232,7 @@ def render_signed_pdf(
     )
     docx_path = Vault.collision_safe_name(out_dir, docx_name.replace(".docx", "_signed.docx"))
     engine = DocxEngine(_TEMPLATES_DIR)
-    if template_id in CLASSIFIED_BOOK_FORMS:
+    if template_id in CLASSIFIED_BOOK_FORMS or template_id in VEHICLE_LETTER_FORMS:
         data["ref"] = book.ref_number
     engine.fill(template_id, data, docx_path)
 
@@ -2223,7 +2243,10 @@ def render_signed_pdf(
 
         _postprocess_general_book_footer(docx_path)
 
-    if template_id not in CLASSIFIED_BOOK_FORMS:
+    if (
+        template_id not in CLASSIFIED_BOOK_FORMS
+        and template_id not in VEHICLE_LETTER_FORMS
+    ):
         DocxEngine.stamp_ref_number(docx_path, book.ref_number, STAMP_STYLE_HEADER)
     DocxEngine.stamp_aztec_code(docx_path, book.ref_number, corner=aztec_corner_for(template_id))
 

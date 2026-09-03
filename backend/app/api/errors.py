@@ -80,6 +80,18 @@ class ValidationFailedError(AppError):
         )
 
 
+class EvgError(AppError):
+    """EVG/Playwright failure exposed as a stable upstream-service error."""
+
+    def __init__(self, code: str, message: str) -> None:
+        super().__init__(
+            code,
+            message,
+            http_status=status.HTTP_502_BAD_GATEWAY,
+            details={"text": message},
+        )
+
+
 def _envelope(code: str, message: str, **details: Any) -> dict[str, Any]:
     return {"error": {"code": code, "message": message, "details": details}}
 
@@ -135,6 +147,7 @@ def install_handlers(app: FastAPI) -> None:
 __all__ = [
     "AppError",
     "ConflictError",
+    "EvgError",
     "NotFoundError",
     "ValidationFailedError",
     "install_handlers",

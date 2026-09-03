@@ -17,6 +17,30 @@ export const loadLeavesPage = () =>
   import('@/pages/leaves/LeavesPage').then((m) => ({ default: m.LeavesPage }))
 export const loadPermitsPage = () =>
   import('@/pages/permits/PermitsPage').then((m) => ({ default: m.PermitsPage }))
+export const loadVehiclesHubPage = () =>
+  import('@/pages/vehicles/VehiclesHubPage').then((m) => ({ default: m.VehiclesHubPage }))
+export const loadVehicleDetailPage = () =>
+  import('@/pages/vehicles/VehicleDetailPage').then((m) => ({ default: m.VehicleDetailPage }))
+export const loadVehicleFinesLetterPage = () =>
+  import('@/pages/vehicles/VehicleFinesLetterPage').then((m) => ({
+    default: m.VehicleFinesLetterPage,
+  }))
+export const loadVehicleFinesReportPage = () =>
+  import('@/pages/vehicles/VehicleFinesReportPage').then((m) => ({
+    default: m.VehicleFinesReportPage,
+  }))
+export const loadVehicleAccidentsPage = () =>
+  import('@/pages/vehicles/VehicleAccidentsPage').then((m) => ({
+    default: m.VehicleAccidentsPage,
+  }))
+export const loadVehicleAccidentLetterPage = () =>
+  import('@/pages/vehicles/VehicleAccidentLetterPage').then((m) => ({
+    default: m.VehicleAccidentLetterPage,
+  }))
+export const loadVehicleMaintenancePage = () =>
+  import('@/pages/vehicles/VehicleMaintenancePage').then((m) => ({
+    default: m.VehicleMaintenancePage,
+  }))
 export const loadLedgerPage = () =>
   import('@/pages/ledger/LedgerPage').then((m) => ({ default: m.LedgerPage }))
 export const loadSettingsPage = () =>

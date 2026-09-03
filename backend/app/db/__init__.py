@@ -11,6 +11,15 @@ Public surface:
 from __future__ import annotations
 
 from app.db.base import Base
+from app.db.models import (
+    Vehicle,
+    VehicleAccident,
+    VehicleFile,
+    VehicleFine,
+    VehicleLicenseRenewal,
+    VehicleMaintenance,
+    VehicleSite,
+)
 from app.db.session import (
     SessionLocal,
     attach_sqlite_pragmas,
@@ -22,6 +31,13 @@ from app.db.session import (
 __all__ = [
     "Base",
     "SessionLocal",
+    "Vehicle",
+    "VehicleAccident",
+    "VehicleFile",
+    "VehicleFine",
+    "VehicleLicenseRenewal",
+    "VehicleMaintenance",
+    "VehicleSite",
     "attach_sqlite_pragmas",
     "engine",
     "get_db",

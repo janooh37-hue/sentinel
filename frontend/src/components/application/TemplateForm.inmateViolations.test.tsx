@@ -121,6 +121,7 @@ const SCHEMA: TemplateDetailResponse = {
     signing_path: 'auto',
     has_code: true,
     notifies_employee: false,
+    feature_minted: false,
   },
   needs_manager: true,
   needs_submitter: false,
