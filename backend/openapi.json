@@ -3141,6 +3141,73 @@
             }
           }
         }
+      },
+      "put": {
+        "tags": [
+          "employees"
+        ],
+        "summary": "Update Employee Absence Episode",
+        "description": "Redraw one register row (dates and note) in a single unit of work.",
+        "operationId": "update_employee_absence_episode_api_v1_employees__employee_id__absences_episodes_put",
+        "parameters": [
+          {
+            "name": "employee_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Employee Id"
+            }
+          },
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AbsenceEpisodeUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AbsenceCreateResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
       }
     },
     "/api/v1/employees/{employee_id}/vault": {
@@ -4029,6 +4096,56 @@
         "responses": {
           "204": {
             "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/absences/episodes": {
+      "get": {
+        "tags": [
+          "absences"
+        ],
+        "summary": "List Absence Register",
+        "description": "Every employee's absence rows, newest first — the Services register.",
+        "operationId": "list_absence_register_api_v1_absences_episodes_get",
+        "parameters": [
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AbsenceRegisterRead"
+                }
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -21877,6 +21994,14 @@
             },
             "type": "array",
             "title": "Skipped Off Roster"
+          },
+          "skipped_on_leave": {
+            "items": {
+              "type": "string",
+              "format": "date"
+            },
+            "type": "array",
+            "title": "Skipped On Leave"
           }
         },
         "type": "object",
@@ -21923,6 +22048,51 @@
         ],
         "title": "AbsenceEpisodeRead",
         "description": "One contiguous run of absence days — a register row."
+      },
+      "AbsenceEpisodeUpdate": {
+        "properties": {
+          "start_date": {
+            "type": "string",
+            "format": "date",
+            "title": "Start Date"
+          },
+          "end_date": {
+            "type": "string",
+            "format": "date",
+            "title": "End Date"
+          },
+          "new_start_date": {
+            "type": "string",
+            "format": "date",
+            "title": "New Start Date"
+          },
+          "new_end_date": {
+            "type": "string",
+            "format": "date",
+            "title": "New End Date"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "type": "object",
+        "required": [
+          "start_date",
+          "end_date",
+          "new_start_date",
+          "new_end_date"
+        ],
+        "title": "AbsenceEpisodeUpdate",
+        "description": "Redraw one register row: the span it has, then the span it should have."
       },
       "AbsenceRead": {
         "properties": {
@@ -22031,6 +22201,108 @@
         ],
         "title": "AbsenceRecordRead",
         "description": "The employee's absence register: who, and the episode rows."
+      },
+      "AbsenceRegisterRead": {
+        "properties": {
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/AbsenceRegisterRowRead"
+            },
+            "type": "array",
+            "title": "Rows"
+          }
+        },
+        "type": "object",
+        "required": [
+          "rows"
+        ],
+        "title": "AbsenceRegisterRead"
+      },
+      "AbsenceRegisterRowRead": {
+        "properties": {
+          "employee_id": {
+            "type": "string",
+            "title": "Employee Id"
+          },
+          "employee_name_en": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Employee Name En"
+          },
+          "employee_name_ar": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Employee Name Ar"
+          },
+          "duty_post": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duty Post"
+          },
+          "duty_unit": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Duty Unit"
+          },
+          "start_date": {
+            "type": "string",
+            "format": "date",
+            "title": "Start Date"
+          },
+          "end_date": {
+            "type": "string",
+            "format": "date",
+            "title": "End Date"
+          },
+          "days": {
+            "type": "integer",
+            "title": "Days"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          }
+        },
+        "type": "object",
+        "required": [
+          "employee_id",
+          "start_date",
+          "end_date",
+          "days"
+        ],
+        "title": "AbsenceRegisterRowRead",
+        "description": "One register row across all employees: who, plus the episode."
       },
       "ActivityItemRead": {
         "properties": {

@@ -85,7 +85,7 @@ def test_record_included_papers_migration_upgrades_and_downgrades(tmp_path: Path
 
     config = Config(str(ROOT / "alembic.ini"))
     config.set_main_option("sqlalchemy.url", f"sqlite:///{database}")
-    command.upgrade(config, "0068")
+    command.upgrade(config, "0068_record_included_papers")
 
     with engine.connect() as connection:
         document_columns = {
@@ -162,3 +162,5 @@ def test_record_included_papers_migration_upgrades_and_downgrades(tmp_path: Path
                 )
             )
         } == {"books_ai", "books_ad", "books_au"}
+
+    engine.dispose()

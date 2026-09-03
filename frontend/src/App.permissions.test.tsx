@@ -20,6 +20,7 @@ vi.mock('@/lib/authContext', () => ({
 }))
 vi.mock('@/lib/useIsMobile', () => ({ useIsMobile: () => false }))
 vi.mock('@/lib/useLockState', () => ({
+  DEFAULT_IDLE_LOCK_SECONDS: 1800,
   useLockState: () => ({ locked: false, lock: vi.fn(), unlock: vi.fn() }),
 }))
 vi.mock('@/hooks/useNotificationStream', () => ({ useNotificationStream: vi.fn() }))

@@ -16,6 +16,7 @@ dependencies = [
     # DOCX -> PDF (Word COM); Windows-only. See requirements.txt for the rationale.
     "docx2pdf>=0.1.8; sys_platform == 'win32'",
     "pywin32>=306; sys_platform == 'win32'",
+    "tzdata>=2024.1; sys_platform == 'win32'",
 ]
 
 [build-system]

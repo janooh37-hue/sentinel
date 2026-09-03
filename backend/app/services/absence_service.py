@@ -17,15 +17,34 @@ Two write paths exist, deliberately separate:
 
 from __future__ import annotations
 
+import itertools
+from collections.abc import Iterable
 from dataclasses import dataclass
 from datetime import date, timedelta
+from typing import Final
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.errors import NotFoundError, ValidationFailedError
-from app.core.timesheet_codes import in_roster
-from app.db.models import Absence, Employee
+from app.core.leave_lifecycle import english_part
+from app.core.timesheet_codes import UNKNOWN_LEAVE, in_roster, is_void
+from app.db.models import Absence, Employee, Leave
+
+#: English leave types whose record explains an absence and therefore removes it.
+SUPERSEDING_LEAVE_TYPES: Final[frozenset[str]] = frozenset(
+    {"Sick Leave", "Annual Leave", "Leave Permit", "Administrative Leave"}
+)
+
+
+def supersedes_absence(leave_type: str) -> bool:
+    """True for a leave whose paper explains the absence days it covers.
+
+    Bilingual labels collapse via ``english_part``; ``"Unknown"`` keeps today's
+    behaviour (treated as annual leave by ``timesheet_codes.leave_code``).
+    """
+    english = english_part(leave_type)
+    return english == UNKNOWN_LEAVE or english in SUPERSEDING_LEAVE_TYPES
 
 
 @dataclass
@@ -35,10 +54,14 @@ class AddRangeResult:
     ``skipped_off_roster`` holds the requested days outside the employee's
     roster window (before joining / after departure) — an absence there could
     never render on a sheet, so it is reported rather than recorded.
+    ``skipped_on_leave`` holds days inside a non-void leave for which
+    ``supersedes_absence`` is true; the leave already explains the day, so
+    absence creation is refused and reported.
     """
 
     created: list[Absence]
     skipped_off_roster: list[date]
+    skipped_on_leave: list[date]
 
 
 def _get_employee_or_404(db: Session, employee_id: str) -> Employee:
@@ -56,6 +79,27 @@ def _covers_day(employee: Employee, day: date) -> bool:
     """Same roster window the time sheet computes, narrowed to one day."""
 
     return in_roster(doj=employee.doj, end_date=employee.end_date, month_start=day, month_end=day)
+
+
+def _days_on_leave(db: Session, employee_id: str, start: date, end: date) -> set[date]:
+    """Days in ``[start, end]`` inside a live leave that supersedes absence."""
+    rows = db.execute(
+        select(Leave.leave_type, Leave.status, Leave.start_date, Leave.end_date).where(
+            Leave.employee_id == employee_id,
+            Leave.deleted_at.is_(None),
+            Leave.start_date <= end,
+            Leave.end_date >= start,
+        )
+    ).all()
+    covered: set[date] = set()
+    for leave_type, status, leave_start, leave_end in rows:
+        if is_void(status) or not supersedes_absence(leave_type):
+            continue
+        day = max(leave_start, start)
+        while day <= min(leave_end, end):
+            covered.add(day)
+            day += timedelta(days=1)
+    return covered
 
 
 def list_for_employee(db: Session, employee_id: str) -> list[Absence]:
@@ -79,6 +123,7 @@ def add_range(
     end: date,
     note: str | None = None,
     user_id: int | None = None,
+    commit: bool = True,
 ) -> AddRangeResult:
     """Record an absence for every day in ``[start, end]`` (inclusive).
 
@@ -109,22 +154,66 @@ def add_range(
         .scalars()
         .all()
     )
+    on_leave = _days_on_leave(db, employee_id, start, end)
 
     created: list[Absence] = []
-    skipped: list[date] = []
+    skipped_off_roster: list[date] = []
+    skipped_on_leave: list[date] = []
     day = start
     while day <= end:
         if day in existing:
             pass
         elif not _covers_day(employee, day):
-            skipped.append(day)
+            skipped_off_roster.append(day)
+        elif day in on_leave:
+            skipped_on_leave.append(day)
         else:
             row = Absence(employee_id=employee_id, date=day, note=note, created_by=user_id)
             db.add(row)
             created.append(row)
         day += timedelta(days=1)
+    db.commit() if commit else db.flush()
+    return AddRangeResult(created, skipped_off_roster, skipped_on_leave)
+
+
+def replace_episode(
+    db: Session,
+    employee_id: str,
+    *,
+    old_start: date,
+    old_end: date,
+    start: date,
+    end: date,
+    note: str | None,
+    user_id: int | None,
+) -> AddRangeResult:
+    """Drop the days a register row spans, then record its new span — one commit.
+
+    The note is written to every day of the new span (a row shows one note);
+    days that already exist outside the old span keep theirs.
+    """
+
+    if old_end < old_start or end < start:
+        invalid_start, invalid_end = (old_start, old_end) if old_end < old_start else (start, end)
+        raise ValidationFailedError(
+            "ABSENCE_RANGE_INVERTED",
+            f"End date {invalid_end:%Y-%m-%d} is before start date {invalid_start:%Y-%m-%d}.",
+            start=invalid_start.isoformat(),
+            end=invalid_end.isoformat(),
+        )
+    _get_employee_or_404(db, employee_id)
+    delete_absences_covered_by(db, employee_id, old_start, old_end, commit=False)
+    result = add_range(
+        db,
+        employee_id,
+        start=start,
+        end=end,
+        note=note,
+        user_id=user_id,
+        commit=False,
+    )
     db.commit()
-    return AddRangeResult(created=created, skipped_off_roster=skipped)
+    return result
 
 
 @dataclass
@@ -155,6 +244,17 @@ class Episode:
         return "; ".join(seen) if seen else None
 
 
+def _group_episodes(rows: Iterable[Absence]) -> list[Episode]:
+    """Group date-ordered absence rows into contiguous episodes."""
+    episodes: list[Episode] = []
+    for row in rows:
+        if episodes and row.date == episodes[-1].end + timedelta(days=1):
+            episodes[-1].rows.append(row)
+        else:
+            episodes.append(Episode(rows=[row]))
+    return episodes
+
+
 def list_episodes(db: Session, employee_id: str) -> list[Episode]:
     """Group the employee's absence days into contiguous episodes.
 
@@ -168,13 +268,21 @@ def list_episodes(db: Session, employee_id: str) -> list[Episode]:
             select(Absence).where(Absence.employee_id == employee_id).order_by(Absence.date)
         ).scalars()
     )
-    episodes: list[Episode] = []
-    for row in rows:
-        if episodes and row.date == episodes[-1].end + timedelta(days=1):
-            episodes[-1].rows.append(row)
-        else:
-            episodes.append(Episode(rows=[row]))
-    return episodes
+    return _group_episodes(rows)
+
+
+def list_register(db: Session) -> list[tuple[Employee, Episode]]:
+    """Every employee's episodes, newest last day first (ties: employee id)."""
+    pairs = db.execute(
+        select(Absence, Employee)
+        .join(Employee, Employee.id == Absence.employee_id)
+        .order_by(Absence.employee_id, Absence.date)
+    ).all()
+    out: list[tuple[Employee, Episode]] = []
+    for employee, group in itertools.groupby(pairs, key=lambda pair: pair[1]):
+        out.extend((employee, episode) for episode in _group_episodes(row for row, _ in group))
+    out.sort(key=lambda pair: (-pair[1].end.toordinal(), pair[0].id))
+    return out
 
 
 def delete_range(db: Session, employee_id: str, start: date, end: date) -> int:
@@ -233,6 +341,7 @@ def delete_absences_covered_by(
 
 
 __all__ = [
+    "SUPERSEDING_LEAVE_TYPES",
     "AddRangeResult",
     "Episode",
     "add_range",
@@ -240,4 +349,7 @@ __all__ = [
     "delete_range",
     "list_episodes",
     "list_for_employee",
+    "list_register",
+    "replace_episode",
+    "supersedes_absence",
 ]

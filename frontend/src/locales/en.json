@@ -3179,25 +3179,55 @@
     "saved": "Recorded {{count}} absence day(s).",
     "savedWithSkips": "Recorded {{count}} day(s); skipped {{skipped}} day(s) outside the employee's service window.",
     "nothingToSave": "Every day in that range is already recorded.",
+    "extended": "Absence extended to today ({{count}} day(s) added).",
+    "skippedOnLeave": "Skipped {{count}} day(s) already covered by a leave.",
     "pickEmployee": "Pick an employee to record or review absences.",
     "list": {
       "title": "Recorded absences",
-      "empty": "No absences recorded for this employee.",
+      "empty": "No absences recorded yet.",
+      "search": "Search by ID or name",
+      "noMatch": "No absences match the search.",
+      "selectAll": "Select all rows",
+      "selectRow": "Select {{name}} ({{id}}), {{start}} to {{end}}",
       "confirmDeleteRange": "Remove the absence from {{start}} to {{end}} ({{count}} day(s))?"
+    },
+    "actions": {
+      "edit": "Edit absence",
+      "stillAbsent": "Still absent — extend to today",
+      "stillAbsentUpToDate": "Already recorded through today"
     },
     "deleted": "Absence removed.",
     "overwritten": "This leave overwrote {{count}} recorded absence day(s) ({{from}} → {{to}}).",
     "table": {
       "id": "ID",
       "name": "Name",
-      "start": "Start date",
-      "end": "End date",
-      "totalDays": "Total days",
-      "postUnit": "Post unit",
+      "start": "Absence date",
+      "end": "To",
+      "totalDays": "Days",
+      "unit": "Unit",
       "notes": "Notes"
     },
     "copy": "Copy table",
-    "copied": "Table copied to the clipboard."
+    "copied": "Table copied to the clipboard.",
+    "edit": {
+      "title": "Edit absence",
+      "description": "Change the days or the note of this row.",
+      "save": "Save changes",
+      "saved": "Absence updated."
+    },
+    "email": {
+      "button": "Send by email ({{count}})",
+      "title": "Email preview",
+      "description": "Check the letter, then open it in the composer to choose recipients and send.",
+      "case": "Case",
+      "caseRow": "Case for {{name}} ({{id}}), {{start}} to {{end}}",
+      "caseAbsent": "Still absent",
+      "caseReturned": "Returned to work",
+      "violationAttached_one": "A signed violation form is attached",
+      "violationAttached_other": "Signed violation forms are attached",
+      "subjectLabel": "Subject",
+      "open": "Open in email"
+    }
   },
   "dutyLocations": {
     "tile": {

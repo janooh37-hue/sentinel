@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.api.deps import get_current_user
 from app.db import session as session_mod
-from app.db.models import Absence, Base, Employee, User
+from app.db.models import Absence, Base, Employee, Leave, User
 from app.db.session import attach_sqlite_pragmas, get_db
 from app.main import create_app
 from app.services import perm_service
@@ -111,6 +111,28 @@ def test_post_skips_and_reports_off_roster_days(client, api_db):
     assert body["skipped_off_roster"] == ["2026-07-08", "2026-07-09"]
 
 
+def test_post_reports_days_on_leave(client, db_session):
+    db_session.add(
+        Leave(
+            employee_id="G1001",
+            leave_type="Sick Leave",
+            start_date=date(2026, 7, 10),
+            end_date=date(2026, 7, 10),
+            days=1,
+            status="Approved",
+        )
+    )
+    db_session.commit()
+
+    response = client.post(
+        "/api/v1/employees/G1001/absences",
+        json={"start_date": "2026-07-09", "end_date": "2026-07-11"},
+    )
+
+    assert response.status_code == 201
+    assert response.json()["skipped_on_leave"] == ["2026-07-10"]
+
+
 def test_post_is_idempotent_per_day(client, db_session):
     payload = {"start_date": "2026-07-09", "end_date": "2026-07-10"}
     first = client.post("/api/v1/employees/G1001/absences", json=payload)
@@ -189,6 +211,39 @@ def test_delete_range_rejects_an_inverted_range(client):
     assert response.json()["error"]["code"] == "ABSENCE_RANGE_INVERTED"
 
 
+def test_put_episode_redraws_the_row(client, db_session):
+    created = client.post(
+        "/api/v1/employees/G1001/absences",
+        json={"start_date": "2026-07-09", "end_date": "2026-07-11", "note": "a"},
+    )
+    assert created.status_code == 201
+
+    response = client.put(
+        "/api/v1/employees/G1001/absences/episodes",
+        json={
+            "start_date": "2026-07-09",
+            "end_date": "2026-07-11",
+            "new_start_date": "2026-07-10",
+            "new_end_date": "2026-07-12",
+            "note": "b",
+        },
+    )
+
+    assert response.status_code == 200
+    assert [row["date"] for row in response.json()["created"]] == [
+        "2026-07-10",
+        "2026-07-11",
+        "2026-07-12",
+    ]
+    rows = db_session.query(Absence).order_by(Absence.date).all()
+    assert [row.date for row in rows] == [
+        date(2026, 7, 10),
+        date(2026, 7, 11),
+        date(2026, 7, 12),
+    ]
+    assert [row.note for row in rows] == ["b", "b", "b"]
+
+
 def test_get_episodes_merges_touching_days_and_stamps_the_employee(client):
     client.post(
         "/api/v1/employees/G1001/absences",
@@ -220,6 +275,39 @@ def test_get_episodes_unknown_employee_is_a_service_404(client):
     assert response.json()["error"]["code"] == "EMPLOYEE_NOT_FOUND"
 
 
+def test_get_register_lists_every_employee_newest_first(client, db_session):
+    employee = db_session.get(Employee, "G1001")
+    assert employee is not None
+    employee.duty_unit = "السرية الأولى"
+    db_session.add(
+        Employee(
+            id="G1002",
+            name_en="OTHER",
+            name_ar="آخر",
+            doj=date(2020, 1, 1),
+        )
+    )
+    db_session.commit()
+    client.post(
+        "/api/v1/employees/G1001/absences",
+        json={"start_date": "2026-07-01", "end_date": "2026-07-02"},
+    )
+    client.post(
+        "/api/v1/employees/G1002/absences",
+        json={"start_date": "2026-07-10", "end_date": "2026-07-10"},
+    )
+
+    response = client.get("/api/v1/absences/episodes")
+
+    assert response.status_code == 200
+    rows = response.json()["rows"]
+    assert rows[0]["employee_id"] == "G1002"
+    assert rows[1]["employee_id"] == "G1001"
+    assert rows[1]["days"] == 2
+    assert rows[1]["employee_name_ar"] == "حارس"
+    assert rows[1]["duty_unit"] == "السرية الأولى"
+
+
 def test_viewer_can_read_but_not_write(viewer_client, client):
     client.post(
         "/api/v1/employees/G1001/absences",
@@ -227,6 +315,8 @@ def test_viewer_can_read_but_not_write(viewer_client, client):
     )
 
     assert viewer_client.get("/api/v1/employees/G1001/absences").status_code == 200
+
+    assert viewer_client.get("/api/v1/absences/episodes").status_code == 200
 
     denied_post = viewer_client.post(
         "/api/v1/employees/G1001/absences",
@@ -241,3 +331,16 @@ def test_viewer_can_read_but_not_write(viewer_client, client):
     )
     assert denied_delete.status_code == 403
     assert denied_delete.json()["error"]["details"]["capability"] == "leaves.edit"
+
+    denied_put = viewer_client.put(
+        "/api/v1/employees/G1001/absences/episodes",
+        json={
+            "start_date": "2026-07-09",
+            "end_date": "2026-07-09",
+            "new_start_date": "2026-07-10",
+            "new_end_date": "2026-07-10",
+            "note": None,
+        },
+    )
+    assert denied_put.status_code == 403
+    assert denied_put.json()["error"]["details"]["capability"] == "leaves.edit"

@@ -909,6 +909,24 @@ describe('useSetCell', () => {
     expect(getTimesheet).toHaveBeenCalledTimes(1) // the write answered with the grid
   })
 
+  it('invalidates the global absence register after a successful cell edit', async () => {
+    getTimesheet.mockResolvedValue({ ...EMPTY_MONTH, rows: [ROW] })
+    const served: TimesheetGridResponse = {
+      ...EMPTY_MONTH,
+      rows: [{ ...ROW, codes: ROW.codes.map((code, index) => (index === 2 ? 'AB' : code)) }],
+    }
+    setTimesheetCell.mockResolvedValue(served)
+    const { result, qc } = renderCellHook()
+    qc.setQueryData(['absence-register'], { rows: [{ employee_id: 'G1001' }] })
+    await waitFor(() => expect(result.current.read.rows).toHaveLength(1))
+
+    await act(async () => {
+      await result.current.write.mutateAsync({ employeeId: 'G1001', day: 3, code: 'AB' })
+    })
+
+    expect(qc.getQueryState(['absence-register'])?.isInvalidated).toBe(true)
+  })
+
   it('restores the previous code and surfaces the server message on failure', async () => {
     getTimesheet.mockResolvedValue({ ...EMPTY_MONTH, rows: [ROW] })
     let reject: (err: Error) => void = () => {}

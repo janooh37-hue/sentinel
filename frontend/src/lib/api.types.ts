@@ -846,7 +846,11 @@ export interface paths {
         };
         /** List Employee Absence Episodes */
         get: operations["list_employee_absence_episodes_api_v1_employees__employee_id__absences_episodes_get"];
-        put?: never;
+        /**
+         * Update Employee Absence Episode
+         * @description Redraw one register row (dates and note) in a single unit of work.
+         */
+        put: operations["update_employee_absence_episode_api_v1_employees__employee_id__absences_episodes_put"];
         post?: never;
         delete?: never;
         options?: never;
@@ -1030,6 +1034,26 @@ export interface paths {
         head?: never;
         /** Update Violation */
         patch: operations["update_violation_api_v1_violations__violation_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/absences/episodes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Absence Register
+         * @description Every employee's absence rows, newest first — the Services register.
+         */
+        get: operations["list_absence_register_api_v1_absences_episodes_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/leaves": {
@@ -4950,6 +4974,8 @@ export interface components {
             created: components["schemas"]["AbsenceRead"][];
             /** Skipped Off Roster */
             skipped_off_roster: string[];
+            /** Skipped On Leave */
+            skipped_on_leave?: string[];
         };
         /**
          * AbsenceEpisodeRead
@@ -4970,6 +4996,34 @@ export interface components {
             days: number;
             /** Notes */
             notes?: string | null;
+        };
+        /**
+         * AbsenceEpisodeUpdate
+         * @description Redraw one register row: the span it has, then the span it should have.
+         */
+        AbsenceEpisodeUpdate: {
+            /**
+             * Start Date
+             * Format: date
+             */
+            start_date: string;
+            /**
+             * End Date
+             * Format: date
+             */
+            end_date: string;
+            /**
+             * New Start Date
+             * Format: date
+             */
+            new_start_date: string;
+            /**
+             * New End Date
+             * Format: date
+             */
+            new_end_date: string;
+            /** Note */
+            note?: string | null;
         };
         /** AbsenceRead */
         AbsenceRead: {
@@ -5007,6 +5061,41 @@ export interface components {
             duty_unit?: string | null;
             /** Episodes */
             episodes: components["schemas"]["AbsenceEpisodeRead"][];
+        };
+        /** AbsenceRegisterRead */
+        AbsenceRegisterRead: {
+            /** Rows */
+            rows: components["schemas"]["AbsenceRegisterRowRead"][];
+        };
+        /**
+         * AbsenceRegisterRowRead
+         * @description One register row across all employees: who, plus the episode.
+         */
+        AbsenceRegisterRowRead: {
+            /** Employee Id */
+            employee_id: string;
+            /** Employee Name En */
+            employee_name_en?: string | null;
+            /** Employee Name Ar */
+            employee_name_ar?: string | null;
+            /** Duty Post */
+            duty_post?: string | null;
+            /** Duty Unit */
+            duty_unit?: string | null;
+            /**
+             * Start Date
+             * Format: date
+             */
+            start_date: string;
+            /**
+             * End Date
+             * Format: date
+             */
+            end_date: string;
+            /** Days */
+            days: number;
+            /** Notes */
+            notes?: string | null;
         };
         /** ActivityItemRead */
         ActivityItemRead: {
@@ -13232,6 +13321,43 @@ export interface operations {
             };
         };
     };
+    update_employee_absence_episode_api_v1_employees__employee_id__absences_episodes_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                employee_id: string;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AbsenceEpisodeUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AbsenceCreateResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_employee_vault_api_v1_employees__employee_id__vault_get: {
         parameters: {
             query?: never;
@@ -13701,6 +13827,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ViolationRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_absence_register_api_v1_absences_episodes_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AbsenceRegisterRead"];
                 };
             };
             /** @description Validation Error */

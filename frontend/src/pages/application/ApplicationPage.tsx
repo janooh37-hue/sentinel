@@ -617,9 +617,9 @@ export function ApplicationPage(): React.JSX.Element {
       setPreviewJobStatus(job.status)
       const saved = savedGenerationFromJob(job)
       void qc.invalidateQueries({ queryKey: ['books'] })
-      // A generated sick/annual leave supersedes the absence days it covers.
+      // A generated superseding leave removes the absence days it covers.
       // The rows are deleted on the FIRST job that covers them (usually the
-      // preview), so this announcement is not gated on the committed save.
+      // preview), so this announcement and invalidation are not gated on the committed save.
       const superseded = job.superseded_absence_dates ?? []
       const [firstDay, lastDay] = [superseded[0], superseded[superseded.length - 1]]
       if (firstDay && lastDay) {
@@ -638,6 +638,7 @@ export function ApplicationPage(): React.JSX.Element {
         )
         void qc.invalidateQueries({ queryKey: ['employee-absences'] })
         void qc.invalidateQueries({ queryKey: ['employee-detail'] })
+        void qc.invalidateQueries({ queryKey: ['absence-register'] })
       }
       if (pendingCommitRef.current && selectedTemplate) {
         if (saved) {
