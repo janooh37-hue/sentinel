@@ -4739,7 +4739,9 @@
       "overlapping_leave": "إجازات متداخلة",
       "departed_but_active": "انتهت خدمته وما زال نشطاً",
       "no_doj": "لا تاريخ مباشرة",
-      "duplicate_name": "اسم مكرر"
+      "duplicate_name": "اسم مكرر",
+      "amended_leave": "إجازة عُدّلت بعد الاعتماد",
+      "deleted_leave": "إجازة معتمدة حُذفت"
     },
     "employee": {
       "sheet": "كشف موظف",

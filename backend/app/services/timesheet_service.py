@@ -34,7 +34,7 @@ from sqlalchemy.orm import Session
 
 from app.api.errors import ConflictError, NotFoundError, ValidationFailedError
 from app.core.constants import DESIGNATION_SEED, TIMESHEET_SHEETS, nationality_en
-from app.core.leave_lifecycle import english_part
+from app.core.leave_lifecycle import canonical_status, english_part
 from app.core.timesheet_codes import (
     CODE_ABSENT,
     CODE_ANNUAL,
@@ -48,6 +48,7 @@ from app.core.timesheet_codes import (
     LeaveSpan,
     in_roster,
     is_void,
+    leave_code,
     month_codes,
 )
 from app.db.models import (
@@ -132,7 +133,7 @@ class Issue:
     kind: str
     #  blocking: "no_designation" | "no_nationality"
     #  warning:  "unknown_leave" | "overlapping_leave" | "departed_but_active"
-    #            | "no_doj" | "duplicate_name"
+    #            | "no_doj" | "duplicate_name" | "amended_leave" | "deleted_leave"
     detail: str
 
 
@@ -582,6 +583,118 @@ def _overlapping_leave_issues(employee: Employee, leaves: Sequence[Leave]) -> li
     return issues
 
 
+def _leave_change_issues(
+    db: Session,
+    members: Sequence[tuple[Employee, TimesheetDesignation | None]],
+    *,
+    leaves_by_employee: Mapping[str, list[Leave]],
+    month_start: date,
+    month_end: date,
+) -> list[Issue]:
+    """Warn when an approved leave changed or disappeared after approval."""
+
+    employees = {employee.id: employee for employee, _designation in members}
+    member_ids = tuple(employees)
+    if not member_ids:
+        return []
+
+    deleted_candidates: list[Leave] = []
+    deleted_rows = db.execute(
+        select(Leave).where(
+            Leave.deleted_at.is_not(None),
+            Leave.employee_id.in_(member_ids),
+            Leave.start_date <= month_end,
+            Leave.end_date >= month_start,
+        )
+    ).scalars()
+    for row in deleted_rows:
+        code = leave_code(row.leave_type)
+        if code is None or canonical_status(row.status) not in ("Approved", "Completed"):
+            continue
+        first = max(row.start_date, month_start)
+        last = min(row.end_date, month_end)
+        required_days = set(range(first.day, last.day + 1))
+        covered_days: set[int] = set()
+        for live in _live_leaves(leaves_by_employee.get(row.employee_id, ())):
+            if leave_code(live.leave_type) != code:
+                continue
+            live_first = max(live.start_date, month_start)
+            live_last = min(live.end_date, month_end)
+            if live_first <= live_last:
+                covered_days.update(range(live_first.day, live_last.day + 1))
+        if required_days <= covered_days:
+            continue
+        deleted_candidates.append(row)
+
+    candidates: list[tuple[str, Leave, str]] = [
+        (row.employee_id, row, "deleted_leave") for row in deleted_candidates
+    ]
+    candidates.extend(
+        (employee.id, row, "amended_leave")
+        for employee, _designation in members
+        for row in _live_leaves(leaves_by_employee.get(employee.id, ()))
+    )
+    candidate_ids = [str(row.id) for _employee_id, row, _kind in candidates]
+    if not candidate_ids:
+        return []
+
+    audit_rows = db.execute(
+        select(AuditLog)
+        .where(
+            AuditLog.entity_type == "leave",
+            AuditLog.action.in_(("leave.amended", "leave.deleted")),
+            AuditLog.entity_id.in_(candidate_ids),
+        )
+        .order_by(AuditLog.ts, AuditLog.id)
+    ).scalars()
+    audits: dict[tuple[str, str], AuditLog] = {}
+    for audit in audit_rows:
+        audits[(audit.entity_id, audit.action)] = audit
+
+    actor_emails = {audit.actor for audit in audits.values() if audit.actor is not None}
+    actor_names: dict[str, str] = {}
+    if actor_emails:
+        users = db.execute(select(User).where(User.email.in_(actor_emails))).scalars()
+        actor_names = {user.email: user.display_name or user.email for user in users}
+
+    def who(audit: AuditLog | None) -> str:
+        if audit is None or audit.actor is None:
+            return "an unrecorded user"
+        return actor_names.get(audit.actor, audit.actor)
+
+    issues: list[tuple[str, date, int, Issue]] = []
+    for employee_id, row, kind in candidates:
+        employee = employees[employee_id]
+        action = "leave.deleted" if kind == "deleted_leave" else "leave.amended"
+        audit = audits.get((str(row.id), action))
+        if kind == "deleted_leave":
+            when = audit.ts if audit is not None else row.deleted_at
+            assert when is not None
+            detail = (
+                f"{employee.name_en}: {english_part(row.leave_type)} "
+                f"{row.start_date:%Y-%m-%d} → {row.end_date:%Y-%m-%d} "
+                f"({canonical_status(row.status)}) was deleted by {who(audit)} "
+                f"on {when:%Y-%m-%d}."
+            )
+        else:
+            if audit is None:
+                continue
+            data = json.loads(audit.payload or "{}")
+            old = data.get("from", {}).get("end")
+            new = data.get("to", {}).get("end")
+            reason = data.get("reason") or ""
+            detail = (
+                f"{employee.name_en}: {english_part(row.leave_type)} "
+                f"from {row.start_date:%Y-%m-%d} was amended by {who(audit)} "
+                f"on {audit.ts:%Y-%m-%d}: end {old} → {new}"
+                f"{f' ({reason})' if reason else ''}. The printed form still shows {old}."
+            )
+        issues.append((employee_id, row.start_date, row.id, Issue(employee_id, kind, detail)))
+
+    issues.sort(key=lambda item: (item[0], item[1], item[2]))
+    return [issue for _employee_id, _start_date, _leave_id, issue in issues]
+
+
 def _warning_issues(
     db: Session,
     members: Sequence[tuple[Employee, TimesheetDesignation | None]],
@@ -590,6 +703,7 @@ def _warning_issues(
     assignments: Mapping[str, TimesheetRosterAssignment],
     designations: Mapping[int, TimesheetDesignation],
     month_start: date,
+    month_end: date,
     sheet: str,
 ) -> list[Issue]:
     """Everything worth telling the operator that does not stop the download."""
@@ -615,6 +729,16 @@ def _warning_issues(
                     )
                 )
         issues.extend(_overlapping_leave_issues(employee, leaves))
+
+    issues.extend(
+        _leave_change_issues(
+            db,
+            members,
+            leaves_by_employee=leaves_by_employee,
+            month_start=month_start,
+            month_end=month_end,
+        )
+    )
 
     for name, sharers in names.items():
         if len(sharers) > 1:
@@ -964,6 +1088,7 @@ def build_month(db: Session, year: int, month: int, *, sheet: str = "main") -> M
         assignments=assignments,
         designations=designations,
         month_start=month_start,
+        month_end=month_end,
         sheet=sheet,
     )
 

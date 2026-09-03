@@ -4402,7 +4402,9 @@
       "overlapping_leave": "Overlapping leave",
       "departed_but_active": "Departed but still active",
       "no_doj": "No date of joining",
-      "duplicate_name": "Duplicate name"
+      "duplicate_name": "Duplicate name",
+      "amended_leave": "Leave changed after approval",
+      "deleted_leave": "Approved leave deleted"
     },
     "employee": {
       "sheet": "Employee sheet",

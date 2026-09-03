@@ -39,8 +39,11 @@ from app.db.models import (
 )
 from app.schemas.timesheet import TimesheetRosterAssignmentWrite
 from app.services import absence_service
+from app.services import leave_service
 from app.services import timesheet_service as svc
 from tests.conftest import make_user
+
+
 
 
 @pytest.fixture(autouse=True)
@@ -923,6 +926,62 @@ def test_a_missing_doj_and_overlapping_leave_are_warnings(db_session, guards):
     assert sum(1 for i in grid.warnings if i.kind == "overlapping_leave") == 1
     assert grid.blocking == []
 
+def test_amended_and_deleted_leaves_are_warnings(db_session, guards):
+    amended = Leave(
+        employee_id="G1001",
+        leave_type="Annual Leave",
+        start_date=date(2026, 7, 15),
+        end_date=date(2026, 7, 20),
+        days=6,
+        status="Approved",
+    )
+    deleted = Leave(
+        employee_id="G1001",
+        leave_type="Annual Leave",
+        start_date=date(2026, 7, 1),
+        end_date=date(2026, 7, 3),
+        days=3,
+        status="Approved",
+    )
+    covered = Leave(
+        employee_id="G1001",
+        leave_type="Annual Leave",
+        start_date=date(2026, 7, 5),
+        end_date=date(2026, 7, 7),
+        days=3,
+        status="Approved",
+    )
+    replacement = Leave(
+        employee_id="G1001",
+        leave_type="Annual Leave",
+        start_date=date(2026, 7, 5),
+        end_date=date(2026, 7, 9),
+        days=5,
+        status="Approved",
+    )
+    db_session.add_all((amended, deleted, covered, replacement))
+    db_session.commit()
+
+    leave_service.amend_approved_leave(
+        db_session,
+        amended.id,
+        end_date=date(2026, 7, 18),
+        reason="x",
+        actor="mgr@x.ae",
+    )
+    leave_service.soft_delete_leave(db_session, deleted.id, actor="mgr@x.ae")
+    leave_service.soft_delete_leave(db_session, covered.id, actor="mgr@x.ae")
+
+    warnings = svc.build_month(db_session, 2026, 7).warnings
+    kinds = {(warning.employee_id, warning.kind) for warning in warnings}
+    assert ("G1001", "amended_leave") in kinds
+    assert ("G1001", "deleted_leave") in kinds
+    amended_detail = next(w.detail for w in warnings if w.kind == "amended_leave")
+    assert "end 2026-07-20 → 2026-07-18" in amended_detail
+    assert "G1001: Annual Leave from 2026-07-15 was amended by mgr@x.ae" in amended_detail
+    deleted_details = [w.detail for w in warnings if w.kind == "deleted_leave"]
+    assert any("2026-07-01 → 2026-07-03" in detail for detail in deleted_details)
+    assert not any("2026-07-05 → 2026-07-07" in detail for detail in deleted_details)
 
 def test_a_void_or_deleted_leave_never_reaches_the_sheet(db_session, guards):
     db_session.add(
