@@ -88,6 +88,27 @@ def _row(db, year, month, employee_id, *, sheet="main"):
     return next(r for r in grid.rows if r.employee_id == employee_id)
 
 
+def test_grid_reports_persisted_edits_with_the_editor(db_session, guards):
+    user = make_user(db_session, email="editor@x.ae")
+
+    svc.set_cell(db_session, 2026, 7, "G1001", 14, "AB", user_id=user.id)
+    absence = db_session.query(Absence).filter_by(employee_id="G1001").one()
+    expected_absence = svc.CellEdit("AB", user.display_name or user.email, absence.created_at)
+    assert _row(db_session, 2026, 7, "G1001").edits[14] == expected_absence
+
+    svc.set_cell(db_session, 2026, 7, "G1001", 15, "X", user_id=user.id)
+    override = db_session.query(TimesheetOverride).filter_by(day=15).one()
+    expected_override = svc.CellEdit("X", user.display_name or user.email, override.created_at)
+    assert _row(db_session, 2026, 7, "G1001").edits[15] == expected_override
+
+    svc.close_month(db_session, 2026, 7)
+    sealed = _row(db_session, 2026, 7, "G1001")
+    assert sealed.edits[14] == expected_absence
+    assert sealed.edits[15] == expected_override
+
+
+
+
 def test_effective_roster_assignment_wins_by_month_and_explicit_null_unassigns(db_session, guards):
     guard = db_session.query(TimesheetDesignation).filter_by(name_en="Security Guard").one()
     supervisor = (

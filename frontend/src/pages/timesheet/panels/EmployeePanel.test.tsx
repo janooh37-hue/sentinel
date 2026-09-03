@@ -54,6 +54,7 @@ const rows: TimesheetRow[] = [
     left_day: 17,
     start_confirmed: false,
     notes: {},
+    edits: {},
   },
   {
     employee_id: 'G7057',
@@ -71,6 +72,7 @@ const rows: TimesheetRow[] = [
     left_day: null,
     start_confirmed: false,
     notes: {},
+    edits: {},
   },
 ]
 

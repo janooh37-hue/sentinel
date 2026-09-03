@@ -4598,6 +4598,8 @@
     "clearCell": "مسح الخلية",
     "asPrinted": "كما تُطبع",
     "cellLabel": "{{id}} يوم {{day}} — {{meaning}}",
+    "editedBy": "عدّلها {{by}} في {{date}}",
+    "editedByUnknown": "مستخدم غير معروف",
     "note": "ملاحظة (اختياري)",
     "colRow": "م",
     "colDay": "اليوم",

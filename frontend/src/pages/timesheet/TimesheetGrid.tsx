@@ -249,6 +249,7 @@ interface RowStrings {
   badgeTo: (day: number) => string
   startedOn: (day: number) => string
   lastWorked: (day: number) => string
+  editedBy: (by: string | null, at: string) => string
   grip: (id: string) => string
 }
 
@@ -402,6 +403,7 @@ const GridRow = memo(function GridRow({
         const slug = slugOf(code)
         const filterMatch = filterCode !== null && slug === filterCode
         const note = row.notes[String(day)]
+        const edit = row.edits[String(day)]
         return (
           <td key={day} className="ts-cellcell">
             <button
@@ -414,11 +416,15 @@ const GridRow = memo(function GridRow({
               data-code={slug}
               data-employee={row.employee_id}
               data-day={day}
-              data-edited={editedDays?.has(day) ? '1' : undefined}
+              data-edited={editedDays?.has(day) || edit !== undefined ? '1' : undefined}
               data-locked={locked ? '1' : undefined}
               data-code-filter-match={filterMatch ? '1' : undefined}
               data-code-filter-current={filterMatch && filterCurrent ? '1' : undefined}
-              title={note}
+              title={
+                [note, edit ? strings.editedBy(edit.by, edit.at) : undefined]
+                  .filter(Boolean)
+                  .join(' — ') || undefined
+              }
               aria-label={strings.cell(row.employee_id, day, strings.meaning[slug] ?? slug)}
             >
               {glyphOf(slug)}
@@ -671,9 +677,18 @@ export function TimesheetGrid({
       badgeTo: (day) => t('timesheet.badgeTo', { day }),
       startedOn: (day) => t('timesheet.startedOn', { day, before: Math.max(1, day - 1) }),
       lastWorked: (day) => t('timesheet.lastWorked', { day }),
+      editedBy: (by, at) =>
+        t('timesheet.editedBy', {
+          by: by ?? t('timesheet.editedByUnknown'),
+          date: new Date(at).toLocaleDateString(i18n.language, {
+            day: '2-digit',
+            month: 'short',
+            year: 'numeric',
+          }),
+        }),
       grip: (id) => t('timesheet.rosterEdit.grip', { id }),
     }
-  }, [t])
+  }, [i18n.language, t])
 
   /** One narrow letter per day, from the month itself rather than 14 more keys. */
   const weekdays = useMemo(() => {

@@ -41361,6 +41361,38 @@
         ],
         "title": "TemplateMeta"
       },
+      "TimesheetCellEdit": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "By"
+          },
+          "at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "by",
+          "at"
+        ],
+        "title": "TimesheetCellEdit",
+        "description": "A persisted manual cell and who set it."
+      },
       "TimesheetCellUpdate": {
         "properties": {
           "employee_id": {
@@ -41907,6 +41939,13 @@
             "type": "object",
             "title": "Notes"
           },
+          "edits": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/TimesheetCellEdit"
+            },
+            "type": "object",
+            "title": "Edits"
+          },
           "designation_id": {
             "anyOf": [
               {
@@ -41935,7 +41974,8 @@
           "joined_day",
           "left_day",
           "start_confirmed",
-          "notes"
+          "notes",
+          "edits"
         ],
         "title": "TimesheetRow",
         "description": "One printed row: the identity block, 31 cells, and both statistics."

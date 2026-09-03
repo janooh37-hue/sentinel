@@ -72,6 +72,8 @@ const KEYS = [
   // reasons a cell can carry.
   'timesheet.asPrinted',
   'timesheet.cellLabel',
+  'timesheet.editedBy',
+  'timesheet.editedByUnknown',
   'timesheet.note',
   'timesheet.colRow',
   'timesheet.colDay',

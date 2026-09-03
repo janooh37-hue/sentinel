@@ -4261,6 +4261,8 @@
     "clearCell": "Clear cell",
     "asPrinted": "As it prints",
     "cellLabel": "{{id}} day {{day}} — {{meaning}}",
+    "editedBy": "Edited by {{by}} on {{date}}",
+    "editedByUnknown": "unknown user",
     "note": "Note (optional)",
     "colRow": "Row",
     "colDay": "Day",

@@ -24,7 +24,7 @@ from __future__ import annotations
 import calendar
 from collections import defaultdict
 from collections.abc import Iterable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
 from typing import Final
 
@@ -121,6 +121,7 @@ class GridRow:
     start_confirmed: bool  # operator acknowledged the NG head
     notes: dict[int, str]  # day -> absence note, for the cell tooltip
     designation_id: int | None = None
+    edits: dict[int, CellEdit] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)
@@ -131,6 +132,14 @@ class Issue:
     #  warning:  "unknown_leave" | "overlapping_leave" | "departed_but_active"
     #            | "no_doj" | "duplicate_name"
     detail: str
+
+
+@dataclass(frozen=True, slots=True)
+class CellEdit:
+    """A persisted manual cell: the override or absence row behind it."""
+    code: str
+    by: str | None
+    at: datetime
 
 
 @dataclass(frozen=True, slots=True)
@@ -246,6 +255,25 @@ def _edge_day(value: date | None, year: int, month: int) -> int | None:
     if value is not None and (value.year, value.month) == (year, month):
         return value.day
     return None
+
+
+def _edits(
+    overrides: Iterable[TimesheetOverride],
+    absences: Iterable[Absence],
+    names: Mapping[int, str],
+) -> dict[int, CellEdit]:
+    edits = {
+        row.date.day: CellEdit(CODE_ABSENT, names.get(row.created_by), row.created_at)
+        for row in absences
+    }
+    edits.update(
+        {
+            row.day: CellEdit(row.code, names.get(row.created_by), row.created_at)
+            for row in overrides
+        }
+    )
+    return edits
+
 
 
 def _notes(absences: Iterable[Absence]) -> dict[int, str]:
@@ -407,15 +435,17 @@ def _absences_by_employee(
     return out
 
 
-def _overrides_by_employee(db: Session, year: int, month: int) -> dict[str, dict[int, str]]:
+def _overrides_by_employee(
+    db: Session, year: int, month: int
+) -> dict[str, list[TimesheetOverride]]:
     rows = db.execute(
         select(TimesheetOverride).where(
             TimesheetOverride.year == year, TimesheetOverride.month == month
         )
     ).scalars()
-    out: dict[str, dict[int, str]] = defaultdict(dict)
+    out: dict[str, list[TimesheetOverride]] = defaultdict(list)
     for row in rows:
-        out[row.employee_id][row.day] = row.code
+        out[row.employee_id].append(row)
     return out
 
 
@@ -468,6 +498,14 @@ def _employees_by_id(db: Session, employee_ids: Sequence[str]) -> dict[str, Empl
         return {}
     rows = db.execute(select(Employee).where(Employee.id.in_(employee_ids))).scalars()
     return {row.id: row for row in rows}
+
+
+def _display_names(db: Session, user_ids: Iterable[int | None]) -> dict[int, str]:
+    ids = {user_id for user_id in user_ids if user_id is not None}
+    if not ids:
+        return {}
+    users = db.execute(select(User).where(User.id.in_(ids))).scalars()
+    return {user.id: user.display_name or user.email for user in users}
 
 
 def _display_name(db: Session, user_id: int | None) -> str | None:
@@ -717,16 +755,17 @@ def _live_rows(
     leaves_by_employee: Mapping[str, list[Leave]],
     post_count: int,
     absences: Mapping[str, list[Absence]],
+    overrides: Mapping[str, list[TimesheetOverride]],
+    names: Mapping[int, str],
     fillers: Mapping[str, str],
     acks: set[str],
 ) -> list[GridRow]:
     """Recompute the whole sheet from the live records."""
 
-    overrides = _overrides_by_employee(db, year, month)
-
     rows: list[GridRow] = []
     for row_no, (employee, designation) in enumerate(members, start=1):
         employee_absences = absences.get(employee.id, [])
+        employee_overrides = overrides.get(employee.id, [])
         codes = month_codes(
             year,
             month,
@@ -734,7 +773,7 @@ def _live_rows(
             end_date=employee.end_date,
             leaves=_leave_spans(leaves_by_employee.get(employee.id, ())),
             absences=[row.date for row in employee_absences],
-            overrides=overrides.get(employee.id),
+            overrides={row.day: row.code for row in employee_overrides},
         )
         block = 1 if row_no <= post_count else 2
         filler = fillers.get(employee.id, DEFAULT_STAT_FILLER)
@@ -760,6 +799,7 @@ def _live_rows(
                 start_confirmed=employee.id in acks,
                 notes=_notes(employee_absences),
                 designation_id=designation.id if designation is not None else None,
+                edits=_edits(employee_overrides, employee_absences, names),
             )
         )
 
@@ -775,6 +815,8 @@ def _sealed_rows(
     *,
     sheet: str,
     absences: Mapping[str, list[Absence]],
+    overrides: Mapping[str, list[TimesheetOverride]],
+    names: Mapping[int, str],
     fillers: Mapping[str, str],
     acks: set[str],
 ) -> list[GridRow]:
@@ -805,6 +847,7 @@ def _sealed_rows(
     for frozen in snapshot:
         employee = employees.get(frozen.employee_id)
         employee_absences = absences.get(frozen.employee_id, [])
+        employee_overrides = overrides.get(frozen.employee_id, [])
         rows.append(
             GridRow(
                 employee_id=frozen.employee_id,
@@ -833,6 +876,7 @@ def _sealed_rows(
                 start_confirmed=frozen.employee_id in acks,
                 notes=_notes(employee_absences),
                 designation_id=None,
+                edits=_edits(employee_overrides, employee_absences, names),
             )
         )
     return rows
@@ -859,6 +903,15 @@ def build_month(db: Session, year: int, month: int, *, sheet: str = "main") -> M
     post_count = DEFAULT_POST_COUNT if period is None else period.post_count
 
     absences = _absences_by_employee(db, month_start, month_end)
+    overrides = _overrides_by_employee(db, year, month)
+    names = _display_names(
+        db,
+        (
+            row.created_by
+            for rows in (*absences.values(), *overrides.values())
+            for row in rows
+        ),
+    )
     fillers = _fillers_by_employee(db, year, month)
     acks = _start_acks(db, year, month)
     members = _members(
@@ -870,9 +923,17 @@ def build_month(db: Session, year: int, month: int, *, sheet: str = "main") -> M
         sheet=sheet,
     )
     leaves_by_employee = _leaves_by_employee(db, month_start, month_end)
-
     if period is not None and period.closed_at is not None:
-        rows = _sealed_rows(db, period, sheet=sheet, absences=absences, fillers=fillers, acks=acks)
+        rows = _sealed_rows(
+            db,
+            period,
+            sheet=sheet,
+            absences=absences,
+            overrides=overrides,
+            names=names,
+            fillers=fillers,
+            acks=acks,
+        )
         blocking = _sealed_issues(rows)
         closed_at: datetime | None = period.closed_at
         closed_by = _display_name(db, period.closed_by)
@@ -886,6 +947,8 @@ def build_month(db: Session, year: int, month: int, *, sheet: str = "main") -> M
             leaves_by_employee=leaves_by_employee,
             post_count=post_count,
             absences=absences,
+            overrides=overrides,
+            names=names,
             fillers=fillers,
             acks=acks,
         )

@@ -177,7 +177,7 @@ def test_the_grid_response_loses_no_field(client, db_session):
 
     grid_fields = {f.name for f in fields(svc.MonthGrid)}
     row_fields = {f.name for f in fields(svc.GridRow)}
-    assert len(grid_fields) == 11 and len(row_fields) == 16
+    assert len(grid_fields) == 11 and len(row_fields) == 17
     assert set(body) == grid_fields
     row = body["rows"][0]
     assert set(row) == row_fields

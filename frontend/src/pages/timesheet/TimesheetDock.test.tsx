@@ -53,6 +53,7 @@ const ROW: TimesheetRow = {
   left_day: null,
   start_confirmed: false,
   notes: {},
+  edits: {},
 }
 
 /**

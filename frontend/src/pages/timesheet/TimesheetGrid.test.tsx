@@ -76,7 +76,9 @@ const row: TimesheetRow = {
   left_day: null,
   start_confirmed: false,
   notes: {},
+  edits: {},
 }
+
 
 const props = {
   rows: [row],
@@ -693,6 +695,27 @@ describe('TimesheetGrid', () => {
     render(<TimesheetGrid {...props} edited={new Set(['G1001|3'])} />)
     expect(cell('G1001', 3)).toHaveAttribute('data-edited', '1')
     expect(cell('G1001', 4)).not.toHaveAttribute('data-edited')
+  })
+
+  it('marks persisted edits and names their editor without a session edit', () => {
+    render(
+      <TimesheetGrid
+        {...props}
+        edited={undefined}
+        rows={[
+          {
+            ...row,
+            edits: {
+              '3': { code: 'X', by: 'Nassem', at: '2026-09-02T04:37:47' },
+            },
+          },
+        ]}
+      />,
+    )
+    expect(cell('G1001', 3)).toHaveAttribute('data-edited', '1')
+    expect(cell('G1001', 3)).toHaveAttribute('title', expect.stringContaining('Nassem'))
+    expect(cell('G1001', 4)).not.toHaveAttribute('data-edited')
+    expect(cell('G1001', 4)).not.toHaveAttribute('title')
   })
 
   it('shows a note on the day it belongs to and not on its neighbour', () => {

@@ -44,6 +44,13 @@ class TimesheetIssue(ORMBase):
     kind: str
     detail: str
 
+class TimesheetCellEdit(ORMBase):
+    """A persisted manual cell and who set it."""
+    code: str
+    by: str | None
+    at: datetime
+
+
 
 class TimesheetRemoved(ORMBase):
     """Someone who finished last month and is therefore off this roster."""
@@ -74,6 +81,7 @@ class TimesheetRow(ORMBase):
     left_day: int | None
     start_confirmed: bool
     notes: dict[int, str]
+    edits: dict[int, TimesheetCellEdit]
     designation_id: int | None = None
 
 
@@ -176,6 +184,7 @@ __all__ = [
     "TimesheetDesignationRead",
     "TimesheetDesignationUpdate",
     "TimesheetFillerUpdate",
+    "TimesheetCellEdit",
     "TimesheetGridResponse",
     "TimesheetIssue",
     "TimesheetPeriodPatch",

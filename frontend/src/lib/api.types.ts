@@ -11151,6 +11151,21 @@ export interface components {
             notifies_employee: boolean;
         };
         /**
+         * TimesheetCellEdit
+         * @description A persisted manual cell and who set it.
+         */
+        TimesheetCellEdit: {
+            /** Code */
+            code: string;
+            /** By */
+            by: string | null;
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
+        };
+        /**
          * TimesheetCellUpdate
          * @description Force one cell. ``code: null`` clears it back to the derived value.
          */
@@ -11356,6 +11371,10 @@ export interface components {
             /** Notes */
             notes: {
                 [key: string]: string;
+            };
+            /** Edits */
+            edits: {
+                [key: string]: components["schemas"]["TimesheetCellEdit"];
             };
             /** Designation Id */
             designation_id?: number | null;
