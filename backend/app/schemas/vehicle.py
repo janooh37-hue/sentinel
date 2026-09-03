@@ -338,7 +338,7 @@ class EvgVehicleOption(BaseModel):
     plate_label: str
 
 
-class EvgPreviewResponse(BaseModel):
+class EvgPreviewResponse(ORMBase):
     rows: list[EvgPreviewRow]
     traffic_codes: list[str]
     fetched_at: datetime
