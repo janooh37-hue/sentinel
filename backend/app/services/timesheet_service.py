@@ -1526,22 +1526,21 @@ def set_cell(
 
     if code == CODE_ABSENT:
         db.add(Absence(employee_id=employee_id, date=cell_date, note=note, created_by=user_id))
-    elif code is not None:
+    elif code is not None and derived != code:
         # An override equal to the derived value is a silent pin that stops the
         # cell tracking records; skip it because this is what Undo last change
         # depends on when it restores a displayed derived code.
-        if derived != code:
-            db.add(
-                TimesheetOverride(
-                    year=year,
-                    month=month,
-                    day=day,
-                    employee_id=employee_id,
-                    code=code,
-                    note=note,
-                    created_by=user_id,
-                )
+        db.add(
+            TimesheetOverride(
+                year=year,
+                month=month,
+                day=day,
+                employee_id=employee_id,
+                code=code,
+                note=note,
+                created_by=user_id,
             )
+        )
     db.add(
         AuditLog(
             actor=actor,

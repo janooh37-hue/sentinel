@@ -38,12 +38,9 @@ from app.db.models import (
     TimesheetStatFiller,
 )
 from app.schemas.timesheet import TimesheetRosterAssignmentWrite
-from app.services import absence_service
-from app.services import leave_service
+from app.services import absence_service, leave_service
 from app.services import timesheet_service as svc
 from tests.conftest import make_user
-
-
 
 
 @pytest.fixture(autouse=True)
