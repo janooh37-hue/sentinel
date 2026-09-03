@@ -80,7 +80,12 @@
       "sections": "Sections",
       "signals": "Waiting signals",
       "done": "Done",
-      "reset": "Reset slot"
+      "reset": "Reset slot",
+      "edit": "Edit dock"
+    },
+    "tools": {
+      "more": "More",
+      "title": "All tools"
     },
     "signals": {
       "approvals": "Approvals",
