@@ -266,12 +266,20 @@ def _edits(
     names: Mapping[int, str],
 ) -> dict[int, CellEdit]:
     edits = {
-        row.date.day: CellEdit(CODE_ABSENT, names.get(row.created_by), row.created_at)
+        row.date.day: CellEdit(
+            CODE_ABSENT,
+            names.get(row.created_by) if row.created_by is not None else None,
+            row.created_at,
+        )
         for row in absences
     }
     edits.update(
         {
-            row.day: CellEdit(row.code, names.get(row.created_by), row.created_at)
+            row.day: CellEdit(
+                row.code,
+                names.get(row.created_by) if row.created_by is not None else None,
+                row.created_at,
+            )
             for row in overrides
         }
     )

@@ -178,13 +178,13 @@ class TimesheetStartAckRequest(BaseModel):
 
 __all__ = [
     "Sheet",
+    "TimesheetCellEdit",
     "TimesheetCellUpdate",
     "TimesheetDesignationCreate",
     "TimesheetDesignationOrder",
     "TimesheetDesignationRead",
     "TimesheetDesignationUpdate",
     "TimesheetFillerUpdate",
-    "TimesheetCellEdit",
     "TimesheetGridResponse",
     "TimesheetIssue",
     "TimesheetPeriodPatch",
