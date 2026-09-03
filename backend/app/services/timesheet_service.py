@@ -287,7 +287,6 @@ def _edits(
     return edits
 
 
-
 def _notes(absences: Iterable[Absence]) -> dict[int, str]:
     """Day -> absence note, so the cell tooltip needs no second request."""
 

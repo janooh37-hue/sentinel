@@ -109,8 +109,6 @@ def test_grid_reports_persisted_edits_with_the_editor(db_session, guards):
     assert sealed.edits[15] == expected_override
 
 
-
-
 def test_effective_roster_assignment_wins_by_month_and_explicit_null_unassigns(db_session, guards):
     guard = db_session.query(TimesheetDesignation).filter_by(name_en="Security Guard").one()
     supervisor = (
@@ -714,7 +712,7 @@ def test_set_cell_writes_an_audit_row(db_session, guards):
         actor=user.email,
     )
 
-    rows = db_session.query(AuditLog).all()
+    rows = db_session.query(AuditLog).order_by(AuditLog.id).all()
     assert len(rows) == 2
     cleared = json.loads(rows[1].payload)
     assert cleared["from"] == "AB"
@@ -923,6 +921,7 @@ def test_a_missing_doj_and_overlapping_leave_are_warnings(db_session, guards):
     assert sum(1 for i in grid.warnings if i.kind == "overlapping_leave") == 1
     assert grid.blocking == []
 
+
 def test_amended_and_deleted_leaves_are_warnings(db_session, guards):
     amended = Leave(
         employee_id="G1001",
@@ -979,6 +978,7 @@ def test_amended_and_deleted_leaves_are_warnings(db_session, guards):
     deleted_details = [w.detail for w in warnings if w.kind == "deleted_leave"]
     assert any("2026-07-01 → 2026-07-03" in detail for detail in deleted_details)
     assert not any("2026-07-05 → 2026-07-07" in detail for detail in deleted_details)
+
 
 def test_a_void_or_deleted_leave_never_reaches_the_sheet(db_session, guards):
     db_session.add(

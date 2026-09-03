@@ -44,12 +44,12 @@ class TimesheetIssue(ORMBase):
     kind: str
     detail: str
 
+
 class TimesheetCellEdit(ORMBase):
     """A persisted manual cell and who set it."""
     code: str
     by: str | None
     at: datetime
-
 
 
 class TimesheetRemoved(ORMBase):
