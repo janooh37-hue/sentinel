@@ -1,4 +1,4 @@
-import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { MemoryRouter, useLocation } from 'react-router-dom'
@@ -35,10 +35,14 @@ function renderDock(): void {
   )
 }
 
+function openTools(): void {
+  fireEvent.click(screen.getByRole('button', { name: 'More' }))
+}
+
 function enterEditMode(slotLabel: string): void {
-  const slot = screen.getByRole('link', { name: slotLabel })
-  fireEvent.pointerDown(slot, { pointerId: 1, clientX: 0, clientY: 0 })
-  act(() => vi.advanceTimersByTime(500))
+  openTools()
+  fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Edit dock' }))
+  fireEvent.click(within(screen.getByRole('navigation', { name: 'Menu' })).getByRole('button', { name: slotLabel }))
 }
 
 beforeEach(async () => {
@@ -55,17 +59,17 @@ afterEach(() => {
   cleanup()
   localStorage.clear()
   vi.clearAllMocks()
-  vi.useRealTimers()
 })
 
 describe('BottomTabBar', () => {
-  it('renders the five default tabs with translated labels', () => {
+  it('renders the four default tabs and the More button', () => {
     renderDock()
 
     const navigation = screen.getByRole('navigation', { name: 'Menu' })
-    for (const label of ['Dashboard', 'Employees', 'Ledger', 'Services', 'Records']) {
+    for (const label of ['Dashboard', 'Employees', 'Services', 'Records']) {
       expect(within(navigation).getByRole('link', { name: label })).toBeInTheDocument()
     }
+    expect(within(navigation).getByRole('button', { name: 'More' })).toBeInTheDocument()
   })
 
   it('never falls back to a denied default destination', () => {
@@ -79,13 +83,13 @@ describe('BottomTabBar', () => {
     const navigation = screen.getByRole('navigation', { name: 'Menu' })
     expect(within(navigation).getAllByRole('link')).toHaveLength(1)
     expect(within(navigation).getByRole('link', { name: 'Dashboard' })).toBeVisible()
-    for (const denied of ['Employees', 'Ledger', 'Services', 'Records']) {
+    expect(within(navigation).getByRole('button', { name: 'More' })).toBeInTheDocument()
+    for (const denied of ['Employees', 'Services', 'Records']) {
       expect(within(navigation).queryByRole('link', { name: denied })).not.toBeInTheDocument()
     }
   })
 
   it('omits denied waiting signals from the customization picker', () => {
-    vi.useFakeTimers()
     mockUseCapabilities.mockReturnValue({
       capabilities: new Set(),
       has: () => false,
@@ -101,18 +105,11 @@ describe('BottomTabBar', () => {
   })
 
   it('edits the original persisted slot when denied slots compact the rendered dock', () => {
-    vi.useFakeTimers()
     localStorage.setItem(
       NAV_SLOTS_STORAGE_KEY,
       JSON.stringify({
         v: 1,
-        ids: [
-          'sec:/',
-          'sec:/employees',
-          'sec:/application',
-          'sig:approvals',
-          'sec:/books',
-        ],
+        ids: ['sec:/', 'sec:/employees', 'sig:approvals', 'sec:/books'],
       }),
     )
     mockUseCapabilities.mockReturnValue({
@@ -126,22 +123,36 @@ describe('BottomTabBar', () => {
     fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Scan-back' }))
 
     const stored = JSON.parse(localStorage.getItem(NAV_SLOTS_STORAGE_KEY) ?? '')
-    expect(stored.ids[2]).toBe('sec:/application')
-    expect(stored.ids[3]).toBe('sig:scanback')
+    expect(stored.ids[1]).toBe('sec:/employees')
+    expect(stored.ids[2]).toBe('sig:scanback')
   })
 
-  it('opens customization on long-press without navigating', () => {
-    vi.useFakeTimers()
+  it('opens the tools sheet on More without navigating', () => {
     renderDock()
 
-    enterEditMode('Employees')
+    openTools()
 
     expect(screen.getByRole('dialog')).toBeInTheDocument()
     expect(screen.getByTestId('location')).toHaveTextContent('/')
   })
 
+  it('navigates to a tapped entry and closes the sheet', () => {
+    renderDock()
+
+    openTools()
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Records' }))
+
+    expect(screen.getByTestId('location')).toHaveTextContent('/books')
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  it('holding a dock link has no touch callout', () => {
+    renderDock()
+
+    expect(screen.getByRole('link', { name: 'Employees' })).toHaveClass('[-webkit-touch-callout:none]')
+  })
+
   it('places a waiting signal into the held slot and shows its live badge', () => {
-    vi.useFakeTimers()
     renderDock()
 
     enterEditMode('Employees')
@@ -158,7 +169,6 @@ describe('BottomTabBar', () => {
   })
 
   it('closes customization when Done is tapped', () => {
-    vi.useFakeTimers()
     renderDock()
 
     enterEditMode('Employees')

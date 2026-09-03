@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useRef, useState, type PointerEvent } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import * as RadixDialog from '@radix-ui/react-dialog'
-import { Minus } from 'lucide-react'
+import { Grip, Minus, Pencil } from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { NavLink } from 'react-router-dom'
+import { NavLink, useNavigate } from 'react-router-dom'
 
 import { cn } from '@/lib/utils'
 import { useCapabilities } from '@/lib/useCapabilities'
@@ -23,16 +24,14 @@ import {
 import { useWaitingSignals } from './useWaitingSignals'
 
 interface DockSlotVisualProps {
-  entry: DockEntry
+  Icon: LucideIcon
   label: string
   count: number
   active?: boolean
   selected?: boolean
 }
 
-function DockSlotVisual({ entry, label, count, active = false, selected = false }: DockSlotVisualProps): React.JSX.Element {
-  const Icon = entry.Icon
-
+function DockSlotVisual({ Icon, label, count, active = false, selected = false }: DockSlotVisualProps): React.JSX.Element {
   return (
     <>
       <span
@@ -43,7 +42,7 @@ function DockSlotVisual({ entry, label, count, active = false, selected = false 
         )}
       >
         <Icon className="h-[19px] w-[19px]" strokeWidth={1.8} aria-hidden />
-        {entry.signal && count > 0 && (
+        {count > 0 && (
           <span
             aria-hidden
             className="absolute -top-1 -end-[7px] inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-accent px-1 text-[10px] font-mono font-semibold leading-none text-white tabular-nums"
@@ -81,6 +80,7 @@ function EntryPicker({ entry, label, count, placed, onSelect }: EntryPickerProps
       type="button"
       aria-pressed={placed}
       onClick={() => onSelect(entry.id)}
+      onPointerEnter={() => prefetchRouteForPath(entry.to)}
       className={cn(
         'flex min-w-0 flex-col items-center gap-1 rounded-xl p-1 text-center transition-colors motion-reduce:transition-none',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-surface',
@@ -114,30 +114,18 @@ function EntryPicker({ entry, label, count, placed, onSelect }: EntryPickerProps
 export function BottomTabBar(): React.JSX.Element {
   const { t } = useTranslation()
   const { has } = useCapabilities()
+  const navigate = useNavigate()
   const signals = useWaitingSignals(true)
   const [slotIds, setSlotIds] = useState(loadSlotIds)
-  const [editMode, setEditMode] = useState(false)
+  const [sheet, setSheet] = useState<'closed' | 'browse' | 'edit'>('closed')
   const [selectedSlot, setSelectedSlot] = useState<number | null>(null)
   const navRef = useRef<HTMLElement>(null)
-  const longPressTimer = useRef<number | null>(null)
-  const pointerStart = useRef<{ id: number; x: number; y: number } | null>(null)
-  const suppressNextClick = useRef(false)
+  const isEditing = sheet === 'edit'
 
-  const cancelLongPress = useCallback(() => {
-    if (longPressTimer.current !== null) {
-      window.clearTimeout(longPressTimer.current)
-      longPressTimer.current = null
-    }
-    pointerStart.current = null
-  }, [])
-
-  const closeEditMode = useCallback(() => {
-    cancelLongPress()
-    setEditMode(false)
+  const closeSheet = useCallback(() => {
+    setSheet('closed')
     setSelectedSlot(null)
-  }, [cancelLongPress])
-
-  useEffect(() => cancelLongPress, [cancelLongPress])
+  }, [])
 
   const renderedSlots = (() => {
     const used = new Set<string>()
@@ -165,28 +153,6 @@ export function BottomTabBar(): React.JSX.Element {
     [signals],
   )
 
-  const startLongPress = (slotIndex: number, event: PointerEvent<HTMLAnchorElement>): void => {
-    if (event.button !== 0) return
-
-    cancelLongPress()
-    pointerStart.current = { id: event.pointerId, x: event.clientX, y: event.clientY }
-    event.currentTarget.setPointerCapture?.(event.pointerId)
-    longPressTimer.current = window.setTimeout(() => {
-      longPressTimer.current = null
-      pointerStart.current = null
-      // A completed hold opens customization and its ensuing click must never navigate.
-      suppressNextClick.current = true
-      setSelectedSlot(slotIndex)
-      setEditMode(true)
-    }, 500)
-  }
-
-  const moveLongPress = (event: PointerEvent<HTMLAnchorElement>): void => {
-    const start = pointerStart.current
-    if (!start || start.id !== event.pointerId) return
-    if (Math.hypot(event.clientX - start.x, event.clientY - start.y) > 8) cancelLongPress()
-  }
-
   const placeSelectedEntry = (entryId: string): void => {
     if (selectedSlot === null) return
 
@@ -195,6 +161,12 @@ export function BottomTabBar(): React.JSX.Element {
       saveSlotIds(next)
       return next
     })
+  }
+
+  const navigateToEntry = (entryId: string): void => {
+    const entry = entryById(entryId)
+    if (entry) navigate(entry.to)
+    closeSheet()
   }
 
   const restoreSlot = (slotIndex: number): void => {
@@ -210,18 +182,18 @@ export function BottomTabBar(): React.JSX.Element {
 
   return (
     // modal={false}: a modal dialog sets pointer-events:none on <body>, which would
-    // kill the edit-mode dock (slot selection + reset handles) living outside the
-    // portal. Non-modal keeps the dock interactive; onInteractOutside below stops
-    // dock taps from closing the sheet.
-    <RadixDialog.Root open={editMode} modal={false} onOpenChange={(open) => !open && closeEditMode()}>
+    // kill the edit-mode dock (slot selection + reset handles) and the More button's
+    // own toggle tap, both of which live outside the portal. Non-modal keeps the dock
+    // interactive; onInteractOutside below stops dock taps from closing the sheet.
+    <RadixDialog.Root open={sheet !== 'closed'} modal={false} onOpenChange={(open) => !open && closeSheet()}>
       <nav
         ref={navRef}
         aria-label={t('nav.menu')}
         onContextMenu={(event) => event.preventDefault()}
         className={cn(
           // This floating geometry clears the physical display corners on iPhones instead of meeting them.
-          'fixed start-3 end-3 bottom-[calc(0.625rem+env(safe-area-inset-bottom))] flex h-[68px] rounded-[26px] border border-border/70 bg-surface/80 px-1.5 [box-shadow:0_10px_30px_rgba(13,40,69,.16)] backdrop-blur-xl md:hidden',
-          editMode ? 'z-50' : 'z-40',
+          'fixed start-3 end-3 bottom-[calc(0.625rem+var(--safe-bottom))] flex h-[68px] rounded-[26px] border border-border/70 bg-surface/80 px-1.5 [box-shadow:0_10px_30px_rgba(13,40,69,.16)] backdrop-blur-xl md:hidden',
+          sheet !== 'closed' ? 'z-50' : 'z-40',
         )}
       >
         {renderedSlots.map(({ entry, sourceSlotIndex }, renderedIndex) => {
@@ -236,10 +208,10 @@ export function BottomTabBar(): React.JSX.Element {
               data-entry-id={entry.id}
               className={cn(
                 'relative flex min-w-0 flex-1 justify-center',
-                editMode && `${rotation} motion-reduce:transform-none`,
+                isEditing && `${rotation} motion-reduce:transform-none`,
               )}
             >
-              {editMode ? (
+              {isEditing ? (
                 <button
                   type="button"
                   aria-label={label}
@@ -247,7 +219,7 @@ export function BottomTabBar(): React.JSX.Element {
                   className="flex min-w-0 flex-1 flex-col items-center gap-0.5 px-1 py-1 text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
                 >
                   <DockSlotVisual
-                    entry={entry}
+                    Icon={entry.Icon}
                     label={label}
                     count={count}
                     selected={selectedSlot === sourceSlotIndex}
@@ -260,22 +232,13 @@ export function BottomTabBar(): React.JSX.Element {
                   aria-label={label}
                   onPointerEnter={() => prefetchRouteForPath(entry.to)}
                   onFocus={() => prefetchRouteForPath(entry.to)}
-                  onPointerDown={(event) => startLongPress(sourceSlotIndex, event)}
-                  onPointerMove={moveLongPress}
-                  onPointerUp={cancelLongPress}
-                  onPointerCancel={cancelLongPress}
-                  onClick={(event) => {
-                    if (suppressNextClick.current) {
-                      event.preventDefault()
-                      suppressNextClick.current = false
-                    }
-                  }}
-                  className="flex min-w-0 flex-1 flex-col items-center gap-0.5 px-1 py-1 text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+                  onClick={() => sheet !== 'closed' && closeSheet()}
+                  className="flex min-w-0 flex-1 flex-col items-center gap-0.5 px-1 py-1 text-foreground [-webkit-touch-callout:none] select-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
                 >
-                  {({ isActive }) => <DockSlotVisual entry={entry} label={label} count={count} active={isActive} />}
+                  {({ isActive }) => <DockSlotVisual Icon={entry.Icon} label={label} count={count} active={isActive} />}
                 </NavLink>
               )}
-              {editMode && (
+              {isEditing && (
                 <button
                   type="button"
                   aria-label={t('nav.customize.reset')}
@@ -288,74 +251,105 @@ export function BottomTabBar(): React.JSX.Element {
             </div>
           )
         })}
+        <div className="relative flex min-w-0 flex-1 justify-center">
+          <button
+            type="button"
+            aria-label={t('nav.tools.more')}
+            aria-haspopup="dialog"
+            aria-expanded={sheet !== 'closed'}
+            onClick={() => (sheet === 'closed' ? setSheet('browse') : closeSheet())}
+            className="flex min-w-0 flex-1 flex-col items-center gap-0.5 px-1 py-1 text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+          >
+            <DockSlotVisual Icon={Grip} label={t('nav.tools.more')} count={0} active={sheet !== 'closed'} />
+          </button>
+        </div>
       </nav>
 
       <RadixDialog.Portal>
-        {editMode && (
+        {sheet !== 'closed' && (
           <div
             aria-hidden
-            onClick={closeEditMode}
+            onClick={closeSheet}
             className="fixed inset-0 z-40 bg-primary/35 backdrop-blur-[2px] animate-in fade-in-0 duration-200 motion-reduce:animate-none"
           />
         )}
         <RadixDialog.Content
           aria-describedby={undefined}
           onInteractOutside={(event) => {
-            // Taps on the dock are part of the editing interaction, not a dismissal.
+            // Taps on the dock are part of the sheet's own interaction (slot editing,
+            // or the More toggle itself), not a dismissal.
             if (navRef.current?.contains(event.target as Node)) event.preventDefault()
           }}
-          className="bottom-sheet fixed inset-x-0 bottom-[calc(5.75rem+env(safe-area-inset-bottom))] z-50 max-h-[calc(100dvh-6.5rem-env(safe-area-inset-bottom))] overflow-y-auto rounded-t-2xl bg-surface shadow-2xl focus-visible:outline-none md:hidden"
+          className="bottom-sheet fixed inset-x-0 bottom-[calc(5.75rem+var(--safe-bottom))] z-50 max-h-[calc(100dvh-6.5rem-var(--safe-bottom))] overflow-y-auto rounded-t-2xl bg-surface shadow-2xl focus-visible:outline-none md:hidden"
         >
           <span aria-hidden className="mx-auto mt-2.5 block h-1 w-10 rounded-full bg-hairline" />
           <header className="flex items-center justify-between gap-3 border-b border-hairline px-5 py-3">
             <RadixDialog.Title className="text-[0.95em] font-semibold text-foreground">
-              {t('nav.customize.title')}
+              {t(isEditing ? 'nav.customize.title' : 'nav.tools.title')}
             </RadixDialog.Title>
-            <RadixDialog.Close asChild>
+            {isEditing ? (
+              <RadixDialog.Close asChild>
+                <button
+                  type="button"
+                  className="rounded-full bg-primary-soft px-3 py-1.5 text-[0.78em] font-semibold text-primary transition-colors hover:bg-primary/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-surface motion-reduce:transition-none"
+                >
+                  {t('nav.customize.done')}
+                </button>
+              </RadixDialog.Close>
+            ) : (
               <button
                 type="button"
-                className="rounded-full bg-primary-soft px-3 py-1.5 text-[0.78em] font-semibold text-primary transition-colors hover:bg-primary/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-surface motion-reduce:transition-none"
+                onClick={() => {
+                  setSheet('edit')
+                  setSelectedSlot(0)
+                }}
+                className="inline-flex items-center gap-1.5 rounded-full bg-primary-soft px-3 py-1.5 text-[0.78em] font-semibold text-primary transition-colors hover:bg-primary/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-surface motion-reduce:transition-none"
               >
-                {t('nav.customize.done')}
+                <Pencil className="h-3.5 w-3.5" strokeWidth={1.8} aria-hidden />
+                {t('nav.customize.edit')}
               </button>
-            </RadixDialog.Close>
+            )}
           </header>
           <div className="space-y-5 px-5 py-4">
-            <p className="text-[0.78em] text-muted-foreground">{t('nav.customize.hint')}</p>
-            <section aria-labelledby="dock-sections-title">
-              <h3 id="dock-sections-title" className="mb-2 text-[0.75em] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-                {t('nav.customize.sections')}
-              </h3>
-              <div className="grid grid-cols-4 gap-x-2 gap-y-3">
-                {availableSections.map((entry) => (
-                  <EntryPicker
-                    key={entry.id}
-                    entry={entry}
-                    label={t(entry.labelKey)}
-                    count={0}
-                    placed={slotIds.includes(entry.id)}
-                    onSelect={placeSelectedEntry}
-                  />
-                ))}
-              </div>
-            </section>
-            <section aria-labelledby="dock-signals-title">
-              <h3 id="dock-signals-title" className="mb-2 text-[0.75em] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-                {t('nav.customize.signals')}
-              </h3>
-              <div className="grid grid-cols-4 gap-x-2 gap-y-3">
-                {availableSignals.map((entry) => (
-                  <EntryPicker
-                    key={entry.id}
-                    entry={entry}
-                    label={t(entry.labelKey)}
-                    count={countFor(entry)}
-                    placed={slotIds.includes(entry.id)}
-                    onSelect={placeSelectedEntry}
-                  />
-                ))}
-              </div>
-            </section>
+            {isEditing && <p className="text-[0.78em] text-muted-foreground">{t('nav.customize.hint')}</p>}
+            {availableSections.length > 0 && (
+              <section aria-labelledby="dock-sections-title">
+                <h3 id="dock-sections-title" className="mb-2 text-[0.75em] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                  {t('nav.customize.sections')}
+                </h3>
+                <div className="grid grid-cols-4 gap-x-2 gap-y-3">
+                  {availableSections.map((entry) => (
+                    <EntryPicker
+                      key={entry.id}
+                      entry={entry}
+                      label={t(entry.labelKey)}
+                      count={0}
+                      placed={isEditing && slotIds.includes(entry.id)}
+                      onSelect={isEditing ? placeSelectedEntry : navigateToEntry}
+                    />
+                  ))}
+                </div>
+              </section>
+            )}
+            {availableSignals.length > 0 && (
+              <section aria-labelledby="dock-signals-title">
+                <h3 id="dock-signals-title" className="mb-2 text-[0.75em] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                  {t('nav.customize.signals')}
+                </h3>
+                <div className="grid grid-cols-4 gap-x-2 gap-y-3">
+                  {availableSignals.map((entry) => (
+                    <EntryPicker
+                      key={entry.id}
+                      entry={entry}
+                      label={t(entry.labelKey)}
+                      count={countFor(entry)}
+                      placed={isEditing && slotIds.includes(entry.id)}
+                      onSelect={isEditing ? placeSelectedEntry : navigateToEntry}
+                    />
+                  ))}
+                </div>
+              </section>
+            )}
           </div>
         </RadixDialog.Content>
       </RadixDialog.Portal>
