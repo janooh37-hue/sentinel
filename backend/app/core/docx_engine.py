@@ -783,7 +783,9 @@ def _pp_general_book(doc: Any, ctx: dict[str, Any]) -> None:
 
 
 def _format_general_book_ref_line(doc: Any) -> None:
-    """Keep the Arabic label RTL and the rendered reference in LTR order."""
+    """Keep the template's ref styling while making its value explicitly LTR."""
+    from copy import deepcopy
+
     from app.core.arabic_rtl import stamp_paragraph, stamp_run
 
     for paragraph in doc.paragraphs:
@@ -791,16 +793,18 @@ def _format_general_book_ref_line(doc: Any) -> None:
         if not match:
             continue
 
+        source = next((run for run in paragraph.runs if run.text), None)
+        source_rpr = deepcopy(source._element.rPr) if source is not None else None
+        family = (source.font.name if source is not None else None) or _CALIBRI
         for run in list(paragraph.runs):
             run._element.getparent().remove(run._element)
         stamp_paragraph(paragraph)
         label = paragraph.add_run("الرقم: ")
         value = paragraph.add_run(match.group(1))
         for run in (label, value):
-            run.font.name = _CALIBRI
-            run.font.size = Pt(16)
-            run.font.italic = True
-            stamp_run(run, _CALIBRI)
+            if source_rpr is not None:
+                run._element.insert(0, deepcopy(source_rpr))
+        stamp_run(label, family)
         value.font.rtl = False
         break
 
