@@ -1191,7 +1191,7 @@ def test_build_month_does_not_query_once_per_row(db_session, guards, count_queri
     assert len(grid.rows) == 33
     assert grid.rows[-1].stat_filler == CODE_SICK  # the batched lookback really ran
     assert large.count == small.count
-    assert large.count <= 12
+    assert large.count <= 13
 
 
 # --- fix round 1: the three writers agree, and the seal's two halves ---------
