@@ -84,6 +84,7 @@ function row(
     left_day: null,
     start_confirmed: false,
     notes: frozen({ 3: 'clinic' }),
+    edits: frozen({}),
   })
 }
 
