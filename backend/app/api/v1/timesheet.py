@@ -258,6 +258,7 @@ def set_cell(
         payload.code,
         note=payload.note,
         user_id=user.id,
+        actor=user.email,
     )
     return _grid(db, year, month, sheet)
 

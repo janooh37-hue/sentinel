@@ -9,6 +9,7 @@ statistics keep-sets, the filler lookback, the notes column, the seal) and the
 two controller rulings.
 """
 
+import json
 from datetime import date, datetime
 
 import pytest
@@ -25,6 +26,7 @@ from app.core.timesheet_codes import (
 )
 from app.db.models import (
     Absence,
+    AuditLog,
     Employee,
     Leave,
     TimesheetDesignation,
@@ -676,6 +678,48 @@ def test_a_non_absence_code_writes_an_override_and_none_clears_it(db_session, gu
     svc.set_cell(db_session, 2026, 7, "G1001", 10, None)
     assert db_session.query(TimesheetOverride).count() == 0
     assert _row(db_session, 2026, 7, "G1001").codes[9] == CODE_PRESENT
+
+
+def test_set_cell_writes_an_audit_row(db_session, guards):
+    user = make_user(db_session, email="editor@x.ae")
+
+    svc.set_cell(
+        db_session,
+        2026,
+        7,
+        "G1001",
+        14,
+        "AB",
+        note="no show",
+        user_id=user.id,
+        actor=user.email,
+    )
+
+    rows = db_session.query(AuditLog).all()
+    assert len(rows) == 1
+    assert rows[0].actor == user.email
+    assert rows[0].entity_type == "timesheet_cell"
+    assert rows[0].entity_id == "G1001:2026-07-14"
+    payload = json.loads(rows[0].payload)
+    assert payload == {"from": "P", "to": "AB", "code": "AB", "note": "no show"}
+
+    svc.set_cell(
+        db_session,
+        2026,
+        7,
+        "G1001",
+        14,
+        None,
+        user_id=user.id,
+        actor=user.email,
+    )
+
+    rows = db_session.query(AuditLog).all()
+    assert len(rows) == 2
+    cleared = json.loads(rows[1].payload)
+    assert cleared["from"] == "AB"
+    assert cleared["to"] == "P"
+    assert cleared["code"] is None
 
 
 def test_switching_a_cell_never_leaves_two_records_fighting(db_session, guards):

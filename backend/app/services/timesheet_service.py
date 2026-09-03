@@ -22,6 +22,7 @@ filler lookback alone would otherwise be 275 round trips.
 from __future__ import annotations
 
 import calendar
+import json
 from collections import defaultdict
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
@@ -51,6 +52,7 @@ from app.core.timesheet_codes import (
 )
 from app.db.models import (
     Absence,
+    AuditLog,
     Employee,
     Leave,
     TimesheetDesignation,
@@ -1309,6 +1311,7 @@ def set_cell(
     *,
     note: str | None = None,
     user_id: int | None = None,
+    actor: str | None = None,
 ) -> None:
     """Force one cell: ``AB`` records an absence, anything else an override.
 
@@ -1373,14 +1376,19 @@ def set_cell(
             db.delete(stale)
     db.flush()
 
+    derived = _derived_cell_code(db, year, month, employee, day)
+    before = (
+        override.code if override is not None else CODE_ABSENT if absence is not None else derived
+    )
+    after = code if code is not None else derived
+
     if code == CODE_ABSENT:
         db.add(Absence(employee_id=employee_id, date=cell_date, note=note, created_by=user_id))
     elif code is not None:
-        derived_code = _derived_cell_code(db, year, month, employee, day)
         # An override equal to the derived value is a silent pin that stops the
         # cell tracking records; skip it because this is what Undo last change
         # depends on when it restores a displayed derived code.
-        if derived_code != code:
+        if derived != code:
             db.add(
                 TimesheetOverride(
                     year=year,
@@ -1392,6 +1400,15 @@ def set_cell(
                     created_by=user_id,
                 )
             )
+    db.add(
+        AuditLog(
+            actor=actor,
+            action="timesheet.cell_set",
+            entity_type="timesheet_cell",
+            entity_id=f"{employee_id}:{cell_date:%Y-%m-%d}",
+            payload=json.dumps({"from": before, "to": after, "code": code, "note": note}),
+        )
+    )
     db.commit()
 
 

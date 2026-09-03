@@ -20,6 +20,7 @@ from app.core.constants import ARABIC_MONTHS
 from app.db import session as session_mod
 from app.db.models import (
     Absence,
+    AuditLog,
     Base,
     Employee,
     Leave,
@@ -266,10 +267,17 @@ def test_put_cell_marks_absence(client, db_session):
 
 def test_a_cell_edit_records_who_made_it(client, db_session):
     _guard(db_session)
-    client.put(
-        "/api/v1/timesheet/2026/7/cell", json={"employee_id": "G1001", "day": 9, "code": "AB"}
+    response = client.put(
+        "/api/v1/timesheet/2026/7/cell",
+        json={"employee_id": "G1001", "day": 14, "code": "AB"},
     )
+    assert response.status_code == 200
+    body = response.json()
+    row = next(row for row in body["rows"] if row["employee_id"] == "G1001")
+    assert row["edits"]["14"]["by"] == "mgr@x.ae"
     assert db_session.query(Absence).one().created_by == client.user_id
+    audit = db_session.query(AuditLog).filter_by(action="timesheet.cell_set").one()
+    assert audit.actor == "mgr@x.ae"
 
 
 def test_a_bad_cell_code_answers_with_the_service_error(client, db_session):
