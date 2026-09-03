@@ -27,7 +27,8 @@ from collections import defaultdict
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
-from typing import Final
+from itertools import chain
+from typing import Final, cast
 
 from sqlalchemy import and_, func, select
 from sqlalchemy.orm import Session
@@ -1044,7 +1045,13 @@ def build_month(db: Session, year: int, month: int, *, sheet: str = "main") -> M
         db,
         (
             row.created_by
-            for rows in (*absences.values(), *overrides.values())
+            for rows in chain(
+                cast(Iterable[Sequence[Absence] | Sequence[TimesheetOverride]], absences.values()),
+                cast(
+                    Iterable[Sequence[Absence] | Sequence[TimesheetOverride]],
+                    overrides.values(),
+                ),
+            )
             for row in rows
         ),
     )
