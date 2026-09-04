@@ -62,7 +62,7 @@ export function NavDrawer({ open, onOpenChange }: NavDrawerProps): React.JSX.Ele
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent aria-label={t('nav.menu')} aria-describedby={undefined}>
+      <SheetContent aria-label={t('nav.menu')} aria-describedby={undefined} className="pt-[var(--safe-top)] pb-[var(--safe-bottom)]">
         <SheetTitle className="sr-only">{t('nav.menu')}</SheetTitle>
         {/* Header: brand + close */}
         <div className="flex items-center justify-between border-b border-border px-4 py-3">

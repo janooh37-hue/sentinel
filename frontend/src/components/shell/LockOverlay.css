@@ -534,7 +534,7 @@
     flex-direction: column;
     align-items: center;
     transform: none;
-    padding: 42px 17px calc(var(--lock-unlock-height, 278px) + 28px);
+    padding: calc(24px + var(--safe-top)) 17px calc(var(--lock-unlock-height, 278px) + 28px + var(--safe-bottom));
     border: 0;
     border-radius: 0;
     background: transparent;
@@ -547,9 +547,9 @@
 
   .lock-overlay[data-layout="stack"] .lock-shell,
   .lock-overlay[data-layout="console"] .lock-shell {
-    inset: 14px 10px auto;
+    inset: calc(14px + var(--safe-top)) 10px auto;
     width: auto;
-    height: min(540px, calc(100dvh - var(--lock-unlock-height, 278px) - 34px));
+    height: min(540px, calc(100dvh - var(--lock-unlock-height, 278px) - 34px - var(--safe-top) - var(--safe-bottom)));
     padding: 26px 16px 0;
     border: 1px solid rgb(255 255 255 / 13%);
     border-radius: 28px;
@@ -667,7 +667,7 @@
   .lock-overlay[data-layout="console"] .lock-unlock {
     position: fixed;
     inset-inline: 10px;
-    bottom: calc(10px + var(--lock-kb-inset, 0px));
+    bottom: calc(10px + var(--safe-bottom) + var(--lock-kb-inset, 0px));
     width: auto;
     margin: 0;
     padding: 18px 20px 16px;

@@ -220,7 +220,7 @@ export function BottomTabBar(): React.JSX.Element {
         onContextMenu={(event) => event.preventDefault()}
         className={cn(
           // This floating geometry clears the physical display corners on iPhones instead of meeting them.
-          'fixed start-3 end-3 bottom-[calc(0.625rem+env(safe-area-inset-bottom))] flex h-[68px] rounded-[26px] border border-border/70 bg-surface/80 px-1.5 [box-shadow:0_10px_30px_rgba(13,40,69,.16)] backdrop-blur-xl md:hidden',
+          'fixed start-3 end-3 bottom-[calc(0.625rem+var(--safe-bottom))] flex h-[68px] rounded-[26px] border border-border/70 bg-surface/80 px-1.5 [box-shadow:0_10px_30px_rgba(13,40,69,.16)] backdrop-blur-xl md:hidden',
           editMode ? 'z-50' : 'z-40',
         )}
       >
@@ -304,7 +304,7 @@ export function BottomTabBar(): React.JSX.Element {
             // Taps on the dock are part of the editing interaction, not a dismissal.
             if (navRef.current?.contains(event.target as Node)) event.preventDefault()
           }}
-          className="bottom-sheet fixed inset-x-0 bottom-[calc(5.75rem+env(safe-area-inset-bottom))] z-50 max-h-[calc(100dvh-6.5rem-env(safe-area-inset-bottom))] overflow-y-auto rounded-t-2xl bg-surface shadow-2xl focus-visible:outline-none md:hidden"
+          className="bottom-sheet fixed inset-x-0 bottom-[calc(5.75rem+var(--safe-bottom))] z-50 max-h-[calc(100dvh-6.5rem-var(--safe-bottom))] overflow-y-auto rounded-t-2xl bg-surface shadow-2xl focus-visible:outline-none md:hidden"
         >
           <span aria-hidden className="mx-auto mt-2.5 block h-1 w-10 rounded-full bg-hairline" />
           <header className="flex items-center justify-between gap-3 border-b border-hairline px-5 py-3">
