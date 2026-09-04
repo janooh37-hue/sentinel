@@ -780,7 +780,7 @@ describe('PermissionsPage Mirror editor', () => {
       'flex',
       'flex-col',
       'z-[45]',
-      '[bottom:calc(4.875rem+env(safe-area-inset-bottom))]',
+      '[bottom:calc(4.875rem+var(--safe-bottom))]',
     )
     expect(screen.queryByRole('button', { name: 'Open preview' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Close preview' })).not.toBeInTheDocument()

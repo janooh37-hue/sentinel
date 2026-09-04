@@ -1123,8 +1123,8 @@ export function BookRecordPage(): React.JSX.Element {
             aria-hidden={dockHidden ? true : undefined}
             inert={dockHidden}
             className={cn(
-              'fixed inset-x-0 bottom-[calc(5.5rem+env(safe-area-inset-bottom))] z-40 border-t border-hairline bg-surface/95 px-3 pt-2 backdrop-blur md:hidden',
-              'pb-[max(0.5rem,env(safe-area-inset-bottom))]',
+              'fixed inset-x-0 bottom-[calc(5.5rem+var(--safe-bottom))] z-40 border-t border-hairline bg-surface/95 px-3 pt-2 backdrop-blur md:hidden',
+              'pb-[max(0.5rem,var(--safe-bottom))]',
               'transition-opacity motion-reduce:transition-none',
               dockHidden && 'pointer-events-none opacity-0',
             )}

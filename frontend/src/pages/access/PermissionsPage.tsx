@@ -367,7 +367,7 @@ function MirrorDevice({
       className={cn(
         'mirror-device flex flex-col rounded-[1.9rem] bg-primary p-2 text-primary-foreground shadow-xl min-[900px]:sticky min-[900px]:top-4 min-[900px]:self-start',
         mobile &&
-          'fixed inset-x-3 z-[45] max-h-[min(68vh,620px)] shadow-2xl [bottom:calc(4.875rem+env(safe-area-inset-bottom))]',
+          'fixed inset-x-3 z-[45] max-h-[min(68vh,620px)] shadow-2xl [bottom:calc(4.875rem+var(--safe-bottom))]',
       )}
     >
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[1.4rem] bg-primary text-primary-foreground">
