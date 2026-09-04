@@ -20,12 +20,12 @@ Method: static reading of the checked-out repository (every claim below carries 
 
 ### Request flow and module inventory
 
-`backend/app/main.py` is the FastAPI app factory (`backend/app/main.py:170-289`). It installs three exception handlers (`backend/app/api/errors.py:99-144`: `AppError`, `RequestValidationError`, and a catch-all `Exception` handler that logs the full traceback and returns a generic `INTERNAL_ERROR` 500), a request-body-size cap (`MAX_BODY_BYTES = 30 * 1024 * 1024`, `backend/app/main.py:66`), gzip, and then mounts 38 versioned routers under `/api/v1` (`backend/app/main.py:206-252`), each gated by `Depends(get_current_user)` at the router level (`main.py:198`) plus per-endpoint `Depends(require_capability(...))`. Routers are thin: they call into `app/services/*_service.py` (90 top-level service modules), which in turn call `app/core/*` pure logic and `app/db/repos/*` (4 repo modules) or raw `select(...)` directly.
+`backend/app/main.py` is the FastAPI app factory (`backend/app/main.py:170-289`). It installs three exception handlers (`backend/app/api/errors.py:99-144`: `AppError`, `RequestValidationError`, and a catch-all `Exception` handler that logs the full traceback and returns a generic `INTERNAL_ERROR` 500), a request-body-size cap (`MAX_BODY_BYTES = 30 * 1024 * 1024`, `backend/app/main.py:66`), gzip, and then mounts 40 versioned routers under `/api/v1` (`backend/app/main.py:206-252`, confirmed by `grep -c 'include_router.*prefix="/api/v1"' backend/app/main.py`; three source files register two router objects each — `employees_v1.router`+`.violations_router`, `documents_v1.documents_router`+`.jobs_router`, `books_v1.router`+`.categories_router` — so the 40 mounted routers come from 37 distinct router-module files, not 40 files), each gated by `Depends(get_current_user)` at the router level (`main.py:198`) plus per-endpoint `Depends(require_capability(...))`. Routers are thin: they call into `app/services/*_service.py` (89 top-level service modules), which in turn call `app/core/*` pure logic and `app/db/repos/*` (3 repo modules) or raw `select(...)` directly.
 
 Counted directly in this checkout:
 - Backend: **71,838** Python lines under `backend/app` (`find backend/app -name '*.py' | xargs wc -l`).
 - Frontend: **157,004** ts/tsx lines under `frontend/src`, of which the generated `frontend/src/lib/api.types.ts` is **25,054** (131,950 excluding it).
-- 38 `api/v1` router modules, 90 service modules, 48 schema modules, 4 repo modules, 31 `<Route>` entries in `frontend/src/App.tsx`.
+- 37 `api/v1` router modules (`find backend/app/api/v1 -maxdepth 1 -name '*.py' ! -name '__init__.py' | wc -l`; mounted as 40 router objects — see above), 89 service modules, 47 schema modules, 3 repo modules, 31 `<Route>` entries in `frontend/src/App.tsx`.
 - 88 Alembic migration files under `backend/app/db/migrations/versions`, one linear head `0084_merge_0083_heads` (`backend/app/db/migrations/versions/0084_merge_0083_heads_merge_outlook_and_vehicle_heads.py:1-14`).
 - 334 sync `def` route handlers vs 21 `async def` (grep across `backend/app/api/v1/*.py`).
 
@@ -53,7 +53,7 @@ Largest frontend modules:
 
 ### Layering violations and import cycles
 
-All 38 routers import `app.db` directly, and 24 `select(` calls appear across 12 routers instead of going through a service (e.g. `backend/app/api/v1/documents.py:82-100`, `backend/app/api/v1/workforce.py:1093-1202` — every `list_overrides`/`list_requirements`/`list_attendance_policies` handler in `workforce.py` builds its `select(...)` inline).
+36 of the 37 routers import `app.db` directly — the sole exception is `templates.py`, which only calls into `template_service` — and 24 `select(` calls appear across 11 of those routers instead of going through a service (e.g. `backend/app/api/v1/documents.py:82-100`, `backend/app/api/v1/workforce.py:1093-1202` — every `list_overrides`/`list_requirements`/`list_attendance_policies` handler in `workforce.py` builds its `select(...)` inline).
 
 44 service modules import from `app.api.errors` — the API layer's own error type — which is a backwards dependency for a would-be layered architecture (services should not know about the API layer). Confirmed directly: `backend/app/services/auth_service.py:25` (`from app.api.errors import AppError, ValidationFailedError`); the same import appears in 43 other service modules.
 
@@ -215,7 +215,7 @@ This is a **connection-pool ceiling, not a hardware ceiling**: CPU usage tops ou
 
 **4a — write-lock hold** (reproduces the committed-document-generation lock on the real Windows host): while a 25-tab load was steady, `hold_lock.py` opened its own `sqlite3` connection, ran `BEGIN IMMEDIATE; UPDATE book_ref_sequence SET next_value=next_value WHERE id=1` (the exact row `allocate_ref_with_retry` touches), held it 20 seconds, committed, three times 60 s apart. **Three confirmed occurrences** of `sqlite3.OperationalError: database is locked` (16:06:19, 16:07:36, 16:07:40 local), all originating from `auth_service.py:474` (`resolve_session`'s `last_seen_at` `db.commit()`) on `GET /ledger`, `GET /dashboard/summary`, and `GET /ledger/unread-recent` — one in the first hold burst, two in the second; the third burst produced none. The 70 s-extension fallback was not needed. All three requests returned to 200 immediately after the corresponding `COMMIT`. Full traceback in Appendix.
 
-**4b — approval reject fan-out**: as the assigned approver, `POST /books/{id}/reject` was issued against pending books during a steady 25-tab run, in two passes (targets: book 1, then book 2 which timed out and crashed the first script attempt; the script was then made resilient to per-book failures and re-run against 5 fresh books, 6-10). Across the **7 total attempts** (books 1, 2, 6, 7, 8, 9, 10), **2 of 7** completed with `200` (book 1, issued during ramp before the pool saturated, and book 6, the first call of the retried run); the remaining **5 of 7** (books 2, 7, 8, 9, 10) hit `httpx.ReadTimeout` with **no server response at all**. Across both runs, **zero** SSE `counts` frames were observed on *any* of the 25 concurrently-open tabs — confirmed by inspecting `sse.events` in both `results-25.json` snapshots (0 entries each). At this concurrency the SSE tick loop cannot get a database connection either, so the "arrival spread" the plan anticipated measuring (first tab → last tab) is not a small number — **it is "never" for the duration of the observation window**. This is the sharpest finding in the whole review: under realistic peak load, an approval decision may not even complete, and if it does, the actor's own other tabs will not learn about it via SSE.
+**4b — approval reject fan-out**: `POST /books/{id}/reject` was issued against pending books via `fanout_trigger.py`, in **two separate invocations against two separate server processes — not one continuous steady run**. The server log records a full restart between them (`FastAPI app ready` at 16:09:33+0400, then again at 16:13:58+0400); the first session's own log shows near-simultaneous failing GETs across `/auth/me`, `/dashboard/summary`, `/ledger`, `/employees`, `/leaves`, `/announcements/status`, `/books/awaiting`, `/scan-inbox/count`, `/ledger/flag-count`, and `/notifications/stream`, confirming a 25-tab load was genuinely active during it — but that `load.py` process's own results were never persisted, so **no `results-*.json` file exists for this first session** (unlike every other figure in this section). The first invocation targeted book 1, then book 2, whose request failed with the same `sqlalchemy.exc.TimeoutError: QueuePool limit of size 5 overflow 10 reached` seen throughout §6 (`/tmp/gssg-load/data/logs/gssg.log:1491`, 16:12:14+0400); the script, not yet resilient to per-book failures, aborted there. It was then rewritten to tolerate per-book failures and re-run against 5 fresh books (6-10) against the freshly restarted server, this time inside a documented `load.py --tabs 25` run (`results-25-4b.json`: 506/632 = 80.1% aggregate error rate, already deep in the same collapse as the N=25 baseline's 80.3%). Of the **7 total attempts** across both sessions (books 1, 2, 6, 7, 8, 9, 10), the database's current `approval_state` — the only artifact common to both sessions — independently confirms exactly **2 succeeded**: books 1 and 6 are now `rejected`; books 2, 7, 8, 9, 10 remain `pending`. **No raw artifact records book 1's response time or status code**; the earlier framing of it as "200, issued during ramp, before pool saturated" is dropped here as unverifiable, and it is cited only as "succeeded" per the DB state. `results-25-4b.json`'s `sse` field records **zero** `counts` frames delivered to any of the 25 concurrently-open tabs during the second invocation (`total_frames: 0`, all 25 streams disconnected); no equivalent SSE artifact exists for the first invocation. Full per-book table with citations in the Appendix. This remains the sharpest finding in the whole review: under realistic peak load, an approval decision may not even complete, and when it does, the actor's own other tabs do not learn about it via SSE.
 
 **4c — scheduler enabled**: re-ran the N=25 level with the in-process scheduler active (external gateways disabled so jobs no-op quickly). Result: aggregate error rate 504/629 = **80.1%**, statistically indistinguishable from the 508/633 = **80.3%** scheduler-off baseline at the same level (both effectively "the system has already collapsed" and adding scheduler writers on top does not measurably worsen an already-saturated pool). The two runs are not meaningfully distinguishable; the scheduler is not the binding constraint here, the SSE+HTTP request volume already is.
 
@@ -292,22 +292,24 @@ and, equivalently, from `backend/app/api/deps.py:65` inside `require_capability`
 
 ### Fault experiment 4b — raw fan-out data
 
-First run (books 1-5; aborted after book 2's timeout crashed the initial script — fixed for the retry below):
-| Book | Assignee | Result |
-|---|---|---|
-| 1 | user1 (admin) | 200 (issued during ramp, before pool saturated) |
-| 2 | user2 | `ReadTimeout` (>10 s) — script aborted here |
+Two separate script invocations against two separate server processes — the server log shows a full restart between them (`FastAPI app ready` at 16:09:33+0400, then again at 16:13:58+0400), so this is not one continuous run.
 
-Retry (books 6-10, script made resilient to per-book failures, 15 s timeout):
-| Book | Assignee | Result | Sent at (UTC) |
+First invocation (books 1, 2). No `results-*.json` survives this server session; outcomes below are corroborated only by the server log and the database's current state:
+| Book | Assignee | Outcome | Evidence |
 |---|---|---|---|
-| 6 | user1 (admin) | 200 | 12:14:47.499 |
-| 7 | user2 | `ReadTimeout` | 12:15:11.410 |
-| 8 | user3 | `ReadTimeout` | 12:15:46.453 |
-| 9 | user4 | `ReadTimeout` | 12:16:21.496 |
-| 10 | user5 | `ReadTimeout` | 12:16:56.539 |
+| 1 | user1 (admin) | succeeded (no raw timing/status artifact survives) | `approval_state = 'rejected'` (`sqlite3 /tmp/gssg-load/data/gssg.db`, queried directly) |
+| 2 | user2 | `sqlalchemy.exc.TimeoutError: QueuePool ... timeout 30.00` on the server; script (not yet resilient to per-book failures) aborted here | `/tmp/gssg-load/data/logs/gssg.log:1491`, 16:12:14+0400; `approval_state` still `pending` |
 
-`sse.events` array in both corresponding `results-25.json` snapshots: **empty** — zero `counts` frames delivered to any of the 25 concurrently-open tabs across either run.
+Second invocation, after `fanout_trigger.py` was made resilient to per-book failures (books 6-10, 15 s client timeout), against the freshly restarted server, correlated with its own `results-25-4b.json` (started_at 12:13:59 UTC, finished_at 12:17:36 UTC; 506/632 = 80.1% aggregate error rate — already deep in the pool-collapse regime, matching the N=25 baseline's 80.3%):
+| Book | Assignee | Result | Sent at (UTC) | Evidence |
+|---|---|---|---|---|
+| 6 | user1 (admin) | 200 | 12:14:47.499 | `fanout-events.json`; `approval_state = 'rejected'` |
+| 7 | user2 | `ReadTimeout` (client) | 12:15:11.410 | `fanout-events.json`; server-side `QueuePool` timeout at `gssg.log:1695` (16:16:35+0400); `approval_state` still `pending` |
+| 8 | user3 | `ReadTimeout` (client) | 12:15:46.453 | `fanout-events.json`; no server-side log entry at all (request still queued for a pool connection when the harness moved on); `approval_state` still `pending` |
+| 9 | user4 | `ReadTimeout` (client) | 12:16:21.496 | `fanout-events.json`; no server-side log entry; `approval_state` still `pending` |
+| 10 | user5 | `ReadTimeout` (client) | 12:16:56.539 | `fanout-events.json`; no server-side log entry; `approval_state` still `pending` |
+
+Across all 7 attempts, the database's current state is the only artifact common to both sessions: books 1 and 6 are `rejected`, books 2, 7, 8, 9, 10 remain `pending` (`sqlite3 /tmp/gssg-load/data/gssg.db "select id, approval_state from books where id in (1,2,6,7,8,9,10)"` → `1|rejected`, `2|pending`, `6|rejected`, `7|pending`, `8|pending`, `9|pending`, `10|pending`). `results-25-4b.json`'s `sse` field records zero delivered `counts` frames to any of the 25 concurrently-open tabs during the second invocation (`total_frames: 0`, `streams_held_full_window: 0`, all 25 disconnected); no equivalent SSE artifact exists for the first invocation.
 
 ### Capacity sweep — endpoint-level detail (selected)
 
