@@ -7,9 +7,8 @@ from __future__ import annotations
 
 import hashlib
 import json
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Mapping
 from datetime import UTC, datetime
-from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -17,9 +16,6 @@ from sqlalchemy.orm import Session
 from app.api.errors import ConflictError, NotFoundError, ValidationFailedError
 from app.db.models import AuditLog, Employee, User
 from app.db.workforce_models import (
-    AttendanceAdjustment,
-    AttendanceCase,
-    AttendanceEvaluation,
     AttendanceProviderPerson,
     WorkAttendancePolicy,
     WorkCrew,
@@ -44,15 +40,6 @@ def _require_int(values: Mapping[str, object], key: str) -> int:
     if isinstance(value, bool) or not isinstance(value, int):
         raise ValidationFailedError("WORKFORCE_POLICY_INVALID", f"{key} must be an integer.")
     return value
-
-
-def _optional_utc_naive(values: Mapping[str, object], key: str) -> datetime | None:
-    value = values.get(key)
-    if value is None:
-        return None
-    if not isinstance(value, datetime):
-        raise ValidationFailedError("ATTENDANCE_ADJUSTMENT_INVALID", f"{key} must be a datetime.")
-    return _utc_naive(value)
 
 
 def etag_for(value: object) -> str:
@@ -291,187 +278,13 @@ def update_provider_mapping(db: Session, *, person_id: int, employee_id: str | N
     return row
 
 
-def _latest_evaluation(db: Session, case_id: int) -> AttendanceEvaluation:
-    row = db.scalar(
-        select(AttendanceEvaluation)
-        .where(AttendanceEvaluation.attendance_case_id == case_id)
-        .order_by(AttendanceEvaluation.revision.desc())
-    )
-    if row is None:
-        raise ConflictError("ATTENDANCE_CASE_VERSION_CONFLICT", "Attendance case has no automatic evaluation.")
-    return row
-
-
-
-
-
-
-def active_attendance_adjustment(
-    rows: Sequence[AttendanceAdjustment],
-) -> AttendanceAdjustment | None:
-    unrevoked = [row for row in rows if row.revoked_at is None]
-    superseded = {
-        row.supersedes_adjustment_id
-        for row in unrevoked
-        if row.supersedes_adjustment_id is not None
-    }
-    return next((row for row in reversed(unrevoked) if row.id not in superseded), None)
-
-def active_attendance_adjustments(
-    db: Session, case_ids: Iterable[int]
-) -> dict[int, AttendanceAdjustment]:
-    """Batch the one unrevoked correction leaf for each attendance case."""
-    ids = list(case_ids)
-    if not ids:
-        return {}
-    rows_by_case: dict[int, list[AttendanceAdjustment]] = {}
-    for row in db.scalars(
-        select(AttendanceAdjustment)
-        .where(AttendanceAdjustment.attendance_case_id.in_(ids))
-        .order_by(
-            AttendanceAdjustment.attendance_case_id,
-            AttendanceAdjustment.created_at,
-            AttendanceAdjustment.id,
-        )
-    ):
-        rows_by_case.setdefault(row.attendance_case_id, []).append(row)
-    return {
-        case_id: active
-        for case_id, rows in rows_by_case.items()
-        if (active := active_attendance_adjustment(rows)) is not None
-    }
-
-
-def overlay_attendance_adjustment(
-    automatic: Mapping[str, Any], adjustment: AttendanceAdjustment | None
-) -> dict[str, Any]:
-    """Apply every field from an active full correction snapshot, including nulls."""
-    values = dict(automatic)
-    if adjustment is None:
-        return values
-    values.update(
-        {
-            "presence_state": adjustment.replacement_presence_state,
-            "first_in_at": adjustment.replacement_first_in_at,
-            "latest_in_at": adjustment.replacement_latest_in_at,
-            "final_out_at": adjustment.replacement_final_out_at,
-            "late_minutes": adjustment.replacement_late_minutes,
-            "early_exit_minutes": adjustment.replacement_early_exit_minutes,
-            "missing_checkout": adjustment.replacement_missing_checkout,
-            "adjustment_id": adjustment.id,
-        }
-    )
-    return values
-
-
-def _active_adjustment(db: Session, case_id: int) -> AttendanceAdjustment | None:
-    rows = list(
-        db.scalars(
-            select(AttendanceAdjustment)
-            .where(AttendanceAdjustment.attendance_case_id == case_id)
-            .order_by(AttendanceAdjustment.created_at, AttendanceAdjustment.id)
-        )
-    )
-    return active_attendance_adjustment(rows)
-
-
-def attendance_case_etag_for(
-    *, case_id: int, latest: AttendanceEvaluation | None, active: AttendanceAdjustment | None
-) -> str:
-    return etag_for(
-        {
-            "case_id": case_id,
-            "automatic_evaluation_id": latest.id if latest else None,
-            "automatic_revision": latest.revision if latest else None,
-            "active_adjustment_id": active.id if active else None,
-            "active_adjustment_revoked_at": active.revoked_at if active else None,
-        }
-    )
-
-
-def attendance_case_etag(db: Session, case_id: int) -> str:
-    return attendance_case_etag_for(
-        case_id=case_id,
-        latest=_latest_evaluation(db, case_id),
-        active=_active_adjustment(db, case_id),
-    )
-
-
-def apply_adjustment(db: Session, *, case_id: int, payload: Mapping[str, object], if_match: str | None, actor: User) -> AttendanceAdjustment:
-    case = db.get(AttendanceCase, case_id)
-    if case is None:
-        raise NotFoundError("ATTENDANCE_CASE_NOT_FOUND", "Attendance case was not found.")
-    current = _active_adjustment(db, case_id)
-    latest = _latest_evaluation(db, case_id)
-    require_if_match(
-        if_match,
-        attendance_case_etag(db, case_id),
-        code="ATTENDANCE_CASE_VERSION_CONFLICT",
-    )
-    values = dict(payload)
-    adjustment = AttendanceAdjustment(
-        attendance_case_id=case_id,
-        base_evaluation_id=latest.id,
-        replacement_presence_state=values.get("replacement_presence_state"),
-        replacement_first_in_at=_optional_utc_naive(values, "replacement_first_in_at"),
-        replacement_latest_in_at=_optional_utc_naive(values, "replacement_latest_in_at"),
-        replacement_final_out_at=_optional_utc_naive(values, "replacement_final_out_at"),
-        replacement_late_minutes=values.get("replacement_late_minutes"),
-        replacement_early_exit_minutes=values.get("replacement_early_exit_minutes"),
-        replacement_missing_checkout=values.get("replacement_missing_checkout"),
-        reason=str(values["reason"]).strip(),
-        created_by_user_id=actor.id,
-        supersedes_adjustment_id=current.id if current else None,
-    )
-    db.add(adjustment)
-    db.flush()
-    _audit(
-        db,
-        user=actor,
-        action="workforce.attendance_adjustment.created",
-        entity_type="attendance_adjustment",
-        entity_id=adjustment.id,
-        before={"superseded_adjustment_id": current.id if current else None},
-        after={
-            "case_id": case_id,
-            "base_evaluation_id": latest.id,
-            "reason": adjustment.reason,
-        },
-    )
-    return adjustment
-
-
-def revoke_adjustment(db: Session, *, case_id: int, adjustment_id: int, reason: str, if_match: str | None, actor: User, now: datetime | None = None) -> AttendanceAdjustment:
-    row = db.get(AttendanceAdjustment, adjustment_id)
-    if row is None or row.attendance_case_id != case_id:
-        raise NotFoundError("ATTENDANCE_ADJUSTMENT_NOT_FOUND", "Attendance adjustment was not found.")
-    require_if_match(
-        if_match,
-        attendance_case_etag(db, case_id),
-        code="ATTENDANCE_CASE_VERSION_CONFLICT",
-    )
-    if row.revoked_at is not None:
-        raise ConflictError("ATTENDANCE_CASE_VERSION_CONFLICT", "Attendance adjustment is already revoked.")
-    row.revoked_at = _utc_naive(now or datetime.now(UTC))
-    row.revoked_by_user_id = actor.id
-    _audit(db, user=actor, action="workforce.attendance_adjustment.revoked", entity_type="attendance_adjustment", entity_id=row.id, before={"revoked_at": None}, after={"revoked_at": row.revoked_at, "reason": reason})
-    return row
-
-
 __all__ = [
-    "apply_adjustment",
-    "active_attendance_adjustment",
-    "active_attendance_adjustments",
-    "attendance_case_etag",
-    "attendance_case_etag_for",
     "approve_attendance_policy",
     "create_attendance_policy",
     "create_crew",
     "etag_for",
-    "overlay_attendance_adjustment",
     "require_if_match",
     "retire_crew",
-    "revoke_adjustment",
     "row_etag",
     "update_crew",
     "update_provider_mapping",

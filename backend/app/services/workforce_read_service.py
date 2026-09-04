@@ -31,15 +31,12 @@ from app.db.workforce_models import (
     WorkRotationStep,
     WorkShiftDefinition,
 )
-from app.services import attendance_profile_service
-from app.services.attendance_evaluation_service import effective_policy
-from app.services.workforce_scope_service import scope_allows
-from app.services.workforce_admin_service import (
-    active_attendance_adjustment,
-    active_attendance_adjustments,
-    attendance_case_etag_for,
-    overlay_attendance_adjustment,
+from app.services import (
+    attendance_correction_service,
+    attendance_policy,
+    attendance_profile_service,
 )
+from app.services.workforce_scope_service import scope_allows
 
 
 def _latest_evaluations(db: Session, case_ids: list[int]) -> dict[int, AttendanceEvaluation]:
@@ -94,7 +91,9 @@ def list_roster(db: Session, *, scope: Any, operational_date: date) -> list[dict
         if _case_allowed(case, scope)
     ]
     latest = _latest_evaluations(db, [case.id for case in cases])
-    adjustments = active_attendance_adjustments(db, [case.id for case in cases])
+    adjustments = attendance_correction_service.active_corrections(
+        db, [case.id for case in cases]
+    )
     result: list[dict[str, Any]] = []
     for case in cases:
         effective = _effective_evaluation_values(
@@ -123,7 +122,9 @@ def list_exceptions(
         query = query.where(AttendanceCase.operational_date == operational_date)
     cases = [case for case in db.scalars(query) if _case_allowed(case, scope)]
     latest = _latest_evaluations(db, [case.id for case in cases])
-    adjustments = active_attendance_adjustments(db, [case.id for case in cases])
+    adjustments = attendance_correction_service.active_corrections(
+        db, [case.id for case in cases]
+    )
     result: list[dict[str, Any]] = []
     for case in cases:
         effective = _effective_evaluation_values(
@@ -299,7 +300,9 @@ def list_attendance_day(
         return []
 
     latest = _latest_evaluations(db, [case.id for case in cases])
-    adjustments = active_attendance_adjustments(db, [case.id for case in cases])
+    adjustments = attendance_correction_service.active_corrections(
+        db, [case.id for case in cases]
+    )
     people = _verified_people(db, {case.employee_id for case in cases})
 
     result: list[dict[str, Any]] = []
@@ -308,7 +311,7 @@ def list_attendance_day(
         effective = _effective_evaluation_values(
             latest.get(case.id), adjustment
         )
-        policy = effective_policy(db, case)
+        policy = attendance_policy.policy_for_case(db, case)
         first_at, last_at, count = _punch_bounds(
             db, case=case, person=people.get(case.employee_id), policy=policy
         )
@@ -372,7 +375,9 @@ def employee_attendance_range(
         if _case_allowed(case, scope)
     ]
     latest = _latest_evaluations(db, [case.id for case in cases])
-    adjustments = active_attendance_adjustments(db, [case.id for case in cases])
+    adjustments = attendance_correction_service.active_corrections(
+        db, [case.id for case in cases]
+    )
     person = _verified_people(db, {employee_id}).get(employee_id)
 
     days: list[dict[str, Any]] = []
@@ -381,7 +386,7 @@ def employee_attendance_range(
         effective = _effective_evaluation_values(
             latest.get(case.id), adjustment
         )
-        policy = effective_policy(db, case)
+        policy = attendance_policy.policy_for_case(db, case)
         first_at, _last_at, count = _punch_bounds(db, case=case, person=person, policy=policy)
         punches: list[dict[str, Any]] = []
         if person is not None and policy is not None:
@@ -462,7 +467,7 @@ def _effective_evaluation_values(
 ) -> dict[str, Any] | None:
     if evaluation is None:
         return None
-    return overlay_attendance_adjustment(_evaluation_read(evaluation), adjustment)
+    return attendance_correction_service.overlay(_evaluation_read(evaluation), adjustment)
 
 
 def _adjustment_read(row: AttendanceAdjustment) -> dict[str, Any]:
@@ -595,7 +600,7 @@ def get_attendance_case_snapshot(
         )
     )
     latest = evaluations[-1] if evaluations else None
-    active = active_attendance_adjustment(adjustments)
+    active = attendance_correction_service.active_correction(adjustments)
     effective = _effective_evaluation_values(latest, active)
     employee = _employee_row(db, case.employee_id)
     body = {
@@ -621,7 +626,9 @@ def get_attendance_case_snapshot(
     }
     return AttendanceCaseSnapshot(
         body=body,
-        etag=attendance_case_etag_for(case_id=case.id, latest=latest, active=active),
+        etag=attendance_correction_service.case_etag_for(
+            case_id=case.id, latest=latest, active=active
+        ),
     )
 
 

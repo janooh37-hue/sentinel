@@ -71,6 +71,7 @@ from app.schemas.workforce import (
     WorkforceSnapshotRead,
 )
 from app.services import (
+    attendance_correction_service,
     attendance_history_service,
     attendance_sync_service,
     perm_service,
@@ -623,18 +624,31 @@ def get_attendance_case(case_id: int, response: Response, user: Annotated[User, 
 @router.post("/attendance/cases/{case_id}/adjustments", status_code=status.HTTP_201_CREATED)
 def create_attendance_adjustment(*, case_id: int, body: AttendanceAdjustmentWrite, response: Response, if_match: Annotated[str | None, Header(alias="If-Match")] = None, user: Annotated[User, Depends(require_capability("workforce.attendance.correct"))], people_user: Annotated[User, Depends(require_capability("workforce.people.view"))], db: Annotated[Session, Depends(get_db)] ) -> dict[str, Any]:
     workforce_read_service.get_attendance_case(db, scope=_scope(db, user), case_id=case_id)
-    row = workforce_admin_service.apply_adjustment(db, case_id=case_id, payload=body.model_dump(mode="python"), if_match=if_match, actor=user)
+    row = attendance_correction_service.correct(
+        db,
+        case_id=case_id,
+        snapshot=body.model_dump(mode="python"),
+        if_match=if_match,
+        actor=user,
+    )
     db.commit()
-    _set_etag(response, workforce_admin_service.attendance_case_etag(db, case_id))
+    _set_etag(response, attendance_correction_service.case_etag(db, case_id))
     return {"id": row.id, "case_id": case_id}
 
 
 @router.post("/attendance/cases/{case_id}/adjustments/{adjustment_id}/revoke")
 def revoke_attendance_adjustment(*, case_id: int, adjustment_id: int, body: AdjustmentRevokeWrite, response: Response, if_match: Annotated[str | None, Header(alias="If-Match")] = None, user: Annotated[User, Depends(require_capability("workforce.attendance.correct"))], people_user: Annotated[User, Depends(require_capability("workforce.people.view"))], db: Annotated[Session, Depends(get_db)] ) -> dict[str, Any]:
     workforce_read_service.get_attendance_case(db, scope=_scope(db, user), case_id=case_id)
-    row = workforce_admin_service.revoke_adjustment(db, case_id=case_id, adjustment_id=adjustment_id, reason=body.reason, if_match=if_match, actor=user)
+    row = attendance_correction_service.revoke(
+        db,
+        case_id=case_id,
+        adjustment_id=adjustment_id,
+        reason=body.reason,
+        if_match=if_match,
+        actor=user,
+    )
     db.commit()
-    _set_etag(response, workforce_admin_service.attendance_case_etag(db, case_id))
+    _set_etag(response, attendance_correction_service.case_etag(db, case_id))
     return {"id": row.id, "revoked_at": row.revoked_at}
 
 

@@ -12,7 +12,11 @@ from app.db.workforce_models import (
     AttendanceEvaluationPunchSource,
     AttendancePunchAssignment,
 )
-from app.services import perm_service, workforce_admin_service, workforce_read_service
+from app.services import (
+    attendance_correction_service,
+    perm_service,
+    workforce_read_service,
+)
 from app.services.workforce_scope_service import resolve_workforce_scope
 from tests.conftest import make_user
 from tests.factories.attendance import add_punch, build_attendance_day, local
@@ -200,19 +204,28 @@ def test_case_denies_out_of_scope_user_without_disclosing_evidence(api_db) -> No
 def test_adjustment_audits_persist_create_and_revoke_reasons(api_db) -> None:
     fixture = build_attendance_day(api_db, operational_date=DAY, posts=[("Gate 1", 1)])
     case = next(case for case in fixture.cases if case.shift_code_snapshot == "morning")
-    created = workforce_admin_service.apply_adjustment(
+    effective = workforce_read_service.get_attendance_case(
+        api_db,
+        scope=resolve_workforce_scope(api_db, fixture.admin),
+        case_id=case.id,
+    )["effective"]
+    created = attendance_correction_service.correct(
         api_db,
         case_id=case.id,
-        payload={"replacement_presence_state": "completed", "reason": "Supervisor register"},
-        if_match=workforce_admin_service.attendance_case_etag(api_db, case.id),
+        snapshot=_adjustment_payload(
+            effective,
+            reason="Supervisor register",
+            replacement_presence_state="completed",
+        ),
+        if_match=attendance_correction_service.case_etag(api_db, case.id),
         actor=fixture.admin,
     )
-    revoked = workforce_admin_service.revoke_adjustment(
+    revoked = attendance_correction_service.revoke(
         api_db,
         case_id=case.id,
         adjustment_id=created.id,
         reason="Duplicate register entry",
-        if_match=workforce_admin_service.attendance_case_etag(api_db, case.id),
+        if_match=attendance_correction_service.case_etag(api_db, case.id),
         actor=fixture.admin,
     )
 
@@ -449,10 +462,10 @@ def test_active_full_snapshot_correction_overlays_every_attendance_projection_an
     api_db.flush()
     scope = resolve_workforce_scope(api_db, fixture.admin)
 
-    correction = workforce_admin_service.apply_adjustment(
+    correction = attendance_correction_service.correct(
         api_db,
         case_id=case.id,
-        payload={
+        snapshot={
             "replacement_presence_state": "completed",
             "replacement_first_in_at": None,
             "replacement_latest_in_at": None,
@@ -462,7 +475,7 @@ def test_active_full_snapshot_correction_overlays_every_attendance_projection_an
             "replacement_missing_checkout": False,
             "reason": "Supervisor register clears unsupported timestamps",
         },
-        if_match=workforce_admin_service.attendance_case_etag(api_db, case.id),
+        if_match=attendance_correction_service.case_etag(api_db, case.id),
         actor=fixture.admin,
     )
 
@@ -509,12 +522,12 @@ def test_active_full_snapshot_correction_overlays_every_attendance_projection_an
         "adjustment_id": correction.id,
     }
 
-    workforce_admin_service.revoke_adjustment(
+    attendance_correction_service.revoke(
         api_db,
         case_id=case.id,
         adjustment_id=correction.id,
         reason="Automatic evidence was sufficient",
-        if_match=workforce_admin_service.attendance_case_etag(api_db, case.id),
+        if_match=attendance_correction_service.case_etag(api_db, case.id),
         actor=fixture.admin,
     )
     api_db.flush()
@@ -649,11 +662,20 @@ def test_case_etag_reveals_active_predecessor_after_revoking_superseder(api_db) 
 def test_case_snapshot_pairs_evidence_body_with_its_concurrency_version(api_db) -> None:
     fixture = build_attendance_day(api_db, operational_date=DAY, posts=[("Gate 1", 1)])
     case = next(case for case in fixture.cases if case.shift_code_snapshot == "morning")
-    first = workforce_admin_service.apply_adjustment(
+    effective = workforce_read_service.get_attendance_case(
+        api_db,
+        scope=resolve_workforce_scope(api_db, fixture.admin),
+        case_id=case.id,
+    )["effective"]
+    first = attendance_correction_service.correct(
         api_db,
         case_id=case.id,
-        payload={"replacement_presence_state": "completed", "reason": "First register"},
-        if_match=workforce_admin_service.attendance_case_etag(api_db, case.id),
+        snapshot=_adjustment_payload(
+            effective,
+            reason="First register",
+            replacement_presence_state="completed",
+        ),
+        if_match=attendance_correction_service.case_etag(api_db, case.id),
         actor=fixture.admin,
     )
     snapshot = workforce_read_service.get_attendance_case_snapshot(
@@ -662,13 +684,17 @@ def test_case_snapshot_pairs_evidence_body_with_its_concurrency_version(api_db) 
         case_id=case.id,
     )
 
-    workforce_admin_service.apply_adjustment(
+    attendance_correction_service.correct(
         api_db,
         case_id=case.id,
-        payload={"replacement_presence_state": "absent", "reason": "Later register"},
+        snapshot=_adjustment_payload(
+            snapshot.body["effective"],
+            reason="Later register",
+            replacement_presence_state="absent",
+        ),
         if_match=snapshot.etag,
         actor=fixture.admin,
     )
 
     assert snapshot.body["effective"]["adjustment_id"] == first.id
-    assert snapshot.etag != workforce_admin_service.attendance_case_etag(api_db, case.id)
+    assert snapshot.etag != attendance_correction_service.case_etag(api_db, case.id)

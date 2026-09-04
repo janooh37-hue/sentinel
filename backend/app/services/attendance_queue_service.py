@@ -15,9 +15,8 @@ from app.db.models import AuditLog
 from app.db.workforce_models import (
     AttendanceCase,
     AttendanceEvaluationQueue,
-    WorkAttendancePolicy,
-    WorkShiftOccurrence,
 )
+from app.services.attendance_policy import policy_for_case
 
 MAX_QUEUE_WINDOW = timedelta(days=31)
 MAX_QUEUE_REASONS = 32
@@ -127,36 +126,6 @@ def enqueue_evaluation(
     return rows
 
 
-def _effective_policy_for_case(db: Session, case: AttendanceCase) -> WorkAttendancePolicy | None:
-    shift_definition_id: int | None = None
-    if case.shift_occurrence_id is not None:
-        shift_definition_id = db.scalar(
-            select(WorkShiftOccurrence.shift_definition_id).where(
-                WorkShiftOccurrence.id == case.shift_occurrence_id
-            )
-        )
-    return db.scalars(
-        select(WorkAttendancePolicy)
-        .where(
-            WorkAttendancePolicy.approved_at.is_not(None),
-            WorkAttendancePolicy.effective_from <= case.operational_date,
-            or_(
-                WorkAttendancePolicy.effective_to.is_(None),
-                WorkAttendancePolicy.effective_to > case.operational_date,
-            ),
-            or_(
-                WorkAttendancePolicy.shift_definition_id.is_(None),
-                WorkAttendancePolicy.shift_definition_id == shift_definition_id,
-            ),
-        )
-        .order_by(
-            WorkAttendancePolicy.shift_definition_id.is_not(None).desc(),
-            WorkAttendancePolicy.effective_from.desc(),
-            WorkAttendancePolicy.id.desc(),
-        )
-    ).first()
-
-
 def enqueue_freshness_boundary_crossings(
     db: Session,
     *,
@@ -185,7 +154,7 @@ def enqueue_freshness_boundary_crossings(
         .order_by(AttendanceCase.scheduled_start_at, AttendanceCase.id)
     ).all()
     for attendance_case in cases:
-        policy = _effective_policy_for_case(db, attendance_case)
+        policy = policy_for_case(db, attendance_case)
         absence_after = policy.absence_after_minutes if policy is not None else 0
         match_after = policy.match_after_minutes if policy is not None else 0
         starts_at = _as_db_utc(attendance_case.scheduled_start_at)
@@ -263,7 +232,9 @@ def _retry_delay(attempts: int) -> timedelta:
     return delay
 
 
-def _claimable_rows(db: Session, *, now: datetime, batch_size: int) -> list[AttendanceEvaluationQueue]:
+def _claimable_rows(
+    db: Session, *, now: datetime, batch_size: int
+) -> list[AttendanceEvaluationQueue]:
     rows = db.scalars(
         select(AttendanceEvaluationQueue)
         .where(
@@ -322,7 +293,9 @@ def drain_evaluation_queue(
     # The default evaluator needs the drain clock; an injected test evaluator
     # takes only (db, row), so bind `now` here rather than widening its contract.
     evaluator: Callable[[Session, AttendanceEvaluationQueue], object] = (
-        evaluate if evaluate is not None else lambda session, queued: _evaluate_row(session, queued, now)
+        evaluate
+        if evaluate is not None
+        else lambda session, queued: _evaluate_row(session, queued, now)
     )
     for row in claimed:
         try:
