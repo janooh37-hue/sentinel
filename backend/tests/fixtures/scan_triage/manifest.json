@@ -1,8 +1,102 @@
 {
   "dependencies": {
-    "PyMuPDF": "1.28.2"
+    "Pillow": "11.3.0",
+    "PyMuPDF": "1.28.2",
+    "aztec-code-generator": "0.12"
   },
   "fixtures": {
+    "blank-valid.png": {
+      "byte_length": 11193,
+      "dimensions": [
+        2400,
+        1200
+      ],
+      "kind": "png",
+      "sha256": "6e172da15d99594535ce30ac8aabddbc0fef2b53b7ca435dc892bc050b2dce39",
+      "source_text": ""
+    },
+    "classified-ref-ar.pdf": {
+      "byte_length": 87330,
+      "expected_pdf_text": "وثيقة اختبار اصطناعية\nالرقم: 1/5/141\nالتاريخ: 05/09/2026\n",
+      "kind": "searchable_pdf",
+      "page_size_points": [
+        595,
+        842
+      ],
+      "sha256": "eb02fdc47e534248c7ca3173dd3dc7a18a3b03f20b5f7760389ba7d2af6a2161",
+      "source_text": "وثيقة اختبار اصطناعية\nالرقم: 1/5/141\nالتاريخ: 05/09/2026\n"
+    },
+    "external-multi-signal.pdf": {
+      "alphanumeric_count": 107,
+      "byte_length": 168430,
+      "expected_pdf_text": "Resident Identity Card\n784-1990-1234567-1\nName: LAYLA HASSAN\nالاسم: ليلى حسن\nIBAN AE070331234567890123456\nExpiry Date: 31/12/2030\n",
+      "kind": "searchable_pdf",
+      "page_size_points": [
+        595,
+        842
+      ],
+      "sha256": "75738aa09d53e77c3949fea36295e0e792b701dde4946818b24b037b641e0a5d"
+    },
+    "external-multi-signal.png": {
+      "byte_length": 172917,
+      "dimensions": [
+        2400,
+        1800
+      ],
+      "kind": "png",
+      "sha256": "974900dcf3bd15cf4d3955b8d8011caaf3442c85eec9d71c00fd19a81c0015b7",
+      "source_text": "Resident Identity Card\n784-1990-1234567-1\nName: LAYLA HASSAN\nالاسم: ليلى حسن\nIBAN AE070331234567890123456\nExpiry Date: 31/12/2030\n"
+    },
+    "malformed.bin": {
+      "byte_length": 31,
+      "kind": "malformed",
+      "sha256": "3891d5e53ee24e71efcb639e77ee3a81a2aa1d9d99ce4aa791c5f282e4574a48"
+    },
+    "malformed.pdf": {
+      "byte_length": 44,
+      "kind": "malformed",
+      "sha256": "e6463632e93d9020e20012098f8fcbc5d2d31735d25507f1371d9583f08231db"
+    },
+    "returned-form-qr.png": {
+      "byte_length": 388,
+      "dimensions": [
+        324,
+        324
+      ],
+      "kind": "aztec_png",
+      "payload": "GSSG:GS-0042",
+      "sha256": "103ebd8ad1e703955cf14e439932892998486eadfcc8003a083b74b86b6793cd"
+    },
+    "returned-form-scan-en.pdf": {
+      "byte_length": 61403,
+      "kind": "image_only_pdf",
+      "page_size_points": [
+        595,
+        842
+      ],
+      "sha256": "cc77d59b49b6dc412f60f95d8ae2e233055c27e7b0e36531abda85a79d374671",
+      "source_text": "Synthetic returned form\nRef: GS-0042\n"
+    },
+    "returned-form-scan-en.png": {
+      "byte_length": 61936,
+      "dimensions": [
+        2400,
+        1200
+      ],
+      "kind": "png",
+      "sha256": "661101e5dbcac530b226923941dea723dca72cab5ceb5588d1f2aa84c4f300fb",
+      "source_text": "Synthetic returned form\nRef: GS-0042\n"
+    },
+    "returned-form-scan-mixed.png": {
+      "byte_length": 68551,
+      "dimensions": [
+        2400,
+        1200
+      ],
+      "kind": "png",
+      "sha256": "731b4a2b8092778b7cba87b660609ada1cee40fc463003a8c3db8658eb50fdf4",
+      "source_text": "وثيقة اختبار اصطناعية\nالرقم: GS-0042\n"
+    },
     "returned-form-text.pdf": {
       "alphanumeric_count": 30,
       "byte_length": 1171,
@@ -14,6 +108,9 @@
       ],
       "sha256": "3e7f5754120f7f3b755f16f5f010ffd7a06e21b262d25fb4d10b7fa770f19d82"
     }
+  },
+  "fonts": {
+    "docs/how-we-work/assets/fonts/naskh-700.ttf": "76e7b3b17abc5068fda755d657d475863df2d48cee60dc21bd22efb11ecb2268"
   },
   "generator": "build_fixtures.py",
   "schema_version": 1

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from contextlib import closing
 from dataclasses import dataclass, field
 from typing import Literal, Protocol
 
@@ -40,7 +41,33 @@ def read_document(raw: bytes) -> DocumentRead:
                     text_source="pdf_text",
                     qr_refs=qr_refs,
                 )
-    raise NotImplementedError("OCR document reading is not implemented")
+        pages: list[OcrPageEvidence] = []
+        try:
+            if raw.startswith(b"%PDF"):
+                with closing(ocr.pdf_to_images(raw)) as images:
+                    for index, image in enumerate(images):
+                        with closing(image):
+                            result = ocr.extract_text(image)
+                        pages.append(
+                            OcrPageEvidence(index, result.text, result.confidence, result.language)
+                        )
+            else:
+                with closing(ocr.load_image(raw)) as image:
+                    result = ocr.extract_text(image)
+                pages.append(OcrPageEvidence(0, result.text, result.confidence, result.language))
+        except ocr.OcrUnavailableError as exc:
+            return DocumentRead(
+                text="",
+                text_source="unavailable",
+                qr_refs=qr_refs,
+                unavailable_reason=str(exc),
+            )
+        return DocumentRead(
+            text="\n".join(page.text for page in pages),
+            text_source="ocr",
+            qr_refs=qr_refs,
+            ocr_pages=tuple(pages),
+        )
 
 
 __all__ = [

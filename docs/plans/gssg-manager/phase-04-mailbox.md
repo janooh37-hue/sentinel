@@ -1,6 +1,6 @@
 # Phase 4 — Mailbox
 
-Status: implementation and all verification complete; merge and deployment pending. PR: #77. Branch: `refactor/p4-mailbox`. Release dependency: Phase 3.
+Status: complete; merged and deployed. PR: #77. Branch: `refactor/p4-mailbox`. Release dependency: Phase 3.
 
 Follow [WORKFLOW.md](WORKFLOW.md). Tests first and current-code verification are required before every implementation slice; required checks precede every build.
 
@@ -75,7 +75,7 @@ authorize a new retry or synchronization policy.
 
 The baseline checkpoint initially awaited the fake contract, failure cases,
 coverage transfers and reviews. Their final evidence and the completed Windows
-gate follow below; release remains pending.
+gate and release follow below.
 
 The first old-route HTTP characterization passed before the move (1 test,
 3.97 seconds), clearing the two-builder barrier. The first direct draft test
@@ -127,8 +127,7 @@ Independent standards, spec, notification-template and i18n/RTL reviews passed
 against exact candidate `41223db20f8f8531b82ecc3f1a011b32900664d6`. Moved
 user-visible literals and MIME fields match the starting commit; only internal
 docstrings changed. No material findings remain. PR #77 contains the candidate
-and final validation evidence. Production remains on the verified Phase 3 merge
-until this phase is merged and deployed.
+and final validation evidence. The production release is recorded below.
 
 The exact candidate passed the supported Windows backend suite: **2,016 passed,
 9 existing skips in 1,233.51 seconds**. Windows Ruff
@@ -143,3 +142,8 @@ comparison confirms four removed entries and no newly unformatted file. The Wind
 
 Release rollback uses a reviewed revert merged and pushed before `mng update`.
 It does not reset the live database or automatically replay draft attempts.
+
+PR #77 merged as `f4619ed97e8e05ddd9b6314f7699294bd87e1da4` on
+5 September 2026. `mng update` completed at 09:16 Dubai time: frontend build and
+import smoke passed, service Running and health OK. A separate production HEAD
+check confirmed that exact merge commit before the fresh Phase 5 worktree began.

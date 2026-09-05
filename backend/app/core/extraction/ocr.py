@@ -5,7 +5,8 @@ import math
 import os
 import shutil
 import threading
-from collections.abc import Iterator
+from collections.abc import Generator
+from contextlib import ExitStack, closing
 from dataclasses import dataclass
 
 from PIL import Image, UnidentifiedImageError
@@ -107,12 +108,15 @@ def extract_text(image: Image.Image) -> OcrResult:
             "'eng' language packs must both be installed. "
             "See docs/superpowers/ocr-server-setup.md."
         ) from exc
+    finally:
+        if img is not image:
+            img.close()
     confs = [int(c) for c in data.get("conf", []) if str(c).lstrip("-").isdigit() and int(c) >= 0]
     confidence = (sum(confs) / len(confs) / 100.0) if confs else 0.0
     return OcrResult(text=text, confidence=confidence)
 
 
-def pdf_to_images(pdf_bytes: bytes, *, dpi: int = 200) -> Iterator[Image.Image]:
+def pdf_to_images(pdf_bytes: bytes, *, dpi: int = 200) -> Generator[Image.Image, None, None]:
     """Yield bounded PDF page rasters via PyMuPDF without retaining prior pages."""
     import fitz
 
@@ -212,15 +216,20 @@ def qr_refs_from_bytes(raw: bytes) -> list[str]:
     refs: list[str] = []
     seen: set[str] = set()
     try:
-        images = pdf_to_images(raw) if raw.startswith(b"%PDF") else iter((load_image(raw),))
-        for image in images:
-            try:
-                for ref in decode_qr_refs(image):
-                    if ref not in seen:
-                        seen.add(ref)
-                        refs.append(ref)
-            finally:
-                image.close()
+        with ExitStack() as stack:
+            images = (
+                stack.enter_context(closing(pdf_to_images(raw)))
+                if raw.startswith(b"%PDF")
+                else iter((load_image(raw),))
+            )
+            for image in images:
+                try:
+                    for ref in decode_qr_refs(image):
+                        if ref not in seen:
+                            seen.add(ref)
+                            refs.append(ref)
+                finally:
+                    image.close()
     except Exception:
         return refs
     return refs
@@ -228,10 +237,10 @@ def qr_refs_from_bytes(raw: bytes) -> list[str]:
 
 def load_image(data: bytes) -> Image.Image:
     try:
-        img = Image.open(io.BytesIO(data))
-        w, h = img.size
-        if w * h > _MAX_PIXELS:
-            raise InvalidImageError(f"Image is too large to process ({w}x{h} pixels).")
-        return img.convert("RGB")
+        with closing(Image.open(io.BytesIO(data))) as img:
+            w, h = img.size
+            if w * h > _MAX_PIXELS:
+                raise InvalidImageError(f"Image is too large to process ({w}x{h} pixels).")
+            return img.convert("RGB")
     except (UnidentifiedImageError, OSError) as exc:
         raise InvalidImageError("The uploaded file is not a readable image.") from exc
