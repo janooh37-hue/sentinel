@@ -48,7 +48,7 @@ from app.core.constants import (
     VEHICLE_LETTER_FORMS,
 )
 from app.core.dateutils import excel_date_to_datetime
-from app.core.docx_engine import DocxEngine, aztec_corner_for
+from app.core.docx_engine import aztec_corner_for
 from app.core.docx_render import _arabic_clock, _arabic_weekday
 from app.core.vault_manager import Vault
 from app.db.models import (
@@ -69,8 +69,11 @@ from app.db.repos.classified_refs_repo import allocate_classified_serial
 from app.db.repos.refs_repo import allocate_ref_with_retry
 from app.schemas.employee import EMPLOYEE_STATUS_ACTIVE, EMPLOYEE_STATUS_RESIGNED
 from app.schemas.linked_document import LinkedDocumentRead
-from app.services import absence_service
+from app.services import absence_service, artifact_service
 from app.services._pdf_executor import convert_docx_to_pdf as convert_docx_to_pdf
+
+_build_docx_filename = artifact_service.build_docx_filename
+_output_dir_for_admin = artifact_service.output_dir_for_admin
 
 if TYPE_CHECKING:
     # Type-only: app.api.v1.documents imports this module at runtime, so a
@@ -123,32 +126,6 @@ _INMATE_ACTION_LABELS: tuple[tuple[str, str], ...] = (
     ("action_written", "تم كتابة مخالفة مسلكية في حق النزلاء"),
     ("action_transferred", "تم نقل النزيل إلى قسم B وتقييده"),
 )
-
-# Short filename prefix per form — mirrors v3's fn = f"LeaveApp_..." pattern
-_FORM_SHORT_NAME: dict[str, str] = {
-    "Leave Application Form": "LeaveApp",
-    "Leave Undertaking": "LeaveUndertaking",
-    "Passport Release Form": "PassportRelease",
-    "Duty Resumption Form": "DutyResumption",
-    "Employee Clearance Form": "Clearance",
-    "Salary Deduction Form": "SalaryDeduction",
-    "Salary Transfer Request": "SalaryTransfer",
-    "Violation Form": "Violation",
-    "Warning Form": "Warning",
-    "HR Request Form": "HRRequest",
-    "Resignation Letter": "ResignationLetter",
-    "Resignation Declaration": "ResignationDecl",
-    "Acknowledgment Form": "Acknowledgment",
-    "Material Request Form": "MRF",
-    "Leave Permit Form": "LeavePermit",
-    "Administrative Leave Form": "AdminLeave",
-    "General Book": "GeneralBook",
-    "Security Permit": "SecurityPermit",
-    "Passport Release List": "PassportReleaseList",
-    "Inmate Conduct Violations": "InmateViolations",
-    "Vehicle Fines": "VehicleFines",
-    "Vehicle Accident Report": "VehicleAccident",
-}
 
 # Forms that create a Leave row in the DB
 _LEAVE_FORM_IDS: frozenset[str] = frozenset(
@@ -430,22 +407,6 @@ def _parse_date_str(val: Any) -> date:
         except (ValueError, TypeError):
             pass
     return datetime.now().date()
-
-
-def _build_docx_filename(template_id: str, name_en: str, ts: datetime) -> str:
-    """Build a filename matching v3's pattern: {ShortName}_{name_short}_{timestamp}.docx"""
-    short = _FORM_SHORT_NAME.get(template_id, template_id.replace(" ", ""))
-    name_short = name_en.replace(" ", "_")[:20] or "General"
-    timestamp = ts.strftime("%Y%m%d_%H%M")
-    return f"{short}_{name_short}_{timestamp}.docx"
-
-
-def _output_dir_for_admin(template_id: str) -> Path:
-    """Global output directory for admin/General Book forms."""
-    settings = get_settings()
-    out = settings.data_dir / "output" / template_id.replace(" ", "_")
-    out.mkdir(parents=True, exist_ok=True)
-    return out
 
 
 def _unlink_document_files(doc: Document, data_dir: Path) -> None:
@@ -846,9 +807,7 @@ def _build_template_data(
         or template_id in VEHICLE_LETTER_FORMS
         or template_id == "Inmate Conduct Violations"
     ):
-        data["submitter_g"] = (
-            (current_user.employee_id or "") if current_user is not None else ""
-        )
+        data["submitter_g"] = (current_user.employee_id or "") if current_user is not None else ""
 
     # ------------------------------------------------------------------
     # 4b-2. Inmate Conduct Violations — the "بيانات مقدم التقرير" row names the
@@ -1122,6 +1081,7 @@ def generate_document(
     attachments: Sequence[GenerateAttachmentSpec] | None = None,
     return_for_leave_id: int | None = None,
     classification_code: str | None = None,
+    converter: artifact_service.PdfConverter | None = None,
 ) -> GenerationResult:
     """Orchestrate the v4 doc generation pipeline.
 
@@ -1173,6 +1133,7 @@ def generate_document(
     then completes that leave.
     """
     embed_signature = dict(embed_signature or {})
+    pdf_converter = converter or convert_docx_to_pdf
 
     # Warning Form sends ``violation_type`` as a list of strings; join it once
     # with the Arabic comma so the DOCX token and the Violation record match.
@@ -1383,9 +1344,7 @@ def generate_document(
     # Classified and vehicle letterhead papers render the ref in the Arabic
     # body line (الرقم: …) — commit-only, so previews stay serial-free. This
     # replaces the English header stamp for these forms.
-    if commit and (
-        template_id in CLASSIFIED_BOOK_FORMS or template_id in VEHICLE_LETTER_FORMS
-    ):
+    if commit and (template_id in CLASSIFIED_BOOK_FORMS or template_id in VEHICLE_LETTER_FORMS):
         data["ref"] = raw_ref
 
     # Truthful embed flag: ``sig1_path`` survives _build_template_data only
@@ -1397,12 +1356,11 @@ def generate_document(
     # ------------------------------------------------------------------
     ts = datetime.now()
     submission_id = str(uuid.uuid4())
-    engine = DocxEngine(_TEMPLATES_DIR)
     settings = get_settings()
 
     primary_name = (employee.name_en if employee is not None else "") or ""
     filename = _build_docx_filename(template_id, primary_name, ts)
-    docx_path = Vault.collision_safe_name(out_dir, filename)
+    destination = out_dir / filename
 
     # Pre-resolve the classified papers' recipient_id → recipient_name here
     # (where the db session is available). _adapt_general_book has a fallback
@@ -1436,43 +1394,29 @@ def generate_document(
             "employee_sig_path": _submitter_sign_path(db, submitter_id),
         }
 
-    engine.fill(template_id, primary_data, docx_path)
-
-    # ------------------------------------------------------------------
-    # 8b. Round 2 — Fix D: sync the classified papers' footer2.xml ← footer3.xml
-    # so the submitter G-number + letterhead appear on page 2+ as well as
-    # page 1. Operates on the saved file (zipfile can't edit in place).
-    # ------------------------------------------------------------------
-    if template_id in CLASSIFIED_BOOK_FORMS:
-        from app.core.docx_engine import _postprocess_general_book_footer
-
-        _postprocess_general_book_footer(docx_path)
-
-    # ------------------------------------------------------------------
-    # 9. Stamp ref number (primary) — committed saves only.
-    # Previews skip the stamp so the operator never sees the placeholder
-    # "DRAFT" string in the header (it would just be visual noise).
-    # ------------------------------------------------------------------
-    if commit:
-        if (
-            template_id not in CLASSIFIED_BOOK_FORMS
-            and template_id not in VEHICLE_LETTER_FORMS
-        ):
-            DocxEngine.stamp_ref_number(docx_path, raw_ref, STAMP_STYLE_HEADER)
-        DocxEngine.stamp_aztec_code(docx_path, raw_ref, corner=aztec_corner_for(template_id))
-
-    # ------------------------------------------------------------------
-    # 10. Convert primary DOCX to PDF
-    # ------------------------------------------------------------------
-    pdf_path: Path | None = None
-    try:
-        pdf_path = convert_docx_to_pdf(docx_path)
-    except Exception:
-        # Hard failure (COM crash, pool timeout). Log at error so it isn't lost
-        # — the job still completes with pdf_path=None and the UI surfaces a
-        # "PDF unavailable — download DOCX" state deliberately.
-        log.error("PDF conversion crashed for %s", docx_path, exc_info=True)
-    if pdf_path is None:
+    primary_artifact = artifact_service.produce_from_template(
+        template_id=template_id,
+        data=primary_data,
+        destination=destination,
+        stamps=artifact_service.StampPlan(
+            reference=raw_ref if commit else None,
+            header_reference=commit
+            and template_id not in CLASSIFIED_BOOK_FORMS
+            and template_id not in VEHICLE_LETTER_FORMS,
+            aztec_corner=aztec_corner_for(template_id) if commit else None,
+            sync_general_book_footer=template_id in CLASSIFIED_BOOK_FORMS,
+        ),
+        converter=pdf_converter,
+    )
+    docx_path = primary_artifact.docx_path
+    pdf_path = primary_artifact.conversion.pdf_path
+    if primary_artifact.conversion.status == "error":
+        log.error(
+            "PDF conversion crashed for %s: %s",
+            docx_path,
+            primary_artifact.conversion.error,
+        )
+    if primary_artifact.conversion.status in {"unavailable", "error"}:
         # Graceful None (e.g. no Word/LibreOffice on the host) is otherwise
         # silent; log it so a host-config issue is diagnosable from the logs.
         log.warning("PDF unavailable for %s — conversion returned no file", docx_path)
@@ -1481,6 +1425,7 @@ def generate_document(
         # into. Abort the generation — the transaction rolls back and staged
         # files stay on disk for retry / the 24h TTL purge.
         if commit and (resolved_attachments or reuse_merged):
+            artifact_service.cleanup_created(primary_artifact, allowed_root=out_dir)
             raise ValidationFailedError(
                 "GENERATION_PDF_FAILED",
                 "PDF conversion failed — the attachments cannot be merged",
@@ -1912,21 +1857,25 @@ def generate_document(
             # adapter (_adapt_leave_undertaking) degrades gracefully, leaving the
             # submitter block blank rather than failing the whole leave packet.
             comp_filename = _build_docx_filename(companion_template_id, primary_name, ts)
-            comp_docx_path = Vault.collision_safe_name(out_dir, comp_filename)
-            engine.fill(companion_template_id, data, comp_docx_path)
-            if commit:
-                DocxEngine.stamp_ref_number(comp_docx_path, raw_ref, STAMP_STYLE_HEADER)
-                DocxEngine.stamp_aztec_code(
+            companion_artifact = artifact_service.produce_from_template(
+                template_id=companion_template_id,
+                data=data,
+                destination=out_dir / comp_filename,
+                stamps=artifact_service.StampPlan(
+                    reference=raw_ref if commit else None,
+                    header_reference=commit,
+                    aztec_corner=aztec_corner_for(companion_template_id) if commit else None,
+                ),
+                converter=pdf_converter,
+            )
+            comp_docx_path = companion_artifact.docx_path
+            comp_pdf_path = companion_artifact.conversion.pdf_path
+            if companion_artifact.conversion.status == "error":
+                log.warning(
+                    "PDF conversion failed for companion %s: %s",
                     comp_docx_path,
-                    raw_ref,
-                    corner=aztec_corner_for(companion_template_id),
+                    companion_artifact.conversion.error,
                 )
-
-            comp_pdf_path: Path | None = None
-            try:
-                comp_pdf_path = convert_docx_to_pdf(comp_docx_path)
-            except Exception:
-                log.warning("PDF conversion failed for companion %s", comp_docx_path, exc_info=True)
 
             comp_row = Document(
                 employee_id=employee_id,
@@ -2059,12 +2008,12 @@ def _sign_authored_docx(
     signer_signature_path: str,
     signer_names: Sequence[str] = (),
     output_dir: Path | None = None,
+    converter: artifact_service.PdfConverter | None = None,
 ) -> str:
     """Signed artifact for a Word-authored book: copy docx → stamp signature →
     convert. The paper already carries ref/date/footer/Aztec from its own
     render — nothing is re-generated (re-rendering from the empty ``fields``
     blob is what blanked signed Word books, 2026-07-19)."""
-    from app.core import docx_engine
     from app.core.constants import DEFAULT_MANAGER_NAME
     from app.services import settings_service
 
@@ -2078,8 +2027,7 @@ def _sign_authored_docx(
     out_dir.mkdir(parents=True, exist_ok=True)
     ts = datetime.now()
     docx_name = _build_docx_filename(template_id, book.ref_number.replace("/", "-"), ts)
-    docx_path = Vault.collision_safe_name(out_dir, docx_name.replace(".docx", "_signed.docx"))
-    shutil.copy2(source, docx_path)
+    destination = out_dir / docx_name.replace(".docx", "_signed.docx")
 
     # Anchor candidates: the signer (a delegated approver may have typed their
     # own closing in Word), the linked manager, then the default manager.
@@ -2091,38 +2039,44 @@ def _sign_authored_docx(
     names.append(DEFAULT_MANAGER_NAME)
 
     _appearance = settings_service.get_settings(db)
-    placed = docx_engine.stamp_signature_above_name(
-        docx_path,
-        signer_signature_path,
-        names,
-        size_mm=_appearance.signature_size_mm,
-        boldness=_appearance.signature_boldness,
-        date_below=ts.strftime("%d/%m/%Y") if book.ref_number.startswith("REPORT-") else None,
-    )
-    if not placed:
+    try:
+        artifact = artifact_service.produce_from_docx(
+            source_path=source,
+            destination=destination,
+            stamps=artifact_service.StampPlan(
+                signature=artifact_service.SignatureStamp(
+                    image_path=Path(signer_signature_path),
+                    anchor_names=tuple(names),
+                    size_mm=_appearance.signature_size_mm,
+                    boldness=_appearance.signature_boldness,
+                    date_below=(
+                        ts.strftime("%d/%m/%Y") if book.ref_number.startswith("REPORT-") else None
+                    ),
+                )
+            ),
+            converter=converter or convert_docx_to_pdf,
+        )
+    except artifact_service.ArtifactStampError as exc:
         # A "signed" paper with no visible signature is the exact defect class
         # this path exists to fix — fail LOUDLY, like the rich path does when
         # its render fails, and don't leave the half-made copy behind.
-        with contextlib.suppress(OSError):
-            docx_path.unlink(missing_ok=True)
         log.error(
             "signature stamp failed for book %s (%s) — sig=%s",
             book.id,
-            docx_path.name,
+            destination.name,
             signer_signature_path,
         )
         raise AppError(
             "SIGNATURE_STAMP_FAILED",
             "تعذر إدراج التوقيع في الكتاب — تحقق من ملف التوقيع ثم أعد المحاولة",
             http_status=409,
-        )
+        ) from exc
 
-    pdf_path: Path | None = None
-    try:
-        pdf_path = convert_docx_to_pdf(docx_path)
-    except Exception:
-        log.error("Signed PDF conversion crashed for %s", docx_path, exc_info=True)
-    if pdf_path is None:
+    docx_path = artifact.docx_path
+    pdf_path = artifact.conversion.pdf_path
+    if artifact.conversion.status == "error":
+        log.error("Signed PDF conversion crashed for %s: %s", docx_path, artifact.conversion.error)
+    elif artifact.conversion.status == "unavailable":
         log.warning("Signed PDF unavailable for %s — returning signed DOCX", docx_path)
 
     settings = get_settings()
@@ -2145,6 +2099,7 @@ def render_signed_pdf(
     signer_signature_path: str,
     signer_names: Sequence[str] = (),
     output_dir: Path | None = None,
+    converter: artifact_service.PdfConverter | None = None,
 ) -> str:
     """Re-render ``version``'s document with the signer's signature embedded in
     the manager slot (``sig1_path``); return the signed PDF path relative to
@@ -2178,6 +2133,7 @@ def render_signed_pdf(
             signer_signature_path=signer_signature_path,
             signer_names=signer_names,
             output_dir=output_dir,
+            converter=converter,
         )
     template_id = version.template_id or ""
     if template_id not in TEMPLATE_FILES:
@@ -2230,32 +2186,30 @@ def render_signed_pdf(
     docx_name = _build_docx_filename(
         template_id, (employee.name_en if employee is not None else "signed") or "signed", ts
     )
-    docx_path = Vault.collision_safe_name(out_dir, docx_name.replace(".docx", "_signed.docx"))
-    engine = DocxEngine(_TEMPLATES_DIR)
     if template_id in CLASSIFIED_BOOK_FORMS or template_id in VEHICLE_LETTER_FORMS:
         data["ref"] = book.ref_number
-    engine.fill(template_id, data, docx_path)
-
-    # Mirror generate_document: sync the General Book page-2+ footer so the
-    # signed artifact matches the original's multi-page footer.
-    if template_id in CLASSIFIED_BOOK_FORMS:
-        from app.core.docx_engine import _postprocess_general_book_footer
-
-        _postprocess_general_book_footer(docx_path)
-
-    if (
-        template_id not in CLASSIFIED_BOOK_FORMS
-        and template_id not in VEHICLE_LETTER_FORMS
-    ):
-        DocxEngine.stamp_ref_number(docx_path, book.ref_number, STAMP_STYLE_HEADER)
-    DocxEngine.stamp_aztec_code(docx_path, book.ref_number, corner=aztec_corner_for(template_id))
-
-    pdf_path: Path | None = None
-    try:
-        pdf_path = convert_docx_to_pdf(docx_path)
-    except Exception:
-        log.error("Signed PDF conversion crashed for %s", docx_path, exc_info=True)
-    if pdf_path is None:
+    signed_artifact = artifact_service.produce_from_template(
+        template_id=template_id,
+        data=data,
+        destination=out_dir / docx_name.replace(".docx", "_signed.docx"),
+        stamps=artifact_service.StampPlan(
+            reference=book.ref_number,
+            header_reference=template_id not in CLASSIFIED_BOOK_FORMS
+            and template_id not in VEHICLE_LETTER_FORMS,
+            aztec_corner=aztec_corner_for(template_id),
+            sync_general_book_footer=template_id in CLASSIFIED_BOOK_FORMS,
+        ),
+        converter=converter or convert_docx_to_pdf,
+    )
+    docx_path = signed_artifact.docx_path
+    pdf_path = signed_artifact.conversion.pdf_path
+    if signed_artifact.conversion.status == "error":
+        log.error(
+            "Signed PDF conversion crashed for %s: %s",
+            docx_path,
+            signed_artifact.conversion.error,
+        )
+    if signed_artifact.conversion.status in {"unavailable", "error"}:
         log.warning("Signed PDF unavailable for %s — conversion returned no file", docx_path)
 
     settings = get_settings()

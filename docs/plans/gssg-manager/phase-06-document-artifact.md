@@ -1,6 +1,6 @@
 # Phase 6 — Document artifacts
 
-Status: not started. Branch: `refactor/p6-document-artifact`. Release dependency: Phase 5.
+Status: merged. Branch: `refactor/p6-document-artifact`. Release dependency: Phase 5 (released at `ee1d9f41925efe59baea3b64217c254967ce35e2`).
 
 Follow [WORKFLOW.md](WORKFLOW.md). Write/retain behavior tests first and inspect the current code before every implementation slice. Finish tests, source review and required checks before every build.
 
@@ -50,4 +50,48 @@ Word preview owns its fixed cache destination, lock, snapshot timestamp and inva
 
 ## Execution evidence
 
-Pending: amended operations contract, caller policy matrix, authored-content fixtures, RED/GREEN and race-test results, converter integration, template hashes, document review and release evidence.
+The amended contract is frozen as separate template-rendered and existing-DOCX
+operations. The saved DOCX remains authoritative, conversion outcome is returned
+to each caller, and callers retain their transaction, packaging and PDF-failure
+policies. Preview retains its fixed filenames, global lock and snapshot mtime.
+
+Observed local evidence so far:
+
+- The artifact owner captured 33 affected pre-edit characterization tests before
+  source edits, then 40 focused old/new integration tests after migrating primary,
+  companion, rich/authored signing and included-paper reconstruction callers.
+- The Word-session owner observed two RED recovery failures showing package and
+  commit failures deleted the saved source. The completed slice passed all 11
+  finish tests, and the source-frozen Word lifecycle gate passed 49 tests plus
+  three loopback route tests. No old test was removed.
+- The synthetic preview API baseline passed with approved loopback access. The
+  earlier sandboxed invocation could not open its local listener and is not
+  counted as product evidence.
+- Read-only inspection of installed Windows docx2pdf 0.1.8 confirmed it uses
+  shared `Dispatch("Word.Application")` and calls `Quit()`. Real injected
+  `DispatchEx` artifact/layout proof therefore still requires an exclusive Word
+  environment. Default-chain method and process-pool checks are supplemental
+  while those unchanged adapters remain outside this phase.
+
+Final frozen local evidence:
+
+- Integrated public-caller gate: 175 passed in 53.79 seconds.
+- Full backend gate: 2,113 passed and 15 skipped in 528.18 seconds. The skips
+  are one opt-in real Word test, five real-OCR tests unavailable on Linux, and
+  nine established live-finance skips; none is counted as external-adapter proof.
+- Ruff and mypy each retain exactly the Phase 5 baseline signatures: Ruff 22
+  findings, mypy 22 findings in seven files, with zero added or removed normalized
+  signatures. All 12 changed Python files pass Ruff formatting.
+- Runtime OpenAPI exactly matches the committed contract at 275 paths; both
+  normalized hashes are
+  `1a0d21a722ad6eff4de52292c49802e46c59ade34f77cfe983502490b84b63e9`.
+  OpenAPI, generated frontend types and tracked template DOCX files have no diff
+  from the Phase 5 starting commit.
+- Independent Standards, Spec and i18n/fidelity source reviews resolved every
+  material finding. The corrected opt-in smoke and its bounded maintenance
+  wrapper have an accepted evidence binding, but no Word operation has run.
+
+Pending before release: the authorized isolated real Word group with synthetic
+artifacts and visual Arabic/English review, the supported Windows backend/static
+and OCR gates, PR readiness/merge, deployment, health and exact production HEAD
+verification.

@@ -181,26 +181,16 @@ def test_rich_versions_still_rerender(
     """A version WITH fields keeps the existing template re-render path."""
     word_version.fields = {"subject": "موضوع", "body": "نص"}
     db_session.commit()
-    calls: list[str] = []
-
-    def fake_fill(self: object, tid: str, data: dict[str, object], out: Path) -> Path:
-        calls.append(tid)
-        DocxFile().save(str(out))
-        return Path(out)
-
-    monkeypatch.setattr(document_service.DocxEngine, "fill", fake_fill)
     monkeypatch.setattr(document_service, "convert_docx_to_pdf", lambda p: None)
-    monkeypatch.setattr("app.core.docx_engine._postprocess_general_book_footer", lambda p: None)
-    monkeypatch.setattr(
-        document_service.DocxEngine, "stamp_aztec_code", staticmethod(lambda *a, **k: True)
-    )
     rel = document_service.render_signed_pdf(
         db_session, version=word_version, signer_signature_path=_sig(tmp_path)
     )
-    assert calls == ["General Book"]
     from app.config import get_settings
 
     leftover = Path(rel)
     if not leftover.is_absolute():
         leftover = get_settings().data_dir / leftover
+    text = docx_to_text(leftover)
+    assert "موضوع" in text
+    assert "نص" in text
     leftover.unlink(missing_ok=True)

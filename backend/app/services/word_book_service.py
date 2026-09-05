@@ -17,6 +17,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+import fitz
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
@@ -29,19 +30,12 @@ from app.core.classifications import (
     get_classification,
 )
 from app.core.constants import TEMPLATE_FILES
-from app.core.docx_engine import (
-    DocxEngine,
-    _postprocess_general_book_footer,
-    aztec_corner_for,
-)
+from app.core.docx_engine import aztec_corner_for
 from app.db.models import Book, BookCategory, BookEditSession, BookVersion, Document, Manager, User
 from app.db.repos import classified_refs_repo
+from app.services import artifact_service
 from app.services._pdf_executor import convert_docx_to_pdf
-from app.services.document_service import (
-    GENERAL_BOOK_BODY_SENTINEL,
-    _build_docx_filename,
-    _output_dir_for_admin,
-)
+from app.services.document_service import GENERAL_BOOK_BODY_SENTINEL
 
 # Every Word book renders on the ONE General Book template — the same file the
 # rich-editor path fills — so both authoring surfaces produce identical paper.
@@ -181,20 +175,29 @@ def create_word_book(
     # header ref stamp + Aztec code — so the paper is identical no matter
     # where the body was written.
     # ------------------------------------------------------------------
-    engine = DocxEngine(settings.templates_dir)
-    if library_template is not None:
-        try:
-            engine.fill_general_book_path(library_template, data, output_path, sandboxed=True)
-        except FileNotFoundError:
+    try:
+        artifact = artifact_service.produce_from_template(
+            template_id=_TEMPLATE_ID,
+            data=data,
+            destination=output_path,
+            template_path=library_template,
+            stamps=artifact_service.StampPlan(
+                reference=ref,
+                aztec_corner=aztec_corner_for(_TEMPLATE_ID),
+                sync_general_book_footer=True,
+            ),
+            convert_pdf=False,
+            collision="exact",
+        )
+    except FileNotFoundError:
+        if library_template is not None:
             raise AppError(
                 "TEMPLATE_MISSING",
                 f"القالب '{template_name}' غير موجود في المكتبة",
                 http_status=409,
             ) from None
-    else:
-        engine.fill(_TEMPLATE_ID, data, output_path)
-    _postprocess_general_book_footer(output_path)
-    DocxEngine.stamp_aztec_code(output_path, ref, corner=aztec_corner_for(_TEMPLATE_ID))
+        raise
+    output_path = artifact.docx_path
 
     # ------------------------------------------------------------------
     # 6. Insert BookEditSession + commit everything atomically
@@ -208,7 +211,12 @@ def create_word_book(
         state="active",
     )
     db.add(session)
-    db.commit()
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        artifact_service.cleanup_created(artifact, allowed_root=output_path.parent)
+        raise
 
     # ------------------------------------------------------------------
     # 7. Build URLs
@@ -286,8 +294,15 @@ def create_report_word_book(
         embed=False,  # no signature at create — embedded at Finish
         prefer_arabic=True,
     )
-    DocxEngine(settings.templates_dir).fill("Report", data, output_path)
-    _postprocess_general_book_footer(output_path)
+    artifact = artifact_service.produce_from_template(
+        template_id="Report",
+        data=data,
+        destination=output_path,
+        stamps=artifact_service.StampPlan(sync_general_book_footer=True),
+        convert_pdf=False,
+        collision="exact",
+    )
+    output_path = artifact.docx_path
     # NO Aztec / ref stamp — Report is no-ref.
 
     token = secrets.token_urlsafe(32)
@@ -301,7 +316,12 @@ def create_report_word_book(
         sign_on_finish=sign,
     )
     db.add(session)
-    db.commit()
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        artifact_service.cleanup_created(artifact, allowed_root=output_path.parent)
+        raise
 
     base_url = settings.public_base_url.rstrip("/")
     dav_url = f"{base_url}/dav/{token}/{filename}"
@@ -345,7 +365,13 @@ def _report_display_date(raw: str | None, now: datetime) -> str:
 # ---------------------------------------------------------------------------
 
 
-def finish_word_session(db: Session, *, user: User, book_id: int) -> Book:
+def finish_word_session(
+    db: Session,
+    *,
+    user: User,
+    book_id: int,
+    converter: artifact_service.PdfConverter | None = None,
+) -> Book:
     """Turn the active Word session into a BookVersion + Document + optional PDF.
 
     Raises AppError:
@@ -379,8 +405,10 @@ def finish_word_session(db: Session, *, user: User, book_id: int) -> Book:
         else ("Report" if is_report else _TEMPLATE_ID)
     )
     now = datetime.now() if is_report else datetime.now(UTC).replace(tzinfo=None)
-    out_dir = _output_dir_for_admin(template_id)
-    filename = _build_docx_filename(template_id, book.ref_number.replace("/", "-"), now)
+    out_dir = artifact_service.output_dir_for_admin(template_id)
+    filename = artifact_service.build_docx_filename(
+        template_id, book.ref_number.replace("/", "-"), now
+    )
     dest = out_dir / filename
     # Avoid collisions (unlikely but possible if clock has low resolution)
     suffix = 0
@@ -389,24 +417,24 @@ def finish_word_session(db: Session, *, user: User, book_id: int) -> Book:
         dest = out_dir / (Path(filename).stem + f"_{suffix}.docx")
 
     src = Path(session.working_path)
-    shutil.copy2(src, dest)
+    artifact = artifact_service.produce_from_docx(
+        source_path=src,
+        destination=dest,
+        converter=converter or convert_docx_to_pdf,
+    )
+    dest = artifact.docx_path
 
     # ------------------------------------------------------------------
-    # 2. PDF conversion (lenient — None is fine)
+    # 2. PDF conversion (lenient — unavailable/error is fine)
     # ------------------------------------------------------------------
-    pdf_path: Path | None = convert_docx_to_pdf(dest)
+    pdf_path = artifact.conversion.pdf_path
     if pdf_path is None and book.merged_attachment_paths:
-        with contextlib.suppress(OSError):
-            dest.unlink()
+        artifact_service.cleanup_created(artifact, allowed_root=out_dir)
         raise AppError(
             "INCLUDED_PAPERS_PDF_REQUIRED",
             "The PDF could not be created; the Word editing session remains open",
             http_status=409,
         )
-    with contextlib.suppress(OSError):
-        src.unlink()
-    _cleanup_preview_files(src.parent)
-
     # ------------------------------------------------------------------
     # 3. Create Document row
     # ------------------------------------------------------------------
@@ -489,19 +517,25 @@ def finish_word_session(db: Session, *, user: User, book_id: int) -> Book:
             "signer_employee_id": session.signer_employee_id,
             "signed": signed,
         }
+    published_package: included_papers_service.PublishedPackageResult | None = None
     if pdf_path is not None and pdf_path.is_file():
         from app.services import included_papers_service
 
         db.flush()
-        included_papers_service.publish_generated_package(
-            db,
-            book,
-            version,
-            doc,
-            pdf_path,
-            invalidate_revision=max_version_no > 0 and not signed,
-            data_dir=get_settings().data_dir,
-        )
+        try:
+            published_package = included_papers_service.publish_generated_package(
+                db,
+                book,
+                version,
+                doc,
+                pdf_path,
+                invalidate_revision=max_version_no > 0 and not signed,
+                data_dir=get_settings().data_dir,
+            )
+        except Exception:
+            db.rollback()
+            artifact_service.cleanup_created(artifact, allowed_root=out_dir)
+            raise
 
     # ------------------------------------------------------------------
     # 5. Populate search_text from the finished docx (before commit so the
@@ -518,7 +552,22 @@ def finish_word_session(db: Session, *, user: User, book_id: int) -> Book:
     # ------------------------------------------------------------------
     session.state = "finished"
 
-    db.commit()
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        if published_package is not None:
+            included_papers_service.cleanup_published_package(
+                published_package,
+                allowed_root=get_settings().data_dir / "book_packages" / str(book.id),
+            )
+        artifact_service.cleanup_created(artifact, allowed_root=out_dir)
+        raise
+    # The Word-saved DOCX is the recoverable source for this transaction.
+    # Remove it only after the version, document and package are committed.
+    with contextlib.suppress(OSError):
+        src.unlink()
+    _cleanup_preview_files(src.parent)
     db.refresh(book)
     return book
 
@@ -570,9 +619,13 @@ def reopen_word_session(db: Session, *, user: User, book_id: int) -> WordSession
     # Reuse the same filename slug as create (ref with slashes → dashes)
     filename = book.ref_number.replace("/", "-") + ".docx"
     output_path = settings.data_dir / "editing" / f"book-{book_id}" / filename
-    output_path.parent.mkdir(parents=True, exist_ok=True)
-
-    shutil.copy2(str(source_path), str(output_path))
+    reopened_artifact = artifact_service.produce_from_docx(
+        source_path=source_path,
+        destination=output_path,
+        convert_pdf=False,
+        collision="exact",
+    )
+    output_path = reopened_artifact.docx_path
 
     token = secrets.token_urlsafe(32)
     session = BookEditSession(
@@ -583,7 +636,12 @@ def reopen_word_session(db: Session, *, user: User, book_id: int) -> WordSession
         state="active",
     )
     db.add(session)
-    db.commit()
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        artifact_service.cleanup_created(reopened_artifact, allowed_root=output_path.parent)
+        raise
 
     base_url = settings.public_base_url.rstrip("/")
     dav_url = f"{base_url}/dav/{token}/{filename}"
@@ -613,7 +671,20 @@ def _cleanup_preview_files(editing_dir: Path) -> None:
 _preview_lock = threading.Lock()
 
 
-def render_session_preview(db: Session, *, book_id: int) -> Path:
+def _is_complete_preview(path: Path) -> bool:
+    try:
+        with fitz.open(path) as document:
+            return document.page_count > 0 and not document.needs_pass
+    except (fitz.EmptyFileError, fitz.FileDataError, RuntimeError, OSError):
+        return False
+
+
+def render_session_preview(
+    db: Session,
+    *,
+    book_id: int,
+    converter: artifact_service.PdfConverter | None = None,
+) -> Path:
     """PDF preview of the ACTIVE session's working docx.
 
     Cached beside the working file as ``preview-src.pdf`` and regenerated only
@@ -638,16 +709,38 @@ def render_session_preview(db: Session, *, book_id: int) -> Path:
 
     preview_pdf = working.parent / "preview-src.pdf"
     with _preview_lock:
-        if preview_pdf.exists() and preview_pdf.stat().st_mtime >= working.stat().st_mtime:
+        if (
+            preview_pdf.exists()
+            and preview_pdf.stat().st_mtime >= working.stat().st_mtime
+            and _is_complete_preview(preview_pdf)
+        ):
             return preview_pdf
 
+        previous_bytes = preview_pdf.read_bytes() if _is_complete_preview(preview_pdf) else None
+        previous_times = (
+            (preview_pdf.stat().st_atime, preview_pdf.stat().st_mtime)
+            if previous_bytes is not None
+            else None
+        )
         snapshot_mtime = working.stat().st_mtime
         src_copy = working.parent / "preview-src.docx"
         shutil.copy2(working, src_copy)
-        pdf = convert_docx_to_pdf(src_copy)
-        with contextlib.suppress(OSError):
-            src_copy.unlink(missing_ok=True)
-        if pdf is None:
+        try:
+            pdf = (converter or convert_docx_to_pdf)(src_copy)
+        except Exception:
+            pdf = None
+        finally:
+            with contextlib.suppress(OSError):
+                src_copy.unlink(missing_ok=True)
+        if (
+            pdf is None
+            or Path(pdf).resolve() != preview_pdf.resolve()
+            or not _is_complete_preview(Path(pdf))
+        ):
+            if previous_bytes is not None and previous_times is not None:
+                preview_pdf.write_bytes(previous_bytes)
+                os.utime(preview_pdf, previous_times)
+                return preview_pdf
             raise AppError(
                 "PREVIEW_UNAVAILABLE", "PDF conversion is not available", http_status=409
             )

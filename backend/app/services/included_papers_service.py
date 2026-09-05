@@ -26,7 +26,13 @@ from app.config import get_settings
 from app.core.constants import ALLOWED_DOC_EXTS
 from app.core.pdf_merge import PdfPackageSourceError, build_pdf_package
 from app.db.models import AuditLog, Book, BookVersion, Document, Employee, User
-from app.services import book_service, document_service, push_service, staging_service
+from app.services import (
+    artifact_service,
+    book_service,
+    document_service,
+    push_service,
+    staging_service,
+)
 
 log = logging.getLogger(__name__)
 
@@ -97,6 +103,12 @@ class PackageState:
     total_page_count: int
     papers: list[PaperView]
     history: list[PackageHistory]
+
+
+@dataclass(frozen=True, slots=True)
+class PublishedPackageResult:
+    published_path: str
+    created_paths: tuple[Path, ...]
 
 
 @dataclass(frozen=True)
@@ -354,16 +366,14 @@ def _generated_fixed_base(
                 "INCLUDED_PAPERS_SOURCE_DOCX_MISSING",
                 "The committed source document is missing",
             )
-        temp_docx = temp_dir / docx.name
-        shutil.copyfile(docx, temp_docx)
-        try:
-            primary = document_service.convert_docx_to_pdf(temp_docx)
-        except Exception as exc:
-            raise ValidationFailedError(
-                "INCLUDED_PAPERS_BASE_RECONSTRUCTION_FAILED",
-                "The fixed generated form could not be reconstructed",
-            ) from exc
-        if primary is None or not primary.is_file():
+        rebuilt = artifact_service.produce_from_docx(
+            source_path=docx,
+            destination=temp_dir / docx.name,
+            collision="exact",
+            converter=document_service.convert_docx_to_pdf,
+        )
+        primary = rebuilt.conversion.pdf_path
+        if rebuilt.conversion.status != "success" or primary is None or not primary.is_file():
             raise ValidationFailedError(
                 "INCLUDED_PAPERS_BASE_RECONSTRUCTION_FAILED",
                 "The fixed generated form could not be reconstructed",
@@ -620,7 +630,7 @@ def publish_generated_package(
     *,
     invalidate_revision: bool,
     data_dir: Path | None = None,
-) -> str:
+) -> PublishedPackageResult:
     """Preserve a generated fixed base and publish it with current papers."""
     if invalidate_revision:
         advance_package_revision(db, book)
@@ -652,7 +662,18 @@ def publish_generated_package(
         raise
     document.base_pdf_path = base_path.resolve().relative_to(data_root).as_posix()
     document.pdf_path = output.resolve().relative_to(data_root).as_posix()
-    return document.pdf_path
+    created_paths = (base_path,) if output == generated_primary else (base_path, output)
+    return PublishedPackageResult(document.pdf_path, created_paths)
+
+
+def cleanup_published_package(result: PublishedPackageResult, *, allowed_root: Path) -> None:
+    """Remove package files created by one publish, within its book directory."""
+    root = Path(allowed_root).resolve()
+    for path in reversed(result.created_paths):
+        resolved = path.resolve()
+        if resolved != root and root not in resolved.parents:
+            raise ValueError(f"Package cleanup path is outside allowed root: {path}")
+        resolved.unlink(missing_ok=True)
 
 
 def publish_signed_package(
