@@ -1,6 +1,6 @@
 # Phase 1 — Attendance rules
 
-Status: implementation in progress. Branch: `refactor/p1-attendance-rules`. Dependency: Phase 0 (merged and deployed in PR #73).
+Status: verification complete; merge and deployment pending. Branch: `refactor/p1-attendance-rules`. Dependency: Phase 0 (merged and deployed in PR #73).
 
 Follow [WORKFLOW.md](WORKFLOW.md): prepare behavior tests first; verify current code and the test result before every implementation slice and every build.
 
@@ -40,9 +40,9 @@ Each table row is a backlog of behaviors. Implement one case at a time using the
 
 - [x] Run `test_attendance_policy.py`, `test_leave_lifecycle.py`, `test_attendance_correction_service.py`, `test_workforce_attendance_corrections_api.py`, `test_workforce_dashboard_api.py`, `test_attendance_punch_allocation.py`, `test_attendance_queue_service.py`, `test_attendance_evaluation_service.py`, and `test_workforce_leave_precedence.py` through the project Python.
 - [x] Search old policy/correction symbols and inspect every remaining executable reference; test names and historical documentation are not stale imports.
-- [ ] Complete the backend release gate in WORKFLOW; regenerate API types only if contract inspection reveals a schema change.
-- [ ] Smoke with synthetic attendance: correction survives reload, stale tab gets conflict, revocation restores automatic verdict, dashboard agrees with live leave rules.
-- [ ] Rollback: reviewed revert; correction rows remain compatible because table/route semantics are preserved. Verify dashboard totals after either deployment.
+- [x] Complete the backend release gate in WORKFLOW; regenerate API types only if contract inspection reveals a schema change.
+- [x] Smoke with synthetic attendance: correction survives reload, stale tab gets conflict, revocation restores automatic verdict, dashboard agrees with live leave rules.
+- [x] Rollback: reviewed revert; correction rows remain compatible because table/route semantics are preserved. Verify dashboard totals after either deployment.
 
 ## Execution evidence
 
@@ -66,7 +66,7 @@ Baseline verification, before application changes:
   missing-stub error, addressed by installing type stubs in the temporary
   environment. These are baseline failures, not passing gates; compare final
   diagnostics and resolve relevant errors in changed modules.
-- Frontend baseline, unchanged by this phase: 2,215 tests passed across 224
+- Frontend starting baseline: 2,215 tests passed across 224
   files and TypeScript passed. Existing frontend lint: 8 errors, 10 warnings.
 
 Implementation evidence:
@@ -85,9 +85,9 @@ Focused command (temporary Linux environment):
 PYTHONDONTWRITEBYTECODE=1 GSSG_DATA_DIR=/tmp/gssg-p1-check-data /tmp/gssg-load/venv/bin/python -m pytest -p no:cacheprovider backend/tests/test_attendance_policy.py backend/tests/test_leave_lifecycle.py backend/tests/test_attendance_correction_service.py backend/tests/test_workforce_attendance_corrections_api.py backend/tests/test_workforce_dashboard_api.py backend/tests/test_attendance_punch_allocation.py backend/tests/test_attendance_queue_service.py backend/tests/test_attendance_evaluation_service.py backend/tests/test_workforce_leave_precedence.py
 ```
 
-The builders' final combined phase matrix passed 98 tests in 18.69 seconds. The independent review,
-Windows full release gate, and deployment evidence remain pending; this phase
-is not yet marked complete. No route or Pydantic contract changed, so generated
+The builders' final combined phase matrix passed 98 tests in 18.69 seconds. Independent behavior/security and i18n/RTL reviews passed with no material
+findings. The Windows backend gate and synthetic HTTP smoke passed. Windows frontend unit, type and build checks and the final full browser suite
+also passed. Deployment remains pending; this phase is not yet complete. No route or Pydantic contract changed, so generated
 API artifacts do not require regeneration. No migrations or document templates
 changed. The two existing dashboard mypy tuple-inference errors were corrected
 in the touched code.
@@ -96,3 +96,79 @@ Full Linux static comparison: Ruff decreased from 29 to 27 diagnostics; mypy
 reports 31 errors in 11 untouched files (two dashboard errors removed). No new
 diagnostics were introduced. Changed-file lint and new-file formatting pass;
 legacy whole-file formatting remains a documented baseline failure.
+
+
+### Windows backend gate and HTTP smoke
+
+Backend source: `e27a0b030f31a7458b2014acd2e2ec554bc5c16c`, tested in the detached
+Windows temporary worktree with a synthetic data directory and the project
+virtual environment. `python.exe -m pytest -p no:cacheprovider -o
+faulthandler_timeout=60`: **1,911 passed, 9 skipped in 1,195.37 seconds**.
+The nine skips require live database/finance-share golden fixtures; no such
+production data was used. Full Windows Ruff: 27 existing errors (baseline 29);
+formatting: 156 legacy files would be reformatted (baseline 158), 461 formatted;
+mypy: 31 existing errors in 11 untouched files (baseline 33 in 12). Changed-file
+checks pass; whole-repository lint/type/format checks remain baseline failures,
+not clean gates.
+
+A real loopback backend with migrated temporary SQLite and two independently
+authenticated cookie sessions verified correction persistence, stale ETag 409,
+revocation restoring every original automatic field, unchanged evaluation and
+queue counts, and exactly two correction audit rows. Dashboard leave totals
+were Annual 1 / Sick 0 / National Service 0 / Other 0 with an unknown Approved
+request and deleted Sick row excluded. The captured temporary server was stopped
+and a connection probe confirmed shutdown.
+
+### Timestamp round-trip defect found during smoke
+
+Presence-only corrections could fail 422: nested read values contain legacy
+UTC-naive timestamps, while the write schema requires timezone-aware timestamps.
+The form returned untouched read timestamps verbatim. A failing form regression
+reproduced this with fractional seconds before the fix. Commit
+`e984d3187bf16ffea00d34aa33f359899a828046` appends `Z` to retained naive UTC strings,
+preserving fractional precision and already-aware offsets; edited Dubai wall
+times still use their existing UTC conversion. No backend/API contract changed.
+
+The form, drawer and API focused suites pass 19 tests; changed-file ESLint and
+TypeScript pass. Independent code and i18n/RTL review found no material issue.
+The original HTTP smoke succeeded after explicit UTC normalization; permanent
+browser coverage and the full Windows frontend release gate validate the form
+fix before release. PR: [#74](https://github.com/janooh37-hue/sentinel/pull/74).
+
+
+Windows frontend source: `e984d3187bf16ffea00d34aa33f359899a828046` (the backend
+is unchanged from its verified revision). Frozen-lockfile dependency install
+passed in the isolated Windows worktree. `pnpm -C frontend test --maxWorkers=2`
+passed **2,216 tests in 224 files, 467.39 seconds**. Full ESLint JSON diagnostics
+exactly match the starting baseline by relative path, rule, severity, line and
+column: 8 existing errors and 10 warnings, with no additions. The comparison
+uses sorted signatures rather than relying only on equal diagnostic counts.
+
+The permanent correction browser regression covers UTC/Dubai wall-time display,
+presence-only wire timestamps, 201 persistence, a stale 409 with preserved draft,
+revocation revealing its predecessor, and English/Arabic drawer bounds at 1280
+and 375 pixels. Before any mutation it proves the exact 80-case / 40-person
+synthetic roster, including IDs and bilingual factory names. Focused Playwright,
+ESLint and standalone TypeScript checks pass. Windows `tsc -b --noEmit` and
+`pnpm -C frontend run build` both passed on the same application revision. The
+build reported only its existing large-chunk warning. The final full browser suite passed as recorded below.
+
+The first full browser run passed 27 tests and exposed two pre-existing
+date-dependent tests: employee attendance opened the current month (September)
+while the synthetic roster contains August 2026. Both failures reproduced on
+an isolated archive of Phase 0 `f6f19382` with its own backend/frontend and fresh
+fixture. The tests now select the fixture month through the existing controls;
+all original grid, timeline and screenshot assertions remain. The two focused
+tests then passed in 12.2 seconds. No product date behavior changed.
+
+Final full Playwright run on a newly migrated/seeded isolated fixture:
+**29 passed in 57.6 seconds**, including all 13 print regressions, the correction
+lifecycle, register/board/timeline/filter checks, English/Arabic layouts,
+overflow and refresh. ESLint and a standalone TypeScript check passed for all
+three changed E2E specs. Captured baseline/focused/final servers were stopped;
+connection probes confirmed their four loopback ports were clear.
+
+Rollback was reviewed for compatibility, not executed: this phase has no schema
+change, and existing correction rows preserve their meaning under a reviewed
+revert. Recheck dashboard classification and correction projections after any
+rollback deployment.
