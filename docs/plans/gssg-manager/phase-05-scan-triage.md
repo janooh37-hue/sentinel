@@ -1,6 +1,6 @@
 # Phase 5 — Scan triage and filing
 
-Status: implementation, local integrated checks, cross-reviews and smoke complete; Windows gates and release pending. PR: #78. Branch: `refactor/p5-scan-triage`. Release dependency: Phase 4.
+Status: implementation and required verification complete. Release evidence: PR #78. Branch: `refactor/p5-scan-triage`. Release dependency: Phase 4.
 
 Follow [WORKFLOW.md](WORKFLOW.md): tests and code verification precede each implementation slice; complete required verification before every build.
 
@@ -39,10 +39,10 @@ Accepted amendment to the original boundaries: a lossless classification result 
 
 ## Verification before build and release
 
-- [ ] Run exact resolved OCR, triage, intake, inbox document/N+1 and scanback test files, then backend checks. Verify response schemas/OpenAPI unchanged or use `sync-api-types` if an intentional contract change remains.
-- [ ] Run required OCR adapter checks on a suitable isolated host with both Arabic (`ara`) and English (`eng`) language packs available; record missing packs/skips as pending evidence, not a passed bilingual check.
+- [x] Run exact resolved OCR, triage, intake, inbox document/N+1 and scanback test files, then backend checks. Verify response schemas/OpenAPI unchanged or use `sync-api-types` if an intentional contract change remains.
+- [x] Run required OCR adapter checks on a suitable isolated host with both Arabic (`ara`) and English (`eng`) language packs available; record missing packs/skips as pending evidence, not a passed bilingual check.
 - [x] Smoke synthetic QR-only, scanned returned-form and external-document uploads in English, Arabic and mixed script, plus inbox confirmation and undo; inspect actual field values, reference matching and source snippets.
-- [ ] Rollback: retain compatibility with pending/auto-filed inbox rows; never replay completed items blindly or detach operator-approved documents automatically.
+- [x] Rollback: retain compatibility with pending/auto-filed inbox rows; never replay completed items blindly or detach operator-approved documents automatically.
 
 ## Execution evidence
 
@@ -232,9 +232,9 @@ passed in 0.22 seconds and the independent reviewer approved the delta. No
 application, fixture or gate file changed; the 155-test result is the preceding
 integrated run, supplemented by this narrow current-code verification.
 
-Pending: supported Windows backend suite, ten-node real Arabic/English OCR
-gate, merge, deployment and exact production HEAD/health
-verification.
+At the initial local freeze, Windows backend/OCR checks and release remained
+pending. The completed Windows evidence follows; PR #78 will record deployment
+and exact production HEAD/health verification after merge.
 
 
 The first full Windows gate on `42fbc678` completed **2,076 passed, nine skipped,
@@ -267,3 +267,35 @@ preserved bare fallback, not strict Arabic-stamped capture. The plan's row 5.5
 requires the former. No application code, parser, OCR setting or acceptance
 assertion changes. The original image's recognition limitation remains disclosed;
 final corrected fixture approval and required Windows gates are recorded below.
+
+
+Final supported Windows verification passed on
+`988f042a349d28af15d0f51bbb128fa5e40698e5` in fresh worktree
+`%TEMP%/gssg-p5-ocr-check-8010cf3210b8`: **all 21 reader cases passed**, and the
+separate required **ten real OCR cases passed**, both exit 0 with zero errors,
+failures or skips. The reviewed wrapper checks JUnit counts and unchanged
+checkout status. Evidence prefix `%TEMP%/gssg-p5-ocr-8010cf3210b8` retains both
+logs/JUnit files, result JSON and the actual adapter/package/traineddata hashes.
+Tesseract is v5.4.0.20240606 with ara/eng/osd installed.
+
+This final evidence combines the original full backend run's **2,076 unaffected
+passes and nine baseline skips** with the corrected complete 21-case reader
+module, plus the explicit ten-node adapter gate. The original 21 setup errors
+and subsequent one-fixture OCR failure are recorded above; the original full
+run is not relabeled as clean. Only fixture packaging/content/generation and
+documentation changed after that full run; application and test assertions are
+unchanged. Final local fixture checks also passed (16 reader cases, five
+missing-ara skips; generator reproduction; owned Ruff/format).
+
+Windows static diagnostics were compared against the retained same-host Phase 4
+logs by normalized path, rule/message and multiplicity: Ruff 22→22, mypy 27→22,
+format 135→134, with **zero new signatures**. The local integrated 155/5 result,
+subsequent two-case test cleanup, exact 275-path runtime OpenAPI comparison,
+independent HTTP persistence smoke and file-ownership cross-reviews remain
+valid. Final fixture, i18n and verification-wrapper deltas received independent
+review. No frontend executable changes require additional frontend gates.
+
+Rollback uses a reviewed revert merged and pushed before `mng update`; preserve
+pending/auto-filed rows and never replay completed items or detach approved
+operator documents automatically. No migration or durable-evidence schema is
+introduced. Only the merged, pushed main commit is eligible for production.
