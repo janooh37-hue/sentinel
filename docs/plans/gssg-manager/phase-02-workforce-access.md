@@ -1,6 +1,6 @@
 # Phase 2 — Workforce access
 
-Status: implementation complete; release verification in progress. Branch: `refactor/p2-workforce-access`. Dependency: Phase 1, except the independently extractable requirements fix in slice 2.1.
+Status: implementation and verification complete; merge and deployment pending. Branch: `refactor/p2-workforce-access`. Dependency: Phase 1, except the independently extractable requirements fix in slice 2.1.
 
 Follow [WORKFLOW.md](WORKFLOW.md). Tests and current-code verification precede every implementation slice; passing verification precedes every build.
 
@@ -41,17 +41,20 @@ Agreed boundaries: `workforce_access_service`, scoped public functions in read/s
 
 ## Verification before build and release
 
-- [ ] Run resolved workforce and attendance test files, including `test_workforce_api_permissions.py`, requirements regressions and `test_workforce_schedule.py`; then the full backend gate.
+- [x] Run resolved workforce and attendance test files, including `test_workforce_api_permissions.py`, requirements regressions and `test_workforce_schedule.py`; then the full backend gate.
 - [x] Review every employee-bound service call for explicit scope, including background callers. Check outsider denial leaves state unchanged.
 - [x] Verify public OpenAPI compatibility; use `sync-api-types` for actual route/schema changes.
 - [x] Smoke requirements pagination, crew membership, overrides, and self attendance with distinct scoped test users; denied writes must be 403.
-- [ ] Rollback: reverting the refactor must retain the requirements security fix. Prefer a targeted revert that keeps slice 2.1, and rerun visibility tests before deployment.
+- [x] Rollback: reverting the refactor must retain the requirements security fix. Prefer a targeted revert that keeps slice 2.1, and rerun visibility tests before deployment.
 
 ## Execution evidence
 
 Starting commit: `cd913c65fa5b1ffc14dcefb2d1ab744c790c8462`, in a new clean
-worktree created after Phase 1 merged and deployed successfully. Slice 2.1
-remains the first slice of this phase and was not expedited separately. Two Sol
+worktree created after Phase 1 merged and deployed successfully. The requirements
+fix stayed within this phase and was not expedited separately. The builder
+introduced the shared access boundary before the requirements HTTP slice; the
+requirements regression itself was run against the unchanged starting route
+before its fix. Two Sol
 builders own disjoint access/read/route and mutation/background modules; an
 independent reviewer tracks coverage and checks the final diff.
 
@@ -144,7 +147,7 @@ ones. Full `mypy --no-incremental` reports the same 31 diagnostic signatures in
 JSON output completes and compares 211 unformatted files against 220 at Phase 1,
 with no newly unformatted file. Three new-test formatting locations were fixed
 after the candidate commit with identical Python AST; supported Windows format
-verification will cover that final formatting-only change. Large legacy files
+verification covered that final formatting-only change. Large legacy files
 retain their existing formatting. `git diff --check` passes.
 Runtime `create_app().openapi()` is exactly equal to the frozen Phase 1 schema
 across 275 paths, including component schemas. No UI, notification, or database
@@ -167,8 +170,22 @@ normally with all external adapters and scheduler disabled.
 
 PR [#75](https://github.com/janooh37-hue/sentinel/pull/75) contains candidate
 `9a3c0ea532929abc04a37b90b40f556928fa79db`. Its full supported Windows backend
-gate is running in a detached worktree with synthetic data. Build, merge and
-deployment remain pending that result.
+gate completed in a fresh detached worktree with synthetic data:
+
+| Supported Windows command | Result |
+| --- | --- |
+| Project `python.exe -m pytest -p no:cacheprovider -o faulthandler_timeout=60` | 1,963 passed, 9 skipped in 1,211.25 seconds; existing live-database/finance-share golden skips are not adapter verification |
+| Project `ruff.exe check .` | 26 existing findings, down from 27 at Phase 1 |
+| Project `ruff.exe format --check .` | Final follow-up: 147 files would reformat, 477 formatted, versus 156 unformatted at Phase 1; no newly unformatted file in the independent local comparison |
+| Project `mypy.exe --no-incremental` | 31 existing findings in 11 files, matching the Phase 1 count and the independently compared local diagnostic signatures |
+
+The follow-up commit `b0ed44e9504e5bff459153109da956c737befa0e` changes only
+phase evidence and the three test-formatting locations whose AST is identical.
+Application code is unchanged from the full-suite candidate. The supported
+Windows formatter verified that follow-up, reducing the remaining legacy
+unformatted set to 147 files. Final merge, deployment/import smoke and exact
+production commit verification remain pending. No frontend source or runtime
+API contract changed, so no frontend rebuild is required by this phase.
 
 Read filtering currently loads candidate rows before applying scope and cursor
 pagination. This removes the visibility/starvation defects and membership N+1,
