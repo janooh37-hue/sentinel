@@ -34,8 +34,9 @@ from app.schemas.email import (
     EmailHandoffResult,
     EmailSyncResult,
     EmailSyncStatus,
+    HandoffAttachment,
 )
-from app.services import email_service, outlook_handoff_service, scheduler_service
+from app.services import email_service, scheduler_service
 
 log = logging.getLogger(__name__)
 
@@ -165,7 +166,7 @@ async def create_handoff(
     """Create a pending ledger row and optionally push a draft to Outlook."""
     to_list = [address.strip() for address in to.split(",") if address.strip()]
     cc_list = [address.strip() for address in cc.split(",") if address.strip()]
-    attachments: list[outlook_handoff_service.HandoffAttachment] = []
+    attachments: list[HandoffAttachment] = []
     if files:
         for upload in files:
             data = await upload.read()
@@ -174,7 +175,7 @@ async def create_handoff(
                     (upload.filename or "attachment", upload.content_type, data)
                 )
     try:
-        entry = outlook_handoff_service.create_handoff(
+        entry = email_service.draft_outgoing(
             db,
             owner_user_id=current_user.id,
             to=to_list,
@@ -189,12 +190,11 @@ async def create_handoff(
             use_signature=use_signature,
             attachments=attachments,
         )
-    except outlook_handoff_service.HandoffValidationError as exc:
+    except email_service.HandoffValidationError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except outlook_handoff_service.HandoffDeliveryError as exc:
+    except email_service.HandoffDeliveryError as exc:
         log.exception("Outlook draft handoff failed")
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     result_mode = "draft" if mode == "draft" else "mailto"
     return EmailHandoffResult(ledger_entry_id=entry.id, mode=result_mode)
-
 

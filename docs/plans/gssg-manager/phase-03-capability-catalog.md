@@ -1,6 +1,6 @@
 # Phase 3 — Capability catalog
 
-Status: implementation, reviews, and all release checks complete; merge/deployment pending. PR: #76. Branch: `refactor/p3-capability-catalog`. Release dependency: Phase 2.
+Status: complete; merged and deployed at `d255072ca67f5a53b3a908f44d7c325c2d451909`, verified 2026-09-05 08:09 Asia/Dubai. PR: #76. Branch: `refactor/p3-capability-catalog`. Release dependency: Phase 2.
 
 Follow [WORKFLOW.md](WORKFLOW.md): prepare tests first, verify current code before every implementation slice, and complete verification before every build.
 
@@ -251,3 +251,8 @@ completion marker identifies the full `16a792fd0698f0fed06c1c85562c486f3692ed69`
 candidate. All source, generated-contract, backend/frontend, browser, specialty
 review and Windows release checks are complete. Merge and production update
 follow; deployment evidence will be attached to PR #76.
+
+Production release completed through `mng update`: build and import smoke passed,
+GSSG Manager restarted with Running / health OK on port 8765, and a separate
+`git rev-parse HEAD` confirmed the full merge commit above. PR #76 records the
+release evidence. Phase 4 starts from a fresh worktree at this verified merge.

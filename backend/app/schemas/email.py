@@ -9,6 +9,8 @@ from pydantic import BaseModel, Field, model_validator
 
 from app.schemas._base import ORMBase
 
+type HandoffAttachment = tuple[str, str | None, bytes]
+
 
 class EmailAccountRead(ORMBase):
     """Public view — never includes the password."""
@@ -83,7 +85,6 @@ class EmailSyncStatus(ORMBase):
     last_sync_error: str | None
     enabled: bool
     interval_minutes: int
-
 
 
 class EmailHandoffResult(BaseModel):
