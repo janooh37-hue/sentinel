@@ -1,6 +1,6 @@
 # Phase 4 — Mailbox
 
-Status: implementation frozen; focused checks and HTTP smoke passed; final review and Windows gate pending. Branch: `refactor/p4-mailbox`. Release dependency: Phase 3.
+Status: implementation and all verification complete; merge and deployment pending. PR: #77. Branch: `refactor/p4-mailbox`. Release dependency: Phase 3.
 
 Follow [WORKFLOW.md](WORKFLOW.md). Tests first and current-code verification are required before every implementation slice; required checks precede every build.
 
@@ -38,11 +38,11 @@ Agreed boundaries: `draft_outgoing`, connection/sync functions, reconciliation b
 
 ## Verification before build and release
 
-- [ ] Run email service, handoff tests still awaiting migration, granular ledger gates and scheduler notification tests; then the backend gate.
+- [x] Run the replacement email service/connection/route/scheduler tests, granular ledger gates and scheduler notification tests; then the backend gate.
 - [x] Confirm no OpenAPI change for the handoff response and no obsolete executable imports.
-- [ ] Run notification-template and i18n reviews if message formatting/copy changes; moving byte-identical copy still requires proving parity.
-- [ ] Smoke using the stateful fake. A real Drafts/sent-folder smoke needs explicit authorization and an isolated account before creating external mail.
-- [ ] Rollback: ledger and server drafts may already exist; inspect pending/sent state before retrying, and avoid duplicate append after redeploy.
+- [x] Run notification-template and i18n reviews if message formatting/copy changes; moving byte-identical copy still requires proving parity.
+- [x] Smoke using the stateful fake. A real Drafts/sent-folder smoke needs explicit authorization and an isolated account before creating external mail.
+- [x] Rollback: ledger and server drafts may already exist; inspect pending/sent state before retrying, and avoid duplicate append after redeploy.
 
 ## Execution evidence
 
@@ -73,8 +73,9 @@ discovery/fetch and differ from raised exceptions. Preserve the actual existing
 watermark behavior for each case; the plan's partial-error prose does not
 authorize a new retry or synchronization policy.
 
-Pending: fake protocol contract, each failure scenario, before/after results,
-message parity, source review and release/rollback observations.
+The baseline checkpoint initially awaited the fake contract, failure cases,
+coverage transfers and reviews. Their final evidence and the completed Windows
+gate follow below; release remains pending.
 
 The first old-route HTTP characterization passed before the move (1 test,
 3.97 seconds), clearing the two-builder barrier. The first direct draft test
@@ -121,3 +122,24 @@ append/create/retry rejection with HTTP 502 and no new row or orphan file.
 The server uses only the stateful IMAP fake and blocks real transport constructors.
 One frontend comment now names the surviving backend tag owner; executable
 frontend code, UI strings and API contracts are unchanged.
+
+Independent standards, spec, notification-template and i18n/RTL reviews passed
+against exact candidate `41223db20f8f8531b82ecc3f1a011b32900664d6`. Moved
+user-visible literals and MIME fields match the starting commit; only internal
+docstrings changed. No material findings remain. PR #77 contains the candidate
+and final validation evidence. Production remains on the verified Phase 3 merge
+until this phase is merged and deployed.
+
+The exact candidate passed the supported Windows backend suite: **2,016 passed,
+9 existing skips in 1,233.51 seconds**. Windows Ruff
+0.15.19 reports 22 existing lint diagnostics (24 at baseline), formatting reports
+135 existing unformatted files and 493 formatted (139/486 at baseline), and mypy
+reports 27 existing errors in 10 files (31 in 11 at baseline). Local normalized
+comparisons identify no new diagnostics. A same-host Windows format-list
+comparison confirms four removed entries and no newly unformatted file. The Windows gate completed against
+`41223db20f8f8531b82ecc3f1a011b32900664d6` in the isolated
+`gssg-p4-check-c1c566fc444b` worktree. Logs/results use
+`gssg-p4-win-c1c566fc444b`; the synthetic data and evidence are retained.
+
+Release rollback uses a reviewed revert merged and pushed before `mng update`.
+It does not reset the live database or automatically replay draft attempts.
