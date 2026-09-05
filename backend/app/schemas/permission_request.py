@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.schemas._base import ORMBase
 
@@ -22,6 +22,10 @@ class PermissionRequestRead(ORMBase):
     user_id: int
     requester_name: str
     capability: str
+    capability_label: str = Field(
+        deprecated=True,
+        description="Deprecated English capability label derived from the catalog.",
+    )
     status: str
     decision: str | None
     created_at: datetime

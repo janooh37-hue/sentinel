@@ -1463,7 +1463,7 @@
           "auth"
         ],
         "summary": "List Capabilities",
-        "description": "The static catalog followed by dynamic service/category capabilities.",
+        "description": "The bilingual catalog, available to every signed-in user.",
         "operationId": "list_capabilities_api_v1_auth_capabilities_get",
         "parameters": [
           {
@@ -27987,13 +27987,43 @@
             "type": "string",
             "title": "Domain"
           },
-          "label": {
+          "label_en": {
             "type": "string",
-            "title": "Label"
+            "title": "Label En"
           },
-          "description": {
+          "label_ar": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label Ar"
+          },
+          "description_en": {
             "type": "string",
-            "title": "Description"
+            "title": "Description En"
+          },
+          "description_ar": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description Ar"
+          },
+          "sensitive": {
+            "type": "boolean",
+            "title": "Sensitive"
+          },
+          "requestable": {
+            "type": "boolean",
+            "title": "Requestable"
           },
           "default_roles": {
             "items": {
@@ -28001,15 +28031,33 @@
             },
             "type": "array",
             "title": "Default Roles"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label",
+            "description": "Deprecated English alias for label_en.",
+            "deprecated": true
+          },
+          "description": {
+            "type": "string",
+            "title": "Description",
+            "description": "Deprecated English alias for description_en.",
+            "deprecated": true
           }
         },
         "type": "object",
         "required": [
           "id",
           "domain",
+          "label_en",
+          "label_ar",
+          "description_en",
+          "description_ar",
+          "sensitive",
+          "requestable",
+          "default_roles",
           "label",
-          "description",
-          "default_roles"
+          "description"
         ],
         "title": "CapabilityRead",
         "description": "One capability in the catalog, with which roles grant it by default."
@@ -37514,7 +37562,9 @@
           },
           "capability_label": {
             "type": "string",
-            "title": "Capability Label"
+            "title": "Capability Label",
+            "description": "Deprecated English capability label derived from the catalog.",
+            "deprecated": true
           },
           "status": {
             "type": "string",

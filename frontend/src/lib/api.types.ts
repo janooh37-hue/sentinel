@@ -497,7 +497,7 @@ export interface paths {
         };
         /**
          * List Capabilities
-         * @description The static catalog followed by dynamic service/category capabilities.
+         * @description The bilingual catalog, available to every signed-in user.
          */
         get: operations["list_capabilities_api_v1_auth_capabilities_get"];
         put?: never;
@@ -6704,12 +6704,32 @@ export interface components {
             id: string;
             /** Domain */
             domain: string;
-            /** Label */
-            label: string;
-            /** Description */
-            description: string;
+            /** Label En */
+            label_en: string;
+            /** Label Ar */
+            label_ar: string | null;
+            /** Description En */
+            description_en: string;
+            /** Description Ar */
+            description_ar: string | null;
+            /** Sensitive */
+            sensitive: boolean;
+            /** Requestable */
+            requestable: boolean;
             /** Default Roles */
             default_roles: string[];
+            /**
+             * Label
+             * @deprecated
+             * @description Deprecated English alias for label_en.
+             */
+            label: string;
+            /**
+             * Description
+             * @deprecated
+             * @description Deprecated English alias for description_en.
+             */
+            description: string;
         };
         /** ClassificationListResponse */
         ClassificationListResponse: {
@@ -9856,7 +9876,11 @@ export interface components {
             requester_name: string;
             /** Capability */
             capability: string;
-            /** Capability Label */
+            /**
+             * Capability Label
+             * @deprecated
+             * @description Deprecated English capability label derived from the catalog.
+             */
             capability_label: string;
             /** Status */
             status: string;

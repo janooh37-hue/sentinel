@@ -328,6 +328,8 @@ def test_auth_catalog_and_user_defaults_include_dynamic_capabilities(
         "label_ar": "اعتماد / رفض السجلات",
         "description_en": "Approve, sign, or reject documents in the approval queue.",
         "description_ar": "اعتماد أو توقيع أو رفض المستندات في قائمة الانتظار.",
+        "label": "Approve / reject records",
+        "description": "Approve, sign, or reject documents in the approval queue.",
         "sensitive": False,
         "requestable": True,
         "default_roles": ["manager", "admin"],
@@ -374,6 +376,8 @@ def test_auth_catalog_and_user_defaults_include_dynamic_capabilities(
         "label_ar": "العمليات",
         "description_en": "View records in Operations.",
         "description_ar": "عرض السجلات ضمن العمليات.",
+        "label": "Operations",
+        "description": "View records in Operations.",
         "sensitive": False,
         "requestable": True,
         "default_roles": ["operator", "manager", "admin"],
@@ -385,6 +389,8 @@ def test_auth_catalog_and_user_defaults_include_dynamic_capabilities(
         "label_ar": None,
         "description_en": "View records in books.category.NOAR.",
         "description_ar": None,
+        "label": "books.category.NOAR",
+        "description": "View records in books.category.NOAR.",
         "sensitive": False,
         "requestable": True,
         "default_roles": ["operator", "manager", "admin"],
@@ -397,6 +403,25 @@ def test_auth_catalog_and_user_defaults_include_dynamic_capabilities(
     assert "books.service.General Book" in payload["role_defaults"]
     assert f"books.category.{category.id}" in payload["role_defaults"]
     assert "books.service.General Book" in payload["effective"]
+
+
+def test_capability_catalog_keeps_legacy_english_search_aliases(
+    mirror_api: ApiHarness,
+) -> None:
+    """A cached pre-catalog admin UI can still search the serialized response."""
+    response = mirror_api.client.get("/api/v1/auth/capabilities")
+
+    assert response.status_code == 200, response.text
+    catalog = response.json()
+    matching = [
+        item["id"]
+        for item in catalog
+        if "approve" in f"{item['label']} {item['description']}".lower()
+    ]
+    assert "books.approve" in matching
+    approve = next(item for item in catalog if item["id"] == "books.approve")
+    assert approve["label"] == approve["label_en"] == "Approve / reject records"
+    assert approve["description"] == approve["description_en"]
 
 
 @pytest.mark.parametrize("role", ["operator", "manager", "admin"])
@@ -460,7 +485,7 @@ def test_dynamic_permission_request_can_be_approved_to_restore_access(
         json={"capability": capability},
     )
     assert created.status_code == 201, created.text
-    assert "capability_label" not in created.json()
+    assert created.json()["capability_label"] == "General Book"
     assert notified_labels == ["General Book"]
 
     mirror_api.as_user(admin)

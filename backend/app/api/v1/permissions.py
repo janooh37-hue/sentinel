@@ -20,7 +20,7 @@ from app.schemas.permission_request import (
     DecideIn,
     PermissionRequestRead,
 )
-from app.services import book_service, permission_request_service
+from app.services import book_service, capability_catalog_service, permission_request_service
 
 router = APIRouter(prefix="/permissions", tags=["permissions"])
 
@@ -37,11 +37,15 @@ def _to_read(row: PermissionRequest, db: Session) -> PermissionRequestRead:
         else:
             requester_name = str(row.user_id)
 
+    catalog_entry = capability_catalog_service.get_catalog_entry(db, row.capability)
+    capability_label = catalog_entry.label_en if catalog_entry is not None else row.capability
+
     return PermissionRequestRead(
         id=row.id,
         user_id=row.user_id,
         requester_name=requester_name,
         capability=row.capability,
+        capability_label=capability_label,
         status=row.status,
         decision=row.decision,
         created_at=row.created_at,

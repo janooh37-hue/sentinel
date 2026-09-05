@@ -92,7 +92,7 @@ def test_operator_can_create_request(api_db):
     assert r.status_code == 201, r.text
     data = r.json()
     assert data["capability"] == "books.approve"
-    assert "capability_label" not in data
+    assert data["capability_label"] == "Approve / reject records"
     assert data["status"] == "pending"
     assert data["decision"] is None
     assert data["user_id"] == u.id
@@ -168,7 +168,7 @@ def test_admin_can_list_pending_requests(api_db):
     assert isinstance(data, list)
     assert len(data) >= 1
     assert any(item["capability"] == "books.approve" for item in data)
-    assert all("capability_label" not in item for item in data)
+    assert all(item["capability_label"] == "Approve / reject records" for item in data)
 
 
 # ─── decide ───────────────────────────────────────────────────────────────────
@@ -195,7 +195,7 @@ def test_admin_can_decide_grant_permanent(api_db):
     data = r_decide.json()
     assert data["status"] == "granted"
     assert data["decision"] == "permanent"
-    assert "capability_label" not in data
+    assert data["capability_label"] == "Approve / reject records"
 
     # The operator now has books.approve
     api_db.expire_all()

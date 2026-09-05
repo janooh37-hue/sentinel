@@ -344,7 +344,19 @@ def list_capabilities(
 ) -> list[CapabilityRead]:
     """The bilingual catalog, available to every signed-in user."""
     return [
-        CapabilityRead.model_validate(entry, from_attributes=True)
+        CapabilityRead(
+            id=entry.id,
+            domain=entry.domain,
+            label_en=entry.label_en,
+            label_ar=entry.label_ar,
+            description_en=entry.description_en,
+            description_ar=entry.description_ar,
+            sensitive=entry.sensitive,
+            requestable=entry.requestable,
+            default_roles=list(entry.default_roles),
+            label=entry.label_en,
+            description=entry.description_en,
+        )
         for entry in capability_catalog_service.list_catalog(db)
     ]
 
