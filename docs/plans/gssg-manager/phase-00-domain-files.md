@@ -1,6 +1,6 @@
 # Phase 0 — Domain language and ADR
 
-Status: documentation and required review complete; PR and release pending.
+Status: complete. PR #73 merged and deployed on 2026-09-05.
 Branch: `refactor/p0-domain-files`. Dependency: none.
 
 Follow [WORKFLOW.md](WORKFLOW.md). This phase writes documentation only; do not create artificial failing tests for Markdown existence. Establish the acceptance checklist below before drafting, then verify the statements against code before every document revision.
@@ -48,10 +48,20 @@ Create root `CONTEXT.md` and `docs/adr/0001-superseding-vs-excusing-leave.md`. D
 - [x] Confirm no application code, templates, schema, routes or runtime configuration changed.
 - [x] Run `git diff --check`, including whitespace checks for the untracked new files.
 - [x] Run the required `i18n-rtl-reviewer` document review. Technical planning prose need not create new application locale keys; any proposed user-facing terminology must work in both languages.
-- [ ] Review and release the documentation PR under the shared workflow; no application bundle is required for documentation alone.
+- [x] Review and release the documentation PR under the shared workflow; no application bundle is required for documentation alone.
 - [x] Rollback: revert only the documentation change if definitions are incorrect; correct downstream plans before implementation.
 
 ## Execution evidence
+
+Release: [PR #73](https://github.com/janooh37-hue/sentinel/pull/73),
+implementation commit `d8f9fc9565380d2a39592aa46031e579112248e7`, merged as
+`f6f19382582fe04c8b2d6131b222e9deb8172481`. The user authorized `mng update`
+on the Windows production host and supplied an authenticated Remmina session.
+At approximately 03:22 Asia/Dubai on 2026-09-05, the update completed, the
+backend smoke check passed, and the restarted service reported Running with
+health OK (`v4.0.0a0`). A separate `git rev-parse HEAD` in the production
+checkout confirmed the merge commit. No application bundle was needed.
+This post-release record is carried forward in the next phase PR.
 
 Starting commit: `f8d603d4d2f4298514015f085d8f96fe9647856b`.
 The worktree already contained the revised plan set and historical plan as

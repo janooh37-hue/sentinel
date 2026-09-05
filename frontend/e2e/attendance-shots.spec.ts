@@ -35,6 +35,15 @@ async function shot(page: Page, name: string): Promise<void> {
   await page.screenshot({ path: `${SHOTS}/${name}.png` })
 }
 
+async function selectFixtureMonth(page: Page): Promise<void> {
+  const now = new Date()
+  const monthDelta = (2026 - now.getUTCFullYear()) * 12 + (7 - now.getUTCMonth())
+  const direction = monthDelta < 0 ? '‹' : '›'
+  for (let step = 0; step < Math.abs(monthDelta); step += 1) {
+    await page.getByRole('button', { name: direction, exact: true }).click()
+  }
+}
+
 test('captures every attendance surface', async ({ page }) => {
   await open(page, `/employees/attendance?date=${DAY}&shift=morning`)
   await expect(page.getByTestId('attendance-register-unit').first()).toBeVisible({ timeout: 20_000 })
@@ -57,6 +66,7 @@ test('captures every attendance surface', async ({ page }) => {
 
   // One employee's attendance tab, opened from the register's deep link.
   await page.goto('/employees/G-9038?tab=attendance')
+  await selectFixtureMonth(page)
   await expect(page.getByTestId('attendance-month-grid')).toBeVisible({ timeout: 20_000 })
   await page.getByTestId('attendance-month-cell').nth(18).click()
   await expect(page.getByTestId('attendance-day-timeline').first()).toBeVisible()
@@ -74,6 +84,7 @@ test('captures every attendance surface', async ({ page }) => {
   await shot(page, 'review-timeline-ar')
 
   await page.goto('/employees/G-9038?tab=attendance')
+  await selectFixtureMonth(page)
   await expect(page.getByTestId('attendance-month-grid')).toBeVisible({ timeout: 20_000 })
   await shot(page, 'review-employee-tab-ar')
 })

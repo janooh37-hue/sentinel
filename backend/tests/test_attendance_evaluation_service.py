@@ -22,13 +22,8 @@ from app.db.workforce_models import (
     WorkShiftDefinition,
     WorkShiftOccurrence,
 )
-from app.services.attendance_evaluation_service import (
-    apply_adjustment,
-    evaluate_case,
-    get_effective_attendance,
-    materialize_scheduled_cases,
-    revoke_adjustment,
-)
+from app.services import attendance_correction_service
+from app.services.attendance_evaluation_service import evaluate_case, materialize_scheduled_cases
 
 UTC_NOW = datetime(2026, 8, 17, 12, tzinfo=UTC)
 SHIFT_START = datetime(2026, 8, 17, 4, tzinfo=UTC)
@@ -283,67 +278,113 @@ def test_approved_leave_wins_precedence_and_stores_canonical_source_links(db_ses
 
 def test_adjustments_have_one_effective_leaf_reject_stale_versions_and_preserve_raw_evidence(db_session):
     case = _seed_case(db_session)
+    actor = db_session.scalar(select(User))
+    assert actor is not None
     raw = _punch(db_session, case, event_id="in-1", at=SHIFT_START, direction="in")
     automatic = evaluate_case(db_session, case.id, evaluated_at=SHIFT_START + timedelta(minutes=31))
+    assert automatic is not None
+    snapshot = {
+        "replacement_presence_state": automatic.presence_state,
+        "replacement_first_in_at": automatic.first_in_at,
+        "replacement_latest_in_at": automatic.latest_in_at,
+        "replacement_final_out_at": automatic.final_out_at,
+        "replacement_late_minutes": automatic.late_minutes,
+        "replacement_early_exit_minutes": automatic.early_exit_minutes,
+        "replacement_missing_checkout": automatic.missing_checkout,
+        "reason": "verified paper checkout",
+    }
+    first_snapshot = {
+        **snapshot,
+        "replacement_presence_state": "completed",
+        "replacement_missing_checkout": False,
+    }
 
-    first = apply_adjustment(
+    first = attendance_correction_service.correct(
         db_session,
-        case.id,
-        if_match=get_effective_attendance(db_session, case.id).version,
-        replacement={"presence_state": "completed", "missing_checkout": False},
-        reason="verified paper checkout",
-        actor_user_id=1,
+        case_id=case.id,
+        if_match=attendance_correction_service.case_etag(db_session, case.id),
+        snapshot=first_snapshot,
+        actor=actor,
     )
-    second = apply_adjustment(
+    second = attendance_correction_service.correct(
         db_session,
-        case.id,
-        if_match=get_effective_attendance(db_session, case.id).version,
-        replacement={"presence_state": "on_duty"},
-        reason="later correction",
-        actor_user_id=1,
+        case_id=case.id,
+        if_match=attendance_correction_service.case_etag(db_session, case.id),
+        snapshot={
+            **snapshot,
+            "replacement_presence_state": "on_duty",
+            "reason": "later correction",
+        },
+        actor=actor,
     )
     assert second.supersedes_adjustment_id == first.id
-    assert get_effective_attendance(db_session, case.id).adjustment_id == second.id
+    assert (
+        attendance_correction_service.active_corrections(db_session, [case.id])[case.id].id
+        == second.id
+    )
     assert db_session.get(AttendancePunch, raw.id).direction == "in"
 
     with pytest.raises(ConflictError) as stale:
-        apply_adjustment(
+        attendance_correction_service.correct(
             db_session,
-            case.id,
-            if_match=automatic.id,
-            replacement={"presence_state": "absent"},
-            reason="stale reviewer",
-            actor_user_id=2,
+            case_id=case.id,
+            if_match='"stale"',
+            snapshot={
+                **snapshot,
+                "replacement_presence_state": "absent",
+                "reason": "stale reviewer",
+            },
+            actor=actor,
         )
     assert stale.value.code == "ATTENDANCE_CASE_VERSION_CONFLICT"
 
 
 def test_revoking_active_adjustment_reveals_latest_active_predecessor(db_session):
     case = _seed_case(db_session)
+    actor = db_session.scalar(select(User))
+    assert actor is not None
     _punch(db_session, case, event_id="in-revoke", at=SHIFT_START, direction="in")
-    evaluate_case(db_session, case.id, evaluated_at=SHIFT_START + timedelta(minutes=31))
+    automatic = evaluate_case(db_session, case.id, evaluated_at=SHIFT_START + timedelta(minutes=31))
+    assert automatic is not None
+    snapshot = {
+        "replacement_presence_state": automatic.presence_state,
+        "replacement_first_in_at": automatic.first_in_at,
+        "replacement_latest_in_at": automatic.latest_in_at,
+        "replacement_final_out_at": automatic.final_out_at,
+        "replacement_late_minutes": automatic.late_minutes,
+        "replacement_early_exit_minutes": automatic.early_exit_minutes,
+        "replacement_missing_checkout": automatic.missing_checkout,
+        "reason": "initial correction",
+    }
 
-    predecessor = apply_adjustment(
+    predecessor = attendance_correction_service.correct(
         db_session,
-        case.id,
-        if_match=get_effective_attendance(db_session, case.id).version,
-        replacement={"presence_state": "completed"},
-        reason="initial correction",
-        actor_user_id=1,
+        case_id=case.id,
+        if_match=attendance_correction_service.case_etag(db_session, case.id),
+        snapshot={**snapshot, "replacement_presence_state": "completed"},
+        actor=actor,
     )
-    current = apply_adjustment(
+    current = attendance_correction_service.correct(
         db_session,
-        case.id,
-        if_match=get_effective_attendance(db_session, case.id).version,
-        replacement={"presence_state": "on_duty"},
-        reason="replacement correction",
-        actor_user_id=1,
+        case_id=case.id,
+        if_match=attendance_correction_service.case_etag(db_session, case.id),
+        snapshot={
+            **snapshot,
+            "replacement_presence_state": "on_duty",
+            "reason": "replacement correction",
+        },
+        actor=actor,
     )
 
-    revoke_adjustment(
+    attendance_correction_service.revoke(
         db_session,
-        current.id,
-        if_match=get_effective_attendance(db_session, case.id).version,
-        actor_user_id=1,
+        case_id=case.id,
+        adjustment_id=current.id,
+        reason="Replacement correction was wrong",
+        if_match=attendance_correction_service.case_etag(db_session, case.id),
+        actor=actor,
     )
-    assert get_effective_attendance(db_session, case.id).adjustment_id == predecessor.id
+    assert (
+        attendance_correction_service.active_corrections(db_session, [case.id])[case.id].id
+        == predecessor.id
+    )

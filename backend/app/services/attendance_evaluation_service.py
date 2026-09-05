@@ -9,7 +9,6 @@ from __future__ import annotations
 import json
 import math
 from collections.abc import Mapping
-from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from hashlib import sha256
 from typing import Any
@@ -18,11 +17,10 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.api.errors import ConflictError, NotFoundError, ValidationFailedError
+from app.api.errors import NotFoundError
 from app.core import leave_lifecycle
-from app.db.models import AuditLog, Employee, Leave
+from app.db.models import Employee, Leave
 from app.db.workforce_models import (
-    AttendanceAdjustment,
     AttendanceCase,
     AttendanceEvaluation,
     AttendanceEvaluationLeaveSource,
@@ -39,7 +37,7 @@ from app.db.workforce_models import (
     WorkShiftDefinition,
     WorkShiftOccurrence,
 )
-from app.services import attendance_profile_service
+from app.services import attendance_policy, attendance_profile_service
 from app.services.workforce_leave import resolve_excusing_leave
 
 # v4 asserts absence at the absence boundary - twice the grace - rather than
@@ -50,20 +48,6 @@ from app.services.workforce_leave import resolve_excusing_leave
 # from that habit rather than assuming an arrival and timing lateness against it.
 ALGORITHM_VERSION = "workforce-attendance-v4"
 _ACTIVE_EMPLOYEE_STATUS = "active"
-_VALID_PRESENCE_STATES = frozenset(
-    {"scheduled", "on_duty", "completed", "absent", "excused_leave", "off", "unknown"}
-)
-_ADJUSTMENT_KEYS = frozenset(
-    {
-        "presence_state",
-        "first_in_at",
-        "latest_in_at",
-        "final_out_at",
-        "late_minutes",
-        "early_exit_minutes",
-        "missing_checkout",
-    }
-)
 
 
 def _as_utc(value: datetime) -> datetime:
@@ -84,38 +68,6 @@ def _datetime_token(value: datetime | None) -> str | None:
 
 def _ceil_positive_minutes(delta: timedelta) -> int:
     return max(0, math.ceil(max(0.0, delta.total_seconds()) / 60.0))
-
-
-def effective_policy(db: Session, case: AttendanceCase) -> WorkAttendancePolicy | None:
-    """Resolve the approved, most-specific policy effective for a fixed case."""
-    occurrence_shift_id: int | None = None
-    if case.shift_occurrence_id is not None:
-        occurrence_shift_id = db.scalar(
-            select(WorkShiftOccurrence.shift_definition_id).where(
-                WorkShiftOccurrence.id == case.shift_occurrence_id
-            )
-        )
-    policy = db.scalars(
-        select(WorkAttendancePolicy)
-        .where(
-            WorkAttendancePolicy.approved_at.is_not(None),
-            WorkAttendancePolicy.effective_from <= case.operational_date,
-            or_(
-                WorkAttendancePolicy.effective_to.is_(None),
-                WorkAttendancePolicy.effective_to > case.operational_date,
-            ),
-            or_(
-                WorkAttendancePolicy.shift_definition_id.is_(None),
-                WorkAttendancePolicy.shift_definition_id == occurrence_shift_id,
-            ),
-        )
-        .order_by(
-            WorkAttendancePolicy.shift_definition_id.is_not(None).desc(),
-            WorkAttendancePolicy.effective_from.desc(),
-            WorkAttendancePolicy.id.desc(),
-        )
-    ).first()
-    return policy
 
 
 def _mapping_state(
@@ -449,7 +401,7 @@ def evaluate_case(
     if evaluation_start_at is not None and _as_utc(case.scheduled_start_at) < _as_utc(evaluation_start_at):
         return None
 
-    policy = effective_policy(db, case)
+    policy = attendance_policy.policy_for_case(db, case)
     mapping, mapping_reason, mapping_identity = _mapping_state(db, case.employee_id)
     fresh = _fresh_through(db, mapping.provider if mapping is not None else None)
     leave = resolve_excusing_leave(
@@ -642,276 +594,6 @@ def materialize_scheduled_cases(
     return created
 
 
-@dataclass(frozen=True)
-class EffectiveAttendance:
-    """The latest automatic revision with one active human leaf overlaid."""
-
-    attendance_case_id: int
-    evaluation_id: int
-    adjustment_id: int | None
-    version: int
-    presence_state: str
-    first_in_at: datetime | None
-    latest_in_at: datetime | None
-    final_out_at: datetime | None
-    late_minutes: int | None
-    early_exit_minutes: int | None
-    missing_checkout: bool
-    reason_code: str
-
-
-def _active_adjustment(db: Session, case_id: int) -> AttendanceAdjustment | None:
-    rows = db.scalars(
-        select(AttendanceAdjustment)
-        .where(
-            AttendanceAdjustment.attendance_case_id == case_id,
-            AttendanceAdjustment.revoked_at.is_(None),
-        )
-        .order_by(AttendanceAdjustment.id)
-    ).all()
-    superseded = {row.supersedes_adjustment_id for row in rows if row.supersedes_adjustment_id is not None}
-    leaves = [row for row in rows if row.id not in superseded]
-    return leaves[-1] if leaves else None
-
-
-def get_effective_attendance(db: Session, case_id: int) -> EffectiveAttendance:
-    """Read the current automatic result with the active reviewed correction."""
-    case = db.get(AttendanceCase, case_id)
-    if case is None:
-        raise NotFoundError("ATTENDANCE_CASE_NOT_FOUND", "Attendance case was not found.", case_id=case_id)
-    automatic = db.scalar(
-        select(AttendanceEvaluation)
-        .where(AttendanceEvaluation.attendance_case_id == case_id)
-        .order_by(AttendanceEvaluation.revision.desc())
-    )
-    if automatic is None:
-        raise NotFoundError(
-            "ATTENDANCE_EVALUATION_NOT_FOUND",
-            "Attendance case has not been evaluated.",
-            case_id=case_id,
-        )
-    adjustment = _active_adjustment(db, case_id)
-    values: dict[str, Any] = {
-        "presence_state": automatic.presence_state,
-        "first_in_at": automatic.first_in_at,
-        "latest_in_at": automatic.latest_in_at,
-        "final_out_at": automatic.final_out_at,
-        "late_minutes": automatic.late_minutes,
-        "early_exit_minutes": automatic.early_exit_minutes,
-        "missing_checkout": automatic.missing_checkout,
-        "reason_code": automatic.reason_code,
-    }
-    if adjustment is not None:
-        for source_name, target_name in (
-            ("replacement_presence_state", "presence_state"),
-            ("replacement_first_in_at", "first_in_at"),
-            ("replacement_latest_in_at", "latest_in_at"),
-            ("replacement_final_out_at", "final_out_at"),
-            ("replacement_late_minutes", "late_minutes"),
-            ("replacement_early_exit_minutes", "early_exit_minutes"),
-            ("replacement_missing_checkout", "missing_checkout"),
-        ):
-            replacement = getattr(adjustment, source_name)
-            if replacement is not None:
-                values[target_name] = replacement
-    return EffectiveAttendance(
-        attendance_case_id=case_id,
-        evaluation_id=automatic.id,
-        adjustment_id=adjustment.id if adjustment is not None else None,
-        version=adjustment.id if adjustment is not None else automatic.id,
-        **values,
-    )
-
-
-def _coerce_version(value: int | str) -> int:
-    if isinstance(value, int) and not isinstance(value, bool):
-        return value
-    if isinstance(value, str):
-        token = value.strip().strip('"')
-        if token.isdecimal():
-            return int(token)
-    raise ValidationFailedError("ATTENDANCE_CASE_VERSION_INVALID", "If-Match must be an effective version.")
-
-
-def _normalize_replacement(replacement: Mapping[str, Any]) -> dict[str, Any]:
-    if not replacement or set(replacement) - _ADJUSTMENT_KEYS:
-        raise ValidationFailedError(
-            "ATTENDANCE_ADJUSTMENT_INVALID",
-            "Adjustment contains no supported replacement fields.",
-        )
-    normalized = dict(replacement)
-    state = normalized.get("presence_state")
-    if state is not None and state not in _VALID_PRESENCE_STATES:
-        raise ValidationFailedError(
-            "ATTENDANCE_ADJUSTMENT_INVALID", "Replacement presence state is invalid."
-        )
-    for key in ("late_minutes", "early_exit_minutes"):
-        value = normalized.get(key)
-        if value is not None and (not isinstance(value, int) or isinstance(value, bool) or value < 0):
-            raise ValidationFailedError(
-                "ATTENDANCE_ADJUSTMENT_INVALID", f"Replacement {key} must be a non-negative integer."
-            )
-    if "missing_checkout" in normalized and not isinstance(normalized["missing_checkout"], bool):
-        raise ValidationFailedError(
-            "ATTENDANCE_ADJUSTMENT_INVALID", "Replacement missing_checkout must be boolean."
-        )
-    for key in ("first_in_at", "latest_in_at", "final_out_at"):
-        value = normalized.get(key)
-        if value is not None:
-            if not isinstance(value, datetime):
-                raise ValidationFailedError(
-                    "ATTENDANCE_ADJUSTMENT_INVALID", f"Replacement {key} must be a timestamp."
-                )
-            normalized[key] = _as_db_utc(value)
-    first = normalized.get("first_in_at")
-    latest = normalized.get("latest_in_at")
-    final = normalized.get("final_out_at")
-    if first is not None and latest is not None and _as_utc(latest) < _as_utc(first):
-        raise ValidationFailedError(
-            "ATTENDANCE_ADJUSTMENT_INVALID", "latest_in_at cannot precede first_in_at."
-        )
-    if latest is not None and final is not None and _as_utc(final) < _as_utc(latest):
-        raise ValidationFailedError(
-            "ATTENDANCE_ADJUSTMENT_INVALID", "final_out_at cannot precede latest_in_at."
-        )
-    return normalized
-
-
-def _enqueue_adjustment_reevaluation(db: Session, case: AttendanceCase, now: datetime) -> None:
-    # Local import avoids an evaluation/queue import cycle while preserving one
-    # transaction for the adjustment and its durable work signal.
-    from app.services.attendance_queue_service import enqueue_evaluation
-
-    enqueue_evaluation(
-        db,
-        employee_id=case.employee_id,
-        window_start_at=_as_utc(case.scheduled_start_at),
-        window_end_at=_as_utc(case.scheduled_end_at),
-        reason_code="ATTENDANCE_ADJUSTMENT_CHANGED",
-        now=now,
-    )
-
-
-def _audit_adjustment(
-    db: Session,
-    *,
-    action: str,
-    case_id: int,
-    actor_user_id: int,
-    adjustment_id: int,
-) -> None:
-    db.add(
-        AuditLog(
-            actor=str(actor_user_id),
-            action=action,
-            entity_type="attendance_case",
-            entity_id=str(case_id),
-            payload=json.dumps({"adjustment_id": adjustment_id}, separators=(",", ":")),
-            ts=_as_db_utc(datetime.now(UTC)),
-        )
-    )
-
-
-def apply_adjustment(
-    db: Session,
-    case_id: int,
-    *,
-    if_match: int | str,
-    replacement: Mapping[str, Any],
-    reason: str,
-    actor_user_id: int,
-    now: datetime | None = None,
-) -> AttendanceAdjustment:
-    """Append a reviewed correction after checking the effective-version token."""
-    if not reason or not reason.strip() or len(reason) > 1024:
-        raise ValidationFailedError("ATTENDANCE_ADJUSTMENT_INVALID", "Adjustment reason is required.")
-    case = db.scalar(select(AttendanceCase).where(AttendanceCase.id == case_id).with_for_update())
-    if case is None:
-        raise NotFoundError("ATTENDANCE_CASE_NOT_FOUND", "Attendance case was not found.", case_id=case_id)
-    effective = get_effective_attendance(db, case_id)
-    if _coerce_version(if_match) != effective.version:
-        raise ConflictError(
-            "ATTENDANCE_CASE_VERSION_CONFLICT",
-            "Attendance case changed before the adjustment was applied.",
-            current_version=effective.version,
-        )
-    normalized = _normalize_replacement(replacement)
-    automatic_id = effective.evaluation_id
-    current = _active_adjustment(db, case_id)
-    adjustment = AttendanceAdjustment(
-        attendance_case_id=case_id,
-        base_evaluation_id=automatic_id,
-        replacement_presence_state=normalized.get("presence_state"),
-        replacement_first_in_at=normalized.get("first_in_at"),
-        replacement_latest_in_at=normalized.get("latest_in_at"),
-        replacement_final_out_at=normalized.get("final_out_at"),
-        replacement_late_minutes=normalized.get("late_minutes"),
-        replacement_early_exit_minutes=normalized.get("early_exit_minutes"),
-        replacement_missing_checkout=normalized.get("missing_checkout"),
-        reason=reason.strip(),
-        created_by_user_id=actor_user_id,
-        supersedes_adjustment_id=current.id if current is not None else None,
-    )
-    db.add(adjustment)
-    db.flush()
-    action_now = _as_utc(now) if now is not None else datetime.now(UTC)
-    _enqueue_adjustment_reevaluation(db, case, action_now)
-    _audit_adjustment(
-        db,
-        action="workforce.attendance_adjusted",
-        case_id=case.id,
-        actor_user_id=actor_user_id,
-        adjustment_id=adjustment.id,
-    )
-    return adjustment
-
-
-def revoke_adjustment(
-    db: Session,
-    adjustment_id: int,
-    *,
-    if_match: int | str,
-    actor_user_id: int,
-    now: datetime | None = None,
-) -> AttendanceAdjustment:
-    """Revoke only the effective leaf; its still-active predecessor is revealed."""
-    adjustment = db.scalar(
-        select(AttendanceAdjustment)
-        .where(AttendanceAdjustment.id == adjustment_id)
-        .with_for_update()
-    )
-    if adjustment is None:
-        raise NotFoundError(
-            "ATTENDANCE_ADJUSTMENT_NOT_FOUND", "Attendance adjustment was not found.", adjustment_id=adjustment_id
-        )
-    case = db.scalar(
-        select(AttendanceCase)
-        .where(AttendanceCase.id == adjustment.attendance_case_id)
-        .with_for_update()
-    )
-    assert case is not None
-    effective = get_effective_attendance(db, case.id)
-    if _coerce_version(if_match) != effective.version or effective.adjustment_id != adjustment.id:
-        raise ConflictError(
-            "ATTENDANCE_CASE_VERSION_CONFLICT",
-            "Attendance case changed before the adjustment was revoked.",
-            current_version=effective.version,
-        )
-    adjustment.revoked_at = _as_db_utc(now or datetime.now(UTC))
-    adjustment.revoked_by_user_id = actor_user_id
-    db.flush()
-    action_now = _as_utc(now) if now is not None else datetime.now(UTC)
-    _enqueue_adjustment_reevaluation(db, case, action_now)
-    _audit_adjustment(
-        db,
-        action="workforce.attendance_adjustment_revoked",
-        case_id=case.id,
-        actor_user_id=actor_user_id,
-        adjustment_id=adjustment.id,
-    )
-    return adjustment
-
-
 # Allocation is implemented beside raw punch persistence.  Re-exporting here
 # preserves the domain-facing evaluator contract and keeps callers decoupled
 # from provider/import plumbing.
@@ -919,12 +601,7 @@ from app.services.attendance_punch_service import resolve_assignment  # noqa: E4
 
 __all__ = [
     "ALGORITHM_VERSION",
-    "EffectiveAttendance",
-    "apply_adjustment",
-    "effective_policy",
     "evaluate_case",
-    "get_effective_attendance",
     "materialize_scheduled_cases",
     "resolve_assignment",
-    "revoke_adjustment",
 ]
