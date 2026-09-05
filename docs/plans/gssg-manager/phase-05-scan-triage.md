@@ -1,6 +1,6 @@
 # Phase 5 — Scan triage and filing
 
-Status: implementation, local integrated checks, cross-reviews and smoke complete; Windows gates and release pending. Branch: `refactor/p5-scan-triage`. Release dependency: Phase 4.
+Status: implementation, local integrated checks, cross-reviews and smoke complete; Windows gates and release pending. PR: #78. Branch: `refactor/p5-scan-triage`. Release dependency: Phase 4.
 
 Follow [WORKFLOW.md](WORKFLOW.md): tests and code verification precede each implementation slice; complete required verification before every build.
 
@@ -41,7 +41,7 @@ Accepted amendment to the original boundaries: a lossless classification result 
 
 - [ ] Run exact resolved OCR, triage, intake, inbox document/N+1 and scanback test files, then backend checks. Verify response schemas/OpenAPI unchanged or use `sync-api-types` if an intentional contract change remains.
 - [ ] Run required OCR adapter checks on a suitable isolated host with both Arabic (`ara`) and English (`eng`) language packs available; record missing packs/skips as pending evidence, not a passed bilingual check.
-- [ ] Smoke synthetic QR-only, scanned returned-form and external-document uploads in English, Arabic and mixed script, plus inbox confirmation and undo; inspect actual field values, reference matching and source snippets.
+- [x] Smoke synthetic QR-only, scanned returned-form and external-document uploads in English, Arabic and mixed script, plus inbox confirmation and undo; inspect actual field values, reference matching and source snippets.
 - [ ] Rollback: retain compatibility with pending/auto-filed inbox rows; never replay completed items blindly or detach operator-approved documents automatically.
 
 ## Execution evidence
@@ -226,6 +226,12 @@ undo. Only the executable OCR adapter is substituted. Final persistence and
 source hashes passed; the owned server stopped and its port closed. This does
 not replace the required real Windows OCR evidence.
 
+After the integrated run, a test-only cleanup scoped restoration of
+`pytesseract.tesseract_cmd` in the two image-closure cases. Both affected cases
+passed in 0.22 seconds and the independent reviewer approved the delta. No
+application, fixture or gate file changed; the 155-test result is the preceding
+integrated run, supplemented by this narrow current-code verification.
+
 Pending: supported Windows backend suite, ten-node real Arabic/English OCR
-gate, one phase PR, merge, deployment and exact production HEAD/health
+gate, merge, deployment and exact production HEAD/health
 verification.

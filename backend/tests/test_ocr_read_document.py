@@ -132,7 +132,7 @@ def test_reader_closes_resized_ocr_image(monkeypatch: pytest.MonkeyPatch, fail: 
     import pytesseract
 
     observed = []
-    monkeypatch.setattr(ocr, "_resolve_tesseract_cmd", lambda: "synthetic-tesseract")
+    original_cmd = pytesseract.pytesseract.tesseract_cmd
 
     def text(image, **_kwargs):
         observed.append(image)
@@ -140,9 +140,14 @@ def test_reader_closes_resized_ocr_image(monkeypatch: pytest.MonkeyPatch, fail: 
             raise pytesseract.TesseractError(1, "synthetic language unavailable")
         return "Ref: GS-0042\n"
 
-    monkeypatch.setattr(pytesseract, "image_to_string", text)
-    monkeypatch.setattr(pytesseract, "image_to_data", lambda *_args, **_kwargs: {"conf": ["90"]})
-    result = read_document((FIXTURE_DIR / "returned-form-qr.png").read_bytes())
+    with monkeypatch.context() as patch:
+        # extract_text assigns this global after resolving the fake executable.
+        patch.setattr(pytesseract.pytesseract, "tesseract_cmd", original_cmd)
+        patch.setattr(ocr, "_resolve_tesseract_cmd", lambda: "synthetic-tesseract")
+        patch.setattr(pytesseract, "image_to_string", text)
+        patch.setattr(pytesseract, "image_to_data", lambda *_args, **_kwargs: {"conf": ["90"]})
+        result = read_document((FIXTURE_DIR / "returned-form-qr.png").read_bytes())
+    assert pytesseract.pytesseract.tesseract_cmd == original_cmd
     assert result.text_source == ("unavailable" if fail else "ocr")
     assert len(observed) == 1
     with pytest.raises(ValueError, match="closed image"):
