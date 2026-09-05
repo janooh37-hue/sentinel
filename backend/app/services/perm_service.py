@@ -24,7 +24,7 @@ from app.core.permissions import (
     CAPABILITY_IDS,
     CATEGORY_CAP_PREFIX,
     ROLE_DEFAULTS,
-    SERVICE_CAP_PREFIX,
+    SENSITIVE_CAPABILITY_IDS,
     SERVICE_CAPABILITY_IDS,
     SERVICE_RECORDS_CAP_PREFIX,
     SERVICE_RECORDS_CAPABILITY_IDS,
@@ -32,13 +32,6 @@ from app.core.permissions import (
 )
 from app.core.roles import ADMIN_ROLE
 from app.db.models import BookCategory, RolePermission, User, UserPermission
-
-# Capabilities that must never be reachable via a per-user override: they are
-# the keys to user management / admin tooling and are admin-only by role. A
-# grant here would let an admin (or a future buggy gate) hand out self-escalation
-# paths; a deny would silently break an admin (admins short-circuit to "all",
-# but this keeps the matrix honest). Admin-grade access comes from the role.
-_SENSITIVE_CAPS: frozenset[str] = frozenset({"users.manage", "system.admin"})
 
 
 def _role_and_dynamic_caps(db: Session, role: str) -> tuple[set[str], set[str]]:
@@ -86,26 +79,6 @@ def dynamic_capability_ids(db: Session) -> set[str]:
         | set(SERVICE_RECORDS_CAPABILITY_IDS)
         | category_capability_ids(db)
     )
-
-
-def dynamic_capability_label(db: Session, capability_id: str) -> str:
-    """Human label for a dynamic capability, or the id for non-dynamic input."""
-    if capability_id.startswith(CATEGORY_CAP_PREFIX):
-        category_id = capability_id.removeprefix(CATEGORY_CAP_PREFIX)
-        category = db.get(BookCategory, category_id)
-        if category is None:
-            return category_id
-        return category.name_en or category_id
-    if capability_id.startswith(SERVICE_RECORDS_CAP_PREFIX):
-        service_id = capability_id.removeprefix(SERVICE_RECORDS_CAP_PREFIX)
-        service_label = dynamic_capability_label(
-            db,
-            f"{SERVICE_CAP_PREFIX}{service_id}",
-        )
-        return f"Records: {service_label}"
-    if capability_id.startswith(SERVICE_CAP_PREFIX):
-        return capability_id.removeprefix(SERVICE_CAP_PREFIX)
-    return capability_id
 
 
 def effective_caps(db: Session, user: User) -> set[str]:
@@ -216,7 +189,7 @@ def _validate_override_item(
         raise AppError("UNKNOWN_CAPABILITY", f"Unknown capability {capability!r}")
     if effect not in ("grant", "deny", None):
         raise AppError("INVALID_EFFECT", f"Effect must be grant/deny/null, got {effect!r}")
-    if effect == "grant" and capability in _SENSITIVE_CAPS:
+    if effect == "grant" and capability in SENSITIVE_CAPABILITY_IDS:
         raise AppError(
             "FORBIDDEN_OVERRIDE",
             f"{capability!r} cannot be granted via a per-user override; "
@@ -410,7 +383,6 @@ __all__ = [
     "category_capability_ids",
     "denied_record_types",
     "dynamic_capability_ids",
-    "dynamic_capability_label",
     "effective_caps",
     "get_user_overrides",
     "has_capability",

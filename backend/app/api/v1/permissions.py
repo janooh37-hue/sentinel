@@ -13,7 +13,6 @@ from fastapi import APIRouter, Depends, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, require_capability
-from app.core.permissions import CAPABILITIES
 from app.db.models import PermissionRequest, User
 from app.db.session import get_db
 from app.schemas.permission_request import (
@@ -21,7 +20,7 @@ from app.schemas.permission_request import (
     DecideIn,
     PermissionRequestRead,
 )
-from app.services import book_service, perm_service, permission_request_service
+from app.services import book_service, permission_request_service
 
 router = APIRouter(prefix="/permissions", tags=["permissions"])
 
@@ -38,18 +37,11 @@ def _to_read(row: PermissionRequest, db: Session) -> PermissionRequestRead:
         else:
             requester_name = str(row.user_id)
 
-    # Resolve capability label from catalog
-    capability_label = next(
-        (c.label for c in CAPABILITIES if c.id == row.capability),
-        perm_service.dynamic_capability_label(db, row.capability),
-    )
-
     return PermissionRequestRead(
         id=row.id,
         user_id=row.user_id,
         requester_name=requester_name,
         capability=row.capability,
-        capability_label=capability_label,
         status=row.status,
         decision=row.decision,
         created_at=row.created_at,

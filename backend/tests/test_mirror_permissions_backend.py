@@ -198,8 +198,7 @@ def test_dynamic_capabilities_are_implicit_defaults_and_never_seeded(
         f"books.service.{service_id}" for service_id in (*SERVICE_IDS, OTHER_SERVICE_ID)
     }
     service_record_caps = {
-        f"books.servicerecords.{service_id}"
-        for service_id in (*SERVICE_IDS, OTHER_SERVICE_ID)
+        f"books.servicerecords.{service_id}" for service_id in (*SERVICE_IDS, OTHER_SERVICE_ID)
     }
     category_cap = f"books.category.{category.id}"
     expected_dynamic = service_caps | service_record_caps | {category_cap}
@@ -308,19 +307,35 @@ def test_auth_catalog_and_user_defaults_include_dynamic_capabilities(
         name_en="Operations",
         name_ar="العمليات",
     )
+    unnamed_category = _category(mirror_api.db, "NOAR")
     operator = _user(
         mirror_api.db,
         role="operator",
         email="catalog-op@test.ae",
     )
 
+    admin = mirror_api.actor
+    mirror_api.as_user(operator)
     response = mirror_api.client.get("/api/v1/auth/capabilities")
     assert response.status_code == 200, response.text
     catalog = {item["id"]: item for item in response.json()}
     service_items = [item for item in catalog.values() if item["domain"] == "services"]
     assert len(service_items) == len(SERVICE_IDS) + 1
-    assert catalog["books.service.General Book"]["label"] == "General Book"
-    assert catalog["books.service.other"]["label"] == "Other"
+    assert catalog["books.approve"] == {
+        "id": "books.approve",
+        "domain": "books",
+        "label_en": "Approve / reject records",
+        "label_ar": "اعتماد / رفض السجلات",
+        "description_en": "Approve, sign, or reject documents in the approval queue.",
+        "description_ar": "اعتماد أو توقيع أو رفض المستندات في قائمة الانتظار.",
+        "sensitive": False,
+        "requestable": True,
+        "default_roles": ["manager", "admin"],
+    }
+    assert catalog["books.service.General Book"]["label_en"] == "General Book"
+    assert catalog["books.service.General Book"]["label_ar"] == "كتاب عام"
+    assert catalog["books.service.other"]["label_en"] == "Other"
+    assert catalog["books.service.other"]["label_ar"] == "أخرى"
     assert catalog["books.service.General Book"]["default_roles"] == [
         "operator",
         "manager",
@@ -335,37 +350,82 @@ def test_auth_catalog_and_user_defaults_include_dynamic_capabilities(
         f"{permissions.SERVICE_RECORDS_CAP_PREFIX}{service_id}": {
             "id": f"{permissions.SERVICE_RECORDS_CAP_PREFIX}{service_id}",
             "domain": "books",
-            "label": (
-                "Records: Other"
-                if service_id == OTHER_SERVICE_ID
-                else f"Records: {service_id}"
-            ),
-            "description": "",
             "default_roles": ["operator", "manager", "admin"],
         }
         for service_id in (*SERVICE_IDS, OTHER_SERVICE_ID)
     }
     assert len(service_record_items) == len(expected_service_record_items)
-    assert {item["id"] for item in service_record_items} == set(
-        expected_service_record_items
-    )
-    assert {
-        item["id"]: item for item in service_record_items
-    } == expected_service_record_items
+    assert {item["id"] for item in service_record_items} == set(expected_service_record_items)
+    for item_id, expected in expected_service_record_items.items():
+        item = catalog[item_id]
+        assert item["id"] == expected["id"]
+        assert item["domain"] == expected["domain"]
+        assert item["label_en"]
+        assert item["label_ar"]
+        assert item["description_en"]
+        assert item["description_ar"]
+        assert item["sensitive"] is False
+        assert item["requestable"] is True
+        assert item["default_roles"] == expected["default_roles"]
     assert catalog[f"books.category.{category.id}"] == {
         "id": f"books.category.{category.id}",
         "domain": "categories",
-        "label": "Operations",
-        "description": "العمليات",
+        "label_en": "Operations",
+        "label_ar": "العمليات",
+        "description_en": "View records in Operations.",
+        "description_ar": "عرض السجلات ضمن العمليات.",
+        "sensitive": False,
+        "requestable": True,
+        "default_roles": ["operator", "manager", "admin"],
+    }
+    assert catalog[f"books.category.{unnamed_category.id}"] == {
+        "id": "books.category.NOAR",
+        "domain": "categories",
+        "label_en": "books.category.NOAR",
+        "label_ar": None,
+        "description_en": "View records in books.category.NOAR.",
+        "description_ar": None,
+        "sensitive": False,
+        "requestable": True,
         "default_roles": ["operator", "manager", "admin"],
     }
 
+    mirror_api.as_user(admin)
     detail = mirror_api.client.get(f"/api/v1/auth/users/{operator.id}/permissions")
     assert detail.status_code == 200, detail.text
     payload = detail.json()
     assert "books.service.General Book" in payload["role_defaults"]
     assert f"books.category.{category.id}" in payload["role_defaults"]
     assert "books.service.General Book" in payload["effective"]
+
+
+@pytest.mark.parametrize("role", ["operator", "manager", "admin"])
+def test_every_authenticated_role_can_read_capability_catalog(
+    mirror_api: ApiHarness,
+    role: str,
+) -> None:
+    user = _user(
+        mirror_api.db,
+        role=role,
+        email=f"catalog-{role}@test.ae",
+    )
+    mirror_api.as_user(user)
+
+    response = mirror_api.client.get("/api/v1/auth/capabilities")
+
+    assert response.status_code == 200, response.text
+    assert len(response.json()) >= 98
+
+
+def test_anonymous_user_cannot_read_capability_catalog(api_db: Session) -> None:
+    app = create_app()
+    app.dependency_overrides[get_db] = lambda: api_db
+
+    with TestClient(app, raise_server_exceptions=True) as client:
+        response = client.get("/api/v1/auth/capabilities")
+
+    assert response.status_code == 401
+    assert response.json()["error"]["code"] == "NOT_AUTHENTICATED"
 
 
 def test_dynamic_permission_request_can_be_approved_to_restore_access(
@@ -389,7 +449,9 @@ def test_dynamic_permission_request_can_be_approved_to_restore_access(
     notified_labels: list[str] = []
     monkeypatch.setattr(
         "app.services.admin_notify.notify_admins_new_request",
-        lambda _db, _user, label, _request_id: notified_labels.append(label),
+        lambda _db, _user, *, capability_id, entry, request_id: notified_labels.append(
+            entry.label_en
+        ),
     )
 
     mirror_api.as_user(operator)
@@ -398,7 +460,7 @@ def test_dynamic_permission_request_can_be_approved_to_restore_access(
         json={"capability": capability},
     )
     assert created.status_code == 201, created.text
-    assert created.json()["capability_label"] == "General Book"
+    assert "capability_label" not in created.json()
     assert notified_labels == ["General Book"]
 
     mirror_api.as_user(admin)
@@ -438,9 +500,7 @@ def test_creation_cap_deny_does_not_hide_existing_service_records(
     listed = mirror_api.client.get("/api/v1/books")
     assert listed.status_code == 200, listed.text
     assert listed.json()["total"] == 1
-    assert [item["ref_number"] for item in listed.json()["items"]] == [
-        visible.ref_number
-    ]
+    assert [item["ref_number"] for item in listed.json()["items"]] == [visible.ref_number]
 
     facets = mirror_api.client.get("/api/v1/books/facets")
     assert facets.status_code == 200, facets.text
@@ -2062,24 +2122,19 @@ def test_expiry_routes_require_expiry_view_independent_of_employees_view(
         assert allowed.status_code == 200, allowed.text
 
 
-def test_dynamic_capability_labels_use_category_name_and_bare_service(
+def test_catalog_dynamic_capability_labels_use_category_and_template_names(
     db_session: Session,
 ) -> None:
+    from app.services import capability_catalog_service
+
     _category(db_session, "OPS", name_en="Operations")
 
-    assert perm_service.dynamic_capability_label(db_session, "books.category.OPS") == "Operations"
-    assert (
-        perm_service.dynamic_capability_label(
-            db_session,
-            "books.service.General Book",
-        )
-        == "General Book"
+    category = capability_catalog_service.get_catalog_entry(db_session, "books.category.OPS")
+    service = capability_catalog_service.get_catalog_entry(db_session, "books.service.General Book")
+    records = capability_catalog_service.get_catalog_entry(
+        db_session, "books.servicerecords.General Book"
     )
 
-    assert (
-        perm_service.dynamic_capability_label(
-            db_session,
-            "books.servicerecords.General Book",
-        )
-        == "Records: General Book"
-    )
+    assert category is not None and category.label_en == "Operations"
+    assert service is not None and service.label_en == "General Book"
+    assert records is not None and records.label_en == "Records: General Book"

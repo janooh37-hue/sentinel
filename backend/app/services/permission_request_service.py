@@ -6,11 +6,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.errors import AppError
-from app.core.permissions import CAPABILITY_IDS
 from app.db.models import PermissionRequest, User
-from app.services import perm_service
-
-_SENSITIVE = frozenset({"users.manage", "system.admin"})
+from app.services import capability_catalog_service, perm_service
 
 
 def expires_from_window(window: str) -> datetime:
@@ -25,11 +22,10 @@ def expires_from_window(window: str) -> datetime:
 
 
 def create_request(db: Session, user: User, capability: str) -> PermissionRequest:
-    if capability not in CAPABILITY_IDS and capability not in perm_service.dynamic_capability_ids(
-        db
-    ):
+    catalog_entry = capability_catalog_service.get_catalog_entry(db, capability)
+    if catalog_entry is None:
         raise AppError("UNKNOWN_CAPABILITY", f"Unknown capability {capability!r}", http_status=400)
-    if capability in _SENSITIVE:
+    if not catalog_entry.requestable:
         raise AppError("FORBIDDEN_REQUEST", "This permission can't be requested.", http_status=400)
     if perm_service.has_capability(db, user, capability):
         raise AppError("ALREADY_GRANTED", "You already have this permission.", http_status=400)
@@ -51,15 +47,15 @@ def create_request(db: Session, user: User, capability: str) -> PermissionReques
         db.commit()
         db.refresh(row)
     # Notify admins for both new requests and re-requests.
-    from app.core.permissions import CAPABILITIES
-
-    label = next(
-        (c.label for c in CAPABILITIES if c.id == capability),
-        perm_service.dynamic_capability_label(db, capability),
-    )
     from app.services import admin_notify
 
-    admin_notify.notify_admins_new_request(db, user, label, row.id)
+    admin_notify.notify_admins_new_request(
+        db,
+        user,
+        capability_id=capability,
+        entry=catalog_entry,
+        request_id=row.id,
+    )
     return row
 
 
