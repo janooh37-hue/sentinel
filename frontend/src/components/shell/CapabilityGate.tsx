@@ -17,20 +17,16 @@
  *   are never lockable and fall back to the hidden (default) behaviour.
  */
 
-import { useContext, useState } from 'react'
-import type { ReactNode } from 'react'
+import { cloneElement, isValidElement, useContext, useRef, useState } from 'react'
+import type { ReactElement, ReactNode } from 'react'
 import { Lock } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { useQuery } from '@tanstack/react-query'
 
 import { QueryClientContext } from '@tanstack/react-query'
 import { AuthContext } from '@/lib/authContext'
 import { useCapabilities } from '@/lib/useCapabilities'
-import { api } from '@/lib/api'
+import { localizeCapability, useCapabilityCatalog } from '@/lib/useCapabilityCatalog'
 import { PermissionRequestDialog } from '@/components/perms/PermissionRequestDialog'
-
-/** Caps that must never surface the lock affordance (security-sensitive). */
-const SENSITIVE_CAPS = new Set(['users.manage', 'system.admin'])
 
 interface CapabilityGateProps {
   cap: string
@@ -52,18 +48,11 @@ function GateInner({
   fallback = null,
   requestable = false,
 }: CapabilityGateProps): React.JSX.Element {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const { has, isLoading } = useCapabilities()
+  const catalog = useCapabilityCatalog()
   const [dialogOpen, setDialogOpen] = useState(false)
-
-  // Fetch capabilities catalog for label/description lookup (cached 5 min).
-  // Only needed when requestable mode is active and the cap is missing.
-  const catalogQuery = useQuery({
-    queryKey: ['capabilities-catalog'],
-    queryFn: () => api.listCapabilities(),
-    staleTime: 5 * 60_000,
-    enabled: requestable && !SENSITIVE_CAPS.has(cap),
-  })
+  const requestTriggerRef = useRef<HTMLSpanElement>(null)
 
   if (isLoading) return <>{fallback}</>
 
@@ -75,14 +64,17 @@ function GateInner({
   // nested interactive elements (invalid HTML, breaks a11y/hydration).
   // The child is rendered with pointer-events-none + reduced opacity so its
   // own click never fires — the wrapper intercepts and opens the dialog.
-  if (requestable && !SENSITIVE_CAPS.has(cap)) {
-    const catalogEntry = catalogQuery.data?.find((c) => c.id === cap)
-    const label = t(`access.permissions.caps.${cap}`, { defaultValue: catalogEntry?.label ?? cap })
-    const description = t(`perms.caps.${cap}.desc`, { defaultValue: catalogEntry?.description ?? '' })
+  const request = catalog.requestState(cap)
+  if (requestable && request.kind === 'requestable') {
+    const { label } = localizeCapability(request.entry, cap, i18n.language)
+    const visualChildren = isValidElement(children)
+      ? cloneElement(children as ReactElement<{ tabIndex?: number }>, { tabIndex: -1 })
+      : children
 
     return (
       <>
         <span
+          ref={requestTriggerRef}
           role="button"
           tabIndex={0}
           className="relative inline-flex cursor-pointer items-center gap-1 opacity-70"
@@ -96,16 +88,16 @@ function GateInner({
           aria-label={t('perms.locked', { label, defaultValue: `You need permission for ${label}. Click to request access.` })}
         >
           <Lock className="h-3.5 w-3.5 shrink-0" />
-          {/* aria-hidden: the child is visually present but inert — the span
-              wrapper above is the single interactive affordance. */}
-          <span className="pointer-events-none" aria-hidden="true">{children}</span>
+          {/* The child stays visible while inert and aria-hidden. Explicitly
+              removing a top-level element from tab order also covers DOM test
+              environments and older engines that do not implement inert. */}
+          <span className="pointer-events-none" aria-hidden="true" inert>{visualChildren}</span>
         </span>
         <PermissionRequestDialog
-          capability={cap}
-          label={label}
-          description={description}
+          request={request}
           open={dialogOpen}
           onClose={() => setDialogOpen(false)}
+          returnFocusRef={requestTriggerRef}
         />
       </>
     )

@@ -12,6 +12,7 @@ connection reuse by default.  We create a local engine with
 ``check_same_thread=False`` so the same in-memory DB is accessible from both
 the main test thread (setup/assertions) and the ASGI worker thread (handlers).
 """
+
 from __future__ import annotations
 
 import pytest
@@ -53,9 +54,7 @@ def api_db(monkeypatch, tmp_path) -> Session:
     )
     attach_sqlite_pragmas(eng, wal=False)
     Base.metadata.create_all(eng)
-    TestSession = sessionmaker(
-        bind=eng, autoflush=False, expire_on_commit=False, future=True
-    )
+    TestSession = sessionmaker(bind=eng, autoflush=False, expire_on_commit=False, future=True)
     monkeypatch.setattr(session_mod, "engine", eng)
     monkeypatch.setattr(session_mod, "SessionLocal", TestSession)
     db = TestSession()
@@ -103,10 +102,42 @@ def test_create_request_unknown_capability_returns_400(api_db):
     """Requesting an unknown capability returns 400."""
     u = _make_user(api_db, role="operator", email="op2@x.ae")
     c = _client(api_db, u)
-    r = c.post(
-        "/api/v1/permissions/requests", json={"capability": "nonexistent.cap"}
-    )
+    r = c.post("/api/v1/permissions/requests", json={"capability": "nonexistent.cap"})
     assert r.status_code == 400
+
+
+@pytest.mark.parametrize("payload", [{}, {"capability": None}, {"capability": []}])
+def test_create_request_schema_errors_remain_422(api_db, payload):
+    u = _make_user(api_db, role="operator", email=f"schema-{len(str(payload))}@x.ae")
+    response = _client(api_db, u).post(
+        "/api/v1/permissions/requests",
+        json=payload,
+    )
+
+    assert response.status_code == 422
+    assert response.json()["error"]["code"] == "VALIDATION_ERROR"
+
+
+@pytest.mark.parametrize("capability", ["", "   "])
+def test_create_request_string_unknowns_remain_400(api_db, capability):
+    u = _make_user(
+        api_db,
+        role="operator",
+        email=f"unknown-{len(capability)}@x.ae",
+    )
+    response = _client(api_db, u).post(
+        "/api/v1/permissions/requests",
+        json={"capability": capability},
+    )
+
+    assert response.status_code == 400
+    assert response.json() == {
+        "error": {
+            "code": "UNKNOWN_CAPABILITY",
+            "message": f"Unknown capability {capability!r}",
+            "details": {},
+        }
+    }
 
 
 def test_create_request_already_held_returns_400(api_db):
@@ -127,9 +158,7 @@ def test_admin_can_list_pending_requests(api_db):
 
     # Create a request as operator
     op_client = _client(api_db, op)
-    op_client.post(
-        "/api/v1/permissions/requests", json={"capability": "books.approve"}
-    )
+    op_client.post("/api/v1/permissions/requests", json={"capability": "books.approve"})
 
     # List as admin
     admin_client = _client(api_db, admin)
@@ -139,6 +168,7 @@ def test_admin_can_list_pending_requests(api_db):
     assert isinstance(data, list)
     assert len(data) >= 1
     assert any(item["capability"] == "books.approve" for item in data)
+    assert all(item["capability_label"] == "Approve / reject records" for item in data)
 
 
 # ─── decide ───────────────────────────────────────────────────────────────────
@@ -151,9 +181,7 @@ def test_admin_can_decide_grant_permanent(api_db):
 
     # Operator creates a request
     op_client = _client(api_db, op)
-    r_create = op_client.post(
-        "/api/v1/permissions/requests", json={"capability": "books.approve"}
-    )
+    r_create = op_client.post("/api/v1/permissions/requests", json={"capability": "books.approve"})
     assert r_create.status_code == 201, r_create.text
     request_id = r_create.json()["id"]
 
@@ -167,6 +195,7 @@ def test_admin_can_decide_grant_permanent(api_db):
     data = r_decide.json()
     assert data["status"] == "granted"
     assert data["decision"] == "permanent"
+    assert data["capability_label"] == "Approve / reject records"
 
     # The operator now has books.approve
     api_db.expire_all()
@@ -179,9 +208,7 @@ def test_admin_can_decide_refuse(api_db):
     op = _make_user(api_db, role="operator", email="op6@x.ae")
 
     op_client = _client(api_db, op)
-    r_create = op_client.post(
-        "/api/v1/permissions/requests", json={"capability": "books.approve"}
-    )
+    r_create = op_client.post("/api/v1/permissions/requests", json={"capability": "books.approve"})
     assert r_create.status_code == 201
     request_id = r_create.json()["id"]
 

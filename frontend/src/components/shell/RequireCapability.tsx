@@ -5,19 +5,13 @@
  * Backend enforcement remains the security boundary.
  */
 
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { Lock } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { useQuery } from '@tanstack/react-query'
 
 import { useCapabilities } from '@/lib/useCapabilities'
-import { api } from '@/lib/api'
+import { useCapabilityCatalog } from '@/lib/useCapabilityCatalog'
 import { PermissionRequestDialog } from '@/components/perms/PermissionRequestDialog'
-
-const NON_REQUESTABLE: Record<string, true> = {
-  'users.manage': true,
-  'system.admin': true,
-}
 
 interface RequireCapabilityProps {
   cap: string
@@ -35,15 +29,9 @@ export function RequireCapability({
 }: RequireCapabilityProps): React.JSX.Element {
   const { t } = useTranslation()
   const { has, isLoading } = useCapabilities()
+  const catalog = useCapabilityCatalog()
   const [dialogOpen, setDialogOpen] = useState(false)
-  const requestable = NON_REQUESTABLE[cap] !== true
-
-  const catalogQuery = useQuery({
-    queryKey: ['capabilities-catalog'],
-    queryFn: () => api.listCapabilities(),
-    staleTime: 5 * 60_000,
-    enabled: requestable && !isLoading && !has(cap),
-  })
+  const requestTriggerRef = useRef<HTMLButtonElement>(null)
 
   if (isLoading) {
     return (
@@ -54,24 +42,25 @@ export function RequireCapability({
   }
 
   if (!has(cap)) {
-    const catalogEntry = catalogQuery.data?.find((c) => c.id === cap)
-    const label = catalogEntry?.label ?? cap
-    const description = catalogEntry?.description ?? ''
+    const request = catalog.requestState(cap)
+    const requestable = request.kind === 'requestable'
+    const explicitlyNonRequestable = request.kind === 'not_requestable'
 
     return (
       <div className="flex flex-1 items-center justify-center p-8">
         <div className="flex max-w-sm flex-col items-center gap-4 rounded-2xl border border-hairline bg-surface p-8 text-center shadow-sm">
           <Lock className="h-8 w-8 text-muted-foreground" />
           <p className="text-sm text-muted-foreground">
-            {requestable
-              ? t('perms.noAccessPage', { defaultValue: "You don't have access to this page" })
-              : t('requireCap.notRequestable', {
+            {explicitlyNonRequestable
+              ? t('requireCap.notRequestable', {
                   defaultValue:
                     'Access to this area is managed by administrators and cannot be requested.',
-                })}
+                })
+              : t('perms.noAccessPage', { defaultValue: "You don't have access to this page" })}
           </p>
           {requestable ? (
             <button
+              ref={requestTriggerRef}
               type="button"
               className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90"
               onClick={() => setDialogOpen(true)}
@@ -82,11 +71,10 @@ export function RequireCapability({
         </div>
         {requestable ? (
           <PermissionRequestDialog
-            capability={cap}
-            label={label}
-            description={description}
+            request={request}
             open={dialogOpen}
             onClose={() => setDialogOpen(false)}
+            returnFocusRef={requestTriggerRef}
           />
         ) : null}
       </div>

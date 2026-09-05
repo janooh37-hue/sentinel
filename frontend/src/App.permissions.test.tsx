@@ -13,7 +13,19 @@ vi.mock('@/lib/useCapabilities', () => ({
 }))
 vi.mock('@/lib/api', () => ({
   api: {
-    listCapabilities: vi.fn().mockResolvedValue([]),
+    listCapabilities: vi.fn().mockResolvedValue([
+      {
+        id: 'users.manage',
+        domain: 'users',
+        label_en: 'Manage users and permissions',
+        label_ar: 'إدارة المستخدمين والصلاحيات',
+        description_en: 'Manage user accounts and effective permissions.',
+        description_ar: 'إدارة حسابات المستخدمين وصلاحياتهم الفعلية.',
+        sensitive: true,
+        requestable: false,
+        default_roles: ['admin'],
+      },
+    ]),
     postCrashReport: vi.fn().mockResolvedValue(undefined),
   },
 }))
@@ -119,6 +131,17 @@ describe('App route capability gates', () => {
         ? 'Access to this area is managed by administrators and cannot be requested.'
         : "You don't have access to this page"
     expect(await screen.findByText(denialCopy)).toBeVisible()
+  })
+
+  it.each([
+    ['/employees', "You don't have access to this page"],
+    ['/permissions', 'Access to this area is managed by administrators and cannot be requested.'],
+  ] as const)('offers no request action for the %s route denial state', async (path, copy) => {
+    window.history.pushState({}, '', path)
+    render(<App />)
+
+    expect(await screen.findByText(copy)).toBeVisible()
+    expect(screen.queryByRole('button', { name: 'Request access' })).not.toBeInTheDocument()
   })
 
   it.each(routes)('renders %s with all required capabilities', async (path, capabilities, pageText) => {

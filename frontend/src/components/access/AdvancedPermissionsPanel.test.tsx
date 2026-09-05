@@ -17,6 +17,7 @@ vi.mock('@/lib/api', () => ({
 
 import { AdvancedPermissionsPanel } from './AdvancedPermissionsPanel'
 import { api, type AdminUserRead, type CapabilityRead, type UserPermissionRead } from '@/lib/api'
+import i18n from '@/lib/i18n'
 
 function createDeferred<T>() {
   let resolve!: (value: T | PromiseLike<T>) => void
@@ -43,12 +44,22 @@ const user: AdminUserRead = {
 }
 
 function cap(id: string, domain = id.split('.')[0], label = id): CapabilityRead {
-  return { id, domain, label, description: `${label} description`, default_roles: [] }
+  return {
+    id,
+    domain,
+    label_en: label,
+    label_ar: null,
+    description_en: `${label} description`,
+    description_ar: null,
+    sensitive: false,
+    requestable: true,
+    default_roles: [],
+  }
 }
 
 const capabilities = [
   cap('books.view', 'books', 'View books'),
-  cap('books.edit', 'books', 'Edit books'),
+  cap('books.edit', 'books', 'Edit records & attachments'),
   cap('leaves.view', 'leaves', 'View leaves'),
   cap('books.service.General Book', 'services', 'General Book'),
   cap('books.servicerecords.General Book', 'services', 'Records: General Book'),
@@ -67,20 +78,24 @@ function perms(overrides: UserPermissionRead['overrides'] = {}): UserPermissionR
   }
 }
 
-function renderPanel(permissionData = perms()) {
+function renderPanel(
+  permissionData = perms(),
+  catalog: CapabilityRead[] = capabilities,
+) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   })
   return render(
     <QueryClientProvider client={client}>
-      <AdvancedPermissionsPanel user={user} perms={permissionData} capabilities={capabilities} />
+      <AdvancedPermissionsPanel user={user} perms={permissionData} capabilities={catalog} />
     </QueryClientProvider>,
   )
 }
 
 describe('AdvancedPermissionsPanel', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.clearAllMocks()
+    await i18n.changeLanguage('en')
     vi.mocked(api.setUserPermission).mockResolvedValue(perms({ 'books.view': 'deny' }))
     vi.mocked(api.setUserPermissionsBulk).mockResolvedValue(perms())
   })
@@ -156,6 +171,33 @@ describe('AdvancedPermissionsPanel', () => {
     const clearButtons = screen.getAllByRole('button', { name: /clear/i })
     await userEvent.click(clearButtons[clearButtons.length - 1]!)
     expect(screen.getByText('books.view')).toBeVisible()
+  })
+
+  it('renders and searches a capability supplied only by the runtime catalog', async () => {
+    const runtimeOnly = cap('custom.export', 'custom', 'Export case register')
+    renderPanel(perms(), [...capabilities, runtimeOnly])
+
+    expect(screen.getByText('Export case register')).toBeVisible()
+    expect(screen.getByText('Export case register description')).toBeVisible()
+    await userEvent.type(screen.getByPlaceholderText('Search permissions…'), 'case register')
+    expect(screen.getByText('custom.export')).toBeVisible()
+    expect(screen.queryByText('books.view')).not.toBeInTheDocument()
+  })
+
+  it('uses Arabic catalog copy in visible and accessible names without control markers', async () => {
+    await i18n.changeLanguage('ar')
+    const runtimeOnly = {
+      ...cap('custom.export', 'custom', 'Export case register'),
+      label_ar: 'تصدير سجل القضايا',
+      description_ar: 'تنزيل سجل القضايا.',
+    }
+    renderPanel(perms(), [runtimeOnly])
+
+    const label = screen.getByText('تصدير سجل القضايا')
+    expect(label).toHaveAttribute('dir', 'auto')
+    expect(screen.getByText('تنزيل سجل القضايا.')).toHaveAttribute('dir', 'auto')
+    expect(screen.getByRole('group', { name: 'تصدير سجل القضايا' })).toBeVisible()
+    expect(screen.queryByRole('group', { name: /\u2068|\u2069/ })).not.toBeInTheDocument()
   })
 
   it('applies a domain-wide deny in one bulk request', async () => {

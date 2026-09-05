@@ -25,6 +25,20 @@ def test_cannot_request_sensitive_cap(db_session):
     with pytest.raises(AppError) as ei:
         prs.create_request(db_session, u, "users.manage")
     assert ei.value.code == "FORBIDDEN_REQUEST"
+    assert ei.value.http_status == 400
+    assert ei.value.message == "This permission can't be requested."
+
+
+@pytest.mark.parametrize("capability", ["", "   ", "missing.capability"])
+def test_unknown_request_keeps_exact_error_semantics(db_session, capability):
+    u = make_user(db_session, role="operator")
+
+    with pytest.raises(AppError) as exc_info:
+        prs.create_request(db_session, u, capability)
+
+    assert exc_info.value.code == "UNKNOWN_CAPABILITY"
+    assert exc_info.value.http_status == 400
+    assert exc_info.value.message == f"Unknown capability {capability!r}"
 
 
 def test_duplicate_request_collapses(db_session):
@@ -49,6 +63,7 @@ def test_decide_once_sets_expiry(db_session):
     r = prs.create_request(db_session, u, "books.approve")
     prs.decide(db_session, r.id, admin=admin, decision="once", window="2h")
     from app.db.models import UserPermission
+
     row = db_session.get(UserPermission, (u.id, "books.approve"))
     assert row.expires_at is not None
 
@@ -66,8 +81,8 @@ def test_rerequest_notifies_admins(db_session, monkeypatch):
     """notify_admins_new_request must fire for both initial and duplicate requests."""
     calls: list[tuple] = []
 
-    def fake_notify(db, user, label, request_id):
-        calls.append((user.id, label, request_id))
+    def fake_notify(db, user, *, capability_id, entry, request_id):
+        calls.append((user.id, capability_id, entry.label_en, request_id))
 
     monkeypatch.setattr(admin_notify, "notify_admins_new_request", fake_notify)
 
@@ -76,10 +91,11 @@ def test_rerequest_notifies_admins(db_session, monkeypatch):
     # First request — should notify once.
     a = prs.create_request(db_session, u, "books.approve")
     assert len(calls) == 1, "expected one notify call on first request"
-    assert calls[0][2] == a.id
+    assert calls[0][1:3] == ("books.approve", "Approve / reject records")
+    assert calls[0][3] == a.id
 
     # Re-request on the same (user, capability) — should notify again.
     b = prs.create_request(db_session, u, "books.approve")
     assert a.id == b.id, "re-request must collapse to the same row"
     assert len(calls) == 2, "expected a second notify call on re-request"
-    assert calls[1][2] == b.id
+    assert calls[1][3] == b.id

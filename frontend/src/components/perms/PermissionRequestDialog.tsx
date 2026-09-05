@@ -2,13 +2,11 @@
  * PermissionRequestDialog — lets a user request a capability they don't have.
  *
  * Props:
- *   capability   — the capability id string (e.g. "documents.scan")
- *   label        — human-readable label (looked up by the caller from the catalog)
- *   description  — short description of what the capability unlocks
+ *   request      — a catalog-verified requestable capability and its copy
  *   open         — controlled open state
  *   onClose      — called when the dialog should close
  *
- * On [Request]: calls api.requestPermission(capability), toasts success, closes.
+ * On [Request]: calls api.requestPermission(request.entry.id), toasts success, closes.
  * The backend is idempotent for pending requests — we treat any 2xx as success.
  * On [Close]: calls onClose without making a network request.
  */
@@ -19,6 +17,11 @@ import { toast } from 'sonner'
 import { useTranslation } from 'react-i18next'
 
 import { api } from '@/lib/api'
+import {
+  isolateBidi,
+  localizeCapability,
+  type CapabilityRequestState,
+} from '@/lib/useCapabilityCatalog'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -31,24 +34,23 @@ import {
 } from '@/components/ui/alert-dialog'
 
 export interface PermissionRequestDialogProps {
-  capability: string
-  label: string
-  description: string
+  request: Extract<CapabilityRequestState, { kind: 'requestable' }>
   open: boolean
   onClose: () => void
+  returnFocusRef: React.RefObject<HTMLElement | null>
 }
 
 export function PermissionRequestDialog({
-  capability,
-  label,
-  description,
+  request,
   open,
   onClose,
+  returnFocusRef,
 }: PermissionRequestDialogProps): React.JSX.Element {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
+  const text = localizeCapability(request.entry, request.entry.id, i18n.language)
 
   const mutation = useMutation({
-    mutationFn: () => api.requestPermission(capability),
+    mutationFn: () => api.requestPermission(request.entry.id),
     onSuccess: () => {
       toast.success(t('perms.request.sent', { defaultValue: 'Request sent' }))
       onClose()
@@ -61,16 +63,21 @@ export function PermissionRequestDialog({
 
   return (
     <AlertDialog open={open} onOpenChange={(o) => { if (!o) onClose() }}>
-      <AlertDialogContent>
+      <AlertDialogContent
+        onCloseAutoFocus={(event) => {
+          event.preventDefault()
+          returnFocusRef.current?.focus()
+        }}
+      >
         <AlertDialogHeader>
           <AlertDialogTitle>
             {t('perms.request.title', { defaultValue: 'Request permission' })}
           </AlertDialogTitle>
           <AlertDialogDescription>
             {t('perms.request.body', {
-              label,
-              description,
-              defaultValue: `You don't have permission to ${label}. ${description} Would you like to request access?`,
+              label: isolateBidi(text.label),
+              description: text.description ? isolateBidi(text.description) : '',
+              defaultValue: `You don't have permission to ${isolateBidi(text.label)}. ${text.description ? isolateBidi(text.description) : ''} Would you like to request access?`,
             })}
           </AlertDialogDescription>
         </AlertDialogHeader>

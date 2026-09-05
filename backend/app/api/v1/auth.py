@@ -20,21 +20,12 @@ from __future__ import annotations
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, Request, Response, UploadFile, status
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import COOKIE_NAME, get_current_user, require_admin
 from app.config import get_settings
 from app.core import ratelimit
-from app.core.form_kind import OTHER_SERVICE_ID, SERVICE_IDS
-from app.core.permissions import (
-    CAPABILITIES,
-    CATEGORY_CAP_PREFIX,
-    ROLE_DEFAULTS,
-    SERVICE_CAP_PREFIX,
-    SERVICE_RECORDS_CAP_PREFIX,
-)
-from app.db.models import BookCategory, User
+from app.db.models import User
 from app.db.session import get_db
 from app.schemas.auth import (
     AdminUserRead,
@@ -57,7 +48,12 @@ from app.schemas.auth import (
     UserPermissionRead,
     VerifyPasswordRequest,
 )
-from app.services import auth_service, perm_service, user_signature_service
+from app.services import (
+    auth_service,
+    capability_catalog_service,
+    perm_service,
+    user_signature_service,
+)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -343,56 +339,26 @@ def set_default_manager(
 
 @router.get("/capabilities", response_model=list[CapabilityRead])
 def list_capabilities(
-    _admin: Annotated[User, Depends(require_admin)],
+    _user: Annotated[User, Depends(get_current_user)],
     db: Annotated[Session, Depends(get_db)],
 ) -> list[CapabilityRead]:
-    """The static catalog followed by dynamic service/category capabilities."""
-    default_roles = ["operator", "manager", "admin"]
-    static = [
+    """The bilingual catalog, available to every signed-in user."""
+    return [
         CapabilityRead(
-            id=cap.id,
-            domain=cap.domain,
-            label=cap.label,
-            description=cap.description,
-            default_roles=[role for role, caps in ROLE_DEFAULTS.items() if cap.id in caps],
+            id=entry.id,
+            domain=entry.domain,
+            label_en=entry.label_en,
+            label_ar=entry.label_ar,
+            description_en=entry.description_en,
+            description_ar=entry.description_ar,
+            sensitive=entry.sensitive,
+            requestable=entry.requestable,
+            default_roles=list(entry.default_roles),
+            label=entry.label_en,
+            description=entry.description_en,
         )
-        for cap in CAPABILITIES
+        for entry in capability_catalog_service.list_catalog(db)
     ]
-    services = [
-        CapabilityRead(
-            id=f"{SERVICE_CAP_PREFIX}{service_id}",
-            domain="services",
-            label="Other" if service_id == OTHER_SERVICE_ID else service_id,
-            description="",
-            default_roles=default_roles,
-        )
-        for service_id in (*SERVICE_IDS, OTHER_SERVICE_ID)
-    ]
-    service_records = [
-        CapabilityRead(
-            id=f"{SERVICE_RECORDS_CAP_PREFIX}{service_id}",
-            domain="books",
-            label=(
-                "Records: Other"
-                if service_id == OTHER_SERVICE_ID
-                else f"Records: {service_id}"
-            ),
-            description="",
-            default_roles=default_roles,
-        )
-        for service_id in (*SERVICE_IDS, OTHER_SERVICE_ID)
-    ]
-    categories = [
-        CapabilityRead(
-            id=f"{CATEGORY_CAP_PREFIX}{row.id}",
-            domain="categories",
-            label=row.name_en or row.id,
-            description=row.name_ar or "",
-            default_roles=default_roles,
-        )
-        for row in db.scalars(select(BookCategory).order_by(BookCategory.id)).all()
-    ]
-    return [*static, *services, *service_records, *categories]
 
 
 @router.get("/users/{user_id}/permissions", response_model=UserPermissionRead)

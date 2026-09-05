@@ -21,6 +21,10 @@ vi.mock('@/lib/api', () => ({
 
 vi.mock('@/lib/useIsMobile', () => ({ useIsMobile: () => false }))
 
+vi.mock('@/lib/authContext', () => ({
+  useAuth: () => ({ status: 'authed', user: { id: 1 } }),
+}))
+
 // Write failures surface through sonner; mocking it lets the rollback test
 // assert the toast without mounting a Toaster.
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), success: vi.fn() } }))
@@ -133,20 +137,34 @@ const pendingRequest: PermissionRequestRead = {
   user_id: operator.id,
   requester_name: operator.display_name,
   capability: 'employees.view',
-  capability_label: 'View employees',
   status: 'pending',
   decision: null,
   created_at: '2026-08-27T08:00:00Z',
 }
 
-const capabilities: CapabilityRead[] = [
-  {
-    id: 'books.view',
-    domain: 'books',
-    label: 'View books',
-    description: 'View records',
+function catalogEntry(
+  id: string,
+  domain: string,
+  labelEn: string,
+  descriptionEn: string,
+): CapabilityRead {
+  return {
+    id,
+    domain,
+    label_en: labelEn,
+    label_ar: null,
+    description_en: descriptionEn,
+    description_ar: null,
+    sensitive: false,
+    requestable: true,
     default_roles: ['operator', 'manager', 'admin'],
-  },
+  }
+}
+
+const capabilities: CapabilityRead[] = [
+  catalogEntry('books.view', 'books', 'View records', 'Browse record books.'),
+  catalogEntry('employees.view', 'employees', 'View employees', 'Browse employee profiles.'),
+  catalogEntry('books.service.other', 'books', 'Other records', 'Create other records.'),
 ]
 
 function configure(
@@ -155,6 +173,7 @@ function configure(
     users?: AdminUserRead[]
     requests?: PermissionRequestRead[]
     usersError?: Error
+    capabilities?: CapabilityRead[]
   } = {},
 ) {
   if (options.usersError) {
@@ -162,7 +181,7 @@ function configure(
   } else {
     vi.mocked(api.listAuthUsers).mockResolvedValue(options.users ?? [operator, admin])
   }
-  vi.mocked(api.listCapabilities).mockResolvedValue(capabilities)
+  vi.mocked(api.listCapabilities).mockResolvedValue(options.capabilities ?? capabilities)
   vi.mocked(api.getUserPermissions).mockResolvedValue(perms)
   vi.mocked(api.listTemplates).mockResolvedValue({
     items: [
@@ -211,6 +230,7 @@ function renderPage(
     requests?: PermissionRequestRead[]
     usersError?: Error
     entry?: string
+    capabilities?: CapabilityRead[]
   } = {},
 ) {
   configure(perms, options)
@@ -652,7 +672,9 @@ describe('PermissionsPage Mirror editor', () => {
   it('approves a selected user pending request permanently', async () => {
     renderPage()
 
-    expect(await screen.findByText('View employees')).toBeVisible()
+    const requestStrip = (await screen.findByText('Requested access')).parentElement?.parentElement
+    expect(requestStrip).not.toBeNull()
+    expect(within(requestStrip!).getByText('View employees')).toBeVisible()
     await userEvent.click(screen.getByRole('button', { name: 'Approve' }))
     await waitFor(() =>
       expect(api.decidePermissionRequest).toHaveBeenCalledWith(90, {
@@ -711,7 +733,7 @@ describe('PermissionsPage Mirror editor', () => {
         'true',
       )
       for (const button of within(
-        within(advanced!).getByRole('group', { name: 'View books' }),
+        within(advanced!).getByRole('group', { name: 'View records' }),
       ).getAllByRole('button')) {
         expect(button).not.toBeDisabled()
         expect(button).toHaveAttribute('aria-disabled', 'true')
@@ -833,21 +855,27 @@ describe('PermissionsPage Mirror editor', () => {
     expect(await screen.findByText(/Records hidden/)).toHaveTextContent('creation blocked')
   })
 
-  it('localizes dynamic Other-record requests instead of showing the backend fallback', async () => {
+  it('renders a pending request from its runtime catalog entry', async () => {
+    const requested = catalogEntry(
+      'custom.export',
+      'custom',
+      'Export case register',
+      'Download the case register.',
+    )
     renderPage(permissionFixture(), {
       requests: [
         {
           ...pendingRequest,
-          capability: 'books.service.other',
-          capability_label: 'other',
+          capability: requested.id,
         },
       ],
+      capabilities: [...capabilities, requested],
     })
 
     const requestStrip = (await screen.findByText('Requested access')).parentElement?.parentElement
     expect(requestStrip).not.toBeNull()
-    expect(within(requestStrip!).getByText('Other records')).toBeVisible()
-    expect(within(requestStrip!).queryByText('other')).not.toBeInTheDocument()
+    expect(within(requestStrip!).getByText('Export case register')).toBeVisible()
+    expect(within(requestStrip!).getByText('Download the case register.')).toBeVisible()
   })
 
   it('edits Other records with the tri-state control and never previews it as creatable', async () => {

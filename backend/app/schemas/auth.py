@@ -148,9 +148,21 @@ class CapabilityRead(BaseModel):
 
     id: str
     domain: str
-    label: str
-    description: str
+    label_en: str
+    label_ar: str | None
+    description_en: str
+    description_ar: str | None
+    sensitive: bool
+    requestable: bool
     default_roles: list[str]
+    label: str = Field(
+        deprecated=True,
+        description="Deprecated English alias for label_en.",
+    )
+    description: str = Field(
+        deprecated=True,
+        description="Deprecated English alias for description_en.",
+    )
 
 
 class UserPermissionRead(BaseModel):
