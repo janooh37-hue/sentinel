@@ -1,6 +1,6 @@
 # Phase 3 — Capability catalog
 
-Status: integrated verification and cached-client compatibility amendment in progress. PR: #76. Branch: `refactor/p3-capability-catalog`. Release dependency: Phase 2.
+Status: implementation, reviews, and all release checks complete; merge/deployment pending. PR: #76. Branch: `refactor/p3-capability-catalog`. Release dependency: Phase 2.
 
 Follow [WORKFLOW.md](WORKFLOW.md): prepare tests first, verify current code before every implementation slice, and complete verification before every build.
 
@@ -40,7 +40,7 @@ Agreed boundaries: permissions catalog, authenticated catalog HTTP response, per
 ## Verification before build and release
 
 - [x] Run catalog, request, bulk permission, admin-notify, mirror-permissions and capability-description backend tests; run CapabilityGate, RequireCapability, PermissionsPage and PermissionRequestsTab frontend tests.
-- [ ] Complete backend and frontend gates sequentially. Run `i18n-rtl-reviewer` and `notification-template-reviewer` before the build.
+- [x] Complete backend and frontend gates sequentially. Run `i18n-rtl-reviewer` and `notification-template-reviewer` before the build.
 - [x] Browser check EN/AR, narrow/wide screens, loading/offline catalog, authorized page and denied page; sensitive request stays unavailable.
 - [x] Rollback: frontend and API metadata changes must roll back together or remain temporarily compatible; verify cached client behavior and server request denial.
 
@@ -131,11 +131,11 @@ two final copy-only fixes; the affected files were checked again afterward.
 At the first schema freeze, runtime OpenAPI retained all 275 paths; structural changes were limited to
 `CapabilityRead`, `PermissionRequestRead`, and the catalog route docstring.
 Generated JSON matched runtime at schema freeze; integrated frontend/generated
-contract review remains pending.
+contract review was pending at this first freeze and completed below.
 
 The full Windows backend gate started against the committed candidate in a fresh
 isolated worktree at 06:38 Dubai on 2026-09-05. Its result, final frontend checks,
-whole-change review, build, browser and release evidence remain pending.
+whole-change review, build, browser and release evidence were pending at that checkpoint; final results follow below.
 
 
 ### Cached-client compatibility amendment
@@ -192,13 +192,13 @@ The first Windows backend candidate `64605fd7` passed 1,980 tests with 9 existin
 skips in 1,222.96 seconds. Windows Ruff reported 24 existing diagnostics, format
 139 existing unformatted files (486 formatted), and mypy the same 31 errors in
 11 files. The compatible backend candidate
-`bd9fd15021a8f5cac727e4cfef6187535d14b8f2` is pushed and receives a new full Windows
-run in a separate GUID worktree with unique synthetic data and logs.
+`bd9fd15021a8f5cac727e4cfef6187535d14b8f2` received a new full Windows
+run in a separate GUID worktree with unique synthetic data and logs, reported below.
 
 Final source standards/spec, notification-template and i18n/RTL reviews are
 clear. The local production build passed after these checks and the focused
 amendment regressions. Built-browser, full browser, legacy-client and final
-Windows evidence are still pending; no Phase 3 production deployment is claimed.
+Windows evidence were pending at that checkpoint; final results follow below.
 
 
 Final browser verification passed after the two keyboard fixes and compatibility
@@ -223,3 +223,31 @@ service. An already-open new client fails request controls closed against the ol
 metadata shape and needs a reload to regain full UI functionality; forward
 rollout compatibility does not claim transparent reverse rollback. Preserve
 request rows and decisions, and keep write authorization enforced throughout.
+
+
+Final Windows backend validation of compatibility candidate `bd9fd150` passed
+1,981 tests with 9 existing skips in 1,246.91 seconds. Ruff remains at 24 existing
+diagnostics, format at 139 existing unformatted files (486 formatted), and mypy
+at the same 31 errors in 11 files. Full local normalized diagnostic comparison
+confirms no new mypy signatures. The Windows frontend gate runs sequentially
+after this completion, against `16a792fd` with all product code, generated
+contracts and the permanent browser spec committed.
+
+
+The final Windows frontend test run against `16a792fd` passed all 2,252 tests
+in 225 files in 458.89 seconds. The runner then stopped at its lint comparison:
+Windows PowerShell 5 decoded the BOM-less UTF-8 JSON with its default legacy
+encoding, corrupting the ellipsis in one existing diagnostic. A read-only
+on-host comparison proved explicit UTF-8 decoding reproduced the exact reviewed
+18-signature hash; CR counts were zero and no diagnostic was changed or waived.
+The reviewed resume script verifies the same retained worktree's full commit and
+tracked-clean status, then reruns lint followed by type-check and build. The
+already-passing full test run is retained as evidence, not claimed as rerun.
+
+The resumed Windows gate completed successfully at 08:04 Dubai on 2026-09-05:
+ESLint exactly matches the reviewed 18 diagnostics, TypeScript passes, and the
+production build exits zero (only the existing bundle-size warning). The final
+completion marker identifies the full `16a792fd0698f0fed06c1c85562c486f3692ed69`
+candidate. All source, generated-contract, backend/frontend, browser, specialty
+review and Windows release checks are complete. Merge and production update
+follow; deployment evidence will be attached to PR #76.
