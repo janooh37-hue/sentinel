@@ -1,6 +1,6 @@
 # Phase 4 — Mailbox
 
-Status: not started. Branch: `refactor/p4-mailbox`. Release dependency: Phase 3.
+Status: implementation frozen; focused checks and HTTP smoke passed; final review and Windows gate pending. Branch: `refactor/p4-mailbox`. Release dependency: Phase 3.
 
 Follow [WORKFLOW.md](WORKFLOW.md). Tests first and current-code verification are required before every implementation slice; required checks precede every build.
 
@@ -12,10 +12,10 @@ Agreed boundaries: `draft_outgoing`, connection/sync functions, reconciliation b
 
 ## Verify current code first
 
-- [ ] Read `email_service.py`, `outlook_handoff_service.py`, email routes and schemas. Inventory public exports and every IMAP operation actually used.
-- [ ] Trace append, attachment save, ledger flush/commit, cleanup, sent reconciliation and stale tagging, including partial failure order.
-- [ ] Locate account locks, sync-all connector propagation, retry behavior and connection cleanup paths.
-- [ ] Run `test_outlook_handoff.py` and existing email/ledger permission tests before moving anything.
+- [x] Read `email_service.py`, `outlook_handoff_service.py`, email routes and schemas. Inventory public exports and every IMAP operation actually used.
+- [x] Trace append, attachment save, ledger flush/commit, cleanup, sent reconciliation and stale tagging, including partial failure order.
+- [x] Locate account locks, sync-all connector propagation, retry behavior and connection cleanup paths.
+- [x] Run `test_outlook_handoff.py` and existing email/ledger permission tests before moving anything.
 
 ## Test-first slices
 
@@ -29,21 +29,95 @@ Agreed boundaries: `draft_outgoing`, connection/sync functions, reconciliation b
 
 ## Detailed tasks
 
-- [ ] Create `backend/tests/fakes/imap.py` and a connector/instance fixture with one consistent shape. Model select/search/fetch as operations on actual fake messages.
-- [ ] Port handoff behavior tests to `test_email_service.py` one behavior at a time. Keep original assertions until equivalent replacements pass.
-- [ ] Inject connector through `test_connection`, `sync_now`, `sync_all_accounts` and `draft_outgoing`, including nested calls.
-- [ ] Move private MIME, attachment, pending-match and cleanup helpers with their callers. Keep the public surface small; do not expose helpers just to preserve private tests.
-- [ ] Remove reverse dynamic imports, then delete `outlook_handoff_service.py` after executable import search is clear.
-- [ ] Review transaction ownership and account-lock lifetime after consolidation; merging files must not change either.
+- [x] Create `backend/tests/fakes/imap.py` and a connector/instance fixture with one consistent shape. Model select/search/fetch as operations on actual fake messages.
+- [x] Port handoff behavior tests to `test_email_service.py` one behavior at a time. Keep original assertions until equivalent replacements pass.
+- [x] Inject connector through `test_connection`, `sync_now`, `sync_all_accounts` and `draft_outgoing`, including nested calls.
+- [x] Move private MIME, attachment, pending-match and cleanup helpers with their callers. Keep the public surface small; do not expose helpers just to preserve private tests.
+- [x] Remove reverse dynamic imports, then delete `outlook_handoff_service.py` after executable import search is clear.
+- [x] Review transaction ownership and account-lock lifetime after consolidation; merging files must not change either.
 
 ## Verification before build and release
 
 - [ ] Run email service, handoff tests still awaiting migration, granular ledger gates and scheduler notification tests; then the backend gate.
-- [ ] Confirm no OpenAPI change for the handoff response and no obsolete executable imports.
+- [x] Confirm no OpenAPI change for the handoff response and no obsolete executable imports.
 - [ ] Run notification-template and i18n reviews if message formatting/copy changes; moving byte-identical copy still requires proving parity.
 - [ ] Smoke using the stateful fake. A real Drafts/sent-folder smoke needs explicit authorization and an isolated account before creating external mail.
 - [ ] Rollback: ledger and server drafts may already exist; inspect pending/sent state before retrying, and avoid duplicate append after redeploy.
 
 ## Execution evidence
 
-Pending: baseline, fake protocol contract, each failure scenario, RED/GREEN results, message parity, source review and release/rollback observations.
+Starting commit: `d255072ca67f5a53b3a908f44d7c325c2d451909`, the verified
+Phase 3 production merge. Fresh worktree `/tmp/sentinel-gssg-p4`, branch
+`refactor/p4-mailbox`, initially clean. Repository instructions, workflow,
+domain context and the current caller inventory were read before implementation.
+
+Before application edits, the existing handoff, granular ledger gate, and
+scheduler notification files passed all 25 tests in 20.07 seconds:
+
+```bash
+env PYTHONDONTWRITEBYTECODE=1 GSSG_DATA_DIR=<fresh-synthetic-directory> \
+  /tmp/gssg-load/venv/bin/python -m pytest -p no:cacheprovider \
+  backend/tests/test_outlook_handoff.py \
+  backend/tests/test_granular_permits_ledger_gates.py \
+  backend/tests/test_scheduler_notify.py
+```
+
+Baseline runtime OpenAPI captured all 275 paths. The first two-builder barrier
+requires a stateful IMAP fake followed by a real HTTP/SQLite/file/MIME test on
+the old owner before moving the connector or route. Existing behavior moves
+retain GREEN-before/GREEN-after evidence; the newly exposed public draft
+boundary may initially fail because it does not exist.
+
+Current-code nuance: server `NO` responses can be handled silently by folder
+discovery/fetch and differ from raised exceptions. Preserve the actual existing
+watermark behavior for each case; the plan's partial-error prose does not
+authorize a new retry or synchronization policy.
+
+Pending: fake protocol contract, each failure scenario, before/after results,
+message parity, source review and release/rollback observations.
+
+The first old-route HTTP characterization passed before the move (1 test,
+3.97 seconds), clearing the two-builder barrier. The first direct draft test
+then failed because the new public boundary did not exist and passed after
+that boundary was implemented with full MIME/persistence assertions.
+
+The typed connector contract uses covariant `Sequence` response containers.
+LIST, FETCH and logout admit byte tuples as the actual imaplib contract does;
+ordinary responses admit bytes and null. Early review removed an attempted
+normalizing adapter that would have added new runtime rejection behavior.
+The structural protocol accepts the raw logged-in IMAP4 connection under strict
+mypy without casts or `Any`, preserving existing response handling.
+
+During a combined transitional run after the route cutover, two legacy tests
+still patched `_connect` while the new route resolved `connect_imap`. They
+attempted an SSL connection to the configured IMAP host and failed while
+decrypting synthetic credentials, before login or mailbox commands. The builder
+corrected the stale patch targets. Mailbox test modules now also replace both
+IMAP transport constructors with a local failure guard, so a missed connector
+patch cannot open a socket. This failed harness run is not counted as product
+RED or successful verification; guarded reruns are required.
+
+Final frozen focused matrix: 60 passed in 27.40 seconds across service (26),
+connection/route/scheduler (20), granular ledger gates and existing scheduler
+notification tests (14). All 11 legacy handoff tests have passing replacements;
+the old service/test files and temporary private aliases are removed. The final
+public dedup test observes actual imports and skipped duplicates rather than
+inspecting the private snapshot helper. Test-local transport guards and settings/
+crypto cache teardown apply throughout the replacement mailbox suites.
+
+Final runtime OpenAPI equals the complete 275-path baseline exactly. Full local
+Ruff improves from 24 to 22 existing diagnostics; mypy improves from 31 to 27
+existing errors in 10 files. Normalized comparison finds no new diagnostic.
+Ruff 0.16.6's detailed formatter renderer crashes identically on baseline and
+candidate; the same formatter with concise output completes, with 199 existing
+unformatted files versus 203 at baseline and no newly unformatted file. Owned
+new/moved files pass focused lint/format checks.
+
+The isolated real HTTP smoke passed: three capability denials before connection;
+connection NOOP/logout; exact mailto/draft responses with English/Arabic MIME
+content and attachment; first sync importing two messages with reconciliation,
+scan enqueue and stale tagging; repeated sync importing zero/skipping two;
+append/create/retry rejection with HTTP 502 and no new row or orphan file.
+The server uses only the stateful IMAP fake and blocks real transport constructors.
+One frontend comment now names the surviving backend tag owner; executable
+frontend code, UI strings and API contracts are unchanged.

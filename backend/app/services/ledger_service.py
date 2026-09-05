@@ -491,7 +491,7 @@ def list_thread(
     The seed entry is excluded from the result list. Soft-deleted entries
     are excluded.
     """
-    from app.services.email_service import _first_address
+    from app.services.email_service import first_email_address
 
     seed = get_entry(db, entry_id, owner_user_id=owner_user_id)
     if seed.channel != "email":
@@ -503,7 +503,7 @@ def list_thread(
 
     # Normalise the seed counterparty to a bare address so "Name <addr>"
     # and "addr" both match the same thread participants.
-    seed_addr = _first_address(seed.counterparty) or seed.counterparty
+    seed_addr = first_email_address(seed.counterparty) or seed.counterparty
 
     stmt = (
         select(LedgerEntry)
@@ -522,7 +522,7 @@ def list_thread(
         r
         for r in candidates
         if _normalize_subject(r.subject) == target
-        and (_first_address(r.counterparty) or r.counterparty) == seed_addr
+        and (first_email_address(r.counterparty) or r.counterparty) == seed_addr
     ]
     return matches[:limit]
 
