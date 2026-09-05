@@ -82,9 +82,7 @@ def test_correction_denies_case_snapshot_outside_scope_before_etag_or_payload(
     fixture = build_attendance_day(db_session, operational_date=DAY, posts=[("Gate 1", 1)])
     case = next(row for row in fixture.cases if row.shift_code_snapshot == "morning")
     outsider_scope = WorkforceScope(
-        entries=(
-            WorkforceScopeEntry(scope_kind="duty_unit", duty_unit="Foreign Unit"),
-        )
+        entries=(WorkforceScopeEntry(scope_kind="duty_unit", duty_unit="Foreign Unit"),)
     )
     before = (
         db_session.query(AttendanceAdjustment).count(),
@@ -115,9 +113,11 @@ def test_correction_denies_case_snapshot_outside_scope_before_etag_or_payload(
 def test_revocation_denial_precedes_version_and_leaves_all_state_unchanged(db_session) -> None:
     fixture = build_attendance_day(db_session, operational_date=DAY, posts=[("Gate 1", 1)])
     case = next(row for row in fixture.cases if row.shift_code_snapshot == "morning")
-    automatic = db_session.query(AttendanceEvaluation).filter_by(
-        attendance_case_id=case.id, revision=1
-    ).one()
+    automatic = (
+        db_session.query(AttendanceEvaluation)
+        .filter_by(attendance_case_id=case.id, revision=1)
+        .one()
+    )
     correction = attendance_correction_service.correct(
         db_session,
         scope=organization_scope(),
@@ -164,9 +164,11 @@ def test_correction_authorizes_the_historical_case_snapshot_after_employee_moves
 ) -> None:
     fixture = build_attendance_day(db_session, operational_date=DAY, posts=[("Gate 1", 1)])
     case = next(row for row in fixture.cases if row.shift_code_snapshot == "morning")
-    automatic = db_session.query(AttendanceEvaluation).filter_by(
-        attendance_case_id=case.id, revision=1
-    ).one()
+    automatic = (
+        db_session.query(AttendanceEvaluation)
+        .filter_by(attendance_case_id=case.id, revision=1)
+        .one()
+    )
     employee = fixture.employees[0]
     employee.duty_unit = "Later Foreign Unit"
     employee.duty_post = "Later Foreign Post"

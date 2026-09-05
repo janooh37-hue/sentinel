@@ -44,7 +44,7 @@ Agreed boundaries: `workforce_access_service`, scoped public functions in read/s
 - [ ] Run resolved workforce and attendance test files, including `test_workforce_api_permissions.py`, requirements regressions and `test_workforce_schedule.py`; then the full backend gate.
 - [x] Review every employee-bound service call for explicit scope, including background callers. Check outsider denial leaves state unchanged.
 - [x] Verify public OpenAPI compatibility; use `sync-api-types` for actual route/schema changes.
-- [ ] Smoke requirements pagination, crew membership, overrides, and self attendance with distinct scoped test users; denied writes must be 403.
+- [x] Smoke requirements pagination, crew membership, overrides, and self attendance with distinct scoped test users; denied writes must be 403.
 - [ ] Rollback: reverting the refactor must retain the requirements security fix. Prefer a targeted revert that keeps slice 2.1, and rerun visibility tests before deployment.
 
 ## Execution evidence
@@ -139,17 +139,36 @@ separate focused result above.
 Full local `ruff check .` reports 26 existing findings versus 27 at Phase 1;
 normalized diagnostics show only one removed import-sorting finding and no new
 ones. Full `mypy --no-incremental` reports the same 31 diagnostic signatures in
-11 files as Phase 1. New modules and compact touched files pass format checks;
-large legacy files retain their existing formatting. `git diff --check` passes.
+11 files as Phase 1. New modules and compact touched files pass format checks. The local Ruff
+0.16.6 full-text format renderer crashes on an existing large source file; its
+JSON output completes and compares 211 unformatted files against 220 at Phase 1,
+with no newly unformatted file. Three new-test formatting locations were fixed
+after the candidate commit with identical Python AST; supported Windows format
+verification will cover that final formatting-only change. Large legacy files
+retain their existing formatting. `git diff --check` passes.
 Runtime `create_app().openapi()` is exactly equal to the frozen Phase 1 schema
 across 275 paths, including component schemas. No UI, notification, or database
 schema change is included.
 
 The independent reviewer found and resolved missing positive mutation coverage,
 a missed demo-script caller, missing post-denial flushes in tests, and the public
-SQL-count regression. Final sign-off, real HTTP smoke and supported Windows
-release gate remain pending; no build or merge is authorized by these pending
-results.
+SQL-count regression. Final independent review has no material code, security or specification
+findings remaining. Real HTTP smoke passed against the frozen candidate using
+four synthetic cookie-authenticated identities: Operations pages `[3, 2]` then
+`[1]`; Unit-A without a department sees its requirement; cursor replay after a
+scope change returns 422; fresh crew GET ETag succeeds with POST 201 and exactly
+one audit; the foreign employee range returns 403; memberships, overrides,
+self identity and seven global metadata endpoints preserve expected results.
+Denied member/override writes both return 403 and leave counts unchanged.
+A fresh post-shutdown session explicitly flushes and confirms one successful
+crew, no denied payload rows, and counts of requirements 505, memberships 3,
+overrides 3, audits 9 and evaluation queue 0. The synthetic server shuts down
+normally with all external adapters and scheduler disabled.
+
+PR [#75](https://github.com/janooh37-hue/sentinel/pull/75) contains candidate
+`9a3c0ea532929abc04a37b90b40f556928fa79db`. Its full supported Windows backend
+gate is running in a detached worktree with synthetic data. Build, merge and
+deployment remain pending that result.
 
 Read filtering currently loads candidate rows before applying scope and cursor
 pagination. This removes the visibility/starvation defects and membership N+1,
