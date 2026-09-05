@@ -1,0 +1,20 @@
+{
+  "dependencies": {
+    "PyMuPDF": "1.28.2"
+  },
+  "fixtures": {
+    "returned-form-text.pdf": {
+      "alphanumeric_count": 30,
+      "byte_length": 1171,
+      "expected_pdf_text": "Synthetic returned form\nRef: GS-0042\n",
+      "kind": "searchable_pdf",
+      "page_size_points": [
+        595,
+        842
+      ],
+      "sha256": "3e7f5754120f7f3b755f16f5f010ffd7a06e21b262d25fb4d10b7fa770f19d82"
+    }
+  },
+  "generator": "build_fixtures.py",
+  "schema_version": 1
+}

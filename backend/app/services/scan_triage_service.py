@@ -15,14 +15,125 @@ from sqlalchemy.orm import Session
 
 from app.api.errors import NotFoundError
 from app.core.extraction.form_ref import candidate_refs
+from app.core.extraction.types import Extraction
 from app.db.models import Book
 from app.services import book_service
+from app.services.document_reader import DocumentRead
 from app.services.extraction_service import _Emp
 from app.services.intake_service import run_intake
 
 # doctypes whose exact ID/passport match is safe to auto-file into the vault.
 _AUTO_EMPLOYEE_DOCTYPES = {"emirates_id", "passport"}
 _EMPLOYEE_DOCTYPES = {"emirates_id", "passport", "bank_iban"}
+
+ReferenceSource = Literal["qr", "ocr_stamped", "ocr_bare"]
+ReferenceMatchKind = Literal["none", "exact", "canonical", "edit_distance_one"]
+EmployeeMatchKind = Literal["exact_uae_id", "exact_passport", "fuzzy_name"]
+InboxTier = Literal["auto", "confirm", "manual"]
+InboxRoute = Literal["book_attach", "employee_doc", "leave", "salary_transfer", "unknown"]
+
+
+@dataclass(frozen=True, slots=True)
+class BookMatchEvidence:
+    book_id: int
+    ref_number: str
+    approval_state: str
+    category: str | None = None
+    subject: str | None = None
+    employee_id: str | None = None
+    employee_name: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class ReferenceCandidate:
+    observed: str
+    normalized: str
+    canonical: str
+    source: ReferenceSource
+    match_kind: ReferenceMatchKind = "none"
+    live_matches: tuple[BookMatchEvidence, ...] = field(default_factory=tuple)
+
+
+@dataclass(frozen=True, slots=True)
+class ReturnedFormMatch:
+    candidate: ReferenceCandidate
+    book: BookMatchEvidence
+    confidence: float
+
+
+@dataclass(frozen=True, slots=True)
+class EmployeeCandidateEvidence:
+    employee_id: str
+    name_en: str
+    name_ar: str | None
+    score: float
+
+
+@dataclass(frozen=True, slots=True)
+class EmployeeMatchEvidence:
+    employee_id: str
+    name_en: str
+    name_ar: str | None
+    score: float
+    kind: EmployeeMatchKind
+
+
+@dataclass(frozen=True, slots=True)
+class ReferenceAmbiguity:
+    source: ReferenceSource
+    match_kind: ReferenceMatchKind
+    observed: tuple[str, ...]
+    book_ids: tuple[int, ...]
+    kind: Literal["reference"] = field(default="reference", init=False)
+
+
+@dataclass(frozen=True, slots=True)
+class EmployeeAmbiguity:
+    match_kind: EmployeeMatchKind
+    employee_ids: tuple[str, ...]
+    kind: Literal["employee"] = field(default="employee", init=False)
+
+
+ClassificationAmbiguity = ReferenceAmbiguity | EmployeeAmbiguity
+
+
+@dataclass(frozen=True, slots=True)
+class ReturnedFormClassification:
+    read: DocumentRead
+    match: ReturnedFormMatch
+    reference_candidates: tuple[ReferenceCandidate, ...] = field(default_factory=tuple)
+    ambiguities: tuple[ClassificationAmbiguity, ...] = field(default_factory=tuple)
+    mode: Literal["returned_form"] = field(default="returned_form", init=False)
+
+
+@dataclass(frozen=True, slots=True)
+class ExternalClassification:
+    read: DocumentRead
+    extraction: Extraction
+    employee_match: EmployeeMatchEvidence | None = None
+    best_employee_score: float = 0.0
+    employee_candidates: tuple[EmployeeCandidateEvidence, ...] = field(default_factory=tuple)
+    reference_candidates: tuple[ReferenceCandidate, ...] = field(default_factory=tuple)
+    ambiguities: tuple[ClassificationAmbiguity, ...] = field(default_factory=tuple)
+    mode: Literal["external"] = field(default="external", init=False)
+
+
+ClassificationResult = ReturnedFormClassification | ExternalClassification
+
+
+@dataclass(frozen=True, slots=True)
+class InboxDecision:
+    classification: ClassificationResult
+    tier: InboxTier
+    proposed_route: InboxRoute
+    proposed_book_id: int | None = None
+    proposed_ref: str | None = None
+    proposed_employee_id: str | None = None
+    match_score: float = 0.0
+    document_type: str = "unknown"
+    fields: dict[str, str] = field(default_factory=dict)
+    confidence: float = 0.0
+    candidates: tuple[EmployeeCandidateEvidence, ...] = field(default_factory=tuple)
 
 
 @dataclass(frozen=True)
@@ -134,4 +245,24 @@ def route(
     )
 
 
-__all__ = ["TriageDecision", "route"]
+__all__ = [
+    "BookMatchEvidence",
+    "ClassificationAmbiguity",
+    "ClassificationResult",
+    "EmployeeAmbiguity",
+    "EmployeeCandidateEvidence",
+    "EmployeeMatchEvidence",
+    "EmployeeMatchKind",
+    "ExternalClassification",
+    "InboxDecision",
+    "InboxRoute",
+    "InboxTier",
+    "ReferenceAmbiguity",
+    "ReferenceCandidate",
+    "ReferenceMatchKind",
+    "ReferenceSource",
+    "ReturnedFormClassification",
+    "ReturnedFormMatch",
+    "TriageDecision",
+    "route",
+]
