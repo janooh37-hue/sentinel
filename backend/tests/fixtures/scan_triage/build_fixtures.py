@@ -242,7 +242,11 @@ def _build(output: Path) -> None:
 
     for name, lines in {
         "returned-form-scan-en.png": ("Synthetic returned form", "Ref: GS-0042"),
-        "returned-form-scan-mixed.png": ("وثيقة اختبار اصطناعية", "الرقم: GS-0042"),
+        "returned-form-scan-mixed.png": (
+            "Synthetic returned form",
+            "وثيقة اختبار اصطناعية",
+            "الرقم: GS-0042 General Services",
+        ),
     }.items():
         raw = _reference_scan(lines)
         (output / name).write_bytes(raw)

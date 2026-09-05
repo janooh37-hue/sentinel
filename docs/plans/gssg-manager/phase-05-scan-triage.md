@@ -251,3 +251,19 @@ expectations are unchanged. The 2,076 unaffected Windows passes remain valid;
 all 21 reader cases and the separate ten-node real OCR gate must pass on a
 fresh checkout of the corrected candidate before merge. The initial full run
 is recorded as failed, not as a clean full-suite result.
+
+
+The corrected checkout then exposed a real adapter limitation: nine required OCR
+cases passed and the original two-line mixed fixture failed because the installed
+engine read `GS-0042` as `65-0042`. Identical pixels through the preserved Phase 4
+adapter and new reader returned identical text. Bounded typography/layout probes
+confirmed this is an existing recognition limitation, not a reader regression.
+A representative bilingual synthetic form retains the Arabic label and literal
+reference, adding an English/Arabic title and ordinary `General Services` context.
+The actual Windows probe recovered both Arabic text and `GS-0042` at confidence
+0.935. Its reference evidence is **`ocr_bare`**: bidirectional OCR orders the value
+before the Arabic label, so this proves mixed-script literal recovery with the
+preserved bare fallback, not strict Arabic-stamped capture. The plan's row 5.5
+requires the former. No application code, parser, OCR setting or acceptance
+assertion changes. The original image's recognition limitation remains disclosed;
+final corrected fixture approval and required Windows gates are recorded below.

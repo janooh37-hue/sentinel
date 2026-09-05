@@ -88,14 +88,14 @@
       "source_text": "Synthetic returned form\nRef: GS-0042\n"
     },
     "returned-form-scan-mixed.png": {
-      "byte_length": 68551,
+      "byte_length": 105168,
       "dimensions": [
         2400,
         1200
       ],
       "kind": "png",
-      "sha256": "731b4a2b8092778b7cba87b660609ada1cee40fc463003a8c3db8658eb50fdf4",
-      "source_text": "وثيقة اختبار اصطناعية\nالرقم: GS-0042\n"
+      "sha256": "4a4de2ce2979ce432bf79c631bc69fe43a940d70f9227c5a0c7a79ad76525bc7",
+      "source_text": "Synthetic returned form\nوثيقة اختبار اصطناعية\nالرقم: GS-0042 General Services\n"
     },
     "returned-form-text.pdf": {
       "alphanumeric_count": 30,
