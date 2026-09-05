@@ -307,8 +307,6 @@ const KEYS = [
   'timesheet.openRecord',
   'timesheet.openLookup',
   'access.permissions.domains.timesheet',
-  'access.permissions.caps.timesheet.view',
-  'access.permissions.caps.timesheet.edit',
 ]
 
 describe('timesheet i18n parity', () => {

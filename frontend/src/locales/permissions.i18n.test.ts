@@ -1,6 +1,5 @@
-/** Cross-stack guard: every capability in the PYTHON catalog must have an EN+AR
- * label, description, and domain key. Parses core/permissions.py so a new cap
- * without translations fails CI here, not in front of an Arabic-speaking admin. */
+/** Cross-stack guard: every capability domain in the Python catalog must have
+ * an EN/AR heading. Capability labels and descriptions come from the API. */
 import { readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -60,16 +59,8 @@ describe('permission catalog i18n completeness', () => {
   // vitest's expect takes no jest-style message argument, so each check pushes
   // its context (locale + dotted path) into `missing`; one failing id then
   // reports every gap for both locales in a single diff.
-  it.each(IDS)('%s has en + ar label, description, and its domain is named', (id) => {
+  it.each(IDS)('%s has a named en + ar domain', (id) => {
     const missing: string[] = []
-    for (const [locale, tree] of [['en', en], ['ar', ar]] as const) {
-      if (!get(tree as unknown as Rec, `access.permissions.caps.${id}`)) {
-        missing.push(`${locale} label ${id}`)
-      }
-      if (!get(tree as unknown as Rec, `perms.caps.${id}.desc`)) {
-        missing.push(`${locale} desc ${id}`)
-      }
-    }
     const domain = id.split('.')[0]
     if (!get(en as unknown as Rec, `access.permissions.domains.${domain}`)) {
       missing.push(`en domain ${domain}`)
@@ -78,6 +69,13 @@ describe('permission catalog i18n completeness', () => {
       missing.push(`ar domain ${domain}`)
     }
     expect(missing).toEqual([])
+  })
+
+  it('does not duplicate runtime catalog labels or descriptions in locale files', () => {
+    for (const tree of [en, ar]) {
+      expect(get(tree as unknown as Rec, 'access.permissions.caps')).toBeUndefined()
+      expect(get(tree as unknown as Rec, 'perms.caps')).toBeUndefined()
+    }
   })
 })
 
@@ -111,7 +109,6 @@ describe('Mirror editor bilingual copy', () => {
       'access.permissions.mirror.svcRecordsOnlyCaption',
       'access.permissions.mirror.svcHiddenCaption',
       'requireCap.notRequestable',
-      'access.permissions.caps.books.service.other',
     ]
     for (const [locale, tree] of [['en', en], ['ar', ar]] as const) {
       for (const key of sharedKeys) {

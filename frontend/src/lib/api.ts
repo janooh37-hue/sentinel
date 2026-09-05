@@ -452,8 +452,12 @@ export type PermissionEffect = 'grant' | 'deny'
 export interface CapabilityRead {
   id: string
   domain: string
-  label: string
-  description: string
+  label_en: string
+  label_ar: string | null
+  description_en: string
+  description_ar: string | null
+  sensitive: boolean
+  requestable: boolean
   default_roles: Array<'operator' | 'manager' | 'admin'>
 }
 
@@ -465,7 +469,6 @@ export interface PermissionRequestRead {
   user_id: number
   requester_name: string | null
   capability: string
-  capability_label: string
   status: PermissionRequestStatus
   decision: string | null
   created_at: string
