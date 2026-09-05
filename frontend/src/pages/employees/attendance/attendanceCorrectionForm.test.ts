@@ -49,8 +49,6 @@ describe('buildAdjustmentPayload', () => {
       reason: 'Corrected terminal time',
     })
   })
-
-
   it('preserves exact effective UTC timestamps when only presence changes', () => {
     const precise = {
       ...effective,
@@ -68,6 +66,27 @@ describe('buildAdjustmentPayload', () => {
       replacement_final_out_at: '2026-08-19T09:00:34.567Z',
     })
   })
+
+  it('adds UTC to retained naive timestamps without dropping fractional precision', () => {
+    const naive = {
+      ...effective,
+      first_in_at: '2026-08-19T01:00:12.345678',
+      latest_in_at: '2026-08-19T01:05:23.456',
+      final_out_at: '2026-08-19T09:00:34.5',
+    }
+
+    expect(buildAdjustmentPayload(naive, {
+      ...draftFromEffective(naive),
+      presenceState: 'completed',
+      reason: 'Presence-only correction',
+    })).toMatchObject({
+      replacement_presence_state: 'completed',
+      replacement_first_in_at: '2026-08-19T01:00:12.345678Z',
+      replacement_latest_in_at: '2026-08-19T01:05:23.456Z',
+      replacement_final_out_at: '2026-08-19T09:00:34.5Z',
+    })
+  })
+
   it('rejects a blank reason and an otherwise unchanged correction', () => {
     expect(() => buildAdjustmentPayload(effective, draftFromEffective(effective))).toThrow('CORRECTION_REASON_REQUIRED')
     expect(() => buildAdjustmentPayload(effective, {
