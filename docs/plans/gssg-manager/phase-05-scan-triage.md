@@ -235,3 +235,19 @@ integrated run, supplemented by this narrow current-code verification.
 Pending: supported Windows backend suite, ten-node real Arabic/English OCR
 gate, merge, deployment and exact production HEAD/health
 verification.
+
+
+The first full Windows gate on `42fbc678` completed **2,076 passed, nine skipped,
+21 reader-module setup errors in 1,326.71 seconds**. Git's automatic text
+conversion changed the deliberately malformed PDF fixture from 44 LF bytes to
+47 CRLF bytes; the unchanged manifest guard correctly rejected it before any
+reader test ran. A fixture-local `.gitattributes` now preserves PDF, PNG and
+BIN bytes. A real Git checkout with `core.autocrlf=true` reproduced the exact
+47-versus-44 failure, then preserved all 11 fixture hashes after the fix; the
+complete local reader module passed 16 cases with five missing-Arabic skips.
+The attributes-only change and the expanded Windows verification wrapper were
+independently reviewed. Application code, tests, fixture contents and manifest
+expectations are unchanged. The 2,076 unaffected Windows passes remain valid;
+all 21 reader cases and the separate ten-node real OCR gate must pass on a
+fresh checkout of the corrected candidate before merge. The initial full run
+is recorded as failed, not as a clean full-suite result.
