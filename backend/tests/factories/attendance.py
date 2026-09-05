@@ -38,12 +38,14 @@ from app.db.workforce_models import (
     AttendancePunch,
     AttendanceSyncState,
     WorkCrew,
+    WorkCrewMembership,
 )
 from app.services import (
     attendance_evaluation_service,
     workforce_schedule_service,
     workforce_seed_service,
 )
+from app.services.workforce_access_service import organization_scope
 from tests.conftest import make_user
 
 SITE_ZONE = ZoneInfo("Asia/Dubai")
@@ -106,7 +108,12 @@ def build_attendance_day(
     admin = make_user(db, role="admin", email=f"factory-{operational_date}-{unit[:6]}@test.ae")
     db.flush()
 
-    workforce_seed_service.seed_workforce_roster(db, actor_user_id=admin.id)
+    trusted_scope = organization_scope()
+    workforce_seed_service.seed_workforce_roster(
+        db,
+        scope=trusted_scope,
+        actor_user_id=admin.id,
+    )
     db.flush()
 
     crew_code = workforce_seed_service.DUTY_UNIT_TO_CREW[unit]
@@ -152,6 +159,14 @@ def build_attendance_day(
 
             workforce_schedule_service.create_crew_membership(
                 db,
+                scope=trusted_scope,
+                if_match=workforce_schedule_service.crew_membership_collection_etag(
+                    list(
+                        db.scalars(
+                            select(WorkCrewMembership).where(WorkCrewMembership.crew_id == crew.id)
+                        )
+                    )
+                ),
                 employee_id=employee.id,
                 crew_id=crew.id,
                 effective_from=local(membership_start, MEMBERSHIP_START),
@@ -161,6 +176,7 @@ def build_attendance_day(
 
     workforce_schedule_service.generate_occurrences(
         db,
+        scope=trusted_scope,
         crew_id=crew.id,
         starts_at=local(operational_date, time(0, 0)) - timedelta(days=3),
         ends_at=local(operational_date, time(0, 0)) + timedelta(days=2),

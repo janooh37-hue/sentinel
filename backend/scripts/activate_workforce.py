@@ -48,6 +48,7 @@ from app.services import (
     workforce_schedule_service,
     workforce_seed_service,
 )
+from app.services.workforce_access_service import organization_scope
 
 PROVIDER = "biotime"
 
@@ -114,8 +115,16 @@ def _configure(db: Session, *, actor: User, apply: bool, sync_minutes: int) -> s
 def _seed_roster(db: Session, *, actor: User, apply: bool) -> str:
     if not apply:
         crews = db.scalar(select(WorkCrew).limit(1))
-        return "would install shifts, rotation patterns, crews, anchors, and the default policy" if crews is None else "crews already present; seeding would be a no-op for existing rows"
-    result = workforce_seed_service.seed_workforce_roster(db, actor_user_id=actor.id)
+        return (
+            "would install shifts, rotation patterns, crews, anchors, and the default policy"
+            if crews is None
+            else "crews already present; seeding would be a no-op for existing rows"
+        )
+    result = workforce_seed_service.seed_workforce_roster(
+        db,
+        scope=organization_scope(),
+        actor_user_id=actor.id,
+    )
     db.commit()
     return (
         f"shifts={result.shifts} patterns={result.patterns} crews={result.crews} "
@@ -144,7 +153,9 @@ def _reconcile(db: Session, *, actor: User, apply: bool) -> str:
     for item in conflicts:
         print(f"    CONFLICT {item.external_employee_code or '-'} -> {', '.join(item.candidates)}")
     for item in unmatched:
-        print(f"    NO MATCH {item.external_employee_code or '-'}  ({item.display_name_snapshot or '-'})")
+        print(
+            f"    NO MATCH {item.external_employee_code or '-'}  ({item.display_name_snapshot or '-'})"
+        )
     for item in skipped:
         print(f"    SKIPPED  {item.external_employee_code or '-'}: {item.skipped_reason}")
     if apply:
@@ -189,11 +200,14 @@ def _memberships(db: Session, *, actor: User, apply: bool) -> str:
         )
     }
     effective_from = _membership_start(db)
+    trusted_scope = organization_scope()
 
     created = 0
     no_crew: dict[str, int] = {}
     no_mapping: list[str] = []
-    for employee in db.scalars(select(Employee).where(Employee.status == "Active").order_by(Employee.id)):
+    for employee in db.scalars(
+        select(Employee).where(Employee.status == "Active").order_by(Employee.id)
+    ):
         unit = (employee.duty_unit or "").strip()
         code = workforce_seed_service.DUTY_UNIT_TO_CREW.get(unit)
         if code is None:
@@ -211,6 +225,16 @@ def _memberships(db: Session, *, actor: User, apply: bool) -> str:
         if apply:
             workforce_schedule_service.create_crew_membership(
                 db,
+                scope=trusted_scope,
+                if_match=workforce_schedule_service.crew_membership_collection_etag(
+                    list(
+                        db.scalars(
+                            select(WorkCrewMembership).where(
+                                WorkCrewMembership.crew_id == crews[code].id
+                            )
+                        )
+                    )
+                ),
                 employee_id=employee.id,
                 crew_id=crews[code].id,
                 effective_from=effective_from,
@@ -244,9 +268,16 @@ def main(argv: list[str] | None = None) -> int:
     db = SessionLocal()
     try:
         actor = _admin(db, args.actor_email)
-        print(f"actor: {actor.email} (id {actor.id}){'' if args.apply else '   DRY RUN — nothing is written'}")
+        print(
+            f"actor: {actor.email} (id {actor.id}){'' if args.apply else '   DRY RUN — nothing is written'}"
+        )
         steps = (
-            ("configuration", lambda: _configure(db, actor=actor, apply=args.apply, sync_minutes=args.sync_minutes)),
+            (
+                "configuration",
+                lambda: _configure(
+                    db, actor=actor, apply=args.apply, sync_minutes=args.sync_minutes
+                ),
+            ),
             ("roster", lambda: _seed_roster(db, actor=actor, apply=args.apply)),
             ("reconcile", lambda: _reconcile(db, actor=actor, apply=args.apply)),
             ("memberships", lambda: _memberships(db, actor=actor, apply=args.apply)),

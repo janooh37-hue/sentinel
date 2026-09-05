@@ -10,6 +10,7 @@ This module answers the question the source can already answer: for one
 employee, on which days was there a punch, when was the first, when was the last,
 and on which device. It writes nothing.
 """
+
 from __future__ import annotations
 
 from collections import defaultdict
@@ -19,8 +20,11 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.api.errors import ValidationFailedError
 from app.db.workforce_models import AttendanceProviderPerson
 from app.services.attendance_provider import AttendanceProvider, ProviderPunch
+from app.services.workforce_access_service import employee_in_scope
+from app.services.workforce_scope_service import WorkforceScope
 
 #: A bounded read: 40 pages of the configured page size covers years of one
 #: person's punches, and stops a mistaken range from paging a site forever.
@@ -51,6 +55,7 @@ def _window(from_date: date, to_date: date, zone: ZoneInfo) -> tuple[datetime, d
 def employee_punch_history(
     db: Session,
     *,
+    scope: WorkforceScope,
     employee_id: str,
     from_date: date,
     to_date: date,
@@ -58,6 +63,16 @@ def employee_punch_history(
     zone: ZoneInfo,
 ) -> dict[str, object]:
     """Group one employee's provider punches by site-local day, newest first."""
+    employee_in_scope(db, scope=scope, employee_id=employee_id)
+    if to_date < from_date:
+        raise ValidationFailedError(
+            "WORKFORCE_HISTORY_RANGE_INVALID", "to_date must not precede from_date."
+        )
+    if (to_date - from_date).days + 1 > MAX_RANGE_DAYS:
+        raise ValidationFailedError(
+            "WORKFORCE_HISTORY_RANGE_INVALID",
+            f"Range must not exceed {MAX_RANGE_DAYS} days.",
+        )
     mapping = _verified_mapping(db, employee_id)
     code = mapping.external_employee_code if mapping is not None else None
     payload: dict[str, object] = {
@@ -85,9 +100,7 @@ def employee_punch_history(
         # person can share. Identity is the mapped ``emp``, so anything else the
         # filter returned is not this employee's history.
         punches.extend(
-            punch
-            for punch in page.items
-            if punch.external_person_id == mapping.external_person_id
+            punch for punch in page.items if punch.external_person_id == mapping.external_person_id
         )
         cursor = page.next_cursor
         if page.exhausted or cursor is None:

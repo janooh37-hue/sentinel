@@ -1,6 +1,6 @@
 # GSSG Manager — phased implementation plan
 
-Status: Phase 0 merged and deployed through PR #73; Phase 1 in progress.
+Status: Phases 0 and 1 merged and deployed through PRs #73 and #74; Phase 2 in progress.
 
 This folder converts [GSSG_MANAGER_PLAN.md](../../../GSSG_MANAGER_PLAN.md) into independently executable phases, incorporating the code audit at `bd5c14e3` on 2026-09-05. Recheck the actual code at the start of every phase; file names and behaviors below are evidence to investigate, not permission to assume the code has stayed unchanged.
 

@@ -1,6 +1,6 @@
 # Phase 1 — Attendance rules
 
-Status: verification complete; merge and deployment pending. Branch: `refactor/p1-attendance-rules`. Dependency: Phase 0 (merged and deployed in PR #73).
+Status: complete, merged and deployed through PR #74. Branch: `refactor/p1-attendance-rules`. Dependency: Phase 0 (merged and deployed in PR #73).
 
 Follow [WORKFLOW.md](WORKFLOW.md): prepare behavior tests first; verify current code and the test result before every implementation slice and every build.
 
@@ -87,7 +87,7 @@ PYTHONDONTWRITEBYTECODE=1 GSSG_DATA_DIR=/tmp/gssg-p1-check-data /tmp/gssg-load/v
 
 The builders' final combined phase matrix passed 98 tests in 18.69 seconds. Independent behavior/security and i18n/RTL reviews passed with no material
 findings. The Windows backend gate and synthetic HTTP smoke passed. Windows frontend unit, type and build checks and the final full browser suite
-also passed. Deployment remains pending; this phase is not yet complete. No route or Pydantic contract changed, so generated
+also passed. The phase was subsequently merged and deployed as recorded below. No route or Pydantic contract changed, so generated
 API artifacts do not require regeneration. No migrations or document templates
 changed. The two existing dashboard mypy tuple-inference errors were corrected
 in the touched code.
@@ -172,3 +172,12 @@ Rollback was reviewed for compatibility, not executed: this phase has no schema
 change, and existing correction rows preserve their meaning under a reviewed
 revert. Recheck dashboard classification and correction projections after any
 rollback deployment.
+
+### Release result
+
+PR [#74](https://github.com/janooh37-hue/sentinel/pull/74) merged as
+`cd913c65fa5b1ffc14dcefb2d1ab744c790c8462` on 2026-09-05. Production
+`mng update` completed at approximately 04:48 Asia/Dubai: dependencies, frontend
+build, backend smoke check, static copy and restart passed. GSSGManager reported
+**Running / health ok (v4.0.0a0)** on port 8765. A separate live-checkout
+`git rev-parse HEAD` confirmed the exact merge commit. Phase 1 is complete.

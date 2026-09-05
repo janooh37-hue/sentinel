@@ -3,11 +3,11 @@
 Network providers are intentionally absent.  Callers open no provider connection while
 using these write functions, and own only the final commit boundary.
 """
+
 from __future__ import annotations
 
-import hashlib
 import json
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from datetime import UTC, datetime
 
 from sqlalchemy import select
@@ -24,10 +24,22 @@ from app.db.workforce_models import (
     WorkShiftOccurrence,
     WorkShiftOverride,
 )
+from app.services.workforce_access_service import require_organization
+from app.services.workforce_etag import etag_for, require_if_match, row_etag
+from app.services.workforce_scope_service import WorkforceScope
+
+_ORGANIZATION_SCHEDULE_MESSAGE = (
+    "Organization workforce scope is required for crew and anchor changes."
+)
+_ORGANIZATION_WORKFORCE_MESSAGE = "Organization workforce scope is required for this change."
 
 
 def _utc_naive(value: datetime) -> datetime:
-    return value.replace(tzinfo=None) if value.tzinfo is None else value.astimezone(UTC).replace(tzinfo=None)
+    return (
+        value.replace(tzinfo=None)
+        if value.tzinfo is None
+        else value.astimezone(UTC).replace(tzinfo=None)
+    )
 
 
 def _require_int(values: Mapping[str, object], key: str) -> int:
@@ -42,33 +54,20 @@ def _require_int(values: Mapping[str, object], key: str) -> int:
     return value
 
 
-def etag_for(value: object) -> str:
-    """A quoted strong tag over canonical non-secret state."""
-    encoded = json.dumps(value, sort_keys=True, separators=(",", ":"), default=str).encode("utf-8")
-    return '"' + hashlib.sha256(encoded).hexdigest() + '"'
-
-
-def row_etag(row: object, *, extra: Mapping[str, object] | None = None) -> str:
-    return etag_for(
-        {
-            "id": getattr(row, "id", None),
-            "updated_at": getattr(row, "updated_at", None),
-            "created_at": getattr(row, "created_at", None),
-            **(dict(extra) if extra else {}),
-        }
-    )
-
-
-def require_if_match(if_match: str | None, current: str, *, code: str = "WORKFORCE_VERSION_CONFLICT") -> None:
-    if if_match is None or if_match != current:
-        raise ConflictError(code, "The workforce record was modified; refresh and retry.")
-
-
 def _actor(user: User) -> str:
     return user.employee_id or user.email
 
 
-def _audit(db: Session, *, user: User, action: str, entity_type: str, entity_id: int | str | None, before: object | None = None, after: object | None = None) -> None:
+def _audit(
+    db: Session,
+    *,
+    user: User,
+    action: str,
+    entity_type: str,
+    entity_id: int | str | None,
+    before: object | None = None,
+    after: object | None = None,
+) -> None:
     db.add(
         AuditLog(
             actor=_actor(user),
@@ -100,8 +99,32 @@ def _crew_is_referenced(db: Session, crew_id: int) -> bool:
     )
 
 
-def create_crew(db: Session, *, payload: Mapping[str, object], actor: User) -> WorkCrew:
+def crew_collection_etag(rows: Iterable[WorkCrew]) -> str:
+    """Return the canonical ID-ordered version of the global crew collection."""
+    return etag_for(
+        [
+            {
+                "id": row.id,
+                "updated_at": row.updated_at,
+                "created_at": row.created_at,
+            }
+            for row in sorted(rows, key=lambda item: item.id)
+        ]
+    )
+
+
+def create_crew(
+    db: Session,
+    *,
+    scope: WorkforceScope,
+    if_match: str | None,
+    payload: Mapping[str, object],
+    actor: User,
+) -> WorkCrew:
+    require_organization(scope, message=_ORGANIZATION_SCHEDULE_MESSAGE)
     _acquire_crew_write_lock(db)
+    current = list(db.scalars(select(WorkCrew).order_by(WorkCrew.id)))
+    require_if_match(if_match, crew_collection_etag(current))
     code = str(payload["code"]).strip()
     if db.scalar(select(WorkCrew).where(WorkCrew.code == code)) is not None:
         raise ConflictError("WORKFORCE_VERSION_CONFLICT", "Crew code already exists.")
@@ -127,11 +150,13 @@ def create_crew(db: Session, *, payload: Mapping[str, object], actor: User) -> W
 def update_crew(
     db: Session,
     *,
+    scope: WorkforceScope,
     crew_id: int,
     payload: Mapping[str, object],
     if_match: str | None,
     actor: User,
 ) -> WorkCrew:
+    require_organization(scope, message=_ORGANIZATION_SCHEDULE_MESSAGE)
     _acquire_crew_write_lock(db)
     crew = db.get(WorkCrew, crew_id)
     if crew is None:
@@ -164,7 +189,9 @@ def update_crew(
             setattr(
                 crew,
                 key,
-                str(value).strip() if key in {"code", "name_en", "name_ar"} and value is not None else value,
+                str(value).strip()
+                if key in {"code", "name_en", "name_ar"} and value is not None
+                else value,
             )
     if not crew.name_en and not crew.name_ar:
         raise ValidationFailedError(
@@ -190,10 +217,16 @@ def update_crew(
 
 
 def retire_crew(
-    db: Session, *, crew_id: int, if_match: str | None, actor: User
+    db: Session,
+    *,
+    scope: WorkforceScope,
+    crew_id: int,
+    if_match: str | None,
+    actor: User,
 ) -> WorkCrew:
     """Retire a named crew without deleting its historical identity."""
 
+    require_organization(scope, message=_ORGANIZATION_SCHEDULE_MESSAGE)
     _acquire_crew_write_lock(db)
     crew = db.get(WorkCrew, crew_id)
     if crew is None:
@@ -214,7 +247,14 @@ def retire_crew(
     return crew
 
 
-def create_attendance_policy(db: Session, *, payload: Mapping[str, object], actor: User) -> WorkAttendancePolicy:
+def create_attendance_policy(
+    db: Session,
+    *,
+    scope: WorkforceScope,
+    payload: Mapping[str, object],
+    actor: User,
+) -> WorkAttendancePolicy:
+    require_organization(scope, message=_ORGANIZATION_WORKFORCE_MESSAGE)
     values = dict(payload)
     policy = WorkAttendancePolicy(
         shift_definition_id=values.get("shift_definition_id"),
@@ -230,11 +270,27 @@ def create_attendance_policy(db: Session, *, payload: Mapping[str, object], acto
     )
     db.add(policy)
     db.flush()
-    _audit(db, user=actor, action="workforce.attendance_policy.created", entity_type="work_attendance_policy", entity_id=policy.id, after={"effective_from": policy.effective_from, "effective_to": policy.effective_to})
+    _audit(
+        db,
+        user=actor,
+        action="workforce.attendance_policy.created",
+        entity_type="work_attendance_policy",
+        entity_id=policy.id,
+        after={"effective_from": policy.effective_from, "effective_to": policy.effective_to},
+    )
     return policy
 
 
-def approve_attendance_policy(db: Session, *, policy_id: int, if_match: str | None, actor: User, now: datetime | None = None) -> WorkAttendancePolicy:
+def approve_attendance_policy(
+    db: Session,
+    *,
+    scope: WorkforceScope,
+    policy_id: int,
+    if_match: str | None,
+    actor: User,
+    now: datetime | None = None,
+) -> WorkAttendancePolicy:
+    require_organization(scope, message=_ORGANIZATION_WORKFORCE_MESSAGE)
     policy = db.get(WorkAttendancePolicy, policy_id)
     if policy is None:
         raise NotFoundError("WORKFORCE_POLICY_NOT_FOUND", "Attendance policy was not found.")
@@ -243,15 +299,39 @@ def approve_attendance_policy(db: Session, *, policy_id: int, if_match: str | No
         raise ConflictError("WORKFORCE_VERSION_CONFLICT", "Attendance policy is already approved.")
     policy.approved_by_user_id = actor.id
     policy.approved_at = _utc_naive(now or datetime.now(UTC))
-    _audit(db, user=actor, action="workforce.attendance_policy.approved", entity_type="work_attendance_policy", entity_id=policy.id, before={"approved_at": None}, after={"approved_at": policy.approved_at})
+    _audit(
+        db,
+        user=actor,
+        action="workforce.attendance_policy.approved",
+        entity_type="work_attendance_policy",
+        entity_id=policy.id,
+        before={"approved_at": None},
+        after={"approved_at": policy.approved_at},
+    )
     return policy
 
 
-def update_provider_mapping(db: Session, *, person_id: int, employee_id: str | None, mapping_state: str, if_match: str | None, actor: User, now: datetime | None = None) -> AttendanceProviderPerson:
+def update_provider_mapping(
+    db: Session,
+    *,
+    scope: WorkforceScope,
+    person_id: int,
+    employee_id: str | None,
+    mapping_state: str,
+    if_match: str | None,
+    actor: User,
+    now: datetime | None = None,
+) -> AttendanceProviderPerson:
+    require_organization(scope, message=_ORGANIZATION_WORKFORCE_MESSAGE)
     row = db.get(AttendanceProviderPerson, person_id)
     if row is None:
-        raise NotFoundError("ATTENDANCE_PROVIDER_PERSON_NOT_FOUND", "Provider person was not found.")
-    require_if_match(if_match, row_etag(row, extra={"mapping_state": row.mapping_state, "employee_id": row.employee_id}))
+        raise NotFoundError(
+            "ATTENDANCE_PROVIDER_PERSON_NOT_FOUND", "Provider person was not found."
+        )
+    require_if_match(
+        if_match,
+        row_etag(row, extra={"mapping_state": row.mapping_state, "employee_id": row.employee_id}),
+    )
     before = {"employee_id": row.employee_id, "mapping_state": row.mapping_state}
     if mapping_state == "verified":
         if not employee_id or db.get(Employee, employee_id) is None:
@@ -265,7 +345,9 @@ def update_provider_mapping(db: Session, *, person_id: int, employee_id: str | N
             )
         )
         if duplicate is not None:
-            raise ConflictError("WORKFORCE_VERSION_CONFLICT", "Employee already has a verified provider mapping.")
+            raise ConflictError(
+                "WORKFORCE_VERSION_CONFLICT", "Employee already has a verified provider mapping."
+            )
         row.employee_id = employee_id
         row.verified_by_user_id = actor.id
         row.verified_at = _utc_naive(now or datetime.now(UTC))
@@ -274,7 +356,15 @@ def update_provider_mapping(db: Session, *, person_id: int, employee_id: str | N
         row.verified_by_user_id = None
         row.verified_at = None
     row.mapping_state = mapping_state
-    _audit(db, user=actor, action="workforce.provider_mapping.updated", entity_type="attendance_provider_person", entity_id=row.id, before=before, after={"employee_id": row.employee_id, "mapping_state": row.mapping_state})
+    _audit(
+        db,
+        user=actor,
+        action="workforce.provider_mapping.updated",
+        entity_type="attendance_provider_person",
+        entity_id=row.id,
+        before=before,
+        after={"employee_id": row.employee_id, "mapping_state": row.mapping_state},
+    )
     return row
 
 
@@ -282,6 +372,7 @@ __all__ = [
     "approve_attendance_policy",
     "create_attendance_policy",
     "create_crew",
+    "crew_collection_etag",
     "etag_for",
     "require_if_match",
     "retire_crew",

@@ -24,6 +24,7 @@ from app.db.workforce_models import (
 )
 from app.services import attendance_correction_service
 from app.services.attendance_evaluation_service import evaluate_case, materialize_scheduled_cases
+from app.services.workforce_access_service import organization_scope
 
 UTC_NOW = datetime(2026, 8, 17, 12, tzinfo=UTC)
 SHIFT_START = datetime(2026, 8, 17, 4, tzinfo=UTC)
@@ -301,6 +302,7 @@ def test_adjustments_have_one_effective_leaf_reject_stale_versions_and_preserve_
 
     first = attendance_correction_service.correct(
         db_session,
+        scope=organization_scope(),
         case_id=case.id,
         if_match=attendance_correction_service.case_etag(db_session, case.id),
         snapshot=first_snapshot,
@@ -308,6 +310,7 @@ def test_adjustments_have_one_effective_leaf_reject_stale_versions_and_preserve_
     )
     second = attendance_correction_service.correct(
         db_session,
+        scope=organization_scope(),
         case_id=case.id,
         if_match=attendance_correction_service.case_etag(db_session, case.id),
         snapshot={
@@ -327,6 +330,7 @@ def test_adjustments_have_one_effective_leaf_reject_stale_versions_and_preserve_
     with pytest.raises(ConflictError) as stale:
         attendance_correction_service.correct(
             db_session,
+            scope=organization_scope(),
             case_id=case.id,
             if_match='"stale"',
             snapshot={
@@ -359,6 +363,7 @@ def test_revoking_active_adjustment_reveals_latest_active_predecessor(db_session
 
     predecessor = attendance_correction_service.correct(
         db_session,
+        scope=organization_scope(),
         case_id=case.id,
         if_match=attendance_correction_service.case_etag(db_session, case.id),
         snapshot={**snapshot, "replacement_presence_state": "completed"},
@@ -366,6 +371,7 @@ def test_revoking_active_adjustment_reveals_latest_active_predecessor(db_session
     )
     current = attendance_correction_service.correct(
         db_session,
+        scope=organization_scope(),
         case_id=case.id,
         if_match=attendance_correction_service.case_etag(db_session, case.id),
         snapshot={
@@ -378,6 +384,7 @@ def test_revoking_active_adjustment_reveals_latest_active_predecessor(db_session
 
     attendance_correction_service.revoke(
         db_session,
+        scope=organization_scope(),
         case_id=case.id,
         adjustment_id=current.id,
         reason="Replacement correction was wrong",
