@@ -17,15 +17,20 @@ from sqlalchemy import select
 from app.db.models import Employee
 from app.db.workforce_models import (
     WorkCrew,
+    WorkCrewMembership,
     WorkCrewSchedule,
     WorkRotationPattern,
     WorkRotationStep,
     WorkShiftDefinition,
     WorkShiftOccurrence,
 )
+from app.services.workforce_access_service import organization_scope
+from app.services.workforce_etag import row_etag
 from app.services.workforce_schedule_service import (
     create_crew_membership,
     create_crew_schedule,
+    crew_membership_collection_etag,
+    crew_schedule_collection_etag,
     generate_occurrences,
     replace_crew_schedule,
     resolve_assignment,
@@ -37,6 +42,19 @@ ANCHOR_LOCAL = datetime(2026, 8, 17, 12, tzinfo=DUBAI)
 ANCHOR_UTC = ANCHOR_LOCAL.astimezone(UTC)
 CYCLE = timedelta(hours=120)
 SHIFT_DURATION = timedelta(hours=8)
+ORGANIZATION_SCOPE = organization_scope()
+
+
+def _schedule_collection_etag(db, crew_id: int) -> str:
+    return crew_schedule_collection_etag(
+        list(db.scalars(select(WorkCrewSchedule).where(WorkCrewSchedule.crew_id == crew_id)))
+    )
+
+
+def _membership_collection_etag(db, crew_id: int) -> str:
+    return crew_membership_collection_etag(
+        list(db.scalars(select(WorkCrewMembership).where(WorkCrewMembership.crew_id == crew_id)))
+    )
 
 
 def _utc(value: datetime) -> datetime:
@@ -113,6 +131,8 @@ def _schedule_canonical_crew(
     crew, pattern, shift_ids = _canonical_crew(db, code=code)
     schedule = create_crew_schedule(
         db,
+        scope=ORGANIZATION_SCOPE,
+        if_match=_schedule_collection_etag(db, crew.id),
         crew_id=crew.id,
         pattern_id=pattern.id,
         anchor_at=ANCHOR_UTC,
@@ -155,6 +175,7 @@ def test_canonical_monday_noon_rotation_materializes_exact_half_open_boundaries(
 
     generate_occurrences(
         db_session,
+        scope=ORGANIZATION_SCOPE,
         crew_id=crew.id,
         starts_at=ANCHOR_UTC,
         ends_at=ANCHOR_UTC + CYCLE + SHIFT_DURATION,
@@ -208,6 +229,7 @@ def test_canonical_rotation_has_no_drift_across_repeated_120_hour_cycles(db_sess
 
     generate_occurrences(
         db_session,
+        scope=ORGANIZATION_SCOPE,
         crew_id=crew.id,
         starts_at=ANCHOR_UTC,
         ends_at=horizon,
@@ -244,6 +266,8 @@ def test_night_assignment_uses_its_dubai_start_date_and_unassigned_employee_is_u
     unassigned = _employee(db_session, "G-UNASSIGNED")
     create_crew_membership(
         db_session,
+        scope=ORGANIZATION_SCOPE,
+        if_match=_membership_collection_etag(db_session, crew.id),
         employee_id=scheduled.id,
         crew_id=crew.id,
         effective_from=ANCHOR_UTC,
@@ -252,6 +276,7 @@ def test_night_assignment_uses_its_dubai_start_date_and_unassigned_employee_is_u
 
     generate_occurrences(
         db_session,
+        scope=ORGANIZATION_SCOPE,
         crew_id=crew.id,
         starts_at=ANCHOR_UTC,
         ends_at=ANCHOR_UTC + timedelta(hours=40),
@@ -279,6 +304,7 @@ def test_replacing_future_anchor_preserves_occurrences_generated_by_prior_schedu
     past_end = ANCHOR_UTC + timedelta(hours=40)
     generate_occurrences(
         db_session,
+        scope=ORGANIZATION_SCOPE,
         crew_id=crew.id,
         starts_at=ANCHOR_UTC,
         ends_at=past_end,
@@ -302,11 +328,13 @@ def test_replacing_future_anchor_preserves_occurrences_generated_by_prior_schedu
     future_boundary = ANCHOR_UTC + CYCLE
     replacement = replace_crew_schedule(
         db_session,
+        scope=ORGANIZATION_SCOPE,
         crew_id=crew.id,
+        schedule_id=first_schedule.id,
+        if_match=row_etag(first_schedule),
         pattern_id=first_schedule.pattern_id,
         anchor_at=future_boundary,
         effective_from=future_boundary,
-        expected_version=first_schedule.version,
         now=past_end,
     )
     db_session.commit()
@@ -331,6 +359,8 @@ def test_overlapping_schedule_versions_are_rejected_before_materialization(db_se
     with pytest.raises(ValueError, match="overlap"):
         create_crew_schedule(
             db_session,
+            scope=ORGANIZATION_SCOPE,
+            if_match=_schedule_collection_etag(db_session, crew.id),
             crew_id=crew.id,
             pattern_id=first_schedule.pattern_id,
             anchor_at=ANCHOR_UTC + CYCLE,
@@ -343,6 +373,8 @@ def test_overlapping_memberships_for_one_employee_are_rejected(db_session):
     employee = _employee(db_session, "G-MEMBERSHIP")
     create_crew_membership(
         db_session,
+        scope=ORGANIZATION_SCOPE,
+        if_match=_membership_collection_etag(db_session, crew.id),
         employee_id=employee.id,
         crew_id=crew.id,
         effective_from=ANCHOR_UTC,
@@ -352,6 +384,8 @@ def test_overlapping_memberships_for_one_employee_are_rejected(db_session):
     with pytest.raises(ValueError, match="overlap"):
         create_crew_membership(
             db_session,
+            scope=ORGANIZATION_SCOPE,
+            if_match=_membership_collection_etag(db_session, crew.id),
             employee_id=employee.id,
             crew_id=crew.id,
             effective_from=ANCHOR_UTC + timedelta(hours=16),

@@ -60,6 +60,7 @@ from app.services import (
     workforce_seed_service,
 )
 from app.services.attendance_provider import AttendanceProvider
+from app.services.workforce_access_service import organization_scope
 
 log = logging.getLogger(__name__)
 
@@ -231,6 +232,7 @@ def _run_workforce_occurrence_generation() -> None:
             len(
                 workforce_schedule_service.generate_occurrences(
                     session,
+                    scope=organization_scope(),
                     crew_id=crew_id,
                     starts_at=starts_at,
                     ends_at=ends_at,

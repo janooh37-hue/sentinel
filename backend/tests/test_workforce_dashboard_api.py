@@ -29,6 +29,7 @@ from app.services import (
     workforce_dashboard_service,
     workforce_read_service,
 )
+from app.services.workforce_access_service import organization_scope
 from app.services.workforce_scope_service import resolve_workforce_scope
 
 # The snapshot route derives its operational date from the real clock, so the
@@ -274,6 +275,7 @@ def test_correction_and_revocation_update_roster_and_every_dashboard_metric(
 
     correction = attendance_correction_service.correct(
         workforce_api_db,
+        scope=organization_scope(),
         case_id=case.id,
         snapshot={
             "replacement_presence_state": "absent",
@@ -327,6 +329,7 @@ def test_correction_and_revocation_update_roster_and_every_dashboard_metric(
 
     attendance_correction_service.revoke(
         workforce_api_db,
+        scope=organization_scope(),
         case_id=case.id,
         adjustment_id=correction.id,
         reason="Automatic attendance restored",

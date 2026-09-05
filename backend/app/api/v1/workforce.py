@@ -8,26 +8,17 @@ from typing import Annotated, Any, TypeVar
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, Header, Query, Response, status
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, require_capability
-from app.api.errors import AppError, ConflictError, NotFoundError, ValidationFailedError
+from app.api.errors import AppError, ConflictError, ValidationFailedError
 from app.config import get_settings
-from app.db.models import AuditLog, Employee, User
+from app.db.models import User
 from app.db.session import get_db
 from app.db.workforce_models import (
     AttendanceEvaluationQueue,
     AttendanceProviderPerson,
-    UserWorkforceScope,
-    WorkAttendancePolicy,
     WorkCrew,
-    WorkCrewMembership,
-    WorkCrewSchedule,
-    WorkRotationPattern,
-    WorkShiftDefinition,
-    WorkShiftOverride,
-    WorkStaffingRequirement,
 )
 from app.schemas.workforce import (
     AdjustmentRevokeWrite,
@@ -77,6 +68,7 @@ from app.services import (
     perm_service,
     scheduler_service,
     settings_service,
+    workforce_access_service,
     workforce_admin_service,
     workforce_dashboard_service,
     workforce_read_service,
@@ -84,15 +76,13 @@ from app.services import (
 )
 from app.services.attendance_provider import AttendanceProvider
 from app.services.attendance_queue_service import retry_evaluation_queue_item
+from app.services.workforce_etag import etag_for, require_if_match, row_etag
 from app.services.workforce_scope_service import (
     WorkforceScope,
     decode_cursor,
     encode_cursor,
-    intersect_workforce_scope,
-    normalize_scope_entry,
     normalize_scope_value,
     resolve_workforce_scope,
-    scope_allows,
 )
 
 router = APIRouter(prefix="/workforce", tags=["workforce"])
@@ -135,140 +125,10 @@ def _set_etag(response: Response, tag: str) -> None:
     response.headers["ETag"] = tag
 
 
-def _scope_rows(db: Session, user_id: int) -> list[UserWorkforceScope]:
-    return list(db.scalars(select(UserWorkforceScope).where(UserWorkforceScope.user_id == user_id).order_by(UserWorkforceScope.scope_kind, UserWorkforceScope.department, UserWorkforceScope.duty_unit, UserWorkforceScope.duty_post)))
-
-
-def _scope_payload(rows: list[UserWorkforceScope]) -> list[dict[str, str | None]]:
-    return [{"scope_kind": row.scope_kind, "department": row.department, "duty_unit": row.duty_unit, "duty_post": row.duty_post} for row in rows]
-
-
-def _scope_etag(rows: list[UserWorkforceScope]) -> str:
-    return workforce_admin_service.etag_for(_scope_payload(rows))
-
-
-def _assert_scope_filter(scope: WorkforceScope, *, department: str | None, duty_unit: str | None, duty_post: str | None) -> WorkforceScope:
-    if any(value is not None for value in (department, duty_unit, duty_post)) and not scope_allows(
-        scope,
-        employee_id="__scope_filter__",
-        department=department,
-        duty_unit=duty_unit,
-        duty_post=duty_post,
-    ):
-        raise AppError("FORBIDDEN", "Requested filter is outside workforce scope.", http_status=403)
-    return intersect_workforce_scope(
-        scope,
-        department=department,
-        duty_unit=duty_unit,
-        duty_post=duty_post,
-    )
-
-
-def _intersect_coverage_scope(
-    scope: WorkforceScope,
-    *,
-    department: str | None,
-    duty_unit: str | None,
-) -> WorkforceScope:
-    """Allow a selected hierarchy ancestor without widening a narrower grant."""
-    if department is None and duty_unit is None:
-        return scope
-    for entry in scope.entries:
-        if entry.scope_kind == "organization":
-            return intersect_workforce_scope(scope, department=department, duty_unit=duty_unit)
-        if entry.scope_kind == "self":
-            continue
-        if entry.department is not None and entry.department != department:
-            continue
-        if duty_unit is not None and entry.scope_kind != "department" and entry.duty_unit != duty_unit:
-            continue
-        return intersect_workforce_scope(scope, department=department, duty_unit=duty_unit)
-    raise AppError("FORBIDDEN", "Requested filter is outside workforce scope.", http_status=403)
-
-
-def _require_organization_schedule_scope(db: Session, user: User) -> None:
-    """Crew identity and anchors are organization-wide, never hierarchy-local."""
-
-    if not _scope(db, user).is_organization:
-        raise AppError(
-            "FORBIDDEN",
-            "Organization workforce scope is required for crew and anchor changes.",
-            http_status=403,
-        )
-
-
-def _require_organization_workforce_scope(db: Session, user: User) -> None:
-    """Guard organization-global surfaces that no hierarchy scope can own.
-
-    Provider configuration/test/sync, unmapped-person reconciliation, and
-    organization-wide policy/configuration all bind every department, so a
-    capability alone must not authorize them.
-    """
-
-    if not _scope(db, user).is_organization:
-        raise AppError(
-            "FORBIDDEN",
-            "Organization workforce scope is required for this change.",
-            http_status=403,
-        )
-
-
 def _is_own_employee(user: User, employee_id: str) -> bool:
     """Whether this caller is asking about their own linked employee record."""
     linked = (user.employee_id or "").strip()
     return bool(linked) and linked == employee_id
-
-
-def _require_employee_schedule_scope(db: Session, user: User, employee_id: str) -> Employee:
-    """Return a target employee only when the manager's resolved scope permits it."""
-
-    employee = db.get(Employee, employee_id)
-    if employee is None:
-        raise NotFoundError("WORKFORCE_EMPLOYEE_NOT_FOUND", "Employee was not found.")
-    if not _scope(db, user).allows_employee(
-        employee_id=employee.id,
-        department=employee.department,
-        duty_unit=employee.duty_unit,
-        duty_post=employee.duty_post,
-    ):
-        raise AppError(
-            "FORBIDDEN",
-            "The employee is outside the assigned workforce scope.",
-            http_status=403,
-        )
-    return employee
-
-
-def _crew_collection_etag(rows: list[WorkCrew]) -> str:
-    return workforce_admin_service.etag_for(
-        [
-            {"id": row.id, "updated_at": row.updated_at, "created_at": row.created_at}
-            for row in rows
-        ]
-    )
-
-
-def _crew_schedule_collection_etag(rows: list[WorkCrewSchedule]) -> str:
-    return workforce_admin_service.etag_for(
-        [
-            {
-                "id": row.id,
-                "version": row.version,
-                "updated_at": row.updated_at,
-                "created_at": row.created_at,
-            }
-            for row in rows
-        ]
-    )
-
-
-def _crew_membership_collection_etag(rows: list[WorkCrewMembership]) -> str:
-    return workforce_admin_service.etag_for(
-        [
-            {"id": row.id, "updated_at": row.updated_at, "created_at": row.created_at}
-            for row in rows
-        ]
-    )
 
 
 def _require_management(db: Session, user: User) -> None:
@@ -280,28 +140,6 @@ def _require_management(db: Session, user: User) -> None:
     raise AppError("FORBIDDEN", "Missing workforce management capability.", http_status=403)
 
 
-def _visible_crew_memberships(
-    db: Session, *, crew_id: int, scope: WorkforceScope
-) -> list[WorkCrewMembership]:
-    rows = workforce_read_service.list_crew_memberships(db, crew_id=crew_id)
-    employee_ids = {row.employee_id for row in rows}
-    employees = {
-        employee.id: employee
-        for employee in db.scalars(select(Employee).where(Employee.id.in_(employee_ids)))
-    }
-    return [
-        row
-        for row in rows
-        if (employee := employees.get(row.employee_id)) is not None
-        and scope.allows_employee(
-            employee_id=employee.id,
-            department=employee.department,
-            duty_unit=employee.duty_unit,
-            duty_post=employee.duty_post,
-        )
-    ]
-
-
 def _configuration_etag(
     configuration: WorkforceConfiguration | None,
 ) -> str:
@@ -310,7 +148,7 @@ def _configuration_etag(
         if configuration is not None
         else {"configured": False}
     )
-    return workforce_admin_service.etag_for(value)
+    return etag_for(value)
 
 
 
@@ -322,7 +160,7 @@ def _crew_read(row: WorkCrew) -> dict[str, Any]:
         "name_en": row.name_en,
         "name_ar": row.name_ar,
         "active": row.active,
-        "version": workforce_admin_service.row_etag(row),
+        "version": row_etag(row),
         "created_at": row.created_at,
         "updated_at": row.updated_at,
     }
@@ -371,7 +209,9 @@ def get_dashboard_coverage(
         raise ValidationFailedError("WORKFORCE_COVERAGE_PARENT_INVALID", "Duty-unit coverage requires only a department filter.")
     if parent_kind == "duty_unit" and (department is None or duty_unit is None):
         raise ValidationFailedError("WORKFORCE_COVERAGE_PARENT_INVALID", "Duty-post coverage requires department and duty-unit filters.")
-    scope = _intersect_coverage_scope(_scope(db, user), department=department, duty_unit=duty_unit)
+    scope = workforce_access_service.intersect_coverage_scope(
+        _scope(db, user), department=department, duty_unit=duty_unit
+    )
     rows = workforce_dashboard_service.get_coverage_children(
         db,
         scope=scope,
@@ -421,30 +261,23 @@ def get_my_workforce_access(user: Annotated[User, Depends(get_current_user)], db
 
 @router.get("/access/users/{user_id}/scopes", response_model=WorkforceScopeReplace)
 def get_user_scopes(user_id: int, response: Response, _admin: Annotated[User, Depends(require_capability("users.manage"))], db: Annotated[Session, Depends(get_db)]) -> dict[str, Any]:
-    if db.get(User, user_id) is None:
-        raise NotFoundError("USER_NOT_FOUND", "User was not found.")
-    rows = _scope_rows(db, user_id)
-    _set_etag(response, _scope_etag(rows))
-    return {"scopes": _scope_payload(rows)}
+    rows, etag = workforce_access_service.user_scopes(db, user_id=user_id)
+    _set_etag(response, etag)
+    return {"scopes": workforce_access_service.scope_payload(rows)}
 
 
 @router.put("/access/users/{user_id}/scopes", response_model=WorkforceScopeReplace)
 def replace_user_scopes(*, user_id: int, body: WorkforceScopeReplace, response: Response, if_match: Annotated[str | None, Header(alias="If-Match")] = None, actor: Annotated[User, Depends(require_capability("users.manage"))], db: Annotated[Session, Depends(get_db)] ) -> dict[str, Any]:
-    if db.get(User, user_id) is None:
-        raise NotFoundError("USER_NOT_FOUND", "User was not found.")
-    current = _scope_rows(db, user_id)
-    workforce_admin_service.require_if_match(if_match, _scope_etag(current))
-    normalized = [normalize_scope_entry(**scope.model_dump()) for scope in body.scopes]
-    if len(set(normalized)) != len(normalized):
-        raise ValidationFailedError("DUPLICATE_WORKFORCE_SCOPE", "Scope replacement contains a duplicate grant.")
-    db.query(UserWorkforceScope).filter(UserWorkforceScope.user_id == user_id).delete(synchronize_session=False)
-    for entry in normalized:
-        db.add(UserWorkforceScope(user_id=user_id, scope_kind=entry.scope_kind, department=entry.department, duty_unit=entry.duty_unit, duty_post=entry.duty_post, created_by_user_id=actor.id))
-    db.add(AuditLog(actor=actor.employee_id or actor.email, action="workforce.scope.replaced", entity_type="user_workforce_scope", entity_id=str(user_id), payload=json.dumps({"scope_count": len(normalized)})))
+    rows, etag = workforce_access_service.replace_user_scopes(
+        db,
+        user_id=user_id,
+        scopes=body.scopes,
+        if_match=if_match,
+        actor=actor,
+    )
     db.commit()
-    rows = _scope_rows(db, user_id)
-    _set_etag(response, _scope_etag(rows))
-    return {"scopes": _scope_payload(rows)}
+    _set_etag(response, etag)
+    return {"scopes": workforce_access_service.scope_payload(rows)}
 
 
 @router.get("/roster", response_model=CursorPage[RosterRowRead])
@@ -459,19 +292,6 @@ def get_roster(operational_date: date, user: Annotated[User, Depends(require_cap
 def get_attendance_exceptions(user: Annotated[User, Depends(require_capability("workforce.attendance.review"))], people_user: Annotated[User, Depends(require_capability("workforce.people.view"))], db: Annotated[Session, Depends(get_db)], operational_date: date | None = None, presence: str | None = None, exception: str | None = None, limit: Annotated[int, Query(ge=1, le=_MAX_LIMIT)] = 100, cursor: str | None = None) -> dict[str, Any]:
     scope = _scope(db, user)
     rows = workforce_read_service.list_exceptions(db, scope=scope, operational_date=operational_date, presence=presence, exception=exception)
-    def severity(row: dict[str, Any]) -> tuple[int, str, int]:
-        if row.get("presence_state") == "absent":
-            return (0, row["employee_id"], row["case_id"])
-        if row.get("missing_checkout"):
-            return (1, row["employee_id"], row["case_id"])
-        if (row.get("late_minutes") or 0) > 0:
-            return (2, row["employee_id"], row["case_id"])
-        if (row.get("early_exit_minutes") or 0) > 0:
-            return (3, row["employee_id"], row["case_id"])
-        if row.get("presence_state") == "unknown":
-            return (4, row["employee_id"], row["case_id"])
-        return (5, row["employee_id"], row["case_id"])
-    rows = sorted(rows, key=severity)
     items, next_cursor = _cursor_page(rows, endpoint="exceptions", scope=scope, filters={"operational_date": operational_date, "presence": presence, "exception": exception}, limit=limit, cursor=cursor)
     return {"items": items, "next_cursor": next_cursor}
 
@@ -570,12 +390,10 @@ def get_employee_attendance_history(
     before the schedule existed can be judged. Same two doors as
     ``get_employee_attendance``, plus the caller's resolved scope.
     """
-    if _is_own_employee(user, employee_id) and perm_service.has_capability(
-        db, user, "workforce.self.view"
+    if not (
+        _is_own_employee(user, employee_id)
+        and perm_service.has_capability(db, user, "workforce.self.view")
     ):
-        if db.get(Employee, employee_id) is None:
-            raise NotFoundError("WORKFORCE_EMPLOYEE_NOT_FOUND", "Employee was not found.")
-    else:
         for capability in ("workforce.people.view", "workforce.attendance.review"):
             if not perm_service.has_capability(db, user, capability):
                 raise AppError(
@@ -583,25 +401,18 @@ def get_employee_attendance_history(
                     "Capability required.",
                     http_status=status.HTTP_403_FORBIDDEN,
                 )
-        _require_employee_schedule_scope(db, user, employee_id)
-    if to_date < from_date:
-        raise ValidationFailedError(
-            "WORKFORCE_HISTORY_RANGE_INVALID", "to_date must not precede from_date."
-        )
-    if (to_date - from_date).days + 1 > attendance_history_service.MAX_RANGE_DAYS:
-        raise ValidationFailedError(
-            "WORKFORCE_HISTORY_RANGE_INVALID",
-            f"Range must not exceed {attendance_history_service.MAX_RANGE_DAYS} days.",
-        )
     try:
         return attendance_history_service.employee_punch_history(
             db,
+            scope=_scope(db, user),
             employee_id=employee_id,
             from_date=from_date,
             to_date=to_date,
             provider=provider,
             zone=ZoneInfo(get_settings().biotime_time_zone),
         )
+    except AppError:
+        raise
     except Exception as exc:
         # Never surface vendor response text: it can carry personal data and the
         # configured provider URL.
@@ -623,9 +434,9 @@ def get_attendance_case(case_id: int, response: Response, user: Annotated[User, 
 
 @router.post("/attendance/cases/{case_id}/adjustments", status_code=status.HTTP_201_CREATED)
 def create_attendance_adjustment(*, case_id: int, body: AttendanceAdjustmentWrite, response: Response, if_match: Annotated[str | None, Header(alias="If-Match")] = None, user: Annotated[User, Depends(require_capability("workforce.attendance.correct"))], people_user: Annotated[User, Depends(require_capability("workforce.people.view"))], db: Annotated[Session, Depends(get_db)] ) -> dict[str, Any]:
-    workforce_read_service.get_attendance_case(db, scope=_scope(db, user), case_id=case_id)
     row = attendance_correction_service.correct(
         db,
+        scope=_scope(db, user),
         case_id=case_id,
         snapshot=body.model_dump(mode="python"),
         if_match=if_match,
@@ -638,9 +449,9 @@ def create_attendance_adjustment(*, case_id: int, body: AttendanceAdjustmentWrit
 
 @router.post("/attendance/cases/{case_id}/adjustments/{adjustment_id}/revoke")
 def revoke_attendance_adjustment(*, case_id: int, adjustment_id: int, body: AdjustmentRevokeWrite, response: Response, if_match: Annotated[str | None, Header(alias="If-Match")] = None, user: Annotated[User, Depends(require_capability("workforce.attendance.correct"))], people_user: Annotated[User, Depends(require_capability("workforce.people.view"))], db: Annotated[Session, Depends(get_db)] ) -> dict[str, Any]:
-    workforce_read_service.get_attendance_case(db, scope=_scope(db, user), case_id=case_id)
     row = attendance_correction_service.revoke(
         db,
+        scope=_scope(db, user),
         case_id=case_id,
         adjustment_id=adjustment_id,
         reason=body.reason,
@@ -671,7 +482,7 @@ def get_shift_definitions(
     limit: Annotated[int, Query(ge=1, le=_MAX_LIMIT)] = 100,
     cursor: str | None = None,
 ) -> dict[str, Any]:
-    rows = list(db.scalars(select(WorkShiftDefinition).order_by(WorkShiftDefinition.code)))
+    rows, etag = workforce_read_service.list_shift_definitions(db)
     items, next_cursor = _cursor_page(
         [workforce_read_service.shift_definition_read(row) for row in rows],
         endpoint="schedule-definitions",
@@ -680,15 +491,7 @@ def get_shift_definitions(
         limit=limit,
         cursor=cursor,
     )
-    _set_etag(
-        response,
-        workforce_admin_service.etag_for(
-            [
-                {"id": row.id, "updated_at": row.updated_at, "created_at": row.created_at}
-                for row in rows
-            ]
-        ),
-    )
+    _set_etag(response, etag)
     return {"items": items, "next_cursor": next_cursor}
 
 
@@ -698,11 +501,9 @@ def get_rotation_pattern(
     _user: Annotated[User, Depends(require_capability("workforce.schedule.manage"))],
     db: Annotated[Session, Depends(get_db)],
 ) -> dict[str, Any]:
-    row = db.scalar(select(WorkRotationPattern).order_by(WorkRotationPattern.code).limit(1))
-    if row is None:
-        raise NotFoundError("WORKFORCE_ROTATION_NOT_FOUND", "Rotation pattern was not found.")
+    row, etag = workforce_read_service.rotation_detail(db)
     data = workforce_read_service.rotation_read(db, row)
-    _set_etag(response, workforce_admin_service.row_etag(row))
+    _set_etag(response, etag)
     return data
 
 
@@ -714,7 +515,7 @@ def list_crews(
     limit: Annotated[int, Query(ge=1, le=_MAX_LIMIT)] = 100,
     cursor: str | None = None,
 ) -> dict[str, Any]:
-    rows = list(db.scalars(select(WorkCrew).order_by(WorkCrew.code)))
+    rows, etag = workforce_read_service.list_crews(db)
     items, next_cursor = _cursor_page(
         [_crew_read(row) for row in rows],
         endpoint="crews",
@@ -723,7 +524,7 @@ def list_crews(
         limit=limit,
         cursor=cursor,
     )
-    _set_etag(response, _crew_collection_etag(rows))
+    _set_etag(response, etag)
     return {"items": items, "next_cursor": next_cursor}
 
 
@@ -734,11 +535,9 @@ def get_crew(
     _user: Annotated[User, Depends(require_capability("workforce.schedule.manage"))],
     db: Annotated[Session, Depends(get_db)],
 ) -> dict[str, Any]:
-    row = db.get(WorkCrew, crew_id)
-    if row is None:
-        raise NotFoundError("WORKFORCE_CREW_NOT_FOUND", "Crew was not found.")
+    row, etag = workforce_read_service.crew_detail(db, crew_id=crew_id)
     data = _crew_read(row)
-    _set_etag(response, data["version"])
+    _set_etag(response, etag)
     return data
 
 
@@ -751,13 +550,13 @@ def create_crew(
     user: Annotated[User, Depends(require_capability("workforce.schedule.manage"))],
     db: Annotated[Session, Depends(get_db)],
 ) -> dict[str, Any]:
-    workforce_schedule_service.acquire_schedule_write_lock(db)
-    _require_organization_schedule_scope(db, user)
-    workforce_admin_service.require_if_match(
-        if_match,
-        _crew_collection_etag(list(db.scalars(select(WorkCrew).order_by(WorkCrew.id)))),
+    row = workforce_admin_service.create_crew(
+        db,
+        scope=_scope(db, user),
+        if_match=if_match,
+        payload=body.model_dump(),
+        actor=user,
     )
-    row = workforce_admin_service.create_crew(db, payload=body.model_dump(), actor=user)
     db.commit()
     data = _crew_read(row)
     _set_etag(response, data["version"])
@@ -774,10 +573,9 @@ def patch_crew(
     user: Annotated[User, Depends(require_capability("workforce.schedule.manage"))],
     db: Annotated[Session, Depends(get_db)],
 ) -> dict[str, Any]:
-    workforce_schedule_service.acquire_schedule_write_lock(db)
-    _require_organization_schedule_scope(db, user)
     row = workforce_admin_service.update_crew(
         db,
+        scope=_scope(db, user),
         crew_id=crew_id,
         payload=body.model_dump(exclude_unset=True),
         if_match=if_match,
@@ -798,10 +596,9 @@ def retire_crew(
     user: Annotated[User, Depends(require_capability("workforce.schedule.manage"))],
     db: Annotated[Session, Depends(get_db)],
 ) -> dict[str, Any]:
-    workforce_schedule_service.acquire_schedule_write_lock(db)
-    _require_organization_schedule_scope(db, user)
     row = workforce_admin_service.retire_crew(
         db,
+        scope=_scope(db, user),
         crew_id=crew_id,
         if_match=if_match,
         actor=user,
@@ -824,9 +621,7 @@ def list_crew_schedules(
     limit: Annotated[int, Query(ge=1, le=_MAX_LIMIT)] = 100,
     cursor: str | None = None,
 ) -> dict[str, Any]:
-    if db.get(WorkCrew, crew_id) is None:
-        raise NotFoundError("WORKFORCE_CREW_NOT_FOUND", "Crew was not found.")
-    rows = workforce_read_service.list_crew_schedules(db, crew_id=crew_id)
+    rows, etag = workforce_read_service.list_crew_schedules(db, crew_id=crew_id)
     items, next_cursor = _cursor_page(
         [workforce_read_service.crew_schedule_read(row) for row in rows],
         endpoint="crew-schedules",
@@ -835,7 +630,7 @@ def list_crew_schedules(
         limit=limit,
         cursor=cursor,
     )
-    _set_etag(response, _crew_schedule_collection_etag(rows))
+    _set_etag(response, etag)
     return {"items": items, "next_cursor": next_cursor}
 
 
@@ -850,11 +645,11 @@ def get_crew_schedule(
     _user: Annotated[User, Depends(require_capability("workforce.schedule.manage"))],
     db: Annotated[Session, Depends(get_db)],
 ) -> dict[str, Any]:
-    row = db.get(WorkCrewSchedule, schedule_id)
-    if row is None or row.crew_id != crew_id:
-        raise NotFoundError("WORKFORCE_SCHEDULE_NOT_FOUND", "Crew schedule was not found.")
+    row, etag = workforce_read_service.crew_schedule_detail(
+        db, crew_id=crew_id, schedule_id=schedule_id
+    )
     data = workforce_read_service.crew_schedule_read(row)
-    _set_etag(response, workforce_admin_service.row_etag(row))
+    _set_etag(response, etag)
     return data
 
 
@@ -872,18 +667,11 @@ def create_crew_schedule(
     user: Annotated[User, Depends(require_capability("workforce.schedule.manage"))],
     db: Annotated[Session, Depends(get_db)],
 ) -> dict[str, Any]:
-    workforce_schedule_service.acquire_schedule_write_lock(db)
-    _require_organization_schedule_scope(db, user)
-    crew = db.get(WorkCrew, crew_id)
-    if crew is None:
-        raise NotFoundError("WORKFORCE_CREW_NOT_FOUND", "Crew was not found.")
-    if not crew.active:
-        raise ValidationFailedError("WORKFORCE_CREW_INACTIVE", "Crew is retired.")
-    schedules = workforce_read_service.list_crew_schedules(db, crew_id=crew_id)
-    workforce_admin_service.require_if_match(if_match, _crew_schedule_collection_etag(schedules))
     try:
         row = workforce_schedule_service.create_crew_schedule(
             db,
+            scope=_scope(db, user),
+            if_match=if_match,
             crew_id=crew_id,
             current_user=user,
             **body.model_dump(mode="python"),
@@ -892,7 +680,7 @@ def create_crew_schedule(
         raise ValidationFailedError("WORKFORCE_SCHEDULE_INVALID", str(exc)) from exc
     db.commit()
     data = workforce_read_service.crew_schedule_read(row)
-    _set_etag(response, workforce_admin_service.row_etag(row))
+    _set_etag(response, row_etag(row))
     return data
 
 
@@ -911,19 +699,13 @@ def replace_crew_schedule(
     user: Annotated[User, Depends(require_capability("workforce.schedule.manage"))],
     db: Annotated[Session, Depends(get_db)],
 ) -> dict[str, Any]:
-    workforce_schedule_service.acquire_schedule_write_lock(db)
-    _require_organization_schedule_scope(db, user)
-    current = db.get(WorkCrewSchedule, schedule_id)
-    if current is None or current.crew_id != crew_id:
-        raise NotFoundError("WORKFORCE_SCHEDULE_NOT_FOUND", "Crew schedule was not found.")
-    workforce_admin_service.require_if_match(
-        if_match, workforce_admin_service.row_etag(current)
-    )
     try:
         row = workforce_schedule_service.replace_crew_schedule(
             db,
+            scope=_scope(db, user),
             crew_id=crew_id,
-            expected_version=current.version,
+            schedule_id=schedule_id,
+            if_match=if_match,
             current_user=user,
             **body.model_dump(mode="python"),
         )
@@ -931,7 +713,7 @@ def replace_crew_schedule(
         raise ValidationFailedError("WORKFORCE_SCHEDULE_INVALID", str(exc)) from exc
     db.commit()
     data = workforce_read_service.crew_schedule_read(row)
-    _set_etag(response, workforce_admin_service.row_etag(row))
+    _set_etag(response, row_etag(row))
     return data
 
 
@@ -945,11 +727,9 @@ def preview_crew_schedule(
     user: Annotated[User, Depends(require_capability("workforce.schedule.manage"))],
     db: Annotated[Session, Depends(get_db)],
 ) -> dict[str, Any]:
-    _require_organization_schedule_scope(db, user)
-    if db.get(WorkCrew, crew_id) is None:
-        raise NotFoundError("WORKFORCE_CREW_NOT_FOUND", "Crew was not found.")
     return workforce_read_service.preview_crew_schedule(
         db,
+        scope=_scope(db, user),
         crew_id=crew_id,
         **body.model_dump(mode="python"),
     )
@@ -967,20 +747,10 @@ def list_crew_memberships(
     limit: Annotated[int, Query(ge=1, le=_MAX_LIMIT)] = 100,
     cursor: str | None = None,
 ) -> dict[str, Any]:
-    if db.get(WorkCrew, crew_id) is None:
-        raise NotFoundError("WORKFORCE_CREW_NOT_FOUND", "Crew was not found.")
     scope = _scope(db, user)
-    rows = [
-        row
-        for row in workforce_read_service.list_crew_memberships(db, crew_id=crew_id)
-        if (employee := db.get(Employee, row.employee_id)) is not None
-        and scope.allows_employee(
-            employee_id=employee.id,
-            department=employee.department,
-            duty_unit=employee.duty_unit,
-            duty_post=employee.duty_post,
-        )
-    ]
+    rows, etag = workforce_read_service.list_crew_memberships(
+        db, crew_id=crew_id, scope=scope
+    )
     items, next_cursor = _cursor_page(
         [workforce_read_service.crew_membership_read(row) for row in rows],
         endpoint="crew-memberships",
@@ -989,7 +759,7 @@ def list_crew_memberships(
         limit=limit,
         cursor=cursor,
     )
-    _set_etag(response, _crew_membership_collection_etag(rows))
+    _set_etag(response, etag)
     return {"items": items, "next_cursor": next_cursor}
 
 
@@ -1004,12 +774,14 @@ def get_crew_membership(
     user: Annotated[User, Depends(require_capability("workforce.schedule.manage"))],
     db: Annotated[Session, Depends(get_db)],
 ) -> dict[str, Any]:
-    row = db.get(WorkCrewMembership, membership_id)
-    if row is None or row.crew_id != crew_id:
-        raise NotFoundError("WORKFORCE_MEMBERSHIP_NOT_FOUND", "Crew membership was not found.")
-    _require_employee_schedule_scope(db, user, row.employee_id)
+    row, etag = workforce_read_service.crew_membership_detail(
+        db,
+        crew_id=crew_id,
+        membership_id=membership_id,
+        scope=_scope(db, user),
+    )
     data = workforce_read_service.crew_membership_read(row)
-    _set_etag(response, workforce_admin_service.row_etag(row))
+    _set_etag(response, etag)
     return data
 
 
@@ -1027,31 +799,12 @@ def create_crew_membership(
     user: Annotated[User, Depends(require_capability("workforce.schedule.manage"))],
     db: Annotated[Session, Depends(get_db)],
 ) -> dict[str, Any]:
-    workforce_schedule_service.acquire_schedule_write_lock(db)
-    _require_employee_schedule_scope(db, user, body.employee_id)
-    crew = db.get(WorkCrew, crew_id)
-    if crew is None:
-        raise NotFoundError("WORKFORCE_CREW_NOT_FOUND", "Crew was not found.")
-    if not crew.active:
-        raise ValidationFailedError("WORKFORCE_CREW_INACTIVE", "Crew is retired.")
     scope = _scope(db, user)
-    memberships = [
-        membership
-        for membership in workforce_read_service.list_crew_memberships(db, crew_id=crew_id)
-        if (employee := db.get(Employee, membership.employee_id)) is not None
-        and scope.allows_employee(
-            employee_id=employee.id,
-            department=employee.department,
-            duty_unit=employee.duty_unit,
-            duty_post=employee.duty_post,
-        )
-    ]
-    workforce_admin_service.require_if_match(
-        if_match, _crew_membership_collection_etag(memberships)
-    )
     try:
         row = workforce_schedule_service.create_crew_membership(
             db,
+            scope=scope,
+            if_match=if_match,
             crew_id=crew_id,
             current_user=user,
             **body.model_dump(mode="python"),
@@ -1060,7 +813,7 @@ def create_crew_membership(
         raise ValidationFailedError("WORKFORCE_MEMBERSHIP_INVALID", str(exc)) from exc
     db.commit()
     data = workforce_read_service.crew_membership_read(row)
-    _set_etag(response, workforce_admin_service.row_etag(row))
+    _set_etag(response, row_etag(row))
     return data
 
 
@@ -1078,18 +831,13 @@ def end_crew_membership(
     user: Annotated[User, Depends(require_capability("workforce.schedule.manage"))],
     db: Annotated[Session, Depends(get_db)],
 ) -> dict[str, Any]:
-    workforce_schedule_service.acquire_schedule_write_lock(db)
-    row = db.get(WorkCrewMembership, membership_id)
-    if row is None or row.crew_id != crew_id:
-        raise NotFoundError("WORKFORCE_MEMBERSHIP_NOT_FOUND", "Crew membership was not found.")
-    _require_employee_schedule_scope(db, user, row.employee_id)
-    workforce_admin_service.require_if_match(
-        if_match, workforce_admin_service.row_etag(row)
-    )
     try:
         updated = workforce_schedule_service.end_crew_membership(
             db,
+            scope=_scope(db, user),
+            crew_id=crew_id,
             membership_id=membership_id,
+            if_match=if_match,
             current_user=user,
             **body.model_dump(mode="python"),
         )
@@ -1097,35 +845,22 @@ def end_crew_membership(
         raise ValidationFailedError("WORKFORCE_MEMBERSHIP_INVALID", str(exc)) from exc
     db.commit()
     data = workforce_read_service.crew_membership_read(updated)
-    _set_etag(response, workforce_admin_service.row_etag(updated))
+    _set_etag(response, row_etag(updated))
     return data
 
 
 @router.get("/overrides", response_model=CursorPage[dict[str, Any]])
 def list_overrides(user: Annotated[User, Depends(require_capability("workforce.schedule.manage"))], db: Annotated[Session, Depends(get_db)], limit: Annotated[int, Query(ge=1, le=_MAX_LIMIT)] = 100, cursor: str | None = None) -> dict[str, Any]:
-    # A scoped manager must not enumerate other hierarchies' people or exceptions.
     scope = _scope(db, user)
-    rows = db.scalars(select(WorkShiftOverride).order_by(WorkShiftOverride.starts_at.desc()).limit(_MAX_LIMIT))
-    visible = []
-    for row in rows:
-        employee = db.get(Employee, row.employee_id)
-        if employee is None or not scope.allows_employee(
-            employee_id=employee.id,
-            department=employee.department,
-            duty_unit=employee.duty_unit,
-            duty_post=employee.duty_post,
-        ):
-            continue
-        visible.append({"id": row.id, "employee_id": row.employee_id, "assignment_kind": row.assignment_kind, "reason_kind": row.reason_kind, "starts_at": row.starts_at, "ends_at": row.ends_at, "cancelled_at": row.cancelled_at, "version": workforce_admin_service.row_etag(row)})
+    visible = [{"id": row.id, "employee_id": row.employee_id, "assignment_kind": row.assignment_kind, "reason_kind": row.reason_kind, "starts_at": row.starts_at, "ends_at": row.ends_at, "cancelled_at": row.cancelled_at, "version": row_etag(row)} for row in workforce_read_service.list_shift_overrides(db, scope=scope)]
     items, next_cursor = _cursor_page(visible, endpoint="overrides", scope=scope, filters={}, limit=limit, cursor=cursor)
     return {"items": items, "next_cursor": next_cursor}
 
 
 @router.post("/overrides", status_code=status.HTTP_201_CREATED)
 def create_shift_override(body: ShiftOverrideWrite, user: Annotated[User, Depends(require_capability("workforce.schedule.manage"))], db: Annotated[Session, Depends(get_db)]) -> dict[str, Any]:
-    _require_employee_schedule_scope(db, user, body.employee_id)
     try:
-        row = workforce_schedule_service.create_shift_override(db, current_user=user, **body.model_dump(mode="python"))
+        row = workforce_schedule_service.create_shift_override(db, scope=_scope(db, user), current_user=user, **body.model_dump(mode="python"))
     except ValueError as exc:
         raise ValidationFailedError("WORKFORCE_OVERRIDE_INVALID", str(exc)) from exc
     db.commit()
@@ -1134,14 +869,8 @@ def create_shift_override(body: ShiftOverrideWrite, user: Annotated[User, Depend
 
 @router.post("/overrides/{override_id}/cancel")
 def cancel_shift_override(*, override_id: int, if_match: Annotated[str | None, Header(alias="If-Match")] = None, user: Annotated[User, Depends(require_capability("workforce.schedule.manage"))], db: Annotated[Session, Depends(get_db)] ) -> dict[str, Any]:
-    row = db.get(WorkShiftOverride, override_id)
-    if row is None:
-        raise NotFoundError("WORKFORCE_OVERRIDE_NOT_FOUND", "Shift override was not found.")
-    workforce_admin_service.require_if_match(if_match, workforce_admin_service.row_etag(row))
-    # Cancellation mutates that employee's schedule, so it needs the same gate.
-    _require_employee_schedule_scope(db, user, row.employee_id)
     try:
-        row = workforce_schedule_service.cancel_shift_override(db, override_id=override_id, current_user=user)
+        row = workforce_schedule_service.cancel_shift_override(db, scope=_scope(db, user), override_id=override_id, if_match=if_match, current_user=user)
     except ValueError as exc:
         raise ConflictError("WORKFORCE_VERSION_CONFLICT", str(exc)) from exc
     db.commit()
@@ -1150,12 +879,10 @@ def cancel_shift_override(*, override_id: int, if_match: Annotated[str | None, H
 
 @router.post("/overrides/swap", status_code=status.HTTP_201_CREATED)
 def create_shift_swap(body: ShiftSwapWrite, user: Annotated[User, Depends(require_capability("workforce.schedule.manage"))], db: Annotated[Session, Depends(get_db)]) -> dict[str, Any]:
-    # Spec: every leg of a swap is checked BEFORE its atomic transaction starts.
-    _require_employee_schedule_scope(db, user, body.from_employee_id)
-    _require_employee_schedule_scope(db, user, body.to_employee_id)
     try:
         off, work, correlation = workforce_schedule_service.create_shift_swap(
             db,
+            scope=_scope(db, user),
             current_user=user,
             **body.model_dump(mode="python"),
         )
@@ -1168,22 +895,16 @@ def create_shift_swap(body: ShiftSwapWrite, user: Annotated[User, Depends(requir
 
 @router.get("/requirements", response_model=CursorPage[dict[str, Any]])
 def list_requirements(user: Annotated[User, Depends(require_capability("workforce.policy.manage"))], db: Annotated[Session, Depends(get_db)], limit: Annotated[int, Query(ge=1, le=_MAX_LIMIT)] = 100, cursor: str | None = None) -> dict[str, Any]:
-    rows = [{"id": row.id, "scope_kind": row.scope_kind, "department": row.department, "duty_unit": row.duty_unit, "duty_post": row.duty_post, "minimum_headcount": row.minimum_headcount, "effective_from": row.effective_from, "effective_to": row.effective_to, "approved_at": row.approved_at, "version": workforce_admin_service.row_etag(row)} for row in db.scalars(select(WorkStaffingRequirement).order_by(WorkStaffingRequirement.id.desc()).limit(_MAX_LIMIT))]
-    items, next_cursor = _cursor_page(rows, endpoint="requirements", scope=_scope(db, user), filters={}, limit=limit, cursor=cursor)
+    scope = _scope(db, user)
+    rows = [{"id": row.id, "scope_kind": row.scope_kind, "department": row.department, "duty_unit": row.duty_unit, "duty_post": row.duty_post, "minimum_headcount": row.minimum_headcount, "effective_from": row.effective_from, "effective_to": row.effective_to, "approved_at": row.approved_at, "version": row_etag(row)} for row in workforce_read_service.list_staffing_requirements(db, scope=scope)]
+    items, next_cursor = _cursor_page(rows, endpoint="requirements", scope=scope, filters={}, limit=limit, cursor=cursor)
     return {"items": items, "next_cursor": next_cursor}
 
 
 @router.post("/requirements", status_code=status.HTTP_201_CREATED)
 def create_staffing_requirement(body: StaffingRequirementWrite, user: Annotated[User, Depends(require_capability("workforce.policy.manage"))], db: Annotated[Session, Depends(get_db)]) -> dict[str, Any]:
-    # The hierarchy target is client-authored, so it must be inside the actor's scope.
-    _assert_scope_filter(
-        _scope(db, user),
-        department=body.department,
-        duty_unit=body.duty_unit,
-        duty_post=body.duty_post,
-    )
     try:
-        row = workforce_schedule_service.create_staffing_requirement(db, current_user=user, **body.model_dump(mode="python"))
+        row = workforce_schedule_service.create_staffing_requirement(db, scope=_scope(db, user), current_user=user, **body.model_dump(mode="python"))
     except ValueError as exc:
         raise ValidationFailedError("WORKFORCE_REQUIREMENT_INVALID", str(exc)) from exc
     db.commit()
@@ -1192,18 +913,8 @@ def create_staffing_requirement(body: StaffingRequirementWrite, user: Annotated[
 
 @router.post("/requirements/{requirement_id}/approve")
 def approve_staffing_requirement(*, requirement_id: int, if_match: Annotated[str | None, Header(alias="If-Match")] = None, user: Annotated[User, Depends(require_capability("workforce.policy.manage"))], db: Annotated[Session, Depends(get_db)] ) -> dict[str, Any]:
-    row = db.get(WorkStaffingRequirement, requirement_id)
-    if row is None:
-        raise NotFoundError("WORKFORCE_REQUIREMENT_NOT_FOUND", "Staffing requirement was not found.")
-    workforce_admin_service.require_if_match(if_match, workforce_admin_service.row_etag(row))
-    _assert_scope_filter(
-        _scope(db, user),
-        department=row.department,
-        duty_unit=row.duty_unit,
-        duty_post=row.duty_post,
-    )
     try:
-        row = workforce_schedule_service.approve_staffing_requirement(db, requirement_id=requirement_id, current_user=user)
+        row = workforce_schedule_service.approve_staffing_requirement(db, scope=_scope(db, user), requirement_id=requirement_id, if_match=if_match, current_user=user)
     except ValueError as exc:
         raise ConflictError("WORKFORCE_VERSION_CONFLICT", str(exc)) from exc
     db.commit()
@@ -1212,24 +923,21 @@ def approve_staffing_requirement(*, requirement_id: int, if_match: Annotated[str
 
 @router.get("/policies", response_model=CursorPage[dict[str, Any]])
 def list_attendance_policies(user: Annotated[User, Depends(require_capability("workforce.policy.manage"))], db: Annotated[Session, Depends(get_db)], limit: Annotated[int, Query(ge=1, le=_MAX_LIMIT)] = 100, cursor: str | None = None) -> dict[str, Any]:
-    rows = [{"id": row.id, "shift_definition_id": row.shift_definition_id, "grace_minutes": row.grace_minutes, "absence_after_minutes": row.absence_after_minutes, "effective_from": row.effective_from, "effective_to": row.effective_to, "approved_at": row.approved_at, "version": workforce_admin_service.row_etag(row)} for row in db.scalars(select(WorkAttendancePolicy).order_by(WorkAttendancePolicy.id.desc()).limit(_MAX_LIMIT))]
+    rows = [{"id": row.id, "shift_definition_id": row.shift_definition_id, "grace_minutes": row.grace_minutes, "absence_after_minutes": row.absence_after_minutes, "effective_from": row.effective_from, "effective_to": row.effective_to, "approved_at": row.approved_at, "version": row_etag(row)} for row in workforce_read_service.list_attendance_policies(db)]
     items, next_cursor = _cursor_page(rows, endpoint="policies", scope=_scope(db, user), filters={}, limit=limit, cursor=cursor)
     return {"items": items, "next_cursor": next_cursor}
 
 
 @router.post("/policies", status_code=status.HTTP_201_CREATED)
 def create_attendance_policy(body: AttendancePolicyWrite, user: Annotated[User, Depends(require_capability("workforce.policy.manage"))], db: Annotated[Session, Depends(get_db)]) -> dict[str, Any]:
-    # An attendance policy with no shift binding is organization-global.
-    _require_organization_workforce_scope(db, user)
-    row = workforce_admin_service.create_attendance_policy(db, payload=body.model_dump(mode="python"), actor=user)
+    row = workforce_admin_service.create_attendance_policy(db, scope=_scope(db, user), payload=body.model_dump(mode="python"), actor=user)
     db.commit()
     return {"id": row.id}
 
 
 @router.post("/policies/{policy_id}/approve")
 def approve_policy(*, policy_id: int, if_match: Annotated[str | None, Header(alias="If-Match")] = None, user: Annotated[User, Depends(require_capability("workforce.policy.manage"))], db: Annotated[Session, Depends(get_db)] ) -> dict[str, Any]:
-    _require_organization_workforce_scope(db, user)
-    row = workforce_admin_service.approve_attendance_policy(db, policy_id=policy_id, if_match=if_match, actor=user)
+    row = workforce_admin_service.approve_attendance_policy(db, scope=_scope(db, user), policy_id=policy_id, if_match=if_match, actor=user)
     db.commit()
     return {"id": row.id, "approved_at": row.approved_at}
 
@@ -1289,25 +997,24 @@ def start_integration_sync(
 def list_integration_people(user: Annotated[User, Depends(require_capability("workforce.integration.manage"))], db: Annotated[Session, Depends(get_db)], mapping_state: str | None = None, limit: Annotated[int, Query(ge=1, le=_MAX_LIMIT)] = 100, cursor: str | None = None) -> dict[str, Any]:
     # Unmapped-person reconciliation is organization-global: it exposes provider
     # display names and employee ids for people in every hierarchy.
-    _require_organization_workforce_scope(db, user)
-    rows = [_provider_read(row) for row in workforce_read_service.list_provider_people(db, mapping_state=mapping_state)]
+    scope = _scope(db, user)
+    rows = [_provider_read(row) for row in workforce_read_service.list_provider_people(db, scope=scope, mapping_state=mapping_state)]
     items, next_cursor = _cursor_page(rows, endpoint="integration-people", scope={"integration": True}, filters={"mapping_state": mapping_state}, limit=limit, cursor=cursor)
     return {"items": items, "next_cursor": next_cursor}
 
 
 @router.patch("/integration/people/{person_id}/mapping", response_model=ProviderPersonRead)
 def patch_provider_mapping(*, person_id: int, body: ProviderPersonMappingWrite, response: Response, if_match: Annotated[str | None, Header(alias="If-Match")] = None, user: Annotated[User, Depends(require_capability("workforce.integration.manage"))], db: Annotated[Session, Depends(get_db)] ) -> dict[str, Any]:
-    _require_organization_workforce_scope(db, user)
-    row = workforce_admin_service.update_provider_mapping(db, person_id=person_id, if_match=if_match, actor=user, **body.model_dump())
+    row = workforce_admin_service.update_provider_mapping(db, scope=_scope(db, user), person_id=person_id, if_match=if_match, actor=user, **body.model_dump())
     db.commit()
-    _set_etag(response, workforce_admin_service.row_etag(row, extra={"mapping_state": row.mapping_state, "employee_id": row.employee_id}))
+    _set_etag(response, row_etag(row, extra={"mapping_state": row.mapping_state, "employee_id": row.employee_id}))
     return _provider_read(row)
 
 
 @router.get("/integration/evaluation-queue", response_model=CursorPage[EvaluationQueueRead])
 def list_evaluation_queue(user: Annotated[User, Depends(require_capability("workforce.integration.manage"))], db: Annotated[Session, Depends(get_db)], state: Annotated[str, Query(pattern="^failed$")] = "failed", limit: Annotated[int, Query(ge=1, le=_MAX_LIMIT)] = 100, cursor: str | None = None) -> dict[str, Any]:
-    _require_organization_workforce_scope(db, user)
-    rows = [_queue_read(row) for row in workforce_read_service.list_failed_queue(db)]
+    scope = _scope(db, user)
+    rows = [_queue_read(row) for row in workforce_read_service.list_failed_queue(db, scope=scope)]
     items, next_cursor = _cursor_page(rows, endpoint="evaluation-queue", scope={"integration": True}, filters={"state": state}, limit=limit, cursor=cursor)
     return {"items": items, "next_cursor": next_cursor}
 
@@ -1355,7 +1062,10 @@ def patch_workforce_configuration(
     # Configuration keys are single organization-global AppSetting rows, so a
     # hierarchy-scoped manager must not be able to move controls (privacy fold,
     # retention) that bind every other department.
-    _require_organization_workforce_scope(db, user)
+    workforce_access_service.require_organization(
+        _scope(db, user),
+        message="Organization workforce scope is required for this change.",
+    )
     values = body.model_dump(exclude_unset=True)
     if not values:
         raise ValidationFailedError(
@@ -1404,7 +1114,7 @@ def patch_workforce_configuration(
             "WORKFORCE_CONFIGURATION_INVALID",
             str(exc),
         ) from exc
-    workforce_admin_service.require_if_match(
+    require_if_match(
         if_match,
         _configuration_etag(current),
     )

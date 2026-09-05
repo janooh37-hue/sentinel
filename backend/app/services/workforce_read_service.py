@@ -25,18 +25,30 @@ from app.db.workforce_models import (
     AttendancePunchProfile,
     AttendanceSyncState,
     DutyAssignmentEvent,
+    WorkAttendancePolicy,
+    WorkCrew,
     WorkCrewMembership,
     WorkCrewSchedule,
     WorkRotationPattern,
     WorkRotationStep,
     WorkShiftDefinition,
+    WorkShiftOverride,
+    WorkStaffingRequirement,
 )
 from app.services import (
     attendance_correction_service,
     attendance_policy,
     attendance_profile_service,
+    workforce_admin_service,
+    workforce_schedule_service,
 )
-from app.services.workforce_scope_service import scope_allows
+from app.services.workforce_access_service import (
+    allows_hierarchy,
+    employee_in_scope,
+    require_organization,
+)
+from app.services.workforce_etag import etag_for, row_etag
+from app.services.workforce_scope_service import WorkforceScope, scope_allows
 
 
 def _latest_evaluations(db: Session, case_ids: list[int]) -> dict[int, AttendanceEvaluation]:
@@ -54,7 +66,7 @@ def _latest_evaluations(db: Session, case_ids: list[int]) -> dict[int, Attendanc
 
 
 
-def _case_allowed(case: AttendanceCase, scope: Any) -> bool:
+def _case_allowed(case: AttendanceCase, scope: WorkforceScope) -> bool:
     return scope_allows(
         scope,
         employee_id=case.employee_id,
@@ -84,7 +96,7 @@ def _person_fields(db: Session, case: AttendanceCase) -> dict[str, Any]:
     }
 
 
-def list_roster(db: Session, *, scope: Any, operational_date: date) -> list[dict[str, Any]]:
+def list_roster(db: Session, *, scope: WorkforceScope, operational_date: date) -> list[dict[str, Any]]:
     cases = [
         case
         for case in db.scalars(select(AttendanceCase).where(AttendanceCase.operational_date == operational_date))
@@ -112,7 +124,7 @@ def list_roster(db: Session, *, scope: Any, operational_date: date) -> list[dict
 def list_exceptions(
     db: Session,
     *,
-    scope: Any,
+    scope: WorkforceScope,
     operational_date: date | None = None,
     presence: str | None = None,
     exception: str | None = None,
@@ -155,7 +167,20 @@ def list_exceptions(
                 "missing_checkout": effective["missing_checkout"],
             }
         )
-    return sorted(result, key=lambda row: (row["scheduled_start_at"], row["employee_id"]))
+    def severity(row: dict[str, Any]) -> tuple[int, str, int]:
+        if row.get("presence_state") == "absent":
+            return (0, row["employee_id"], row["case_id"])
+        if row.get("missing_checkout"):
+            return (1, row["employee_id"], row["case_id"])
+        if (row.get("late_minutes") or 0) > 0:
+            return (2, row["employee_id"], row["case_id"])
+        if (row.get("early_exit_minutes") or 0) > 0:
+            return (3, row["employee_id"], row["case_id"])
+        if row.get("presence_state") == "unknown":
+            return (4, row["employee_id"], row["case_id"])
+        return (5, row["employee_id"], row["case_id"])
+
+    return sorted(result, key=severity)
 
 
 
@@ -278,7 +303,7 @@ def _late_minutes(case: AttendanceCase, first_punch_at: datetime | None) -> int 
 def list_attendance_day(
     db: Session,
     *,
-    scope: Any,
+    scope: WorkforceScope,
     operational_date: date,
     shift_code: str | None = None,
 ) -> list[dict[str, Any]]:
@@ -345,12 +370,13 @@ MAX_ATTENDANCE_RANGE_DAYS = 92
 def employee_attendance_range(
     db: Session,
     *,
-    scope: Any,
+    scope: WorkforceScope,
     employee_id: str,
     from_date: date,
     to_date: date,
 ) -> dict[str, Any]:
     """One employee's attendance days, each with its own punch list."""
+    employee_in_scope(db, scope=scope, employee_id=employee_id)
     if to_date < from_date:
         raise ValidationFailedError(
             "ATTENDANCE_RANGE_INVALID", "The attendance window ends before it starts."
@@ -576,7 +602,7 @@ class AttendanceCaseSnapshot:
 
 
 def get_attendance_case_snapshot(
-    db: Session, *, scope: Any, case_id: int
+    db: Session, *, scope: WorkforceScope, case_id: int
 ) -> AttendanceCaseSnapshot:
     case = db.get(AttendanceCase, case_id)
     if case is None:
@@ -632,11 +658,11 @@ def get_attendance_case_snapshot(
     )
 
 
-def get_attendance_case(db: Session, *, scope: Any, case_id: int) -> dict[str, Any]:
+def get_attendance_case(db: Session, *, scope: WorkforceScope, case_id: int) -> dict[str, Any]:
     return get_attendance_case_snapshot(db, scope=scope, case_id=case_id).body
 
 
-def list_duty_assignment_events(db: Session, *, scope: Any) -> list[dict[str, Any]]:
+def list_duty_assignment_events(db: Session, *, scope: WorkforceScope) -> list[dict[str, Any]]:
     rows = list(db.scalars(select(DutyAssignmentEvent).order_by(DutyAssignmentEvent.effective_at.desc())))
     result: list[dict[str, Any]] = []
     for row in rows:
@@ -666,6 +692,55 @@ def list_duty_assignment_events(db: Session, *, scope: Any) -> list[dict[str, An
     return result
 
 
+def list_shift_overrides(db: Session, *, scope: WorkforceScope) -> list[WorkShiftOverride]:
+    """Return every visible override before route-owned cursor pagination."""
+    rows = list(
+        db.scalars(
+            select(WorkShiftOverride).order_by(
+                WorkShiftOverride.starts_at.desc(),
+                WorkShiftOverride.id.desc(),
+            )
+        )
+    )
+    employee_ids = {row.employee_id for row in rows}
+    employees = {
+        employee.id: employee
+        for employee in db.scalars(select(Employee).where(Employee.id.in_(employee_ids)))
+    }
+    return [
+        row
+        for row in rows
+        if (employee := employees.get(row.employee_id)) is not None
+        and scope_allows(
+            scope,
+            employee_id=employee.id,
+            department=employee.department,
+            duty_unit=employee.duty_unit,
+            duty_post=employee.duty_post,
+        )
+    ]
+
+
+def list_staffing_requirements(
+    db: Session,
+    *,
+    scope: WorkforceScope,
+) -> list[WorkStaffingRequirement]:
+    """Return every visible hierarchy requirement before cursor pagination."""
+    return [
+        row
+        for row in db.scalars(
+            select(WorkStaffingRequirement).order_by(WorkStaffingRequirement.id.desc())
+        )
+        if allows_hierarchy(
+            scope,
+            department=row.department,
+            duty_unit=row.duty_unit,
+            duty_post=row.duty_post,
+        )
+    ]
+
+
 
 def shift_definition_read(row: WorkShiftDefinition) -> dict[str, Any]:
     """Return the full immutable shift definition contract."""
@@ -678,6 +753,41 @@ def shift_definition_read(row: WorkShiftDefinition) -> dict[str, Any]:
         "created_at": row.created_at,
         "updated_at": row.updated_at,
     }
+
+
+def list_shift_definitions(
+    db: Session,
+) -> tuple[list[WorkShiftDefinition], str]:
+    """Return global shift metadata and the collection version."""
+    rows = list(db.scalars(select(WorkShiftDefinition).order_by(WorkShiftDefinition.code)))
+    etag = etag_for(
+        [
+            {"id": row.id, "updated_at": row.updated_at, "created_at": row.created_at}
+            for row in rows
+        ]
+    )
+    return rows, etag
+
+
+def rotation_detail(db: Session) -> tuple[WorkRotationPattern, str]:
+    """Return the global rotation metadata and its version."""
+    row = db.scalar(select(WorkRotationPattern).order_by(WorkRotationPattern.code).limit(1))
+    if row is None:
+        raise NotFoundError("WORKFORCE_ROTATION_NOT_FOUND", "Rotation pattern was not found.")
+    return row, row_etag(row)
+
+
+def list_crews(db: Session) -> tuple[list[WorkCrew], str]:
+    """Return code-sorted global crews with the canonical ID-snapshot ETag."""
+    rows = list(db.scalars(select(WorkCrew).order_by(WorkCrew.code)))
+    return rows, workforce_admin_service.crew_collection_etag(rows)
+
+
+def crew_detail(db: Session, *, crew_id: int) -> tuple[WorkCrew, str]:
+    row = db.get(WorkCrew, crew_id)
+    if row is None:
+        raise NotFoundError("WORKFORCE_CREW_NOT_FOUND", "Crew was not found.")
+    return row, row_etag(row)
 
 
 def rotation_read(db: Session, row: WorkRotationPattern) -> dict[str, Any]:
@@ -744,7 +854,7 @@ def crew_membership_read(row: WorkCrewMembership) -> dict[str, Any]:
     }
 
 
-def list_crew_schedules(db: Session, *, crew_id: int) -> list[WorkCrewSchedule]:
+def _crew_schedule_rows(db: Session, *, crew_id: int) -> list[WorkCrewSchedule]:
     """Return a deterministic, route-paginated schedule collection."""
 
     return list(
@@ -756,16 +866,66 @@ def list_crew_schedules(db: Session, *, crew_id: int) -> list[WorkCrewSchedule]:
     )
 
 
-def list_crew_memberships(db: Session, *, crew_id: int) -> list[WorkCrewMembership]:
-    """Return a deterministic, route-paginated crew membership collection."""
+def list_crew_schedules(
+    db: Session, *, crew_id: int
+) -> tuple[list[WorkCrewSchedule], str]:
+    crew_detail(db, crew_id=crew_id)
+    rows = _crew_schedule_rows(db, crew_id=crew_id)
+    return rows, workforce_schedule_service.crew_schedule_collection_etag(rows)
 
-    return list(
+
+def crew_schedule_detail(
+    db: Session, *, crew_id: int, schedule_id: int
+) -> tuple[WorkCrewSchedule, str]:
+    row = db.get(WorkCrewSchedule, schedule_id)
+    if row is None or row.crew_id != crew_id:
+        raise NotFoundError("WORKFORCE_SCHEDULE_NOT_FOUND", "Crew schedule was not found.")
+    return row, row_etag(row)
+
+
+def list_crew_memberships(
+    db: Session, *, crew_id: int, scope: WorkforceScope
+) -> tuple[list[WorkCrewMembership], str]:
+    """Return visible memberships with one batched employee lookup and shared ETag."""
+    crew_detail(db, crew_id=crew_id)
+
+    rows = list(
         db.scalars(
             select(WorkCrewMembership)
             .where(WorkCrewMembership.crew_id == crew_id)
             .order_by(WorkCrewMembership.effective_from, WorkCrewMembership.id)
         )
     )
+    employee_ids = {row.employee_id for row in rows}
+    employees = {
+        employee.id: employee
+        for employee in db.scalars(select(Employee).where(Employee.id.in_(employee_ids)))
+    }
+    visible = [
+        row
+        for row in rows
+        if (employee := employees.get(row.employee_id)) is not None
+        and scope.allows_employee(
+            employee_id=employee.id,
+            department=employee.department,
+            duty_unit=employee.duty_unit,
+            duty_post=employee.duty_post,
+        )
+    ]
+    return (
+        visible,
+        workforce_schedule_service.crew_membership_collection_etag(visible),
+    )
+
+
+def crew_membership_detail(
+    db: Session, *, crew_id: int, membership_id: int, scope: WorkforceScope
+) -> tuple[WorkCrewMembership, str]:
+    row = db.get(WorkCrewMembership, membership_id)
+    if row is None or row.crew_id != crew_id:
+        raise NotFoundError("WORKFORCE_MEMBERSHIP_NOT_FOUND", "Crew membership was not found.")
+    employee_in_scope(db, scope=scope, employee_id=row.employee_id)
+    return row, row_etag(row)
 
 
 def _as_utc_naive(value: datetime) -> datetime:
@@ -785,6 +945,7 @@ def _preview_conflict(
 def preview_crew_schedule(
     db: Session,
     *,
+    scope: WorkforceScope,
     crew_id: int,
     pattern_id: int,
     anchor_at: datetime,
@@ -795,6 +956,12 @@ def preview_crew_schedule(
     now: datetime | None = None,
 ) -> dict[str, Any]:
     """Compute a bounded anchor preview without writing schedules or occurrences."""
+
+    require_organization(
+        scope,
+        message="Organization workforce scope is required for crew and anchor changes.",
+    )
+    crew_detail(db, crew_id=crew_id)
 
     anchor = _as_utc_naive(anchor_at)
     starts = _as_utc_naive(effective_from)
@@ -868,7 +1035,7 @@ def preview_crew_schedule(
             )
         )
 
-    schedules = list_crew_schedules(db, crew_id=crew_id)
+    schedules = _crew_schedule_rows(db, crew_id=crew_id)
     replacement = next(
         (schedule for schedule in schedules if schedule.id == replaces_schedule_id), None
     )
@@ -946,14 +1113,31 @@ def preview_crew_schedule(
     return {"crew_id": crew_id, "occurrences": occurrences, "conflicts": []}
 
 
-def list_provider_people(db: Session, *, mapping_state: str | None = None) -> list[AttendanceProviderPerson]:
+def list_attendance_policies(db: Session) -> list[WorkAttendancePolicy]:
+    """Return global attendance policy metadata in established order."""
+    return list(
+        db.scalars(select(WorkAttendancePolicy).order_by(WorkAttendancePolicy.id.desc()))
+    )
+
+
+def list_provider_people(
+    db: Session, *, scope: WorkforceScope, mapping_state: str | None = None
+) -> list[AttendanceProviderPerson]:
+    require_organization(
+        scope, message="Organization workforce scope is required for this change."
+    )
     query = select(AttendanceProviderPerson).order_by(AttendanceProviderPerson.id)
     if mapping_state is not None:
         query = query.where(AttendanceProviderPerson.mapping_state == mapping_state)
     return list(db.scalars(query))
 
 
-def list_failed_queue(db: Session) -> list[AttendanceEvaluationQueue]:
+def list_failed_queue(
+    db: Session, *, scope: WorkforceScope
+) -> list[AttendanceEvaluationQueue]:
+    require_organization(
+        scope, message="Organization workforce scope is required for this change."
+    )
     return list(
         db.scalars(
             select(AttendanceEvaluationQueue)
@@ -1005,18 +1189,30 @@ def integration_status(db: Session) -> dict[str, Any]:
 
 
 __all__ = [
+    "crew_detail",
+    "crew_membership_detail",
     "crew_membership_read",
+    "crew_schedule_detail",
     "crew_schedule_read",
+    "employee_attendance_range",
     "get_attendance_case",
+    "get_attendance_case_snapshot",
     "integration_status",
+    "list_attendance_day",
+    "list_attendance_policies",
     "list_crew_memberships",
     "list_crew_schedules",
+    "list_crews",
     "list_duty_assignment_events",
     "list_exceptions",
     "list_failed_queue",
     "list_provider_people",
     "list_roster",
+    "list_shift_definitions",
+    "list_shift_overrides",
+    "list_staffing_requirements",
     "preview_crew_schedule",
+    "rotation_detail",
     "rotation_read",
     "shift_definition_read",
 ]

@@ -14,15 +14,50 @@ from zoneinfo import ZoneInfo
 import pytest
 from sqlalchemy import select
 
-from app.db.workforce_models import WorkCrew, WorkShiftDefinition, WorkShiftOccurrence
+from app.api.errors import AppError
+from app.db.workforce_models import (
+    WorkAttendancePolicy,
+    WorkCrew,
+    WorkCrewSchedule,
+    WorkRotationPattern,
+    WorkShiftDefinition,
+    WorkShiftOccurrence,
+)
 from app.services import workforce_schedule_service, workforce_seed_service
+from app.services.workforce_access_service import organization_scope
+from app.services.workforce_scope_service import WorkforceScope, WorkforceScopeEntry
 
 DUBAI = ZoneInfo("Asia/Dubai")
 
 
 def _seed(db_session, admin_user) -> None:
-    workforce_seed_service.seed_workforce_roster(db_session, actor_user_id=admin_user.id)
+    workforce_seed_service.seed_workforce_roster(
+        db_session,
+        scope=organization_scope(),
+        actor_user_id=admin_user.id,
+    )
     db_session.flush()
+
+
+def test_seed_requires_explicit_organization_scope(db_session, admin_user) -> None:
+    department_scope = WorkforceScope(
+        entries=(WorkforceScopeEntry(scope_kind="department", department="Operations"),)
+    )
+
+    with pytest.raises(AppError) as denied:
+        workforce_seed_service.seed_workforce_roster(
+            db_session,
+            scope=department_scope,
+            actor_user_id=admin_user.id,
+        )
+
+    assert denied.value.code == "FORBIDDEN"
+    db_session.flush()
+    assert db_session.scalar(select(WorkCrew.id).limit(1)) is None
+    assert db_session.scalar(select(WorkCrewSchedule.id).limit(1)) is None
+    assert db_session.scalar(select(WorkRotationPattern.id).limit(1)) is None
+    assert db_session.scalar(select(WorkShiftDefinition.id).limit(1)) is None
+    assert db_session.scalar(select(WorkAttendancePolicy.id).limit(1)) is None
 
 
 def _generate(db_session, *, start: date, days: int) -> None:
@@ -30,7 +65,11 @@ def _generate(db_session, *, start: date, days: int) -> None:
     ends_at = starts_at + timedelta(days=days)
     for crew_id in db_session.scalars(select(WorkCrew.id)):
         workforce_schedule_service.generate_occurrences(
-            db_session, crew_id=crew_id, starts_at=starts_at, ends_at=ends_at
+            db_session,
+            scope=organization_scope(),
+            crew_id=crew_id,
+            starts_at=starts_at,
+            ends_at=ends_at,
         )
     db_session.flush()
 
@@ -89,9 +128,7 @@ def test_nineteenth_august_matches_the_stated_roster(seeded):
 
 
 def test_noon_rotates_through_every_crew_then_wraps(seeded):
-    noon_by_day = [
-        _roster(seeded, date(2026, 8, day)).get("noon") for day in range(18, 24)
-    ]
+    noon_by_day = [_roster(seeded, date(2026, 8, day)).get("noon") for day in range(18, 24)]
 
     assert noon_by_day == ["crew_2", "crew_3", "crew_4", "crew_5", "crew_1", "crew_2"]
 
@@ -108,8 +145,7 @@ def test_yesterdays_noon_crew_works_todays_morning_and_night(seeded):
 def test_each_crew_works_three_shifts_and_rests_three_days(seeded):
     for crew_code in ("crew_1", "crew_2", "crew_3", "crew_4", "crew_5"):
         working_days = {
-            _roster(seeded, date(2026, 8, day)).get(shift)
-            and date(2026, 8, day)
+            _roster(seeded, date(2026, 8, day)).get(shift) and date(2026, 8, day)
             for day in range(18, 23)
             for shift in ("morning", "noon", "night")
             if _roster(seeded, date(2026, 8, day)).get(shift) == crew_code
@@ -152,9 +188,7 @@ def test_night_occurrence_is_attributed_to_the_day_it_starts(seeded):
         .where(WorkCrew.code == roster["night"])
     ).all()
     nights = [
-        row
-        for row in occurrence
-        if row.starts_at.replace(tzinfo=UTC).astimezone(DUBAI).hour == 21
+        row for row in occurrence if row.starts_at.replace(tzinfo=UTC).astimezone(DUBAI).hour == 21
     ]
 
     assert nights, "expected a night occurrence"
@@ -212,7 +246,11 @@ def test_seeding_twice_changes_nothing(db_session, admin_user):
         for model in (WorkShiftDefinition, WorkCrew, WorkShiftOccurrence)
     }
 
-    second = workforce_seed_service.seed_workforce_roster(db_session, actor_user_id=admin_user.id)
+    second = workforce_seed_service.seed_workforce_roster(
+        db_session,
+        scope=organization_scope(),
+        actor_user_id=admin_user.id,
+    )
     db_session.flush()
 
     assert second.schedules == 0

@@ -17,6 +17,7 @@ from app.services import (
     perm_service,
     workforce_read_service,
 )
+from app.services.workforce_access_service import organization_scope
 from app.services.workforce_scope_service import resolve_workforce_scope
 from tests.conftest import make_user
 from tests.factories.attendance import add_punch, build_attendance_day, local
@@ -211,6 +212,7 @@ def test_adjustment_audits_persist_create_and_revoke_reasons(api_db) -> None:
     )["effective"]
     created = attendance_correction_service.correct(
         api_db,
+        scope=organization_scope(),
         case_id=case.id,
         snapshot=_adjustment_payload(
             effective,
@@ -222,6 +224,7 @@ def test_adjustment_audits_persist_create_and_revoke_reasons(api_db) -> None:
     )
     revoked = attendance_correction_service.revoke(
         api_db,
+        scope=organization_scope(),
         case_id=case.id,
         adjustment_id=created.id,
         reason="Duplicate register entry",
@@ -464,6 +467,7 @@ def test_active_full_snapshot_correction_overlays_every_attendance_projection_an
 
     correction = attendance_correction_service.correct(
         api_db,
+        scope=organization_scope(),
         case_id=case.id,
         snapshot={
             "replacement_presence_state": "completed",
@@ -524,6 +528,7 @@ def test_active_full_snapshot_correction_overlays_every_attendance_projection_an
 
     attendance_correction_service.revoke(
         api_db,
+        scope=organization_scope(),
         case_id=case.id,
         adjustment_id=correction.id,
         reason="Automatic evidence was sufficient",
@@ -669,6 +674,7 @@ def test_case_snapshot_pairs_evidence_body_with_its_concurrency_version(api_db) 
     )["effective"]
     first = attendance_correction_service.correct(
         api_db,
+        scope=organization_scope(),
         case_id=case.id,
         snapshot=_adjustment_payload(
             effective,
@@ -686,6 +692,7 @@ def test_case_snapshot_pairs_evidence_body_with_its_concurrency_version(api_db) 
 
     attendance_correction_service.correct(
         api_db,
+        scope=organization_scope(),
         case_id=case.id,
         snapshot=_adjustment_payload(
             snapshot.body["effective"],

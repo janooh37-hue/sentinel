@@ -17,7 +17,9 @@ from app.db.workforce_models import (
     AttendanceCase,
     AttendanceEvaluation,
 )
-from app.services.workforce_admin_service import etag_for, require_if_match
+from app.services.workforce_access_service import forbid_outside_scope
+from app.services.workforce_etag import etag_for, require_if_match
+from app.services.workforce_scope_service import WorkforceScope
 
 _SNAPSHOT_KEYS = frozenset(
     {
@@ -216,6 +218,7 @@ def _audit_revoked(
 def correct(
     db: Session,
     *,
+    scope: WorkforceScope,
     case_id: int,
     snapshot: Mapping[str, object],
     if_match: str | None,
@@ -225,6 +228,14 @@ def correct(
     case = db.get(AttendanceCase, case_id)
     if case is None:
         raise NotFoundError("ATTENDANCE_CASE_NOT_FOUND", "Attendance case was not found.")
+    forbid_outside_scope(
+        scope,
+        employee_id=case.employee_id,
+        department=case.department_snapshot,
+        duty_unit=case.duty_unit_snapshot,
+        duty_post=case.duty_post_snapshot,
+        message="Attendance case is outside workforce scope.",
+    )
     current = _active_correction(db, case_id)
     latest = _latest_evaluation(db, case_id)
     require_if_match(
@@ -265,6 +276,7 @@ def correct(
 def revoke(
     db: Session,
     *,
+    scope: WorkforceScope,
     case_id: int,
     adjustment_id: int,
     reason: str,
@@ -273,6 +285,17 @@ def revoke(
     now: datetime | None = None,
 ) -> AttendanceAdjustment:
     """Revoke one correction without recalculating automatic attendance."""
+    case = db.get(AttendanceCase, case_id)
+    if case is None:
+        raise NotFoundError("ATTENDANCE_CASE_NOT_FOUND", "Attendance case was not found.")
+    forbid_outside_scope(
+        scope,
+        employee_id=case.employee_id,
+        department=case.department_snapshot,
+        duty_unit=case.duty_unit_snapshot,
+        duty_post=case.duty_post_snapshot,
+        message="Attendance case is outside workforce scope.",
+    )
     correction = db.get(AttendanceAdjustment, adjustment_id)
     if correction is None or correction.attendance_case_id != case_id:
         raise NotFoundError(
