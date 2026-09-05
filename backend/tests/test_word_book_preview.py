@@ -3,6 +3,7 @@
 from datetime import UTC, datetime
 from pathlib import Path
 
+import fitz
 import pytest
 from docx import Document as DocxFile
 from sqlalchemy.orm import Session
@@ -10,6 +11,13 @@ from sqlalchemy.orm import Session
 from app.api.errors import AppError
 from app.db.models import Book, BookCategory, BookEditSession
 from app.services import word_book_service
+
+
+def _pdf(path: Path) -> Path:
+    with fitz.open() as document:
+        document.new_page()
+        document.save(path)
+    return path
 
 
 @pytest.fixture
@@ -49,8 +57,7 @@ def test_preview_renders_and_caches(
     def fake_convert(src: Path) -> Path:
         calls.append(src)
         out = src.with_suffix(".pdf")
-        out.write_bytes(b"%PDF-1.4 fake")
-        return out
+        return _pdf(out)
 
     monkeypatch.setattr(word_book_service, "convert_docx_to_pdf", fake_convert)
     p1 = word_book_service.render_session_preview(db_session, book_id=book.id)
@@ -58,6 +65,24 @@ def test_preview_renders_and_caches(
     # Second call with unchanged working file: served from cache, no re-convert.
     p2 = word_book_service.render_session_preview(db_session, book_id=book.id)
     assert p2 == p1 and len(calls) == 1
+
+
+def test_preview_accepts_public_pdf_converter(
+    db_session: Session,
+    active_session: tuple[Book, Path],
+) -> None:
+    """The Windows gate can inject its isolated converter through the public seam."""
+    book, _working = active_session
+
+    preview = word_book_service.render_session_preview(
+        db_session,
+        book_id=book.id,
+        converter=lambda source: _pdf(source.with_suffix(".pdf")),
+    )
+
+    assert preview.name == "preview-src.pdf"
+    with fitz.open(preview) as document:
+        assert document.page_count == 1
 
 
 def test_preview_regenerates_when_working_file_changes(
@@ -74,8 +99,7 @@ def test_preview_regenerates_when_working_file_changes(
     def fake_convert(src: Path) -> Path:
         calls.append(src)
         out = src.with_suffix(".pdf")
-        out.write_bytes(b"%PDF-1.4 v" + str(len(calls)).encode())
-        return out
+        return _pdf(out)
 
     monkeypatch.setattr(word_book_service, "convert_docx_to_pdf", fake_convert)
     word_book_service.render_session_preview(db_session, book_id=book.id)
@@ -158,8 +182,7 @@ def test_preview_route_supports_base64(
 
         def fake_convert(src: Path) -> Path:
             out = src.with_suffix(".pdf")
-            out.write_bytes(b"%PDF-1.4 route")
-            return out
+            return _pdf(out)
 
         monkeypatch.setattr(word_book_service, "convert_docx_to_pdf", fake_convert)
 
@@ -278,3 +301,88 @@ def test_preview_unavailable_when_conversion_fails(
     with pytest.raises(AppError) as ei:
         word_book_service.render_session_preview(db_session, book_id=book.id)
     assert ei.value.code == "PREVIEW_UNAVAILABLE"
+
+
+def test_preview_failed_refresh_preserves_last_complete_pdf(
+    db_session: Session,
+    active_session: tuple[Book, Path],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A converter that truncates its target cannot destroy the last good preview."""
+    import os
+
+    book, working = active_session
+    preview = _pdf(working.parent / "preview-src.pdf")
+    original = preview.read_bytes()
+    old = working.stat().st_mtime - 10
+    os.utime(preview, (old, old))
+
+    def truncate(src: Path) -> Path:
+        target = src.with_suffix(".pdf")
+        target.write_bytes(b"%PDF truncated")
+        return target
+
+    monkeypatch.setattr(word_book_service, "convert_docx_to_pdf", truncate)
+
+    result = word_book_service.render_session_preview(db_session, book_id=book.id)
+
+    assert result == preview
+    assert preview.read_bytes() == original
+
+
+def test_dav_put_during_preview_conversion_leaves_snapshot_cache_stale(
+    db_session: Session,
+    active_session: tuple[Book, Path],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A real DAV PUT during conversion is visible on the next preview poll."""
+    import asyncio
+
+    from starlette.requests import Request
+
+    from app.api.dav import dav_handler
+
+    book, working = active_session
+    calls = 0
+
+    async def put_saved_bytes() -> int:
+        sent = False
+
+        async def receive():
+            nonlocal sent
+            if sent:
+                return {"type": "http.disconnect"}
+            sent = True
+            return {"type": "http.request", "body": b"new Word save", "more_body": False}
+
+        request = Request(
+            {
+                "type": "http",
+                "method": "PUT",
+                "path": "/dav/tok-preview/1-11-7.docx",
+                "headers": [],
+                "query_string": b"",
+                "server": ("test", 80),
+                "client": ("test", 1),
+                "scheme": "http",
+            },
+            receive,
+        )
+        response = await dav_handler("tok-preview", "1-11-7.docx", request, db_session)
+        return response.status_code
+
+    def convert_with_midflight_put(src: Path) -> Path:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            assert asyncio.run(put_saved_bytes()) == 204
+        return _pdf(src.with_suffix(".pdf"))
+
+    monkeypatch.setattr(word_book_service, "convert_docx_to_pdf", convert_with_midflight_put)
+
+    first = word_book_service.render_session_preview(db_session, book_id=book.id)
+    assert working.read_bytes() == b"new Word save"
+    assert first.stat().st_mtime < working.stat().st_mtime
+
+    word_book_service.render_session_preview(db_session, book_id=book.id)
+    assert calls == 2

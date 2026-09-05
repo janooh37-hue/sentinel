@@ -26,7 +26,13 @@ from app.config import get_settings
 from app.core.constants import ALLOWED_DOC_EXTS
 from app.core.pdf_merge import PdfPackageSourceError, build_pdf_package
 from app.db.models import AuditLog, Book, BookVersion, Document, Employee, User
-from app.services import book_service, document_service, push_service, staging_service
+from app.services import (
+    artifact_service,
+    book_service,
+    document_service,
+    push_service,
+    staging_service,
+)
 
 log = logging.getLogger(__name__)
 
@@ -354,16 +360,14 @@ def _generated_fixed_base(
                 "INCLUDED_PAPERS_SOURCE_DOCX_MISSING",
                 "The committed source document is missing",
             )
-        temp_docx = temp_dir / docx.name
-        shutil.copyfile(docx, temp_docx)
-        try:
-            primary = document_service.convert_docx_to_pdf(temp_docx)
-        except Exception as exc:
-            raise ValidationFailedError(
-                "INCLUDED_PAPERS_BASE_RECONSTRUCTION_FAILED",
-                "The fixed generated form could not be reconstructed",
-            ) from exc
-        if primary is None or not primary.is_file():
+        rebuilt = artifact_service.produce_from_docx(
+            source_path=docx,
+            destination=temp_dir / docx.name,
+            collision="exact",
+            converter=document_service.convert_docx_to_pdf,
+        )
+        primary = rebuilt.conversion.pdf_path
+        if rebuilt.conversion.status != "success" or primary is None or not primary.is_file():
             raise ValidationFailedError(
                 "INCLUDED_PAPERS_BASE_RECONSTRUCTION_FAILED",
                 "The fixed generated form could not be reconstructed",

@@ -1,6 +1,6 @@
 # Phase 6 — Document artifacts
 
-Status: not started. Branch: `refactor/p6-document-artifact`. Release dependency: Phase 5.
+Status: in progress. Branch: `refactor/p6-document-artifact`. Release dependency: Phase 5 (released at `ee1d9f41925efe59baea3b64217c254967ce35e2`).
 
 Follow [WORKFLOW.md](WORKFLOW.md). Write/retain behavior tests first and inspect the current code before every implementation slice. Finish tests, source review and required checks before every build.
 
@@ -50,4 +50,30 @@ Word preview owns its fixed cache destination, lock, snapshot timestamp and inva
 
 ## Execution evidence
 
-Pending: amended operations contract, caller policy matrix, authored-content fixtures, RED/GREEN and race-test results, converter integration, template hashes, document review and release evidence.
+The amended contract is frozen as separate template-rendered and existing-DOCX
+operations. The saved DOCX remains authoritative, conversion outcome is returned
+to each caller, and callers retain their transaction, packaging and PDF-failure
+policies. Preview retains its fixed filenames, global lock and snapshot mtime.
+
+Observed local evidence so far:
+
+- The artifact owner captured 33 affected pre-edit characterization tests before
+  source edits, then 40 focused old/new integration tests after migrating primary,
+  companion, rich/authored signing and included-paper reconstruction callers.
+- The Word-session owner observed two RED recovery failures showing package and
+  commit failures deleted the saved source. The completed slice passed all 11
+  finish tests, and the source-frozen Word lifecycle gate passed 49 tests plus
+  three loopback route tests. No old test was removed.
+- The synthetic preview API baseline passed with approved loopback access. The
+  earlier sandboxed invocation could not open its local listener and is not
+  counted as product evidence.
+- Read-only inspection of installed Windows docx2pdf 0.1.8 confirmed it uses
+  shared `Dispatch("Word.Application")` and calls `Quit()`. Real injected
+  `DispatchEx` artifact/layout proof therefore still requires an exclusive Word
+  environment. Default-chain method and process-pool checks are supplemental
+  while those unchanged adapters remain outside this phase.
+
+Pending before release: source freeze, independent source and i18n/RTL reviews,
+full backend/static/API/template-hash gates, the minimal isolated real Word group
+with synthetic artifacts and visual review, PR/merge, deployment, health and
+exact production HEAD verification.

@@ -201,6 +201,77 @@ def test_finish_keeps_session_when_managed_papers_cannot_be_republished(
     assert working_path.is_file()
     assert session.state == "active"
     assert db_session.query(BookVersion).filter_by(book_id=book.id).count() == 0
+    assert book.merged_attachment_paths == [{"path": "book_attachments/paper.pdf"}]
+    assert not list((tmp_path / "data" / "output").rglob("*.docx"))
+    assert not list((tmp_path / "data" / "output").rglob("*.pdf"))
+
+
+def test_finish_preserves_saved_source_when_package_publication_fails(
+    db_session, tmp_path, monkeypatch
+):
+    """A packaging failure leaves the Word-saved DOCX available for retry."""
+    from datetime import UTC, datetime
+
+    from app.services import included_papers_service, word_book_service
+
+    monkeypatch.setattr(word_book_service, "get_settings", lambda: _settings(tmp_path))
+    monkeypatch.setattr(
+        word_book_service,
+        "convert_docx_to_pdf",
+        lambda path: _pdf(path.with_suffix(".pdf")),
+    )
+    monkeypatch.setattr(
+        included_papers_service,
+        "publish_generated_package",
+        lambda *args, **kwargs: (_ for _ in ()).throw(RuntimeError("package failed")),
+    )
+
+    user = _user(db_session)
+    book, session = _make_book_with_session(db_session, user, tmp_path)
+    session.last_put_at = datetime.now(UTC).replace(tzinfo=None)
+    db_session.commit()
+    saved_source = Path(session.working_path)
+    saved_bytes = saved_source.read_bytes()
+
+    with pytest.raises(RuntimeError, match="package failed"):
+        word_book_service.finish_word_session(db_session, user=user, book_id=book.id)
+
+    assert saved_source.read_bytes() == saved_bytes
+    db_session.refresh(session)
+    assert session.state == "active"
+    assert not list((tmp_path / "data" / "output").rglob("*.docx"))
+    assert not list((tmp_path / "data" / "output").rglob("*.pdf"))
+
+
+def test_finish_preserves_saved_source_when_commit_fails(db_session, tmp_path, monkeypatch):
+    """A database commit failure leaves the Word-saved DOCX available for retry."""
+    from datetime import UTC, datetime
+
+    from app.services import word_book_service
+
+    monkeypatch.setattr(word_book_service, "get_settings", lambda: _settings(tmp_path))
+    monkeypatch.setattr(word_book_service, "convert_docx_to_pdf", lambda _path: None)
+
+    user = _user(db_session)
+    book, session = _make_book_with_session(db_session, user, tmp_path)
+    session.last_put_at = datetime.now(UTC).replace(tzinfo=None)
+    db_session.commit()
+    saved_source = Path(session.working_path)
+    saved_bytes = saved_source.read_bytes()
+
+    monkeypatch.setattr(
+        db_session,
+        "commit",
+        lambda: (_ for _ in ()).throw(RuntimeError("commit failed")),
+    )
+    with pytest.raises(RuntimeError, match="commit failed"):
+        word_book_service.finish_word_session(db_session, user=user, book_id=book.id)
+
+    assert saved_source.read_bytes() == saved_bytes
+    db_session.refresh(session)
+    assert session.state == "active"
+    assert not list((tmp_path / "data" / "output").rglob("*.docx"))
+    assert not list((tmp_path / "data" / "output").rglob("*.pdf"))
 
 
 def test_finish_second_session_gives_version_2_revision(db_session, tmp_path, monkeypatch):
@@ -297,6 +368,30 @@ def test_finish_with_pdf_none_does_not_fail(db_session, tmp_path, monkeypatch):
     v = db_session.query(BookVersion).filter_by(book_id=book.id).one()
     doc = db_session.get(Document, v.document_id)
     assert doc.pdf_path is None
+
+
+def test_finish_accepts_public_pdf_converter(db_session, tmp_path, monkeypatch):
+    """The Windows gate can inject its isolated converter through the public seam."""
+    from datetime import UTC, datetime
+
+    from app.services import word_book_service
+
+    monkeypatch.setattr(word_book_service, "get_settings", lambda: _settings(tmp_path))
+    user = _user(db_session)
+    book, session = _make_book_with_session(db_session, user, tmp_path)
+    session.last_put_at = datetime.now(UTC).replace(tzinfo=None)
+    db_session.commit()
+
+    result = word_book_service.finish_word_session(
+        db_session,
+        user=user,
+        book_id=book.id,
+        converter=lambda path: _pdf(path.with_suffix(".pdf")),
+    )
+
+    document = db_session.get(Document, result.versions[-1].document_id)
+    assert document is not None
+    assert document.pdf_path is not None
 
 
 def test_discard_draft_voids_book(db_session, tmp_path, monkeypatch):

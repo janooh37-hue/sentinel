@@ -94,6 +94,36 @@ def test_create_classified_book_returns_session_info(db_session, tmp_path, monke
     assert f"الرقم: {info.ref_number}" in text
 
 
+def test_create_commit_failure_removes_uncommitted_working_docx(db_session, tmp_path, monkeypatch):
+    """A failed transaction cannot leave an orphan Word working artifact."""
+    from app.services import word_book_service
+
+    _seed_gs(db_session)
+    settings = _settings(tmp_path)
+    settings.templates_dir.mkdir(parents=True)
+    _write_minimal_docx(settings.templates_dir / _GENERAL_BOOK)
+    monkeypatch.setattr(word_book_service, "get_settings", lambda: settings)
+    user = _user(db_session)
+    monkeypatch.setattr(
+        db_session,
+        "commit",
+        lambda: (_ for _ in ()).throw(RuntimeError("commit failed")),
+    )
+
+    with pytest.raises(RuntimeError, match="commit failed"):
+        word_book_service.create_word_book(
+            db_session,
+            user=user,
+            classification_code="5/1",
+            recipient_id=None,
+            subject="transaction failure",
+            cc=None,
+            manager_id=None,
+        )
+
+    assert not list((settings.data_dir / "editing").rglob("*.docx"))
+
+
 def test_working_docx_gets_body_ref_line(db_session, tmp_path, monkeypatch):
     """The working docx carries the Arabic body ref line (الرقم: …) — the
     General Book template renders {{ ref }} as the body line; no English
