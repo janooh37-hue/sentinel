@@ -1,0 +1,4 @@
+# These synthetic artifacts have exact byte lengths and SHA256 manifest entries.
+*.pdf -text
+*.png -text
+*.bin -text
