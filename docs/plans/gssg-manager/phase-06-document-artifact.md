@@ -1,6 +1,6 @@
 # Phase 6 — Document artifacts
 
-Status: in progress. Branch: `refactor/p6-document-artifact`. Release dependency: Phase 5 (released at `ee1d9f41925efe59baea3b64217c254967ce35e2`).
+Status: merged. Branch: `refactor/p6-document-artifact`. Release dependency: Phase 5 (released at `ee1d9f41925efe59baea3b64217c254967ce35e2`).
 
 Follow [WORKFLOW.md](WORKFLOW.md). Write/retain behavior tests first and inspect the current code before every implementation slice. Finish tests, source review and required checks before every build.
 
