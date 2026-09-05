@@ -1,6 +1,6 @@
 # Phase 2 — Workforce access
 
-Status: implementation and verification complete; merge and deployment pending. Branch: `refactor/p2-workforce-access`. Dependency: Phase 1, except the independently extractable requirements fix in slice 2.1.
+Status: complete — PR #75 merged and deployed. Branch: `refactor/p2-workforce-access`. Dependency: Phase 1, except the independently extractable requirements fix in slice 2.1.
 
 Follow [WORKFLOW.md](WORKFLOW.md). Tests and current-code verification precede every implementation slice; passing verification precedes every build.
 
@@ -183,8 +183,7 @@ The follow-up commit `b0ed44e9504e5bff459153109da956c737befa0e` changes only
 phase evidence and the three test-formatting locations whose AST is identical.
 Application code is unchanged from the full-suite candidate. The supported
 Windows formatter verified that follow-up, reducing the remaining legacy
-unformatted set to 147 files. Final merge, deployment/import smoke and exact
-production commit verification remain pending. No frontend source or runtime
+unformatted set to 147 files. PR #75 merged and deployed successfully; release details follow. No frontend source or runtime
 API contract changed, so no frontend rebuild is required by this phase.
 
 Read filtering currently loads candidate rows before applying scope and cursor
@@ -196,5 +195,15 @@ existing overlap/version computation under the same SQLite write lock.
 Rollback uses a reviewed targeted revert PR merged and pushed before deployment.
 Retain the requirement visibility fix, foreign-habits authorization and their
 regressions; rerun visibility and ETag tests. This phase adds no migration or
-new durable-state format. Deployment and exact production commit verification
-remain pending.
+new durable-state format. Deployment and exact production commit verification completed successfully.
+
+
+### Release result
+
+PR [#75](https://github.com/janooh37-hue/sentinel/pull/75) merged on
+2026-09-05 at 02:04:54 UTC as `ef67bd851754014a520b06304f90d52cbf0158b6`.
+Production `mng update` completed at 06:05 Dubai. Backend import smoke passed;
+GSSGManager returned Running with health ok, version 4.0.0a0, port 8765. A
+separate production Git check confirmed that exact full merge commit at 06:06
+Dubai. Only after that verification was the Phase 3 worktree created from the
+current `origin/main`.
