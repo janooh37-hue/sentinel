@@ -11,12 +11,23 @@ BookCategory GS is seeded so the classified ref allocator can write.
 from __future__ import annotations
 
 from datetime import date
+from pathlib import Path
 
+import fitz
 import pytest
 
 from app.db.models import Book, BookCategory, BookVersion, Document, Employee, User
 from app.schemas.permit import PermitCreate, PermitVehicleCreate
 from app.services import document_service, permit_service
+
+
+def _valid_pdf_for(docx_path: Path) -> Path:
+    pdf_path = docx_path.with_suffix(".pdf")
+    pdf = fitz.open()
+    pdf.new_page()
+    pdf.save(pdf_path)
+    pdf.close()
+    return pdf_path
 
 
 def _seed_gs(db):
@@ -169,9 +180,7 @@ def _mark_latest_as_finished_word(db, permit_id: int) -> tuple[int, str, str | N
 
 def test_finished_word_version_survives_structured_regeneration_with_pdf(gen_env, monkeypatch):
     db = gen_env
-    monkeypatch.setattr(
-        document_service, "convert_docx_to_pdf", lambda path: path.with_suffix(".pdf")
-    )
+    monkeypatch.setattr(document_service, "convert_docx_to_pdf", _valid_pdf_for)
     permit = permit_service.create_permit(db, _payload())
     old_version_id, old_docx_path, old_pdf_path = _mark_latest_as_finished_word(db, permit.id)
 
@@ -196,9 +205,7 @@ def test_finished_word_version_keeps_older_pdf_when_new_conversion_returns_none(
     gen_env, monkeypatch
 ):
     db = gen_env
-    monkeypatch.setattr(
-        document_service, "convert_docx_to_pdf", lambda path: path.with_suffix(".pdf")
-    )
+    monkeypatch.setattr(document_service, "convert_docx_to_pdf", _valid_pdf_for)
     permit = permit_service.create_permit(db, _payload())
     old_version_id, _, old_pdf_path = _mark_latest_as_finished_word(db, permit.id)
     assert old_pdf_path is not None

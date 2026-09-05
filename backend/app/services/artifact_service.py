@@ -112,9 +112,9 @@ def _reserve_exact(destination: Path) -> Path:
     return destination
 
 
-def _reserve(destination: Path, collision: Literal["suffix", "exact"]) -> Path:
-    if collision == "exact":
-        return _reserve_exact(destination)
+def _reserve(
+    destination: Path, collision: Literal["suffix", "exact"], *, reserve_pdf: bool
+) -> tuple[Path, Path | None]:
     index = 0
     while True:
         candidate = (
@@ -122,15 +122,32 @@ def _reserve(destination: Path, collision: Literal["suffix", "exact"]) -> Path:
             if index == 0
             else destination.with_name(f"{destination.stem}_{index}{destination.suffix}")
         )
-        # A pre-existing sibling PDF is also occupied: conversion would
-        # otherwise overwrite a file this operation does not own.
-        if candidate.with_suffix(".pdf").exists():
+        try:
+            target = _reserve_exact(candidate)
+        except FileExistsError:
+            if collision == "exact":
+                raise
+            index += 1
+            continue
+        if not reserve_pdf:
+            return target, None
+        expected_pdf = candidate.with_suffix(".pdf")
+        reserved_pdf = expected_pdf.with_name(f".{expected_pdf.name}.gssg-reserve")
+        if expected_pdf.exists():
+            target.unlink(missing_ok=True)
+            if collision == "exact":
+                raise FileExistsError(expected_pdf)
             index += 1
             continue
         try:
-            return _reserve_exact(candidate)
+            _reserve_exact(reserved_pdf)
         except FileExistsError:
+            target.unlink(missing_ok=True)
+            if collision == "exact":
+                raise
             index += 1
+            continue
+        return target, reserved_pdf
 
 
 def _convert(target: Path, converter: PdfConverter | None) -> ConversionOutcome:
@@ -148,6 +165,8 @@ def _convert(target: Path, converter: PdfConverter | None) -> ConversionOutcome:
     if pdf_path is None:
         return ConversionOutcome(status="unavailable")
     resolved = Path(pdf_path)
+    if resolved.resolve() != target.with_suffix(".pdf").resolve():
+        return ConversionOutcome(status="error", error="Converter returned an unowned PDF path")
     if not resolved.is_file() or resolved.stat().st_size == 0:
         return ConversionOutcome(status="unavailable")
     try:
@@ -195,6 +214,7 @@ def _finish(
     stamps: StampPlan,
     convert_pdf: bool,
     converter: PdfConverter | None,
+    reserved_pdf: Path | None,
 ) -> ArtifactResult:
     created: list[Path] = [target]
     try:
@@ -202,9 +222,8 @@ def _finish(
         if not convert_pdf:
             return ArtifactResult(target, ConversionOutcome(status="skipped"), tuple(created))
         expected_pdf = target.with_suffix(".pdf")
-        pdf_existed = expected_pdf.exists()
         conversion = _convert(target, converter)
-        if expected_pdf.exists() and not pdf_existed:
+        if reserved_pdf is not None:
             if conversion.status == "success":
                 created.append(expected_pdf)
             else:
@@ -214,6 +233,9 @@ def _finish(
         for path in reversed(created):
             path.unlink(missing_ok=True)
         raise
+    finally:
+        if reserved_pdf is not None:
+            reserved_pdf.unlink(missing_ok=True)
 
 
 def produce_from_template(
@@ -231,7 +253,7 @@ def produce_from_template(
     """Render a registered template into a newly owned artifact path."""
     if template_root is not None and template_path is not None:
         raise ValueError("template_root and template_path are mutually exclusive")
-    target = _reserve(Path(destination), collision)
+    target, reserved_pdf = _reserve(Path(destination), collision, reserve_pdf=convert_pdf)
     try:
         if template_path is not None:
             DocxEngine(template_path.parent).fill_general_book_path(
@@ -244,8 +266,16 @@ def produce_from_template(
             DocxEngine(root).fill(template_id, dict(data), target)
     except Exception:
         target.unlink(missing_ok=True)
+        if reserved_pdf is not None:
+            reserved_pdf.unlink(missing_ok=True)
         raise
-    return _finish(target, stamps=stamps, convert_pdf=convert_pdf, converter=converter)
+    return _finish(
+        target,
+        stamps=stamps,
+        convert_pdf=convert_pdf,
+        converter=converter,
+        reserved_pdf=reserved_pdf,
+    )
 
 
 def produce_from_docx(
@@ -261,14 +291,22 @@ def produce_from_docx(
     source = Path(source_path)
     if not source.is_file() or source.suffix.lower() != ".docx":
         raise FileNotFoundError(source)
-    target = _reserve(Path(destination), collision)
+    target, reserved_pdf = _reserve(Path(destination), collision, reserve_pdf=convert_pdf)
     try:
         shutil.copy2(source, target)
     except Exception:
         target.unlink(missing_ok=True)
+        if reserved_pdf is not None:
+            reserved_pdf.unlink(missing_ok=True)
         raise
 
-    return _finish(target, stamps=stamps, convert_pdf=convert_pdf, converter=converter)
+    return _finish(
+        target,
+        stamps=stamps,
+        convert_pdf=convert_pdf,
+        converter=converter,
+        reserved_pdf=reserved_pdf,
+    )
 
 
 def cleanup_created(result: ArtifactResult, *, allowed_root: Path) -> None:

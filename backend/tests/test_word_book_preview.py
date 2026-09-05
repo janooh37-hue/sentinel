@@ -330,6 +330,31 @@ def test_preview_failed_refresh_preserves_last_complete_pdf(
     assert preview.read_bytes() == original
 
 
+def test_preview_rejects_foreign_converter_output_without_mutating_it(
+    db_session: Session,
+    active_session: tuple[Book, Path],
+    tmp_path: Path,
+) -> None:
+    """Preview accepts only its fixed cache path and never takes ownership elsewhere."""
+    book, _working = active_session
+    foreign = _pdf(tmp_path / "foreign.pdf")
+    foreign_bytes = foreign.read_bytes()
+    foreign_mtime = foreign.stat().st_mtime_ns
+
+    with pytest.raises(AppError) as error:
+        word_book_service.render_session_preview(
+            db_session,
+            book_id=book.id,
+            converter=lambda _source: foreign,
+        )
+
+    assert error.value.code == "PREVIEW_UNAVAILABLE"
+    assert foreign.read_bytes() == foreign_bytes
+    assert foreign.stat().st_mtime_ns == foreign_mtime
+    assert foreign.is_file()
+    assert not (_working.parent / "preview-src.pdf").exists()
+
+
 def test_dav_put_during_preview_conversion_leaves_snapshot_cache_stale(
     db_session: Session,
     active_session: tuple[Book, Path],

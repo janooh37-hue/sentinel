@@ -105,6 +105,12 @@ class PackageState:
     history: list[PackageHistory]
 
 
+@dataclass(frozen=True, slots=True)
+class PublishedPackageResult:
+    published_path: str
+    created_paths: tuple[Path, ...]
+
+
 @dataclass(frozen=True)
 class _ResolvedPaper:
     id: str
@@ -624,7 +630,7 @@ def publish_generated_package(
     *,
     invalidate_revision: bool,
     data_dir: Path | None = None,
-) -> str:
+) -> PublishedPackageResult:
     """Preserve a generated fixed base and publish it with current papers."""
     if invalidate_revision:
         advance_package_revision(db, book)
@@ -656,7 +662,18 @@ def publish_generated_package(
         raise
     document.base_pdf_path = base_path.resolve().relative_to(data_root).as_posix()
     document.pdf_path = output.resolve().relative_to(data_root).as_posix()
-    return document.pdf_path
+    created_paths = (base_path,) if output == generated_primary else (base_path, output)
+    return PublishedPackageResult(document.pdf_path, created_paths)
+
+
+def cleanup_published_package(result: PublishedPackageResult, *, allowed_root: Path) -> None:
+    """Remove package files created by one publish, within its book directory."""
+    root = Path(allowed_root).resolve()
+    for path in reversed(result.created_paths):
+        resolved = path.resolve()
+        if resolved != root and root not in resolved.parents:
+            raise ValueError(f"Package cleanup path is outside allowed root: {path}")
+        resolved.unlink(missing_ok=True)
 
 
 def publish_signed_package(

@@ -73,7 +73,25 @@ Observed local evidence so far:
   environment. Default-chain method and process-pool checks are supplemental
   while those unchanged adapters remain outside this phase.
 
-Pending before release: source freeze, independent source and i18n/RTL reviews,
-full backend/static/API/template-hash gates, the minimal isolated real Word group
-with synthetic artifacts and visual review, PR/merge, deployment, health and
-exact production HEAD verification.
+Final frozen local evidence:
+
+- Integrated public-caller gate: 175 passed in 53.79 seconds.
+- Full backend gate: 2,113 passed and 15 skipped in 528.18 seconds. The skips
+  are one opt-in real Word test, five real-OCR tests unavailable on Linux, and
+  nine established live-finance skips; none is counted as external-adapter proof.
+- Ruff and mypy each retain exactly the Phase 5 baseline signatures: Ruff 22
+  findings, mypy 22 findings in seven files, with zero added or removed normalized
+  signatures. All 12 changed Python files pass Ruff formatting.
+- Runtime OpenAPI exactly matches the committed contract at 275 paths; both
+  normalized hashes are
+  `1a0d21a722ad6eff4de52292c49802e46c59ade34f77cfe983502490b84b63e9`.
+  OpenAPI, generated frontend types and tracked template DOCX files have no diff
+  from the Phase 5 starting commit.
+- Independent Standards, Spec and i18n/fidelity source reviews resolved every
+  material finding. The corrected opt-in smoke and its bounded maintenance
+  wrapper have an accepted evidence binding, but no Word operation has run.
+
+Pending before release: the authorized isolated real Word group with synthetic
+artifacts and visual Arabic/English review, the supported Windows backend/static
+and OCR gates, PR readiness/merge, deployment, health and exact production HEAD
+verification.

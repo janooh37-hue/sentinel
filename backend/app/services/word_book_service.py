@@ -35,11 +35,7 @@ from app.db.models import Book, BookCategory, BookEditSession, BookVersion, Docu
 from app.db.repos import classified_refs_repo
 from app.services import artifact_service
 from app.services._pdf_executor import convert_docx_to_pdf
-from app.services.document_service import (
-    GENERAL_BOOK_BODY_SENTINEL,
-    _build_docx_filename,
-    _output_dir_for_admin,
-)
+from app.services.document_service import GENERAL_BOOK_BODY_SENTINEL
 
 # Every Word book renders on the ONE General Book template — the same file the
 # rich-editor path fills — so both authoring surfaces produce identical paper.
@@ -409,8 +405,10 @@ def finish_word_session(
         else ("Report" if is_report else _TEMPLATE_ID)
     )
     now = datetime.now() if is_report else datetime.now(UTC).replace(tzinfo=None)
-    out_dir = _output_dir_for_admin(template_id)
-    filename = _build_docx_filename(template_id, book.ref_number.replace("/", "-"), now)
+    out_dir = artifact_service.output_dir_for_admin(template_id)
+    filename = artifact_service.build_docx_filename(
+        template_id, book.ref_number.replace("/", "-"), now
+    )
     dest = out_dir / filename
     # Avoid collisions (unlikely but possible if clock has low resolution)
     suffix = 0
@@ -519,12 +517,13 @@ def finish_word_session(
             "signer_employee_id": session.signer_employee_id,
             "signed": signed,
         }
+    published_package: included_papers_service.PublishedPackageResult | None = None
     if pdf_path is not None and pdf_path.is_file():
         from app.services import included_papers_service
 
         db.flush()
         try:
-            included_papers_service.publish_generated_package(
+            published_package = included_papers_service.publish_generated_package(
                 db,
                 book,
                 version,
@@ -557,6 +556,11 @@ def finish_word_session(
         db.commit()
     except Exception:
         db.rollback()
+        if published_package is not None:
+            included_papers_service.cleanup_published_package(
+                published_package,
+                allowed_root=get_settings().data_dir / "book_packages" / str(book.id),
+            )
         artifact_service.cleanup_created(artifact, allowed_root=out_dir)
         raise
     # The Word-saved DOCX is the recoverable source for this transaction.
@@ -728,7 +732,11 @@ def render_session_preview(
         finally:
             with contextlib.suppress(OSError):
                 src_copy.unlink(missing_ok=True)
-        if pdf is None or not _is_complete_preview(pdf):
+        if (
+            pdf is None
+            or Path(pdf).resolve() != preview_pdf.resolve()
+            or not _is_complete_preview(Path(pdf))
+        ):
             if previous_bytes is not None and previous_times is not None:
                 preview_pdf.write_bytes(previous_bytes)
                 os.utime(preview_pdf, previous_times)

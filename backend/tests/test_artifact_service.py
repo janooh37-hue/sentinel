@@ -7,6 +7,8 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 from pathlib import Path
 
+import fitz
+import pytest
 from docx import Document
 
 from app.core.constants import TEMPLATE_FILES
@@ -214,3 +216,48 @@ def test_converter_rejects_and_removes_truncated_pdf(tmp_path: Path) -> None:
     assert result.conversion.pdf_path is None
     assert result.created_paths == (result.docx_path,)
     assert not result.docx_path.with_suffix(".pdf").exists()
+
+
+def test_exact_conversion_rejects_preexisting_sibling_pdf_without_touching_it(
+    tmp_path: Path,
+) -> None:
+    source = tmp_path / "source.docx"
+    Document().save(source)
+    destination = tmp_path / "record.docx"
+    sibling = destination.with_suffix(".pdf")
+    sibling.write_bytes(b"foreign-pdf")
+
+    with pytest.raises(FileExistsError):
+        artifact_service.produce_from_docx(
+            source_path=source,
+            destination=destination,
+            collision="exact",
+        )
+
+    assert sibling.read_bytes() == b"foreign-pdf"
+    assert not destination.exists()
+
+
+def test_converter_returning_foreign_pdf_is_an_error_and_never_touches_it(tmp_path: Path) -> None:
+    source = tmp_path / "source.docx"
+    Document().save(source)
+    foreign = tmp_path / "foreign" / "other.pdf"
+    foreign.parent.mkdir()
+    pdf = fitz.open()
+    pdf.new_page()
+    pdf.save(foreign)
+    pdf.close()
+    foreign_hash = _sha256(foreign)
+
+    result = artifact_service.produce_from_docx(
+        source_path=source,
+        destination=tmp_path / "record.docx",
+        collision="exact",
+        converter=lambda _source: foreign,
+    )
+
+    assert result.conversion.status == "error"
+    assert result.conversion.pdf_path is None
+    assert result.conversion.error == "Converter returned an unowned PDF path"
+    assert _sha256(foreign) == foreign_hash
+    assert result.created_paths == (result.docx_path,)

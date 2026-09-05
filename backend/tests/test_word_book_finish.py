@@ -128,11 +128,10 @@ def test_finish_after_put_creates_version_and_document(db_session, tmp_path, mon
 
     from app.services import word_book_service
 
-    _dummy_pdf = _pdf(tmp_path / "dummy.pdf")
     monkeypatch.setattr(word_book_service, "get_settings", lambda: _settings(tmp_path))
     monkeypatch.setattr(
         "app.services.word_book_service.convert_docx_to_pdf",
-        lambda p: _dummy_pdf,
+        lambda p: _pdf(p.with_suffix(".pdf")),
     )
 
     user = _user(db_session)
@@ -274,17 +273,73 @@ def test_finish_preserves_saved_source_when_commit_fails(db_session, tmp_path, m
     assert not list((tmp_path / "data" / "output").rglob("*.pdf"))
 
 
+def test_finish_cleans_published_package_when_terminal_commit_fails(
+    db_session, tmp_path, monkeypatch
+):
+    """Package files are transaction-owned and removed if the final commit fails."""
+    from datetime import UTC, datetime
+
+    from docx import Document as DocxFile
+
+    from app.services import book_service, word_book_service
+
+    settings = _settings(tmp_path)
+    monkeypatch.setattr(word_book_service, "get_settings", lambda: settings)
+    monkeypatch.setattr(book_service, "get_settings", lambda: settings)
+    user = _user(db_session)
+    book, session = _make_book_with_session(db_session, user, tmp_path)
+
+    saved = DocxFile()
+    saved.add_paragraph("P6 recoverable Word source")
+    saved.save(session.working_path)
+    saved_source = Path(session.working_path)
+    saved_bytes = saved_source.read_bytes()
+    paper_dir = settings.data_dir / "book_attachments"
+    paper_dir.mkdir(parents=True)
+    paper = _pdf(paper_dir / "paper.pdf")
+    book.merged_attachment_paths = [
+        {"path": paper.relative_to(settings.data_dir).as_posix(), "slot_key": "supporting"}
+    ]
+    session.last_put_at = datetime.now(UTC).replace(tzinfo=None)
+    db_session.commit()
+
+    package_dir = settings.data_dir / "book_packages" / str(book.id)
+    package_dir.mkdir(parents=True)
+    existing = _pdf(package_dir / "existing-published.pdf")
+    existing_bytes = existing.read_bytes()
+    monkeypatch.setattr(
+        db_session,
+        "commit",
+        lambda: (_ for _ in ()).throw(RuntimeError("terminal commit failed")),
+    )
+
+    with pytest.raises(RuntimeError, match="terminal commit failed"):
+        word_book_service.finish_word_session(
+            db_session,
+            user=user,
+            book_id=book.id,
+            converter=lambda path: _pdf(path.with_suffix(".pdf")),
+        )
+
+    assert saved_source.read_bytes() == saved_bytes
+    db_session.refresh(session)
+    assert session.state == "active"
+    assert existing.read_bytes() == existing_bytes
+    assert list(package_dir.iterdir()) == [existing]
+    assert not list((settings.data_dir / "output").rglob("*.docx"))
+    assert not list((settings.data_dir / "output").rglob("*.pdf"))
+
+
 def test_finish_second_session_gives_version_2_revision(db_session, tmp_path, monkeypatch):
     """After an existing version, finishing another session → version_no=2, trigger=revision."""
     from datetime import UTC, datetime
 
     from app.services import word_book_service
 
-    _dummy_pdf = _pdf(tmp_path / "dummy.pdf")
     monkeypatch.setattr(word_book_service, "get_settings", lambda: _settings(tmp_path))
     monkeypatch.setattr(
         "app.services.word_book_service.convert_docx_to_pdf",
-        lambda p: _dummy_pdf,
+        lambda p: _pdf(p.with_suffix(".pdf")),
     )
 
     user = _user(db_session)
@@ -499,11 +554,10 @@ def test_finish_classified_book_slashed_ref_no_nested_dirs(db_session, tmp_path,
     from app.db.models import BookCategory
     from app.services import word_book_service
 
-    _dummy_pdf = _pdf(tmp_path / "dummy.pdf")
     monkeypatch.setattr(word_book_service, "get_settings", lambda: _settings(tmp_path))
     monkeypatch.setattr(
         "app.services.word_book_service.convert_docx_to_pdf",
-        lambda p: _dummy_pdf,
+        lambda p: _pdf(p.with_suffix(".pdf")),
     )
 
     # Seed the "C" classified category
