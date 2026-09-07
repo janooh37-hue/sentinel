@@ -4400,6 +4400,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/vehicles/scan-licence": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Scan Vehicle Licence */
+        post: operations["scan_vehicle_licence_api_v1_vehicles_scan_licence_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/vehicles/{vehicle_id}": {
         parameters: {
             query?: never;
@@ -4416,6 +4433,40 @@ export interface paths {
         head?: never;
         /** Update Vehicle */
         patch: operations["update_vehicle_api_v1_vehicles__vehicle_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/vehicles/{vehicle_id}/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Archive Vehicle */
+        post: operations["archive_vehicle_api_v1_vehicles__vehicle_id__archive_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/vehicles/{vehicle_id}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Restore Vehicle */
+        post: operations["restore_vehicle_api_v1_vehicles__vehicle_id__restore_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/vehicles/{vehicle_id}/renew": {
@@ -6214,6 +6265,14 @@ export interface components {
         };
         /** Body_scan_vehicle_licence_api_v1_permits_scan_vehicle_licence_post */
         Body_scan_vehicle_licence_api_v1_permits_scan_vehicle_licence_post: {
+            /**
+             * Upload
+             * Format: binary
+             */
+            upload: string;
+        };
+        /** Body_scan_vehicle_licence_api_v1_vehicles_scan_licence_post */
+        Body_scan_vehicle_licence_api_v1_vehicles_scan_licence_post: {
             /**
              * Upload
              * Format: binary
@@ -11717,6 +11776,28 @@ export interface components {
             photo_file_id?: number | null;
             /** License File Id */
             license_file_id?: number | null;
+            /** Make */
+            make?: string | null;
+            /** Model */
+            model?: string | null;
+            /** Model Year */
+            model_year?: number | null;
+            /** Colour */
+            colour?: string | null;
+            /** Insurance Expiry */
+            insurance_expiry?: string | null;
+            /** Inmate Capacity */
+            inmate_capacity?: number | null;
+            /** Passenger Capacity */
+            passenger_capacity?: number | null;
+            /** Accessories Ar */
+            accessories_ar?: string | null;
+            /** Accessories En */
+            accessories_en?: string | null;
+            /** Notes Ar */
+            notes_ar?: string | null;
+            /** Notes En */
+            notes_en?: string | null;
         };
         /** VehicleFileRead */
         VehicleFileRead: {
@@ -11935,6 +12016,22 @@ export interface components {
             black_points: number;
             /** Photo Url */
             photo_url?: string | null;
+            /** Make */
+            make?: string | null;
+            /** Model */
+            model?: string | null;
+            /** Model Year */
+            model_year?: number | null;
+            /** Colour */
+            colour?: string | null;
+            /** Insurance Expiry */
+            insurance_expiry?: string | null;
+            /** Insurance Status */
+            insurance_status?: ("valid" | "due" | "expired") | null;
+            /** Days To Insurance Expiry */
+            days_to_insurance_expiry?: number | null;
+            /** Archived At */
+            archived_at?: string | null;
         };
         /** VehicleMaintenanceCreate */
         VehicleMaintenanceCreate: {
@@ -12019,6 +12116,45 @@ export interface components {
              */
             vehicle_type_en: string;
         };
+        /** VehicleProfileScan */
+        VehicleProfileScan: {
+            /** Plate Code */
+            plate_code?: string | null;
+            /** Plate Number */
+            plate_number?: string | null;
+            /** Traffic Code */
+            traffic_code?: string | null;
+            /** Vin */
+            vin?: string | null;
+            /** Make */
+            make?: string | null;
+            /** Model */
+            model?: string | null;
+            /** Model Year */
+            model_year?: number | null;
+            /** Colour */
+            colour?: string | null;
+            /** Type Ar */
+            type_ar?: string | null;
+            /** Type En */
+            type_en?: string | null;
+            /** Class Ar */
+            class_ar?: string | null;
+            /** Class En */
+            class_en?: string | null;
+            /** License Start */
+            license_start?: string | null;
+            /** License Expiry */
+            license_expiry?: string | null;
+            /** Insurance Expiry */
+            insurance_expiry?: string | null;
+            /** Unmapped */
+            unmapped?: {
+                [key: string]: string;
+            };
+            /** Warnings */
+            warnings?: ("OCR_UNAVAILABLE" | "OCR_NO_FIELDS" | "OCR_REVIEW_REQUIRED")[];
+        };
         /** VehicleRead */
         VehicleRead: {
             /** Id */
@@ -12084,6 +12220,22 @@ export interface components {
             black_points: number;
             /** Photo Url */
             photo_url?: string | null;
+            /** Make */
+            make?: string | null;
+            /** Model */
+            model?: string | null;
+            /** Model Year */
+            model_year?: number | null;
+            /** Colour */
+            colour?: string | null;
+            /** Insurance Expiry */
+            insurance_expiry?: string | null;
+            /** Insurance Status */
+            insurance_status?: ("valid" | "due" | "expired") | null;
+            /** Days To Insurance Expiry */
+            days_to_insurance_expiry?: number | null;
+            /** Archived At */
+            archived_at?: string | null;
             /** Contract Note Ar */
             contract_note_ar: string | null;
             /** Contract Note En */
@@ -12100,6 +12252,24 @@ export interface components {
             maintenance?: components["schemas"]["VehicleMaintenanceRead"][];
             /** Photos */
             photos?: components["schemas"]["VehicleFileRead"][];
+            /** Inmate Capacity */
+            inmate_capacity?: number | null;
+            /** Passenger Capacity */
+            passenger_capacity?: number | null;
+            /** Accessories Ar */
+            accessories_ar?: string | null;
+            /** Accessories En */
+            accessories_en?: string | null;
+            /** Notes Ar */
+            notes_ar?: string | null;
+            /** Notes En */
+            notes_en?: string | null;
+            /** Photo File Id */
+            photo_file_id?: number | null;
+            /** License File Id */
+            license_file_id?: number | null;
+            /** License Files */
+            license_files?: components["schemas"]["VehicleFileRead"][];
         };
         /** VehicleSiteCreate */
         VehicleSiteCreate: {
@@ -12165,6 +12335,28 @@ export interface components {
             photo_file_id?: number | null;
             /** License File Id */
             license_file_id?: number | null;
+            /** Make */
+            make?: string | null;
+            /** Model */
+            model?: string | null;
+            /** Model Year */
+            model_year?: number | null;
+            /** Colour */
+            colour?: string | null;
+            /** Insurance Expiry */
+            insurance_expiry?: string | null;
+            /** Inmate Capacity */
+            inmate_capacity?: number | null;
+            /** Passenger Capacity */
+            passenger_capacity?: number | null;
+            /** Accessories Ar */
+            accessories_ar?: string | null;
+            /** Accessories En */
+            accessories_en?: string | null;
+            /** Notes Ar */
+            notes_ar?: string | null;
+            /** Notes En */
+            notes_en?: string | null;
         };
         /** VehiclesSummary */
         VehiclesSummary: {
@@ -12178,6 +12370,8 @@ export interface components {
             black_points: number;
             /** License Attention */
             license_attention: number;
+            /** Insurance Attention */
+            insurance_attention: number;
             /** Open Accidents */
             open_accidents: number;
             /** Maintenance Due */
@@ -22738,6 +22932,7 @@ export interface operations {
                 q?: string | null;
                 site_id?: number | null;
                 expiry?: string;
+                state?: string;
             };
             header?: never;
             path?: never;
@@ -22802,6 +22997,41 @@ export interface operations {
             };
         };
     };
+    scan_vehicle_licence_api_v1_vehicles_scan_licence_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_scan_vehicle_licence_api_v1_vehicles_scan_licence_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VehicleProfileScan"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_vehicle_api_v1_vehicles__vehicle_id__get: {
         parameters: {
             query?: never;
@@ -22851,6 +23081,72 @@ export interface operations {
                 "application/json": components["schemas"]["VehicleUpdate"];
             };
         };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VehicleRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    archive_vehicle_api_v1_vehicles__vehicle_id__archive_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                vehicle_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VehicleRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    restore_vehicle_api_v1_vehicles__vehicle_id__restore_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                vehicle_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {

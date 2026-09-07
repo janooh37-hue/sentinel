@@ -81,7 +81,7 @@ def generate_fines_letter(
     user: User,
 ) -> LetterResult:
     """Generate and file a fines letter for fines owned by one vehicle."""
-    vehicle = vehicle_service.get_vehicle(db, vehicle_id)
+    vehicle = vehicle_service.require_active_vehicle(db, vehicle_id)
     requested_ids = set(fine_ids)
     selected = [fine for fine in vehicle.fines if fine.id in requested_ids]
     found_ids = {fine.id for fine in selected}
@@ -146,7 +146,7 @@ def generate_accident_letter(
     user: User,
 ) -> LetterResult:
     """Generate, file, and link an official accident letter."""
-    vehicle = vehicle_service.get_vehicle(db, vehicle_id)
+    vehicle = vehicle_service.require_active_vehicle(db, vehicle_id)
     accident = next(
         (row for row in vehicle.accidents if row.id == accident_id),
         None,

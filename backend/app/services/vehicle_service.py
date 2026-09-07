@@ -8,13 +8,13 @@ import re
 import uuid
 from datetime import UTC, date, datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, object_session, selectinload
 
-from app.api.errors import NotFoundError, ValidationFailedError
+from app.api.errors import ConflictError, NotFoundError, ValidationFailedError
 from app.config import get_settings
 from app.db.models import (
     AuditLog,
@@ -193,6 +193,14 @@ def to_list_item(
     current_day = today or date.today()
     window = _notify_window(row, notify_days)
     photo = _vehicle_file(row, row.photo_file_id)
+    insurance_status = (
+        expiry_status(row.insurance_expiry, today=current_day, notify_days=window)
+        if row.insurance_expiry is not None
+        else None
+    )
+    days_to_insurance_expiry = (
+        (row.insurance_expiry - current_day).days if row.insurance_expiry is not None else None
+    )
     return VehicleListItem.model_validate(row).model_copy(
         update={
             "plate_label": plate_label(row),
@@ -204,6 +212,8 @@ def to_list_item(
             "fines_amount": sum(item.amount for item in row.fines),
             "black_points": sum(item.black_points for item in row.fines),
             "photo_url": _file_url(row.id, photo.id) if photo is not None else None,
+            "insurance_status": insurance_status,
+            "days_to_insurance_expiry": days_to_insurance_expiry,
         }
     )
 
@@ -223,6 +233,14 @@ def to_read(
             **item.model_dump(),
             "contract_note_ar": row.contract_note_ar,
             "contract_note_en": row.contract_note_en,
+            "inmate_capacity": row.inmate_capacity,
+            "passenger_capacity": row.passenger_capacity,
+            "accessories_ar": row.accessories_ar,
+            "accessories_en": row.accessories_en,
+            "notes_ar": row.notes_ar,
+            "notes_en": row.notes_en,
+            "photo_file_id": row.photo_file_id,
+            "license_file_id": row.license_file_id,
         }
     )
     return result.model_copy(
@@ -266,7 +284,19 @@ def to_read(
             "photos": [
                 _file_read(file_row)
                 for file_row in sorted(
-                    (item for item in row.files if item.kind == "gallery"),
+                    (
+                        item
+                        for item in row.files
+                        if item.kind in {"photo", "gallery"} and item.id != row.photo_file_id
+                    ),
+                    key=lambda item: (item.created_at, item.id),
+                    reverse=True,
+                )
+            ],
+            "license_files": [
+                _file_read(file_row)
+                for file_row in sorted(
+                    (item for item in row.files if item.kind == "license"),
                     key=lambda item: (item.created_at, item.id),
                     reverse=True,
                 )
@@ -304,6 +334,7 @@ def list_vehicles(
     q: str | None = None,
     site_id: int | None = None,
     expiry: str = "all",
+    state: Literal["active", "archived"] = "active",
     today: date | None = None,
     notify_days: int | None = None,
 ) -> list[Vehicle]:
@@ -314,6 +345,10 @@ def list_vehicles(
             expiry=expiry,
         )
     stmt = select(Vehicle).options(*_list_options()).execution_options(populate_existing=True)
+    if state == "active":
+        stmt = stmt.where(Vehicle.archived_at.is_(None))
+    else:
+        stmt = stmt.where(Vehicle.archived_at.is_not(None))
     if site_id is not None:
         stmt = stmt.where(Vehicle.site_id == site_id)
     rows = list(
@@ -345,6 +380,9 @@ def list_vehicles(
                     row.type_en,
                     row.class_ar,
                     row.class_en,
+                    row.make,
+                    row.model,
+                    row.colour,
                     row.site.name_ar,
                     row.site.name_en,
                 )
@@ -358,8 +396,8 @@ def list_vehicles(
         )
         filtered_rows: list[Vehicle] = []
         for row in rows:
-            state = expiry_status(row.license_expiry, today=current_day, notify_days=window)
-            if state == expiry or (expiry == "attention" and state != "valid"):
+            row_state = expiry_status(row.license_expiry, today=current_day, notify_days=window)
+            if row_state == expiry or (expiry == "attention" and row_state != "valid"):
                 filtered_rows.append(row)
         rows = filtered_rows
     return rows
@@ -384,6 +422,45 @@ def get_vehicle(db: Session, vehicle_id: int) -> Vehicle:
             id=vehicle_id,
         )
     return row
+
+
+def require_active_vehicle(db: Session, vehicle_id: int) -> Vehicle:
+    row = get_vehicle(db, vehicle_id)
+    if row.archived_at is not None:
+        raise ConflictError(
+            "VEHICLE_ARCHIVED",
+            f"Vehicle {vehicle_id} is archived.",
+            id=vehicle_id,
+        )
+    return row
+
+
+def archive_vehicle(db: Session, vehicle_id: int, *, actor: str | None = None) -> Vehicle:
+    row = get_vehicle(db, vehicle_id)
+    if row.archived_at is not None:
+        return row
+    row.archived_at = _utcnow()
+    row.updated_at = _utcnow()
+    db.commit()
+    _audit(db, "vehicle.archived", row.id, actor, {"plate_number": row.plate_number})
+    return get_vehicle(db, row.id)
+
+
+def restore_vehicle(db: Session, vehicle_id: int, *, actor: str | None = None) -> Vehicle:
+    row = get_vehicle(db, vehicle_id)
+    if row.archived_at is None:
+        return row
+    if not row.site.active:
+        raise ValidationFailedError(
+            "VEHICLE_SITE_INACTIVE",
+            "Restoring this vehicle requires reactivating its site first.",
+            site_id=row.site_id,
+        )
+    row.archived_at = None
+    row.updated_at = _utcnow()
+    db.commit()
+    _audit(db, "vehicle.restored", row.id, actor, {"plate_number": row.plate_number})
+    return get_vehicle(db, row.id)
 
 
 def _get_site(db: Session, site_id: int) -> VehicleSite:
@@ -495,6 +572,17 @@ def create_vehicle(db: Session, payload: VehicleCreate, *, actor: str | None = N
         contract_note_en=payload.contract_note_en,
         license_start=payload.license_start,
         license_expiry=payload.license_expiry,
+        make=payload.make,
+        model=payload.model,
+        model_year=payload.model_year,
+        colour=payload.colour,
+        insurance_expiry=payload.insurance_expiry,
+        inmate_capacity=payload.inmate_capacity,
+        passenger_capacity=payload.passenger_capacity,
+        accessories_ar=payload.accessories_ar,
+        accessories_en=payload.accessories_en,
+        notes_ar=payload.notes_ar,
+        notes_en=payload.notes_en,
     )
     db.add(row)
     try:
@@ -543,7 +631,7 @@ def update_vehicle(
     *,
     actor: str | None = None,
 ) -> Vehicle:
-    row = get_vehicle(db, vehicle_id)
+    row = require_active_vehicle(db, vehicle_id)
     data = payload.model_dump(exclude_unset=True)
     audit_payload = payload.model_dump(mode="json", exclude_unset=True)
     required_fields = {
@@ -605,6 +693,8 @@ def update_vehicle(
         setattr(row, field, value)
     if "license_start" in data or "license_expiry" in data:
         row.expiry_reminder_sent_for = None
+    if "insurance_expiry" in data:
+        row.insurance_reminder_sent_for = None
     row.updated_at = _utcnow()
     try:
         db.commit()
@@ -688,7 +778,9 @@ def update_site(
     if data.get("active") is False:
         vehicle_count = int(
             db.execute(
-                select(func.count(Vehicle.id)).where(Vehicle.site_id == site_id)
+                select(func.count(Vehicle.id)).where(
+                    Vehicle.site_id == site_id, Vehicle.archived_at.is_(None)
+                )
             ).scalar_one()
         )
         if vehicle_count:
@@ -724,7 +816,7 @@ def renew_license(
     *,
     actor: str | None = None,
 ) -> Vehicle:
-    row = get_vehicle(db, vehicle_id)
+    row = require_active_vehicle(db, vehicle_id)
     if payload.scan_file_id is not None:
         _owned_file(db, row.id, payload.scan_file_id, kind="license")
     renewal = VehicleLicenseRenewal(
@@ -765,7 +857,7 @@ def add_fine(
     actor: str | None = None,
     created_by_user_id: int | None = None,
 ) -> Vehicle:
-    row = get_vehicle(db, vehicle_id)
+    row = require_active_vehicle(db, vehicle_id)
     _validate_employee(db, payload.employee_id)
     fine = VehicleFine(
         vehicle_id=row.id,
@@ -814,7 +906,7 @@ def update_fine(
     *,
     actor: str | None = None,
 ) -> Vehicle:
-    get_vehicle(db, vehicle_id)
+    require_active_vehicle(db, vehicle_id)
     row = _get_fine(db, vehicle_id, fine_id)
     data = payload.model_dump(exclude_unset=True)
     cleared_required = next(
@@ -854,7 +946,7 @@ def delete_fine(
     *,
     actor: str | None = None,
 ) -> Vehicle:
-    get_vehicle(db, vehicle_id)
+    require_active_vehicle(db, vehicle_id)
     row = _get_fine(db, vehicle_id, fine_id)
     db.delete(row)
     db.commit()
@@ -868,7 +960,7 @@ def create_accident(
     *,
     actor: str | None = None,
 ) -> VehicleAccident:
-    vehicle = get_vehicle(db, payload.vehicle_id)
+    vehicle = require_active_vehicle(db, payload.vehicle_id)
     _validate_employee(db, payload.employee_id)
     for file_id in payload.photo_file_ids:
         _owned_file(db, vehicle.id, file_id, kind="accident")
@@ -930,7 +1022,7 @@ def set_accident_status(
     *,
     actor: str | None = None,
 ) -> VehicleAccident:
-    get_vehicle(db, vehicle_id)
+    require_active_vehicle(db, vehicle_id)
     row = _get_accident(db, vehicle_id, accident_id)
     if status not in {"open", "closed"}:
         raise ValidationFailedError(
@@ -958,7 +1050,7 @@ def delete_accident(
     *,
     actor: str | None = None,
 ) -> None:
-    get_vehicle(db, vehicle_id)
+    require_active_vehicle(db, vehicle_id)
     row = _get_accident(db, vehicle_id, accident_id)
     db.delete(row)
     db.commit()
@@ -977,7 +1069,7 @@ def create_maintenance(
     *,
     actor: str | None = None,
 ) -> VehicleMaintenance:
-    vehicle = get_vehicle(db, payload.vehicle_id)
+    vehicle = require_active_vehicle(db, payload.vehicle_id)
     if payload.receipt_file_id is not None:
         _owned_file(db, vehicle.id, payload.receipt_file_id, kind="receipt")
     row = VehicleMaintenance(
@@ -1033,7 +1125,7 @@ def delete_maintenance(
     *,
     actor: str | None = None,
 ) -> None:
-    get_vehicle(db, vehicle_id)
+    require_active_vehicle(db, vehicle_id)
     row = _get_maintenance(db, vehicle_id, maintenance_id)
     db.delete(row)
     db.commit()
@@ -1061,6 +1153,7 @@ def list_fines(
             selectinload(VehicleFine.vehicle).selectinload(Vehicle.site),
         )
         .execution_options(populate_existing=True)
+        .where(Vehicle.archived_at.is_(None))
     )
     if site_id is not None:
         stmt = stmt.where(Vehicle.site_id == site_id)
@@ -1080,12 +1173,14 @@ def list_accidents(db: Session) -> list[VehicleAccident]:
     return list(
         db.execute(
             select(VehicleAccident)
+            .join(VehicleAccident.vehicle)
             .options(
                 selectinload(VehicleAccident.employee),
                 selectinload(VehicleAccident.vehicle).selectinload(Vehicle.files),
                 selectinload(VehicleAccident.vehicle).selectinload(Vehicle.site),
             )
             .execution_options(populate_existing=True)
+            .where(Vehicle.archived_at.is_(None))
             .order_by(VehicleAccident.date.desc(), VehicleAccident.id.desc())
         )
         .scalars()
@@ -1098,11 +1193,13 @@ def list_maintenance(db: Session) -> list[VehicleMaintenance]:
     return list(
         db.execute(
             select(VehicleMaintenance)
+            .join(VehicleMaintenance.vehicle)
             .options(
                 selectinload(VehicleMaintenance.vehicle).selectinload(Vehicle.files),
                 selectinload(VehicleMaintenance.vehicle).selectinload(Vehicle.site),
             )
             .execution_options(populate_existing=True)
+            .where(Vehicle.archived_at.is_(None))
             .order_by(VehicleMaintenance.date.desc(), VehicleMaintenance.id.desc())
         )
         .scalars()
@@ -1114,20 +1211,34 @@ def list_maintenance(db: Session) -> list[VehicleMaintenance]:
 def summary(db: Session) -> VehiclesSummary:
     today = date.today()
     notify_days = settings_service.get_vehicle_notify_days(db)
-    vehicles = list(db.execute(select(Vehicle)).scalars().all())
+    vehicles = list(
+        db.execute(select(Vehicle).where(Vehicle.archived_at.is_(None))).scalars().all()
+    )
     fines_count, fines_amount, black_points = db.execute(
         select(
             func.count(VehicleFine.id),
             func.coalesce(func.sum(VehicleFine.amount), 0),
             func.coalesce(func.sum(VehicleFine.black_points), 0),
         )
+        .join(VehicleFine.vehicle)
+        .where(Vehicle.archived_at.is_(None))
     ).one()
     open_accidents = int(
         db.execute(
-            select(func.count(VehicleAccident.id)).where(VehicleAccident.status == "open")
+            select(func.count(VehicleAccident.id))
+            .join(VehicleAccident.vehicle)
+            .where(VehicleAccident.status == "open", Vehicle.archived_at.is_(None))
         ).scalar_one()
     )
-    maintenance_rows = list(db.execute(select(VehicleMaintenance.next_due)).scalars().all())
+    maintenance_rows = list(
+        db.execute(
+            select(VehicleMaintenance.next_due)
+            .join(VehicleMaintenance.vehicle)
+            .where(Vehicle.archived_at.is_(None))
+        )
+        .scalars()
+        .all()
+    )
     active_sites = int(
         db.execute(
             select(func.count(VehicleSite.id)).where(VehicleSite.active.is_(True))
@@ -1140,6 +1251,11 @@ def summary(db: Session) -> VehiclesSummary:
         black_points=int(black_points),
         license_attention=sum(
             expiry_status(row.license_expiry, today=today, notify_days=notify_days) != "valid"
+            for row in vehicles
+        ),
+        insurance_attention=sum(
+            row.insurance_expiry is not None
+            and expiry_status(row.insurance_expiry, today=today, notify_days=notify_days) != "valid"
             for row in vehicles
         ),
         open_accidents=open_accidents,
@@ -1169,7 +1285,7 @@ def store_file(
     label_ar: str | None = None,
     label_en: str | None = None,
 ) -> VehicleFile:
-    get_vehicle(db, vehicle_id)
+    require_active_vehicle(db, vehicle_id)
     if kind not in _FILE_KINDS:
         raise ValidationFailedError(
             "VEHICLE_FILE_BAD_KIND",
@@ -1265,7 +1381,7 @@ def delete_file(
     *,
     actor: str | None = None,
 ) -> None:
-    get_vehicle(db, vehicle_id)
+    require_active_vehicle(db, vehicle_id)
     row = _owned_file(db, vehicle_id, file_id)
     if row.kind != "gallery":
         raise ValidationFailedError(

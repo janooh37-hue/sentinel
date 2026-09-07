@@ -450,9 +450,7 @@ class VehicleSite(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     name_ar: Mapped[str] = mapped_column(String(128), nullable=False)
     name_en: Mapped[str] = mapped_column(String(128), nullable=False)
-    active: Mapped[bool] = mapped_column(
-        Boolean, nullable=False, default=True, server_default="1"
-    )
+    active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="1")
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_utcnow)
 
     vehicles: Mapped[list[Vehicle]] = relationship(back_populates="site")
@@ -479,6 +477,19 @@ class Vehicle(Base):
     # dependency with vehicle_files during table creation.
     photo_file_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     license_file_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    make: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    model: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    model_year: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    colour: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    insurance_expiry: Mapped[date | None] = mapped_column(Date, nullable=True)
+    inmate_capacity: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    passenger_capacity: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    accessories_ar: Mapped[str | None] = mapped_column(Text, nullable=True)
+    accessories_en: Mapped[str | None] = mapped_column(Text, nullable=True)
+    notes_ar: Mapped[str | None] = mapped_column(Text, nullable=True)
+    notes_en: Mapped[str | None] = mapped_column(Text, nullable=True)
+    archived_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    insurance_reminder_sent_for: Mapped[date | None] = mapped_column(Date, nullable=True)
     expiry_reminder_sent_for: Mapped[date | None] = mapped_column(Date, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_utcnow)
     updated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
@@ -603,9 +614,7 @@ class VehicleAccident(Base):
     description_ar: Mapped[str] = mapped_column(Text, nullable=False)
     description_en: Mapped[str | None] = mapped_column(Text, nullable=True)
     police_ref: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    damage_cost: Mapped[int] = mapped_column(
-        Integer, nullable=False, default=0, server_default="0"
-    )
+    damage_cost: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     status: Mapped[str] = mapped_column(
         String(8), nullable=False, default="open", server_default="open"
     )
@@ -632,9 +641,7 @@ class VehicleMaintenance(Base):
     date: Mapped[dt.date] = mapped_column(Date, nullable=False)
     type: Mapped[str] = mapped_column(String(16), nullable=False)
     odometer_km: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    cost: Mapped[int] = mapped_column(
-        Integer, nullable=False, default=0, server_default="0"
-    )
+    cost: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     vendor_ar: Mapped[str | None] = mapped_column(String(128), nullable=True)
     vendor_en: Mapped[str | None] = mapped_column(String(128), nullable=True)
     next_due: Mapped[dt.date | None] = mapped_column(Date, nullable=True)

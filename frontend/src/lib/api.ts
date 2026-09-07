@@ -298,6 +298,7 @@ export type VehicleAccidentRead = components['schemas']['VehicleAccidentRead']
 export type VehicleMaintenanceCreate = components['schemas']['VehicleMaintenanceCreate']
 export type VehicleMaintenanceRead = components['schemas']['VehicleMaintenanceRead']
 export type VehiclesSummary = components['schemas']['VehiclesSummary']
+export type VehicleProfileScan = components['schemas']['VehicleProfileScan']
 export type FinesLetterRequest = components['schemas']['FinesLetterRequest']
 export type LetterResult = components['schemas']['LetterResult']
 export type EvgPreviewResponse = components['schemas']['EvgPreviewResponse']
@@ -1389,13 +1390,21 @@ export const api = {
       q?: string
       site_id?: number
       expiry?: 'all' | 'attention' | 'valid' | 'due' | 'expired'
+      state?: 'active' | 'archived'
     } = {},
   ) => request<VehicleListItem[]>('GET', `/vehicles${qs({ ...params })}`),
-  createVehicle: (body: VehicleCreate) =>
-    request<VehicleRead>('POST', '/vehicles', body),
+  createVehicle: (body: VehicleCreate) => request<VehicleRead>('POST', '/vehicles', body),
   getVehicle: (id: number) => request<VehicleRead>('GET', `/vehicles/${id}`),
   updateVehicle: (id: number, body: VehicleUpdate) =>
     request<VehicleRead>('PATCH', `/vehicles/${id}`, body),
+  archiveVehicle: (id: number) => request<VehicleRead>('POST', `/vehicles/${id}/archive`),
+  restoreVehicle: (id: number) => request<VehicleRead>('POST', `/vehicles/${id}/restore`),
+  /** OCR-extract vehicle profile fields from a licence image/PDF, reviewed before applying. */
+  scanVehicleProfile: (file: File): Promise<VehicleProfileScan> => {
+    const form = new FormData()
+    form.append('file', file)
+    return multipart<VehicleProfileScan>('/vehicles/scan-licence', form)
+  },
   renewVehicleLicense: (id: number, body: LicenseRenewCreate) =>
     request<VehicleRead>('POST', `/vehicles/${id}/renew`, body),
   uploadVehicleFile: (

@@ -135,9 +135,7 @@ def _add_fine(client: TestClient, vehicle_id: int) -> dict[str, Any]:
     return response.json()
 
 
-def _upload_license_scan(
-    client: TestClient, vehicle_id: int, *, filename: str
-) -> dict[str, Any]:
+def _upload_license_scan(client: TestClient, vehicle_id: int, *, filename: str) -> dict[str, Any]:
     response = client.post(
         f"/api/v1/vehicles/{vehicle_id}/files",
         data={"kind": "license"},
@@ -232,9 +230,7 @@ def test_renew_license_archives_old_period_and_preserves_existing_scan_when_omit
         license_start=old_start,
         license_expiry=old_expiry,
     )
-    current_scan = _upload_license_scan(
-        admin_client, vehicle["id"], filename="current-license.png"
-    )
+    current_scan = _upload_license_scan(admin_client, vehicle["id"], filename="current-license.png")
     attached = admin_client.patch(
         f"/api/v1/vehicles/{vehicle['id']}",
         json={"license_file_id": current_scan["id"]},
@@ -275,9 +271,7 @@ def test_renew_license_replaces_current_scan_when_supplied(
     api_db: Session,
 ) -> None:
     vehicle = _create_vehicle(admin_client)
-    current_scan = _upload_license_scan(
-        admin_client, vehicle["id"], filename="current-license.png"
-    )
+    current_scan = _upload_license_scan(admin_client, vehicle["id"], filename="current-license.png")
     replacement_scan = _upload_license_scan(
         admin_client, vehicle["id"], filename="replacement-license.png"
     )
@@ -519,3 +513,315 @@ def test_notify_days_updates_summary_and_flips_vehicle_to_due(
     updated = next(row for row in vehicles_response.json() if row["id"] == vehicle["id"])
     assert updated["days_to_expiry"] == 40
     assert updated["expiry_status"] == "due"
+
+
+def test_profile_fields_persist_and_round_trip(admin_client: TestClient) -> None:
+    payload = _vehicle_payload()
+    payload.update(
+        {
+            "make": "Toyota",
+            "model": "Land Cruiser",
+            "model_year": 2024,
+            "colour": "White",
+            "insurance_expiry": "2027-06-01",
+            "inmate_capacity": 0,
+            "passenger_capacity": 12,
+            "accessories_ar": "مكيف",
+            "accessories_en": "AC unit",
+            "notes_ar": "ملاحظة عامة",
+            "notes_en": "General note",
+        }
+    )
+    created = admin_client.post("/api/v1/vehicles", json=payload)
+    assert created.status_code == 201, created.text
+    vehicle = created.json()
+    assert vehicle["make"] == "Toyota"
+    assert vehicle["model"] == "Land Cruiser"
+    assert vehicle["model_year"] == 2024
+    assert vehicle["colour"] == "White"
+    assert vehicle["insurance_expiry"] == "2027-06-01"
+    assert vehicle["insurance_status"] == "valid"
+    assert vehicle["inmate_capacity"] == 0
+    assert vehicle["passenger_capacity"] == 12
+    assert vehicle["accessories_ar"] == "مكيف"
+    assert vehicle["accessories_en"] == "AC unit"
+    assert vehicle["notes_ar"] == "ملاحظة عامة"
+    assert vehicle["notes_en"] == "General note"
+    # Adding profile facts never touches the existing bilingual type.
+    assert vehicle["type_ar"] == payload["type_ar"]
+    assert vehicle["type_en"] == payload["type_en"]
+
+    fetched = admin_client.get(f"/api/v1/vehicles/{vehicle['id']}")
+    assert fetched.status_code == 200, fetched.text
+    assert fetched.json()["make"] == "Toyota"
+
+
+def test_update_profile_fields_null_vs_omitted_vs_unset(admin_client: TestClient) -> None:
+    vehicle = _create_vehicle(admin_client)
+
+    filled = admin_client.patch(
+        f"/api/v1/vehicles/{vehicle['id']}",
+        json={"make": "Nissan", "insurance_expiry": "2027-01-01"},
+    )
+    assert filled.status_code == 200, filled.text
+    assert filled.json()["make"] == "Nissan"
+    assert filled.json()["insurance_expiry"] == "2027-01-01"
+
+    # Omitted fields are preserved (PATCH exclude_unset semantics).
+    omitted = admin_client.patch(f"/api/v1/vehicles/{vehicle['id']}", json={"colour": "Black"})
+    assert omitted.status_code == 200, omitted.text
+    assert omitted.json()["make"] == "Nissan"
+    assert omitted.json()["insurance_expiry"] == "2027-01-01"
+    assert omitted.json()["colour"] == "Black"
+
+    # Explicit null clears the value and its computed status.
+    cleared = admin_client.patch(
+        f"/api/v1/vehicles/{vehicle['id']}",
+        json={"insurance_expiry": None},
+    )
+    assert cleared.status_code == 200, cleared.text
+    assert cleared.json()["insurance_expiry"] is None
+    assert cleared.json()["insurance_status"] is None
+    assert cleared.json()["make"] == "Nissan"
+
+
+def test_negative_capacity_and_bad_license_dates_rejected_with_no_partial_write(
+    admin_client: TestClient,
+) -> None:
+    vehicle = _create_vehicle(admin_client)
+
+    bad_capacity = admin_client.patch(
+        f"/api/v1/vehicles/{vehicle['id']}",
+        json={"passenger_capacity": -1, "make": "ShouldNotPersist"},
+    )
+    assert bad_capacity.status_code == 422, bad_capacity.text
+
+    bad_dates = admin_client.patch(
+        f"/api/v1/vehicles/{vehicle['id']}",
+        json={
+            "license_start": "2027-01-01",
+            "license_expiry": "2026-01-01",
+            "make": "ShouldNotPersist",
+        },
+    )
+    assert bad_dates.status_code in (409, 422), bad_dates.text
+
+    persisted = admin_client.get(f"/api/v1/vehicles/{vehicle['id']}")
+    assert persisted.status_code == 200, persisted.text
+    assert persisted.json()["make"] is None
+    assert persisted.json()["passenger_capacity"] is None
+
+
+def test_archive_lifecycle_retains_history_and_guards_every_write_path(
+    admin_client: TestClient,
+    vehicle_editor_client: TestClient,
+    api_db: Session,
+) -> None:
+    from app.services import vehicle_reminder_service
+
+    vehicle = _create_vehicle(admin_client)
+    vehicle_id = int(vehicle["id"])
+    _add_fine(admin_client, vehicle_id)
+    photo = admin_client.post(
+        f"/api/v1/vehicles/{vehicle_id}/files",
+        data={"kind": "gallery"},
+        files={"file": ("main.png", _PNG_1X1, "image/png")},
+    )
+    assert photo.status_code == 200, photo.text
+    _upload_license_scan(admin_client, vehicle_id, filename="licence.png")
+    accident = admin_client.post(
+        "/api/v1/vehicles/accidents",
+        json={
+            "vehicle_id": vehicle_id,
+            "employee_id": None,
+            "date": "2026-08-21",
+            "time": "14:30",
+            "location_ar": "موقف الاختبار",
+            "location_en": "Test car park",
+            "description_ar": "تلف",
+            "description_en": "Damage",
+            "police_ref": None,
+            "damage_cost": 500,
+            "photo_file_ids": [],
+        },
+    )
+    assert accident.status_code == 201, accident.text
+    accident_id = accident.json()["id"]
+    maintenance = admin_client.post(
+        "/api/v1/vehicles/maintenance",
+        json={
+            "vehicle_id": vehicle_id,
+            "date": "2026-08-22",
+            "type": "service",
+            "odometer_km": 1000,
+            "cost": 200,
+            "vendor_ar": None,
+            "vendor_en": "Garage",
+            "next_due": None,
+            "receipt_file_id": None,
+        },
+    )
+    assert maintenance.status_code == 201, maintenance.text
+    renewed = admin_client.post(
+        f"/api/v1/vehicles/{vehicle_id}/renew",
+        json={"start": "2026-01-01", "expiry": "2027-01-01", "cost": 500},
+    )
+    assert renewed.status_code == 200, renewed.text
+
+    # Only vehicles.delete can archive; edit alone is insufficient.
+    forbidden = vehicle_editor_client.post(f"/api/v1/vehicles/{vehicle_id}/archive")
+    assert forbidden.status_code == 403, forbidden.text
+    assert forbidden.json()["error"]["details"]["capability"] == "vehicles.delete"
+
+    archived = admin_client.post(f"/api/v1/vehicles/{vehicle_id}/archive")
+    assert archived.status_code == 200, archived.text
+    assert archived.json()["archived_at"] is not None
+
+    # Repeating archive on an already-archived vehicle is a harmless no-op.
+    again = admin_client.post(f"/api/v1/vehicles/{vehicle_id}/archive")
+    assert again.status_code == 200, again.text
+    assert again.json()["archived_at"] == archived.json()["archived_at"]
+
+    # Excluded from the default (active) list and summary aggregates.
+    active_list = admin_client.get("/api/v1/vehicles")
+    assert vehicle_id not in {row["id"] for row in active_list.json()}
+    archived_list = admin_client.get("/api/v1/vehicles?state=archived")
+    assert vehicle_id in {row["id"] for row in archived_list.json()}
+    summary = admin_client.get("/api/v1/vehicles/summary")
+    assert summary.status_code == 200, summary.text
+    assert summary.json()["vehicles"] == 0
+    assert summary.json()["fines_count"] == 0
+
+    # Excluded from fleet-wide fines/accidents/maintenance listings.
+    assert admin_client.get("/api/v1/vehicles/fines").json() == []
+    assert admin_client.get("/api/v1/vehicles/accidents").json() == []
+    assert admin_client.get("/api/v1/vehicles/maintenance").json() == []
+
+    # Excluded from EVG candidate options.
+    evg_preview = admin_client.post(
+        "/api/v1/vehicles/fines/evg/preview", json={"traffic_codes": []}
+    )
+    assert evg_preview.status_code == 200, evg_preview.text
+    assert vehicle_id not in {row["id"] for row in evg_preview.json()["vehicles"]}
+
+    # Excluded from reminder runs even though its licence is far in the past
+    # relative to a distant frozen "today" — sanity-checked by directly
+    # forcing the window to always be due and confirming zero sends.
+    sent = vehicle_reminder_service.send_due_reminders(api_db, today=date(2030, 1, 1))
+    assert sent == 0
+
+    # Archived detail stays readable, including files/fines/accidents/history.
+    detail = admin_client.get(f"/api/v1/vehicles/{vehicle_id}")
+    assert detail.status_code == 200, detail.text
+    body = detail.json()
+    assert len(body["fines"]) == 1
+    assert [row["id"] for row in body["accidents"]] == [accident_id]
+    assert len(body["maintenance"]) == 1
+    assert len(body["renewals"]) == 1
+    assert len(body["license_files"]) >= 1
+
+    # Every representative write endpoint rejects the archived vehicle, even
+    # with edit capability.
+    guarded = [
+        lambda: admin_client.patch(f"/api/v1/vehicles/{vehicle_id}", json={"make": "X"}),
+        lambda: admin_client.post(
+            f"/api/v1/vehicles/{vehicle_id}/renew",
+            json={"start": "2027-01-01", "expiry": "2028-01-01", "cost": 0},
+        ),
+        lambda: admin_client.post(
+            f"/api/v1/vehicles/{vehicle_id}/fines",
+            json={
+                "employee_id": None,
+                "date": "2026-08-20",
+                "time": None,
+                "amount": 100,
+                "black_points": 0,
+                "location": None,
+                "description": None,
+            },
+        ),
+        lambda: admin_client.post(
+            "/api/v1/vehicles/accidents",
+            json={
+                "vehicle_id": vehicle_id,
+                "employee_id": None,
+                "date": "2026-08-21",
+                "time": "14:30",
+                "location_ar": "a",
+                "location_en": "a",
+                "description_ar": "a",
+                "description_en": "a",
+                "police_ref": None,
+                "damage_cost": 0,
+                "photo_file_ids": [],
+            },
+        ),
+        lambda: admin_client.post(
+            "/api/v1/vehicles/maintenance",
+            json={
+                "vehicle_id": vehicle_id,
+                "date": "2026-08-22",
+                "type": "service",
+                "odometer_km": 1,
+                "cost": 0,
+                "vendor_ar": None,
+                "vendor_en": None,
+                "next_due": None,
+                "receipt_file_id": None,
+            },
+        ),
+        lambda: admin_client.post(
+            f"/api/v1/vehicles/{vehicle_id}/files",
+            data={"kind": "gallery"},
+            files={"file": ("x.png", _PNG_1X1, "image/png")},
+        ),
+    ]
+    for call in guarded:
+        response = call()
+        assert response.status_code == 409, response.text
+        assert response.json()["error"]["code"] == "VEHICLE_ARCHIVED"
+
+    # Restore requires vehicles.delete too.
+    forbidden_restore = vehicle_editor_client.post(f"/api/v1/vehicles/{vehicle_id}/restore")
+    assert forbidden_restore.status_code == 403, forbidden_restore.text
+
+    restored = admin_client.post(f"/api/v1/vehicles/{vehicle_id}/restore")
+    assert restored.status_code == 200, restored.text
+    assert restored.json()["archived_at"] is None
+
+    # Repeating restore on an already-active vehicle is a harmless no-op.
+    again_restore = admin_client.post(f"/api/v1/vehicles/{vehicle_id}/restore")
+    assert again_restore.status_code == 200, again_restore.text
+
+    active_again = admin_client.get("/api/v1/vehicles")
+    assert vehicle_id in {row["id"] for row in active_again.json()}
+    # Writes work again post-restore, and plate uniqueness/history survived.
+    resumed_edit = admin_client.patch(f"/api/v1/vehicles/{vehicle_id}", json={"make": "Toyota"})
+    assert resumed_edit.status_code == 200, resumed_edit.text
+    assert resumed_edit.json()["make"] == "Toyota"
+    assert len(resumed_edit.json()["renewals"]) == 1
+    duplicate_plate = admin_client.post(
+        "/api/v1/vehicles",
+        json=_vehicle_payload(),
+    )
+    assert duplicate_plate.status_code == 422, duplicate_plate.text
+    assert duplicate_plate.json()["error"]["code"] == "PLATE_EXISTS"
+
+
+def test_restore_rejects_inactive_site(admin_client: TestClient) -> None:
+    vehicle = _create_vehicle(admin_client)
+    vehicle_id = int(vehicle["id"])
+    site_id = vehicle["site_id"]
+
+    archived = admin_client.post(f"/api/v1/vehicles/{vehicle_id}/archive")
+    assert archived.status_code == 200, archived.text
+
+    deactivated = admin_client.patch(f"/api/v1/vehicles/sites/{site_id}", json={"active": False})
+    assert deactivated.status_code == 200, deactivated.text
+
+    restore = admin_client.post(f"/api/v1/vehicles/{vehicle_id}/restore")
+    assert restore.status_code == 422, restore.text
+    assert restore.json()["error"]["code"] == "VEHICLE_SITE_INACTIVE"
+
+    still_archived = admin_client.get(f"/api/v1/vehicles/{vehicle_id}")
+    assert still_archived.json()["archived_at"] is not None

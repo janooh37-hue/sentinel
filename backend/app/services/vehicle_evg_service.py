@@ -17,7 +17,7 @@ from app.schemas.vehicle import (
     EvgVehicleOption,
 )
 from app.services.evg_client import fetch_tickets
-from app.services.vehicle_service import _audit, get_vehicle, plate_label
+from app.services.vehicle_service import _audit, plate_label, require_active_vehicle
 
 
 def _traffic_codes(
@@ -37,7 +37,9 @@ def preview(
 ) -> EvgPreviewResponse:
     """Fetch EVG rows and classify their match against the current fleet."""
 
-    vehicles = list(db.scalars(select(Vehicle).order_by(Vehicle.id)).all())
+    vehicles = list(
+        db.scalars(select(Vehicle).where(Vehicle.archived_at.is_(None)).order_by(Vehicle.id)).all()
+    )
     codes = _traffic_codes(vehicles, traffic_codes)
     existing_fines = db.scalars(
         select(VehicleFine).where(VehicleFine.evg_ticket_no.is_not(None))
@@ -126,7 +128,7 @@ def confirm(
             "Every EVG row must be matched to a vehicle before import",
         )
     for vehicle_id in sorted({row.vehicle_id for row in rows}):
-        get_vehicle(db, vehicle_id)
+        require_active_vehicle(db, vehicle_id)
 
     ticket_numbers = [row.ticket_no for row in rows]
     known = set(

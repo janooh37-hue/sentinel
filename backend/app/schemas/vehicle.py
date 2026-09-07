@@ -65,6 +65,17 @@ class VehicleCreate(BaseModel):
     license_expiry: date_t
     photo_file_id: int | None = None
     license_file_id: int | None = None
+    make: str | None = Field(default=None, max_length=128)
+    model: str | None = Field(default=None, max_length=128)
+    model_year: int | None = Field(default=None, ge=1000, le=9999)
+    colour: str | None = Field(default=None, max_length=64)
+    insurance_expiry: date_t | None = None
+    inmate_capacity: int | None = Field(default=None, ge=0)
+    passenger_capacity: int | None = Field(default=None, ge=0)
+    accessories_ar: str | None = Field(default=None, max_length=2048)
+    accessories_en: str | None = Field(default=None, max_length=2048)
+    notes_ar: str | None = Field(default=None, max_length=2048)
+    notes_en: str | None = Field(default=None, max_length=2048)
 
     @model_validator(mode="after")
     def _validate_site_and_dates(self) -> VehicleCreate:
@@ -91,6 +102,17 @@ class VehicleUpdate(BaseModel):
     license_expiry: date_t | None = None
     photo_file_id: int | None = None
     license_file_id: int | None = None
+    make: str | None = Field(default=None, max_length=128)
+    model: str | None = Field(default=None, max_length=128)
+    model_year: int | None = Field(default=None, ge=1000, le=9999)
+    colour: str | None = Field(default=None, max_length=64)
+    insurance_expiry: date_t | None = None
+    inmate_capacity: int | None = Field(default=None, ge=0)
+    passenger_capacity: int | None = Field(default=None, ge=0)
+    accessories_ar: str | None = Field(default=None, max_length=2048)
+    accessories_en: str | None = Field(default=None, max_length=2048)
+    notes_ar: str | None = Field(default=None, max_length=2048)
+    notes_en: str | None = Field(default=None, max_length=2048)
 
     @model_validator(mode="after")
     def _validate_dates(self) -> VehicleUpdate:
@@ -123,6 +145,14 @@ class VehicleListItem(ORMBase):
     fines_amount: int = 0
     black_points: int = 0
     photo_url: str | None = None
+    make: str | None = None
+    model: str | None = None
+    model_year: int | None = None
+    colour: str | None = None
+    insurance_expiry: date_t | None = None
+    insurance_status: VehicleExpiryStatus | None = None
+    days_to_insurance_expiry: int | None = None
+    archived_at: datetime | None = None
 
 
 class VehicleFineCreate(BaseModel):
@@ -287,6 +317,15 @@ class VehicleRead(VehicleListItem):
     accidents: list[VehicleAccidentRead] = Field(default_factory=list)
     maintenance: list[VehicleMaintenanceRead] = Field(default_factory=list)
     photos: list[VehicleFileRead] = Field(default_factory=list)
+    inmate_capacity: int | None = None
+    passenger_capacity: int | None = None
+    accessories_ar: str | None = None
+    accessories_en: str | None = None
+    notes_ar: str | None = None
+    notes_en: str | None = None
+    photo_file_id: int | None = None
+    license_file_id: int | None = None
+    license_files: list[VehicleFileRead] = Field(default_factory=list)
 
 
 class VehiclesSummary(BaseModel):
@@ -295,6 +334,7 @@ class VehiclesSummary(BaseModel):
     fines_amount: int
     black_points: int
     license_attention: int
+    insurance_attention: int
     open_accidents: int
     maintenance_due: int
     active_sites: int
@@ -356,3 +396,26 @@ class EvgConfirmRequest(BaseModel):
 class EvgConfirmResult(BaseModel):
     created: int
     skipped: int
+
+
+VehicleScanWarning = Literal["OCR_UNAVAILABLE", "OCR_NO_FIELDS", "OCR_REVIEW_REQUIRED"]
+
+
+class VehicleProfileScan(BaseModel):
+    plate_code: str | None = None
+    plate_number: str | None = None
+    traffic_code: str | None = None
+    vin: str | None = None
+    make: str | None = None
+    model: str | None = None
+    model_year: int | None = None
+    colour: str | None = None
+    type_ar: str | None = None
+    type_en: str | None = None
+    class_ar: str | None = None
+    class_en: str | None = None
+    license_start: date_t | None = None
+    license_expiry: date_t | None = None
+    insurance_expiry: date_t | None = None
+    unmapped: dict[str, str] = Field(default_factory=dict)
+    warnings: list[VehicleScanWarning] = Field(default_factory=list)

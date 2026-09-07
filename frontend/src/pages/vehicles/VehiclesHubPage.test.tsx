@@ -43,6 +43,7 @@ const SUMMARY: VehiclesSummary = {
   fines_amount: 3400,
   black_points: 11,
   license_attention: 2,
+  insurance_attention: 0,
   open_accidents: 1,
   maintenance_due: 2,
   active_sites: 2,
