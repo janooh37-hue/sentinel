@@ -584,6 +584,93 @@ def test_update_profile_fields_null_vs_omitted_vs_unset(admin_client: TestClient
     assert cleared.json()["insurance_status"] is None
     assert cleared.json()["make"] == "Nissan"
 
+    # Make/model are independent of the existing bilingual vehicle type and class.
+    respecced = admin_client.patch(
+        f"/api/v1/vehicles/{vehicle['id']}",
+        json={"make": "Mitsubishi", "model": "Rosa", "model_year": 2019},
+    )
+    assert respecced.status_code == 200, respecced.text
+    assert respecced.json()["model"] == "Rosa"
+    assert respecced.json()["model_year"] == 2019
+    assert respecced.json()["type_ar"] == vehicle["type_ar"]
+    assert respecced.json()["type_en"] == vehicle["type_en"]
+    assert respecced.json()["class_ar"] == vehicle["class_ar"]
+    assert respecced.json()["class_en"] == vehicle["class_en"]
+    assert respecced.json()["license_start"] == vehicle["license_start"]
+    assert respecced.json()["license_expiry"] == vehicle["license_expiry"]
+
+    # Zero is a real capacity on the update path, and null is still "unknown".
+    zeroed = admin_client.patch(
+        f"/api/v1/vehicles/{vehicle['id']}",
+        json={"inmate_capacity": 0, "passenger_capacity": 0},
+    )
+    assert zeroed.status_code == 200, zeroed.text
+    assert zeroed.json()["inmate_capacity"] == 0
+    assert zeroed.json()["passenger_capacity"] == 0
+
+    unknown = admin_client.patch(
+        f"/api/v1/vehicles/{vehicle['id']}",
+        json={"inmate_capacity": None},
+    )
+    assert unknown.status_code == 200, unknown.text
+    assert unknown.json()["inmate_capacity"] is None
+    assert unknown.json()["passenger_capacity"] == 0
+
+
+def test_list_search_matches_make_model_and_colour(admin_client: TestClient) -> None:
+    payload = _vehicle_payload()
+    payload.update({"make": "Mitsubishi", "model": "Rosa", "colour": "Pearl"})
+    created = admin_client.post("/api/v1/vehicles", json=payload)
+    assert created.status_code == 201, created.text
+    vehicle_id = created.json()["id"]
+
+    for term in ("Mitsubishi", "rosa", "pearl"):
+        found = admin_client.get("/api/v1/vehicles", params={"q": term})
+        assert found.status_code == 200, found.text
+        assert [row["id"] for row in found.json()] == [vehicle_id], term
+
+    missing = admin_client.get("/api/v1/vehicles", params={"q": "Peugeot"})
+    assert missing.status_code == 200, missing.text
+    assert missing.json() == []
+
+
+def test_blank_optional_text_becomes_null(admin_client: TestClient) -> None:
+    blank_fields = (
+        "vin",
+        "contract_note_ar",
+        "contract_note_en",
+        "make",
+        "model",
+        "colour",
+        "accessories_ar",
+        "accessories_en",
+        "notes_ar",
+        "notes_en",
+    )
+    payload = _vehicle_payload()
+    payload.update({field: "   " if index % 2 else "" for index, field in enumerate(blank_fields)})
+    created = admin_client.post("/api/v1/vehicles", json=payload)
+    assert created.status_code == 201, created.text
+    vehicle = created.json()
+    for field in blank_fields:
+        assert vehicle[field] is None, field
+
+    filled = admin_client.patch(
+        f"/api/v1/vehicles/{vehicle['id']}",
+        json={field: f" {field}-value " for field in blank_fields},
+    )
+    assert filled.status_code == 200, filled.text
+    for field in blank_fields:
+        assert filled.json()[field] == f"{field}-value", field
+
+    blanked = admin_client.patch(
+        f"/api/v1/vehicles/{vehicle['id']}",
+        json={field: "   " if index % 2 else "" for index, field in enumerate(blank_fields)},
+    )
+    assert blanked.status_code == 200, blanked.text
+    for field in blank_fields:
+        assert blanked.json()[field] is None, field
+
 
 def test_negative_capacity_and_bad_license_dates_rejected_with_no_partial_write(
     admin_client: TestClient,
@@ -604,7 +691,7 @@ def test_negative_capacity_and_bad_license_dates_rejected_with_no_partial_write(
             "make": "ShouldNotPersist",
         },
     )
-    assert bad_dates.status_code in (409, 422), bad_dates.text
+    assert bad_dates.status_code == 422, bad_dates.text
 
     persisted = admin_client.get(f"/api/v1/vehicles/{vehicle['id']}")
     assert persisted.status_code == 200, persisted.text

@@ -6,7 +6,7 @@ from datetime import date as date_t
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.schemas._base import ORMBase
 
@@ -48,7 +48,36 @@ class VehicleFileRead(ORMBase):
     url: str = ""
 
 
-class VehicleCreate(BaseModel):
+class _VehicleOptionalText(BaseModel):
+    """Blank optional vehicle text means "not recorded", so it is stored as NULL.
+
+    Shared by ``VehicleCreate`` and ``VehicleUpdate`` so a field cannot be
+    normalized on one and left raw on the other. ``check_fields=False`` is
+    required because the fields live on the subclasses;
+    ``test_blank_optional_text_becomes_null`` covers every listed field on both
+    verbs, so a field renamed out from under this list fails a test rather than
+    silently losing its normalization.
+    """
+
+    @field_validator(
+        "vin",
+        "contract_note_ar",
+        "contract_note_en",
+        "make",
+        "model",
+        "colour",
+        "accessories_ar",
+        "accessories_en",
+        "notes_ar",
+        "notes_en",
+        check_fields=False,
+    )
+    @classmethod
+    def _blank_is_unknown(cls, v: str | None) -> str | None:
+        return (v or "").strip() or None
+
+
+class VehicleCreate(_VehicleOptionalText):
     plate_code: str | None = Field(default=None, pattern=r"^\d{1,3}$")
     plate_number: str = Field(pattern=r"^\d{1,6}$")
     traffic_code: str = Field(pattern=r"^\d{4,12}$")
@@ -86,7 +115,7 @@ class VehicleCreate(BaseModel):
         return self
 
 
-class VehicleUpdate(BaseModel):
+class VehicleUpdate(_VehicleOptionalText):
     plate_code: str | None = Field(default=None, pattern=r"^\d{1,3}$")
     plate_number: str | None = Field(default=None, pattern=r"^\d{1,6}$")
     traffic_code: str | None = Field(default=None, pattern=r"^\d{4,12}$")
