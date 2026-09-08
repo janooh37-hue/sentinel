@@ -494,7 +494,7 @@ class VehicleImportImage(BaseModel):
     kind: VehicleImportImageKind | None = None
 
 
-class VehicleImportInspection(BaseModel):
+class VehicleImportInspection(ORMBase):
     token: str
     expires_at: datetime
     filename: str
