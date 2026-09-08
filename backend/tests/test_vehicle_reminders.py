@@ -84,8 +84,9 @@ def _capture_pushes(
         user_id: int,
         messages: dict[str, tuple[str, str]],
         url: str,
-    ) -> None:
+    ) -> int:
         pushes.append((user_id, messages, url))
+        return 1
 
     monkeypatch.setattr(
         vehicle_reminder_service.push_service,
@@ -341,11 +342,12 @@ def test_recipient_failure_is_logged_and_does_not_block_marker_or_others(
         user_id: int,
         _messages: dict[str, tuple[str, str]],
         _url: str,
-    ) -> None:
+    ) -> int:
         attempted.append(user_id)
         if user_id == failing.id:
             raise RuntimeError("stale push subscription")
         delivered.append(user_id)
+        return 1
 
     monkeypatch.setattr(
         vehicle_reminder_service.push_service,
@@ -537,10 +539,11 @@ def test_insurance_reminder_recipient_failure_is_logged_and_retryable_for_others
         user_id: int,
         _messages: dict[str, tuple[str, str]],
         _url: str,
-    ) -> None:
+    ) -> int:
         attempted.append(user_id)
         if user_id == failing.id:
             raise RuntimeError("push provider unavailable")
+        return 1
 
     monkeypatch.setattr(vehicle_reminder_service.push_service, "send_to_user", fake_send_to_user)
 
@@ -551,3 +554,35 @@ def test_insurance_reminder_recipient_failure_is_logged_and_retryable_for_others
     assert set(attempted) == {failing.id, working.id}
     db_session.refresh(vehicle)
     assert vehicle.insurance_reminder_sent_for == vehicle.insurance_expiry
+
+
+def test_insurance_reminder_marker_stays_unset_when_nothing_actually_delivers(
+    db_session: Session,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """`send_to_user` can return 0 without raising — e.g. a recipient with no
+    registered push subscriptions at all. That must not be mistaken for a
+    successful send: the vehicle stays retryable, not stuck unmarked."""
+    settings_service.set_vehicle_notify_days(db_session, 30)
+    vehicle = _make_vehicle(
+        db_session,
+        expiry=_TODAY + timedelta(days=365),
+        insurance_expiry=_TODAY,
+    )
+    _make_user(db_session, email="no-subs@test.ae", can_view_vehicles=True)
+
+    def fake_send_to_user(
+        _db: Session,
+        _user_id: int,
+        _messages: dict[str, tuple[str, str]],
+        _url: str,
+    ) -> int:
+        return 0
+
+    monkeypatch.setattr(vehicle_reminder_service.push_service, "send_to_user", fake_send_to_user)
+
+    sent = vehicle_reminder_service.send_due_reminders(db_session, today=_TODAY)
+
+    assert sent == 0
+    db_session.refresh(vehicle)
+    assert vehicle.insurance_reminder_sent_for is None

@@ -299,6 +299,19 @@ export type VehicleMaintenanceCreate = components['schemas']['VehicleMaintenance
 export type VehicleMaintenanceRead = components['schemas']['VehicleMaintenanceRead']
 export type VehiclesSummary = components['schemas']['VehiclesSummary']
 export type VehicleProfileScan = components['schemas']['VehicleProfileScan']
+export type VehicleImportChange = components['schemas']['VehicleImportChange']
+export type VehicleImportConfirmRequest = components['schemas']['VehicleImportConfirmRequest']
+export type VehicleImportCounts = components['schemas']['VehicleImportCounts']
+export type VehicleImportImage = components['schemas']['VehicleImportImage']
+export type VehicleImportInspectRow = components['schemas']['VehicleImportInspectRow']
+export type VehicleImportInspection = components['schemas']['VehicleImportInspection']
+export type VehicleImportIssue = components['schemas']['VehicleImportIssue']
+export type VehicleImportPreview = components['schemas']['VehicleImportPreview']
+export type VehicleImportPreviewDraftRow = components['schemas']['VehicleImportPreviewDraftRow']
+export type VehicleImportPreviewRequest = components['schemas']['VehicleImportPreviewRequest']
+export type VehicleImportPreviewRow = components['schemas']['VehicleImportPreviewRow']
+export type VehicleImportResult = components['schemas']['VehicleImportResult']
+export type VehicleImportSection = components['schemas']['VehicleImportSection']
 export type FinesLetterRequest = components['schemas']['FinesLetterRequest']
 export type LetterResult = components['schemas']['LetterResult']
 export type EvgPreviewResponse = components['schemas']['EvgPreviewResponse']
@@ -1405,6 +1418,43 @@ export const api = {
     form.append('file', file)
     return multipart<VehicleProfileScan>('/vehicles/scan-licence', form)
   },
+  downloadVehicleImportTemplate: (): Promise<Blob> =>
+    fetchAttachment('/vehicles/imports/template', 'vehicle-import-template.xlsx').then(
+      (file) => file.blob,
+    ),
+  inspectVehicleImport: (file: File): Promise<VehicleImportInspection> => {
+    const form = new FormData()
+    form.append('file', file)
+    return multipart<VehicleImportInspection>('/vehicles/imports/inspect', form)
+  },
+  previewVehicleImport: (
+    token: string,
+    body: VehicleImportPreviewRequest,
+  ): Promise<VehicleImportPreview> =>
+    request<VehicleImportPreview>(
+      'POST',
+      `/vehicles/imports/${encodeURIComponent(token)}/preview`,
+      body,
+    ),
+  vehicleImportImageUrl: (token: string, imageId: string): string =>
+    `${BASE}/vehicles/imports/${encodeURIComponent(token)}/images/${encodeURIComponent(imageId)}`,
+  scanVehicleImportImage: (
+    token: string,
+    imageId: string,
+  ): Promise<VehicleProfileScan> =>
+    request<VehicleProfileScan>(
+      'POST',
+      `/vehicles/imports/${encodeURIComponent(token)}/images/${encodeURIComponent(imageId)}/scan`,
+    ),
+  confirmVehicleImport: (
+    token: string,
+    body: VehicleImportConfirmRequest,
+  ): Promise<VehicleImportResult> =>
+    request<VehicleImportResult>(
+      'POST',
+      `/vehicles/imports/${encodeURIComponent(token)}/confirm`,
+      body,
+    ),
   renewVehicleLicense: (id: number, body: LicenseRenewCreate) =>
     request<VehicleRead>('POST', `/vehicles/${id}/renew`, body),
   uploadVehicleFile: (

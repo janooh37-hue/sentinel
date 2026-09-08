@@ -313,13 +313,17 @@ export function AbsencesPage(): React.JSX.Element {
                     className="h-8 gap-1.5 px-3 text-[0.82em]"
                     onClick={async () => {
                       const copyRows = selectedRows.length > 0 ? selectedRows : filteredRows
-                      await copyTable({
-                        html: buildAbsenceTableHtml(copyRows),
-                        text: [ABSENCE_TABLE_HEADERS, ...absenceTableCells(copyRows)]
-                          .map((row) => row.join('\t'))
-                          .join('\n'),
-                      })
-                      toast.success(t('absences.copied'))
+                      try {
+                        await copyTable({
+                          html: buildAbsenceTableHtml(copyRows),
+                          text: [ABSENCE_TABLE_HEADERS, ...absenceTableCells(copyRows)]
+                            .map((row) => row.join('\t'))
+                            .join('\n'),
+                        })
+                        toast.success(t('absences.copied'))
+                      } catch {
+                        toast.error(t('common.copyFailed'))
+                      }
                     }}
                   >
                     <ClipboardCopy className="h-4 w-4" strokeWidth={1.8} aria-hidden />

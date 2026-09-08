@@ -19177,6 +19177,380 @@
         }
       }
     },
+    "/api/v1/vehicles/imports/template": {
+      "get": {
+        "tags": [
+          "vehicles"
+        ],
+        "summary": "Download Vehicle Import Template",
+        "operationId": "download_vehicle_import_template_api_v1_vehicles_imports_template_get",
+        "parameters": [
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/vehicles/imports/inspect": {
+      "post": {
+        "tags": [
+          "vehicles"
+        ],
+        "summary": "Inspect Vehicle Import",
+        "operationId": "inspect_vehicle_import_api_v1_vehicles_imports_inspect_post",
+        "parameters": [
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_inspect_vehicle_import_api_v1_vehicles_imports_inspect_post"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VehicleImportInspection"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/vehicles/imports/{token}/preview": {
+      "post": {
+        "tags": [
+          "vehicles"
+        ],
+        "summary": "Preview Vehicle Import",
+        "operationId": "preview_vehicle_import_api_v1_vehicles_imports__token__preview_post",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Token"
+            }
+          },
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VehicleImportPreviewRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VehicleImportPreview"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/vehicles/imports/{token}/images/{image_id}": {
+      "get": {
+        "tags": [
+          "vehicles"
+        ],
+        "summary": "Get Vehicle Import Image",
+        "operationId": "get_vehicle_import_image_api_v1_vehicles_imports__token__images__image_id__get",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Token"
+            }
+          },
+          {
+            "name": "image_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Image Id"
+            }
+          },
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/vehicles/imports/{token}/images/{image_id}/scan": {
+      "post": {
+        "tags": [
+          "vehicles"
+        ],
+        "summary": "Scan Vehicle Import Image",
+        "operationId": "scan_vehicle_import_image_api_v1_vehicles_imports__token__images__image_id__scan_post",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Token"
+            }
+          },
+          {
+            "name": "image_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Image Id"
+            }
+          },
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VehicleProfileScan"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/vehicles/imports/{token}/confirm": {
+      "post": {
+        "tags": [
+          "vehicles"
+        ],
+        "summary": "Confirm Vehicle Import",
+        "operationId": "confirm_vehicle_import_api_v1_vehicles_imports__token__confirm_post",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Token"
+            }
+          },
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VehicleImportConfirmRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VehicleImportResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/vehicles/{vehicle_id}": {
       "get": {
         "tags": [
@@ -26775,6 +27149,20 @@
           "upload"
         ],
         "title": "Body_inspect_approved_violation_api_v1_documents_inmate_violations_approved_imports_inspect_post"
+      },
+      "Body_inspect_vehicle_import_api_v1_vehicles_imports_inspect_post": {
+        "properties": {
+          "upload": {
+            "type": "string",
+            "format": "binary",
+            "title": "Upload"
+          }
+        },
+        "type": "object",
+        "required": [
+          "upload"
+        ],
+        "title": "Body_inspect_vehicle_import_api_v1_vehicles_imports_inspect_post"
       },
       "Body_intake_document_api_v1_intake_post": {
         "properties": {
@@ -43609,6 +43997,684 @@
         },
         "type": "object",
         "title": "VehicleFineUpdate"
+      },
+      "VehicleImportChange": {
+        "properties": {
+          "field": {
+            "type": "string",
+            "title": "Field"
+          },
+          "before": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Before"
+          },
+          "after": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "After"
+          }
+        },
+        "type": "object",
+        "required": [
+          "field",
+          "before",
+          "after"
+        ],
+        "title": "VehicleImportChange"
+      },
+      "VehicleImportConfirmRequest": {
+        "properties": {
+          "revision": {
+            "type": "string",
+            "title": "Revision"
+          },
+          "row_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Row Ids"
+          }
+        },
+        "type": "object",
+        "required": [
+          "revision",
+          "row_ids"
+        ],
+        "title": "VehicleImportConfirmRequest"
+      },
+      "VehicleImportCounts": {
+        "properties": {
+          "create": {
+            "type": "integer",
+            "title": "Create",
+            "default": 0
+          },
+          "update": {
+            "type": "integer",
+            "title": "Update",
+            "default": 0
+          },
+          "unchanged": {
+            "type": "integer",
+            "title": "Unchanged",
+            "default": 0
+          },
+          "invalid": {
+            "type": "integer",
+            "title": "Invalid",
+            "default": 0
+          },
+          "archived": {
+            "type": "integer",
+            "title": "Archived",
+            "default": 0
+          },
+          "excluded": {
+            "type": "integer",
+            "title": "Excluded",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "title": "VehicleImportCounts"
+      },
+      "VehicleImportImage": {
+        "properties": {
+          "image_id": {
+            "type": "string",
+            "title": "Image Id"
+          },
+          "url": {
+            "type": "string",
+            "title": "Url"
+          },
+          "row_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Row Id"
+          },
+          "original_name": {
+            "type": "string",
+            "title": "Original Name"
+          },
+          "kind": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "photo",
+                  "license"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Kind"
+          }
+        },
+        "type": "object",
+        "required": [
+          "image_id",
+          "url",
+          "original_name"
+        ],
+        "title": "VehicleImportImage"
+      },
+      "VehicleImportInspectRow": {
+        "properties": {
+          "row_id": {
+            "type": "string",
+            "title": "Row Id"
+          },
+          "section_id": {
+            "type": "string",
+            "title": "Section Id"
+          },
+          "sheet": {
+            "type": "string",
+            "title": "Sheet"
+          },
+          "row_number": {
+            "type": "integer",
+            "title": "Row Number"
+          },
+          "raw": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "type": "object",
+            "title": "Raw"
+          },
+          "values": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "type": "object",
+            "title": "Values"
+          },
+          "image_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Image Ids"
+          }
+        },
+        "type": "object",
+        "required": [
+          "row_id",
+          "section_id",
+          "sheet",
+          "row_number",
+          "raw",
+          "values"
+        ],
+        "title": "VehicleImportInspectRow"
+      },
+      "VehicleImportInspection": {
+        "properties": {
+          "token": {
+            "type": "string",
+            "title": "Token"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Expires At"
+          },
+          "filename": {
+            "type": "string",
+            "title": "Filename"
+          },
+          "sections": {
+            "items": {
+              "$ref": "#/components/schemas/VehicleImportSection"
+            },
+            "type": "array",
+            "title": "Sections"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/VehicleImportInspectRow"
+            },
+            "type": "array",
+            "title": "Rows"
+          },
+          "images": {
+            "items": {
+              "$ref": "#/components/schemas/VehicleImportImage"
+            },
+            "type": "array",
+            "title": "Images"
+          },
+          "warnings": {
+            "items": {
+              "$ref": "#/components/schemas/VehicleImportIssue"
+            },
+            "type": "array",
+            "title": "Warnings"
+          }
+        },
+        "type": "object",
+        "required": [
+          "token",
+          "expires_at",
+          "filename",
+          "sections",
+          "rows",
+          "images"
+        ],
+        "title": "VehicleImportInspection"
+      },
+      "VehicleImportIssue": {
+        "properties": {
+          "row_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Row Id"
+          },
+          "field": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Field"
+          },
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "message"
+        ],
+        "title": "VehicleImportIssue"
+      },
+      "VehicleImportPreview": {
+        "properties": {
+          "revision": {
+            "type": "string",
+            "title": "Revision"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/VehicleImportPreviewRow"
+            },
+            "type": "array",
+            "title": "Rows"
+          },
+          "counts": {
+            "$ref": "#/components/schemas/VehicleImportCounts"
+          }
+        },
+        "type": "object",
+        "required": [
+          "revision",
+          "rows",
+          "counts"
+        ],
+        "title": "VehicleImportPreview"
+      },
+      "VehicleImportPreviewDraftRow": {
+        "properties": {
+          "row_id": {
+            "type": "string",
+            "title": "Row Id"
+          },
+          "excluded": {
+            "type": "boolean",
+            "title": "Excluded",
+            "default": false
+          },
+          "values": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "type": "object",
+            "title": "Values"
+          },
+          "image_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Image Ids"
+          },
+          "image_roles": {
+            "additionalProperties": {
+              "type": "string",
+              "enum": [
+                "photo",
+                "license"
+              ]
+            },
+            "type": "object",
+            "title": "Image Roles"
+          },
+          "photo_action": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "keep_current",
+                  "use_imported"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Photo Action"
+          },
+          "primary_image_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Primary Image Id"
+          },
+          "license_action": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "keep_current",
+                  "use_imported"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "License Action"
+          },
+          "license_image_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "License Image Id"
+          },
+          "ocr_reviewed_image_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Ocr Reviewed Image Ids"
+          },
+          "ocr_manual_image_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Ocr Manual Image Ids"
+          },
+          "ocr_identity_confirmed_image_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Ocr Identity Confirmed Image Ids"
+          }
+        },
+        "type": "object",
+        "required": [
+          "row_id",
+          "values"
+        ],
+        "title": "VehicleImportPreviewDraftRow"
+      },
+      "VehicleImportPreviewRequest": {
+        "properties": {
+          "site_mappings": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "type": "object",
+            "title": "Site Mappings"
+          },
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/VehicleImportPreviewDraftRow"
+            },
+            "type": "array",
+            "title": "Rows"
+          },
+          "excluded_image_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Excluded Image Ids"
+          }
+        },
+        "type": "object",
+        "required": [
+          "rows"
+        ],
+        "title": "VehicleImportPreviewRequest"
+      },
+      "VehicleImportPreviewRow": {
+        "properties": {
+          "row_id": {
+            "type": "string",
+            "title": "Row Id"
+          },
+          "action": {
+            "type": "string",
+            "enum": [
+              "create",
+              "update",
+              "unchanged",
+              "invalid",
+              "archived",
+              "excluded"
+            ],
+            "title": "Action"
+          },
+          "vehicle_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vehicle Id"
+          },
+          "values": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "type": "object",
+            "title": "Values"
+          },
+          "changes": {
+            "items": {
+              "$ref": "#/components/schemas/VehicleImportChange"
+            },
+            "type": "array",
+            "title": "Changes"
+          },
+          "errors": {
+            "items": {
+              "$ref": "#/components/schemas/VehicleImportIssue"
+            },
+            "type": "array",
+            "title": "Errors"
+          },
+          "warnings": {
+            "items": {
+              "$ref": "#/components/schemas/VehicleImportIssue"
+            },
+            "type": "array",
+            "title": "Warnings"
+          },
+          "current_photo_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Photo Url"
+          },
+          "current_license_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current License Url"
+          },
+          "images": {
+            "items": {
+              "$ref": "#/components/schemas/VehicleImportImage"
+            },
+            "type": "array",
+            "title": "Images"
+          },
+          "photo_choice_required": {
+            "type": "boolean",
+            "title": "Photo Choice Required",
+            "default": false
+          },
+          "license_choice_required": {
+            "type": "boolean",
+            "title": "License Choice Required",
+            "default": false
+          },
+          "ocr_review_required": {
+            "type": "boolean",
+            "title": "Ocr Review Required",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "row_id",
+          "action",
+          "values"
+        ],
+        "title": "VehicleImportPreviewRow"
+      },
+      "VehicleImportResult": {
+        "properties": {
+          "created": {
+            "type": "integer",
+            "title": "Created"
+          },
+          "updated": {
+            "type": "integer",
+            "title": "Updated"
+          },
+          "unchanged": {
+            "type": "integer",
+            "title": "Unchanged"
+          },
+          "images_added": {
+            "type": "integer",
+            "title": "Images Added"
+          },
+          "images_skipped": {
+            "type": "integer",
+            "title": "Images Skipped"
+          },
+          "vehicle_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Vehicle Ids"
+          }
+        },
+        "type": "object",
+        "required": [
+          "created",
+          "updated",
+          "unchanged",
+          "images_added",
+          "images_skipped",
+          "vehicle_ids"
+        ],
+        "title": "VehicleImportResult"
+      },
+      "VehicleImportSection": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "sheet": {
+            "type": "string",
+            "title": "Sheet"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "sheet",
+          "title"
+        ],
+        "title": "VehicleImportSection"
       },
       "VehicleLicenceScan": {
         "properties": {

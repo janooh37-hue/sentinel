@@ -145,6 +145,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   hasCapability.mockReturnValue(true)
   listAbsenceRegister.mockResolvedValue({ rows: [] })
+  copyTable.mockResolvedValue(undefined)
   createEmployeeAbsences.mockResolvedValue({
     created: [ROW(1, '2026-07-09', 'no call'), ROW(2, '2026-07-10', 'no call')],
     skipped_off_roster: [],
@@ -298,6 +299,20 @@ describe('AbsencesPage', () => {
       '1\tG1001\tجون دو\tالثالثة\t09/07/2026\t10/07/2026\t2\tno call',
     )
     expect(toastSuccess).toHaveBeenCalledWith('Table copied to the clipboard.')
+  })
+
+  it('reports a clipboard failure without announcing success', async () => {
+    listAbsenceRegister.mockResolvedValue(REGISTER)
+    copyTable.mockRejectedValueOnce(new Error('COPY_FAILED'))
+    renderPage()
+    const user = userEvent.setup()
+
+    await user.click(await screen.findByRole('button', { name: 'Copy table' }))
+
+    await waitFor(() =>
+      expect(toastError).toHaveBeenCalledWith('Could not copy to clipboard. Try again.'),
+    )
+    expect(toastSuccess).not.toHaveBeenCalled()
   })
 
   it('extends a row to today with one click', async () => {

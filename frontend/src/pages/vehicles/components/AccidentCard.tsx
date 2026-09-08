@@ -46,14 +46,23 @@ interface Props {
    * into its file; inside the vehicle file both are redundant.
    */
   showVehicle?: boolean
+  /** True on an archived vehicle's file: every mutating control (status
+   *  toggle, letter generation, delete) is hidden, matching the backend's
+   *  active-vehicle write guard, even for staff who otherwise hold the
+   *  capability. */
+  readOnly?: boolean
 }
 
-export function AccidentCard({ accident, showVehicle = false }: Props): React.JSX.Element {
+export function AccidentCard({
+  accident,
+  showVehicle = false,
+  readOnly = false,
+}: Props): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const queryClient = useQueryClient()
   const { has } = useCapabilities()
-  const canEdit = has('vehicles.edit')
-  const canDelete = has('vehicles.delete')
+  const canEdit = has('vehicles.edit') && !readOnly
+  const canDelete = has('vehicles.delete') && !readOnly
   const [confirmOpen, setConfirmOpen] = useState(false)
 
   const setStatus = useMutation({

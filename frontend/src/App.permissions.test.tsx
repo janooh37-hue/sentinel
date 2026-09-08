@@ -75,6 +75,8 @@ vi.mock('@/lib/routeLoaders', () => ({
   loadVehicleAccidentLetterPage: () => Promise.resolve({ default: () => <div>vehicle-accident-letter-page</div> }),
   loadVehicleAccidentsPage: () => Promise.resolve({ default: () => <div>vehicle-accidents-page</div> }),
   loadVehicleDetailPage: () => Promise.resolve({ default: () => <div>vehicle-detail-page</div> }),
+  loadVehicleEditPage: () => Promise.resolve({ default: () => <div>vehicle-edit-page</div> }),
+  loadVehicleImportPage: () => Promise.resolve({ default: () => <div>vehicle-import-page</div> }),
   loadVehicleFinesLetterPage: () => Promise.resolve({ default: () => <div>vehicle-fines-letter-page</div> }),
   loadVehicleFinesReportPage: () => Promise.resolve({ default: () => <div>vehicle-fines-report-page</div> }),
   loadVehicleMaintenancePage: () => Promise.resolve({ default: () => <div>vehicle-maintenance-page</div> }),
@@ -106,6 +108,9 @@ const routes = [
   ['/vehicles/maintenance', ['vehicles.view'], 'vehicle-maintenance-page'],
   ['/vehicles/42', ['vehicles.view'], 'vehicle-detail-page'],
   ['/vehicles/42/fines-letter', ['vehicles.view'], 'vehicle-fines-letter-page'],
+  ['/vehicles/edit', ['vehicles.view', 'vehicles.edit'], 'vehicle-edit-page'],
+  ['/vehicles/edit/42', ['vehicles.view', 'vehicles.edit'], 'vehicle-edit-page'],
+  ['/vehicles/import', ['vehicles.view', 'vehicles.edit'], 'vehicle-import-page'],
 ] as const
 
 const eitherCapabilityRoutes = [
@@ -173,6 +178,18 @@ describe('App route capability gates', () => {
 
       expect(await screen.findByText("You don't have access to this page")).toBeVisible()
       expect(screen.queryByText('scanback-page')).not.toBeInTheDocument()
+    },
+  )
+
+  it.each(['vehicles.view', 'vehicles.edit'])(
+    'denies /vehicles/edit when %s is the only granted capability',
+    async (capability) => {
+      capabilityState.allowed = new Set([capability])
+      window.history.pushState({}, '', '/vehicles/edit')
+      render(<App />)
+
+      expect(await screen.findByText("You don't have access to this page")).toBeVisible()
+      expect(screen.queryByText('vehicle-edit-page')).not.toBeInTheDocument()
     },
   )
 

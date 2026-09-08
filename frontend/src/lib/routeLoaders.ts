@@ -21,6 +21,12 @@ export const loadVehiclesHubPage = () =>
   import('@/pages/vehicles/VehiclesHubPage').then((m) => ({ default: m.VehiclesHubPage }))
 export const loadVehicleDetailPage = () =>
   import('@/pages/vehicles/VehicleDetailPage').then((m) => ({ default: m.VehicleDetailPage }))
+export const loadVehicleEditPage = () =>
+  import('@/pages/vehicles/VehicleEditPage').then((m) => ({ default: m.VehicleEditPage }))
+export const loadVehicleImportPage = () =>
+  import('@/pages/vehicles/import/VehicleImportPage').then((m) => ({
+    default: m.VehicleImportPage,
+  }))
 export const loadVehicleFinesLetterPage = () =>
   import('@/pages/vehicles/VehicleFinesLetterPage').then((m) => ({
     default: m.VehicleFinesLetterPage,

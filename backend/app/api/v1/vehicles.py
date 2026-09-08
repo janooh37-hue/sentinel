@@ -37,6 +37,11 @@ from app.schemas.vehicle import (
     VehicleMaintenanceCreate,
     VehicleMaintenanceRead,
     VehicleProfileScan,
+    VehicleImportConfirmRequest,
+    VehicleImportInspection,
+    VehicleImportPreview,
+    VehicleImportPreviewRequest,
+    VehicleImportResult,
     VehicleRead,
     VehicleSiteCreate,
     VehicleSiteRead,
@@ -49,6 +54,7 @@ from app.services import (
     vehicle_evg_service,
     vehicle_letter_service,
     vehicle_profile_scan_service,
+    vehicle_import_service,
     vehicle_service,
 )
 
@@ -268,6 +274,87 @@ async def scan_vehicle_licence(
             allowed=[".pdf", ".png", ".jpg", ".jpeg", ".webp"],
         )
     return await run_in_threadpool(vehicle_profile_scan_service.scan_vehicle_profile, data)
+
+
+@router.get("/imports/template")
+def download_vehicle_import_template(
+    _user: Annotated[User, Depends(require_capability("vehicles.edit"))],
+) -> Response:
+    return Response(
+        content=vehicle_import_service.build_vehicle_import_template(),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={
+            "Content-Disposition": 'attachment; filename="vehicle-import-template.xlsx"',
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
+
+
+@router.post("/imports/inspect", response_model=VehicleImportInspection)
+async def inspect_vehicle_import(
+    user: Annotated[User, Depends(require_capability("vehicles.edit"))],
+    upload: Annotated[UploadFile, File(alias="file")],
+) -> VehicleImportInspection:
+    data = await upload.read(vehicle_import_service.MAX_COMPRESSED_BYTES + 1)
+    return await run_in_threadpool(
+        vehicle_import_service.inspect_upload,
+        owner=user,
+        filename=upload.filename or "",
+        data=data,
+    )
+
+
+@router.post("/imports/{token}/preview", response_model=VehicleImportPreview)
+def preview_vehicle_import(
+    token: str,
+    payload: VehicleImportPreviewRequest,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(require_capability("vehicles.edit"))],
+) -> VehicleImportPreview:
+    return vehicle_import_service.preview(db, token, payload, owner=user)
+
+
+@router.get("/imports/{token}/images/{image_id}")
+def get_vehicle_import_image(
+    token: str,
+    image_id: str,
+    user: Annotated[User, Depends(require_capability("vehicles.edit"))],
+) -> Response:
+    path, media_type, original_name = vehicle_import_service.resolve_image(
+        token, image_id, owner=user
+    )
+    return Response(
+        content=path.read_bytes(),
+        media_type=media_type,
+        headers={
+            "Content-Disposition": f'inline; filename="{original_name}"',
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
+
+
+@router.post("/imports/{token}/images/{image_id}/scan", response_model=VehicleProfileScan)
+async def scan_vehicle_import_image(
+    token: str,
+    image_id: str,
+    user: Annotated[User, Depends(require_capability("vehicles.edit"))],
+) -> VehicleProfileScan:
+    return await run_in_threadpool(
+        vehicle_import_service.scan_image,
+        token,
+        image_id,
+        owner=user,
+    )
+
+
+@router.post("/imports/{token}/confirm", response_model=VehicleImportResult)
+def confirm_vehicle_import(
+    token: str,
+    payload: VehicleImportConfirmRequest,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(require_capability("vehicles.edit"))],
+) -> VehicleImportResult:
+    return vehicle_import_service.confirm(db, token, payload, owner=user)
 
 
 @router.get("/{vehicle_id}", response_model=VehicleRead)

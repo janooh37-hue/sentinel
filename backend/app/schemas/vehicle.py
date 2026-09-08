@@ -448,3 +448,129 @@ class VehicleProfileScan(BaseModel):
     insurance_expiry: date_t | None = None
     unmapped: dict[str, str] = Field(default_factory=dict)
     warnings: list[VehicleScanWarning] = Field(default_factory=list)
+
+
+VehicleImportImageKind = Literal["photo", "license"]
+VehicleImportAction = Literal[
+    "create",
+    "update",
+    "unchanged",
+    "invalid",
+    "archived",
+    "excluded",
+]
+VehicleImportFileAction = Literal["keep_current", "use_imported"]
+VehicleImportScalar = str | int | None
+
+
+class VehicleImportIssue(BaseModel):
+    row_id: str | None = None
+    field: str | None = None
+    code: str
+    message: str
+
+
+class VehicleImportSection(BaseModel):
+    id: str
+    sheet: str
+    title: str
+
+
+class VehicleImportInspectRow(BaseModel):
+    row_id: str
+    section_id: str
+    sheet: str
+    row_number: int
+    raw: dict[str, str | None]
+    values: dict[str, VehicleImportScalar]
+    image_ids: list[str] = Field(default_factory=list)
+
+
+class VehicleImportImage(BaseModel):
+    image_id: str
+    url: str
+    row_id: str | None = None
+    original_name: str
+    kind: VehicleImportImageKind | None = None
+
+
+class VehicleImportInspection(BaseModel):
+    token: str
+    expires_at: datetime
+    filename: str
+    sections: list[VehicleImportSection]
+    rows: list[VehicleImportInspectRow]
+    images: list[VehicleImportImage]
+    warnings: list[VehicleImportIssue] = Field(default_factory=list)
+
+
+class VehicleImportPreviewDraftRow(BaseModel):
+    row_id: str
+    excluded: bool = False
+    values: dict[str, VehicleImportScalar]
+    image_ids: list[str] = Field(default_factory=list)
+    image_roles: dict[str, VehicleImportImageKind] = Field(default_factory=dict)
+    photo_action: VehicleImportFileAction | None = None
+    primary_image_id: str | None = None
+    license_action: VehicleImportFileAction | None = None
+    license_image_id: str | None = None
+    ocr_reviewed_image_ids: list[str] = Field(default_factory=list)
+    ocr_manual_image_ids: list[str] = Field(default_factory=list)
+    ocr_identity_confirmed_image_ids: list[str] = Field(default_factory=list)
+
+
+class VehicleImportPreviewRequest(BaseModel):
+    site_mappings: dict[str, int] = Field(default_factory=dict)
+    rows: list[VehicleImportPreviewDraftRow]
+    excluded_image_ids: list[str] = Field(default_factory=list)
+
+
+class VehicleImportChange(BaseModel):
+    field: str
+    before: VehicleImportScalar
+    after: VehicleImportScalar
+
+
+class VehicleImportPreviewRow(BaseModel):
+    row_id: str
+    action: VehicleImportAction
+    vehicle_id: int | None = None
+    values: dict[str, VehicleImportScalar]
+    changes: list[VehicleImportChange] = Field(default_factory=list)
+    errors: list[VehicleImportIssue] = Field(default_factory=list)
+    warnings: list[VehicleImportIssue] = Field(default_factory=list)
+    current_photo_url: str | None = None
+    current_license_url: str | None = None
+    images: list[VehicleImportImage] = Field(default_factory=list)
+    photo_choice_required: bool = False
+    license_choice_required: bool = False
+    ocr_review_required: bool = False
+
+
+class VehicleImportCounts(BaseModel):
+    create: int = 0
+    update: int = 0
+    unchanged: int = 0
+    invalid: int = 0
+    archived: int = 0
+    excluded: int = 0
+
+
+class VehicleImportPreview(BaseModel):
+    revision: str
+    rows: list[VehicleImportPreviewRow]
+    counts: VehicleImportCounts
+
+
+class VehicleImportConfirmRequest(BaseModel):
+    revision: str
+    row_ids: list[str]
+
+
+class VehicleImportResult(BaseModel):
+    created: int
+    updated: int
+    unchanged: int
+    images_added: int
+    images_skipped: int
+    vehicle_ids: list[int]

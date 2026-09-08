@@ -34,13 +34,16 @@ import {
   FileText,
   History,
   Image as ImageIcon,
+  Loader2,
   Pencil,
+  Star,
   Trash2,
+  Upload,
   Wrench,
 } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { Link, useParams, useSearchParams } from 'react-router-dom'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 
 import { FileTypeIcon } from '@/components/ledger/FileTypeIcon'
@@ -68,11 +71,13 @@ import type {
   VehicleRead,
 } from '@/lib/api'
 import { toBase64Url } from '@/lib/pdf'
+import { isolateBidi } from '@/lib/useCapabilityCatalog'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { useIsMobile } from '@/lib/useIsMobile'
 import { cn } from '@/lib/utils'
 
 import {
+  DOCUMENT_ACCEPT,
   EMPTY_VALUE,
   IMAGE_ACCEPT,
   VEHICLE_QUERY_KEYS,
@@ -127,6 +132,7 @@ export function VehicleDetailPage(): React.JSX.Element {
   const vehicleId = id && /^\d+$/.test(id) ? Number(id) : null
   const [searchParams, setSearchParams] = useSearchParams()
   const tab = tabFromSearch(searchParams)
+  const navigate = useNavigate()
 
   const { t, i18n } = useTranslation()
   const lang = i18n.language
@@ -144,6 +150,8 @@ export function VehicleDetailPage(): React.JSX.Element {
   const [fineToDelete, setFineToDelete] = useState<VehicleFineRead | null>(null)
   const [recordToDelete, setRecordToDelete] = useState<VehicleMaintenanceRead | null>(null)
   const [photoToDelete, setPhotoToDelete] = useState<VehicleFileRead | null>(null)
+  const [archiveConfirmOpen, setArchiveConfirmOpen] = useState(false)
+  const [restoreConfirmOpen, setRestoreConfirmOpen] = useState(false)
 
   const vehicleQuery = useQuery({
     queryKey: VEHICLE_QUERY_KEYS.detail(vehicleId ?? 0),
@@ -212,7 +220,33 @@ export function VehicleDetailPage(): React.JSX.Element {
       }),
     onSuccess: (_file, target) => {
       invalidateVehicleQueries(queryClient, { vehicleId: target.vehicleId })
-      toast.success(t('common.savedToast'))
+      toast.success(`${target.file.name}: ${t('common.savedToast')}`)
+    },
+    onError: (err, target) =>
+      toast.error(`${target.file.name}: ${vehicleErrorMessage(err, t)}`),
+  })
+
+  const setMainPhoto = useMutation({
+    mutationFn: (target: { vehicleId: number; fileId: number }) =>
+      api.updateVehicle(target.vehicleId, { photo_file_id: target.fileId }),
+    onSuccess: (_updated, target) => {
+      invalidateVehicleQueries(queryClient, { vehicleId: target.vehicleId })
+      toast.success(t('common.updatedToast'))
+    },
+    onError: (err) => toast.error(vehicleErrorMessage(err, t)),
+  })
+
+  const replaceLicenseFile = useMutation({
+    mutationFn: async (target: { vehicleId: number; file: File }) => {
+      const uploaded = await api.uploadVehicleFile(target.vehicleId, 'license', target.file, {
+        label_ar: t('vehicles.licenseScan', { lng: 'ar' }),
+        label_en: t('vehicles.licenseScan', { lng: 'en' }),
+      })
+      return api.updateVehicle(target.vehicleId, { license_file_id: uploaded.id })
+    },
+    onSuccess: (_updated, target) => {
+      invalidateVehicleQueries(queryClient, { vehicleId: target.vehicleId })
+      toast.success(t('common.updatedToast'))
     },
     onError: (err) => toast.error(vehicleErrorMessage(err, t)),
   })
@@ -227,11 +261,36 @@ export function VehicleDetailPage(): React.JSX.Element {
     onError: (err) => toast.error(vehicleErrorMessage(err, t)),
   })
 
+  const archiveVehicle = useMutation({
+    mutationFn: (target: number) => api.archiveVehicle(target),
+    onSuccess: () => {
+      invalidateVehicleQueries(queryClient, { registers: ['sites'] })
+      toast.success(t('vehicles.vehicleArchived'))
+      navigate('/vehicles')
+    },
+    onError: (err) => toast.error(vehicleErrorMessage(err, t)),
+  })
+
+  const restoreVehicle = useMutation({
+    mutationFn: (target: number) => api.restoreVehicle(target),
+    onSuccess: (_result, target) => {
+      invalidateVehicleQueries(queryClient, { vehicleId: target, registers: ['sites'] })
+      toast.success(t('vehicles.vehicleRestored'))
+    },
+    onError: (err) => toast.error(vehicleErrorMessage(err, t)),
+  })
+
   const vehicle = vehicleQuery.data
   const notFound =
     vehicleId == null ||
     (vehicleQuery.error instanceof ApiError && vehicleQuery.error.status === 404)
   const plate = vehicle ? vehicle.plate_label || plateLabel(vehicle) : null
+  const archived = Boolean(vehicle?.archived_at)
+  // Editing/renewal/child-mutation/file-mutation controls all fold through
+  // these two — a single choke point rather than re-checking `archived` at
+  // every panel, matching the backend's active-vehicle write guard.
+  const canMutate = canEdit && !archived
+  const canDeleteMutate = canDelete && !archived
   const fines = vehicle?.fines ?? []
   const renewals = vehicle?.renewals ?? []
   const accidents = vehicle?.accidents ?? []
@@ -239,6 +298,18 @@ export function VehicleDetailPage(): React.JSX.Element {
   const photos = vehicle?.photos ?? []
   const galleryCount =
     photos.length + (vehicle?.photo_url ? 1 : 0) + (vehicle?.license_url ? 1 : 0)
+
+  async function uploadGalleryPhotos(files: readonly File[]): Promise<void> {
+    if (!vehicle) return
+    for (const file of files) {
+      try {
+        await uploadPhoto.mutateAsync({ vehicleId: vehicle.id, file })
+      } catch {
+        // `uploadPhoto.onError` identifies the failed file; keep processing the
+        // rest of the operator's selection rather than discarding it.
+      }
+    }
+  }
   const counts: Record<VehicleTab, number> = {
     fines: fines.length,
     renewals: renewals.length,
@@ -281,15 +352,27 @@ export function VehicleDetailPage(): React.JSX.Element {
                   <PlateChip plate={plate} size="lg" />
                 </>
               )}
+              {archived && (
+                <span className="rounded-full bg-surface-tinted px-2 py-0.5 text-[0.6em] font-semibold uppercase tracking-wide text-muted-foreground">
+                  {t('vehicles.archivedStatus')}
+                </span>
+              )}
             </h1>
             <p className="mt-1 hidden text-[0.84em] text-muted-foreground md:block">
-              {t('vehicles.detailDesc')}
+              {archived ? t('vehicles.archivedNotice') : t('vehicles.detailDesc')}
             </p>
           </div>
 
           <div className="flex shrink-0 flex-wrap items-center gap-2">
-            {vehicle && canEdit && (
+            {vehicle && canMutate && (
               <>
+                <Link
+                  to={`/vehicles/edit/${vehicle.id}`}
+                  className={buttonVariants({ variant: 'secondary', size: 'sm' })}
+                >
+                  <Pencil className="h-3.5 w-3.5" aria-hidden />
+                  {t('vehicles.editVehicle')}
+                </Link>
                 <Button
                   type="button"
                   size="sm"
@@ -325,6 +408,26 @@ export function VehicleDetailPage(): React.JSX.Element {
                   </Button>
                 )}
               </>
+            )}
+            {vehicle && canDelete && !archived && (
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                onClick={() => setArchiveConfirmOpen(true)}
+              >
+                {t('vehicles.archiveVehicle')}
+              </Button>
+            )}
+            {vehicle && canDelete && archived && (
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                onClick={() => setRestoreConfirmOpen(true)}
+              >
+                {t('vehicles.restoreVehicle')}
+              </Button>
             )}
             <RefreshButton />
           </div>
@@ -383,8 +486,8 @@ export function VehicleDetailPage(): React.JSX.Element {
                 <FinesPanel
                   vehicle={vehicle}
                   fines={fines}
-                  canEdit={canEdit}
-                  canDelete={canDelete}
+                  canEdit={canMutate}
+                  canDelete={canDeleteMutate}
                   isMobile={isMobile}
                   busy={deleteFine.isPending}
                   onEdit={(fine) => setFineTarget({ mode: 'edit', fine })}
@@ -395,22 +498,27 @@ export function VehicleDetailPage(): React.JSX.Element {
                 <RenewalsPanel
                   vehicle={vehicle}
                   renewals={renewals}
-                  canEdit={canEdit}
+                  canEdit={canMutate}
+                  replacingLicense={replaceLicenseFile.isPending}
                   onRenew={() => setRenewOpen(true)}
+                  onReplaceLicense={(file) =>
+                    replaceLicenseFile.mutate({ vehicleId: vehicle.id, file })
+                  }
                 />
               )}
               {tab === 'accidents' && (
                 <AccidentsPanel
                   accidents={accidents}
-                  canEdit={canEdit}
+                  canEdit={canMutate}
+                  readOnly={archived}
                   onAdd={() => setAccidentOpen(true)}
                 />
               )}
               {tab === 'maintenance' && (
                 <MaintenancePanel
                   records={maintenance}
-                  canEdit={canEdit}
-                  canDelete={canDelete}
+                  canEdit={canMutate}
+                  canDelete={canDeleteMutate}
                   isMobile={isMobile}
                   busy={deleteMaintenance.isPending}
                   onAdd={() => setMaintenanceOpen(true)}
@@ -422,11 +530,15 @@ export function VehicleDetailPage(): React.JSX.Element {
                   vehicle={vehicle}
                   photos={photos}
                   count={galleryCount}
-                  canEdit={canEdit}
-                  canDelete={canDelete}
+                  canEdit={canMutate}
+                  canDelete={canDeleteMutate}
                   uploading={uploadPhoto.isPending}
                   deleting={deletePhoto.isPending}
-                  onUpload={(file) => uploadPhoto.mutate({ vehicleId: vehicle.id, file })}
+                  settingMain={setMainPhoto.isPending}
+                  onUpload={uploadGalleryPhotos}
+                  onSetMain={(photo) =>
+                    setMainPhoto.mutate({ vehicleId: vehicle.id, fileId: photo.id })
+                  }
                   onDelete={setPhotoToDelete}
                 />
               )}
@@ -438,7 +550,7 @@ export function VehicleDetailPage(): React.JSX.Element {
       {/* Dialogs. Each owns its mutation, toast and invalidation; this page owns
           only whether it is open, and remounts it per target so the form never
           opens with the previous row's values. */}
-      {vehicle && canEdit && (
+      {vehicle && canMutate && (
         <>
           {renewOpen && (
             <RenewLicenseDialog
@@ -481,7 +593,7 @@ export function VehicleDetailPage(): React.JSX.Element {
         </>
       )}
 
-      {vehicle && canDelete && (
+      {vehicle && canDeleteMutate && (
         <>
           <ConfirmDialog
             open={fineToDelete != null}
@@ -533,6 +645,27 @@ export function VehicleDetailPage(): React.JSX.Element {
               }
               setPhotoToDelete(null)
             }}
+          />
+        </>
+      )}
+      {vehicle && canDelete && (
+        <>
+          <ConfirmDialog
+            open={archiveConfirmOpen}
+            onOpenChange={setArchiveConfirmOpen}
+            title={t('vehicles.archiveConfirmTitle', { plate: isolateBidi(plate ?? '') })}
+            description={t('vehicles.archiveConfirmDesc')}
+            confirmLabel={t('vehicles.archiveVehicle')}
+            destructive
+            onConfirm={() => archiveVehicle.mutate(vehicle.id)}
+          />
+          <ConfirmDialog
+            open={restoreConfirmOpen}
+            onOpenChange={setRestoreConfirmOpen}
+            title={t('vehicles.restoreConfirmTitle', { plate: isolateBidi(plate ?? '') })}
+            description={t('vehicles.restoreConfirmDesc')}
+            confirmLabel={t('vehicles.restoreVehicle')}
+            onConfirm={() => restoreVehicle.mutate(vehicle.id)}
           />
         </>
       )}
@@ -797,6 +930,18 @@ function OverviewPanel({
             <VehicleStatusBadge family="expiry" status={vehicle.expiry_status} />
           </span>
         </InfoItem>
+        <InfoItem label={t('vehicles.insuranceExpiry')}>
+          {vehicle.insurance_expiry ? (
+            <span className="flex flex-wrap items-center gap-1.5">
+              <Mono>{formatIsoDate(vehicle.insurance_expiry)}</Mono>
+              {vehicle.insurance_status && (
+                <VehicleStatusBadge family="expiry" status={vehicle.insurance_status} />
+              )}
+            </span>
+          ) : (
+            <span className="text-muted-foreground">{t('vehicles.insuranceNotRecorded')}</span>
+          )}
+        </InfoItem>
         <InfoItem label={t('vehicles.vin')}>
           <Mono>{vehicle.vin || EMPTY_VALUE}</Mono>
         </InfoItem>
@@ -1059,16 +1204,23 @@ function RenewalsPanel({
   vehicle,
   renewals,
   canEdit,
+  replacingLicense,
   onRenew,
+  onReplaceLicense,
 }: {
   vehicle: VehicleRead
   renewals: readonly Renewal[]
   canEdit: boolean
+  replacingLicense: boolean
   /** The page's single renew dialog — the panel holds no state of its own. */
   onRenew: () => void
+  onReplaceLicense: (file: File) => void
 }): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const lang = i18n.language
+  const previousLicenseFiles = (vehicle.license_files ?? []).filter(
+    (file) => file.id !== vehicle.license_file_id,
+  )
 
   return (
     <>
@@ -1095,20 +1247,31 @@ function RenewalsPanel({
           }
         />
         <div className="grid gap-3.5 p-3.5 sm:grid-cols-[210px_1fr]">
-          {vehicle.license_url ? (
-            <UrlFileTile
-              url={vehicle.license_url}
-              label={t('vehicles.licenseScan')}
-              className="h-[152px] w-full"
-              showLabel
-            />
-          ) : (
-            <MissingFileTile
-              icon={FileText}
-              label={t('vehicles.licenseScan')}
-              className="h-[152px] w-full"
-            />
-          )}
+          <div className="flex min-w-0 flex-col gap-2">
+            {vehicle.license_url ? (
+              <UrlFileTile
+                url={vehicle.license_url}
+                label={t('vehicles.licenseScan')}
+                className="h-[152px] w-full"
+                showLabel
+              />
+            ) : (
+              <MissingFileTile
+                icon={FileText}
+                label={t('vehicles.licenseScan')}
+                className="h-[152px] w-full"
+              />
+            )}
+            {canEdit && (
+              <FileUploadZone
+                accept={DOCUMENT_ACCEPT}
+                label={t('vehicles.replaceLicenceFile')}
+                hint={t('vehicles.replaceLicenceFileHint')}
+                busy={replacingLicense}
+                onFile={onReplaceLicense}
+              />
+            )}
+          </div>
           <dl className="grid grid-cols-2 gap-x-4 gap-y-3 self-start">
             <InfoItem label={t('vehicles.licenseStart')}>
               <Mono>{formatIsoDate(vehicle.license_start)}</Mono>
@@ -1121,6 +1284,25 @@ function RenewalsPanel({
             </InfoItem>
           </dl>
         </div>
+        {previousLicenseFiles.length > 0 && (
+          <div className="border-t border-hairline px-3.5 py-3">
+            <h3 className="text-[0.7rem] font-semibold text-muted-foreground">
+              {t('vehicles.previousLicenceFiles')}
+            </h3>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {previousLicenseFiles.map((file) => (
+                <VehicleFileThumb
+                  key={file.id}
+                  vehicleId={vehicle.id}
+                  file={file}
+                  siblings={previousLicenseFiles}
+                  showLabel
+                  className="h-[92px] w-[128px]"
+                />
+              ))}
+            </div>
+          </div>
+        )}
       </Panel>
 
       <Panel className="mt-3">
@@ -1175,10 +1357,12 @@ function RenewalsPanel({
 function AccidentsPanel({
   accidents,
   canEdit,
+  readOnly = false,
   onAdd,
 }: {
   accidents: NonNullable<VehicleRead['accidents']>
   canEdit: boolean
+  readOnly?: boolean
   onAdd: () => void
 }): React.JSX.Element {
   const { t, i18n } = useTranslation()
@@ -1204,7 +1388,7 @@ function AccidentsPanel({
           {accidents.map((accident) => (
             // Inside the vehicle's own file the plate chip and the «Open» link
             // would only point back at this page.
-            <AccidentCard key={accident.id} accident={accident} />
+            <AccidentCard key={accident.id} accident={accident} readOnly={readOnly} />
           ))}
         </div>
       )}
@@ -1410,6 +1594,64 @@ function MaintenanceCard({
   )
 }
 
+function MultiFileUploadZone({
+  accept,
+  label,
+  busy,
+  disabled,
+  onFiles,
+}: {
+  accept: string
+  label: string
+  busy: boolean
+  disabled: boolean
+  onFiles: (files: readonly File[]) => void | Promise<void>
+}): React.JSX.Element {
+  const { t } = useTranslation()
+  const blocked = busy || disabled
+
+  return (
+    <label
+      className={cn(
+        'flex flex-col items-center justify-center gap-1.5 rounded-lg border border-dashed border-border px-4 py-6 text-center transition-colors',
+        'focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 focus-within:ring-offset-background',
+        blocked
+          ? 'cursor-not-allowed opacity-70'
+          : 'cursor-pointer hover:border-primary hover:bg-surface-tinted',
+      )}
+    >
+      <input
+        type="file"
+        accept={accept}
+        multiple
+        disabled={blocked}
+        className="sr-only"
+        onChange={(event) => {
+          const files = Array.from(event.currentTarget.files ?? [])
+          event.currentTarget.value = ''
+          if (files.length > 0) void onFiles(files)
+        }}
+      />
+      {busy ? (
+        <>
+          <Loader2
+            role="status"
+            aria-label={t('common.loading')}
+            strokeWidth={2}
+            className="h-5 w-5 animate-spin text-primary motion-reduce:animate-none"
+          />
+          <span className="text-xs text-muted-foreground">{t('common.loading')}</span>
+        </>
+      ) : (
+        <>
+          <Upload className="h-5 w-5 text-muted-foreground" strokeWidth={1.75} aria-hidden />
+          <span className="text-sm font-medium text-foreground">{label}</span>
+        </>
+      )}
+    </label>
+  )
+}
+
 // ── Photos ──────────────────────────────────────────────────────────────────
 
 function PhotosPanel({
@@ -1420,7 +1662,9 @@ function PhotosPanel({
   canDelete,
   uploading,
   deleting,
+  settingMain,
   onUpload,
+  onSetMain,
   onDelete,
 }: {
   vehicle: VehicleRead
@@ -1432,7 +1676,9 @@ function PhotosPanel({
   /** A removal is in flight: every tile's delete stays out of reach until the
    *  refreshed gallery comes back, so a second tap cannot fire on stale rows. */
   deleting: boolean
-  onUpload: (file: File) => void
+  settingMain: boolean
+  onUpload: (files: readonly File[]) => void | Promise<void>
+  onSetMain: (photo: VehicleFileRead) => void
   onDelete: (photo: VehicleFileRead) => void
 }): React.JSX.Element {
   const { t, i18n } = useTranslation()
@@ -1471,13 +1717,27 @@ function PhotosPanel({
               showLabel
               className="h-[132px] w-full"
             />
+            {canEdit && photo.id !== vehicle.photo_file_id && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon-sm"
+                className="absolute start-1 top-1 bg-surface/85 text-muted-foreground hover:text-primary"
+                disabled={uploading || deleting || settingMain}
+                aria-label={t('vehicles.setAsMainPhoto')}
+                title={t('vehicles.setAsMainPhoto')}
+                onClick={() => onSetMain(photo)}
+              >
+                <Star className="h-3.5 w-3.5" aria-hidden />
+              </Button>
+            )}
             {canDelete && (
               <Button
                 type="button"
                 variant="ghost"
                 size="icon-sm"
                 className="absolute end-1 top-1 bg-surface/85 text-muted-foreground hover:text-destructive"
-                disabled={deleting}
+                disabled={deleting || settingMain}
                 aria-label={t('vehicles.delete')}
                 title={t('vehicles.delete')}
                 onClick={() => onDelete(photo)}
@@ -1488,11 +1748,12 @@ function PhotosPanel({
           </div>
         ))}
         {canEdit && (
-          <FileUploadZone
+          <MultiFileUploadZone
             accept={IMAGE_ACCEPT}
             label={t('vehicles.addPhoto')}
             busy={uploading}
-            onFile={onUpload}
+            disabled={deleting || settingMain}
+            onFiles={onUpload}
           />
         )}
         {count === 0 && !canEdit && (

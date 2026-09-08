@@ -4417,6 +4417,108 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/vehicles/imports/template": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Download Vehicle Import Template */
+        get: operations["download_vehicle_import_template_api_v1_vehicles_imports_template_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/vehicles/imports/inspect": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Inspect Vehicle Import */
+        post: operations["inspect_vehicle_import_api_v1_vehicles_imports_inspect_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/vehicles/imports/{token}/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Preview Vehicle Import */
+        post: operations["preview_vehicle_import_api_v1_vehicles_imports__token__preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/vehicles/imports/{token}/images/{image_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Vehicle Import Image */
+        get: operations["get_vehicle_import_image_api_v1_vehicles_imports__token__images__image_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/vehicles/imports/{token}/images/{image_id}/scan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Scan Vehicle Import Image */
+        post: operations["scan_vehicle_import_image_api_v1_vehicles_imports__token__images__image_id__scan_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/vehicles/imports/{token}/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Confirm Vehicle Import */
+        post: operations["confirm_vehicle_import_api_v1_vehicles_imports__token__confirm_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/vehicles/{vehicle_id}": {
         parameters: {
             query?: never;
@@ -6225,6 +6327,14 @@ export interface components {
         };
         /** Body_inspect_approved_violation_api_v1_documents_inmate_violations_approved_imports_inspect_post */
         Body_inspect_approved_violation_api_v1_documents_inmate_violations_approved_imports_inspect_post: {
+            /**
+             * Upload
+             * Format: binary
+             */
+            upload: string;
+        };
+        /** Body_inspect_vehicle_import_api_v1_vehicles_imports_inspect_post */
+        Body_inspect_vehicle_import_api_v1_vehicles_imports_inspect_post: {
             /**
              * Upload
              * Format: binary
@@ -11925,6 +12035,240 @@ export interface components {
             location?: string | null;
             /** Description */
             description?: string | null;
+        };
+        /** VehicleImportChange */
+        VehicleImportChange: {
+            /** Field */
+            field: string;
+            /** Before */
+            before: string | number | null;
+            /** After */
+            after: string | number | null;
+        };
+        /** VehicleImportConfirmRequest */
+        VehicleImportConfirmRequest: {
+            /** Revision */
+            revision: string;
+            /** Row Ids */
+            row_ids: string[];
+        };
+        /** VehicleImportCounts */
+        VehicleImportCounts: {
+            /**
+             * Create
+             * @default 0
+             */
+            create: number;
+            /**
+             * Update
+             * @default 0
+             */
+            update: number;
+            /**
+             * Unchanged
+             * @default 0
+             */
+            unchanged: number;
+            /**
+             * Invalid
+             * @default 0
+             */
+            invalid: number;
+            /**
+             * Archived
+             * @default 0
+             */
+            archived: number;
+            /**
+             * Excluded
+             * @default 0
+             */
+            excluded: number;
+        };
+        /** VehicleImportImage */
+        VehicleImportImage: {
+            /** Image Id */
+            image_id: string;
+            /** Url */
+            url: string;
+            /** Row Id */
+            row_id?: string | null;
+            /** Original Name */
+            original_name: string;
+            /** Kind */
+            kind?: ("photo" | "license") | null;
+        };
+        /** VehicleImportInspectRow */
+        VehicleImportInspectRow: {
+            /** Row Id */
+            row_id: string;
+            /** Section Id */
+            section_id: string;
+            /** Sheet */
+            sheet: string;
+            /** Row Number */
+            row_number: number;
+            /** Raw */
+            raw: {
+                [key: string]: string | null;
+            };
+            /** Values */
+            values: {
+                [key: string]: string | number | null;
+            };
+            /** Image Ids */
+            image_ids?: string[];
+        };
+        /** VehicleImportInspection */
+        VehicleImportInspection: {
+            /** Token */
+            token: string;
+            /**
+             * Expires At
+             * Format: date-time
+             */
+            expires_at: string;
+            /** Filename */
+            filename: string;
+            /** Sections */
+            sections: components["schemas"]["VehicleImportSection"][];
+            /** Rows */
+            rows: components["schemas"]["VehicleImportInspectRow"][];
+            /** Images */
+            images: components["schemas"]["VehicleImportImage"][];
+            /** Warnings */
+            warnings?: components["schemas"]["VehicleImportIssue"][];
+        };
+        /** VehicleImportIssue */
+        VehicleImportIssue: {
+            /** Row Id */
+            row_id?: string | null;
+            /** Field */
+            field?: string | null;
+            /** Code */
+            code: string;
+            /** Message */
+            message: string;
+        };
+        /** VehicleImportPreview */
+        VehicleImportPreview: {
+            /** Revision */
+            revision: string;
+            /** Rows */
+            rows: components["schemas"]["VehicleImportPreviewRow"][];
+            counts: components["schemas"]["VehicleImportCounts"];
+        };
+        /** VehicleImportPreviewDraftRow */
+        VehicleImportPreviewDraftRow: {
+            /** Row Id */
+            row_id: string;
+            /**
+             * Excluded
+             * @default false
+             */
+            excluded: boolean;
+            /** Values */
+            values: {
+                [key: string]: string | number | null;
+            };
+            /** Image Ids */
+            image_ids?: string[];
+            /** Image Roles */
+            image_roles?: {
+                [key: string]: "photo" | "license";
+            };
+            /** Photo Action */
+            photo_action?: ("keep_current" | "use_imported") | null;
+            /** Primary Image Id */
+            primary_image_id?: string | null;
+            /** License Action */
+            license_action?: ("keep_current" | "use_imported") | null;
+            /** License Image Id */
+            license_image_id?: string | null;
+            /** Ocr Reviewed Image Ids */
+            ocr_reviewed_image_ids?: string[];
+            /** Ocr Manual Image Ids */
+            ocr_manual_image_ids?: string[];
+            /** Ocr Identity Confirmed Image Ids */
+            ocr_identity_confirmed_image_ids?: string[];
+        };
+        /** VehicleImportPreviewRequest */
+        VehicleImportPreviewRequest: {
+            /** Site Mappings */
+            site_mappings?: {
+                [key: string]: number;
+            };
+            /** Rows */
+            rows: components["schemas"]["VehicleImportPreviewDraftRow"][];
+            /** Excluded Image Ids */
+            excluded_image_ids?: string[];
+        };
+        /** VehicleImportPreviewRow */
+        VehicleImportPreviewRow: {
+            /** Row Id */
+            row_id: string;
+            /**
+             * Action
+             * @enum {string}
+             */
+            action: "create" | "update" | "unchanged" | "invalid" | "archived" | "excluded";
+            /** Vehicle Id */
+            vehicle_id?: number | null;
+            /** Values */
+            values: {
+                [key: string]: string | number | null;
+            };
+            /** Changes */
+            changes?: components["schemas"]["VehicleImportChange"][];
+            /** Errors */
+            errors?: components["schemas"]["VehicleImportIssue"][];
+            /** Warnings */
+            warnings?: components["schemas"]["VehicleImportIssue"][];
+            /** Current Photo Url */
+            current_photo_url?: string | null;
+            /** Current License Url */
+            current_license_url?: string | null;
+            /** Images */
+            images?: components["schemas"]["VehicleImportImage"][];
+            /**
+             * Photo Choice Required
+             * @default false
+             */
+            photo_choice_required: boolean;
+            /**
+             * License Choice Required
+             * @default false
+             */
+            license_choice_required: boolean;
+            /**
+             * Ocr Review Required
+             * @default false
+             */
+            ocr_review_required: boolean;
+        };
+        /** VehicleImportResult */
+        VehicleImportResult: {
+            /** Created */
+            created: number;
+            /** Updated */
+            updated: number;
+            /** Unchanged */
+            unchanged: number;
+            /** Images Added */
+            images_added: number;
+            /** Images Skipped */
+            images_skipped: number;
+            /** Vehicle Ids */
+            vehicle_ids: number[];
+        };
+        /** VehicleImportSection */
+        VehicleImportSection: {
+            /** Id */
+            id: string;
+            /** Sheet */
+            sheet: string;
+            /** Title */
+            title: string;
         };
         /**
          * VehicleLicenceScan
@@ -23019,6 +23363,214 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["VehicleProfileScan"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    download_vehicle_import_template_api_v1_vehicles_imports_template_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    inspect_vehicle_import_api_v1_vehicles_imports_inspect_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_inspect_vehicle_import_api_v1_vehicles_imports_inspect_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VehicleImportInspection"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_vehicle_import_api_v1_vehicles_imports__token__preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VehicleImportPreviewRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VehicleImportPreview"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_vehicle_import_image_api_v1_vehicles_imports__token__images__image_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+                image_id: string;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    scan_vehicle_import_image_api_v1_vehicles_imports__token__images__image_id__scan_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+                image_id: string;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VehicleProfileScan"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    confirm_vehicle_import_api_v1_vehicles_imports__token__confirm_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VehicleImportConfirmRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VehicleImportResult"];
                 };
             };
             /** @description Validation Error */

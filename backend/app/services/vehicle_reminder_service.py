@@ -36,12 +36,13 @@ def _send_to_recipients(
     sent = 0
     for user_id in recipient_ids:
         try:
-            push_service.send_to_user(db, user_id, messages, url)
+            delivered = push_service.send_to_user(db, user_id, messages, url)
         except Exception:
             db.rollback()
             log.exception("vehicle reminders: push failed for user %s", user_id)
             continue
-        sent += 1
+        if delivered > 0:
+            sent += 1
     return sent
 
 

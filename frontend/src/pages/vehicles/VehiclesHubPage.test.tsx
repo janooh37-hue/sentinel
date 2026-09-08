@@ -5,11 +5,19 @@ import { I18nextProvider } from 'react-i18next'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import { copyTable } from '@/lib/copyTable'
 import { api } from '@/lib/api'
 import type { VehicleListItem, VehicleSiteRead, VehiclesSummary } from '@/lib/api'
 import i18n from '@/lib/i18n'
 
+import { buildVehicleTable, vehicleTableClipboard } from './vehicleTable'
 import { VehiclesHubPage } from './VehiclesHubPage'
+
+const mobileViewport = vi.hoisted(() => ({ value: false }))
+
+vi.mock('@/lib/useIsMobile', () => ({
+  useIsMobile: () => mobileViewport.value,
+}))
 
 vi.mock('@/lib/useCapabilities', () => ({
   useCapabilities: () => ({
@@ -19,6 +27,10 @@ vi.mock('@/lib/useCapabilities', () => ({
       capability === 'vehicles.edit' ||
       capability === 'vehicles.delete',
   }),
+}))
+
+vi.mock('@/lib/copyTable', () => ({
+  copyTable: vi.fn(),
 }))
 
 type ApiModule = { api: typeof api } & Record<string, unknown>
@@ -33,6 +45,8 @@ vi.mock('@/lib/api', async (importOriginal) => {
       listVehicleSites: vi.fn(),
       listVehicles: vi.fn(),
       setVehicleNotifyDays: vi.fn(),
+      archiveVehicle: vi.fn(),
+      restoreVehicle: vi.fn(),
     },
   }
 })
@@ -152,13 +166,29 @@ function renderPage() {
   )
 }
 
+function liveView(): HTMLElement {
+  const view = document.querySelector<HTMLElement>('[data-print-hide]')
+  if (!view) throw new Error('Live vehicle hub not found')
+  return view
+}
+
+function vehicleRowCheckbox(plate: string): HTMLInputElement {
+  const row = within(liveView()).getByText(plate).closest('tr')
+  if (!row) throw new Error(`Vehicle row not found for ${plate}`)
+  return within(row).getByRole('checkbox')
+}
+
 beforeEach(async () => {
   vi.clearAllMocks()
+  mobileViewport.value = false
   await i18n.changeLanguage('en')
+  vi.mocked(copyTable).mockResolvedValue()
   vi.mocked(api.vehiclesSummary).mockResolvedValue(SUMMARY)
   vi.mocked(api.listVehicleSites).mockResolvedValue(SITES)
   vi.mocked(api.listVehicles).mockImplementation(async (params = {}) =>
     VEHICLES.filter((vehicle) => {
+      const wantArchived = params.state === 'archived'
+      if (Boolean(vehicle.archived_at) !== wantArchived) return false
       if (params.site_id != null && vehicle.site_id !== params.site_id) return false
       if (params.expiry === 'attention' && vehicle.expiry_status === 'valid') return false
       if (
@@ -173,10 +203,12 @@ beforeEach(async () => {
     }),
   )
   vi.mocked(api.setVehicleNotifyDays).mockResolvedValue(SUMMARY)
+  vi.mocked(api.archiveVehicle).mockResolvedValue({ ...VEHICLES[0], archived_at: '2026-09-07T00:00:00' } as never)
+  vi.mocked(api.restoreVehicle).mockResolvedValue({ ...VEHICLES[0], archived_at: null } as never)
 })
 
 describe('VehiclesHubPage', () => {
-  it('renders all six service cards with their live summary counts', async () => {
+  it('renders every service card with its live summary count', async () => {
     renderPage()
 
     await screen.findByRole('heading', { name: 'Vehicle Services' })
@@ -187,13 +219,16 @@ describe('VehiclesHubPage', () => {
     const renew = screen.getByRole('button', { name: /Renew License/ })
     const accidents = screen.getByRole('link', { name: /Accident Report/ })
     const maintenance = screen.getByRole('link', { name: /Maintenance/ })
+    const editVehicle = screen.getByRole('link', { name: /Edit Vehicle/ })
     const addVehicle = screen.getByRole('button', { name: /Add Vehicle/ })
     const sites = screen.getByRole('button', { name: /Sites/ })
     expect(within(renew).getByText('2')).toBeInTheDocument()
     expect(within(accidents).getByText('1')).toBeInTheDocument()
     expect(within(maintenance).getByText('2')).toBeInTheDocument()
+    expect(within(editVehicle).getByText('3')).toBeInTheDocument()
     expect(within(addVehicle).getByText('3')).toBeInTheDocument()
     expect(within(sites).getByText('2')).toBeInTheDocument()
+    expect(document.querySelector('a[href="/vehicles/import"]')).toBeInTheDocument()
   })
 
   it('renders shared service artwork without legacy inline icons', async () => {
@@ -201,7 +236,7 @@ describe('VehiclesHubPage', () => {
 
     await screen.findByRole('heading', { name: 'Vehicle Services' })
 
-    expect(container.querySelectorAll('img[src*="service-icons"]').length).toBe(6)
+    expect(container.querySelectorAll('img[src*="service-icons"]').length).toBe(8)
     expect(container.querySelector('svg[viewBox="0 0 64 64"]')).toBeNull()
   })
 
@@ -209,15 +244,17 @@ describe('VehiclesHubPage', () => {
     const user = userEvent.setup()
     renderPage()
 
-    await screen.findByText('14 \\ 58216')
-    expect(screen.getByText('10 \\ 36348')).toBeInTheDocument()
-    expect(screen.getByText('21 \\ 13695')).toBeInTheDocument()
+    await within(liveView()).findByText('14 \\ 58216')
+    expect(within(liveView()).getByText('10 \\ 36348')).toBeInTheDocument()
+    expect(within(liveView()).getByText('21 \\ 13695')).toBeInTheDocument()
 
     await user.click(screen.getByRole('button', { name: 'Al Wathba' }))
 
-    await waitFor(() => expect(screen.queryByText('21 \\ 13695')).not.toBeInTheDocument())
-    expect(screen.getByText('14 \\ 58216')).toBeInTheDocument()
-    expect(screen.getByText('10 \\ 36348')).toBeInTheDocument()
+    await waitFor(() =>
+      expect(within(liveView()).queryByText('21 \\ 13695')).not.toBeInTheDocument(),
+    )
+    expect(within(liveView()).getByText('14 \\ 58216')).toBeInTheDocument()
+    expect(within(liveView()).getByText('10 \\ 36348')).toBeInTheDocument()
     expect(screen.queryByRole('heading', { name: 'Mussafah' })).not.toBeInTheDocument()
   })
 
@@ -225,21 +262,132 @@ describe('VehiclesHubPage', () => {
     const user = userEvent.setup()
     renderPage()
 
-    await screen.findByText('10 \\ 36348')
-    await user.selectOptions(screen.getByRole('combobox'), 'attention')
+    await within(liveView()).findByText('10 \\ 36348')
+    await user.selectOptions(
+      screen.getByRole('combobox', { name: 'License expiry' }),
+      'attention',
+    )
 
-    await waitFor(() => expect(screen.queryByText('10 \\ 36348')).not.toBeInTheDocument())
-    expect(screen.getByText('14 \\ 58216')).toBeInTheDocument()
-    expect(screen.getByText('21 \\ 13695')).toBeInTheDocument()
+    await waitFor(() =>
+      expect(within(liveView()).queryByText('10 \\ 36348')).not.toBeInTheDocument(),
+    )
+    expect(within(liveView()).getByText('14 \\ 58216')).toBeInTheDocument()
+    expect(within(liveView()).getByText('21 \\ 13695')).toBeInTheDocument()
+  })
+
+  it('disables copy with no selection and copies only the selected vehicles once selected', async () => {
+    const user = userEvent.setup()
+    const { container } = renderPage()
+
+    await within(liveView()).findByText('14 \\ 58216')
+    const copyButton = screen.getByRole('button', { name: 'Copy table' })
+    expect(copyButton).toBeDisabled()
+
+    await user.click(vehicleRowCheckbox('14 \\ 58216'))
+    await waitFor(() => expect(copyButton).toBeEnabled())
+    await user.click(copyButton)
+
+    await waitFor(() =>
+      expect(copyTable).toHaveBeenLastCalledWith(
+        vehicleTableClipboard(buildVehicleTable([VEHICLES[0]], 'en', i18n.t)),
+      ),
+    )
+    const printRows = container.querySelectorAll('.print-vehicle-list tbody tr')
+    expect(printRows).toHaveLength(1)
+    expect(printRows[0]).toHaveTextContent('14 \\ 58216')
+  })
+
+  it('clears a selected vehicle when the expiry filter changes', async () => {
+    const user = userEvent.setup()
+    renderPage()
+
+    await within(liveView()).findByText('14 \\ 58216')
+    await user.click(vehicleRowCheckbox('14 \\ 58216'))
+    expect(vehicleRowCheckbox('14 \\ 58216')).toBeChecked()
+
+    await user.selectOptions(
+      screen.getByRole('combobox', { name: 'License expiry' }),
+      'attention',
+    )
+
+    await waitFor(() => expect(vehicleRowCheckbox('14 \\ 58216')).not.toBeChecked())
+  })
+
+  it('keeps selection across language and responsive layout changes', async () => {
+    const user = userEvent.setup()
+    renderPage()
+
+    await within(liveView()).findByText('14 \\ 58216')
+    await user.click(vehicleRowCheckbox('14 \\ 58216'))
+
+    mobileViewport.value = true
+    await i18n.changeLanguage('ar')
+    try {
+      const card = within(liveView()).getByText('14 \\ 58216').closest('article')
+      if (!card) throw new Error('Mobile vehicle card not found')
+      await waitFor(() => expect(within(card).getByRole('checkbox')).toBeChecked())
+    } finally {
+      await i18n.changeLanguage('en')
+    }
+  })
+
+  it('disables print and copy while the fleet is loading', () => {
+    // The frontend targets ES2023, before `Promise.withResolvers`.
+    vi.mocked(api.listVehicles).mockReturnValue(new Promise<VehicleListItem[]>(() => {}))
+    renderPage()
+
+    expect(screen.getByRole('button', { name: 'Print' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Copy table' })).toBeDisabled()
   })
 
   it('renders the fleet ledger heading in Arabic', async () => {
     await i18n.changeLanguage('ar')
     try {
       renderPage()
-      expect(await screen.findByRole('heading', { name: 'سجل المركبات' })).toBeInTheDocument()
+      expect(
+        await within(liveView()).findByRole('heading', { name: 'سجل المركبات' }),
+      ).toBeInTheDocument()
     } finally {
       await i18n.changeLanguage('en')
     }
+  })
+
+  it('shows "Not recorded" for a vehicle with no insurance date', async () => {
+    renderPage()
+
+    await within(liveView()).findByText('14 \\ 58216')
+    expect(screen.getAllByText(/Not recorded/).length).toBeGreaterThan(0)
+  })
+
+  it('switches the ledger to archived vehicles and offers Restore instead of Archive', async () => {
+    const user = userEvent.setup()
+    vi.mocked(api.listVehicles).mockImplementation(async (params = {}) => {
+      if (params.state === 'archived') {
+        return [{ ...VEHICLES[0], id: 104, archived_at: '2026-09-07T00:00:00' }]
+      }
+      return VEHICLES
+    })
+    renderPage()
+
+    await within(liveView()).findByText('14 \\ 58216')
+    await user.selectOptions(screen.getByRole('combobox', { name: 'State' }), 'archived')
+
+    await waitFor(async () => expect((await screen.findAllByText('Archived')).length).toBeGreaterThan(1))
+    expect(screen.getAllByRole('button', { name: /Restore vehicle/ }).length).toBeGreaterThan(0)
+    expect(screen.queryByRole('button', { name: /Archive vehicle/ })).not.toBeInTheDocument()
+  })
+
+  it('archives a vehicle after confirming, then refetches the ledger', async () => {
+    const user = userEvent.setup()
+    renderPage()
+
+    await within(liveView()).findByText('14 \\ 58216')
+    const [archiveButton] = screen.getAllByRole('button', { name: /Archive vehicle/ })
+    await user.click(archiveButton)
+
+    const dialog = await screen.findByRole('dialog')
+    await user.click(within(dialog).getByRole('button', { name: 'Archive vehicle' }))
+
+    await waitFor(() => expect(api.archiveVehicle).toHaveBeenCalledWith(101))
   })
 })

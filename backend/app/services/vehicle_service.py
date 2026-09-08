@@ -306,8 +306,9 @@ def to_read(
 
 
 def site_read(row: VehicleSite) -> VehicleSiteRead:
+    active_count = sum(1 for vehicle in row.vehicles if vehicle.archived_at is None)
     return VehicleSiteRead.model_validate(row).model_copy(
-        update={"vehicle_count": len(row.vehicles)}
+        update={"vehicle_count": active_count}
     )
 
 
@@ -441,8 +442,8 @@ def archive_vehicle(db: Session, vehicle_id: int, *, actor: str | None = None) -
         return row
     row.archived_at = _utcnow()
     row.updated_at = _utcnow()
+    _add_audit(db, "vehicle.archived", row.id, actor, {"plate_number": row.plate_number})
     db.commit()
-    _audit(db, "vehicle.archived", row.id, actor, {"plate_number": row.plate_number})
     return get_vehicle(db, row.id)
 
 
@@ -458,8 +459,8 @@ def restore_vehicle(db: Session, vehicle_id: int, *, actor: str | None = None) -
         )
     row.archived_at = None
     row.updated_at = _utcnow()
+    _add_audit(db, "vehicle.restored", row.id, actor, {"plate_number": row.plate_number})
     db.commit()
-    _audit(db, "vehicle.restored", row.id, actor, {"plate_number": row.plate_number})
     return get_vehicle(db, row.id)
 
 
@@ -536,7 +537,8 @@ def _owned_file(
     return row
 
 
-def create_vehicle(db: Session, payload: VehicleCreate, *, actor: str | None = None) -> Vehicle:
+def _create_vehicle_record(db: Session, payload: VehicleCreate) -> Vehicle:
+    """Validate, add, and flush a vehicle without owning the transaction."""
     if _plate_exists(db, plate_code=payload.plate_code, plate_number=payload.plate_number):
         _raise_plate_exists(payload.plate_code, payload.plate_number)
 
@@ -585,14 +587,19 @@ def create_vehicle(db: Session, payload: VehicleCreate, *, actor: str | None = N
         notes_en=payload.notes_en,
     )
     db.add(row)
+    db.flush()
+    if payload.photo_file_id is not None:
+        _owned_file(db, row.id, payload.photo_file_id, kind="photo")
+        row.photo_file_id = payload.photo_file_id
+    if payload.license_file_id is not None:
+        _owned_file(db, row.id, payload.license_file_id, kind="license")
+        row.license_file_id = payload.license_file_id
+    return row
+
+
+def create_vehicle(db: Session, payload: VehicleCreate, *, actor: str | None = None) -> Vehicle:
     try:
-        db.flush()
-        if payload.photo_file_id is not None:
-            _owned_file(db, row.id, payload.photo_file_id, kind="photo")
-            row.photo_file_id = payload.photo_file_id
-        if payload.license_file_id is not None:
-            _owned_file(db, row.id, payload.license_file_id, kind="license")
-            row.license_file_id = payload.license_file_id
+        row = _create_vehicle_record(db, payload)
         db.commit()
     except IntegrityError:
         db.rollback()
@@ -605,9 +612,9 @@ def create_vehicle(db: Session, payload: VehicleCreate, *, actor: str | None = N
         _audit(
             db,
             "site.created",
-            site.id,
+            row.site_id,
             actor,
-            {"name_ar": site.name_ar, "name_en": site.name_en},
+            {"name_ar": payload.new_site.name_ar, "name_en": payload.new_site.name_en},
             entity_type="vehicle_site",
         )
     _audit(
@@ -624,16 +631,9 @@ def create_vehicle(db: Session, payload: VehicleCreate, *, actor: str | None = N
     return get_vehicle(db, row.id)
 
 
-def update_vehicle(
-    db: Session,
-    vehicle_id: int,
-    payload: VehicleUpdate,
-    *,
-    actor: str | None = None,
-) -> Vehicle:
-    row = require_active_vehicle(db, vehicle_id)
+def _update_vehicle_record(db: Session, row: Vehicle, payload: VehicleUpdate) -> None:
+    """Validate and mutate an existing vehicle without owning the transaction."""
     data = payload.model_dump(exclude_unset=True)
-    audit_payload = payload.model_dump(mode="json", exclude_unset=True)
     required_fields = {
         "plate_number",
         "traffic_code",
@@ -685,28 +685,68 @@ def update_vehicle(
         _raise_plate_exists(next_code, next_number)
 
     if "photo_file_id" in data and data["photo_file_id"] is not None:
-        _owned_file(db, row.id, data["photo_file_id"], kind="photo")
+        new_photo = _owned_file(db, row.id, data["photo_file_id"])
+        if new_photo.kind not in {"photo", "gallery"}:
+            raise ValidationFailedError(
+                "VEHICLE_FILE_KIND_MISMATCH",
+                f"File {new_photo.id} is not a photo file.",
+                file_id=new_photo.id,
+                expected_kind="photo",
+                actual_kind=new_photo.kind,
+            )
+        if new_photo.id != row.photo_file_id:
+            if row.photo_file_id is not None:
+                previous = db.get(VehicleFile, row.photo_file_id)
+                if previous is not None and previous.kind == "photo":
+                    previous.kind = "gallery"
+            new_photo.kind = "photo"
     if "license_file_id" in data and data["license_file_id"] is not None:
         _owned_file(db, row.id, data["license_file_id"], kind="license")
 
+    license_dates_changed = (
+        "license_start" in data and data["license_start"] != row.license_start
+    ) or ("license_expiry" in data and data["license_expiry"] != row.license_expiry)
+    insurance_changed = (
+        "insurance_expiry" in data and data["insurance_expiry"] != row.insurance_expiry
+    )
+
     for field, value in data.items():
         setattr(row, field, value)
-    if "license_start" in data or "license_expiry" in data:
+    if license_dates_changed:
         row.expiry_reminder_sent_for = None
-    if "insurance_expiry" in data:
+    if insurance_changed:
         row.insurance_reminder_sent_for = None
     row.updated_at = _utcnow()
+
+
+def update_vehicle(
+    db: Session,
+    vehicle_id: int,
+    payload: VehicleUpdate,
+    *,
+    actor: str | None = None,
+) -> Vehicle:
+    row = require_active_vehicle(db, vehicle_id)
+    audit_payload = payload.model_dump(mode="json", exclude_unset=True)
     try:
+        _update_vehicle_record(db, row, payload)
         db.commit()
     except IntegrityError:
         db.rollback()
-        if _plate_exists(
+        next_code = payload.plate_code if "plate_code" in payload.model_fields_set else row.plate_code
+        next_number = (
+            payload.plate_number if "plate_number" in payload.model_fields_set else row.plate_number
+        )
+        if next_number is not None and _plate_exists(
             db,
             plate_code=next_code,
             plate_number=next_number,
             excluding_vehicle_id=row.id,
         ):
             _raise_plate_exists(next_code, next_number)
+        raise
+    except Exception:
+        db.rollback()
         raise
     _audit(db, "vehicle.updated", row.id, actor, audit_payload)
     return get_vehicle(db, row.id)
@@ -1274,7 +1314,7 @@ def _safe_filename(filename: str) -> str:
     return name or "vehicle-file"
 
 
-def store_file(
+def _store_file_record(
     db: Session,
     vehicle_id: int,
     *,
@@ -1284,7 +1324,8 @@ def store_file(
     media_type: str,
     label_ar: str | None = None,
     label_en: str | None = None,
-) -> VehicleFile:
+) -> tuple[VehicleFile, Path]:
+    """Write and flush a vehicle file without owning the transaction."""
     require_active_vehicle(db, vehicle_id)
     if kind not in _FILE_KINDS:
         raise ValidationFailedError(
@@ -1326,25 +1367,56 @@ def store_file(
 
     data_dir = get_settings().data_dir.resolve()
     destination_dir = data_dir / "vehicle_files" / str(vehicle_id) / kind
-    destination_dir.mkdir(parents=True, exist_ok=True)
     destination = destination_dir / f"{uuid.uuid4().hex}-{safe_name}"
-    destination.write_bytes(data)
-    row = VehicleFile(
-        vehicle_id=vehicle_id,
-        kind=kind,
-        label_ar=label_ar,
-        label_en=label_en,
-        path=destination.relative_to(data_dir).as_posix(),
-        original_name=safe_name,
-        media_type=normalized_media,
-        size=len(data),
-    )
-    db.add(row)
     try:
+        destination_dir.mkdir(parents=True, exist_ok=True)
+        destination.write_bytes(data)
+        row = VehicleFile(
+            vehicle_id=vehicle_id,
+            kind=kind,
+            label_ar=label_ar,
+            label_en=label_en,
+            path=destination.relative_to(data_dir).as_posix(),
+            original_name=safe_name,
+            media_type=normalized_media,
+            size=len(data),
+        )
+        db.add(row)
+        db.flush()
+    except Exception:
+        destination.unlink(missing_ok=True)
+        raise
+    return row, destination
+
+
+def store_file(
+    db: Session,
+    vehicle_id: int,
+    *,
+    kind: str,
+    filename: str,
+    data: bytes,
+    media_type: str,
+    label_ar: str | None = None,
+    label_en: str | None = None,
+) -> VehicleFile:
+    path: Path | None = None
+    try:
+        row, path = _store_file_record(
+            db,
+            vehicle_id,
+            kind=kind,
+            filename=filename,
+            data=data,
+            media_type=media_type,
+            label_ar=label_ar,
+            label_en=label_en,
+        )
         db.commit()
     except Exception:
         db.rollback()
-        destination.unlink(missing_ok=True)
+        if path is not None:
+            path.unlink(missing_ok=True)
         raise
     db.refresh(row)
     return row
@@ -1400,6 +1472,27 @@ def delete_file(
     _audit(db, "file.deleted", vehicle_id, actor, {"file_id": file_id})
 
 
+def _add_audit(
+    db: Session,
+    action: str,
+    vehicle_id: int,
+    actor: str | None,
+    payload: dict[str, Any],
+    *,
+    entity_type: str = "vehicle",
+) -> None:
+    """Add an audit entry without owning the caller's transaction."""
+    db.add(
+        AuditLog(
+            actor=actor,
+            action=action,
+            entity_type=entity_type,
+            entity_id=str(vehicle_id),
+            payload=json.dumps(payload),
+        )
+    )
+
+
 def _audit(
     db: Session,
     action: str,
@@ -1409,12 +1502,12 @@ def _audit(
     *,
     entity_type: str = "vehicle",
 ) -> None:
-    entry = AuditLog(
-        actor=actor,
-        action=action,
+    _add_audit(
+        db,
+        action,
+        vehicle_id,
+        actor,
+        payload,
         entity_type=entity_type,
-        entity_id=str(vehicle_id),
-        payload=json.dumps(payload),
     )
-    db.add(entry)
     db.commit()
