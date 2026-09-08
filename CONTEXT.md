@@ -83,6 +83,40 @@ A contiguous run of recorded absence dates for one employee; any missing calenda
 date splits the run into separate episodes.
 _Avoid_: Leave, attendance case
 
+
+### Inmate conduct
+
+**Inmate violation occurrence**:
+One inmate line on one Inmate Conduct Violations Record. Every occurrence counts
+independently, even when the same inmate appears more than once on one Record or
+across several Records.
+_Avoid_: Inmate when counting violations, deduplicated inmate
+
+**Violation month**:
+The calendar month containing the occurrence date recorded on the Inmate Conduct
+Violations Record. Every inmate violation occurrence on that Record belongs to
+that month; filing time does not move it to another month.
+_Avoid_: Filing month, creation month
+
+**Violation narrative**:
+The report-level description of the conduct violation, shared by every inmate
+violation occurrence on the same Record.
+_Avoid_: Per-inmate details
+
+**Monthly violation register entry**:
+The monthly view of one inmate violation occurrence. It retains the occurrence's
+full source facts even when only a subset appears as columns. While the month is
+open, only the latest version of an approved, non-deleted, non-voided Record
+contributes entries. Closing the month freezes each entry's facts and order;
+every occurrence must have an occurrence time before that can happen.
+_Avoid_: Record, inmate summary
+
+**Register serial number**:
+The one-based chronological position of an inmate violation occurrence within
+its Violation month. It is recalculated while the month is open and frozen when
+the month closes; it is not the occurrence's identity.
+_Avoid_: Row ID, inmate number
+
 ### Access and organization
 
 **Capability**:
