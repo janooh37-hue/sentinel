@@ -113,7 +113,10 @@ const VEHICLES: VehicleListItem[] = [
     fines_count: 3,
     fines_amount: 1250,
     black_points: 4,
-    photo_url: '/api/v1/vehicles/101/files/1',
+    photo_asset_id: 1,
+    photo_url: '/api/v1/vehicles/photo-library/1/image/preview',
+    photo_thumbnail_url: '/api/v1/vehicles/photo-library/1/image/thumbnail',
+    photo_full_url: '/api/v1/vehicles/photo-library/1/image/full',
   },
   {
     id: 102,
@@ -134,7 +137,10 @@ const VEHICLES: VehicleListItem[] = [
     fines_count: 1,
     fines_amount: 300,
     black_points: 0,
+    photo_asset_id: null,
     photo_url: null,
+    photo_thumbnail_url: null,
+    photo_full_url: null,
   },
   {
     id: 103,
@@ -155,7 +161,10 @@ const VEHICLES: VehicleListItem[] = [
     fines_count: 3,
     fines_amount: 1850,
     black_points: 7,
+    photo_asset_id: null,
     photo_url: null,
+    photo_thumbnail_url: null,
+    photo_full_url: null,
   },
 ]
 
@@ -228,6 +237,16 @@ beforeEach(async () => {
 })
 
 describe('VehiclesHubPage', () => {
+  it('uses the thumbnail variant in the fleet ledger', async () => {
+    renderPage()
+
+    const photos = await screen.findAllByRole('img', { name: 'Main photo' })
+    expect(photos[0]).toHaveAttribute(
+      'src',
+      '/api/v1/vehicles/photo-library/1/image/thumbnail',
+    )
+  })
+
   it('renders metric service cards and keeps import as a count-free secondary action', async () => {
     renderPage()
 

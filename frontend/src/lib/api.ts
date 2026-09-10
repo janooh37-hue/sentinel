@@ -289,6 +289,7 @@ export type VehicleSiteRead = components['schemas']['VehicleSiteRead']
 export type VehicleSiteCreate = components['schemas']['VehicleSiteCreate']
 export type VehicleSiteUpdate = components['schemas']['VehicleSiteUpdate']
 export type VehicleFileRead = components['schemas']['VehicleFileRead']
+export type VehiclePhotoRead = components['schemas']['VehiclePhotoRead']
 export type VehicleFineCreate = components['schemas']['VehicleFineCreate']
 export type VehicleFineUpdate = components['schemas']['VehicleFineUpdate']
 export type VehicleFineRead = components['schemas']['VehicleFineRead']
@@ -1436,6 +1437,22 @@ export const api = {
   getVehicle: (id: number) => request<VehicleRead>('GET', `/vehicles/${id}`),
   updateVehicle: (id: number, body: VehicleUpdate) =>
     request<VehicleRead>('PATCH', `/vehicles/${id}`, body),
+  listVehiclePhotos: () => request<VehiclePhotoRead[]>('GET', '/vehicles/photo-library'),
+  uploadVehiclePhoto: (
+    file: File,
+    labels: { label_ar: string; label_en: string },
+  ): Promise<VehiclePhotoRead> => {
+    const form = new FormData()
+    form.append('file', file)
+    form.append('label_ar', labels.label_ar)
+    form.append('label_en', labels.label_en)
+    return multipart<VehiclePhotoRead>('/vehicles/photo-library', form)
+  },
+  promoteVehiclePhoto: (vehicleId: number, fileId: number) =>
+    request<VehiclePhotoRead>(
+      'POST',
+      `/vehicles/${vehicleId}/files/${fileId}/photo-asset`,
+    ),
   archiveVehicle: (id: number) => request<VehicleRead>('POST', `/vehicles/${id}/archive`),
   restoreVehicle: (id: number) => request<VehicleRead>('POST', `/vehicles/${id}/restore`),
   /** OCR-extract vehicle profile fields from a licence image/PDF, reviewed before applying. */

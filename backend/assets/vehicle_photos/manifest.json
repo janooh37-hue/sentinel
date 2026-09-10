@@ -1,0 +1,27 @@
+[
+  {
+    "filename": "toyota-hiace.webp",
+    "label_ar": "تويوتا هايس",
+    "label_en": "Toyota Hiace"
+  },
+  {
+    "filename": "toyota-hilux.webp",
+    "label_ar": "تويوتا هايلكس",
+    "label_en": "Toyota Hilux"
+  },
+  {
+    "filename": "toyota-coaster.webp",
+    "label_ar": "تويوتا كوستر",
+    "label_en": "Toyota Coaster"
+  },
+  {
+    "filename": "ford-everest.webp",
+    "label_ar": "فورد إيفرست",
+    "label_en": "Ford Everest"
+  },
+  {
+    "filename": "toyota-fortuner.webp",
+    "label_ar": "تويوتا فورتشنر",
+    "label_en": "Toyota Fortuner"
+  }
+]

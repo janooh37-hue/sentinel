@@ -977,7 +977,7 @@ function VehiclePhoto({
 }): React.JSX.Element {
   const { t } = useTranslation()
   const box = cn('h-[38px] w-[54px] shrink-0 rounded-lg border border-border', className)
-  if (!vehicle.photo_url) {
+  if (!vehicle.photo_thumbnail_url) {
     return (
       <span aria-hidden className={cn(box, 'grid place-items-center border-dashed bg-surface-raised')}>
         <Car className="h-4 w-4 text-faint" strokeWidth={1.6} />
@@ -986,10 +986,10 @@ function VehiclePhoto({
   }
   return (
     <img
-      src={vehicle.photo_url}
+      src={vehicle.photo_thumbnail_url}
       alt={t('vehicles.mainPhoto')}
       loading="lazy"
-      className={cn(box, 'object-cover')}
+      className={cn(box, 'bg-surface-raised object-contain')}
     />
   )
 }

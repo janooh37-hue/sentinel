@@ -312,3 +312,215 @@ def test_0083_downgrade_keeps_referenced_category_and_removes_vehicle_tables(
             text("SELECT id FROM book_categories WHERE id IN ('VF', 'VA') ORDER BY id")
         ).scalars()
         assert list(restored_categories) == ["VA", "VF"]
+
+
+def test_0087_preserves_legacy_assignments_and_downgrades_live_selection_safely(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    database = tmp_path / "vehicle-photo-migration.db"
+    data_dir = tmp_path / "data"
+    data_dir.mkdir()
+    config = _config(database)
+    command.upgrade(config, "0086_merge_0085_heads")
+    engine = create_engine(config.get_main_option("sqlalchemy.url"))
+    original_relative = "vehicle_files/1/photo/legacy.webp"
+    original_path = data_dir / original_relative
+    original_path.parent.mkdir(parents=True)
+    original_path.write_bytes(b"legacy-original")
+    try:
+        with engine.begin() as connection:
+            connection.execute(
+                text(
+                    "INSERT INTO vehicle_sites (name_ar, name_en, created_at) "
+                    "VALUES ('الموقع', 'Site', '2026-01-01 00:00:00')"
+                )
+            )
+            for index, archived_at in enumerate((None, "2026-02-01 00:00:00", None, None), start=1):
+                connection.execute(
+                    text(
+                        """
+                        INSERT INTO vehicles (
+                            plate_number,
+                            traffic_code,
+                            type_ar,
+                            type_en,
+                            class_ar,
+                            class_en,
+                            site_id,
+                            license_start,
+                            license_expiry,
+                            archived_at,
+                            created_at
+                        )
+                        VALUES (
+                            :plate_number,
+                            :traffic_code,
+                            'مركبة',
+                            'Vehicle',
+                            'خفيفة',
+                            'Light',
+                            1,
+                            '2026-01-01',
+                            '2026-12-31',
+                            :archived_at,
+                            '2026-01-01 00:00:00'
+                        )
+                        """
+                    ),
+                    {
+                        "plate_number": f"70{index:03d}",
+                        "traffic_code": f"11800216{index:02d}",
+                        "archived_at": archived_at,
+                    },
+                )
+            connection.execute(
+                text(
+                    """
+                    INSERT INTO vehicle_files (
+                        id,
+                        vehicle_id,
+                        kind,
+                        path,
+                        original_name,
+                        media_type,
+                        size,
+                        created_at
+                    )
+                    VALUES (
+                        1,
+                        1,
+                        'photo',
+                        :path,
+                        'legacy.webp',
+                        'image/webp',
+                        15,
+                        '2026-01-01 00:00:00'
+                    )
+                    """
+                ),
+                {"path": original_relative},
+            )
+            connection.execute(text("UPDATE vehicles SET photo_file_id = 1 WHERE id IN (1, 2)"))
+            connection.execute(text("UPDATE vehicles SET photo_file_id = 999 WHERE id = 3"))
+
+        command.upgrade(config, "0087_vehicle_photo_library")
+        with engine.connect() as connection:
+            columns = _vehicle_columns(connection)
+            assert "photo_asset_id" in columns
+            assert "photo_file_id" not in columns
+            pointers = list(
+                connection.execute(
+                    text("SELECT photo_asset_id FROM vehicles ORDER BY id")
+                ).scalars()
+            )
+            assert pointers[0] == pointers[1]
+            assert pointers[0] is not None
+            assert pointers[2] is not None and pointers[2] != pointers[0]
+            assert pointers[3] is None
+            assignments = connection.execute(
+                text(
+                    "SELECT vehicle_id, photo_file_id FROM "
+                    "vehicle_photo_legacy_assignments ORDER BY vehicle_id"
+                )
+            ).all()
+            assert [tuple(row) for row in assignments] == [(1, 1), (2, 1), (3, 999)]
+
+        command.downgrade(config, "0086_merge_0085_heads")
+        with engine.connect() as connection:
+            assert list(
+                connection.execute(text("SELECT photo_file_id FROM vehicles ORDER BY id")).scalars()
+            ) == [1, 1, 999, None]
+            assert original_path.read_bytes() == b"legacy-original"
+
+        command.upgrade(config, "0087_vehicle_photo_library")
+        shared_relative = "vehicle_photos/new/full.webp"
+        shared_path = data_dir / shared_relative
+        shared_path.parent.mkdir(parents=True)
+        shared_path.write_bytes(b"new-shared-photo")
+        with engine.begin() as connection:
+            inserted = connection.execute(
+                text(
+                    """
+                    INSERT INTO vehicle_photo_assets (
+                        label_ar,
+                        label_en,
+                        original_name,
+                        content_hash,
+                        width,
+                        height,
+                        thumbnail_path,
+                        preview_path,
+                        full_path,
+                        created_at
+                    )
+                    VALUES (
+                        'مشترك',
+                        'Shared',
+                        'shared.webp',
+                        :content_hash,
+                        100,
+                        80,
+                        :path,
+                        :path,
+                        :path,
+                        '2026-09-10 00:00:00'
+                    )
+                    """
+                ),
+                {"content_hash": "a" * 64, "path": shared_relative},
+            )
+            assert inserted.lastrowid is not None
+            new_asset_id = int(inserted.lastrowid)
+            connection.execute(text("UPDATE vehicles SET photo_asset_id = NULL WHERE id = 1"))
+            connection.execute(
+                text("UPDATE vehicles SET photo_asset_id = :asset_id WHERE id IN (2, 4)"),
+                {"asset_id": new_asset_id},
+            )
+
+        from app.config import get_settings
+
+        monkeypatch.setattr(get_settings(), "data_dir", data_dir)
+        command.downgrade(config, "0086_merge_0085_heads")
+        with engine.connect() as connection:
+            downgraded = connection.execute(
+                text(
+                    """
+                    SELECT vehicle.id, vehicle.photo_file_id, file.path
+                    FROM vehicles AS vehicle
+                    LEFT JOIN vehicle_files AS file ON file.id = vehicle.photo_file_id
+                    ORDER BY vehicle.id
+                    """
+                )
+            ).all()
+            assert tuple(downgraded[0]) == (1, None, None)
+            assert tuple(downgraded[2]) == (3, 999, None)
+            assert downgraded[1][1] not in {None, 1}
+            assert downgraded[3][1] not in {None, 1}
+            copied_paths = {
+                str(downgraded[1][2]),
+                str(downgraded[3][2]),
+            }
+            assert len(copied_paths) == 2
+            assert shared_relative not in copied_paths
+            assert all(
+                (data_dir / path).read_bytes() == b"new-shared-photo" for path in copied_paths
+            )
+            assert original_path.read_bytes() == b"legacy-original"
+
+        command.upgrade(config, "head")
+        with engine.connect() as connection:
+            assert connection.scalar(text("SELECT version_num FROM alembic_version")) == (
+                "0087_vehicle_photo_library"
+            )
+            restored = list(
+                connection.execute(
+                    text("SELECT photo_asset_id FROM vehicles ORDER BY id")
+                ).scalars()
+            )
+            assert restored[0] is None
+            assert restored[1] is not None
+            assert restored[2] is not None
+            assert restored[3] is not None
+    finally:
+        engine.dispose()

@@ -22,6 +22,7 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.api.errors import AppError
 from app.config import get_settings
+from app.core.vehicle_photos import process_photo
 from app.core.vehicle_xlsx import (
     MAX_COMPRESSED_BYTES,
     ParsedVehicleWorkbook,
@@ -49,7 +50,7 @@ from app.schemas.vehicle import (
     VehicleProfileScan,
     VehicleUpdate,
 )
-from app.services import vehicle_profile_scan_service, vehicle_service
+from app.services import vehicle_photo_service, vehicle_profile_scan_service, vehicle_service
 
 log = logging.getLogger(__name__)
 
@@ -193,7 +194,10 @@ def _purge_stale(root: Path, *, now: datetime) -> None:
 
 def _owner_matches(metadata: Mapping[str, object], owner: User) -> bool:
     try:
-        return int(str(metadata["owner_user_id"])) == owner.id and str(metadata["owner_email"]) == owner.email
+        return (
+            int(str(metadata["owner_user_id"])) == owner.id
+            and str(metadata["owner_email"]) == owner.email
+        )
     except (KeyError, TypeError, ValueError):
         return False
 
@@ -400,9 +404,7 @@ def _image_metadata(inspection: Mapping[str, Any], image_id: str) -> dict[str, A
     for value in inspection.get("images", []):
         if isinstance(value, dict) and value.get("image_id") == image_id:
             return value
-    raise VehicleImportError(
-        "VEHICLE_IMPORT_TOKEN_NOT_FOUND", "Staged vehicle image not found."
-    )
+    raise VehicleImportError("VEHICLE_IMPORT_TOKEN_NOT_FOUND", "Staged vehicle image not found.")
 
 
 def _staged_image_path(stage: Path, image: Mapping[str, Any]) -> Path:
@@ -473,7 +475,9 @@ def scan_image(token: str, image_id: str, *, owner: User) -> VehicleProfileScan:
     cache = _scan_cache_path(stage, image)
     if cache.is_file():
         return VehicleProfileScan.model_validate(_json(cache))
-    result = vehicle_profile_scan_service.scan_vehicle_profile(_staged_image_path(stage, image).read_bytes())
+    result = vehicle_profile_scan_service.scan_vehicle_profile(
+        _staged_image_path(stage, image).read_bytes()
+    )
     if "OCR_UNAVAILABLE" not in result.warnings:
         _write_json(cache, result.model_dump(mode="json"))
     return result
@@ -502,7 +506,11 @@ def _file_url(vehicle_id: int, file_id: int | None) -> str | None:
 
 
 def _vehicle_stmt() -> Any:
-    return select(Vehicle).options(selectinload(Vehicle.files), selectinload(Vehicle.site))
+    return select(Vehicle).options(
+        selectinload(Vehicle.files),
+        selectinload(Vehicle.photo_asset),
+        selectinload(Vehicle.site),
+    )
 
 
 def _files_snapshot(vehicle: Vehicle) -> list[dict[str, object]]:
@@ -532,7 +540,7 @@ def _vehicle_fingerprint(vehicle: Vehicle) -> dict[str, object]:
             **_vehicle_values(vehicle),
             "archived_at": _scalar(vehicle.archived_at),
             "updated_at": _scalar(vehicle.updated_at),
-            "photo_file_id": vehicle.photo_file_id,
+            "photo_asset_id": vehicle.photo_asset_id,
             "license_file_id": vehicle.license_file_id,
             "files": _files_snapshot(vehicle),
         },
@@ -597,12 +605,7 @@ def _duplicates(values_by_row: Mapping[str, Mapping[str, object]]) -> set[str]:
         code = values.get("plate_code")
         if isinstance(number, str) and (code is None or isinstance(code, str)):
             rows_by_plate.setdefault((code, number), []).append(row_id)
-    return {
-        row_id
-        for row_ids in rows_by_plate.values()
-        if len(row_ids) > 1
-        for row_id in row_ids
-    }
+    return {row_id for row_ids in rows_by_plate.values() if len(row_ids) > 1 for row_id in row_ids}
 
 
 def _validate_request_shape(
@@ -624,9 +627,7 @@ def _validate_request_shape(
         )
 
     image_ids = {
-        str(image["image_id"])
-        for image in inspection.get("images", [])
-        if isinstance(image, dict)
+        str(image["image_id"]) for image in inspection.get("images", []) if isinstance(image, dict)
     }
     excluded = set(payload.excluded_image_ids)
     if len(excluded) != len(payload.excluded_image_ids) or not excluded.issubset(image_ids):
@@ -635,7 +636,9 @@ def _validate_request_shape(
         )
     assigned: dict[str, str] = {}
     for row in payload.rows:
-        if len(set(row.image_ids)) != len(row.image_ids) or not set(row.image_ids).issubset(image_ids):
+        if len(set(row.image_ids)) != len(row.image_ids) or not set(row.image_ids).issubset(
+            image_ids
+        ):
             raise VehicleImportError(
                 "VEHICLE_IMPORT_INVALID_FIELD", "Row image ids must be unique staged images."
             )
@@ -712,7 +715,9 @@ def _choice_plan(
     draft: VehicleImportPreviewDraftRow,
     images: list[tuple[dict[str, Any], str]],
     existing: Vehicle | None,
-) -> tuple[list[dict[str, object]], list[VehicleImportIssue], bool, bool, list[VehicleImportChange]]:
+) -> tuple[
+    list[dict[str, object]], list[VehicleImportIssue], bool, bool, list[VehicleImportChange]
+]:
     errors: list[VehicleImportIssue] = []
     changes: list[VehicleImportChange] = []
     photo_ids = [str(image["image_id"]) for image, role in images if role == "photo"]
@@ -729,7 +734,7 @@ def _choice_plan(
         errors.append(
             _issue(
                 row_id,
-                "photo_file_id",
+                "photo_asset_id",
                 "VEHICLE_IMPORT_PHOTO_CHOICE_REQUIRED",
                 "Choose whether to keep the current photo or use an imported photo.",
             )
@@ -747,7 +752,7 @@ def _choice_plan(
         errors.append(
             _issue(
                 row_id,
-                "photo_file_id",
+                "photo_asset_id",
                 "VEHICLE_IMPORT_INVALID_FIELD",
                 "The primary image must be a photo assigned to this row.",
             )
@@ -777,6 +782,9 @@ def _choice_plan(
                 "image_id": image["image_id"],
                 "role": role,
                 "sha256": digest,
+                "photo_content_hash": (
+                    image.get("photo_content_hash") if role == "photo" else None
+                ),
                 "dedup_file_id": duplicate.id if duplicate is not None else None,
                 "dedup_image_id": duplicate_image_id,
                 "is_primary": (
@@ -795,21 +803,30 @@ def _choice_plan(
             imported_hashes[(role, digest)] = str(image["image_id"])
 
     if existing is not None and not photo_required and draft.photo_action == "use_imported":
-        target = next((item for item in plan if item["is_primary"]), None)
-        after = target["dedup_file_id"] if target and target["dedup_file_id"] else draft.primary_image_id
-        if existing.photo_file_id != after:
+        primary_photo = next((item for item in plan if item["is_primary"]), None)
+        same_asset = (
+            primary_photo is not None
+            and existing.photo_asset is not None
+            and existing.photo_asset.content_hash == primary_photo["photo_content_hash"]
+        )
+        photo_after = existing.photo_asset_id if same_asset else draft.primary_image_id
+        if existing.photo_asset_id != photo_after:
             changes.append(
                 VehicleImportChange(
-                    field="photo_file_id", before=existing.photo_file_id, after=after
+                    field="photo_asset_id", before=existing.photo_asset_id, after=photo_after
                 )
             )
     if existing is not None and not license_required and draft.license_action == "use_imported":
-        target = next((item for item in plan if item["is_license_primary"]), None)
-        after = target["dedup_file_id"] if target and target["dedup_file_id"] else draft.license_image_id
-        if existing.license_file_id != after:
+        primary_license = next((item for item in plan if item["is_license_primary"]), None)
+        license_after = (
+            primary_license["dedup_file_id"]
+            if primary_license and primary_license["dedup_file_id"]
+            else draft.license_image_id
+        )
+        if existing.license_file_id != license_after:
             changes.append(
                 VehicleImportChange(
-                    field="license_file_id", before=existing.license_file_id, after=after
+                    field="license_file_id", before=existing.license_file_id, after=license_after
                 )
             )
     return plan, errors, photo_required, license_required, changes
@@ -912,7 +929,12 @@ def preview(
             if role not in {"photo", "license"}:
                 missing_roles.append(image_id)
                 continue
-            selected_images.append((image, str(role)))
+            selected = dict(image)
+            if role == "photo":
+                selected["photo_content_hash"] = process_photo(
+                    _staged_image_path(stage, image).read_bytes()
+                ).content_hash
+            selected_images.append((selected, str(role)))
         if missing_roles:
             errors.extend(
                 _issue(
@@ -1034,14 +1056,17 @@ def preview(
         elif existing is None:
             action = "create"
         elif changes or any(
-            item["dedup_file_id"] is None and item["dedup_image_id"] is None
-            for item in image_plan
+            item["dedup_file_id"] is None and item["dedup_image_id"] is None for item in image_plan
         ):
             action = "update"
         else:
             action = "unchanged"
 
-        current_photo = _file_url(existing.id, existing.photo_file_id) if existing is not None else None
+        current_photo = (
+            vehicle_photo_service.asset_url(existing.photo_asset, "preview")
+            if existing is not None and existing.photo_asset is not None
+            else None
+        )
         current_license = (
             _file_url(existing.id, existing.license_file_id) if existing is not None else None
         )
@@ -1171,7 +1196,11 @@ def _live_fingerprint(db: Session, plan: Mapping[str, Any]) -> dict[str, object]
     if not isinstance(expected, dict):
         return None
     if response.vehicle_id is not None:
-        vehicle = db.scalars(_vehicle_stmt().where(Vehicle.id == response.vehicle_id)).unique().one_or_none()
+        vehicle = (
+            db.scalars(_vehicle_stmt().where(Vehicle.id == response.vehicle_id))
+            .unique()
+            .one_or_none()
+        )
         return _vehicle_fingerprint(vehicle) if vehicle is not None else None
     plate_code = response.values.get("plate_code")
     plate_number = response.values.get("plate_number")
@@ -1182,7 +1211,10 @@ def _live_fingerprint(db: Session, plan: Mapping[str, Any]) -> dict[str, object]
         if plate_code is None
         else Vehicle.plate_code == str(plate_code)
     )
-    if db.scalar(select(Vehicle.id).where(code_clause, Vehicle.plate_number == plate_number)) is not None:
+    if (
+        db.scalar(select(Vehicle.id).where(code_clause, Vehicle.plate_number == plate_number))
+        is not None
+    ):
         return {"vehicle": "appeared"}
     site_id = response.values.get("site_id")
     site = db.get(VehicleSite, site_id) if isinstance(site_id, int) else None
@@ -1211,9 +1243,14 @@ def _payload_values(values: Mapping[str, str | int | None]) -> dict[str, object]
     return {field: values.get(field) for field in _PROFILE_FIELDS}
 
 
-def _promote_photo(file: VehicleFile) -> None:
-    if file.kind == "gallery":
-        file.kind = "photo"
+def _cleanup_created_paths(paths: Iterable[Path]) -> None:
+    for path in reversed(list(paths)):
+        if path.is_dir():
+            shutil.rmtree(path, ignore_errors=True)
+            continue
+        path.unlink(missing_ok=True)
+        with suppress(OSError):
+            path.parent.rmdir()
 
 
 def confirm(
@@ -1267,9 +1304,11 @@ def confirm(
                     raise VehicleImportError(
                         "VEHICLE_IMPORT_STALE", "The preview vehicle match is no longer valid."
                     )
-                matched = db.scalars(
-                    _vehicle_stmt().where(Vehicle.id == response.vehicle_id)
-                ).unique().one_or_none()
+                matched = (
+                    db.scalars(_vehicle_stmt().where(Vehicle.id == response.vehicle_id))
+                    .unique()
+                    .one_or_none()
+                )
                 if matched is None:
                     raise VehicleImportError(
                         "VEHICLE_IMPORT_STALE", "The preview vehicle no longer exists."
@@ -1291,10 +1330,8 @@ def confirm(
 
             # `get_vehicle` (reached via `require_active_vehicle` inside
             # `_store_file_record`) reloads with `populate_existing=True`. This
-            # session is `autoflush=False`, so without an explicit flush here
-            # any just-set scalar change (the update above, or a prior image's
-            # `photo_file_id`/`license_file_id` set below) is unflushed and gets
-            # silently overwritten back to its old DB value by that reload.
+            # session is `autoflush=False`, so flush scalar and image-pointer
+            # changes before any file helper reloads the row.
             db.flush()
             for image_plan in plan.get("image_plan", []):
                 if not isinstance(image_plan, dict):
@@ -1317,25 +1354,36 @@ def confirm(
                     file = db.get(VehicleFile, existing_id) if existing_id is not None else None
                     if file is None:
                         raise VehicleImportError(
-                            "VEHICLE_IMPORT_UNKNOWN_REVISION", "The image deduplication plan is invalid."
+                            "VEHICLE_IMPORT_UNKNOWN_REVISION",
+                            "The image deduplication plan is invalid.",
                         )
                     images_skipped += 1
                 else:
                     image = image_by_id[image_id]
+                    image_bytes = _staged_image_path(claimed, image).read_bytes()
                     file, path = vehicle_service._store_file_record(
                         db,
                         vehicle.id,
-                        kind=role,
+                        kind="gallery" if role == "photo" else role,
                         filename=str(image["original_name"]),
-                        data=_staged_image_path(claimed, image).read_bytes(),
+                        data=image_bytes,
                         media_type=str(image["media_type"]),
                     )
                     created_paths.append(path)
                     images_added += 1
                 file_ids_by_image[image_id] = file.id
                 if image_plan.get("is_primary"):
-                    _promote_photo(file)
-                    vehicle.photo_file_id = file.id
+                    image = image_by_id[image_id]
+                    photo_asset, asset_root = vehicle_photo_service._create_photo_asset_record(
+                        db,
+                        filename=str(image["original_name"]),
+                        data=_staged_image_path(claimed, image).read_bytes(),
+                        label_ar=None,
+                        label_en=Path(str(image["original_name"])).stem,
+                    )
+                    if asset_root is not None:
+                        created_paths.append(asset_root)
+                    vehicle.photo_asset_id = photo_asset.id
                 if image_plan.get("is_license_primary"):
                     vehicle.license_file_id = file.id
                 # Same reload hazard as above, for the *next* image in this row.
@@ -1387,10 +1435,7 @@ def confirm(
         )
     except OperationalError as exc:
         db.rollback()
-        for path in created_paths:
-            path.unlink(missing_ok=True)
-            with suppress(OSError):
-                path.parent.rmdir()
+        _cleanup_created_paths(created_paths)
         if "locked" in str(exc).casefold() or "busy" in str(exc).casefold():
             raise VehicleImportError(
                 "VEHICLE_IMPORT_BUSY", "The vehicle database is busy; retry confirmation."
@@ -1398,10 +1443,7 @@ def confirm(
         raise
     except (Exception, KeyboardInterrupt):
         db.rollback()
-        for path in created_paths:
-            path.unlink(missing_ok=True)
-            with suppress(OSError):
-                path.parent.rmdir()
+        _cleanup_created_paths(created_paths)
         raise
     finally:
         if not committed:

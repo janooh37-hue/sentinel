@@ -34,6 +34,7 @@ def api_db(monkeypatch: pytest.MonkeyPatch, tmp_path):
         yield db
     finally:
         db.close()
+        eng.dispose()
 
 
 def _user(db: Session, *, email: str, capabilities: tuple[str, ...] = ()) -> User:

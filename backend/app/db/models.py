@@ -41,7 +41,7 @@ from sqlalchemy import (
     func,
     text,
 )
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, foreign, mapped_column, relationship
 
 from app.db.base import Base
 
@@ -456,6 +456,32 @@ class VehicleSite(Base):
     vehicles: Mapped[list[Vehicle]] = relationship(back_populates="site")
 
 
+class VehiclePhotoAsset(Base):
+    """Independent immutable main-photo content shared by fleet vehicles."""
+
+    __tablename__ = "vehicle_photo_assets"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    label_ar: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    label_en: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    original_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    original_path: Mapped[str | None] = mapped_column(Text, nullable=True)
+    content_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    width: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    height: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    thumbnail_path: Mapped[str | None] = mapped_column(Text, nullable=True)
+    preview_path: Mapped[str | None] = mapped_column(Text, nullable=True)
+    full_path: Mapped[str | None] = mapped_column(Text, nullable=True)
+    legacy_file_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    canonical_asset_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_utcnow)
+
+    __table_args__ = (
+        UniqueConstraint("content_hash", name="uq_vehicle_photo_assets_content_hash"),
+        UniqueConstraint("legacy_file_id", name="uq_vehicle_photo_assets_legacy_file_id"),
+    )
+
+
 class Vehicle(Base):
     __tablename__ = "vehicles"
 
@@ -473,9 +499,9 @@ class Vehicle(Base):
     contract_note_en: Mapped[str | None] = mapped_column(Text, nullable=True)
     license_start: Mapped[date] = mapped_column(Date, nullable=False)
     license_expiry: Mapped[date] = mapped_column(Date, nullable=False)
-    # File foreign keys are enforced by the vehicle service to avoid a circular
-    # dependency with vehicle_files during table creation.
-    photo_file_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # File and photo-asset foreign keys are enforced by the vehicle service to
+    # avoid circular table dependencies and SQLite batch-ALTER constraints.
+    photo_asset_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     license_file_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     make: Mapped[str | None] = mapped_column(String(128), nullable=True)
     model: Mapped[str | None] = mapped_column(String(128), nullable=True)
@@ -495,6 +521,10 @@ class Vehicle(Base):
     updated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     site: Mapped[VehicleSite] = relationship(back_populates="vehicles")
+    photo_asset: Mapped[VehiclePhotoAsset | None] = relationship(
+        primaryjoin=lambda: foreign(Vehicle.photo_asset_id) == VehiclePhotoAsset.id,
+        viewonly=True,
+    )
     files: Mapped[list[VehicleFile]] = relationship(
         back_populates="vehicle", cascade="all, delete-orphan"
     )
@@ -520,6 +550,7 @@ class Vehicle(Base):
             sqlite_where=text("plate_code IS NULL"),
         ),
         Index("ix_vehicles_site", "site_id"),
+        Index("ix_vehicles_photo_asset", "photo_asset_id"),
         Index("ix_vehicles_plate_number", "plate_number"),
     )
 
@@ -1376,6 +1407,10 @@ class User(Base):
     """
 
     __tablename__ = "users"
+    # Request-scoped capability memo, deliberately not mapped or persisted.
+    # The attribute is populated lazily by perm_service.effective_caps.
+    __allow_unmapped__ = True
+    _effective_caps_cache: frozenset[str] | None
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     email: Mapped[str] = mapped_column(String(256), nullable=False)  # stored lowercased
@@ -2180,6 +2215,7 @@ __all__ = [
     "UserPermission",
     "UserWorkforceScope",
     "VaultFile",
+    "VehiclePhotoAsset",
     "Violation",
     "WorkAttendancePolicy",
     "WorkCrew",

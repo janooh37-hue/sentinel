@@ -5,7 +5,13 @@ import { I18nextProvider } from 'react-i18next'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api } from '@/lib/api'
-import type { VehicleFileRead, VehicleProfileScan, VehicleRead, VehicleSiteRead } from '@/lib/api'
+import type {
+  VehicleFileRead,
+  VehiclePhotoRead,
+  VehicleProfileScan,
+  VehicleRead,
+  VehicleSiteRead,
+} from '@/lib/api'
 import i18n from '@/lib/i18n'
 
 import { AddVehicleDialog } from './AddVehicleDialog'
@@ -25,6 +31,8 @@ vi.mock('@/lib/api', async (importOriginal) => {
       createVehicle: vi.fn(),
       uploadVehicleFile: vi.fn(),
       updateVehicle: vi.fn(),
+      listVehiclePhotos: vi.fn(),
+      uploadVehiclePhoto: vi.fn(),
     },
   }
 })
@@ -65,6 +73,19 @@ const LICENSE_FILE: VehicleFileRead = {
   media_type: 'image/jpeg',
   url: '/api/vehicles/101/files/501',
 }
+const PHOTO_ASSET: VehiclePhotoRead = {
+  id: 21,
+  label_ar: 'تويوتا كوستر',
+  label_en: 'Toyota Coaster',
+  original_name: 'coaster.webp',
+  thumbnail_url: '/api/v1/vehicles/photo-library/21/image/thumbnail',
+  preview_url: '/api/v1/vehicles/photo-library/21/image/preview',
+  full_url: '/api/v1/vehicles/photo-library/21/image/full',
+  width: 1448,
+  height: 1086,
+  usage_count: 2,
+}
+
 
 function renderDialog() {
   const client = new QueryClient({
@@ -97,6 +118,7 @@ beforeEach(async () => {
   })
   vi.mocked(api.createVehicle).mockResolvedValue(CREATED_VEHICLE)
   vi.mocked(api.uploadVehicleFile).mockResolvedValue(LICENSE_FILE)
+  vi.mocked(api.listVehiclePhotos).mockResolvedValue([PHOTO_ASSET])
   vi.mocked(api.updateVehicle).mockResolvedValue({
     ...CREATED_VEHICLE,
     license_file_id: LICENSE_FILE.id,
@@ -107,6 +129,10 @@ describe('AddVehicleDialog licence scan', () => {
   it('reviews suggestions without overwriting filled fields and retains the scan until Save', async () => {
     const user = userEvent.setup()
     renderDialog()
+    await user.click(await screen.findByRole('button', { name: 'Choose from library' }))
+    const picker = await screen.findByRole('dialog', { name: 'Choose main photo' })
+    await user.click(within(picker).getByRole('button', { name: /Toyota Coaster/ }))
+    await user.click(within(picker).getByRole('button', { name: 'Save selection' }))
 
     const makeInput = await screen.findByLabelText('Make')
     await user.type(makeInput, 'Manual make')
@@ -141,6 +167,9 @@ describe('AddVehicleDialog licence scan', () => {
     await user.click(screen.getByRole('button', { name: 'Save' }))
 
     await waitFor(() => expect(api.createVehicle).toHaveBeenCalledTimes(1))
+    expect(api.createVehicle).toHaveBeenCalledWith(
+      expect.objectContaining({ photo_asset_id: PHOTO_ASSET.id }),
+    )
     expect(api.uploadVehicleFile).toHaveBeenCalledTimes(1)
     expect(api.uploadVehicleFile).toHaveBeenCalledWith(101, 'license', licence)
     expect(api.updateVehicle).toHaveBeenCalledWith(101, { license_file_id: 501 })

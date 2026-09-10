@@ -10,7 +10,7 @@
  * masked and only sent when the user changes it.
  */
 
-import { useEffect, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -25,7 +25,7 @@ import {
 } from 'lucide-react'
 
 import { api, apiErrorMessage } from '@/lib/api'
-import type { EmailAccountUpsert } from '@/lib/api'
+import type { EmailAccountRead, EmailAccountUpsert } from '@/lib/api'
 import { useIdentity } from '@/lib/useIdentity'
 import { useAuth } from '@/lib/authContext'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
@@ -47,6 +47,39 @@ const DEFAULTS: EmailAccountUpsert = {
   inbox_folder: 'INBOX',
   enabled: true,
   sync_interval_minutes: 5,
+}
+
+function formFromAccount(account: EmailAccountRead): EmailAccountUpsert {
+  return {
+    email: account.email,
+    imap_host: account.imap_host,
+    imap_port: account.imap_port,
+    use_ssl: account.use_ssl,
+    username: account.username,
+    password: '',
+    smtp_host: account.smtp_host,
+    smtp_port: account.smtp_port,
+    smtp_use_tls: account.smtp_use_tls,
+    sent_folder: account.sent_folder,
+    drafts_folder: account.drafts_folder,
+    inbox_folder: account.inbox_folder,
+    enabled: account.enabled,
+    sync_interval_minutes: account.sync_interval_minutes,
+  }
+}
+
+type EmailFormEdits = Partial<EmailAccountUpsert>
+
+function discardSavedEdits(
+  current: EmailFormEdits,
+  submitted: EmailFormEdits,
+): EmailFormEdits {
+  if (current === submitted) return {}
+  const remaining = { ...current }
+  for (const key of Object.keys(submitted) as Array<keyof EmailAccountUpsert>) {
+    if (current[key] === submitted[key]) delete remaining[key]
+  }
+  return remaining
 }
 
 // ---------------------------------------------------------------------------
@@ -82,34 +115,24 @@ export function EmailSection(): React.JSX.Element {
   const [linkPickerId, setLinkPickerId] = useState<string | null>(null)
   const [isChangingLink, setIsChangingLink] = useState(false)
 
-  const [form, setForm] = useState<EmailAccountUpsert>(DEFAULTS)
+  const account = accountQuery.data
+  // Sparse overrides let async/refreshed account data update untouched fields
+  // without replacing anything the user has typed.
+  const [formEdits, setFormEdits] = useState<EmailFormEdits>({})
+  const loadedForm = useMemo(
+    () => account ? formFromAccount(account) : DEFAULTS,
+    [account],
+  )
+  const form = useMemo(() => ({ ...loadedForm, ...formEdits }), [formEdits, loadedForm])
   const [showPassword, setShowPassword] = useState(false)
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
 
-  useEffect(() => {
-    if (accountQuery.data) {
-      setForm({
-        email: accountQuery.data.email,
-        imap_host: accountQuery.data.imap_host,
-        imap_port: accountQuery.data.imap_port,
-        use_ssl: accountQuery.data.use_ssl,
-        username: accountQuery.data.username,
-        password: '', // never echoed back
-        smtp_host: accountQuery.data.smtp_host,
-        smtp_port: accountQuery.data.smtp_port,
-        smtp_use_tls: accountQuery.data.smtp_use_tls,
-        sent_folder: accountQuery.data.sent_folder,
-        drafts_folder: accountQuery.data.drafts_folder,
-        inbox_folder: accountQuery.data.inbox_folder,
-        enabled: accountQuery.data.enabled,
-        sync_interval_minutes: accountQuery.data.sync_interval_minutes,
-      })
-    }
-  }, [accountQuery.data])
-
   const saveMutation = useMutation({
-    mutationFn: (body: EmailAccountUpsert) => api.upsertEmailAccount(body),
-    onSuccess: () => {
+    mutationFn: ({ body }: { body: EmailAccountUpsert; submittedEdits: EmailFormEdits }) =>
+      api.upsertEmailAccount(body),
+    onSuccess: (account, { submittedEdits }) => {
+      qc.setQueryData(['email-account'], account)
+      setFormEdits((current) => discardSavedEdits(current, submittedEdits))
       toast.success(t('settings.email.saved', { defaultValue: 'Email settings saved' }))
       void qc.invalidateQueries({ queryKey: ['email-account'] })
     },
@@ -148,7 +171,8 @@ export function EmailSection(): React.JSX.Element {
     mutationFn: () => api.deleteEmailAccount(),
     onSuccess: () => {
       toast.success(t('settings.email.deleted', { defaultValue: 'Email account removed' }))
-      setForm(DEFAULTS)
+      qc.setQueryData(['email-account'], null)
+      setFormEdits({})
       void qc.invalidateQueries({ queryKey: ['email-account'] })
     },
     onError: (err) =>
@@ -182,7 +206,7 @@ export function EmailSection(): React.JSX.Element {
     key: K,
     value: EmailAccountUpsert[K],
   ): void => {
-    setForm((f) => ({ ...f, [key]: value }))
+    setFormEdits((edits) => ({ ...edits, [key]: value }))
   }
 
   const handleSave = (): void => {
@@ -198,13 +222,13 @@ export function EmailSection(): React.JSX.Element {
       smtp_use_tls: true,
       // Preserve the linked employee — Save shouldn't clear an existing link.
       // The dedicated linkMutation owns changes to this field.
-      linked_employee_id: accountQuery.data?.linked_employee_id ?? null,
+      linked_employee_id: account?.linked_employee_id ?? null,
     }
     if (!payload.password) delete (payload as Record<string, unknown>).password
-    saveMutation.mutate(payload)
+    saveMutation.mutate({ body: payload, submittedEdits: formEdits })
   }
 
-  const hasAccount = !!accountQuery.data
+  const hasAccount = !!account
 
   return (
     <section className="rounded-2xl bg-surface p-4 sm:p-6">

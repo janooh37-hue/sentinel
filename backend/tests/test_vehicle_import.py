@@ -27,7 +27,14 @@ from app.core.vehicle_xlsx import (
     normalize_import_values,
     parse_vehicle_workbook,
 )
-from app.db.models import AuditLog, User, Vehicle, VehicleFile, VehicleSite
+from app.db.models import (
+    AuditLog,
+    User,
+    Vehicle,
+    VehicleFile,
+    VehiclePhotoAsset,
+    VehicleSite,
+)
 from app.db.session import get_db
 from app.main import create_app
 from app.schemas.vehicle import VehicleProfileScan
@@ -416,7 +423,7 @@ def test_legacy_mixed_outcomes_images_atomic_apply_and_idempotent_reimport(
     assert api_db.get(Vehicle, active.id).notes_ar == "keep me"
     assert api_db.get(Vehicle, archived.id).archived_at is not None
     assert all(file.kind == "license" for file in api_db.scalars(select(VehicleFile)).all())
-    assert all(vehicle.photo_file_id is None for vehicle in api_db.scalars(select(Vehicle)).all())
+    assert all(vehicle.photo_asset_id is None for vehicle in api_db.scalars(select(Vehicle)).all())
 
     second_inspection = _inspect(import_client, workbook)
     second_payload = _preview_payload(second_inspection, mappings)
@@ -551,7 +558,7 @@ def test_scanned_identity_conflict_requires_explicit_confirmation(
     )
 
 
-def test_mid_batch_file_failure_rolls_back_db_and_only_new_files(
+def test_mid_batch_photo_failure_rolls_back_db_and_new_asset_files(
     import_client: TestClient,
     api_db: Session,
     monkeypatch: pytest.MonkeyPatch,
@@ -573,7 +580,7 @@ def test_mid_batch_file_failure_rolls_back_db_and_only_new_files(
         image_rows=[(2, "red"), (3, "blue")],
     )
     inspection = _inspect(import_client, workbook)
-    roles = {image["image_id"]: "license" for image in inspection["images"]}
+    roles = {image["image_id"]: "photo" for image in inspection["images"]}
     preview = import_client.post(
         f"/api/v1/vehicles/imports/{inspection['token']}/preview",
         json=_preview_payload(
@@ -604,9 +611,76 @@ def test_mid_batch_file_failure_rolls_back_db_and_only_new_files(
     api_db.expire_all()
     assert api_db.scalar(select(func.count()).select_from(Vehicle)) == 1
     assert api_db.scalar(select(func.count()).select_from(VehicleFile)) == 1
+    assert api_db.scalar(select(func.count()).select_from(VehiclePhotoAsset)) == 0
     assert existing_path.read_bytes() == existing_bytes
     vehicle_files = get_settings().data_dir / "vehicle_files"
     assert [path for path in vehicle_files.rglob("*") if path.is_file()] == [existing_path]
+    photo_assets = get_settings().data_dir / "vehicle_photos"
+    assert not photo_assets.exists() or not any(photo_assets.rglob("*"))
+
+
+def test_imported_primary_photos_exact_dedup_and_reimport_is_idempotent(
+    import_client: TestClient,
+    api_db: Session,
+) -> None:
+    site = _site(api_db, "Shared photos")
+    workbook = _standard_workbook(
+        [_standard_row("51001"), _standard_row("51002")],
+        image_rows=[(2, "red"), (3, "red")],
+    )
+
+    inspection = _inspect(import_client, workbook)
+    roles = {image["image_id"]: "photo" for image in inspection["images"]}
+    payload = _preview_payload(
+        inspection,
+        {inspection["sections"][0]["id"]: site.id},
+        roles=roles,
+    )
+    preview = import_client.post(
+        f"/api/v1/vehicles/imports/{inspection['token']}/preview", json=payload
+    )
+    assert preview.status_code == 200, preview.text
+    confirmed = import_client.post(
+        f"/api/v1/vehicles/imports/{inspection['token']}/confirm",
+        json={
+            "revision": preview.json()["revision"],
+            "row_ids": [row["row_id"] for row in preview.json()["rows"]],
+        },
+    )
+    assert confirmed.status_code == 200, confirmed.text
+    api_db.expire_all()
+    imported = list(
+        api_db.scalars(
+            select(Vehicle).where(Vehicle.plate_number.in_({"51001", "51002"})).order_by(Vehicle.id)
+        )
+    )
+    assert len({vehicle.photo_asset_id for vehicle in imported}) == 1
+    assert api_db.scalar(select(func.count()).select_from(VehiclePhotoAsset)) == 1
+    assert {file.kind for file in api_db.scalars(select(VehicleFile)).all()} == {"gallery"}
+
+    second_inspection = _inspect(import_client, workbook)
+    second_roles = {image["image_id"]: "photo" for image in second_inspection["images"]}
+    second_preview = import_client.post(
+        f"/api/v1/vehicles/imports/{second_inspection['token']}/preview",
+        json=_preview_payload(
+            second_inspection,
+            {second_inspection["sections"][0]["id"]: site.id},
+            roles=second_roles,
+        ),
+    )
+    assert second_preview.status_code == 200, second_preview.text
+    assert {row["action"] for row in second_preview.json()["rows"]} == {"unchanged"}
+    second_confirm = import_client.post(
+        f"/api/v1/vehicles/imports/{second_inspection['token']}/confirm",
+        json={
+            "revision": second_preview.json()["revision"],
+            "row_ids": [row["row_id"] for row in second_preview.json()["rows"]],
+        },
+    )
+    assert second_confirm.status_code == 200, second_confirm.text
+    assert second_confirm.json()["images_added"] == 0
+    assert second_confirm.json()["images_skipped"] == 2
+    assert api_db.scalar(select(func.count()).select_from(VehiclePhotoAsset)) == 1
 
 
 def test_generated_template_roundtrip_keeps_zero_dates_and_both_image_roles(
@@ -671,9 +745,13 @@ def test_generated_template_roundtrip_keeps_zero_dates_and_both_image_roles(
     assert created.passenger_capacity == 0
     assert created.license_start == date(2025, 2, 1)
     assert created.insurance_expiry == date(2026, 12, 31)
-    assert created.photo_file_id is not None
+    assert created.photo_asset_id is not None
     assert created.license_file_id is not None
-    assert {file.kind for file in api_db.scalars(select(VehicleFile)).all()} == {"photo", "license"}
+    assert {file.kind for file in api_db.scalars(select(VehicleFile)).all()} == {
+        "gallery",
+        "license",
+    }
+    assert api_db.scalar(select(func.count()).select_from(VehiclePhotoAsset)) == 1
     imported_audits = api_db.scalars(
         select(AuditLog).where(AuditLog.action == "vehicle.imported")
     ).all()

@@ -6,7 +6,7 @@ from datetime import date as date_t
 from pathlib import Path
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, File, Form, Query, UploadFile, status
+from fastapi import APIRouter, Depends, File, Form, Header, Query, UploadFile, status
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 from app.api._responses import maybe_base64
 from app.api.deps import require_capability
 from app.api.errors import ValidationFailedError
+from app.core.vehicle_photos import MAX_UPLOAD_BYTES
 from app.db.models import User, VehicleFile
 from app.db.session import get_db
 from app.schemas.vehicle import (
@@ -33,15 +34,16 @@ from app.schemas.vehicle import (
     VehicleFineCreate,
     VehicleFineRead,
     VehicleFineUpdate,
-    VehicleListItem,
-    VehicleMaintenanceCreate,
-    VehicleMaintenanceRead,
-    VehicleProfileScan,
     VehicleImportConfirmRequest,
     VehicleImportInspection,
     VehicleImportPreview,
     VehicleImportPreviewRequest,
     VehicleImportResult,
+    VehicleListItem,
+    VehicleMaintenanceCreate,
+    VehicleMaintenanceRead,
+    VehiclePhotoRead,
+    VehicleProfileScan,
     VehicleRead,
     VehicleSiteCreate,
     VehicleSiteRead,
@@ -52,9 +54,10 @@ from app.schemas.vehicle import (
 from app.services import (
     settings_service,
     vehicle_evg_service,
-    vehicle_letter_service,
-    vehicle_profile_scan_service,
     vehicle_import_service,
+    vehicle_letter_service,
+    vehicle_photo_service,
+    vehicle_profile_scan_service,
     vehicle_service,
 )
 
@@ -73,6 +76,16 @@ def _file_response(row: VehicleFile, path: Path, encoding: str | None) -> Respon
             "Content-Disposition": (f'{disposition}; filename="{row.original_name}"'),
             "X-Content-Type-Options": "nosniff",
         },
+    )
+
+
+def _etag_matches(value: str | None, etag: str) -> bool:
+    if value is None:
+        return False
+    expected = etag.removeprefix("W/")
+    return any(
+        candidate.strip() == "*" or candidate.strip().removeprefix("W/") == expected
+        for candidate in value.split(",")
     )
 
 
@@ -213,6 +226,85 @@ def create_vehicle_maintenance(
         today=date_t.today(),
         notify_days=settings_service.get_vehicle_notify_days(db),
     )
+
+
+@router.get("/photo-library", response_model=list[VehiclePhotoRead])
+def list_vehicle_photo_library(
+    db: Annotated[Session, Depends(get_db)],
+    _user: Annotated[User, Depends(require_capability("vehicles.view"))],
+) -> list[VehiclePhotoRead]:
+    return [
+        vehicle_photo_service.photo_read(db, row)
+        for row in vehicle_photo_service.list_photo_assets(db)
+    ]
+
+
+@router.get("/photo-library/{photo_id}", response_model=VehiclePhotoRead)
+def get_vehicle_photo_library_item(
+    photo_id: int,
+    db: Annotated[Session, Depends(get_db)],
+    _user: Annotated[User, Depends(require_capability("vehicles.view"))],
+) -> VehiclePhotoRead:
+    return vehicle_photo_service.photo_read(db, vehicle_photo_service.get_photo_asset(db, photo_id))
+
+
+@router.post("/photo-library", response_model=VehiclePhotoRead)
+async def upload_vehicle_photo_library_item(
+    db: Annotated[Session, Depends(get_db)],
+    _user: Annotated[User, Depends(require_capability("vehicles.edit"))],
+    file: Annotated[UploadFile, File()],
+    label_ar: Annotated[str | None, Form()] = None,
+    label_en: Annotated[str | None, Form()] = None,
+) -> VehiclePhotoRead:
+    data = await file.read(MAX_UPLOAD_BYTES + 1)
+    if len(data) > MAX_UPLOAD_BYTES:
+        raise ValidationFailedError(
+            "VEHICLE_PHOTO_TOO_LARGE",
+            f"File exceeds {MAX_UPLOAD_BYTES // (1024 * 1024)} MiB.",
+            size=len(data),
+        )
+    row = await run_in_threadpool(
+        vehicle_photo_service.create_photo_asset,
+        db,
+        filename=file.filename or "vehicle-photo",
+        data=data,
+        label_ar=label_ar,
+        label_en=label_en,
+    )
+    return vehicle_photo_service.photo_read(db, row)
+
+
+@router.delete(
+    "/photo-library/{photo_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+)
+def delete_vehicle_photo_library_item(
+    photo_id: int,
+    db: Annotated[Session, Depends(get_db)],
+    _user: Annotated[User, Depends(require_capability("vehicles.delete"))],
+) -> Response:
+    vehicle_photo_service.delete_photo_asset(db, photo_id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.get("/photo-library/{photo_id}/image/{variant}")
+def get_vehicle_photo_library_image(
+    photo_id: int,
+    variant: str,
+    db: Annotated[Session, Depends(get_db)],
+    _user: Annotated[User, Depends(require_capability("vehicles.view"))],
+    if_none_match: Annotated[str | None, Header(alias="If-None-Match")] = None,
+) -> Response:
+    row, path, etag = vehicle_photo_service.resolve_photo_variant(db, photo_id, variant)
+    headers = {
+        "Cache-Control": "private, max-age=31536000, immutable",
+        "ETag": etag,
+        "X-Content-Type-Options": "nosniff",
+    }
+    if _etag_matches(if_none_match, etag):
+        return Response(status_code=status.HTTP_304_NOT_MODIFIED, headers=headers)
+    headers["Content-Disposition"] = f'inline; filename="{row.id}-{variant}.webp"'
+    return Response(content=path.read_bytes(), media_type="image/webp", headers=headers)
 
 
 @router.get("", response_model=list[VehicleListItem])
@@ -432,6 +524,20 @@ async def upload_vehicle_file(
     return VehicleFileRead.model_validate(row).model_copy(
         update={"url": f"/api/v1/vehicles/{vehicle_id}/files/{row.id}"}
     )
+
+
+@router.post(
+    "/{vehicle_id}/files/{file_id}/photo-asset",
+    response_model=VehiclePhotoRead,
+)
+def promote_vehicle_file_to_photo_asset(
+    vehicle_id: int,
+    file_id: int,
+    db: Annotated[Session, Depends(get_db)],
+    _user: Annotated[User, Depends(require_capability("vehicles.edit"))],
+) -> VehiclePhotoRead:
+    row = vehicle_photo_service.promote_vehicle_file(db, vehicle_id, file_id)
+    return vehicle_photo_service.photo_read(db, row)
 
 
 @router.get("/{vehicle_id}/files/{file_id}")

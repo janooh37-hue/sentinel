@@ -18,6 +18,7 @@ from app.db.models import (
     VehicleFine,
     VehicleLicenseRenewal,
     VehicleMaintenance,
+    VehiclePhotoAsset,
     VehicleSite,
 )
 from app.db.session import (
@@ -37,6 +38,7 @@ __all__ = [
     "VehicleFine",
     "VehicleLicenseRenewal",
     "VehicleMaintenance",
+    "VehiclePhotoAsset",
     "VehicleSite",
     "attach_sqlite_pragmas",
     "engine",

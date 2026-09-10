@@ -281,6 +281,7 @@ export const VEHICLE_QUERY_KEYS = {
   summary: ['vehicles-summary'] as const,
   list: ['vehicles'] as const,
   detail: (vehicleId: number) => ['vehicle', vehicleId] as const,
+  photoLibrary: ['vehicle-photo-library'] as const,
   sites: ['vehicle-sites'] as const,
   fines: ['vehicle-fines'] as const,
   accidents: ['vehicle-accidents'] as const,
@@ -300,6 +301,7 @@ export function invalidateVehicleQueries(
 ): void {
   void queryClient.invalidateQueries({ queryKey: VEHICLE_QUERY_KEYS.summary })
   void queryClient.invalidateQueries({ queryKey: VEHICLE_QUERY_KEYS.list })
+  void queryClient.invalidateQueries({ queryKey: VEHICLE_QUERY_KEYS.photoLibrary })
   if (options.vehicleId != null) {
     void queryClient.invalidateQueries({ queryKey: VEHICLE_QUERY_KEYS.detail(options.vehicleId) })
   }
@@ -313,6 +315,21 @@ export function invalidateVehicleQueries(
 const ERROR_MESSAGE_KEYS: Record<string, string> = {
   SITE_HAS_VEHICLES: 'vehicles.siteHasVehicles',
   VEHICLE_FILE_IN_USE: 'vehicles.vehicleFileInUse',
+  VEHICLE_FILE_KIND_MISMATCH: 'vehicles.photoLibrary.errors.invalid',
+  VEHICLE_PHOTO_INVALID: 'vehicles.photoLibrary.errors.invalid',
+  VEHICLE_PHOTO_EMPTY: 'vehicles.photoLibrary.errors.invalid',
+  VEHICLE_PHOTO_UNSUPPORTED_FORMAT: 'vehicles.photoLibrary.errors.invalid',
+  VEHICLE_PHOTO_TOO_LARGE: 'vehicles.photoLibrary.errors.tooLarge',
+  VEHICLE_PHOTO_DIMENSIONS_TOO_LARGE: 'vehicles.photoLibrary.errors.dimensionsTooLarge',
+  VEHICLE_PHOTO_ANIMATED: 'vehicles.photoLibrary.errors.animated',
+  VEHICLE_PHOTO_LABEL_REQUIRED: 'vehicles.photoLibrary.errors.labelRequired',
+  VEHICLE_PHOTO_LABEL_TOO_LONG: 'vehicles.photoLibrary.errors.labelTooLong',
+  VEHICLE_PHOTO_IN_USE: 'vehicles.photoLibrary.errors.inUse',
+  VEHICLE_PHOTO_NOT_FOUND: 'vehicles.photoLibrary.selectionUnavailable',
+  VEHICLE_PHOTO_INVALID_PATH: 'vehicles.photoLibrary.selectionUnavailable',
+  VEHICLE_PHOTO_MISSING: 'vehicles.photoLibrary.selectionUnavailable',
+  VEHICLE_PHOTO_SOURCE_MISSING: 'vehicles.photoLibrary.selectionUnavailable',
+  VEHICLE_PHOTO_VARIANT_NOT_FOUND: 'vehicles.photoLibrary.selectionUnavailable',
   EVG_UNAVAILABLE: 'vehicles.evg.error',
   EVG_DRIVER_MISSING: 'vehicles.evg.driverMissing',
 }

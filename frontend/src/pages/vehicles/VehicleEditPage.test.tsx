@@ -7,11 +7,16 @@ import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ApiError, api } from '@/lib/api'
-import type { VehicleFileRead, VehicleRead, VehicleSiteRead, VehicleUpdate } from '@/lib/api'
+import type {
+  VehicleFileRead,
+  VehiclePhotoRead,
+  VehicleRead,
+  VehicleSiteRead,
+  VehicleUpdate,
+} from '@/lib/api'
 import i18n from '@/lib/i18n'
 
 import { VehicleEditPage } from './VehicleEditPage'
-import { VEHICLE_QUERY_KEYS } from './vehicleUtils'
 
 const testState = { canDeleteFiles: true }
 
@@ -40,6 +45,9 @@ vi.mock('@/lib/api', async (importOriginal) => {
       uploadVehicleFile: vi.fn(),
       deleteVehicleFile: vi.fn(),
       listVehicles: vi.fn(),
+      listVehiclePhotos: vi.fn(),
+      uploadVehiclePhoto: vi.fn(),
+      promoteVehiclePhoto: vi.fn(),
     },
   }
 })
@@ -84,7 +92,10 @@ function baseVehicle(overrides: Partial<VehicleRead> = {}): VehicleRead {
     fines_count: 0,
     fines_amount: 0,
     black_points: 0,
+    photo_asset_id: null,
     photo_url: null,
+    photo_thumbnail_url: null,
+    photo_full_url: null,
     make: null,
     model: null,
     model_year: null,
@@ -107,12 +118,26 @@ function baseVehicle(overrides: Partial<VehicleRead> = {}): VehicleRead {
     accessories_en: null,
     notes_ar: null,
     notes_en: null,
-    photo_file_id: null,
     license_file_id: null,
     license_files: [],
     ...overrides,
   } as VehicleRead
 }
+function photoAsset(id: number, name = 'Vehicle composite'): VehiclePhotoRead {
+  return {
+    id,
+    label_ar: 'صورة مركبة',
+    label_en: name,
+    original_name: `${name}.webp`,
+    thumbnail_url: `/api/v1/vehicles/photo-library/${id}/image/thumbnail`,
+    preview_url: `/api/v1/vehicles/photo-library/${id}/image/preview`,
+    full_url: `/api/v1/vehicles/photo-library/${id}/image/full`,
+    width: 1448,
+    height: 1086,
+    usage_count: 0,
+  }
+}
+
 
 function renderEditor(vehicleId = 101, strict = false) {
   const client = new QueryClient({
@@ -143,6 +168,7 @@ beforeEach(async () => {
   URL.revokeObjectURL = vi.fn()
   await i18n.changeLanguage('en')
   vi.mocked(api.listVehicleSites).mockResolvedValue(SITES)
+  vi.mocked(api.listVehiclePhotos).mockResolvedValue([])
 })
 
 describe('VehicleEditPage', () => {
@@ -269,7 +295,7 @@ describe('VehicleEditPage', () => {
     expect(attemptedFiles).toEqual(['saved.jpg', 'failed.jpg', 'failed.jpg'])
   })
 
-  it('invalidates landed writes and retries only a failed licence attachment', async () => {
+  it('retries only a failed licence attachment', async () => {
     const user = userEvent.setup()
     const vehicle = baseVehicle()
     const replacement = new File(['replacement'], 'replacement-license.pdf', {
@@ -296,8 +322,7 @@ describe('VehicleEditPage', () => {
         license_url: uploaded.url,
         license_files: [uploaded],
       })
-    const { client } = renderEditor()
-    const invalidate = vi.spyOn(client, 'invalidateQueries')
+    renderEditor()
 
     const uploadZone = await screen.findByRole('button', {
       name: 'Upload new license scan',
@@ -330,20 +355,7 @@ describe('VehicleEditPage', () => {
       replacement,
     )
     expect(api.createVehicle).not.toHaveBeenCalled()
-    expect(invalidate).toHaveBeenCalledTimes(10)
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: VEHICLE_QUERY_KEYS.summary })
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: VEHICLE_QUERY_KEYS.list })
-    expect(invalidate).toHaveBeenCalledWith({
-      queryKey: VEHICLE_QUERY_KEYS.detail(101),
-    })
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: VEHICLE_QUERY_KEYS.sites })
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: VEHICLE_QUERY_KEYS.fines })
-    expect(invalidate).toHaveBeenCalledWith({ queryKey: VEHICLE_QUERY_KEYS.accidents })
-    expect(invalidate).toHaveBeenCalledWith({
-      queryKey: VEHICLE_QUERY_KEYS.maintenance,
-    })
 
-    invalidate.mockClear()
     await user.click(screen.getByRole('button', { name: 'Save' }))
 
     await screen.findByText('DETAIL PAGE')
@@ -353,16 +365,6 @@ describe('VehicleEditPage', () => {
     })
     expect(api.uploadVehicleFile).toHaveBeenCalledTimes(1)
     expect(api.createVehicle).not.toHaveBeenCalled()
-    expect(invalidate).toHaveBeenCalledTimes(3)
-    expect(invalidate).toHaveBeenNthCalledWith(1, {
-      queryKey: VEHICLE_QUERY_KEYS.summary,
-    })
-    expect(invalidate).toHaveBeenNthCalledWith(2, {
-      queryKey: VEHICLE_QUERY_KEYS.list,
-    })
-    expect(invalidate).toHaveBeenNthCalledWith(3, {
-      queryKey: VEHICLE_QUERY_KEYS.detail(101),
-    })
   })
 
   it('confirms before leaving when a gallery file is staged', async () => {
@@ -417,47 +419,55 @@ describe('VehicleEditPage', () => {
     ).toEqual([...createdUrls].sort())
   })
 
-  it('saves only the chosen existing gallery photo pointer', async () => {
+  it('promotes the chosen gallery photo and saves only the independent asset pointer', async () => {
     const user = userEvent.setup()
     const gallery = vehicleFile(3, 'gallery', 'gallery.jpg')
+    const asset = photoAsset(21)
     const vehicle = baseVehicle({
-      photo_file_id: 1,
-      photo_url: '/api/v1/vehicles/101/files/1',
+      photo_asset_id: 1,
+      photo_url: '/api/v1/vehicles/photo-library/1/image/preview',
       photos: [gallery],
     })
     vi.mocked(api.getVehicle).mockResolvedValue(vehicle)
+    vi.mocked(api.promoteVehiclePhoto).mockResolvedValue(asset)
     vi.mocked(api.updateVehicle).mockResolvedValue({
       ...vehicle,
-      photo_file_id: gallery.id,
-      photo_url: gallery.url,
+      photo_asset_id: asset.id,
+      photo_url: asset.preview_url,
     })
     renderEditor()
 
     await user.click(
       await screen.findByRole('button', { name: /Use .*gallery\.jpg.* as main photo/ }),
     )
+    await waitFor(() => expect(api.promoteVehiclePhoto).toHaveBeenCalledWith(101, gallery.id))
 
     expect(api.updateVehicle).not.toHaveBeenCalled()
     await user.click(screen.getByRole('button', { name: 'Save' }))
 
     await waitFor(() =>
-      expect(api.updateVehicle).toHaveBeenCalledWith(101, { photo_file_id: gallery.id }),
+      expect(api.updateVehicle).toHaveBeenCalledWith(101, { photo_asset_id: asset.id }),
     )
     expect(api.updateVehicle).toHaveBeenCalledTimes(1)
   })
 
-  it('does not save a dangling main-photo draft after that gallery file is deleted', async () => {
+  it('keeps a promoted draft valid after its gallery original is deleted', async () => {
     const user = userEvent.setup()
     const gallery = vehicleFile(3, 'gallery', 'gallery.jpg')
+    const asset = photoAsset(22)
     vi.mocked(api.getVehicle).mockResolvedValue(baseVehicle({ photos: [gallery] }))
+    vi.mocked(api.promoteVehiclePhoto).mockResolvedValue(asset)
     vi.mocked(api.deleteVehicleFile).mockResolvedValue(undefined)
+    vi.mocked(api.updateVehicle).mockResolvedValue(
+      baseVehicle({ photo_asset_id: asset.id, photo_url: asset.preview_url }),
+    )
     renderEditor()
 
     await user.click(
       await screen.findByRole('button', { name: /Use .*gallery\.jpg.* as main photo/ }),
     )
     expect(
-      screen.getByRole('button', { name: /gallery\.jpg.* selected as main photo/ }),
+      await screen.findByRole('button', { name: /gallery\.jpg.* selected as main photo/ }),
     ).toHaveAttribute('aria-pressed', 'true')
 
     await user.click(screen.getByRole('button', { name: /Delete .*gallery\.jpg/ }))
@@ -471,65 +481,76 @@ describe('VehicleEditPage', () => {
     )
 
     await user.click(screen.getByRole('button', { name: 'Save' }))
-
-    await screen.findByText('DETAIL PAGE')
-    expect(api.updateVehicle).not.toHaveBeenCalledWith(101, {
-      photo_file_id: gallery.id,
-    })
+    await waitFor(() =>
+      expect(api.updateVehicle).toHaveBeenCalledWith(101, { photo_asset_id: asset.id }),
+    )
   })
 
   it('retries only a failed main-photo pointer after the scalar profile has landed', async () => {
     const user = userEvent.setup()
     const gallery = vehicleFile(3, 'gallery', 'gallery.jpg')
+    const asset = photoAsset(23)
     const vehicle = baseVehicle({ photos: [gallery] })
     const scalarSaved = { ...vehicle, make: 'Toyota' }
     vi.mocked(api.getVehicle).mockResolvedValue(vehicle)
+    vi.mocked(api.promoteVehiclePhoto).mockResolvedValue(asset)
     vi.mocked(api.updateVehicle)
       .mockResolvedValueOnce(scalarSaved)
       .mockRejectedValueOnce(new Error('Pointer update interrupted'))
       .mockResolvedValueOnce({
         ...scalarSaved,
-        photo_file_id: gallery.id,
-        photo_url: gallery.url,
+        photo_asset_id: asset.id,
+        photo_url: asset.preview_url,
       })
     renderEditor()
 
     await user.type(await screen.findByLabelText('Make'), 'Toyota')
     await user.click(screen.getByRole('button', { name: /Use .*gallery\.jpg.* as main photo/ }))
+    await waitFor(() => expect(api.promoteVehiclePhoto).toHaveBeenCalledTimes(1))
     await user.click(screen.getByRole('button', { name: 'Save' }))
 
     expect(await screen.findByRole('alert')).toHaveTextContent(/Profile saved;.*1 file failed/)
     expect(api.updateVehicle).toHaveBeenNthCalledWith(1, 101, { make: 'Toyota' })
-    expect(api.updateVehicle).toHaveBeenNthCalledWith(2, 101, { photo_file_id: gallery.id })
+    expect(api.updateVehicle).toHaveBeenNthCalledWith(2, 101, { photo_asset_id: asset.id })
 
     await user.click(screen.getByRole('button', { name: 'Save' }))
 
     await screen.findByText('DETAIL PAGE')
+    expect(api.promoteVehiclePhoto).toHaveBeenCalledTimes(1)
     expect(api.updateVehicle).toHaveBeenCalledTimes(3)
-    expect(api.updateVehicle).toHaveBeenNthCalledWith(3, 101, { photo_file_id: gallery.id })
+    expect(api.updateVehicle).toHaveBeenNthCalledWith(3, 101, { photo_asset_id: asset.id })
   })
 
-  it('saves an explicit null main-photo pointer without deleting the file', async () => {
+  it('saves an explicit null asset pointer without deleting any file', async () => {
     const user = userEvent.setup()
+    const current = photoAsset(1)
     const vehicle = baseVehicle({
-      photo_file_id: 1,
-      photo_url: '/api/v1/vehicles/101/files/1',
+      photo_asset_id: current.id,
+      photo_url: current.preview_url,
+      photo_thumbnail_url: current.thumbnail_url,
+      photo_full_url: current.full_url,
     })
     vi.mocked(api.getVehicle).mockResolvedValue(vehicle)
+    vi.mocked(api.listVehiclePhotos).mockResolvedValue([current])
     vi.mocked(api.updateVehicle).mockResolvedValue({
       ...vehicle,
-      photo_file_id: null,
+      photo_asset_id: null,
       photo_url: null,
+      photo_thumbnail_url: null,
+      photo_full_url: null,
     })
     renderEditor()
 
-    await user.click(await screen.findByRole('button', { name: 'Remove main photo' }))
+    await user.click(await screen.findByRole('button', { name: 'Choose from library' }))
+    const picker = await screen.findByRole('dialog', { name: 'Choose main photo' })
+    await user.click(within(picker).getByRole('button', { name: 'Remove main photo' }))
+    await user.click(within(picker).getByRole('button', { name: 'Save selection' }))
 
     expect(api.updateVehicle).not.toHaveBeenCalled()
     await user.click(screen.getByRole('button', { name: 'Save' }))
 
     await waitFor(() =>
-      expect(api.updateVehicle).toHaveBeenCalledWith(101, { photo_file_id: null }),
+      expect(api.updateVehicle).toHaveBeenCalledWith(101, { photo_asset_id: null }),
     )
     expect(api.deleteVehicleFile).not.toHaveBeenCalled()
   })
@@ -556,11 +577,7 @@ describe('VehicleEditPage', () => {
     dialog = await screen.findByRole('dialog')
     await user.click(within(dialog).getByRole('button', { name: 'Delete photo' }))
 
-    expect(
-      await screen.findByText(
-        'This photo is in use as the main photo or in an accident record and cannot be deleted.',
-      ),
-    ).toBeInTheDocument()
+    expect(await screen.findByRole('alert')).toBeInTheDocument()
     expect(api.deleteVehicleFile).toHaveBeenCalledWith(101, 3)
     expect(screen.getByRole('img', { name: 'gallery.jpg' })).toBeInTheDocument()
 

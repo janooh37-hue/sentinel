@@ -4,27 +4,33 @@ from __future__ import annotations
 
 import base64
 import json
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date, timedelta
 from pathlib import Path
+from threading import Barrier
 from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy.orm import Session
+from sqlalchemy import create_engine, func, select
+from sqlalchemy.orm import Session, sessionmaker
 
 from app.api.deps import get_current_user
 from app.config import get_settings
 from app.db.models import (
     AuditLog,
+    Base,
     Employee,
     User,
     UserPermission,
     Vehicle,
     VehicleAccident,
     VehicleFile,
+    VehiclePhotoAsset,
 )
-from app.db.session import get_db
+from app.db.session import attach_sqlite_pragmas, get_db
 from app.main import create_app
+from app.services import vehicle_photo_service
 
 _PNG_1X1 = base64.b64decode(
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
@@ -512,34 +518,311 @@ def test_gallery_png_upload_is_served_inline(admin_client: TestClient) -> None:
     assert response.content == _PNG_1X1
 
 
-def test_deleting_current_main_photo_is_rejected_as_in_use(
+def test_photo_library_shares_exact_asset_and_isolates_vehicle_selection(
     admin_client: TestClient,
 ) -> None:
+    first = _create_vehicle(admin_client)
+    second_payload = _vehicle_payload()
+    second_payload["plate_number"] = "58217"
+    second_payload["new_site"] = {
+        "name_ar": "موقع الاختبار الثاني",
+        "name_en": "Second Test Site",
+    }
+    second_response = admin_client.post("/api/v1/vehicles", json=second_payload)
+    assert second_response.status_code == 201, second_response.text
+    second = second_response.json()
+
+    uploaded = admin_client.post(
+        "/api/v1/vehicles/photo-library",
+        data={"label_ar": "هايس", "label_en": "Hiace"},
+        files={"file": ("hiace.png", _PNG_1X1, "image/png")},
+    )
+    assert uploaded.status_code == 200, uploaded.text
+    asset = uploaded.json()
+    duplicate = admin_client.post(
+        "/api/v1/vehicles/photo-library",
+        data={"label_en": "Same pixels"},
+        files={"file": ("same-image.png", _PNG_1X1, "image/png")},
+    )
+    assert duplicate.status_code == 200, duplicate.text
+    assert duplicate.json()["id"] == asset["id"]
+
+    for vehicle in (first, second):
+        selected = admin_client.patch(
+            f"/api/v1/vehicles/{vehicle['id']}",
+            json={"photo_asset_id": asset["id"]},
+        )
+        assert selected.status_code == 200, selected.text
+    first_selected = admin_client.get(f"/api/v1/vehicles/{first['id']}").json()
+    second_selected = admin_client.get(f"/api/v1/vehicles/{second['id']}").json()
+    url_fields = ("photo_url", "photo_thumbnail_url", "photo_full_url")
+    assert all(first_selected[field] == second_selected[field] for field in url_fields)
+
+    cleared = admin_client.patch(f"/api/v1/vehicles/{first['id']}", json={"photo_asset_id": None})
+    assert cleared.status_code == 200, cleared.text
+    assert cleared.json()["photo_asset_id"] is None
+    assert all(cleared.json()[field] is None for field in url_fields)
+    assert (
+        admin_client.get(f"/api/v1/vehicles/{second['id']}").json()["photo_asset_id"] == asset["id"]
+    )
+
+    archived = admin_client.post(f"/api/v1/vehicles/{second['id']}/archive")
+    assert archived.status_code == 200, archived.text
+    blocked = admin_client.delete(f"/api/v1/vehicles/photo-library/{asset['id']}")
+    assert blocked.status_code == 409, blocked.text
+    assert blocked.json()["error"]["code"] == "VEHICLE_PHOTO_IN_USE"
+    assert blocked.json()["error"]["details"] == {
+        "photo_id": asset["id"],
+        "usage_count": 1,
+    }
+
+    assert admin_client.post(f"/api/v1/vehicles/{second['id']}/restore").status_code == 200
+    assert (
+        admin_client.patch(
+            f"/api/v1/vehicles/{second['id']}", json={"photo_asset_id": None}
+        ).status_code
+        == 200
+    )
+    assert admin_client.delete(f"/api/v1/vehicles/photo-library/{asset['id']}").status_code == 204
+
+
+def test_concurrent_exact_photo_uploads_share_asset_and_cleanup_losing_files(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    settings = get_settings()
+    monkeypatch.setattr(settings, "data_dir", tmp_path / "concurrent-photo-data")
+    settings.ensure_dirs()
+    engine = create_engine(
+        f"sqlite:///{tmp_path / 'concurrent-photo.db'}",
+        future=True,
+        connect_args={"check_same_thread": False, "timeout": 10},
+    )
+    attach_sqlite_pragmas(engine, wal=False)
+    Base.metadata.create_all(engine)
+    test_session = sessionmaker(
+        bind=engine,
+        autoflush=False,
+        expire_on_commit=False,
+        future=True,
+    )
+    both_files_written = Barrier(2)
+    original_write = vehicle_photo_service._write_photo_files
+
+    def synchronized_write(**kwargs):
+        result = original_write(**kwargs)
+        both_files_written.wait(timeout=10)
+        return result
+
+    monkeypatch.setattr(vehicle_photo_service, "_write_photo_files", synchronized_write)
+
+    def upload(label: str) -> int:
+        with test_session() as db:
+            return vehicle_photo_service.create_photo_asset(
+                db,
+                filename=f"{label}.png",
+                data=_PNG_1X1,
+                label_ar=None,
+                label_en=label,
+            ).id
+
+    try:
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            futures = [executor.submit(upload, label) for label in ("First", "Second")]
+            asset_ids = [future.result(timeout=15) for future in futures]
+        assert len(set(asset_ids)) == 1
+        with test_session() as db:
+            assert db.scalar(select(func.count()).select_from(VehiclePhotoAsset)) == 1
+        roots = [path for path in (settings.data_dir / "vehicle_photos").iterdir() if path.is_dir()]
+        assert len(roots) == 1
+    finally:
+        engine.dispose()
+
+
+def test_lazy_legacy_dedup_preserves_issued_urls_without_duplicate_storage(
+    admin_client: TestClient,
+    api_db: Session,
+) -> None:
+    first = _create_vehicle(admin_client)
+    second_payload = _vehicle_payload()
+    second_payload["plate_number"] = "58218"
+    second_payload["new_site"] = {
+        "name_ar": "موقع الصور القديمة",
+        "name_en": "Legacy Photo Site",
+    }
+    second_response = admin_client.post("/api/v1/vehicles", json=second_payload)
+    assert second_response.status_code == 201, second_response.text
+    second = second_response.json()
+
+    files = []
+    for vehicle in (first, second):
+        uploaded = admin_client.post(
+            f"/api/v1/vehicles/{vehicle['id']}/files",
+            data={"kind": "photo"},
+            files={"file": ("legacy.png", _PNG_1X1, "image/png")},
+        )
+        assert uploaded.status_code == 200, uploaded.text
+        files.append(uploaded.json())
+
+    assets = [
+        VehiclePhotoAsset(
+            label_en=f"Legacy {index}",
+            original_name=file["original_name"],
+            legacy_file_id=file["id"],
+        )
+        for index, file in enumerate(files, start=1)
+    ]
+    api_db.add_all(assets)
+    api_db.flush()
+    first_vehicle = api_db.get(Vehicle, first["id"])
+    second_vehicle = api_db.get(Vehicle, second["id"])
+    assert first_vehicle is not None
+    assert second_vehicle is not None
+    first_vehicle.photo_asset_id = assets[0].id
+    second_vehicle.photo_asset_id = assets[1].id
+    first_asset_id = assets[0].id
+    duplicate_asset_id = assets[1].id
+    api_db.commit()
+
+    listed = admin_client.get("/api/v1/vehicles/photo-library")
+    assert listed.status_code == 200, listed.text
+    metadata = {item["id"]: item for item in listed.json()}
+    first_urls = metadata[first_asset_id]
+    duplicate_urls = metadata[duplicate_asset_id]
+    assert duplicate_urls["width"] is None
+    assert duplicate_urls["height"] is None
+
+    canonical_responses = {
+        variant: admin_client.get(first_urls[f"{variant}_url"])
+        for variant in ("thumbnail", "preview", "full")
+    }
+    duplicate_responses = {
+        variant: admin_client.get(duplicate_urls[f"{variant}_url"])
+        for variant in ("thumbnail", "preview", "full")
+    }
+    for variant in ("thumbnail", "preview", "full"):
+        canonical_response = canonical_responses[variant]
+        duplicate_response = duplicate_responses[variant]
+        assert canonical_response.status_code == 200, canonical_response.text
+        assert duplicate_response.status_code == 200, duplicate_response.text
+        assert duplicate_response.content == canonical_response.content
+        assert duplicate_response.headers["etag"] == canonical_response.headers["etag"]
+
+    api_db.expire_all()
+    alias = api_db.get(VehiclePhotoAsset, duplicate_asset_id)
+    assert alias is not None
+    assert alias.canonical_asset_id == first_asset_id
+    assert alias.content_hash is None
+    assert alias.thumbnail_path is None
+    assert alias.preview_path is None
+    assert alias.full_path is None
+    persisted_first = api_db.get(Vehicle, first["id"])
+    persisted_second = api_db.get(Vehicle, second["id"])
+    assert persisted_first is not None
+    assert persisted_second is not None
+    assert persisted_first.photo_asset_id == first_asset_id
+    assert persisted_second.photo_asset_id == first_asset_id
+
+    selected_alias = admin_client.patch(
+        f"/api/v1/vehicles/{second['id']}",
+        json={"photo_asset_id": duplicate_asset_id},
+    )
+    assert selected_alias.status_code == 200, selected_alias.text
+    assert selected_alias.json()["photo_asset_id"] == first_asset_id
+    assert (
+        admin_client.delete(f"/api/v1/vehicles/photo-library/{duplicate_asset_id}").status_code
+        == 409
+    )
+    assert {item["id"] for item in admin_client.get("/api/v1/vehicles/photo-library").json()} == {
+        first_asset_id
+    }
+
+    storage_roots = [
+        path for path in (get_settings().data_dir / "vehicle_photos").iterdir() if path.is_dir()
+    ]
+    assert len(storage_roots) == 1
+    for file in files:
+        stored = api_db.get(VehicleFile, file["id"])
+        assert stored is not None
+        assert (get_settings().data_dir / stored.path).is_file()
+
+
+def test_photo_library_auth_precedes_etag_and_invalid_upload_is_rejected(
+    admin_client: TestClient,
+    vehicle_editor_client: TestClient,
+    api_db: Session,
+) -> None:
+    uploaded = admin_client.post(
+        "/api/v1/vehicles/photo-library",
+        data={"label_en": "Private photo"},
+        files={"file": ("private.png", _PNG_1X1, "image/png")},
+    )
+    assert uploaded.status_code == 200, uploaded.text
+    image_url = uploaded.json()["thumbnail_url"]
+    image = admin_client.get(image_url)
+    assert image.status_code == 200, image.text
+    assert image.headers["cache-control"] == "private, max-age=31536000, immutable"
+    etag = image.headers["etag"]
+
+    unauthorised_user = _make_user(api_db, role="operator", email="vehicle-photo-no-view@test.ae")
+    unauthorised = _client_for(api_db, unauthorised_user).get(
+        image_url, headers={"If-None-Match": etag}
+    )
+    assert unauthorised.status_code == 403
+    conditional = vehicle_editor_client.get(image_url, headers={"If-None-Match": f"W/{etag}"})
+    assert conditional.status_code == 304
+    assert conditional.headers["etag"] == etag
+    assert (
+        vehicle_editor_client.delete(
+            f"/api/v1/vehicles/photo-library/{uploaded.json()['id']}"
+        ).status_code
+        == 403
+    )
+
+    invalid = vehicle_editor_client.post(
+        "/api/v1/vehicles/photo-library",
+        data={"label_en": "Broken"},
+        files={"file": ("broken.png", b"not an image", "image/png")},
+    )
+    assert invalid.status_code == 422, invalid.text
+    assert invalid.json()["error"]["code"] == "VEHICLE_PHOTO_INVALID"
+
+
+def test_gallery_promotion_copies_to_library_without_mutating_original(
+    admin_client: TestClient,
+    api_db: Session,
+) -> None:
     vehicle = _create_vehicle(admin_client)
-    vehicle_id = int(vehicle["id"])
-    main = _upload_vehicle_image(
+    gallery = _upload_vehicle_image(
         admin_client,
-        vehicle_id,
-        kind="photo",
-        filename="protected-main.png",
+        int(vehicle["id"]),
+        kind="gallery",
+        filename="gallery-source.png",
     )
-    attached = admin_client.patch(
-        f"/api/v1/vehicles/{vehicle_id}",
-        json={"photo_file_id": main["id"]},
-    )
-    assert attached.status_code == 200, attached.text
+    original = api_db.get(VehicleFile, gallery["id"])
+    assert original is not None
+    original_path = get_settings().data_dir / original.path
+    original_bytes = original_path.read_bytes()
 
-    rejected = admin_client.delete(
-        f"/api/v1/vehicles/{vehicle_id}/files/{main['id']}",
+    promoted = admin_client.post(
+        f"/api/v1/vehicles/{vehicle['id']}/files/{gallery['id']}/photo-asset"
     )
+    assert promoted.status_code == 200, promoted.text
+    api_db.expire_all()
+    preserved = api_db.get(VehicleFile, gallery["id"])
+    assert preserved is not None
+    assert preserved.kind == "gallery"
+    assert preserved.path == original.path
+    assert original_path.read_bytes() == original_bytes
 
-    assert rejected.status_code == 409, rejected.text
-    assert rejected.json()["error"]["code"] == "VEHICLE_FILE_IN_USE"
-    assert rejected.json()["error"]["details"] == {"file_id": main["id"]}
-    assert admin_client.get(main["url"]).status_code == 200
-    persisted = admin_client.get(f"/api/v1/vehicles/{vehicle_id}")
-    assert persisted.status_code == 200, persisted.text
-    assert persisted.json()["photo_file_id"] == main["id"]
+    selected = admin_client.patch(
+        f"/api/v1/vehicles/{vehicle['id']}",
+        json={"photo_asset_id": promoted.json()["id"]},
+    )
+    assert selected.status_code == 200, selected.text
+    assert admin_client.delete(gallery["url"]).status_code == 204
+    assert not original_path.exists()
+    assert admin_client.get(promoted.json()["full_url"]).status_code == 200
 
 
 def test_deleting_accident_referenced_gallery_photo_names_blocking_accident(
@@ -673,55 +956,6 @@ def test_free_photo_deletion_keeps_permission_and_active_vehicle_guards(
     assert audit.actor == admin_user.email
     assert audit.payload is not None
     assert json.loads(audit.payload) == {"file_id": free_photo["id"]}
-
-
-def test_replaced_former_main_photo_is_deletable(
-    admin_client: TestClient,
-    api_db: Session,
-) -> None:
-    vehicle = _create_vehicle(admin_client)
-    vehicle_id = int(vehicle["id"])
-    former_main = _upload_vehicle_image(
-        admin_client,
-        vehicle_id,
-        kind="photo",
-        filename="former-main.png",
-    )
-    replacement = _upload_vehicle_image(
-        admin_client,
-        vehicle_id,
-        kind="gallery",
-        filename="replacement-main.png",
-    )
-    attached = admin_client.patch(
-        f"/api/v1/vehicles/{vehicle_id}",
-        json={"photo_file_id": former_main["id"]},
-    )
-    assert attached.status_code == 200, attached.text
-    replaced = admin_client.patch(
-        f"/api/v1/vehicles/{vehicle_id}",
-        json={"photo_file_id": replacement["id"]},
-    )
-    assert replaced.status_code == 200, replaced.text
-    api_db.expire_all()
-    former_row = api_db.get(VehicleFile, former_main["id"])
-    assert former_row is not None
-    assert former_row.kind == "gallery"
-    former_path = get_settings().data_dir / former_row.path
-
-    deleted = admin_client.delete(
-        f"/api/v1/vehicles/{vehicle_id}/files/{former_main['id']}",
-    )
-
-    assert deleted.status_code == 204, deleted.text
-    api_db.expire_all()
-    assert api_db.get(VehicleFile, former_main["id"]) is None
-    assert not former_path.exists()
-    assert admin_client.get(former_main["url"]).status_code == 404
-    persisted = admin_client.get(f"/api/v1/vehicles/{vehicle_id}")
-    assert persisted.status_code == 200, persisted.text
-    assert persisted.json()["photo_file_id"] == replacement["id"]
-    assert admin_client.get(replacement["url"]).status_code == 200
 
 
 def test_notify_days_updates_summary_and_flips_vehicle_to_due(

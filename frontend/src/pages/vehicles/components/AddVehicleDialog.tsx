@@ -1,19 +1,8 @@
 /**
- * AddVehicleDialog — register a vehicle, its site and its first license.
- *
- * Three requests, in this order, because a file needs a vehicle to belong to:
- *   1. POST /vehicles           — the record (with `new_site` when the operator
- *                                 typed a site instead of picking one)
- *   2. POST /vehicles/{id}/files — the main photo and the license scan
- *   3. PATCH /vehicles/{id}     — point the record at the stored files
- * The success toast fires after the last one. An upload that fails does not
- * discard the vehicle: the record is kept, the dialog closes, and the failure
- * is reported on its own so the operator knows to re-attach the scan from the
- * vehicle file rather than re-registering the vehicle.
- *
- * Field schema, rendering, and payload mapping are shared with the full-page
- * editor via `vehicleForm.ts` / `VehicleFormFields` — this dialog owns only
- * the create → upload → attach mutation and its own file-picker slots.
+ * AddVehicleDialog registers a vehicle and its first licence. The reusable
+ * main photo is selected or uploaded before submit, so the asset pointer lands
+ * in the create request. A licence attachment still follows creation; failures
+ * there are reported without inviting a duplicate vehicle retry.
  */
 
 import { useId, useRef, useState } from 'react'
@@ -26,11 +15,10 @@ import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 import { api } from '@/lib/api'
-import type { VehicleRead, VehicleSiteRead, VehicleUpdate } from '@/lib/api'
+import type { VehiclePhotoRead, VehicleRead, VehicleSiteRead, VehicleUpdate } from '@/lib/api'
 
 import {
   DOCUMENT_ACCEPT,
-  IMAGE_ACCEPT,
   VEHICLE_QUERY_KEYS,
   invalidateVehicleQueries,
   vehicleErrorMessage,
@@ -51,6 +39,7 @@ import {
 } from './VehicleDialogShell'
 import { VehicleFormFields } from './VehicleFormFields'
 import { VehicleLicenceScanControl } from './VehicleLicenceScanControl'
+import { VehiclePhotoPicker } from './VehiclePhotoPicker'
 
 interface Props {
   open: boolean
@@ -120,7 +109,8 @@ function AddVehicleForm({
   const fieldId = useId()
   const alertId = `${fieldId}-alert`
 
-  const [photoFile, setPhotoFile] = useState<File | null>(null)
+  const [photoPickerOpen, setPhotoPickerOpen] = useState(false)
+  const [selectedPhoto, setSelectedPhoto] = useState<VehiclePhotoRead | null>(null)
   const scanRetainedFileRef = useRef<File | null>(null)
   const [licenseFile, setLicenseFile] = useState<File | null>(null)
   const [serverError, setServerError] = useState<string | null>(null)
@@ -138,17 +128,13 @@ function AddVehicleForm({
     mutationFn: async (
       values: VehicleFormValues,
     ): Promise<{ vehicle: VehicleRead; failures: string[] }> => {
-      const body = vehicleCreatePayload(values)
+      const body = {
+        ...vehicleCreatePayload(values),
+        photo_asset_id: selectedPhoto?.id ?? null,
+      }
       let vehicle = await api.createVehicle(body)
       const patch: VehicleUpdate = {}
       const failures: string[] = []
-      if (photoFile) {
-        try {
-          patch.photo_file_id = (await api.uploadVehicleFile(vehicle.id, 'photo', photoFile)).id
-        } catch (err) {
-          failures.push(vehicleErrorMessage(err, t))
-        }
-      }
       if (licenseFile) {
         try {
           patch.license_file_id = (
@@ -193,6 +179,7 @@ function AddVehicleForm({
   const alert = serverError ?? (invalid ? t('vehicles.requiredFields') : null)
 
   return (
+    <>
     <form
       className="flex min-h-0 flex-1 flex-col"
       onSubmit={handleSubmit((values) => {
@@ -211,15 +198,31 @@ function AddVehicleForm({
         />
 
         <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
-          <UploadSlot
-            label={t('vehicles.uploadPhoto')}
-            accept={IMAGE_ACCEPT}
-            file={photoFile}
-            onFile={setPhotoFile}
-            onClear={() => setPhotoFile(null)}
-            disabled={mutation.isPending}
-            clearLabel={t('common.remove')}
-          />
+          <div className="flex flex-col gap-2 rounded-lg border border-border bg-surface-raised p-3">
+            <span className="text-xs font-semibold text-foreground">
+              {t('vehicles.mainPhoto')}
+            </span>
+            {selectedPhoto ? (
+              <img
+                src={selectedPhoto.preview_url}
+                alt={t('vehicles.mainPhoto')}
+                className="h-28 w-full rounded-md bg-surface-tinted object-contain"
+              />
+            ) : (
+              <p className="grid h-20 place-items-center text-center text-xs text-muted-foreground">
+                {t('vehicles.photoLibrary.noSelection')}
+              </p>
+            )}
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              disabled={mutation.isPending}
+              onClick={() => setPhotoPickerOpen(true)}
+            >
+              {t('vehicles.photoLibrary.choose')}
+            </Button>
+          </div>
           <div className="flex flex-col gap-3.5">
             <UploadSlot
               label={t('vehicles.licenseScan')}
@@ -276,5 +279,13 @@ function AddVehicleForm({
         </Button>
       </VehicleDialogFooter>
     </form>
+      <VehiclePhotoPicker
+        open={photoPickerOpen}
+        onOpenChange={setPhotoPickerOpen}
+        currentAssetId={selectedPhoto?.id ?? null}
+        currentPreviewUrl={selectedPhoto?.preview_url}
+        onSave={setSelectedPhoto}
+      />
+    </>
   )
 }

@@ -412,7 +412,12 @@ def regenerate_permit_book(
         # approval state it had before normalization, so its immutable DOCX/PDF
         # remains in history and the new version is appended.
         latest = prior.versions[-1] if prior is not None and prior.versions else None
-        if latest is not None and latest.document_id is not None and latest.fields == {}:
+        if (
+            prior is not None
+            and latest is not None
+            and latest.document_id is not None
+            and latest.fields == {}
+        ):
             prior.approval_state = "returned"
             db.flush()
 

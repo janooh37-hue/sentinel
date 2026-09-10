@@ -7,7 +7,7 @@ import { toast } from 'sonner'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { ApiError, api } from '@/lib/api'
-import type { VehicleFileRead, VehicleRead, VehicleSiteRead } from '@/lib/api'
+import type { VehicleFileRead, VehiclePhotoRead, VehicleRead, VehicleSiteRead } from '@/lib/api'
 import i18n from '@/lib/i18n'
 
 import { VehicleDetailPage } from './VehicleDetailPage'
@@ -37,6 +37,9 @@ vi.mock('@/lib/api', async (importOriginal) => {
       uploadVehicleFile: vi.fn(),
       updateVehicle: vi.fn(),
       deleteVehicleFile: vi.fn(),
+      promoteVehiclePhoto: vi.fn(),
+      listVehiclePhotos: vi.fn(),
+      uploadVehiclePhoto: vi.fn(),
     },
   }
 })
@@ -77,7 +80,10 @@ function baseVehicle(overrides: Partial<VehicleRead> = {}): VehicleRead {
     fines_count: 0,
     fines_amount: 0,
     black_points: 0,
-    photo_url: '/api/v1/vehicles/101/files/1',
+    photo_asset_id: 1,
+    photo_url: '/api/v1/vehicles/photo-library/1/image/preview',
+    photo_thumbnail_url: '/api/v1/vehicles/photo-library/1/image/thumbnail',
+    photo_full_url: '/api/v1/vehicles/photo-library/1/image/full',
     make: null,
     model: null,
     model_year: null,
@@ -100,11 +106,23 @@ function baseVehicle(overrides: Partial<VehicleRead> = {}): VehicleRead {
     accessories_en: null,
     notes_ar: null,
     notes_en: null,
-    photo_file_id: 1,
     license_file_id: 2,
     license_files: [vehicleFile(2, 'license', 'licence.jpg')],
     ...overrides,
   }
+}
+
+const PHOTO_ASSET: VehiclePhotoRead = {
+  id: 21,
+  label_ar: 'صورة جانبية',
+  label_en: 'Side photo',
+  original_name: 'side.jpg',
+  thumbnail_url: '/api/v1/vehicles/photo-library/21/image/thumbnail',
+  preview_url: '/api/v1/vehicles/photo-library/21/image/preview',
+  full_url: '/api/v1/vehicles/photo-library/21/image/full',
+  width: 1448,
+  height: 1086,
+  usage_count: 0,
 }
 
 function renderPage(tab?: 'renewals' | 'photos') {
@@ -144,6 +162,8 @@ beforeEach(async () => {
   )
   vi.mocked(api.getVehicle).mockResolvedValue(baseVehicle())
   vi.mocked(api.listVehicleSites).mockResolvedValue(SITES)
+  vi.mocked(api.listVehiclePhotos).mockResolvedValue([PHOTO_ASSET])
+  vi.mocked(api.promoteVehiclePhoto).mockResolvedValue(PHOTO_ASSET)
 })
 
 describe('VehicleDetailPage', () => {
@@ -154,14 +174,31 @@ describe('VehicleDetailPage', () => {
     expect(label.parentElement).toHaveTextContent('Not recorded')
   })
 
+  it('loads the full variant only after the main photo viewer opens', async () => {
+    const user = userEvent.setup()
+    renderPage()
+
+    await user.click(await screen.findByRole('button', { name: 'Main photo' }))
+
+    expect(await screen.findByRole('img', { name: 'Main photo' })).toHaveAttribute(
+      'src',
+      '/api/v1/vehicles/photo-library/1/image/full',
+    )
+  })
+
   it('promotes a gallery photo to the main photo', async () => {
     const user = userEvent.setup()
-    vi.mocked(api.updateVehicle).mockResolvedValue(baseVehicle())
+    vi.mocked(api.updateVehicle).mockResolvedValue(
+      baseVehicle({ photo_asset_id: PHOTO_ASSET.id, photo_url: PHOTO_ASSET.preview_url }),
+    )
     renderPage('photos')
 
     await user.click(await screen.findByRole('button', { name: 'Set as main photo' }))
 
-    await waitFor(() => expect(api.updateVehicle).toHaveBeenCalledWith(101, { photo_file_id: 3 }))
+    await waitFor(() =>
+      expect(api.promoteVehiclePhoto).toHaveBeenCalledWith(101, 3),
+    )
+    expect(api.updateVehicle).toHaveBeenCalledWith(101, { photo_asset_id: PHOTO_ASSET.id })
   })
 
   it('replaces only the attached licence file without changing licence dates', async () => {

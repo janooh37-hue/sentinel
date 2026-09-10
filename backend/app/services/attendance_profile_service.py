@@ -268,7 +268,7 @@ def rebuild_profiles(
             if anchored is None:
                 continue
             observed_minutes = (anchored.start_minutes + own) % _DAY_MINUTES
-            better = min(
+            better_shift = min(
                 (
                     shift
                     for shift in shifts
@@ -279,17 +279,17 @@ def rebuild_profiles(
                 key=lambda shift: abs(_signed_offset(observed_minutes, shift.start_minutes)),
                 default=None,
             )
-            if better is not None:
-                mismatches.append((employee_id, shift_code, better.code))
+            if better_shift is not None:
+                mismatches.append((employee_id, shift_code, better_shift.code))
 
     db.flush()
     # Keyed on the row that was flagged, not on the person: a rotating crew holds
     # one profile per shift, and only the shift whose habit disagrees carries the
     # suggestion.
-    for employee_id, shift_code, better in mismatches:
+    for employee_id, shift_code, suggested_shift_code in mismatches:
         profile = db.get(AttendancePunchProfile, (employee_id, shift_code))
         if profile is not None:
-            profile.suggested_shift_code = better
+            profile.suggested_shift_code = suggested_shift_code
 
     db.flush()
     return ProfileRebuildResult(
@@ -356,7 +356,9 @@ def evidence_window(
         learned_end = case.scheduled_end_at + timedelta(
             minutes=profile.departure_late_offset + WIDEN_MARGIN_MINUTES
         )
-        end = max(end, min(learned_end, case.scheduled_end_at + timedelta(minutes=MAX_WIDEN_MINUTES)))
+        end = max(
+            end, min(learned_end, case.scheduled_end_at + timedelta(minutes=MAX_WIDEN_MINUTES))
+        )
     return (start, end)
 
 

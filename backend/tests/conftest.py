@@ -123,3 +123,4 @@ def api_db(monkeypatch, tmp_path) -> Iterator[Session]:
         yield db
     finally:
         db.close()
+        engine.dispose()

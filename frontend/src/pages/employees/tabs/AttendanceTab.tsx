@@ -134,6 +134,7 @@ export function AttendanceTab({
   initialMonth,
 }: Props): React.JSX.Element {
   const { t, i18n } = useTranslation()
+  const language = i18n.language
   const { has } = useCapabilities()
   const [month, setMonth] = useState(() => initialMonth ?? new Date().toISOString().slice(0, 10))
   const [selected, setSelected] = useState<string | null>(null)
@@ -199,12 +200,12 @@ export function AttendanceTab({
       .map(([iso, days]) => ({
         iso,
         days,
-        label: new Date(`${iso}-01T00:00:00Z`).toLocaleDateString(i18n.language, {
+        label: new Date(`${iso}-01T00:00:00Z`).toLocaleDateString(language, {
           month: 'short',
           timeZone: 'UTC',
         }),
       }))
-  }, [record.data, i18n.language])
+  }, [record.data, language])
 
   const habits = useMemo(() => query.data?.habits ?? [], [query.data])
   const rosterMismatch =
@@ -303,7 +304,7 @@ export function AttendanceTab({
   // 4 Jan 1970 was a Sunday, so index 0 lines up with `getDay()` and with the
   // padding cells that push the 1st into its column.
   const weekdays = Array.from({ length: 7 }, (_, index) =>
-    new Date(Date.UTC(1970, 0, 4 + index)).toLocaleDateString(i18n.language, {
+    new Date(Date.UTC(1970, 0, 4 + index)).toLocaleDateString(language, {
       weekday: 'short',
       timeZone: 'UTC',
     }),
@@ -408,7 +409,7 @@ export function AttendanceTab({
       <section className="rounded-2xl border border-hairline bg-surface">
         <header className="flex flex-wrap items-center gap-2.5 border-b border-hairline px-4 py-3">
           <h3 className="text-[0.85em] font-bold">
-            {new Date(bounds.year, bounds.month - 1, 1).toLocaleDateString(i18n.language, {
+            {new Date(bounds.year, bounds.month - 1, 1).toLocaleDateString(language, {
               month: 'long',
               year: 'numeric',
             })}
