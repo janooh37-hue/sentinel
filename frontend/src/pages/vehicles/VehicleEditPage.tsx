@@ -13,7 +13,7 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { FileText, Image as ImageIcon, Search, Upload, X } from 'lucide-react'
+import { Search, Star, Trash2, Upload, X } from 'lucide-react'
 import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import { Link, useNavigate, useParams } from 'react-router-dom'
@@ -26,8 +26,8 @@ import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ApiError, api } from '@/lib/api'
 import { isolateBidi } from '@/lib/useCapabilityCatalog'
-import type { VehicleListItem, VehicleRead, VehicleUpdate } from '@/lib/api'
-import { useDebouncedValue } from '@/lib/useDebouncedValue'
+import type { VehicleFileRead, VehicleListItem, VehicleRead, VehicleUpdate } from '@/lib/api'
+import { useCapabilities } from '@/lib/useCapabilities'
 
 import {
   type VehicleFormInput,
@@ -41,12 +41,13 @@ import {
   IMAGE_ACCEPT,
   VEHICLE_QUERY_KEYS,
   invalidateVehicleQueries,
-  localized,
+  fileLabel,
   plateLabel,
   vehicleErrorMessage,
 } from './vehicleUtils'
 import { PlateChip } from './components/PlateChip'
 import { UploadSlot } from './components/VehicleDialogShell'
+import { VehicleFileThumb } from './components/VehicleFileViewer'
 import { VehicleLicenceScanControl } from './components/VehicleLicenceScanControl'
 import { VehicleFormFields } from './components/VehicleFormFields'
 
@@ -227,6 +228,12 @@ function VehicleEditEditor({ vehicleId }: { vehicleId: number }): React.JSX.Elem
   )
 }
 
+type PendingGalleryFile = {
+  key: number
+  file: File
+  previewUrl: string
+}
+
 type PendingLicenceFile = {
   file: File
   uploadedFileId: number | null
@@ -234,10 +241,11 @@ type PendingLicenceFile = {
 
 type EditorSaveResult = {
   vehicle: VehicleRead
-  galleryUploaded: File[]
+  galleryUploaded: PendingGalleryFile[]
   licenceFile: File | null
   licenceUploadedFileId: number | null
   licenceAttached: boolean
+  mainPhotoSaved: boolean
   failures: string[]
 }
 
@@ -262,7 +270,7 @@ function EditorSection({
 }): React.JSX.Element {
   return (
     <section className="space-y-3">
-      <h3 className="text-sm font-semibold text-foreground">{title}</h3>
+      <h2 className="text-sm font-semibold text-foreground">{title}</h2>
       {children}
     </section>
   )
@@ -281,15 +289,22 @@ function EditorForm({
   alertId: string
   onSaved: (vehicle: VehicleRead) => void
 }): React.JSX.Element {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const navigate = useNavigate()
   const queryClient = useQueryClient()
+  const { has } = useCapabilities()
+  const canDeleteFiles = has('vehicles.delete')
   const savedVehicleRef = useRef(vehicle)
+  const [savedVehicle, setSavedVehicle] = useState(vehicle)
   const scanRetainedFileRef = useRef<File | null>(null)
+  const pendingGallerySequence = useRef(0)
+  const activePreviewUrls = useRef(new Set<string>())
   const [serverError, setServerError] = useState<string | null>(null)
   const [discardConfirmOpen, setDiscardConfirmOpen] = useState(false)
-  const [pendingGalleryFiles, setPendingGalleryFiles] = useState<File[]>([])
+  const [pendingGalleryFiles, setPendingGalleryFiles] = useState<PendingGalleryFile[]>([])
   const [pendingLicence, setPendingLicence] = useState<PendingLicenceFile | null>(null)
+  const [mainPhotoDraft, setMainPhotoDraft] = useState<number | null | undefined>(undefined)
+  const [photoToDelete, setPhotoToDelete] = useState<VehicleFileRead | null>(null)
 
   const form = useForm<VehicleFormInput, unknown, VehicleFormValues>({
     resolver: zodResolver(vehicleFormSchema),
@@ -301,7 +316,12 @@ function EditorForm({
   } = form
   const currentValues = form.watch()
   const hasPendingFiles = pendingGalleryFiles.length > 0 || pendingLicence != null
-  const hasUnsavedChanges = isDirty || hasPendingFiles
+  const hasUnsavedChanges = isDirty || hasPendingFiles || mainPhotoDraft !== undefined
+
+  const revokePreviewUrl = (url: string): void => {
+    if (!activePreviewUrls.current.delete(url)) return
+    URL.revokeObjectURL(url)
+  }
 
   // Tab close/reload while dirty — Cancel/back inside the app is handled by
   // the confirm dialog below (BrowserRouter has no navigation blocker).
@@ -314,12 +334,20 @@ function EditorForm({
     return () => window.removeEventListener('beforeunload', handler)
   }, [hasUnsavedChanges])
 
+  useEffect(
+    () => () => {
+      for (const url of activePreviewUrls.current) URL.revokeObjectURL(url)
+      activePreviewUrls.current.clear()
+    },
+    [],
+  )
+
   const mutation = useMutation({
     mutationFn: async (values: VehicleFormValues): Promise<EditorSaveResult> => {
       let savedVehicle = savedVehicleRef.current
       const patch = vehicleUpdatePayload(values, savedVehicle)
       if (Object.keys(patch).length > 0) {
-        savedVehicle = await api.updateVehicle(vehicle.id, patch)
+        savedVehicle = await api.updateVehicle(savedVehicle.id, patch)
         const identityChanged = VEHICLE_IDENTITY_PATCH_FIELDS.some((field) =>
           Object.prototype.hasOwnProperty.call(patch, field),
         )
@@ -331,13 +359,37 @@ function EditorForm({
         })
       }
 
-      const galleryUploaded: File[] = []
+      const galleryUploaded: PendingGalleryFile[] = []
       const failures: string[] = []
-      for (const file of pendingGalleryFiles) {
+      for (const pending of pendingGalleryFiles) {
         try {
-          await api.uploadVehicleFile(vehicle.id, 'gallery', file)
-          invalidateVehicleQueries(queryClient, { vehicleId: vehicle.id })
-          galleryUploaded.push(file)
+          const uploaded = await api.uploadVehicleFile(
+            savedVehicle.id,
+            'gallery',
+            pending.file,
+          )
+          savedVehicle = {
+            ...savedVehicle,
+            photos: [
+              uploaded,
+              ...(savedVehicle.photos ?? []).filter((photo) => photo.id !== uploaded.id),
+            ],
+          }
+          invalidateVehicleQueries(queryClient, { vehicleId: savedVehicle.id })
+          galleryUploaded.push(pending)
+        } catch (err) {
+          failures.push(vehicleErrorMessage(err, t))
+        }
+      }
+
+      let mainPhotoSaved = false
+      if (mainPhotoDraft !== undefined) {
+        try {
+          savedVehicle = await api.updateVehicle(savedVehicle.id, {
+            photo_file_id: mainPhotoDraft,
+          })
+          invalidateVehicleQueries(queryClient, { vehicleId: savedVehicle.id })
+          mainPhotoSaved = true
         } catch (err) {
           failures.push(vehicleErrorMessage(err, t))
         }
@@ -350,22 +402,31 @@ function EditorForm({
         if (licenceUploadedFileId == null) {
           try {
             const uploadedFile = await api.uploadVehicleFile(
-              vehicle.id,
+              savedVehicle.id,
               'license',
               pendingLicence.file,
             )
             licenceUploadedFileId = uploadedFile.id
-            invalidateVehicleQueries(queryClient, { vehicleId: vehicle.id })
+            savedVehicle = {
+              ...savedVehicle,
+              license_files: [
+                uploadedFile,
+                ...(savedVehicle.license_files ?? []).filter(
+                  (file) => file.id !== uploadedFile.id,
+                ),
+              ],
+            }
+            invalidateVehicleQueries(queryClient, { vehicleId: savedVehicle.id })
           } catch (err) {
             failures.push(vehicleErrorMessage(err, t))
           }
         }
         if (licenceUploadedFileId != null) {
           try {
-            savedVehicle = await api.updateVehicle(vehicle.id, {
+            savedVehicle = await api.updateVehicle(savedVehicle.id, {
               license_file_id: licenceUploadedFileId,
             })
-            invalidateVehicleQueries(queryClient, { vehicleId: vehicle.id })
+            invalidateVehicleQueries(queryClient, { vehicleId: savedVehicle.id })
             licenceAttached = true
           } catch (err) {
             failures.push(vehicleErrorMessage(err, t))
@@ -379,17 +440,25 @@ function EditorForm({
         licenceFile,
         licenceUploadedFileId,
         licenceAttached,
+        mainPhotoSaved,
         failures,
       }
     },
     onSuccess: (result) => {
       savedVehicleRef.current = result.vehicle
+      setSavedVehicle(result.vehicle)
       form.reset(vehicleFormDefaults(result.vehicle, sites))
       if (result.galleryUploaded.length > 0) {
+        const uploadedKeys = new Set(result.galleryUploaded.map((pending) => pending.key))
         setPendingGalleryFiles((current) =>
-          current.filter((file) => !result.galleryUploaded.includes(file)),
+          current.filter((pending) => {
+            if (!uploadedKeys.has(pending.key)) return true
+            revokePreviewUrl(pending.previewUrl)
+            return false
+          }),
         )
       }
+      if (result.mainPhotoSaved) setMainPhotoDraft(undefined)
       if (result.licenceFile) {
         setPendingLicence((current) => {
           if (!current || current.file !== result.licenceFile) return current
@@ -420,9 +489,38 @@ function EditorForm({
     },
   })
 
+  const deletePhoto = useMutation({
+    mutationFn: (file: VehicleFileRead) =>
+      api.deleteVehicleFile(savedVehicleRef.current.id, file.id),
+    onSuccess: (_result, deleted) => {
+      const nextVehicle = {
+        ...savedVehicleRef.current,
+        photos: (savedVehicleRef.current.photos ?? []).filter(
+          (photo) => photo.id !== deleted.id,
+        ),
+      }
+      savedVehicleRef.current = nextVehicle
+      setSavedVehicle(nextVehicle)
+      setMainPhotoDraft((draft) => (draft === deleted.id ? undefined : draft))
+      setServerError(null)
+      invalidateVehicleQueries(queryClient, { vehicleId: nextVehicle.id })
+      toast.success(t('vehicles.photoDeleted'))
+    },
+    onError: (err) => {
+      const message = vehicleErrorMessage(err, t)
+      setServerError(message)
+      toast.error(message)
+    },
+  })
+
   const invalid = Object.keys(errors).length > 0
   const alert = serverError ?? (invalid ? t('vehicles.requiredFields') : null)
-  const plate = vehicle.plate_label || plateLabel(vehicle)
+  const plate = savedVehicle.plate_label || plateLabel(savedVehicle)
+  const busy = mutation.isPending || deletePhoto.isPending
+  const galleryPhotos = savedVehicle.photos ?? []
+  // The API returns licence files newest-first; keeping that order also keeps
+  // the current and historical scans aligned with the vehicle record.
+  const licenceFiles = savedVehicle.license_files ?? []
 
   const leave = (): void => {
     if (hasUnsavedChanges) setDiscardConfirmOpen(true)
@@ -472,12 +570,15 @@ function EditorForm({
             />
 
             <EditorSection title={t('vehicles.sections.photos')}>
-              {(vehicle.photo_url || vehicle.license_url) && (
-                <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
-                  {vehicle.photo_url && (
+              <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                <div className="space-y-2">
+                  <h3 className="text-xs font-semibold text-foreground">
+                    {t('vehicles.mainPhoto')}
+                  </h3>
+                  {savedVehicle.photo_url && (
                     <div className="overflow-hidden rounded-lg border border-border bg-surface-raised">
                       <img
-                        src={vehicle.photo_url}
+                        src={savedVehicle.photo_url}
                         alt={t('vehicles.mainPhoto')}
                         className="h-32 w-full object-cover"
                       />
@@ -486,21 +587,61 @@ function EditorForm({
                       </p>
                     </div>
                   )}
-                  {vehicle.license_url && (
-                    <a
-                      href={vehicle.license_url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="flex min-h-32 flex-col items-center justify-center gap-2 rounded-lg border border-border bg-surface-raised p-4 text-center transition-colors hover:bg-surface-tinted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  {(savedVehicle.photo_file_id != null || mainPhotoDraft != null) && (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      className="w-full"
+                      disabled={busy}
+                      onClick={() =>
+                        setMainPhotoDraft((draft) => (draft === null ? undefined : null))
+                      }
                     >
-                      <FileText className="h-7 w-7 text-primary" strokeWidth={1.75} aria-hidden />
-                      <span className="text-xs font-medium text-foreground">
-                        {t('vehicles.currentLicense')}
-                      </span>
-                    </a>
+                      {mainPhotoDraft === null
+                        ? t('vehicles.keepMainPhoto')
+                        : t('vehicles.removeMainPhoto')}
+                    </Button>
+                  )}
+                  {mainPhotoDraft === null && (
+                    <p role="status" className="text-xs font-medium text-muted-foreground">
+                      {t('vehicles.mainPhotoRemovalPending')}
+                    </p>
                   )}
                 </div>
-              )}
+
+                <div className="space-y-2">
+                  <h3 className="text-xs font-semibold text-foreground">
+                    {t('vehicles.licenceFiles')}
+                  </h3>
+                  {licenceFiles.length > 0 && (
+                    <ul
+                      aria-label={t('vehicles.licenceFiles')}
+                      className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-2 xl:grid-cols-3"
+                    >
+                      {licenceFiles.map((file) => {
+                        const current = file.id === savedVehicle.license_file_id
+                        return (
+                          <li key={file.id} className="relative min-w-0">
+                            <VehicleFileThumb
+                              vehicleId={savedVehicle.id}
+                              file={file}
+                              siblings={licenceFiles}
+                              showLabel
+                              className="h-28 w-full"
+                            />
+                            {current && (
+                              <span className="pointer-events-none absolute end-1 top-1 rounded-full bg-primary px-2 py-0.5 text-[0.65rem] font-semibold text-primary-foreground shadow-sm">
+                                {t('vehicles.currentLicenceScan')}
+                              </span>
+                            )}
+                          </li>
+                        )
+                      })}
+                    </ul>
+                  )}
+                </div>
+              </div>
 
               <div className="grid grid-cols-1 gap-3.5 lg:grid-cols-2">
                 <VehicleLicenceScanControl
@@ -526,92 +667,179 @@ function EditorForm({
                       )
                     }
                   }}
-                  disabled={mutation.isPending}
+                  disabled={busy}
                 />
 
-                <div className="space-y-3">
-                  <UploadSlot
-                    label={t('vehicles.uploadScan')}
-                    accept={DOCUMENT_ACCEPT}
-                    file={pendingLicence?.file ?? null}
-                    onFile={(file) => {
-                      scanRetainedFileRef.current = null
-                      setPendingLicence({ file, uploadedFileId: null })
-                    }}
-                    onClear={() => {
-                      scanRetainedFileRef.current = null
-                      setPendingLicence(null)
-                    }}
-                    disabled={mutation.isPending}
-                    clearLabel={t('common.remove')}
-                  />
-
-                  <label className="flex cursor-pointer flex-col items-center justify-center gap-1.5 rounded-lg border border-dashed border-border px-4 py-6 text-center transition-colors focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 focus-within:ring-offset-background hover:border-primary hover:bg-surface-tinted">
-                    <input
-                      type="file"
-                      accept={IMAGE_ACCEPT}
-                      multiple
-                      disabled={mutation.isPending}
-                      className="sr-only"
-                      aria-label={t('vehicles.addPhoto')}
-                      onChange={(event) => {
-                        const files = Array.from(event.currentTarget.files ?? [])
-                        event.currentTarget.value = ''
-                        if (files.length > 0) {
-                          setPendingGalleryFiles((current) => [...current, ...files])
-                        }
-                      }}
-                    />
-                    <Upload className="h-5 w-5 text-muted-foreground" strokeWidth={1.75} aria-hidden />
-                    <span className="text-sm font-medium text-foreground">
-                      {t('vehicles.addPhoto')}
-                    </span>
-                  </label>
-
-                  {pendingGalleryFiles.length > 0 && (
-                    <ul className="space-y-2">
-                      {pendingGalleryFiles.map((file, index) => (
-                        <li
-                          key={`${file.name}-${file.size}-${file.lastModified}-${index}`}
-                          className="flex items-center gap-2 rounded-lg border border-border bg-surface-raised px-3 py-2"
-                        >
-                          <ImageIcon
-                            className="h-4 w-4 shrink-0 text-muted-foreground"
-                            strokeWidth={1.75}
-                            aria-hidden
-                          />
-                          <span className="min-w-0 flex-1 truncate text-sm text-foreground" dir="auto">
-                            {file.name}
-                          </span>
-                          <button
-                            type="button"
-                            disabled={mutation.isPending}
-                            onClick={() =>
-                              setPendingGalleryFiles((current) =>
-                                current.filter((_, fileIndex) => fileIndex !== index),
-                              )
-                            }
-                            aria-label={`${t('common.remove')}: ${isolateBidi(file.name)}`}
-                            title={t('common.remove')}
-                            className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-surface-tinted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
-                          >
-                            <X className="h-4 w-4" aria-hidden />
-                          </button>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
+                <UploadSlot
+                  label={t('vehicles.uploadScan')}
+                  accept={DOCUMENT_ACCEPT}
+                  file={pendingLicence?.file ?? null}
+                  onFile={(file) => {
+                    scanRetainedFileRef.current = null
+                    setPendingLicence({ file, uploadedFileId: null })
+                  }}
+                  onClear={() => {
+                    scanRetainedFileRef.current = null
+                    setPendingLicence(null)
+                  }}
+                  disabled={busy}
+                  clearLabel={t('common.remove')}
+                />
               </div>
+
+              {galleryPhotos.length > 0 && (
+                <div className="space-y-2">
+                  <h3 className="text-xs font-semibold text-foreground">
+                    {t('vehicles.gallery')}
+                  </h3>
+                  <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                    {galleryPhotos.map((photo) => {
+                      const label = fileLabel(photo, i18n.language)
+                      const selected = mainPhotoDraft === photo.id
+                      return (
+                        <li
+                          key={photo.id}
+                          className="grid min-w-0 grid-cols-[4rem_minmax(0,1fr)] gap-2 rounded-lg border border-border bg-surface-raised p-2"
+                        >
+                          <VehicleFileThumb
+                            vehicleId={savedVehicle.id}
+                            file={photo}
+                            siblings={galleryPhotos}
+                            className="h-16 w-16"
+                          />
+                          <div className="flex min-w-0 flex-col justify-between gap-1.5">
+                            <span className="truncate text-xs text-foreground" dir="auto">
+                              {label}
+                            </span>
+                            <div className="flex flex-wrap items-center gap-1">
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant={selected ? 'secondary' : 'ghost'}
+                                disabled={busy || selected}
+                                aria-label={t('vehicles.useFileAsMainPhoto', {
+                                  name: isolateBidi(label),
+                                })}
+                                onClick={() => setMainPhotoDraft(photo.id)}
+                              >
+                                <Star className="h-3.5 w-3.5" aria-hidden />
+                                {selected
+                                  ? t('vehicles.selectedAsMainPhoto')
+                                  : t('vehicles.useAsMainPhoto')}
+                              </Button>
+                              {canDeleteFiles && (
+                                <Button
+                                  type="button"
+                                  size="icon-sm"
+                                  variant="ghost"
+                                  disabled={busy}
+                                  className="text-muted-foreground hover:text-accent"
+                                  aria-label={t('vehicles.deleteFileNamed', {
+                                    name: isolateBidi(label),
+                                  })}
+                                  title={t('vehicles.delete')}
+                                  onClick={() => setPhotoToDelete(photo)}
+                                >
+                                  <Trash2 className="h-3.5 w-3.5" aria-hidden />
+                                </Button>
+                              )}
+                            </div>
+                          </div>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                </div>
+              )}
+
+              <label className="flex cursor-pointer flex-col items-center justify-center gap-1.5 rounded-lg border border-dashed border-border bg-surface-raised px-4 py-6 text-center transition-colors focus-within:ring-2 focus-within:ring-ring focus-within:ring-offset-2 focus-within:ring-offset-background hover:border-primary hover:bg-surface-tinted motion-reduce:transition-none">
+                <input
+                  type="file"
+                  accept={IMAGE_ACCEPT}
+                  multiple
+                  disabled={busy}
+                  className="sr-only"
+                  aria-label={t('vehicles.uploadGalleryPhotos')}
+                  onChange={(event) => {
+                    const files = Array.from(event.currentTarget.files ?? [])
+                    event.currentTarget.value = ''
+                    if (files.length === 0) return
+                    setPendingGalleryFiles((current) => [
+                      ...current,
+                      ...files.map((file) => {
+                        const previewUrl = URL.createObjectURL(file)
+                        activePreviewUrls.current.add(previewUrl)
+                        pendingGallerySequence.current += 1
+                        return {
+                          key: pendingGallerySequence.current,
+                          file,
+                          previewUrl,
+                        }
+                      }),
+                    ])
+                  }}
+                />
+                <Upload
+                  className="h-5 w-5 text-muted-foreground"
+                  strokeWidth={1.75}
+                  aria-hidden
+                />
+                <span className="text-sm font-medium text-foreground">
+                  {t('vehicles.uploadGalleryPhotos')}
+                </span>
+              </label>
+
+              {pendingGalleryFiles.length > 0 && (
+                <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  {pendingGalleryFiles.map((pending) => (
+                    <li
+                      key={pending.key}
+                      className="flex min-w-0 items-center gap-2 rounded-lg border border-border bg-surface-raised p-2"
+                    >
+                      <img
+                        src={pending.previewUrl}
+                        alt={t('vehicles.pendingPhotoPreview', {
+                          name: isolateBidi(pending.file.name),
+                        })}
+                        className="h-14 w-16 shrink-0 rounded-md object-cover"
+                      />
+                      <span className="min-w-0 flex-1 truncate text-xs text-foreground" dir="auto">
+                        {pending.file.name}
+                      </span>
+                      <Button
+                        type="button"
+                        size="icon-sm"
+                        variant="ghost"
+                        disabled={busy}
+                        aria-label={t('vehicles.removePendingPhoto', {
+                          name: isolateBidi(pending.file.name),
+                        })}
+                        title={t('common.remove')}
+                        onClick={() =>
+                          setPendingGalleryFiles((current) =>
+                            current.filter((file) => {
+                              if (file.key !== pending.key) return true
+                              revokePreviewUrl(file.previewUrl)
+                              return false
+                            }),
+                          )
+                        }
+                      >
+                        <X className="h-3.5 w-3.5" aria-hidden />
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </EditorSection>
           </div>
         </div>
 
         <div className="sticky bottom-0 flex shrink-0 items-center justify-end gap-2 border-t border-border bg-surface px-4 py-3 md:px-6">
-          <Button type="button" variant="ghost" disabled={mutation.isPending} onClick={leave}>
+          <Button type="button" variant="ghost" disabled={busy} onClick={leave}>
             {t('vehicles.cancel')}
           </Button>
-          <Button type="submit" disabled={mutation.isPending}>
+          <Button type="submit" disabled={busy}>
             {mutation.isPending ? t('common.saving') : t('vehicles.save')}
           </Button>
         </div>
@@ -626,6 +854,22 @@ function EditorForm({
         destructive
         onConfirm={() => navigate(`/vehicles/${vehicle.id}`)}
       />
+      {canDeleteFiles && (
+        <ConfirmDialog
+          open={photoToDelete != null}
+          onOpenChange={(open) => {
+            if (!open) setPhotoToDelete(null)
+          }}
+          title={t('vehicles.deleteGalleryPhoto')}
+          description={t('vehicles.deleteGalleryPhotoConfirm')}
+          confirmLabel={t('vehicles.deletePhoto')}
+          destructive
+          onConfirm={() => {
+            if (photoToDelete) deletePhoto.mutate(photoToDelete)
+            setPhotoToDelete(null)
+          }}
+        />
+      )}
     </div>
   )
 }

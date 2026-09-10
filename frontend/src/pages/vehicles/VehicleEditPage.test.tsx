@@ -1,22 +1,26 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { I18nextProvider } from 'react-i18next'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { api } from '@/lib/api'
+import { ApiError, api } from '@/lib/api'
 import type { VehicleFileRead, VehicleRead, VehicleSiteRead, VehicleUpdate } from '@/lib/api'
 import i18n from '@/lib/i18n'
 
 import { VehicleEditPage } from './VehicleEditPage'
 import { VEHICLE_QUERY_KEYS } from './vehicleUtils'
 
+const testState = { canDeleteFiles: true }
+
 vi.mock('@/lib/useCapabilities', () => ({
   useCapabilities: () => ({
     isLoading: false,
     has: (capability: string) =>
-      capability === 'vehicles.view' || capability === 'vehicles.edit',
+      capability === 'vehicles.view' ||
+      capability === 'vehicles.edit' ||
+      (capability === 'vehicles.delete' && testState.canDeleteFiles),
   }),
 }))
 
@@ -33,6 +37,7 @@ vi.mock('@/lib/api', async (importOriginal) => {
       listVehicleSites: vi.fn(),
       updateVehicle: vi.fn(),
       uploadVehicleFile: vi.fn(),
+      deleteVehicleFile: vi.fn(),
       listVehicles: vi.fn(),
     },
   }
@@ -41,6 +46,22 @@ vi.mock('@/lib/api', async (importOriginal) => {
 const SITES: VehicleSiteRead[] = [
   { id: 1, name_ar: 'مشروع الوثبة', name_en: 'Al Wathba', active: true, vehicle_count: 1 },
 ]
+
+function vehicleFile(
+  id: number,
+  kind: VehicleFileRead['kind'],
+  name: string,
+): VehicleFileRead {
+  return {
+    id,
+    kind,
+    label_ar: null,
+    label_en: null,
+    original_name: name,
+    media_type: 'image/jpeg',
+    url: `/api/v1/vehicles/101/files/${id}`,
+  }
+}
 
 function baseVehicle(overrides: Partial<VehicleRead> = {}): VehicleRead {
   return {
@@ -113,6 +134,11 @@ function renderEditor(vehicleId = 101) {
 
 beforeEach(async () => {
   vi.clearAllMocks()
+  testState.canDeleteFiles = true
+  URL.createObjectURL = vi.fn(
+    (file: Blob) => `blob:${(file as File).name}`,
+  ) as unknown as typeof URL.createObjectURL
+  URL.revokeObjectURL = vi.fn()
   await i18n.changeLanguage('en')
   vi.mocked(api.listVehicleSites).mockResolvedValue(SITES)
 })
@@ -215,7 +241,7 @@ describe('VehicleEditPage', () => {
 
     const makeInput = await screen.findByLabelText('Make')
     await user.type(makeInput, 'Toyota')
-    const galleryInput = screen.getByLabelText('Add photo')
+    const galleryInput = screen.getByLabelText('Upload gallery photos')
     const savedFile = new File(['saved'], 'saved.jpg', { type: 'image/jpeg' })
     const failedFile = new File(['failed'], 'failed.jpg', { type: 'image/jpeg' })
     await user.upload(galleryInput, [savedFile, failedFile])
@@ -228,7 +254,8 @@ describe('VehicleEditPage', () => {
     await waitFor(() => expect(api.uploadVehicleFile).toHaveBeenCalledTimes(2))
     expect(api.updateVehicle).toHaveBeenCalledTimes(1)
     expect(api.updateVehicle).toHaveBeenCalledWith(101, { make: 'Toyota' })
-    expect(screen.queryByText('saved.jpg')).not.toBeInTheDocument()
+    expect(screen.queryByAltText(/Preview of .*saved\.jpg/)).not.toBeInTheDocument()
+    expect(screen.getByRole('img', { name: 'saved.jpg' })).toBeInTheDocument()
     expect(screen.getByText('failed.jpg')).toBeInTheDocument()
     expect(screen.queryByText('DETAIL PAGE')).not.toBeInTheDocument()
 
@@ -276,6 +303,8 @@ describe('VehicleEditPage', () => {
     const uploadInput = uploadZone.querySelector('input[type="file"]')
     expect(uploadInput).not.toBeNull()
     await user.upload(uploadInput as HTMLInputElement, replacement)
+    expect(api.uploadVehicleFile).not.toHaveBeenCalled()
+    expect(api.updateVehicle).not.toHaveBeenCalled()
     const typeInput = screen.getByLabelText('Vehicle type in English')
     await user.clear(typeInput)
     await user.type(typeInput, 'Toyota Hiace')
@@ -341,7 +370,7 @@ describe('VehicleEditPage', () => {
     renderEditor()
 
     await screen.findByLabelText('Make')
-    const galleryInput = screen.getByLabelText('Add photo')
+    const galleryInput = screen.getByLabelText('Upload gallery photos')
     await user.upload(
       galleryInput,
       new File(['pending'], 'pending.jpg', { type: 'image/jpeg' }),
@@ -350,5 +379,169 @@ describe('VehicleEditPage', () => {
 
     expect(await screen.findByRole('dialog')).toBeInTheDocument()
     expect(screen.queryByText('DETAIL PAGE')).not.toBeInTheDocument()
+  })
+
+  it('previews each pending gallery file and revokes its object URL on removal and unmount', async () => {
+    const user = userEvent.setup()
+    vi.mocked(URL.createObjectURL).mockImplementation(
+      (file) => `blob:${(file as File).name}`,
+    )
+    vi.mocked(api.getVehicle).mockResolvedValue(baseVehicle())
+    const first = new File(['first'], 'first.jpg', { type: 'image/jpeg' })
+    const second = new File(['second'], 'second.jpg', { type: 'image/jpeg' })
+    const { unmount } = renderEditor()
+
+    await user.upload(await screen.findByLabelText('Upload gallery photos'), [first, second])
+
+    expect(screen.getByAltText(/first\.jpg/)).toHaveAttribute('src', 'blob:first.jpg')
+    expect(screen.getByAltText(/second\.jpg/)).toHaveAttribute('src', 'blob:second.jpg')
+    expect(URL.createObjectURL).toHaveBeenCalledTimes(2)
+
+    await user.click(screen.getByRole('button', { name: /Remove .*first\.jpg/ }))
+
+    expect(screen.queryByAltText(/first\.jpg/)).not.toBeInTheDocument()
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:first.jpg')
+
+    unmount()
+
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:second.jpg')
+    expect(URL.revokeObjectURL).toHaveBeenCalledTimes(2)
+  })
+
+  it('saves only the chosen existing gallery photo pointer', async () => {
+    const user = userEvent.setup()
+    const gallery = vehicleFile(3, 'gallery', 'gallery.jpg')
+    const vehicle = baseVehicle({
+      photo_file_id: 1,
+      photo_url: '/api/v1/vehicles/101/files/1',
+      photos: [gallery],
+    })
+    vi.mocked(api.getVehicle).mockResolvedValue(vehicle)
+    vi.mocked(api.updateVehicle).mockResolvedValue({
+      ...vehicle,
+      photo_file_id: gallery.id,
+      photo_url: gallery.url,
+    })
+    renderEditor()
+
+    await user.click(
+      await screen.findByRole('button', { name: /Use .*gallery\.jpg.* as main photo/ }),
+    )
+
+    expect(api.updateVehicle).not.toHaveBeenCalled()
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() =>
+      expect(api.updateVehicle).toHaveBeenCalledWith(101, { photo_file_id: gallery.id }),
+    )
+    expect(api.updateVehicle).toHaveBeenCalledTimes(1)
+  })
+
+  it('retries only a failed main-photo pointer after the scalar profile has landed', async () => {
+    const user = userEvent.setup()
+    const gallery = vehicleFile(3, 'gallery', 'gallery.jpg')
+    const vehicle = baseVehicle({ photos: [gallery] })
+    const scalarSaved = { ...vehicle, make: 'Toyota' }
+    vi.mocked(api.getVehicle).mockResolvedValue(vehicle)
+    vi.mocked(api.updateVehicle)
+      .mockResolvedValueOnce(scalarSaved)
+      .mockRejectedValueOnce(new Error('Pointer update interrupted'))
+      .mockResolvedValueOnce({
+        ...scalarSaved,
+        photo_file_id: gallery.id,
+        photo_url: gallery.url,
+      })
+    renderEditor()
+
+    await user.type(await screen.findByLabelText('Make'), 'Toyota')
+    await user.click(screen.getByRole('button', { name: /Use .*gallery\.jpg.* as main photo/ }))
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(/Profile saved;.*1 file failed/)
+    expect(api.updateVehicle).toHaveBeenNthCalledWith(1, 101, { make: 'Toyota' })
+    expect(api.updateVehicle).toHaveBeenNthCalledWith(2, 101, { photo_file_id: gallery.id })
+
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    await screen.findByText('DETAIL PAGE')
+    expect(api.updateVehicle).toHaveBeenCalledTimes(3)
+    expect(api.updateVehicle).toHaveBeenNthCalledWith(3, 101, { photo_file_id: gallery.id })
+  })
+
+  it('saves an explicit null main-photo pointer without deleting the file', async () => {
+    const user = userEvent.setup()
+    const vehicle = baseVehicle({
+      photo_file_id: 1,
+      photo_url: '/api/v1/vehicles/101/files/1',
+    })
+    vi.mocked(api.getVehicle).mockResolvedValue(vehicle)
+    vi.mocked(api.updateVehicle).mockResolvedValue({
+      ...vehicle,
+      photo_file_id: null,
+      photo_url: null,
+    })
+    renderEditor()
+
+    await user.click(await screen.findByRole('button', { name: 'Remove main photo' }))
+
+    expect(api.updateVehicle).not.toHaveBeenCalled()
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    await waitFor(() =>
+      expect(api.updateVehicle).toHaveBeenCalledWith(101, { photo_file_id: null }),
+    )
+    expect(api.deleteVehicleFile).not.toHaveBeenCalled()
+  })
+
+  it('confirms gallery deletion, localizes an in-use denial, and hides delete without access', async () => {
+    const user = userEvent.setup()
+    const gallery = vehicleFile(3, 'gallery', 'gallery.jpg')
+    vi.mocked(api.getVehicle).mockResolvedValue(baseVehicle({ photos: [gallery] }))
+    vi.mocked(api.deleteVehicleFile).mockRejectedValue(
+      new ApiError(409, 'VEHICLE_FILE_IN_USE', 'Vehicle file is in use.'),
+    )
+    const firstRender = renderEditor()
+
+    await user.click(await screen.findByRole('button', { name: /Delete .*gallery\.jpg/ }))
+
+    expect(api.deleteVehicleFile).not.toHaveBeenCalled()
+    const dialog = await screen.findByRole('dialog')
+    expect(dialog).toHaveTextContent('Delete gallery photo?')
+    await user.click(within(dialog).getByRole('button', { name: 'Delete photo' }))
+
+    expect(
+      await screen.findByText(
+        'This photo is in use as the main photo or in an accident record and cannot be deleted.',
+      ),
+    ).toBeInTheDocument()
+    expect(api.deleteVehicleFile).toHaveBeenCalledWith(101, 3)
+    expect(screen.getByRole('img', { name: 'gallery.jpg' })).toBeInTheDocument()
+
+    firstRender.unmount()
+    testState.canDeleteFiles = false
+    renderEditor()
+
+    expect(await screen.findByRole('img', { name: 'gallery.jpg' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Delete .*gallery\.jpg/ })).not.toBeInTheDocument()
+  })
+
+  it('keeps licence files in server newest-first order and marks the current scan', async () => {
+    const current = vehicleFile(8, 'license', 'current-license.jpg')
+    const previous = vehicleFile(4, 'license', 'previous-license.jpg')
+    vi.mocked(api.getVehicle).mockResolvedValue(
+      baseVehicle({
+        license_file_id: current.id,
+        license_url: current.url,
+        license_files: [current, previous],
+      }),
+    )
+    renderEditor()
+
+    const files = await screen.findByRole('list', { name: 'Licence scans' })
+    expect(within(files).getAllByRole('img').map((image) => image.getAttribute('alt'))).toEqual([
+      'current-license.jpg',
+      'previous-license.jpg',
+    ])
+    expect(within(files).getByText('Current scan')).toBeInTheDocument()
   })
 })
