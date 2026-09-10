@@ -209,11 +209,13 @@ describe('VehicleImportPage', () => {
     )
     expect(screen.getAllByLabelText(/Site for.*Vehicles/)).toHaveLength(1)
     expect(
-      within(row as HTMLElement).queryByLabelText(i18n.t('vehicles.site')),
+      within(row as HTMLElement).queryByLabelText((label) =>
+        label.includes(i18n.t('vehicles.site')),
+      ),
     ).not.toBeInTheDocument()
 
-    const licenseStart = within(row as HTMLElement).getByLabelText(
-      i18n.t('vehicles.licenseStart'),
+    const licenseStart = within(row as HTMLElement).getByLabelText((label) =>
+      label.includes(i18n.t('vehicles.licenseStart')),
     )
     await user.clear(licenseStart)
     await user.type(licenseStart, '2026-02-02')
