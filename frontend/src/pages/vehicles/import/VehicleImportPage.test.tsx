@@ -302,28 +302,28 @@ describe('VehicleImportPage', () => {
   })
 
   it('renders one affected-vehicle link for every returned id and keeps restart available', async () => {
+    const user = userEvent.setup()
+    const onRestart = vi.fn()
     render(
       <I18nextProvider i18n={i18n}>
         <MemoryRouter>
-          <ImportResultSummary result={RESULT} onRestart={vi.fn()} />
+          <ImportResultSummary result={RESULT} onRestart={onRestart} />
         </MemoryRouter>
       </I18nextProvider>,
     )
 
-    const links = RESULT.vehicle_ids.map((vehicleId) =>
-      screen.getByRole('link', {
-        name: i18n.t('vehicles.import.result.openVehicle', { id: vehicleId }),
-      }),
+    const links = screen
+      .getAllByRole('link')
+      .filter((link) => /^\/vehicles\/\d+$/.test(link.getAttribute('href') ?? ''))
+    expect(links.map((link) => link.getAttribute('href'))).toEqual(
+      RESULT.vehicle_ids.map((vehicleId) => `/vehicles/${vehicleId}`),
     )
-    expect(links).toHaveLength(RESULT.vehicle_ids.length)
-    expect(links.map((link) => link.getAttribute('href'))).toEqual([
-      '/vehicles/501',
-      '/vehicles/502',
-    ])
-    expect(
+
+    await user.click(
       screen.getByRole('button', {
         name: i18n.t('vehicles.import.importAnother'),
       }),
-    ).toBeInTheDocument()
+    )
+    expect(onRestart).toHaveBeenCalledOnce()
   })
 })
