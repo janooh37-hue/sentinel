@@ -34,6 +34,7 @@ from app.api.v1 import employees as employees_v1
 from app.api.v1 import expiry as expiry_v1
 from app.api.v1 import extractions as extractions_v1
 from app.api.v1 import identity as identity_v1
+from app.api.v1 import inmate_statistics as inmate_statistics_v1
 from app.api.v1 import intake as intake_v1
 from app.api.v1 import leaves as leaves_v1
 from app.api.v1 import ledger as ledger_v1
@@ -212,6 +213,7 @@ def create_app() -> FastAPI:
     app.include_router(absences_v1.router, prefix="/api/v1", dependencies=auth_gate)
     app.include_router(leaves_v1.router, prefix="/api/v1", dependencies=auth_gate)
     app.include_router(timesheet_v1.router, prefix="/api/v1", dependencies=auth_gate)
+    app.include_router(inmate_statistics_v1.router, prefix="/api/v1", dependencies=auth_gate)
     app.include_router(templates_v1.router, prefix="/api/v1", dependencies=auth_gate)
     app.include_router(documents_v1.documents_router, prefix="/api/v1", dependencies=auth_gate)
     app.include_router(documents_v1.jobs_router, prefix="/api/v1", dependencies=auth_gate)

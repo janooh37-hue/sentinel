@@ -23,7 +23,6 @@ import contextlib
 import functools
 import json
 import logging
-import re
 import shutil
 import uuid
 from collections.abc import Callable, Sequence
@@ -39,7 +38,8 @@ from app.api.errors import AppError, NotFoundError, ValidationFailedError
 from app.config import get_settings
 from app.core import form_policy, leave_lifecycle
 from app.core import signature as signature_core
-from app.core.book_text import build_search_text, html_to_text
+from app.core.book_text import build_search_text
+from app.core.book_text import html_to_text as book_html_to_text
 from app.core.classifications import classified_ref, get_classification
 from app.core.constants import (
     CLASSIFIED_BOOK_FORMS,
@@ -50,6 +50,7 @@ from app.core.constants import (
 from app.core.dateutils import excel_date_to_datetime
 from app.core.docx_engine import aztec_corner_for
 from app.core.docx_render import _arabic_clock, _arabic_weekday
+from app.core.html_text import html_to_text
 from app.core.vault_manager import Vault
 from app.db.models import (
     AuditLog,
@@ -339,40 +340,9 @@ _RICH_FIELD_TYPES: frozenset[str] = frozenset({"arabic_rich", "arabic_rich_full"
 GENERAL_BOOK_BODY_SENTINEL = "⁣GSSG_BODY_ANCHOR⁣"
 
 
-def _html_to_text(html: str) -> str:
-    """Flatten editor HTML to plain text, preserving block/line breaks.
-
-    The Jinja DOCX render substitutes ``{{ body }}`` / ``{{ reason }}`` with
-    the raw string, so HugeRTE HTML would otherwise appear literally (``<p>``,
-    ``<span>`` …) in the document. We strip the markup to text and map block
-    boundaries (``<br>``, ``</p>``, ``</div>``, ``</li>``) to newlines so
-    multi-paragraph content stays readable. (Rich formatting — bold, colour,
-    RTL runs — is intentionally not preserved here; see arabic_rtl.html_to_docx
-    for the full fragment renderer.)
-    """
-    if not html or "<" not in html:
-        return html or ""
-    # Block-closing / break tags → newline before tags are stripped.
-    text = re.sub(r"(?i)<\s*br\s*/?\s*>", "\n", html)
-    text = re.sub(r"(?i)</\s*(p|div|li|tr|h[1-6]|blockquote)\s*>", "\n", text)
-    text = re.sub(r"<[^>]+>", "", text)
-    # Decode the handful of entities HugeRTE emits.
-    text = (
-        text.replace("&nbsp;", " ")
-        .replace("&amp;", "&")
-        .replace("&lt;", "<")
-        .replace("&gt;", ">")
-        .replace("&quot;", '"')
-        .replace("&#39;", "'")
-    )
-    # Collapse the runs of blank lines the block-boundary mapping can create.
-    text = re.sub(r"\n[ \t]*\n[ \t]*\n+", "\n\n", text)
-    return text.strip()
-
-
 def _flatten_rich_fields(template_id: str, fields: dict[str, Any]) -> dict[str, Any]:
     """Return a copy of `fields` with any ``arabic_rich``/``arabic_rich_full``
-    values flattened from HTML to plain text (see ``_html_to_text``)."""
+    values flattened from HTML to plain text (see ``html_to_text``)."""
     meta = load_fields_meta().get(template_id, {})
     rich_keys = {f["key"] for f in meta.get("fields", []) if f.get("type") in _RICH_FIELD_TYPES}
     if not rich_keys:
@@ -391,7 +361,7 @@ def _flatten_rich_fields(template_id: str, fields: dict[str, Any]) -> dict[str, 
                 out["body_html"] = val
                 out[key] = GENERAL_BOOK_BODY_SENTINEL
             else:
-                out[key] = _html_to_text(val)
+                out[key] = html_to_text(val)
     return out
 
 
@@ -1547,7 +1517,7 @@ def generate_document(
                 else (f"{template_id} — {_emp_name}" if _emp_name else template_id)
             )
             _body_raw = fields.get("body")
-            _body_text = html_to_text(_body_raw) if isinstance(_body_raw, str) else ""
+            _body_text = book_html_to_text(_body_raw) if isinstance(_body_raw, str) else ""
             book_row = Book(
                 category_id=cat_code,
                 ref_number=raw_ref,

@@ -40,6 +40,7 @@ vi.mock('@/lib/api', () => ({
     getWordTemplateTable: vi.fn().mockResolvedValue({ has_table: false, columns: [] }),
     listEmployees: vi.fn().mockResolvedValue({ items: [] }),
     getEmployee: vi.fn().mockResolvedValue(null),
+    listInmateNationalities: vi.fn().mockResolvedValue({ items: [], aliases: {} }),
   },
 }))
 
@@ -129,7 +130,9 @@ const SCHEMA: TemplateDetailResponse = {
 }
 
 function makeQc(): QueryClient {
-  return new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  client.setQueryData(['inmate-nationalities'], { items: [], aliases: {} })
+  return client
 }
 
 function Harness(): React.JSX.Element {
