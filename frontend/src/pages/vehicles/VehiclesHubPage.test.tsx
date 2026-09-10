@@ -248,7 +248,7 @@ describe('VehiclesHubPage', () => {
     expect(within(editVehicle).getByText('3')).toBeInTheDocument()
     expect(within(addVehicle).getByText('3')).toBeInTheDocument()
     expect(within(sites).getByText('2')).toBeInTheDocument()
-    const importAction = screen.getByRole('link', { name: 'Import Fleet' })
+    const importAction = screen.getByRole('link', { name: 'Fleet Import' })
     expect(importAction).toHaveAttribute('href', '/vehicles/import')
     expect(importAction).not.toHaveTextContent('3')
     expect(importAction.closest('div')).toHaveTextContent(

@@ -14,6 +14,7 @@ import type {
   VehicleProfileScan,
   VehicleSiteRead,
 } from '@/lib/api'
+import { isolateBidi } from '@/lib/useCapabilityCatalog'
 
 import {
   type VehicleFormInput,
