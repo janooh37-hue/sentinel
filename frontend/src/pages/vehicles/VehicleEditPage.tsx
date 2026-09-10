@@ -25,9 +25,10 @@ import { EmptyState } from '@/components/ui/empty-state'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ApiError, api } from '@/lib/api'
-import { isolateBidi } from '@/lib/useCapabilityCatalog'
 import type { VehicleFileRead, VehicleListItem, VehicleRead, VehicleUpdate } from '@/lib/api'
 import { useCapabilities } from '@/lib/useCapabilities'
+import { isolateBidi } from '@/lib/useCapabilityCatalog'
+import { useDebouncedValue } from '@/lib/useDebouncedValue'
 
 import {
   type VehicleFormInput,
@@ -40,8 +41,9 @@ import {
   DOCUMENT_ACCEPT,
   IMAGE_ACCEPT,
   VEHICLE_QUERY_KEYS,
-  invalidateVehicleQueries,
   fileLabel,
+  invalidateVehicleQueries,
+  localized,
   plateLabel,
   vehicleErrorMessage,
 } from './vehicleUtils'
