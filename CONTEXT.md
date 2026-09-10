@@ -107,15 +107,54 @@ _Avoid_: Per-inmate details
 The monthly view of one inmate violation occurrence. It retains the occurrence's
 full source facts even when only a subset appears as columns. While the month is
 open, only the latest version of an approved, non-deleted, non-voided Record
-contributes entries. Closing the month freezes each entry's facts and order;
-every occurrence must have an occurrence time before that can happen.
+contributes entries. Closing the month freezes each entry's facts and order.
 _Avoid_: Record, inmate summary
 
+**Inmate population**:
+One of the two groups a monthly violation register entry is sorted into by the
+inmate's nationality: citizens or non-citizens. Membership is derived from the
+nationality, never stored as its own flag, and a stateless inmate is a
+non-citizen.
+_Avoid_: Expatriates as the group's meaning, nationality table
+
+**Pending completion entry**:
+A monthly violation register entry with no resolvable nationality, and therefore
+no inmate population. It appears in its own group in the register, is counted
+there, blocks the month close, and is sealed in that group when an administrator
+forces the close over it.
+_Avoid_: Incomplete row, outstanding completion, unspecified nationality entry
+
+**Incomplete mark**:
+The flag an entry carries when a value it should hold is permanently missing,
+because a forced close froze it or because a historical nationality matched
+nothing. It marks values, not group membership, and any inmate population may
+contain marked entries.
+_Avoid_: Pending, draft, invalid entry
+
 **Register serial number**:
-The one-based chronological position of an inmate violation occurrence within
-its Violation month. It is recalculated while the month is open and frozen when
-the month closes; it is not the occurrence's identity.
-_Avoid_: Row ID, inmate number
+The one-based chronological position of an inmate violation occurrence within its
+inmate population, or within the pending completion group, in a Violation month.
+It is recalculated while the month is open and frozen when the month closes; it is
+not the occurrence's identity.
+_Avoid_: Row ID, inmate number, position within the month
+
+**Month close**:
+The administrator action that freezes a Violation month's entries as the register's
+source of truth. It is refused while the month is still running, and refused over
+incomplete entries unless the administrator forces it with a recorded reason.
+_Avoid_: Lock, seal, submit
+
+**Month reopen**:
+The administrator action that returns a closed Violation month to live projection.
+It is the only way to correct a closed month, and the entries of the previous close
+survive it until the month is closed again.
+_Avoid_: Unlock, unfreeze
+
+**Arrived after close**:
+An inmate violation occurrence whose source Record was edited to an occurrence date
+inside an already-closed Violation month. It is listed against that month without
+entering its frozen entries or counts.
+_Avoid_: Late violation, orphan row
 
 ### Access and organization
 
