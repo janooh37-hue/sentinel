@@ -133,7 +133,7 @@ function renderEditor(vehicleId = 101) {
 }
 
 beforeEach(async () => {
-  vi.clearAllMocks()
+  vi.resetAllMocks()
   testState.canDeleteFiles = true
   URL.createObjectURL = vi.fn(
     (file: Blob) => `blob:${(file as File).name}`,
@@ -305,7 +305,7 @@ describe('VehicleEditPage', () => {
     await user.upload(uploadInput as HTMLInputElement, replacement)
     expect(api.uploadVehicleFile).not.toHaveBeenCalled()
     expect(api.updateVehicle).not.toHaveBeenCalled()
-    const typeInput = screen.getByLabelText('Vehicle type in English')
+    const typeInput = screen.getByRole('textbox', { name: /Vehicle type in English/ })
     await user.clear(typeInput)
     await user.type(typeInput, 'Toyota Hiace')
     await user.click(screen.getByRole('button', { name: 'Save' }))
