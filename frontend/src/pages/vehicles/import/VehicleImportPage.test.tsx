@@ -189,7 +189,7 @@ describe('VehicleImportPage', () => {
     expect(await screen.findByText('Fleet import complete')).toBeInTheDocument()
   })
 
-  it('uses typed shared controls and blocks invalid integer corrections without coercing them', async () => {
+  it('keeps site assignment section-scoped while validating typed row corrections', async () => {
     const user = userEvent.setup()
     const { container } = renderWizard()
     const fileInput = container.querySelector('input[type="file"]') as HTMLInputElement
@@ -205,6 +205,8 @@ describe('VehicleImportPage', () => {
     const row = screen.getByText('Workbook row \u20682\u2069').closest('article')
     expect(row).not.toBeNull()
     await user.click(within(row as HTMLElement).getByText('Edit workbook fields'))
+    expect(screen.getAllByLabelText('Site for \u2068Vehicles\u2069')).toHaveLength(1)
+    expect(within(row as HTMLElement).queryByLabelText('Site')).not.toBeInTheDocument()
 
     expect(within(row as HTMLElement).getByLabelText('Licence start')).toHaveAttribute(
       'type',
@@ -221,6 +223,16 @@ describe('VehicleImportPage', () => {
     await user.type(capacity, '12')
     await waitFor(() => expect(capacity).not.toHaveAttribute('aria-invalid'))
     expect(screen.getByRole('button', { name: 'Preview changes' })).toBeEnabled()
+
+    await user.click(screen.getByRole('button', { name: 'Preview changes' }))
+    await waitFor(() => expect(api.previewVehicleImport).toHaveBeenCalledTimes(1))
+    const request = vi.mocked(api.previewVehicleImport).mock.calls[0]?.[1]
+    expect(request?.site_mappings).toEqual({ 'section-1': 7 })
+    expect(request?.rows.map((draft) => draft.row_id)).toEqual([
+      'row-valid',
+      'row-invalid',
+    ])
+    expect(request?.rows.every((draft) => !('site_id' in draft.values))).toBe(true)
   })
 
   it('renders required-field row errors from the locale instead of the backend message', async () => {

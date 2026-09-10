@@ -46,7 +46,6 @@ interface ImportRowDetailProps {
   selected: boolean
   onDraftChange: (draft: VehicleImportPreviewDraftRow) => void
   onSelectedChange: (selected: boolean) => void
-  onSiteChange: (siteId: number) => void
   onScan: (imageId: string) => void
 }
 
@@ -93,7 +92,6 @@ export function ImportRowDetail({
   selected,
   onDraftChange,
   onSelectedChange,
-  onSiteChange,
   onScan,
 }: ImportRowDetailProps): React.JSX.Element {
   const { t } = useTranslation()
@@ -130,11 +128,7 @@ export function ImportRowDetail({
         values: { ...draft.values, ...values },
       })
     }
-    if (formValues.site) {
-      const selectedSiteId = Number(formValues.site)
-      if (selectedSiteId !== siteId) onSiteChange(selectedSiteId)
-    }
-  }, [draft, formValues, onDraftChange, onSiteChange, siteId])
+  }, [draft, formValues, onDraftChange])
 
   const alertId = `vehicle-import-${source.row_id}-errors`
   const invalidCorrection = Object.keys(form.formState.errors).length > 0
@@ -292,6 +286,7 @@ export function ImportRowDetail({
             sites={sites}
             mode="edit"
             vehicle={null}
+            showSiteField={false}
             fieldIdPrefix={`vehicle-import-${source.row_id}`}
             alertId={alertId}
           />

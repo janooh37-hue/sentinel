@@ -35,6 +35,8 @@ export interface VehicleFormFieldsProps {
    *  to the existing Renew action instead of letting a date edit masquerade
    *  as a renewal. */
   vehicle?: VehicleRead | null
+  /** Import review assigns sites once per workbook section, outside each row. */
+  showSiteField?: boolean
   fieldIdPrefix: string
   alertId: string
 }
@@ -59,6 +61,7 @@ export function VehicleFormFields({
   sites,
   mode,
   vehicle,
+  showSiteField = true,
   fieldIdPrefix: fieldId,
   alertId,
 }: VehicleFormFieldsProps): React.JSX.Element {
@@ -167,60 +170,76 @@ export function VehicleFormFields({
             </VehicleField>
           </>
         )}
-        <VehicleField id={`${fieldId}-site`} label={t('vehicles.site')} required>
-          <Controller
-            control={control}
-            name="site"
-            render={({ field }) => (
-              <Select value={field.value} onValueChange={field.onChange}>
-                <SelectTrigger id={`${fieldId}-site`}>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {activeSites.map((site) => (
-                    <SelectItem key={site.id} value={String(site.id)}>
-                      {localized(site.name_ar, site.name_en, i18n.language)}
-                    </SelectItem>
-                  ))}
-                  {mode === 'edit' && currentSiteInactive && vehicle && (
-                    <SelectItem value={String(vehicle.site_id)}>
-                      {t('vehicles.currentInactiveSite')}
-                    </SelectItem>
-                  )}
-                  {mode === 'create' && <SelectItem value={NEW_SITE}>{t('vehicles.newSiteOption')}</SelectItem>}
-                </SelectContent>
-              </Select>
-            )}
-          />
-          {mode === 'edit' && currentSiteInactive && (
-            <p className="text-xs text-muted-foreground">
-              {t('vehicles.siteInactiveHint')}{' '}
-              <Link to="/vehicles" className="underline">
-                {t('vehicles.manageSites')}
-              </Link>
-            </p>
-          )}
-        </VehicleField>
-        {newSiteMode && (
+        {showSiteField ? (
           <>
-            <VehicleField id={`${fieldId}-site-ar`} label={t('vehicles.siteNameAr')} required>
-              <Input
-                id={`${fieldId}-site-ar`}
-                dir="rtl"
-                {...register('new_site_ar')}
-                {...flag('new_site_ar')}
+            <VehicleField id={`${fieldId}-site`} label={t('vehicles.site')} required>
+              <Controller
+                control={control}
+                name="site"
+                render={({ field }) => (
+                  <Select value={field.value} onValueChange={field.onChange}>
+                    <SelectTrigger id={`${fieldId}-site`}>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {activeSites.map((site) => (
+                        <SelectItem key={site.id} value={String(site.id)}>
+                          {localized(site.name_ar, site.name_en, i18n.language)}
+                        </SelectItem>
+                      ))}
+                      {mode === 'edit' && currentSiteInactive && vehicle && (
+                        <SelectItem value={String(vehicle.site_id)}>
+                          {t('vehicles.currentInactiveSite')}
+                        </SelectItem>
+                      )}
+                      {mode === 'create' && (
+                        <SelectItem value={NEW_SITE}>
+                          {t('vehicles.newSiteOption')}
+                        </SelectItem>
+                      )}
+                    </SelectContent>
+                  </Select>
+                )}
               />
+              {mode === 'edit' && currentSiteInactive && (
+                <p className="text-xs text-muted-foreground">
+                  {t('vehicles.siteInactiveHint')}{' '}
+                  <Link to="/vehicles" className="underline">
+                    {t('vehicles.manageSites')}
+                  </Link>
+                </p>
+              )}
             </VehicleField>
-            <VehicleField id={`${fieldId}-site-en`} label={t('vehicles.siteNameEn')} required>
-              <Input
-                id={`${fieldId}-site-en`}
-                dir="ltr"
-                {...register('new_site_en')}
-                {...flag('new_site_en')}
-              />
-            </VehicleField>
+            {newSiteMode && (
+              <>
+                <VehicleField
+                  id={`${fieldId}-site-ar`}
+                  label={t('vehicles.siteNameAr')}
+                  required
+                >
+                  <Input
+                    id={`${fieldId}-site-ar`}
+                    dir="rtl"
+                    {...register('new_site_ar')}
+                    {...flag('new_site_ar')}
+                  />
+                </VehicleField>
+                <VehicleField
+                  id={`${fieldId}-site-en`}
+                  label={t('vehicles.siteNameEn')}
+                  required
+                >
+                  <Input
+                    id={`${fieldId}-site-en`}
+                    dir="ltr"
+                    {...register('new_site_en')}
+                    {...flag('new_site_en')}
+                  />
+                </VehicleField>
+              </>
+            )}
           </>
-        )}
+        ) : null}
       </Section>
 
       <Section title={t('vehicles.sections.specs')}>

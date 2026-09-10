@@ -270,9 +270,6 @@ export function ImportReviewTable({
                     selected={selectedRowIds.has(source.row_id)}
                     onDraftChange={(next) => onDraftChange(source.row_id, () => next)}
                     onSelectedChange={(selected) => onSelectedChange(source.row_id, selected)}
-                    onSiteChange={(siteId) =>
-                      onSiteMappingChange(source.section_id, siteId)
-                    }
                     onScan={onScan}
                   />
                 )
