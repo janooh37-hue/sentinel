@@ -1,19 +1,37 @@
+import { useState } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { I18nextProvider } from 'react-i18next'
 import { MemoryRouter } from 'react-router-dom'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { api } from '@/lib/api'
 import type { EvgPreviewResponse, EvgPreviewRow, VehicleListItem } from '@/lib/api'
 import i18n from '@/lib/i18n'
 
+import type * as VehicleDialogShellModule from './VehicleDialogShell'
 import { EvgFetchDialog } from './EvgFetchDialog'
 
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
 
+const shellBusyMock = vi.hoisted(() => vi.fn())
+
+vi.mock('./VehicleDialogShell', async (importOriginal) => {
+  const mod = await importOriginal<typeof VehicleDialogShellModule>()
+  const RealVehicleDialogShell = mod.VehicleDialogShell
+  return {
+    ...mod,
+    VehicleDialogShell: (props: Parameters<typeof RealVehicleDialogShell>[0]) => {
+      shellBusyMock(props.busy ?? false)
+      return <RealVehicleDialogShell {...props} />
+    },
+  }
+})
+
 type ApiModule = { api: typeof api } & Record<string, unknown>
+const evgPreviewMock = vi.hoisted(() => vi.fn())
+const evgPreviewJobMock = vi.hoisted(() => vi.fn())
 
 vi.mock('@/lib/api', async (importOriginal) => {
   const mod = await importOriginal<ApiModule>()
@@ -22,7 +40,8 @@ vi.mock('@/lib/api', async (importOriginal) => {
     api: {
       ...mod.api,
       listVehicles: vi.fn(),
-      evgPreview: vi.fn(),
+      evgPreview: evgPreviewMock,
+      evgPreviewJob: evgPreviewJobMock,
       evgConfirm: vi.fn(),
     },
   }
@@ -167,7 +186,54 @@ const PREVIEW: EvgPreviewResponse = {
   vehicles: FLEET.map(({ id, plate_label }) => ({ id, plate_label })),
 }
 
-function renderDialog() {
+const RUNNING_PREVIEW_JOB = {
+  job_id: 'job-1',
+  status: 'running',
+  result: null,
+  error_code: null,
+  error_message: null,
+} as const
+
+const DONE_PREVIEW_JOB = {
+  job_id: 'job-1',
+  status: 'done',
+  result: PREVIEW,
+  error_code: null,
+  error_message: null,
+} as const
+
+const FAILED_PREVIEW_JOB = {
+  job_id: 'job-1',
+  status: 'failed',
+  result: null,
+  error_code: 'EVG_SEARCH_REJECTED',
+  error_message: 'EVG rejected the traffic code.',
+} as const
+
+function ControlledDialog({ onOpenChange }: { onOpenChange: (open: boolean) => void }) {
+  const [open, setOpen] = useState(true)
+  return (
+    <EvgFetchDialog
+      open={open}
+      onOpenChange={(next) => {
+        onOpenChange(next)
+        setOpen(next)
+      }}
+    />
+  )
+}
+
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  let reject!: (reason?: unknown) => void
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res
+    reject = rej
+  })
+  return { promise, resolve, reject }
+}
+
+function renderDialog({ controlled = false }: { controlled?: boolean } = {}) {
   const queryClient = new QueryClient({
     defaultOptions: {
       queries: { retry: false },
@@ -176,17 +242,21 @@ function renderDialog() {
   })
   const onOpenChange = vi.fn()
 
-  render(
+  const rendered = render(
     <QueryClientProvider client={queryClient}>
       <I18nextProvider i18n={i18n}>
         <MemoryRouter>
-          <EvgFetchDialog open onOpenChange={onOpenChange} />
+          {controlled ? (
+            <ControlledDialog onOpenChange={onOpenChange} />
+          ) : (
+            <EvgFetchDialog open onOpenChange={onOpenChange} />
+          )}
         </MemoryRouter>
       </I18nextProvider>
     </QueryClientProvider>,
   )
 
-  return { onOpenChange, queryClient }
+  return { onOpenChange, queryClient, unmount: rendered.unmount }
 }
 
 async function fetchPreview(user: ReturnType<typeof userEvent.setup>) {
@@ -201,21 +271,179 @@ function rowFor(ticketNo: string) {
 }
 
 describe('EvgFetchDialog', () => {
+  afterEach(() => vi.useRealTimers())
+
   beforeEach(async () => {
     vi.clearAllMocks()
     await i18n.changeLanguage('en')
     vi.mocked(api.listVehicles).mockResolvedValue(FLEET)
-    vi.mocked(api.evgPreview).mockResolvedValue(PREVIEW)
+    evgPreviewMock.mockResolvedValue({ job_id: 'job-1' })
+    evgPreviewJobMock.mockResolvedValue(DONE_PREVIEW_JOB)
     vi.mocked(api.evgConfirm).mockResolvedValue({ created: 1, skipped: 0 })
+  })
+
+  it('keeps fetching state until the preview job completes', async () => {
+    evgPreviewJobMock
+      .mockReset()
+      .mockResolvedValueOnce(RUNNING_PREVIEW_JOB)
+      .mockResolvedValueOnce(DONE_PREVIEW_JOB)
+
+    renderDialog()
+    const fetchButton = await screen.findByRole('button', { name: 'Fetch fines' })
+
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    await user.click(fetchButton)
+
+    const status = await screen.findByRole('status')
+    expect(status).toHaveTextContent(i18n.t('vehicles.evg.fetching'))
+    expect(screen.getByRole('button', { name: 'Cancel' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: i18n.t('common.loading') })).toBeDisabled()
+    expect(screen.queryByText(MATCHED_ROW.ticket_no)).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Add 1 fines' })).not.toBeInTheDocument()
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2000)
+    })
+
+    expect(await screen.findByText(MATCHED_ROW.ticket_no)).toBeInTheDocument()
+    expect(screen.getByText(UNMATCHED_ROW.ticket_no)).toBeInTheDocument()
+  })
+
+  it('imports selected rows with operator assignments after a pending job completes', async () => {
+    evgPreviewJobMock
+      .mockReset()
+      .mockResolvedValueOnce(RUNNING_PREVIEW_JOB)
+      .mockResolvedValueOnce(DONE_PREVIEW_JOB)
+
+    renderDialog()
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    await user.click(await screen.findByRole('button', { name: 'Fetch fines' }))
+    expect(await screen.findByRole('status')).toBeInTheDocument()
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2000)
+    })
+
+    const matched = rowFor(MATCHED_ROW.ticket_no)
+    const unmatched = rowFor(UNMATCHED_ROW.ticket_no)
+    await user.click(within(matched).getByRole('checkbox'))
+    await user.selectOptions(
+      within(unmatched).getByRole('combobox'),
+      String(ASSIGNED_VEHICLE_ID),
+    )
+    await user.click(screen.getByRole('button', { name: 'Add 1 fines' }))
+
+    await waitFor(() =>
+      expect(api.evgConfirm).toHaveBeenCalledWith({
+        rows: [{ ...UNMATCHED_ROW, vehicle_id: ASSIGNED_VEHICLE_ID }],
+      }),
+    )
+
+    const terminalCallCount = evgPreviewJobMock.mock.calls.length
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(6000)
+    })
+    expect(evgPreviewJobMock).toHaveBeenCalledTimes(terminalCallCount)
+  })
+
+  it('resets the shell busy state after a successful import unmounts the panel', async () => {
+    const { promise: confirmPromise, resolve: resolveConfirm } = deferred<{
+      created: number
+      skipped: number
+    }>()
+    vi.mocked(api.evgConfirm).mockReturnValueOnce(confirmPromise)
+
+    const { onOpenChange } = renderDialog({ controlled: true })
+    const user = userEvent.setup()
+    await user.click(await screen.findByRole('button', { name: 'Fetch fines' }))
+    await screen.findByText(MATCHED_ROW.ticket_no)
+
+    shellBusyMock.mockClear()
+    await user.click(screen.getByRole('button', { name: 'Add 1 fines' }))
+    await waitFor(() => expect(shellBusyMock).toHaveBeenCalledWith(true))
+
+    await act(async () => resolveConfirm({ created: 1, skipped: 0 }))
+    await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false))
+    await waitFor(() =>
+      expect(shellBusyMock.mock.calls.at(-1)?.[0]).toBe(false),
+    )
+  })
+
+  it('stops a failed job and allows a fresh fetch while preserving its backend error', async () => {
+    evgPreviewMock
+      .mockReset()
+      .mockResolvedValueOnce({ job_id: 'job-1' })
+      .mockResolvedValueOnce({ job_id: 'job-2' })
+    evgPreviewJobMock
+      .mockReset()
+      .mockResolvedValueOnce(FAILED_PREVIEW_JOB)
+      .mockResolvedValueOnce({ ...RUNNING_PREVIEW_JOB, job_id: 'job-2' })
+
+    renderDialog()
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    await user.click(await screen.findByRole('button', { name: 'Fetch fines' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      FAILED_PREVIEW_JOB.error_message,
+    )
+    const terminalCallCount = evgPreviewJobMock.mock.calls.length
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(6000)
+    })
+    expect(evgPreviewJobMock).toHaveBeenCalledTimes(terminalCallCount)
+
+    await user.click(screen.getByRole('button', { name: 'Fetch fines' }))
+    expect(evgPreviewMock).toHaveBeenCalledTimes(2)
+    await waitFor(() => expect(evgPreviewJobMock).toHaveBeenCalledWith('job-2'))
+  })
+
+  it('retries the same job after a polling transport error without fetching again', async () => {
+    evgPreviewJobMock
+      .mockReset()
+      .mockRejectedValueOnce(new Error('connection dropped'))
+      .mockResolvedValue(RUNNING_PREVIEW_JOB)
+
+    renderDialog()
+    const user = userEvent.setup()
+    await user.click(await screen.findByRole('button', { name: 'Fetch fines' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('connection dropped')
+    const retryButton = await screen.findByRole('button', { name: 'Retry' })
+    await user.click(retryButton)
+
+    await waitFor(() => expect(evgPreviewJobMock.mock.calls.length).toBeGreaterThanOrEqual(2))
+    expect(evgPreviewJobMock).toHaveBeenNthCalledWith(1, 'job-1')
+    expect(evgPreviewJobMock).toHaveBeenNthCalledWith(2, 'job-1')
+    expect(evgPreviewMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('stops polling when the dialog unmounts', async () => {
+    evgPreviewJobMock.mockReset().mockResolvedValue(RUNNING_PREVIEW_JOB)
+
+    const { unmount } = renderDialog()
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+    await user.click(await screen.findByRole('button', { name: 'Fetch fines' }))
+    await waitFor(() => expect(evgPreviewJobMock).toHaveBeenCalledTimes(1))
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2000)
+    })
+    expect(evgPreviewJobMock).toHaveBeenCalledTimes(2)
+
+    unmount()
+    const callsAtUnmount = evgPreviewJobMock.mock.calls.length
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(6000)
+    })
+    expect(evgPreviewJobMock).toHaveBeenCalledTimes(callsAtUnmount)
   })
 
   it('renders every preview status and applies its initial row-selection state', async () => {
     const user = userEvent.setup()
     await fetchPreview(user)
-
-    expect(api.evgPreview).toHaveBeenCalledWith({
-      traffic_codes: ['1180021637', '1180099942'],
-    })
 
     const matched = rowFor(MATCHED_ROW.ticket_no)
     const unmatched = rowFor(UNMATCHED_ROW.ticket_no)

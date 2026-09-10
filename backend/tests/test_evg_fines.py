@@ -2,15 +2,20 @@
 
 from __future__ import annotations
 
+import concurrent.futures
 import json
+import threading
+import time
+from collections.abc import Iterator
 from datetime import date
+from uuid import uuid4
 
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
-from app.api.errors import ValidationFailedError
+from app.api.errors import EvgError, ValidationFailedError
 from app.core.evg_fines import (
     EvgTicketDetails,
     EvgTicketRow,
@@ -23,7 +28,7 @@ from app.db.models import AuditLog, User, Vehicle, VehicleFine, VehicleSite
 from app.db.session import get_db
 from app.main import create_app
 from app.schemas.vehicle import EvgConfirmRow
-from app.services import vehicle_evg_service
+from app.services import vehicle_evg_jobs, vehicle_evg_service
 
 TICKETS_HTML = """
 <html>
@@ -181,6 +186,37 @@ def evg_admin_client(api_db: Session) -> TestClient:
     app.dependency_overrides[get_db] = lambda: api_db
     app.dependency_overrides[get_current_user] = lambda: user
     return TestClient(app, raise_server_exceptions=True)
+
+
+@pytest.fixture(autouse=True)
+def _evg_jobs_teardown() -> Iterator[None]:
+    yield
+    vehicle_evg_jobs.shutdown()
+
+
+def _client_for_user(db: Session, user: User) -> TestClient:
+    app = create_app()
+    app.dependency_overrides[get_db] = lambda: db
+    app.dependency_overrides[get_current_user] = lambda: user
+    return TestClient(app, raise_server_exceptions=True)
+
+
+def _wait_for_evg_job(
+    client: TestClient,
+    job_id: str,
+    *,
+    timeout: float = 5,
+) -> dict[str, object]:
+    deadline = time.monotonic() + timeout
+    while True:
+        response = client.get(f"/api/v1/vehicles/fines/evg/preview/{job_id}")
+        assert response.status_code == 200, response.text
+        body = response.json()
+        if body["status"] in {"done", "failed"}:
+            return body
+        if time.monotonic() >= deadline:
+            pytest.fail(f"EVG preview job {job_id} did not finish within {timeout} seconds")
+        time.sleep(0.05)
 
 
 def test_parse_tickets_page_returns_exact_rows_and_next_postback() -> None:
@@ -375,6 +411,369 @@ def test_preview_classifies_matched_ambiguous_unmatched_and_imported(
         (vehicle_10.id, "10 \\ 13695"),
         (vehicle_21.id, "21 \\ 13695"),
     }
+
+
+def test_preview_returns_accepted_while_fetch_is_blocked_then_imports(
+    api_db: Session,
+    evg_admin_client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    site = VehicleSite(name_ar="موقع اختبار المهام", name_en="Job Test Site")
+    api_db.add(site)
+    api_db.flush()
+    vehicle = _vehicle(site.id, plate_code="21")
+    api_db.add(vehicle)
+    api_db.commit()
+
+    latch = threading.Event()
+    executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+
+    def blocked_fetch_tickets(
+        tcn: str, *, details_for, timeout_s: int = 120
+    ) -> list[tuple[EvgTicketRow, EvgTicketDetails | None]]:
+        latch.wait()
+        return [
+            (
+                _ticket("6261776007", plate_number="13695"),
+                _details("6261776007", plate_code="21"),
+            )
+        ]
+
+    monkeypatch.setattr(vehicle_evg_service, "fetch_tickets", blocked_fetch_tickets)
+
+    try:
+        response_future = executor.submit(
+            evg_admin_client.post,
+            "/api/v1/vehicles/fines/evg/preview",
+            json={"traffic_codes": ["1180021637"]},
+        )
+        try:
+            response = response_future.result(timeout=5)
+        except concurrent.futures.TimeoutError:
+            pytest.fail(
+                "Synchronous preview route did not return HTTP 202 while EVG fetching was blocked"
+            )
+
+        assert not latch.is_set()
+        assert response.status_code == 202
+        job_id = response.json()["job_id"]
+        assert isinstance(job_id, str)
+        assert job_id
+
+        status_response = evg_admin_client.get(f"/api/v1/vehicles/fines/evg/preview/{job_id}")
+        assert status_response.status_code == 200
+        pending_job = status_response.json()
+        assert pending_job["status"] in {"queued", "running"}
+        assert pending_job["result"] is None
+
+        latch.set()
+        deadline = time.monotonic() + 5
+        while True:
+            status_response = evg_admin_client.get(f"/api/v1/vehicles/fines/evg/preview/{job_id}")
+            assert status_response.status_code == 200
+            completed_job = status_response.json()
+            if completed_job["status"] == "done":
+                break
+            if time.monotonic() >= deadline:
+                pytest.fail("EVG preview job did not finish within 5 seconds")
+            time.sleep(0.05)
+
+        rows = completed_job["result"]["rows"]
+        assert len(rows) == 1
+        row = rows[0]
+        assert row["ticket_no"] == "6261776007"
+        assert row["match"] == "matched"
+        assert row["vehicle_id"] == vehicle.id
+
+        assert evg_admin_client.get("/api/v1/vehicles/fines").json() == []
+
+        confirm_row = dict(row)
+        confirm_row["vehicle_id"] = vehicle.id
+        confirm_response = evg_admin_client.post(
+            "/api/v1/vehicles/fines/evg/confirm",
+            json={"rows": [confirm_row]},
+        )
+        assert confirm_response.status_code == 200
+        assert confirm_response.json()["created"] == 1
+
+        fines = evg_admin_client.get("/api/v1/vehicles/fines").json()
+        assert len(fines) == 1
+        assert fines[0]["evg_ticket_no"] == "6261776007"
+        assert fines[0]["amount"] == 600
+        assert fines[0]["vehicle_id"] == vehicle.id
+
+        repeated_confirm = evg_admin_client.post(
+            "/api/v1/vehicles/fines/evg/confirm",
+            json={"rows": [confirm_row]},
+        )
+        assert repeated_confirm.status_code == 200
+        assert repeated_confirm.json()["created"] == 0
+        assert repeated_confirm.json()["skipped"] == 1
+        assert len(evg_admin_client.get("/api/v1/vehicles/fines").json()) == 1
+    finally:
+        latch.set()
+        executor.shutdown(wait=True)
+        vehicle_evg_jobs.shutdown()
+
+
+def test_polling_running_job_remains_responsive_with_second_job_queued(
+    evg_admin_client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    first_started = threading.Event()
+    release = threading.Event()
+
+    def blocked_fetch_tickets(
+        _tcn: str, *, details_for, timeout_s: int = 120
+    ) -> list[tuple[EvgTicketRow, EvgTicketDetails | None]]:
+        first_started.set()
+        release.wait()
+        return []
+
+    monkeypatch.setattr(vehicle_evg_service, "fetch_tickets", blocked_fetch_tickets)
+
+    first_id = ""
+    second_id = ""
+    try:
+        first = evg_admin_client.post(
+            "/api/v1/vehicles/fines/evg/preview",
+            json={"traffic_codes": ["1111111111"]},
+        )
+        assert first.status_code == 202, first.text
+        first_id = first.json()["job_id"]
+        assert first_started.wait(timeout=5)
+
+        second = evg_admin_client.post(
+            "/api/v1/vehicles/fines/evg/preview",
+            json={"traffic_codes": ["2222222222"]},
+        )
+        assert second.status_code == 202, second.text
+        second_id = second.json()["job_id"]
+
+        running = evg_admin_client.get(f"/api/v1/vehicles/fines/evg/preview/{first_id}")
+        queued = evg_admin_client.get(f"/api/v1/vehicles/fines/evg/preview/{second_id}")
+        assert running.status_code == 200, running.text
+        assert queued.status_code == 200, queued.text
+        assert running.json() == {
+            "job_id": first_id,
+            "status": "running",
+            "result": None,
+            "error_code": None,
+            "error_message": None,
+        }
+        assert queued.json() == {
+            "job_id": second_id,
+            "status": "queued",
+            "result": None,
+            "error_code": None,
+            "error_message": None,
+        }
+    finally:
+        release.set()
+
+    assert _wait_for_evg_job(evg_admin_client, first_id)["status"] == "done"
+    assert _wait_for_evg_job(evg_admin_client, second_id)["status"] == "done"
+
+
+def test_known_evg_error_marks_job_failed_without_persisting_fines(
+    api_db: Session,
+    evg_admin_client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def failed_fetch_tickets(
+        _tcn: str, *, details_for, timeout_s: int = 120
+    ) -> list[tuple[EvgTicketRow, EvgTicketDetails | None]]:
+        raise EvgError("EVG_DRIVER_MISSING", "EVG browser driver is unavailable.")
+
+    monkeypatch.setattr(vehicle_evg_service, "fetch_tickets", failed_fetch_tickets)
+
+    response = evg_admin_client.post(
+        "/api/v1/vehicles/fines/evg/preview",
+        json={"traffic_codes": ["1111111111"]},
+    )
+    assert response.status_code == 202, response.text
+    job = _wait_for_evg_job(evg_admin_client, response.json()["job_id"])
+
+    assert job["status"] == "failed"
+    assert job["result"] is None
+    assert job["error_code"] == "EVG_DRIVER_MISSING"
+    assert job["error_message"] == "EVG browser driver is unavailable."
+    assert api_db.query(VehicleFine).count() == 0
+
+
+def test_unexpected_evg_error_is_redacted_and_marks_job_failed(
+    api_db: Session,
+    evg_admin_client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    secret_text = "raw upstream HTML must stay private"
+
+    def failed_fetch_tickets(
+        _tcn: str, *, details_for, timeout_s: int = 120
+    ) -> list[tuple[EvgTicketRow, EvgTicketDetails | None]]:
+        raise RuntimeError(secret_text)
+
+    monkeypatch.setattr(vehicle_evg_service, "fetch_tickets", failed_fetch_tickets)
+
+    response = evg_admin_client.post(
+        "/api/v1/vehicles/fines/evg/preview",
+        json={"traffic_codes": ["1111111111"]},
+    )
+    assert response.status_code == 202, response.text
+    job = _wait_for_evg_job(evg_admin_client, response.json()["job_id"])
+
+    assert job == {
+        "job_id": response.json()["job_id"],
+        "status": "failed",
+        "result": None,
+        "error_code": "EVG_UNAVAILABLE",
+        "error_message": "EVG fine fetching failed.",
+    }
+    assert secret_text not in json.dumps(job)
+    assert api_db.query(VehicleFine).count() == 0
+
+
+def test_preview_job_lookup_hides_other_owners_and_unknown_ids(
+    api_db: Session,
+    evg_admin_client: TestClient,
+) -> None:
+    submitted = evg_admin_client.post(
+        "/api/v1/vehicles/fines/evg/preview",
+        json={"traffic_codes": []},
+    )
+    assert submitted.status_code == 202, submitted.text
+    job_id = submitted.json()["job_id"]
+
+    other_user = User(
+        email="other-evg-admin@test.ae",
+        password_hash="x",
+        role="admin",
+        status="active",
+    )
+    api_db.add(other_user)
+    api_db.commit()
+    other_client = _client_for_user(api_db, other_user)
+
+    hidden = other_client.get(f"/api/v1/vehicles/fines/evg/preview/{job_id}")
+    unknown = evg_admin_client.get(f"/api/v1/vehicles/fines/evg/preview/{uuid4()}")
+    vehicle_evg_jobs.shutdown()
+    restarted = evg_admin_client.get(f"/api/v1/vehicles/fines/evg/preview/{job_id}")
+
+    assert hidden.status_code == 404, hidden.text
+    assert unknown.status_code == 404, unknown.text
+    assert restarted.status_code == 404, restarted.text
+    assert (
+        hidden.json()
+        == unknown.json()
+        == restarted.json()
+        == {
+            "error": {
+                "code": "EVG_PREVIEW_JOB_NOT_FOUND",
+                "message": "EVG preview job not found.",
+                "details": {},
+            }
+        }
+    )
+
+
+def test_preview_requires_vehicle_edit_capability(api_db: Session) -> None:
+    user = User(
+        email="evg-no-edit@test.ae",
+        password_hash="x",
+        role="operator",
+        status="active",
+    )
+    api_db.add(user)
+    api_db.commit()
+    client = _client_for_user(api_db, user)
+
+    post = client.post(
+        "/api/v1/vehicles/fines/evg/preview",
+        json={"traffic_codes": []},
+    )
+    get = client.get(f"/api/v1/vehicles/fines/evg/preview/{uuid4()}")
+
+    assert post.status_code == 403, post.text
+    assert get.status_code == 403, get.text
+    assert post.json()["error"]["details"]["capability"] == "vehicles.edit"
+    assert get.json()["error"]["details"]["capability"] == "vehicles.edit"
+
+
+def test_preview_queue_capacity_evicts_oldest_terminal_job(
+    evg_admin_client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(vehicle_evg_jobs, "_MAX_JOBS", 1)
+    started = threading.Event()
+    release = threading.Event()
+
+    def blocked_fetch_tickets(
+        _tcn: str, *, details_for, timeout_s: int = 120
+    ) -> list[tuple[EvgTicketRow, EvgTicketDetails | None]]:
+        started.set()
+        release.wait()
+        return []
+
+    monkeypatch.setattr(vehicle_evg_service, "fetch_tickets", blocked_fetch_tickets)
+
+    first_id = ""
+    try:
+        first = evg_admin_client.post(
+            "/api/v1/vehicles/fines/evg/preview",
+            json={"traffic_codes": ["1111111111"]},
+        )
+        assert first.status_code == 202, first.text
+        first_id = first.json()["job_id"]
+        assert started.wait(timeout=5)
+
+        busy = evg_admin_client.post(
+            "/api/v1/vehicles/fines/evg/preview",
+            json={"traffic_codes": []},
+        )
+        assert busy.status_code == 503, busy.text
+        assert busy.json()["error"] == {
+            "code": "EVG_BUSY",
+            "message": "EVG fetch queue is full.",
+            "details": {},
+        }
+    finally:
+        release.set()
+
+    assert _wait_for_evg_job(evg_admin_client, first_id)["status"] == "done"
+    replacement = evg_admin_client.post(
+        "/api/v1/vehicles/fines/evg/preview",
+        json={"traffic_codes": []},
+    )
+    assert replacement.status_code == 202, replacement.text
+    replacement_id = replacement.json()["job_id"]
+
+    evicted = evg_admin_client.get(f"/api/v1/vehicles/fines/evg/preview/{first_id}")
+    assert evicted.status_code == 404, evicted.text
+    assert evicted.json()["error"]["code"] == "EVG_PREVIEW_JOB_NOT_FOUND"
+    assert _wait_for_evg_job(evg_admin_client, replacement_id)["status"] == "done"
+
+
+def test_empty_traffic_code_list_completes_without_fetching(
+    evg_admin_client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def unexpected_fetch(*_args, **_kwargs):
+        pytest.fail("empty traffic-code preview must not call EVG")
+
+    monkeypatch.setattr(vehicle_evg_service, "fetch_tickets", unexpected_fetch)
+
+    response = evg_admin_client.post(
+        "/api/v1/vehicles/fines/evg/preview",
+        json={"traffic_codes": []},
+    )
+    assert response.status_code == 202, response.text
+    job = _wait_for_evg_job(evg_admin_client, response.json()["job_id"])
+
+    assert job["status"] == "done"
+    assert job["error_code"] is None
+    assert job["error_message"] is None
+    assert job["result"]["rows"] == []
+    assert job["result"]["traffic_codes"] == []
 
 
 def test_confirm_inserts_two_skips_duplicate_and_preserves_evg_fields(

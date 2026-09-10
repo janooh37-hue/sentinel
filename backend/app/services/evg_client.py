@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-import os
 import threading
 from collections.abc import Callable
 from contextlib import suppress
 from typing import Any, Never
 from urllib.parse import quote
 
-os.environ.setdefault("PLAYWRIGHT_BROWSERS_PATH", "0")
+# Let Playwright's default cache or an explicit PLAYWRIGHT_BROWSERS_PATH win;
+# forcing a package-local cache misses browsers installed by the standard command.
 
 try:
     from playwright.sync_api import sync_playwright

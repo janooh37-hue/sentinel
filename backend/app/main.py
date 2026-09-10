@@ -57,7 +57,7 @@ from app.api.v1 import timesheet as timesheet_v1
 from app.api.v1 import vehicles as vehicles_v1
 from app.config import get_settings
 from app.logging import configure_logging
-from app.services import scheduler_service
+from app.services import scheduler_service, vehicle_evg_jobs
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 
@@ -144,7 +144,7 @@ class BodySizeLimitMiddleware:
 
 @asynccontextmanager
 async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
-    """Boot the background scheduler on startup; shut it down on exit."""
+    """Boot the scheduler on startup; drain it and the EVG worker on exit."""
     # Reconcile role_permissions with the in-code presets so capabilities added
     # to a role preset after the initial seed (e.g. books.approve added to manager)
     # reach already-deployed DBs without a manual migration.
@@ -165,7 +165,10 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
     try:
         yield
     finally:
-        scheduler_service.shutdown()
+        try:
+            scheduler_service.shutdown()
+        finally:
+            vehicle_evg_jobs.shutdown()
 
 
 def create_app() -> FastAPI:

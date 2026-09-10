@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import base64
 import json
+import time
+from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date, timedelta
 from pathlib import Path
@@ -30,7 +32,7 @@ from app.db.models import (
 )
 from app.db.session import attach_sqlite_pragmas, get_db
 from app.main import create_app
-from app.services import vehicle_photo_service
+from app.services import vehicle_evg_jobs, vehicle_photo_service
 
 _PNG_1X1 = base64.b64decode(
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
@@ -55,6 +57,12 @@ def _client_for(db: Session, user: User) -> TestClient:
     app.dependency_overrides[get_db] = lambda: db
     app.dependency_overrides[get_current_user] = lambda: user
     return TestClient(app, raise_server_exceptions=True)
+
+
+@pytest.fixture(autouse=True)
+def _evg_jobs_teardown() -> Iterator[None]:
+    yield
+    vehicle_evg_jobs.shutdown()
 
 
 @pytest.fixture()
@@ -1259,8 +1267,20 @@ def test_archive_lifecycle_retains_history_and_guards_every_write_path(
     evg_preview = admin_client.post(
         "/api/v1/vehicles/fines/evg/preview", json={"traffic_codes": []}
     )
-    assert evg_preview.status_code == 200, evg_preview.text
-    assert vehicle_id not in {row["id"] for row in evg_preview.json()["vehicles"]}
+    assert evg_preview.status_code == 202, evg_preview.text
+    job_id = evg_preview.json()["job_id"]
+    deadline = time.monotonic() + 5
+    while True:
+        evg_status = admin_client.get(f"/api/v1/vehicles/fines/evg/preview/{job_id}")
+        assert evg_status.status_code == 200, evg_status.text
+        job = evg_status.json()
+        if job["status"] == "done":
+            break
+        assert job["status"] in {"queued", "running"}, job
+        if time.monotonic() >= deadline:
+            pytest.fail("EVG preview job did not finish within 5 seconds")
+        time.sleep(0.05)
+    assert vehicle_id not in {row["id"] for row in job["result"]["vehicles"]}
 
     # Excluded from reminder runs even though its licence is far in the past
     # relative to a distant frozen "today" — sanity-checked by directly
