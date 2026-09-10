@@ -4499,6 +4499,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/vehicles/fines/evg/preview/{job_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Evg Preview Job */
+        get: operations["get_evg_preview_job_api_v1_vehicles_fines_evg_preview__job_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/vehicles/fines/evg/confirm": {
         parameters: {
             query?: never;
@@ -9032,6 +9049,26 @@ export interface components {
              * @enum {string}
              */
             match: "matched" | "ambiguous" | "unmatched" | "already_imported";
+        };
+        /** EvgPreviewJobCreated */
+        EvgPreviewJobCreated: {
+            /** Job Id */
+            job_id: string;
+        };
+        /** EvgPreviewJobStatus */
+        EvgPreviewJobStatus: {
+            /** Job Id */
+            job_id: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "queued" | "running" | "done" | "failed";
+            result?: components["schemas"]["EvgPreviewResponse"] | null;
+            /** Error Code */
+            error_code?: string | null;
+            /** Error Message */
+            error_message?: string | null;
         };
         /** EvgPreviewRequest */
         EvgPreviewRequest: {
@@ -24011,12 +24048,45 @@ export interface operations {
         };
         responses: {
             /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EvgPreviewJobCreated"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_evg_preview_job_api_v1_vehicles_fines_evg_preview__job_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: string;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["EvgPreviewResponse"];
+                    "application/json": components["schemas"]["EvgPreviewJobStatus"];
                 };
             };
             /** @description Validation Error */

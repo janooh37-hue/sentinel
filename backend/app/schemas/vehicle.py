@@ -443,6 +443,18 @@ class EvgConfirmResult(BaseModel):
     skipped: int
 
 
+class EvgPreviewJobCreated(BaseModel):
+    job_id: str
+
+
+class EvgPreviewJobStatus(BaseModel):
+    job_id: str
+    status: Literal["queued", "running", "done", "failed"]
+    result: EvgPreviewResponse | None = None
+    error_code: str | None = None
+    error_message: str | None = None
+
+
 VehicleScanWarning = Literal["OCR_UNAVAILABLE", "OCR_NO_FIELDS", "OCR_REVIEW_REQUIRED"]
 
 

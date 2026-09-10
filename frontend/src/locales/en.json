@@ -1370,7 +1370,7 @@
       "title": "Fetch fines from EVG",
       "desc": "Searches evg.ae by traffic code and matches plates to the fleet.",
       "fetch": "Fetch fines",
-      "fetching": "Fetching from EVG… this takes up to two minutes",
+      "fetching": "Fetching fines from EVG… This may take several minutes.",
       "trafficCodes": "Traffic codes",
       "sourceRow": "Source row",
       "matched": "Matched",
@@ -1382,7 +1382,10 @@
       "imported": "{{created}} fines added, {{skipped}} skipped",
       "noRows": "No fines returned from EVG.",
       "error": "EVG could not be reached.",
-      "driverMissing": "The EVG browser driver is not installed."
+      "driverMissing": "The EVG browser driver is not installed.",
+      "invalidResponse": "The server returned an invalid response. Please try again.",
+      "jobExpired": "The fine-fetch session expired. Fetch the fines again.",
+      "busy": "EVG fine fetching is busy. Try again later."
     }
   },
   "leaves": {

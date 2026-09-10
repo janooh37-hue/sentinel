@@ -316,6 +316,8 @@ export type VehicleImportSection = components['schemas']['VehicleImportSection']
 export type FinesLetterRequest = components['schemas']['FinesLetterRequest']
 export type LetterResult = components['schemas']['LetterResult']
 export type EvgPreviewResponse = components['schemas']['EvgPreviewResponse']
+export type EvgPreviewJobCreated = components['schemas']['EvgPreviewJobCreated']
+export type EvgPreviewJobStatus = components['schemas']['EvgPreviewJobStatus']
 export type EvgPreviewRow = components['schemas']['EvgPreviewRow']
 export type EvgConfirmRequest = components['schemas']['EvgConfirmRequest']
 export type EvgConfirmResult = components['schemas']['EvgConfirmResult']
@@ -1036,7 +1038,23 @@ async function unwrap<T>(res: Response): Promise<T> {
     return undefined as T
   }
   const text = await res.text()
-  const parsed = text ? (JSON.parse(text) as unknown) : undefined
+  let parsed: unknown
+  try {
+    parsed = text ? (JSON.parse(text) as unknown) : undefined
+  } catch {
+    // A reverse proxy can answer a slow request with HTML; losing the HTTP
+    // status here is what turned that response into a user-visible SyntaxError.
+    const details = { content_type: res.headers.get('content-type') ?? '' }
+    if (!res.ok) {
+      throw new ApiError(
+        res.status,
+        `HTTP_${res.status}`,
+        res.statusText || `HTTP ${res.status}`,
+        details,
+      )
+    }
+    throw new ApiError(res.status, 'INVALID_RESPONSE', `HTTP ${res.status}`, details)
+  }
   if (!res.ok) {
     const envelope = (parsed as ErrorEnvelope | undefined)?.error
     throw new ApiError(
@@ -1529,7 +1547,9 @@ export const api = {
     params: { site_id?: number; date_from?: string; date_to?: string } = {},
   ) => request<VehicleFineRead[]>('GET', `/vehicles/fines${qs({ ...params })}`),
   evgPreview: (body: { traffic_codes?: string[] | null }) =>
-    request<EvgPreviewResponse>('POST', '/vehicles/fines/evg/preview', body),
+    request<EvgPreviewJobCreated>('POST', '/vehicles/fines/evg/preview', body),
+  evgPreviewJob: (jobId: string) =>
+    request<EvgPreviewJobStatus>('GET', `/vehicles/fines/evg/preview/${jobId}`),
   evgConfirm: (body: EvgConfirmRequest) =>
     request<EvgConfirmResult>('POST', '/vehicles/fines/evg/confirm', body),
   listVehicleAccidents: () =>

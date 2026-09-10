@@ -20,8 +20,9 @@ from app.db.session import get_db
 from app.schemas.vehicle import (
     EvgConfirmRequest,
     EvgConfirmResult,
+    EvgPreviewJobCreated,
+    EvgPreviewJobStatus,
     EvgPreviewRequest,
-    EvgPreviewResponse,
     FinesLetterRequest,
     LetterResult,
     LicenseRenewCreate,
@@ -53,6 +54,7 @@ from app.schemas.vehicle import (
 )
 from app.services import (
     settings_service,
+    vehicle_evg_jobs,
     vehicle_evg_service,
     vehicle_import_service,
     vehicle_letter_service,
@@ -154,16 +156,30 @@ def list_vehicle_fines(
     return [vehicle_service.fine_read(row) for row in rows]
 
 
-@router.post("/fines/evg/preview", response_model=EvgPreviewResponse)
+# Enqueue the long Playwright fetch because synchronous previews can outlive the
+# reverse proxy's read timeout.
+@router.post(
+    "/fines/evg/preview",
+    response_model=EvgPreviewJobCreated,
+    status_code=status.HTTP_202_ACCEPTED,
+)
 def preview_evg_fines(
     payload: EvgPreviewRequest,
-    db: Annotated[Session, Depends(get_db)],
-    _user: Annotated[User, Depends(require_capability("vehicles.edit"))],
-) -> EvgPreviewResponse:
-    return vehicle_evg_service.preview(
-        db,
+    user: Annotated[User, Depends(require_capability("vehicles.edit"))],
+) -> EvgPreviewJobCreated:
+    job_id = vehicle_evg_jobs.submit_preview(
+        owner_id=user.id,
         traffic_codes=payload.traffic_codes,
     )
+    return EvgPreviewJobCreated(job_id=job_id)
+
+
+@router.get("/fines/evg/preview/{job_id}", response_model=EvgPreviewJobStatus)
+def get_evg_preview_job(
+    job_id: str,
+    user: Annotated[User, Depends(require_capability("vehicles.edit"))],
+) -> EvgPreviewJobStatus:
+    return vehicle_evg_jobs.get_preview(job_id, owner_id=user.id)
 
 
 @router.post("/fines/evg/confirm", response_model=EvgConfirmResult)

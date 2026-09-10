@@ -27,7 +27,7 @@
  * operator whether to retry, fix a traffic code, or call the driver.
  */
 
-import { useId, useMemo, useState } from 'react'
+import { useCallback, useEffect, useId, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   AlertTriangle,
@@ -155,6 +155,8 @@ function EvgPanel({
   /** `null` = every code the fleet has, including ones that arrive later. */
   const [pickedCodes, setPickedCodes] = useState<readonly string[] | null>(null)
   const [preview, setPreview] = useState<EvgPreviewResponse | null>(null)
+  const [jobId, setJobId] = useState<string | null>(null)
+  const [pollStopped, setPollStopped] = useState(false)
   /** Operator-resolved vehicle per ticket — only `ambiguous`/`unmatched` rows
    *  ever get an entry here. */
   const [assigned, setAssigned] = useState<Record<string, number>>({})
@@ -177,42 +179,62 @@ function EvgPanel({
 
   const activeCodes = pickedCodes ?? fleetCodes
 
-  const fail = (err: unknown): void => {
-    const text = vehicleErrorMessage(err, t)
-    const detail =
-      err instanceof ApiError && typeof err.details.text === 'string' ? err.details.text : null
-    setError(text)
-    setErrorDetail(detail && detail.trim() ? detail.trim() : null)
-    toast.error(text)
-  }
+  const fail = useCallback(
+    (err: unknown): void => {
+      if (
+        err instanceof ApiError &&
+        (err.code === 'INVALID_RESPONSE' ||
+          (err.code === `HTTP_${err.status}` && err.status >= 500))
+      ) {
+        const text = t('vehicles.evg.invalidResponse')
+        setError(text)
+        setErrorDetail(`HTTP ${err.status}`)
+        toast.error(text)
+        return
+      }
 
-  const clearError = (): void => {
+      const text = vehicleErrorMessage(err, t)
+      const detail =
+        err instanceof ApiError && typeof err.details.text === 'string' ? err.details.text : null
+      setError(text)
+      setErrorDetail(detail && detail.trim() ? detail.trim() : null)
+      toast.error(text)
+    },
+    [t],
+  )
+
+  const clearError = useCallback((): void => {
     setError(null)
     setErrorDetail(null)
-  }
+  }, [])
 
   const previewMutation = useMutation({
     mutationFn: (traffic_codes: string[]) => api.evgPreview({ traffic_codes }),
+    retry: false,
     onMutate: () => {
-      onBusyChange(true)
       clearError()
+      setPollStopped(false)
     },
-    onSettled: () => onBusyChange(false),
-    onSuccess: (data) => {
-      setPreview(data)
-      setAssigned({})
-      setChecked({})
-    },
+    onSuccess: (created) => setJobId(created.job_id),
     onError: fail,
+  })
+
+  const jobQuery = useQuery({
+    queryKey: ['vehicle-evg-preview', jobId],
+    queryFn: () => api.evgPreviewJob(jobId as string),
+    enabled: jobId != null && !pollStopped,
+    retry: false,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    refetchInterval: (query) => {
+      const status = query.state.data?.status
+      return status === 'queued' || status === 'running' ? 2000 : false
+    },
   })
 
   const confirmMutation = useMutation({
     mutationFn: (rows: ConfirmRow[]) => api.evgConfirm({ rows }),
-    onMutate: () => {
-      onBusyChange(true)
-      clearError()
-    },
-    onSettled: () => onBusyChange(false),
+    onMutate: clearError,
     onSuccess: (result) => {
       // Imported fines change the hub summary, the ledger's fine counts and the
       // flat fines register; only a successful import closes the dialog.
@@ -225,7 +247,81 @@ function EvgPanel({
     onError: fail,
   })
 
-  const busy = previewMutation.isPending || confirmMutation.isPending
+  const fetching =
+    previewMutation.isPending ||
+    (jobId != null &&
+      !pollStopped &&
+      (jobQuery.data == null ||
+        jobQuery.data.status === 'queued' ||
+        jobQuery.data.status === 'running')) ||
+    (jobId != null && pollStopped && jobQuery.isFetching)
+  const busy = fetching || confirmMutation.isPending
+
+  useEffect(() => onBusyChange(busy), [busy, onBusyChange])
+  useEffect(() => () => onBusyChange(false), [onBusyChange])
+
+  const handlePollingError = useCallback(
+    (err: unknown): void => {
+      if (
+        err instanceof ApiError &&
+        (err.code === 'EVG_PREVIEW_JOB_NOT_FOUND' || err.status === 401 || err.status === 403)
+      ) {
+        setJobId(null)
+        setPollStopped(false)
+      } else {
+        setPollStopped(true)
+      }
+      fail(err)
+    },
+    [fail],
+  )
+
+  /* eslint-disable react-hooks/set-state-in-effect -- intentional: consume a polling transport failure into local dialog state */
+  useEffect(() => {
+    if (jobId == null || pollStopped || !jobQuery.isError) return
+    handlePollingError(jobQuery.error)
+  }, [handlePollingError, jobId, jobQuery.error, jobQuery.isError, pollStopped])
+  /* eslint-enable react-hooks/set-state-in-effect */
+
+  /* eslint-disable react-hooks/set-state-in-effect -- intentional: consume a terminal EVG preview-job payload into local dialog state */
+  useEffect(() => {
+    const job = jobQuery.data
+    if (jobId == null || job == null) return
+    if (job.status === 'queued' || job.status === 'running') return
+
+    setJobId(null)
+    setPollStopped(false)
+    if (job.status === 'done') {
+      if (job.result == null) {
+        fail(new ApiError(200, 'INVALID_RESPONSE', 'HTTP 200'))
+        return
+      }
+      setPreview(job.result)
+      setAssigned({})
+      setChecked({})
+      return
+    }
+
+    fail(
+      new ApiError(
+        502,
+        job.error_code ?? 'EVG_UNAVAILABLE',
+        job.error_message ?? 'EVG fine fetching failed.',
+      ),
+    )
+  }, [fail, jobId, jobQuery.data])
+  /* eslint-enable react-hooks/set-state-in-effect */
+
+  const retryPolling = (): void => {
+    clearError()
+    void jobQuery.refetch().then(({ data, error: retryError }) => {
+      if (retryError) {
+        handlePollingError(retryError)
+      } else if (data?.status === 'queued' || data?.status === 'running') {
+        setPollStopped(false)
+      }
+    })
+  }
 
   /** The vehicle a row would be filed under: the operator's choice first, then
    *  whatever the server matched. `null` means the row is not fileable. */
@@ -279,9 +375,17 @@ function EvgPanel({
 
   const backToCodes = (): void => {
     setPreview(null)
+    setJobId(null)
+    setPollStopped(false)
     setAssigned({})
     setChecked({})
     clearError()
+  }
+
+  const closePanel = (): void => {
+    setJobId(null)
+    setPollStopped(false)
+    onClose()
   }
 
   const errorRegion = (
@@ -341,7 +445,7 @@ function EvgPanel({
                         key={code}
                         type="button"
                         aria-pressed={on}
-                        disabled={busy}
+                        disabled={busy || jobId != null}
                         onClick={() =>
                           setPickedCodes(
                             on
@@ -365,7 +469,7 @@ function EvgPanel({
                 </div>
               </div>
 
-              {previewMutation.isPending && (
+              {fetching && (
                 <p
                   role="status"
                   className="flex items-center gap-2 rounded-md border border-border bg-surface-raised px-3 py-2.5 text-[0.76rem] text-muted-foreground"
@@ -383,17 +487,24 @@ function EvgPanel({
         </VehicleDialogBody>
 
         <VehicleDialogFooter>
-          <Button type="button" variant="secondary" onClick={onClose} disabled={busy}>
+          <Button type="button" variant="secondary" onClick={closePanel} disabled={busy}>
             {t('vehicles.cancel')}
           </Button>
           {fleetCodes.length > 0 && (
             <Button
               type="button"
-              disabled={busy || activeCodes.length === 0}
-              onClick={() => previewMutation.mutate([...activeCodes])}
+              disabled={busy || (jobId == null && activeCodes.length === 0)}
+              onClick={() => {
+                if (jobId != null && pollStopped) retryPolling()
+                else previewMutation.mutate([...activeCodes])
+              }}
             >
               <DownloadCloud className="h-3.5 w-3.5" aria-hidden />
-              {previewMutation.isPending ? t('common.loading') : t('vehicles.evg.fetch')}
+              {fetching
+                ? t('common.loading')
+                : jobId != null && pollStopped
+                  ? t('vehicles.retry')
+                  : t('vehicles.evg.fetch')}
             </Button>
           )}
         </VehicleDialogFooter>
@@ -489,7 +600,7 @@ function EvgPanel({
         <Button type="button" variant="ghost" onClick={backToCodes} disabled={busy}>
           {t('common.previous')}
         </Button>
-        <Button type="button" variant="secondary" onClick={onClose} disabled={busy}>
+        <Button type="button" variant="secondary" onClick={closePanel} disabled={busy}>
           {t('vehicles.close')}
         </Button>
         {rows.length > 0 && (
