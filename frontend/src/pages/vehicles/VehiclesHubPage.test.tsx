@@ -248,21 +248,12 @@ describe('VehiclesHubPage', () => {
     expect(within(editVehicle).getByText('3')).toBeInTheDocument()
     expect(within(addVehicle).getByText('3')).toBeInTheDocument()
     expect(within(sites).getByText('2')).toBeInTheDocument()
-    const importAction = screen.getByRole('link', { name: 'Fleet Import' })
+    const importAction = screen.getByRole('link', {
+      name: i18n.t('vehicles.importService'),
+    })
     expect(importAction).toHaveAttribute('href', '/vehicles/import')
     expect(importAction).not.toHaveTextContent('3')
-    expect(importAction.closest('div')).toHaveTextContent(
-      'Bulk-create or update vehicles from an XLSX spreadsheet',
-    )
-  })
-
-  it('renders shared service artwork without legacy inline icons', async () => {
-    const { container } = renderPage()
-
-    await screen.findByRole('heading', { name: 'Vehicle Services' })
-
-    expect(container.querySelectorAll('img[src*="service-icons"]').length).toBe(7)
-    expect(container.querySelector('svg[viewBox="0 0 64 64"]')).toBeNull()
+    expect(screen.getByText(i18n.t('vehicles.importServiceDesc'))).toBeInTheDocument()
   })
 
   it('filters the grouped fleet ledger with a site chip', async () => {

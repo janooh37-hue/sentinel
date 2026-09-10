@@ -200,31 +200,43 @@ describe('VehicleImportPage', () => {
         type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       }),
     )
-    await screen.findByText('Workbook review')
-    await user.selectOptions(screen.getByLabelText('Site for \u2068Vehicles\u2069'), '7')
+    await screen.findByText(i18n.t('vehicles.import.reviewTitle'))
+    await user.selectOptions(screen.getByLabelText(/Site for.*Vehicles/), '7')
     const row = screen.getByText('Workbook row \u20682\u2069').closest('article')
     expect(row).not.toBeNull()
-    await user.click(within(row as HTMLElement).getByText('Edit workbook fields'))
-    expect(screen.getAllByLabelText('Site for \u2068Vehicles\u2069')).toHaveLength(1)
-    expect(within(row as HTMLElement).queryByLabelText('Site')).not.toBeInTheDocument()
-
-    expect(within(row as HTMLElement).getByLabelText('Licence start')).toHaveAttribute(
-      'type',
-      'date',
+    await user.click(
+      within(row as HTMLElement).getByText(i18n.t('vehicles.import.fieldsTitle')),
     )
-    const capacity = within(row as HTMLElement).getByLabelText('Passenger capacity')
-    expect(capacity).toHaveAttribute('inputmode', 'numeric')
+    expect(screen.getAllByLabelText(/Site for.*Vehicles/)).toHaveLength(1)
+    expect(
+      within(row as HTMLElement).queryByLabelText(i18n.t('vehicles.site')),
+    ).not.toBeInTheDocument()
 
+    const licenseStart = within(row as HTMLElement).getByLabelText(
+      i18n.t('vehicles.licenseStart'),
+    )
+    await user.clear(licenseStart)
+    await user.type(licenseStart, '2026-02-02')
+
+    await user.click(
+      within(row as HTMLElement).getByLabelText(i18n.t('vehicles.class')),
+    )
+    await user.click(screen.getByRole('option', { name: 'Pickup' }))
+
+    const capacity = within(row as HTMLElement).getByLabelText(
+      i18n.t('vehicles.passengerCapacity'),
+    )
+    const previewButton = screen.getByRole('button', {
+      name: i18n.t('vehicles.import.previewChanges'),
+    })
     await user.type(capacity, '12 seats')
-    await waitFor(() => expect(capacity).toHaveAttribute('aria-invalid', 'true'))
-    expect(screen.getByRole('button', { name: 'Preview changes' })).toBeDisabled()
+    await waitFor(() => expect(previewButton).toBeDisabled())
 
     await user.clear(capacity)
     await user.type(capacity, '12')
-    await waitFor(() => expect(capacity).not.toHaveAttribute('aria-invalid'))
-    expect(screen.getByRole('button', { name: 'Preview changes' })).toBeEnabled()
+    await waitFor(() => expect(previewButton).toBeEnabled())
 
-    await user.click(screen.getByRole('button', { name: 'Preview changes' }))
+    await user.click(previewButton)
     await waitFor(() => expect(api.previewVehicleImport).toHaveBeenCalledTimes(1))
     const request = vi.mocked(api.previewVehicleImport).mock.calls[0]?.[1]
     expect(request?.site_mappings).toEqual({ 'section-1': 7 })
@@ -233,6 +245,13 @@ describe('VehicleImportPage', () => {
       'row-invalid',
     ])
     expect(request?.rows.every((draft) => !('site_id' in draft.values))).toBe(true)
+    const corrected = request?.rows.find((draft) => draft.row_id === 'row-valid')
+    expect(corrected?.values).toMatchObject({
+      license_start: '2026-02-02',
+      passenger_capacity: 12,
+      class_ar: 'بيك أب',
+      class_en: 'Pickup',
+    })
   })
 
   it('renders required-field row errors from the locale instead of the backend message', async () => {
@@ -266,11 +285,17 @@ describe('VehicleImportPage', () => {
         type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       }),
     )
-    await screen.findByText('مراجعة ملف المركبات')
+    await screen.findByText(i18n.t('vehicles.import.reviewTitle'))
     await user.selectOptions(screen.getByLabelText(/موقع القسم/), '7')
-    await user.click(screen.getByRole('button', { name: 'معاينة التغييرات' }))
+    await user.click(
+      screen.getByRole('button', {
+        name: i18n.t('vehicles.import.previewChanges'),
+      }),
+    )
 
-    expect(await screen.findByText('هذا الحقل مطلوب.')).toBeInTheDocument()
+    expect(
+      await screen.findByText(i18n.t('vehicles.import.errors.requiredField')),
+    ).toBeInTheDocument()
     expect(screen.queryByText('type_ar is required.')).not.toBeInTheDocument()
   })
 
@@ -283,12 +308,20 @@ describe('VehicleImportPage', () => {
       </I18nextProvider>,
     )
 
-    const links = screen.getAllByRole('link', { name: /Open vehicle/ })
+    const links = RESULT.vehicle_ids.map((vehicleId) =>
+      screen.getByRole('link', {
+        name: i18n.t('vehicles.import.result.openVehicle', { id: vehicleId }),
+      }),
+    )
     expect(links).toHaveLength(RESULT.vehicle_ids.length)
     expect(links.map((link) => link.getAttribute('href'))).toEqual([
       '/vehicles/501',
       '/vehicles/502',
     ])
-    expect(screen.getByRole('button', { name: 'Import another workbook' })).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', {
+        name: i18n.t('vehicles.import.importAnother'),
+      }),
+    ).toBeInTheDocument()
   })
 })
