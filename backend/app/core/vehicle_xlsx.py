@@ -69,11 +69,12 @@ class _VehicleClassCatalog(TypedDict):
     aliases: _VehicleClassAliases
 
 
+_VEHICLE_CLASS_CATALOG_PATH = (
+    Path(__file__).resolve().parents[2] / "templates" / "vehicle_classes.json"
+)
 _VEHICLE_CLASS_CATALOG = cast(
     _VehicleClassCatalog,
-    json.loads(
-        Path(__file__).with_name("vehicle_classes.json").read_text(encoding="utf-8")
-    ),
+    json.loads(_VEHICLE_CLASS_CATALOG_PATH.read_text(encoding="utf-8")),
 )
 _VEHICLE_CLASSES = tuple(
     (preset["ar"], preset["en"]) for preset in _VEHICLE_CLASS_CATALOG["presets"]
@@ -597,8 +598,6 @@ def _row_from_cells(
     if layout == "legacy":
         if values.get("type_ar") is not None and values.get("type_en") is None:
             values["type_en"] = values["type_ar"]
-        if values.get("class_ar") is not None and values.get("class_en") is None:
-            values["class_en"] = values["class_ar"]
     issues = [
         VehicleXlsxIssue(
             row_id=row_id,

@@ -10,7 +10,7 @@
  */
 
 import type { QueryClient } from '@tanstack/react-query'
-import vehicleClassCatalog from '../../../../backend/app/core/vehicle_classes.json'
+import vehicleClassCatalog from '../../../../backend/templates/vehicle_classes.json'
 
 import type { BadgeProps } from '@/components/ui/badge'
 import type { DocViewerItem } from '@/components/ui/document-viewer-dialog'

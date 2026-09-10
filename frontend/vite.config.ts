@@ -26,7 +26,7 @@ export default defineConfig({
       // Permit the one backend-owned catalog imported into the frontend bundle.
       allow: [
         fileURLToPath(new URL('.', import.meta.url)),
-        fileURLToPath(new URL('../backend/app/core/vehicle_classes.json', import.meta.url)),
+        fileURLToPath(new URL('../backend/templates/vehicle_classes.json', import.meta.url)),
       ],
     },
     strictPort: true,

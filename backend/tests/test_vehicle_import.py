@@ -704,13 +704,33 @@ def test_legacy_class_aliases_resolve_to_exact_bilingual_presets(
     assert parsed.rows[0].values["class_en"] == expected_en
 
 
-def test_legacy_unknown_class_is_preserved_for_custom_review() -> None:
+def test_legacy_unknown_class_is_preserved_for_custom_review(
+    import_client: TestClient,
+    api_db: Session,
+) -> None:
     custom_class = "فئة مخصصة للمهمة"
-    parsed = parse_vehicle_workbook(_legacy_workbook(class_name=custom_class))
-    row = parsed.rows[0]
-    assert row.raw["class_ar"] == custom_class
-    assert row.values["class_ar"] == custom_class
-    assert row.values["class_en"] == custom_class
+    site = _site(api_db, "Custom class")
+    inspection = _inspect(import_client, _legacy_workbook(class_name=custom_class))
+    inspected_row = inspection["rows"][0]
+    assert inspected_row["raw"]["class_ar"] == custom_class
+    assert inspected_row["values"]["class_ar"] == custom_class
+    assert inspected_row["values"]["class_en"] is None
+
+    response = import_client.post(
+        f"/api/v1/vehicles/imports/{inspection['token']}/preview",
+        json=_preview_payload(
+            inspection,
+            {section["id"]: site.id for section in inspection["sections"]},
+        ),
+    )
+    assert response.status_code == 200, response.text
+    preview_row = response.json()["rows"][0]
+    assert preview_row["action"] == "invalid"
+    assert any(
+        error["code"] == "VEHICLE_IMPORT_REQUIRED_FIELD"
+        and error["field"] == "class_en"
+        for error in preview_row["errors"]
+    )
 
 
 def test_core_formula_corrupt_and_oversized_rejections() -> None:
