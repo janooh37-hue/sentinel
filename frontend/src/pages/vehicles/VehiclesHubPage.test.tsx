@@ -14,6 +14,11 @@ import { buildVehicleTable, vehicleTableClipboard } from './vehicleTable'
 import { VehiclesHubPage } from './VehiclesHubPage'
 
 const mobileViewport = vi.hoisted(() => ({ value: false }))
+const outputState = vi.hoisted(() => ({
+  print: vi.fn(),
+  toastSuccess: vi.fn(),
+  toastError: vi.fn(),
+}))
 
 vi.mock('@/lib/useIsMobile', () => ({
   useIsMobile: () => mobileViewport.value,
@@ -31,6 +36,13 @@ vi.mock('@/lib/useCapabilities', () => ({
 
 vi.mock('@/lib/copyTable', () => ({
   copyTable: vi.fn(),
+}))
+
+vi.mock('sonner', () => ({
+  toast: {
+    success: outputState.toastSuccess,
+    error: outputState.toastError,
+  },
 }))
 
 type ApiModule = { api: typeof api } & Record<string, unknown>
@@ -181,6 +193,11 @@ function vehicleRowCheckbox(plate: string): HTMLInputElement {
 beforeEach(async () => {
   vi.clearAllMocks()
   mobileViewport.value = false
+  outputState.print.mockReset()
+  Object.defineProperty(window, 'print', {
+    configurable: true,
+    value: outputState.print,
+  })
   await i18n.changeLanguage('en')
   vi.mocked(copyTable).mockResolvedValue()
   vi.mocked(api.vehiclesSummary).mockResolvedValue(SUMMARY)
@@ -292,9 +309,62 @@ describe('VehiclesHubPage', () => {
         vehicleTableClipboard(buildVehicleTable([VEHICLES[0]], 'en', i18n.t)),
       ),
     )
-    const printRows = container.querySelectorAll('.print-vehicle-list tbody tr')
-    expect(printRows).toHaveLength(1)
-    expect(printRows[0]).toHaveTextContent('14 \\ 58216')
+    await waitFor(() =>
+      expect(outputState.toastSuccess).toHaveBeenCalledWith(
+        'Table copied to the clipboard.',
+      ),
+    )
+    expect(outputState.toastError).not.toHaveBeenCalled()
+    expect(container.querySelector('.print-vehicle-list')).not.toBeInTheDocument()
+  })
+
+  it('reports a localized clipboard failure and keeps the current selection', async () => {
+    const user = userEvent.setup()
+    vi.mocked(copyTable).mockRejectedValueOnce(new Error('COPY_FAILED'))
+    renderPage()
+
+    const selected = await screen.findByRole('checkbox', { name: 'Select 10 \\ 36348' })
+    await user.click(selected)
+    const copyButton = screen.getByRole('button', { name: 'Copy table' })
+    await user.click(copyButton)
+
+    await waitFor(() =>
+      expect(outputState.toastError).toHaveBeenCalledWith(
+        'Could not copy to clipboard. Try again.',
+      ),
+    )
+    expect(outputState.toastSuccess).not.toHaveBeenCalled()
+    expect(selected).toBeChecked()
+    expect(copyButton).toBeEnabled()
+  })
+
+  it('reports a localized print failure and releases the transient print state', async () => {
+    const user = userEvent.setup()
+    let printViewMounted = false
+    let printWasDisabled = false
+    outputState.print.mockImplementation(() => {
+      printViewMounted = document.querySelector('.print-vehicle-list') != null
+      printWasDisabled = screen.getByRole('button', { name: 'Print' }).hasAttribute('disabled')
+      throw new Error('Print unavailable')
+    })
+    renderPage()
+
+    const selected = await screen.findByRole('checkbox', { name: 'Select 14 \\ 58216' })
+    await user.click(selected)
+    const printButton = screen.getByRole('button', { name: 'Print' })
+    await user.click(printButton)
+
+    await waitFor(() =>
+      expect(outputState.toastError).toHaveBeenCalledWith(
+        'Could not open the print dialog. Try again.',
+      ),
+    )
+    expect(printViewMounted).toBe(true)
+    expect(printWasDisabled).toBe(true)
+    expect(printButton).toBeEnabled()
+    expect(document.querySelector('.print-vehicle-list')).not.toBeInTheDocument()
+    expect(outputState.toastSuccess).not.toHaveBeenCalled()
+    expect(selected).toBeChecked()
   })
 
   it('clears a selected vehicle when the expiry filter changes', async () => {
@@ -331,11 +401,32 @@ describe('VehiclesHubPage', () => {
     }
   })
 
-  it('disables print and copy while the fleet is loading', () => {
-    // The frontend targets ES2023, before `Promise.withResolvers`.
-    vi.mocked(api.listVehicles).mockReturnValue(new Promise<VehicleListItem[]>(() => {}))
-    renderPage()
+  it('disables print and copy while loading, erroring, or resolving a search filter', async () => {
+    let resolveRows!: (rows: VehicleListItem[]) => void
+    vi.mocked(api.listVehicles).mockReturnValueOnce(
+      new Promise<VehicleListItem[]>((resolve) => {
+        resolveRows = resolve
+      }),
+    )
+    const first = renderPage()
 
+    expect(screen.getByRole('button', { name: 'Print' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Copy table' })).toBeDisabled()
+
+    resolveRows(VEHICLES)
+    const selected = await screen.findByRole('checkbox', { name: 'Select 14 \\ 58216' })
+    await userEvent.click(selected)
+    await userEvent.type(
+      screen.getByRole('searchbox', { name: 'Search plate, type, or traffic code' }),
+      'Toyota',
+    )
+    expect(screen.getByRole('button', { name: 'Print' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Copy table' })).toBeDisabled()
+
+    first.unmount()
+    vi.mocked(api.listVehicles).mockRejectedValueOnce(new Error('offline'))
+    renderPage()
+    await screen.findByText("Couldn't load this. Check your connection and try again.")
     expect(screen.getByRole('button', { name: 'Print' })).toBeDisabled()
     expect(screen.getByRole('button', { name: 'Copy table' })).toBeDisabled()
   })

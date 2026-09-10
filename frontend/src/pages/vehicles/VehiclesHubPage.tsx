@@ -20,6 +20,7 @@
  */
 
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
+import { flushSync } from 'react-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Car, ClipboardCopy, DownloadCloud, Printer, Search } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
@@ -68,7 +69,11 @@ import { ServiceCard } from './components/ServiceCard'
 import { VehicleListPrintView } from './components/VehicleListPrintView'
 import { SitesDialog } from './components/SitesDialog'
 import { VehicleStatusBadge } from './components/VehicleStatusBadge'
-import { buildVehicleTable, vehicleTableClipboard } from './vehicleTable'
+import {
+  buildVehicleTable,
+  vehicleTableClipboard,
+  type VehicleTableSnapshot,
+} from './vehicleTable'
 
 /** The license-state filter, exactly the values `GET /vehicles` accepts. */
 const EXPIRY_FILTERS = ['all', 'attention', 'valid', 'due', 'expired'] as const
@@ -99,6 +104,11 @@ interface SiteGroup {
   finesAmount: number
 }
 
+interface VehiclePrintOutput {
+  table: VehicleTableSnapshot
+  scopeLabel: string
+}
+
 export function VehiclesHubPage(): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const lang = i18n.language
@@ -113,6 +123,9 @@ export function VehiclesHubPage(): React.JSX.Element {
   const [expiry, setExpiry] = useState<ExpiryFilter>('all')
   const [state, setState] = useState<StateFilter>('active')
   const [selectedIds, setSelectedIds] = useState<Set<number>>(() => new Set())
+  const [copyPending, setCopyPending] = useState(false)
+  const [printPending, setPrintPending] = useState(false)
+  const [printOutput, setPrintOutput] = useState<VehiclePrintOutput | null>(null)
   /** `null` = follow the server; a string while the operator is typing. */
   const [notifyDraft, setNotifyDraft] = useState<string | null>(null)
 
@@ -194,7 +207,12 @@ export function VehiclesHubPage(): React.JSX.Element {
     [scopeRows, lang, t],
   )
   const listActionsDisabled =
-    listQuery.isLoading || listQuery.isError || listQuery.isFetching || query.trim() !== debouncedQuery
+    listQuery.isLoading ||
+    listQuery.isError ||
+    listQuery.isFetching ||
+    query.trim() !== debouncedQuery ||
+    copyPending ||
+    printPending
   const allRowsSelected =
     rows.length > 0 && rows.every((vehicle) => selectedIds.has(vehicle.id))
   const someRowsSelected =
@@ -203,8 +221,14 @@ export function VehiclesHubPage(): React.JSX.Element {
     `vehicles.state${state === 'active' ? 'Active' : 'Archived'}`,
   )} · ${
     selectedIds.size > 0
-      ? t('vehicles.selectedScope', { count: selectedIds.size })
-      : t('vehicles.filteredScope', { count: scopeRows.length })
+      ? t('vehicles.output.selectedScope', {
+          count: selectedIds.size,
+          formattedCount: isolateBidi(formatNumber(selectedIds.size, lang)),
+        })
+      : t('vehicles.output.filteredScope', {
+          count: scopeRows.length,
+          formattedCount: isolateBidi(formatNumber(scopeRows.length, lang)),
+        })
   }`
 
   const toggleVehicle = (id: number, checked: boolean): void => {
@@ -221,11 +245,32 @@ export function VehiclesHubPage(): React.JSX.Element {
   }
 
   const copyVehicleTable = async (): Promise<void> => {
+    if (selectedIds.size === 0) return
+    setCopyPending(true)
     try {
       await copyTable(vehicleTableClipboard(vehicleTable))
-      toast.success(t('absences.copied'))
+      toast.success(t('vehicles.output.copied'))
     } catch {
-      toast.error(t('common.copyFailed'))
+      toast.error(t('vehicles.output.copyFailed'))
+    } finally {
+      setCopyPending(false)
+    }
+  }
+
+  const printVehicleList = (): void => {
+    flushSync(() => {
+      setPrintPending(true)
+      setPrintOutput({ table: vehicleTable, scopeLabel })
+    })
+    try {
+      window.print()
+    } catch {
+      toast.error(t('vehicles.output.printFailed'))
+    } finally {
+      flushSync(() => {
+        setPrintPending(false)
+        setPrintOutput(null)
+      })
     }
   }
 
@@ -491,17 +536,20 @@ export function VehiclesHubPage(): React.JSX.Element {
                 className="text-[0.75rem] text-muted-foreground"
                 aria-live="polite"
               >
-                {t('vehicles.selectedCount', { count: selectedIds.size })}
+                {t('vehicles.output.selectedCount', {
+                  count: selectedIds.size,
+                  formattedCount: isolateBidi(formatNumber(selectedIds.size, lang)),
+                })}
               </span>
               <label className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border px-2.5 text-[0.75rem] font-medium text-foreground">
                 <SelectionCheckbox
                   checked={allRowsSelected}
                   indeterminate={someRowsSelected}
                   disabled={rows.length === 0}
-                  label={t('vehicles.selectAll')}
+                  label={t('vehicles.output.selectAllShown')}
                   onChange={toggleAllRows}
                 />
-                <span>{t('vehicles.selectAll')}</span>
+                <span>{t('vehicles.output.selectAllShown')}</span>
               </label>
               <Button
                 type="button"
@@ -510,17 +558,17 @@ export function VehiclesHubPage(): React.JSX.Element {
                 disabled={selectedIds.size === 0}
                 onClick={() => setSelectedIds(new Set())}
               >
-                {t('vehicles.clearSelection')}
+                {t('vehicles.output.clearSelection')}
               </Button>
               <Button
                 type="button"
                 variant="secondary"
                 size="sm"
                 disabled={listActionsDisabled}
-                onClick={() => window.print()}
+                onClick={printVehicleList}
               >
                 <Printer className="h-3.5 w-3.5" aria-hidden />
-                {t('vehicles.print')}
+                {t('vehicles.output.print')}
               </Button>
               <Button
                 type="button"
@@ -530,7 +578,7 @@ export function VehiclesHubPage(): React.JSX.Element {
                 onClick={() => void copyVehicleTable()}
               >
                 <ClipboardCopy className="h-3.5 w-3.5" aria-hidden />
-                {t('absences.copy')}
+                {t('vehicles.output.copy')}
               </Button>
               {canEdit && (
                 <Button type="button" size="sm" onClick={() => setEvgOpen(true)}>
@@ -725,7 +773,7 @@ export function VehiclesHubPage(): React.JSX.Element {
                               <SelectionCheckbox
                                 checked={allRowsSelected}
                                 indeterminate={someRowsSelected}
-                                label={t('vehicles.selectAll')}
+                                label={t('vehicles.output.selectAllShown')}
                                 onChange={toggleAllRows}
                               />
                             </TableHead>
@@ -823,11 +871,13 @@ export function VehiclesHubPage(): React.JSX.Element {
         </>
       )}
       </div>
-      <VehicleListPrintView
-        table={vehicleTable}
-        title={t('vehicles.fleet')}
-        scopeLabel={scopeLabel}
-      />
+      {printOutput && (
+        <VehicleListPrintView
+          table={printOutput.table}
+          title={t('vehicles.fleet')}
+          scopeLabel={printOutput.scopeLabel}
+        />
+      )}
     </>
   )
 }
@@ -1062,7 +1112,7 @@ function VehicleRow({
       <TableCell className="w-10">
         <SelectionCheckbox
           checked={selected}
-          label={t('vehicles.selectVehicle', {
+          label={t('vehicles.output.selectVehicle', {
             plate: vehicle.plate_label || vehicle.plate_number,
           })}
           onChange={onToggle}
@@ -1157,7 +1207,7 @@ function VehicleCard({
       <div className="flex items-start justify-between gap-2.5">
         <SelectionCheckbox
           checked={selected}
-          label={t('vehicles.selectVehicle', {
+          label={t('vehicles.output.selectVehicle', {
             plate: vehicle.plate_label || vehicle.plate_number,
           })}
           onChange={onToggle}
