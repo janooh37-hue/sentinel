@@ -1,7 +1,6 @@
 /**
- * The Drafts folder is what "Draft in Outlook" writes into over IMAP, so a
- * mailbox that names it something other than `Drafts` must be able to say so
- * and have that survive a save.
+ * Email account form boundaries: server hydration, custom folders, save
+ * payloads, and edits made while loading or saving.
  */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
@@ -64,16 +63,39 @@ function renderSection(): void {
   )
 }
 
+function deferred<T>(): { promise: Promise<T>; resolve: (value: T) => void } {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((fulfill) => {
+    resolve = fulfill
+  })
+  return { promise, resolve }
+}
+
 beforeEach(() => {
+  vi.clearAllMocks()
   vi.mocked(api.getEmailAccount).mockResolvedValue(ACCOUNT as never)
   vi.mocked(api.upsertEmailAccount).mockResolvedValue(ACCOUNT as never)
 })
 
-describe('EmailSection drafts folder', () => {
+describe('EmailSection account form', () => {
   it('hydrates the configured drafts folder instead of the default', async () => {
     renderSection()
     const field = await screen.findByLabelText('Drafts folder')
     await waitFor(() => expect(field).toHaveValue('Entwürfe'))
+  })
+
+  it('hydrates untouched fields without overwriting edits made while the account loads', async () => {
+    const accountLoad = deferred<typeof ACCOUNT>()
+    vi.mocked(api.getEmailAccount).mockReturnValueOnce(accountLoad.promise as never)
+    renderSection()
+
+    const email = screen.getByRole('textbox', { name: /Email address/ })
+    await userEvent.type(email, 'draft@gssg.ae')
+    accountLoad.resolve(ACCOUNT)
+
+    await waitFor(() => expect(screen.getByRole('textbox', { name: /IMAP username/ })).toHaveValue('ops@gssg.ae'))
+    expect(email).toHaveValue('draft@gssg.ae')
+    expect(screen.getByLabelText('Drafts folder')).toHaveValue('Entwürfe')
   })
 
   it('carries an edited drafts folder into the save payload', async () => {
@@ -92,5 +114,25 @@ describe('EmailSection drafts folder', () => {
       sent_folder: 'Sent',
       inbox_folder: 'INBOX',
     })
+  })
+
+  it('keeps edits made while a save is in flight', async () => {
+    const save = deferred<typeof ACCOUNT>()
+    vi.mocked(api.upsertEmailAccount).mockReturnValueOnce(save.promise as never)
+    renderSection()
+    const field = await screen.findByLabelText('Drafts folder')
+    await waitFor(() => expect(field).toHaveValue('Entwürfe'))
+
+    await userEvent.clear(field)
+    await userEvent.type(field, 'Saved Drafts')
+    await userEvent.click(screen.getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(api.upsertEmailAccount).toHaveBeenCalledTimes(1))
+
+    await userEvent.clear(field)
+    await userEvent.type(field, 'Next Drafts')
+    save.resolve({ ...ACCOUNT, drafts_folder: 'Saved Drafts' })
+
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled())
+    expect(field).toHaveValue('Next Drafts')
   })
 })

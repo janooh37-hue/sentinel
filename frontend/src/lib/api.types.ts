@@ -4552,6 +4552,59 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/vehicles/photo-library": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Vehicle Photo Library */
+        get: operations["list_vehicle_photo_library_api_v1_vehicles_photo_library_get"];
+        put?: never;
+        /** Upload Vehicle Photo Library Item */
+        post: operations["upload_vehicle_photo_library_item_api_v1_vehicles_photo_library_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/vehicles/photo-library/{photo_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Vehicle Photo Library Item */
+        get: operations["get_vehicle_photo_library_item_api_v1_vehicles_photo_library__photo_id__get"];
+        put?: never;
+        post?: never;
+        /** Delete Vehicle Photo Library Item */
+        delete: operations["delete_vehicle_photo_library_item_api_v1_vehicles_photo_library__photo_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/vehicles/photo-library/{photo_id}/image/{variant}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Vehicle Photo Library Image */
+        get: operations["get_vehicle_photo_library_image_api_v1_vehicles_photo_library__photo_id__image__variant__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/vehicles": {
         parameters: {
             query?: never;
@@ -4769,6 +4822,23 @@ export interface paths {
         put?: never;
         /** Upload Vehicle File */
         post: operations["upload_vehicle_file_api_v1_vehicles__vehicle_id__files_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/vehicles/{vehicle_id}/files/{file_id}/photo-asset": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Promote Vehicle File To Photo Asset */
+        post: operations["promote_vehicle_file_to_photo_asset_api_v1_vehicles__vehicle_id__files__file_id__photo_asset_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -6714,6 +6784,18 @@ export interface components {
         Body_upload_vehicle_file_api_v1_vehicles__vehicle_id__files_post: {
             /** Kind */
             kind: string;
+            /**
+             * File
+             * Format: binary
+             */
+            file: string;
+            /** Label Ar */
+            label_ar?: string | null;
+            /** Label En */
+            label_en?: string | null;
+        };
+        /** Body_upload_vehicle_photo_library_item_api_v1_vehicles_photo_library_post */
+        Body_upload_vehicle_photo_library_item_api_v1_vehicles_photo_library_post: {
             /**
              * File
              * Format: binary
@@ -12344,8 +12426,8 @@ export interface components {
              * Format: date
              */
             license_expiry: string;
-            /** Photo File Id */
-            photo_file_id?: number | null;
+            /** Photo Asset Id */
+            photo_asset_id?: number | null;
             /** License File Id */
             license_file_id?: number | null;
             /** Make */
@@ -12820,8 +12902,14 @@ export interface components {
              * @default 0
              */
             black_points: number;
+            /** Photo Asset Id */
+            photo_asset_id?: number | null;
             /** Photo Url */
             photo_url?: string | null;
+            /** Photo Thumbnail Url */
+            photo_thumbnail_url?: string | null;
+            /** Photo Full Url */
+            photo_full_url?: string | null;
             /** Make */
             make?: string | null;
             /** Model */
@@ -12921,6 +13009,29 @@ export interface components {
              * @default
              */
             vehicle_type_en: string;
+        };
+        /** VehiclePhotoRead */
+        VehiclePhotoRead: {
+            /** Id */
+            id: number;
+            /** Label Ar */
+            label_ar: string | null;
+            /** Label En */
+            label_en: string | null;
+            /** Original Name */
+            original_name: string;
+            /** Thumbnail Url */
+            thumbnail_url: string;
+            /** Preview Url */
+            preview_url: string;
+            /** Full Url */
+            full_url: string;
+            /** Width */
+            width: number | null;
+            /** Height */
+            height: number | null;
+            /** Usage Count */
+            usage_count: number;
         };
         /** VehicleProfileScan */
         VehicleProfileScan: {
@@ -13024,8 +13135,14 @@ export interface components {
              * @default 0
              */
             black_points: number;
+            /** Photo Asset Id */
+            photo_asset_id?: number | null;
             /** Photo Url */
             photo_url?: string | null;
+            /** Photo Thumbnail Url */
+            photo_thumbnail_url?: string | null;
+            /** Photo Full Url */
+            photo_full_url?: string | null;
             /** Make */
             make?: string | null;
             /** Model */
@@ -13070,8 +13187,6 @@ export interface components {
             notes_ar?: string | null;
             /** Notes En */
             notes_en?: string | null;
-            /** Photo File Id */
-            photo_file_id?: number | null;
             /** License File Id */
             license_file_id?: number | null;
             /** License Files */
@@ -13137,8 +13252,8 @@ export interface components {
             license_start?: string | null;
             /** License Expiry */
             license_expiry?: string | null;
-            /** Photo File Id */
-            photo_file_id?: number | null;
+            /** Photo Asset Id */
+            photo_asset_id?: number | null;
             /** License File Id */
             license_file_id?: number | null;
             /** Make */
@@ -24082,6 +24197,172 @@ export interface operations {
             };
         };
     };
+    list_vehicle_photo_library_api_v1_vehicles_photo_library_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VehiclePhotoRead"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    upload_vehicle_photo_library_item_api_v1_vehicles_photo_library_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_upload_vehicle_photo_library_item_api_v1_vehicles_photo_library_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VehiclePhotoRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_vehicle_photo_library_item_api_v1_vehicles_photo_library__photo_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                photo_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VehiclePhotoRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_vehicle_photo_library_item_api_v1_vehicles_photo_library__photo_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                photo_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_vehicle_photo_library_image_api_v1_vehicles_photo_library__photo_id__image__variant__get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-None-Match"?: string | null;
+            };
+            path: {
+                photo_id: number;
+                variant: string;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_vehicles_api_v1_vehicles_get: {
         parameters: {
             query?: {
@@ -24593,6 +24874,40 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["VehicleFileRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    promote_vehicle_file_to_photo_asset_api_v1_vehicles__vehicle_id__files__file_id__photo_asset_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                vehicle_id: number;
+                file_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VehiclePhotoRead"];
                 };
             };
             /** @description Validation Error */

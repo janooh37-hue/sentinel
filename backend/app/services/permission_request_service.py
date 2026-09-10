@@ -83,9 +83,8 @@ def decide(
         raise AppError(
             "REQUEST_NOT_PENDING", "Request not found or already decided.", http_status=404
         )
-    target = db.get(User, row.user_id)
     if decision == "permanent":
-        perm_service.set_user_override(db, target.id, row.capability, "grant", actor=admin)
+        perm_service.set_user_override(db, row.user_id, row.capability, "grant", actor=admin)
         row.status, row.decision = "granted", "permanent"
     elif decision == "once":
         if not window:
@@ -94,7 +93,7 @@ def decide(
             )
         perm_service.set_user_override(
             db,
-            target.id,
+            row.user_id,
             row.capability,
             "grant",
             actor=admin,

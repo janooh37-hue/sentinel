@@ -100,6 +100,7 @@ import { PlateChip } from './components/PlateChip'
 import { RenewLicenseDialog } from './components/RenewLicenseDialog'
 import { VehicleFileThumb } from './components/VehicleFileViewer'
 import { VehicleStatusBadge } from './components/VehicleStatusBadge'
+import { VehiclePhotoPicker } from './components/VehiclePhotoPicker'
 
 /** The registers, in the order they are worked. `fines` is the default and is
  *  therefore the one state the URL does not spell out. */
@@ -147,6 +148,7 @@ export function VehicleDetailPage(): React.JSX.Element {
   const [fineTarget, setFineTarget] = useState<FineTarget | null>(null)
   const [accidentOpen, setAccidentOpen] = useState(false)
   const [maintenanceOpen, setMaintenanceOpen] = useState(false)
+  const [photoPickerOpen, setPhotoPickerOpen] = useState(false)
   const [fineToDelete, setFineToDelete] = useState<VehicleFineRead | null>(null)
   const [recordToDelete, setRecordToDelete] = useState<VehicleMaintenanceRead | null>(null)
   const [photoToDelete, setPhotoToDelete] = useState<VehicleFileRead | null>(null)
@@ -226,9 +228,20 @@ export function VehicleDetailPage(): React.JSX.Element {
       toast.error(`${target.file.name}: ${vehicleErrorMessage(err, t)}`),
   })
 
-  const setMainPhoto = useMutation({
-    mutationFn: (target: { vehicleId: number; fileId: number }) =>
-      api.updateVehicle(target.vehicleId, { photo_file_id: target.fileId }),
+  const saveMainPhoto = useMutation({
+    mutationFn: (target: { vehicleId: number; photoAssetId: number | null }) =>
+      api.updateVehicle(target.vehicleId, { photo_asset_id: target.photoAssetId }),
+    onSuccess: (_updated, target) => {
+      invalidateVehicleQueries(queryClient, { vehicleId: target.vehicleId })
+      toast.success(t('common.updatedToast'))
+    },
+  })
+
+  const promoteGalleryPhoto = useMutation({
+    mutationFn: async (target: { vehicleId: number; fileId: number }) => {
+      const asset = await api.promoteVehiclePhoto(target.vehicleId, target.fileId)
+      return api.updateVehicle(target.vehicleId, { photo_asset_id: asset.id })
+    },
     onSuccess: (_updated, target) => {
       invalidateVehicleQueries(queryClient, { vehicleId: target.vehicleId })
       toast.success(t('common.updatedToast'))
@@ -463,7 +476,13 @@ export function VehicleDetailPage(): React.JSX.Element {
           </div>
         ) : (
           <>
-            <OverviewPanel vehicle={vehicle} plate={plate ?? ''} siteLabel={siteLabel} />
+            <OverviewPanel
+              vehicle={vehicle}
+              plate={plate ?? ''}
+              siteLabel={siteLabel}
+              canEdit={canMutate}
+              onEditPhoto={() => setPhotoPickerOpen(true)}
+            />
 
             <div
               className="mt-4 flex flex-wrap gap-1.5"
@@ -534,10 +553,10 @@ export function VehicleDetailPage(): React.JSX.Element {
                   canDelete={canDeleteMutate}
                   uploading={uploadPhoto.isPending}
                   deleting={deletePhoto.isPending}
-                  settingMain={setMainPhoto.isPending}
+                  settingMain={promoteGalleryPhoto.isPending}
                   onUpload={uploadGalleryPhotos}
                   onSetMain={(photo) =>
-                    setMainPhoto.mutate({ vehicleId: vehicle.id, fileId: photo.id })
+                    promoteGalleryPhoto.mutate({ vehicleId: vehicle.id, fileId: photo.id })
                   }
                   onDelete={setPhotoToDelete}
                 />
@@ -647,6 +666,20 @@ export function VehicleDetailPage(): React.JSX.Element {
             }}
           />
         </>
+      )}
+      {vehicle && canMutate && (
+        <VehiclePhotoPicker
+          open={photoPickerOpen}
+          onOpenChange={setPhotoPickerOpen}
+          currentAssetId={vehicle.photo_asset_id ?? null}
+          currentPreviewUrl={vehicle.photo_url}
+          onSave={(asset) =>
+            saveMainPhoto.mutateAsync({
+              vehicleId: vehicle.id,
+              photoAssetId: asset?.id ?? null,
+            }).then(() => undefined)
+          }
+        />
       )}
       {vehicle && canDelete && (
         <>
@@ -787,20 +820,24 @@ function TabChip({
  */
 function UrlFileTile({
   url,
+  viewerUrl = url,
   label,
   className,
+  imageClassName,
   showLabel = false,
 }: {
   url: string
+  viewerUrl?: string
   label: string
   className?: string
+  imageClassName?: string
   showLabel?: boolean
 }): React.JSX.Element {
   const [isPdf, setIsPdf] = useState(false)
   const [open, setOpen] = useState(false)
   const item: DocViewerItem = isPdf
     ? { name: label, kind: 'pdf', pdfBase64Url: toBase64Url(url), openUrl: url, downloadUrl: url }
-    : { name: label, kind: 'image', imageUrl: url, openUrl: url, downloadUrl: url }
+    : { name: label, kind: 'image', imageUrl: viewerUrl, openUrl: viewerUrl, downloadUrl: viewerUrl }
 
   return (
     <>
@@ -826,7 +863,7 @@ function UrlFileTile({
             alt=""
             loading="lazy"
             onError={() => setIsPdf(true)}
-            className="min-h-0 w-full flex-1 object-cover"
+            className={cn('min-h-0 w-full flex-1 object-cover', imageClassName)}
           />
         )}
         {showLabel && (
@@ -874,37 +911,47 @@ function OverviewPanel({
   vehicle,
   plate,
   siteLabel,
+  canEdit,
+  onEditPhoto,
 }: {
   vehicle: VehicleRead
   plate: string
   siteLabel: string
+  canEdit: boolean
+  onEditPhoto: () => void
 }): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const lang = i18n.language
 
   return (
     <Panel className="md:grid md:grid-cols-[240px_1fr]">
-      <div className="relative min-h-[170px] md:min-h-[228px]">
+      <div className="flex min-h-[170px] flex-col md:min-h-[228px]">
         {vehicle.photo_url ? (
           <UrlFileTile
             url={vehicle.photo_url}
+            viewerUrl={vehicle.photo_full_url ?? vehicle.photo_url}
             label={t('vehicles.mainPhoto')}
-            className="h-full min-h-[170px] w-full rounded-none border-0 md:min-h-[228px]"
+            className="min-h-[170px] w-full flex-1 rounded-none border-0"
+            imageClassName="object-contain"
           />
         ) : (
           <MissingFileTile
             icon={Car}
             label={t('vehicles.mainPhoto')}
-            className="h-full min-h-[170px] w-full rounded-none border-0 md:min-h-[228px]"
+            className="min-h-[170px] w-full flex-1 rounded-none border-0"
           />
         )}
-        {vehicle.photo_url && (
-          <span
-            aria-hidden
-            className="pointer-events-none absolute inset-x-3 bottom-2.5 truncate rounded-lg bg-primary/85 px-2 py-1 text-[0.62rem] font-medium text-primary-foreground"
+        {canEdit && (
+          <Button
+            type="button"
+            size="sm"
+            variant="secondary"
+            className="m-2"
+            onClick={onEditPhoto}
           >
-            {t('vehicles.mainPhoto')}
-          </span>
+            <Pencil className="h-3.5 w-3.5" aria-hidden />
+            {t('vehicles.photoLibrary.choose')}
+          </Button>
         )}
       </div>
 
@@ -1693,8 +1740,10 @@ function PhotosPanel({
         {vehicle.photo_url && (
           <UrlFileTile
             url={vehicle.photo_url}
+            viewerUrl={vehicle.photo_full_url ?? vehicle.photo_url}
             label={t('vehicles.mainPhoto')}
             className="h-[132px] w-full"
+            imageClassName="object-contain"
             showLabel
           />
         )}
@@ -1717,7 +1766,7 @@ function PhotosPanel({
               showLabel
               className="h-[132px] w-full"
             />
-            {canEdit && photo.id !== vehicle.photo_file_id && (
+            {canEdit && (
               <Button
                 type="button"
                 variant="ghost"

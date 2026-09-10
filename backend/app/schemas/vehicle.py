@@ -48,6 +48,19 @@ class VehicleFileRead(ORMBase):
     url: str = ""
 
 
+class VehiclePhotoRead(ORMBase):
+    id: int
+    label_ar: str | None
+    label_en: str | None
+    original_name: str
+    thumbnail_url: str
+    preview_url: str
+    full_url: str
+    width: int | None
+    height: int | None
+    usage_count: int
+
+
 class _VehicleOptionalText(BaseModel):
     """Blank optional vehicle text means "not recorded", so it is stored as NULL.
 
@@ -92,7 +105,7 @@ class VehicleCreate(_VehicleOptionalText):
     contract_note_en: str | None = None
     license_start: date_t
     license_expiry: date_t
-    photo_file_id: int | None = None
+    photo_asset_id: int | None = None
     license_file_id: int | None = None
     make: str | None = Field(default=None, max_length=128)
     model: str | None = Field(default=None, max_length=128)
@@ -129,7 +142,7 @@ class VehicleUpdate(_VehicleOptionalText):
     contract_note_en: str | None = None
     license_start: date_t | None = None
     license_expiry: date_t | None = None
-    photo_file_id: int | None = None
+    photo_asset_id: int | None = None
     license_file_id: int | None = None
     make: str | None = Field(default=None, max_length=128)
     model: str | None = Field(default=None, max_length=128)
@@ -173,7 +186,10 @@ class VehicleListItem(ORMBase):
     fines_count: int = 0
     fines_amount: int = 0
     black_points: int = 0
+    photo_asset_id: int | None = None
     photo_url: str | None = None
+    photo_thumbnail_url: str | None = None
+    photo_full_url: str | None = None
     make: str | None = None
     model: str | None = None
     model_year: int | None = None
@@ -352,7 +368,7 @@ class VehicleRead(VehicleListItem):
     accessories_en: str | None = None
     notes_ar: str | None = None
     notes_en: str | None = None
-    photo_file_id: int | None = None
+    photo_asset_id: int | None = None
     license_file_id: int | None = None
     license_files: list[VehicleFileRead] = Field(default_factory=list)
 

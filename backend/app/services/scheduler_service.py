@@ -180,9 +180,7 @@ def _local_day_horizon(now: datetime) -> datetime:
     that day to appear.
     """
     zone = ZoneInfo(workforce_seed_service.SITE_TIMEZONE)
-    local_end = datetime.combine(
-        now.astimezone(zone).date(), time.max, tzinfo=zone
-    )
+    local_end = datetime.combine(now.astimezone(zone).date(), time.max, tzinfo=zone)
     return local_end.astimezone(UTC)
 
 
@@ -200,9 +198,7 @@ def _materialize_scheduled_cases(session: Session, *, now: datetime) -> int:
         return 0
     horizon = _local_day_horizon(now)
     created = 0
-    for employee_id in session.scalars(
-        select(WorkCrewMembership.employee_id).distinct()
-    ).all():
+    for employee_id in session.scalars(select(WorkCrewMembership.employee_id).distinct()).all():
         cases = attendance_evaluation_service.materialize_scheduled_cases(
             session,
             employee_id=employee_id,
@@ -261,9 +257,7 @@ def run_workforce_evaluation_queue_drain_once() -> int:
     """Drain one durable evaluation batch and commit its atomic queue mutation."""
     session = SessionLocal()
     try:
-        result = attendance_queue_service.drain_evaluation_queue(
-            session, now=datetime.now(UTC)
-        )
+        result = attendance_queue_service.drain_evaluation_queue(session, now=datetime.now(UTC))
         session.commit()
         return result.completed
     except Exception:
@@ -500,7 +494,9 @@ def _attachments_line(n: int) -> tuple[str, str]:
     return en, ar
 
 
-def _email_push(new_items: list, section_url: str) -> tuple[dict, str]:
+def _email_push(
+    new_items: list[notification_service.ActionableItem], section_url: str
+) -> tuple[dict[str, tuple[str, str]], str]:
     """Email push — name the sender, subject, a content preview and attachment
     count (single), or summarize the burst and name the latest (several)."""
     n = len(new_items)
@@ -524,13 +520,18 @@ def _email_push(new_items: list, section_url: str) -> tuple[dict, str]:
     return (
         _localized(
             f"{n} new emails\nLatest · {who} — {subj}",
-            f"{n} رسائل بريد جديدة\nالأحدث · {who} — {subj}",
+            f"""{n} رسائل بريد جديدة
+الأحدث · {who} — {subj}""",
         ),
         section_url,
     )
 
 
-def _doc_push(kind: str, new_items: list, section_url: str) -> tuple[dict, str]:
+def _doc_push(
+    kind: str,
+    new_items: list[notification_service.ActionableItem],
+    section_url: str,
+) -> tuple[dict[str, tuple[str, str]], str]:
     """Approval / review push — name the record, who it's from, deep-link to it
     (single); count the queue (several)."""
     n = len(new_items)
@@ -554,7 +555,9 @@ def _doc_push(kind: str, new_items: list, section_url: str) -> tuple[dict, str]:
     return _localized(f"{n} {noun_en}", f"{n} {noun_ar}"), section_url
 
 
-def _scan_push(new_items: list, section_url: str) -> tuple[dict, str]:
+def _scan_push(
+    new_items: list[notification_service.ActionableItem], section_url: str
+) -> tuple[dict[str, tuple[str, str]], str]:
     """Scan-inbox push — a scanned document is waiting to be reviewed/routed."""
     n = len(new_items)
     if n == 1:
@@ -562,7 +565,8 @@ def _scan_push(new_items: list, section_url: str) -> tuple[dict, str]:
         return (
             _localized(
                 f"New scan to review · {label}\nWaiting in your scan inbox",
-                f"ملف ممسوح جديد للمراجعة · {label}\nبانتظار المراجعة في صندوق الوارد",
+                f"""ملف ممسوح جديد للمراجعة · {label}
+بانتظار المراجعة في صندوق الوارد""",
             ),
             new_items[0].url,
         )
@@ -589,7 +593,9 @@ def _ar_records_waiting(n: int) -> str:
     return f"{n} سجل بانتظار نسخته الموقّعة"
 
 
-def _scanback_push(new_items: list, section_url: str) -> tuple[dict, str]:
+def _scanback_push(
+    new_items: list[notification_service.ActionableItem], section_url: str
+) -> tuple[dict[str, tuple[str, str]], str]:
     """Scan-back push — a printed paper was signed but never scanned into the app.
 
     Deliberately NOT routed through `_doc_push`: that copy says "Signature
@@ -603,7 +609,8 @@ def _scanback_push(new_items: list, section_url: str) -> tuple[dict, str]:
         return (
             _localized(
                 f"Signed copy not filed · {it.label}{subj}\nScan it into the record",
-                f"لم تُرفع النسخة الموقّعة · {it.label}{subj}\nامسحها وأرفقها بالسجل",
+                f"""لم تُرفع النسخة الموقّعة · {it.label}{subj}
+امسحها وأرفقها بالسجل""",
             ),
             it.url,
         )
@@ -617,7 +624,9 @@ def _scanback_push(new_items: list, section_url: str) -> tuple[dict, str]:
 
 
 def _build_push(
-    kind: str, new_items: list, section_url: str
+    kind: str,
+    new_items: list[notification_service.ActionableItem],
+    section_url: str,
 ) -> tuple[dict[str, tuple[str, str]], str]:
     """Localized {lang: (title, body)} pairs + the click deep-link URL.
 
@@ -633,12 +642,12 @@ def _build_push(
     return _doc_push(kind, new_items, section_url)
 
 
-def _notify_user(session, user: User) -> None:
+def _notify_user(session: Session, user: User) -> None:
     """Push each NEW owned actionable item once, deep-linked, in the device's
     language. State lives in the durable ``push_sent`` ledger, so restarts no
     longer replay still-open items."""
     items = notification_service.actionable_items(session, user)
-    by_kind: dict[str, list] = {}
+    by_kind: dict[str, list[notification_service.ActionableItem]] = {}
     for it in items:
         by_kind.setdefault(it.kind, []).append(it)
     for kind, section_url in _KIND_META.items():

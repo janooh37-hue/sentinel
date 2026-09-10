@@ -13,7 +13,7 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { zodResolver } from '@hookform/resolvers/zod'
-import { Search, Star, Trash2, Upload, X } from 'lucide-react'
+import { Loader2, Search, Star, Trash2, Upload, X } from 'lucide-react'
 import { useForm } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import { Link, useNavigate, useParams } from 'react-router-dom'
@@ -25,7 +25,13 @@ import { EmptyState } from '@/components/ui/empty-state'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ApiError, api } from '@/lib/api'
-import type { VehicleFileRead, VehicleListItem, VehicleRead, VehicleUpdate } from '@/lib/api'
+import type {
+  VehicleFileRead,
+  VehicleListItem,
+  VehiclePhotoRead,
+  VehicleRead,
+  VehicleUpdate,
+} from '@/lib/api'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { isolateBidi } from '@/lib/useCapabilityCatalog'
 import { useDebouncedValue } from '@/lib/useDebouncedValue'
@@ -52,6 +58,7 @@ import { UploadSlot } from './components/VehicleDialogShell'
 import { VehicleFileThumb } from './components/VehicleFileViewer'
 import { VehicleLicenceScanControl } from './components/VehicleLicenceScanControl'
 import { VehicleFormFields } from './components/VehicleFormFields'
+import { VehiclePhotoPicker } from './components/VehiclePhotoPicker'
 
 export function VehicleEditPage(): React.JSX.Element {
   const { id } = useParams<{ id: string }>()
@@ -356,7 +363,12 @@ function EditorForm({
   const [discardConfirmOpen, setDiscardConfirmOpen] = useState(false)
   const [pendingGalleryFiles, setPendingGalleryFiles] = useState<PendingGalleryFile[]>([])
   const [pendingLicence, setPendingLicence] = useState<PendingLicenceFile | null>(null)
+  const [photoPickerOpen, setPhotoPickerOpen] = useState(false)
   const [mainPhotoDraft, setMainPhotoDraft] = useState<number | null | undefined>(undefined)
+  const [mainPhotoDraftPreviewUrl, setMainPhotoDraftPreviewUrl] = useState<
+    string | null | undefined
+  >(undefined)
+  const [promotedFromFileId, setPromotedFromFileId] = useState<number | null>(null)
   const [photoToDelete, setPhotoToDelete] = useState<VehicleFileRead | null>(null)
 
   const form = useForm<VehicleFormInput, unknown, VehicleFormValues>({
@@ -426,7 +438,7 @@ function EditorForm({
       if (mainPhotoDraft !== undefined) {
         try {
           savedVehicle = await api.updateVehicle(savedVehicle.id, {
-            photo_file_id: mainPhotoDraft,
+            photo_asset_id: mainPhotoDraft,
           })
           invalidateVehicleQueries(queryClient, { vehicleId: savedVehicle.id })
           mainPhotoSaved = true
@@ -494,7 +506,11 @@ function EditorForm({
           current.filter((pending) => !uploadedKeys.has(pending.key)),
         )
       }
-      if (result.mainPhotoSaved) setMainPhotoDraft(undefined)
+      if (result.mainPhotoSaved) {
+        setMainPhotoDraft(undefined)
+        setMainPhotoDraftPreviewUrl(undefined)
+        setPromotedFromFileId(null)
+      }
       if (result.licenceFile) {
         setPendingLicence((current) => {
           if (!current || current.file !== result.licenceFile) return current
@@ -525,6 +541,23 @@ function EditorForm({
     },
   })
 
+  const promoteGalleryPhoto = useMutation({
+    mutationFn: (file: VehicleFileRead) =>
+      api.promoteVehiclePhoto(savedVehicleRef.current.id, file.id),
+    onSuccess: (asset, file) => {
+      setMainPhotoDraft(asset.id)
+      setMainPhotoDraftPreviewUrl(asset.preview_url)
+      setPromotedFromFileId(file.id)
+      setServerError(null)
+      void queryClient.invalidateQueries({ queryKey: VEHICLE_QUERY_KEYS.photoLibrary })
+    },
+    onError: (err) => {
+      const message = vehicleErrorMessage(err, t)
+      setServerError(message)
+      toast.error(message)
+    },
+  })
+
   const deletePhoto = useMutation({
     mutationFn: (file: VehicleFileRead) =>
       api.deleteVehicleFile(savedVehicleRef.current.id, file.id),
@@ -537,7 +570,8 @@ function EditorForm({
       }
       savedVehicleRef.current = nextVehicle
       setSavedVehicle(nextVehicle)
-      setMainPhotoDraft((draft) => (draft === deleted.id ? undefined : draft))
+      // A promoted main photo is now an independent library asset. Removing
+      // the gallery original cannot leave its vehicle pointer dangling.
       setServerError(null)
       invalidateVehicleQueries(queryClient, { vehicleId: nextVehicle.id })
       toast.success(t('vehicles.photoDeleted'))
@@ -552,8 +586,12 @@ function EditorForm({
   const invalid = Object.keys(errors).length > 0
   const alert = serverError ?? (invalid ? t('vehicles.requiredFields') : null)
   const plate = savedVehicle.plate_label || plateLabel(savedVehicle)
-  const busy = mutation.isPending || deletePhoto.isPending
+  const busy = mutation.isPending || deletePhoto.isPending || promoteGalleryPhoto.isPending
   const galleryPhotos = savedVehicle.photos ?? []
+  const mainPhotoId =
+    mainPhotoDraft === undefined ? (savedVehicle.photo_asset_id ?? null) : mainPhotoDraft
+  const mainPhotoPreviewUrl =
+    mainPhotoDraft === undefined ? savedVehicle.photo_url : mainPhotoDraftPreviewUrl
   // The API returns licence files newest-first; keeping that order also keeps
   // the current and historical scans aligned with the vehicle record.
   const licenceFiles = savedVehicle.license_files ?? []
@@ -611,37 +649,38 @@ function EditorForm({
                   <h3 className="text-xs font-semibold text-foreground">
                     {t('vehicles.mainPhoto')}
                   </h3>
-                  {savedVehicle.photo_url && (
-                    <div className="overflow-hidden rounded-lg border border-border bg-surface-raised">
+                  <div className="overflow-hidden rounded-lg border border-border bg-surface-raised">
+                    {mainPhotoPreviewUrl ? (
                       <img
-                        src={savedVehicle.photo_url}
+                        src={mainPhotoPreviewUrl}
                         alt={t('vehicles.mainPhoto')}
-                        className="h-32 w-full object-cover"
+                        className="h-32 w-full object-contain"
                       />
-                      <p className="px-3 py-2 text-xs font-medium text-foreground">
+                    ) : (
+                      <p className="grid h-32 place-items-center px-3 text-center text-xs text-muted-foreground">
+                        {t('vehicles.photoLibrary.noSelection')}
+                      </p>
+                    )}
+                    <div className="flex items-center justify-between gap-2 border-t border-hairline px-3 py-2">
+                      <p className="text-xs font-medium text-foreground">
                         {t('vehicles.mainPhoto')}
                       </p>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        disabled={busy}
+                        onClick={() => setPhotoPickerOpen(true)}
+                      >
+                        {t('vehicles.photoLibrary.choose')}
+                      </Button>
                     </div>
-                  )}
-                  {(savedVehicle.photo_file_id != null || mainPhotoDraft != null) && (
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="ghost"
-                      className="w-full"
-                      disabled={busy}
-                      onClick={() =>
-                        setMainPhotoDraft((draft) => (draft === null ? undefined : null))
-                      }
-                    >
-                      {mainPhotoDraft === null
-                        ? t('vehicles.keepMainPhoto')
-                        : t('vehicles.removeMainPhoto')}
-                    </Button>
-                  )}
-                  {mainPhotoDraft === null && (
+                  </div>
+                  {mainPhotoDraft !== undefined && (
                     <p role="status" className="text-xs font-medium text-muted-foreground">
-                      {t('vehicles.mainPhotoRemovalPending')}
+                      {mainPhotoDraft === null
+                        ? t('vehicles.mainPhotoRemovalPending')
+                        : t('vehicles.photoLibrary.selectionPending')}
                     </p>
                   )}
                 </div>
@@ -731,7 +770,7 @@ function EditorForm({
                   <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                     {galleryPhotos.map((photo) => {
                       const label = fileLabel(photo, i18n.language)
-                      const selected = mainPhotoDraft === photo.id
+                      const selected = promotedFromFileId === photo.id
                       return (
                         <li
                           key={photo.id}
@@ -760,9 +799,14 @@ function EditorForm({
                                     : 'vehicles.useFileAsMainPhoto',
                                   { name: isolateBidi(label) },
                                 )}
-                                onClick={() => setMainPhotoDraft(photo.id)}
+                                onClick={() => promoteGalleryPhoto.mutate(photo)}
                               >
-                                <Star className="h-3.5 w-3.5" aria-hidden />
+                                {promoteGalleryPhoto.isPending &&
+                                promoteGalleryPhoto.variables?.id === photo.id ? (
+                                  <Loader2 className="h-3.5 w-3.5 animate-spin motion-reduce:animate-none" aria-hidden />
+                                ) : (
+                                  <Star className="h-3.5 w-3.5" aria-hidden />
+                                )}
                                 {selected
                                   ? t('vehicles.selectedAsMainPhoto')
                                   : t('vehicles.useAsMainPhoto')}
@@ -859,6 +903,17 @@ function EditorForm({
         </div>
       </form>
 
+      <VehiclePhotoPicker
+        open={photoPickerOpen}
+        onOpenChange={setPhotoPickerOpen}
+        currentAssetId={mainPhotoId}
+        currentPreviewUrl={mainPhotoPreviewUrl}
+        onSave={(asset: VehiclePhotoRead | null) => {
+          setMainPhotoDraft(asset?.id ?? null)
+          setMainPhotoDraftPreviewUrl(asset?.preview_url ?? null)
+          setPromotedFromFileId(null)
+        }}
+      />
       <ConfirmDialog
         open={discardConfirmOpen}
         onOpenChange={setDiscardConfirmOpen}

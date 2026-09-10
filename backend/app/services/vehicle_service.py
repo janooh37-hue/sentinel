@@ -10,7 +10,7 @@ from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any, Literal
 
-from sqlalchemy import func, select
+from sqlalchemy import func, inspect, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, object_session, selectinload
 
@@ -25,6 +25,7 @@ from app.db.models import (
     VehicleFine,
     VehicleLicenseRenewal,
     VehicleMaintenance,
+    VehiclePhotoAsset,
     VehicleSite,
 )
 from app.schemas.vehicle import (
@@ -47,7 +48,7 @@ from app.schemas.vehicle import (
     VehiclesSummary,
     VehicleUpdate,
 )
-from app.services import settings_service
+from app.services import settings_service, vehicle_photo_service
 
 log = logging.getLogger(__name__)
 
@@ -193,7 +194,7 @@ def to_list_item(
 ) -> VehicleListItem:
     current_day = today or date.today()
     window = _notify_window(row, notify_days)
-    photo = _vehicle_file(row, row.photo_file_id)
+    photo_urls = vehicle_photo_service.asset_urls(row.photo_asset)
     insurance_status = (
         expiry_status(row.insurance_expiry, today=current_day, notify_days=window)
         if row.insurance_expiry is not None
@@ -212,7 +213,7 @@ def to_list_item(
             "fines_count": len(row.fines),
             "fines_amount": sum(item.amount for item in row.fines),
             "black_points": sum(item.black_points for item in row.fines),
-            "photo_url": _file_url(row.id, photo.id) if photo is not None else None,
+            **photo_urls,
             "insurance_status": insurance_status,
             "days_to_insurance_expiry": days_to_insurance_expiry,
         }
@@ -240,7 +241,7 @@ def to_read(
             "accessories_en": row.accessories_en,
             "notes_ar": row.notes_ar,
             "notes_en": row.notes_en,
-            "photo_file_id": row.photo_file_id,
+            "photo_asset_id": row.photo_asset_id,
             "license_file_id": row.license_file_id,
         }
     )
@@ -285,11 +286,7 @@ def to_read(
             "photos": [
                 _file_read(file_row)
                 for file_row in sorted(
-                    (
-                        item
-                        for item in row.files
-                        if item.kind in {"photo", "gallery"} and item.id != row.photo_file_id
-                    ),
+                    (item for item in row.files if item.kind in {"photo", "gallery"}),
                     key=lambda item: (item.created_at, item.id),
                     reverse=True,
                 )
@@ -315,6 +312,7 @@ def _list_options() -> tuple[Any, ...]:
     return (
         selectinload(Vehicle.site),
         selectinload(Vehicle.files),
+        selectinload(Vehicle.photo_asset),
         selectinload(Vehicle.fines).selectinload(VehicleFine.employee),
     )
 
@@ -540,6 +538,11 @@ def _create_vehicle_record(db: Session, payload: VehicleCreate) -> Vehicle:
     """Validate, add, and flush a vehicle without owning the transaction."""
     if _plate_exists(db, plate_code=payload.plate_code, plate_number=payload.plate_number):
         _raise_plate_exists(payload.plate_code, payload.plate_number)
+    photo_asset_id = None
+    if payload.photo_asset_id is not None:
+        photo_asset_id = vehicle_photo_service.get_selectable_photo_asset(
+            db, payload.photo_asset_id
+        ).id
 
     if payload.new_site is not None:
         site = VehicleSite(
@@ -573,6 +576,7 @@ def _create_vehicle_record(db: Session, payload: VehicleCreate) -> Vehicle:
         contract_note_en=payload.contract_note_en,
         license_start=payload.license_start,
         license_expiry=payload.license_expiry,
+        photo_asset_id=photo_asset_id,
         make=payload.make,
         model=payload.model,
         model_year=payload.model_year,
@@ -587,9 +591,6 @@ def _create_vehicle_record(db: Session, payload: VehicleCreate) -> Vehicle:
     )
     db.add(row)
     db.flush()
-    if payload.photo_file_id is not None:
-        _owned_file(db, row.id, payload.photo_file_id, kind="photo")
-        row.photo_file_id = payload.photo_file_id
     if payload.license_file_id is not None:
         _owned_file(db, row.id, payload.license_file_id, kind="license")
         row.license_file_id = payload.license_file_id
@@ -683,22 +684,10 @@ def _update_vehicle_record(db: Session, row: Vehicle, payload: VehicleUpdate) ->
     ):
         _raise_plate_exists(next_code, next_number)
 
-    if "photo_file_id" in data and data["photo_file_id"] is not None:
-        new_photo = _owned_file(db, row.id, data["photo_file_id"])
-        if new_photo.kind not in {"photo", "gallery"}:
-            raise ValidationFailedError(
-                "VEHICLE_FILE_KIND_MISMATCH",
-                f"File {new_photo.id} is not a photo file.",
-                file_id=new_photo.id,
-                expected_kind="photo",
-                actual_kind=new_photo.kind,
-            )
-        if new_photo.id != row.photo_file_id:
-            if row.photo_file_id is not None:
-                previous = db.get(VehicleFile, row.photo_file_id)
-                if previous is not None and previous.kind == "photo":
-                    previous.kind = "gallery"
-            new_photo.kind = "photo"
+    if "photo_asset_id" in data and data["photo_asset_id"] is not None:
+        data["photo_asset_id"] = vehicle_photo_service.get_selectable_photo_asset(
+            db, data["photo_asset_id"]
+        ).id
     if "license_file_id" in data and data["license_file_id"] is not None:
         _owned_file(db, row.id, data["license_file_id"], kind="license")
 
@@ -1463,11 +1452,32 @@ def delete_file(
             file_id=file_id,
             kind=row.kind,
         )
-    if vehicle.photo_file_id == file_id:
+    legacy_asset_id = db.scalar(
+        select(VehiclePhotoAsset.id).where(VehiclePhotoAsset.legacy_file_id == file_id)
+    )
+    legacy_vehicle_id = (
+        db.scalar(
+            text(
+                """
+                SELECT vehicle_id
+                FROM vehicle_photo_legacy_assignments
+                WHERE photo_file_id = :file_id
+                ORDER BY vehicle_id
+                LIMIT 1
+                """
+            ),
+            {"file_id": file_id},
+        )
+        if inspect(db.get_bind()).has_table("vehicle_photo_legacy_assignments")
+        else None
+    )
+    if legacy_asset_id is not None or legacy_vehicle_id is not None:
         raise ConflictError(
             "VEHICLE_FILE_IN_USE",
-            "The file is currently used as the vehicle's main photo.",
+            "The file is retained as a migrated vehicle-photo recovery source.",
             file_id=file_id,
+            photo_asset_id=legacy_asset_id,
+            legacy_vehicle_id=legacy_vehicle_id,
         )
     blocking_accident_id = min(
         (accident.id for accident in vehicle.accidents if file_id in accident.photo_file_ids),

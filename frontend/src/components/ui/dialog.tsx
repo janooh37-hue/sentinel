@@ -16,6 +16,7 @@
 import * as Dialog from '@radix-ui/react-dialog'
 import * as React from 'react'
 import { X } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 
 import { cn } from '@/lib/utils'
 
@@ -64,6 +65,7 @@ export function DialogContent({
 }: React.ComponentPropsWithoutRef<typeof Dialog.Content> & {
   hideClose?: boolean
 }): React.JSX.Element {
+  const { t } = useTranslation()
   return (
     <Dialog.Portal>
       <DialogOverlay />
@@ -83,7 +85,7 @@ export function DialogContent({
         {!hideClose && (
           <Dialog.Close
             className="absolute end-3.5 top-3.5 rounded-md p-1 text-muted-foreground transition-colors hover:bg-surface-tinted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
-            aria-label="Close"
+            aria-label={t('common.close')}
           >
             <X className="h-4 w-4" aria-hidden />
           </Dialog.Close>

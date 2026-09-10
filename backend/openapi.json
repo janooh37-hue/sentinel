@@ -19651,6 +19651,304 @@
         }
       }
     },
+    "/api/v1/vehicles/photo-library": {
+      "get": {
+        "tags": [
+          "vehicles"
+        ],
+        "summary": "List Vehicle Photo Library",
+        "operationId": "list_vehicle_photo_library_api_v1_vehicles_photo_library_get",
+        "parameters": [
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/VehiclePhotoRead"
+                  },
+                  "title": "Response List Vehicle Photo Library Api V1 Vehicles Photo Library Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "vehicles"
+        ],
+        "summary": "Upload Vehicle Photo Library Item",
+        "operationId": "upload_vehicle_photo_library_item_api_v1_vehicles_photo_library_post",
+        "parameters": [
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_upload_vehicle_photo_library_item_api_v1_vehicles_photo_library_post"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VehiclePhotoRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/vehicles/photo-library/{photo_id}": {
+      "get": {
+        "tags": [
+          "vehicles"
+        ],
+        "summary": "Get Vehicle Photo Library Item",
+        "operationId": "get_vehicle_photo_library_item_api_v1_vehicles_photo_library__photo_id__get",
+        "parameters": [
+          {
+            "name": "photo_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Photo Id"
+            }
+          },
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VehiclePhotoRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "vehicles"
+        ],
+        "summary": "Delete Vehicle Photo Library Item",
+        "operationId": "delete_vehicle_photo_library_item_api_v1_vehicles_photo_library__photo_id__delete",
+        "parameters": [
+          {
+            "name": "photo_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Photo Id"
+            }
+          },
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/vehicles/photo-library/{photo_id}/image/{variant}": {
+      "get": {
+        "tags": [
+          "vehicles"
+        ],
+        "summary": "Get Vehicle Photo Library Image",
+        "operationId": "get_vehicle_photo_library_image_api_v1_vehicles_photo_library__photo_id__image__variant__get",
+        "parameters": [
+          {
+            "name": "photo_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Photo Id"
+            }
+          },
+          {
+            "name": "variant",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Variant"
+            }
+          },
+          {
+            "name": "If-None-Match",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "If-None-Match"
+            }
+          },
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/vehicles": {
       "get": {
         "tags": [
@@ -20607,6 +20905,73 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/VehicleFileRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/vehicles/{vehicle_id}/files/{file_id}/photo-asset": {
+      "post": {
+        "tags": [
+          "vehicles"
+        ],
+        "summary": "Promote Vehicle File To Photo Asset",
+        "operationId": "promote_vehicle_file_to_photo_asset_api_v1_vehicles__vehicle_id__files__file_id__photo_asset_post",
+        "parameters": [
+          {
+            "name": "vehicle_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Vehicle Id"
+            }
+          },
+          {
+            "name": "file_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "File Id"
+            }
+          },
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VehiclePhotoRead"
                 }
               }
             }
@@ -28336,6 +28701,42 @@
           "file"
         ],
         "title": "Body_upload_vehicle_file_api_v1_vehicles__vehicle_id__files_post"
+      },
+      "Body_upload_vehicle_photo_library_item_api_v1_vehicles_photo_library_post": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "format": "binary",
+            "title": "File"
+          },
+          "label_ar": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label Ar"
+          },
+          "label_en": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label En"
+          }
+        },
+        "type": "object",
+        "required": [
+          "file"
+        ],
+        "title": "Body_upload_vehicle_photo_library_item_api_v1_vehicles_photo_library_post"
       },
       "BookAnnotationCreate": {
         "properties": {
@@ -45132,7 +45533,7 @@
             "format": "date",
             "title": "License Expiry"
           },
-          "photo_file_id": {
+          "photo_asset_id": {
             "anyOf": [
               {
                 "type": "integer"
@@ -45141,7 +45542,7 @@
                 "type": "null"
               }
             ],
-            "title": "Photo File Id"
+            "title": "Photo Asset Id"
           },
           "license_file_id": {
             "anyOf": [
@@ -46582,6 +46983,17 @@
             "title": "Black Points",
             "default": 0
           },
+          "photo_asset_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Photo Asset Id"
+          },
           "photo_url": {
             "anyOf": [
               {
@@ -46592,6 +47004,28 @@
               }
             ],
             "title": "Photo Url"
+          },
+          "photo_thumbnail_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Photo Thumbnail Url"
+          },
+          "photo_full_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Photo Full Url"
           },
           "make": {
             "anyOf": [
@@ -46947,6 +47381,92 @@
         ],
         "title": "VehicleMaintenanceRead"
       },
+      "VehiclePhotoRead": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "label_ar": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label Ar"
+          },
+          "label_en": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label En"
+          },
+          "original_name": {
+            "type": "string",
+            "title": "Original Name"
+          },
+          "thumbnail_url": {
+            "type": "string",
+            "title": "Thumbnail Url"
+          },
+          "preview_url": {
+            "type": "string",
+            "title": "Preview Url"
+          },
+          "full_url": {
+            "type": "string",
+            "title": "Full Url"
+          },
+          "width": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Width"
+          },
+          "height": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Height"
+          },
+          "usage_count": {
+            "type": "integer",
+            "title": "Usage Count"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "label_ar",
+          "label_en",
+          "original_name",
+          "thumbnail_url",
+          "preview_url",
+          "full_url",
+          "width",
+          "height",
+          "usage_count"
+        ],
+        "title": "VehiclePhotoRead"
+      },
       "VehicleProfileScan": {
         "properties": {
           "plate_code": {
@@ -47241,6 +47761,17 @@
             "title": "Black Points",
             "default": 0
           },
+          "photo_asset_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Photo Asset Id"
+          },
           "photo_url": {
             "anyOf": [
               {
@@ -47251,6 +47782,28 @@
               }
             ],
             "title": "Photo Url"
+          },
+          "photo_thumbnail_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Photo Thumbnail Url"
+          },
+          "photo_full_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Photo Full Url"
           },
           "make": {
             "anyOf": [
@@ -47480,17 +48033,6 @@
               }
             ],
             "title": "Notes En"
-          },
-          "photo_file_id": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Photo File Id"
           },
           "license_file_id": {
             "anyOf": [
@@ -47778,7 +48320,7 @@
             ],
             "title": "License Expiry"
           },
-          "photo_file_id": {
+          "photo_asset_id": {
             "anyOf": [
               {
                 "type": "integer"
@@ -47787,7 +48329,7 @@
                 "type": "null"
               }
             ],
-            "title": "Photo File Id"
+            "title": "Photo Asset Id"
           },
           "license_file_id": {
             "anyOf": [
