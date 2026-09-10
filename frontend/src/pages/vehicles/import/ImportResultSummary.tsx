@@ -5,6 +5,7 @@ import { Link } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import type { VehicleImportCounts, VehicleImportResult } from '@/lib/api'
+import { isolateBidi } from '@/lib/useCapabilityCatalog'
 
 import { formatNumber } from '../vehicleUtils'
 
@@ -89,7 +90,7 @@ export function ImportResultSummary({
                       className="inline-flex rounded-md border border-border bg-surface-raised px-3 py-2 text-xs font-semibold text-primary hover:bg-surface-tinted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     >
                       {t('vehicles.import.result.openVehicle', {
-                        id: formatNumber(vehicleId, i18n.language),
+                        id: isolateBidi(formatNumber(vehicleId, i18n.language)),
                       })}
                     </Link>
                   </li>
