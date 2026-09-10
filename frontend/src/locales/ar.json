@@ -1286,6 +1286,7 @@
       "excludeRow": "استبعاد الصف",
       "notPreviewed": "لم تتم معاينته",
       "fieldsTitle": "تعديل حقول الملف",
+      "correctionInvalid": "راجع حقول الملف المحددة قبل إنشاء المعاينة.",
       "errorsTitle": "يلزم التصحيح قبل الاستيراد",
       "warningsTitle": "تنبيهات للمراجعة",
       "changesTitle": "التغييرات على المركبة الحالية",
@@ -1351,7 +1352,9 @@
         "updated": "تم تحديثها",
         "unchanged": "بلا تغيير",
         "images_added": "صور مضافة",
-        "images_skipped": "صور متخطاة"
+        "images_skipped": "صور متخطاة",
+        "affectedVehicles": "المركبات المتأثرة",
+        "openVehicle": "فتح المركبة {{id}}"
       },
       "fields": {
         "plate_code": "رمز اللوحة",
@@ -1384,6 +1387,7 @@
       },
       "errors": {
         "invalidField": "هذه القيمة غير صالحة. راجع الحقل.",
+        "requiredField": "هذا الحقل مطلوب.",
         "siteRequired": "اختر موقع التشغيل لهذا القسم.",
         "duplicatePlate": "تظهر هذه اللوحة أكثر من مرة في الملف.",
         "imageRoleRequired": "حدّد ما إذا كانت كل صورة مضمّنة صورة مركبة أو صورة ترخيص.",

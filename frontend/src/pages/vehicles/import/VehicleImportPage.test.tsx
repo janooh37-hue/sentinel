@@ -14,6 +14,7 @@ import type {
 } from '@/lib/api'
 import i18n from '@/lib/i18n'
 
+import { ImportResultSummary } from './ImportResultSummary'
 import { VehicleImportPage } from './VehicleImportPage'
 
 type ApiModule = { api: typeof api } & Record<string, unknown>
@@ -50,7 +51,7 @@ const INSPECTION: VehicleImportInspection = {
       sheet: 'Vehicles',
       row_number: 2,
       raw: { plate_number: '1001' },
-      values: { plate_code: '1', plate_number: '1001', traffic_code: 'T-1' },
+      values: { plate_code: '1', plate_number: '1001', traffic_code: '10001' },
       image_ids: [],
     },
     {
@@ -59,7 +60,7 @@ const INSPECTION: VehicleImportInspection = {
       sheet: 'Vehicles',
       row_number: 3,
       raw: { plate_number: '1001' },
-      values: { plate_code: '1', plate_number: '1001', traffic_code: 'T-2' },
+      values: { plate_code: '1', plate_number: '1001', traffic_code: '10002' },
       image_ids: [],
     },
   ],
@@ -74,7 +75,7 @@ const PREVIEW: VehicleImportPreview = {
       row_id: 'row-valid',
       action: 'create',
       vehicle_id: null,
-      values: { plate_code: '1', plate_number: '1001', traffic_code: 'T-1', site_id: 7 },
+      values: { plate_code: '1', plate_number: '1001', traffic_code: '10001', site_id: 7 },
       changes: [],
       errors: [],
       warnings: [],
@@ -89,7 +90,7 @@ const PREVIEW: VehicleImportPreview = {
       row_id: 'row-invalid',
       action: 'invalid',
       vehicle_id: null,
-      values: { plate_code: '1', plate_number: '1001', traffic_code: 'T-2', site_id: 7 },
+      values: { plate_code: '1', plate_number: '1001', traffic_code: '10002', site_id: 7 },
       changes: [],
       errors: [
         {
@@ -117,7 +118,7 @@ const RESULT: VehicleImportResult = {
   unchanged: 0,
   images_added: 0,
   images_skipped: 0,
-  vehicle_ids: [501],
+  vehicle_ids: [501, 502],
 }
 
 function renderWizard() {
@@ -186,5 +187,96 @@ describe('VehicleImportPage', () => {
       }),
     )
     expect(await screen.findByText('Fleet import complete')).toBeInTheDocument()
+  })
+
+  it('uses typed shared controls and blocks invalid integer corrections without coercing them', async () => {
+    const user = userEvent.setup()
+    const { container } = renderWizard()
+    const fileInput = container.querySelector('input[type="file"]') as HTMLInputElement
+
+    await user.upload(
+      fileInput,
+      new File(['xlsx'], 'fleet.xlsx', {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      }),
+    )
+    await screen.findByText('Workbook review')
+    await user.selectOptions(screen.getByLabelText('Site for \u2068Vehicles\u2069'), '7')
+    const row = screen.getByText('Workbook row \u20682\u2069').closest('article')
+    expect(row).not.toBeNull()
+    await user.click(within(row as HTMLElement).getByText('Edit workbook fields'))
+
+    expect(within(row as HTMLElement).getByLabelText('Licence start')).toHaveAttribute(
+      'type',
+      'date',
+    )
+    const capacity = within(row as HTMLElement).getByLabelText('Passenger capacity')
+    expect(capacity).toHaveAttribute('inputmode', 'numeric')
+
+    await user.type(capacity, '12 seats')
+    await waitFor(() => expect(capacity).toHaveAttribute('aria-invalid', 'true'))
+    expect(screen.getByRole('button', { name: 'Preview changes' })).toBeDisabled()
+
+    await user.clear(capacity)
+    await user.type(capacity, '12')
+    await waitFor(() => expect(capacity).not.toHaveAttribute('aria-invalid'))
+    expect(screen.getByRole('button', { name: 'Preview changes' })).toBeEnabled()
+  })
+
+  it('renders required-field row errors from the locale instead of the backend message', async () => {
+    const user = userEvent.setup()
+    const requiredPreview: VehicleImportPreview = {
+      ...PREVIEW,
+      rows: PREVIEW.rows.map((row) =>
+        row.row_id === 'row-invalid'
+          ? {
+              ...row,
+              errors: [
+                {
+                  row_id: row.row_id,
+                  field: 'type_ar',
+                  code: 'VEHICLE_IMPORT_REQUIRED_FIELD',
+                  message: 'type_ar is required.',
+                },
+              ],
+            }
+          : row,
+      ),
+    }
+    await i18n.changeLanguage('ar')
+    vi.mocked(api.previewVehicleImport).mockResolvedValue(requiredPreview)
+    const { container } = renderWizard()
+    const fileInput = container.querySelector('input[type="file"]') as HTMLInputElement
+
+    await user.upload(
+      fileInput,
+      new File(['xlsx'], 'fleet.xlsx', {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      }),
+    )
+    await screen.findByText('مراجعة ملف المركبات')
+    await user.selectOptions(screen.getByLabelText(/موقع القسم/), '7')
+    await user.click(screen.getByRole('button', { name: 'معاينة التغييرات' }))
+
+    expect(await screen.findByText('هذا الحقل مطلوب.')).toBeInTheDocument()
+    expect(screen.queryByText('type_ar is required.')).not.toBeInTheDocument()
+  })
+
+  it('renders one affected-vehicle link for every returned id and keeps restart available', async () => {
+    render(
+      <I18nextProvider i18n={i18n}>
+        <MemoryRouter>
+          <ImportResultSummary result={RESULT} onRestart={vi.fn()} />
+        </MemoryRouter>
+      </I18nextProvider>,
+    )
+
+    const links = screen.getAllByRole('link', { name: /Open vehicle/ })
+    expect(links).toHaveLength(RESULT.vehicle_ids.length)
+    expect(links.map((link) => link.getAttribute('href'))).toEqual([
+      '/vehicles/501',
+      '/vehicles/502',
+    ])
+    expect(screen.getByRole('button', { name: 'Import another workbook' })).toBeInTheDocument()
   })
 })

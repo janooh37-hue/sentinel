@@ -17,8 +17,12 @@ import { isolateBidi } from '@/lib/useCapabilityCatalog'
 import { formatNumber, localized } from '../vehicleUtils'
 import { ImportPreviewCounts } from './ImportResultSummary'
 import { ImportRowDetail } from './ImportRowDetail'
-import { issueKey } from './importUtils'
-import type { DraftUpdater } from './importUtils'
+import {
+  importDraftFormValues,
+  isImportCorrectionValid,
+  issueKey,
+  type DraftUpdater,
+} from './importUtils'
 
 interface ImportReviewTableProps {
   inspection: VehicleImportInspection
@@ -77,6 +81,17 @@ export function ImportReviewTable({
   const imageById = new Map(inspection.images.map((image) => [image.image_id, image]))
   const unassignedImages = inspection.images.filter((image) => image.row_id == null)
   const previewIsCurrent = Boolean(preview && !previewDirty)
+  const correctionsValid = inspection.rows.every((source) => {
+    const draft = draftById.get(source.row_id)
+    return (
+      draft == null ||
+      draft.excluded ||
+      isImportCorrectionValid(
+        importDraftFormValues(draft, siteMappings[source.section_id]),
+      )
+    )
+  })
+  const previewAllowed = canPreview && correctionsValid
 
   return (
     <div className="mx-auto w-full max-w-[1480px] space-y-4 px-4 pb-24 md:px-6">
@@ -247,12 +262,17 @@ export function ImportReviewTable({
                     draft={draft}
                     previewRow={previewById.get(source.row_id)}
                     images={rowImages}
+                    sites={sites}
+                    siteId={siteMappings[source.section_id]}
                     scanResults={scanResults}
                     scanningImageId={scanningImageId}
                     previewIsCurrent={previewIsCurrent}
                     selected={selectedRowIds.has(source.row_id)}
                     onDraftChange={(next) => onDraftChange(source.row_id, () => next)}
                     onSelectedChange={(selected) => onSelectedChange(source.row_id, selected)}
+                    onSiteChange={(siteId) =>
+                      onSiteMappingChange(source.section_id, siteId)
+                    }
                     onScan={onScan}
                   />
                 )
@@ -271,7 +291,7 @@ export function ImportReviewTable({
             : t('vehicles.import.previewRequired')}
         </p>
         <div className="flex flex-wrap gap-2">
-          <Button type="button" variant="secondary" onClick={onPreview} disabled={!canPreview || isPreviewing || isConfirming}>
+          <Button type="button" variant="secondary" onClick={onPreview} disabled={!previewAllowed || isPreviewing || isConfirming}>
             {isPreviewing ? (
               <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden />
             ) : (

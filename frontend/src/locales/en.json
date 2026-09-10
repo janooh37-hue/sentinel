@@ -1194,6 +1194,7 @@
       "excludeRow": "Exclude row",
       "notPreviewed": "Not previewed",
       "fieldsTitle": "Edit workbook fields",
+      "correctionInvalid": "Review the highlighted workbook fields before previewing.",
       "errorsTitle": "Resolve before import",
       "warningsTitle": "Review warnings",
       "changesTitle": "Changes to the current vehicle",
@@ -1259,7 +1260,9 @@
         "updated": "Updated",
         "unchanged": "Unchanged",
         "images_added": "Images added",
-        "images_skipped": "Images skipped"
+        "images_skipped": "Images skipped",
+        "affectedVehicles": "Affected vehicles",
+        "openVehicle": "Open vehicle {{id}}"
       },
       "fields": {
         "plate_code": "Plate code",
@@ -1292,6 +1295,7 @@
       },
       "errors": {
         "invalidField": "This value is invalid. Review the field.",
+        "requiredField": "This field is required.",
         "siteRequired": "Choose an operating site for this section.",
         "duplicatePlate": "This plate appears more than once in the workbook.",
         "imageRoleRequired": "Choose whether every embedded image is a vehicle photo or licence.",

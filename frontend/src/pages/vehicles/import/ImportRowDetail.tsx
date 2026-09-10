@@ -1,20 +1,35 @@
+import { useEffect, useMemo } from 'react'
+import { zodResolver } from '@hookform/resolvers/zod'
 import { AlertTriangle, Archive, ChevronDown } from 'lucide-react'
+import { useForm, useWatch, type Resolver } from 'react-hook-form'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
 
 import { Badge } from '@/components/ui/badge'
-import { Input } from '@/components/ui/input'
-import { isolateBidi } from '@/lib/useCapabilityCatalog'
 import type {
   VehicleImportImage,
   VehicleImportInspectRow,
   VehicleImportPreviewDraftRow,
   VehicleImportPreviewRow,
   VehicleProfileScan,
+  VehicleSiteRead,
 } from '@/lib/api'
 
+import {
+  type VehicleFormInput,
+  type VehicleFormValues,
+  vehicleFormSchema,
+} from '../vehicleForm'
+import { VehicleFormAlert } from '../components/VehicleDialogShell'
+import { VehicleFormFields } from '../components/VehicleFormFields'
 import { ImportImageReview } from './ImportImageReview'
-import { importFieldDir, isConfirmable, issueKey } from './importUtils'
+import {
+  importDraftFormValues,
+  importDraftValuesFromForm,
+  importFieldDir,
+  isConfirmable,
+  issueKey,
+} from './importUtils'
 
 interface ImportRowDetailProps {
   token: string
@@ -22,12 +37,15 @@ interface ImportRowDetailProps {
   draft: VehicleImportPreviewDraftRow
   previewRow?: VehicleImportPreviewRow
   images: VehicleImportImage[]
+  sites: VehicleSiteRead[]
+  siteId?: number
   scanResults: Record<string, VehicleProfileScan>
   scanningImageId: string | null
   previewIsCurrent: boolean
   selected: boolean
   onDraftChange: (draft: VehicleImportPreviewDraftRow) => void
   onSelectedChange: (selected: boolean) => void
+  onSiteChange: (siteId: number) => void
   onScan: (imageId: string) => void
 }
 
@@ -43,21 +61,82 @@ const ACTION_TONE: Record<
   excluded: 'outline',
 }
 
+const sharedVehicleResolver = zodResolver(vehicleFormSchema)
+const importCorrectionResolver: Resolver<
+  VehicleFormInput,
+  unknown,
+  VehicleFormValues
+> = async (values, context, options) => {
+  const resolved = await sharedVehicleResolver(values, context, options)
+  const errors = { ...resolved.errors }
+  for (const field of Object.keys(errors) as Array<keyof VehicleFormInput>) {
+    const value = values[field]
+    if (typeof value === 'string' && value.trim() === '') delete errors[field]
+  }
+  return Object.keys(errors).length === 0
+    ? { values: values as VehicleFormValues, errors: {} }
+    : { values: {}, errors }
+}
+
 export function ImportRowDetail({
   token,
   source,
   draft,
   previewRow,
   images,
+  sites,
+  siteId,
   scanResults,
   scanningImageId,
   previewIsCurrent,
   selected,
   onDraftChange,
   onSelectedChange,
+  onSiteChange,
   onScan,
 }: ImportRowDetailProps): React.JSX.Element {
   const { t } = useTranslation()
+  const defaults = useMemo(() => importDraftFormValues(draft, siteId), [draft, siteId])
+  const form = useForm<VehicleFormInput, unknown, VehicleFormValues>({
+    resolver: importCorrectionResolver,
+    defaultValues: defaults,
+    mode: 'onChange',
+  })
+  const watchedValues = useWatch({ control: form.control })
+  const formValues = useMemo(
+    () => ({ ...defaults, ...watchedValues }) as VehicleFormValues,
+    [defaults, watchedValues],
+  )
+
+  useEffect(() => {
+    const current = form.getValues()
+    const desiredDraft = importDraftValuesFromForm(defaults)
+    const currentDraft = importDraftValuesFromForm(current)
+    const draftChanged = Object.entries(desiredDraft).some(
+      ([field, value]) => (currentDraft[field] ?? null) !== value,
+    )
+    if (draftChanged || current.site !== defaults.site) form.reset(defaults)
+  }, [defaults, form])
+
+  useEffect(() => {
+    const values = importDraftValuesFromForm(formValues)
+    const draftChanged = Object.entries(values).some(
+      ([field, value]) => (draft.values[field] ?? null) !== value,
+    )
+    if (draftChanged) {
+      onDraftChange({
+        ...draft,
+        values: { ...draft.values, ...values },
+      })
+    }
+    if (formValues.site) {
+      const selectedSiteId = Number(formValues.site)
+      if (selectedSiteId !== siteId) onSiteChange(selectedSiteId)
+    }
+  }, [draft, formValues, onDraftChange, onSiteChange, siteId])
+
+  const alertId = `vehicle-import-${source.row_id}-errors`
+  const invalidCorrection = Object.keys(form.formState.errors).length > 0
   const confirmable = Boolean(previewRow && isConfirmable(previewRow))
   const archived = previewRow?.action === 'archived'
   const plate = [draft.values.plate_code, draft.values.plate_number].filter(Boolean).join(' \\ ')
@@ -200,26 +279,21 @@ export function ImportRowDetail({
           {t('vehicles.import.fieldsTitle')}
           <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180 motion-reduce:transition-none" aria-hidden />
         </summary>
-        <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {Object.keys(draft.values).map((field) => (
-            <label key={field} className="text-xs font-medium text-muted-foreground">
-              {t(`vehicles.import.fields.${field}`)}
-              <Input
-                dir={importFieldDir(field)}
-                className="mt-1"
-                value={draft.values[field] ?? ''}
-                onChange={(event) =>
-                  onDraftChange({
-                    ...draft,
-                    values: {
-                      ...draft.values,
-                      [field]: event.target.value === '' ? null : event.target.value,
-                    },
-                  })
-                }
-              />
-            </label>
-          ))}
+        <div className="mt-3 space-y-3">
+          <VehicleFormAlert
+            id={alertId}
+            message={
+              invalidCorrection ? t('vehicles.import.correctionInvalid') : null
+            }
+          />
+          <VehicleFormFields
+            form={form}
+            sites={sites}
+            mode="edit"
+            vehicle={null}
+            fieldIdPrefix={`vehicle-import-${source.row_id}`}
+            alertId={alertId}
+          />
         </div>
       </details>
 

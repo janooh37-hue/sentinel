@@ -228,7 +228,7 @@ beforeEach(async () => {
 })
 
 describe('VehiclesHubPage', () => {
-  it('renders every service card with its live summary count', async () => {
+  it('renders metric service cards and keeps import as a count-free secondary action', async () => {
     renderPage()
 
     await screen.findByRole('heading', { name: 'Vehicle Services' })
@@ -248,7 +248,12 @@ describe('VehiclesHubPage', () => {
     expect(within(editVehicle).getByText('3')).toBeInTheDocument()
     expect(within(addVehicle).getByText('3')).toBeInTheDocument()
     expect(within(sites).getByText('2')).toBeInTheDocument()
-    expect(document.querySelector('a[href="/vehicles/import"]')).toBeInTheDocument()
+    const importAction = screen.getByRole('link', { name: 'Import Fleet' })
+    expect(importAction).toHaveAttribute('href', '/vehicles/import')
+    expect(importAction).not.toHaveTextContent('3')
+    expect(importAction.closest('div')).toHaveTextContent(
+      'Bulk-create or update vehicles from an XLSX spreadsheet',
+    )
   })
 
   it('renders shared service artwork without legacy inline icons', async () => {
@@ -256,7 +261,7 @@ describe('VehiclesHubPage', () => {
 
     await screen.findByRole('heading', { name: 'Vehicle Services' })
 
-    expect(container.querySelectorAll('img[src*="service-icons"]').length).toBe(8)
+    expect(container.querySelectorAll('img[src*="service-icons"]').length).toBe(7)
     expect(container.querySelector('svg[viewBox="0 0 64 64"]')).toBeNull()
   })
 

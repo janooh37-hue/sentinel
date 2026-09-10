@@ -43,13 +43,13 @@ export function ImportResultSummary({
   onRestart: () => void
 }): React.JSX.Element {
   const { t, i18n } = useTranslation()
-  const counts: Array<[keyof Omit<VehicleImportResult, 'vehicle_ids'>, number]> = [
+  const counts = [
     ['created', result.created],
     ['updated', result.updated],
     ['unchanged', result.unchanged],
     ['images_added', result.images_added],
     ['images_skipped', result.images_skipped],
-  ]
+  ] as const
 
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-1 items-center px-4 py-10 md:px-6">
@@ -76,7 +76,28 @@ export function ImportResultSummary({
               </div>
             ))}
           </dl>
-          <div className="flex flex-wrap justify-center gap-2 px-6 py-5">
+          {result.vehicle_ids.length > 0 ? (
+            <div className="border-t border-hairline px-6 py-4">
+              <h3 className="text-sm font-semibold text-foreground">
+                {t('vehicles.import.result.affectedVehicles')}
+              </h3>
+              <ul className="mt-2 flex flex-wrap gap-2">
+                {result.vehicle_ids.map((vehicleId, index) => (
+                  <li key={`${vehicleId}-${index}`}>
+                    <Link
+                      to={`/vehicles/${vehicleId}`}
+                      className="inline-flex rounded-md border border-border bg-surface-raised px-3 py-2 text-xs font-semibold text-primary hover:bg-surface-tinted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      {t('vehicles.import.result.openVehicle', {
+                        id: formatNumber(vehicleId, i18n.language),
+                      })}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
+          <div className="flex flex-wrap justify-center gap-2 border-t border-hairline px-6 py-5">
             <Button type="button" variant="secondary" onClick={onRestart}>
               {t('vehicles.import.importAnother')}
             </Button>

@@ -510,17 +510,29 @@ export function VehiclesHubPage(): React.JSX.Element {
               countLabel={t('vehicles.sitesService')}
             />
           )}
-          {canEdit && (
-            <ServiceCard
-              artwork="vehicle-register"
-              to="/vehicles/import"
-              title={t('vehicles.importService')}
-              description={t('vehicles.importServiceDesc')}
-              count={figure(summary?.vehicles)}
-              countLabel={t('vehicles.fleetSize')}
-            />
-          )}
         </div>
+
+        {canEdit ? (
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-surface px-3.5 py-3">
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-foreground">
+                {t('vehicles.importService')}
+              </p>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                {t('vehicles.importServiceDesc')}
+              </p>
+            </div>
+            <Link
+              to="/vehicles/import"
+              className={cn(
+                buttonVariants({ variant: 'secondary', size: 'sm' }),
+                'shrink-0',
+              )}
+            >
+              {t('vehicles.importService')}
+            </Link>
+          </div>
+        ) : null}
 
         {/* Fleet ledger. `tabIndex={-1}` is the landing target of the Renew
             card, so a keyboard operator arrives inside the section instead of

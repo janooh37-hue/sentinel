@@ -8,6 +8,14 @@ import type {
   VehicleSiteRead,
 } from '@/lib/api'
 
+import {
+  CUSTOM_CLASS,
+  resolveVehicleClass,
+  type VehicleFormValues,
+  vehicleFormSchema,
+} from '../vehicleForm'
+import { parsePlate, VEHICLE_CLASSES } from '../vehicleUtils'
+
 export type OcrField =
   | 'plate_code'
   | 'plate_number'
@@ -65,6 +73,121 @@ export type DraftUpdater = (
   rowId: string,
   update: (draft: VehicleImportPreviewDraftRow) => VehicleImportPreviewDraftRow,
 ) => void
+
+function stringValue(value: string | number | null | undefined): string {
+  return value == null ? '' : String(value)
+}
+
+/** Hydrate the shared vehicle form from one workbook row. Empty import cells
+ * stay empty: the backend interprets them as "keep the stored value" when the
+ * row matches an existing vehicle. */
+export function importDraftFormValues(
+  draft: VehicleImportPreviewDraftRow,
+  siteId: number | undefined,
+): VehicleFormValues {
+  const selectedClass = resolveVehicleClass(
+    stringValue(draft.values.class_ar),
+    stringValue(draft.values.class_en),
+  )
+  const classIndex = selectedClass
+    ? VEHICLE_CLASSES.findIndex(
+        (option) => option.ar === selectedClass.ar && option.en === selectedClass.en,
+      )
+    : -1
+  const plate = [draft.values.plate_code, draft.values.plate_number].filter(Boolean).join(' \\ ')
+  return {
+    plate,
+    traffic_code: stringValue(draft.values.traffic_code),
+    vin: stringValue(draft.values.vin),
+    type_ar: stringValue(draft.values.type_ar),
+    type_en: stringValue(draft.values.type_en),
+    vehicle_class: classIndex >= 0 ? String(classIndex) : CUSTOM_CLASS,
+    custom_class_ar: classIndex >= 0 ? '' : stringValue(draft.values.class_ar),
+    custom_class_en: classIndex >= 0 ? '' : stringValue(draft.values.class_en),
+    site: siteId == null ? '' : String(siteId),
+    new_site_ar: '',
+    new_site_en: '',
+    contract_note_ar: stringValue(draft.values.contract_note_ar),
+    contract_note_en: stringValue(draft.values.contract_note_en),
+    license_start: stringValue(draft.values.license_start),
+    license_expiry: stringValue(draft.values.license_expiry),
+    make: stringValue(draft.values.make),
+    model: stringValue(draft.values.model),
+    model_year: stringValue(draft.values.model_year),
+    colour: stringValue(draft.values.colour),
+    insurance_expiry: stringValue(draft.values.insurance_expiry),
+    inmate_capacity: stringValue(draft.values.inmate_capacity),
+    passenger_capacity: stringValue(draft.values.passenger_capacity),
+    accessories_ar: stringValue(draft.values.accessories_ar),
+    accessories_en: stringValue(draft.values.accessories_en),
+    notes_ar: stringValue(draft.values.notes_ar),
+    notes_en: stringValue(draft.values.notes_en),
+  }
+}
+
+function nullableText(value: string): string | null {
+  const trimmed = value.trim()
+  return trimmed === '' ? null : trimmed
+}
+
+function nullableInteger(value: string): string | number | null {
+  const trimmed = value.trim()
+  if (trimmed === '') return null
+  return /^\d+$/.test(trimmed) ? Number(trimmed) : trimmed
+}
+
+/** Convert shared-form strings back to the preview contract. Invalid integer
+ * text is deliberately preserved for validation rather than truncated by
+ * `parseInt`; blanks become null so updates preserve the stored field. */
+export function importDraftValuesFromForm(
+  values: VehicleFormValues,
+): VehicleImportPreviewDraftRow['values'] {
+  const plate = parsePlate(values.plate)
+  const vehicleClass =
+    values.vehicle_class === CUSTOM_CLASS
+      ? { ar: values.custom_class_ar, en: values.custom_class_en }
+      : VEHICLE_CLASSES[Number(values.vehicle_class)]
+  return {
+    plate_code: plate?.plate_code ?? null,
+    plate_number: plate?.plate_number ?? nullableText(values.plate),
+    traffic_code: nullableText(values.traffic_code),
+    vin: nullableText(values.vin),
+    type_ar: nullableText(values.type_ar),
+    type_en: nullableText(values.type_en),
+    class_ar: nullableText(vehicleClass?.ar ?? ''),
+    class_en: nullableText(vehicleClass?.en ?? ''),
+    contract_note_ar: nullableText(values.contract_note_ar),
+    contract_note_en: nullableText(values.contract_note_en),
+    license_start: nullableText(values.license_start),
+    license_expiry: nullableText(values.license_expiry),
+    make: nullableText(values.make),
+    model: nullableText(values.model),
+    model_year: nullableInteger(values.model_year),
+    colour: nullableText(values.colour),
+    insurance_expiry: nullableText(values.insurance_expiry),
+    inmate_capacity: nullableInteger(values.inmate_capacity),
+    passenger_capacity: nullableInteger(values.passenger_capacity),
+    accessories_ar: nullableText(values.accessories_ar),
+    accessories_en: nullableText(values.accessories_en),
+    notes_ar: nullableText(values.notes_ar),
+    notes_en: nullableText(values.notes_en),
+  }
+}
+
+function blankFieldIssue(values: VehicleFormValues, path: PropertyKey[]): boolean {
+  const field = path[0]
+  if (typeof field !== 'string') return false
+  const value = values[field as keyof VehicleFormValues]
+  return typeof value === 'string' && value.trim() === ''
+}
+
+/** Import corrections reuse the shared form validation, except that an empty
+ * cell is a meaningful "preserve existing" instruction. The backend still
+ * reports required blanks for create rows after it resolves the row match. */
+export function isImportCorrectionValid(values: VehicleFormValues): boolean {
+  const result = vehicleFormSchema.safeParse(values)
+  return result.success || result.error.issues.every((issue) => blankFieldIssue(values, issue.path))
+}
 
 export function createDraftRows(
   inspection: VehicleImportInspection,
@@ -150,6 +273,7 @@ export function issueKey(issue: VehicleImportIssue): string {
   const byCode: Record<string, string> = {
     VEHICLE_IMPORT_INVALID_FIELD: 'invalidField',
     VEHICLE_IMPORT_SITE_REQUIRED: 'siteRequired',
+    VEHICLE_IMPORT_REQUIRED_FIELD: 'requiredField',
     VEHICLE_IMPORT_DUPLICATE_PLATE: 'duplicatePlate',
     VEHICLE_IMPORT_IMAGE_ROLE_REQUIRED: 'imageRoleRequired',
     VEHICLE_IMPORT_PHOTO_CHOICE_REQUIRED: 'photoChoiceRequired',
