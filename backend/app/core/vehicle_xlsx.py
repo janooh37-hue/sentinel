@@ -595,9 +595,12 @@ def _row_from_cells(
         return None, []
     row_id = f"{section.id}-row-{row_number}"
     values, errors = normalize_import_values(raw_source, epoch=epoch)
-    if layout == "legacy":
-        if values.get("type_ar") is not None and values.get("type_en") is None:
-            values["type_en"] = values["type_ar"]
+    if (
+        layout == "legacy"
+        and values.get("type_ar") is not None
+        and values.get("type_en") is None
+    ):
+        values["type_en"] = values["type_ar"]
     issues = [
         VehicleXlsxIssue(
             row_id=row_id,
