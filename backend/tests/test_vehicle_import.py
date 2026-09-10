@@ -190,7 +190,7 @@ def _inject_vml_note_image(data: bytes, *, row_number: int, image_data: bytes) -
     return output.getvalue()
 
 
-def _legacy_workbook() -> bytes:
+def _legacy_workbook(*, class_name: str = "فئة اختبار") -> bytes:
     from openpyxl import Workbook
 
     workbook = Workbook()
@@ -224,7 +224,7 @@ def _legacy_workbook() -> bytes:
             "01/01/2027",
             "مركبة اختبار",
             f"SYNTHETIC-{row}",
-            "فئة اختبار",
+            class_name,
             "٠ نزيل",  # noqa: RUF001 — Arabic-Indic digit is the point of this fixture
             0,
             None,
@@ -686,6 +686,33 @@ def test_core_legacy_detection_anchor_resolution_and_normalization() -> None:
     assert invalid == [("license_start", "Invalid calendar date.")]
 
 
+@pytest.mark.parametrize(
+    ("legacy_class", "expected_ar", "expected_en"),
+    [
+        ("بيك اب  ثقيل", "بيك أب ثقيل", "Heavy pickup"),
+        ("بيك اب ثقيل", "بيك أب ثقيل", "Heavy pickup"),
+        ("فرع الامن", "فرع الأمن", "Security branch"),
+    ],
+)
+def test_legacy_class_aliases_resolve_to_exact_bilingual_presets(
+    legacy_class: str,
+    expected_ar: str,
+    expected_en: str,
+) -> None:
+    parsed = parse_vehicle_workbook(_legacy_workbook(class_name=legacy_class))
+    assert parsed.rows[0].values["class_ar"] == expected_ar
+    assert parsed.rows[0].values["class_en"] == expected_en
+
+
+def test_legacy_unknown_class_is_preserved_for_custom_review() -> None:
+    custom_class = "فئة مخصصة للمهمة"
+    parsed = parse_vehicle_workbook(_legacy_workbook(class_name=custom_class))
+    row = parsed.rows[0]
+    assert row.raw["class_ar"] == custom_class
+    assert row.values["class_ar"] == custom_class
+    assert row.values["class_en"] == custom_class
+
+
 def test_core_formula_corrupt_and_oversized_rejections() -> None:
     from openpyxl import Workbook
 
@@ -720,3 +747,41 @@ def test_generated_template_has_canonical_order_instructions_and_no_formulas() -
         for cell in row
     )
     assert workbook["Vehicles"].max_row == 1
+    instructions = workbook["Instructions - التعليمات"]
+    overview_en = [cell.value for cell in instructions["B"] if isinstance(cell.value, str)]
+    overview_ar = [cell.value for cell in instructions["C"] if isinstance(cell.value, str)]
+    assert any("blank cell preserves the existing stored value" in value for value in overview_en)
+    assert any("الخلية الفارغة القيمة الحالية المخزنة كما هي" in value for value in overview_ar)
+
+    header_row = next(
+        cell.row
+        for cell in instructions["A"]
+        if cell.value == "Canonical column / اسم العمود"
+    )
+    documented_columns = tuple(
+        instructions.cell(row=row_number, column=1).value
+        for row_number in range(header_row + 1, instructions.max_row + 1)
+    )
+    assert documented_columns == CANONICAL_COLUMNS
+    required_columns = {
+        "plate_number",
+        "traffic_code",
+        "type_ar",
+        "type_en",
+        "class_ar",
+        "class_en",
+        "license_start",
+        "license_expiry",
+    }
+    for row_number, column_name in enumerate(CANONICAL_COLUMNS, start=header_row + 1):
+        assert instructions.cell(row_number, 2).value
+        assert instructions.cell(row_number, 3).value
+        expected = "Yes / نعم" if column_name in required_columns else "No / لا"
+        assert instructions.cell(row_number, 4).value == expected
+
+    values = _standard_row("00123")
+    for column, name in enumerate(CANONICAL_COLUMNS, start=1):
+        workbook["Vehicles"].cell(2, column, values.get(name))
+    parsed = parse_vehicle_workbook(_workbook_bytes(workbook))
+    assert parsed.layout == "standard"
+    assert parsed.rows[0].values["plate_number"] == "00123"

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import io
+import json
 import mimetypes
 import posixpath
 import re
@@ -12,7 +13,7 @@ from dataclasses import dataclass, field
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 from pathlib import Path, PurePosixPath
-from typing import Any
+from typing import Any, TypedDict, cast
 from xml.etree import ElementTree as ET
 
 from openpyxl import Workbook, load_workbook
@@ -56,6 +57,145 @@ CANONICAL_COLUMNS = (
     "contract_note_ar",
     "contract_note_en",
 )
+
+
+class _VehicleClassAliases(TypedDict):
+    ar: dict[str, str]
+    en: dict[str, str]
+
+
+class _VehicleClassCatalog(TypedDict):
+    presets: list[dict[str, str]]
+    aliases: _VehicleClassAliases
+
+
+_VEHICLE_CLASS_CATALOG = cast(
+    _VehicleClassCatalog,
+    json.loads(
+        Path(__file__).with_name("vehicle_classes.json").read_text(encoding="utf-8")
+    ),
+)
+_VEHICLE_CLASSES = tuple(
+    (preset["ar"], preset["en"]) for preset in _VEHICLE_CLASS_CATALOG["presets"]
+)
+_VEHICLE_CLASS_BY_AR = {ar: (ar, en) for ar, en in _VEHICLE_CLASSES}
+_VEHICLE_CLASS_BY_EN = {en.casefold(): (ar, en) for ar, en in _VEHICLE_CLASSES}
+_VEHICLE_CLASS_ALIASES_AR = _VEHICLE_CLASS_CATALOG["aliases"]["ar"]
+_VEHICLE_CLASS_ALIASES_EN = {
+    alias.casefold(): canonical.casefold()
+    for alias, canonical in _VEHICLE_CLASS_CATALOG["aliases"]["en"].items()
+}
+
+_CREATE_REQUIRED_COLUMNS = frozenset(
+    {
+        "plate_number",
+        "traffic_code",
+        "type_ar",
+        "type_en",
+        "class_ar",
+        "class_en",
+        "license_start",
+        "license_expiry",
+    }
+)
+_CANONICAL_COLUMN_GUIDANCE = {
+    "plate_code": (
+        "Plate category code before the plate number (1 to 3 digits).",
+        "رمز فئة اللوحة الذي يسبق رقمها (من رقم إلى ثلاثة أرقام).",
+    ),
+    "plate_number": (
+        "Official plate number (1 to 6 digits); retain significant leading zeros.",
+        "رقم لوحة المركبة الرسمي (من رقم إلى ستة أرقام)؛ احتفظ بالأصفار البادئة المهمة.",
+    ),
+    "traffic_code": (
+        "Vehicle traffic-file code (4 to 12 digits).",
+        "الرمز المروري للمركبة (من 4 إلى 12 رقمًا).",
+    ),
+    "type_ar": (
+        "Vehicle type name in Arabic.",
+        "اسم نوع المركبة باللغة العربية.",
+    ),
+    "type_en": (
+        "Vehicle type name in English.",
+        "اسم نوع المركبة باللغة الإنجليزية.",
+    ),
+    "class_ar": (
+        "Vehicle class in Arabic; use a preset or an exact custom-class name.",
+        "فئة المركبة باللغة العربية؛ استخدم فئة معتمدة أو اسم فئة مخصصة دقيقًا.",
+    ),
+    "class_en": (
+        "Vehicle class in English; use the matching preset or exact custom-class name.",
+        "فئة المركبة باللغة الإنجليزية؛ استخدم الفئة المعتمدة المطابقة أو اسم فئة مخصصة دقيقًا.",
+    ),
+    "vin": (
+        "Vehicle identification number (VIN) or chassis number.",
+        "رقم تعريف المركبة (VIN) أو رقم القاعدة.",
+    ),
+    "site": (
+        "Optional workbook site reference; select the required assigned site during review.",
+        "مرجع اختياري للموقع داخل الملف؛ اختر الموقع المعيّن المطلوب أثناء المراجعة.",
+    ),
+    "make": (
+        "Vehicle manufacturer.",
+        "الشركة المصنّعة للمركبة.",
+    ),
+    "model": (
+        "Vehicle model.",
+        "طراز المركبة.",
+    ),
+    "model_year": (
+        "Four-digit vehicle model year.",
+        "سنة صنع المركبة من أربعة أرقام.",
+    ),
+    "colour": (
+        "Vehicle colour.",
+        "لون المركبة.",
+    ),
+    "license_start": (
+        "Licence validity start date.",
+        "تاريخ بداية سريان ترخيص المركبة.",
+    ),
+    "license_expiry": (
+        "Licence expiry date.",
+        "تاريخ انتهاء ترخيص المركبة.",
+    ),
+    "insurance_expiry": (
+        "Insurance expiry date.",
+        "تاريخ انتهاء تأمين المركبة.",
+    ),
+    "inmate_capacity": (
+        "Inmate capacity as a non-negative whole number.",
+        "سعة النزلاء كعدد صحيح غير سالب.",
+    ),
+    "passenger_capacity": (
+        "Passenger capacity as a non-negative whole number.",
+        "سعة الركاب كعدد صحيح غير سالب.",
+    ),
+    "accessories_ar": (
+        "Vehicle accessories description in Arabic.",
+        "وصف ملحقات المركبة باللغة العربية.",
+    ),
+    "accessories_en": (
+        "Vehicle accessories description in English.",
+        "وصف ملحقات المركبة باللغة الإنجليزية.",
+    ),
+    "notes_ar": (
+        "General vehicle notes in Arabic.",
+        "ملاحظات المركبة العامة باللغة العربية.",
+    ),
+    "notes_en": (
+        "General vehicle notes in English.",
+        "ملاحظات المركبة العامة باللغة الإنجليزية.",
+    ),
+    "contract_note_ar": (
+        "Contract details or note in Arabic.",
+        "تفاصيل العقد أو ملاحظته باللغة العربية.",
+    ),
+    "contract_note_en": (
+        "Contract details or note in English.",
+        "تفاصيل العقد أو ملاحظته باللغة الإنجليزية.",
+    ),
+}
 
 _LEGACY_COLUMNS = {
     2: "combined_plate",
@@ -270,6 +410,24 @@ def _normalized_text(value: object) -> str | None:
     return " ".join(text.split())
 
 
+def _vehicle_class_preset(
+    ar_value: object,
+    en_value: object,
+) -> tuple[str, str] | None:
+    ar = _normalized_text(ar_value)
+    if ar is not None:
+        canonical_ar = _VEHICLE_CLASS_ALIASES_AR.get(ar, ar)
+        if match := _VEHICLE_CLASS_BY_AR.get(canonical_ar):
+            return match
+    en = _normalized_text(en_value)
+    if en is not None:
+        normalized_en = en.casefold()
+        canonical_en = _VEHICLE_CLASS_ALIASES_EN.get(normalized_en, normalized_en)
+        if match := _VEHICLE_CLASS_BY_EN.get(canonical_en):
+            return match
+    return None
+
+
 def _identifier(value: object) -> str | None:
     text = _normalized_text(value)
     if text is None:
@@ -361,6 +519,13 @@ def normalize_import_values(
         except ValueError as exc:
             normalized[field_name] = None
             errors.append((field_name, str(exc)))
+
+    class_preset = _vehicle_class_preset(
+        normalized.get("class_ar"),
+        normalized.get("class_en"),
+    )
+    if class_preset is not None:
+        normalized["class_ar"], normalized["class_en"] = class_preset
 
     combined = values.get("combined_plate")
     if combined is not None and _normalized_text(combined) is not None:
@@ -858,26 +1023,87 @@ def build_vehicle_import_template() -> bytes:
 
     instructions = workbook.create_sheet("Instructions - التعليمات")
     instructions.sheet_view.rightToLeft = True
-    lines = (
+    overview = (
         ("Vehicle import template", "نموذج استيراد المركبات"),
-        ("Enter one vehicle per row on the Vehicles sheet.", "أدخل مركبة واحدة في كل صف في ورقة Vehicles."),
+        (
+            "Enter one vehicle per row on the Vehicles sheet.",
+            "أدخل مركبة واحدة في كل صف في ورقة Vehicles.",
+        ),
         ("Do not rename canonical column headers.", "لا تغيّر أسماء أعمدة النموذج."),
+        (
+            "Create: fill every column marked Yes / نعم. An assigned site is also required during review.",
+            "الإنشاء: عبّئ كل عمود مميّز بـ Yes / نعم. يجب أيضًا تعيين الموقع أثناء المراجعة.",
+        ),
+        (
+            "Update: a blank cell preserves the existing stored value; enter a value only when it should change.",
+            "التحديث: تترك الخلية الفارغة القيمة الحالية المخزنة كما هي؛ أدخل قيمة فقط عند الحاجة إلى تغييرها.",
+        ),
         ("Dates: YYYY-MM-DD or DD/MM/YYYY.", "التواريخ: YYYY-MM-DD أو DD/MM/YYYY."),
-        ("Plate numbers are text; keep significant leading zeros.", "أرقام اللوحات نصية؛ احتفظ بالأصفار البادئة المهمة."),
-        ("Place images on the same row as their vehicle.", "ضع الصور في صف المركبة نفسه."),
-        ("Choose photo or licence for every image during review.", "اختر صورة مركبة أو رخصة لكل صورة أثناء المراجعة."),
-        ("Site assignment is confirmed during import review.", "يتم تأكيد تعيين الموقع أثناء مراجعة الاستيراد."),
+        (
+            "Plate numbers are text; keep significant leading zeros.",
+            "أرقام اللوحات نصية؛ احتفظ بالأصفار البادئة المهمة.",
+        ),
+        (
+            "Known legacy class spellings become exact bilingual presets; unknown class text is preserved for custom review.",
+            "تُحوّل صيغ الفئات القديمة المعروفة إلى الفئات الثنائية المعتمدة؛ ويُحتفظ بنص الفئة غير المعروفة للمراجعة كفئة مخصصة.",
+        ),
+        (
+            "Place images on the same row as their vehicle.",
+            "ضع الصور في صف المركبة نفسه.",
+        ),
+        (
+            "Choose photo or licence for every image during review.",
+            "اختر صورة مركبة أو رخصة لكل صورة أثناء المراجعة.",
+        ),
+        (
+            "Site assignment is confirmed during import review.",
+            "يتم تأكيد تعيين الموقع أثناء مراجعة الاستيراد.",
+        ),
     )
-    for row_number, (english, arabic) in enumerate(lines, start=1):
-        instructions.cell(row=row_number, column=1, value=english)
-        instructions.cell(row=row_number, column=2, value=arabic)
+    for row_number, (english, arabic) in enumerate(overview, start=1):
+        instructions.cell(row=row_number, column=2, value=english)
+        instructions.cell(row=row_number, column=3, value=arabic)
+
+    guidance_header_row = len(overview) + 2
+    guidance_headers = (
+        "Canonical column / اسم العمود",
+        "English guidance",
+        "الإرشادات العربية",
+        "Create required? / مطلوب عند الإنشاء؟",
+    )
+    for column_number, value in enumerate(guidance_headers, start=1):
+        cell = instructions.cell(row=guidance_header_row, column=column_number, value=value)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+
+    for row_number, column_name in enumerate(
+        CANONICAL_COLUMNS,
+        start=guidance_header_row + 1,
+    ):
+        english, arabic = _CANONICAL_COLUMN_GUIDANCE[column_name]
+        instructions.cell(row=row_number, column=1, value=column_name)
+        instructions.cell(row=row_number, column=2, value=english)
+        instructions.cell(row=row_number, column=3, value=arabic)
+        instructions.cell(
+            row=row_number,
+            column=4,
+            value="Yes / نعم" if column_name in _CREATE_REQUIRED_COLUMNS else "No / لا",
+        )
+
     for row in instructions.iter_rows():
         for cell in row:
-            cell.font = Font(name="Arial", bold=cell.row == 1)
-            cell.alignment = Alignment(wrap_text=True, vertical="top")
-    instructions.column_dimensions["A"].width = 58
+            if cell.row != guidance_header_row:
+                cell.font = Font(name="Arial", bold=cell.row == 1)
+                cell.alignment = Alignment(wrap_text=True, vertical="top")
+    instructions.column_dimensions["A"].width = 28
     instructions.column_dimensions["B"].width = 58
-    instructions.freeze_panes = "A2"
+    instructions.column_dimensions["C"].width = 58
+    instructions.column_dimensions["D"].width = 28
+    instructions.freeze_panes = f"A{guidance_header_row + 1}"
+    instructions.auto_filter.ref = (
+        f"A{guidance_header_row}:D{guidance_header_row + len(CANONICAL_COLUMNS)}"
+    )
 
     output = io.BytesIO()
     workbook.save(output)

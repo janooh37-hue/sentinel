@@ -15,6 +15,7 @@ import type { VehicleCreate, VehicleRead, VehicleSiteRead, VehicleUpdate } from 
 
 import {
   VEHICLE_CLASSES,
+  VEHICLE_CLASS_ALIASES,
   licenseWindowEnd,
   normalizeDigits,
   parsePlate,
@@ -102,19 +103,11 @@ export type VehicleFormValues = z.output<typeof vehicleFormSchema>
  *  kept distinct so callers stay explicit about which side they mean). */
 export type VehicleFormInput = z.input<typeof vehicleFormSchema>
 
-/** Two spelling/wording variants seen in the operator's legacy workbook,
- *  normalized onto the canonical preset before matching. */
-const CLASS_ALIASES: Record<string, string> = {
-  'بيك اب  ثقيل': 'بيك أب ثقيل',
-  'بيك اب ثقيل': 'بيك أب ثقيل',
-  'فرع الامن': 'فرع الأمن',
-}
-
 const collapseSpace = (value: string): string => value.trim().replace(/\s+/g, ' ')
 
 /**
  * Match a scanned/imported bilingual class pair onto an existing preset by
- * normalized exact name (plus the two known legacy spelling aliases). `null`
+ * normalized exact name (plus the known legacy spelling aliases). `null`
  * when nothing matches confidently — the caller routes to the custom-class
  * path rather than guessing or discarding the source text.
  */
@@ -124,14 +117,15 @@ export function resolveVehicleClass(
 ): { ar: string; en: string } | null {
   if (ar) {
     const normalized = collapseSpace(ar)
-    const aliased = CLASS_ALIASES[normalized] ?? normalized
-    const match = VEHICLE_CLASSES.find((option) => collapseSpace(option.ar) === aliased)
+    const canonical = VEHICLE_CLASS_ALIASES.ar[normalized] ?? normalized
+    const match = VEHICLE_CLASSES.find((option) => collapseSpace(option.ar) === canonical)
     if (match) return match
   }
   if (en) {
     const normalized = collapseSpace(en).toLowerCase()
+    const canonical = (VEHICLE_CLASS_ALIASES.en[normalized] ?? normalized).toLowerCase()
     const match = VEHICLE_CLASSES.find(
-      (option) => collapseSpace(option.en).toLowerCase() === normalized,
+      (option) => collapseSpace(option.en).toLowerCase() === canonical,
     )
     if (match) return match
   }
