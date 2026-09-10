@@ -215,7 +215,9 @@ def _legacy_workbook(*, class_name: str = "مركبة خفيفة") -> bytes:
     for column, header in enumerate(headers, start=1):
         sheet.cell(2, column, header)
 
-    def vehicle_row(row: int, plate: str, *, notes: str | None = None, traffic: object = 1180021637) -> None:
+    def vehicle_row(
+        row: int, plate: str, *, notes: str | None = None, traffic: object = 1180021637
+    ) -> None:
         values = [
             row - 2,
             plate,
@@ -304,7 +306,9 @@ def _preview_payload(
             image_id
             for image_id in image_ids
             if row_roles.get(image_id) == "license"
-            or next(image for image in inspection["images"] if image["image_id"] == image_id)["kind"]
+            or next(image for image in inspection["images"] if image["image_id"] == image_id)[
+                "kind"
+            ]
             == "license"
         ]
         photo_ids = [image_id for image_id in image_ids if row_roles.get(image_id) == "photo"]
@@ -332,7 +336,13 @@ def _preview_payload(
 def _inspect(client: TestClient, data: bytes, filename: str = "synthetic.xlsx") -> dict[str, Any]:
     response = client.post(
         "/api/v1/vehicles/imports/inspect",
-        files={"file": (filename, data, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
+        files={
+            "file": (
+                filename,
+                data,
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            )
+        },
     )
     assert response.status_code == 200, response.text
     return response.json()
@@ -437,7 +447,9 @@ def test_legacy_mixed_outcomes_images_atomic_apply_and_idempotent_reimport(
     assert api_db.scalar(select(func.count()).select_from(VehicleFile)) == 2
 
 
-def test_confirm_rejects_stale_vehicle_and_rolls_back(import_client: TestClient, api_db: Session) -> None:
+def test_confirm_rejects_stale_vehicle_and_rolls_back(
+    import_client: TestClient, api_db: Session
+) -> None:
     site = _site(api_db, "Stale")
     vehicle = _vehicle(api_db, site, plate_code="7", plate_number="30001", notes_ar="before")
     workbook = _standard_workbook([_standard_row("30001", notes_ar="from sheet")])
@@ -473,7 +485,9 @@ def test_confirm_same_token_twice_is_claimed(import_client: TestClient, api_db: 
     ).json()
     body = {"revision": preview["revision"], "row_ids": [preview["rows"][0]["row_id"]]}
     first = import_client.post(f"/api/v1/vehicles/imports/{inspection['token']}/confirm", json=body)
-    second = import_client.post(f"/api/v1/vehicles/imports/{inspection['token']}/confirm", json=body)
+    second = import_client.post(
+        f"/api/v1/vehicles/imports/{inspection['token']}/confirm", json=body
+    )
     assert first.status_code == 200
     assert second.status_code == 409
     assert second.json()["error"]["code"] == "VEHICLE_IMPORT_TOKEN_CLAIMED"
@@ -507,11 +521,14 @@ def test_scanned_identity_conflict_requires_explicit_confirmation(
         json=_preview_payload(inspection, mappings),
     )
     assert blocked.status_code == 200
-    blocked_row = next(row for row in blocked.json()["rows"] if image["image_id"] in [item["image_id"] for item in row["images"]])
+    blocked_row = next(
+        row
+        for row in blocked.json()["rows"]
+        if image["image_id"] in [item["image_id"] for item in row["images"]]
+    )
     assert blocked_row["action"] == "invalid"
     assert any(
-        error["code"] == "VEHICLE_IMPORT_SCAN_IDENTITY_CONFLICT"
-        for error in blocked_row["errors"]
+        error["code"] == "VEHICLE_IMPORT_SCAN_IDENTITY_CONFLICT" for error in blocked_row["errors"]
     )
 
     accepted = import_client.post(
@@ -530,8 +547,7 @@ def test_scanned_identity_conflict_requires_explicit_confirmation(
         if image["image_id"] in [item["image_id"] for item in row["images"]]
     )
     assert not any(
-        error["code"] == "VEHICLE_IMPORT_SCAN_IDENTITY_CONFLICT"
-        for error in accepted_row["errors"]
+        error["code"] == "VEHICLE_IMPORT_SCAN_IDENTITY_CONFLICT" for error in accepted_row["errors"]
     )
 
 
@@ -600,7 +616,10 @@ def test_generated_template_roundtrip_keeps_zero_dates_and_both_image_roles(
     site = _site(api_db, "Template")
     response = import_client.get("/api/v1/vehicles/imports/template")
     assert response.status_code == 200
-    assert response.headers["content-disposition"] == 'attachment; filename="vehicle-import-template.xlsx"'
+    assert (
+        response.headers["content-disposition"]
+        == 'attachment; filename="vehicle-import-template.xlsx"'
+    )
     workbook = load_workbook(io.BytesIO(response.content))
     sheet = workbook["Vehicles"]
     values = _standard_row(
@@ -727,8 +746,7 @@ def test_legacy_unknown_class_is_preserved_for_custom_review(
     preview_row = response.json()["rows"][0]
     assert preview_row["action"] == "invalid"
     assert any(
-        error["code"] == "VEHICLE_IMPORT_REQUIRED_FIELD"
-        and error["field"] == "class_en"
+        error["code"] == "VEHICLE_IMPORT_REQUIRED_FIELD" and error["field"] == "class_en"
         for error in preview_row["errors"]
     )
 
@@ -744,8 +762,7 @@ def test_core_formula_corrupt_and_oversized_rejections() -> None:
     sheet.cell(2, 3, "1180021637")
     parsed = parse_vehicle_workbook(_workbook_bytes(workbook))
     assert any(
-        warning.code == "VEHICLE_IMPORT_INVALID_FIELD"
-        and warning.field == "plate_number"
+        warning.code == "VEHICLE_IMPORT_INVALID_FIELD" and warning.field == "plate_number"
         for warning in parsed.warnings
     )
     with pytest.raises(VehicleXlsxError, match=r"valid \.xlsx") as corrupt:
@@ -774,9 +791,7 @@ def test_generated_template_has_canonical_order_instructions_and_no_formulas() -
     assert any("الخلية الفارغة القيمة الحالية المخزنة كما هي" in value for value in overview_ar)
 
     header_row = next(
-        cell.row
-        for cell in instructions["A"]
-        if cell.value == "Canonical column / اسم العمود"
+        cell.row for cell in instructions["A"] if cell.value == "Canonical column / اسم العمود"
     )
     documented_columns = tuple(
         instructions.cell(row=row_number, column=1).value

@@ -217,7 +217,7 @@ _INTEGER_FIELDS = frozenset({"model_year", "inmate_capacity", "passenger_capacit
 _IDENTIFIER_FIELDS = frozenset({"plate_code", "plate_number", "traffic_code"})
 _BLANK_MARKERS = frozenset({"", "-", "—"})
 _LEGACY_TITLE_RE = re.compile(r"كشف\s+تفصيلي\s+لمركبات", re.IGNORECASE)
-_DTD_RE = re.compile(br"<!\s*(?:DOCTYPE|ENTITY)\b", re.IGNORECASE)
+_DTD_RE = re.compile(rb"<!\s*(?:DOCTYPE|ENTITY)\b", re.IGNORECASE)
 _DRIVE_RE = re.compile(r"^[A-Za-z]:")
 _REL_NS = "http://schemas.openxmlformats.org/package/2006/relationships"
 _DOC_REL_NS = "http://schemas.openxmlformats.org/officeDocument/2006/relationships"
@@ -309,7 +309,11 @@ def _parse_xml(raw: bytes, *, part: str) -> ET.Element:
 
 def _validate_package(data: bytes) -> dict[str, bytes]:
     if not data or len(data) > MAX_COMPRESSED_BYTES:
-        code = "VEHICLE_IMPORT_TOO_LARGE" if len(data) > MAX_COMPRESSED_BYTES else "VEHICLE_IMPORT_BAD_FILE"
+        code = (
+            "VEHICLE_IMPORT_TOO_LARGE"
+            if len(data) > MAX_COMPRESSED_BYTES
+            else "VEHICLE_IMPORT_BAD_FILE"
+        )
         message = (
             f"Workbook exceeds {MAX_COMPRESSED_BYTES // (1024 * 1024)} MiB."
             if code == "VEHICLE_IMPORT_TOO_LARGE"
@@ -450,7 +454,9 @@ def _integer(value: object) -> int | None:
     text = _normalized_text(value)
     if text is None:
         return None
-    match = re.fullmatch(r"(\d+)(?:\s*(?:نزيل|نزلاء|راكب|ركاب|passengers?|inmates?))?", text, re.IGNORECASE)
+    match = re.fullmatch(
+        r"(\d+)(?:\s*(?:نزيل|نزلاء|راكب|ركاب|passengers?|inmates?))?", text, re.IGNORECASE
+    )
     if match is None:
         raise ValueError("Expected a non-negative whole number.")
     return int(match.group(1))
@@ -551,7 +557,9 @@ def normalize_import_values(
                 else:
                     normalized["plate_code"] = plate_code or parsed_code
                     normalized["plate_number"] = parsed_number
-        if plate_code is not None and (not isinstance(plate_code, str) or not re.fullmatch(r"\d{1,3}", plate_code)):
+        if plate_code is not None and (
+            not isinstance(plate_code, str) or not re.fullmatch(r"\d{1,3}", plate_code)
+        ):
             errors.append(("plate_code", "Plate code must contain 1 to 3 digits."))
         if plate_number is not None and (
             not isinstance(normalized.get("plate_number"), str)
@@ -595,11 +603,7 @@ def _row_from_cells(
         return None, []
     row_id = f"{section.id}-row-{row_number}"
     values, errors = normalize_import_values(raw_source, epoch=epoch)
-    if (
-        layout == "legacy"
-        and values.get("type_ar") is not None
-        and values.get("type_en") is None
-    ):
+    if layout == "legacy" and values.get("type_ar") is not None and values.get("type_en") is None:
         values["type_en"] = values["type_ar"]
     issues = [
         VehicleXlsxIssue(
@@ -632,7 +636,9 @@ def _row_from_cells(
     )
 
 
-def _legacy_sections(workbook: Any) -> tuple[list[VehicleXlsxSection], list[tuple[Any, int, int, VehicleXlsxSection]]]:
+def _legacy_sections(
+    workbook: Any,
+) -> tuple[list[VehicleXlsxSection], list[tuple[Any, int, int, VehicleXlsxSection]]]:
     sections: list[VehicleXlsxSection] = []
     spans: list[tuple[Any, int, int, VehicleXlsxSection]] = []
     for worksheet in workbook.worksheets:
@@ -671,7 +677,9 @@ def _standard_sections(
     for worksheet in workbook.worksheets:
         for row_number in range(1, min(worksheet.max_row, 25) + 1):
             headers = {
-                column_number: (_normalized_text(worksheet.cell(row_number, column_number).value) or "")
+                column_number: (
+                    _normalized_text(worksheet.cell(row_number, column_number).value) or ""
+                )
                 for column_number in range(1, worksheet.max_column + 1)
             }
             recognized = {value for value in headers.values() if value in canonical}
@@ -737,6 +745,7 @@ def _part_target(source_part: str, target: str) -> str:
     if not _safe_member_name(resolved):
         raise _bad_file("The workbook contains an unsafe relationship target.")
     return resolved
+
 
 def _sheet_parts(xml_parts: Mapping[str, bytes]) -> list[tuple[str, str]]:
     workbook_root = _parse_xml(xml_parts["xl/workbook.xml"], part="xl/workbook.xml")
@@ -900,7 +909,9 @@ def _extract_images(
                     anchors.extend(_normal_drawing_anchors(xml_parts, archive, target_part))
             for row_number, original_name, media_type, image_data in anchors:
                 image_id = f"image-{len(images) + 1}"
-                row_id = row_lookup.get((sheet_name, row_number)) if row_number is not None else None
+                row_id = (
+                    row_lookup.get((sheet_name, row_number)) if row_number is not None else None
+                )
                 kind = "license" if sheet_name in legacy_sheets else None
                 if row_id is None:
                     warnings.append(
@@ -935,7 +946,9 @@ def parse_vehicle_workbook(data: bytes) -> ParsedVehicleWorkbook:
     """Parse a legacy or canonical vehicle workbook without extracting its ZIP."""
     xml_parts = _validate_package(data)
     try:
-        workbook = load_workbook(io.BytesIO(data), data_only=False, read_only=False, keep_links=False)
+        workbook = load_workbook(
+            io.BytesIO(data), data_only=False, read_only=False, keep_links=False
+        )
     except Exception as exc:
         raise _bad_file("The workbook could not be opened.") from exc
 

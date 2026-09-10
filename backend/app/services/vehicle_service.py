@@ -308,9 +308,7 @@ def to_read(
 
 def site_read(row: VehicleSite) -> VehicleSiteRead:
     active_count = sum(1 for vehicle in row.vehicles if vehicle.archived_at is None)
-    return VehicleSiteRead.model_validate(row).model_copy(
-        update={"vehicle_count": active_count}
-    )
+    return VehicleSiteRead.model_validate(row).model_copy(update={"vehicle_count": active_count})
 
 
 def _list_options() -> tuple[Any, ...]:
@@ -734,7 +732,9 @@ def update_vehicle(
         db.commit()
     except IntegrityError:
         db.rollback()
-        next_code = payload.plate_code if "plate_code" in payload.model_fields_set else row.plate_code
+        next_code = (
+            payload.plate_code if "plate_code" in payload.model_fields_set else row.plate_code
+        )
         next_number = (
             payload.plate_number if "plate_number" in payload.model_fields_set else row.plate_number
         )
@@ -1470,11 +1470,7 @@ def delete_file(
             file_id=file_id,
         )
     blocking_accident_id = min(
-        (
-            accident.id
-            for accident in vehicle.accidents
-            if file_id in accident.photo_file_ids
-        ),
+        (accident.id for accident in vehicle.accidents if file_id in accident.photo_file_ids),
         default=None,
     )
     if blocking_accident_id is not None:
