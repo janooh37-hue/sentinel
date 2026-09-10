@@ -1138,6 +1138,7 @@
     "filesFailedAfterSave_one": "Profile saved; 1 file failed.",
     "filesFailedAfterSave_other": "Profile saved; {{count}} files failed.",
     "setAsMainPhoto": "Set as main photo",
+    "vehicleFileInUse": "This photo is in use as the main photo or in an accident record and cannot be deleted.",
     "replaceLicenceFile": "Replace licence file",
     "replaceLicenceFileHint": "Replaces only the attached scan; licence dates stay unchanged.",
     "previousLicenceFiles": "Previous licence files",

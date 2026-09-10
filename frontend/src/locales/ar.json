@@ -1230,6 +1230,7 @@
     "filesFailedAfterSave_many": "تم حفظ بيانات المركبة؛ تعذّر رفع {{count}} ملفًا.",
     "filesFailedAfterSave_other": "تم حفظ بيانات المركبة؛ تعذّر رفع {{count}} ملف.",
     "setAsMainPhoto": "تعيين كصورة رئيسية",
+    "vehicleFileInUse": "هذه الصورة مستخدمة كصورة رئيسية أو في سجل حادث ولا يمكن حذفها.",
     "replaceLicenceFile": "استبدال ملف الرخصة",
     "replaceLicenceFileHint": "يستبدل صورة الرخصة المرفقة فقط، من دون تغيير تواريخ الرخصة.",
     "previousLicenceFiles": "ملفات الرخصة السابقة",

@@ -306,6 +306,7 @@ export function invalidateVehicleQueries(
  *  falls through to the API's own message. */
 const ERROR_MESSAGE_KEYS: Record<string, string> = {
   SITE_HAS_VEHICLES: 'vehicles.siteHasVehicles',
+  VEHICLE_FILE_IN_USE: 'vehicles.vehicleFileInUse',
   EVG_UNAVAILABLE: 'vehicles.evg.error',
   EVG_DRIVER_MISSING: 'vehicles.evg.driverMissing',
 }

@@ -55,6 +55,7 @@ MAX_FILE_BYTES = 25 * 1024 * 1024
 _ALLOWED_EXTENSIONS = frozenset({".pdf", ".png", ".jpg", ".jpeg", ".webp"})
 _IMAGE_EXTENSIONS = frozenset({".png", ".jpg", ".jpeg", ".webp"})
 _IMAGE_KINDS = frozenset({"photo", "gallery", "accident"})
+_PHOTO_KINDS = frozenset({"photo", "gallery"})
 _FILE_KINDS = frozenset({"photo", "license", "gallery", "accident", "receipt"})
 _ALLOWED_MEDIA_BY_EXTENSION: dict[str, frozenset[str]] = {
     ".pdf": frozenset({"application/pdf"}),
@@ -1453,14 +1454,35 @@ def delete_file(
     *,
     actor: str | None = None,
 ) -> None:
-    require_active_vehicle(db, vehicle_id)
+    vehicle = require_active_vehicle(db, vehicle_id)
     row = _owned_file(db, vehicle_id, file_id)
-    if row.kind != "gallery":
+    if row.kind not in _PHOTO_KINDS:
         raise ValidationFailedError(
             "FILE_NOT_DELETABLE",
-            "Only gallery photos can be deleted.",
+            "Only photo and gallery files can be deleted.",
             file_id=file_id,
             kind=row.kind,
+        )
+    if vehicle.photo_file_id == file_id:
+        raise ConflictError(
+            "VEHICLE_FILE_IN_USE",
+            "The file is currently used as the vehicle's main photo.",
+            file_id=file_id,
+        )
+    blocking_accident_id = min(
+        (
+            accident.id
+            for accident in vehicle.accidents
+            if file_id in accident.photo_file_ids
+        ),
+        default=None,
+    )
+    if blocking_accident_id is not None:
+        raise ConflictError(
+            "VEHICLE_FILE_IN_USE",
+            "The file is referenced by a vehicle accident.",
+            file_id=file_id,
+            accident_id=blocking_accident_id,
         )
     path = _resolve_file_path(row)
     db.delete(row)

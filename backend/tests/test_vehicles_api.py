@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import base64
+import json
 from datetime import date, timedelta
 from pathlib import Path
 from typing import Any
@@ -13,7 +14,15 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
 from app.config import get_settings
-from app.db.models import Employee, User, UserPermission, Vehicle
+from app.db.models import (
+    AuditLog,
+    Employee,
+    User,
+    UserPermission,
+    Vehicle,
+    VehicleAccident,
+    VehicleFile,
+)
 from app.db.session import get_db
 from app.main import create_app
 
@@ -139,6 +148,22 @@ def _upload_license_scan(client: TestClient, vehicle_id: int, *, filename: str) 
     response = client.post(
         f"/api/v1/vehicles/{vehicle_id}/files",
         data={"kind": "license"},
+        files={"file": (filename, _PNG_1X1, "image/png")},
+    )
+    assert response.status_code == 200, response.text
+    return response.json()
+
+
+def _upload_vehicle_image(
+    client: TestClient,
+    vehicle_id: int,
+    *,
+    kind: str,
+    filename: str,
+) -> dict[str, Any]:
+    response = client.post(
+        f"/api/v1/vehicles/{vehicle_id}/files",
+        data={"kind": kind},
         files={"file": (filename, _PNG_1X1, "image/png")},
     )
     assert response.status_code == 200, response.text
@@ -485,6 +510,218 @@ def test_gallery_png_upload_is_served_inline(admin_client: TestClient) -> None:
     assert response.headers["content-type"] == "image/png"
     assert response.headers["content-disposition"].lower().startswith("inline")
     assert response.content == _PNG_1X1
+
+
+def test_deleting_current_main_photo_is_rejected_as_in_use(
+    admin_client: TestClient,
+) -> None:
+    vehicle = _create_vehicle(admin_client)
+    vehicle_id = int(vehicle["id"])
+    main = _upload_vehicle_image(
+        admin_client,
+        vehicle_id,
+        kind="photo",
+        filename="protected-main.png",
+    )
+    attached = admin_client.patch(
+        f"/api/v1/vehicles/{vehicle_id}",
+        json={"photo_file_id": main["id"]},
+    )
+    assert attached.status_code == 200, attached.text
+
+    rejected = admin_client.delete(
+        f"/api/v1/vehicles/{vehicle_id}/files/{main['id']}",
+    )
+
+    assert rejected.status_code == 409, rejected.text
+    assert rejected.json()["error"]["code"] == "VEHICLE_FILE_IN_USE"
+    assert rejected.json()["error"]["details"] == {"file_id": main["id"]}
+    assert admin_client.get(main["url"]).status_code == 200
+    persisted = admin_client.get(f"/api/v1/vehicles/{vehicle_id}")
+    assert persisted.status_code == 200, persisted.text
+    assert persisted.json()["photo_file_id"] == main["id"]
+
+
+def test_deleting_accident_referenced_gallery_photo_names_blocking_accident(
+    admin_client: TestClient,
+    api_db: Session,
+) -> None:
+    vehicle = _create_vehicle(admin_client)
+    vehicle_id = int(vehicle["id"])
+    evidence = _upload_vehicle_image(
+        admin_client,
+        vehicle_id,
+        kind="gallery",
+        filename="accident-evidence.png",
+    )
+    accident = VehicleAccident(
+        vehicle_id=vehicle_id,
+        employee_id=None,
+        date=date(2026, 8, 21),
+        time="14:30",
+        location_ar="موقف الاختبار",
+        location_en="Test car park",
+        description_ar="تلف",
+        description_en="Damage",
+        police_ref=None,
+        damage_cost=500,
+        status="open",
+        photo_file_ids=[evidence["id"]],
+    )
+    api_db.add(accident)
+    api_db.commit()
+
+    rejected = admin_client.delete(
+        f"/api/v1/vehicles/{vehicle_id}/files/{evidence['id']}",
+    )
+
+    assert rejected.status_code == 409, rejected.text
+    assert rejected.json()["error"]["code"] == "VEHICLE_FILE_IN_USE"
+    assert rejected.json()["error"]["details"] == {
+        "file_id": evidence["id"],
+        "accident_id": accident.id,
+    }
+    assert admin_client.get(evidence["url"]).status_code == 200
+    api_db.expire_all()
+    persisted = api_db.get(VehicleAccident, accident.id)
+    assert persisted is not None
+    assert persisted.photo_file_ids == [evidence["id"]]
+
+
+@pytest.mark.parametrize("kind", ["license", "accident", "receipt"])
+def test_license_accident_and_receipt_files_remain_not_deletable(
+    admin_client: TestClient,
+    kind: str,
+) -> None:
+    vehicle = _create_vehicle(admin_client)
+    vehicle_id = int(vehicle["id"])
+    protected = _upload_vehicle_image(
+        admin_client,
+        vehicle_id,
+        kind=kind,
+        filename=f"protected-{kind}.png",
+    )
+
+    rejected = admin_client.delete(
+        f"/api/v1/vehicles/{vehicle_id}/files/{protected['id']}",
+    )
+
+    assert rejected.status_code == 422, rejected.text
+    assert rejected.json()["error"]["code"] == "FILE_NOT_DELETABLE"
+    assert rejected.json()["error"]["details"] == {
+        "file_id": protected["id"],
+        "kind": kind,
+    }
+    assert admin_client.get(protected["url"]).status_code == 200
+
+
+@pytest.mark.parametrize("kind", ["photo", "gallery"])
+def test_free_photo_deletion_keeps_permission_and_active_vehicle_guards(
+    admin_client: TestClient,
+    vehicle_editor_client: TestClient,
+    admin_user: User,
+    api_db: Session,
+    kind: str,
+) -> None:
+    vehicle = _create_vehicle(admin_client)
+    vehicle_id = int(vehicle["id"])
+    free_photo = _upload_vehicle_image(
+        admin_client,
+        vehicle_id,
+        kind=kind,
+        filename=f"free-{kind}.png",
+    )
+    file_row = api_db.get(VehicleFile, free_photo["id"])
+    assert file_row is not None
+    stored_path = get_settings().data_dir / file_row.path
+    assert stored_path.is_file()
+
+    forbidden = vehicle_editor_client.delete(
+        f"/api/v1/vehicles/{vehicle_id}/files/{free_photo['id']}",
+    )
+    assert forbidden.status_code == 403, forbidden.text
+    assert forbidden.json()["error"]["details"]["capability"] == "vehicles.delete"
+    assert stored_path.is_file()
+
+    archived = admin_client.post(f"/api/v1/vehicles/{vehicle_id}/archive")
+    assert archived.status_code == 200, archived.text
+    archived_delete = admin_client.delete(
+        f"/api/v1/vehicles/{vehicle_id}/files/{free_photo['id']}",
+    )
+    assert archived_delete.status_code == 409, archived_delete.text
+    assert archived_delete.json()["error"]["code"] == "VEHICLE_ARCHIVED"
+    restored = admin_client.post(f"/api/v1/vehicles/{vehicle_id}/restore")
+    assert restored.status_code == 200, restored.text
+
+    deleted = admin_client.delete(
+        f"/api/v1/vehicles/{vehicle_id}/files/{free_photo['id']}",
+    )
+
+    assert deleted.status_code == 204, deleted.text
+    api_db.expire_all()
+    assert api_db.get(VehicleFile, free_photo["id"]) is None
+    assert not stored_path.exists()
+    audit = (
+        api_db.query(AuditLog)
+        .filter_by(
+            action="file.deleted",
+            entity_type="vehicle",
+            entity_id=str(vehicle_id),
+        )
+        .one()
+    )
+    assert audit.actor == admin_user.email
+    assert audit.payload is not None
+    assert json.loads(audit.payload) == {"file_id": free_photo["id"]}
+
+
+def test_replaced_former_main_photo_is_deletable(
+    admin_client: TestClient,
+    api_db: Session,
+) -> None:
+    vehicle = _create_vehicle(admin_client)
+    vehicle_id = int(vehicle["id"])
+    former_main = _upload_vehicle_image(
+        admin_client,
+        vehicle_id,
+        kind="photo",
+        filename="former-main.png",
+    )
+    replacement = _upload_vehicle_image(
+        admin_client,
+        vehicle_id,
+        kind="gallery",
+        filename="replacement-main.png",
+    )
+    attached = admin_client.patch(
+        f"/api/v1/vehicles/{vehicle_id}",
+        json={"photo_file_id": former_main["id"]},
+    )
+    assert attached.status_code == 200, attached.text
+    replaced = admin_client.patch(
+        f"/api/v1/vehicles/{vehicle_id}",
+        json={"photo_file_id": replacement["id"]},
+    )
+    assert replaced.status_code == 200, replaced.text
+    api_db.expire_all()
+    former_row = api_db.get(VehicleFile, former_main["id"])
+    assert former_row is not None
+    assert former_row.kind == "gallery"
+    former_path = get_settings().data_dir / former_row.path
+
+    deleted = admin_client.delete(
+        f"/api/v1/vehicles/{vehicle_id}/files/{former_main['id']}",
+    )
+
+    assert deleted.status_code == 204, deleted.text
+    api_db.expire_all()
+    assert api_db.get(VehicleFile, former_main["id"]) is None
+    assert not former_path.exists()
+    assert admin_client.get(former_main["url"]).status_code == 404
+    persisted = admin_client.get(f"/api/v1/vehicles/{vehicle_id}")
+    assert persisted.status_code == 200, persisted.text
+    assert persisted.json()["photo_file_id"] == replacement["id"]
+    assert admin_client.get(replacement["url"]).status_code == 200
 
 
 def test_notify_days_updates_summary_and_flips_vehicle_to_due(
