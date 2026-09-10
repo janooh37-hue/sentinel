@@ -45,13 +45,19 @@ def _make_user(
     return user
 
 
-def _make_vehicle(db: Session, *, expiry: date) -> Vehicle:
+def _make_vehicle(
+    db: Session,
+    *,
+    expiry: date,
+    insurance_expiry: date | None = None,
+    plate_number: str = "58216",
+) -> Vehicle:
     site = VehicleSite(name_ar="موقع الاختبار", name_en="Test Site")
     db.add(site)
     db.flush()
     vehicle = Vehicle(
         plate_code="14",
-        plate_number="58216",
+        plate_number=plate_number,
         traffic_code="1180021637",
         type_ar="تويوتا هايس",
         type_en="Toyota Hiace",
@@ -60,6 +66,7 @@ def _make_vehicle(db: Session, *, expiry: date) -> Vehicle:
         site_id=site.id,
         license_start=_TODAY - timedelta(days=355),
         license_expiry=expiry,
+        insurance_expiry=insurance_expiry,
     )
     db.add(vehicle)
     db.commit()
@@ -77,8 +84,9 @@ def _capture_pushes(
         user_id: int,
         messages: dict[str, tuple[str, str]],
         url: str,
-    ) -> None:
+    ) -> int:
         pushes.append((user_id, messages, url))
+        return 1
 
     monkeypatch.setattr(
         vehicle_reminder_service.push_service,
@@ -334,11 +342,12 @@ def test_recipient_failure_is_logged_and_does_not_block_marker_or_others(
         user_id: int,
         _messages: dict[str, tuple[str, str]],
         _url: str,
-    ) -> None:
+    ) -> int:
         attempted.append(user_id)
         if user_id == failing.id:
             raise RuntimeError("stale push subscription")
         delivered.append(user_id)
+        return 1
 
     monkeypatch.setattr(
         vehicle_reminder_service.push_service,
@@ -401,3 +410,179 @@ def test_scheduler_registers_vehicle_reminders_at_0910_dubai(
     assert cron_fields["hour"] == "9"
     assert cron_fields["minute"] == "10"
     assert str(trigger.timezone) == "Asia/Dubai"
+
+
+@pytest.mark.parametrize(
+    ("insurance_expiry", "expected_state"),
+    [
+        (_TODAY - timedelta(days=1), "expired"),
+        (_TODAY, "due"),
+        (_TODAY + timedelta(days=30), "due"),
+        (_TODAY + timedelta(days=31), "valid"),
+    ],
+)
+def test_insurance_expiry_boundaries_at_frozen_today(
+    db_session: Session,
+    monkeypatch: pytest.MonkeyPatch,
+    insurance_expiry: date,
+    expected_state: str,
+) -> None:
+    settings_service.set_vehicle_notify_days(db_session, 30)
+    vehicle = _make_vehicle(
+        db_session,
+        expiry=_TODAY + timedelta(days=365),
+        insurance_expiry=insurance_expiry,
+    )
+    _make_user(db_session, email="viewer@test.ae", can_view_vehicles=True)
+    pushes = _capture_pushes(monkeypatch)
+
+    sent = vehicle_reminder_service.send_due_reminders(db_session, today=_TODAY)
+    db_session.refresh(vehicle)
+
+    if expected_state == "valid":
+        assert sent == 0
+        assert pushes == []
+        assert vehicle.insurance_reminder_sent_for is None
+    else:
+        assert sent == 1
+        assert vehicle.insurance_reminder_sent_for == insurance_expiry
+        heading = "Insurance expired" if expected_state == "expired" else "Insurance expiring"
+        assert heading in pushes[0][1]["en"][1]
+
+    # A second run never re-notifies for the same unchanged due date.
+    pushes.clear()
+    assert vehicle_reminder_service.send_due_reminders(db_session, today=_TODAY) == 0
+    assert pushes == []
+
+
+def test_null_insurance_date_and_archived_vehicle_never_notify(
+    db_session: Session,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    settings_service.set_vehicle_notify_days(db_session, 30)
+    no_insurance = _make_vehicle(db_session, expiry=_TODAY + timedelta(days=365))
+    archived = _make_vehicle(
+        db_session,
+        expiry=_TODAY + timedelta(days=365),
+        insurance_expiry=_TODAY,
+        plate_number="58217",
+    )
+    archived.archived_at = vehicle_service._utcnow()
+    db_session.commit()
+    _make_user(db_session, email="viewer@test.ae", can_view_vehicles=True)
+    pushes = _capture_pushes(monkeypatch)
+
+    assert vehicle_reminder_service.send_due_reminders(db_session, today=_TODAY) == 0
+    assert pushes == []
+    db_session.refresh(no_insurance)
+    assert no_insurance.insurance_reminder_sent_for is None
+
+
+def test_insurance_and_license_reminder_markers_are_independent(db_session: Session) -> None:
+    from app.schemas.vehicle import VehicleUpdate
+
+    vehicle = _make_vehicle(
+        db_session,
+        expiry=_TODAY + timedelta(days=5),
+        insurance_expiry=_TODAY + timedelta(days=5),
+    )
+    vehicle.expiry_reminder_sent_for = vehicle.license_expiry
+    vehicle.insurance_reminder_sent_for = vehicle.insurance_expiry
+    db_session.commit()
+
+    # Changing only the insurance date resets the insurance marker, never the
+    # license marker.
+    vehicle_service.update_vehicle(
+        db_session,
+        vehicle.id,
+        VehicleUpdate(insurance_expiry=_TODAY + timedelta(days=40)),
+    )
+    db_session.refresh(vehicle)
+    assert vehicle.insurance_reminder_sent_for is None
+    assert vehicle.expiry_reminder_sent_for == vehicle.license_expiry
+
+    vehicle.insurance_reminder_sent_for = vehicle.insurance_expiry
+    db_session.commit()
+
+    # Changing only the license dates resets the license marker, never the
+    # insurance marker.
+    vehicle_service.update_vehicle(
+        db_session,
+        vehicle.id,
+        VehicleUpdate(
+            license_start=vehicle.license_start,
+            license_expiry=_TODAY + timedelta(days=90),
+        ),
+    )
+    db_session.refresh(vehicle)
+    assert vehicle.expiry_reminder_sent_for is None
+    assert vehicle.insurance_reminder_sent_for == vehicle.insurance_expiry
+
+
+def test_insurance_reminder_recipient_failure_is_logged_and_retryable_for_others(
+    db_session: Session,
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    settings_service.set_vehicle_notify_days(db_session, 30)
+    vehicle = _make_vehicle(
+        db_session,
+        expiry=_TODAY + timedelta(days=365),
+        insurance_expiry=_TODAY,
+    )
+    failing = _make_user(db_session, email="failing@test.ae", can_view_vehicles=True)
+    working = _make_user(db_session, email="working@test.ae", can_view_vehicles=True)
+    attempted: list[int] = []
+
+    def fake_send_to_user(
+        _db: Session,
+        user_id: int,
+        _messages: dict[str, tuple[str, str]],
+        _url: str,
+    ) -> int:
+        attempted.append(user_id)
+        if user_id == failing.id:
+            raise RuntimeError("push provider unavailable")
+        return 1
+
+    monkeypatch.setattr(vehicle_reminder_service.push_service, "send_to_user", fake_send_to_user)
+
+    with caplog.at_level(logging.ERROR):
+        sent = vehicle_reminder_service.send_due_reminders(db_session, today=_TODAY)
+
+    assert sent == 1
+    assert set(attempted) == {failing.id, working.id}
+    db_session.refresh(vehicle)
+    assert vehicle.insurance_reminder_sent_for == vehicle.insurance_expiry
+
+
+def test_insurance_reminder_marker_stays_unset_when_nothing_actually_delivers(
+    db_session: Session,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """`send_to_user` can return 0 without raising — e.g. a recipient with no
+    registered push subscriptions at all. That must not be mistaken for a
+    successful send: the vehicle stays retryable, not stuck unmarked."""
+    settings_service.set_vehicle_notify_days(db_session, 30)
+    vehicle = _make_vehicle(
+        db_session,
+        expiry=_TODAY + timedelta(days=365),
+        insurance_expiry=_TODAY,
+    )
+    _make_user(db_session, email="no-subs@test.ae", can_view_vehicles=True)
+
+    def fake_send_to_user(
+        _db: Session,
+        _user_id: int,
+        _messages: dict[str, tuple[str, str]],
+        _url: str,
+    ) -> int:
+        return 0
+
+    monkeypatch.setattr(vehicle_reminder_service.push_service, "send_to_user", fake_send_to_user)
+
+    sent = vehicle_reminder_service.send_due_reminders(db_session, today=_TODAY)
+
+    assert sent == 0
+    db_session.refresh(vehicle)
+    assert vehicle.insurance_reminder_sent_for is None

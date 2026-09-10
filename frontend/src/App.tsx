@@ -43,6 +43,8 @@ import {
   loadPermitsPage,
   loadVehicleAccidentLetterPage,
   loadVehicleAccidentsPage,
+  loadVehicleEditPage,
+  loadVehicleImportPage,
   loadVehicleDetailPage,
   loadVehicleFinesLetterPage,
   loadVehicleFinesReportPage,
@@ -74,6 +76,8 @@ const LeavesPage = lazy(loadLeavesPage)
 const PermitsPage = lazy(loadPermitsPage)
 const VehiclesHubPage = lazy(loadVehiclesHubPage)
 const VehicleDetailPage = lazy(loadVehicleDetailPage)
+const VehicleEditPage = lazy(loadVehicleEditPage)
+const VehicleImportPage = lazy(loadVehicleImportPage)
 const VehicleFinesLetterPage = lazy(loadVehicleFinesLetterPage)
 const VehicleFinesReportPage = lazy(loadVehicleFinesReportPage)
 const VehicleAccidentsPage = lazy(loadVehicleAccidentsPage)
@@ -374,6 +378,36 @@ function Shell(): React.JSX.Element {
                 element={
                   <RequireCapability cap="vehicles.view">
                     <VehicleMaintenancePage />
+                  </RequireCapability>
+                }
+              />
+              <Route
+                path="/vehicles/import"
+                element={
+                  <RequireCapability cap="vehicles.view">
+                    <RequireCapability cap="vehicles.edit">
+                      <VehicleImportPage />
+                    </RequireCapability>
+                  </RequireCapability>
+                }
+              />
+              <Route
+                path="/vehicles/edit"
+                element={
+                  <RequireCapability cap="vehicles.view">
+                    <RequireCapability cap="vehicles.edit">
+                      <VehicleEditPage />
+                    </RequireCapability>
+                  </RequireCapability>
+                }
+              />
+              <Route
+                path="/vehicles/edit/:id"
+                element={
+                  <RequireCapability cap="vehicles.view">
+                    <RequireCapability cap="vehicles.edit">
+                      <VehicleEditPage />
+                    </RequireCapability>
                   </RequireCapability>
                 }
               />

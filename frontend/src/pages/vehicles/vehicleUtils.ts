@@ -10,6 +10,7 @@
  */
 
 import type { QueryClient } from '@tanstack/react-query'
+import vehicleClassCatalog from '../../../../backend/templates/vehicle_classes.json'
 
 import type { BadgeProps } from '@/components/ui/badge'
 import type { DocViewerItem } from '@/components/ui/document-viewer-dialog'
@@ -216,17 +217,22 @@ export function parsePlate(
 
 // ── Fixed option lists ──────────────────────────────────────────────────────
 
+interface VehicleClassCatalog {
+  readonly presets: ReadonlyArray<{ ar: string; en: string }>
+  readonly aliases: {
+    readonly ar: Readonly<Record<string, string>>
+    readonly en: Readonly<Record<string, string>>
+  }
+}
+
+const classCatalog: VehicleClassCatalog = vehicleClassCatalog
+
 /** The fleet's seven vehicle classes, stored as the `class_ar`/`class_en` pair.
- *  A fixed list (not free text) keeps the ledger's Class column groupable. */
-export const VEHICLE_CLASSES: ReadonlyArray<{ ar: string; en: string }> = [
-  { ar: 'مركبة خفيفة', en: 'Light vehicle' },
-  { ar: 'باص خفيف', en: 'Light bus' },
-  { ar: 'باص ثقيل', en: 'Heavy bus' },
-  { ar: 'بيك أب', en: 'Pickup' },
-  { ar: 'بيك أب ثقيل', en: 'Heavy pickup' },
-  { ar: 'فرع الأمن', en: 'Security branch' },
-  { ar: 'مندوب', en: 'Messenger vehicle' },
-]
+ *  The backend importer consumes this same catalog so preset wording cannot drift. */
+export const VEHICLE_CLASSES: ReadonlyArray<{ ar: string; en: string }> = classCatalog.presets
+
+/** Confident exact legacy spellings keyed to their canonical preset names. */
+export const VEHICLE_CLASS_ALIASES = classCatalog.aliases
 
 export const MAINTENANCE_TYPES: readonly MaintenanceType[] = [
   'service',
@@ -306,6 +312,7 @@ export function invalidateVehicleQueries(
  *  falls through to the API's own message. */
 const ERROR_MESSAGE_KEYS: Record<string, string> = {
   SITE_HAS_VEHICLES: 'vehicles.siteHasVehicles',
+  VEHICLE_FILE_IN_USE: 'vehicles.vehicleFileInUse',
   EVG_UNAVAILABLE: 'vehicles.evg.error',
   EVG_DRIVER_MISSING: 'vehicles.evg.driverMissing',
 }

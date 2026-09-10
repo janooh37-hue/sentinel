@@ -1824,8 +1824,56 @@ body {
     margin: 12mm;
   }
   .print-register,
-  .print-vehicle-report {
+  .print-vehicle-report,
+  .print-vehicle-list {
     page: register;
+  }
+  /* The fleet list is a fixed paper document, not a scaled copy of the live
+     UI. Pin its face, ink, and rules so both the Aa setting and dark theme are
+     irrelevant on paper. */
+  #root .print-vehicle-list {
+    background: #fff !important;
+    color: #1c1f24 !important;
+    font-family: Arial, sans-serif !important;
+    font-size: 11pt !important;
+  }
+  #root .print-vehicle-list * {
+    color: #1c1f24 !important;
+    font-family: Arial, sans-serif !important;
+  }
+  #root .print-vehicle-list table {
+    border-collapse: collapse;
+    background: #fff !important;
+    color: #1c1f24 !important;
+    font-size: 11pt !important;
+  }
+  #root .print-vehicle-list th,
+  #root .print-vehicle-list td {
+    border: 1px solid #1c1f24 !important;
+    background: #fff !important;
+    padding: 5pt 6pt;
+    text-align: start;
+    vertical-align: middle;
+  }
+  .print-vehicle-list-heading {
+    margin-block-end: 10pt;
+  }
+  .print-vehicle-list-heading h1 {
+    margin: 0 0 4pt;
+    font-size: 15pt;
+    font-weight: 700;
+  }
+  .print-vehicle-list-heading > div {
+    display: flex;
+    justify-content: space-between;
+    gap: 12pt;
+  }
+  .print-vehicle-list thead {
+    display: table-header-group;
+  }
+  .print-vehicle-list tr {
+    break-inside: avoid;
+    page-break-inside: avoid;
   }
   /* The fines report is the only document printed from the DOM as a
      letterhead sheet (every other one prints a rendered PDF), and the sheet's

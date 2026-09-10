@@ -6,7 +6,7 @@ from datetime import date as date_t
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.schemas._base import ORMBase
 
@@ -48,7 +48,36 @@ class VehicleFileRead(ORMBase):
     url: str = ""
 
 
-class VehicleCreate(BaseModel):
+class _VehicleOptionalText(BaseModel):
+    """Blank optional vehicle text means "not recorded", so it is stored as NULL.
+
+    Shared by ``VehicleCreate`` and ``VehicleUpdate`` so a field cannot be
+    normalized on one and left raw on the other. ``check_fields=False`` is
+    required because the fields live on the subclasses;
+    ``test_blank_optional_text_becomes_null`` covers every listed field on both
+    verbs, so a field renamed out from under this list fails a test rather than
+    silently losing its normalization.
+    """
+
+    @field_validator(
+        "vin",
+        "contract_note_ar",
+        "contract_note_en",
+        "make",
+        "model",
+        "colour",
+        "accessories_ar",
+        "accessories_en",
+        "notes_ar",
+        "notes_en",
+        check_fields=False,
+    )
+    @classmethod
+    def _blank_is_unknown(cls, v: str | None) -> str | None:
+        return (v or "").strip() or None
+
+
+class VehicleCreate(_VehicleOptionalText):
     plate_code: str | None = Field(default=None, pattern=r"^\d{1,3}$")
     plate_number: str = Field(pattern=r"^\d{1,6}$")
     traffic_code: str = Field(pattern=r"^\d{4,12}$")
@@ -65,6 +94,17 @@ class VehicleCreate(BaseModel):
     license_expiry: date_t
     photo_file_id: int | None = None
     license_file_id: int | None = None
+    make: str | None = Field(default=None, max_length=128)
+    model: str | None = Field(default=None, max_length=128)
+    model_year: int | None = Field(default=None, ge=1000, le=9999)
+    colour: str | None = Field(default=None, max_length=64)
+    insurance_expiry: date_t | None = None
+    inmate_capacity: int | None = Field(default=None, ge=0)
+    passenger_capacity: int | None = Field(default=None, ge=0)
+    accessories_ar: str | None = Field(default=None, max_length=2048)
+    accessories_en: str | None = Field(default=None, max_length=2048)
+    notes_ar: str | None = Field(default=None, max_length=2048)
+    notes_en: str | None = Field(default=None, max_length=2048)
 
     @model_validator(mode="after")
     def _validate_site_and_dates(self) -> VehicleCreate:
@@ -75,7 +115,7 @@ class VehicleCreate(BaseModel):
         return self
 
 
-class VehicleUpdate(BaseModel):
+class VehicleUpdate(_VehicleOptionalText):
     plate_code: str | None = Field(default=None, pattern=r"^\d{1,3}$")
     plate_number: str | None = Field(default=None, pattern=r"^\d{1,6}$")
     traffic_code: str | None = Field(default=None, pattern=r"^\d{4,12}$")
@@ -91,6 +131,17 @@ class VehicleUpdate(BaseModel):
     license_expiry: date_t | None = None
     photo_file_id: int | None = None
     license_file_id: int | None = None
+    make: str | None = Field(default=None, max_length=128)
+    model: str | None = Field(default=None, max_length=128)
+    model_year: int | None = Field(default=None, ge=1000, le=9999)
+    colour: str | None = Field(default=None, max_length=64)
+    insurance_expiry: date_t | None = None
+    inmate_capacity: int | None = Field(default=None, ge=0)
+    passenger_capacity: int | None = Field(default=None, ge=0)
+    accessories_ar: str | None = Field(default=None, max_length=2048)
+    accessories_en: str | None = Field(default=None, max_length=2048)
+    notes_ar: str | None = Field(default=None, max_length=2048)
+    notes_en: str | None = Field(default=None, max_length=2048)
 
     @model_validator(mode="after")
     def _validate_dates(self) -> VehicleUpdate:
@@ -123,6 +174,14 @@ class VehicleListItem(ORMBase):
     fines_amount: int = 0
     black_points: int = 0
     photo_url: str | None = None
+    make: str | None = None
+    model: str | None = None
+    model_year: int | None = None
+    colour: str | None = None
+    insurance_expiry: date_t | None = None
+    insurance_status: VehicleExpiryStatus | None = None
+    days_to_insurance_expiry: int | None = None
+    archived_at: datetime | None = None
 
 
 class VehicleFineCreate(BaseModel):
@@ -287,6 +346,15 @@ class VehicleRead(VehicleListItem):
     accidents: list[VehicleAccidentRead] = Field(default_factory=list)
     maintenance: list[VehicleMaintenanceRead] = Field(default_factory=list)
     photos: list[VehicleFileRead] = Field(default_factory=list)
+    inmate_capacity: int | None = None
+    passenger_capacity: int | None = None
+    accessories_ar: str | None = None
+    accessories_en: str | None = None
+    notes_ar: str | None = None
+    notes_en: str | None = None
+    photo_file_id: int | None = None
+    license_file_id: int | None = None
+    license_files: list[VehicleFileRead] = Field(default_factory=list)
 
 
 class VehiclesSummary(BaseModel):
@@ -295,6 +363,7 @@ class VehiclesSummary(BaseModel):
     fines_amount: int
     black_points: int
     license_attention: int
+    insurance_attention: int
     open_accidents: int
     maintenance_due: int
     active_sites: int
@@ -356,3 +425,152 @@ class EvgConfirmRequest(BaseModel):
 class EvgConfirmResult(BaseModel):
     created: int
     skipped: int
+
+
+VehicleScanWarning = Literal["OCR_UNAVAILABLE", "OCR_NO_FIELDS", "OCR_REVIEW_REQUIRED"]
+
+
+class VehicleProfileScan(BaseModel):
+    plate_code: str | None = None
+    plate_number: str | None = None
+    traffic_code: str | None = None
+    vin: str | None = None
+    make: str | None = None
+    model: str | None = None
+    model_year: int | None = None
+    colour: str | None = None
+    type_ar: str | None = None
+    type_en: str | None = None
+    class_ar: str | None = None
+    class_en: str | None = None
+    license_start: date_t | None = None
+    license_expiry: date_t | None = None
+    insurance_expiry: date_t | None = None
+    unmapped: dict[str, str] = Field(default_factory=dict)
+    warnings: list[VehicleScanWarning] = Field(default_factory=list)
+
+
+VehicleImportImageKind = Literal["photo", "license"]
+VehicleImportAction = Literal[
+    "create",
+    "update",
+    "unchanged",
+    "invalid",
+    "archived",
+    "excluded",
+]
+VehicleImportFileAction = Literal["keep_current", "use_imported"]
+VehicleImportScalar = str | int | None
+
+
+class VehicleImportIssue(BaseModel):
+    row_id: str | None = None
+    field: str | None = None
+    code: str
+    message: str
+
+
+class VehicleImportSection(BaseModel):
+    id: str
+    sheet: str
+    title: str
+
+
+class VehicleImportInspectRow(BaseModel):
+    row_id: str
+    section_id: str
+    sheet: str
+    row_number: int
+    raw: dict[str, str | None]
+    values: dict[str, VehicleImportScalar]
+    image_ids: list[str] = Field(default_factory=list)
+
+
+class VehicleImportImage(BaseModel):
+    image_id: str
+    url: str
+    row_id: str | None = None
+    original_name: str
+    kind: VehicleImportImageKind | None = None
+
+
+class VehicleImportInspection(ORMBase):
+    token: str
+    expires_at: datetime
+    filename: str
+    sections: list[VehicleImportSection]
+    rows: list[VehicleImportInspectRow]
+    images: list[VehicleImportImage]
+    warnings: list[VehicleImportIssue] = Field(default_factory=list)
+
+
+class VehicleImportPreviewDraftRow(BaseModel):
+    row_id: str
+    excluded: bool = False
+    values: dict[str, VehicleImportScalar]
+    image_ids: list[str] = Field(default_factory=list)
+    image_roles: dict[str, VehicleImportImageKind] = Field(default_factory=dict)
+    photo_action: VehicleImportFileAction | None = None
+    primary_image_id: str | None = None
+    license_action: VehicleImportFileAction | None = None
+    license_image_id: str | None = None
+    ocr_reviewed_image_ids: list[str] = Field(default_factory=list)
+    ocr_manual_image_ids: list[str] = Field(default_factory=list)
+    ocr_identity_confirmed_image_ids: list[str] = Field(default_factory=list)
+
+
+class VehicleImportPreviewRequest(BaseModel):
+    site_mappings: dict[str, int] = Field(default_factory=dict)
+    rows: list[VehicleImportPreviewDraftRow]
+    excluded_image_ids: list[str] = Field(default_factory=list)
+
+
+class VehicleImportChange(BaseModel):
+    field: str
+    before: VehicleImportScalar
+    after: VehicleImportScalar
+
+
+class VehicleImportPreviewRow(BaseModel):
+    row_id: str
+    action: VehicleImportAction
+    vehicle_id: int | None = None
+    values: dict[str, VehicleImportScalar]
+    changes: list[VehicleImportChange] = Field(default_factory=list)
+    errors: list[VehicleImportIssue] = Field(default_factory=list)
+    warnings: list[VehicleImportIssue] = Field(default_factory=list)
+    current_photo_url: str | None = None
+    current_license_url: str | None = None
+    images: list[VehicleImportImage] = Field(default_factory=list)
+    photo_choice_required: bool = False
+    license_choice_required: bool = False
+    ocr_review_required: bool = False
+
+
+class VehicleImportCounts(BaseModel):
+    create: int = 0
+    update: int = 0
+    unchanged: int = 0
+    invalid: int = 0
+    archived: int = 0
+    excluded: int = 0
+
+
+class VehicleImportPreview(BaseModel):
+    revision: str
+    rows: list[VehicleImportPreviewRow]
+    counts: VehicleImportCounts
+
+
+class VehicleImportConfirmRequest(BaseModel):
+    revision: str
+    row_ids: list[str]
+
+
+class VehicleImportResult(BaseModel):
+    created: int
+    updated: int
+    unchanged: int
+    images_added: int
+    images_skipped: int
+    vehicle_ids: list[int]

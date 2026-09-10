@@ -7,11 +7,13 @@ from pathlib import Path
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, Form, Query, UploadFile, status
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
 from app.api._responses import maybe_base64
 from app.api.deps import require_capability
+from app.api.errors import ValidationFailedError
 from app.db.models import User, VehicleFile
 from app.db.session import get_db
 from app.schemas.vehicle import (
@@ -34,6 +36,12 @@ from app.schemas.vehicle import (
     VehicleListItem,
     VehicleMaintenanceCreate,
     VehicleMaintenanceRead,
+    VehicleProfileScan,
+    VehicleImportConfirmRequest,
+    VehicleImportInspection,
+    VehicleImportPreview,
+    VehicleImportPreviewRequest,
+    VehicleImportResult,
     VehicleRead,
     VehicleSiteCreate,
     VehicleSiteRead,
@@ -45,6 +53,8 @@ from app.services import (
     settings_service,
     vehicle_evg_service,
     vehicle_letter_service,
+    vehicle_profile_scan_service,
+    vehicle_import_service,
     vehicle_service,
 )
 
@@ -215,6 +225,10 @@ def list_vehicles(
         str,
         Query(pattern=r"^(?:all|attention|valid|due|expired)$"),
     ] = "all",
+    state: Annotated[
+        str,
+        Query(pattern=r"^(?:active|archived)$"),
+    ] = "active",
 ) -> list[VehicleListItem]:
     today = date_t.today()
     notify_days = settings_service.get_vehicle_notify_days(db)
@@ -223,6 +237,7 @@ def list_vehicles(
         q=q,
         site_id=site_id,
         expiry=expiry,
+        state=state,  # type: ignore[arg-type]
         today=today,
         notify_days=notify_days,
     )
@@ -237,6 +252,109 @@ def create_vehicle(
 ) -> VehicleRead:
     row = vehicle_service.create_vehicle(db, payload, actor=user.email)
     return vehicle_service.to_read(row)
+
+
+@router.post("/scan-licence", response_model=VehicleProfileScan)
+async def scan_vehicle_licence(
+    _user: Annotated[User, Depends(require_capability("vehicles.edit"))],
+    upload: Annotated[UploadFile, File(alias="file")],
+) -> VehicleProfileScan:
+    data = await upload.read(vehicle_service.MAX_FILE_BYTES + 1)
+    if len(data) > vehicle_service.MAX_FILE_BYTES:
+        raise ValidationFailedError(
+            "VEHICLE_FILE_TOO_LARGE",
+            f"File exceeds {vehicle_service.MAX_FILE_BYTES // (1024 * 1024)} MiB.",
+            size=len(data),
+        )
+    extension = Path(upload.filename or "").suffix.lower()
+    if extension not in {".pdf", ".png", ".jpg", ".jpeg", ".webp"}:
+        raise ValidationFailedError(
+            "VEHICLE_FILE_BAD_EXTENSION",
+            f"File type {extension!r} is not allowed.",
+            allowed=[".pdf", ".png", ".jpg", ".jpeg", ".webp"],
+        )
+    return await run_in_threadpool(vehicle_profile_scan_service.scan_vehicle_profile, data)
+
+
+@router.get("/imports/template")
+def download_vehicle_import_template(
+    _user: Annotated[User, Depends(require_capability("vehicles.edit"))],
+) -> Response:
+    return Response(
+        content=vehicle_import_service.build_vehicle_import_template(),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={
+            "Content-Disposition": 'attachment; filename="vehicle-import-template.xlsx"',
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
+
+
+@router.post("/imports/inspect", response_model=VehicleImportInspection)
+async def inspect_vehicle_import(
+    user: Annotated[User, Depends(require_capability("vehicles.edit"))],
+    upload: Annotated[UploadFile, File(alias="file")],
+) -> VehicleImportInspection:
+    data = await upload.read(vehicle_import_service.MAX_COMPRESSED_BYTES + 1)
+    return await run_in_threadpool(
+        vehicle_import_service.inspect_upload,
+        owner=user,
+        filename=upload.filename or "",
+        data=data,
+    )
+
+
+@router.post("/imports/{token}/preview", response_model=VehicleImportPreview)
+def preview_vehicle_import(
+    token: str,
+    payload: VehicleImportPreviewRequest,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(require_capability("vehicles.edit"))],
+) -> VehicleImportPreview:
+    return vehicle_import_service.preview(db, token, payload, owner=user)
+
+
+@router.get("/imports/{token}/images/{image_id}")
+def get_vehicle_import_image(
+    token: str,
+    image_id: str,
+    user: Annotated[User, Depends(require_capability("vehicles.edit"))],
+) -> Response:
+    path, media_type, original_name = vehicle_import_service.resolve_image(
+        token, image_id, owner=user
+    )
+    return Response(
+        content=path.read_bytes(),
+        media_type=media_type,
+        headers={
+            "Content-Disposition": f'inline; filename="{original_name}"',
+            "X-Content-Type-Options": "nosniff",
+        },
+    )
+
+
+@router.post("/imports/{token}/images/{image_id}/scan", response_model=VehicleProfileScan)
+async def scan_vehicle_import_image(
+    token: str,
+    image_id: str,
+    user: Annotated[User, Depends(require_capability("vehicles.edit"))],
+) -> VehicleProfileScan:
+    return await run_in_threadpool(
+        vehicle_import_service.scan_image,
+        token,
+        image_id,
+        owner=user,
+    )
+
+
+@router.post("/imports/{token}/confirm", response_model=VehicleImportResult)
+def confirm_vehicle_import(
+    token: str,
+    payload: VehicleImportConfirmRequest,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(require_capability("vehicles.edit"))],
+) -> VehicleImportResult:
+    return vehicle_import_service.confirm(db, token, payload, owner=user)
 
 
 @router.get("/{vehicle_id}", response_model=VehicleRead)
@@ -256,6 +374,26 @@ def update_vehicle(
     user: Annotated[User, Depends(require_capability("vehicles.edit"))],
 ) -> VehicleRead:
     row = vehicle_service.update_vehicle(db, vehicle_id, payload, actor=user.email)
+    return vehicle_service.to_read(row)
+
+
+@router.post("/{vehicle_id}/archive", response_model=VehicleRead)
+def archive_vehicle(
+    vehicle_id: int,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(require_capability("vehicles.delete"))],
+) -> VehicleRead:
+    row = vehicle_service.archive_vehicle(db, vehicle_id, actor=user.email)
+    return vehicle_service.to_read(row)
+
+
+@router.post("/{vehicle_id}/restore", response_model=VehicleRead)
+def restore_vehicle(
+    vehicle_id: int,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(require_capability("vehicles.delete"))],
+) -> VehicleRead:
+    row = vehicle_service.restore_vehicle(db, vehicle_id, actor=user.email)
     return vehicle_service.to_read(row)
 
 

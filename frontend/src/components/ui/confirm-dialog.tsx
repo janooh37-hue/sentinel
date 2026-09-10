@@ -42,6 +42,8 @@ interface ConfirmDialogProps {
   onConfirm: () => void
   /** When true, the confirm button uses the destructive (accent) colour. */
   destructive?: boolean
+  /** Explicit return target for controlled dialogs that do not render a Radix trigger. */
+  returnFocusRef?: React.RefObject<HTMLElement | null>
 }
 
 export function ConfirmDialog({
@@ -52,13 +54,23 @@ export function ConfirmDialog({
   confirmLabel,
   onConfirm,
   destructive = false,
+  returnFocusRef,
 }: ConfirmDialogProps): React.JSX.Element {
   const { t } = useTranslation()
   const label = confirmLabel ?? t('common.confirm')
 
   return (
     <AlertDialog open={open} onOpenChange={onOpenChange}>
-      <AlertDialogContent>
+      <AlertDialogContent
+        onCloseAutoFocus={
+          returnFocusRef
+            ? (event) => {
+                event.preventDefault()
+                returnFocusRef.current?.focus()
+              }
+            : undefined
+        }
+      >
         <AlertDialogHeader>
           <AlertDialogTitle>{title}</AlertDialogTitle>
           {description && (

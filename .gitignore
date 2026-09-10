@@ -147,3 +147,6 @@ mockups/refreance/
 %TEMP%/
 .opencode/package-lock.json
 .worktrees/
+
+# Local synthetic env used for isolated feature-worktree verification
+.synthdata/

@@ -36,12 +36,13 @@ def _send_to_recipients(
     sent = 0
     for user_id in recipient_ids:
         try:
-            push_service.send_to_user(db, user_id, messages, url)
+            delivered = push_service.send_to_user(db, user_id, messages, url)
         except Exception:
             db.rollback()
             log.exception("vehicle reminders: push failed for user %s", user_id)
             continue
-        sent += 1
+        if delivered > 0:
+            sent += 1
     return sent
 
 
@@ -58,6 +59,26 @@ def _license_messages(vehicle: Vehicle, state: str) -> dict[str, tuple[str, str]
         en_detail = f"{plate} · {vehicle.type_en} expires on {expiry}"
         ar_heading = "ترخيص على وشك الانتهاء"
         ar_detail = f"{_isolate(plate)} · {vehicle.type_ar} ينتهي في {expiry}"
+    return {
+        "en": (_TITLE, f"{en_heading}\n{en_detail}"),
+        "ar": (_TITLE, f"{ar_heading}\n{ar_detail}"),
+    }
+
+
+def _insurance_messages(vehicle: Vehicle, state: str) -> dict[str, tuple[str, str]]:
+    plate = vehicle_service.plate_label(vehicle)
+    assert vehicle.insurance_expiry is not None  # guarded by caller
+    expiry = vehicle.insurance_expiry.strftime("%d/%m/%Y")
+    if state == "expired":
+        en_heading = "Insurance expired"
+        en_detail = f"{plate} · {vehicle.type_en} insurance expired on {expiry}"
+        ar_heading = "انتهى التأمين"
+        ar_detail = f"{_isolate(plate)} · {vehicle.type_ar} انتهى تأمينها في {expiry}"
+    else:
+        en_heading = "Insurance expiring"
+        en_detail = f"{plate} · {vehicle.type_en} insurance expires on {expiry}"
+        ar_heading = "تأمين على وشك الانتهاء"
+        ar_detail = f"{_isolate(plate)} · {vehicle.type_ar} تأمينها ينتهي في {expiry}"
     return {
         "en": (_TITLE, f"{en_heading}\n{en_detail}"),
         "ar": (_TITLE, f"{ar_heading}\n{ar_detail}"),
@@ -96,7 +117,9 @@ def send_due_reminders(db: Session, *, today: date) -> int:
     recipient_ids = [user.id for user in recipients(db)]
     sent = 0
 
-    vehicles = list(db.scalars(select(Vehicle).order_by(Vehicle.id)))
+    vehicles = list(
+        db.scalars(select(Vehicle).where(Vehicle.archived_at.is_(None)).order_by(Vehicle.id))
+    )
     for vehicle in vehicles:
         state = vehicle_service.expiry_status(
             vehicle.license_expiry,
@@ -116,10 +139,35 @@ def send_due_reminders(db: Session, *, today: date) -> int:
             vehicle.expiry_reminder_sent_for = vehicle.license_expiry
             db.commit()
 
+    for vehicle in vehicles:
+        if vehicle.insurance_expiry is None:
+            continue
+        insurance_state = vehicle_service.expiry_status(
+            vehicle.insurance_expiry,
+            today=today,
+            notify_days=notify_days,
+        )
+        if (
+            insurance_state == "valid"
+            or vehicle.insurance_reminder_sent_for == vehicle.insurance_expiry
+        ):
+            continue
+        delivered = _send_to_recipients(
+            db,
+            recipient_ids,
+            _insurance_messages(vehicle, insurance_state),
+            f"/vehicles/{vehicle.id}",
+        )
+        sent += delivered
+        if delivered:
+            vehicle.insurance_reminder_sent_for = vehicle.insurance_expiry
+            db.commit()
+
     maintenance_rows = list(
         db.scalars(
             select(VehicleMaintenance)
-            .where(VehicleMaintenance.next_due.is_not(None))
+            .join(VehicleMaintenance.vehicle)
+            .where(VehicleMaintenance.next_due.is_not(None), Vehicle.archived_at.is_(None))
             .options(selectinload(VehicleMaintenance.vehicle))
             .order_by(VehicleMaintenance.id)
         )

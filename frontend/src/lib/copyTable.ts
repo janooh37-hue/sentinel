@@ -34,18 +34,75 @@ export async function copyTable({ html, text }: CopyTableOptions): Promise<void>
   const host = document.createElement('div')
   host.contentEditable = 'true'
   host.setAttribute('aria-hidden', 'true')
+  host.tabIndex = -1
   host.style.position = 'fixed'
   host.style.inset = '0 auto auto 0'
   host.style.opacity = '0'
   host.style.pointerEvents = 'none'
   host.innerHTML = html
-  document.body.appendChild(host)
-  const range = document.createRange()
-  range.selectNodeContents(host)
+
   const selection = window.getSelection()
-  selection?.removeAllRanges()
-  selection?.addRange(range)
-  document.execCommand('copy')
-  selection?.removeAllRanges()
-  host.remove()
+  const previousRanges = selection
+    ? Array.from({ length: selection.rangeCount }, (_, index) =>
+        selection.getRangeAt(index).cloneRange(),
+      )
+    : []
+  const previousActiveElement =
+    document.activeElement instanceof HTMLElement ? document.activeElement : null
+  let copyEventFired = false
+  let clipboardDataPresent = false
+  let bothFlavorsSet = false
+  const handleCopy = (event: ClipboardEvent): void => {
+    copyEventFired = true
+    if (!event.clipboardData) return
+    clipboardDataPresent = true
+    try {
+      event.clipboardData.setData('text/html', html)
+      event.clipboardData.setData('text/plain', text)
+      const types = Array.from(event.clipboardData.types)
+      bothFlavorsSet = types.includes('text/html') && types.includes('text/plain')
+      event.preventDefault()
+    } catch {
+      bothFlavorsSet = false
+    }
+  }
+
+  document.body.appendChild(host)
+  document.addEventListener('copy', handleCopy, { once: true })
+  try {
+    host.focus()
+    const range = document.createRange()
+    range.selectNodeContents(host)
+    selection?.removeAllRanges()
+    selection?.addRange(range)
+
+    let commandSucceeded = false
+    try {
+      commandSucceeded = document.execCommand('copy')
+    } catch {
+      throw new Error('COPY_FAILED')
+    }
+    if (
+      !commandSucceeded ||
+      !copyEventFired ||
+      !clipboardDataPresent ||
+      !bothFlavorsSet
+    ) {
+      throw new Error('COPY_FAILED')
+    }
+  } finally {
+    document.removeEventListener('copy', handleCopy)
+    host.remove()
+    try {
+      if (previousActiveElement?.isConnected) previousActiveElement.focus()
+    } catch {
+      // A detached or inert prior target cannot be restored.
+    }
+    try {
+      selection?.removeAllRanges()
+      previousRanges.forEach((range) => selection?.addRange(range))
+    } catch {
+      // A prior range can become stale while copy is in progress.
+    }
+  }
 }

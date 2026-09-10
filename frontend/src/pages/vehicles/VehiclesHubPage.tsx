@@ -2,7 +2,7 @@
  * Vehicle Services — the module's hub at `/vehicles`.
  *
  * Two surfaces on one page, in the order an operator works:
- *   1. six service cards, each showing its own live figure from
+ *   1. service cards, each showing its own live figure from
  *      `GET /vehicles/summary`, so the count is the reason to click;
  *   2. the fleet ledger — the licensed fleet grouped by operating site, with
  *      search, a site filter, a license-state filter and the reminder window.
@@ -19,9 +19,10 @@
  * without it — a viewer is never shown a control the API would 403.
  */
 
-import { useId, useMemo, useRef, useState } from 'react'
+import { useEffect, useId, useMemo, useRef, useState } from 'react'
+import { flushSync } from 'react-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Car, DownloadCloud, Search } from 'lucide-react'
+import { Car, ClipboardCopy, DownloadCloud, Printer, Search } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
 import { toast } from 'sonner'
@@ -29,6 +30,7 @@ import { toast } from 'sonner'
 import { RefreshButton } from '@/components/refresh/RefreshButton'
 import { Button } from '@/components/ui/button'
 import { buttonVariants } from '@/components/ui/button-variants'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { EmptyState } from '@/components/ui/empty-state'
 import { Input } from '@/components/ui/input'
 import { SkeletonRow } from '@/components/ui/skeleton'
@@ -39,8 +41,10 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
+import { copyTable } from '@/lib/copyTable'
 import { api } from '@/lib/api'
 import type { VehicleListItem, VehicleSiteRead } from '@/lib/api'
+import { isolateBidi } from '@/lib/useCapabilityCatalog'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { useDebouncedValue } from '@/lib/useDebouncedValue'
 import { useReducedMotion } from '@/lib/useFakeProgress'
@@ -53,6 +57,7 @@ import {
   formatAed,
   formatIsoDate,
   formatNumber,
+  invalidateVehicleQueries,
   localized,
   vehicleErrorMessage,
 } from './vehicleUtils'
@@ -61,12 +66,22 @@ import { EvgFetchDialog } from './components/EvgFetchDialog'
 import { PlateChip } from './components/PlateChip'
 import { RenewLicenseDialog } from './components/RenewLicenseDialog'
 import { ServiceCard } from './components/ServiceCard'
+import { VehicleListPrintView } from './components/VehicleListPrintView'
 import { SitesDialog } from './components/SitesDialog'
 import { VehicleStatusBadge } from './components/VehicleStatusBadge'
+import {
+  buildVehicleTable,
+  vehicleTableClipboard,
+  type VehicleTableSnapshot,
+} from './vehicleTable'
 
 /** The license-state filter, exactly the values `GET /vehicles` accepts. */
 const EXPIRY_FILTERS = ['all', 'attention', 'valid', 'due', 'expired'] as const
 type ExpiryFilter = (typeof EXPIRY_FILTERS)[number]
+
+/** The active/archived toggle, exactly the values `GET /vehicles` accepts. */
+const STATE_FILTERS = ['active', 'archived'] as const
+type StateFilter = (typeof STATE_FILTERS)[number]
 
 /** The reminder window the API clamps to (`NotifyDaysUpdate`). */
 const NOTIFY_MIN = 1
@@ -89,6 +104,11 @@ interface SiteGroup {
   finesAmount: number
 }
 
+interface VehiclePrintOutput {
+  table: VehicleTableSnapshot
+  scopeLabel: string
+}
+
 export function VehiclesHubPage(): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const lang = i18n.language
@@ -101,6 +121,11 @@ export function VehiclesHubPage(): React.JSX.Element {
   const [query, setQuery] = useState('')
   const [siteId, setSiteId] = useState<number | null>(null)
   const [expiry, setExpiry] = useState<ExpiryFilter>('all')
+  const [state, setState] = useState<StateFilter>('active')
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(() => new Set())
+  const [copyPending, setCopyPending] = useState(false)
+  const [printPending, setPrintPending] = useState(false)
+  const [printOutput, setPrintOutput] = useState<VehiclePrintOutput | null>(null)
   /** `null` = follow the server; a string while the operator is typing. */
   const [notifyDraft, setNotifyDraft] = useState<string | null>(null)
 
@@ -108,6 +133,8 @@ export function VehiclesHubPage(): React.JSX.Element {
   const [sitesOpen, setSitesOpen] = useState(false)
   const [evgOpen, setEvgOpen] = useState(false)
   const [renewTarget, setRenewTarget] = useState<VehicleListItem | null>(null)
+  const [archiveTarget, setArchiveTarget] = useState<VehicleListItem | null>(null)
+  const [restoreTarget, setRestoreTarget] = useState<VehicleListItem | null>(null)
 
   const ledgerRef = useRef<HTMLElement>(null)
   const searchId = useId()
@@ -123,8 +150,9 @@ export function VehiclesHubPage(): React.JSX.Element {
       ...(debouncedQuery ? { q: debouncedQuery } : {}),
       ...(siteId != null ? { site_id: siteId } : {}),
       expiry,
+      state,
     }),
-    [debouncedQuery, siteId, expiry],
+    [debouncedQuery, siteId, expiry, state],
   )
 
   const summaryQuery = useQuery({
@@ -144,6 +172,119 @@ export function VehiclesHubPage(): React.JSX.Element {
   const summary = summaryQuery.data
   const sites = sitesQuery.data
   const rows = listQuery.data ?? NO_VEHICLES
+
+  // A refetch can remove vehicles independently of the visible filters (for
+  // example, after another operator archives one). Keep only ids present in
+  // the fresh result, and preserve Set identity when there is nothing to prune.
+  useEffect(() => {
+    const availableIds = new Set(rows.map((vehicle) => vehicle.id))
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setSelectedIds((current) => {
+      let pruned = false
+      const next = new Set<number>()
+      for (const id of current) {
+        if (availableIds.has(id)) next.add(id)
+        else pruned = true
+      }
+      return pruned ? next : current
+    })
+  }, [rows])
+
+  // A filter change starts a different working set. Language and viewport are
+  // deliberately absent: selection survives translation and responsive layout.
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setSelectedIds((current) => (current.size === 0 ? current : new Set()))
+  }, [debouncedQuery, siteId, expiry, state])
+
+  const scopeRows = useMemo(
+    () =>
+      selectedIds.size > 0 ? rows.filter((vehicle) => selectedIds.has(vehicle.id)) : rows,
+    [rows, selectedIds],
+  )
+  const vehicleTable = useMemo(
+    () => buildVehicleTable(scopeRows, lang, t),
+    [scopeRows, lang, t],
+  )
+  const listActionsDisabled =
+    listQuery.isLoading ||
+    listQuery.isError ||
+    listQuery.isFetching ||
+    query.trim() !== debouncedQuery ||
+    copyPending ||
+    printPending
+  const allRowsSelected =
+    rows.length > 0 && rows.every((vehicle) => selectedIds.has(vehicle.id))
+  const someRowsSelected =
+    !allRowsSelected && rows.some((vehicle) => selectedIds.has(vehicle.id))
+  const scopeLabel = `${t(
+    `vehicles.state${state === 'active' ? 'Active' : 'Archived'}`,
+  )} · ${
+    selectedIds.size > 0
+      ? t('vehicles.output.selectedScope', {
+          count: selectedIds.size,
+          formattedCount: isolateBidi(formatNumber(selectedIds.size, lang)),
+        })
+      : t('vehicles.output.filteredScope', {
+          count: scopeRows.length,
+          formattedCount: isolateBidi(formatNumber(scopeRows.length, lang)),
+        })
+  }`
+
+  const toggleVehicle = (id: number, checked: boolean): void => {
+    setSelectedIds((current) => {
+      const next = new Set(current)
+      if (checked) next.add(id)
+      else next.delete(id)
+      return next
+    })
+  }
+
+  const toggleAllRows = (checked: boolean): void => {
+    setSelectedIds(checked ? new Set(rows.map((vehicle) => vehicle.id)) : new Set())
+  }
+
+  const copyVehicleTable = async (): Promise<void> => {
+    if (selectedIds.size === 0) return
+    setCopyPending(true)
+    try {
+      await copyTable(vehicleTableClipboard(vehicleTable))
+      toast.success(t('vehicles.output.copied'))
+    } catch {
+      toast.error(t('vehicles.output.copyFailed'))
+    } finally {
+      setCopyPending(false)
+    }
+  }
+
+  const printVehicleList = (): void => {
+    flushSync(() => {
+      setPrintPending(true)
+      setPrintOutput({ table: vehicleTable, scopeLabel })
+    })
+    // Sandboxed or policy-blocked print calls can return normally without
+    // opening a dialog. `beforeprint` confirms only that printing started;
+    // neither it nor `afterprint` can claim a physical print completed.
+    let printStarted = false
+    const markPrintStarted = (): void => {
+      printStarted = true
+    }
+    window.addEventListener('beforeprint', markPrintStarted, { once: true })
+    try {
+      window.print()
+      if (!printStarted) {
+        toast.error(t('vehicles.output.printFailed'))
+      }
+    } catch {
+      toast.error(t('vehicles.output.printFailed'))
+    } finally {
+      window.removeEventListener('beforeprint', markPrintStarted)
+      flushSync(() => {
+        setPrintPending(false)
+        setPrintOutput(null)
+      })
+    }
+  }
 
   const notifyDays = summary?.notify_days
   const notifyValue = notifyDraft ?? (notifyDays != null ? String(notifyDays) : '')
@@ -180,6 +321,24 @@ export function VehiclesHubPage(): React.JSX.Element {
     }
     setNotifyDays.mutate(days)
   }
+
+  const canDelete = has('vehicles.delete')
+  const archiveMutation = useMutation({
+    mutationFn: (vehicle: VehicleListItem) => api.archiveVehicle(vehicle.id),
+    onSuccess: () => {
+      invalidateVehicleQueries(queryClient, { registers: ['sites'] })
+      toast.success(t('vehicles.vehicleArchived'))
+    },
+    onError: (err) => toast.error(vehicleErrorMessage(err, t)),
+  })
+  const restoreMutation = useMutation({
+    mutationFn: (vehicle: VehicleListItem) => api.restoreVehicle(vehicle.id),
+    onSuccess: () => {
+      invalidateVehicleQueries(queryClient, { registers: ['sites'] })
+      toast.success(t('vehicles.vehicleRestored'))
+    },
+    onError: (err) => toast.error(vehicleErrorMessage(err, t)),
+  })
 
   /** The Renew card is a filter, not a dialog: it narrows the ledger to the
    *  licenses that need action and takes the operator (and the keyboard focus)
@@ -237,7 +396,11 @@ export function VehiclesHubPage(): React.JSX.Element {
     value == null ? EMPTY_VALUE : formatNumber(value, lang)
 
   return (
-    <div className="flex flex-1 flex-col overflow-hidden bg-background">
+    <>
+      <div
+        data-print-hide
+        className="flex flex-1 flex-col overflow-hidden bg-background"
+      >
       <header className="shrink-0 px-4 pb-2 pt-3 md:px-6 md:pb-3 md:pt-5">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
@@ -320,6 +483,16 @@ export function VehiclesHubPage(): React.JSX.Element {
           {canEdit && (
             <ServiceCard
               artwork="vehicle-register"
+              to="/vehicles/edit"
+              title={t('vehicles.editVehicleService')}
+              description={t('vehicles.editVehicleServiceDesc')}
+              count={figure(summary?.vehicles)}
+              countLabel={t('vehicles.fleetSize')}
+            />
+          )}
+          {canEdit && (
+            <ServiceCard
+              artwork="vehicle-register"
               onClick={() => setAddOpen(true)}
               title={t('vehicles.addVehicleService')}
               description={t('vehicles.addVehicleServiceDesc')}
@@ -338,6 +511,28 @@ export function VehiclesHubPage(): React.JSX.Element {
             />
           )}
         </div>
+
+        {canEdit ? (
+          <div className="mt-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-surface px-3.5 py-3">
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-foreground">
+                {t('vehicles.importService')}
+              </p>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                {t('vehicles.importServiceDesc')}
+              </p>
+            </div>
+            <Link
+              to="/vehicles/import"
+              className={cn(
+                buttonVariants({ variant: 'secondary', size: 'sm' }),
+                'shrink-0',
+              )}
+            >
+              {t('vehicles.importService')}
+            </Link>
+          </div>
+        ) : null}
 
         {/* Fleet ledger. `tabIndex={-1}` is the landing target of the Renew
             card, so a keyboard operator arrives inside the section instead of
@@ -360,13 +555,71 @@ export function VehiclesHubPage(): React.JSX.Element {
                 {t('vehicles.fleetDesc')}
               </p>
             </div>
-            {canEdit && (
-              <Button type="button" size="sm" onClick={() => setEvgOpen(true)}>
-                <DownloadCloud className="h-3.5 w-3.5" aria-hidden />
-                {t('vehicles.importFines')}
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              <span
+                className="text-[0.75rem] text-muted-foreground"
+                aria-live="polite"
+              >
+                {t('vehicles.output.selectedCount', {
+                  count: selectedIds.size,
+                  formattedCount: isolateBidi(formatNumber(selectedIds.size, lang)),
+                })}
+              </span>
+              <label className="inline-flex h-8 items-center gap-1.5 rounded-md border border-border px-2.5 text-[0.75rem] font-medium text-foreground">
+                <SelectionCheckbox
+                  checked={allRowsSelected}
+                  indeterminate={someRowsSelected}
+                  disabled={rows.length === 0}
+                  label={t('vehicles.output.selectAllShown')}
+                  onChange={toggleAllRows}
+                />
+                <span>{t('vehicles.output.selectAllShown')}</span>
+              </label>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                disabled={selectedIds.size === 0}
+                onClick={() => setSelectedIds(new Set())}
+              >
+                {t('vehicles.output.clearSelection')}
               </Button>
-            )}
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                disabled={listActionsDisabled}
+                onClick={printVehicleList}
+              >
+                <Printer className="h-3.5 w-3.5" aria-hidden />
+                {t('vehicles.output.print')}
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                size="sm"
+                disabled={listActionsDisabled || selectedIds.size === 0}
+                onClick={() => void copyVehicleTable()}
+              >
+                <ClipboardCopy className="h-3.5 w-3.5" aria-hidden />
+                {t('vehicles.output.copy')}
+              </Button>
+              {canEdit && (
+                <Button type="button" size="sm" onClick={() => setEvgOpen(true)}>
+                  <DownloadCloud className="h-3.5 w-3.5" aria-hidden />
+                  {t('vehicles.importFines')}
+                </Button>
+              )}
+            </div>
           </header>
+
+          {!!summary?.insurance_attention && (
+            <p className="mb-3 text-[0.78rem] text-muted-foreground">
+              {t('vehicles.insuranceAttentionNotice', {
+                count: isolateBidi(String(summary.insurance_attention)),
+              })}
+            </p>
+          )}
 
           <div className="mb-4 rounded-xl border border-border bg-surface p-2.5">
             <div className="flex flex-wrap items-center gap-2">
@@ -397,6 +650,18 @@ export function VehiclesHubPage(): React.JSX.Element {
                 {EXPIRY_FILTERS.map((option) => (
                   <option key={option} value={option}>
                     {option === 'all' ? t('vehicles.allExpiry') : t(`vehicles.${option}`)}
+                  </option>
+                ))}
+              </select>
+              <select
+                className={selectClass}
+                aria-label={t('vehicles.stateFilter')}
+                value={state}
+                onChange={(event) => setState(event.target.value as StateFilter)}
+              >
+                {STATE_FILTERS.map((option) => (
+                  <option key={option} value={option}>
+                    {t(`vehicles.state${option === 'active' ? 'Active' : 'Archived'}`)}
                   </option>
                 ))}
               </select>
@@ -509,8 +774,14 @@ export function VehiclesHubPage(): React.JSX.Element {
                         <VehicleCard
                           key={vehicle.id}
                           vehicle={vehicle}
+                          selected={selectedIds.has(vehicle.id)}
+                          onToggle={(checked) => toggleVehicle(vehicle.id, checked)}
                           canEdit={canEdit}
+                          canDelete={canDelete}
+                          state={state}
                           onRenew={() => setRenewTarget(vehicle)}
+                          onArchive={() => setArchiveTarget(vehicle)}
+                          onRestore={() => setRestoreTarget(vehicle)}
                         />
                       ))}
                     </div>
@@ -522,6 +793,14 @@ export function VehiclesHubPage(): React.JSX.Element {
                       <table className="w-full min-w-[860px] text-sm">
                         <TableHeader>
                           <TableRow>
+                            <TableHead className="w-10">
+                              <SelectionCheckbox
+                                checked={allRowsSelected}
+                                indeterminate={someRowsSelected}
+                                label={t('vehicles.output.selectAllShown')}
+                                onChange={toggleAllRows}
+                              />
+                            </TableHead>
                             <TableHead className="w-[76px]">{t('vehicles.mainPhoto')}</TableHead>
                             <TableHead>{t('vehicles.plate')}</TableHead>
                             <TableHead>{t('vehicles.type')}</TableHead>
@@ -537,8 +816,14 @@ export function VehiclesHubPage(): React.JSX.Element {
                             <VehicleRow
                               key={vehicle.id}
                               vehicle={vehicle}
+                              selected={selectedIds.has(vehicle.id)}
+                              onToggle={(checked) => toggleVehicle(vehicle.id, checked)}
                               canEdit={canEdit}
+                              canDelete={canDelete}
+                              state={state}
                               onRenew={() => setRenewTarget(vehicle)}
+                              onArchive={() => setArchiveTarget(vehicle)}
+                              onRestore={() => setRestoreTarget(vehicle)}
                             />
                           ))}
                         </TableBody>
@@ -570,7 +855,54 @@ export function VehiclesHubPage(): React.JSX.Element {
           )}
         </>
       )}
-    </div>
+      {canDelete && (
+        <>
+          <ConfirmDialog
+            open={archiveTarget != null}
+            onOpenChange={(open) => {
+              if (!open) setArchiveTarget(null)
+            }}
+            title={t('vehicles.archiveConfirmTitle', {
+              plate: isolateBidi(
+                archiveTarget ? archiveTarget.plate_label || archiveTarget.plate_number : '',
+              ),
+            })}
+            description={t('vehicles.archiveConfirmDesc')}
+            confirmLabel={t('vehicles.archiveVehicle')}
+            destructive
+            onConfirm={() => {
+              if (archiveTarget) archiveMutation.mutate(archiveTarget)
+              setArchiveTarget(null)
+            }}
+          />
+          <ConfirmDialog
+            open={restoreTarget != null}
+            onOpenChange={(open) => {
+              if (!open) setRestoreTarget(null)
+            }}
+            title={t('vehicles.restoreConfirmTitle', {
+              plate: isolateBidi(
+                restoreTarget ? restoreTarget.plate_label || restoreTarget.plate_number : '',
+              ),
+            })}
+            description={t('vehicles.restoreConfirmDesc')}
+            confirmLabel={t('vehicles.restoreVehicle')}
+            onConfirm={() => {
+              if (restoreTarget) restoreMutation.mutate(restoreTarget)
+              setRestoreTarget(null)
+            }}
+          />
+        </>
+      )}
+      </div>
+      {printOutput && (
+        <VehicleListPrintView
+          table={printOutput.table}
+          title={t('vehicles.fleet')}
+          scopeLabel={printOutput.scopeLabel}
+        />
+      )}
+    </>
   )
 }
 
@@ -603,6 +935,38 @@ function SiteChip({
   )
 }
 
+function SelectionCheckbox({
+  checked,
+  indeterminate = false,
+  disabled = false,
+  label,
+  onChange,
+}: {
+  checked: boolean
+  indeterminate?: boolean
+  disabled?: boolean
+  label: string
+  onChange: (checked: boolean) => void
+}): React.JSX.Element {
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    if (inputRef.current) inputRef.current.indeterminate = indeterminate
+  }, [indeterminate])
+
+  return (
+    <input
+      ref={inputRef}
+      type="checkbox"
+      checked={checked}
+      disabled={disabled}
+      onChange={(event) => onChange(event.target.checked)}
+      aria-label={label}
+      className="h-4 w-4 accent-primary"
+    />
+  )
+}
+
 /** The main photo as the ledger shows it, or a quiet placeholder. */
 function VehiclePhoto({
   vehicle,
@@ -630,21 +994,32 @@ function VehiclePhoto({
   )
 }
 
-/** Renew (only while the license needs it) + Open, shared by row and card. */
+/** Renew (only while the license needs it) + Edit + Open + Archive/Restore,
+ *  shared by row and card. Archived vehicles never offer Edit/Renew — the
+ *  file stays viewable, but only Restore resumes editing. */
 function VehicleActions({
   vehicle,
   canEdit,
+  canDelete,
+  state,
   onRenew,
+  onArchive,
+  onRestore,
 }: {
   vehicle: VehicleListItem
   canEdit: boolean
+  canDelete: boolean
+  state: StateFilter
   onRenew: () => void
+  onArchive: () => void
+  onRestore: () => void
 }): React.JSX.Element {
   const { t } = useTranslation()
   const plate = vehicle.plate_label || vehicle.plate_number
+  const archived = state === 'archived'
   return (
-    <div className="flex items-center justify-end gap-1.5">
-      {canEdit && vehicle.expiry_status !== 'valid' && (
+    <div className="flex flex-wrap items-center justify-end gap-1.5">
+      {!archived && canEdit && vehicle.expiry_status !== 'valid' && (
         <Button
           type="button"
           size="sm"
@@ -654,6 +1029,15 @@ function VehicleActions({
           {t('vehicles.renew')}
         </Button>
       )}
+      {!archived && canEdit && (
+        <Link
+          to={`/vehicles/edit/${vehicle.id}`}
+          aria-label={`${t('vehicles.editVehicle')} · ${plate}`}
+          className={buttonVariants({ variant: 'secondary', size: 'sm' })}
+        >
+          {t('vehicles.editVehicle')}
+        </Link>
+      )}
       <Link
         to={`/vehicles/${vehicle.id}`}
         aria-label={`${t('vehicles.open')} · ${plate}`}
@@ -661,6 +1045,28 @@ function VehicleActions({
       >
         {t('vehicles.open')}
       </Link>
+      {canDelete && !archived && (
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={onArchive}
+          aria-label={`${t('vehicles.archiveVehicle')} · ${plate}`}
+        >
+          {t('vehicles.archiveVehicle')}
+        </Button>
+      )}
+      {canDelete && archived && (
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          onClick={onRestore}
+          aria-label={`${t('vehicles.restoreVehicle')} · ${plate}`}
+        >
+          {t('vehicles.restoreVehicle')}
+        </Button>
+      )}
     </div>
   )
 }
@@ -679,24 +1085,75 @@ function FinesFigure({ vehicle }: { vehicle: VehicleListItem }): React.JSX.Eleme
   )
 }
 
+/** Licence status already carries its own date; insurance adds a second,
+ *  clearly labelled line in the same cell rather than a new column — a
+ *  missing date reads as "Not recorded" and never a badge. */
+function InsuranceStatus({ vehicle }: { vehicle: VehicleListItem }): React.JSX.Element {
+  const { t } = useTranslation()
+  if (!vehicle.insurance_expiry || !vehicle.insurance_status) {
+    return (
+      <span className="text-[0.68rem] text-muted-foreground">
+        {t('vehicles.insuranceExpiry')} · {t('vehicles.insuranceNotRecorded')}
+      </span>
+    )
+  }
+  return (
+    <span className="flex items-center gap-1.5">
+      <span className="text-[0.68rem] text-muted-foreground">{t('vehicles.insuranceExpiry')}</span>
+      <bdi dir="ltr" className="font-mono text-[0.7rem] font-medium text-foreground">
+        {formatIsoDate(vehicle.insurance_expiry)}
+      </bdi>
+      <VehicleStatusBadge family="expiry" status={vehicle.insurance_status} />
+    </span>
+  )
+}
+
 function VehicleRow({
   vehicle,
+  selected,
   canEdit,
+  canDelete,
+  state,
+  onToggle,
   onRenew,
+  onArchive,
+  onRestore,
 }: {
   vehicle: VehicleListItem
+  selected: boolean
   canEdit: boolean
+  canDelete: boolean
+  state: StateFilter
+  onToggle: (checked: boolean) => void
   onRenew: () => void
+  onArchive: () => void
+  onRestore: () => void
 }): React.JSX.Element {
-  const { i18n } = useTranslation()
+  const { t, i18n } = useTranslation()
   const lang = i18n.language
   return (
-    <TableRow>
+    <TableRow className={selected ? 'bg-primary-soft' : undefined}>
+      <TableCell className="w-10">
+        <SelectionCheckbox
+          checked={selected}
+          label={t('vehicles.output.selectVehicle', {
+            plate: vehicle.plate_label || vehicle.plate_number,
+          })}
+          onChange={onToggle}
+        />
+      </TableCell>
       <TableCell className="w-[76px]">
         <VehiclePhoto vehicle={vehicle} />
       </TableCell>
       <TableCell>
-        <PlateChip plate={vehicle.plate_label || vehicle.plate_number} />
+        <span className="flex flex-col gap-1">
+          <PlateChip plate={vehicle.plate_label || vehicle.plate_number} />
+          {vehicle.archived_at && (
+            <span className="text-[0.66rem] font-medium text-muted-foreground">
+              {t('vehicles.archivedStatus')}
+            </span>
+          )}
+        </span>
       </TableCell>
       <TableCell>
         <span className="flex flex-col">
@@ -720,13 +1177,22 @@ function VehicleRow({
             {formatIsoDate(vehicle.license_expiry)}
           </bdi>
           <VehicleStatusBadge family="expiry" status={vehicle.expiry_status} />
+          <InsuranceStatus vehicle={vehicle} />
         </span>
       </TableCell>
       <TableCell>
         <FinesFigure vehicle={vehicle} />
       </TableCell>
       <TableCell className="text-end">
-        <VehicleActions vehicle={vehicle} canEdit={canEdit} onRenew={onRenew} />
+        <VehicleActions
+          vehicle={vehicle}
+          canEdit={canEdit}
+          canDelete={canDelete}
+          state={state}
+          onRenew={onRenew}
+          onArchive={onArchive}
+          onRestore={onRestore}
+        />
       </TableCell>
     </TableRow>
   )
@@ -734,20 +1200,51 @@ function VehicleRow({
 
 function VehicleCard({
   vehicle,
+  selected,
   canEdit,
+  canDelete,
+  state,
+  onToggle,
   onRenew,
+  onArchive,
+  onRestore,
 }: {
   vehicle: VehicleListItem
+  selected: boolean
   canEdit: boolean
+  canDelete: boolean
+  state: StateFilter
+  onToggle: (checked: boolean) => void
   onRenew: () => void
+  onArchive: () => void
+  onRestore: () => void
 }): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const lang = i18n.language
   return (
-    <article className="rounded-xl border border-border bg-surface-raised p-3">
+    <article
+      className={cn(
+        'rounded-xl border border-border p-3',
+        selected ? 'bg-primary-soft' : 'bg-surface-raised',
+      )}
+    >
       <div className="flex items-start justify-between gap-2.5">
+        <SelectionCheckbox
+          checked={selected}
+          label={t('vehicles.output.selectVehicle', {
+            plate: vehicle.plate_label || vehicle.plate_number,
+          })}
+          onChange={onToggle}
+        />
         <div className="min-w-0">
-          <PlateChip plate={vehicle.plate_label || vehicle.plate_number} size="sm" />
+          <span className="flex items-center gap-1.5">
+            <PlateChip plate={vehicle.plate_label || vehicle.plate_number} size="sm" />
+            {vehicle.archived_at && (
+              <span className="text-[0.64rem] font-medium text-muted-foreground">
+                {t('vehicles.archivedStatus')}
+              </span>
+            )}
+          </span>
           <h4 className="mt-1.5 text-[0.82rem] font-semibold text-foreground" dir="auto">
             {localized(vehicle.type_ar, vehicle.type_en, lang)}
           </h4>
@@ -777,9 +1274,21 @@ function VehicleCard({
         </div>
       </dl>
 
+      <div className="mb-2.5">
+        <InsuranceStatus vehicle={vehicle} />
+      </div>
+
       <div className="flex items-center justify-between gap-2">
         <VehicleStatusBadge family="expiry" status={vehicle.expiry_status} />
-        <VehicleActions vehicle={vehicle} canEdit={canEdit} onRenew={onRenew} />
+        <VehicleActions
+          vehicle={vehicle}
+          canEdit={canEdit}
+          canDelete={canDelete}
+          state={state}
+          onRenew={onRenew}
+          onArchive={onArchive}
+          onRestore={onRestore}
+        />
       </div>
     </article>
   )
