@@ -233,7 +233,6 @@ function VehicleEditEditor({ vehicleId }: { vehicleId: number }): React.JSX.Elem
 type PendingGalleryFile = {
   key: number
   file: File
-  previewUrl: string
 }
 
 type PendingLicenceFile = {
@@ -278,6 +277,60 @@ function EditorSection({
   )
 }
 
+function PendingGalleryFileRow({
+  pending,
+  disabled,
+  onRemove,
+}: {
+  pending: PendingGalleryFile
+  disabled: boolean
+  onRemove: () => void
+}): React.JSX.Element {
+  const { t } = useTranslation()
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+
+  useEffect(() => {
+    const url = URL.createObjectURL(pending.file)
+    setPreviewUrl(url)
+    return () => URL.revokeObjectURL(url)
+  }, [pending.file])
+
+  return (
+    <li className="flex min-w-0 items-center gap-2 rounded-lg border border-border bg-surface-raised p-2">
+      {previewUrl ? (
+        <img
+          src={previewUrl}
+          alt={t('vehicles.pendingPhotoPreview', {
+            name: isolateBidi(pending.file.name),
+          })}
+          className="h-14 w-16 shrink-0 rounded-md object-cover"
+        />
+      ) : (
+        <span
+          aria-hidden
+          className="h-14 w-16 shrink-0 rounded-md bg-surface-tinted"
+        />
+      )}
+      <span className="min-w-0 flex-1 truncate text-xs text-foreground" dir="auto">
+        {pending.file.name}
+      </span>
+      <Button
+        type="button"
+        size="icon-sm"
+        variant="ghost"
+        disabled={disabled}
+        aria-label={t('vehicles.removePendingPhoto', {
+          name: isolateBidi(pending.file.name),
+        })}
+        title={t('common.remove')}
+        onClick={onRemove}
+      >
+        <X className="h-3.5 w-3.5" aria-hidden />
+      </Button>
+    </li>
+  )
+}
+
 function EditorForm({
   vehicle,
   sites,
@@ -300,7 +353,7 @@ function EditorForm({
   const [savedVehicle, setSavedVehicle] = useState(vehicle)
   const scanRetainedFileRef = useRef<File | null>(null)
   const pendingGallerySequence = useRef(0)
-  const activePreviewUrls = useRef(new Set<string>())
+  const photoDeleteTriggerRef = useRef<HTMLButtonElement | null>(null)
   const [serverError, setServerError] = useState<string | null>(null)
   const [discardConfirmOpen, setDiscardConfirmOpen] = useState(false)
   const [pendingGalleryFiles, setPendingGalleryFiles] = useState<PendingGalleryFile[]>([])
@@ -320,11 +373,6 @@ function EditorForm({
   const hasPendingFiles = pendingGalleryFiles.length > 0 || pendingLicence != null
   const hasUnsavedChanges = isDirty || hasPendingFiles || mainPhotoDraft !== undefined
 
-  const revokePreviewUrl = (url: string): void => {
-    if (!activePreviewUrls.current.delete(url)) return
-    URL.revokeObjectURL(url)
-  }
-
   // Tab close/reload while dirty — Cancel/back inside the app is handled by
   // the confirm dialog below (BrowserRouter has no navigation blocker).
   useEffect(() => {
@@ -335,14 +383,6 @@ function EditorForm({
     window.addEventListener('beforeunload', handler)
     return () => window.removeEventListener('beforeunload', handler)
   }, [hasUnsavedChanges])
-
-  useEffect(
-    () => () => {
-      for (const url of activePreviewUrls.current) URL.revokeObjectURL(url)
-      activePreviewUrls.current.clear()
-    },
-    [],
-  )
 
   const mutation = useMutation({
     mutationFn: async (values: VehicleFormValues): Promise<EditorSaveResult> => {
@@ -453,11 +493,7 @@ function EditorForm({
       if (result.galleryUploaded.length > 0) {
         const uploadedKeys = new Set(result.galleryUploaded.map((pending) => pending.key))
         setPendingGalleryFiles((current) =>
-          current.filter((pending) => {
-            if (!uploadedKeys.has(pending.key)) return true
-            revokePreviewUrl(pending.previewUrl)
-            return false
-          }),
+          current.filter((pending) => !uploadedKeys.has(pending.key)),
         )
       }
       if (result.mainPhotoSaved) setMainPhotoDraft(undefined)
@@ -744,7 +780,10 @@ function EditorForm({
                                     name: isolateBidi(label),
                                   })}
                                   title={t('vehicles.delete')}
-                                  onClick={() => setPhotoToDelete(photo)}
+                                  onClick={(event) => {
+                                    photoDeleteTriggerRef.current = event.currentTarget
+                                    setPhotoToDelete(photo)
+                                  }}
                                 >
                                   <Trash2 className="h-3.5 w-3.5" aria-hidden />
                                 </Button>
@@ -773,13 +812,10 @@ function EditorForm({
                     setPendingGalleryFiles((current) => [
                       ...current,
                       ...files.map((file) => {
-                        const previewUrl = URL.createObjectURL(file)
-                        activePreviewUrls.current.add(previewUrl)
                         pendingGallerySequence.current += 1
                         return {
                           key: pendingGallerySequence.current,
                           file,
-                          previewUrl,
                         }
                       }),
                     ])
@@ -798,42 +834,16 @@ function EditorForm({
               {pendingGalleryFiles.length > 0 && (
                 <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                   {pendingGalleryFiles.map((pending) => (
-                    <li
+                    <PendingGalleryFileRow
                       key={pending.key}
-                      className="flex min-w-0 items-center gap-2 rounded-lg border border-border bg-surface-raised p-2"
-                    >
-                      <img
-                        src={pending.previewUrl}
-                        alt={t('vehicles.pendingPhotoPreview', {
-                          name: isolateBidi(pending.file.name),
-                        })}
-                        className="h-14 w-16 shrink-0 rounded-md object-cover"
-                      />
-                      <span className="min-w-0 flex-1 truncate text-xs text-foreground" dir="auto">
-                        {pending.file.name}
-                      </span>
-                      <Button
-                        type="button"
-                        size="icon-sm"
-                        variant="ghost"
-                        disabled={busy}
-                        aria-label={t('vehicles.removePendingPhoto', {
-                          name: isolateBidi(pending.file.name),
-                        })}
-                        title={t('common.remove')}
-                        onClick={() =>
-                          setPendingGalleryFiles((current) =>
-                            current.filter((file) => {
-                              if (file.key !== pending.key) return true
-                              revokePreviewUrl(file.previewUrl)
-                              return false
-                            }),
-                          )
-                        }
-                      >
-                        <X className="h-3.5 w-3.5" aria-hidden />
-                      </Button>
-                    </li>
+                      pending={pending}
+                      disabled={busy}
+                      onRemove={() =>
+                        setPendingGalleryFiles((current) =>
+                          current.filter((file) => file.key !== pending.key),
+                        )
+                      }
+                    />
                   ))}
                 </ul>
               )}
@@ -874,6 +884,7 @@ function EditorForm({
             if (photoToDelete) deletePhoto.mutate(photoToDelete)
             setPhotoToDelete(null)
           }}
+          returnFocusRef={photoDeleteTriggerRef}
         />
       )}
     </div>

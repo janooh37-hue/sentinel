@@ -1,3 +1,4 @@
+import { StrictMode } from 'react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
@@ -113,11 +114,11 @@ function baseVehicle(overrides: Partial<VehicleRead> = {}): VehicleRead {
   } as VehicleRead
 }
 
-function renderEditor(vehicleId = 101) {
+function renderEditor(vehicleId = 101, strict = false) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   })
-  const result = render(
+  const editor = (
     <QueryClientProvider client={client}>
       <I18nextProvider i18n={i18n}>
         <MemoryRouter initialEntries={[`/vehicles/edit/${vehicleId}`]}>
@@ -127,8 +128,9 @@ function renderEditor(vehicleId = 101) {
           </Routes>
         </MemoryRouter>
       </I18nextProvider>
-    </QueryClientProvider>,
+    </QueryClientProvider>
   )
+  const result = render(strict ? <StrictMode>{editor}</StrictMode> : editor)
   return { ...result, client }
 }
 
@@ -380,31 +382,39 @@ describe('VehicleEditPage', () => {
     expect(screen.queryByText('DETAIL PAGE')).not.toBeInTheDocument()
   })
 
-  it('previews each pending gallery file and revokes its object URL on removal and unmount', async () => {
+  it('previews each pending gallery file and revokes every object URL in StrictMode', async () => {
     const user = userEvent.setup()
-    vi.mocked(URL.createObjectURL).mockImplementation(
-      (file) => `blob:${(file as File).name}`,
-    )
+    const createdUrls: string[] = []
+    vi.mocked(URL.createObjectURL).mockImplementation((file) => {
+      const url = `blob:${(file as File).name}-${createdUrls.length + 1}`
+      createdUrls.push(url)
+      return url
+    })
     vi.mocked(api.getVehicle).mockResolvedValue(baseVehicle())
     const first = new File(['first'], 'first.jpg', { type: 'image/jpeg' })
     const second = new File(['second'], 'second.jpg', { type: 'image/jpeg' })
-    const { unmount } = renderEditor()
+    const { unmount } = renderEditor(101, true)
 
     await user.upload(await screen.findByLabelText('Upload gallery photos'), [first, second])
 
-    expect(screen.getByAltText(/first\.jpg/)).toHaveAttribute('src', 'blob:first.jpg')
-    expect(screen.getByAltText(/second\.jpg/)).toHaveAttribute('src', 'blob:second.jpg')
-    expect(URL.createObjectURL).toHaveBeenCalledTimes(2)
+    const firstPreview = screen.getByAltText(/first\.jpg/)
+    const secondPreview = screen.getByAltText(/second\.jpg/)
+    const firstUrl = firstPreview.getAttribute('src')
+    const secondUrl = secondPreview.getAttribute('src')
+    expect(firstUrl).toMatch(/^blob:first\.jpg-/)
+    expect(secondUrl).toMatch(/^blob:second\.jpg-/)
 
     await user.click(screen.getByRole('button', { name: /Remove .*first\.jpg/ }))
 
     expect(screen.queryByAltText(/first\.jpg/)).not.toBeInTheDocument()
-    expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:first.jpg')
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith(firstUrl)
 
     unmount()
 
-    expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:second.jpg')
-    expect(URL.revokeObjectURL).toHaveBeenCalledTimes(2)
+    expect(URL.revokeObjectURL).toHaveBeenCalledWith(secondUrl)
+    expect(
+      vi.mocked(URL.revokeObjectURL).mock.calls.map(([url]) => url).sort(),
+    ).toEqual([...createdUrls].sort())
   })
 
   it('saves only the chosen existing gallery photo pointer', async () => {
@@ -533,11 +543,17 @@ describe('VehicleEditPage', () => {
     )
     const firstRender = renderEditor()
 
-    await user.click(await screen.findByRole('button', { name: /Delete .*gallery\.jpg/ }))
+    const deleteButton = await screen.findByRole('button', { name: /Delete .*gallery\.jpg/ })
+    await user.click(deleteButton)
 
     expect(api.deleteVehicleFile).not.toHaveBeenCalled()
-    const dialog = await screen.findByRole('dialog')
+    let dialog = await screen.findByRole('dialog')
     expect(dialog).toHaveTextContent('Delete gallery photo?')
+    await user.click(within(dialog).getByRole('button', { name: 'Cancel' }))
+    await waitFor(() => expect(deleteButton).toHaveFocus())
+
+    await user.click(deleteButton)
+    dialog = await screen.findByRole('dialog')
     await user.click(within(dialog).getByRole('button', { name: 'Delete photo' }))
 
     expect(
