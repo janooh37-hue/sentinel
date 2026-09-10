@@ -198,6 +198,9 @@ beforeEach(async () => {
     configurable: true,
     value: outputState.print,
   })
+  outputState.print.mockImplementation(() => {
+    window.dispatchEvent(new Event('beforeprint'))
+  })
   await i18n.changeLanguage('en')
   vi.mocked(copyTable).mockResolvedValue()
   vi.mocked(api.vehiclesSummary).mockResolvedValue(SUMMARY)
@@ -336,6 +339,26 @@ describe('VehiclesHubPage', () => {
     expect(outputState.toastSuccess).not.toHaveBeenCalled()
     expect(selected).toBeChecked()
     expect(copyButton).toBeEnabled()
+  })
+
+  it('reports a localized print failure when print returns without starting', async () => {
+    const user = userEvent.setup()
+    outputState.print.mockImplementation(() => undefined)
+    renderPage()
+
+    await screen.findByRole('checkbox', { name: 'Select 14 \\ 58216' })
+    const printButton = screen.getByRole('button', { name: 'Print' })
+    await user.click(printButton)
+
+    await waitFor(() =>
+      expect(outputState.toastError).toHaveBeenCalledWith(
+        'Could not open the print dialog. Try again.',
+      ),
+    )
+    expect(outputState.print).toHaveBeenCalledTimes(1)
+    expect(printButton).toBeEnabled()
+    expect(document.querySelector('.print-vehicle-list')).not.toBeInTheDocument()
+    expect(outputState.toastSuccess).not.toHaveBeenCalled()
   })
 
   it('reports a localized print failure and releases the transient print state', async () => {

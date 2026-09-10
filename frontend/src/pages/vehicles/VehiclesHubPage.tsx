@@ -262,11 +262,23 @@ export function VehiclesHubPage(): React.JSX.Element {
       setPrintPending(true)
       setPrintOutput({ table: vehicleTable, scopeLabel })
     })
+    // Sandboxed or policy-blocked print calls can return normally without
+    // opening a dialog. `beforeprint` confirms only that printing started;
+    // neither it nor `afterprint` can claim a physical print completed.
+    let printStarted = false
+    const markPrintStarted = (): void => {
+      printStarted = true
+    }
+    window.addEventListener('beforeprint', markPrintStarted, { once: true })
     try {
       window.print()
+      if (!printStarted) {
+        toast.error(t('vehicles.output.printFailed'))
+      }
     } catch {
       toast.error(t('vehicles.output.printFailed'))
     } finally {
+      window.removeEventListener('beforeprint', markPrintStarted)
       flushSync(() => {
         setPrintPending(false)
         setPrintOutput(null)
