@@ -96,8 +96,8 @@ export function ImportReviewTable({
   return (
     <div className="mx-auto w-full max-w-[1480px] space-y-4 px-4 pb-24 md:px-6">
       <Card>
-        <CardHeader className="items-start gap-3 md:flex-row md:items-center">
-          <div>
+        <CardHeader className="flex-col items-stretch gap-3 lg:flex-row lg:items-center">
+          <div className="min-w-0 lg:shrink-0">
             <CardTitle className="text-[1em]">{t('vehicles.import.reviewTitle')}</CardTitle>
             <p dir="auto" className="mt-1 text-xs text-muted-foreground">
               {t('vehicles.import.fileSummary', {

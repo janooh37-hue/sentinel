@@ -21,7 +21,7 @@ const PREVIEW_COUNT_KEYS: readonly (keyof VehicleImportCounts)[] = [
 export function ImportPreviewCounts({ counts }: { counts: VehicleImportCounts }): React.JSX.Element {
   const { t, i18n } = useTranslation()
   return (
-    <dl className="grid grid-cols-3 gap-px overflow-hidden rounded-lg border border-border bg-border md:grid-cols-6">
+    <dl className="grid w-full min-w-0 grid-cols-3 gap-px overflow-hidden rounded-lg border border-border bg-border md:grid-cols-6 lg:w-auto lg:flex-1">
       {PREVIEW_COUNT_KEYS.map((key) => (
         <div key={key} className="bg-surface px-3 py-2 text-center">
           <dt className="text-[0.7em] font-medium text-muted-foreground">
