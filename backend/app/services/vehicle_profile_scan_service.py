@@ -63,6 +63,9 @@ def scan_vehicle_profile(data: bytes) -> VehicleProfileScan:
     type_en = fields.get("vehicle_type")
     class_en = fields.get("plate_category")
 
+    # ``reg_expiry`` is the permit parser's intentionally generic legacy key;
+    # a profile licence expiry is safe to suggest only from its explicit label.
+
     scan = VehicleProfileScan(
         plate_code=plate_code,
         plate_number=plate_number,
@@ -77,7 +80,7 @@ def scan_vehicle_profile(data: bytes) -> VehicleProfileScan:
         class_ar=fields.get("class_ar"),
         class_en=class_en,
         license_start=fields.get("license_start"),
-        license_expiry=fields.get("license_expiry") or fields.get("reg_expiry"),
+        license_expiry=fields.get("license_expiry"),
         insurance_expiry=fields.get("insurance_expiry"),
         unmapped=unmapped,
         warnings=["OCR_REVIEW_REQUIRED"],

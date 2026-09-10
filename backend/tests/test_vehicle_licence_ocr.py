@@ -107,3 +107,15 @@ def test_bare_expiry_label_without_registration_or_insurance_qualifier_is_unambi
     assert fields["reg_expiry"] == "2027-03-14"
     assert "license_expiry" not in fields
     assert "insurance_expiry" not in fields
+
+
+def test_insurance_only_expiry_is_not_claimed_as_license_expiry() -> None:
+    fields = extract_vehicle_licence("Insurance Expiry: 12/03/2027")
+    assert fields["insurance_expiry"] == "2027-03-12"
+    assert "license_expiry" not in fields
+
+
+def test_licence_only_expiry_is_read_from_its_explicit_label() -> None:
+    fields = extract_vehicle_licence("Licence Expiry Date: 14/03/2027")
+    assert fields["license_expiry"] == "2027-03-14"
+    assert "insurance_expiry" not in fields

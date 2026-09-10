@@ -182,3 +182,19 @@ def test_scan_vehicle_profile_flags_unparseable_plate_as_unmapped(
     assert scan.plate_code is None
     assert scan.plate_number is None
     assert scan.unmapped["plate_no"] == "A45213"
+
+
+def test_insurance_only_scan_does_not_fabricate_license_expiry(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        vehicle_profile_scan_service,
+        "ocr_bytes_to_text",
+        lambda data: "Insurance Expiry: 12/03/2027\n",
+    )
+
+    scan = vehicle_profile_scan_service.scan_vehicle_profile(b"x")
+
+    assert scan.insurance_expiry is not None
+    assert scan.insurance_expiry.isoformat() == "2027-03-12"
+    assert scan.license_expiry is None
