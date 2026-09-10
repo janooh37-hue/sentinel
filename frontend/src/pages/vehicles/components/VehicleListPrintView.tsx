@@ -1,6 +1,12 @@
 import type { VehicleTableSnapshot } from '../vehicleTable'
 
-const COLUMN_WIDTHS = ['20%', '29%', '17%', '17%', '17%'] as const
+const COLUMNS = [
+  { id: 'plate', width: '20%' },
+  { id: 'vehicle', width: '29%' },
+  { id: 'traffic-code', width: '17%' },
+  { id: 'licence-expiry', width: '17%' },
+  { id: 'fines', width: '17%' },
+] as const
 
 export function VehicleListPrintView(props: {
   table: VehicleTableSnapshot
@@ -21,8 +27,8 @@ export function VehicleListPrintView(props: {
 
       <table dir={table.direction} style={{ tableLayout: 'fixed', width: '100%' }}>
         <colgroup>
-          {COLUMN_WIDTHS.map((width) => (
-            <col key={width} style={{ width }} />
+          {COLUMNS.map((column) => (
+            <col key={column.id} style={{ width: column.width }} />
           ))}
         </colgroup>
         <thead>
