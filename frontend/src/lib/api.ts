@@ -954,6 +954,32 @@ export interface TimesheetMonth {
   sheet?: TimesheetSheet
 }
 
+// Monthly inmate conduct violation register (wayfinder #91) — one month of the
+// six-column register, its two populations, and the group of entries whose
+// nationality is not yet known.
+export type InmateRegisterMonth = components['schemas']['MonthOut']
+export type InmateRegisterEntry = components['schemas']['RegisterEntryOut']
+export type InmateRegisterCounts = components['schemas']['MonthCountsOut']
+export type InmateRegisterUncounted = components['schemas']['UncountedRecordOut']
+export type InmateRegisterArrived = components['schemas']['ArrivedAfterCloseOut']
+export type InmateRegisterBlocking = components['schemas']['BlockingEntryOut']
+export type InmateNationality = components['schemas']['NationalityOut']
+export type InmateNationalityList = components['schemas']['NationalityListOut']
+export type InmateAwaitingClose = components['schemas']['AwaitingCloseOut']
+export type InmateAwaitingMonth = components['schemas']['AwaitingMonthOut']
+export type InmateManualRowIn = components['schemas']['ManualRowIn']
+export type InmateManualRowPatch = components['schemas']['ManualRowPatch']
+export type InmateCompletionIn = components['schemas']['CompletionIn']
+export type InmateRegisterClose = components['schemas']['CloseIn']
+/** The three register groups: two inmate populations plus pending completion. */
+export type InmatePopulation = 'citizens' | 'expats' | 'pending'
+
+/** The month coordinates every register call needs. */
+export interface InmateRegisterMonthParams {
+  year: number
+  month: number
+}
+
 /** A file the caller is expected to save, not preview. */
 export interface DownloadedFile {
   blob: Blob
@@ -2432,6 +2458,75 @@ export const api = {
       `/timesheet/employee/${encodeURIComponent(p.employeeId)}/${p.year}/${p.month}/export${qs({ months: p.months })}`,
       fallbackName,
     ),
+
+  // --- monthly inmate violation register (wayfinder #91) ---
+  /** One Violation month: live entries while open, frozen entries once closed. */
+  getInmateRegisterMonth: (p: InmateRegisterMonthParams) =>
+    request<InmateRegisterMonth>('GET', `/inmate-violations/statistics/${p.year}/${p.month}`),
+  /** The closed inmate nationality list plus the history alias table. */
+  listInmateNationalities: () =>
+    request<InmateNationalityList>('GET', '/inmate-violations/nationalities'),
+  /** Admin-only: ended months that still carry no seal. */
+  getInmateRegisterAwaitingClose: () =>
+    request<InmateAwaitingClose>('GET', '/inmate-violations/statistics/awaiting-close'),
+  /** Admin-only. `force_reason` is required to close over pending entries. */
+  closeInmateRegisterMonth: (p: InmateRegisterMonthParams, body: InmateRegisterClose = {}) =>
+    request<InmateRegisterMonth>(
+      'POST',
+      `/inmate-violations/statistics/${p.year}/${p.month}/close`,
+      body,
+    ),
+  /** Admin-only. The previous seal survives until the month is closed again. */
+  reopenInmateRegisterMonth: (p: InmateRegisterMonthParams) =>
+    request<InmateRegisterMonth>(
+      'POST',
+      `/inmate-violations/statistics/${p.year}/${p.month}/reopen`,
+    ),
+  createInmateManualRow: (p: InmateRegisterMonthParams, body: InmateManualRowIn) =>
+    request<InmateRegisterMonth>(
+      'POST',
+      `/inmate-violations/statistics/${p.year}/${p.month}/manual-rows`,
+      body,
+    ),
+  updateInmateManualRow: (rowId: number, body: InmateManualRowPatch) =>
+    request<InmateRegisterMonth>(
+      'PATCH',
+      `/inmate-violations/statistics/manual-rows/${rowId}`,
+      body,
+    ),
+  deleteInmateManualRow: (rowId: number) =>
+    request<InmateRegisterMonth>(
+      'DELETE',
+      `/inmate-violations/statistics/manual-rows/${rowId}`,
+    ),
+  /** Fill in an uploaded approved copy so its occurrences become countable. */
+  completeInmateImport: (bookId: number, body: InmateCompletionIn) =>
+    request<InmateRegisterMonth>(
+      'POST',
+      `/inmate-violations/statistics/completions/${bookId}`,
+      body,
+    ),
+  /** The register workbook. Downloading NEVER closes the month.
+   *
+   *  `populations` narrows the table blocks; omitted, the server carries every
+   *  group, because an export must not silently drop a filed occurrence.
+   */
+  fetchInmateRegisterExport: (
+    p: InmateRegisterMonthParams & {
+      language?: 'ar' | 'en'
+      populations?: readonly InmatePopulation[]
+    },
+    fallbackName: string,
+  ) => {
+    const query = new URLSearchParams()
+    if (p.language) query.set('language', p.language)
+    for (const key of p.populations ?? []) query.append('populations', key)
+    const suffix = query.size > 0 ? `?${query.toString()}` : ''
+    return fetchAttachment(
+      `/inmate-violations/statistics/${p.year}/${p.month}/export${suffix}`,
+      fallbackName,
+    )
+  },
 
   // --- notifications (Phase 4 LAN) ---
   /** JSON safety-poll fallback; used when EventSource is unavailable. */

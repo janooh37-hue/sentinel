@@ -37,6 +37,7 @@ import { shouldShowNotifyToggle } from './notifyToggle'
 import { GeneratedSaveActions } from './GeneratedSaveActions'
 import { savedGenerationFromJob, type SavedGeneration } from './savedGeneration'
 import { ApprovedViolationUpload } from './ApprovedViolationUpload'
+import { StatisticsTab } from './statistics/StatisticsTab'
 import { SavedRecordActions, type NotificationChoice } from '@/components/books/SavedRecordActions'
 import { api, apiErrorMessage } from '@/lib/api'
 import type {
@@ -90,7 +91,7 @@ import {
 import { WordHandoffDialog } from '@/pages/books/WordHandoffDialog'
 
 type TabValue = 'fields' | 'preview'
-type InmateEntryMode = 'create' | 'upload'
+type InmateEntryMode = 'create' | 'upload' | 'stats'
 
 // Adapter: translate the api response into the shape TemplateForm expects
 function adaptSchema(raw: Awaited<ReturnType<typeof api.getTemplateFields>>): TemplateDetailResponse {
@@ -126,7 +127,7 @@ function formWidthClass(fields: readonly TemplateField[] | undefined): string {
 export function ApplicationPage(): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const isAr = i18n.language.startsWith('ar')
-  const { has } = useCapabilities()
+  const { has, isLoading: capabilitiesLoading } = useCapabilities()
 
   // Per-template email-basket counts → the marker on each gallery tile.
   const { baskets } = useEmailBasket()
@@ -214,7 +215,15 @@ export function ApplicationPage(): React.JSX.Element {
   const [lastSaved, setLastSaved] = useState<
     (SavedGeneration & { notification?: NotificationChoice }) | null
   >(null)
+  const requestedStatsModeRef = useRef(
+    formFromUrl === 'inmate_conduct_violations' && searchParams.get('mode') === 'stats',
+  )
   const [inmateEntryMode, setInmateEntryMode] = useState<InmateEntryMode>('create')
+  useEffect(() => {
+    if (capabilitiesLoading || !requestedStatsModeRef.current) return
+    requestedStatsModeRef.current = false
+    if (has('books.view')) setInmateEntryMode('stats')
+  }, [capabilitiesLoading, has])
   const [approvedImport, setApprovedImport] = useState<ApprovedViolationImportRead | null>(null)
   const [approvedImportBusy, setApprovedImportBusy] = useState(false)
   const approvedImportSuccessRef = useRef<HTMLHeadingElement | null>(null)
@@ -1048,6 +1057,22 @@ export function ApplicationPage(): React.JSX.Element {
                 >
                   {t('application.approvedViolation.uploadApproved')}
                 </Button>
+                {has('books.view') && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={inmateEntryMode === 'stats' ? 'default' : 'ghost'}
+                    aria-pressed={inmateEntryMode === 'stats'}
+                    disabled={approvedImportBusy}
+                    onClick={() => {
+                      if (approvedImportBusy) return
+                      setInmateEntryMode('stats')
+                      setApprovedImport(null)
+                    }}
+                  >
+                    {t('application.approvedViolation.monthlyStatistics')}
+                  </Button>
+                )}
               </div>
             )}
 
@@ -1067,7 +1092,16 @@ export function ApplicationPage(): React.JSX.Element {
                       refNumber={approvedImport.ref_number}
                       detail={t('application.approvedViolation.approvedCopyFiled')}
                     />
-                    <div className="flex justify-end">
+                    <div className="flex flex-wrap justify-end gap-2">
+                      {has('books.view') && (
+                        <Button
+                          type="button"
+                          variant="link"
+                          onClick={() => setInmateEntryMode('stats')}
+                        >
+                          {t('application.approvedViolation.openRegister')}
+                        </Button>
+                      )}
                       <Button
                         type="button"
                         variant="outline"
@@ -1085,8 +1119,13 @@ export function ApplicationPage(): React.JSX.Element {
                 )}
               </section>
             )}
+            {isInmateService && inmateEntryMode === 'stats' && has('books.view') && (
+              <section className="rounded-2xl bg-surface px-4 py-6 sm:px-7">
+                <StatisticsTab />
+              </section>
+            )}
             <section
-              hidden={isInmateService && inmateEntryMode === 'upload'}
+              hidden={isInmateService && inmateEntryMode !== 'create'}
               className="rounded-2xl bg-surface px-4 py-6 sm:px-7"
             >
               {/* Tab strip — Fields / Preview */}

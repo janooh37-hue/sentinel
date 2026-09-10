@@ -56,6 +56,7 @@ import { EmailSyncStatusWidget } from '@/components/dashboard/widgets/EmailSyncS
 import { BooksAwaitingWidget } from '@/pages/dashboard/widgets/BooksAwaitingWidget'
 import { ExpiringSoonWidget } from '@/pages/dashboard/widgets/ExpiringSoonWidget'
 import { PendingDeparturesWidget } from '@/pages/dashboard/widgets/PendingDeparturesWidget'
+import { ViolationMonthsWidget } from '@/pages/dashboard/widgets/ViolationMonthsWidget'
 import { WaitingApprovalsCard } from '@/pages/dashboard/widgets/WaitingApprovalsCard'
 import { WorkforceCoverageSheet } from '@/pages/dashboard/widgets/WorkforceCoverageSheet'
 import { WorkforcePulseWidget } from '@/pages/dashboard/widgets/WorkforcePulseWidget'
@@ -404,6 +405,8 @@ export function DashboardPage({ onNavigate }: DashboardPageProps): React.JSX.Ele
         return <ExpiringSoonWidget />
       case 'pending_departures':
         return <PendingDeparturesWidget />
+      case 'violation_months':
+        return <ViolationMonthsWidget />
       case 'workforce_pulse':
         return <WorkforcePulseWidget onOpenCoverage={() => setCoverageOpen(true)} />
       case 'on_leave_today':

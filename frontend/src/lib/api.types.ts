@@ -1380,6 +1380,176 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/inmate-violations/nationalities": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Nationalities
+         * @description The closed inmate nationality list, for the entry form and the register.
+         */
+        get: operations["list_nationalities_api_v1_inmate_violations_nationalities_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/inmate-violations/statistics/awaiting-close": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Awaiting Close
+         * @description Ended months that still carry no seal, with what blocks each one.
+         */
+        get: operations["awaiting_close_api_v1_inmate_violations_statistics_awaiting_close_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/inmate-violations/statistics/{year}/{month}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Month */
+        get: operations["get_month_api_v1_inmate_violations_statistics__year___month__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/inmate-violations/statistics/{year}/{month}/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export Month
+         * @description Download the register workbook. This never closes or re-closes a month.
+         *
+         *     ``populations`` narrows the table blocks; omitted, every group is carried,
+         *     because an export that silently omits a filed occurrence is the one failure
+         *     this register cannot have.
+         */
+        get: operations["export_month_api_v1_inmate_violations_statistics__year___month__export_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/inmate-violations/statistics/{year}/{month}/close": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Close Month */
+        post: operations["close_month_api_v1_inmate_violations_statistics__year___month__close_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/inmate-violations/statistics/{year}/{month}/reopen": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reopen Month */
+        post: operations["reopen_month_api_v1_inmate_violations_statistics__year___month__reopen_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/inmate-violations/statistics/{year}/{month}/manual-rows": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Manual Row */
+        post: operations["create_manual_row_api_v1_inmate_violations_statistics__year___month__manual_rows_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/inmate-violations/statistics/manual-rows/{row_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Manual Row */
+        delete: operations["delete_manual_row_api_v1_inmate_violations_statistics_manual_rows__row_id__delete"];
+        options?: never;
+        head?: never;
+        /** Update Manual Row */
+        patch: operations["update_manual_row_api_v1_inmate_violations_statistics_manual_rows__row_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/inmate-violations/statistics/completions/{book_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Complete Import
+         * @description Fill in an uploaded approved copy so its occurrences become countable.
+         */
+        post: operations["complete_import_api_v1_inmate_violations_statistics_completions__book_id__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/templates": {
         parameters: {
             query?: never;
@@ -5791,6 +5961,25 @@ export interface components {
              */
             is_default: boolean;
         };
+        /**
+         * ArrivedAfterCloseOut
+         * @description An occurrence edited into this month after it was sealed.
+         */
+        ArrivedAfterCloseOut: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /**
+             * Violation Date
+             * Format: date
+             */
+            violation_date: string;
+            /** Ref Number */
+            ref_number: string | null;
+            /** Source Book Id */
+            source_book_id: number | null;
+        };
         /** AttachmentSlotRead */
         AttachmentSlotRead: {
             /** Key */
@@ -6111,6 +6300,38 @@ export interface components {
              * Format: date-time
              */
             ts: string;
+        };
+        /**
+         * AwaitingCloseOut
+         * @description Ended months with entries and no seal. A standing state, not an event.
+         */
+        AwaitingCloseOut: {
+            /** Months */
+            months: components["schemas"]["AwaitingMonthOut"][];
+            /** Count */
+            count: number;
+        };
+        /** AwaitingMonthOut */
+        AwaitingMonthOut: {
+            /** Year */
+            year: number;
+            /** Month */
+            month: number;
+            /** Row Count */
+            row_count: number;
+            /** Pending Count */
+            pending_count: number;
+            /** Closable */
+            closable: boolean;
+        };
+        /** BlockingEntryOut */
+        BlockingEntryOut: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Missing */
+            missing: string[];
         };
         /** Body_add_attachment_api_v1_ledger__entry_id__attachments_post */
         Body_add_attachment_api_v1_ledger__entry_id__attachments_post: {
@@ -6749,6 +6970,14 @@ export interface components {
             /** Unit Ar */
             unit_ar: string;
         };
+        /**
+         * CloseIn
+         * @description A close over entries pending completion needs a recorded reason.
+         */
+        CloseIn: {
+            /** Force Reason */
+            force_reason?: string | null;
+        };
         /** CompletenessRead */
         CompletenessRead: {
             /** Filled */
@@ -6766,6 +6995,33 @@ export interface components {
             top_missing: components["schemas"]["MissingFieldCount"][];
             /** First Incomplete Id */
             first_incomplete_id: string | null;
+        };
+        /**
+         * CompletionIn
+         * @description ``report_time``, ``reporter_id`` and the narrative are the save gate.
+         */
+        CompletionIn: {
+            /** Report Time */
+            report_time: string;
+            /** Reporter Id */
+            reporter_id: string;
+            /** Violation Details */
+            violation_details: string;
+            /** Inmates */
+            inmates: components["schemas"]["CompletionInmateIn"][];
+        };
+        /** CompletionInmateIn */
+        CompletionInmateIn: {
+            /** Name */
+            name: string;
+            /** Uid */
+            uid?: string | null;
+            /** Nationality */
+            nationality?: string | null;
+            /** Wing */
+            wing?: string | null;
+            /** Holding No */
+            holding_no?: string | null;
         };
         /**
          * ConfigurationPatch
@@ -7454,7 +7710,7 @@ export interface components {
              * Id
              * @enum {string}
              */
-            id: "pending" | "workspace" | "violations" | "drafts" | "ledger" | "on_leave_today" | "upcoming_leave" | "recent_docs" | "email_sync_status" | "waiting_approvals" | "expiring_soon" | "recent_ledger" | "pending_departures" | "workforce_pulse";
+            id: "pending" | "workspace" | "violations" | "drafts" | "ledger" | "on_leave_today" | "upcoming_leave" | "recent_docs" | "email_sync_status" | "waiting_approvals" | "expiring_soon" | "recent_ledger" | "pending_departures" | "workforce_pulse" | "violation_months";
             /**
              * Visible
              * @default true
@@ -9630,6 +9886,70 @@ export interface components {
             /** User Id */
             user_id?: number | null;
         };
+        /**
+         * ManualProvenanceOut
+         * @description Why a hand-typed entry exists, and who typed it. Screen only.
+         */
+        ManualProvenanceOut: {
+            /** Row Id */
+            row_id?: number | null;
+            /** Reason */
+            reason?: string | null;
+            /** Created By */
+            created_by?: number | null;
+            /** Created By Name */
+            created_by_name?: string | null;
+            /** Created At */
+            created_at?: string | null;
+        };
+        /** ManualRowIn */
+        ManualRowIn: {
+            /** Name */
+            name: string;
+            /**
+             * Violation Date
+             * Format: date
+             */
+            violation_date: string;
+            /** Reason */
+            reason: string;
+            /** Uid */
+            uid?: string | null;
+            /** Nationality Label */
+            nationality_label?: string | null;
+            /** Wing */
+            wing?: string | null;
+            /** Holding No */
+            holding_no?: string | null;
+            /** Reporter Id */
+            reporter_id?: string | null;
+            /** Details Text */
+            details_text?: string | null;
+        };
+        /**
+         * ManualRowPatch
+         * @description Only the supplied cells change; the rest keep their stored values.
+         */
+        ManualRowPatch: {
+            /** Name */
+            name?: string | null;
+            /** Violation Date */
+            violation_date?: string | null;
+            /** Reason */
+            reason?: string | null;
+            /** Uid */
+            uid?: string | null;
+            /** Nationality Label */
+            nationality_label?: string | null;
+            /** Wing */
+            wing?: string | null;
+            /** Holding No */
+            holding_no?: string | null;
+            /** Reporter Id */
+            reporter_id?: string | null;
+            /** Details Text */
+            details_text?: string | null;
+        };
         /** MarkAllReadResponse */
         MarkAllReadResponse: {
             /** Updated */
@@ -9680,6 +10000,60 @@ export interface components {
             /** Count */
             count: number;
         };
+        /** MonthCountsOut */
+        MonthCountsOut: {
+            /** Citizens */
+            citizens: number;
+            /** Expats */
+            expats: number;
+            /** Pending */
+            pending: number;
+            /** Total */
+            total: number;
+        };
+        /** MonthOut */
+        MonthOut: {
+            /** Year */
+            year: number;
+            /** Month */
+            month: number;
+            /** Closed */
+            closed: boolean;
+            /** Closed At */
+            closed_at: string | null;
+            /** Closed By */
+            closed_by: number | null;
+            /** Closed By Name */
+            closed_by_name: string | null;
+            /** Reopened At */
+            reopened_at: string | null;
+            /** Reopened By */
+            reopened_by: number | null;
+            /** Reopened By Name */
+            reopened_by_name: string | null;
+            /** Force Reason */
+            force_reason: string | null;
+            /** Force Closed */
+            force_closed: boolean;
+            /** Can Close */
+            can_close: boolean;
+            /**
+             * First Closable Date
+             * Format: date
+             */
+            first_closable_date: string;
+            /** Export Ready */
+            export_ready: boolean;
+            counts: components["schemas"]["MonthCountsOut"];
+            /** Entries */
+            entries: components["schemas"]["RegisterEntryOut"][];
+            /** Uncounted */
+            uncounted: components["schemas"]["UncountedRecordOut"][];
+            /** Arrived After Close */
+            arrived_after_close: components["schemas"]["ArrivedAfterCloseOut"][];
+            /** Blocking */
+            blocking: components["schemas"]["BlockingEntryOut"][];
+        };
         /** MyDocumentActivityRead */
         MyDocumentActivityRead: {
             /** Documents Today */
@@ -9693,6 +10067,29 @@ export interface components {
             nationality: string;
             /** Count */
             count: number;
+        };
+        /** NationalityListOut */
+        NationalityListOut: {
+            /** Items */
+            items: components["schemas"]["NationalityOut"][];
+            /** Aliases */
+            aliases: {
+                [key: string]: string;
+            };
+        };
+        /**
+         * NationalityOut
+         * @description One entry of the closed inmate nationality list.
+         */
+        NationalityOut: {
+            /** Code */
+            code: string;
+            /** Label Ar */
+            label_ar: string;
+            /** Label En */
+            label_en: string;
+            /** Selectable */
+            selectable: boolean;
         };
         /** NextShiftRead */
         NextShiftRead: {
@@ -10560,6 +10957,59 @@ export interface components {
             /** Name Ar */
             name_ar: string | null;
         };
+        /** RegisterEntryOut */
+        RegisterEntryOut: {
+            /** Id */
+            id: string;
+            /** Origin */
+            origin: string;
+            /** Row No */
+            row_no: number;
+            /** Population */
+            population: string;
+            /** Name */
+            name: string;
+            /** Uid */
+            uid: string;
+            /** Nationality Label */
+            nationality_label: string;
+            /** Nationality Code */
+            nationality_code: string | null;
+            /**
+             * Violation Date
+             * Format: date
+             */
+            violation_date: string;
+            /** Duty Unit */
+            duty_unit: string;
+            /** Details Text */
+            details_text: string;
+            /** Wing */
+            wing: string;
+            /** Holding No */
+            holding_no: string;
+            /** Reporter Id */
+            reporter_id: string | null;
+            /** Reporter Name */
+            reporter_name: string | null;
+            /** Source Book Id */
+            source_book_id: number | null;
+            /** Source Version No */
+            source_version_no: number | null;
+            /** Source Row Index */
+            source_row_index: number | null;
+            /** Source Ref Number */
+            source_ref_number: string | null;
+            /** Incomplete Marks */
+            incomplete_marks: string[];
+            /** Missing */
+            missing: string[];
+            /** Duplicate Of */
+            duplicate_of: string | null;
+            /** Completion Book Id */
+            completion_book_id: number | null;
+            manual: components["schemas"]["ManualProvenanceOut"] | null;
+        };
         /**
          * RegisterRequest
          * @description Request-access (or bootstrap-admin) payload.
@@ -11415,6 +11865,18 @@ export interface components {
         TransferAdminRequest: {
             /** Employee Id */
             employee_id: string;
+        };
+        /**
+         * UncountedRecordOut
+         * @description A filed Record that belongs to no Violation month.
+         */
+        UncountedRecordOut: {
+            /** Book Id */
+            book_id: number;
+            /** Ref Number */
+            ref_number: string;
+            /** Reason */
+            reason: string;
         };
         /** UnreadCountResponse */
         UnreadCountResponse: {
@@ -15830,6 +16292,356 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_nationalities_api_v1_inmate_violations_nationalities_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NationalityListOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    awaiting_close_api_v1_inmate_violations_statistics_awaiting_close_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AwaitingCloseOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_month_api_v1_inmate_violations_statistics__year___month__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                year: number;
+                month: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MonthOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_month_api_v1_inmate_violations_statistics__year___month__export_get: {
+        parameters: {
+            query?: {
+                language?: string;
+                populations?: string[] | null;
+            };
+            header?: never;
+            path: {
+                year: number;
+                month: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    close_month_api_v1_inmate_violations_statistics__year___month__close_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                year: number;
+                month: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CloseIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MonthOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reopen_month_api_v1_inmate_violations_statistics__year___month__reopen_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                year: number;
+                month: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MonthOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_manual_row_api_v1_inmate_violations_statistics__year___month__manual_rows_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                year: number;
+                month: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ManualRowIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MonthOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_manual_row_api_v1_inmate_violations_statistics_manual_rows__row_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                row_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MonthOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_manual_row_api_v1_inmate_violations_statistics_manual_rows__row_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                row_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ManualRowPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MonthOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    complete_import_api_v1_inmate_violations_statistics_completions__book_id__post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                book_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CompletionIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MonthOut"];
                 };
             };
             /** @description Validation Error */

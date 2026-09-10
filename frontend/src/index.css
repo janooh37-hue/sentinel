@@ -2111,3 +2111,58 @@ body {
 [data-org-tree-fullscreen-host]:fullscreen { height: 100%; border: 0; border-radius: 0; box-shadow: none; }
 [data-org-tree-fullscreen-host]:fullscreen > nav, [data-org-tree-fullscreen-host]:fullscreen > section { height: 100%; align-items: stretch; }
 [data-org-tree-fullscreen-host]:fullscreen .org-tree-view { height: 100%; }
+
+/* Monthly inmate violation register: named A4 pages keep the selected physical
+   orientation while all console chrome remains under data-print-hide. */
+@media print {
+  @page inmate-register-landscape {
+    size: A4 landscape;
+    margin: 8mm;
+  }
+
+  @page inmate-register-portrait {
+    size: A4 portrait;
+    margin: 8mm;
+  }
+
+  .print-inmate-register-landscape {
+    page: inmate-register-landscape;
+  }
+
+  .print-inmate-register-portrait {
+    page: inmate-register-portrait;
+  }
+
+  .print-inmate-register {
+    display: block !important;
+    width: 100% !important;
+    padding: 0 !important;
+    color: #000 !important;
+    box-shadow: none !important;
+  }
+
+  #root .print-inmate-register {
+    background: #fff !important;
+  }
+
+  #root .print-inmate-register .print-inmate-register-band {
+    background: #c00000 !important;
+    color: #fff !important;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+
+  .print-inmate-register thead {
+    display: table-header-group;
+  }
+
+  .print-inmate-register tfoot {
+    display: table-row-group;
+  }
+
+  .print-inmate-register tr,
+  .print-inmate-register .break-inside-avoid {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+}

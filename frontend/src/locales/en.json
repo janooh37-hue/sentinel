@@ -2762,7 +2762,9 @@
         "saveFailed": "Could not save the approved record. Try again.",
         "expired": "This upload expired. Choose the file again.",
         "metadataRequired": "Confirm the report date, at least one inmate name, and the Record subject."
-      }
+      },
+      "monthlyStatistics": "Monthly statistics",
+      "openRegister": "Open the monthly register"
     },
     "formCard": {
       "fallbackTitle": "Form",
@@ -3108,7 +3110,8 @@
       "expiring_soon": "Expiring Soon",
       "recent_ledger": "Recent Ledger",
       "pending_departures": "Pending Departures",
-      "workforce_pulse": "Workforce Pulse"
+      "workforce_pulse": "Workforce Pulse",
+      "violation_months": "Months awaiting close"
     },
     "quickActionLabels": {
       "general_book": "General Book",
@@ -4595,5 +4598,228 @@
     "empty": "No attendance rows for this day yet.",
     "notStartedHint": "This window has not opened yet, so nothing is missing.",
     "loadFailed": "Attendance could not be loaded."
+  },
+  "inmateStats": {
+    "title": "Monthly statistics",
+    "subtitle": "The inmate violations register for one month",
+    "views": {
+      "register": "Register",
+      "export": "Export"
+    },
+    "month": {
+      "label": "Month",
+      "open": "Open",
+      "closed": "Closed",
+      "previous": "Previous month",
+      "next": "Next month"
+    },
+    "populations": {
+      "citizens": "Citizens",
+      "expats": "Non-citizens",
+      "pending": "Pending completion"
+    },
+    "counts": {
+      "perTable": "Violations",
+      "monthTotal": "Month total",
+      "documentTotal": "Total violations this month"
+    },
+    "columns": {
+      "no": "No.",
+      "name": "Name",
+      "uid": "Unified No.",
+      "nationality": "Nationality",
+      "date": "Violation date",
+      "dutyUnit": "Duty company",
+      "details": "Violation details"
+    },
+    "index": {
+      "expandColumns": "Show all columns",
+      "collapseColumns": "Hide the details column",
+      "empty": "No violations recorded in this month.",
+      "emptyPopulation": "No entries in this table.",
+      "selectRow": "Select an entry to view it"
+    },
+    "inspector": {
+      "title": "Entry detail",
+      "empty": "Select an entry from the list to see its full record.",
+      "record": "Record",
+      "openRecord": "Open the Record",
+      "manualBadge": "Manual entry",
+      "manualReason": "Reason for the manual entry",
+      "createdBy": "Added by {{name}} on {{date}}",
+      "wing": "Wing",
+      "holdingNo": "Holding no.",
+      "reporter": "Reporting employee",
+      "derivedReadOnly": "Derived entries cannot be edited — correct the Record instead.",
+      "closedReadOnly": "The month is closed; reopening it is the only correction path.",
+      "incompleteMark": "Missing value",
+      "pendingCompletion": "Pending completion"
+    },
+    "sealed": {
+      "strip": "Closed month",
+      "closedAt": "Closed on",
+      "closedBy": "Closed by",
+      "forced": "Administrative close over incomplete entries",
+      "reason": "Reason for the administrative close",
+      "live": "Live projection — may change after printing"
+    },
+    "actions": {
+      "addManual": "Add a manual entry",
+      "edit": "Edit",
+      "delete": "Delete",
+      "save": "Save",
+      "cancel": "Cancel",
+      "close": "Close the month",
+      "reopen": "Reopen the month",
+      "forceClose": "Close over incomplete entries",
+      "complete": "Complete the record"
+    },
+    "close": {
+      "title": "Close the Violation month",
+      "confirm": "Confirm close",
+      "notEnded": "A month that has not ended cannot be closed — first eligible date {{date}}.",
+      "blockingTitle": "Entries blocking the close",
+      "blockingHint": "Complete these entries, or close the month administratively with a recorded reason.",
+      "reasonLabel": "Reason for the administrative close",
+      "reasonRequired": "A reason is required to close over incomplete entries.",
+      "reopenTitle": "Reopen a closed month",
+      "reopenHint": "The previous close's entries stay until the month is closed again.",
+      "reopenConfirm": "Confirm reopen",
+      "otherOpenMonths": "Other months are still open: {{months}}"
+    },
+    "warnings": {
+      "title": "Month warnings",
+      "show": "Show warnings",
+      "hide": "Hide warnings",
+      "uncounted": "Records not counted",
+      "uncountedReason": {
+        "no_violation_date": "The Record has no violation date, so it belongs to no month."
+      },
+      "duplicates": "Duplicate manual entries",
+      "duplicatesHint": "A manual entry shares its date and name with a derived entry. The only action offered is deleting the manual entry.",
+      "arrivedAfterClose": "Arrived after close",
+      "arrivedAfterCloseHint": "Occurrences moved into this month after it was sealed. They enter neither the frozen entries nor the counts; a reopen is the fix."
+    },
+    "missing": {
+      "nationality": "Nationality required",
+      "details": "Violation details required"
+    },
+    "manualForm": {
+      "createTitle": "New manual entry",
+      "editTitle": "Edit the manual entry",
+      "name": "Inmate name",
+      "violationDate": "Violation date",
+      "reason": "Reason for the manual entry",
+      "reasonHint": "Why does this entry exist with no Record behind it?",
+      "uid": "Unified no.",
+      "nationality": "Nationality",
+      "wing": "Wing",
+      "holdingNo": "Holding no.",
+      "reporter": "Reporting employee",
+      "reporterHint": "The duty company is derived from the reporter's unit on the violation date.",
+      "details": "Violation details",
+      "detailsHint": "Required before the month closes, not required to save.",
+      "deleteTitle": "Delete the manual entry",
+      "deleteConfirm": "The entry will be removed from the register for good. Delete it?",
+      "required": "This field is required.",
+      "dateOutsideMonth": "The violation date must fall inside the month shown."
+    },
+    "completion": {
+      "title": "Complete the approved-copy record",
+      "hint": "The scan is the source; fill in what it shows.",
+      "reportTime": "Violation time",
+      "reporter": "Reporting employee",
+      "details": "Violation details",
+      "inmates": "Inmates",
+      "addLine": "Add an inmate",
+      "removeLine": "Remove the line",
+      "required": "Violation time, reporting employee and details are required to save.",
+      "nationalityGate": "Nationality is not required to save, and is required to close the month.",
+      "lockedHint": "This entry was closed administratively with values missing. Reopening the month is the only correction path."
+    },
+    "export": {
+      "title": "Export the register",
+      "subtitle": "Each method declares what it carries and what it loses.",
+      "methods": {
+        "copy": "Copy as a table",
+        "copyCarries": "A styled HTML table with a plain-text twin for Excel or Word.",
+        "copyLoses": "No masthead, no signatures, and no count lines.",
+        "print": "Print / PDF",
+        "printCarries": "The full official A4 paper: masthead, tables, counts, signatures.",
+        "printLoses": "It produces no sortable data file.",
+        "xlsx": "XLSX file",
+        "xlsxCarries": "Data worksheets plus a summary, ready to send.",
+        "xlsxLoses": "It carries neither the paper layout nor the signatures.",
+        "xlsxNeverCloses": "Downloading the file never closes the month."
+      },
+      "options": {
+        "title": "Export options",
+        "scope": "Tables included",
+        "scopeHint": "Excluding a table means recorded violations will not reach the file.",
+        "language": "Document language",
+        "languageAr": "Arabic",
+        "languageEn": "English",
+        "counts": "Show the count lines",
+        "orientation": "Paper orientation",
+        "landscape": "Landscape",
+        "portrait": "Portrait",
+        "detailMode": "Details column",
+        "detailReference": "Reference to the Record",
+        "detailFull": "Full narrative",
+        "willReach": "What reaches the file",
+        "willReachLine": "{{rows}} entries · {{derived}} derived · {{manual}} manual · {{tables}} tables",
+        "dropped": "Excluded: {{tables}}"
+      },
+      "preview": "Document preview",
+      "zoom": "Zoom",
+      "fit": "Fit",
+      "copied": "The table was copied to the clipboard.",
+      "printSent": "The register was sent to print.",
+      "downloaded": "The register file was downloaded.",
+      "referenceCell": "See Record {{ref}}"
+    },
+    "document": {
+      "titleAr": "سجل مخالفات المحتجزين الشهري",
+      "titleEn": "Monthly Inmate Violations Register",
+      "authority": "United Arab Emirates — Abu Dhabi Police GHQ — Security Guards",
+      "month": "Month",
+      "period": "Period",
+      "generated": "Generated",
+      "reference": "Document reference",
+      "derivedCount": "Derived entries",
+      "manualCount": "Manual entries",
+      "incompleteCount": "Incomplete entries",
+      "preparedBy": "Prepared by",
+      "checkedBy": "Checked by",
+      "approvedBy": "Approved by",
+      "pendingSection": "Entries pending completion"
+    },
+    "awaiting": {
+      "empty": "No ended month is awaiting close.",
+      "closable": "Ready to close",
+      "blocked": "Pending completion: {{count}}",
+      "rows_one": "{{count}} entry",
+      "rows_other": "{{count}} entries",
+      "open": "Open the register",
+      "more": "More months awaiting close: {{count}}"
+    },
+    "toasts": {
+      "created": "The manual entry was added.",
+      "updated": "The manual entry was updated.",
+      "deleted": "The manual entry was deleted.",
+      "closed": "The month was closed.",
+      "reopened": "The month was reopened.",
+      "completed": "The approved-copy record was completed."
+    },
+    "nationalityPicker": {
+      "label": "Nationality",
+      "placeholder": "Select a nationality",
+      "search": "Search for a country",
+      "empty": "No matching result.",
+      "loading": "Loading the list…",
+      "loadError": "The nationality list could not be loaded.",
+      "unresolved": "The filed nationality does not match the list — pick the correct value.",
+      "clear": "Clear the selection"
+    }
   }
 }
