@@ -190,7 +190,7 @@ def _inject_vml_note_image(data: bytes, *, row_number: int, image_data: bytes) -
     return output.getvalue()
 
 
-def _legacy_workbook(*, class_name: str = "فئة اختبار") -> bytes:
+def _legacy_workbook(*, class_name: str = "مركبة خفيفة") -> bytes:
     from openpyxl import Workbook
 
     workbook = Workbook()
