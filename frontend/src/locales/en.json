@@ -1144,6 +1144,7 @@
     "useAsMainPhoto": "Use as main photo",
     "useFileAsMainPhoto": "Use {{name}} as main photo",
     "selectedAsMainPhoto": "Selected as main photo",
+    "selectedFileAsMainPhoto": "{{name}} selected as main photo",
     "removeMainPhoto": "Remove main photo",
     "keepMainPhoto": "Keep main photo",
     "mainPhotoRemovalPending": "Main photo will be removed when you save.",

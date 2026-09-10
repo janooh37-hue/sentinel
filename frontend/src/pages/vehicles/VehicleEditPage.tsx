@@ -719,9 +719,13 @@ function EditorForm({
                                 size="sm"
                                 variant={selected ? 'secondary' : 'ghost'}
                                 disabled={busy || selected}
-                                aria-label={t('vehicles.useFileAsMainPhoto', {
-                                  name: isolateBidi(label),
-                                })}
+                                aria-pressed={selected}
+                                aria-label={t(
+                                  selected
+                                    ? 'vehicles.selectedFileAsMainPhoto'
+                                    : 'vehicles.useFileAsMainPhoto',
+                                  { name: isolateBidi(label) },
+                                )}
                                 onClick={() => setMainPhotoDraft(photo.id)}
                               >
                                 <Star className="h-3.5 w-3.5" aria-hidden />

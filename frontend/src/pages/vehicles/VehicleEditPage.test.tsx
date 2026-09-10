@@ -436,6 +436,38 @@ describe('VehicleEditPage', () => {
     expect(api.updateVehicle).toHaveBeenCalledTimes(1)
   })
 
+  it('does not save a dangling main-photo draft after that gallery file is deleted', async () => {
+    const user = userEvent.setup()
+    const gallery = vehicleFile(3, 'gallery', 'gallery.jpg')
+    vi.mocked(api.getVehicle).mockResolvedValue(baseVehicle({ photos: [gallery] }))
+    vi.mocked(api.deleteVehicleFile).mockResolvedValue(undefined)
+    renderEditor()
+
+    await user.click(
+      await screen.findByRole('button', { name: /Use .*gallery\.jpg.* as main photo/ }),
+    )
+    expect(
+      screen.getByRole('button', { name: /gallery\.jpg.* selected as main photo/ }),
+    ).toHaveAttribute('aria-pressed', 'true')
+
+    await user.click(screen.getByRole('button', { name: /Delete .*gallery\.jpg/ }))
+    await user.click(
+      within(await screen.findByRole('dialog')).getByRole('button', {
+        name: 'Delete photo',
+      }),
+    )
+    await waitFor(() =>
+      expect(screen.queryByRole('img', { name: 'gallery.jpg' })).not.toBeInTheDocument(),
+    )
+
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    await screen.findByText('DETAIL PAGE')
+    expect(api.updateVehicle).not.toHaveBeenCalledWith(101, {
+      photo_file_id: gallery.id,
+    })
+  })
+
   it('retries only a failed main-photo pointer after the scalar profile has landed', async () => {
     const user = userEvent.setup()
     const gallery = vehicleFile(3, 'gallery', 'gallery.jpg')

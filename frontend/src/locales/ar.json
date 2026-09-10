@@ -1236,6 +1236,7 @@
     "useAsMainPhoto": "استخدام كصورة رئيسية",
     "useFileAsMainPhoto": "استخدام {{name}} كصورة رئيسية",
     "selectedAsMainPhoto": "تم اختيارها كصورة رئيسية",
+    "selectedFileAsMainPhoto": "تم اختيار {{name}} كصورة رئيسية",
     "removeMainPhoto": "إزالة الصورة الرئيسية",
     "keepMainPhoto": "الإبقاء على الصورة الرئيسية",
     "mainPhotoRemovalPending": "ستتم إزالة الصورة الرئيسية عند الحفظ.",
