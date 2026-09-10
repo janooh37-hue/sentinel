@@ -287,30 +287,28 @@ function PendingGalleryFileRow({
   onRemove: () => void
 }): React.JSX.Element {
   const { t } = useTranslation()
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+  const previewRef = useRef<HTMLImageElement>(null)
 
   useEffect(() => {
+    const image = previewRef.current
+    if (!image) return
     const url = URL.createObjectURL(pending.file)
-    setPreviewUrl(url)
-    return () => URL.revokeObjectURL(url)
+    image.src = url
+    return () => {
+      image.removeAttribute('src')
+      URL.revokeObjectURL(url)
+    }
   }, [pending.file])
 
   return (
     <li className="flex min-w-0 items-center gap-2 rounded-lg border border-border bg-surface-raised p-2">
-      {previewUrl ? (
-        <img
-          src={previewUrl}
-          alt={t('vehicles.pendingPhotoPreview', {
-            name: isolateBidi(pending.file.name),
-          })}
-          className="h-14 w-16 shrink-0 rounded-md object-cover"
-        />
-      ) : (
-        <span
-          aria-hidden
-          className="h-14 w-16 shrink-0 rounded-md bg-surface-tinted"
-        />
-      )}
+      <img
+        ref={previewRef}
+        alt={t('vehicles.pendingPhotoPreview', {
+          name: isolateBidi(pending.file.name),
+        })}
+        className="h-14 w-16 shrink-0 rounded-md bg-surface-tinted object-cover"
+      />
       <span className="min-w-0 flex-1 truncate text-xs text-foreground" dir="auto">
         {pending.file.name}
       </span>
