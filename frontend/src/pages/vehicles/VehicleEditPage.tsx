@@ -471,7 +471,7 @@ function EditorForm({
 
       if (result.failures.length > 0) {
         const summary = t('vehicles.filesFailedAfterSave', {
-          count: isolateBidi(String(result.failures.length)),
+          count: result.failures.length,
         })
         setServerError(summary)
         toast.error(summary)
