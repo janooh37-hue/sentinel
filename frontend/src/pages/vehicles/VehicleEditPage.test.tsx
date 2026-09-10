@@ -10,6 +10,7 @@ import type { VehicleFileRead, VehicleRead, VehicleSiteRead, VehicleUpdate } fro
 import i18n from '@/lib/i18n'
 
 import { VehicleEditPage } from './VehicleEditPage'
+import { VEHICLE_QUERY_KEYS } from './vehicleUtils'
 
 vi.mock('@/lib/useCapabilities', () => ({
   useCapabilities: () => ({
@@ -27,6 +28,7 @@ vi.mock('@/lib/api', async (importOriginal) => {
     ...mod,
     api: {
       ...mod.api,
+      createVehicle: vi.fn(),
       getVehicle: vi.fn(),
       listVehicleSites: vi.fn(),
       updateVehicle: vi.fn(),
@@ -94,7 +96,7 @@ function renderEditor(vehicleId = 101) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   })
-  return render(
+  const result = render(
     <QueryClientProvider client={client}>
       <I18nextProvider i18n={i18n}>
         <MemoryRouter initialEntries={[`/vehicles/edit/${vehicleId}`]}>
@@ -106,6 +108,7 @@ function renderEditor(vehicleId = 101) {
       </I18nextProvider>
     </QueryClientProvider>,
   )
+  return { ...result, client }
 }
 
 beforeEach(async () => {
@@ -235,6 +238,101 @@ describe('VehicleEditPage', () => {
     expect(api.updateVehicle).toHaveBeenCalledTimes(1)
     expect(api.uploadVehicleFile).toHaveBeenCalledTimes(3)
     expect(attemptedFiles).toEqual(['saved.jpg', 'failed.jpg', 'failed.jpg'])
+  })
+
+  it('invalidates landed writes and retries only a failed licence attachment', async () => {
+    const user = userEvent.setup()
+    const vehicle = baseVehicle()
+    const replacement = new File(['replacement'], 'replacement-license.pdf', {
+      type: 'application/pdf',
+    })
+    const uploaded: VehicleFileRead = {
+      id: 601,
+      kind: 'license',
+      label_ar: null,
+      label_en: null,
+      original_name: replacement.name,
+      media_type: replacement.type,
+      url: '/api/vehicles/101/files/601',
+    }
+    const updatedVehicle = { ...vehicle, type_en: 'Toyota Hiace' }
+    vi.mocked(api.getVehicle).mockResolvedValue(vehicle)
+    vi.mocked(api.uploadVehicleFile).mockResolvedValue(uploaded)
+    vi.mocked(api.updateVehicle)
+      .mockResolvedValueOnce(updatedVehicle)
+      .mockRejectedValueOnce(new Error('Attachment interrupted'))
+      .mockResolvedValueOnce({
+        ...updatedVehicle,
+        license_file_id: uploaded.id,
+        license_url: uploaded.url,
+        license_files: [uploaded],
+      })
+    const { client } = renderEditor()
+    const invalidate = vi.spyOn(client, 'invalidateQueries')
+
+    const uploadZone = await screen.findByRole('button', {
+      name: 'Upload new license scan',
+    })
+    const uploadInput = uploadZone.querySelector('input[type="file"]')
+    expect(uploadInput).not.toBeNull()
+    await user.upload(uploadInput as HTMLInputElement, replacement)
+    const typeInput = screen.getByLabelText('Vehicle type in English')
+    await user.clear(typeInput)
+    await user.type(typeInput, 'Toyota Hiace')
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      /Profile saved;.*1 file failed/,
+    )
+    expect(screen.getByText(replacement.name)).toBeInTheDocument()
+    expect(screen.queryByText('DETAIL PAGE')).not.toBeInTheDocument()
+    expect(api.updateVehicle).toHaveBeenCalledTimes(2)
+    expect(api.updateVehicle).toHaveBeenNthCalledWith(1, 101, {
+      type_en: 'Toyota Hiace',
+    })
+    expect(api.updateVehicle).toHaveBeenNthCalledWith(2, 101, {
+      license_file_id: uploaded.id,
+    })
+    expect(api.uploadVehicleFile).toHaveBeenCalledTimes(1)
+    expect(api.uploadVehicleFile).toHaveBeenCalledWith(
+      101,
+      'license',
+      replacement,
+    )
+    expect(api.createVehicle).not.toHaveBeenCalled()
+    expect(invalidate).toHaveBeenCalledTimes(10)
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: VEHICLE_QUERY_KEYS.summary })
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: VEHICLE_QUERY_KEYS.list })
+    expect(invalidate).toHaveBeenCalledWith({
+      queryKey: VEHICLE_QUERY_KEYS.detail(101),
+    })
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: VEHICLE_QUERY_KEYS.sites })
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: VEHICLE_QUERY_KEYS.fines })
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: VEHICLE_QUERY_KEYS.accidents })
+    expect(invalidate).toHaveBeenCalledWith({
+      queryKey: VEHICLE_QUERY_KEYS.maintenance,
+    })
+
+    invalidate.mockClear()
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+
+    await screen.findByText('DETAIL PAGE')
+    expect(api.updateVehicle).toHaveBeenCalledTimes(3)
+    expect(api.updateVehicle).toHaveBeenNthCalledWith(3, 101, {
+      license_file_id: uploaded.id,
+    })
+    expect(api.uploadVehicleFile).toHaveBeenCalledTimes(1)
+    expect(api.createVehicle).not.toHaveBeenCalled()
+    expect(invalidate).toHaveBeenCalledTimes(3)
+    expect(invalidate).toHaveBeenNthCalledWith(1, {
+      queryKey: VEHICLE_QUERY_KEYS.summary,
+    })
+    expect(invalidate).toHaveBeenNthCalledWith(2, {
+      queryKey: VEHICLE_QUERY_KEYS.list,
+    })
+    expect(invalidate).toHaveBeenNthCalledWith(3, {
+      queryKey: VEHICLE_QUERY_KEYS.detail(101),
+    })
   })
 
   it('confirms before leaving when a gallery file is staged', async () => {

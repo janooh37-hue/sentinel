@@ -26,7 +26,7 @@ import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ApiError, api } from '@/lib/api'
 import { isolateBidi } from '@/lib/useCapabilityCatalog'
-import type { VehicleListItem, VehicleRead } from '@/lib/api'
+import type { VehicleListItem, VehicleRead, VehicleUpdate } from '@/lib/api'
 import { useDebouncedValue } from '@/lib/useDebouncedValue'
 
 import {
@@ -149,7 +149,6 @@ function SelectorRow({ vehicle }: { vehicle: VehicleListItem }): React.JSX.Eleme
 function VehicleEditEditor({ vehicleId }: { vehicleId: number }): React.JSX.Element {
   const { t } = useTranslation()
   const navigate = useNavigate()
-  const queryClient = useQueryClient()
   const fieldId = useId()
   const alertId = `${fieldId}-alert`
 
@@ -221,7 +220,6 @@ function VehicleEditEditor({ vehicleId }: { vehicleId: number }): React.JSX.Elem
       fieldId={fieldId}
       alertId={alertId}
       onSaved={(saved) => {
-        invalidateVehicleQueries(queryClient, { vehicleId: saved.id, registers: ['sites'] })
         toast.success(t('vehicles.vehicleUpdated'))
         navigate(`/vehicles/${saved.id}`)
       }}
@@ -242,6 +240,18 @@ type EditorSaveResult = {
   licenceAttached: boolean
   failures: string[]
 }
+
+const VEHICLE_IDENTITY_PATCH_FIELDS: readonly (keyof VehicleUpdate)[] = [
+  'plate_code',
+  'plate_number',
+  'traffic_code',
+  'vin',
+  'type_ar',
+  'type_en',
+  'class_ar',
+  'class_en',
+  'site_id',
+]
 
 function EditorSection({
   title,
@@ -273,6 +283,7 @@ function EditorForm({
 }): React.JSX.Element {
   const { t } = useTranslation()
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const savedVehicleRef = useRef(vehicle)
   const scanRetainedFileRef = useRef<File | null>(null)
   const [serverError, setServerError] = useState<string | null>(null)
@@ -309,6 +320,15 @@ function EditorForm({
       const patch = vehicleUpdatePayload(values, savedVehicle)
       if (Object.keys(patch).length > 0) {
         savedVehicle = await api.updateVehicle(vehicle.id, patch)
+        const identityChanged = VEHICLE_IDENTITY_PATCH_FIELDS.some((field) =>
+          Object.prototype.hasOwnProperty.call(patch, field),
+        )
+        invalidateVehicleQueries(queryClient, {
+          vehicleId: savedVehicle.id,
+          registers: identityChanged
+            ? ['sites', 'fines', 'accidents', 'maintenance']
+            : undefined,
+        })
       }
 
       const galleryUploaded: File[] = []
@@ -316,6 +336,7 @@ function EditorForm({
       for (const file of pendingGalleryFiles) {
         try {
           await api.uploadVehicleFile(vehicle.id, 'gallery', file)
+          invalidateVehicleQueries(queryClient, { vehicleId: vehicle.id })
           galleryUploaded.push(file)
         } catch (err) {
           failures.push(vehicleErrorMessage(err, t))
@@ -328,9 +349,13 @@ function EditorForm({
       if (pendingLicence) {
         if (licenceUploadedFileId == null) {
           try {
-            licenceUploadedFileId = (
-              await api.uploadVehicleFile(vehicle.id, 'license', pendingLicence.file)
-            ).id
+            const uploadedFile = await api.uploadVehicleFile(
+              vehicle.id,
+              'license',
+              pendingLicence.file,
+            )
+            licenceUploadedFileId = uploadedFile.id
+            invalidateVehicleQueries(queryClient, { vehicleId: vehicle.id })
           } catch (err) {
             failures.push(vehicleErrorMessage(err, t))
           }
@@ -340,6 +365,7 @@ function EditorForm({
             savedVehicle = await api.updateVehicle(vehicle.id, {
               license_file_id: licenceUploadedFileId,
             })
+            invalidateVehicleQueries(queryClient, { vehicleId: vehicle.id })
             licenceAttached = true
           } catch (err) {
             failures.push(vehicleErrorMessage(err, t))
@@ -356,9 +382,9 @@ function EditorForm({
         failures,
       }
     },
-    onSuccess: (result, values) => {
+    onSuccess: (result) => {
       savedVehicleRef.current = result.vehicle
-      form.reset(values)
+      form.reset(vehicleFormDefaults(result.vehicle, sites))
       if (result.galleryUploaded.length > 0) {
         setPendingGalleryFiles((current) =>
           current.filter((file) => !result.galleryUploaded.includes(file)),
