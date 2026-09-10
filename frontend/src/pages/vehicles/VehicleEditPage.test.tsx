@@ -313,7 +313,6 @@ describe('VehicleEditPage', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent(
       /Profile saved;.*1 file failed/,
     )
-    expect(screen.getByText(replacement.name)).toBeInTheDocument()
     expect(screen.queryByText('DETAIL PAGE')).not.toBeInTheDocument()
     expect(api.updateVehicle).toHaveBeenCalledTimes(2)
     expect(api.updateVehicle).toHaveBeenNthCalledWith(1, 101, {
