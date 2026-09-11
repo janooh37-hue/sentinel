@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import concurrent.futures
+import copy
 import json
 import threading
 import time
@@ -10,6 +11,7 @@ from collections.abc import Iterator
 from datetime import date
 from uuid import uuid4
 
+import httpx
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
@@ -17,127 +19,401 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_user
 from app.api.errors import EvgError, ValidationFailedError
 from app.core.evg_fines import (
-    EvgTicketDetails,
     EvgTicketRow,
-    has_next_page,
-    parse_ticket_details,
-    parse_tickets_page,
-    plate_code_from_color,
+    parse_tickets_payload,
+    plate_code_from_color_code,
 )
 from app.db.models import AuditLog, User, Vehicle, VehicleFine, VehicleSite
 from app.db.session import get_db
 from app.main import create_app
 from app.schemas.vehicle import EvgConfirmRow
-from app.services import vehicle_evg_jobs, vehicle_evg_service
+from app.services import evg_client, vehicle_evg_jobs, vehicle_evg_service
 
-TICKETS_HTML = """
-<html>
-  <body>
-    <table id="ctl00_cphScrollMenu_gettickets1_ctl00_gvTickets">
-      <tr>
-        <th></th><th>Fine No.</th><th>Date &amp; Time</th><th>Location</th>
-        <th>Plate No.</th><th>Total Amount</th><th>Discount (%)</th>
-        <th>Amount after Discount</th><th>Late Charges</th>
-        <th>Black Points Law</th><th>Fine Type</th>
-      </tr>
-      <tr>
-        <td><input type="checkbox"></td>
-        <td><a onclick="open('ticketdetails.aspx?language=en&amp;Type=Tickets&amp;Page=0&amp;TicketNo=6261776007')">******6007</a></td>
-        <td>20-08-2026 12:37 PM</td><td>Abu Dhabi - Airport Road</td>
-        <td>13695</td><td>600</td><td>0 %</td><td>600</td>
-        <td>0 AED</td><td>4</td><td>Absent</td>
-      </tr>
-      <tr>
-        <td><input type="checkbox"></td>
-        <td><a onclick="showTicket('ticketdetails.aspx?TicketNo=6261776008')">******6008</a></td>
-        <td>21-08-2026</td><td>Al Ain Road</td>
-        <td>13695</td><td>300 AED</td><td>10 %</td><td>270 AED</td>
-        <td>20 AED</td><td></td><td>Absent</td>
-      </tr>
-      <tr>
-        <td><input type="checkbox"></td>
-        <td><a href="#" onclick="location.href='ticketdetails.aspx?TicketNo=6261776009&amp;Page=0'">******6009</a></td>
-        <td>22-08-2026 08:05 AM</td><td>Mussafah</td>
-        <td>99999</td><td>1000</td><td>0 %</td><td>1000</td>
-        <td>0 AED</td><td>12</td><td>Absent</td>
-      </tr>
-      <tr class="pager">
-        <td colspan="11">
-          <a href="javascript:__doPostBack('ctl00$cphScrollMenu$gettickets1$ctl00$gvTickets','Page$2')">2</a>
-        </td>
-      </tr>
-    </table>
-  </body>
-</html>
-"""
+TICKETS_PAYLOAD: dict[str, object] = {
+    "ResponseValue": {
+        "Tickets": [
+            {
+                "TicketID": {
+                    "TicketNo": 8101,
+                    "TicketYear": 2026,
+                    "TicketSourceCode": 1,
+                    "TicketDate": "2026-08-20T00:00:00",
+                    "IsExternalTicket": False,
+                },
+                "TicketTime": "2026-08-20T12:37:20",
+                "TicketType": "A",
+                "LocationDescAr": "طريق المطار التجريبي",
+                "LocationDescEn": "Synthetic Airport Road",
+                "DriverTcfNo": None,
+                "LicenseInfo": None,
+                "PlateInfo": {
+                    "PlateNo": " 55501 ",
+                    "PlateOrgNo": 0,
+                    "PlateColorCode": 72,
+                    "PlateKindCode": 1,
+                    "PlateTypeCode": None,
+                    "PlateSourceCode": 1,
+                },
+                "VehicleOwnerTcfNo": 7770001234,
+                "IsWebPayable": True,
+                "LateCharges": 20.6,
+                "TotalAmount": 600.4,
+                "DiscountRate": 10.4,
+                "TotalAmountAfterDiscount": 540.6,
+                "BlackPoints": 4,
+                "MaterialsList": [
+                    {
+                        "MaterialCode": 1001,
+                        "MaterialArabicDesc": "مخالفة سرعة تجريبية",
+                        "MaterialEnglishDesc": "Synthetic speeding violation",
+                        "MaterialAmount": 300,
+                        "DiscountRate": 10.4,
+                        "AmountAfterDiscount": 270,
+                    },
+                    {
+                        "MaterialCode": 1002,
+                        "MaterialArabicDesc": "مخالفة مسار تجريبية",
+                        "MaterialEnglishDesc": "Synthetic lane violation",
+                        "MaterialAmount": 300,
+                        "DiscountRate": 10.4,
+                        "AmountAfterDiscount": 270,
+                    },
+                ],
+                "TicketStatus": None,
+                "PaymentDate": None,
+            },
+            {
+                "TicketID": {
+                    "TicketNo": 8102,
+                    "TicketYear": 2026,
+                    "TicketSourceCode": 1,
+                    "TicketDate": "2026-08-21T00:00:00",
+                    "IsExternalTicket": False,
+                },
+                "TicketTime": None,
+                "TicketType": "Camera",
+                "LocationDescAr": "موقع تجريبي ثان",
+                "LocationDescEn": "",
+                "PlateInfo": {
+                    "PlateNo": 77702,
+                    "PlateColorCode": 166,
+                },
+                "LateCharges": None,
+                "TotalAmount": 300.6,
+                "DiscountRate": 0.6,
+                "TotalAmountAfterDiscount": None,
+                "BlackPoints": None,
+                "MaterialsList": [
+                    {
+                        "MaterialArabicDesc": "وصف عربي تجريبي",
+                        "MaterialEnglishDesc": None,
+                    },
+                    {
+                        "MaterialArabicDesc": " ",
+                        "MaterialEnglishDesc": "",
+                    },
+                ],
+            },
+            {
+                "TicketID": {
+                    "TicketNo": 8101,
+                    "TicketDate": "2026-08-22T00:00:00",
+                },
+                "TicketTime": "2026-08-22T08:05:00",
+                "TicketType": "A",
+                "LocationDescEn": "Duplicate should be ignored",
+                "PlateInfo": {
+                    "PlateNo": "99991",
+                    "PlateColorCode": 70,
+                },
+                "TotalAmount": 900,
+                "DiscountRate": 0,
+                "TotalAmountAfterDiscount": 900,
+                "LateCharges": 0,
+                "BlackPoints": 0,
+                "MaterialsList": [],
+            },
+            {
+                "TicketID": {
+                    "TicketNo": 8103,
+                    "TicketDate": "2026-08-23T00:00:00",
+                },
+                "TicketTime": "2026-08-23T09:00:00",
+                "TicketType": "A",
+                "LocationDescEn": "Zero amount should be ignored",
+                "PlateInfo": {
+                    "PlateNo": "99992",
+                    "PlateColorCode": 70,
+                },
+                "TotalAmount": 0,
+                "DiscountRate": 0,
+                "TotalAmountAfterDiscount": 0,
+                "LateCharges": 0,
+                "BlackPoints": 0,
+                "MaterialsList": [],
+            },
+            {
+                "TicketID": {
+                    "TicketDate": "2026-08-24T00:00:00",
+                },
+                "TicketTime": "2026-08-24T10:00:00",
+                "TicketType": "A",
+                "LocationDescEn": "Missing number should be ignored",
+                "PlateInfo": {
+                    "PlateNo": "99993",
+                    "PlateColorCode": 70,
+                },
+                "TotalAmount": 500,
+                "DiscountRate": 0,
+                "TotalAmountAfterDiscount": 500,
+                "LateCharges": 0,
+                "BlackPoints": 0,
+                "MaterialsList": [],
+            },
+        ]
+    },
+    "OperationSucceded": True,
+    "ResponseCode": 5,
+    "ResponseCodeMessage": "OperationSucceeded",
+    "Exception": None,
+}
 
 
-DETAILS_HTML = """
-<html>
-  <body>
-    <table id="ticket-facts">
-      <tr><td>Fine No.</td><td>6261776007</td></tr>
-      <tr><td>Date</td><td>20-08-2026</td></tr>
-      <tr><td>Time</td><td>12:37:20 PM</td></tr>
-      <tr><td>Location</td><td>Abu Dhabi - Airport Road</td></tr>
-      <tr><td>Plate No.</td><td>13695</td></tr>
-      <tr><td>Plate Color</td><td>TWENTY-FIRST CATEGORY</td></tr>
-      <tr><td>Owner Traffic No.</td><td>1180021637</td></tr>
-    </table>
-    <table id="violations">
-      <tr><th>Description</th><th>Amount</th><th>Amount after Discount</th></tr>
-      <tr><td>Exceeding the speed limit</td><td>300 AED</td><td>300 AED</td></tr>
-      <tr><td>Failure to keep lane discipline</td><td>300 AED</td><td>300 AED</td></tr>
-    </table>
-  </body>
-</html>
-"""
+def test_parse_tickets_payload_maps_rows_and_skips_unusable() -> None:
+    assert parse_tickets_payload(TICKETS_PAYLOAD) == [
+        EvgTicketRow(
+            ticket_no="8101",
+            date=date(2026, 8, 20),
+            time="12:37",
+            location="Synthetic Airport Road",
+            plate_number="55501",
+            plate_code="21",
+            amount=600,
+            discount_pct=10,
+            amount_after_discount=541,
+            late_charges=21,
+            black_points=4,
+            fine_type="Absent",
+            descriptions=(
+                "Synthetic speeding violation",
+                "Synthetic lane violation",
+            ),
+        ),
+        EvgTicketRow(
+            ticket_no="8102",
+            date=date(2026, 8, 21),
+            time=None,
+            location="موقع تجريبي ثان",
+            plate_number="77702",
+            plate_code=None,
+            amount=301,
+            discount_pct=1,
+            amount_after_discount=None,
+            late_charges=0,
+            black_points=0,
+            fine_type="Camera",
+            descriptions=("وصف عربي تجريبي",),
+        ),
+    ]
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"TotalAmountAfterDiscount": -1},
+        {"BlackPoints": -2},
+        {"LateCharges": -5},
+        {"DiscountRate": -10},
+    ],
+)
+def test_parse_tickets_payload_skips_a_ticket_outside_the_preview_bounds(
+    overrides: dict[str, object],
+) -> None:
+    """One out-of-range ticket is skipped, not allowed to fail the whole preview."""
+
+    tickets = copy.deepcopy(TICKETS_PAYLOAD["ResponseValue"])["Tickets"]  # type: ignore[index]
+    out_of_range = copy.deepcopy(tickets[0])
+    out_of_range["TicketID"]["TicketNo"] = 8109  # type: ignore[index]
+    out_of_range.update(overrides)
+    payload = {**TICKETS_PAYLOAD, "ResponseValue": {"Tickets": [*tickets, out_of_range]}}
+
+    assert parse_tickets_payload(payload) == parse_tickets_payload(TICKETS_PAYLOAD)
+
+
+@pytest.mark.parametrize(
+    ("color_code", "expected"),
+    [
+        (70, "19"),
+        (72, "21"),
+        (52, "1"),
+        (110, "59"),
+        (51, None),
+        (111, None),
+        (166, None),
+        (None, None),
+        ("x", None),
+    ],
+)
+def test_plate_code_from_color_code_maps_verified_range(
+    color_code: object,
+    expected: str | None,
+) -> None:
+    assert plate_code_from_color_code(color_code) == expected
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        [],
+        {"ResponseValue": {"Tickets": "not-a-list"}},
+    ],
+)
+def test_parse_tickets_payload_rejects_an_unusable_envelope(payload: object) -> None:
+    with pytest.raises(ValueError):
+        parse_tickets_payload(payload)
+
+
+def test_fetch_tickets_calls_portal_api_and_returns_mapped_rows(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    requests: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        assert request.method == "GET"
+        assert str(request.url) == ("https://evg.ae/PortalApi/api/UTSTickets/7770001234")
+        return httpx.Response(200, json=TICKETS_PAYLOAD)
+
+    monkeypatch.setattr(evg_client, "_transport", httpx.MockTransport(handler))
+
+    expected = parse_tickets_payload(TICKETS_PAYLOAD)
+    assert evg_client.fetch_tickets("7770001234") == expected
+    assert len(requests) == 1
+
+
+def test_fetch_tickets_retries_once_when_the_edge_stalls_a_request(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """EVG's bot-defence edge stalls a burst instead of answering it."""
+
+    attempts: list[int] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        attempts.append(1)
+        if len(attempts) == 1:
+            raise httpx.ReadTimeout("synthetic edge stall", request=request)
+        return httpx.Response(200, json=TICKETS_PAYLOAD)
+
+    monkeypatch.setattr(evg_client, "_transport", httpx.MockTransport(handler))
+    monkeypatch.setattr(evg_client, "_RETRY_BACKOFF_S", 0.0)
+
+    assert evg_client.fetch_tickets("7770001234") == parse_tickets_payload(TICKETS_PAYLOAD)
+    assert len(attempts) == 2
+
+
+def test_fetch_tickets_gives_up_after_one_retry(monkeypatch: pytest.MonkeyPatch) -> None:
+    attempts: list[int] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        attempts.append(1)
+        raise httpx.ReadTimeout("synthetic edge stall", request=request)
+
+    monkeypatch.setattr(evg_client, "_transport", httpx.MockTransport(handler))
+    monkeypatch.setattr(evg_client, "_RETRY_BACKOFF_S", 0.0)
+
+    with pytest.raises(EvgError) as raised:
+        evg_client.fetch_tickets("7770001234")
+
+    assert raised.value.code == "EVG_UNAVAILABLE"
+    assert len(attempts) == 2
+
+
+@pytest.mark.parametrize(
+    ("case", "expected_fragment"),
+    [
+        ("http_status", "500"),
+        ("invalid_json", None),
+        ("operation_failed", "Synthetic upstream outage reference"),
+        ("transport_error", None),
+    ],
+)
+def test_fetch_tickets_maps_upstream_failures_without_leaking_markup(
+    monkeypatch: pytest.MonkeyPatch,
+    case: str,
+    expected_fragment: str | None,
+) -> None:
+    raw_html = "<!DOCTYPE html><h1>synthetic upstream failure</h1>"
+    upstream_message = (
+        "Synthetic upstream outage reference <b>formatting</b> " + ("x" * 400) + "UNSAFE_TAIL"
+    )
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        if case == "http_status":
+            return httpx.Response(500, text=raw_html)
+        if case == "invalid_json":
+            return httpx.Response(200, text="<not-json>")
+        if case == "operation_failed":
+            return httpx.Response(
+                200,
+                json={
+                    "ResponseValue": {"Tickets": []},
+                    "OperationSucceded": False,
+                    "ResponseCodeMessage": upstream_message,
+                },
+            )
+        raise httpx.ConnectError("synthetic connection refused", request=request)
+
+    monkeypatch.setattr(evg_client, "_transport", httpx.MockTransport(handler))
+    monkeypatch.setattr(evg_client, "_RETRY_BACKOFF_S", 0.0)
+
+    with pytest.raises(EvgError) as raised:
+        evg_client.fetch_tickets("7770001234")
+
+    assert raised.value.code == "EVG_UNAVAILABLE"
+    message = raised.value.message
+    assert "<" not in message
+    assert "doctype" not in message.casefold()
+    assert raw_html not in message
+    if expected_fragment is not None:
+        assert expected_fragment in message
+    if case == "operation_failed":
+        assert "UNSAFE_TAIL" not in message
 
 
 def _ticket(
     ticket_no: str,
     *,
     plate_number: str,
+    time: str | None = None,
+    plate_code: str | None = None,
     amount: int = 600,
-    amount_after_discount: int = 600,
+    amount_after_discount: int | None = 600,
     black_points: int = 4,
-    location: str = "Abu Dhabi - Airport Road",
+    location: str = "Synthetic Airport Road",
+    descriptions: tuple[str, ...] = (),
 ) -> EvgTicketRow:
     return EvgTicketRow(
         ticket_no=ticket_no,
         date=date(2026, 8, 20),
+        time=time,
         location=location,
         plate_number=plate_number,
+        plate_code=plate_code,
         amount=amount,
         discount_pct=0,
         amount_after_discount=amount_after_discount,
         late_charges=0,
         black_points=black_points,
         fine_type="Absent",
-    )
-
-
-def _details(
-    ticket_no: str,
-    *,
-    plate_code: str | None,
-    time: str = "12:37",
-    descriptions: list[str] | None = None,
-) -> EvgTicketDetails:
-    return EvgTicketDetails(
-        ticket_no=ticket_no,
-        time=time,
-        plate_code=plate_code,
-        owner_traffic_no="1180021637",
-        descriptions=descriptions or ["Exceeding the speed limit"],
+        descriptions=descriptions,
     )
 
 
 def _vehicle(site_id: int, *, plate_code: str) -> Vehicle:
     return Vehicle(
         plate_code=plate_code,
-        plate_number="13695",
-        traffic_code="1180021637",
+        plate_number="55501",
+        traffic_code="7770001234",
         type_ar="مركبة اختبار",
         type_en="Test vehicle",
         class_ar="مركبة خفيفة",
@@ -157,8 +433,8 @@ def _confirm_payload(
         "ticket_no": ticket_no,
         "date": "2026-08-24",
         "time": "12:37",
-        "location": "Abu Dhabi",
-        "plate_number": "13695",
+        "location": "Synthetic Airport Road",
+        "plate_number": "55501",
         "plate_code": "21",
         "amount": 600,
         "amount_after_discount": 600,
@@ -219,81 +495,6 @@ def _wait_for_evg_job(
         time.sleep(0.05)
 
 
-def test_parse_tickets_page_returns_exact_rows_and_next_postback() -> None:
-    assert parse_tickets_page(TICKETS_HTML) == [
-        EvgTicketRow(
-            ticket_no="6261776007",
-            date=date(2026, 8, 20),
-            location="Abu Dhabi - Airport Road",
-            plate_number="13695",
-            amount=600,
-            discount_pct=0,
-            amount_after_discount=600,
-            late_charges=0,
-            black_points=4,
-            fine_type="Absent",
-        ),
-        EvgTicketRow(
-            ticket_no="6261776008",
-            date=date(2026, 8, 21),
-            location="Al Ain Road",
-            plate_number="13695",
-            amount=300,
-            discount_pct=10,
-            amount_after_discount=270,
-            late_charges=20,
-            black_points=0,
-            fine_type="Absent",
-        ),
-        EvgTicketRow(
-            ticket_no="6261776009",
-            date=date(2026, 8, 22),
-            location="Mussafah",
-            plate_number="99999",
-            amount=1000,
-            discount_pct=0,
-            amount_after_discount=1000,
-            late_charges=0,
-            black_points=12,
-            fine_type="Absent",
-        ),
-    ]
-    assert has_next_page(TICKETS_HTML) == "Page$2"
-    assert has_next_page(TICKETS_HTML.replace("Page$2", "Current$2")) is None
-
-
-def test_parse_ticket_details_returns_exact_normalized_details() -> None:
-    assert parse_ticket_details(DETAILS_HTML) == EvgTicketDetails(
-        ticket_no="6261776007",
-        time="12:37",
-        plate_code="21",
-        owner_traffic_no="1180021637",
-        descriptions=[
-            "Exceeding the speed limit",
-            "Failure to keep lane discipline",
-        ],
-    )
-
-
-@pytest.mark.parametrize(
-    ("label", "expected"),
-    [
-        ("FIRST CATEGORY", "1"),
-        ("ELEVENTH CATEGORY", "11"),
-        ("NINETEENTH CATEGORY", "19"),
-        ("TWENTIETH CATEGORY", "20"),
-        ("TWENTY-FIRST CATEGORY", "21"),
-        ("THIRTY-SECOND CATEGORY", "32"),
-        ("FIFTIETH CATEGORY", "50"),
-        ("FIFTY-NINTH CATEGORY", "59"),
-        ("SPECIAL CATEGORY", None),
-        ("", None),
-    ],
-)
-def test_plate_code_from_color_maps_english_ordinals(label: str, expected: str | None) -> None:
-    assert plate_code_from_color(label) == expected
-
-
 @pytest.fixture()
 def evg_fleet(db_session: Session, admin_user: User) -> dict[str, object]:
     site = VehicleSite(name_ar="موقع الاختبار", name_en="Test Site")
@@ -336,61 +537,47 @@ def test_preview_classifies_matched_ambiguous_unmatched_and_imported(
     vehicle_21 = evg_fleet["vehicle_21"]
     assert isinstance(vehicle_10, Vehicle)
     assert isinstance(vehicle_21, Vehicle)
-    details_requests: dict[str, bool] = {}
 
     rows = [
-        (
-            _ticket("9001", plate_number="13695"),
-            _details(
-                "9001",
-                plate_code="21",
-                descriptions=["Speeding", "Lane violation"],
-            ),
+        _ticket(
+            "9001",
+            plate_number="55501",
+            time="12:37",
+            plate_code="21",
+            descriptions=("Speeding", "Lane violation"),
         ),
-        (
-            _ticket(
-                "9002",
-                plate_number="13695",
-                amount=300,
-                amount_after_discount=270,
-                black_points=0,
-                location="Al Ain Road",
-            ),
-            _details(
-                "9002",
-                plate_code=None,
-                time="08:05",
-                descriptions=["Parking violation"],
-            ),
+        _ticket(
+            "9002",
+            plate_number="55501",
+            time="08:05",
+            plate_code=None,
+            amount=300,
+            amount_after_discount=270,
+            black_points=0,
+            location="Synthetic Al Ain Road",
+            descriptions=("Parking violation",),
         ),
-        (_ticket("9003", plate_number="99999"), None),
-        (_ticket("9004", plate_number="13695"), None),
+        _ticket("9003", plate_number="99999"),
+        _ticket("9004", plate_number="55501"),
     ]
 
     def fake_fetch_tickets(
-        tcn: str, *, details_for, timeout_s: int = 120
-    ) -> list[tuple[EvgTicketRow, EvgTicketDetails | None]]:
-        assert tcn == "1180021637"
-        assert timeout_s == 120
-        details_requests.update(
-            {ticket.ticket_no: details_for(ticket.ticket_no) for ticket, _ in rows}
-        )
+        tcn: str,
+        *,
+        timeout_s: float = 30.0,
+    ) -> list[EvgTicketRow]:
+        assert tcn == "7770001234"
+        assert timeout_s == 30.0
         return rows
 
     monkeypatch.setattr(vehicle_evg_service, "fetch_tickets", fake_fetch_tickets)
 
     preview = vehicle_evg_service.preview(
         db_session,
-        traffic_codes=["1180021637"],
+        traffic_codes=["7770001234"],
     )
 
-    assert details_requests == {
-        "9001": True,
-        "9002": True,
-        "9003": True,
-        "9004": False,
-    }
-    assert preview.traffic_codes == ["1180021637"]
+    assert preview.traffic_codes == ["7770001234"]
     assert [
         (
             row.ticket_no,
@@ -408,8 +595,8 @@ def test_preview_classifies_matched_ambiguous_unmatched_and_imported(
         ("9004", "already_imported", vehicle_10.id, None, None, None),
     ]
     assert {(option.id, option.plate_label) for option in preview.vehicles} == {
-        (vehicle_10.id, "10 \\ 13695"),
-        (vehicle_21.id, "21 \\ 13695"),
+        (vehicle_10.id, "10 \\ 55501"),
+        (vehicle_21.id, "21 \\ 55501"),
     }
 
 
@@ -429,13 +616,20 @@ def test_preview_returns_accepted_while_fetch_is_blocked_then_imports(
     executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
 
     def blocked_fetch_tickets(
-        tcn: str, *, details_for, timeout_s: int = 120
-    ) -> list[tuple[EvgTicketRow, EvgTicketDetails | None]]:
+        tcn: str,
+        *,
+        timeout_s: float = 30.0,
+    ) -> list[EvgTicketRow]:
+        assert tcn == "7770001234"
+        assert timeout_s == 30.0
         latch.wait()
         return [
-            (
-                _ticket("6261776007", plate_number="13695"),
-                _details("6261776007", plate_code="21"),
+            _ticket(
+                "9050",
+                plate_number="55501",
+                time="12:37",
+                plate_code="21",
+                descriptions=("Synthetic speeding violation",),
             )
         ]
 
@@ -445,7 +639,7 @@ def test_preview_returns_accepted_while_fetch_is_blocked_then_imports(
         response_future = executor.submit(
             evg_admin_client.post,
             "/api/v1/vehicles/fines/evg/preview",
-            json={"traffic_codes": ["1180021637"]},
+            json={"traffic_codes": ["7770001234"]},
         )
         try:
             response = response_future.result(timeout=5)
@@ -481,7 +675,7 @@ def test_preview_returns_accepted_while_fetch_is_blocked_then_imports(
         rows = completed_job["result"]["rows"]
         assert len(rows) == 1
         row = rows[0]
-        assert row["ticket_no"] == "6261776007"
+        assert row["ticket_no"] == "9050"
         assert row["match"] == "matched"
         assert row["vehicle_id"] == vehicle.id
 
@@ -498,7 +692,7 @@ def test_preview_returns_accepted_while_fetch_is_blocked_then_imports(
 
         fines = evg_admin_client.get("/api/v1/vehicles/fines").json()
         assert len(fines) == 1
-        assert fines[0]["evg_ticket_no"] == "6261776007"
+        assert fines[0]["evg_ticket_no"] == "9050"
         assert fines[0]["amount"] == 600
         assert fines[0]["vehicle_id"] == vehicle.id
 
@@ -524,8 +718,10 @@ def test_polling_running_job_remains_responsive_with_second_job_queued(
     release = threading.Event()
 
     def blocked_fetch_tickets(
-        _tcn: str, *, details_for, timeout_s: int = 120
-    ) -> list[tuple[EvgTicketRow, EvgTicketDetails | None]]:
+        _tcn: str,
+        *,
+        timeout_s: float = 30.0,
+    ) -> list[EvgTicketRow]:
         first_started.set()
         release.wait()
         return []
@@ -581,9 +777,11 @@ def test_known_evg_error_marks_job_failed_without_persisting_fines(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     def failed_fetch_tickets(
-        _tcn: str, *, details_for, timeout_s: int = 120
-    ) -> list[tuple[EvgTicketRow, EvgTicketDetails | None]]:
-        raise EvgError("EVG_DRIVER_MISSING", "EVG browser driver is unavailable.")
+        _tcn: str,
+        *,
+        timeout_s: float = 30.0,
+    ) -> list[EvgTicketRow]:
+        raise EvgError("EVG_UNAVAILABLE", "EVG portal is unavailable.")
 
     monkeypatch.setattr(vehicle_evg_service, "fetch_tickets", failed_fetch_tickets)
 
@@ -596,8 +794,8 @@ def test_known_evg_error_marks_job_failed_without_persisting_fines(
 
     assert job["status"] == "failed"
     assert job["result"] is None
-    assert job["error_code"] == "EVG_DRIVER_MISSING"
-    assert job["error_message"] == "EVG browser driver is unavailable."
+    assert job["error_code"] == "EVG_UNAVAILABLE"
+    assert job["error_message"] == "EVG portal is unavailable."
     assert api_db.query(VehicleFine).count() == 0
 
 
@@ -609,8 +807,10 @@ def test_unexpected_evg_error_is_redacted_and_marks_job_failed(
     secret_text = "raw upstream HTML must stay private"
 
     def failed_fetch_tickets(
-        _tcn: str, *, details_for, timeout_s: int = 120
-    ) -> list[tuple[EvgTicketRow, EvgTicketDetails | None]]:
+        _tcn: str,
+        *,
+        timeout_s: float = 30.0,
+    ) -> list[EvgTicketRow]:
         raise RuntimeError(secret_text)
 
     monkeypatch.setattr(vehicle_evg_service, "fetch_tickets", failed_fetch_tickets)
@@ -708,8 +908,10 @@ def test_preview_queue_capacity_evicts_oldest_terminal_job(
     release = threading.Event()
 
     def blocked_fetch_tickets(
-        _tcn: str, *, details_for, timeout_s: int = 120
-    ) -> list[tuple[EvgTicketRow, EvgTicketDetails | None]]:
+        _tcn: str,
+        *,
+        timeout_s: float = 30.0,
+    ) -> list[EvgTicketRow]:
         started.set()
         release.wait()
         return []
@@ -757,7 +959,11 @@ def test_empty_traffic_code_list_completes_without_fetching(
     evg_admin_client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    def unexpected_fetch(*_args, **_kwargs):
+    def unexpected_fetch(
+        _tcn: str,
+        *,
+        timeout_s: float = 30.0,
+    ) -> list[EvgTicketRow]:
         pytest.fail("empty traffic-code preview must not call EVG")
 
     monkeypatch.setattr(vehicle_evg_service, "fetch_tickets", unexpected_fetch)
@@ -790,8 +996,8 @@ def test_confirm_inserts_two_skips_duplicate_and_preserves_evg_fields(
         ticket_no="9001",
         date=date(2026, 8, 20),
         time="12:37",
-        location="Abu Dhabi - Airport Road",
-        plate_number="13695",
+        location="Synthetic Airport Road",
+        plate_number="55501",
         plate_code="21",
         amount=600,
         amount_after_discount=540,
@@ -805,8 +1011,8 @@ def test_confirm_inserts_two_skips_duplicate_and_preserves_evg_fields(
         ticket_no="9002",
         date=date(2026, 8, 21),
         time="08:05",
-        location="Al Ain Road",
-        plate_number="13695",
+        location="Synthetic Al Ain Road",
+        plate_number="55501",
         plate_code=None,
         amount=300,
         amount_after_discount=270,
@@ -821,7 +1027,7 @@ def test_confirm_inserts_two_skips_duplicate_and_preserves_evg_fields(
         date=date(2026, 8, 1),
         time=None,
         location="Previously imported",
-        plate_number="13695",
+        plate_number="55501",
         plate_code="10",
         amount=400,
         amount_after_discount=400,
@@ -872,7 +1078,7 @@ def test_confirm_inserts_two_skips_duplicate_and_preserves_evg_fields(
         600,
         540,
         4,
-        "Abu Dhabi - Airport Road",
+        "Synthetic Airport Road",
         "Speeding ؛ Lane violation",
         "Absent",
         admin_user.id,
@@ -896,7 +1102,7 @@ def test_confirm_inserts_two_skips_duplicate_and_preserves_evg_fields(
         300,
         270,
         0,
-        "Al Ain Road",
+        "Synthetic Al Ain Road",
         "Parking violation",
     )
 
@@ -912,8 +1118,8 @@ def test_confirm_rejects_an_unmatched_row_before_any_insert(
         ticket_no="9100",
         date=date(2026, 8, 23),
         time=None,
-        location="Abu Dhabi",
-        plate_number="13695",
+        location="Synthetic City",
+        plate_number="55501",
         plate_code="21",
         amount=500,
         amount_after_discount=500,

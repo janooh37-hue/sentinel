@@ -156,8 +156,8 @@ def list_vehicle_fines(
     return [vehicle_service.fine_read(row) for row in rows]
 
 
-# Enqueue the long Playwright fetch because synchronous previews can outlive the
-# reverse proxy's read timeout.
+# Enqueue the upstream EVG fetch because its duration is unknown and a synchronous
+# preview can outlive the reverse proxy's read timeout.
 @router.post(
     "/fines/evg/preview",
     response_model=EvgPreviewJobCreated,

@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from app.db import session as session_mod
 from app.db.models import Base, User
 from app.db.session import attach_sqlite_pragmas
-from app.services import openwa_client, perm_service
+from app.services import evg_client, openwa_client, perm_service
 
 
 @pytest.fixture(autouse=True)
@@ -30,6 +30,24 @@ def _block_live_whatsapp_gateway(monkeypatch) -> None:
         raise httpx.ConnectError("live WhatsApp gateway is blocked in tests")
 
     monkeypatch.setattr(openwa_client, "_transport", httpx.MockTransport(refuse))
+
+
+@pytest.fixture(autouse=True)
+def _block_live_evg_gateway(monkeypatch) -> None:
+    """Keep the suite off the live Emirates Vehicle Gate.
+
+    An unmocked EVG fetch would otherwise reach the live Emirates Vehicle Gate.
+    Tests that exercise the client assign their own ``_transport`` and override
+    this closed-door default.
+    """
+
+    def refuse(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError(
+            "live Emirates Vehicle Gate is blocked in tests",
+            request=request,
+        )
+
+    monkeypatch.setattr(evg_client, "_transport", httpx.MockTransport(refuse))
 
 
 @pytest.fixture()

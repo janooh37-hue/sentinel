@@ -1382,7 +1382,6 @@
       "imported": "{{created}} fines added, {{skipped}} skipped",
       "noRows": "No fines returned from EVG.",
       "error": "EVG could not be reached.",
-      "driverMissing": "The EVG browser driver is not installed.",
       "invalidResponse": "The server returned an invalid response. Please try again.",
       "jobExpired": "The fine-fetch session expired. Fetch the fines again.",
       "busy": "EVG fine fetching is busy. Try again later."
