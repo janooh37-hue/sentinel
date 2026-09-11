@@ -125,34 +125,43 @@ export function WordReopenButton({
 
   const hasActiveSession = book.edit_session?.state === 'active'
   const isFinished = (book.versions?.length ?? 0) > 0 && !hasActiveSession
-  if (book.voided_at || !isFinished) return null
+  // Once reopened, `book.edit_session` flips active from this SAME action —
+  // `invalidate()` triggers a refetch of the invalidated `['books','detail',
+  // bookId]` query that can resolve well before the user ever sees the
+  // dialog, reliably so while a privacy lock defers its first presentation
+  // (2026-09 lock/Word-handoff fix). The trigger must not unmount and
+  // discard the retained session out from under itself the moment its own
+  // reopen succeeds.
+  if (book.voided_at || (!isFinished && reopenSession == null)) return null
 
   const label = t('books.word.editNewVersion')
   const title = isMobile ? t('books.word.needsPc') : label
 
   return (
     <>
-      <div className="flex flex-col gap-1">
-        <button
-          type="button"
-          disabled={isMobile || reopenMutation.isPending}
-          onClick={() => reopenMutation.mutate()}
-          aria-label={iconOnly ? label : undefined}
-          title={iconOnly ? title : undefined}
-          className={cn(
-            'inline-flex items-center gap-1.5 rounded-lg border text-[0.82em] font-semibold text-[#185abd] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50',
-            iconOnly ? 'h-9 w-9 justify-center p-0' : 'px-3 py-2',
-          )}
-          style={{ borderColor: '#185abd55' }}
-        >
-          {iconOnly ? <FilePenLine className="h-4 w-4" aria-hidden="true" /> : label}
-        </button>
-        {isMobile && !iconOnly ? (
-          <span className="text-[0.72em] text-muted-foreground">
-            {t('books.word.needsPc')}
-          </span>
-        ) : null}
-      </div>
+      {isFinished && (
+        <div className="flex flex-col gap-1">
+          <button
+            type="button"
+            disabled={isMobile || reopenMutation.isPending}
+            onClick={() => reopenMutation.mutate()}
+            aria-label={iconOnly ? label : undefined}
+            title={iconOnly ? title : undefined}
+            className={cn(
+              'inline-flex items-center gap-1.5 rounded-lg border text-[0.82em] font-semibold text-[#185abd] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50',
+              iconOnly ? 'h-9 w-9 justify-center p-0' : 'px-3 py-2',
+            )}
+            style={{ borderColor: '#185abd55' }}
+          >
+            {iconOnly ? <FilePenLine className="h-4 w-4" aria-hidden="true" /> : label}
+          </button>
+          {isMobile && !iconOnly ? (
+            <span className="text-[0.72em] text-muted-foreground">
+              {t('books.word.needsPc')}
+            </span>
+          ) : null}
+        </div>
+      )}
 
       <WordHandoffDialog
         session={reopenSession}

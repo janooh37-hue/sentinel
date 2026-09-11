@@ -21,6 +21,7 @@ import { MigrationGate } from '@/pages/system/MigrationWizard'
 import { KeyboardShortcutsProvider } from '@/lib/keyboardShortcuts'
 import { AuthProvider } from '@/lib/AuthProvider'
 import { useAuth } from '@/lib/authContext'
+import { AppLockContext } from '@/lib/appLockContext'
 import { useIsMobile } from '@/lib/useIsMobile'
 import { DEFAULT_IDLE_LOCK_SECONDS, useLockState } from '@/lib/useLockState'
 import { type Page, PAGE_PATHS, buildPagePath } from '@/lib/pageNav'
@@ -198,7 +199,7 @@ function Shell(): React.JSX.Element {
   }
 
   return (
-    <>
+    <AppLockContext.Provider value={locked}>
       <div className="flex h-screen flex-col bg-background">
         <TopProgressBar />
         <a
@@ -524,7 +525,7 @@ function Shell(): React.JSX.Element {
           }}
         />
       )}
-    </>
+    </AppLockContext.Provider>
   )
 }
 

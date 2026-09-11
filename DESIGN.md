@@ -1376,11 +1376,49 @@ Western digits.
 ### 3.7 LockOverlay
 
 **Sources:** `components/shell/LockOverlay.tsx`,
-`components/shell/LockOverlay.css`, and `lib/useLockState.ts`.
+`components/shell/LockOverlay.css`, `lib/useLockState.ts`, and
+`lib/appLockContext.ts`.
 
-Full-screen privacy lock rendered above all routes at `z-index: 100`. The
-authenticated session remains valid behind the overlay; unlocking re-verifies
-the signed-in user's password through `/auth/verify-password`.
+Full-screen privacy lock rendered above all routes as a controlled,
+non-dismissible Radix `Dialog.Root` (`z-index: 99` overlay, lock content
+above it). The authenticated session remains valid behind the overlay;
+unlocking re-verifies the signed-in user's password through
+`/auth/verify-password`. Only a successful verification closes it — Escape,
+outside pointer/focus interaction, and any background dialog's own close
+control are all suppressed on the lock's root.
+
+**Modal focus ownership:** the lock is a real Radix `Dialog.Root`/`Portal`/
+`Content`, not a plain `<div>` with dialog ARIA attributes — visual stacking
+alone doesn't grant DOM focus/pointer ownership, and an already-open Radix
+modal elsewhere in the tree (notably the Word handoff dialog,
+`pages/books/WordHandoffDialog.tsx`) keeps its own focus trap and pointer
+capture active underneath a lock that isn't itself part of the same
+focus-scope stack. Being a real `Dialog.Root` lets the lock join that stack
+and reliably become topmost. Password focus is set in `onOpenAutoFocus`
+(after the modal has acquired ownership, not on a bare mount effect); a
+successful unlock restores focus to the prior workflow's control, or the
+next surviving open dialog, or `#main-content` as a last resort — see
+`restoreSurvivingWorkflowFocus` in the source. `aria-hidden` on an ancestor
+is deliberately **not** treated as non-focusable there: unlike `inert` (see
+`CapabilityGate.tsx`), `aria-hidden` alone doesn't remove real DOM focus, and
+rejecting it can drop restoration silently when Radix's shared `hideOthers`
+bookkeeping has marked a still-usable dialog hidden for an unrelated reason.
+
+**Preserving an in-progress Word handoff across a lock cycle:**
+`lib/appLockContext.ts` exposes the shell's existing lock boolean read-only
+(`Shell` in `App.tsx` provides it; no second timer or lock store).
+`WordHandoffDialog` consumes it to defer presenting a **newly arrived**
+session while locked — it keeps polling and retains the session, but
+doesn't mount a competing dialog over the password field; unlocking presents
+it once, without a second create/reopen request. An already-open handoff
+(and any of its own nested dialogs, e.g. the Discard confirmation) stays
+mounted through the whole lock cycle untouched. `components/books/
+BookWordActions.tsx`'s `WordReopenButton` mounts its dialog whenever it
+holds a retained (non-voided) session, not only while the record's
+`edit_session` is still absent — that flag can flip active via an
+`invalidateQueries` refetch before the user ever sees the dialog, reliably
+so once presentation is deferred by a lock, so the button must not read it
+as "nothing to show."
 
 **Automatic lock:**
 

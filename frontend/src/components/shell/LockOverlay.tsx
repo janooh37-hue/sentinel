@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import * as Dialog from '@radix-ui/react-dialog'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import {
@@ -275,7 +276,64 @@ function OperationsBlock({
   )
 }
 
+// `aria-hidden` alone (unlike `inert`, the codebase's actual non-interactivity
+// marker — see CapabilityGate.tsx) does not remove an element from the DOM
+// focus order; only `hidden`/`inert` genuinely do. WordHandoffDialog's own
+// ConfirmDialog is a *sibling* Radix Root, not nested, so both independently
+// call the shared `hideOthers` — they legitimately end up mutually
+// `aria-hidden` while both are open, well before the lock ever mounts. Since
+// that pre-existing pattern is unrelated to this fix, restoration must not
+// treat `aria-hidden` as disqualifying, or the only survivable target is
+// wrongly rejected and focus silently drops to nothing.
+function canReceiveRestoredFocus(element: HTMLElement | null): element is HTMLElement {
+  return (
+    element?.isConnected === true &&
+    !element.hasAttribute('disabled') &&
+    element.getAttribute('aria-disabled') !== 'true' &&
+    element.closest('[hidden], [inert]') === null
+  )
+}
+
+const OPEN_DIALOG_SELECTOR = '[role="dialog"][data-state="open"]'
+
+function restoreSurvivingWorkflowFocus(previousFocus: HTMLElement | null): void {
+  const activeElement =
+    document.activeElement instanceof HTMLElement ? document.activeElement : null
+  const activeDialog = activeElement?.closest<HTMLElement>(OPEN_DIALOG_SELECTOR)
+  if (activeDialog && !activeDialog.hasAttribute('data-lock-overlay')) return
+
+  if (canReceiveRestoredFocus(previousFocus)) {
+    previousFocus.focus()
+    return
+  }
+
+  const openDialogs = document.querySelectorAll<HTMLElement>(OPEN_DIALOG_SELECTOR)
+  for (let index = openDialogs.length - 1; index >= 0; index -= 1) {
+    const dialog = openDialogs[index]
+    if (
+      !dialog.hasAttribute('data-lock-overlay') &&
+      dialog.closest('[hidden], [inert]') === null
+    ) {
+      dialog.focus()
+      return
+    }
+  }
+
+  document.querySelector<HTMLElement>('#main-content')?.focus()
+}
+
 export function LockOverlay({ onUnlocked, onSignOut }: LockOverlayProps): React.JSX.Element {
+  return (
+    <Dialog.Root open modal onOpenChange={() => undefined}>
+      <Dialog.Portal>
+        <Dialog.Overlay className="lock-dialog-overlay" />
+        <LockOverlayContent onUnlocked={onUnlocked} onSignOut={onSignOut} />
+      </Dialog.Portal>
+    </Dialog.Root>
+  )
+}
+
+function LockOverlayContent({ onUnlocked, onSignOut }: LockOverlayProps): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const isAr = i18n.language.startsWith('ar')
   const locale = isAr ? 'ar' : 'en'
@@ -285,6 +343,8 @@ export function LockOverlay({ onUnlocked, onSignOut }: LockOverlayProps): React.
   const [error, setError] = useState<string | null>(null)
   const [now, setNow] = useState(() => new Date())
   const inputRef = useRef<HTMLInputElement>(null)
+  const previousFocusRef = useRef<HTMLElement | null>(null)
+  const successfulUnlockRef = useRef(false)
   const overlayRef = useRef<HTMLDivElement>(null)
   const unlockRef = useRef<HTMLFormElement>(null)
   const queryClient = useQueryClient()
@@ -319,7 +379,6 @@ export function LockOverlay({ onUnlocked, onSignOut }: LockOverlayProps): React.
   })
 
   useEffect(() => {
-    inputRef.current?.focus()
     const interval = window.setInterval(() => setNow(new Date()), 30_000)
     return () => window.clearInterval(interval)
   }, [])
@@ -362,11 +421,12 @@ export function LockOverlay({ onUnlocked, onSignOut }: LockOverlayProps): React.
 
   async function handleSubmit(event: React.FormEvent): Promise<void> {
     event.preventDefault()
-    if (!password) return
+    if (!password || submitting) return
     setSubmitting(true)
     setError(null)
     try {
       await api.verifyAuthPassword(password)
+      successfulUnlockRef.current = true
       onUnlocked()
     } catch (err) {
       setError(apiErrorMessage(err))
@@ -428,15 +488,30 @@ export function LockOverlay({ onUnlocked, onSignOut }: LockOverlayProps): React.
         : t('lockScreen.cheer.shiftRemainingMinutes', { minutes: shiftRemainingMinutes })
 
   return (
-    <div
+    <Dialog.Content
       ref={overlayRef}
       className="lock-overlay"
-      role="dialog"
-      aria-modal="true"
-      aria-label={t('lockScreen.title')}
+      data-lock-overlay="true"
       dir={isAr ? 'rtl' : 'ltr'}
       data-layout={layout}
+      onOpenAutoFocus={(event) => {
+        previousFocusRef.current =
+          document.activeElement instanceof HTMLElement ? document.activeElement : null
+        event.preventDefault()
+        inputRef.current?.focus()
+      }}
+      onCloseAutoFocus={(event) => {
+        event.preventDefault()
+        if (successfulUnlockRef.current) {
+          restoreSurvivingWorkflowFocus(previousFocusRef.current)
+        }
+      }}
+      onEscapeKeyDown={(event) => event.preventDefault()}
+      onPointerDownOutside={(event) => event.preventDefault()}
+      onInteractOutside={(event) => event.preventDefault()}
+      onKeyDown={(event) => event.stopPropagation()}
     >
+      <Dialog.Title className="sr-only">{t('lockScreen.title')}</Dialog.Title>
       <div className="lock-frost" aria-hidden="true" />
       <div className="lock-shell">
         <TimeBlock now={now} isAr={isAr} />
@@ -493,13 +568,15 @@ export function LockOverlay({ onUnlocked, onSignOut }: LockOverlayProps): React.
               {error}
             </p>
           )}
-          <p className="lock-idle">
-            {t('lockScreen.idleNote', {
-              duration: t(
-                `lockTimer.durations.${user?.idle_lock_seconds ?? DEFAULT_IDLE_LOCK_SECONDS}`,
-              ),
-            })}
-          </p>
+          <Dialog.Description asChild>
+            <p className="lock-idle">
+              {t('lockScreen.idleNote', {
+                duration: t(
+                  `lockTimer.durations.${user?.idle_lock_seconds ?? DEFAULT_IDLE_LOCK_SECONDS}`,
+                ),
+              })}
+            </p>
+          </Dialog.Description>
           <button className="lock-signout" type="button" onClick={onSignOut}>
             {t('lockScreen.signOut')}
           </button>
@@ -518,6 +595,6 @@ export function LockOverlay({ onUnlocked, onSignOut }: LockOverlayProps): React.
           </div>
         )}
       </div>
-    </div>
+    </Dialog.Content>
   )
 }

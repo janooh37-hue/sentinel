@@ -12,6 +12,7 @@ import { toast } from 'sonner'
 
 import { WordHandoffDialog } from './WordHandoffDialog'
 import * as apiMod from '@/lib/api'
+import { AppLockContext } from '@/lib/appLockContext'
 import type { WordSessionRead, BookRead } from '@/lib/api'
 import { useCapabilities } from '@/lib/useCapabilities'
 
@@ -88,6 +89,16 @@ const FAKE_SESSION: WordSessionRead = {
   filename: 'file.docx',
   word_url: 'ms-word:ofe|u|https://gssg.lan/dav/file.docx',
   dav_url: 'https://gssg.lan/dav/file.docx',
+}
+
+const REPLACEMENT_SESSION: WordSessionRead = {
+  ...FAKE_SESSION,
+  book_id: 43,
+  ref_number: '2/5/GSSG/142',
+  token: 'replacement-token',
+  filename: 'replacement.docx',
+  word_url: 'ms-word:ofe|u|https://gssg.lan/dav/replacement.docx',
+  dav_url: 'https://gssg.lan/dav/replacement.docx',
 }
 
 function bookWith(last_put_at: string | null): BookRead {
@@ -501,5 +512,221 @@ describe('WordHandoffDialog', () => {
       expect(screen.getByText(/جارٍ تجهيز ملف PDF/)).toBeTruthy(),
     )
     expect(screen.queryByTestId('doc-pdf-canvas')).toBeNull()
+  })
+
+  it('defers a locked session while polling, then presents and focuses it on unlock', async () => {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const getBook = vi.spyOn(apiMod.api, 'getBook').mockResolvedValue(bookWith(null))
+    const onClose = vi.fn()
+    const view = render(
+      createElement(
+        QueryClientProvider,
+        { client: qc },
+        createElement('button', { type: 'button' }, 'Page focus target'),
+        createElement(
+          AppLockContext.Provider,
+          { value: true },
+          createElement(WordHandoffDialog, {
+            session: FAKE_SESSION,
+            open: true,
+            onClose,
+          }),
+        ),
+      ),
+    )
+    screen.getByRole('button', { name: 'Page focus target' }).focus()
+
+    await waitFor(() => expect(getBook).toHaveBeenCalledWith(42))
+    expect(screen.queryByText('1/5/GSSG/141')).not.toBeInTheDocument()
+    expect(document.querySelector('[role="dialog"]')).toBeNull()
+
+    view.rerender(
+      createElement(
+        QueryClientProvider,
+        { client: qc },
+        createElement('button', { type: 'button' }, 'Page focus target'),
+        createElement(
+          AppLockContext.Provider,
+          { value: false },
+          createElement(WordHandoffDialog, {
+            session: FAKE_SESSION,
+            open: true,
+            onClose,
+          }),
+        ),
+      ),
+    )
+
+    await screen.findByText('1/5/GSSG/141')
+    const dialog = screen.getByRole('dialog')
+    await waitFor(() => expect(dialog).toContainElement(document.activeElement as HTMLElement))
+
+    view.rerender(
+      createElement(
+        QueryClientProvider,
+        { client: qc },
+        createElement('button', { type: 'button' }, 'Page focus target'),
+        createElement(
+          AppLockContext.Provider,
+          { value: true },
+          createElement(WordHandoffDialog, {
+            session: FAKE_SESSION,
+            open: true,
+            onClose,
+          }),
+        ),
+      ),
+    )
+
+    expect(screen.getByRole('dialog')).toBe(dialog)
+    expect(screen.getByText('1/5/GSSG/141')).toBeInTheDocument()
+    expect(onClose).not.toHaveBeenCalled()
+  })
+
+  it('keeps an already-presented handoff and nested confirmation mounted while locked', async () => {
+    const user = userEvent.setup()
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    vi.spyOn(apiMod.api, 'getBook').mockResolvedValue(bookWith(null))
+    const view = render(
+      createElement(
+        QueryClientProvider,
+        { client: qc },
+        createElement(
+          AppLockContext.Provider,
+          { value: false },
+          createElement(WordHandoffDialog, {
+            session: FAKE_SESSION,
+            open: true,
+            onClose: vi.fn(),
+          }),
+        ),
+      ),
+    )
+    await screen.findByText('1/5/GSSG/141')
+    await user.click(screen.getByText('تجاهل'))
+    await screen.findByText('سيصبح الكتاب ملغياً ويبقى رقمه محفوظاً في السجل. متابعة؟')
+    const dialogs = Array.from(document.querySelectorAll('[role="dialog"]'))
+    expect(dialogs).toHaveLength(2)
+
+    view.rerender(
+      createElement(
+        QueryClientProvider,
+        { client: qc },
+        createElement(
+          AppLockContext.Provider,
+          { value: true },
+          createElement(WordHandoffDialog, {
+            session: FAKE_SESSION,
+            open: true,
+            onClose: vi.fn(),
+          }),
+        ),
+      ),
+    )
+
+    expect(Array.from(document.querySelectorAll('[role="dialog"]'))).toEqual(dialogs)
+    expect(screen.getByText('سيصبح الكتاب ملغياً ويبقى رقمه محفوظاً في السجل. متابعة؟')).toBeInTheDocument()
+  })
+
+  it('defers a replacement token while locked and resets presentation history on close', async () => {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const getBook = vi.spyOn(apiMod.api, 'getBook').mockImplementation(async (bookId) => ({
+      ...bookWith(null),
+      id: bookId,
+      ref_number: bookId === 43 ? REPLACEMENT_SESSION.ref_number : FAKE_SESSION.ref_number,
+    }))
+    const onClose = vi.fn()
+    const view = render(
+      createElement(
+        QueryClientProvider,
+        { client: qc },
+        createElement(
+          AppLockContext.Provider,
+          { value: false },
+          createElement(WordHandoffDialog, {
+            session: FAKE_SESSION,
+            open: true,
+            onClose,
+          }),
+        ),
+      ),
+    )
+    await screen.findByText('1/5/GSSG/141')
+
+    view.rerender(
+      createElement(
+        QueryClientProvider,
+        { client: qc },
+        createElement(
+          AppLockContext.Provider,
+          { value: true },
+          createElement(WordHandoffDialog, {
+            session: REPLACEMENT_SESSION,
+            open: true,
+            onClose,
+          }),
+        ),
+      ),
+    )
+    await waitFor(() => expect(getBook).toHaveBeenCalledWith(43))
+    expect(screen.queryByText('1/5/GSSG/141')).not.toBeInTheDocument()
+    expect(screen.queryByText('2/5/GSSG/142')).not.toBeInTheDocument()
+    expect(document.querySelector('[role="dialog"]')).toBeNull()
+
+    view.rerender(
+      createElement(
+        QueryClientProvider,
+        { client: qc },
+        createElement(
+          AppLockContext.Provider,
+          { value: false },
+          createElement(WordHandoffDialog, {
+            session: REPLACEMENT_SESSION,
+            open: true,
+            onClose,
+          }),
+        ),
+      ),
+    )
+    await screen.findByText('2/5/GSSG/142')
+    const replacementDialog = screen.getByRole('dialog')
+    await waitFor(() =>
+      expect(replacementDialog).toContainElement(document.activeElement as HTMLElement),
+    )
+
+    view.rerender(
+      createElement(
+        QueryClientProvider,
+        { client: qc },
+        createElement(
+          AppLockContext.Provider,
+          { value: false },
+          createElement(WordHandoffDialog, {
+            session: REPLACEMENT_SESSION,
+            open: false,
+            onClose,
+          }),
+        ),
+      ),
+    )
+    expect(document.querySelector('[role="dialog"]')).toBeNull()
+
+    view.rerender(
+      createElement(
+        QueryClientProvider,
+        { client: qc },
+        createElement(
+          AppLockContext.Provider,
+          { value: true },
+          createElement(WordHandoffDialog, {
+            session: REPLACEMENT_SESSION,
+            open: true,
+            onClose,
+          }),
+        ),
+      ),
+    )
+    expect(screen.queryByText('2/5/GSSG/142')).not.toBeInTheDocument()
+    expect(document.querySelector('[role="dialog"]')).toBeNull()
   })
 })
