@@ -333,7 +333,6 @@ const ERROR_MESSAGE_KEYS: Record<string, string> = {
   EVG_PREVIEW_JOB_NOT_FOUND: 'vehicles.evg.jobExpired',
   EVG_BUSY: 'vehicles.evg.busy',
   EVG_UNAVAILABLE: 'vehicles.evg.error',
-  EVG_DRIVER_MISSING: 'vehicles.evg.driverMissing',
 }
 
 export function vehicleErrorMessage(err: unknown, t: Translate): string {

@@ -53,18 +53,14 @@ def preview(
     preview_rows: list[EvgPreviewRow] = []
     seen_tickets: set[str] = set()
     for traffic_code in codes:
-        fetched = fetch_tickets(
-            traffic_code,
-            details_for=lambda ticket_no: ticket_no not in known,
-        )
-        for ticket, details in fetched:
+        for ticket in fetch_tickets(traffic_code):
             if ticket.ticket_no in seen_tickets:
                 continue
             seen_tickets.add(ticket.ticket_no)
 
-            plate_code = details.plate_code if details is not None else None
-            description = " ؛ ".join(details.descriptions) or None if details is not None else None
-            time = details.time if details is not None else None
+            plate_code = ticket.plate_code
+            description = " ؛ ".join(ticket.descriptions) or None
+            time = ticket.time
             imported = known.get(ticket.ticket_no)
             if imported is not None:
                 match = "already_imported"

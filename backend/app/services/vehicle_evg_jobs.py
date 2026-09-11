@@ -1,7 +1,7 @@
 """Run long EVG preview fetches outside FastAPI's shared request thread pool.
 
-A dedicated single worker prevents Playwright work—and serialization behind
-``evg_client._FETCH_LOCK``—from starving the lightweight preview-status routes.
+A dedicated single worker isolates an upstream call of unknown duration so it cannot
+starve the lightweight preview-status routes.
 """
 
 from __future__ import annotations
