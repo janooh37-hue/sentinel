@@ -202,7 +202,6 @@ The privacy lock and the Word session are independent lifecycles. A lock/unlock 
 | `frontend/src/pages/books/WordHandoffDialog.test.tsx` | Cover deferred first presentation, release on unlock, token replacement, and retention of an already-open handoff. |
 | `frontend/src/components/shell/LockOverlay.test.tsx` | Behavior-level regression coverage with a real open Radix dialog beneath the real lock; error/retry and dismissal tests. |
 | `frontend/e2e/lock-word-handoff.spec.ts` (new) | Actual composed workflow in Chromium with synthetic networking, real portals/CSS, idle transition, unlock, and retained save/Finish behavior. |
-| `frontend/e2e/lock-word-handoff.config.ts` (new, narrow test configuration) | Isolated local frontend port/base URL and no accidental reuse of the production-connected default server. Extend existing Playwright conventions. |
 | `DESIGN.md`, section 3.7 | After implementation passes, document the modal/focus ownership and state-preserving unlock contract. |
 
 No translation changes are expected: reuse existing Arabic/English keys. If a new user-facing string is unavoidable, update both locale files together and include them in the RTL review.
@@ -255,7 +254,7 @@ Run from the implementation worktree, sequentially on this host:
 
 ```powershell
 pnpm -C frontend test src/components/shell/LockOverlay.test.tsx src/lib/useLockState.test.ts src/pages/books/WordHandoffDialog.test.tsx src/components/books/BookWordActions.test.tsx
-pnpm -C frontend exec playwright test --config=e2e/lock-word-handoff.config.ts
+pnpm -C frontend run e2e -- e2e/lock-word-handoff.spec.ts
 pnpm -C frontend run lint
 pnpm -C frontend exec tsc -b --noEmit
 pnpm -C frontend run build
@@ -267,7 +266,6 @@ The browser spec/config above are planned additions; those commands are not clai
 
 - The existing Vite proxy defaults to `127.0.0.1:8765`; the existing Playwright webServer defaults to port 5173 with server reuse. Do not run this workflow against those defaults blindly.
 - The targeted browser configuration must launch the worktree frontend on a verified-free loopback port, set matching baseURL/webServer URLs, and disable reuse of unrelated servers. The automated browser regression needs no live backend: set `GSSG_API_TARGET=http://lock-handoff-test.invalid`, intercept required API traffic with Playwright fixtures, and set `serviceWorkers: 'block'`. The reserved `.invalid` target is a fail-closed backstop, never a production endpoint.
-- In that dedicated configuration, resolve `testDir` explicitly to `frontend/e2e` and select only `lock-word-handoff.spec.ts` with `testMatch`. A config stored inside `e2e/` must not accidentally inherit a relative `./e2e` path as `e2e/e2e`, or discover the whole unrelated suite.
 - Fulfill required `/api` requests from synthetic fixtures and abort/fail the test on any unhandled API request rather than continuing it to the proxy. Stub unrelated weather requests. Neither production credentials nor the existing preview accounts are prerequisites for this synthetic test.
 - After browser regressions pass, perform the real Word smoke using the disposable-backend procedure below. Open Word explicitly, let the app lock, save in Word, return, unlock, and Finish from the retained handoff. Verify an already-existing session, not merely a standalone lock demo.
 - Visually verify English/LTR and Arabic/RTL, desktop and narrow viewport. The narrow test checks unlock behavior and keyboard positioning, not a new ability to launch desktop Word from mobile.

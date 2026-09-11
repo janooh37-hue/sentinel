@@ -708,6 +708,9 @@ const test = base.extend<{ backend: SyntheticApi }>({
   },
 })
 
+test.use({ serviceWorkers: 'block' })
+test.describe.configure({ timeout: 45_000 })
+
 async function prepareApp(
   page: Page,
   backend: SyntheticApi,
@@ -1097,6 +1100,8 @@ test('Finish completing while locked retains the finished view without a duplica
 
   releaseFinish()
   await expect.poll(() => backend.isFinished(book.id)).toBe(true)
+  await page.locator('[data-sonner-toast]').waitFor({ state: 'attached' })
+  await expect(page.locator('[data-sonner-toast]')).toBeHidden({ timeout: 1_000 })
   await expect(page.locator('#lock-pwd')).toBeFocused()
   await expect(lockDialog(page, locale)).toBeVisible()
   expect(backend.finishedBookIds).toEqual([book.id])

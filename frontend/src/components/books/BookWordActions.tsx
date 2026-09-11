@@ -112,6 +112,14 @@ export function WordReopenButton({
   const { t } = useTranslation()
   const qc = useQueryClient()
   const [reopenSession, setReopenSession] = useState<WordSessionRead | null>(null)
+  // The same instance is reused across records (BookRecordPage QueueNav,
+  // RecordPane selection). A session retained for record A must not present
+  // over record B.
+  const [sessionBookId, setSessionBookId] = useState(book.id)
+  if (sessionBookId !== book.id) {
+    setSessionBookId(book.id)
+    setReopenSession(null)
+  }
   const invalidate = () => void qc.invalidateQueries({ queryKey: ['books'] })
 
   const reopenMutation = useMutation({
@@ -125,13 +133,9 @@ export function WordReopenButton({
 
   const hasActiveSession = book.edit_session?.state === 'active'
   const isFinished = (book.versions?.length ?? 0) > 0 && !hasActiveSession
-  // Once reopened, `book.edit_session` flips active from this SAME action —
-  // `invalidate()` triggers a refetch of the invalidated `['books','detail',
-  // bookId]` query that can resolve well before the user ever sees the
-  // dialog, reliably so while a privacy lock defers its first presentation
-  // (2026-09 lock/Word-handoff fix). The trigger must not unmount and
-  // discard the retained session out from under itself the moment its own
-  // reopen succeeds.
+  // Reopen flips `book.edit_session` active via the `invalidate()` refetch,
+  // often before the user sees the dialog (always when a lock defers it):
+  // keep the retained session mounted instead of reading that as "nothing to show".
   if (book.voided_at || (!isFinished && reopenSession == null)) return null
 
   const label = t('books.word.editNewVersion')

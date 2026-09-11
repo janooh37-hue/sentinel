@@ -507,7 +507,6 @@ function LockOverlayContent({ onUnlocked, onSignOut }: LockOverlayProps): React.
         }
       }}
       onEscapeKeyDown={(event) => event.preventDefault()}
-      onPointerDownOutside={(event) => event.preventDefault()}
       onInteractOutside={(event) => event.preventDefault()}
       onKeyDown={(event) => event.stopPropagation()}
     >

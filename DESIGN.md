@@ -1385,7 +1385,8 @@ above it). The authenticated session remains valid behind the overlay;
 unlocking re-verifies the signed-in user's password through
 `/auth/verify-password`. Only a successful verification closes it — Escape,
 outside pointer/focus interaction, and any background dialog's own close
-control are all suppressed on the lock's root.
+control are all suppressed on the lock's root. Toasts are hidden while the
+lock is open (`body:has([data-lock-overlay]) [data-sonner-toaster]`).
 
 **Modal focus ownership:** the lock is a real Radix `Dialog.Root`/`Portal`/
 `Content`, not a plain `<div>` with dialog ARIA attributes — visual stacking
