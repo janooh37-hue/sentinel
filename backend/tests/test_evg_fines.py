@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import concurrent.futures
+import copy
 import json
 import threading
 import time
@@ -217,6 +218,29 @@ def test_parse_tickets_payload_maps_rows_and_skips_unusable() -> None:
 
 
 @pytest.mark.parametrize(
+    "overrides",
+    [
+        {"TotalAmountAfterDiscount": -1},
+        {"BlackPoints": -2},
+        {"LateCharges": -5},
+        {"DiscountRate": -10},
+    ],
+)
+def test_parse_tickets_payload_skips_a_ticket_outside_the_preview_bounds(
+    overrides: dict[str, object],
+) -> None:
+    """One out-of-range ticket is skipped, not allowed to fail the whole preview."""
+
+    tickets = copy.deepcopy(TICKETS_PAYLOAD["ResponseValue"])["Tickets"]  # type: ignore[index]
+    out_of_range = copy.deepcopy(tickets[0])
+    out_of_range["TicketID"]["TicketNo"] = 8109  # type: ignore[index]
+    out_of_range.update(overrides)
+    payload = {**TICKETS_PAYLOAD, "ResponseValue": {"Tickets": [*tickets, out_of_range]}}
+
+    assert parse_tickets_payload(payload) == parse_tickets_payload(TICKETS_PAYLOAD)
+
+
+@pytest.mark.parametrize(
     ("color_code", "expected"),
     [
         (70, "19"),
@@ -340,6 +364,7 @@ def test_fetch_tickets_maps_upstream_failures_without_leaking_markup(
         raise httpx.ConnectError("synthetic connection refused", request=request)
 
     monkeypatch.setattr(evg_client, "_transport", httpx.MockTransport(handler))
+    monkeypatch.setattr(evg_client, "_RETRY_BACKOFF_S", 0.0)
 
     with pytest.raises(EvgError) as raised:
         evg_client.fetch_tickets("7770001234")

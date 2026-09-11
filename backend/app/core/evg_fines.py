@@ -156,6 +156,17 @@ def _parse_ticket(value: object) -> EvgTicketRow | None:
     if late_charges is None or black_points is None:
         return None
 
+    # The preview schema bounds these (amount >= 1, the rest >= 0). Reject an
+    # out-of-range ticket here so one malformed row is skipped like any other,
+    # instead of failing the whole preview on response validation.
+    if (
+        discount_pct < 0
+        or late_charges < 0
+        or black_points < 0
+        or (amount_after_discount is not None and amount_after_discount < 0)
+    ):
+        return None
+
     ticket_type = _text(ticket.get("TicketType"))
     return EvgTicketRow(
         ticket_no=ticket_no,
