@@ -77,12 +77,12 @@ export function SealedStrip({ month }: { month: InmateRegisterMonth }): React.JS
           <p className="text-xs text-muted-foreground">
             {t('inmateStats.sealed.closedBy')}: {month.closed_by_name ?? ''}
           </p>
-          {month.force_closed ? (
+          {month.workflow.legacy && month.workflow.legacy_metadata?.force_closed === true ? (
             <>
               <Badge tone="warning">{t('inmateStats.sealed.forced')}</Badge>
-              {month.force_reason ? (
+              {typeof month.workflow.legacy_metadata?.force_reason === 'string' ? (
                 <p className="text-xs text-muted-foreground" dir="auto">
-                  {t('inmateStats.sealed.reason')}: {month.force_reason}
+                  {t('inmateStats.sealed.reason')}: {month.workflow.legacy_metadata.force_reason}
                 </p>
               ) : null}
             </>
@@ -113,6 +113,7 @@ export function EntryInspector({
     return (
       <ManualEntryForm
         entry={null}
+        wings={month.wing_summary.counts.map((item) => item.wing)}
         year={month.year}
         month={month.month}
         isWriting={isWriting}
@@ -135,6 +136,7 @@ export function EntryInspector({
     return (
       <ManualEntryForm
         entry={entry}
+        wings={month.wing_summary.counts.map((item) => item.wing)}
         year={month.year}
         month={month.month}
         isWriting={isWriting}
@@ -152,6 +154,7 @@ export function EntryInspector({
     return (
       <ManualEntryForm
         entry={entry}
+        wings={month.wing_summary.counts.map((item) => item.wing)}
         year={month.year}
         month={month.month}
         isWriting={isWriting}
@@ -171,6 +174,7 @@ export function EntryInspector({
       <CompletionForm
         key={entry.completion_book_id}
         sourceEntry={entry}
+        wings={month.wing_summary.counts.map((item) => item.wing)}
         reportEntries={reportEntries}
         isWriting={isWriting}
         onComplete={onComplete}
@@ -284,7 +288,7 @@ export function EntryInspector({
         </h4>
         <dl className="mt-2 rounded-lg border border-hairline bg-surface px-3">
           <FieldValue label={t('inmateStats.inspector.reporter')} value={entry.reporter_name} />
-          <FieldValue label={t('inmateStats.inspector.wing')} value={entry.wing} />
+          <FieldValue label={t('inmateStats.inspector.wing')} value={entry.wing} ltr incomplete={entry.missing.includes('wing')} />
           <FieldValue label={t('inmateStats.inspector.holdingNo')} value={entry.holding_no} ltr />
         </dl>
       </section>

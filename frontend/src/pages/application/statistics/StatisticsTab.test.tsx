@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { I18nextProvider } from 'react-i18next'
@@ -10,6 +10,7 @@ import type * as ApiModule from '@/lib/api'
 import i18n from '@/lib/i18n'
 import { formatRegisterDate } from './registerModel'
 import { StatisticsTab } from './StatisticsTab'
+import { workflowMonth } from './workflowFixtures'
 
 let currentMonth: InmateRegisterMonth
 const mutations = {
@@ -17,7 +18,10 @@ const mutations = {
   updateManualRow: vi.fn(),
   deleteManualRow: vi.fn(),
   completeImport: vi.fn(),
-  closeMonth: vi.fn(),
+  prepareMonth: vi.fn(),
+  reviewMonth: vi.fn(),
+  approveMonth: vi.fn(),
+  returnMonth: vi.fn(),
   reopenMonth: vi.fn(),
 }
 
@@ -27,6 +31,18 @@ vi.mock('./useInmateRegister', () => ({
     isLoading: false,
     isError: false,
     refetch: vi.fn(),
+    reviewers: [{ user_id: 2, employee_id: 'G200', name_ar: 'مراجع تجريبي' }],
+    managers: [{ user_id: 3, employee_id: 'G300', name_ar: 'مدير تجريبي' }],
+    candidatesLoading: false,
+    candidatesError: null,
+    history: [],
+    historyLoading: false,
+    historyError: null,
+    selectedReport: undefined,
+    reportLoading: false,
+    reportError: null,
+    mutationError: null,
+    refreshReport: vi.fn(),
     ...mutations,
     isWriting: false,
   }),
@@ -35,6 +51,7 @@ vi.mock('./useInmateRegister', () => ({
     isLoading: false,
     isError: false,
   }),
+  useInmateTasks: () => ({ data: { items: [], count: 0 }, isSuccess: true }),
 }))
 vi.mock('@/lib/useIdentity', () => ({
   useIdentity: () => ({ isAdmin: false }),
@@ -88,7 +105,7 @@ function month(entries: InmateRegisterEntry[], closed = false): InmateRegisterMo
   const citizens = entries.filter((item) => item.population === 'citizens').length
   const expats = entries.filter((item) => item.population === 'expats').length
   const pending = entries.filter((item) => item.population === 'pending').length
-  return {
+  return workflowMonth({
     year: 2026,
     month: 8,
     closed,
@@ -98,9 +115,6 @@ function month(entries: InmateRegisterEntry[], closed = false): InmateRegisterMo
     reopened_at: null,
     reopened_by: null,
     reopened_by_name: null,
-    force_reason: null,
-    force_closed: false,
-    can_close: !closed,
     first_closable_date: '2026-09-01',
     export_ready: true,
     counts: { citizens, expats, pending, total: citizens + expats + pending },
@@ -108,7 +122,7 @@ function month(entries: InmateRegisterEntry[], closed = false): InmateRegisterMo
     uncounted: [],
     arrived_after_close: [],
     blocking: [],
-  }
+  })
 }
 
 function renderTab(language = 'en') {
@@ -130,6 +144,48 @@ beforeEach(() => {
 })
 
 describe('StatisticsTab', () => {
+  it('keeps four summary tiles and places pending inside the month total', () => {
+    currentMonth = month([entry('pending', 'pending')])
+    currentMonth.wing_summary = { ...currentMonth.wing_summary, most: ['1A', '1B'], most_count: 2 }
+    const { container } = renderTab()
+    const summary = container.querySelector('header dl')!
+    expect(summary.children).toHaveLength(4)
+    expect(summary.children[2]).toHaveTextContent('Pending completion')
+    expect(summary.children[3]).toHaveTextContent('1A')
+    expect(summary.children[3]).toHaveTextContent('1B')
+  })
+
+  it('offers only server-allowed workflow actions and keeps reviewed register editable', () => {
+    currentMonth = month([])
+    currentMonth.workflow = { ...currentMonth.workflow, state: 'awaiting_manager', allowed_actions: [] }
+    renderTab()
+    expect(screen.getByRole('region', { name: i18n.t('inmateStats.workflow.title') })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: i18n.t('inmateStats.workflow.approve') })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: i18n.t('inmateStats.workflow.prepare') })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Add a manual entry' })).toBeInTheDocument()
+  })
+
+  it('uses the API wing choices in the manual correction form', async () => {
+    currentMonth = month([])
+    renderTab()
+    await userEvent.click(screen.getByRole('button', { name: 'Add a manual entry' }))
+    await userEvent.click(screen.getByRole('combobox', { name: 'Wing' }))
+    expect(screen.getAllByRole('option').map((option) => option.textContent)).toEqual(['—', '1A', '1B'])
+  })
+
+  it('opens the exact blocker correction in the mobile inspector across populations', async () => {
+    const target = entry('manual-target', 'expats', { origin: 'manual', missing: ['wing'], wing: '',
+      manual: { row_id: 8, reason: 'Recovered source', created_by: 1, created_by_name: 'Synthetic', created_at: '2026-08-10T08:00:00Z' } })
+    currentMonth = month([entry('citizen', 'citizens'), target])
+    currentMonth.blocking = [{ id: target.id, name: target.name, missing: ['wing'] }]
+    const media = vi.spyOn(window, 'matchMedia').mockReturnValue({ matches: true } as MediaQueryList)
+    try {
+      renderTab()
+      await userEvent.click(screen.getByRole('button', { name: /manual-target-name —/ }))
+      expect(within(screen.getByRole('dialog')).getByLabelText(/Inmate name/)).toHaveValue('manual-target-name')
+    } finally { media.mockRestore() }
+  })
+
   it('shows the pending population only when it contains entries and opens its completion form', async () => {
     currentMonth = month([
       entry('citizen', 'citizens'),

@@ -31,9 +31,10 @@ import { useScanBack } from '@/pages/scanBack/useScanBack'
 import { useScanInboxCount } from '@/pages/scanInbox/useScanInboxCount'
 import {
   inmateRegisterHref,
-  newestAwaitingMonth,
+  inmateMonthlyTasksHref,
+  formatRegisterMonth,
 } from '@/pages/application/statistics/registerModel'
-import { useInmateAwaitingClose } from '@/pages/application/statistics/useInmateRegister'
+import { useInmateTasks } from '@/pages/application/statistics/useInmateRegister'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { EmptyState } from '@/components/ui/empty-state'
 import { NavBell } from './NavBell'
@@ -67,7 +68,7 @@ function shortDateLabel(iso: string): string {
 }
 
 export function NavBellPopover(): React.JSX.Element {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const navigate = useNavigate()
   const qc = useQueryClient()
   const [open, setOpen] = useState(false)
@@ -106,10 +107,9 @@ export function NavBellPopover(): React.JSX.Element {
     ? (pendingQuery.data ?? []).filter((u) => u.status === 'pending').length
     : 0
 
-  const violationMonthsQuery = useInmateAwaitingClose(isAdmin)
-  const violationMonths = isAdmin ? (violationMonthsQuery.data?.months ?? []) : []
-  const newestViolationMonth = newestAwaitingMonth(violationMonths)
-  const awaitingViolationMonths = isAdmin ? (violationMonthsQuery.data?.count ?? 0) : 0
+  const violationMonthsQuery = useInmateTasks()
+  const monthlyTasks = (violationMonthsQuery.data?.items ?? []).filter((item) => item.kind === 'review' || item.kind === 'approve')
+  const awaitingViolationMonths = monthlyTasks.length
 
   const expiryQuery = useQuery({
     queryKey: ['expiry', 'summary'],
@@ -261,13 +261,13 @@ export function NavBellPopover(): React.JSX.Element {
             </button>
           )}
 
-          {/* Ended inmate-violation months still awaiting their admin seal */}
-          {isAdmin && awaitingViolationMonths > 0 && newestViolationMonth && (
+          {monthlyTasks.slice(0, 5).map((task) => (
             <button
+              key={`${task.year}-${task.month}-${task.kind}-${task.submission_id}`}
               type="button"
               onClick={() => {
                 setOpen(false)
-                navigate(inmateRegisterHref(newestViolationMonth.year, newestViolationMonth.month))
+                navigate(inmateRegisterHref(task.year, task.month, task.submission_id))
               }}
               className="flex w-full items-center gap-3 border-b border-hairline px-4 py-3 text-start transition-colors hover:bg-surface-tinted focus-visible:bg-surface-tinted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
             >
@@ -278,21 +278,16 @@ export function NavBellPopover(): React.JSX.Element {
               </Avatar>
               <div className="flex min-w-0 flex-1 flex-col">
                 <span className="truncate text-[0.9em] font-semibold text-foreground">
-                  {t('dashboard.widgetLabels.violation_months')}
+                  {formatRegisterMonth(task.year, task.month, i18n.language)}
                 </span>
                 <span className="text-[0.78em] text-muted-foreground">
-                  {t('inmateStats.awaiting.open')}
+                  {t(`inmateStats.workflow.tasks.${task.kind}`)}
                 </span>
               </div>
-              <span
-                dir="ltr"
-                className="rounded-full bg-warning/15 px-2 py-0.5 font-mono text-[0.7em] font-semibold text-warning"
-              >
-                {awaitingViolationMonths}
-              </span>
               <ArrowRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground rtl:rotate-180" strokeWidth={1.8} />
             </button>
-          )}
+          ))}
+          {monthlyTasks.length > 5 ? <Link to={inmateMonthlyTasksHref} onClick={() => setOpen(false)} className="block border-b border-hairline px-4 py-3 text-sm text-primary hover:underline">{t('inmateStats.workflow.allTasks')}</Link> : null}
 
           {/* Awaiting MY approval (books.approve-gated) — Phase 4 LAN */}
           {canApproveBooks && awaitingApproval > 0 && (

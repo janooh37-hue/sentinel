@@ -17,7 +17,6 @@ import {
 import { Textarea } from '@/components/ui/textarea'
 import { EmployeePicker } from '../EmployeePicker'
 import { NationalityPicker } from './RegisterPickers'
-import { WINGS } from './registerModel'
 import { useInmateNationalities } from './useInmateRegister'
 
 const EMPTY_WING = '__none__'
@@ -34,6 +33,7 @@ interface CompletionLine {
 }
 
 interface CompletionFormProps {
+  wings: readonly string[]
   sourceEntry: InmateRegisterEntry
   reportEntries: readonly InmateRegisterEntry[]
   isWriting: boolean
@@ -55,12 +55,14 @@ function lineFromEntry(entry: InmateRegisterEntry): CompletionLine {
 }
 
 export function CompletionForm({
+  wings,
   sourceEntry,
   reportEntries,
   isWriting,
   onComplete,
 }: CompletionFormProps): React.JSX.Element {
   const { t } = useTranslation()
+  const formId = useId()
   const reporterLabelId = useId()
   const nationalities = useInmateNationalities()
   const [reportTime, setReportTime] = useState('')
@@ -124,12 +126,12 @@ export function CompletionForm({
 
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="space-y-1.5">
-          <Label htmlFor="register-completion-time">
+          <Label htmlFor={`${formId}-time`}>
             {t('inmateStats.completion.reportTime')}
             <span className="ms-0.5 text-destructive">*</span>
           </Label>
           <Input
-            id="register-completion-time"
+            id={`${formId}-time`}
             type="time"
             value={reportTime}
             onChange={(event) => setReportTime(event.target.value)}
@@ -152,12 +154,12 @@ export function CompletionForm({
       </div>
 
       <div className="space-y-1.5">
-        <Label htmlFor="register-completion-details">
+        <Label htmlFor={`${formId}-details`}>
           {t('inmateStats.completion.details')}
           <span className="ms-0.5 text-destructive">*</span>
         </Label>
         <Textarea
-          id="register-completion-details"
+          id={`${formId}-details`}
           value={violationDetails}
           onChange={(event) => setViolationDetails(event.target.value)}
           required
@@ -214,9 +216,9 @@ export function CompletionForm({
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
               <div className="space-y-1.5 sm:col-span-2">
-                <Label htmlFor={`${line.key}-name`}>{t('inmateStats.columns.name')}</Label>
+                <Label htmlFor={`${formId}-${line.key}-name`}>{t('inmateStats.columns.name')}</Label>
                 <Input
-                  id={`${line.key}-name`}
+                  id={`${formId}-${line.key}-name`}
                   value={line.name}
                   onChange={(event) => updateLine(line.key, { name: event.target.value })}
                   required
@@ -224,9 +226,9 @@ export function CompletionForm({
                 />
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor={`${line.key}-uid`}>{t('inmateStats.columns.uid')}</Label>
+                <Label htmlFor={`${formId}-${line.key}-uid`}>{t('inmateStats.columns.uid')}</Label>
                 <Input
-                  id={`${line.key}-uid`}
+                  id={`${formId}-${line.key}-uid`}
                   value={line.uid}
                   onChange={(event) => updateLine(line.key, { uid: event.target.value })}
                   dir="ltr"
@@ -243,30 +245,31 @@ export function CompletionForm({
                 unresolved={line.unresolvedNationality}
               />
               <div className="space-y-1.5">
-                <Label htmlFor={`${line.key}-wing`}>{t('inmateStats.inspector.wing')}</Label>
+                <Label htmlFor={`${formId}-${line.key}-wing`}>{t('inmateStats.inspector.wing')}</Label>
                 <Select
-                  value={line.wing || EMPTY_WING}
+                  value={wings.includes(line.wing) ? line.wing : EMPTY_WING}
                   onValueChange={(value) =>
                     updateLine(line.key, { wing: value === EMPTY_WING ? '' : value })
                   }
                 >
-                  <SelectTrigger id={`${line.key}-wing`}>
+                  <SelectTrigger id={`${formId}-${line.key}-wing`}>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value={EMPTY_WING}>—</SelectItem>
-                    {WINGS.map((value) => (
+                    {wings.map((value) => (
                       <SelectItem key={value} value={value}>
                         <bdi dir="ltr">{value}</bdi>
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
+                {line.wing && !wings.includes(line.wing) ? <p className="text-sm text-warning">{t('inmateStats.workflow.invalidWing')} <bdi dir="ltr">{line.wing}</bdi></p> : null}
               </div>
               <div className="space-y-1.5">
-                <Label htmlFor={`${line.key}-holding`}>{t('inmateStats.inspector.holdingNo')}</Label>
+                <Label htmlFor={`${formId}-${line.key}-holding`}>{t('inmateStats.inspector.holdingNo')}</Label>
                 <Input
-                  id={`${line.key}-holding`}
+                  id={`${formId}-${line.key}-holding`}
                   value={line.holdingNo}
                   onChange={(event) => updateLine(line.key, { holdingNo: event.target.value })}
                   dir="ltr"

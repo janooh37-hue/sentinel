@@ -3,19 +3,22 @@ import { useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { Columns3, UserRoundPlus } from 'lucide-react'
 
-import type { InmatePopulation, InmateRegisterEntry } from '@/lib/api'
+import { ApiError, type InmatePopulation, type InmateRegisterEntry } from '@/lib/api'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { CloseControls } from './CloseControls'
+import { WorkflowControls } from './WorkflowControls'
+import { ViolationMonthsWidget } from '@/pages/dashboard/widgets/ViolationMonthsWidget'
+import { Label } from '@/components/ui/label'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { EntryInspector, SealedStrip, type InspectorMode } from './EntryInspector'
 import { ExportWorkspace } from './ExportWorkspace'
 import { MonthSwitcher } from './MonthSwitcher'
 import { RegisterIndex } from './RegisterIndex'
 import { WarningsStrip } from './WarningsStrip'
-import { groupEntries, parseMonthKey, visibleGroups } from './registerModel'
+import { formatRegisterDateTime, groupEntries, parseMonthKey, parseSubmissionId, visibleGroups } from './registerModel'
 import { useInmateRegister } from './useInmateRegister'
 
 type ViewMode = 'register' | 'export'
@@ -30,16 +33,30 @@ function initialCoordinate(raw: string | null): { year: number; month: number } 
 export function StatisticsTab(): React.JSX.Element {
   const { t } = useTranslation()
   const [searchParams] = useSearchParams()
+  const rawMonth = searchParams.get('stats_month')
+  const rawSubmission = searchParams.get('stats_submission')
+  if ((rawMonth !== null && !parseMonthKey(rawMonth)) ||
+    (rawSubmission !== null && (!parseSubmissionId(rawSubmission) || !rawMonth))) {
+    return <p role="alert" className="p-4 text-accent">{t('inmateStats.workflow.invalidLink')}</p>
+  }
+  return <StatisticsMonth key={`${rawMonth}:${rawSubmission}`} />
+}
+
+function StatisticsMonth(): React.JSX.Element {
+  const { t, i18n } = useTranslation()
+  const [searchParams] = useSearchParams()
   const [coordinate, setCoordinate] = useState(() =>
     initialCoordinate(searchParams.get('stats_month')),
   )
-  const [view, setView] = useState<ViewMode>('register')
+  const [view, setView] = useState<ViewMode>(searchParams.has('stats_submission') ? 'export' : 'register')
+  const [submissionId, setSubmissionId] = useState(() => parseSubmissionId(searchParams.get('stats_submission')))
+  const [selectionMade, setSelectionMade] = useState(searchParams.has('stats_submission'))
   const [population, setPopulation] = useState<InmatePopulation>('citizens')
   const [expandedColumns, setExpandedColumns] = useState(false)
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [inspectorMode, setInspectorMode] = useState<InspectorMode>('view')
   const [sheetOpen, setSheetOpen] = useState(false)
-  const register = useInmateRegister(coordinate.year, coordinate.month)
+  const register = useInmateRegister(coordinate.year, coordinate.month, submissionId)
   const month = register.month
   const groups = groupEntries(month)
   const shownGroups = visibleGroups(groups)
@@ -81,10 +98,30 @@ export function StatisticsTab(): React.JSX.Element {
     setSelectedId(null)
     setInspectorMode('view')
     setSheetOpen(false)
+    setView('register')
+    setSubmissionId(null)
+    setSelectionMade(false)
+  }
+
+  const openReport = (id: number | null): void => {
+    setSubmissionId(id)
+    setSelectionMade(true)
+    setSheetOpen(false)
+    setView('export')
+    register.refreshReport()
+  }
+
+  const correctEntry = (id: string): void => {
+    const entry = month?.entries.find((item) => item.id === id)
+    if (!entry) return
+    setView('register')
+    setPopulation(entry.population as InmatePopulation)
+    selectEntry(entry)
   }
 
   const inspector = month ? (
     <EntryInspector
+      key={`${coordinate.year}-${coordinate.month}-${selectedEntry?.id ?? 'new'}-${inspectorMode}`}
       month={month}
       entry={selectedEntry}
       mode={month.closed ? 'view' : inspectorMode}
@@ -92,18 +129,17 @@ export function StatisticsTab(): React.JSX.Element {
       isWriting={register.isWriting}
       onModeChange={setInspectorMode}
       onCreate={(body) => {
-        register.createManualRow(body)
-        setInspectorMode('view')
+        register.createManualRow(body, { onSuccess: () => setInspectorMode('view') })
       }}
       onUpdate={(args) => {
-        register.updateManualRow(args)
-        setInspectorMode('view')
+        register.updateManualRow(args, { onSuccess: () => setInspectorMode('view') })
       }}
       onDelete={(rowId) => {
-        register.deleteManualRow(rowId)
-        setSelectedId(null)
-        setInspectorMode('view')
-        setSheetOpen(false)
+        register.deleteManualRow(rowId, { onSuccess: () => {
+          setSelectedId(null)
+          setInspectorMode('view')
+          setSheetOpen(false)
+        } })
       }}
       onComplete={register.completeImport}
     />
@@ -144,8 +180,7 @@ export function StatisticsTab(): React.JSX.Element {
                 variant={view === 'export' ? 'secondary' : 'ghost'}
                 aria-pressed={view === 'export'}
                 onClick={() => {
-                  setSheetOpen(false)
-                  setView('export')
+                  openReport(selectionMade ? submissionId : month?.workflow.active_submission_id ?? null)
                 }}
               >
                 {t('inmateStats.views.export')}
@@ -172,25 +207,27 @@ export function StatisticsTab(): React.JSX.Element {
                 {month.counts.expats}
               </dd>
             </div>
-            {month.counts.pending > 0 ? (
-              <div className="bg-warning-soft px-4 py-3 text-warning">
-                <dt className="text-xs font-semibold">
-                  {t('inmateStats.populations.pending')} — {t('inmateStats.counts.perTable')}
-                </dt>
-                <dd className="mt-1 font-mono text-2xl font-bold tabular-nums" dir="ltr">
-                  {month.counts.pending}
-                </dd>
-              </div>
-            ) : null}
             <div className="bg-primary-soft px-4 py-3 text-primary-on-soft">
               <dt className="text-xs font-semibold">{t('inmateStats.counts.monthTotal')}</dt>
               <dd className="mt-1 font-mono text-2xl font-extrabold tabular-nums" dir="ltr">
                 {month.counts.total}
               </dd>
+              {month.counts.pending > 0 ? <dd className="mt-1 text-sm">{t('inmateStats.populations.pending')}: <bdi dir="ltr">{month.counts.pending}</bdi></dd> : null}
+            </div>
+            <div className="min-w-0 bg-surface-raised px-4 py-3">
+              <dt className="text-xs font-semibold">{t('inmateStats.counts.mostWing')}</dt>
+              <dd className="mt-1 flex flex-wrap gap-x-2 font-mono text-xl font-bold">{month.wing_summary.most.length ? month.wing_summary.most.map((wing) => <bdi dir="ltr" key={wing}>{wing}</bdi>) : '—'}</dd>
+              <dd className="mt-1 text-sm">{t('inmateStats.counts.perTable')}: <bdi dir="ltr">{month.wing_summary.most_count}</bdi></dd>
+              {month.wing_summary.unassigned_count > 0 ? <dd className="mt-1 text-sm text-warning">{t('inmateStats.workflow.provisionalWings', { count: month.wing_summary.unassigned_count })}</dd> : null}
             </div>
           </dl>
         ) : null}
       </header>
+
+      <div id="monthly-tasks" className="scroll-mt-4"><ViolationMonthsWidget compact={false} /></div>
+
+      {month ? <WorkflowControls key={`${coordinate.year}-${coordinate.month}-${month.workflow.version}`} month={month} register={register}
+        viewedSubmissionId={view === 'export' ? submissionId : null} viewedDraftFingerprint={view === 'register' || submissionId === null ? month.projection_fingerprint : null} onOpenReport={openReport} onCorrectEntry={correctEntry} /> : null}
 
       {register.isLoading ? (
         <div className="space-y-3" aria-label={t('common.loading')}>
@@ -199,13 +236,44 @@ export function StatisticsTab(): React.JSX.Element {
         </div>
       ) : register.isError || !month ? (
         <div className="rounded-xl border border-hairline bg-surface p-8 text-center">
-          <p className="text-sm text-muted-foreground">{t('common.loadError')}</p>
+          <p role="alert" className="text-sm text-muted-foreground">{t(register.error instanceof ApiError && register.error.status === 403 ? 'inmateStats.workflow.reportForbidden' : 'common.loadError')}</p>
           <Button type="button" variant="outline" className="mt-3" onClick={register.refetch}>
             {t('common.retry')}
           </Button>
         </div>
       ) : view === 'export' ? (
-        <ExportWorkspace month={month} />
+        <div className="space-y-4">
+          <div className="space-y-2 rounded-xl border border-hairline bg-surface p-4">
+            <Label htmlFor="register-report-selection">{t('inmateStats.workflow.reportSelection')}</Label>
+            <Select value={submissionId === null ? 'draft' : String(submissionId)} onValueChange={(value) => openReport(value === 'draft' ? null : Number(value))}>
+              <SelectTrigger id="register-report-selection" className="h-auto min-h-10 max-w-xl text-start"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                {!month.closed ? <SelectItem value="draft">{t('inmateStats.workflow.currentDraft')}</SelectItem> : null}
+                {register.history.map((item) => <SelectItem key={item.id} value={String(item.id)}>
+                  {t('inmateStats.workflow.revision', { sequence: item.sequence })}{' · '}{t(`inmateStats.workflow.reportStates.${item.report_state}`)}{item.stale ? ` · ${t('inmateStats.workflow.stale')}` : ''}{item.current ? ` · ${t('inmateStats.workflow.active')}` : ''}
+                </SelectItem>)}
+              </SelectContent>
+            </Select>
+            {register.historyError ? <p role="alert" className="text-sm text-accent">{t('inmateStats.workflow.historyError')} <Button type="button" variant="link" onClick={register.refetch}>{t('common.retry')}</Button></p> : null}
+            <p role="status" className="text-sm text-muted-foreground">
+              {submissionId === null ? t('inmateStats.workflow.currentDraft') : register.selectedReport ? `${t('inmateStats.workflow.revision', { sequence: register.selectedReport.sequence })} · ${t(`inmateStats.workflow.reportStates.${register.selectedReport.report_state}`)}${register.selectedReport.stale ? ` · ${t('inmateStats.workflow.stale')}` : ''}${!register.selectedReport.current ? ` · ${t('inmateStats.workflow.history')}` : ''}` : t('common.loading')}
+            </p>
+          </div>
+          {submissionId !== null && (register.reportError || (!register.reportLoading && !register.selectedReport)) ? <div role="alert" className="space-y-2 rounded-xl border border-hairline bg-surface p-4">
+            <p>{t(register.reportError instanceof ApiError ? register.reportError.status === 403 ? 'inmateStats.workflow.reportForbidden' : register.reportError.status === 404 ? 'inmateStats.workflow.reportNotFound' : 'common.loadError' : register.reportError ? 'common.loadError' : 'inmateStats.workflow.reportNotFound')}</p>
+            <Button type="button" variant="outline" onClick={register.refreshReport}>{t('common.retry')}</Button>
+          </div> : submissionId !== null && register.reportLoading ? <Skeleton aria-label={t('common.loading')} className="h-80 w-full" /> : (
+            <ExportWorkspace month={submissionId === null ? month : register.selectedReport!} submissionId={submissionId ?? undefined} />
+          )}
+          {register.selectedReport && submissionId !== null ? <details className="rounded-xl border border-hairline bg-surface p-4">
+            <summary className="cursor-pointer font-semibold">{t('inmateStats.workflow.actionHistory')}</summary>
+            <ol className="mt-3 space-y-3 text-sm">{register.selectedReport.actions.map((action, index) => <li key={`${action.action}-${index}`}>
+              <p>{t(`inmateStats.workflow.events.${action.action}`)} · <bdi dir="ltr">{formatRegisterDateTime(action.occurred_at, i18n.language)}</bdi></p>
+              <p><bdi>{action.actor_name_ar}</bdi> · <bdi dir="ltr">{action.actor_employee_id}</bdi></p>
+              {action.reason ? <p dir="auto" className="mt-1 whitespace-pre-wrap">{action.reason}</p> : null}
+            </li>)}</ol>
+          </details> : null}
+        </div>
       ) : (
         <>
           <SealedStrip month={month} />
@@ -294,18 +362,12 @@ export function StatisticsTab(): React.JSX.Element {
           </Tabs>
 
           <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
-            <SheetContent className="w-[min(94vw,28rem)] overflow-y-auto p-4 lg:hidden">
+            <SheetContent aria-describedby={undefined} className="w-[min(94vw,28rem)] overflow-y-auto p-4 lg:hidden">
               <SheetTitle className="sr-only">{t('inmateStats.inspector.title')}</SheetTitle>
               {inspector}
             </SheetContent>
           </Sheet>
 
-          <CloseControls
-            month={month}
-            isWriting={register.isWriting}
-            onClose={register.closeMonth}
-            onReopen={register.reopenMonth}
-          />
         </>
       )}
     </div>
