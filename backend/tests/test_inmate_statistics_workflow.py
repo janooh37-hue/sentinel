@@ -212,6 +212,56 @@ def test_current_month_broken_assignment_is_admin_recovery_task(api_db, people):
     assert not service.workflow_tasks(api_db, actor=people[1])
 
 
+@pytest.mark.parametrize("caller_index", [3, 4])
+def test_unrelated_task_polling_does_not_project_active_months(api_db, people, monkeypatch, caller_index):
+    for month in (7, 8, 9):
+        live(api_db, month=month)
+        review(api_db, people, month=month)
+    projected = []
+    original = service.effective_projection
+    def track_projection(db, year, month):
+        projected.append((year, month))
+        return original(db, year, month)
+    monkeypatch.setattr(service, "effective_projection", track_projection)
+    assert service.workflow_tasks(api_db, actor=people[caller_index]) == []
+    assert projected == []
+
+
+def test_admin_recovers_stale_report_with_ineligible_preparer(api_db, people):
+    book = live(api_db, month=9)
+    submitted = prepare(api_db, people, month=9)
+    version = book.versions[0]
+    version.fields = {**version.fields, "violation_details": "Changed after preparation"}
+    people[0].status = "disabled"
+    api_db.commit()
+    tasks = service.workflow_tasks(api_db, actor=people[4])
+    assert [(item["kind"], item["submission_id"]) for item in tasks] == [("recovery", submitted.workflow["active_submission_id"])]
+
+
+@pytest.mark.parametrize("profile", ["linked", "missing_employee", "missing_arabic"])
+def test_local_invalidation_preserves_available_actor_facts(api_db, people, profile):
+    row = service.create_manual_row(api_db, 2026, 8, actor=people[0], name="نزيل", violation_date=date(2026, 8, 1), reason="إضافة", nationality_label="الامارات", wing="1A", details_text="تفاصيل")
+    review(api_db, people)
+    editor = people[3]
+    if profile == "missing_employee":
+        editor.employee_id = None
+    elif profile == "missing_arabic":
+        editor.employee.name_ar = " "
+    api_db.commit()
+    expected_employee_id = editor.employee_id
+    expected_name = "الموظف التجريبي 3" if profile == "linked" else None
+    editor_id = editor.id
+    service.update_manual_row(api_db, row.id, actor=editor, changes={"wing": "1B"})
+    if editor.employee_id:
+        editor.employee.name_ar = "اسم محدث"
+    editor.employee_id = people[4].employee_id
+    api_db.commit()
+    event = api_db.scalar(select(InmateViolationWorkflowAction).where(InmateViolationWorkflowAction.action == "invalidated"))
+    assert event.actor_user_id == editor_id
+    assert event.actor_employee_id == expected_employee_id
+    assert event.actor_name_ar == expected_name
+
+
 def test_return_and_fresh_supersede_need_reason_and_preserve_old_task_identity(api_db, people):
     live(api_db)
     original = prepare(api_db, people)

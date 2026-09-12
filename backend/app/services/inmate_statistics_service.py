@@ -1287,7 +1287,15 @@ def _reserve_local_edit(db: Session, year: int, month: int, actor: User) -> None
     if actor.status != "active" or not all(perm_service.has_capability(db, actor, cap) for cap in _WRITE_CAPS):
         raise AppError("FORBIDDEN", "Register write capabilities are required.", http_status=403)
     if root.state in {"awaiting_review", "awaiting_manager"}:
-        _append(db, root, _active_submission(db, root), "invalidated", facts={"user_id": actor.id}, reason="register_changed")
+        # Ordinary edits need no signing profile. Preserve whatever identity
+        # exists after the reservation refreshed the account and employee.
+        employee = db.get(Employee, actor.employee_id) if actor.employee_id else None
+        facts = {
+            "user_id": actor.id,
+            "employee_id": employee.id if employee else None,
+            "name_ar": (_text(employee.name_ar) or None) if employee else None,
+        }
+        _append(db, root, _active_submission(db, root), "invalidated", facts=facts, reason="register_changed")
         root.state = "draft"
         db.flush()
 
@@ -1584,6 +1592,8 @@ def workflow_tasks(db: Session, *, actor: User, today: date | None = None) -> li
     """Assigned actions plus cheap unowned discovery; no global live projection."""
     if not _caps(db, actor, "navigation"):
         return []
+    can_prepare = _eligible(db, actor, "prepare")
+    is_admin = actor.role == "admin"
     tasks = []
     roots = list(db.scalars(select(InmateViolationWorkflow)))
     occupied = {(root.year, root.month) for root in roots if root.state == "closed" or root.current_sequence}
@@ -1595,22 +1605,35 @@ def workflow_tasks(db: Session, *, actor: User, today: date | None = None) -> li
             continue
         facts = _actor_facts(db, submission)
         preparer_id = (facts.get("prepared") or {}).get("user_id")
-        preparer = db.get(User, preparer_id) if preparer_id else None
         stage = "review" if root.state == "awaiting_review" else "approve" if root.state == "awaiting_manager" else None
+        selected_user_id = submission.reviewer_user_id if stage == "review" else submission.manager_user_id if stage == "approve" else None
+        owns_preparation = preparer_id == actor.id and can_prepare
+        owns_assignment = stage is not None and selected_user_id == actor.id
+        if not (owns_preparation or owns_assignment or is_admin):
+            continue
         assignment = _assignment(db, submission, stage) if stage else None
-        context = _submission_context(db, submission)
-        correction = root.state == "draft" or context["stale"]
+        eligible_assignee = bool(owns_assignment and assignment and assignment["eligible"])
+        broken_assignment = bool(stage and (assignment is None or not assignment["eligible"]))
+        preparer = db.get(User, preparer_id) if is_admin and preparer_id else None
+        recovery_candidate = is_admin and not _eligible(db, preparer, "prepare")
         kind, code = None, None
-        if actor.role == "admin" and ((stage and (assignment is None or not assignment["eligible"])) or (correction and not _eligible(db, preparer, "prepare"))):
-            kind = "recovery"
-            code = "INMATE_REGISTER_ASSIGNEE_INELIGIBLE" if stage else "INMATE_REGISTER_INVALID_ACTOR_PROFILE"
-        elif correction and preparer_id == actor.id and _eligible(db, actor, "prepare"):
-            kind, code = "correction", "INMATE_REGISTER_STALE_PROJECTION"
-        elif not correction and assignment and assignment["user_id"] == actor.id and assignment["eligible"]:
-            kind = stage
+        if is_admin and broken_assignment:
+            # Broken handoffs are recoverable immediately, even in a current
+            # month. Their discovery does not need a report projection.
+            kind, code = "recovery", "INMATE_REGISTER_ASSIGNEE_INELIGIBLE"
+        elif owns_preparation or eligible_assignee or recovery_candidate:
+            # Only these callers can receive a task affected by freshness.
+            # An administrator with healthy unrelated actors skips projection.
+            correction = root.state == "draft" or _submission_context(db, submission)["stale"]
+            if correction and recovery_candidate:
+                kind, code = "recovery", "INMATE_REGISTER_INVALID_ACTOR_PROFILE"
+            elif correction and owns_preparation:
+                kind, code = "correction", "INMATE_REGISTER_STALE_PROJECTION"
+            elif not correction and eligible_assignee:
+                kind = stage
         if kind:
             tasks.append({"year": root.year, "month": root.month, "kind": kind, "submission_id": submission.id, "code": code, "row_count": len(submission.payload["entries"])})
-    if _eligible(db, actor, "prepare"):
+    if can_prepare:
         counts: dict[tuple[int, int], int] = {}
         for _book, version in _current_versions(db):
             fields = version.fields if isinstance(version.fields, dict) else {}
