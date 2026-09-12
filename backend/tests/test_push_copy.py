@@ -8,6 +8,33 @@ from app.services.notification_service import ActionableItem
 APP = "GSSG Manager"
 
 
+def test_monthly_push_names_report_stage_and_links_to_exact_submission():
+    for kind, en, ar in [
+        ("monthly_review", "review", "مراجعتك"),
+        ("monthly_approval", "approval", "اعتمادك"),
+    ]:
+        target = "/application?form=inmate_conduct_violations&mode=stats&stats_month=2026-08&stats_submission=42"
+        messages, url = ss._build_push(kind, [_item(kind, label="2026-08", url=target)], "/section")
+        assert "Monthly inmate violations report" in messages["en"][1]
+        assert en in messages["en"][1]
+        assert ar in messages["ar"][1]
+        assert "2026-08" in messages["ar"][1]
+        assert url == target
+
+
+def test_grouped_monthly_push_opens_monthly_tasks_section():
+    for kind in ("monthly_review", "monthly_approval"):
+        assert (
+            ss._KIND_META.get(kind)
+            == "/application?form=inmate_conduct_violations&mode=stats#monthly-tasks"
+        )
+        messages, url = ss._build_push(
+            kind, [_item(kind), _item(kind, ref="inmate-submission:2")], ss._KIND_META[kind]
+        )
+        assert "2 monthly inmate violations reports" in messages["en"][1]
+        assert url.endswith("#monthly-tasks")
+
+
 def _item(kind, **kw):
     base = dict(kind=kind, ref=f"{kind}:1", url=f"/{kind}/1", label="#1")
     base.update(kw)
@@ -15,6 +42,7 @@ def _item(kind, **kw):
 
 
 # --- titles: app name in both languages, every kind ------------------------
+
 
 def test_titles_are_app_name_in_both_languages():
     cases = [
@@ -30,6 +58,7 @@ def test_titles_are_app_name_in_both_languages():
 
 
 # --- email: sender + subject + preview + attachments, not "1 unread email" --
+
 
 def test_email_single_names_sender_subject_preview_attachments():
     it = _item(
@@ -74,6 +103,7 @@ def test_email_multiple_summarizes_and_names_latest():
 
 # --- approval / review ------------------------------------------------------
 
+
 def test_approval_single_signature_needed_with_from_and_deeplink():
     it = _item("approval", url="/books/5", label="HR-0409", subject="Annual leave", requester="Ali")
     messages, url = ss._build_push("approval", [it], "/books?status=pending")
@@ -101,6 +131,7 @@ def test_approval_multiple_counts_queue():
 
 # --- scan -------------------------------------------------------------------
 
+
 def test_scan_single_and_multiple():
     one, _ = ss._build_push("scan", [_item("scan", url="/scan-inbox", label="#42")], "/scan-inbox")
     assert "New scan to review" in one["en"][1]
@@ -110,6 +141,7 @@ def test_scan_single_and_multiple():
 
 
 # --- helpers ----------------------------------------------------------------
+
 
 def test_email_preview_strips_html_collapses_and_truncates():
     html = "<p>Hello&nbsp;there</p><div>Second   line</div>"

@@ -709,13 +709,7 @@ export interface ScanInboxCount {
 }
 
 // Phase 4 LAN — Notification counts (SSE + JSON safety-poll).
-// Hand-mirrored from backend/app/schemas/notifications.py NotificationCounts.
-export interface NotificationCounts {
-  approvals: number
-  leaves: number
-  scans: number
-  emails: number
-}
+export type NotificationCounts = components['schemas']['NotificationCounts']
 
 // Phase 05 — Books
 // ``attachment_paths`` (Task 1 / migration 0023) is not yet in api.types.ts;
@@ -982,12 +976,24 @@ export type InmateRegisterArrived = components['schemas']['ArrivedAfterCloseOut'
 export type InmateRegisterBlocking = components['schemas']['BlockingEntryOut']
 export type InmateNationality = components['schemas']['NationalityOut']
 export type InmateNationalityList = components['schemas']['NationalityListOut']
-export type InmateAwaitingClose = components['schemas']['AwaitingCloseOut']
-export type InmateAwaitingMonth = components['schemas']['AwaitingMonthOut']
+export type InmateWorkflowTasks = components['schemas']['WorkflowTasksOut']
+export type InmateWorkflowTask = components['schemas']['WorkflowTaskOut']
+export type InmateWorkflow = components['schemas']['WorkflowOut']
+export type InmateWorkflowActor = components['schemas']['WorkflowActorOut']
+export type InmateWorkflowAssignment = components['schemas']['WorkflowAssignmentOut']
+export type InmateWorkflowCandidate = components['schemas']['WorkflowCandidateOut']
+export type InmateWorkflowBlocker = components['schemas']['WorkflowBlockerOut']
+export type InmateWingSummary = components['schemas']['WingSummaryOut']
+export type InmateSubmission = components['schemas']['SubmissionOut']
+export type InmateSubmissionSummary = components['schemas']['SubmissionSummaryOut']
 export type InmateManualRowIn = components['schemas']['ManualRowIn']
 export type InmateManualRowPatch = components['schemas']['ManualRowPatch']
 export type InmateCompletionIn = components['schemas']['CompletionIn']
-export type InmateRegisterClose = components['schemas']['CloseIn']
+export type InmateRegisterPrepare = components['schemas']['PrepareIn']
+export type InmateRegisterReview = components['schemas']['ReviewIn']
+export type InmateRegisterReturn = components['schemas']['ReturnIn']
+export type InmateRegisterApprove = components['schemas']['SubmissionActionIn']
+export type InmateRegisterReopen = components['schemas']['ReopenIn']
 /** The three register groups: two inmate populations plus pending completion. */
 export type InmatePopulation = 'citizens' | 'expats' | 'pending'
 
@@ -2562,21 +2568,53 @@ export const api = {
   /** The closed inmate nationality list plus the history alias table. */
   listInmateNationalities: () =>
     request<InmateNationalityList>('GET', '/inmate-violations/nationalities'),
-  /** Admin-only: ended months that still carry no seal. */
-  getInmateRegisterAwaitingClose: () =>
-    request<InmateAwaitingClose>('GET', '/inmate-violations/statistics/awaiting-close'),
-  /** Admin-only. `force_reason` is required to close over pending entries. */
-  closeInmateRegisterMonth: (p: InmateRegisterMonthParams, body: InmateRegisterClose = {}) =>
+  getInmateRegisterTasks: () =>
+    request<InmateWorkflowTasks>('GET', '/inmate-violations/statistics/tasks'),
+  getInmateRegisterCandidates: (p: InmateRegisterMonthParams, stage: 'review' | 'approve') =>
+    request<InmateWorkflowCandidate[]>(
+      'GET',
+      `/inmate-violations/statistics/${p.year}/${p.month}/candidates${qs({ stage })}`,
+    ),
+  getInmateRegisterSubmissions: (p: InmateRegisterMonthParams) =>
+    request<InmateSubmissionSummary[]>(
+      'GET',
+      `/inmate-violations/statistics/${p.year}/${p.month}/submissions`,
+    ),
+  getInmateRegisterSubmission: (p: InmateRegisterMonthParams, submissionId: number) =>
+    request<InmateSubmission>(
+      'GET',
+      `/inmate-violations/statistics/${p.year}/${p.month}/submissions/${submissionId}`,
+    ),
+  prepareInmateRegisterMonth: (p: InmateRegisterMonthParams, body: InmateRegisterPrepare) =>
     request<InmateRegisterMonth>(
       'POST',
-      `/inmate-violations/statistics/${p.year}/${p.month}/close`,
+      `/inmate-violations/statistics/${p.year}/${p.month}/prepare`,
       body,
     ),
-  /** Admin-only. The previous seal survives until the month is closed again. */
-  reopenInmateRegisterMonth: (p: InmateRegisterMonthParams) =>
+  reviewInmateRegisterMonth: (p: InmateRegisterMonthParams, body: InmateRegisterReview) =>
+    request<InmateRegisterMonth>(
+      'POST',
+      `/inmate-violations/statistics/${p.year}/${p.month}/review`,
+      body,
+    ),
+  returnInmateRegisterMonth: (p: InmateRegisterMonthParams, body: InmateRegisterReturn) =>
+    request<InmateRegisterMonth>(
+      'POST',
+      `/inmate-violations/statistics/${p.year}/${p.month}/return`,
+      body,
+    ),
+  approveInmateRegisterMonth: (p: InmateRegisterMonthParams, body: InmateRegisterApprove) =>
+    request<InmateRegisterMonth>(
+      'POST',
+      `/inmate-violations/statistics/${p.year}/${p.month}/approve`,
+      body,
+    ),
+  /** Admin-only reasoned reopen. Preserves the previous report and actors. */
+  reopenInmateRegisterMonth: (p: InmateRegisterMonthParams, body: InmateRegisterReopen) =>
     request<InmateRegisterMonth>(
       'POST',
       `/inmate-violations/statistics/${p.year}/${p.month}/reopen`,
+      body,
     ),
   createInmateManualRow: (p: InmateRegisterMonthParams, body: InmateManualRowIn) =>
     request<InmateRegisterMonth>(
@@ -2611,11 +2649,13 @@ export const api = {
     p: InmateRegisterMonthParams & {
       language?: 'ar' | 'en'
       populations?: readonly InmatePopulation[]
+      submission_id?: number
     },
     fallbackName: string,
   ) => {
     const query = new URLSearchParams()
     if (p.language) query.set('language', p.language)
+    if (p.submission_id !== undefined) query.set('submission_id', String(p.submission_id))
     for (const key of p.populations ?? []) query.append('populations', key)
     const suffix = query.size > 0 ? `?${query.toString()}` : ''
     return fetchAttachment(
