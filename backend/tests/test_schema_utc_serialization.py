@@ -12,9 +12,15 @@ from __future__ import annotations
 
 from datetime import datetime
 
+import pytest
 from pydantic import BaseModel
 
 from app.schemas.book import BookRead, BookVersionRead
+from app.schemas.inmate_statistics import (
+    SubmissionSummaryOut,
+    WorkflowActionOut,
+    WorkflowActorOut,
+)
 from app.schemas.notify import NotifyMessageRead
 
 NAIVE = datetime(2026, 8, 4, 5, 51, 31)
@@ -65,6 +71,72 @@ def test_naive_utc_timestamp_serializes_with_a_utc_offset() -> None:
 
 def test_none_timestamp_survives() -> None:
     assert '"delivery_checked_at":null' in _notify().model_dump_json()
+
+
+@pytest.mark.parametrize(
+    ("schema", "payload", "timestamp_fields"),
+    [
+        (
+            WorkflowActorOut,
+            dict(user_id=1, name_ar="اسم", employee_id="1", acted_at=NAIVE),
+            ("acted_at",),
+        ),
+        (
+            WorkflowActionOut,
+            dict(
+                action="approved",
+                occurred_at=NAIVE,
+                actor_user_id=1,
+                actor_name_ar="اسم",
+                actor_employee_id="1",
+                reason=None,
+            ),
+            ("occurred_at",),
+        ),
+        (
+            SubmissionSummaryOut,
+            dict(
+                id=1,
+                sequence=1,
+                origin="workflow",
+                created_at=NAIVE,
+                approved_at=NAIVE,
+                report_state="approved",
+                current=True,
+                stale=False,
+            ),
+            ("created_at", "approved_at"),
+        ),
+    ],
+    ids=["actor", "action", "summary"],
+)
+def test_inmate_workflow_timestamps_are_utc_without_changing_field_types(
+    schema: type[BaseModel], payload: dict[str, object], timestamp_fields: tuple[str, ...]
+) -> None:
+    dumped = schema(**payload).model_dump(mode="json")
+    properties = schema.model_json_schema(mode="serialization")["properties"]
+    for field in timestamp_fields:
+        assert dumped[field] == "2026-08-04T05:51:31Z"
+        variants = properties[field].get("anyOf", [properties[field]])
+        assert any(
+            item.get("format") == "date-time" and item.get("type") == "string" for item in variants
+        )
+
+
+def test_legacy_submission_summary_keeps_unknown_timestamps_null() -> None:
+    summary = SubmissionSummaryOut(
+        id=1,
+        sequence=1,
+        origin="legacy",
+        created_at=None,
+        approved_at=None,
+        report_state="legacy",
+        current=True,
+        stale=False,
+    )
+    dumped = summary.model_dump(mode="json")
+    assert dumped["created_at"] is None
+    assert dumped["approved_at"] is None
 
 
 def test_non_datetime_fields_are_untouched() -> None:

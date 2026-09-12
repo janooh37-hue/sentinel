@@ -123,7 +123,7 @@ class WingSummaryOut(BaseModel):
     unassigned_count: int
 
 
-class WorkflowActorOut(BaseModel):
+class WorkflowActorOut(ORMBase):
     user_id: int
     name_ar: str
     employee_id: str
@@ -279,7 +279,7 @@ class ReopenIn(WorkflowVersionIn):
     reason: str = Field(min_length=1)
 
 
-class SubmissionSummaryOut(BaseModel):
+class SubmissionSummaryOut(ORMBase):
     id: int
     sequence: int
     origin: Literal["workflow", "legacy"]
@@ -290,8 +290,10 @@ class SubmissionSummaryOut(BaseModel):
     stale: bool
 
 
-class WorkflowActionOut(BaseModel):
-    action: Literal["prepared", "reviewed", "approved", "returned", "superseded", "invalidated", "reopened"]
+class WorkflowActionOut(ORMBase):
+    action: Literal[
+        "prepared", "reviewed", "approved", "returned", "superseded", "invalidated", "reopened"
+    ]
     occurred_at: datetime
     actor_user_id: int | None
     actor_name_ar: str | None
