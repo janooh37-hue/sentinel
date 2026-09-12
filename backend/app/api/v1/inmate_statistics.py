@@ -282,34 +282,72 @@ def prepare_month(
 
 
 @router.post("/statistics/{year}/{month}/review", response_model=MonthOut)
-def review_month(year: Year, month: Month, body: ReviewIn, user: Annotated[User, Depends(register_reader)], db: Annotated[Session, Depends(get_db)]) -> MonthOut:
+def review_month(
+    year: Year,
+    month: Month,
+    body: ReviewIn,
+    user: Annotated[User, Depends(register_reader)],
+    db: Annotated[Session, Depends(get_db)],
+) -> MonthOut:
     return _month_out(register.review_month(db, year, month, actor=user, **body.model_dump()))
 
 
 @router.post("/statistics/{year}/{month}/return", response_model=MonthOut)
-def return_month(year: Year, month: Month, body: ReturnIn, user: Annotated[User, Depends(register_reader)], db: Annotated[Session, Depends(get_db)]) -> MonthOut:
+def return_month(
+    year: Year,
+    month: Month,
+    body: ReturnIn,
+    user: Annotated[User, Depends(register_reader)],
+    db: Annotated[Session, Depends(get_db)],
+) -> MonthOut:
     return _month_out(register.return_month(db, year, month, actor=user, **body.model_dump()))
 
 
 @router.post("/statistics/{year}/{month}/approve", response_model=MonthOut)
-def approve_month(year: Year, month: Month, body: SubmissionActionIn, user: Annotated[User, Depends(register_reader)], db: Annotated[Session, Depends(get_db)]) -> MonthOut:
+def approve_month(
+    year: Year,
+    month: Month,
+    body: SubmissionActionIn,
+    user: Annotated[User, Depends(register_reader)],
+    db: Annotated[Session, Depends(get_db)],
+) -> MonthOut:
     return _month_out(register.approve_month(db, year, month, actor=user, **body.model_dump()))
 
 
 @router.get("/statistics/{year}/{month}/candidates", response_model=list[WorkflowCandidateOut])
-def workflow_candidates(year: Year, month: Month, stage: Literal["review", "approve"], user: Annotated[User, Depends(register_reader)], db: Annotated[Session, Depends(get_db)]) -> list[dict]:
+def workflow_candidates(
+    year: Year,
+    month: Month,
+    stage: Literal["review", "approve"],
+    user: Annotated[User, Depends(register_reader)],
+    db: Annotated[Session, Depends(get_db)],
+) -> list[dict]:
     return register.workflow_candidates(db, year, month, actor=user, stage=stage)
 
 
 @router.get("/statistics/{year}/{month}/submissions", response_model=list[SubmissionSummaryOut])
-def submission_history(year: Year, month: Month, _user: Annotated[User, Depends(register_reader)], db: Annotated[Session, Depends(get_db)]) -> list[dict]:
+def submission_history(
+    year: Year,
+    month: Month,
+    _user: Annotated[User, Depends(register_reader)],
+    db: Annotated[Session, Depends(get_db)],
+) -> list[dict]:
     return register.submission_history(db, year, month)
 
 
 @router.get("/statistics/{year}/{month}/submissions/{submission_id}", response_model=SubmissionOut)
-def get_submission(year: Year, month: Month, submission_id: int, _user: Annotated[User, Depends(register_reader)], db: Annotated[Session, Depends(get_db)]) -> SubmissionOut:
+def get_submission(
+    year: Year,
+    month: Month,
+    submission_id: int,
+    _user: Annotated[User, Depends(register_reader)],
+    db: Annotated[Session, Depends(get_db)],
+) -> SubmissionOut:
     view = register.submission_month(db, year, month, submission_id)
-    return SubmissionOut(**_month_out(view).model_dump(), **register.submission_detail(db, year, month, submission_id))
+    return SubmissionOut(
+        **_month_out(view).model_dump(),
+        **register.submission_detail(db, year, month, submission_id),
+    )
 
 
 @router.post("/statistics/{year}/{month}/reopen", response_model=MonthOut)

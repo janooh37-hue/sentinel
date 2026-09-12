@@ -253,7 +253,14 @@ def _write_summary_sheet(
     rows.extend(
         (
             (labels["total"], sum(counts[key] for key in _SECTION_KEYS)),
-            (labels["status"], labels["legacy"] if legacy else labels["closed"] if closed_at is not None else labels["open"]),
+            (
+                labels["status"],
+                labels["legacy"]
+                if legacy
+                else labels["closed"]
+                if closed_at is not None
+                else labels["open"],
+            ),
         )
     )
     if closed_at is not None:

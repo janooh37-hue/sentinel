@@ -21,7 +21,9 @@ def test_static_catalog_has_complete_bilingual_request_policy_metadata():
     assert by_id["ledger.view"].label_en == "View ledger"
     assert by_id["ledger.view"].label_ar == "عرض سجل المراسلات"
 
-    assert frozenset({"users.manage", "system.admin", "inmate_statistics.approve"}) == (permissions.SENSITIVE_CAPABILITY_IDS)
+    assert frozenset({"users.manage", "system.admin", "inmate_statistics.approve"}) == (
+        permissions.SENSITIVE_CAPABILITY_IDS
+    )
     assert {cap.id for cap in CAPABILITIES if cap.sensitive} == set(
         permissions.SENSITIVE_CAPABILITY_IDS
     )

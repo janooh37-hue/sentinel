@@ -2054,14 +2054,23 @@ class InmateViolationWorkflow(Base):
     year: Mapped[int] = mapped_column(Integer, nullable=False)
     month: Mapped[int] = mapped_column(Integer, nullable=False)
     version: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
-    state: Mapped[str] = mapped_column(String(24), nullable=False, default="draft", server_default="draft")
-    current_sequence: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    state: Mapped[str] = mapped_column(
+        String(24), nullable=False, default="draft", server_default="draft"
+    )
+    current_sequence: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
     __table_args__ = (
         UniqueConstraint("year", "month", name="uq_inmate_violation_workflows_month"),
         CheckConstraint("month BETWEEN 1 AND 12", name="ck_inmate_violation_workflows_month"),
         CheckConstraint("year BETWEEN 2000 AND 2100", name="ck_inmate_violation_workflows_year"),
-        CheckConstraint("version >= 0 AND current_sequence >= 0", name="ck_inmate_violation_workflows_version"),
-        CheckConstraint("state IN ('draft','awaiting_review','awaiting_manager','closed')", name="ck_inmate_violation_workflows_state"),
+        CheckConstraint(
+            "version >= 0 AND current_sequence >= 0", name="ck_inmate_violation_workflows_version"
+        ),
+        CheckConstraint(
+            "state IN ('draft','awaiting_review','awaiting_manager','closed')",
+            name="ck_inmate_violation_workflows_state",
+        ),
         Index("ix_inmate_violation_workflows_state", "state"),
     )
 
@@ -2071,22 +2080,35 @@ class InmateViolationSubmission(Base):
 
     __tablename__ = "inmate_violation_submissions"
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    workflow_id: Mapped[int] = mapped_column(ForeignKey("inmate_violation_workflows.id", ondelete="CASCADE"), nullable=False)
+    workflow_id: Mapped[int] = mapped_column(
+        ForeignKey("inmate_violation_workflows.id", ondelete="CASCADE"), nullable=False
+    )
     sequence: Mapped[int] = mapped_column(Integer, nullable=False)
     payload: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
     fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
     created_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     origin: Mapped[str] = mapped_column(String(16), nullable=False, default="workflow")
-    reviewer_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    reviewer_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
     reviewer_employee_id: Mapped[str | None] = mapped_column(String(16), nullable=True)
-    manager_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    manager_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
     manager_employee_id: Mapped[str | None] = mapped_column(String(16), nullable=True)
     legacy_metadata: Mapped[dict[str, Any] | None] = mapped_column(JSON, nullable=True)
     __table_args__ = (
-        UniqueConstraint("workflow_id", "sequence", name="uq_inmate_violation_submissions_sequence"),
+        UniqueConstraint(
+            "workflow_id", "sequence", name="uq_inmate_violation_submissions_sequence"
+        ),
         CheckConstraint("sequence > 0", name="ck_inmate_violation_submissions_sequence"),
-        CheckConstraint("origin IN ('workflow','legacy')", name="ck_inmate_violation_submissions_origin"),
-        CheckConstraint("origin = 'legacy' OR created_at IS NOT NULL", name="ck_inmate_violation_submissions_created_at"),
+        CheckConstraint(
+            "origin IN ('workflow','legacy')", name="ck_inmate_violation_submissions_origin"
+        ),
+        CheckConstraint(
+            "origin = 'legacy' OR created_at IS NOT NULL",
+            name="ck_inmate_violation_submissions_created_at",
+        ),
         Index("ix_inmate_violation_submissions_reviewer", "reviewer_user_id"),
         Index("ix_inmate_violation_submissions_manager", "manager_user_id"),
     )
@@ -2097,8 +2119,12 @@ class InmateViolationWorkflowAction(Base):
 
     __tablename__ = "inmate_violation_workflow_actions"
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    workflow_id: Mapped[int] = mapped_column(ForeignKey("inmate_violation_workflows.id", ondelete="CASCADE"), nullable=False)
-    submission_id: Mapped[int | None] = mapped_column(ForeignKey("inmate_violation_submissions.id", ondelete="CASCADE"), nullable=True)
+    workflow_id: Mapped[int] = mapped_column(
+        ForeignKey("inmate_violation_workflows.id", ondelete="CASCADE"), nullable=False
+    )
+    submission_id: Mapped[int | None] = mapped_column(
+        ForeignKey("inmate_violation_submissions.id", ondelete="CASCADE"), nullable=True
+    )
     action: Mapped[str] = mapped_column(String(16), nullable=False)
     occurred_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_utcnow)
     actor_user_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
@@ -2106,11 +2132,26 @@ class InmateViolationWorkflowAction(Base):
     actor_employee_id: Mapped[str | None] = mapped_column(String(16), nullable=True)
     reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     __table_args__ = (
-        CheckConstraint("action IN ('prepared','reviewed','approved','returned','superseded','invalidated','reopened')", name="ck_inmate_violation_actions_kind"),
-        CheckConstraint("action NOT IN ('prepared','reviewed','approved') OR (submission_id IS NOT NULL AND actor_user_id IS NOT NULL AND length(trim(actor_name_ar)) > 0 AND actor_name_ar IS NOT NULL AND length(trim(actor_employee_id)) > 0 AND actor_employee_id IS NOT NULL)", name="ck_inmate_violation_actions_actor"),
-        CheckConstraint("action NOT IN ('returned','reopened') OR (reason IS NOT NULL AND length(trim(reason)) > 0)", name="ck_inmate_violation_actions_reason"),
+        CheckConstraint(
+            "action IN ('prepared','reviewed','approved','returned','superseded','invalidated','reopened')",
+            name="ck_inmate_violation_actions_kind",
+        ),
+        CheckConstraint(
+            "action NOT IN ('prepared','reviewed','approved') OR (submission_id IS NOT NULL AND actor_user_id IS NOT NULL AND length(trim(actor_name_ar)) > 0 AND actor_name_ar IS NOT NULL AND length(trim(actor_employee_id)) > 0 AND actor_employee_id IS NOT NULL)",
+            name="ck_inmate_violation_actions_actor",
+        ),
+        CheckConstraint(
+            "action NOT IN ('returned','reopened') OR (reason IS NOT NULL AND length(trim(reason)) > 0)",
+            name="ck_inmate_violation_actions_reason",
+        ),
         Index("ix_inmate_violation_actions_workflow", "workflow_id", "id"),
-        Index("uq_inmate_violation_actions_stage", "submission_id", "action", unique=True, sqlite_where=text("action IN ('prepared','reviewed','approved')")),
+        Index(
+            "uq_inmate_violation_actions_stage",
+            "submission_id",
+            "action",
+            unique=True,
+            sqlite_where=text("action IN ('prepared','reviewed','approved')"),
+        ),
     )
 
 

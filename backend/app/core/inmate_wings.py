@@ -29,4 +29,6 @@ def normalize_wing(value: str | None) -> str | None:
     try:
         return CanonicalWing(normalized).value
     except ValueError as exc:
-        raise ValueError("Wing must be one of 1A, 1B, 2A, 2B, 3A, 3B, 4A, 4B, 5A, 5B, 6A, 6B") from exc
+        raise ValueError(
+            "Wing must be one of 1A, 1B, 2A, 2B, 3A, 3B, 4A, 4B, 5A, 5B, 6A, 6B"
+        ) from exc

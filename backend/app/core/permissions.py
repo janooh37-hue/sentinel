@@ -49,14 +49,22 @@ class Capability:
 
 CAPABILITIES: Final[tuple[Capability, ...]] = (
     Capability(
-        "inmate_statistics.review", "inmate_statistics", "Review inmate monthly reports",
-        "مراجعة تقارير مخالفات النزلاء الشهرية", "Review an assigned monthly inmate report and select its approving manager.",
+        "inmate_statistics.review",
+        "inmate_statistics",
+        "Review inmate monthly reports",
+        "مراجعة تقارير مخالفات النزلاء الشهرية",
+        "Review an assigned monthly inmate report and select its approving manager.",
         "مراجعة تقرير مخالفات النزلاء الشهري المسند إليك واختيار المدير المعتمد.",
     ),
     Capability(
-        "inmate_statistics.approve", "inmate_statistics", "Approve inmate monthly reports",
-        "اعتماد تقارير مخالفات النزلاء الشهرية", "Approve an assigned reviewed report and close its month after month-end.",
-        "اعتماد التقرير المراجع المسند إليك وإغلاق سجله بعد انتهاء الشهر.", sensitive=True, requestable=False,
+        "inmate_statistics.approve",
+        "inmate_statistics",
+        "Approve inmate monthly reports",
+        "اعتماد تقارير مخالفات النزلاء الشهرية",
+        "Approve an assigned reviewed report and close its month after month-end.",
+        "اعتماد التقرير المراجع المسند إليك وإغلاق سجله بعد انتهاء الشهر.",
+        sensitive=True,
+        requestable=False,
     ),
     Capability(
         "app.access",

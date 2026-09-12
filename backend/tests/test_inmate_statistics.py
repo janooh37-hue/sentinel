@@ -115,7 +115,9 @@ def _actor(db: Session, *, role: str = "admin", email: str = "actor@x.ae") -> Us
 def _approve_test_month(db: Session, year: int, month: int, *, actor: User, today: date):
     """Exercise the real three-person service chain for existing seal tests."""
     if not actor.employee_id:
-        employee = Employee(id=f"GACT{actor.id}", name_en="Synthetic manager", name_ar="مدير تجريبي")
+        employee = Employee(
+            id=f"GACT{actor.id}", name_en="Synthetic manager", name_ar="مدير تجريبي"
+        )
         db.add(employee)
         db.flush()
         actor.employee_id = employee.id
@@ -130,9 +132,33 @@ def _approve_test_month(db: Session, year: int, month: int, *, actor: User, toda
         user.employee_id = employee.id
     db.commit()
     view = register.build_month(db, year, month)
-    view = register.prepare_month(db, year, month, actor=prep, expected_version=view.workflow["version"], expected_projection_fingerprint=view.projection_fingerprint, reviewer_user_id=reviewer.id)
-    view = register.review_month(db, year, month, actor=reviewer, expected_version=view.workflow["version"], submission_id=view.workflow["active_submission_id"], manager_user_id=actor.id)
-    return register.approve_month(db, year, month, actor=actor, expected_version=view.workflow["version"], submission_id=view.workflow["active_submission_id"], today=today)
+    view = register.prepare_month(
+        db,
+        year,
+        month,
+        actor=prep,
+        expected_version=view.workflow["version"],
+        expected_projection_fingerprint=view.projection_fingerprint,
+        reviewer_user_id=reviewer.id,
+    )
+    view = register.review_month(
+        db,
+        year,
+        month,
+        actor=reviewer,
+        expected_version=view.workflow["version"],
+        submission_id=view.workflow["active_submission_id"],
+        manager_user_id=actor.id,
+    )
+    return register.approve_month(
+        db,
+        year,
+        month,
+        actor=actor,
+        expected_version=view.workflow["version"],
+        submission_id=view.workflow["active_submission_id"],
+        today=today,
+    )
 
 
 def _reporter(
@@ -690,7 +716,9 @@ def test_final_approval_refuses_pending_completion_without_bypass(db_session: Se
     _reporter(db_session)
     _record(db_session, report_date="2026-08-11", imported_names=["نزيل تجريبي"])
     with pytest.raises(Exception) as raised:
-        _approve_test_month(db_session, CLOSED_YEAR, CLOSED_MONTH, actor=_actor(db_session), today=TODAY)
+        _approve_test_month(
+            db_session, CLOSED_YEAR, CLOSED_MONTH, actor=_actor(db_session), today=TODAY
+        )
     assert raised.value.code == "INMATE_REGISTER_INCOMPLETE_ENTRIES"
     assert not register.build_month(db_session, CLOSED_YEAR, CLOSED_MONTH).closed
 
@@ -738,7 +766,9 @@ def test_reopen_keeps_the_previous_seal_and_re_close_never_downgrades_the_duty_u
     _approve_test_month(db_session, CLOSED_YEAR, CLOSED_MONTH, actor=actor, today=TODAY)
 
     version = register.build_month(db_session, CLOSED_YEAR, CLOSED_MONTH).workflow["version"]
-    reopened = register.reopen_month(db_session, CLOSED_YEAR, CLOSED_MONTH, actor=actor, expected_version=version, reason="تصحيح")
+    reopened = register.reopen_month(
+        db_session, CLOSED_YEAR, CLOSED_MONTH, actor=actor, expected_version=version, reason="تصحيح"
+    )
 
     assert reopened.closed is False
     # The previous seal survives a reopen; entry presence never signals closure.
@@ -751,9 +781,7 @@ def test_reopen_keeps_the_previous_seal_and_re_close_never_downgrades_the_duty_u
     employee.duty_unit = None
     db_session.commit()
 
-    re_closed = _approve_test_month(
-        db_session, CLOSED_YEAR, CLOSED_MONTH, actor=actor, today=TODAY
-    )
+    re_closed = _approve_test_month(db_session, CLOSED_YEAR, CLOSED_MONTH, actor=actor, today=TODAY)
 
     assert {entry.duty_unit for entry in re_closed.entries} == {"السرية الثانية"}
     assert db_session.scalars(
@@ -808,8 +836,12 @@ def test_direct_close_is_removed_and_reopen_rejects_missing_body(
 ) -> None:
     _closable_month(api_db)
     for client in (operator_client, admin_client):
-        assert client.post("/api/v1/inmate-violations/statistics/2026/8/close", json={}).status_code in {404, 405}
-    assert admin_client.post("/api/v1/inmate-violations/statistics/2026/8/reopen").status_code == 422
+        assert client.post(
+            "/api/v1/inmate-violations/statistics/2026/8/close", json={}
+        ).status_code in {404, 405}
+    assert (
+        admin_client.post("/api/v1/inmate-violations/statistics/2026/8/reopen").status_code == 422
+    )
 
 
 def test_manual_row_routes_round_trip_and_return_the_month(
@@ -849,7 +881,10 @@ def test_tasks_route_is_accessible_to_non_admins(
     api_db: Session, operator_client: TestClient
 ) -> None:
     assert operator_client.get("/api/v1/inmate-violations/statistics/tasks").status_code == 200
-    assert "/api/v1/inmate-violations/statistics/awaiting-close" not in operator_client.app.openapi()["paths"]
+    assert (
+        "/api/v1/inmate-violations/statistics/awaiting-close"
+        not in operator_client.app.openapi()["paths"]
+    )
 
 
 def test_nationality_list_route_carries_the_closed_list(operator_client: TestClient) -> None:
@@ -880,9 +915,14 @@ def test_export_downloads_a_workbook_without_closing_the_month(
 def test_close_materialises_one_workbook_copy(api_db: Session, admin_client: TestClient) -> None:
     _closable_month(api_db)
 
-    view = _approve_test_month(api_db, 2026, 8, actor=api_db.get(User, admin_client.user_id), today=TODAY)
+    view = _approve_test_month(
+        api_db, 2026, 8, actor=api_db.get(User, admin_client.user_id), today=TODAY
+    )
 
     period = api_db.scalars(select(InmateViolationPeriod)).one()
-    assert period.export_path == f"inmate_violations/2026-08-submission-{view.workflow['active_submission_id']}.xlsx"
+    assert (
+        period.export_path
+        == f"inmate_violations/2026-08-submission-{view.workflow['active_submission_id']}.xlsx"
+    )
     stored = get_settings().data_dir / period.export_path
     assert stored.is_file()
