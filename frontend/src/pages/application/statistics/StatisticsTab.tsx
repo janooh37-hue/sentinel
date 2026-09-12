@@ -273,7 +273,11 @@ function StatisticsMonth(): React.JSX.Element {
             <summary className="cursor-pointer font-semibold">{t('inmateStats.workflow.actionHistory')}</summary>
             <ol className="mt-3 space-y-3 text-sm">{register.selectedReport.actions.map((action, index) => <li key={`${action.action}-${index}`}>
               <p>{t(`inmateStats.workflow.events.${action.action}`)} · <bdi dir="ltr">{formatRegisterDateTime(action.occurred_at, i18n.language)}</bdi></p>
-              <p><bdi>{action.actor_name_ar}</bdi> · <bdi dir="ltr">{action.actor_employee_id}</bdi></p>
+              {action.actor_name_ar || action.actor_employee_id ? <p>
+                {action.actor_name_ar ? <bdi>{action.actor_name_ar}</bdi> : null}
+                {action.actor_name_ar && action.actor_employee_id ? ' · ' : null}
+                {action.actor_employee_id ? <bdi dir="ltr">{action.actor_employee_id}</bdi> : null}
+              </p> : null}
               {action.reason ? <p dir="auto" className="mt-1 whitespace-pre-wrap">{action.reason}</p> : null}
             </li>)}</ol>
           </details> : null}

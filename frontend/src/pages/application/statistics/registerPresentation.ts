@@ -40,15 +40,18 @@ export const REPORT_STYLES = {
   metaCell: { minWidth: '0', minHeight: '10.5mm', padding: '1mm 1.4mm', borderBottom: '0.5pt solid #dddddd', borderInlineEnd: '0.5pt solid #dddddd' },
   metaLabel: { margin: '0', fontSize: '6pt', color: '#555555', textAlign: 'start' },
   metaValue: { margin: '2mm 0 0', fontSize: '8.04pt', fontWeight: 'bold', unicodeBidi: 'isolate', overflowWrap: 'anywhere' },
-  table: { width: '178.1mm', tableLayout: 'fixed', borderCollapse: 'collapse', fontFamily: FONT, fontSize: '11.04pt', lineHeight: '1.16', color: '#000000', background: '#ffffff', direction: 'rtl', margin: '0' },
-  band: { border: '0.5pt solid #000000', background: HEADER_COLOR, color: PAPER_COLOR, padding: '2.4pt 2pt', textAlign: 'center', fontWeight: 'bold', fontSize: '12pt', printColorAdjust: 'exact' },
-  header: { border: '0.5pt solid #000000', background: HEADER_COLOR, color: PAPER_COLOR, padding: '2.4pt 2pt', textAlign: 'center', fontWeight: 'bold', fontSize: '11.04pt', printColorAdjust: 'exact' },
-  cell: { border: '0.5pt solid #000000', padding: '1.5pt 2pt', textAlign: 'start', verticalAlign: 'top', whiteSpace: 'pre-line', overflowWrap: 'anywhere', unicodeBidi: 'isolate' },
+  // One compact physical table contract is serialized into rich clipboard HTML
+  // and rendered by the preview/print DOM. Do not override these values in
+  // print CSS: PDF and pasted Word tables must retain identical formatting.
+  table: { width: '178.1mm', tableLayout: 'fixed', borderCollapse: 'collapse', fontFamily: FONT, fontSize: '9pt', lineHeight: '1.05', color: '#000000', background: '#ffffff', direction: 'rtl', margin: '0' },
+  band: { border: '0.5pt solid #000000', background: HEADER_COLOR, color: PAPER_COLOR, padding: '1.2pt 1.5pt', textAlign: 'center', fontWeight: 'bold', fontSize: '10pt', printColorAdjust: 'exact' },
+  header: { border: '0.5pt solid #000000', background: HEADER_COLOR, color: PAPER_COLOR, padding: '1.2pt 1.5pt', textAlign: 'center', fontWeight: 'bold', fontSize: '9pt', printColorAdjust: 'exact' },
+  cell: { border: '0.5pt solid #000000', padding: '0.65pt 1.5pt', textAlign: 'start', verticalAlign: 'top', whiteSpace: 'pre-line', overflowWrap: 'anywhere', unicodeBidi: 'isolate' },
   caption: { padding: '2mm 0', fontFamily: FONT, fontSize: '9pt', fontWeight: 'bold', textAlign: 'start', color: '#000000', background: '#ffffff' },
   summary: { width: '179.3mm', margin: '1.5mm 0 0', marginInlineStart: '-0.6mm', breakInside: 'avoid' },
   // Both summary columns align to the physical right in the reference,
   // including the separately LTR-isolated counts and canonical wing codes.
-  summaryCell: { border: '0.5pt solid #808080', padding: '0.9pt 4pt', textAlign: 'right', verticalAlign: 'top', unicodeBidi: 'isolate', overflowWrap: 'anywhere' },
+  summaryCell: { border: '0.5pt solid #808080', padding: '0.65pt 1.5pt', textAlign: 'right', verticalAlign: 'top', unicodeBidi: 'isolate', overflowWrap: 'anywhere' },
   signatures: { display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: '2.5mm', margin: '4mm 0 0', breakInside: 'avoid' },
   signature: { minHeight: '19mm', minWidth: '0', border: '0.5pt solid #dddddd', padding: '1.4mm 2mm' },
   role: { fontSize: '8.04pt', fontWeight: 'bold', margin: '0 0 3mm' },

@@ -53,6 +53,21 @@ describe('immutable report selection', () => {
     expect(screen.getByText(i18n.t('inmateStats.workflow.actionHistory')).closest('[data-print-hide]')).not.toBeNull()
   })
 
+  it('omits the actor line for an automated invalidation action', async () => {
+    vi.mocked(api.getInmateRegisterSubmission).mockResolvedValue(workflowSubmission({
+      entries: [row('Submitted inmate')], counts: { citizens: 1, expats: 0, pending: 0, total: 1 },
+      actions: [{
+        action: 'invalidated', occurred_at: '2026-08-21T04:00:00Z',
+        actor_user_id: null, actor_name_ar: null, actor_employee_id: null, reason: null,
+      }],
+    }))
+    mount('&stats_submission=42')
+    await screen.findAllByText('Submitted inmate')
+    const history = screen.getByText(i18n.t('inmateStats.workflow.actionHistory')).closest('details')
+    expect(history?.querySelectorAll('li p')).toHaveLength(1)
+    expect(history).not.toHaveTextContent(' ·  · ')
+  })
+
   it('reselects the exact task submission after a local history choice at the same URL', async () => {
     vi.mocked(api.getInmateRegisterTasks).mockResolvedValue({ count: 1, items: [
       { year: 2026, month: 8, kind: 'approve', submission_id: 42, code: null, row_count: 1 },

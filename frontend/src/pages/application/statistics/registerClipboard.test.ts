@@ -63,6 +63,49 @@ describe('monthly report and clipboard', () => {
     expect(container.querySelector('tfoot')).toBeNull()
   })
 
+  it('uses one compact physical table contract in the report DOM and escaped rich HTML', () => {
+    const month = sampleMonth()
+    const { container } = render(createElement(RegisterDocument, { month, options, draftIssuedAt, forPrint: true }))
+    const copied = htmlDocument(buildRegisterClipboard(month, options, i18n.t).html)
+    const paper = container.querySelector('table') as HTMLTableElement
+    const rich = copied.querySelector('table') as HTMLTableElement
+    const paperBand = paper.querySelector('thead tr:first-child th') as HTMLTableCellElement
+    const richBand = rich.querySelector('thead tr:first-child th') as HTMLTableCellElement
+    const paperHeader = paper.querySelector('thead tr:nth-child(2) th') as HTMLTableCellElement
+    const richHeader = rich.querySelector('thead tr:nth-child(2) th') as HTMLTableCellElement
+    const paperCell = paper.querySelector('tbody td') as HTMLTableCellElement
+    const richCell = rich.querySelector('tbody td') as HTMLTableCellElement
+
+    expect([paper.style.fontSize, paper.style.lineHeight, paper.style.width, paper.style.borderCollapse, paper.style.backgroundColor, paper.style.color])
+      .toEqual(['9pt', '1.05', '178.1mm', 'collapse', 'rgb(255, 255, 255)', 'rgb(0, 0, 0)'])
+    expect([rich.style.fontSize, rich.style.lineHeight, rich.style.width, rich.style.borderCollapse, rich.style.backgroundColor, rich.style.color])
+      .toEqual([paper.style.fontSize, paper.style.lineHeight, paper.style.width, paper.style.borderCollapse, paper.style.backgroundColor, paper.style.color])
+    for (const [paperNode, richNode, expected] of [
+      [paperBand, richBand, ['1.2pt 1.5pt', '0.5pt solid rgb(0, 0, 0)', 'rgb(192, 0, 0)', 'rgb(255, 255, 255)', '10pt', 'bold']],
+      [paperHeader, richHeader, ['1.2pt 1.5pt', '0.5pt solid rgb(0, 0, 0)', 'rgb(192, 0, 0)', 'rgb(255, 255, 255)', '9pt', 'bold']],
+      [paperCell, richCell, ['0.65pt 1.5pt', '0.5pt solid rgb(0, 0, 0)', '', '', '', '']],
+    ] as const) {
+      const physical = (node: HTMLTableCellElement) => [node.style.padding, node.style.border, node.style.backgroundColor, node.style.color, node.style.fontSize, node.style.fontWeight]
+      expect(physical(paperNode)).toEqual(expected)
+      expect(physical(richNode)).toEqual(physical(paperNode))
+    }
+    expect(Array.from(rich.querySelectorAll('col'), (col) => col.style.width))
+      .toEqual(Array.from(paper.querySelectorAll('col'), (col) => col.style.width))
+
+    const paperSummary = container.querySelectorAll('table')[2] as HTMLTableElement
+    const richSummary = copied.querySelectorAll('table')[2] as HTMLTableElement
+    expect([paperSummary.style.width, paperSummary.style.fontSize, paperSummary.style.lineHeight])
+      .toEqual(['179.3mm', '9pt', '1.05'])
+    expect([richSummary.style.width, richSummary.style.fontSize, richSummary.style.lineHeight])
+      .toEqual([paperSummary.style.width, paperSummary.style.fontSize, paperSummary.style.lineHeight])
+    const paperSummaryCell = paperSummary.querySelector('tbody th') as HTMLTableCellElement
+    const richSummaryCell = richSummary.querySelector('tbody th') as HTMLTableCellElement
+    expect([paperSummaryCell.style.padding, paperSummaryCell.style.border, paperSummaryCell.style.fontWeight])
+      .toEqual(['0.65pt 1.5pt', '0.5pt solid rgb(128, 128, 128)', 'bold'])
+    expect([richSummaryCell.style.padding, richSummaryCell.style.border, richSummaryCell.style.fontWeight])
+      .toEqual([paperSummaryCell.style.padding, paperSummaryCell.style.border, paperSummaryCell.style.fontWeight])
+  })
+
   it('keeps a partial extract caption in paper, HTML and TSV with summary disabled', () => {
     const month = sampleMonth()
     const partial = { ...options, scope: ['citizens'] as const, includeCounts: false }

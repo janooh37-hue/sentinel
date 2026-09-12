@@ -37,15 +37,6 @@ describe('ExportWorkspace', () => {
     expect(stamps()).toEqual(initial)
   })
 
-  it('marks the print-only document for the compact A4 portrait profile', () => {
-    const client = new QueryClient()
-    const { container } = render(<QueryClientProvider client={client}><ExportWorkspace month={workflowMonth()} submissionId={42} /></QueryClientProvider>)
-    const papers = container.querySelectorAll('[data-inmate-register-document]')
-    expect(papers).toHaveLength(2)
-    expect(papers[0]).not.toHaveAttribute('data-report-print-profile')
-    expect(papers[1]).toHaveAttribute('data-report-print-profile', 'a4-portrait-compact')
-  })
-
   it('renders absent legacy issue and actor facts as dashes', () => {
     const client = new QueryClient()
     const legacy = workflowSubmission({
