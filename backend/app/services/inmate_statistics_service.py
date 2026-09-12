@@ -23,21 +23,28 @@ therefore the only correction path (see ``reopen_month``).
 
 from __future__ import annotations
 
+import hashlib
 import json
+import os
+import tempfile
 from calendar import monthrange
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field, replace
 from datetime import UTC, date, datetime, time
+from functools import cached_property, wraps
 from types import MappingProxyType
 from typing import Any, Final
 
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
+from sqlalchemy.dialects.sqlite import insert
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
-from app.api.errors import ConflictError, NotFoundError, ValidationFailedError
+from app.api.errors import AppError, ConflictError, NotFoundError, ValidationFailedError
 from app.config import get_settings
 from app.core import inmate_statistics_xlsx as xlsx
 from app.core.html_text import html_to_text
+from app.core.inmate_wings import CANONICAL_WINGS, normalize_wing
 from app.core.nationalities import (
     NATIONALITY_CODE_UNSPECIFIED,
     is_citizen,
@@ -51,9 +58,14 @@ from app.db.models import (
     InmateViolationManualRow,
     InmateViolationPeriod,
     InmateViolationStatRow,
+    InmateViolationSubmission,
+    InmateViolationWorkflow,
+    InmateViolationWorkflowAction,
     User,
+    UserPermission,
 )
 from app.db.workforce_models import DutyAssignmentEvent
+from app.services import perm_service
 
 #: The service/template this register counts. Never the employee ``Violation``
 #: table — that is staff misconduct, a different domain sharing one word.
@@ -179,32 +191,65 @@ class MonthRegister:
     reopened_at: datetime | None
     reopened_by: int | None
     reopened_by_name: str | None
-    force_reason: str | None
     export_ready: bool
     entries: tuple[RegisterEntry, ...]
     uncounted: tuple[UncountedRecord, ...]
     arrived_after_close: tuple[ArrivedAfterClose, ...]
+    workflow: dict[str, Any] = field(default_factory=dict)
+    legacy_metadata: dict[str, Any] | None = None
 
     @property
     def closed(self) -> bool:
         return self.closed_at is not None
 
-    @property
-    def counts(self) -> dict[str, int]:
+    @cached_property
+    def _aggregates(self) -> tuple[dict[str, int], dict[str, Any]]:
         """Three per-table counts plus the three-term month total.
 
         Never stored: a stored total is a second source of truth for a ``len()``.
         """
 
         counts = {key: 0 for key in POPULATIONS}
+        wings = dict.fromkeys(CANONICAL_WINGS, 0)
+        unassigned = 0
         for entry in self.entries:
             counts[entry.population] += 1
+            try:
+                wing = normalize_wing(entry.wing)
+            except ValueError:
+                wing = None
+            if wing:
+                wings[wing] += 1
+            else:
+                unassigned += 1
         counts["total"] = sum(counts[key] for key in POPULATIONS)
-        return counts
+        positive = [value for value in wings.values() if value > 0]
+        most, least = max(positive, default=0), min(positive, default=0)
+        return counts, {
+            "counts": [{"wing": wing.value, "violations": count} for wing, count in wings.items()],
+            "most": [wing.value for wing, count in wings.items() if count == most and most],
+            "most_count": most,
+            "least": [wing.value for wing, count in wings.items() if count == least and least],
+            "least_count": least,
+            "zero": [wing.value for wing, count in wings.items() if not count],
+            "unassigned_count": unassigned,
+        }
+
+    @property
+    def counts(self) -> dict[str, int]:
+        return self._aggregates[0]
+
+    @property
+    def wing_summary(self) -> dict[str, Any]:
+        return self._aggregates[1]
+
+    @property
+    def projection_fingerprint(self) -> str:
+        return _fingerprint(_snapshot(self.year, self.month, self.entries))
 
     @property
     def blocking(self) -> tuple[RegisterEntry, ...]:
-        """Entries a close is refused over, unless it is forced."""
+        """Entries that prevent final approval."""
 
         return tuple(entry for entry in self.entries if entry.missing)
 
@@ -464,6 +509,14 @@ def _finalise(entries: list[RegisterEntry], *, sealed: bool) -> tuple[RegisterEn
         if sealed:
             continue
         missing: list[str] = []
+        try:
+            wing = normalize_wing(entry.wing)
+        except ValueError:
+            wing = None
+        if wing:
+            entry.wing = wing
+        else:
+            missing.append("wing")
         if entry.nationality_code is None:
             missing.append(MISSING_NATIONALITY)
         if entry.is_manual and not entry.details_text:
@@ -584,13 +637,13 @@ def _sealed_entry(row: InmateViolationStatRow) -> RegisterEntry:
     )
 
 
-def build_month(db: Session, year: int, month: int) -> MonthRegister:
+def build_month(db: Session, year: int, month: int, *, actor: User | None = None) -> MonthRegister:
     """One month, live or sealed. Never writes — the seal is an explicit act."""
 
     period = _period(db, year, month)
     if period is None or period.closed_at is None:
-        entries, uncounted = project_month(db, year, month)
-        return MonthRegister(
+        entries, uncounted = effective_projection(db, year, month)
+        result = MonthRegister(
             year=year,
             month=month,
             closed_at=None,
@@ -599,12 +652,12 @@ def build_month(db: Session, year: int, month: int) -> MonthRegister:
             reopened_at=period.reopened_at if period else None,
             reopened_by=period.reopened_by if period else None,
             reopened_by_name=_user_name(db, period.reopened_by) if period else None,
-            force_reason=None,
             export_ready=False,
             entries=entries,
             uncounted=uncounted,
             arrived_after_close=(),
         )
+        return replace(result, workflow=_workflow_out(db, result, actor=actor))
 
     sealed = [
         _sealed_entry(row)
@@ -627,21 +680,28 @@ def build_month(db: Session, year: int, month: int) -> MonthRegister:
         for entry in live
         if entry.handle not in frozen_handles
     )
-    return MonthRegister(
+    root = _workflow(db, year, month)
+    submission = _active_submission(db, root)
+    if submission is not None:
+        sealed = list(_restore_entries(submission.payload))
+    facts = _actor_facts(db, submission)
+    metadata = _legacy_metadata(submission)
+    result = MonthRegister(
         year=year,
         month=month,
         closed_at=period.closed_at,
         closed_by=period.closed_by,
-        closed_by_name=_user_name(db, period.closed_by),
+        closed_by_name=(facts.get("approved") or {}).get("name_ar"),
         reopened_at=period.reopened_at,
         reopened_by=period.reopened_by,
         reopened_by_name=_user_name(db, period.reopened_by),
-        force_reason=period.force_reason,
         export_ready=bool(period.export_path),
         entries=tuple(sealed),
         uncounted=uncounted,
         arrived_after_close=arrived,
+        legacy_metadata=metadata,
     )
+    return replace(result, workflow=_workflow_out(db, result, actor=actor))
 
 
 # --------------------------------------------------------------------------- #
@@ -733,6 +793,25 @@ def _audit(
 # manual entries
 # --------------------------------------------------------------------------- #
 
+
+def _transaction(operation):
+    """The public mutation owns the request transaction, including every refusal."""
+    @wraps(operation)
+    def run(db: Session, *args, **kwargs):
+        try:
+            result = operation(db, *args, **kwargs)
+            db.commit()
+            return result
+        except OperationalError as exc:
+            db.rollback()
+            if "locked" in str(exc).lower() or "busy" in str(exc).lower():
+                raise ConflictError("INMATE_REGISTER_STALE_WORKFLOW", "Another writer changed this month. Reload and try again.") from exc
+            raise
+        except Exception:
+            db.rollback()
+            raise
+    return run
+
 _MANUAL_CELLS: Final[tuple[str, ...]] = (
     "name",
     "violation_date",
@@ -763,6 +842,7 @@ def _manual_payload(row: InmateViolationManualRow) -> dict[str, Any]:
     return {cell: getattr(row, cell) for cell in _MANUAL_CELLS}
 
 
+@_transaction
 def create_manual_row(
     db: Session,
     year: int,
@@ -781,7 +861,7 @@ def create_manual_row(
 ) -> InmateViolationManualRow:
     """Capture an occurrence no filed Record carries. ``reason`` is required."""
 
-    _assert_open(db, year, month)
+    _reserve_local_edit(db, year, month, actor)
     if (violation_date.year, violation_date.month) != (year, month):
         raise ValidationFailedError(
             "INMATE_REGISTER_DATE_OUTSIDE_MONTH",
@@ -796,7 +876,7 @@ def create_manual_row(
         violation_date=violation_date,
         uid=_text(uid) or None,
         nationality_label=_text(nationality_label) or None,
-        wing=_text(wing) or None,
+        wing=_validated_wing(wing),
         holding_no=_text(holding_no) or None,
         reporter_id=_text(reporter_id) or None,
         details_text=_text(details_text) or None,
@@ -813,11 +893,10 @@ def create_manual_row(
         entity_id=f"manual:{row.id}",
         payload={"year": year, "month": month, **_manual_payload(row)},
     )
-    db.commit()
-    db.refresh(row)
     return row
 
 
+@_transaction
 def update_manual_row(
     db: Session,
     manual_row_id: int,
@@ -828,7 +907,10 @@ def update_manual_row(
     row = db.get(InmateViolationManualRow, manual_row_id)
     if row is None:
         raise NotFoundError("INMATE_REGISTER_ROW_NOT_FOUND", "Manual entry not found.")
-    _assert_open(db, row.year, row.month)
+    _reserve_local_edit(db, row.year, row.month, actor)
+    row = db.get(InmateViolationManualRow, manual_row_id, populate_existing=True)
+    if row is None:
+        raise NotFoundError("INMATE_REGISTER_ROW_NOT_FOUND", "Manual entry not found.")
     before = _manual_payload(row)
     for cell, value in changes.items():
         if cell not in _MANUAL_CELLS:
@@ -848,6 +930,8 @@ def update_manual_row(
                     month=row.month,
                 )
             row.violation_date = value
+        elif cell == "wing":
+            row.wing = _validated_wing(value)
         else:
             setattr(row, cell, _text(value) or None)
     row.updated_by = actor.id
@@ -867,18 +951,20 @@ def update_manual_row(
         entity_id=f"manual:{row.id}",
         payload={"year": row.year, "month": row.month, "reason": row.reason, "changed": changed},
     )
-    db.commit()
-    db.refresh(row)
     return row
 
 
+@_transaction
 def delete_manual_row(db: Session, manual_row_id: int, *, actor: User) -> None:
     """The one operation that removes a line leaving no trace on any survivor."""
 
     row = db.get(InmateViolationManualRow, manual_row_id)
     if row is None:
         raise NotFoundError("INMATE_REGISTER_ROW_NOT_FOUND", "Manual entry not found.")
-    _assert_open(db, row.year, row.month)
+    _reserve_local_edit(db, row.year, row.month, actor)
+    row = db.get(InmateViolationManualRow, manual_row_id, populate_existing=True)
+    if row is None:
+        raise NotFoundError("INMATE_REGISTER_ROW_NOT_FOUND", "Manual entry not found.")
     payload = {"year": row.year, "month": row.month, **_manual_payload(row)}
     _audit(
         db,
@@ -889,7 +975,6 @@ def delete_manual_row(db: Session, manual_row_id: int, *, actor: User) -> None:
         payload=payload,
     )
     db.delete(row)
-    db.commit()
 
 
 # --------------------------------------------------------------------------- #
@@ -897,6 +982,7 @@ def delete_manual_row(db: Session, manual_row_id: int, *, actor: User) -> None:
 # --------------------------------------------------------------------------- #
 
 
+@_transaction
 def complete_import(
     db: Session,
     book_id: int,
@@ -936,7 +1022,16 @@ def complete_import(
             "INMATE_REGISTER_RECORD_NOT_DATED",
             "This Record has no usable violation date; fix the Record first.",
         )
-    _assert_open(db, violation_date.year, violation_date.month)
+    reserved_month = (violation_date.year, violation_date.month)
+    _reserve_local_edit(db, *reserved_month, actor)
+    book = db.get(Book, book_id, populate_existing=True)
+    if book is None or book.deleted_at is not None:
+        raise NotFoundError("BOOK_NOT_FOUND", "Record not found.")
+    version = max(book.versions, key=lambda item: item.version_no, default=None)
+    fields = dict(version.fields) if version is not None and isinstance(version.fields, dict) else {}
+    fresh_date = _parse_date(fields.get("report_date"))
+    if (version is None or version.template_id != TEMPLATE_ID or not fields.get("imported_approved") or fresh_date is None or (fresh_date.year, fresh_date.month) != reserved_month):
+        raise ConflictError("INMATE_REGISTER_STALE_PROJECTION", "The source Record changed. Reload before completing it.")
     if not _text(report_time):
         raise ValidationFailedError("INMATE_REGISTER_TIME_REQUIRED", "Report time is required.")
     if not _text(reporter_id) or db.get(Employee, _text(reporter_id)) is None:
@@ -952,6 +1047,8 @@ def complete_import(
         for row in inmates
         if _text(row.get("name"))
     ]
+    for row in rows:
+        row["wing"] = _validated_wing(row.get("wing")) or ""
     if not rows:
         raise ValidationFailedError(
             "INMATE_REGISTER_NO_INMATES", "At least one inmate line is required."
@@ -978,8 +1075,6 @@ def complete_import(
             "completion": completion,
         },
     )
-    db.commit()
-    db.refresh(book)
     return book
 
 
@@ -1050,144 +1145,485 @@ def _carry_forward_duty_units(
             ]
 
 
-def close_month(
-    db: Session,
-    year: int,
-    month: int,
-    *,
-    actor: User,
-    force_reason: str | None = None,
-    today: date | None = None,
-) -> MonthRegister:
-    """Freeze the month's entries as the register's source of truth."""
+def _workflow(db: Session, year: int, month: int) -> InmateViolationWorkflow | None:
+    return db.scalar(select(InmateViolationWorkflow).where(InmateViolationWorkflow.year == year, InmateViolationWorkflow.month == month))
 
-    if not month_has_ended(year, month, today=today):
-        raise ConflictError(
-            "INMATE_REGISTER_MONTH_NOT_ENDED",
-            "A Violation month cannot be closed before it ends.",
-            year=year,
-            month=month,
-            first_closable_date=first_closable_date(year, month).isoformat(),
-        )
+
+def _active_submission(db: Session, root: InmateViolationWorkflow | None) -> InmateViolationSubmission | None:
+    if root is None or root.current_sequence == 0:
+        return None
+    return db.scalar(select(InmateViolationSubmission).where(InmateViolationSubmission.workflow_id == root.id, InmateViolationSubmission.sequence == root.current_sequence))
+
+
+def _snapshot(year: int, month: int, entries: tuple[RegisterEntry, ...]) -> dict[str, Any]:
+    return json.loads(json.dumps({"schema_version": 1, "year": year, "month": month, "entries": [asdict(entry) for entry in entries]}, ensure_ascii=False, default=lambda value: value.isoformat()))
+
+
+def _fingerprint(payload: dict[str, Any]) -> str:
+    # Keep provenance, but changing only a creator's account display name is
+    # not a change to the violation being reviewed.
+    canonical = {**payload, "entries": [
+        {key: value for key, value in row.items() if key not in {"manual_created_by_name", "_sort_created_at"}}
+        for row in payload["entries"]
+    ]}
+    return hashlib.sha256(json.dumps(canonical, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")).hexdigest()
+
+
+def _restore_entries(payload: dict[str, Any]) -> tuple[RegisterEntry, ...]:
+    entries = []
+    for stored in payload["entries"]:
+        row = dict(stored)
+        row["violation_date"] = date.fromisoformat(row["violation_date"])
+        if row.get("manual_created_at"):
+            row["manual_created_at"] = datetime.fromisoformat(row["manual_created_at"])
+        entries.append(RegisterEntry(**row))
+    return tuple(entries)
+
+
+def effective_projection(db: Session, year: int, month: int) -> tuple[tuple[RegisterEntry, ...], tuple[UncountedRecord, ...]]:
+    entries, uncounted = project_month(db, year, month)
     period = _period(db, year, month)
-    if period is not None and period.closed_at is not None:
-        raise ConflictError(
-            "INMATE_REGISTER_ALREADY_CLOSED",
-            "This Violation month is already closed.",
-            year=year,
-            month=month,
-        )
-    entries, _uncounted = project_month(db, year, month)
+    if period is not None and period.closed_at is None:
+        previous = {row.row_handle: _text(row.duty_unit) for row in db.scalars(select(InmateViolationStatRow).where(InmateViolationStatRow.period_id == period.id))}
+        _carry_forward_duty_units(entries, previous)
+    return entries, uncounted
+
+
+_READ_CAPS = ("books.view", f"books.servicerecords.{TEMPLATE_ID}")
+_NAV_CAPS = ("documents.generate", f"books.service.{TEMPLATE_ID}")
+_WRITE_CAPS = ("books.edit", f"books.service.{TEMPLATE_ID}")
+
+
+def _caps(db: Session, user: User, stage: str) -> bool:
+    capabilities = _READ_CAPS + _NAV_CAPS
+    if stage == "prepare":
+        capabilities += ("books.edit",)
+    elif stage in {"review", "approve"}:
+        capabilities += (f"inmate_statistics.{stage}",)
+    effective = perm_service.effective_caps(db, user)
+    # Admin lockout protection elsewhere does not waive a stage-specific deny.
+    denied = set(db.scalars(select(UserPermission.capability).where(UserPermission.user_id == user.id, UserPermission.effect == "deny")))
+    return user.status == "active" and all(cap in effective and cap not in denied for cap in capabilities)
+
+
+def _identity(db: Session, user: User | None, stage: str, *, earlier: Sequence[dict[str, Any]] = (), selected_employee_id: str | None = None) -> dict[str, Any]:
+    if user is None or not _caps(db, user, stage):
+        raise AppError("INMATE_REGISTER_ACTOR_INELIGIBLE", "This account is not active or lacks the required report capabilities.", http_status=403)
+    employee = db.get(Employee, user.employee_id) if user.employee_id else None
+    if employee is None or not _text(employee.id) or not _text(employee.name_ar):
+        raise ValidationFailedError("INMATE_REGISTER_INVALID_ACTOR_PROFILE", "Link the account to an employee with an Arabic name and employee ID.")
+    if selected_employee_id is not None and employee.id != selected_employee_id:
+        raise ConflictError("INMATE_REGISTER_ASSIGNEE_RELINKED", "The selected account's employee link changed. Prepare a new submission.")
+    if any(item["user_id"] == user.id or item["employee_id"] == employee.id for item in earlier):
+        raise ValidationFailedError("INMATE_REGISTER_ACTORS_NOT_DISTINCT", "Preparation, review and approval require different accounts and employees.")
+    return {"user_id": user.id, "name_ar": employee.name_ar.strip(), "employee_id": employee.id}
+
+
+def _eligible(db: Session, user: User | None, stage: str, **kwargs) -> bool:
+    try:
+        _identity(db, user, stage, **kwargs)
+        return True
+    except AppError:
+        return False
+
+
+def _reserve(db: Session, year: int, month: int, *, expected_version: int | None = None, states: Sequence[str] = ("draft", "awaiting_review", "awaiting_manager")) -> InmateViolationWorkflow:
+    # This is deliberately the FIRST mutation. It obtains SQLite's writer
+    # reservation before source projection, identity checks or a local edit.
+    conditions = [InmateViolationWorkflow.year == year, InmateViolationWorkflow.month == month, InmateViolationWorkflow.state.in_(states)]
+    if expected_version is not None:
+        conditions.append(InmateViolationWorkflow.version == expected_version)
+    changed = db.execute(update(InmateViolationWorkflow).where(*conditions).values(version=InmateViolationWorkflow.version + 1).execution_options(synchronize_session=False))
+    if changed.rowcount == 0:
+        # Absent roots start at version zero. Existing roots cannot be reset.
+        db.execute(insert(InmateViolationWorkflow).values(year=year, month=month, version=0, current_sequence=0, state="draft").on_conflict_do_nothing(index_elements=["year", "month"]))
+        changed = db.execute(update(InmateViolationWorkflow).where(*conditions).values(version=InmateViolationWorkflow.version + 1).execution_options(synchronize_session=False))
+        if changed.rowcount != 1:
+            if expected_version is None:
+                db.expire_all()
+                _assert_open(db, year, month)
+            raise ConflictError("INMATE_REGISTER_STALE_WORKFLOW", "The workflow changed or is closed. Reload before acting.")
+    db.expire_all()
+    for mapped in list(db.identity_map.values()):
+        if isinstance(mapped, User):
+            mapped._effective_caps_cache = None
+    root = _workflow(db, year, month)
+    assert root is not None
+    return root
+
+
+def _actor_facts(db: Session, submission: InmateViolationSubmission | None) -> dict[str, dict[str, Any]]:
+    if submission is None:
+        return {}
+    return {
+        event.action: {"user_id": event.actor_user_id, "name_ar": event.actor_name_ar, "employee_id": event.actor_employee_id, "acted_at": event.occurred_at}
+        for event in db.scalars(select(InmateViolationWorkflowAction).where(InmateViolationWorkflowAction.submission_id == submission.id, InmateViolationWorkflowAction.action.in_(("prepared", "reviewed", "approved"))))
+    }
+
+
+def _append(db: Session, root: InmateViolationWorkflow, submission: InmateViolationSubmission | None, action: str, *, facts: dict[str, Any] | None = None, reason: str | None = None) -> None:
+    facts = facts or {}
+    db.add(InmateViolationWorkflowAction(workflow_id=root.id, submission_id=submission.id if submission else None, action=action, actor_user_id=facts.get("user_id"), actor_name_ar=facts.get("name_ar"), actor_employee_id=facts.get("employee_id"), reason=reason, occurred_at=_utcnow()))
+    db.flush()
+
+
+def _reason(value: str | None) -> str:
+    reason = _text(value)
+    if not reason:
+        raise ValidationFailedError("INMATE_REGISTER_REASON_REQUIRED", "A reason is required.", field="reason")
+    return reason
+
+
+def _validated_wing(value: Any) -> str | None:
+    try:
+        return normalize_wing(_text(value))
+    except ValueError as exc:
+        raise ValidationFailedError("INMATE_REGISTER_INVALID_WING", str(exc), field="wing") from exc
+
+
+def _reserve_local_edit(db: Session, year: int, month: int, actor: User) -> None:
+    root = _reserve(db, year, month)
+    _assert_open(db, year, month)
+    if actor.status != "active" or not all(perm_service.has_capability(db, actor, cap) for cap in _WRITE_CAPS):
+        raise AppError("FORBIDDEN", "Register write capabilities are required.", http_status=403)
+    if root.state in {"awaiting_review", "awaiting_manager"}:
+        _append(db, root, _active_submission(db, root), "invalidated", facts={"user_id": actor.id}, reason="register_changed")
+        root.state = "draft"
+        db.flush()
+
+
+def _fresh(db: Session, root: InmateViolationWorkflow, submission: InmateViolationSubmission) -> None:
+    entries, _ = effective_projection(db, root.year, root.month)
+    if _fingerprint(_snapshot(root.year, root.month, entries)) != submission.fingerprint:
+        raise ConflictError("INMATE_REGISTER_STALE_PROJECTION", "The submitted data changed. A new preparation and review are required.")
+
+
+def _submission_for_action(db: Session, root: InmateViolationWorkflow, submission_id: int) -> InmateViolationSubmission:
+    submission = _active_submission(db, root)
+    if submission is None or submission.id != submission_id:
+        raise ConflictError("INMATE_REGISTER_STALE_WORKFLOW", "This submission is no longer active.")
+    return submission
+
+
+def _assigned_actor(db: Session, actor: User, submission: InmateViolationSubmission, stage: str) -> dict[str, Any]:
+    prefix = "reviewer" if stage == "review" else "manager"
+    if getattr(submission, f"{prefix}_user_id") != actor.id:
+        raise AppError("INMATE_REGISTER_WRONG_ASSIGNEE", "Only the selected person may perform this stage.", http_status=403)
+    facts = _actor_facts(db, submission)
+    earlier = [facts[key] for key in ("prepared", "reviewed") if key in facts and not (stage == "review" and key == "reviewed")]
+    return _identity(db, actor, stage, earlier=earlier, selected_employee_id=getattr(submission, f"{prefix}_employee_id"))
+
+
+@_transaction
+def prepare_month(db: Session, year: int, month: int, *, actor: User, expected_version: int, expected_projection_fingerprint: str, reviewer_user_id: int, supersede_reason: str | None = None) -> MonthRegister:
+    root = _reserve(db, year, month, expected_version=expected_version)
+    _assert_open(db, year, month)
+    facts = _identity(db, actor, "prepare")
+    reviewer = _identity(db, db.get(User, reviewer_user_id), "review", earlier=[facts])
+    entries, _ = effective_projection(db, year, month)
+    payload = _snapshot(year, month, entries)
+    fingerprint = _fingerprint(payload)
+    if expected_projection_fingerprint != fingerprint:
+        raise ConflictError("INMATE_REGISTER_STALE_PROJECTION", "The preview changed. Reload the report before submitting.")
+    previous = _active_submission(db, root)
+    if previous is not None:
+        prior_facts = _actor_facts(db, previous)
+        if root.state in {"awaiting_review", "awaiting_manager"} and fingerprint == previous.fingerprint:
+            if actor.role != "admin" and (prior_facts.get("prepared") or {}).get("user_id") != actor.id:
+                raise AppError("INMATE_REGISTER_SUPERSEDE_FORBIDDEN", "Only the preparer or an administrator may replace a fresh submission.", http_status=403)
+            supersede_reason = _reason(supersede_reason)
+        _append(db, root, previous, "superseded", facts=facts, reason=_text(supersede_reason) or None)
+    root.current_sequence += 1
+    root.state = "awaiting_review"
+    submission = InmateViolationSubmission(workflow_id=root.id, sequence=root.current_sequence, payload=payload, fingerprint=fingerprint, origin="workflow", reviewer_user_id=reviewer["user_id"], reviewer_employee_id=reviewer["employee_id"])
+    db.add(submission)
+    db.flush()
+    _append(db, root, submission, "prepared", facts=facts)
+    return build_month(db, year, month, actor=actor)
+
+
+@_transaction
+def review_month(db: Session, year: int, month: int, *, actor: User, expected_version: int, submission_id: int, manager_user_id: int) -> MonthRegister:
+    root = _reserve(db, year, month, expected_version=expected_version, states=("awaiting_review",))
+    submission = _submission_for_action(db, root, submission_id)
+    facts = _assigned_actor(db, actor, submission, "review")
+    _fresh(db, root, submission)
+    earlier = [*_actor_facts(db, submission).values(), facts]
+    manager = _identity(db, db.get(User, manager_user_id), "approve", earlier=earlier)
+    submission.manager_user_id = manager["user_id"]
+    submission.manager_employee_id = manager["employee_id"]
+    root.state = "awaiting_manager"
+    _append(db, root, submission, "reviewed", facts=facts)
+    return build_month(db, year, month, actor=actor)
+
+
+@_transaction
+def return_month(db: Session, year: int, month: int, *, actor: User, expected_version: int, submission_id: int, reason: str) -> MonthRegister:
+    root = _reserve(db, year, month, expected_version=expected_version, states=("awaiting_review", "awaiting_manager"))
+    submission = _submission_for_action(db, root, submission_id)
+    facts = _assigned_actor(db, actor, submission, "review" if root.state == "awaiting_review" else "approve")
+    _append(db, root, submission, "returned", facts=facts, reason=_reason(reason))
+    root.state = "draft"
+    db.flush()
+    return build_month(db, year, month, actor=actor)
+
+
+@_transaction
+def approve_month(db: Session, year: int, month: int, *, actor: User, expected_version: int, submission_id: int, today: date | None = None) -> MonthRegister:
+    root = _reserve(db, year, month, expected_version=expected_version, states=("awaiting_manager",))
+    _assert_open(db, year, month)
+    submission = _submission_for_action(db, root, submission_id)
+    facts = _assigned_actor(db, actor, submission, "approve")
+    earlier = _actor_facts(db, submission)
+    if "prepared" not in earlier or "reviewed" not in earlier:
+        raise ConflictError("INMATE_REGISTER_STALE_WORKFLOW", "Preparation and review are required.")
+    _fresh(db, root, submission)
+    if not month_has_ended(year, month, today=today):
+        raise ConflictError("INMATE_REGISTER_MONTH_NOT_ENDED", "Final approval is available after month-end.", first_closable_date=first_closable_date(year, month).isoformat())
+    entries = _restore_entries(submission.payload)
     if not entries:
-        raise ConflictError(
-            "INMATE_REGISTER_MONTH_EMPTY",
-            "This Violation month has no entries to freeze.",
-            year=year,
-            month=month,
-        )
+        raise ConflictError("INMATE_REGISTER_MONTH_EMPTY", "There are no entries to approve.")
     blocking = [entry for entry in entries if entry.missing]
-    reason = (force_reason or "").strip()
-    if blocking and not reason:
-        raise ConflictError(
-            "INMATE_REGISTER_INCOMPLETE_ENTRIES",
-            "The month has entries pending completion; closing over them needs a reason.",
-            year=year,
-            month=month,
-            entries=[
-                {"id": entry.handle, "name": entry.name, "missing": entry.missing}
-                for entry in blocking
-            ],
-        )
-    previous_units: dict[str, str] = {}
+    if blocking:
+        raise ConflictError("INMATE_REGISTER_INCOMPLETE_ENTRIES", "Complete the entries and submit the report again.", entries=[{"id": entry.handle, "name": entry.name, "missing": entry.missing} for entry in blocking])
+    period = _period(db, year, month)
     if period is None:
         period = InmateViolationPeriod(year=year, month=month)
         db.add(period)
         db.flush()
-    else:
-        previous_units = {
-            row.row_handle: _text(row.duty_unit)
-            for row in db.scalars(
-                select(InmateViolationStatRow).where(InmateViolationStatRow.period_id == period.id)
-            )
-        }
-    _carry_forward_duty_units(entries, previous_units)
-    for entry in entries:
-        # A forced close records that the month was closed over unknowns; it
-        # never discovers them, and it never moves an entry between groups. Only
-        # the entries it sealed over are marked — an ordinary close freezes a
-        # complete entry with no marks at all.
-        if entry.missing:
-            marks = set(entry.incomplete_marks) | set(entry.missing)
-            if entry.duty_unit == UNSPECIFIED:
-                marks.add(MISSING_DUTY_UNIT)
-            entry.incomplete_marks = sorted(marks)
-        entry.missing = []
     _freeze(db, period, entries)
     period.closed_at = _utcnow()
     period.closed_by = actor.id
-    period.force_reason = reason or None
-    _audit(
-        db,
-        actor=actor,
-        action=(
-            "inmate_violation_month_force_closed" if blocking else "inmate_violation_month_closed"
-        ),
-        entity_type="inmate_violation_period",
-        entity_id=f"{year}-{month:02d}",
-        payload={
-            "year": year,
-            "month": month,
-            "row_count": len(entries),
-            **({"reason": reason} if blocking else {}),
-        },
-    )
+    root.state = "closed"
+    _append(db, root, submission, "approved", facts=facts)
+    _audit(db, actor=actor, action="inmate_violation_month_closed", entity_type="inmate_violation_period", entity_id=f"{year}-{month:02d}", payload={"year": year, "month": month, "submission_id": submission.id, "row_count": len(entries)})
     db.flush()
-    _write_export_copy(period, build_month(db, year, month))
-    db.commit()
-    return build_month(db, year, month)
+    result = build_month(db, year, month, actor=actor)
+    _write_export_copy(period, result, submission_id=submission.id)
+    db.flush()
+    return replace(result, export_ready=True)
 
 
-def reopen_month(db: Session, year: int, month: int, *, actor: User) -> MonthRegister:
-    """Return a closed month to live projection.
-
-    The previous seal's entries stay in place until the month is closed again;
-    ``closed_at IS NULL`` alone means open, so entry presence never signals
-    closure.
-    """
-
+@_transaction
+def reopen_month(db: Session, year: int, month: int, *, actor: User, expected_version: int, reason: str) -> MonthRegister:
+    root = _reserve(db, year, month, expected_version=expected_version, states=("closed",))
+    if actor.role != "admin" or not _caps(db, actor, "navigation"):
+        raise AppError("FORBIDDEN", "Administrator access and register navigation are required.", http_status=403)
+    reason = _reason(reason)
     period = _period(db, year, month)
     if period is None or period.closed_at is None:
-        raise ConflictError(
-            "INMATE_REGISTER_NOT_CLOSED",
-            "This Violation month is not closed.",
-            year=year,
-            month=month,
-        )
-    row_count = db.scalar(
-        select(func.count())
-        .select_from(InmateViolationStatRow)
-        .where(InmateViolationStatRow.period_id == period.id)
-    )
+        raise ConflictError("INMATE_REGISTER_NOT_CLOSED", "This month is not closed.")
     period.closed_at = None
     period.closed_by = None
-    period.force_reason = None
     period.reopened_at = _utcnow()
     period.reopened_by = actor.id
-    _audit(
-        db,
-        actor=actor,
-        action="inmate_violation_month_reopened",
-        entity_type="inmate_violation_period",
-        entity_id=f"{year}-{month:02d}",
-        payload={"year": year, "month": month, "row_count": int(row_count or 0)},
-    )
-    db.commit()
-    return build_month(db, year, month)
+    root.state = "draft"
+    employee = db.get(Employee, actor.employee_id) if actor.employee_id else None
+    _append(db, root, _active_submission(db, root), "reopened", facts={"user_id": actor.id, "employee_id": actor.employee_id, "name_ar": employee.name_ar if employee else None}, reason=reason)
+    _audit(db, actor=actor, action="inmate_violation_month_reopened", entity_type="inmate_violation_period", entity_id=f"{year}-{month:02d}", payload={"year": year, "month": month, "reason": reason})
+    db.flush()
+    return build_month(db, year, month, actor=actor)
 
 
 # --------------------------------------------------------------------------- #
 # the workbook
 # --------------------------------------------------------------------------- #
+
+
+def _assignment(db: Session, submission: InmateViolationSubmission, stage: str) -> dict[str, Any] | None:
+    prefix = "reviewer" if stage == "review" else "manager"
+    user_id = getattr(submission, f"{prefix}_user_id")
+    employee_id = getattr(submission, f"{prefix}_employee_id")
+    if user_id is None and employee_id is None:
+        return None
+    user = db.get(User, user_id) if user_id is not None else None
+    facts = _actor_facts(db, submission)
+    earlier = [facts[key] for key in ("prepared", "reviewed") if key in facts and not (stage == "review" and key == "reviewed")]
+    employee = db.get(Employee, employee_id) if employee_id else None
+    return {"user_id": user_id, "employee_id": employee_id, "name_ar": employee.name_ar if employee else None, "eligible": _eligible(db, user, stage, earlier=earlier, selected_employee_id=employee_id)}
+
+
+def _legacy_metadata(submission: InmateViolationSubmission | None) -> dict[str, Any] | None:
+    if submission is None or submission.origin != "legacy":
+        return None
+    # The raw SQL archive preserves NULL distinctions for audit/downgrade;
+    # month responses need only closure metadata, not a duplicate full report.
+    return {key: value for key, value in (submission.legacy_metadata or {}).items() if key != "stored_rows"}
+
+
+def _workflow_out(db: Session, month: MonthRegister, *, actor: User | None = None) -> dict[str, Any]:
+    root = _workflow(db, month.year, month.month)
+    submission = _active_submission(db, root)
+    state = root.state if root else "draft"
+    facts = _actor_facts(db, submission)
+    stale = bool(submission and state != "closed" and (state == "draft" or month.projection_fingerprint != submission.fingerprint))
+    shown_facts = facts if state != "draft" else {}
+    reviewer = _assignment(db, submission, "review") if submission else None
+    manager = _assignment(db, submission, "approve") if submission else None
+    allowed = []
+    blockers = []
+    if stale:
+        blockers.append({"code": "INMATE_REGISTER_STALE_PROJECTION", "details": {}})
+    if not month.closed and not month_has_ended(month.year, month.month):
+        blockers.append({"code": "INMATE_REGISTER_MONTH_NOT_ENDED", "details": {"first_closable_date": first_closable_date(month.year, month.month).isoformat()}})
+    if month.blocking:
+        blockers.append({"code": "INMATE_REGISTER_INCOMPLETE_ENTRIES", "details": {"entries": [{"id": row.handle, "missing": row.missing} for row in month.blocking]}})
+    current_assignment = reviewer if state == "awaiting_review" else manager if state == "awaiting_manager" else None
+    if current_assignment and not current_assignment["eligible"]:
+        blockers.append({"code": "INMATE_REGISTER_ASSIGNEE_INELIGIBLE", "details": {"user_id": current_assignment["user_id"], "employee_id": current_assignment["employee_id"]}})
+    if actor is not None:
+        if state != "closed" and _eligible(db, actor, "prepare") and (state == "draft" or stale or actor.role == "admin" or (facts.get("prepared") or {}).get("user_id") == actor.id):
+            allowed.append("prepare")
+        if current_assignment and current_assignment["user_id"] == actor.id and current_assignment["eligible"]:
+            allowed.append("return")
+            if not stale:
+                if state == "awaiting_review":
+                    allowed.append("review")
+                elif month_has_ended(month.year, month.month) and month.entries and not month.blocking:
+                    allowed.append("approve")
+        if state == "closed" and actor.role == "admin" and _caps(db, actor, "navigation"):
+            allowed.append("reopen")
+        if state != "closed" and _caps(db, actor, "prepare") and not _eligible(db, actor, "prepare"):
+            blockers.append({"code": "INMATE_REGISTER_INVALID_ACTOR_PROFILE", "details": {"user_id": actor.id}})
+    legacy = bool(submission and submission.origin == "legacy" and state == "closed")
+    return {
+        "version": root.version if root else 0, "state": state,
+        "active_submission_id": submission.id if submission else None,
+        "current_sequence": root.current_sequence if root else 0,
+        "reviewer": reviewer if state != "draft" else None, "manager": manager if state != "draft" else None,
+        "prepared": shown_facts.get("prepared"), "reviewed": shown_facts.get("reviewed"), "approved": shown_facts.get("approved"),
+        "needs_review": stale, "blockers": blockers, "allowed_actions": allowed,
+        "legacy": legacy, "legacy_metadata": _legacy_metadata(submission) if legacy else None,
+    }
+
+
+def workflow_candidates(db: Session, year: int, month: int, *, actor: User, stage: str) -> list[dict[str, Any]]:
+    root = _workflow(db, year, month)
+    if root and root.state == "closed":
+        raise ConflictError("INMATE_REGISTER_MONTH_CLOSED", "Reopen the month before selecting report actors.")
+    if stage == "review":
+        earlier = [_identity(db, actor, "prepare")]
+        if "prepare" not in build_month(db, year, month, actor=actor).workflow["allowed_actions"]:
+            raise AppError("INMATE_REGISTER_SUPERSEDE_FORBIDDEN", "Only the preparer or an administrator may replace a fresh submission.", http_status=403)
+    else:
+        submission = _active_submission(db, root)
+        if root is None or root.state != "awaiting_review" or submission is None:
+            raise ConflictError("INMATE_REGISTER_STALE_WORKFLOW", "A submitted report awaiting review is required.")
+        reviewer = _assigned_actor(db, actor, submission, "review")
+        earlier = [*_actor_facts(db, submission).values(), reviewer]
+    choices = []
+    for user in db.scalars(select(User).where(User.status == "active").order_by(User.id)):
+        try:
+            choices.append(_identity(db, user, stage, earlier=earlier))
+        except AppError:
+            continue
+    return choices
+
+
+def _get_submission(db: Session, year: int, month: int, submission_id: int) -> InmateViolationSubmission:
+    submission = db.scalar(select(InmateViolationSubmission).join(InmateViolationWorkflow, InmateViolationWorkflow.id == InmateViolationSubmission.workflow_id).where(InmateViolationWorkflow.year == year, InmateViolationWorkflow.month == month, InmateViolationSubmission.id == submission_id))
+    if submission is None:
+        raise NotFoundError("INMATE_REGISTER_SUBMISSION_NOT_FOUND", "This report revision does not belong to the requested month.")
+    return submission
+
+
+def _submission_context(db: Session, submission: InmateViolationSubmission) -> dict[str, Any]:
+    root = db.get(InmateViolationWorkflow, submission.workflow_id)
+    assert root is not None
+    facts = _actor_facts(db, submission)
+    current = root.current_sequence == submission.sequence and root.state != "draft"
+    stale = False
+    if current and root.state != "closed":
+        entries, _ = effective_projection(db, root.year, root.month)
+        stale = _fingerprint(_snapshot(root.year, root.month, entries)) != submission.fingerprint
+    elif root.current_sequence == submission.sequence and root.state == "draft":
+        stale = True
+    state = "legacy" if submission.origin == "legacy" else "approved" if "approved" in facts else "reviewed" if "reviewed" in facts else "prepared"
+    return {"id": submission.id, "sequence": submission.sequence, "origin": submission.origin, "created_at": submission.created_at, "report_state": state, "approved_at": (facts.get("approved") or {}).get("acted_at"), "current": current, "stale": stale}
+
+
+def submission_history(db: Session, year: int, month: int) -> list[dict[str, Any]]:
+    root = _workflow(db, year, month)
+    if root is None:
+        return []
+    return [_submission_context(db, submission) for submission in db.scalars(select(InmateViolationSubmission).where(InmateViolationSubmission.workflow_id == root.id).order_by(InmateViolationSubmission.sequence.desc()))]
+
+
+def submission_detail(db: Session, year: int, month: int, submission_id: int) -> dict[str, Any]:
+    submission = _get_submission(db, year, month, submission_id)
+    context = _submission_context(db, submission)
+    actions = [
+        {"action": event.action, "occurred_at": event.occurred_at, "actor_user_id": event.actor_user_id,
+         "actor_name_ar": event.actor_name_ar, "actor_employee_id": event.actor_employee_id, "reason": event.reason}
+        for event in db.scalars(select(InmateViolationWorkflowAction).where(InmateViolationWorkflowAction.submission_id == submission_id).order_by(InmateViolationWorkflowAction.id))
+    ]
+    return {"submission_id": submission_id, "sequence": context["sequence"], "created_at": context["created_at"], "report_state": context["report_state"], "current": context["current"], "stale": context["stale"], "actions": actions}
+
+
+def submission_month(db: Session, year: int, month: int, submission_id: int) -> MonthRegister:
+    submission = _get_submission(db, year, month, submission_id)
+    facts = _actor_facts(db, submission)
+    legacy = submission.origin == "legacy"
+    metadata = _legacy_metadata(submission)
+    approved = facts.get("approved") or {}
+    closed_at = approved.get("acted_at") or (metadata or {}).get("closed_at")
+    if isinstance(closed_at, str):
+        closed_at = datetime.fromisoformat(closed_at)
+    context = _submission_context(db, submission)
+    workflow = {
+        "version": 0, "state": "closed" if closed_at else "awaiting_manager" if "reviewed" in facts else "awaiting_review" if "prepared" in facts else "draft",
+        "active_submission_id": submission.id, "current_sequence": submission.sequence,
+        "reviewer": _assignment(db, submission, "review"), "manager": _assignment(db, submission, "approve"),
+        "prepared": facts.get("prepared"), "reviewed": facts.get("reviewed"), "approved": facts.get("approved"),
+        "needs_review": context["stale"], "blockers": [], "allowed_actions": [], "legacy": legacy, "legacy_metadata": metadata,
+    }
+    return MonthRegister(year=year, month=month, closed_at=closed_at, closed_by=approved.get("user_id") or (metadata or {}).get("closed_by"), closed_by_name=approved.get("name_ar"), reopened_at=None, reopened_by=None, reopened_by_name=None, export_ready=bool(closed_at), entries=_restore_entries(submission.payload), uncounted=(), arrived_after_close=(), workflow=workflow, legacy_metadata=metadata)
+
+
+def workflow_tasks(db: Session, *, actor: User, today: date | None = None) -> list[dict[str, Any]]:
+    """Assigned actions plus cheap unowned discovery; no global live projection."""
+    if not _caps(db, actor, "navigation"):
+        return []
+    tasks = []
+    roots = list(db.scalars(select(InmateViolationWorkflow)))
+    occupied = {(root.year, root.month) for root in roots if root.state == "closed" or root.current_sequence}
+    for root in roots:
+        if root.state == "closed":
+            continue
+        submission = _active_submission(db, root)
+        if submission is None:
+            continue
+        facts = _actor_facts(db, submission)
+        preparer_id = (facts.get("prepared") or {}).get("user_id")
+        preparer = db.get(User, preparer_id) if preparer_id else None
+        stage = "review" if root.state == "awaiting_review" else "approve" if root.state == "awaiting_manager" else None
+        assignment = _assignment(db, submission, stage) if stage else None
+        context = _submission_context(db, submission)
+        correction = root.state == "draft" or context["stale"]
+        kind, code = None, None
+        if actor.role == "admin" and ((stage and (assignment is None or not assignment["eligible"])) or (correction and not _eligible(db, preparer, "prepare"))):
+            kind = "recovery"
+            code = "INMATE_REGISTER_ASSIGNEE_INELIGIBLE" if stage else "INMATE_REGISTER_INVALID_ACTOR_PROFILE"
+        elif correction and preparer_id == actor.id and _eligible(db, actor, "prepare"):
+            kind, code = "correction", "INMATE_REGISTER_STALE_PROJECTION"
+        elif not correction and assignment and assignment["user_id"] == actor.id and assignment["eligible"]:
+            kind = stage
+        if kind:
+            tasks.append({"year": root.year, "month": root.month, "kind": kind, "submission_id": submission.id, "code": code, "row_count": len(submission.payload["entries"])})
+    if _eligible(db, actor, "prepare"):
+        counts: dict[tuple[int, int], int] = {}
+        for _book, version in _current_versions(db):
+            fields = version.fields if isinstance(version.fields, dict) else {}
+            occurred = _parse_date(fields.get("report_date"))
+            if occurred:
+                key = (occurred.year, occurred.month)
+                counts[key] = counts.get(key, 0) + len(_source_rows(fields)[1])
+        for year, month, count in db.execute(select(InmateViolationManualRow.year, InmateViolationManualRow.month, func.count()).group_by(InmateViolationManualRow.year, InmateViolationManualRow.month)):
+            counts[(year, month)] = counts.get((year, month), 0) + count
+        for (year, month), count in sorted(counts.items()):
+            if count and (year, month) not in occupied and month_has_ended(year, month, today=today):
+                tasks.append({"year": year, "month": month, "kind": "prepare", "submission_id": None, "code": None, "row_count": count})
+    return tasks
 
 #: Where the close-time copy of a sealed month lives, relative to ``data_dir``.
 EXPORT_DIR_NAME: Final[str] = "inmate_violations"
@@ -1279,29 +1715,40 @@ def render_workbook(
         sections=_sections(month, language=language, populations=populations),
         closed_at=month.closed_at,
         closed_by_name=month.closed_by_name,
-        force_reason=month.force_reason,
+        legacy_force_reason=(month.legacy_metadata or {}).get("force_reason"),
         language=language,
+        legacy=month.legacy_metadata is not None,
     )
     return payload, xlsx.register_filename(month.year, month.month, language)
 
 
-def _export_copy_path(year: int, month: int) -> str:
-    return f"{EXPORT_DIR_NAME}/{year}-{month:02d}.xlsx"
+def _export_copy_path(year: int, month: int, submission_id: int) -> str:
+    return f"{EXPORT_DIR_NAME}/{year}-{month:02d}-submission-{submission_id}.xlsx"
 
 
-def _write_export_copy(period: InmateViolationPeriod, month: MonthRegister) -> None:
+def _write_export_copy(period: InmateViolationPeriod, month: MonthRegister, *, submission_id: int) -> None:
     """Materialise the sealed month's workbook — a file to send, not evidence.
 
-    Replaced on every re-close, so only the newest copy exists. It is a cache of
-    a deterministic render; the frozen entries are the proof of what a month
-    contained.
+    Each submission has its own target. Publication updates only the pending
+    period transaction; rollback leaves any orphan unreferenced and preserves
+    the prior approved file. The submission payload remains the report evidence.
     """
 
-    relative = _export_copy_path(month.year, month.month)
+    relative = _export_copy_path(month.year, month.month, submission_id)
     target = get_settings().data_dir / relative
     target.parent.mkdir(parents=True, exist_ok=True)
     payload, _filename = render_workbook(month, language="ar")
-    target.write_bytes(payload)
+    staged = None
+    try:
+        with tempfile.NamedTemporaryFile(dir=target.parent, suffix=".tmp", delete=False) as stream:
+            staged = stream.name
+            stream.write(payload)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(staged, target)
+    finally:
+        if staged and os.path.exists(staged):
+            os.unlink(staged)
     period.export_path = relative
 
 
@@ -1312,6 +1759,7 @@ def export_workbook(
     *,
     language: str = "ar",
     populations: Sequence[str] = POPULATIONS,
+    submission_id: int | None = None,
 ) -> tuple[bytes, str]:
     """The download. Serves the sealed month's stored Arabic copy when it exists.
 
@@ -1320,12 +1768,15 @@ def export_workbook(
     it only answers a request for exactly that.
     """
 
+    if submission_id is not None:
+        return render_workbook(submission_month(db, year, month, submission_id), language=language, populations=populations)
     register = build_month(db, year, month)
     period = _period(db, year, month)
     if (
         language == "ar"
         and tuple(populations) == POPULATIONS
         and register.closed
+        and not register.workflow.get("legacy")
         and period is not None
         and period.export_path is not None
     ):

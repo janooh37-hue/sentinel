@@ -112,6 +112,29 @@ def _actor(db: Session, *, role: str = "admin", email: str = "actor@x.ae") -> Us
     return user
 
 
+def _approve_test_month(db: Session, year: int, month: int, *, actor: User, today: date):
+    """Exercise the real three-person service chain for existing seal tests."""
+    if not actor.employee_id:
+        employee = Employee(id=f"GACT{actor.id}", name_en="Synthetic manager", name_ar="مدير تجريبي")
+        db.add(employee)
+        db.flush()
+        actor.employee_id = employee.id
+        db.commit()
+    suffix = len(db.scalars(select(User)).all())
+    prep = _actor(db, email=f"prep{suffix}@example.test")
+    reviewer = _actor(db, email=f"review{suffix}@example.test")
+    for user in (prep, reviewer):
+        employee = Employee(id=f"GACT{user.id}", name_en="Synthetic actor", name_ar="موظف تجريبي")
+        db.add(employee)
+        db.flush()
+        user.employee_id = employee.id
+    db.commit()
+    view = register.build_month(db, year, month)
+    view = register.prepare_month(db, year, month, actor=prep, expected_version=view.workflow["version"], expected_projection_fingerprint=view.projection_fingerprint, reviewer_user_id=reviewer.id)
+    view = register.review_month(db, year, month, actor=reviewer, expected_version=view.workflow["version"], submission_id=view.workflow["active_submission_id"], manager_user_id=actor.id)
+    return register.approve_month(db, year, month, actor=actor, expected_version=view.workflow["version"], submission_id=view.workflow["active_submission_id"], today=today)
+
+
 def _reporter(
     db: Session,
     employee_id: str = "G4603",
@@ -449,7 +472,7 @@ def test_manual_entry_without_details_blocks_the_close(db_session: Session) -> N
 
     month = register.build_month(db_session, 2026, 8)
 
-    assert month.entries[0].missing == ["details"]
+    assert month.entries[0].missing == ["wing", "details"]
 
 
 def test_a_manual_entry_shadowing_a_record_warns_but_never_merges(db_session: Session) -> None:
@@ -568,9 +591,9 @@ def test_completion_merges_a_namespaced_block_and_leaves_the_import_intact(
     assert entry.population == register.POPULATION_CITIZENS
     assert entry.duty_unit == "السرية الثانية"
     assert entry.details_text == "تفاصيل من الصورة"
-    # Empty uid/wing print empty, permanently, and are never errors.
+    # Empty UID remains optional; a draft wing must be completed for approval.
     assert (entry.uid, entry.wing) == ("", "")
-    assert entry.missing == []
+    assert entry.missing == ["wing"]
 
     logged = db_session.scalars(
         select(AuditLog).where(AuditLog.action == "inmate_violation_import_completed")
@@ -613,7 +636,7 @@ def test_a_running_month_cannot_be_closed(db_session: Session) -> None:
     _record(db_session, report_date="2026-09-03", inmates=[_inmate("راشد")])
 
     with pytest.raises(Exception) as raised:
-        register.close_month(db_session, 2026, 9, actor=_actor(db_session), today=TODAY)
+        _approve_test_month(db_session, 2026, 9, actor=_actor(db_session), today=TODAY)
 
     assert "INMATE_REGISTER_MONTH_NOT_ENDED" in str(raised.value.code)  # type: ignore[union-attr]
     assert register.first_closable_date(2026, 9) == date(2026, 10, 1)
@@ -631,7 +654,7 @@ def test_close_freezes_the_entries_and_audits(db_session: Session) -> None:
     _closable_month(db_session)
     actor = _actor(db_session)
 
-    month = register.close_month(db_session, CLOSED_YEAR, CLOSED_MONTH, actor=actor, today=TODAY)
+    month = _approve_test_month(db_session, CLOSED_YEAR, CLOSED_MONTH, actor=actor, today=TODAY)
 
     assert month.closed is True
     assert month.closed_by == actor.id
@@ -647,7 +670,7 @@ def test_close_freezes_the_entries_and_audits(db_session: Session) -> None:
 
 def test_a_sealed_month_is_never_re_derived(db_session: Session) -> None:
     _closable_month(db_session)
-    register.close_month(
+    _approve_test_month(
         db_session, CLOSED_YEAR, CLOSED_MONTH, actor=_actor(db_session), today=TODAY
     )
 
@@ -663,42 +686,19 @@ def test_a_sealed_month_is_never_re_derived(db_session: Session) -> None:
     assert month.entries[0].source_ref_number == book.ref_number
 
 
-def test_close_refuses_over_pending_completion_unless_forced(db_session: Session) -> None:
+def test_final_approval_refuses_pending_completion_without_bypass(db_session: Session) -> None:
     _reporter(db_session)
-    _record(db_session, report_date="2026-08-11", imported_names=["حمد علي المزروعي"])
-    actor = _actor(db_session)
-
+    _record(db_session, report_date="2026-08-11", imported_names=["نزيل تجريبي"])
     with pytest.raises(Exception) as raised:
-        register.close_month(db_session, CLOSED_YEAR, CLOSED_MONTH, actor=actor, today=TODAY)
-    assert "INMATE_REGISTER_INCOMPLETE_ENTRIES" in str(raised.value.code)  # type: ignore[union-attr]
-
-    month = register.close_month(
-        db_session,
-        CLOSED_YEAR,
-        CLOSED_MONTH,
-        actor=actor,
-        force_reason="صورة غير مقروءة",
-        today=TODAY,
-    )
-
-    assert month.force_reason == "صورة غير مقروءة"
-    sealed = month.entries[0]
-    # Force-close freezes cells and marks them; it never moves the entry into a
-    # population it never had.
-    assert sealed.population == register.POPULATION_PENDING
-    assert "nationality" in sealed.incomplete_marks
-    assert (
-        db_session.scalars(
-            select(AuditLog.action).where(AuditLog.action == "inmate_violation_month_force_closed")
-        ).one()
-        == "inmate_violation_month_force_closed"
-    )
+        _approve_test_month(db_session, CLOSED_YEAR, CLOSED_MONTH, actor=_actor(db_session), today=TODAY)
+    assert raised.value.code == "INMATE_REGISTER_INCOMPLETE_ENTRIES"
+    assert not register.build_month(db_session, CLOSED_YEAR, CLOSED_MONTH).closed
 
 
 def test_a_closed_month_admits_no_write(db_session: Session) -> None:
     _closable_month(db_session)
     actor = _actor(db_session)
-    register.close_month(db_session, CLOSED_YEAR, CLOSED_MONTH, actor=actor, today=TODAY)
+    _approve_test_month(db_session, CLOSED_YEAR, CLOSED_MONTH, actor=actor, today=TODAY)
 
     with pytest.raises(Exception) as raised:
         register.create_manual_row(
@@ -718,7 +718,7 @@ def test_an_occurrence_edited_into_a_closed_month_is_listed_outside_the_seal(
     db_session: Session,
 ) -> None:
     _closable_month(db_session)
-    register.close_month(
+    _approve_test_month(
         db_session, CLOSED_YEAR, CLOSED_MONTH, actor=_actor(db_session), today=TODAY
     )
     late = _record(db_session, report_date="2026-08-30", inmates=[_inmate("وصل بعد الإغلاق")])
@@ -735,9 +735,10 @@ def test_reopen_keeps_the_previous_seal_and_re_close_never_downgrades_the_duty_u
 ) -> None:
     _closable_month(db_session)
     actor = _actor(db_session)
-    register.close_month(db_session, CLOSED_YEAR, CLOSED_MONTH, actor=actor, today=TODAY)
+    _approve_test_month(db_session, CLOSED_YEAR, CLOSED_MONTH, actor=actor, today=TODAY)
 
-    reopened = register.reopen_month(db_session, CLOSED_YEAR, CLOSED_MONTH, actor=actor)
+    version = register.build_month(db_session, CLOSED_YEAR, CLOSED_MONTH).workflow["version"]
+    reopened = register.reopen_month(db_session, CLOSED_YEAR, CLOSED_MONTH, actor=actor, expected_version=version, reason="تصحيح")
 
     assert reopened.closed is False
     # The previous seal survives a reopen; entry presence never signals closure.
@@ -750,7 +751,7 @@ def test_reopen_keeps_the_previous_seal_and_re_close_never_downgrades_the_duty_u
     employee.duty_unit = None
     db_session.commit()
 
-    re_closed = register.close_month(
+    re_closed = _approve_test_month(
         db_session, CLOSED_YEAR, CLOSED_MONTH, actor=actor, today=TODAY
     )
 
@@ -770,7 +771,7 @@ def test_awaiting_close_lists_ended_months_with_entries_and_no_seal(db_session: 
     _record(db_session, report_date="2026-07-04", inmates=[_inmate("يوليو")])
     _record(db_session, report_date="2026-08-05", imported_names=["أغسطس قيد الإكمال"])
     _record(db_session, report_date="2026-09-03", inmates=[_inmate("سبتمبر الجاري")])
-    register.close_month(db_session, 2026, 7, actor=_actor(db_session), today=TODAY)
+    _approve_test_month(db_session, 2026, 7, actor=_actor(db_session), today=TODAY)
 
     months = register.awaiting_close(db_session, today=TODAY)
 
@@ -796,26 +797,19 @@ def test_month_route_serves_entries_counts_and_warnings(
     body = response.json()
     assert body["counts"] == {"citizens": 1, "expats": 1, "pending": 0, "total": 2}
     assert body["closed"] is False
-    assert body["can_close"] is True
+    assert "can_close" not in body
+    assert body["workflow"]["state"] == "draft"
     assert body["first_closable_date"] == "2026-09-01"
     assert body["entries"][0]["id"].endswith(":0")
 
 
-def test_close_and_reopen_are_admin_only(
+def test_direct_close_is_removed_and_reopen_rejects_missing_body(
     api_db: Session, operator_client: TestClient, admin_client: TestClient
 ) -> None:
     _closable_month(api_db)
-
-    refused = operator_client.post("/api/v1/inmate-violations/statistics/2026/8/close", json={})
-    assert refused.status_code == 403
-
-    closed = admin_client.post("/api/v1/inmate-violations/statistics/2026/8/close", json={})
-    assert closed.status_code == 200
-    assert closed.json()["closed"] is True
-
-    reopened = admin_client.post("/api/v1/inmate-violations/statistics/2026/8/reopen")
-    assert reopened.status_code == 200
-    assert reopened.json()["closed"] is False
+    for client in (operator_client, admin_client):
+        assert client.post("/api/v1/inmate-violations/statistics/2026/8/close", json={}).status_code in {404, 405}
+    assert admin_client.post("/api/v1/inmate-violations/statistics/2026/8/reopen").status_code == 422
 
 
 def test_manual_row_routes_round_trip_and_return_the_month(
@@ -851,19 +845,11 @@ def test_manual_row_routes_round_trip_and_return_the_month(
     assert deleted.json()["counts"]["total"] == 0
 
 
-def test_awaiting_close_route_is_admin_only(
-    api_db: Session, operator_client: TestClient, admin_client: TestClient
+def test_tasks_route_is_accessible_to_non_admins(
+    api_db: Session, operator_client: TestClient
 ) -> None:
-    _reporter(api_db)
-    _record(api_db, report_date="2026-08-05", inmates=[_inmate("راشد")])
-
-    assert (
-        operator_client.get("/api/v1/inmate-violations/statistics/awaiting-close").status_code
-        == 403
-    )
-    body = admin_client.get("/api/v1/inmate-violations/statistics/awaiting-close").json()
-    assert body["count"] >= 1
-    assert body["months"][0]["closable"] is True
+    assert operator_client.get("/api/v1/inmate-violations/statistics/tasks").status_code == 200
+    assert "/api/v1/inmate-violations/statistics/awaiting-close" not in operator_client.app.openapi()["paths"]
 
 
 def test_nationality_list_route_carries_the_closed_list(operator_client: TestClient) -> None:
@@ -894,9 +880,9 @@ def test_export_downloads_a_workbook_without_closing_the_month(
 def test_close_materialises_one_workbook_copy(api_db: Session, admin_client: TestClient) -> None:
     _closable_month(api_db)
 
-    admin_client.post("/api/v1/inmate-violations/statistics/2026/8/close", json={})
+    view = _approve_test_month(api_db, 2026, 8, actor=api_db.get(User, admin_client.user_id), today=TODAY)
 
     period = api_db.scalars(select(InmateViolationPeriod)).one()
-    assert period.export_path == "inmate_violations/2026-08.xlsx"
+    assert period.export_path == f"inmate_violations/2026-08-submission-{view.workflow['active_submission_id']}.xlsx"
     stored = get_settings().data_dir / period.export_path
     assert stored.is_file()
