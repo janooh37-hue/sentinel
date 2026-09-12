@@ -13,7 +13,6 @@
  */
 
 import type {
-  InmateAwaitingMonth,
   InmatePopulation,
   InmateRegisterEntry,
   InmateRegisterMonth,
@@ -24,25 +23,20 @@ export const POPULATIONS: readonly InmatePopulation[] = ['citizens', 'expats', '
 
 export const UNSPECIFIED = 'غير محدد'
 
-/** الليوان — the closed wing list every inmate cell in this domain picks from. */
-export const WINGS: readonly string[] = [1, 2, 3, 4, 5, 6].flatMap((floor) => [
-  `${floor}A`,
-  `${floor}B`,
-])
-
 /** Where the register lives: the third mode tab of the Records service. */
 const REGISTER_HREF = '/application?form=inmate_conduct_violations&mode=stats'
 
 /** Deep-link into one month of the register — the reminder's only action. */
-export function inmateRegisterHref(year: number, month: number): string {
-  return `${REGISTER_HREF}&stats_month=${monthKey(year, month)}`
+export function inmateRegisterHref(year: number, month: number, submissionId?: number | null): string {
+  return `${REGISTER_HREF}&stats_month=${monthKey(year, month)}${submissionId == null ? '' : `&stats_submission=${submissionId}`}`
 }
 
-/** The month a reminder should open: awaiting months arrive oldest first. */
-export function newestAwaitingMonth(
-  months: readonly InmateAwaitingMonth[],
-): InmateAwaitingMonth | null {
-  return months.length > 0 ? months[months.length - 1] : null
+export const inmateMonthlyTasksHref = `${REGISTER_HREF}#monthly-tasks`
+
+export function parseSubmissionId(raw: string | null): number | null {
+  if (raw === null || !/^[1-9]\d*$/.test(raw)) return null
+  const value = Number(raw)
+  return Number.isSafeInteger(value) ? value : null
 }
 
 export interface RegisterGroup {
@@ -76,7 +70,7 @@ export function parseMonthKey(key: string): { year: number; month: number } | nu
   if (!match) return null
   const year = Number(match[1])
   const month = Number(match[2])
-  if (month < 1 || month > 12) return null
+  if (year < 2000 || year > 2100 || month < 1 || month > 12) return null
   return { year, month }
 }
 

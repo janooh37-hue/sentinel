@@ -19,12 +19,15 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import type { InmateNationality } from '@/lib/api'
-import { resolveNationalityCode, WINGS } from '@/pages/application/statistics/registerModel'
+import { resolveNationalityCode } from '@/pages/application/statistics/registerModel'
 import { useInmateNationalities } from '@/pages/application/statistics/useInmateRegister'
 import type { FieldProps } from '../types'
 
 const EMPTY_UNRESOLVED: readonly boolean[] = []
 const EMPTY_NATIONALITIES: readonly InmateNationality[] = []
+// The source-document form has no month projection. Generate its fixed schema choices;
+// register correction forms receive the server's wing_summary choices instead.
+const WINGS = Array.from({ length: 6 }, (_, index) => index + 1).flatMap((floor) => [`${floor}A`, `${floor}B`])
 
 interface Row {
   name: string

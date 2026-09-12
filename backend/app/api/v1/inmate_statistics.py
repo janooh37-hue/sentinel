@@ -1,19 +1,15 @@
 """Monthly inmate conduct violation register.
 
-Read is ``books.view`` plus the service's own visibility grant; writing a manual
-entry or completing an imported copy is ``books.edit`` plus the service's create
-grant — the same pair the Records service already uses. No ``inmate_stats.*``
-capability family exists: the details column reproduces each Record's narrative,
-so a register-only viewer would already read the papers' contents.
-
-Close and reopen are ``require_admin``, and exporting never closes a month
-(deliberately unlike the timesheet, where the download owns the seal).
+Register reads and writes keep the existing Records capabilities. Monthly
+review and approval also require their own capabilities, navigation access,
+assignment and a distinct linked employee identity. Only the final approval
+closes the month; administrator reopening requires a reason.
 """
 
 from __future__ import annotations
 
 from datetime import date
-from typing import Annotated
+from typing import Annotated, Any, Literal
 from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, Path, Query, Response, status
@@ -26,10 +22,7 @@ from app.db.models import User
 from app.db.session import get_db
 from app.schemas.inmate_statistics import (
     ArrivedAfterCloseOut,
-    AwaitingCloseOut,
-    AwaitingMonthOut,
     BlockingEntryOut,
-    CloseIn,
     CompletionIn,
     ManualProvenanceOut,
     ManualRowIn,
@@ -38,8 +31,17 @@ from app.schemas.inmate_statistics import (
     MonthOut,
     NationalityListOut,
     NationalityOut,
+    PrepareIn,
     RegisterEntryOut,
+    ReopenIn,
+    ReturnIn,
+    ReviewIn,
+    SubmissionActionIn,
+    SubmissionOut,
+    SubmissionSummaryOut,
     UncountedRecordOut,
+    WorkflowCandidateOut,
+    WorkflowTasksOut,
 )
 from app.services import inmate_statistics_service as register
 from app.services import perm_service
@@ -145,9 +147,9 @@ def _month_out(month: register.MonthRegister, *, today: date | None = None) -> M
         reopened_at=month.reopened_at,
         reopened_by=month.reopened_by,
         reopened_by_name=month.reopened_by_name,
-        force_reason=month.force_reason,
-        force_closed=month.force_reason is not None,
-        can_close=register.month_has_ended(month.year, month.month, today=today),
+        projection_fingerprint=month.projection_fingerprint,
+        wing_summary=month.wing_summary,
+        workflow=month.workflow,
         first_closable_date=register.first_closable_date(month.year, month.month),
         export_ready=month.export_ready,
         counts=MonthCountsOut(
@@ -207,27 +209,13 @@ def list_nationalities(
     )
 
 
-@router.get("/statistics/awaiting-close", response_model=AwaitingCloseOut)
-def awaiting_close(
-    _admin: Annotated[User, Depends(require_admin)],
+@router.get("/statistics/tasks", response_model=WorkflowTasksOut)
+def workflow_tasks(
+    user: Annotated[User, Depends(get_current_user)],
     db: Annotated[Session, Depends(get_db)],
-) -> AwaitingCloseOut:
-    """Ended months that still carry no seal, with what blocks each one."""
-
-    months = register.awaiting_close(db)
-    return AwaitingCloseOut(
-        months=[
-            AwaitingMonthOut(
-                year=item.year,
-                month=item.month,
-                row_count=item.row_count,
-                pending_count=item.pending_count,
-                closable=item.closable,
-            )
-            for item in months
-        ],
-        count=len(months),
-    )
+) -> WorkflowTasksOut:
+    items = register.workflow_tasks(db, actor=user)
+    return WorkflowTasksOut(items=items, count=len(items))
 
 
 @router.get("/statistics/{year}/{month}", response_model=MonthOut)
@@ -237,7 +225,7 @@ def get_month(
     _user: Annotated[User, Depends(register_reader)],
     db: Annotated[Session, Depends(get_db)],
 ) -> MonthOut:
-    return _month_out(register.build_month(db, year, month))
+    return _month_out(register.build_month(db, year, month, actor=_user))
 
 
 @router.get("/statistics/{year}/{month}/export")
@@ -248,6 +236,7 @@ def export_month(
     db: Annotated[Session, Depends(get_db)],
     language: Language = "ar",
     populations: Annotated[list[str] | None, Query()] = None,
+    submission_id: Annotated[int | None, Query(gt=0)] = None,
 ) -> Response:
     """Download the register workbook. This never closes or re-closes a month.
 
@@ -264,7 +253,7 @@ def export_month(
             http_status=422,
         )
     payload, filename = register.export_workbook(
-        db, year, month, language=language, populations=scope
+        db, year, month, language=language, populations=scope, submission_id=submission_id
     )
     return Response(
         content=payload,
@@ -281,16 +270,83 @@ def export_month(
 # --------------------------------------------------------------------------- #
 
 
-@router.post("/statistics/{year}/{month}/close", response_model=MonthOut)
-def close_month(
+@router.post("/statistics/{year}/{month}/prepare", response_model=MonthOut)
+def prepare_month(
     year: Year,
     month: Month,
-    body: CloseIn,
-    admin: Annotated[User, Depends(require_admin)],
+    body: PrepareIn,
+    user: Annotated[User, Depends(register_reader)],
     db: Annotated[Session, Depends(get_db)],
 ) -> MonthOut:
-    return _month_out(
-        register.close_month(db, year, month, actor=admin, force_reason=body.force_reason)
+    return _month_out(register.prepare_month(db, year, month, actor=user, **body.model_dump()))
+
+
+@router.post("/statistics/{year}/{month}/review", response_model=MonthOut)
+def review_month(
+    year: Year,
+    month: Month,
+    body: ReviewIn,
+    user: Annotated[User, Depends(register_reader)],
+    db: Annotated[Session, Depends(get_db)],
+) -> MonthOut:
+    return _month_out(register.review_month(db, year, month, actor=user, **body.model_dump()))
+
+
+@router.post("/statistics/{year}/{month}/return", response_model=MonthOut)
+def return_month(
+    year: Year,
+    month: Month,
+    body: ReturnIn,
+    user: Annotated[User, Depends(register_reader)],
+    db: Annotated[Session, Depends(get_db)],
+) -> MonthOut:
+    return _month_out(register.return_month(db, year, month, actor=user, **body.model_dump()))
+
+
+@router.post("/statistics/{year}/{month}/approve", response_model=MonthOut)
+def approve_month(
+    year: Year,
+    month: Month,
+    body: SubmissionActionIn,
+    user: Annotated[User, Depends(register_reader)],
+    db: Annotated[Session, Depends(get_db)],
+) -> MonthOut:
+    return _month_out(register.approve_month(db, year, month, actor=user, **body.model_dump()))
+
+
+@router.get("/statistics/{year}/{month}/candidates", response_model=list[WorkflowCandidateOut])
+def workflow_candidates(
+    year: Year,
+    month: Month,
+    stage: Literal["review", "approve"],
+    user: Annotated[User, Depends(register_reader)],
+    db: Annotated[Session, Depends(get_db)],
+) -> list[dict[str, Any]]:
+    return register.workflow_candidates(db, year, month, actor=user, stage=stage)
+
+
+@router.get("/statistics/{year}/{month}/submissions", response_model=list[SubmissionSummaryOut])
+def submission_history(
+    year: Year,
+    month: Month,
+    _user: Annotated[User, Depends(register_reader)],
+    db: Annotated[Session, Depends(get_db)],
+) -> list[dict[str, Any]]:
+    return register.submission_history(db, year, month)
+
+
+@router.get("/statistics/{year}/{month}/submissions/{submission_id}", response_model=SubmissionOut)
+def get_submission(
+    year: Year,
+    month: Month,
+    submission_id: int,
+    _user: Annotated[User, Depends(register_reader)],
+    db: Annotated[Session, Depends(get_db)],
+) -> SubmissionOut:
+    view = register.submission_month(db, year, month, submission_id)
+    return SubmissionOut(
+        **_month_out(view).model_dump(),
+        **register.submission_detail(db, year, month, submission_id),
     )
 
 
@@ -298,10 +354,11 @@ def close_month(
 def reopen_month(
     year: Year,
     month: Month,
+    body: ReopenIn,
     admin: Annotated[User, Depends(require_admin)],
     db: Annotated[Session, Depends(get_db)],
 ) -> MonthOut:
-    return _month_out(register.reopen_month(db, year, month, actor=admin))
+    return _month_out(register.reopen_month(db, year, month, actor=admin, **body.model_dump()))
 
 
 # --------------------------------------------------------------------------- #
@@ -336,7 +393,7 @@ def create_manual_row(
         reporter_id=body.reporter_id,
         details_text=body.details_text,
     )
-    return _month_out(register.build_month(db, year, month))
+    return _month_out(register.build_month(db, year, month, actor=user))
 
 
 @router.patch("/statistics/manual-rows/{row_id}", response_model=MonthOut)
@@ -352,7 +409,7 @@ def update_manual_row(
         actor=user,
         changes=body.model_dump(exclude_unset=True),
     )
-    return _month_out(register.build_month(db, row.year, row.month))
+    return _month_out(register.build_month(db, row.year, row.month, actor=user))
 
 
 @router.delete("/statistics/manual-rows/{row_id}", response_model=MonthOut)
@@ -363,7 +420,7 @@ def delete_manual_row(
 ) -> MonthOut:
     year, month = register.manual_row_month(db, row_id)
     register.delete_manual_row(db, row_id, actor=user)
-    return _month_out(register.build_month(db, year, month))
+    return _month_out(register.build_month(db, year, month, actor=user))
 
 
 @router.post("/statistics/completions/{book_id}", response_model=MonthOut)
@@ -385,4 +442,4 @@ def complete_import(
         inmates=[item.model_dump() for item in body.inmates],
     )
     year, month = register.record_month(db, book)
-    return _month_out(register.build_month(db, year, month))
+    return _month_out(register.build_month(db, year, month, actor=user))

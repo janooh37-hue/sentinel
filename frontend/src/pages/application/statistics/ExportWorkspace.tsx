@@ -13,7 +13,6 @@ import {
   buildRegisterClipboard,
   DEFAULT_REGISTER_SCOPE,
   registerGroupsForScope,
-  type RegisterDocumentLanguage,
   type RegisterExportOptions,
 } from './registerClipboard'
 import { POPULATIONS } from './registerModel'
@@ -131,13 +130,12 @@ function MethodCard({
   )
 }
 
-export function ExportWorkspace({ month }: { month: InmateRegisterMonth }): React.JSX.Element {
+export function ExportWorkspace({ month, submissionId }: { month: InmateRegisterMonth; submissionId?: number }): React.JSX.Element {
   const { t, i18n } = useTranslation()
+  const [draftIssuedAt] = useState(() => new Date().toISOString())
   const [options, setOptions] = useState<RegisterExportOptions>(() => ({
     scope: DEFAULT_REGISTER_SCOPE,
-    language: i18n.language.startsWith('ar') ? 'ar' : 'en',
     includeCounts: true,
-    orientation: 'landscape',
     detailMode: 'reference',
   }))
   const [zoom, setZoom] = useState<(typeof ZOOM_STEPS)[number]>(75)
@@ -148,8 +146,8 @@ export function ExportWorkspace({ month }: { month: InmateRegisterMonth }): Reac
   const paperRef = useRef<HTMLDivElement>(null)
 
   const clipboardPayload = useMemo(
-    () => buildRegisterClipboard(month, options, t),
-    [month, options, t],
+    () => buildRegisterClipboard(month, options, t, submissionId),
+    [month, options, t, submissionId],
   )
   const groups = registerGroupsForScope(month, options.scope)
   const includedEntries = groups.flatMap((group) => group.entries)
@@ -157,14 +155,14 @@ export function ExportWorkspace({ month }: { month: InmateRegisterMonth }): Reac
   const derivedCount = includedEntries.length - manualCount
   const dropped = DEFAULT_REGISTER_SCOPE.filter((key) => !options.scope.includes(key))
   const populations = POPULATIONS.filter((key) => options.scope.includes(key))
-  const paperWidthMm = options.orientation === 'portrait' ? 210 : 297
+  const paperWidthMm = 210
   const paperWidthPx = paperWidthMm * MM_IN_PX
   const effectiveScale = fit ? fitScale : zoom / 100
 
   const download = useMutation({
-    mutationFn: (language: RegisterDocumentLanguage) =>
+    mutationFn: () =>
       api.fetchInmateRegisterExport(
-        { year: month.year, month: month.month, language, populations },
+        { year: month.year, month: month.month, language: 'ar', populations, submission_id: submissionId },
         `inmate-violations-${month.year}-${String(month.month).padStart(2, '0')}.xlsx`,
       ),
     onSuccess: (file) => {
@@ -219,7 +217,14 @@ export function ExportWorkspace({ month }: { month: InmateRegisterMonth }): Reac
     }
   }
 
-  const printDocument = (): void => {
+  const printDocument = async (): Promise<void> => {
+    await document.fonts?.ready
+    await Promise.all(Array.from(document.querySelectorAll<HTMLImageElement>('[data-inmate-register-document] img'), async (image) => {
+      if (!image.complete) await new Promise<void>((resolve) => {
+        image.addEventListener('load', () => resolve(), { once: true })
+        image.addEventListener('error', () => resolve(), { once: true })
+      })
+    }))
     window.print()
     toast.success(t('inmateStats.export.printSent'))
   }
@@ -254,7 +259,7 @@ export function ExportWorkspace({ month }: { month: InmateRegisterMonth }): Reac
               carries={t('inmateStats.export.methods.printCarries')}
               loses={t('inmateStats.export.methods.printLoses')}
             >
-              <Button type="button" size="sm" onClick={printDocument}>
+              <Button type="button" size="sm" onClick={() => void printDocument()}>
                 <Printer className="h-3.5 w-3.5" aria-hidden />
                 {t('inmateStats.export.methods.print')}
               </Button>
@@ -275,7 +280,7 @@ export function ExportWorkspace({ month }: { month: InmateRegisterMonth }): Reac
                 variant="outline"
                 disabled={download.isPending}
                 aria-busy={download.isPending}
-                onClick={() => download.mutate(options.language)}
+                onClick={() => download.mutate()}
               >
                 <FileSpreadsheet className="h-3.5 w-3.5" aria-hidden />
                 {t('inmateStats.export.methods.xlsx')}
@@ -313,27 +318,6 @@ export function ExportWorkspace({ month }: { month: InmateRegisterMonth }): Reac
                 </p>
               ) : null}
 
-              <fieldset className="mt-5">
-                <legend className="text-sm font-semibold">
-                  {t('inmateStats.export.options.language')}
-                </legend>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  <Choice
-                    name="register-document-language"
-                    value="ar"
-                    checked={options.language === 'ar'}
-                    label={t('inmateStats.export.options.languageAr')}
-                    onChange={() => setOptions((current) => ({ ...current, language: 'ar' }))}
-                  />
-                  <Choice
-                    name="register-document-language"
-                    value="en"
-                    checked={options.language === 'en'}
-                    label={t('inmateStats.export.options.languageEn')}
-                    onChange={() => setOptions((current) => ({ ...current, language: 'en' }))}
-                  />
-                </div>
-              </fieldset>
             </fieldset>
 
             <div className="space-y-4">
@@ -345,31 +329,6 @@ export function ExportWorkspace({ month }: { month: InmateRegisterMonth }): Reac
                 }
               />
 
-              <fieldset>
-                <legend className="text-sm font-semibold">
-                  {t('inmateStats.export.options.orientation')}
-                </legend>
-                <div className="mt-2 flex flex-wrap gap-2">
-                  <Choice
-                    name="register-orientation"
-                    value="landscape"
-                    checked={options.orientation === 'landscape'}
-                    label={t('inmateStats.export.options.landscape')}
-                    onChange={() =>
-                      setOptions((current) => ({ ...current, orientation: 'landscape' }))
-                    }
-                  />
-                  <Choice
-                    name="register-orientation"
-                    value="portrait"
-                    checked={options.orientation === 'portrait'}
-                    label={t('inmateStats.export.options.portrait')}
-                    onChange={() =>
-                      setOptions((current) => ({ ...current, orientation: 'portrait' }))
-                    }
-                  />
-                </div>
-              </fieldset>
             </div>
 
             <fieldset className="min-w-0">
@@ -463,17 +422,17 @@ export function ExportWorkspace({ month }: { month: InmateRegisterMonth }): Reac
                 style={{
                   width: `${paperWidthMm}mm`,
                   transform: `scale(${effectiveScale})`,
-                  transformOrigin: options.language === 'ar' ? '100% 0' : '0 0',
+                  transformOrigin: i18n.dir() === 'rtl' ? '100% 0' : '0 0',
                 }}
               >
-                <RegisterDocument month={month} options={options} />
+                <RegisterDocument month={month} options={options} submissionId={submissionId} draftIssuedAt={draftIssuedAt} />
               </div>
             </div>
           </div>
         </section>
       </div>
 
-      <RegisterDocument month={month} options={options} forPrint />
+      <RegisterDocument month={month} options={options} submissionId={submissionId} draftIssuedAt={draftIssuedAt} forPrint />
     </div>
   )
 }

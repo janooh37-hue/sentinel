@@ -2,7 +2,7 @@
  * useNotificationStream — shell-level SSE consumer. Mounted ONCE in App's Shell.
  *
  * Opens EventSource('/api/v1/notifications/stream'); on each `counts` event it
- * invalidates the react-query keys behind the bell's four signals and fires a
+ * invalidates the react-query keys behind the bell's signals and fires a
  * browser Notification for any count that ROSE since the last frame. A
  * low-frequency safety poll keeps the bell fresh if the stream disconnects.
  *
@@ -86,6 +86,7 @@ export function useNotificationStream(enabled = true): void {
       void qc.invalidateQueries({ queryKey: ['ledger-unread-count'] })
       void qc.invalidateQueries({ queryKey: ['ledger-log'] })
       void qc.invalidateQueries({ queryKey: ['notifications', 'counts'] })
+      void qc.invalidateQueries({ queryKey: ['inmate-register', 'tasks'] })
     }
 
     const notifyFor = (next: NotificationCounts): void => {
@@ -108,8 +109,10 @@ export function useNotificationStream(enabled = true): void {
         emails: t('nav.bell.notify.email', {
           defaultValue: 'New email in your inbox',
         }),
+        monthly_reviews: t('nav.bell.notify.monthlyReview'),
+        monthly_approvals: t('nav.bell.notify.monthlyApproval'),
       }
-      ;(['approvals', 'leaves', 'scans', 'emails'] as Key[]).forEach((k) => {
+      ;(Object.keys(titles) as Key[]).forEach((k) => {
         if (
           next[k] > prev[k] &&
           typeof Notification !== 'undefined' &&

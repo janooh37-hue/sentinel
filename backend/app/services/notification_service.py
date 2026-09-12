@@ -20,6 +20,7 @@ from app.db.models import User
 from app.schemas.notifications import NotificationCounts
 from app.services import (
     book_service,
+    inmate_statistics_service,
     leave_service,
     ledger_service,
     perm_service,
@@ -31,7 +32,7 @@ from app.services import (
 class ActionableItem:
     """One owned, actionable item for Web Push — carries its own deep link."""
 
-    kind: str  # 'approval' (sign) | 'review' | 'scan' | 'email' | 'scanback'
+    kind: str  # Book, monthly report, scan, email or scan-back action.
     ref: str  # opaque, stable per-kind key, e.g. 'book:42'
     url: str  # frontend deep-link path the notification click navigates to
     label: str  # short human label (ref number / id) for the body text
@@ -44,6 +45,30 @@ class ActionableItem:
 _TAG_RE = re.compile(r"<[^>]+>")
 _WS_RE = re.compile(r"\s+")
 _ADDR_RE = re.compile(r"\s*<[^>]*>\s*$")
+
+MONTHLY_TASKS_URL = "/application?form=inmate_conduct_violations&mode=stats#monthly-tasks"
+
+
+def _monthly_items(db: Session, user: User) -> list[ActionableItem]:
+    """Use the route's task policy; unowned preparation/recovery never pushes."""
+    items = []
+    for task in inmate_statistics_service.workflow_tasks(db, actor=user):
+        if task["kind"] not in {"review", "approve"}:
+            continue
+        month = f"{task['year']}-{task['month']:02d}"
+        submission_id = task["submission_id"]
+        items.append(
+            ActionableItem(
+                kind="monthly_review" if task["kind"] == "review" else "monthly_approval",
+                ref=f"inmate-submission:{submission_id}",
+                url=(
+                    "/application?form=inmate_conduct_violations&mode=stats"
+                    f"&stats_month={month}&stats_submission={submission_id}"
+                ),
+                label=month,
+            )
+        )
+    return items
 
 
 def _email_preview(notes_html: str | None, limit: int = 140) -> str:
@@ -150,6 +175,7 @@ def actionable_items(db: Session, user: User) -> list[ActionableItem]:
                 )
             )
 
+    items.extend(_monthly_items(db, user))
     return items
 
 
@@ -216,4 +242,12 @@ def relevant_counts(
         if precomputed_leaves is not None
         else _leaves_needing_action(db, today_iso)
     )
-    return NotificationCounts(approvals=approvals, leaves=leaves, scans=scans, emails=emails)
+    monthly = _monthly_items(db, user)
+    return NotificationCounts(
+        approvals=approvals,
+        leaves=leaves,
+        scans=scans,
+        emails=emails,
+        monthly_reviews=sum(item.kind == "monthly_review" for item in monthly),
+        monthly_approvals=sum(item.kind == "monthly_approval" for item in monthly),
+    )

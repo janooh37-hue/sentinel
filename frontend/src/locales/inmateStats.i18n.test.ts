@@ -16,12 +16,16 @@ const EXPECTED_PLACEHOLDERS = [
   '{{count}}',
   '{{date}}',
   '{{derived}}',
+  '{{displayed}}',
+  '{{groups}}',
   '{{manual}}',
-  '{{months}}',
+  '{{month}}',
   '{{name}}',
   '{{ref}}',
   '{{rows}}',
+  '{{sequence}}',
   '{{tables}}',
+  '{{total}}',
 ]
 const INTERPOLATION = /{{\w+}}/g
 
@@ -48,22 +52,15 @@ function featureStrings(locale: Rec): Strings {
   return result
 }
 
-// Arabic and English intentionally have different concrete CLDR plural leaves.
-// Treat those leaves as one logical translation key for cross-locale parity;
-// the exact required leaves are checked independently below.
-function logicalKey(path: string): string {
-  return path.replace(/^inmateStats\.awaiting\.rows_(?:one|two|few|many|other)$/, 'inmateStats.awaiting.rows')
-}
-
 function logicalKeys(strings: Strings): string[] {
-  return [...new Set(Object.keys(strings).map(logicalKey))].sort()
+  return Object.keys(strings).sort()
 }
 
 function placeholdersFor(strings: Strings, key: string): string[] {
   return [
     ...new Set(
       Object.entries(strings)
-        .filter(([path]) => logicalKey(path) === key)
+        .filter(([path]) => path === key)
         .flatMap(([, value]) => value.match(INTERPOLATION) ?? []),
     ),
   ].sort()
@@ -74,24 +71,21 @@ const AR = featureStrings(ar as unknown as Rec)
 const EN_KEYS = logicalKeys(EN)
 const AR_KEYS = logicalKeys(AR)
 
-const EN_ROW_FORMS = {
-  'inmateStats.awaiting.rows_one': '{{count}} entry',
-  'inmateStats.awaiting.rows_other': '{{count}} entries',
-}
-const AR_ROW_FORMS = {
-  'inmateStats.awaiting.rows_one': 'سطر واحد',
-  'inmateStats.awaiting.rows_two': 'سطران',
-  'inmateStats.awaiting.rows_few': '{{count}} أسطر',
-  'inmateStats.awaiting.rows_many': '{{count}} سطرًا',
-  'inmateStats.awaiting.rows_other': '{{count}} سطر',
-}
+const RETIRED_KEYS = [
+  'inmateStats.actions.close',
+  'inmateStats.actions.forceClose',
+  'inmateStats.awaiting',
+  'inmateStats.close',
+  'inmateStats.document.titleEn',
+  'inmateStats.export.options.language',
+  'inmateStats.export.options.languageAr',
+  'inmateStats.export.options.languageEn',
+  'inmateStats.export.options.orientation',
+  'inmateStats.export.options.landscape',
+  'inmateStats.export.options.portrait',
+] as const
 
 describe('inmate statistics i18n parity', () => {
-  it('covers all 179 logical feature keys in both locales', () => {
-    expect(EN_KEYS).toHaveLength(179)
-    expect(AR_KEYS).toHaveLength(179)
-  })
-
   it('has every logical key in both locales', () => {
     const onlyInEnglish = EN_KEYS.filter((key) => !AR_KEYS.includes(key))
     const onlyInArabic = AR_KEYS.filter((key) => !EN_KEYS.includes(key))
@@ -123,43 +117,39 @@ describe('inmate statistics i18n parity', () => {
     expect(used).toEqual(EXPECTED_PLACEHOLDERS)
   })
 
-  it('has the locale-specific i18next plural leaves for awaiting rows', () => {
-    expect(
-      Object.fromEntries(Object.keys(EN_ROW_FORMS).map((path) => [path, EN[path]])),
-    ).toEqual(EN_ROW_FORMS)
-    expect(
-      Object.fromEntries(Object.keys(AR_ROW_FORMS).map((path) => [path, AR[path]])),
-    ).toEqual(AR_ROW_FORMS)
+  it('does not retain retired direct-close or document-option copy', () => {
+    const present = RETIRED_KEYS.flatMap((path) =>
+      [
+        ['en', get(en as unknown as Rec, path)],
+        ['ar', get(ar as unknown as Rec, path)],
+      ].flatMap(([locale, value]) => (value === undefined ? [] : [`${locale} ${path}`])),
+    )
+    expect(present).toEqual([])
   })
 
   it('has no Latin-script sentence leak in the Arabic feature copy', () => {
     const allowedTokens = /\b(?:XLSX|PDF|A4|IVR|HTML|Excel|Word|Outlook)\b/g
     const leaks = Object.entries(AR).flatMap(([path, value]) => {
-      if (path === 'inmateStats.document.titleEn') return []
       const prose = value.replace(INTERPOLATION, '').replace(allowedTokens, '')
       return /[A-Za-z]/.test(prose) ? [{ path, value }] : []
     })
     expect(leaks).toEqual([])
   })
 
-  it('keeps the settled close and pending-completion vocabulary', () => {
+  it('keeps the settled workflow and pending-completion vocabulary', () => {
     const retired = Object.entries(AR).filter(([, value]) =>
       ['قفل الشهر', 'فتح القفل'].some((phrase) => value.includes(phrase)),
     )
-    const blockedPhraseLocations = Object.entries(AR)
-      .filter(([, value]) => value.includes('مطلوب إكمالها'))
-      .map(([path]) => path)
-
     expect(retired).toEqual([])
-    expect(blockedPhraseLocations).toEqual(['inmateStats.awaiting.blocked'])
     expect(AR['inmateStats.populations.pending']).toBe('قيد الإكمال')
+    expect(AR['inmateStats.workflow.errors.INMATE_REGISTER_INCOMPLETE_ENTRIES']).toContain('قيماً صحيحة لليوان')
   })
 
   it('resolves representative keys and interpolation through configured i18next resources', async () => {
     await i18n.changeLanguage('en')
     try {
       expect(i18n.t('application.approvedViolation.monthlyStatistics')).toBe('Monthly statistics')
-      expect(i18n.t('dashboard.widgetLabels.violation_months')).toBe('Months awaiting close')
+      expect(i18n.t('dashboard.widgetLabels.violation_months')).toBe('Monthly report tasks')
       expect(i18n.t('inmateStats.inspector.createdBy', { name: 'Ali', date: '2026-09-10' })).toBe(
         'Added by Ali on 2026-09-10',
       )
@@ -174,16 +164,20 @@ describe('inmate statistics i18n parity', () => {
       expect(i18n.t('inmateStats.export.referenceCell', { ref: 'IVR/2026-09' })).toBe(
         'See Record IVR/2026-09',
       )
-      expect(i18n.t('inmateStats.close.otherOpenMonths', { months: '2026-07, 2026-08' })).toBe(
-        'Other months are still open: 2026-07, 2026-08',
-      )
-      expect(i18n.t('inmateStats.awaiting.more', { count: 4 })).toBe(
-        'More months awaiting close: 4',
+      expect(
+        i18n.t('inmateStats.document.extractCaption', {
+          groups: 'Citizens',
+          displayed: 8,
+          total: 12,
+        }),
+      ).toBe('Extract: Citizens — 8 of 12 month rows')
+      expect(i18n.t('nav.bell.notify.monthlyReview')).toBe(
+        'A monthly inmate violations report needs your review',
       )
 
       await i18n.changeLanguage('ar')
       expect(i18n.t('application.approvedViolation.openRegister')).toBe('فتح السجل الشهري')
-      expect(i18n.t('dashboard.widgetLabels.violation_months')).toBe('أشهر بانتظار الإغلاق')
+      expect(i18n.t('dashboard.widgetLabels.violation_months')).toBe('مهام التقارير الشهرية')
       expect(i18n.t('inmateStats.inspector.createdBy', { name: 'علي', date: '2026-09-10' })).toBe(
         'أضافه علي في 2026-09-10',
       )
@@ -198,31 +192,19 @@ describe('inmate statistics i18n parity', () => {
       expect(i18n.t('inmateStats.export.referenceCell', { ref: 'IVR/2026-09' })).toBe(
         'راجع التقرير IVR/2026-09',
       )
-      expect(i18n.t('inmateStats.close.otherOpenMonths', { months: '2026-07، 2026-08' })).toBe(
-        'أشهر أخرى ما زالت مفتوحة: 2026-07، 2026-08',
-      )
-      expect(i18n.t('inmateStats.awaiting.more', { count: 4 })).toBe(
-        'أشهر أخرى بانتظار الإغلاق: 4',
+      expect(
+        i18n.t('inmateStats.document.extractCaption', {
+          groups: 'المواطنين',
+          displayed: 8,
+          total: 12,
+        }),
+      ).toBe('مقتطف: المواطنين — 8 من أصل 12 سطرًا للشهر')
+      expect(i18n.t('nav.bell.notify.monthlyApproval')).toBe(
+        'تقرير مخالفات النزلاء الشهري بانتظار اعتمادك',
       )
     } finally {
       await i18n.changeLanguage('en')
     }
   })
 
-  it('pluralizes awaiting rows through configured i18next resources', async () => {
-    await i18n.changeLanguage('en')
-    try {
-      expect(i18n.t('inmateStats.awaiting.rows', { count: 1 })).toBe('1 entry')
-      expect(i18n.t('inmateStats.awaiting.rows', { count: 3 })).toBe('3 entries')
-
-      await i18n.changeLanguage('ar')
-      expect(i18n.t('inmateStats.awaiting.rows', { count: 1 })).toBe('سطر واحد')
-      expect(i18n.t('inmateStats.awaiting.rows', { count: 2 })).toBe('سطران')
-      expect(i18n.t('inmateStats.awaiting.rows', { count: 3 })).toBe('3 أسطر')
-      expect(i18n.t('inmateStats.awaiting.rows', { count: 11 })).toBe('11 سطرًا')
-      expect(i18n.t('inmateStats.awaiting.rows', { count: 100 })).toBe('100 سطر')
-    } finally {
-      await i18n.changeLanguage('en')
-    }
-  })
 })
