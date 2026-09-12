@@ -1,8 +1,10 @@
 """Behavioral proof of the inmate-specific three-person monthly approval."""
 
 from concurrent.futures import ThreadPoolExecutor
-from datetime import date
+from copy import deepcopy
+from datetime import date, datetime, timedelta
 from io import BytesIO
+from itertools import count
 from threading import Event
 
 import pytest
@@ -22,6 +24,9 @@ from app.db.models import (
     Employee,
     InmateViolationManualRow,
     InmateViolationPeriod,
+    InmateViolationStatRow,
+    InmateViolationSubmission,
+    InmateViolationWorkflow,
     InmateViolationWorkflowAction,
     User,
     UserPermission,
@@ -110,6 +115,84 @@ def test_approval_seals_reviewed_snapshot_and_actor_identity(api_db, people):
     people[2].employee.name_ar = "اسم مختلف"
     api_db.commit()
     assert service.submission_month(api_db, 2026, 8, submission_id).workflow["approved"]["name_ar"] != "اسم مختلف"
+
+
+@pytest.mark.parametrize("stage", ["review", "approve"])
+@pytest.mark.parametrize("damage", ["row_changed", "schema_version", "wrong_year", "wrong_month", "invalid_entry_type", "missing_entry_field", "invalid_entries", "checksum_changed"])
+def test_corrupted_submission_refuses_advancement_atomically(api_db, people, stage, damage):
+    live(api_db)
+    view = prepare(api_db, people) if stage == "review" else review(api_db, people)
+    submission_id = view.workflow["active_submission_id"]
+    version = view.workflow["version"]
+    submission = api_db.get(InmateViolationSubmission, submission_id)
+    payload = deepcopy(submission.payload)
+    if damage == "row_changed":
+        payload["entries"][0]["name"] = "corrupted stored name"
+    elif damage == "schema_version":
+        payload["schema_version"] = 2
+    elif damage == "wrong_year":
+        payload["year"] = 2025
+    elif damage == "wrong_month":
+        payload["month"] = 7
+    elif damage == "invalid_entry_type":
+        payload["entries"][0]["name"] = ["not a scalar name"]
+    elif damage == "missing_entry_field":
+        del payload["entries"][0]["manual_created_by_name"]
+    elif damage == "invalid_entries":
+        payload["entries"] = None
+    else:
+        submission.fingerprint = "0" * 64
+    submission.payload = payload
+    # A matching digest never makes a malformed/wrong-month schema acceptable.
+    if damage in {"schema_version", "wrong_year", "wrong_month", "invalid_entry_type"}:
+        submission.fingerprint = service._fingerprint(payload)
+    api_db.commit()
+    with pytest.raises(AppError) as error:
+        if stage == "review":
+            service.review_month(api_db, 2026, 8, actor=people[1], expected_version=version, submission_id=submission_id, manager_user_id=people[2].id)
+        else:
+            approve(api_db, people, view)
+    assert error.value.code == "INMATE_REGISTER_INVALID_SUBMISSION"
+    root = api_db.scalar(select(InmateViolationWorkflow))
+    assert root.version == version
+    assert root.state == ("awaiting_review" if stage == "review" else "awaiting_manager")
+    event_kind = "reviewed" if stage == "review" else "approved"
+    assert api_db.scalar(select(func.count()).select_from(InmateViolationWorkflowAction).where(InmateViolationWorkflowAction.submission_id == submission_id, InmateViolationWorkflowAction.action == event_kind)) == 0
+    assert api_db.scalar(select(func.count()).select_from(InmateViolationPeriod)) == 0
+    assert api_db.scalar(select(func.count()).select_from(InmateViolationStatRow)) == 0
+    assert not list(service.get_settings().data_dir.glob("inmate_violations/*.xlsx"))
+
+
+def test_approval_action_and_period_share_one_exact_instant(api_db, people, monkeypatch):
+    live(api_db)
+    viewed = review(api_db, people)
+    ticks = count()
+    monkeypatch.setattr(service, "_utcnow", lambda: datetime(2026, 9, 13, 1) + timedelta(microseconds=next(ticks)))
+    closed = approve(api_db, people, viewed)
+    approved_at = closed.workflow["approved"]["acted_at"]
+    assert closed.closed_at == approved_at
+    period = api_db.scalar(select(InmateViolationPeriod))
+    event = api_db.scalar(select(InmateViolationWorkflowAction).where(InmateViolationWorkflowAction.action == "approved"))
+    assert period.closed_at == event.occurred_at == approved_at
+    submission = api_db.get(InmateViolationSubmission, viewed.workflow["active_submission_id"])
+    assert submission.created_at is not None
+    assert service.submission_month(api_db, 2026, 8, submission.id).closed_at == approved_at
+
+
+@pytest.mark.parametrize("old_archive_timestamp", [None, datetime(2026, 9, 13, 1)])
+def test_legacy_creation_never_fabricates_or_exposes_issue_time(api_db, people, old_archive_timestamp):
+    live(api_db)
+    prepared = prepare(api_db, people)
+    current = api_db.get(InmateViolationSubmission, prepared.workflow["active_submission_id"])
+    legacy = InmateViolationSubmission(workflow_id=current.workflow_id, sequence=2, origin="legacy", payload=current.payload, fingerprint=current.fingerprint, created_at=old_archive_timestamp, legacy_metadata={})
+    api_db.add(legacy)
+    api_db.commit()
+    if old_archive_timestamp is None:
+        assert legacy.created_at is None
+    summary = service.submission_history(api_db, 2026, 8)[0]
+    assert summary["created_at"] is None
+    assert service.submission_detail(api_db, 2026, 8, legacy.id)["created_at"] is None
+    assert current.created_at is not None
 
 
 @pytest.mark.parametrize("kind", ["same_user", "same_employee", "missing_arabic", "disabled", "denied_navigation", "denied_template"])

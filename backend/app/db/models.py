@@ -2075,7 +2075,7 @@ class InmateViolationSubmission(Base):
     sequence: Mapped[int] = mapped_column(Integer, nullable=False)
     payload: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
     fingerprint: Mapped[str] = mapped_column(String(64), nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, nullable=False)
+    created_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     origin: Mapped[str] = mapped_column(String(16), nullable=False, default="workflow")
     reviewer_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     reviewer_employee_id: Mapped[str | None] = mapped_column(String(16), nullable=True)
@@ -2086,6 +2086,7 @@ class InmateViolationSubmission(Base):
         UniqueConstraint("workflow_id", "sequence", name="uq_inmate_violation_submissions_sequence"),
         CheckConstraint("sequence > 0", name="ck_inmate_violation_submissions_sequence"),
         CheckConstraint("origin IN ('workflow','legacy')", name="ck_inmate_violation_submissions_origin"),
+        CheckConstraint("origin = 'legacy' OR created_at IS NOT NULL", name="ck_inmate_violation_submissions_created_at"),
         Index("ix_inmate_violation_submissions_reviewer", "reviewer_user_id"),
         Index("ix_inmate_violation_submissions_manager", "manager_user_id"),
     )

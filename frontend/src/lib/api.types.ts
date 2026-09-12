@@ -11970,11 +11970,8 @@ export interface components {
             submission_id: number;
             /** Sequence */
             sequence: number;
-            /**
-             * Created At
-             * Format: date-time
-             */
-            created_at: string;
+            /** Created At */
+            created_at: string | null;
             /**
              * Report State
              * @enum {string}
@@ -11998,11 +11995,8 @@ export interface components {
              * @enum {string}
              */
             origin: "workflow" | "legacy";
-            /**
-             * Created At
-             * Format: date-time
-             */
-            created_at: string;
+            /** Created At */
+            created_at: string | null;
             /**
              * Report State
              * @enum {string}

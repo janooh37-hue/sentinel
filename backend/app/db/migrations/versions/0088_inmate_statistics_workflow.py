@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-from datetime import UTC, datetime
 
 import sqlalchemy as sa
 from alembic import op
@@ -42,7 +41,7 @@ def upgrade() -> None:
         sa.Column("sequence", sa.Integer(), nullable=False),
         sa.Column("payload", sa.JSON(), nullable=False),
         sa.Column("fingerprint", sa.String(64), nullable=False),
-        sa.Column("created_at", sa.DateTime(), nullable=False),
+        sa.Column("created_at", sa.DateTime(), nullable=True),
         sa.Column("origin", sa.String(16), nullable=False),
         sa.Column("reviewer_user_id", sa.Integer(), sa.ForeignKey("users.id", ondelete="SET NULL"), nullable=True),
         sa.Column("reviewer_employee_id", sa.String(16), nullable=True),
@@ -52,6 +51,7 @@ def upgrade() -> None:
         sa.UniqueConstraint("workflow_id", "sequence", name="uq_inmate_violation_submissions_sequence"),
         sa.CheckConstraint("sequence > 0", name="ck_inmate_violation_submissions_sequence"),
         sa.CheckConstraint("origin IN ('workflow','legacy')", name="ck_inmate_violation_submissions_origin"),
+        sa.CheckConstraint("origin = 'legacy' OR created_at IS NOT NULL", name="ck_inmate_violation_submissions_created_at"),
     )
     op.create_index("ix_inmate_violation_submissions_reviewer", "inmate_violation_submissions", ["reviewer_user_id"])
     op.create_index("ix_inmate_violation_submissions_manager", "inmate_violation_submissions", ["manager_user_id"])
@@ -78,7 +78,6 @@ def upgrade() -> None:
     rows = sa.Table("inmate_violation_stat_rows", metadata, autoload_with=connection)
     workflows = sa.Table("inmate_violation_workflows", metadata, autoload_with=connection)
     submissions = sa.Table("inmate_violation_submissions", metadata, autoload_with=connection)
-    archived_at = datetime.now(UTC).replace(tzinfo=None)
     for period in connection.execute(sa.select(periods).order_by(periods.c.id)).mappings():
         workflow_id = connection.execute(workflows.insert().values(year=period["year"], month=period["month"], version=0, state="closed" if period["closed_at"] else "draft", current_sequence=1)).inserted_primary_key[0]
         entries = []
@@ -98,7 +97,7 @@ def upgrade() -> None:
         fingerprint = hashlib.sha256(json.dumps(canonical, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")).hexdigest()
         legacy = json.loads(json.dumps({key: period[key] for key in ("closed_at", "closed_by", "reopened_at", "reopened_by", "force_reason", "export_path")}, default=lambda value: value.isoformat()))
         legacy["stored_rows"] = json.loads(json.dumps(stored_rows, ensure_ascii=False, default=lambda value: value.isoformat()))
-        connection.execute(submissions.insert().values(workflow_id=workflow_id, sequence=1, payload=payload, fingerprint=fingerprint, created_at=archived_at, origin="legacy", legacy_metadata=legacy))
+        connection.execute(submissions.insert().values(workflow_id=workflow_id, sequence=1, payload=payload, fingerprint=fingerprint, created_at=None, origin="legacy", legacy_metadata=legacy))
     with op.batch_alter_table("inmate_violation_periods") as batch:
         batch.drop_column("force_reason")
 

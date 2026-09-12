@@ -30,11 +30,13 @@ import tempfile
 from calendar import monthrange
 from collections.abc import Mapping, Sequence
 from dataclasses import asdict, dataclass, field, replace
+from dataclasses import fields as dataclass_fields
 from datetime import UTC, date, datetime, time
 from functools import cached_property, wraps
 from types import MappingProxyType
 from typing import Any, Final
 
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from sqlalchemy import func, select, update
 from sqlalchemy.dialects.sqlite import insert
 from sqlalchemy.exc import OperationalError
@@ -159,6 +161,16 @@ class RegisterEntry:
     @property
     def is_manual(self) -> bool:
         return self.origin == ORIGIN_MANUAL
+
+
+class _SubmissionPayload(BaseModel):
+    """Strict persisted report envelope, separate from the public month DTO."""
+
+    model_config = ConfigDict(extra="forbid", strict=True)
+    schema_version: int = Field(ge=1, le=1)
+    year: int = Field(ge=2000, le=2100)
+    month: int = Field(ge=1, le=12)
+    entries: list[RegisterEntry]
 
 
 @dataclass(frozen=True)
@@ -1261,9 +1273,9 @@ def _actor_facts(db: Session, submission: InmateViolationSubmission | None) -> d
     }
 
 
-def _append(db: Session, root: InmateViolationWorkflow, submission: InmateViolationSubmission | None, action: str, *, facts: dict[str, Any] | None = None, reason: str | None = None) -> None:
+def _append(db: Session, root: InmateViolationWorkflow, submission: InmateViolationSubmission | None, action: str, *, facts: dict[str, Any] | None = None, reason: str | None = None, occurred_at: datetime | None = None) -> None:
     facts = facts or {}
-    db.add(InmateViolationWorkflowAction(workflow_id=root.id, submission_id=submission.id if submission else None, action=action, actor_user_id=facts.get("user_id"), actor_name_ar=facts.get("name_ar"), actor_employee_id=facts.get("employee_id"), reason=reason, occurred_at=_utcnow()))
+    db.add(InmateViolationWorkflowAction(workflow_id=root.id, submission_id=submission.id if submission else None, action=action, actor_user_id=facts.get("user_id"), actor_name_ar=facts.get("name_ar"), actor_employee_id=facts.get("employee_id"), reason=reason, occurred_at=occurred_at if occurred_at is not None else _utcnow()))
     db.flush()
 
 
@@ -1300,10 +1312,36 @@ def _reserve_local_edit(db: Session, year: int, month: int, actor: User) -> None
         db.flush()
 
 
-def _fresh(db: Session, root: InmateViolationWorkflow, submission: InmateViolationSubmission) -> None:
+def _validated_submission(root: InmateViolationWorkflow, submission: InmateViolationSubmission) -> tuple[RegisterEntry, ...]:
+    """Validate stored evidence under the action's existing writer reservation."""
+    try:
+        payload = submission.payload
+        parsed = _SubmissionPayload.model_validate_json(
+            json.dumps(payload, ensure_ascii=False, allow_nan=False), strict=True
+        )
+        if (parsed.year, parsed.month) != (root.year, root.month):
+            raise ValueError("Submission belongs to a different month")
+        expected_fields = {item.name for item in dataclass_fields(RegisterEntry)}
+        if any(set(row) != expected_fields for row in payload["entries"]):
+            raise ValueError("Submission entry fields do not match its schema")
+        if any((entry.violation_date.year, entry.violation_date.month) != (root.year, root.month) for entry in parsed.entries):
+            raise ValueError("Submission entry date belongs to a different month")
+        if _fingerprint(payload) != submission.fingerprint:
+            raise ValueError("Submission fingerprint does not match its stored payload")
+    except (ValidationError, TypeError, ValueError) as exc:
+        raise ConflictError(
+            "INMATE_REGISTER_INVALID_SUBMISSION",
+            "The stored report failed integrity validation. Prepare a new submission before advancing.",
+        ) from exc
+    return tuple(parsed.entries)
+
+
+def _fresh(db: Session, root: InmateViolationWorkflow, submission: InmateViolationSubmission) -> tuple[RegisterEntry, ...]:
+    reviewed_entries = _validated_submission(root, submission)
     entries, _ = effective_projection(db, root.year, root.month)
     if _fingerprint(_snapshot(root.year, root.month, entries)) != submission.fingerprint:
         raise ConflictError("INMATE_REGISTER_STALE_PROJECTION", "The submitted data changed. A new preparation and review are required.")
+    return reviewed_entries
 
 
 def _submission_for_action(db: Session, root: InmateViolationWorkflow, submission_id: int) -> InmateViolationSubmission:
@@ -1343,7 +1381,7 @@ def prepare_month(db: Session, year: int, month: int, *, actor: User, expected_v
         _append(db, root, previous, "superseded", facts=facts, reason=_text(supersede_reason) or None)
     root.current_sequence += 1
     root.state = "awaiting_review"
-    submission = InmateViolationSubmission(workflow_id=root.id, sequence=root.current_sequence, payload=payload, fingerprint=fingerprint, origin="workflow", reviewer_user_id=reviewer["user_id"], reviewer_employee_id=reviewer["employee_id"])
+    submission = InmateViolationSubmission(workflow_id=root.id, sequence=root.current_sequence, payload=payload, fingerprint=fingerprint, created_at=_utcnow(), origin="workflow", reviewer_user_id=reviewer["user_id"], reviewer_employee_id=reviewer["employee_id"])
     db.add(submission)
     db.flush()
     _append(db, root, submission, "prepared", facts=facts)
@@ -1385,10 +1423,9 @@ def approve_month(db: Session, year: int, month: int, *, actor: User, expected_v
     earlier = _actor_facts(db, submission)
     if "prepared" not in earlier or "reviewed" not in earlier:
         raise ConflictError("INMATE_REGISTER_STALE_WORKFLOW", "Preparation and review are required.")
-    _fresh(db, root, submission)
+    entries = _fresh(db, root, submission)
     if not month_has_ended(year, month, today=today):
         raise ConflictError("INMATE_REGISTER_MONTH_NOT_ENDED", "Final approval is available after month-end.", first_closable_date=first_closable_date(year, month).isoformat())
-    entries = _restore_entries(submission.payload)
     if not entries:
         raise ConflictError("INMATE_REGISTER_MONTH_EMPTY", "There are no entries to approve.")
     blocking = [entry for entry in entries if entry.missing]
@@ -1400,10 +1437,11 @@ def approve_month(db: Session, year: int, month: int, *, actor: User, expected_v
         db.add(period)
         db.flush()
     _freeze(db, period, entries)
-    period.closed_at = _utcnow()
+    approved_at = _utcnow()
+    period.closed_at = approved_at
     period.closed_by = actor.id
     root.state = "closed"
-    _append(db, root, submission, "approved", facts=facts)
+    _append(db, root, submission, "approved", facts=facts, occurred_at=approved_at)
     _audit(db, actor=actor, action="inmate_violation_month_closed", entity_type="inmate_violation_period", entity_id=f"{year}-{month:02d}", payload={"year": year, "month": month, "submission_id": submission.id, "row_count": len(entries)})
     db.flush()
     result = build_month(db, year, month, actor=actor)
@@ -1547,7 +1585,7 @@ def _submission_context(db: Session, submission: InmateViolationSubmission) -> d
     elif root.current_sequence == submission.sequence and root.state == "draft":
         stale = True
     state = "legacy" if submission.origin == "legacy" else "approved" if "approved" in facts else "reviewed" if "reviewed" in facts else "prepared"
-    return {"id": submission.id, "sequence": submission.sequence, "origin": submission.origin, "created_at": submission.created_at, "report_state": state, "approved_at": (facts.get("approved") or {}).get("acted_at"), "current": current, "stale": stale}
+    return {"id": submission.id, "sequence": submission.sequence, "origin": submission.origin, "created_at": submission.created_at if submission.origin == "workflow" else None, "report_state": state, "approved_at": (facts.get("approved") or {}).get("acted_at"), "current": current, "stale": stale}
 
 
 def submission_history(db: Session, year: int, month: int) -> list[dict[str, Any]]:

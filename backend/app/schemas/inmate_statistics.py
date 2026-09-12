@@ -283,7 +283,7 @@ class SubmissionSummaryOut(BaseModel):
     id: int
     sequence: int
     origin: Literal["workflow", "legacy"]
-    created_at: datetime
+    created_at: datetime | None
     report_state: Literal["prepared", "reviewed", "approved", "legacy"]
     approved_at: datetime | None
     current: bool
@@ -302,7 +302,7 @@ class WorkflowActionOut(BaseModel):
 class SubmissionOut(MonthOut):
     submission_id: int
     sequence: int
-    created_at: datetime
+    created_at: datetime | None
     report_state: Literal["prepared", "reviewed", "approved", "legacy"]
     current: bool
     stale: bool

@@ -12,8 +12,10 @@ from openpyxl import load_workbook
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import Session
 
+from app.api.v1.inmate_statistics import _month_out
 from app.config import get_settings
 from app.db.models import Employee, User
+from app.schemas.inmate_statistics import SubmissionOut, SubmissionSummaryOut
 from app.services import inmate_statistics_service as service
 from app.services import perm_service
 
@@ -48,8 +50,14 @@ def test_legacy_upgrade_and_downgrade_preserve_only_current_force_reason(tmp_pat
     with Session(engine) as db:
         default_payload, _ = service.export_workbook(db, 2026, 8)
         assert default_payload.startswith(b"PK")
-        assert service.submission_history(db, 2026, 8)[0]["approved_at"] is None
+        summary = service.submission_history(db, 2026, 8)[0]
+        assert summary["approved_at"] is None
+        assert summary["created_at"] is None
+        assert SubmissionSummaryOut(**summary).created_at is None
         for submission_id, month in ((1, 8), (2, 7)):
+            view = service.submission_month(db, 2026, month, submission_id)
+            detail = SubmissionOut(**_month_out(view).model_dump(), **service.submission_detail(db, 2026, month, submission_id))
+            assert detail.created_at is None
             payload, _ = service.export_workbook(db, 2026, month, submission_id=submission_id, language="en")
             workbook = load_workbook(BytesIO(payload))
             summary = {row[0].value: row[1].value for row in workbook["الملخص"] if len(row) >= 2}
