@@ -215,15 +215,10 @@ export function ApplicationPage(): React.JSX.Element {
   const [lastSaved, setLastSaved] = useState<
     (SavedGeneration & { notification?: NotificationChoice }) | null
   >(null)
-  const requestedStatsModeRef = useRef(
-    formFromUrl === 'inmate_conduct_violations' && searchParams.get('mode') === 'stats',
-  )
+  const requestedStatsMode =
+    formFromUrl === 'inmate_conduct_violations' && searchParams.get('mode') === 'stats'
+  const hydratedStatsNavigationRef = useRef<string | null>(null)
   const [inmateEntryMode, setInmateEntryMode] = useState<InmateEntryMode>('create')
-  useEffect(() => {
-    if (capabilitiesLoading || !requestedStatsModeRef.current) return
-    requestedStatsModeRef.current = false
-    if (has('books.view')) setInmateEntryMode('stats')
-  }, [capabilitiesLoading, has])
   const [approvedImport, setApprovedImport] = useState<ApprovedViolationImportRead | null>(null)
   const [approvedImportBusy, setApprovedImportBusy] = useState(false)
   const approvedImportSuccessRef = useRef<HTMLHeadingElement | null>(null)
@@ -263,6 +258,8 @@ export function ApplicationPage(): React.JSX.Element {
   // changes.  This is the canonical URL-param-hydration pattern: we can't
   // seed `useState` because the templates query is asynchronous.
   useEffect(() => {
+    // Statistics task URLs remain canonical and are consumed per navigation below.
+    if (requestedStatsMode) return
     if (!formFromUrl || templates.length === 0 || selectedTemplate) return
     const id = resolveTemplateIdFromSlug(formFromUrl, templates)
     if (id) {
@@ -278,7 +275,7 @@ export function ApplicationPage(): React.JSX.Element {
       { replace: true },
     )
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [formFromUrl, templates.length])
+  }, [formFromUrl, templates.length, requestedStatsMode])
 
   // Employee data for basket item — dedupes with EmployeeHeader's query.
   const employeeQuery = useQuery({
@@ -703,6 +700,21 @@ export function ApplicationPage(): React.JSX.Element {
     setTemplateName(null)
     setPendingWordSession(null)
   }, [form])
+
+  // The shell stays mounted on same-path bell navigation. Hydrate each task
+  // navigation (including the same URL again), not only the initial page mount.
+  // Keep the canonical form parameter so reloads retain the statistics service.
+  useEffect(() => {
+    if (!requestedStatsMode || capabilitiesLoading || approvedImportBusy ||
+      hydratedStatsNavigationRef.current === location.key) return
+    const id = resolveTemplateIdFromSlug('inmate_conduct_violations', templates)
+    if (!id) return
+    hydratedStatsNavigationRef.current = location.key
+    if (selectedTemplate !== id) handleSelectTemplate(id)
+    setInmateEntryMode(has('books.view') ? 'stats' : 'create')
+    setApprovedImport(null)
+  }, [requestedStatsMode, capabilitiesLoading, approvedImportBusy, location.key,
+    templates, selectedTemplate, handleSelectTemplate, has])
 
   // Restore the draft once the template + schema-query are in hand. Running
   // after the schema query resolves means RHF's defaultValues machinery is

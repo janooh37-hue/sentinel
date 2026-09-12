@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useLocation, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { Columns3, UserRoundPlus } from 'lucide-react'
 
@@ -32,6 +32,7 @@ function initialCoordinate(raw: string | null): { year: number; month: number } 
 
 export function StatisticsTab(): React.JSX.Element {
   const { t } = useTranslation()
+  const location = useLocation()
   const [searchParams] = useSearchParams()
   const rawMonth = searchParams.get('stats_month')
   const rawSubmission = searchParams.get('stats_submission')
@@ -39,7 +40,9 @@ export function StatisticsTab(): React.JSX.Element {
     (rawSubmission !== null && (!parseSubmissionId(rawSubmission) || !rawMonth))) {
     return <p role="alert" className="p-4 text-accent">{t('inmateStats.workflow.invalidLink')}</p>
   }
-  return <StatisticsMonth key={`${rawMonth}:${rawSubmission}`} />
+  // A task may navigate to the same URL after a local history/month choice.
+  // Every navigation must consume its exact coordinate and submission again.
+  return <StatisticsMonth key={`${location.key}:${rawMonth}:${rawSubmission}`} />
 }
 
 function StatisticsMonth(): React.JSX.Element {
@@ -179,6 +182,7 @@ function StatisticsMonth(): React.JSX.Element {
                 size="xs"
                 variant={view === 'export' ? 'secondary' : 'ghost'}
                 aria-pressed={view === 'export'}
+                disabled={!month || register.isLoading || register.isError}
                 onClick={() => {
                   openReport(selectionMade ? submissionId : month?.workflow.active_submission_id ?? null)
                 }}

@@ -28,7 +28,7 @@ const live = () => {
 }
 function mount(search: string) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  render(<QueryClientProvider client={client}><MemoryRouter initialEntries={[`/application?stats_month=2026-08${search}`]}><StatisticsTab /></MemoryRouter></QueryClientProvider>)
+  render(<QueryClientProvider client={client}><MemoryRouter initialEntries={[`/application?form=inmate_conduct_violations&mode=stats&stats_month=2026-08${search}`]}><StatisticsTab /></MemoryRouter></QueryClientProvider>)
   return client
 }
 beforeEach(() => {
@@ -43,6 +43,34 @@ beforeEach(() => {
     entries: [row(id === 41 ? 'Archived inmate' : 'Submitted inmate')], counts: { citizens: 1, expats: 0, pending: 0, total: 1 } }))
 })
 describe('immutable report selection', () => {
+  it('reselects the exact task submission after a local history choice at the same URL', async () => {
+    vi.mocked(api.getInmateRegisterTasks).mockResolvedValue({ count: 1, items: [
+      { year: 2026, month: 8, kind: 'approve', submission_id: 42, code: null, row_count: 1 },
+    ] })
+    mount('&stats_submission=42')
+    await screen.findAllByText('Submitted inmate')
+    await userEvent.click(screen.getByRole('combobox', { name: i18n.t('inmateStats.workflow.reportSelection') }))
+    await userEvent.click(screen.getByRole('option', { name: (name) => name.includes(i18n.t('inmateStats.workflow.stale')) }))
+    await screen.findAllByText('Archived inmate')
+    await userEvent.click(screen.getByRole('link', { name: /August 2026/ }))
+    expect((await screen.findAllByText('Submitted inmate')).length).toBeGreaterThan(0)
+    expect(screen.queryByText('Archived inmate')).not.toBeInTheDocument()
+  })
+
+  it('defers export selection while the month loads, then defaults to its active submission', async () => {
+    let resolveMonth!: (month: ReturnType<typeof live>) => void
+    vi.mocked(api.getInmateRegisterMonth).mockReturnValue(new Promise((resolve) => { resolveMonth = resolve }))
+    mount('')
+    const exportButton = screen.getByRole('button', { name: i18n.t('inmateStats.views.export') })
+    expect(exportButton).toBeDisabled()
+    await userEvent.click(exportButton)
+    await act(async () => resolveMonth(live()))
+    await waitFor(() => expect(exportButton).toBeEnabled())
+    await userEvent.click(exportButton)
+    expect((await screen.findAllByText('Submitted inmate')).length).toBeGreaterThan(0)
+    expect(screen.queryByText('Current draft inmate')).not.toBeInTheDocument()
+  })
+
   it('opens an exact history link and does not replace it when the active submission changes', async () => {
     const client = mount('&stats_submission=41')
     expect((await screen.findAllByText('Archived inmate')).length).toBeGreaterThan(0)
