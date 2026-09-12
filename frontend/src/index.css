@@ -2160,42 +2160,39 @@ body {
 [data-org-tree-fullscreen-host]:fullscreen > nav, [data-org-tree-fullscreen-host]:fullscreen > section { height: 100%; align-items: stretch; }
 [data-org-tree-fullscreen-host]:fullscreen .org-tree-view { height: 100%; }
 
-/* Monthly inmate violation register: named A4 pages keep the selected physical
-   orientation while all console chrome remains under data-print-hide. */
+/* Monthly inmate report geometry and table styles come from its shared
+   presentation specification. The named page has the same physical margins. */
+.register-document-preview {
+  box-shadow: 0 18px 55px rgb(0 0 0 / 24%);
+}
+
+[data-inmate-register-document] *,
+[data-inmate-register-document] [dir] {
+  font-family: inherit;
+}
+
 @media print {
-  @page inmate-register-landscape {
-    size: A4 landscape;
-    margin: 8mm;
-  }
-
-  @page inmate-register-portrait {
-    size: A4 portrait;
-    margin: 8mm;
-  }
-
-  .print-inmate-register-landscape {
-    page: inmate-register-landscape;
-  }
-
-  .print-inmate-register-portrait {
-    page: inmate-register-portrait;
-  }
-
   .print-inmate-register {
+    page: inmate-register-portrait;
     display: block !important;
     width: 100% !important;
+    min-height: var(--inmate-report-print-height) !important;
     padding: 0 !important;
-    color: #000 !important;
+    color: var(--inmate-report-ink) !important;
     box-shadow: none !important;
   }
 
   #root .print-inmate-register {
-    background: #fff !important;
+    background: var(--inmate-report-paper) !important;
   }
 
-  #root .print-inmate-register .print-inmate-register-band {
-    background: #c00000 !important;
-    color: #fff !important;
+  #root .print-inmate-register header {
+    display: flex !important;
+  }
+
+  #root .print-inmate-register thead th {
+    background: var(--inmate-report-header) !important;
+    color: var(--inmate-report-paper) !important;
     print-color-adjust: exact;
     -webkit-print-color-adjust: exact;
   }
@@ -2204,12 +2201,17 @@ body {
     display: table-header-group;
   }
 
-  .print-inmate-register tfoot {
-    display: table-row-group;
+  #root .print-inmate-register tbody th,
+  #root .print-inmate-register tbody td {
+    color: var(--inmate-report-ink) !important;
+    background: var(--inmate-report-paper) !important;
   }
 
+  /* Avoid is advisory: a row taller than a page can fragment naturally.
+     No fixed row heights or overflow clipping may hide a full narrative. */
   .print-inmate-register tr,
-  .print-inmate-register .break-inside-avoid {
+  .print-inmate-register [data-report-signatures],
+  .print-inmate-register [data-report-summary] {
     break-inside: avoid;
     page-break-inside: avoid;
   }

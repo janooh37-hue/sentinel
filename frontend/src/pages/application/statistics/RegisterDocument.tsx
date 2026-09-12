@@ -1,331 +1,98 @@
-import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import type { InmatePopulation, InmateRegisterMonth } from '@/lib/api'
-
-import {
-  documentReference,
-  formatRegisterDate,
-  formatRegisterDateTime,
-  formatRegisterMonth,
-  type RegisterGroup,
-} from './registerModel'
-import {
-  registerColumnKeys,
-  registerEntryValues,
-  registerGroupsForScope,
-  type RegisterExportOptions,
-} from './registerClipboard'
+import type { InmateRegisterMonth } from '@/lib/api'
+import { documentReference, formatRegisterDate, formatRegisterDateTime, formatRegisterMonth } from './registerModel'
+import { buildRegisterPresentation, REPORT_LOCALE, REPORT_PAGE_RULE, REPORT_STYLES as styles, type RegisterExportOptions, type ReportTable } from './registerPresentation'
 
 interface RegisterDocumentProps {
   month: InmateRegisterMonth
   options: RegisterExportOptions
+  submissionId?: number
+  draftIssuedAt?: string
   forPrint?: boolean
 }
 
-const WIDTHS_BY_GROUP: Record<InmatePopulation, readonly string[]> = {
-  citizens: ['6%', '18%', '18%', '14%', '15%', '29%'],
-  expats: ['5%', '16%', '16%', '13%', '13%', '14%', '23%'],
-  pending: ['6%', '18%', '18%', '14%', '15%', '29%'],
-}
-
-function periodBounds(year: number, month: number): readonly [string, string] {
-  const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate()
-  const prefix = `${year}-${String(month).padStart(2, '0')}`
-  return [`${prefix}-01`, `${prefix}-${String(lastDay).padStart(2, '0')}`]
-}
-
-function MetaCell({
-  label,
-  value,
-  direction = 'auto',
-}: {
-  label: string
-  value: string
-  direction?: 'auto' | 'ltr'
+function MetaCell({ label, value, direction = 'ltr', issuedAt, closedAt }: {
+  label: string; value: string; direction?: 'rtl' | 'ltr'; issuedAt?: string; closedAt?: string
 }): React.JSX.Element {
-  return (
-    <div className="min-w-0 border-e border-b border-black px-1.5 py-1">
-      <dt className="text-[6.2pt] font-bold uppercase tracking-[0.08em] text-[#555]">
-        {label}
-      </dt>
-      <dd
-        className="mt-px break-words text-[7.8pt] font-semibold tabular-nums [unicode-bidi:isolate]"
-        dir={direction}
-      >
-        {value}
-      </dd>
-    </div>
-  )
+  return <div style={styles.metaCell} data-report-issued-at={issuedAt} data-report-closed-at={closedAt}>
+    <dt style={styles.metaLabel}>{label}</dt>
+    <dd style={styles.metaValue} dir={direction}>{value}</dd>
+  </div>
 }
 
-function RegisterTable({
-  group,
-  options,
-}: {
-  group: RegisterGroup
-  options: RegisterExportOptions
-}): React.JSX.Element {
-  const { t } = useTranslation()
-  const headers = registerColumnKeys(group.key).map((key) =>
-    t(key, { lng: options.language }),
-  )
-  const widths = WIDTHS_BY_GROUP[group.key]
-  const dateIndex = group.key === 'expats' ? 4 : 3
-  const detailsIndex = headers.length - 1
-  const cellClass = 'border border-black px-1 py-0.5 align-top text-[7.1pt] leading-[1.38]'
-
-  return (
-    <section className="mt-2.5">
-      {/* This is a fixed Arabic government form, not reader-direction layout:
-          `ت` starts on the right in both document languages. */}
-      <table dir="rtl" className="w-full table-fixed border-collapse text-black">
-        <colgroup>
-          {widths.map((width, index) => <col key={index} style={{ width }} />)}
-        </colgroup>
-        <thead>
-          <tr>
-            <th
-              dir="rtl"
-              colSpan={headers.length}
-              scope="colgroup"
-              className="print-inmate-register-band border border-black bg-[#C00000] px-1 py-1 text-center text-[8.4pt] font-extrabold leading-tight text-white [print-color-adjust:exact]"
-            >
-              {t(`inmateStats.populations.${group.key}`, { lng: options.language })}
-            </th>
-          </tr>
-          <tr>
-            {headers.map((header) => (
-              <th
-                key={header}
-                scope="col"
-                className="print-inmate-register-band border border-black bg-[#C00000] px-1 py-1 text-center text-[6.7pt] font-extrabold leading-tight text-white [print-color-adjust:exact]"
-              >
-                {header}
-              </th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {group.entries.map((entry) => {
-            const values = registerEntryValues(entry, group.key, options, t)
-            return (
-              // Manual entries deliberately use the ordinary row shape: no
-              // provenance badge, reason, or extra document column.
-              <tr key={entry.id} className="break-inside-avoid">
-                {values.map((value, index) => {
-                  const numericOrDate = index === 0 || index === 2 || index === dateIndex
-                  return (
-                    <td
-                      key={index}
-                      className={`${cellClass} ${numericOrDate ? 'text-center font-mono tabular-nums [unicode-bidi:isolate]' : 'text-start'} ${index === detailsIndex ? 'whitespace-pre-line break-words' : 'break-words'}`}
-                      dir={numericOrDate ? 'ltr' : 'auto'}
-                    >
-                      {value}
-                    </td>
-                  )
-                })}
-              </tr>
-            )
-          })}
-        </tbody>
-        {options.includeCounts ? (
-          <tfoot>
-            <tr className="break-inside-avoid font-extrabold">
-              <td
-                colSpan={headers.length - 1}
-                className="border border-black px-1.5 py-1 text-end text-[7.3pt]"
-              >
-                {t('inmateStats.counts.perTable', { lng: options.language })}
-              </td>
-              <td
-                dir="ltr"
-                className="border border-black px-1.5 py-1 text-center font-mono text-[8pt] tabular-nums [unicode-bidi:isolate]"
-              >
-                {group.count}
-              </td>
-            </tr>
-          </tfoot>
-        ) : null}
-      </table>
-    </section>
-  )
+function RegisterTable({ table, caption }: { table: ReportTable; caption: string | null }): React.JSX.Element {
+  return <table dir="rtl" style={styles.table}>
+    {caption ? <caption dir="rtl" style={styles.caption}>{caption}</caption> : null}
+    <colgroup>{table.columns.map((column, index) => <col key={index} style={{ width: column.width }} />)}</colgroup>
+    <thead>
+      <tr><th dir="rtl" colSpan={table.columns.length} scope="colgroup" style={styles.band}>{table.label}</th></tr>
+      <tr>{table.columns.map((column, index) => <th key={index} scope="col" dir="rtl" style={styles.header}>{column.label}</th>)}</tr>
+    </thead>
+    <tbody>{table.rows.map((row) => <tr key={row.id}>
+      {row.values.map((value, index) => <td key={index} dir={table.columns[index].direction} style={table.columns[index].style}>{value}</td>)}
+    </tr>)}</tbody>
+  </table>
 }
 
-function SignatureBlock({ language }: { language: 'ar' | 'en' }): React.JSX.Element {
+/** Render the selected report facts; a live draft cannot inherit submission actors. */
+export function RegisterDocument({ month, options, submissionId, draftIssuedAt, forPrint = false }: RegisterDocumentProps): React.JSX.Element {
   const { t } = useTranslation()
-  const roles = [
-    t('inmateStats.document.preparedBy', { lng: language }),
-    t('inmateStats.document.checkedBy', { lng: language }),
-    t('inmateStats.document.approvedBy', { lng: language }),
-  ]
-  return (
-    <dl className="mt-3 grid grid-cols-3 gap-2 break-inside-avoid">
-      {roles.map((role) => (
-        <div key={role} className="min-h-[22mm] border-[1.5px] border-black px-2 py-1.5">
-          <dt className="text-[7.2pt] font-extrabold uppercase tracking-[0.08em]">{role}</dt>
-          <dd className="mt-[12mm] border-b border-dotted border-black" aria-hidden="true" />
+  const ar = (key: string) => t(key, { lng: 'ar' })
+  const presentation = buildRegisterPresentation(month, options, t, submissionId)
+  const submitted = submissionId !== undefined
+  const legacy = submitted && month.workflow.legacy
+  const actors = submitted && !legacy ? [month.workflow.prepared, month.workflow.reviewed, month.workflow.approved] : [null, null, null]
+  const issuedAt = legacy ? null : submitted ? month.workflow.prepared?.acted_at : draftIssuedAt
+  const closedAt = submitted ? legacy ? month.closed_at : month.workflow.approved?.acted_at : null
+  const dateTime = (iso: string | null | undefined) => iso ? formatRegisterDateTime(iso, REPORT_LOCALE) : '—'
+  const formattedMonth = formatRegisterMonth(month.year, month.month, REPORT_LOCALE)
+  const prefix = `${month.year}-${String(month.month).padStart(2, '0')}`
+  const lastDay = new Date(Date.UTC(month.year, month.month, 0)).getUTCDate()
+  const period = `${formatRegisterDate(`${prefix}-01`, REPORT_LOCALE)} – ${formatRegisterDate(`${prefix}-${lastDay}`, REPORT_LOCALE)}`
+  const derivedCount = month.entries.filter((entry) => entry.origin === 'derived').length
+  const incompleteCount = month.entries.filter((entry) => entry.missing.length > 0 || entry.incomplete_marks.length > 0).length
+  const roles = ['preparedBy', 'checkedBy', 'approvedBy']
+
+  return <div className={forPrint ? 'print-inmate-register hidden print:block' : 'register-document-preview'} style={styles.paper} lang="ar" dir="rtl" data-inmate-register-document>
+    {forPrint ? <style>{REPORT_PAGE_RULE}</style> : null}
+    <div className="inmate-register-content" style={styles.content}>
+      <header style={styles.masthead}>
+        <img src="/brand/gssg-logo.png" alt="" style={styles.logo} />
+        <div>
+          <h2 style={styles.heading}>{ar('inmateStats.document.titleAr')}</h2>
+          <p style={styles.authority}>{ar('inmateStats.document.authority')}</p>
         </div>
-      ))}
-    </dl>
-  )
-}
-
-/** The formal A4 artifact. Screen provenance and manual-entry controls never enter this tree. */
-export function RegisterDocument({
-  month,
-  options,
-  forPrint = false,
-}: RegisterDocumentProps): React.JSX.Element {
-  const { t } = useTranslation()
-  const [generatedIso] = useState(() => new Date().toISOString())
-  const groups = registerGroupsForScope(month, options.scope)
-  const entries = groups.flatMap((group) => group.entries)
-  const derivedCount = entries.filter((entry) => entry.origin === 'derived').length
-  const manualCount = entries.length - derivedCount
-  const incompleteCount = entries.filter(
-    (entry) => entry.missing.length > 0 || entry.incomplete_marks.length > 0,
-  ).length
-  const [periodStart, periodEnd] = periodBounds(month.year, month.month)
-  const reference = documentReference(month.year, month.month)
-  // The total is always re-derived from the three scoped table groups; it is
-  // never trusted as stored month state.
-  const documentTotal = groups.reduce((total, group) => total + group.count, 0)
-  const pageClass =
-    options.orientation === 'portrait'
-      ? 'print-inmate-register-portrait'
-      : 'print-inmate-register-landscape'
-  const rootClass = forPrint
-    ? `print-inmate-register ${pageClass} hidden w-full bg-white text-black print:block`
-    : 'register-document-preview w-full bg-white text-black shadow-[0_18px_55px_rgb(0_0_0_/_0.24)]'
-  const formattedMonth = formatRegisterMonth(month.year, month.month, options.language)
-  const formattedPeriod = `${formatRegisterDate(periodStart, options.language)} – ${formatRegisterDate(periodEnd, options.language)}`
-  const generatedAt = formatRegisterDateTime(generatedIso, options.language)
-
-  return (
-    <div
-      className={`${rootClass} p-[10mm] text-[9.6pt] leading-[1.35]`}
-      lang={options.language}
-      dir={options.language === 'ar' ? 'rtl' : 'ltr'}
-      data-inmate-register-document
-    >
-      <div className="flex items-center gap-2.5 border-b-[1.5px] border-black pb-1.5">
-        <img
-          src="/brand/gssg-logo.png"
-          alt=""
-          className="h-[15mm] w-[15mm] shrink-0 object-contain"
-        />
-        <div className="min-w-0 flex-1">
-          <h2 className="text-[13pt] font-extrabold tracking-[-0.01em]">
-            <span lang="ar" dir="rtl">{t('inmateStats.document.titleAr', { lng: 'ar' })}</span>
-            <span aria-hidden="true"> · </span>
-            <span lang="en" dir="ltr" className="[unicode-bidi:isolate]">
-              {t('inmateStats.document.titleEn', { lng: 'en' })}
-            </span>
-          </h2>
-          <p className="mt-px text-[7.2pt] text-[#555]">
-            {t('inmateStats.document.authority', { lng: options.language })}
-          </p>
-        </div>
-        <dl className="shrink-0 text-end">
-          <dt className="text-[6.2pt] font-bold uppercase tracking-[0.08em] text-[#555]">
-            {t('inmateStats.document.month', { lng: options.language })}
-          </dt>
-          <dd
-            dir="ltr"
-            className="text-[9pt] font-extrabold tabular-nums [unicode-bidi:isolate]"
-          >
-            {formattedMonth}
-          </dd>
-        </dl>
-      </div>
-
-      <dl className="mt-1.5 grid grid-cols-4 border-s border-t border-black">
-        <MetaCell
-          label={t('inmateStats.document.month', { lng: options.language })}
-          value={formattedMonth}
-          direction="ltr"
-        />
-        <MetaCell
-          label={t('inmateStats.document.period', { lng: options.language })}
-          value={formattedPeriod}
-          direction="ltr"
-        />
-        <MetaCell
-          label={t('inmateStats.document.generated', { lng: options.language })}
-          value={generatedAt}
-          direction="ltr"
-        />
-        <MetaCell
-          label={t('inmateStats.document.reference', { lng: options.language })}
-          value={reference}
-          direction="ltr"
-        />
-        <MetaCell
-          label={t('inmateStats.document.derivedCount', { lng: options.language })}
-          value={String(derivedCount)}
-          direction="ltr"
-        />
-        <MetaCell
-          label={t('inmateStats.document.manualCount', { lng: options.language })}
-          value={String(manualCount)}
-          direction="ltr"
-        />
-        <MetaCell
-          label={t('inmateStats.document.incompleteCount', { lng: options.language })}
-          value={String(incompleteCount)}
-          direction="ltr"
-        />
-        {month.closed ? (
-          <>
-            <MetaCell
-              label={t('inmateStats.sealed.closedAt', { lng: options.language })}
-              value={
-                month.closed_at
-                  ? formatRegisterDateTime(month.closed_at, options.language)
-                  : ''
-              }
-              direction="ltr"
-            />
-            <MetaCell
-              label={t('inmateStats.sealed.closedBy', { lng: options.language })}
-              value={month.closed_by_name ?? ''}
-            />
-            {month.force_closed ? (
-              <MetaCell
-                label={t('inmateStats.sealed.strip', { lng: options.language })}
-                value={t('inmateStats.sealed.forced', { lng: options.language })}
-              />
-            ) : null}
-          </>
-        ) : null}
+      </header>
+      <dl data-report-metadata style={styles.metadata}>
+        <MetaCell label={ar('inmateStats.document.month')} value={formattedMonth} direction="rtl" />
+        <MetaCell label={ar('inmateStats.document.period')} value={period} />
+        <MetaCell label={ar('inmateStats.document.generated')} value={dateTime(issuedAt)} issuedAt={issuedAt ?? ''} />
+        <MetaCell label={ar('inmateStats.document.reference')} value={documentReference(month.year, month.month)} />
+        <MetaCell label={ar('inmateStats.document.derivedCount')} value={String(derivedCount)} />
+        <MetaCell label={ar('inmateStats.document.manualCount')} value={String(month.entries.length - derivedCount)} />
+        <MetaCell label={ar('inmateStats.document.incompleteCount')} value={String(incompleteCount)} />
+        <MetaCell label={ar('inmateStats.sealed.closedAt')} value={dateTime(closedAt)} closedAt={closedAt ?? ''} />
       </dl>
-
-      {!month.closed ? (
-        <p className="mt-1.5 border-[1.5px] border-[#C00000] px-2 py-1 text-center text-[7.5pt] font-extrabold text-[#C00000]">
-          {t('inmateStats.sealed.live', { lng: options.language })}
-        </p>
-      ) : null}
-
-      {groups.map((group) => (
-        <RegisterTable key={group.key} group={group} options={options} />
-      ))}
-
-      {options.includeCounts ? (
-        <div className="mt-2 flex items-baseline justify-end gap-3 border-y-[1.5px] border-black px-2 py-1.5 break-inside-avoid">
-          <span className="text-[8pt] font-extrabold">
-            {t('inmateStats.counts.documentTotal', { lng: options.language })}
-          </span>
-          <strong
-            dir="ltr"
-            className="font-mono text-[11pt] tabular-nums [unicode-bidi:isolate]"
-          >
-            {documentTotal}
-          </strong>
-        </div>
-      ) : null}
-
-      <SignatureBlock language={options.language} />
+      {!submitted ? <p style={styles.pending}>{ar('inmateStats.sealed.live')}</p> : null}
+      {presentation.tables.map((table, index) => <RegisterTable key={table.key} table={table} caption={index === 0 ? presentation.caption : null} />)}
+      {presentation.summaryRows.length ? <table dir="rtl" style={{ ...styles.table, ...styles.summary }} data-report-summary>
+        <colgroup><col style={{ width: '48.5%' }} /><col style={{ width: '51.5%' }} /></colgroup>
+        <thead><tr><th dir="rtl" colSpan={2} style={styles.band}>{presentation.summaryTitle}</th></tr></thead>
+        <tbody>{presentation.summaryRows.map((row) => <tr key={row.label}>
+          <th scope="row" dir="rtl" style={{ ...styles.summaryCell, fontWeight: 'bold' }}>{row.label}</th>
+          <td dir={row.direction} style={styles.summaryCell}>{row.value}</td>
+        </tr>)}</tbody>
+      </table> : null}
     </div>
-  )
+    <dl style={styles.signatures} data-report-signatures>
+      {roles.map((role, index) => <div key={role} style={styles.signature} data-report-stage={role}>
+        <dt style={styles.role}>{ar(`inmateStats.document.${role}`)}</dt>
+        <dd style={styles.identity}>{actors[index] ? <>
+          <span dir="auto">{actors[index].name_ar}</span><br />
+          <bdi dir="ltr">{actors[index].employee_id}</bdi>
+        </> : legacy ? '—' : ar('inmateStats.document.notPerformed')}</dd>
+      </div>)}
+    </dl>
+  </div>
 }
