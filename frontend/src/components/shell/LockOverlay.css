@@ -1,3 +1,16 @@
+.lock-dialog-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 99;
+}
+
+/* Sonner's toaster stacks at z-index 999999999, above the lock. Anything
+   settling behind the lock (Finish/Discard results, query errors) must not
+   surface on the privacy screen. Toasts still expire on their own timers. */
+body:has([data-lock-overlay='true']) [data-sonner-toaster] {
+  display: none;
+}
+
 .lock-overlay {
   position: fixed;
   inset: 0;

@@ -1,12 +1,19 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import { useState } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { api, type WorkforceSnapshot } from '@/lib/api'
+import { ApiError, api, type WorkforceSnapshot } from '@/lib/api'
 import i18n from '@/lib/i18n'
 import { loadLockWeather } from '@/lib/lockWeather'
 import type * as LockWeatherModule from '@/lib/lockWeather'
+import {
+  DialogContent,
+  DialogRoot,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 
 import { LockOverlay } from './LockOverlay'
 
@@ -78,6 +85,58 @@ function renderOverlay(client = new QueryClient({ defaultOptions: { queries: { r
     </QueryClientProvider>,
   )
   return { client, onUnlocked, onSignOut }
+}
+
+function NestedModalScenario({
+  locked,
+  onUnlocked,
+  onBackgroundAction,
+}: {
+  locked: boolean
+  onUnlocked: () => void
+  onBackgroundAction: () => void
+}): React.JSX.Element {
+  const [confirmationOpen, setConfirmationOpen] = useState(true)
+
+  return (
+    <>
+      <DialogRoot open>
+        <DialogContent hideClose aria-describedby={undefined}>
+          <DialogTitle>Word handoff</DialogTitle>
+          <button type="button" onClick={onBackgroundAction}>
+            Finish hidden handoff
+          </button>
+        </DialogContent>
+      </DialogRoot>
+      <ConfirmDialog
+        open={confirmationOpen}
+        onOpenChange={setConfirmationOpen}
+        title="Discard Word draft"
+        description="Keep this confirmation open."
+        onConfirm={onBackgroundAction}
+      />
+      {locked && <LockOverlay onUnlocked={onUnlocked} onSignOut={vi.fn()} />}
+    </>
+  )
+}
+
+function PageLockScenario({
+  locked,
+  showTarget = true,
+  onUnlocked,
+}: {
+  locked: boolean
+  showTarget?: boolean
+  onUnlocked: () => void
+}): React.JSX.Element {
+  return (
+    <>
+      <main id="main-content" tabIndex={-1}>
+        {showTarget && <button type="button">Return target</button>}
+      </main>
+      {locked && <LockOverlay onUnlocked={onUnlocked} onSignOut={vi.fn()} />}
+    </>
+  )
 }
 
 describe('LockOverlay', () => {
@@ -250,6 +309,232 @@ describe('LockOverlay', () => {
       expect(document.querySelector('.lock-shifts')).toHaveTextContent('الظهيرة')
       expect(document.querySelector('.lock-shifts')).not.toHaveTextContent('السرية الأولى')
     })
+  })
+
+  it('owns focus above nested Radix dialogs and preserves them through Escape and unlock', async () => {
+    const user = userEvent.setup()
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const backgroundAction = vi.fn()
+    const onUnlocked = vi.fn()
+    const view = render(
+      <QueryClientProvider client={client}>
+        <NestedModalScenario
+          locked={false}
+          onUnlocked={onUnlocked}
+          onBackgroundAction={backgroundAction}
+        />
+      </QueryClientProvider>,
+    )
+
+    // getByRole is deliberately avoided here: this scenario mirrors
+    // WordHandoffDialog's real pre-existing shape (its ConfirmDialog is a
+    // sibling Radix Root, not nested), so both top-level modals mutually
+    // mark each other aria-hidden via Radix's shared hideOthers bookkeeping
+    // (a pre-existing, unrelated quirk) — the button stays genuinely
+    // focus-reachable, so a text lookup (unaffected by aria-hidden) is the
+    // correct way to grab the real DOM node.
+    const cancel = await screen.findByText('Cancel')
+    cancel.focus()
+    expect(cancel).toHaveFocus()
+
+    view.rerender(
+      <QueryClientProvider client={client}>
+        <NestedModalScenario
+          locked
+          onUnlocked={onUnlocked}
+          onBackgroundAction={backgroundAction}
+        />
+      </QueryClientProvider>,
+    )
+    const password = await screen.findByLabelText('Password')
+    await waitFor(() => expect(password).toHaveFocus())
+
+    await user.keyboard('{Escape}')
+    expect(screen.getByText('Discard Word draft')).toBeInTheDocument()
+    expect(screen.getByText('Word handoff')).toBeInTheDocument()
+    expect(backgroundAction).not.toHaveBeenCalled()
+
+    fireEvent.pointerDown(document.body)
+    fireEvent.click(document.body)
+    expect(screen.getByLabelText('Password')).toBeInTheDocument()
+    expect(screen.getByText('Discard Word draft')).toBeInTheDocument()
+
+    await user.type(password, 'Secret123!')
+    await user.click(screen.getByRole('button', { name: 'Unlock' }))
+    await waitFor(() => expect(onUnlocked).toHaveBeenCalledOnce())
+    view.rerender(
+      <QueryClientProvider client={client}>
+        <NestedModalScenario
+          locked={false}
+          onUnlocked={onUnlocked}
+          onBackgroundAction={backgroundAction}
+        />
+      </QueryClientProvider>,
+    )
+
+    await waitFor(() => expect(cancel).toHaveFocus())
+    expect(screen.getByText('Discard Word draft')).toBeInTheDocument()
+    expect(backgroundAction).not.toHaveBeenCalled()
+  })
+
+  it('contains keyboard traversal and app shortcuts without blocking ordinary input', async () => {
+    const user = userEvent.setup()
+    const shortcutListener = vi.fn()
+    window.addEventListener('keydown', shortcutListener)
+
+    try {
+      renderOverlay()
+      const password = await screen.findByLabelText('Password')
+      await waitFor(() => expect(password).toHaveFocus())
+      expect(fireEvent.keyDown(password, { key: 'a' })).toBe(true)
+      fireEvent.keyDown(password, { key: 'k', ctrlKey: true })
+      fireEvent.keyDown(password, { key: '/', ctrlKey: true })
+
+      const visibility = screen.getByRole('button', { name: 'Show password' })
+      visibility.focus()
+      fireEvent.keyDown(visibility, { key: 'n', ctrlKey: true })
+      expect(shortcutListener).not.toHaveBeenCalled()
+
+      await user.type(password, 'Secret123!')
+      const signOut = screen.getByRole('button', { name: 'Not you? Sign out' })
+      signOut.focus()
+      await user.tab()
+      expect(password).toHaveFocus()
+      await user.tab({ shift: true })
+      expect(signOut).toHaveFocus()
+    } finally {
+      window.removeEventListener('keydown', shortcutListener)
+    }
+  })
+
+  it('keeps verification errors editable and retries through the same lock', async () => {
+    const user = userEvent.setup()
+    vi.mocked(api.verifyAuthPassword)
+      .mockRejectedValueOnce(new ApiError(401, 'invalid_password', 'Incorrect password'))
+      .mockRejectedValueOnce(new TypeError('Connection lost'))
+      .mockResolvedValueOnce(undefined)
+    const { onUnlocked } = renderOverlay()
+    const password = await screen.findByLabelText('Password')
+
+    await user.type(password, 'wrong')
+    await user.click(screen.getByRole('button', { name: 'Unlock' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('Incorrect password')
+    expect(password).toBeEnabled()
+    expect(password).toHaveValue('wrong')
+    expect(onUnlocked).not.toHaveBeenCalled()
+
+    await user.clear(password)
+    await user.type(password, 'retry')
+    await user.click(screen.getByRole('button', { name: 'Unlock' }))
+    expect(await screen.findByRole('alert')).toHaveTextContent('TypeError: Connection lost')
+    expect(password).toBeEnabled()
+    expect(onUnlocked).not.toHaveBeenCalled()
+
+    await user.clear(password)
+    await user.type(password, 'Secret123!')
+    await user.click(screen.getByRole('button', { name: 'Unlock' }))
+
+    await waitFor(() => expect(onUnlocked).toHaveBeenCalledOnce())
+    expect(api.verifyAuthPassword).toHaveBeenNthCalledWith(1, 'wrong')
+    expect(api.verifyAuthPassword).toHaveBeenNthCalledWith(2, 'retry')
+    expect(api.verifyAuthPassword).toHaveBeenNthCalledWith(3, 'Secret123!')
+  })
+
+  it('allows only one password verification while a submission is pending', async () => {
+    const user = userEvent.setup()
+    let resolveVerification!: () => void
+    vi.mocked(api.verifyAuthPassword).mockImplementationOnce(
+      () => new Promise<void>((resolve) => {
+        resolveVerification = resolve
+      }),
+    )
+    const { onUnlocked } = renderOverlay()
+    const password = await screen.findByLabelText('Password')
+    const form = password.closest('form')
+
+    await user.type(password, 'Secret123!')
+    await user.click(screen.getByRole('button', { name: 'Unlock' }))
+    expect(form).not.toBeNull()
+    fireEvent.submit(form!)
+    fireEvent.submit(form!)
+    expect(api.verifyAuthPassword).toHaveBeenCalledOnce()
+
+    resolveVerification()
+    await waitFor(() => expect(onUnlocked).toHaveBeenCalledOnce())
+  })
+
+  it('restores page focus across repeated successful lock cycles', async () => {
+    const user = userEvent.setup()
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const onUnlocked = vi.fn()
+    const view = render(
+      <QueryClientProvider client={client}>
+        <PageLockScenario locked={false} onUnlocked={onUnlocked} />
+      </QueryClientProvider>,
+    )
+    const target = screen.getByRole('button', { name: 'Return target' })
+
+    for (const [index, attempt] of ['FirstSecret!', 'SecondSecret!'].entries()) {
+      target.focus()
+      view.rerender(
+        <QueryClientProvider client={client}>
+          <PageLockScenario locked onUnlocked={onUnlocked} />
+        </QueryClientProvider>,
+      )
+      const password = await screen.findByLabelText('Password')
+      await waitFor(() => expect(password).toHaveFocus())
+      await user.type(password, attempt)
+      await user.click(screen.getByRole('button', { name: 'Unlock' }))
+      await waitFor(() => expect(onUnlocked).toHaveBeenCalledTimes(index + 1))
+      view.rerender(
+        <QueryClientProvider client={client}>
+          <PageLockScenario locked={false} onUnlocked={onUnlocked} />
+        </QueryClientProvider>,
+      )
+      await waitFor(() => expect(target).toHaveFocus())
+    }
+
+    expect(api.verifyAuthPassword).toHaveBeenCalledTimes(2)
+  })
+
+  it('falls back to main content when the pre-lock focus target no longer exists', async () => {
+    const user = userEvent.setup()
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const onUnlocked = vi.fn()
+    const view = render(
+      <QueryClientProvider client={client}>
+        <PageLockScenario locked={false} onUnlocked={onUnlocked} />
+      </QueryClientProvider>,
+    )
+    const target = screen.getByRole('button', { name: 'Return target' })
+    target.focus()
+
+    view.rerender(
+      <QueryClientProvider client={client}>
+        <PageLockScenario locked onUnlocked={onUnlocked} />
+      </QueryClientProvider>,
+    )
+    const password = await screen.findByLabelText('Password')
+    await waitFor(() => expect(password).toHaveFocus())
+    view.rerender(
+      <QueryClientProvider client={client}>
+        <PageLockScenario locked showTarget={false} onUnlocked={onUnlocked} />
+      </QueryClientProvider>,
+    )
+    await user.type(password, 'Secret123!')
+    await user.click(screen.getByRole('button', { name: 'Unlock' }))
+    await waitFor(() => expect(onUnlocked).toHaveBeenCalledOnce())
+    view.rerender(
+      <QueryClientProvider client={client}>
+        <PageLockScenario
+          locked={false}
+          showTarget={false}
+          onUnlocked={onUnlocked}
+        />
+      </QueryClientProvider>,
+    )
+
+    await waitFor(() => expect(screen.getByRole('main')).toHaveFocus())
   })
 
   it('uses the existing password verification flow and can sign out', async () => {
