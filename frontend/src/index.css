@@ -2202,6 +2202,30 @@ body {
     min-height: 252mm !important;
   }
 
+  /* The approved 9-citizen / 7-expat reference composition must retain both
+     population tables, its summary and all three actor blocks on one A4 sheet.
+     Keep the screen preview at the reference's comfortable reading size, but
+     use a denser paper-only table rhythm so ordinary rows do not force the
+     summary and signatures onto a second page. Long narratives still fragment
+     naturally because no row height or overflow is fixed. */
+  .print-inmate-register[data-report-print-profile='a4-portrait-compact'] table {
+    font-size: 9pt !important;
+    line-height: 1.05 !important;
+  }
+
+  .print-inmate-register[data-report-print-profile='a4-portrait-compact'] thead th {
+    padding: 1.2pt 1.5pt !important;
+  }
+
+  .print-inmate-register[data-report-print-profile='a4-portrait-compact'] thead tr:first-child th {
+    font-size: 10pt !important;
+  }
+
+  .print-inmate-register[data-report-print-profile='a4-portrait-compact'] tbody th,
+  .print-inmate-register[data-report-print-profile='a4-portrait-compact'] tbody td {
+    padding: 0.65pt 1.5pt !important;
+  }
+
   #root .print-inmate-register {
     background: var(--inmate-report-paper) !important;
   }

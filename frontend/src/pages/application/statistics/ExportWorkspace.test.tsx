@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import i18n from '@/lib/i18n'
 import { ExportWorkspace } from './ExportWorkspace'
-import { workflowMonth } from './workflowFixtures'
+import { workflowMonth, workflowSubmission } from './workflowFixtures'
 
 afterEach(() => vi.restoreAllMocks())
 
@@ -35,5 +35,33 @@ describe('ExportWorkspace', () => {
     expect(initial[0]).toBe(initial[1])
     await userEvent.click(screen.getByRole('radio', { name: 'Full narrative' }))
     expect(stamps()).toEqual(initial)
+  })
+
+  it('marks the print-only document for the compact A4 portrait profile', () => {
+    const client = new QueryClient()
+    const { container } = render(<QueryClientProvider client={client}><ExportWorkspace month={workflowMonth()} submissionId={42} /></QueryClientProvider>)
+    const papers = container.querySelectorAll('[data-inmate-register-document]')
+    expect(papers).toHaveLength(2)
+    expect(papers[0]).not.toHaveAttribute('data-report-print-profile')
+    expect(papers[1]).toHaveAttribute('data-report-print-profile', 'a4-portrait-compact')
+  })
+
+  it('renders absent legacy issue and actor facts as dashes', () => {
+    const client = new QueryClient()
+    const legacy = workflowSubmission({
+      created_at: null,
+      closed_at: '2026-09-01T08:00:00Z',
+      workflow: {
+        ...workflowMonth().workflow,
+        state: 'closed',
+        legacy: true,
+        legacy_metadata: { closed_at: '2026-09-01T08:00:00Z', closed_by: null, closed_by_name: null },
+      },
+    })
+    const { container } = render(<QueryClientProvider client={client}><ExportWorkspace month={legacy} submissionId={42} /></QueryClientProvider>)
+    expect(Array.from(container.querySelectorAll('[data-report-issued-at]'), (cell) => cell.getAttribute('data-report-issued-at'))).toEqual(['', ''])
+    expect(Array.from(container.querySelectorAll('[data-report-signatures]'), (signatures) =>
+      Array.from(signatures.querySelectorAll('[data-report-stage] dd'), (actor) => actor.textContent),
+    )).toEqual([['—', '—', '—'], ['—', '—', '—']])
   })
 })

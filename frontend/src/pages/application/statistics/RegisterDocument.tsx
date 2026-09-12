@@ -54,7 +54,7 @@ export function RegisterDocument({ month, options, submissionId, draftIssuedAt, 
   const incompleteCount = month.entries.filter((entry) => entry.missing.length > 0 || entry.incomplete_marks.length > 0).length
   const roles = ['preparedBy', 'checkedBy', 'approvedBy']
 
-  return <div className={forPrint ? 'print-inmate-register hidden print:block' : 'register-document-preview'} style={styles.paper} lang="ar" dir="rtl" data-inmate-register-document>
+  return <div className={forPrint ? 'print-inmate-register hidden print:block' : 'register-document-preview'} style={styles.paper} lang="ar" dir="rtl" data-inmate-register-document data-report-print-profile={forPrint ? 'a4-portrait-compact' : undefined}>
     {forPrint ? <style>{REPORT_PAGE_RULE}</style> : null}
     <div className="inmate-register-content" style={styles.content}>
       <header style={styles.masthead}>
