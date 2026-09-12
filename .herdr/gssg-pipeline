@@ -1,0 +1,189 @@
+#!/usr/bin/env bash
+# gssg-pipeline — spawn/repair the GSSG Manager agent pipeline in a Herdr workspace.
+#
+# Stages, in tab order:
+#   plan (omp) -> build (codex) -> review (claude) -> deploy (ssh to the live host)
+#
+# Idempotent: existing tabs, live agents and an attached deploy session are kept.
+# Talks to the Herdr server socket, so it runs from any terminal; only the
+# implicit "current workspace" form needs to run inside a Herdr pane.
+set -euo pipefail
+
+self=$(readlink -f "$0")
+REPO="${GSSG_REPO:-$(cd "$(dirname "$self")/.." && pwd)}"
+DEPLOY_HOST="${GSSG_DEPLOY_HOST:-gssgit}"
+WS_LABEL="${GSSG_WS_LABEL:-sentinel}"
+SUFFIX="${GSSG_AGENT_SUFFIX:-}"
+START_TIMEOUT_MS="${GSSG_AGENT_TIMEOUT_MS:-90000}"
+
+# stage order is tab order; "deploy" is a plain shell, not an agent
+STAGES=(plan:omp build:codex review:claude)
+DEPLOY_STAGE=deploy
+
+usage() {
+  cat <<EOF
+gssg-pipeline — GSSG Manager agent pipeline for Herdr
+
+Usage:
+  gssg-pipeline                      Ensure the pipeline in the calling pane's workspace
+  gssg-pipeline <workspace-id>       Ensure the pipeline in that workspace (e.g. w7)
+  gssg-pipeline --new                Spawn a new workspace on this checkout, then ensure
+  gssg-pipeline --worktree <branch>  Spawn a new workspace on a fresh git worktree
+  gssg-pipeline -h | --help          Show this help
+
+Stages (tab order):
+  plan    omp     drives the work and hands off to the others
+  build   codex   implementation
+  review  claude  review and verification
+  deploy  shell   ssh session on the live host ($DEPLOY_HOST)
+
+Driving the stages (see 'handoff -h'):
+  handoff status                     Names, kinds, states, tabs
+  handoff build "<prompt>"           Prompt a stage, wait for it to settle, print the tail
+  handoff review "<prompt>" -t 900000
+  handoff read plan 200              Re-read a transcript without prompting
+  handoff keys review esc            Answer or cancel a blocked dialog
+  handoff deploy "mng status"        Run a command in the deploy ssh pane
+
+Environment (current values shown):
+  GSSG_REPO=$REPO
+      checkout the agents work in
+  GSSG_DEPLOY_HOST=$DEPLOY_HOST
+      ssh target for the deploy tab
+  GSSG_WS_LABEL=$WS_LABEL
+      label for workspaces created with --new
+  GSSG_AGENT_SUFFIX=${SUFFIX:-<unset>}
+      suffix for tab labels and agent names; Herdr agent names are global, so a
+      second pipeline needs one: GSSG_AGENT_SUFFIX=2 gssg-pipeline --new
+  GSSG_AGENT_TIMEOUT_MS=$START_TIMEOUT_MS
+      per-agent startup timeout
+
+Teardown:
+  herdr workspace close <id>                   Workspace created with --new
+  herdr worktree remove --workspace <id> --force   Workspace created with --worktree
+EOF
+}
+
+die() { printf 'gssg-pipeline: %s\n' "$*" >&2; exit 1; }
+note() { printf '  %s\n' "$*" >&2; }   # stderr: stdout carries captured ids
+
+case "${1:-}" in -h|--help|help) usage; exit 0 ;; esac
+
+command -v herdr >/dev/null || die "herdr is not in PATH"
+command -v jq >/dev/null || die "jq is required"
+herdr workspace list >/dev/null 2>&1 || die "no Herdr server reachable; start 'herdr' first"
+[[ -d "$REPO" ]] || die "repo not found: $REPO (set GSSG_REPO)"
+
+ws=""
+case "${1:-}" in
+  --new)
+    created=$(herdr workspace create --label "$WS_LABEL$SUFFIX" --cwd "$REPO" --no-focus)
+    ;;
+  --worktree)
+    branch=${2:?branch name required}
+    created=$(herdr worktree create --cwd "$REPO" --branch "$branch" --no-focus)
+    # Agents must work in the linked checkout, never in the production tree.
+    REPO=$(jq -r '.result.workspace.worktree.checkout_path' <<<"$created")
+    note "worktree checkout $REPO"
+    ;;
+  -*) die "unknown option: $1 (see --help)" ;;
+  "") ws="${HERDR_WORKSPACE_ID:-}"
+      [[ -n $ws ]] ||
+        die "outside a Herdr pane: pass a workspace id, --new, or --worktree <branch>" ;;
+  *)  ws="$1" ;;
+esac
+if [[ -z $ws ]]; then
+  ws=$(jq -r '.result.workspace.workspace_id' <<<"$created")
+  # Reuse the workspace's root tab as the first stage instead of leaving it idle.
+  herdr tab rename "$(jq -r '.result.tab.tab_id' <<<"$created")" \
+    "${STAGES[0]%%:*}$SUFFIX" >/dev/null
+fi
+printf 'workspace %s\n' "$ws" >&2
+
+# --- helpers -----------------------------------------------------------------
+
+ensure_tab() { # label -> tab_id, creating the tab when missing
+  local label=$1 tab
+  tab=$(herdr tab list --workspace "$ws" |
+          jq -r --arg l "$label" 'first(.result.tabs[] | select(.label == $l) | .tab_id) // ""')
+  if [[ -z $tab ]]; then
+    tab=$(herdr tab create --workspace "$ws" --label "$label" --cwd "$REPO" --no-focus |
+            jq -r '.result.tab.tab_id')
+    note "created tab $label ($tab)"
+  fi
+  printf '%s\n' "$tab"
+}
+
+first_pane() { # tab_id -> lowest-numbered pane in that tab
+  local pane
+  pane=$(herdr pane list --workspace "$ws" |
+           jq -r --arg t "$1" '[.result.panes[] | select(.tab_id == $t)] | first.pane_id // ""')
+  [[ -n $pane ]] || die "tab $1 has no pane"
+  printf '%s\n' "$pane"
+}
+
+pane_agent_kind() { # pane_id -> detected agent kind ("" when none)
+  herdr agent list |
+    jq -r --arg p "$1" 'first(.result.agents[] | select(.pane_id == $p) | .agent) // ""'
+}
+
+ensure_agent() { # name kind pane_id
+  local name=$1 kind=$2 pane=$3 live held
+  # `agent get` exits 1 for an unknown name; pipefail would abort the script.
+  held=$(herdr agent get "$name" 2>/dev/null | jq -r '.result.agent.pane_id // ""') || held=""
+  if [[ $held == "$pane" ]]; then
+    note "agent $name already live in $pane"
+    return
+  fi
+  [[ -z $held ]] ||
+    die "name '$name' is already taken by $held; rerun with GSSG_AGENT_SUFFIX set"
+  live=$(pane_agent_kind "$pane")
+  if [[ $live == "$kind" ]]; then
+    herdr agent rename "$pane" "$name" >/dev/null
+    note "named existing $kind in $pane -> $name"
+  elif [[ -n $live ]]; then
+    die "pane $pane runs $live, expected $kind (close it or rename manually)"
+  else
+    herdr agent start "$name" --kind "$kind" --pane "$pane" --timeout "$START_TIMEOUT_MS" >/dev/null
+    note "started $kind in $pane -> $name"
+  fi
+}
+
+ensure_deploy() { # pane_id: keep one interactive ssh session to the live host
+  local pane=$1 info fg
+  info=$(herdr pane process-info --pane "$pane")
+  # The pane's own shell always appears in the foreground list; only extra
+  # processes mean the pane is busy.
+  fg=$(jq -r '.result.process_info
+              | .shell_pid as $s
+              | [.foreground_processes[] | select(.pid != $s) | .name] | join(",")' <<<"$info")
+  if [[ $fg == *ssh* ]]; then
+    note "deploy pane $pane already attached ($fg)"
+    return
+  fi
+  [[ -z $fg ]] || die "deploy pane $pane is busy running: $fg"
+  herdr pane run "$pane" "ssh $DEPLOY_HOST" >/dev/null
+  note "opened ssh $DEPLOY_HOST in $pane (a password prompt may be waiting)"
+}
+
+# --- pipeline ----------------------------------------------------------------
+
+# Tabs are created in stage order so the tab bar reads plan -> build -> review -> deploy.
+# `die` inside $( ) only exits the subshell, so capture ids step by step.
+for stage in "${STAGES[@]}"; do
+  name="${stage%%:*}$SUFFIX"
+  tab=$(ensure_tab "$name") || exit 1
+  pane=$(first_pane "$tab") || exit 1
+  ensure_agent "$name" "${stage##*:}" "$pane"
+done
+tab=$(ensure_tab "$DEPLOY_STAGE$SUFFIX") || exit 1
+pane=$(first_pane "$tab") || exit 1
+ensure_deploy "$pane"
+
+printf '\n'
+# Report in tab order, not alphabetically.
+herdr agent list |
+  jq -r --arg w "$ws" '[.result.agents[] | select(.workspace_id == $w)]
+         | sort_by(.tab_id | split(":t")[1] | tonumber)[]
+         | [(.name // "-"), .agent, .agent_status, .tab_id, .pane_id] | @tsv' |
+  column -t -N STAGE,KIND,STATE,TAB,PANE

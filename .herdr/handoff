@@ -1,0 +1,158 @@
+#!/usr/bin/env bash
+# handoff — hand work between the stages of the GSSG Manager Herdr pipeline
+#           (plan -> build -> review -> deploy; see 'gssg-pipeline -h').
+#
+# Agent names resolve server-wide, so every subcommand except `deploy` works from
+# any terminal. `deploy` addresses a tab, so it needs a workspace id.
+set -euo pipefail
+
+TIMEOUT_MS="${HANDOFF_TIMEOUT_MS:-600000}"
+LINES="${HANDOFF_LINES:-120}"
+# A second pipeline (GSSG_AGENT_SUFFIX=2) labels its tabs deploy2, build2, ...
+DEPLOY_TAB_LABEL="${GSSG_DEPLOY_TAB:-deploy${GSSG_AGENT_SUFFIX:-}}"
+
+usage() {
+  cat <<EOF
+handoff — drive the GSSG Manager agent pipeline in Herdr
+
+Usage:
+  handoff status                     Stages, kinds, lifecycle states, tabs
+  handoff <stage> "<prompt>" [-t MS] Prompt a stage, wait for it to settle, print the tail
+  handoff read <stage> [lines]       Re-read a transcript without prompting
+  handoff keys <stage> <key>...      Send logical keys (esc, ctrl+c, enter, ...)
+  handoff focus <stage>              Bring a stage's tab to the foreground
+  handoff deploy "<command>" [MS]    Run a command in the deploy ssh pane, capture its output
+  handoff -h | --help                Show this help
+
+Stages are Herdr agent names: plan (omp), build (codex), review (claude).
+With GSSG_AGENT_SUFFIX=2 they are plan2, build2, review2.
+
+Examples:
+  handoff build "Implement the repo method, no tests yet"
+  handoff review "Review the staged diff; report actionable findings only" -t 900000
+  handoff read build 200
+  handoff keys review esc
+  handoff deploy "mng status"
+
+Lifecycle:
+  idle/done  ready for input        working  turn in progress
+  blocked    approval or question dialog — inspect with 'handoff read', answer with
+             'handoff keys'; prompting a blocked stage is refused
+  unknown    an agent is present but unclassified; not proof of completion
+
+Environment:
+  HANDOFF_TIMEOUT_MS=$TIMEOUT_MS   default wait for --wait/deploy
+  HANDOFF_LINES=$LINES             transcript lines printed
+  GSSG_AGENT_SUFFIX               stage-name/tab suffix of a second pipeline
+  GSSG_DEPLOY_TAB=$DEPLOY_TAB_LABEL  deploy tab label
+  GSSG_WORKSPACE                  workspace id for 'deploy' when run outside a Herdr pane
+EOF
+}
+
+die() { printf 'handoff: %s\n' "$*" >&2; exit 1; }
+
+case "${1:-}" in -h|--help|help) usage; exit 0 ;; esac
+
+command -v herdr >/dev/null || die "herdr is not in PATH"
+command -v jq >/dev/null || die "jq is required"
+herdr agent list >/dev/null 2>&1 || die "no Herdr server reachable; start 'herdr' first"
+
+ws="${GSSG_WORKSPACE:-${HERDR_WORKSPACE_ID:-}}"
+
+agents_table() {
+  herdr agent list |
+    jq -r '[.result.agents[]]
+           | sort_by(.workspace_id, (.tab_id | split(":t")[1] | tonumber))[]
+           | [(.name // "-"), .agent, .agent_status, .tab_id, .pane_id] | @tsv' |
+    column -t -N STAGE,KIND,STATE,TAB,PANE
+}
+
+deploy_pane() {
+  local tab
+  [[ -n $ws ]] ||
+    die "outside a Herdr pane: set GSSG_WORKSPACE=<workspace id> for deploy"
+  tab=$(herdr tab list --workspace "$ws" |
+          jq -r --arg l "$DEPLOY_TAB_LABEL" \
+             'first(.result.tabs[] | select(.label == $l) | .tab_id) // ""')
+  [[ -n $tab ]] || die "no '$DEPLOY_TAB_LABEL' tab in workspace $ws (run gssg-pipeline)"
+  herdr pane list --workspace "$ws" |
+    jq -r --arg t "$tab" '[.result.panes[] | select(.tab_id == $t)] | first.pane_id'
+}
+
+state_of() { herdr agent get "$1" | jq -r '.result.agent.agent_status'; }
+
+read_tail() { # name lines -- `agent read` emits raw pane text, not JSON
+  local out
+  out=$(herdr agent read "$1" --source recent-unwrapped --lines "$2" --format text)
+  # Full-screen agent UIs (codex) keep their rows on the alternate screen, which
+  # never reaches host scrollback; fall back to the rendered viewport.
+  [[ -n ${out//[[:space:]]/} ]] ||
+    out=$(herdr agent read "$1" --source visible --lines "$2" --format text)
+  printf '%s\n' "$out"
+}
+
+cmd=${1:-status}
+shift || true
+
+case "$cmd" in
+  status) agents_table ;;
+
+  read)
+    name=${1:?stage name required}
+    read_tail "$name" "${2:-$LINES}"
+    ;;
+
+  keys)
+    name=${1:?stage name required}; shift
+    [[ $# -gt 0 ]] || die "at least one key required"
+    herdr agent send-keys "$name" "$@" | jq -c '.result'
+    ;;
+
+  focus)
+    name=${1:?stage name required}
+    herdr agent focus "$name" | jq -c '.result.agent | {name, tab_id, agent_status}'
+    ;;
+
+  deploy)
+    text=${1:?command required}
+    pane=$(deploy_pane)
+    marker="__HANDOFF_${RANDOM}${RANDOM}__"
+    herdr pane run "$pane" "echo ${marker}_BEGIN; $text; echo ${marker}_END" >/dev/null
+    # Anchor to line start: the echoed command line also contains both markers.
+    herdr pane wait-output "$pane" --regex "(?m)^${marker}_END" --timeout "${2:-$TIMEOUT_MS}" >/dev/null ||
+      die "deploy command did not finish before the timeout; inspect tab '$DEPLOY_TAB_LABEL'"
+    # Keep only the block between the markers.
+    herdr pane read "$pane" --source recent-unwrapped --lines "$LINES" --format text |
+      awk -v b="${marker}_BEGIN" -v e="${marker}_END" '
+        index($0, b) && index($0, e) { next }
+        index($0, b) { out = ""; on = 1; next }
+        index($0, e) && on { on = 0; next }
+        on { out = out $0 "\n" }
+        END { printf "%s", out }'
+    ;;
+
+  *)
+    name=$cmd
+    text=${1:?prompt text required}; shift || true
+    timeout=$TIMEOUT_MS
+    while [[ $# -gt 0 ]]; do
+      case "$1" in
+        -t|--timeout) timeout=${2:?timeout ms required}; shift 2 ;;
+        *) die "unknown option: $1 (see --help)" ;;
+      esac
+    done
+
+    state=$(state_of "$name") || die "unknown stage: $name"
+    [[ $state != blocked ]] ||
+      die "$name is blocked on a dialog; inspect with 'handoff read $name' and answer with 'handoff keys $name ...'"
+
+    herdr agent prompt "$name" "$text" --wait --timeout "$timeout" >/dev/null ||
+      die "prompt to $name did not settle; inspect with 'handoff read $name'"
+
+    final=$(state_of "$name")
+    printf -- '--- %s (%s) ---\n' "$name" "$final"
+    read_tail "$name" "$LINES"
+    [[ $final != blocked ]] ||
+      printf '\n%s is waiting on an approval/question dialog.\n' "$name"
+    ;;
+esac
