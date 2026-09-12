@@ -228,10 +228,10 @@ function StatisticsMonth(): React.JSX.Element {
         ) : null}
       </header>
 
-      <div id="monthly-tasks" className="scroll-mt-4"><ViolationMonthsWidget compact={false} /></div>
+      <div id="monthly-tasks" data-print-hide className="scroll-mt-4"><ViolationMonthsWidget compact={false} /></div>
 
-      {month ? <WorkflowControls key={`${coordinate.year}-${coordinate.month}-${month.workflow.version}`} month={month} register={register}
-        viewedSubmissionId={view === 'export' ? submissionId : null} viewedDraftFingerprint={view === 'register' || submissionId === null ? month.projection_fingerprint : null} onOpenReport={openReport} onCorrectEntry={correctEntry} /> : null}
+      {month ? <div data-print-hide><WorkflowControls key={`${coordinate.year}-${coordinate.month}-${month.workflow.version}`} month={month} register={register}
+        viewedSubmissionId={view === 'export' ? submissionId : null} viewedDraftFingerprint={view === 'register' || submissionId === null ? month.projection_fingerprint : null} onOpenReport={openReport} onCorrectEntry={correctEntry} /></div> : null}
 
       {register.isLoading ? (
         <div className="space-y-3" aria-label={t('common.loading')}>
@@ -247,7 +247,7 @@ function StatisticsMonth(): React.JSX.Element {
         </div>
       ) : view === 'export' ? (
         <div className="space-y-4">
-          <div className="space-y-2 rounded-xl border border-hairline bg-surface p-4">
+          <div data-print-hide className="space-y-2 rounded-xl border border-hairline bg-surface p-4">
             <Label htmlFor="register-report-selection">{t('inmateStats.workflow.reportSelection')}</Label>
             <Select value={submissionId === null ? 'draft' : String(submissionId)} onValueChange={(value) => openReport(value === 'draft' ? null : Number(value))}>
               <SelectTrigger id="register-report-selection" className="h-auto min-h-10 max-w-xl text-start"><SelectValue /></SelectTrigger>
@@ -269,7 +269,7 @@ function StatisticsMonth(): React.JSX.Element {
           </div> : submissionId !== null && register.reportLoading ? <Skeleton aria-label={t('common.loading')} className="h-80 w-full" /> : (
             <ExportWorkspace month={submissionId === null ? month : register.selectedReport!} submissionId={submissionId ?? undefined} />
           )}
-          {register.selectedReport && submissionId !== null ? <details className="rounded-xl border border-hairline bg-surface p-4">
+          {register.selectedReport && submissionId !== null ? <details data-print-hide className="rounded-xl border border-hairline bg-surface p-4">
             <summary className="cursor-pointer font-semibold">{t('inmateStats.workflow.actionHistory')}</summary>
             <ol className="mt-3 space-y-3 text-sm">{register.selectedReport.actions.map((action, index) => <li key={`${action.action}-${index}`}>
               <p>{t(`inmateStats.workflow.events.${action.action}`)} · <bdi dir="ltr">{formatRegisterDateTime(action.occurred_at, i18n.language)}</bdi></p>

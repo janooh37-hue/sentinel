@@ -18,7 +18,8 @@ def test_monthly_push_names_report_stage_and_links_to_exact_submission():
         assert "Monthly inmate violations report" in messages["en"][1]
         assert en in messages["en"][1]
         assert ar in messages["ar"][1]
-        assert "2026-08" in messages["ar"][1]
+        assert "\u20662026-08\u2069" in messages["ar"][1]
+        assert "\u2066" not in messages["en"][1]
         assert url == target
 
 
@@ -32,6 +33,8 @@ def test_grouped_monthly_push_opens_monthly_tasks_section():
             kind, [_item(kind), _item(kind, ref="inmate-submission:2")], ss._KIND_META[kind]
         )
         assert "2 monthly inmate violations reports" in messages["en"][1]
+        assert "\u20662\u2069" in messages["ar"][1]
+        assert "\u2066" not in messages["en"][1]
         assert url.endswith("#monthly-tasks")
 
 

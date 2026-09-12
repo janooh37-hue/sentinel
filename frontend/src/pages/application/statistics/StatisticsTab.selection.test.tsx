@@ -43,6 +43,16 @@ beforeEach(() => {
     entries: [row(id === 41 ? 'Archived inmate' : 'Submitted inmate')], counts: { citizens: 1, expats: 0, pending: 0, total: 1 } }))
 })
 describe('immutable report selection', () => {
+  it('keeps workflow chrome, version selection, and action history off the printed report', async () => {
+    mount('&stats_submission=42')
+    await screen.findAllByText('Submitted inmate')
+
+    expect(screen.getByRole('heading', { name: i18n.t('dashboard.widgetLabels.violation_months') }).closest('[data-print-hide]')).not.toBeNull()
+    expect(screen.getByRole('heading', { name: i18n.t('inmateStats.workflow.title') }).closest('[data-print-hide]')).not.toBeNull()
+    expect(screen.getByRole('combobox', { name: i18n.t('inmateStats.workflow.reportSelection') }).closest('[data-print-hide]')).not.toBeNull()
+    expect(screen.getByText(i18n.t('inmateStats.workflow.actionHistory')).closest('[data-print-hide]')).not.toBeNull()
+  })
+
   it('reselects the exact task submission after a local history choice at the same URL', async () => {
     vi.mocked(api.getInmateRegisterTasks).mockResolvedValue({ count: 1, items: [
       { year: 2026, month: 8, kind: 'approve', submission_id: 42, code: null, row_count: 1 },

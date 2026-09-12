@@ -1040,7 +1040,7 @@ export function ApplicationPage(): React.JSX.Element {
             </header>
 
             {isInmateService && (
-              <div className="mb-4 inline-flex rounded-xl border border-border bg-surface-tinted p-1">
+              <div data-print-hide className="mb-4 inline-flex rounded-xl border border-border bg-surface-tinted p-1">
                 <Button
                   type="button"
                   size="sm"

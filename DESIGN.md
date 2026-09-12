@@ -62,6 +62,7 @@ Other pages will be appended under §4 as they're documented.
    4.7  SectionCard
    4.8  Row variants (OnLeave / Upcoming / Document / Ledger)
    4.9  Edit dialogs (WidgetEditDialog)
+   4.10 Monthly inmate report workspace
 5. Animation appendix
 6. Not yet documented
 ```
@@ -2330,6 +2331,46 @@ mt-5 flex items-center justify-between border-t border-hairline pt-4
   local draft state is fresh on every open. Avoids a `useEffect` to sync
   props → state.
 - Outside-click / Escape / overlay-click all close.
+
+---
+
+### 4.10 Monthly inmate report workspace
+
+**Sources:** `pages/application/statistics/StatisticsTab.tsx`,
+`WorkflowControls.tsx`, `ExportWorkspace.tsx`, `RegisterDocument.tsx`, and
+`registerPresentation.ts`.
+
+The surrounding workspace is ordinary bilingual application UI: controls,
+task labels, validation, actor selection, history, and notifications resolve
+from the active English or Arabic locale and follow the document direction.
+Control layout uses logical start/end properties, action labels may wrap, and
+the same preparation, review, approval, return, and reasoned-reopen controls
+must remain reachable at desktop and narrow widths and at every supported font
+scale.
+
+The report paper is intentionally different from its shell. Preview, print,
+PDF, and rich clipboard table content initiated by this workspace are always
+Arabic and RTL. The paper is fixed to A4 portrait and retains physical
+reference proportions; application language, theme, and font scale do not
+change the official document's language, colors, measurements, or typography.
+IDs, dates, references, and wing codes inside the RTL report use explicit LTR
+direction. There are no report language or orientation controls.
+
+The report contains an Arabic masthead, exactly two four-cell metadata rows,
+the selected population tables, an optional eight-row whole-month summary,
+and three performed-actor identity blocks. A partial extract keeps its extract
+caption even when the summary is disabled. Rich clipboard output includes the
+selected tables, extract caption when applicable, and optional summary, but
+excludes masthead, metadata, and actor blocks. Its plain-text twin preserves
+the same values. Table headers repeat across printed pages; rows have no fixed
+height or clipping, and the complete actor block appears once at the end.
+
+Workflow status and report selection are separate. The live controls always
+show the root month's current state, while preview/export may be pinned to an
+immutable historical submission. A current draft has no performed actors or
+closure timestamp inherited from an earlier revision. Review and final
+approval actions are enabled only while the exact active submission is open;
+server-provided allowed actions and blockers remain authoritative.
 
 ---
 

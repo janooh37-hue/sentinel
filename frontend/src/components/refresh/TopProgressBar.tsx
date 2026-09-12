@@ -8,6 +8,7 @@ export function TopProgressBar() {
   return (
     <div
       aria-hidden
+      data-print-hide
       data-refreshing={refreshing || undefined}
       className={[
         'pointer-events-none absolute inset-x-0 top-0 z-40 h-0.5 overflow-hidden',

@@ -204,6 +204,7 @@ function Shell(): React.JSX.Element {
         <TopProgressBar />
         <a
           href="#main-content"
+          data-print-hide
           className="sr-only focus:not-sr-only focus:absolute focus:inset-inline-start-4 focus:top-4 focus:z-[100] focus:rounded-md focus:bg-primary focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:text-primary-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
         >
           {t('a11y.skipToContent')}

@@ -2172,6 +2172,19 @@ body {
 }
 
 @media print {
+  body:has(.print-inmate-register) {
+    page: inmate-register-portrait;
+  }
+
+  /* A named page starts a new fragmentation context. Any padding or closing
+     fragment on an ancestor after that page becomes a trailing blank sheet,
+     even when all of the ancestor's visible siblings are print-hidden. Remove
+     those layout boxes only while the inmate sheet is mounted; the document
+     itself keeps its fixed paper geometry and named-page margins. */
+  body:has(.print-inmate-register) #root *:not(.print-inmate-register):has(.print-inmate-register) {
+    display: contents !important;
+  }
+
   .print-inmate-register {
     page: inmate-register-portrait;
     display: block !important;
@@ -2180,6 +2193,13 @@ body {
     padding: 0 !important;
     color: var(--inmate-report-ink) !important;
     box-shadow: none !important;
+  }
+
+  /* Keep one millimetre of fragmentation tolerance below the fixed content +
+     signature geometry. An exact 253 + 4 + 19 = 276mm sum rounds a fraction
+     over Chromium's 276mm A4 content box and creates a trailing blank page. */
+  .print-inmate-register .inmate-register-content {
+    min-height: 252mm !important;
   }
 
   #root .print-inmate-register {

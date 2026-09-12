@@ -571,7 +571,7 @@ def _monthly_push(
         return (
             _localized(
                 f"Monthly inmate violations report · {item.label}\nAwaiting your {stage_en}",
-                f"""تقرير مخالفات النزلاء الشهري · {item.label}
+                f"""تقرير مخالفات النزلاء الشهري · \u2066{item.label}\u2069
 بانتظار {stage_ar}""",
             ),
             item.url,
@@ -580,7 +580,7 @@ def _monthly_push(
     return (
         _localized(
             f"{count} monthly inmate violations reports awaiting your {stage_en}",
-            f"تقارير مخالفات النزلاء الشهرية بانتظار {stage_ar} · {count}",
+            f"تقارير مخالفات النزلاء الشهرية بانتظار {stage_ar} · \u2066{count}\u2069",
         ),
         section_url,
     )
