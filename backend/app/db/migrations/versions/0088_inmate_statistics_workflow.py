@@ -143,7 +143,7 @@ def upgrade() -> None:
     workflows = sa.Table("inmate_violation_workflows", metadata, autoload_with=connection)
     submissions = sa.Table("inmate_violation_submissions", metadata, autoload_with=connection)
     for period in connection.execute(sa.select(periods).order_by(periods.c.id)).mappings():
-        workflow_id = connection.execute(
+        inserted_key = connection.execute(
             workflows.insert().values(
                 year=period["year"],
                 month=period["month"],
@@ -151,7 +151,9 @@ def upgrade() -> None:
                 state="closed" if period["closed_at"] else "draft",
                 current_sequence=1,
             )
-        ).inserted_primary_key[0]
+        ).inserted_primary_key
+        assert inserted_key is not None
+        workflow_id = inserted_key[0]
         entries = []
         stored_rows = []
         for stored in connection.execute(

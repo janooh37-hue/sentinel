@@ -9,7 +9,7 @@ closes the month; administrator reopening requires a reason.
 from __future__ import annotations
 
 from datetime import date
-from typing import Annotated, Literal
+from typing import Annotated, Any, Literal
 from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, Path, Query, Response, status
@@ -321,7 +321,7 @@ def workflow_candidates(
     stage: Literal["review", "approve"],
     user: Annotated[User, Depends(register_reader)],
     db: Annotated[Session, Depends(get_db)],
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     return register.workflow_candidates(db, year, month, actor=user, stage=stage)
 
 
@@ -331,7 +331,7 @@ def submission_history(
     month: Month,
     _user: Annotated[User, Depends(register_reader)],
     db: Annotated[Session, Depends(get_db)],
-) -> list[dict]:
+) -> list[dict[str, Any]]:
     return register.submission_history(db, year, month)
 
 

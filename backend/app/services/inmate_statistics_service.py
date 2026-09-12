@@ -34,11 +34,12 @@ from dataclasses import fields as dataclass_fields
 from datetime import UTC, date, datetime, time
 from functools import cached_property, wraps
 from types import MappingProxyType
-from typing import Any, Final
+from typing import Any, Final, Protocol, cast
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from sqlalchemy import func, select, update
 from sqlalchemy.dialects.sqlite import insert
+from sqlalchemy.engine import CursorResult
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
@@ -46,7 +47,7 @@ from app.api.errors import AppError, ConflictError, NotFoundError, ValidationFai
 from app.config import get_settings
 from app.core import inmate_statistics_xlsx as xlsx
 from app.core.html_text import html_to_text
-from app.core.inmate_wings import CANONICAL_WINGS, normalize_wing
+from app.core.inmate_wings import CANONICAL_WINGS, CanonicalWing, normalize_wing
 from app.core.nationalities import (
     NATIONALITY_CODE_UNSPECIFIED,
     is_citizen,
@@ -231,7 +232,7 @@ class MonthRegister:
             except ValueError:
                 wing = None
             if wing:
-                wings[wing] += 1
+                wings[CanonicalWing(wing)] += 1
             else:
                 unassigned += 1
         counts["total"] = sum(counts[key] for key in POPULATIONS)
@@ -806,11 +807,17 @@ def _audit(
 # --------------------------------------------------------------------------- #
 
 
-def _transaction(operation):
+class _TransactionalOperation[**P, R](Protocol):
+    def __call__(self, db: Session, *args: P.args, **kwargs: P.kwargs) -> R: ...
+
+
+def _transaction[**P, R](
+    operation: _TransactionalOperation[P, R],
+) -> _TransactionalOperation[P, R]:
     """The public mutation owns the request transaction, including every refusal."""
 
     @wraps(operation)
-    def run(db: Session, *args, **kwargs):
+    def run(db: Session, *args: P.args, **kwargs: P.kwargs) -> R:
         try:
             result = operation(db, *args, **kwargs)
             db.commit()
@@ -1196,17 +1203,21 @@ def _active_submission(
 
 
 def _snapshot(year: int, month: int, entries: tuple[RegisterEntry, ...]) -> dict[str, Any]:
-    return json.loads(
-        json.dumps(
-            {
-                "schema_version": 1,
-                "year": year,
-                "month": month,
-                "entries": [asdict(entry) for entry in entries],
-            },
-            ensure_ascii=False,
-            default=lambda value: value.isoformat(),
-        )
+    # The JSON round trip converts nested dates while preserving this dict envelope.
+    return cast(
+        dict[str, Any],
+        json.loads(
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "year": year,
+                    "month": month,
+                    "entries": [asdict(entry) for entry in entries],
+                },
+                ensure_ascii=False,
+                default=lambda value: value.isoformat(),
+            )
+        ),
     )
 
 
@@ -1264,7 +1275,7 @@ _WRITE_CAPS = ("books.edit", f"books.service.{TEMPLATE_ID}")
 
 
 def _caps(db: Session, user: User, stage: str) -> bool:
-    capabilities = _READ_CAPS + _NAV_CAPS
+    capabilities: tuple[str, ...] = _READ_CAPS + _NAV_CAPS
     if stage == "prepare":
         capabilities += ("books.edit",)
     elif stage in {"review", "approve"}:
@@ -1313,12 +1324,19 @@ def _identity(
             "INMATE_REGISTER_ACTORS_NOT_DISTINCT",
             "Preparation, review and approval require different accounts and employees.",
         )
-    return {"user_id": user.id, "name_ar": employee.name_ar.strip(), "employee_id": employee.id}
+    return {"user_id": user.id, "name_ar": _text(employee.name_ar), "employee_id": employee.id}
 
 
-def _eligible(db: Session, user: User | None, stage: str, **kwargs) -> bool:
+def _eligible(
+    db: Session,
+    user: User | None,
+    stage: str,
+    *,
+    earlier: Sequence[dict[str, Any]] = (),
+    selected_employee_id: str | None = None,
+) -> bool:
     try:
-        _identity(db, user, stage, **kwargs)
+        _identity(db, user, stage, earlier=earlier, selected_employee_id=selected_employee_id)
         return True
     except AppError:
         return False
@@ -1341,11 +1359,15 @@ def _reserve(
     ]
     if expected_version is not None:
         conditions.append(InmateViolationWorkflow.version == expected_version)
-    changed = db.execute(
-        update(InmateViolationWorkflow)
-        .where(*conditions)
-        .values(version=InmateViolationWorkflow.version + 1)
-        .execution_options(synchronize_session=False)
+    # An UPDATE without RETURNING produces CursorResult, including its rowcount.
+    changed = cast(
+        CursorResult[Any],
+        db.execute(
+            update(InmateViolationWorkflow)
+            .where(*conditions)
+            .values(version=InmateViolationWorkflow.version + 1)
+            .execution_options(synchronize_session=False)
+        ),
     )
     if changed.rowcount == 0:
         # Absent roots start at version zero. Existing roots cannot be reset.
@@ -1354,11 +1376,14 @@ def _reserve(
             .values(year=year, month=month, version=0, current_sequence=0, state="draft")
             .on_conflict_do_nothing(index_elements=["year", "month"])
         )
-        changed = db.execute(
-            update(InmateViolationWorkflow)
-            .where(*conditions)
-            .values(version=InmateViolationWorkflow.version + 1)
-            .execution_options(synchronize_session=False)
+        changed = cast(
+            CursorResult[Any],
+            db.execute(
+                update(InmateViolationWorkflow)
+                .where(*conditions)
+                .values(version=InmateViolationWorkflow.version + 1)
+                .execution_options(synchronize_session=False)
+            ),
         )
         if changed.rowcount != 1:
             if expected_version is None:
