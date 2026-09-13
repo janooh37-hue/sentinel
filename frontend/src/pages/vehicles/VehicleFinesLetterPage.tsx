@@ -56,9 +56,10 @@ import {
   EMPTY_VALUE,
   VEHICLE_QUERY_KEYS,
   employeeLabel,
-  formatAed,
+  formatFilsAed,
+  formatFilsNumber,
   formatIsoDate,
-  formatLetterAed,
+  formatLetterFilsAed,
   formatLetterDate,
   formatNumber,
   isArabic,
@@ -68,6 +69,7 @@ import {
 import { PaperNote, PaperPlateBox, PaperSheet, PaperTable } from './components/PaperSheet'
 import { PlateChip } from './components/PlateChip'
 import { VehicleFormAlert } from './components/VehicleDialogShell'
+import { VehicleStatusBadge } from './components/VehicleStatusBadge'
 
 /** What the reference line shows before the book exists. The real ref
  *  (`VF-0231`) is minted server-side and announced in the save toast. */
@@ -128,7 +130,7 @@ function FinesLetterWizard(): React.JSX.Element {
     () => orderedFines.filter((fine) => !excluded.has(fine.id)),
     [orderedFines, excluded],
   )
-  const selectedTotal = letterRows.reduce((sum, fine) => sum + fine.amount, 0)
+  const selectedTotal = letterRows.reduce((sum, fine) => sum + fine.amount_fils, 0)
   const hasSelection = letterRows.length > 0
 
   const generate = useMutation({
@@ -459,9 +461,17 @@ function FineChecklist({
                   <span aria-hidden> · </span>
                   <bdi>{`${formatNumber(fine.black_points, lang)} ${t('vehicles.points')}`}</bdi>
                 </span>
+                <span className="mt-1 flex flex-wrap items-center gap-1.5">
+                  <VehicleStatusBadge family="payment" status={fine.payment_status} />
+                  {fine.archived_at && (
+                    <span className="text-[0.66em] uppercase tracking-[0.06em] text-muted-foreground">
+                      {t('vehicles.fines.archivedLabel')}
+                    </span>
+                  )}
+                </span>
               </span>
               <strong className="shrink-0 text-[0.82em] font-semibold text-foreground">
-                <bdi>{formatAed(fine.amount, lang)}</bdi>
+                <bdi>{formatFilsAed(fine.amount_fils, lang)}</bdi>
               </strong>
             </label>
           </li>
@@ -477,7 +487,7 @@ function FineChecklist({
         <bdi>
           {t('vehicles.selectedSummary', {
             count: selectedCount,
-            total: formatNumber(selectedTotal, lang),
+            total: formatFilsNumber(selectedTotal),
           })}
         </bdi>
       </footer>
@@ -623,7 +633,7 @@ function LetterPreview({
                       <td className="font-mono">
                         <bdi dir="ltr">{formatLetterDate(fine.date)}</bdi>
                       </td>
-                      <td>{formatLetterAed(fine.amount)}</td>
+                      <td>{formatLetterFilsAed(fine.amount_fils)}</td>
                       <td className="font-mono">{fine.black_points}</td>
                     </tr>
                   )

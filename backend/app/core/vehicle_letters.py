@@ -19,8 +19,17 @@ class FineLine:
     employee_name_en: str | None
     g_number: str | None
     date: date
-    amount: int
+    amount_fils: int
     black_points: int
+
+
+def _format_letter_amount(amount_fils: int) -> str:
+    """`34900 -> "349 درهم"`, `34950 -> "349.50 درهم"` — whole dirhams print
+    without cents, exactly as the template always has; a fractional fine now
+    prints its cents rather than being silently rounded away."""
+    whole, cents = divmod(amount_fils, 100)
+    amount = str(whole) if cents == 0 else f"{whole}.{cents:02d}"
+    return f"{amount} درهم"
 
 
 def fines_letter_fields(
@@ -46,7 +55,7 @@ def fines_letter_fields(
                 "employee_name": employee_name,
                 "g_number": g_number,
                 "date": fine.date.strftime("%d/%m/%Y"),
-                "amount": f"{fine.amount} درهم",
+                "amount": _format_letter_amount(fine.amount_fils),
                 "points": fine.black_points,
             }
         )

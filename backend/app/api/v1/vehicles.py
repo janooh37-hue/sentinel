@@ -32,6 +32,8 @@ from app.schemas.vehicle import (
     VehicleAccidentStatusUpdate,
     VehicleCreate,
     VehicleFileRead,
+    VehicleFineBatchRequest,
+    VehicleFineBatchResult,
     VehicleFineCreate,
     VehicleFineRead,
     VehicleFineUpdate,
@@ -153,7 +155,37 @@ def list_vehicle_fines(
     date_to: date_t | None = None,
 ) -> list[VehicleFineRead]:
     rows = vehicle_service.list_fines(db, site_id=site_id, date_from=date_from, date_to=date_to)
-    return [vehicle_service.fine_read(row) for row in rows]
+    receipt_ids = {row.receipt_file_id for row in rows if row.receipt_file_id is not None}
+    receipts = vehicle_service.get_files_by_id(db, receipt_ids)
+    return [
+        vehicle_service.fine_read(
+            row,
+            receipt=receipts.get(row.receipt_file_id) if row.receipt_file_id is not None else None,
+        )
+        for row in rows
+    ]
+
+
+# Static — must remain above /{vehicle_id}/fines/{fine_id} for the same reason
+# as the module header comment: a batch endpoint under /fines/ is not a fine id.
+@router.post("/fines/archive", response_model=VehicleFineBatchResult)
+def archive_vehicle_fines(
+    payload: VehicleFineBatchRequest,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(require_capability("vehicles.delete"))],
+) -> VehicleFineBatchResult:
+    changed = vehicle_service.archive_fines(db, payload.fines, actor=user.email)
+    return VehicleFineBatchResult(changed_count=changed)
+
+
+@router.post("/fines/restore", response_model=VehicleFineBatchResult)
+def restore_vehicle_fines(
+    payload: VehicleFineBatchRequest,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(require_capability("vehicles.delete"))],
+) -> VehicleFineBatchResult:
+    changed = vehicle_service.restore_fines(db, payload.fines, actor=user.email)
+    return VehicleFineBatchResult(changed_count=changed)
 
 
 # Enqueue the upstream EVG fetch because its duration is unknown and a synchronous
@@ -584,7 +616,7 @@ def delete_vehicle_file(
 
 @router.post(
     "/{vehicle_id}/fines",
-    response_model=VehicleRead,
+    response_model=VehicleFineRead,
     status_code=status.HTTP_201_CREATED,
 )
 def add_vehicle_fine(
@@ -592,15 +624,15 @@ def add_vehicle_fine(
     payload: VehicleFineCreate,
     db: Annotated[Session, Depends(get_db)],
     user: Annotated[User, Depends(require_capability("vehicles.edit"))],
-) -> VehicleRead:
-    row = vehicle_service.add_fine(
+) -> VehicleFineRead:
+    fine = vehicle_service.add_fine(
         db,
         vehicle_id,
         payload,
         actor=user.email,
         created_by_user_id=user.id,
     )
-    return vehicle_service.to_read(row)
+    return vehicle_service.fine_read(fine)
 
 
 @router.post("/{vehicle_id}/fines/letter", response_model=LetterResult)
@@ -626,8 +658,11 @@ def update_vehicle_fine(
     payload: VehicleFineUpdate,
     db: Annotated[Session, Depends(get_db)],
     user: Annotated[User, Depends(require_capability("vehicles.edit"))],
+    if_match: Annotated[str | None, Header(alias="If-Match")] = None,
 ) -> VehicleRead:
-    row = vehicle_service.update_fine(db, vehicle_id, fine_id, payload, actor=user.email)
+    row = vehicle_service.update_fine(
+        db, vehicle_id, fine_id, payload, if_match=if_match, actor=user.email
+    )
     return vehicle_service.to_read(row)
 
 
@@ -637,9 +672,56 @@ def delete_vehicle_fine(
     fine_id: int,
     db: Annotated[Session, Depends(get_db)],
     user: Annotated[User, Depends(require_capability("vehicles.delete"))],
+    if_match: Annotated[str | None, Header(alias="If-Match")] = None,
 ) -> VehicleRead:
-    row = vehicle_service.delete_fine(db, vehicle_id, fine_id, actor=user.email)
+    row = vehicle_service.delete_fine(db, vehicle_id, fine_id, if_match=if_match, actor=user.email)
     return vehicle_service.to_read(row)
+
+
+@router.post("/{vehicle_id}/fines/{fine_id}/payment", response_model=VehicleFineRead)
+async def record_vehicle_fine_payment(
+    vehicle_id: int,
+    fine_id: int,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(require_capability("vehicles.edit"))],
+    file: Annotated[UploadFile | None, File()] = None,
+    if_match: Annotated[str | None, Header(alias="If-Match")] = None,
+) -> VehicleFineRead:
+    data = await file.read(vehicle_service.FINE_RECEIPT_MAX_BYTES + 1) if file is not None else None
+    row = vehicle_service.record_payment(
+        db,
+        vehicle_id,
+        fine_id,
+        if_match=if_match,
+        filename=file.filename if file is not None else None,
+        data=data,
+        media_type=file.content_type if file is not None else None,
+        actor=user.email,
+    )
+    return vehicle_service.fine_read(row)
+
+
+@router.put("/{vehicle_id}/fines/{fine_id}/receipt", response_model=VehicleFineRead)
+async def attach_vehicle_fine_receipt(
+    vehicle_id: int,
+    fine_id: int,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(require_capability("vehicles.edit"))],
+    file: Annotated[UploadFile, File()],
+    if_match: Annotated[str | None, Header(alias="If-Match")] = None,
+) -> VehicleFineRead:
+    data = await file.read(vehicle_service.FINE_RECEIPT_MAX_BYTES + 1)
+    row = vehicle_service.attach_receipt(
+        db,
+        vehicle_id,
+        fine_id,
+        if_match=if_match,
+        filename=file.filename or "receipt",
+        data=data,
+        media_type=file.content_type or "",
+        actor=user.email,
+    )
+    return vehicle_service.fine_read(row)
 
 
 @router.post(

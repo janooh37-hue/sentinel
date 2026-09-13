@@ -19654,6 +19654,124 @@
         }
       }
     },
+    "/api/v1/vehicles/fines/archive": {
+      "post": {
+        "tags": [
+          "vehicles"
+        ],
+        "summary": "Archive Vehicle Fines",
+        "operationId": "archive_vehicle_fines_api_v1_vehicles_fines_archive_post",
+        "parameters": [
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VehicleFineBatchRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VehicleFineBatchResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/vehicles/fines/restore": {
+      "post": {
+        "tags": [
+          "vehicles"
+        ],
+        "summary": "Restore Vehicle Fines",
+        "operationId": "restore_vehicle_fines_api_v1_vehicles_fines_restore_post",
+        "parameters": [
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VehicleFineBatchRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VehicleFineBatchResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/vehicles/fines/evg/preview": {
       "post": {
         "tags": [
@@ -21577,7 +21695,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/VehicleRead"
+                  "$ref": "#/components/schemas/VehicleFineRead"
                 }
               }
             }
@@ -21690,6 +21808,22 @@
             }
           },
           {
+            "name": "If-Match",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "If-Match"
+            }
+          },
+          {
             "name": "gssg_session",
             "in": "cookie",
             "required": false,
@@ -21765,6 +21899,22 @@
             }
           },
           {
+            "name": "If-Match",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "If-Match"
+            }
+          },
+          {
             "name": "gssg_session",
             "in": "cookie",
             "required": false,
@@ -21788,6 +21938,191 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/VehicleRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/vehicles/{vehicle_id}/fines/{fine_id}/payment": {
+      "post": {
+        "tags": [
+          "vehicles"
+        ],
+        "summary": "Record Vehicle Fine Payment",
+        "operationId": "record_vehicle_fine_payment_api_v1_vehicles__vehicle_id__fines__fine_id__payment_post",
+        "parameters": [
+          {
+            "name": "vehicle_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Vehicle Id"
+            }
+          },
+          {
+            "name": "fine_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Fine Id"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "If-Match"
+            }
+          },
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_record_vehicle_fine_payment_api_v1_vehicles__vehicle_id__fines__fine_id__payment_post"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VehicleFineRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/vehicles/{vehicle_id}/fines/{fine_id}/receipt": {
+      "put": {
+        "tags": [
+          "vehicles"
+        ],
+        "summary": "Attach Vehicle Fine Receipt",
+        "operationId": "attach_vehicle_fine_receipt_api_v1_vehicles__vehicle_id__fines__fine_id__receipt_put",
+        "parameters": [
+          {
+            "name": "vehicle_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Vehicle Id"
+            }
+          },
+          {
+            "name": "fine_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Fine Id"
+            }
+          },
+          {
+            "name": "If-Match",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "If-Match"
+            }
+          },
+          {
+            "name": "gssg_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Gssg Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_attach_vehicle_fine_receipt_api_v1_vehicles__vehicle_id__fines__fine_id__receipt_put"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VehicleFineRead"
                 }
               }
             }
@@ -28646,6 +28981,20 @@
         ],
         "title": "Body_add_book_attachment_api_v1_books__book_id__attachments_post"
       },
+      "Body_attach_vehicle_fine_receipt_api_v1_vehicles__vehicle_id__fines__fine_id__receipt_put": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "format": "binary",
+            "title": "File"
+          }
+        },
+        "type": "object",
+        "required": [
+          "file"
+        ],
+        "title": "Body_attach_vehicle_fine_receipt_api_v1_vehicles__vehicle_id__fines__fine_id__receipt_put"
+      },
       "Body_create_extraction_api_v1_extractions_post": {
         "properties": {
           "file": {
@@ -28798,6 +29147,24 @@
           "file"
         ],
         "title": "Body_intake_document_api_v1_intake_post"
+      },
+      "Body_record_vehicle_fine_payment_api_v1_vehicles__vehicle_id__fines__fine_id__payment_post": {
+        "properties": {
+          "file": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "binary"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "File"
+          }
+        },
+        "type": "object",
+        "title": "Body_record_vehicle_fine_payment_api_v1_vehicles__vehicle_id__fines__fine_id__payment_post"
       },
       "Body_replace_book_attachment_api_v1_books__book_id__attachments__index__put": {
         "properties": {
@@ -35931,12 +36298,12 @@
             ],
             "title": "Plate Code"
           },
-          "amount": {
+          "amount_fils": {
             "type": "integer",
             "minimum": 1.0,
-            "title": "Amount"
+            "title": "Amount Fils"
           },
-          "amount_after_discount": {
+          "amount_after_discount_fils": {
             "anyOf": [
               {
                 "type": "integer",
@@ -35946,7 +36313,7 @@
                 "type": "null"
               }
             ],
-            "title": "Amount After Discount"
+            "title": "Amount After Discount Fils"
           },
           "black_points": {
             "type": "integer",
@@ -35991,7 +36358,7 @@
           "location",
           "plate_number",
           "plate_code",
-          "amount",
+          "amount_fils",
           "black_points",
           "fine_type",
           "description",
@@ -36168,12 +36535,12 @@
             ],
             "title": "Plate Code"
           },
-          "amount": {
+          "amount_fils": {
             "type": "integer",
             "minimum": 1.0,
-            "title": "Amount"
+            "title": "Amount Fils"
           },
-          "amount_after_discount": {
+          "amount_after_discount_fils": {
             "anyOf": [
               {
                 "type": "integer",
@@ -36183,7 +36550,7 @@
                 "type": "null"
               }
             ],
-            "title": "Amount After Discount"
+            "title": "Amount After Discount Fils"
           },
           "black_points": {
             "type": "integer",
@@ -36235,7 +36602,7 @@
           "location",
           "plate_number",
           "plate_code",
-          "amount",
+          "amount_fils",
           "black_points",
           "fine_type",
           "description",
@@ -46373,6 +46740,36 @@
         ],
         "title": "VehicleFileRead"
       },
+      "VehicleFineBatchRequest": {
+        "properties": {
+          "fines": {
+            "items": {
+              "$ref": "#/components/schemas/VehicleFinePaymentRecord"
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Fines"
+          }
+        },
+        "type": "object",
+        "required": [
+          "fines"
+        ],
+        "title": "VehicleFineBatchRequest"
+      },
+      "VehicleFineBatchResult": {
+        "properties": {
+          "changed_count": {
+            "type": "integer",
+            "title": "Changed Count"
+          }
+        },
+        "type": "object",
+        "required": [
+          "changed_count"
+        ],
+        "title": "VehicleFineBatchResult"
+      },
       "VehicleFineCreate": {
         "properties": {
           "employee_id": {
@@ -46402,13 +46799,15 @@
             ],
             "title": "Time"
           },
-          "amount": {
+          "amount_fils": {
             "type": "integer",
-            "minimum": 1.0,
-            "title": "Amount"
+            "maximum": 999999999.0,
+            "minimum": 100.0,
+            "title": "Amount Fils"
           },
           "black_points": {
             "type": "integer",
+            "maximum": 999.0,
             "minimum": 0.0,
             "title": "Black Points",
             "default": 0
@@ -46416,7 +46815,8 @@
           "location": {
             "anyOf": [
               {
-                "type": "string"
+                "type": "string",
+                "maxLength": 512
               },
               {
                 "type": "null"
@@ -46427,7 +46827,8 @@
           "description": {
             "anyOf": [
               {
-                "type": "string"
+                "type": "string",
+                "maxLength": 2048
               },
               {
                 "type": "null"
@@ -46439,9 +46840,28 @@
         "type": "object",
         "required": [
           "date",
-          "amount"
+          "amount_fils"
         ],
         "title": "VehicleFineCreate"
+      },
+      "VehicleFinePaymentRecord": {
+        "properties": {
+          "id": {
+            "type": "integer",
+            "title": "Id"
+          },
+          "version": {
+            "type": "string",
+            "title": "Version"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "version"
+        ],
+        "title": "VehicleFinePaymentRecord",
+        "description": "`{fines: [{id, version}]}` batch archive/restore request row."
       },
       "VehicleFineRead": {
         "properties": {
@@ -46502,11 +46922,11 @@
             ],
             "title": "Time"
           },
-          "amount": {
+          "amount_fils": {
             "type": "integer",
-            "title": "Amount"
+            "title": "Amount Fils"
           },
-          "amount_after_discount": {
+          "amount_after_discount_fils": {
             "anyOf": [
               {
                 "type": "integer"
@@ -46515,7 +46935,7 @@
                 "type": "null"
               }
             ],
-            "title": "Amount After Discount"
+            "title": "Amount After Discount Fils"
           },
           "black_points": {
             "type": "integer",
@@ -46573,10 +46993,46 @@
             ],
             "title": "Fine Type"
           },
+          "payment_status": {
+            "type": "string",
+            "enum": [
+              "unknown",
+              "unpaid",
+              "paid"
+            ],
+            "title": "Payment Status"
+          },
+          "receipt": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/VehicleFileRead"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "archived_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Archived At"
+          },
           "created_at": {
             "type": "string",
             "format": "date-time",
             "title": "Created At"
+          },
+          "version": {
+            "type": "string",
+            "title": "Version",
+            "default": ""
           },
           "vehicle_plate_label": {
             "type": "string",
@@ -46606,14 +47062,16 @@
           "employee_id",
           "date",
           "time",
-          "amount",
-          "amount_after_discount",
+          "amount_fils",
+          "amount_after_discount_fils",
           "black_points",
           "source",
           "evg_ticket_no",
           "location",
           "description",
           "fine_type",
+          "payment_status",
+          "archived_at",
           "created_at"
         ],
         "title": "VehicleFineRead"
@@ -46654,22 +47112,24 @@
             ],
             "title": "Time"
           },
-          "amount": {
+          "amount_fils": {
             "anyOf": [
               {
                 "type": "integer",
-                "minimum": 1.0
+                "maximum": 999999999.0,
+                "minimum": 100.0
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Amount"
+            "title": "Amount Fils"
           },
           "black_points": {
             "anyOf": [
               {
                 "type": "integer",
+                "maximum": 999.0,
                 "minimum": 0.0
               },
               {
@@ -46681,7 +47141,8 @@
           "location": {
             "anyOf": [
               {
-                "type": "string"
+                "type": "string",
+                "maxLength": 512
               },
               {
                 "type": "null"
@@ -46692,13 +47153,26 @@
           "description": {
             "anyOf": [
               {
-                "type": "string"
+                "type": "string",
+                "maxLength": 2048
               },
               {
                 "type": "null"
               }
             ],
             "title": "Description"
+          },
+          "payment_status": {
+            "anyOf": [
+              {
+                "type": "string",
+                "const": "unpaid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Payment Status"
           }
         },
         "type": "object",
@@ -47580,9 +48054,9 @@
             "title": "Fines Count",
             "default": 0
           },
-          "fines_amount": {
+          "fines_amount_fils": {
             "type": "integer",
-            "title": "Fines Amount",
+            "title": "Fines Amount Fils",
             "default": 0
           },
           "black_points": {
@@ -48358,9 +48832,9 @@
             "title": "Fines Count",
             "default": 0
           },
-          "fines_amount": {
+          "fines_amount_fils": {
             "type": "integer",
-            "title": "Fines Amount",
+            "title": "Fines Amount Fils",
             "default": 0
           },
           "black_points": {
@@ -49096,9 +49570,9 @@
             "type": "integer",
             "title": "Fines Count"
           },
-          "fines_amount": {
+          "fines_amount_fils": {
             "type": "integer",
-            "title": "Fines Amount"
+            "title": "Fines Amount Fils"
           },
           "black_points": {
             "type": "integer",
@@ -49133,7 +49607,7 @@
         "required": [
           "vehicles",
           "fines_count",
-          "fines_amount",
+          "fines_amount_fils",
           "black_points",
           "license_attention",
           "insurance_attention",
