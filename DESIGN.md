@@ -2361,6 +2361,10 @@ suggests the Arabic report title plus the selected year and month
 (`سجل مخالفات المسلكية الشهـري_2026-09`), never the application's generic tab
 title, and the tab title is restored once the print dialog closes.
 
+Save as PDF suggests the Arabic report title plus the selected year and month
+(`سجل مخالفات المسلكية الشهـري_2026-09`), never the application's generic tab
+title, and the tab title is restored once the print dialog closes.
+
 The report contains an Arabic masthead, exactly two four-cell metadata rows,
 the selected population tables, an optional eight-row whole-month summary,
 and three performed-actor identity blocks. A partial extract keeps its extract
