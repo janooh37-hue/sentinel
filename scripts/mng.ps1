@@ -185,6 +185,101 @@ function Assert-Admin([string] $verb) {
 }
 
 # -- Commands -----------------------------------------------------------------
+function Get-DotEnvValue([hashtable] $values, [string] $name) {
+    # Process environment variables take precedence over .env, matching the
+    # behavior of the backend's dotenv loader and allowing service managers to
+    # inject secrets without writing them to disk.
+    $processValue = [Environment]::GetEnvironmentVariable($name, 'Process')
+    if (-not [string]::IsNullOrWhiteSpace($processValue)) { return $processValue }
+    if ($values.ContainsKey($name) -and -not [string]::IsNullOrWhiteSpace($values[$name])) {
+        return $values[$name]
+    }
+    return $null
+}
+
+function Read-DotEnv([string] $path) {
+    $values = @{}
+    if (-not (Test-Path -LiteralPath $path)) { return $values }
+    foreach ($line in Get-Content -LiteralPath $path -ErrorAction Stop) {
+        if ($line -notmatch '^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*?)\s*$') { continue }
+        $name = $Matches[1]
+        $value = $Matches[2]
+        # Accept the common quoted dotenv forms, including comments after a
+        # quoted value, and strip comments from unquoted values only.
+        if ($value -match '^"(.*)"(?:\s+#.*)?$') {
+            $value = $Matches[1]
+        } elseif ($value -match "^'(.*)'(?:\s+#.*)?$") {
+            $value = $Matches[1]
+        } elseif ($value -match '^(.*?)\s+#') {
+            $value = $Matches[1].TrimEnd()
+        }
+        $values[$name] = $value
+    }
+    return $values
+}
+
+function Get-UpdateGitAuthentication([string] $remoteUrl) {
+    # SSH remotes and local remotes already have their own authentication
+    # mechanism. Only the private GitHub HTTPS remote needs the PAT flow.
+    if ($remoteUrl -notmatch '^https://') { return $null }
+
+    $envFile = Join-Path $Root '.env'
+    $values = Read-DotEnv $envFile
+    $username = Get-DotEnvValue $values 'MNG_GIT_USERNAME'
+    $token = Get-DotEnvValue $values 'MNG_GIT_TOKEN'
+    if ([string]::IsNullOrWhiteSpace($username) -or [string]::IsNullOrWhiteSpace($token)) {
+        $message = 'Private repository authentication is not configured. Set MNG_GIT_USERNAME and '
+        $message += 'MNG_GIT_TOKEN in {0} (copy .env.example to .env), using a GitHub PAT with ' -f $envFile
+        $message += 'Contents: Read access. The credential values are never printed.'
+        throw $message
+    }
+    return [pscustomobject]@{ Username = $username; Token = $token }
+}
+
+function Invoke-AuthenticatedGitPull($authentication) {
+    $askPassPath = $null
+    $oldAskPass = $env:GIT_ASKPASS
+    $oldTerminalPrompt = $env:GIT_TERMINAL_PROMPT
+    $oldUsername = $env:MNG_UPDATE_GIT_USERNAME
+    $oldToken = $env:MNG_UPDATE_GIT_TOKEN
+    try {
+        if ($authentication) {
+            $askPassDir = Join-Path ([IO.Path]::GetTempPath()) ('mng-git-' + [Guid]::NewGuid().ToString('N'))
+            New-Item -ItemType Directory -Path $askPassDir -Force | Out-Null
+            $askPassPath = Join-Path $askPassDir 'askpass.ps1'
+            # The helper contains no credential; Git passes the prompt and the
+            # values travel only through this process's environment.
+            Set-Content -LiteralPath $askPassPath -Encoding UTF8 -Value @'
+param([string] $Prompt)
+if ($Prompt -match '(?i)username') {
+    [Console]::Write($env:MNG_UPDATE_GIT_USERNAME)
+    exit 0
+}
+if ($Prompt -match '(?i)password|passphrase') {
+    [Console]::Write($env:MNG_UPDATE_GIT_TOKEN)
+    exit 0
+}
+exit 1
+'@
+            $env:MNG_UPDATE_GIT_USERNAME = $authentication.Username
+            $env:MNG_UPDATE_GIT_TOKEN = $authentication.Token
+            $env:GIT_ASKPASS = "powershell.exe -NoProfile -ExecutionPolicy Bypass -File `"$askPassPath`""
+            $env:GIT_TERMINAL_PROMPT = '0'
+        }
+        & git pull --ff-only
+        $gitExitCode = $LASTEXITCODE
+    } finally {
+        if ($null -eq $oldAskPass) { Remove-Item Env:GIT_ASKPASS -ErrorAction SilentlyContinue } else { $env:GIT_ASKPASS = $oldAskPass }
+        if ($null -eq $oldTerminalPrompt) { Remove-Item Env:GIT_TERMINAL_PROMPT -ErrorAction SilentlyContinue } else { $env:GIT_TERMINAL_PROMPT = $oldTerminalPrompt }
+        if ($null -eq $oldUsername) { Remove-Item Env:MNG_UPDATE_GIT_USERNAME -ErrorAction SilentlyContinue } else { $env:MNG_UPDATE_GIT_USERNAME = $oldUsername }
+        if ($null -eq $oldToken) { Remove-Item Env:MNG_UPDATE_GIT_TOKEN -ErrorAction SilentlyContinue } else { $env:MNG_UPDATE_GIT_TOKEN = $oldToken }
+        if ($askPassPath) {
+            Remove-Item -LiteralPath (Split-Path -Parent $askPassPath) -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }
+    return $gitExitCode
+}
+
 function Show-Status {
     $port = Get-Port
     $svc  = Get-Service -Name $Service -ErrorAction SilentlyContinue
@@ -456,8 +551,14 @@ function Invoke-Update {
     try {
         Write-Host '  Fetching latest from git ...' -ForegroundColor Cyan
         $before = (git rev-parse HEAD).Trim()
-        git pull --ff-only
-        if ($LASTEXITCODE -ne 0) { throw 'git pull failed (resolve manually, then run: mng deploy)' }
+        $remoteUrl = [string](git remote get-url origin 2>$null | Select-Object -First 1)
+        $remoteUrl = $remoteUrl.Trim()
+        if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($remoteUrl)) {
+            throw 'git origin remote is not configured; set origin to the Sentinel repository, then rerun: mng update'
+        }
+        $authentication = Get-UpdateGitAuthentication $remoteUrl
+        $gitExitCode = Invoke-AuthenticatedGitPull $authentication
+        if ($gitExitCode -ne 0) { throw 'git pull failed (resolve manually, then run: mng deploy)' }
         $after = (git rev-parse HEAD).Trim()
         # Pathspecs are cwd-relative, so the frontend diff must run while we are
         # still at the repo root. `git diff --name-only` prints nothing when the
@@ -526,6 +627,7 @@ function Show-Help {
     Write-Host '    mng build       rebuild frontend bundle -> backend\app\static'
     Write-Host '    mng deploy      sync deps + backup + build + migrate + smoke check + restart'
     Write-Host '    mng update      git pull; if changed -> sync deps + deploy (skips untouched frontend)'
+    Write-Host '  update HTTPS remotes use MNG_GIT_USERNAME and MNG_GIT_TOKEN from .env.' -ForegroundColor Gray
     Write-Host '    mng logs        tail service log   (-Tail N, -Stderr)'
     Write-Host '    mng open        open the app in the browser'
     Write-Host ''
