@@ -2187,9 +2187,12 @@ body {
 
   .print-inmate-register {
     page: inmate-register-portrait;
-    display: block !important;
+    display: flex !important;
+    flex-direction: column !important;
     width: 100% !important;
-    min-height: 0 !important;
+    /* One page's content budget (297 - 14 - 7mm), 1mm under Chromium's
+       rounding tolerance so the flex box never spills a trailing sheet. */
+    min-height: 275mm !important;
     padding-block: 0 !important;
     padding-inline: var(--inmate-report-side-margin) !important;
     color: var(--inmate-report-ink) !important;
@@ -2200,6 +2203,14 @@ body {
      content itself follows natural pagination instead of a forced height. */
   .print-inmate-register .inmate-register-content {
     min-height: 0 !important;
+  }
+
+  /* Pin the signature row to the physical bottom of a short page via the
+     flex column above; a genuinely dense report already fills or exceeds
+     the min-height, so this margin collapses to 0 and the row simply
+     follows the last table row, unchanged from natural flow. */
+  .print-inmate-register [data-report-signatures] {
+    margin-top: auto !important;
   }
 
   #root .print-inmate-register {
