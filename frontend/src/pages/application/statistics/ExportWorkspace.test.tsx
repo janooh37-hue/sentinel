@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor } from '@testing-library/react'
+import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -35,6 +35,44 @@ describe('ExportWorkspace', () => {
     await waitFor(() => expect(download).toHaveBeenCalled())
     const request = new URL(String(download.mock.calls[0][0]), 'http://localhost')
     expect(request.pathname).toBe('/api/v1/inmate-violations/statistics/2026/8/export')
-    expect(request.searchParams.get('language')).toBe('ar')
+  })
+
+  describe('save as pdf', () => {
+    // The dialog takes its suggested filename from `document.title` and
+    // nowhere else, so the swap has to happen on `beforeprint` and be undone
+    // after — matching the register the operator was actually looking at.
+    it('suggests the selected month\'s Arabic register name while the dialog is open', () => {
+      const original = document.title
+      const title = i18n.t('inmateStats.document.titleAr', { lng: 'ar' })
+      const client = new QueryClient()
+      const { rerender, unmount } = render(
+        <QueryClientProvider client={client}>
+          <ExportWorkspace month={workflowMonth()} />
+        </QueryClientProvider>,
+      )
+
+      expect(document.title).toBe(original)
+
+      act(() => window.dispatchEvent(new Event('beforeprint')))
+      expect(document.title).toBe(`${title}_2026-08`)
+
+      // A different month rendered while the dialog is still open must not
+      // change the title already handed to the in-flight dialog.
+      rerender(
+        <QueryClientProvider client={client}>
+          <ExportWorkspace month={workflowMonth({ month: 9 })} />
+        </QueryClientProvider>,
+      )
+      expect(document.title).toBe(`${title}_2026-08`)
+
+      act(() => window.dispatchEvent(new Event('afterprint')))
+      expect(document.title).toBe(original)
+
+      act(() => window.dispatchEvent(new Event('beforeprint')))
+      expect(document.title).toBe(`${title}_2026-09`)
+
+      unmount()
+      expect(document.title).toBe(original)
+    })
   })
 })

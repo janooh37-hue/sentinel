@@ -103,6 +103,7 @@ export function WorkflowControls({ month, register, onCorrectEntry }: Props): Re
   return (
     <section
       aria-labelledby={`${id}-title`}
+      data-print-hide
       className="space-y-4 rounded-xl border border-hairline bg-surface p-4"
     >
       <div className="flex flex-wrap items-center justify-between gap-2">

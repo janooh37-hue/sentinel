@@ -2189,17 +2189,17 @@ body {
     page: inmate-register-portrait;
     display: block !important;
     width: 100% !important;
-    min-height: var(--inmate-report-print-height) !important;
-    padding: 0 !important;
+    min-height: 0 !important;
+    padding-block: 0 !important;
+    padding-inline: var(--inmate-report-side-margin) !important;
     color: var(--inmate-report-ink) !important;
     box-shadow: none !important;
   }
 
-  /* Keep one millimetre of fragmentation tolerance below the fixed content +
-     signature geometry. An exact 253 + 4 + 19 = 276mm sum rounds a fraction
-     over Chromium's 276mm A4 content box and creates a trailing blank page. */
+  /* Named-page margins already reserve the top/bottom paper insets; the
+     content itself follows natural pagination instead of a forced height. */
   .print-inmate-register .inmate-register-content {
-    min-height: 252mm !important;
+    min-height: 0 !important;
   }
 
   #root .print-inmate-register {
