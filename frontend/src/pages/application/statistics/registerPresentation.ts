@@ -80,10 +80,13 @@ export function registerGroupsForScope(month: InmateRegisterMonth, scope: readon
     .filter((group) => included.has(group.key))
 }
 
+// Weighted so the name column (longest realistic content) outweighs the
+// unified-number column (a handful of digits); expats' ratio was already
+// balanced and is left as originally measured.
 const WIDTHS = {
-  citizens: [605, 1693, 2853, 1506, 1348, 2092],
+  citizens: [50, 270, 110, 130, 140, 300],
   expats: [327, 2405, 1260, 1159, 1699, 1301, 1946],
-  pending: [605, 1693, 2853, 1506, 1348, 2092],
+  pending: [50, 270, 110, 130, 140, 300],
 } satisfies Record<InmatePopulation, number[]>
 
 function marked(entry: InmateRegisterEntry, field: string, value: string): string {
@@ -112,7 +115,7 @@ export function buildRegisterPresentation(month: InmateRegisterMonth, options: R
       label: ar(`inmateStats.populations.${group.key}`),
       columns: keys.map((key, index) => {
         const numeric = ['no', 'uid', 'date'].includes(key)
-        return { label: ar(`inmateStats.columns.${key}`), width: `${(WIDTHS[group.key][index] / totalWidth * 100).toFixed(5)}%`, direction: numeric ? 'ltr' : 'auto', style: { ...REPORT_STYLES.cell, textAlign: numeric ? 'center' : 'start' } }
+        return { label: ar(`inmateStats.columns.${key}`), width: `${(WIDTHS[group.key][index] / totalWidth * 100).toFixed(5)}%`, direction: numeric ? 'ltr' : 'auto', style: { ...REPORT_STYLES.cell, textAlign: 'center' } }
       }),
       rows: group.entries.map((entry) => ({ id: entry.id, values: entryValues(entry, group.key, options, t) })),
     }
