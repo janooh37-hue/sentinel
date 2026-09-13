@@ -166,3 +166,8 @@ mockups/*_PLAN.md
 
 # Local synthetic env used for isolated feature-worktree verification
 .synthdata/
+
+# Internal planning scratch + host-specific ops runbook (real hostnames/paths -
+# not needed by repo consumers; kept on disk, never tracked).
+/GSSG_MANAGER_PLAN.md
+/SERVER-MIGRATION.md
