@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
 import { Button } from '@/components/ui/button'
+import { usePrintFilename } from '@/hooks/usePrintFilename'
 import { api, apiErrorMessage, type InmatePopulation, type InmateRegisterMonth } from '@/lib/api'
 import { copyTable } from '@/lib/copyTable'
 
@@ -144,6 +145,9 @@ export function ExportWorkspace({ month }: { month: InmateRegisterMonth }): Reac
   const [paperHeight, setPaperHeight] = useState(1)
   const deskRef = useRef<HTMLDivElement>(null)
   const paperRef = useRef<HTMLDivElement>(null)
+  usePrintFilename(
+    `${t('inmateStats.document.titleAr', { lng: 'ar' })}_${month.year}-${String(month.month).padStart(2, '0')}`,
+  )
 
   const clipboardPayload = useMemo(
     () => buildRegisterClipboard(month, options, t),

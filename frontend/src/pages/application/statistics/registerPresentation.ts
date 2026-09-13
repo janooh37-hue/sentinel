@@ -24,11 +24,9 @@ const PRINT_PROPERTIES = {
   '--inmate-report-header': HEADER_COLOR,
   '--inmate-report-paper': PAPER_COLOR,
   '--inmate-report-ink': INK_COLOR,
-  // Chromium rounds an exact 276mm named-page content height fractionally
-  // over the A4 box and emits a blank trailing sheet. Keep 1mm tolerance.
-  '--inmate-report-print-height': '275mm',
+  '--inmate-report-side-margin': PAGE.side,
 } as CSSProperties
-export const REPORT_PAGE_RULE = `@media print { @page inmate-register-portrait { size: A4 portrait; margin: ${PAGE.top} ${PAGE.side} ${PAGE.bottom}; } }`
+export const REPORT_PAGE_RULE = `@media print { @page inmate-register-portrait { size: A4 portrait; margin: ${PAGE.top} 0 ${PAGE.bottom}; } }`
 export const REPORT_STYLES = {
   paper: { ...PRINT_PROPERTIES, boxSizing: 'border-box', width: PAGE.width, minHeight: PAGE.height, padding: `${PAGE.top} ${PAGE.side} ${PAGE.bottom}`, color: INK_COLOR, background: PAPER_COLOR, fontFamily: FONT, fontSize: '11.04pt', lineHeight: '1.16', direction: 'rtl' },
   content: { minHeight: '253mm' },

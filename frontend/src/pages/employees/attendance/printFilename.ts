@@ -4,8 +4,8 @@
  * A browser takes the suggested filename of a printed page from
  * `document.title` — there is no file to name, only the dialog's guess — so the
  * title is swapped when the dialog opens and put straight back when it closes
- * (`usePrintFilename` in `AttendancePrintSheet`). Nothing else about the
- * printout changes: the paper, the data and the filters are untouched.
+ * (`usePrintFilename` in `src/hooks/usePrintFilename.ts`). Nothing else about
+ * the printout changes: the paper, the data and the filters are untouched.
  *
  * The shape HR files these by:
  *

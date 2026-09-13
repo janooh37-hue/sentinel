@@ -16,6 +16,13 @@ frontend/node_modules/
 frontend/dist/
 frontend/.vite/
 
+# Stray root-level npm/pnpm installs (the project's only package.json lives
+# in frontend/; a root one is always an accidental `npm install` here)
+/node_modules/
+/package.json
+/package-lock.json
+/pnpm-lock.yaml
+
 # Built artifacts (frontend → backend bundle)
 backend/app/static/assets/
 backend/app/static/index.html
@@ -142,9 +149,15 @@ backend/scripts/_run_sample_report.bat
 # swarm agent memory (binary tool state)
 .swarm/
 
+# Local Herdr agent-pipeline tooling (personal automation, not shared repo source)
+.herdr/
+
 # design mockup screenshots and reference images (large binaries, local only)
 mockups/shots/
 mockups/refreance/
+
+# Feature planning drafts dropped in mockups/ (scratch, not shared design source)
+mockups/*_PLAN.md
 
 # Agent worktrees
 %TEMP%/
