@@ -8,9 +8,11 @@ open and the sealed month across three export channels.
 from __future__ import annotations
 
 from datetime import date, datetime
+from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
+from app.core.inmate_wings import CanonicalWing, normalize_wing
 from app.schemas._base import ORMBase
 
 
@@ -106,6 +108,71 @@ class MonthCountsOut(BaseModel):
     total: int
 
 
+class WingCountOut(BaseModel):
+    wing: CanonicalWing
+    violations: int
+
+
+class WingSummaryOut(BaseModel):
+    counts: list[WingCountOut]
+    most: list[CanonicalWing]
+    most_count: int
+    least: list[CanonicalWing]
+    least_count: int
+    zero: list[CanonicalWing]
+    unassigned_count: int
+
+
+class WorkflowActorOut(ORMBase):
+    user_id: int
+    name_ar: str
+    employee_id: str
+    acted_at: datetime
+
+
+class WorkflowCandidateOut(BaseModel):
+    user_id: int
+    name_ar: str
+    employee_id: str
+
+
+class WorkflowAssignmentOut(BaseModel):
+    user_id: int | None
+    name_ar: str | None
+    employee_id: str | None
+    eligible: bool
+
+
+class WorkflowBlockerOut(BaseModel):
+    code: str
+    details: dict[str, Any] = Field(default_factory=dict)
+
+
+class WorkflowEventOut(ORMBase):
+    """The last return or reopen, kept until the next preparation replaces it."""
+
+    action: Literal["returned", "reopened"]
+    user_id: int | None
+    name_ar: str | None
+    employee_id: str | None
+    acted_at: datetime
+    reason: str | None
+
+
+class WorkflowOut(BaseModel):
+    version: int
+    state: Literal["draft", "awaiting_review", "awaiting_manager", "closed"]
+    reviewer: WorkflowAssignmentOut | None
+    manager: WorkflowAssignmentOut | None
+    prepared: WorkflowActorOut | None
+    reviewed: WorkflowActorOut | None
+    approved: WorkflowActorOut | None
+    last_event: WorkflowEventOut | None
+    needs_review: bool
+    blockers: list[WorkflowBlockerOut]
+    allowed_actions: list[Literal["prepare", "review", "return", "approve", "reopen"]]
+
+
 class MonthOut(ORMBase):
     year: int
     month: int
@@ -116,11 +183,12 @@ class MonthOut(ORMBase):
     reopened_at: datetime | None
     reopened_by: int | None
     reopened_by_name: str | None
-    #: Set only when the close was forced over entries pending completion.
+    #: Read-only history of a month forced closed before the approval workflow.
     force_reason: str | None
     force_closed: bool
-    #: False while the month is still running — a close is refused before then.
-    can_close: bool
+    projection_fingerprint: str
+    wing_summary: WingSummaryOut
+    workflow: WorkflowOut
     first_closable_date: date
     #: A workbook copy was written at close and is available to download.
     export_ready: bool
@@ -137,16 +205,26 @@ class AwaitingMonthOut(BaseModel):
     row_count: int
     pending_count: int
     closable: bool
+    #: The stage this month waits on, and whether the caller is its actor.
+    stage: Literal["prepare", "review", "approve"]
+    assigned: bool
 
 
 class AwaitingCloseOut(BaseModel):
-    """Ended months with entries and no seal. A standing state, not an event."""
+    """Unsealed months the caller can move. A standing state, not an event."""
 
     months: list[AwaitingMonthOut]
     count: int
 
 
-class ManualRowIn(BaseModel):
+class WingInput(BaseModel):
+    @field_validator("wing", check_fields=False)
+    @classmethod
+    def canonical_wing(cls, value: str | None) -> str | None:
+        return normalize_wing(value)
+
+
+class ManualRowIn(WingInput):
     name: str = Field(min_length=1, max_length=160)
     violation_date: date
     reason: str = Field(min_length=1)
@@ -158,7 +236,7 @@ class ManualRowIn(BaseModel):
     details_text: str | None = None
 
 
-class ManualRowPatch(BaseModel):
+class ManualRowPatch(WingInput):
     """Only the supplied cells change; the rest keep their stored values."""
 
     name: str | None = Field(default=None, min_length=1, max_length=160)
@@ -172,7 +250,7 @@ class ManualRowPatch(BaseModel):
     details_text: str | None = None
 
 
-class CompletionInmateIn(BaseModel):
+class CompletionInmateIn(WingInput):
     name: str = Field(min_length=1, max_length=160)
     uid: str | None = Field(default=None, max_length=64)
     nationality: str | None = Field(default=None, max_length=64)
@@ -189,28 +267,29 @@ class CompletionIn(BaseModel):
     inmates: list[CompletionInmateIn] = Field(min_length=1)
 
 
-class CloseIn(BaseModel):
-    """A close over entries pending completion needs a recorded reason."""
+class WorkflowVersionIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    expected_version: int = Field(ge=0)
 
-    force_reason: str | None = None
+
+class PrepareIn(WorkflowVersionIn):
+    """The fingerprint is the report the preparer actually previewed."""
+
+    expected_projection_fingerprint: str = Field(pattern="^[a-f0-9]{64}$")
+    reviewer_user_id: int = Field(gt=0)
 
 
-__all__ = [
-    "ArrivedAfterCloseOut",
-    "AwaitingCloseOut",
-    "AwaitingMonthOut",
-    "BlockingEntryOut",
-    "CloseIn",
-    "CompletionIn",
-    "CompletionInmateIn",
-    "ManualProvenanceOut",
-    "ManualRowIn",
-    "ManualRowPatch",
-    "MonthCountsOut",
-    "MonthOut",
-    "NationalityListOut",
-    "NationalityOut",
-    "ORMBase",
-    "RegisterEntryOut",
-    "UncountedRecordOut",
-]
+class ReviewIn(WorkflowVersionIn):
+    manager_user_id: int = Field(gt=0)
+
+
+class ReturnIn(WorkflowVersionIn):
+    reason: str = Field(min_length=1)
+
+
+class ApproveIn(WorkflowVersionIn):
+    pass
+
+
+class ReopenIn(WorkflowVersionIn):
+    reason: str = Field(min_length=1)

@@ -2,7 +2,6 @@ import { Link } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { CalendarClock } from 'lucide-react'
 
-import { useIdentity } from '@/lib/useIdentity'
 import { EmptyState } from '@/components/ui/empty-state'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
@@ -12,13 +11,10 @@ import {
 } from '@/pages/application/statistics/registerModel'
 import { useInmateAwaitingClose } from '@/pages/application/statistics/useInmateRegister'
 
-/** Admin-only reminder for ended inmate-violation months that still need a seal. */
+/** Reminder for ended inmate-violation months the current user can act on. */
 export function ViolationMonthsWidget(): React.JSX.Element | null {
   const { t, i18n } = useTranslation()
-  const { isAdmin } = useIdentity()
-  const query = useInmateAwaitingClose(isAdmin)
-
-  if (!isAdmin) return null
+  const query = useInmateAwaitingClose()
 
   const months = query.data?.months ?? []
   const total = query.data?.count ?? 0
@@ -75,7 +71,7 @@ export function ViolationMonthsWidget(): React.JSX.Element | null {
               <Link
                 key={`${item.year}-${item.month}`}
                 to={inmateRegisterHref(item.year, item.month)}
-                aria-label={`${monthLabel} — ${t('inmateStats.awaiting.open')}`}
+                aria-label={`${monthLabel} — ${t(`inmateStats.workflow.${item.stage}`)}`}
                 className="flex items-center gap-3 rounded-lg px-2 py-2 text-start transition-colors hover:bg-surface-tinted focus-visible:rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <div className="min-w-0 flex-1">
@@ -86,7 +82,7 @@ export function ViolationMonthsWidget(): React.JSX.Element | null {
                     {monthLabel}
                   </span>
                   <span className="block text-[0.72em] text-muted-foreground">
-                    {t('inmateStats.awaiting.rows', { count: item.row_count })}
+                    {t(`inmateStats.workflow.${item.stage}`)} · {t('inmateStats.awaiting.rows', { count: item.row_count })}
                   </span>
                 </div>
                 <span

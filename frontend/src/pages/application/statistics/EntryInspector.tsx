@@ -284,7 +284,12 @@ export function EntryInspector({
         </h4>
         <dl className="mt-2 rounded-lg border border-hairline bg-surface px-3">
           <FieldValue label={t('inmateStats.inspector.reporter')} value={entry.reporter_name} />
-          <FieldValue label={t('inmateStats.inspector.wing')} value={entry.wing} />
+          <FieldValue
+            label={t('inmateStats.inspector.wing')}
+            value={entry.wing}
+            ltr
+            incomplete={entry.missing.includes('wing')}
+          />
           <FieldValue label={t('inmateStats.inspector.holdingNo')} value={entry.holding_no} ltr />
         </dl>
       </section>

@@ -108,7 +108,9 @@
         "approval": "A document needs your approval",
         "leave": "A leave request needs action",
         "scan": "A scan was attached to a record",
-        "email": "New email in your inbox"
+        "email": "New email in your inbox",
+        "monthlyReview": "A monthly inmate violations report needs your review",
+        "monthlyApproval": "A monthly inmate violations report needs your approval"
       },
       "followUpsTitle": "Follow-ups",
       "followUps_one": "{{count}} email flagged for follow-up",
@@ -3428,7 +3430,7 @@
       "recent_ledger": "Recent Ledger",
       "pending_departures": "Pending Departures",
       "workforce_pulse": "Workforce Pulse",
-      "violation_months": "Months awaiting close"
+      "violation_months": "Monthly report workflow"
     },
     "quickActionLabels": {
       "general_book": "General Book",
@@ -4193,7 +4195,8 @@
         "permits": "Permits",
         "vehicles": "Vehicles",
         "messages": "Messages",
-        "workforce": "Workforce"
+        "workforce": "Workforce",
+        "inmate_statistics": "Inmate monthly reports"
       }
     }
   },
@@ -4938,7 +4941,9 @@
     "counts": {
       "perTable": "Violations",
       "monthTotal": "Month total",
-      "documentTotal": "Total violations this month"
+      "documentTotal": "Total violations this month",
+      "mostWing": "Wing with most violations",
+      "unassignedWings": "{{count}} row(s) still need a wing"
     },
     "columns": {
       "no": "No.",
@@ -4986,23 +4991,8 @@
       "delete": "Delete",
       "save": "Save",
       "cancel": "Cancel",
-      "close": "Close the month",
       "reopen": "Reopen the month",
-      "forceClose": "Close over incomplete entries",
       "complete": "Complete the record"
-    },
-    "close": {
-      "title": "Close the Violation month",
-      "confirm": "Confirm close",
-      "notEnded": "A month that has not ended cannot be closed — first eligible date {{date}}.",
-      "blockingTitle": "Entries blocking the close",
-      "blockingHint": "Complete these entries, or close the month administratively with a recorded reason.",
-      "reasonLabel": "Reason for the administrative close",
-      "reasonRequired": "A reason is required to close over incomplete entries.",
-      "reopenTitle": "Reopen a closed month",
-      "reopenHint": "The previous close's entries stay until the month is closed again.",
-      "reopenConfirm": "Confirm reopen",
-      "otherOpenMonths": "Other months are still open: {{months}}"
     },
     "warnings": {
       "title": "Month warnings",
@@ -5019,7 +5009,8 @@
     },
     "missing": {
       "nationality": "Nationality required",
-      "details": "Violation details required"
+      "details": "Violation details required",
+      "wing": "Valid wing"
     },
     "manualForm": {
       "createTitle": "New manual entry",
@@ -5059,8 +5050,8 @@
       "subtitle": "Each method declares what it carries and what it loses.",
       "methods": {
         "copy": "Copy as a table",
-        "copyCarries": "A styled HTML table with a plain-text twin for Excel or Word.",
-        "copyLoses": "No masthead, no signatures, and no count lines.",
+        "copyCarries": "Selected data tables and the optional whole-month summary, as styled HTML with a plain-text twin for Excel or Word.",
+        "copyLoses": "No masthead, metadata, or signatures.",
         "print": "Print / PDF",
         "printCarries": "The full official A4 paper: masthead, tables, counts, signatures.",
         "printLoses": "It produces no sortable data file.",
@@ -5073,13 +5064,7 @@
         "title": "Export options",
         "scope": "Tables included",
         "scopeHint": "Excluding a table means recorded violations will not reach the file.",
-        "language": "Document language",
-        "languageAr": "Arabic",
-        "languageEn": "English",
-        "counts": "Show the count lines",
-        "orientation": "Paper orientation",
-        "landscape": "Landscape",
-        "portrait": "Portrait",
+        "counts": "Include summary",
         "detailMode": "Details column",
         "detailReference": "Reference to the Record",
         "detailFull": "Full narrative",
@@ -5096,9 +5081,8 @@
       "referenceCell": "See Record {{ref}}"
     },
     "document": {
-      "titleAr": "سجل مخالفات المحتجزين الشهري",
-      "titleEn": "Monthly Inmate Violations Register",
-      "authority": "United Arab Emirates — Abu Dhabi Police GHQ — Security Guards",
+      "titleAr": "سجل مخالفات المسلكية الشهـري",
+      "authority": "Global Security Services Group — Al Wathba Correctional and Rehabilitation Centre",
       "month": "Month",
       "period": "Period",
       "generated": "Generated",
@@ -5109,16 +5093,72 @@
       "preparedBy": "Prepared by",
       "checkedBy": "Checked by",
       "approvedBy": "Approved by",
-      "pendingSection": "Entries pending completion"
+      "pendingSection": "Entries pending completion",
+      "summaryTitle": "Monthly inmate violations summary — {{month}}",
+      "state": "State",
+      "leastWings": "Fewest violations",
+      "mostWings": "Most violations",
+      "zeroWings": "No violations",
+      "noPositiveWings": "No recorded violations",
+      "noZeroWings": "None",
+      "notPerformed": "Not yet performed",
+      "extractCaption": "Extract: {{groups}} — {{displayed}} of {{total}} month rows"
+    },
+    "workflow": {
+      "title": "Monthly report approval",
+      "states": { "draft": "Preparation required", "awaiting_review": "Awaiting review", "awaiting_manager": "Awaiting manager approval", "closed": "Approved and closed" },
+      "stages": { "prepared": "Preparation", "reviewed": "Review", "approved": "Manager approval" },
+      "notPerformed": "Not performed",
+      "selected": { "reviewer": "Selected reviewer", "manager": "Selected manager" },
+      "unavailablePerson": "Account unavailable",
+      "events": {
+        "returned": "Returned for correction",
+        "reopened": "Reopened by an administrator"
+      },
+      "assigneeUnavailable": "This assignment is no longer eligible. Prepare the report again.",
+      "candidatesError": "The eligible people could not be loaded. Retry to select the next person.",
+      "select": { "reviewer": "Select reviewer", "manager": "Select approving manager" },
+      "choosePerson": "Choose a person",
+      "noCandidates": "No eligible person is available for this stage. Ask an administrator to check account access and employee links.",
+      "reason": "Reason",
+      "reasonHint": "A reason is required to return or reopen a report.",
+      "prepare": "Send for review",
+      "review": "Pass to manager",
+      "approve": "Approve and close",
+      "return": "Return for preparation",
+      "approveTitle": "Approve and close {{month}}?",
+      "approveHint": "This records your approval and locks the register for {{month}}.",
+      "reopenTitle": "Reopen {{month}}?",
+      "reopenHint": "Reopening clears the approval. Changes require new preparation, review and manager approval.",
+      "preparedToast": "Report sent for review.",
+      "reviewedToast": "Report passed to the selected manager.",
+      "returnedToast": "Report returned for preparation.",
+      "invalidWing": "Select a valid wing to correct the stored value:",
+      "stale": "Data changed; new review required",
+      "errors": {
+        "INMATE_REGISTER_STALE_PROJECTION": "The report data changed. Correct the register and prepare it again.",
+        "INMATE_REGISTER_MONTH_NOT_ENDED": "This month has not ended yet.",
+        "INMATE_REGISTER_INCOMPLETE_ENTRIES": "Complete the listed fields and valid wings, then prepare the report again before final approval.",
+        "INMATE_REGISTER_ASSIGNEE_INELIGIBLE": "The selected person no longer has the required access or employee identity. Prepare the report again with an eligible person.",
+        "INMATE_REGISTER_INVALID_ACTOR_PROFILE": "Link this account to an employee with an Arabic name and employee ID before acting.",
+        "INMATE_REGISTER_STALE_WORKFLOW": "The workflow changed. Reload the report and check the current assignment before trying again.",
+        "INMATE_REGISTER_MONTH_EMPTY": "There are no violation rows to approve.",
+        "INMATE_REGISTER_ACTOR_INELIGIBLE": "This account is inactive or lacks the required report access. Ask an administrator to check it.",
+        "INMATE_REGISTER_ASSIGNEE_RELINKED": "The selected account is now linked to another employee. Prepare the report again.",
+        "INMATE_REGISTER_ACTORS_NOT_DISTINCT": "Preparation, review and approval require three different accounts linked to three different employees.",
+        "INMATE_REGISTER_REASON_REQUIRED": "Enter a reason before continuing.",
+        "INMATE_REGISTER_INVALID_WING": "Choose a valid wing from the list, then save the correction.",
+        "INMATE_REGISTER_WRONG_ASSIGNEE": "Only the person selected for this stage may perform it. Reload to check the assignment.",
+        "INMATE_REGISTER_MONTH_CLOSED": "This month is closed. An administrator must reopen it with a reason before corrections can be saved."
+      }
     },
     "awaiting": {
       "empty": "No ended month is awaiting close.",
+      "rows": "{{count}} rows",
       "closable": "Ready to close",
-      "blocked": "Pending completion: {{count}}",
-      "rows_one": "{{count}} entry",
-      "rows_other": "{{count}} entries",
-      "open": "Open the register",
-      "more": "More months awaiting close: {{count}}"
+      "blocked": "{{count}} pending",
+      "more": "More months awaiting close: {{count}}",
+      "open": "Open the monthly register"
     },
     "toasts": {
       "created": "The manual entry was added.",

@@ -1409,7 +1409,7 @@ export interface paths {
         };
         /**
          * Awaiting Close
-         * @description Ended months that still carry no seal, with what blocks each one.
+         * @description Unsealed months waiting on this caller — the bell and widget source.
          */
         get: operations["awaiting_close_api_v1_inmate_violations_statistics_awaiting_close_get"];
         put?: never;
@@ -1461,7 +1461,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/inmate-violations/statistics/{year}/{month}/close": {
+    "/api/v1/inmate-violations/statistics/{year}/{month}/prepare": {
         parameters: {
             query?: never;
             header?: never;
@@ -1470,8 +1470,76 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Close Month */
-        post: operations["close_month_api_v1_inmate_violations_statistics__year___month__close_post"];
+        /** Prepare Month */
+        post: operations["prepare_month_api_v1_inmate_violations_statistics__year___month__prepare_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/inmate-violations/statistics/{year}/{month}/review": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Review Month */
+        post: operations["review_month_api_v1_inmate_violations_statistics__year___month__review_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/inmate-violations/statistics/{year}/{month}/return": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Return Month */
+        post: operations["return_month_api_v1_inmate_violations_statistics__year___month__return_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/inmate-violations/statistics/{year}/{month}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Approve Month */
+        post: operations["approve_month_api_v1_inmate_violations_statistics__year___month__approve_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/inmate-violations/statistics/{year}/{month}/candidates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Workflow Candidates */
+        get: operations["workflow_candidates_api_v1_inmate_violations_statistics__year___month__candidates_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -6118,6 +6186,11 @@ export interface components {
             /** Offset */
             offset: number;
         };
+        /** ApproveIn */
+        ApproveIn: {
+            /** Expected Version */
+            expected_version: number;
+        };
         /** ApproveRequest */
         ApproveRequest: {
             /**
@@ -6543,7 +6616,7 @@ export interface components {
         };
         /**
          * AwaitingCloseOut
-         * @description Ended months with entries and no seal. A standing state, not an event.
+         * @description Unsealed months the caller can move. A standing state, not an event.
          */
         AwaitingCloseOut: {
             /** Months */
@@ -6563,6 +6636,13 @@ export interface components {
             pending_count: number;
             /** Closable */
             closable: boolean;
+            /**
+             * Stage
+             * @enum {string}
+             */
+            stage: "prepare" | "review" | "approve";
+            /** Assigned */
+            assigned: boolean;
         };
         /** BlockingEntryOut */
         BlockingEntryOut: {
@@ -7185,6 +7265,11 @@ export interface components {
             approval_steps?: components["schemas"]["BookApprovalStepRead"][];
         };
         /**
+         * CanonicalWing
+         * @enum {string}
+         */
+        CanonicalWing: "1A" | "1B" | "2A" | "2B" | "3A" | "3B" | "4A" | "4B" | "5A" | "5B" | "6A" | "6B";
+        /**
          * CapabilityRead
          * @description One capability in the catalog, with which roles grant it by default.
          */
@@ -7237,14 +7322,6 @@ export interface components {
             name_en: string;
             /** Unit Ar */
             unit_ar: string;
-        };
-        /**
-         * CloseIn
-         * @description A close over entries pending completion needs a recorded reason.
-         */
-        CloseIn: {
-            /** Force Reason */
-            force_reason?: string | null;
         };
         /** CompletenessRead */
         CompletenessRead: {
@@ -10323,8 +10400,10 @@ export interface components {
             force_reason: string | null;
             /** Force Closed */
             force_closed: boolean;
-            /** Can Close */
-            can_close: boolean;
+            /** Projection Fingerprint */
+            projection_fingerprint: string;
+            wing_summary: components["schemas"]["WingSummaryOut"];
+            workflow: components["schemas"]["WorkflowOut"];
             /**
              * First Closable Date
              * Format: date
@@ -10406,6 +10485,10 @@ export interface components {
             scans: number;
             /** Emails */
             emails: number;
+            /** Monthly Reviews */
+            monthly_reviews: number;
+            /** Monthly Approvals */
+            monthly_approvals: number;
         };
         /** NotifyDaysUpdate */
         NotifyDaysUpdate: {
@@ -11030,6 +11113,18 @@ export interface components {
             /** Nationality */
             nationality?: string | null;
         };
+        /**
+         * PrepareIn
+         * @description The fingerprint is the report the preparer actually previewed.
+         */
+        PrepareIn: {
+            /** Expected Version */
+            expected_version: number;
+            /** Expected Projection Fingerprint */
+            expected_projection_fingerprint: string;
+            /** Reviewer User Id */
+            reviewer_user_id: number;
+        };
         /** ProviderPersonMappingWrite */
         ProviderPersonMappingWrite: {
             /** Employee Id */
@@ -11340,10 +11435,24 @@ export interface components {
             /** New Name */
             new_name: string;
         };
+        /** ReopenIn */
+        ReopenIn: {
+            /** Expected Version */
+            expected_version: number;
+            /** Reason */
+            reason: string;
+        };
         /** ResetPasswordRequest */
         ResetPasswordRequest: {
             /** Password */
             password: string;
+        };
+        /** ReturnIn */
+        ReturnIn: {
+            /** Expected Version */
+            expected_version: number;
+            /** Reason */
+            reason: string;
         };
         /** ReturnedFormOut */
         ReturnedFormOut: {
@@ -11369,6 +11478,13 @@ export interface components {
             employee_id?: string | null;
             /** Employee Name */
             employee_name?: string | null;
+        };
+        /** ReviewIn */
+        ReviewIn: {
+            /** Expected Version */
+            expected_version: number;
+            /** Manager User Id */
+            manager_user_id: number;
         };
         /** ReviewRequest */
         ReviewRequest: {
@@ -13420,6 +13536,29 @@ export interface components {
             /** Doc Path */
             doc_path?: string | null;
         };
+        /** WingCountOut */
+        WingCountOut: {
+            wing: components["schemas"]["CanonicalWing"];
+            /** Violations */
+            violations: number;
+        };
+        /** WingSummaryOut */
+        WingSummaryOut: {
+            /** Counts */
+            counts: components["schemas"]["WingCountOut"][];
+            /** Most */
+            most: components["schemas"]["CanonicalWing"][];
+            /** Most Count */
+            most_count: number;
+            /** Least */
+            least: components["schemas"]["CanonicalWing"][];
+            /** Least Count */
+            least_count: number;
+            /** Zero */
+            zero: components["schemas"]["CanonicalWing"][];
+            /** Unassigned Count */
+            unassigned_count: number;
+        };
         /** WordBookCreate */
         WordBookCreate: {
             /** Classification Code */
@@ -13541,6 +13680,95 @@ export interface components {
              * @default true
              */
             active: boolean;
+        };
+        /** WorkflowActorOut */
+        WorkflowActorOut: {
+            /** User Id */
+            user_id: number;
+            /** Name Ar */
+            name_ar: string;
+            /** Employee Id */
+            employee_id: string;
+            /**
+             * Acted At
+             * Format: date-time
+             */
+            acted_at: string;
+        };
+        /** WorkflowAssignmentOut */
+        WorkflowAssignmentOut: {
+            /** User Id */
+            user_id: number | null;
+            /** Name Ar */
+            name_ar: string | null;
+            /** Employee Id */
+            employee_id: string | null;
+            /** Eligible */
+            eligible: boolean;
+        };
+        /** WorkflowBlockerOut */
+        WorkflowBlockerOut: {
+            /** Code */
+            code: string;
+            /** Details */
+            details?: {
+                [key: string]: unknown;
+            };
+        };
+        /** WorkflowCandidateOut */
+        WorkflowCandidateOut: {
+            /** User Id */
+            user_id: number;
+            /** Name Ar */
+            name_ar: string;
+            /** Employee Id */
+            employee_id: string;
+        };
+        /**
+         * WorkflowEventOut
+         * @description The last return or reopen, kept until the next preparation replaces it.
+         */
+        WorkflowEventOut: {
+            /**
+             * Action
+             * @enum {string}
+             */
+            action: "returned" | "reopened";
+            /** User Id */
+            user_id: number | null;
+            /** Name Ar */
+            name_ar: string | null;
+            /** Employee Id */
+            employee_id: string | null;
+            /**
+             * Acted At
+             * Format: date-time
+             */
+            acted_at: string;
+            /** Reason */
+            reason: string | null;
+        };
+        /** WorkflowOut */
+        WorkflowOut: {
+            /** Version */
+            version: number;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "draft" | "awaiting_review" | "awaiting_manager" | "closed";
+            reviewer: components["schemas"]["WorkflowAssignmentOut"] | null;
+            manager: components["schemas"]["WorkflowAssignmentOut"] | null;
+            prepared: components["schemas"]["WorkflowActorOut"] | null;
+            reviewed: components["schemas"]["WorkflowActorOut"] | null;
+            approved: components["schemas"]["WorkflowActorOut"] | null;
+            last_event: components["schemas"]["WorkflowEventOut"] | null;
+            /** Needs Review */
+            needs_review: boolean;
+            /** Blockers */
+            blockers: components["schemas"]["WorkflowBlockerOut"][];
+            /** Allowed Actions */
+            allowed_actions: ("prepare" | "review" | "return" | "approve" | "reopen")[];
         };
         /** WorkforceAccessRead */
         WorkforceAccessRead: {
@@ -17128,7 +17356,7 @@ export interface operations {
             };
         };
     };
-    close_month_api_v1_inmate_violations_statistics__year___month__close_post: {
+    prepare_month_api_v1_inmate_violations_statistics__year___month__prepare_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -17142,7 +17370,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["CloseIn"];
+                "application/json": components["schemas"]["PrepareIn"];
             };
         };
         responses: {
@@ -17153,6 +17381,156 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["MonthOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    review_month_api_v1_inmate_violations_statistics__year___month__review_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                year: number;
+                month: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReviewIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MonthOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    return_month_api_v1_inmate_violations_statistics__year___month__return_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                year: number;
+                month: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReturnIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MonthOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    approve_month_api_v1_inmate_violations_statistics__year___month__approve_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                year: number;
+                month: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ApproveIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MonthOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    workflow_candidates_api_v1_inmate_violations_statistics__year___month__candidates_get: {
+        parameters: {
+            query: {
+                stage: "review" | "approve";
+            };
+            header?: never;
+            path: {
+                year: number;
+                month: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowCandidateOut"][];
                 };
             };
             /** @description Validation Error */
@@ -17178,7 +17556,11 @@ export interface operations {
                 gssg_session?: string | null;
             };
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReopenIn"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {

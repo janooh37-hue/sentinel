@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useLocation, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { Columns3, UserRoundPlus } from 'lucide-react'
 
@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button'
 import { Sheet, SheetContent, SheetTitle } from '@/components/ui/sheet'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { CloseControls } from './CloseControls'
+import { WorkflowControls } from './WorkflowControls'
 import { EntryInspector, SealedStrip, type InspectorMode } from './EntryInspector'
 import { ExportWorkspace } from './ExportWorkspace'
 import { MonthSwitcher } from './MonthSwitcher'
@@ -28,11 +28,15 @@ function initialCoordinate(raw: string | null): { year: number; month: number } 
 }
 
 export function StatisticsTab(): React.JSX.Element {
-  const { t } = useTranslation()
+  const location = useLocation()
   const [searchParams] = useSearchParams()
-  const [coordinate, setCoordinate] = useState(() =>
-    initialCoordinate(searchParams.get('stats_month')),
-  )
+  const statsMonth = searchParams.get('stats_month')
+  return <StatisticsMonth key={`${location.key}:${statsMonth ?? ''}`} initialMonth={statsMonth} />
+}
+
+function StatisticsMonth({ initialMonth }: { initialMonth: string | null }): React.JSX.Element {
+  const { t } = useTranslation()
+  const [coordinate, setCoordinate] = useState(() => initialCoordinate(initialMonth))
   const [view, setView] = useState<ViewMode>('register')
   const [population, setPopulation] = useState<InmatePopulation>('citizens')
   const [expandedColumns, setExpandedColumns] = useState(false)
@@ -75,6 +79,14 @@ export function StatisticsTab(): React.JSX.Element {
     setSheetOpen(false)
   }
 
+  const correctEntry = (id: string): void => {
+    const entry = month?.entries.find((candidate) => candidate.id === id)
+    if (!entry) return
+    setView('register')
+    setPopulation(entry.population as InmatePopulation)
+    selectEntry(entry)
+  }
+
   const changeMonth = (next: { year: number; month: number }): void => {
     setCoordinate(next)
     setPopulation('citizens')
@@ -85,26 +97,28 @@ export function StatisticsTab(): React.JSX.Element {
 
   const inspector = month ? (
     <EntryInspector
+      key={`${coordinate.year}-${coordinate.month}-${selectedEntry?.id ?? 'none'}-${month.closed ? 'view' : inspectorMode}`}
       month={month}
       entry={selectedEntry}
       mode={month.closed ? 'view' : inspectorMode}
       reportEntries={reportEntries}
       isWriting={register.isWriting}
       onModeChange={setInspectorMode}
-      onCreate={(body) => {
-        register.createManualRow(body)
-        setInspectorMode('view')
-      }}
-      onUpdate={(args) => {
-        register.updateManualRow(args)
-        setInspectorMode('view')
-      }}
-      onDelete={(rowId) => {
-        register.deleteManualRow(rowId)
-        setSelectedId(null)
-        setInspectorMode('view')
-        setSheetOpen(false)
-      }}
+      onCreate={(body) =>
+        register.createManualRow(body, { onSuccess: () => setInspectorMode('view') })
+      }
+      onUpdate={(args) =>
+        register.updateManualRow(args, { onSuccess: () => setInspectorMode('view') })
+      }
+      onDelete={(rowId) =>
+        register.deleteManualRow(rowId, {
+          onSuccess: () => {
+            setSelectedId(null)
+            setInspectorMode('view')
+            setSheetOpen(false)
+          },
+        })
+      }
       onComplete={register.completeImport}
     />
   ) : null
@@ -172,25 +186,37 @@ export function StatisticsTab(): React.JSX.Element {
                 {month.counts.expats}
               </dd>
             </div>
-            {month.counts.pending > 0 ? (
-              <div className="bg-warning-soft px-4 py-3 text-warning">
-                <dt className="text-xs font-semibold">
-                  {t('inmateStats.populations.pending')} — {t('inmateStats.counts.perTable')}
-                </dt>
-                <dd className="mt-1 font-mono text-2xl font-bold tabular-nums" dir="ltr">
-                  {month.counts.pending}
-                </dd>
-              </div>
-            ) : null}
             <div className="bg-primary-soft px-4 py-3 text-primary-on-soft">
               <dt className="text-xs font-semibold">{t('inmateStats.counts.monthTotal')}</dt>
               <dd className="mt-1 font-mono text-2xl font-extrabold tabular-nums" dir="ltr">
                 {month.counts.total}
               </dd>
+              {month.counts.pending > 0 ? (
+                <p className="mt-1 text-xs font-semibold text-warning">
+                  {t('inmateStats.populations.pending')}: <bdi dir="ltr">{month.counts.pending}</bdi>
+                </p>
+              ) : null}
+            </div>
+            <div className="bg-surface-raised px-4 py-3">
+              <dt className="text-xs font-semibold">{t('inmateStats.counts.mostWing')}</dt>
+              <dd className="mt-1 font-mono text-lg font-bold tabular-nums" dir="ltr">
+                {month.wing_summary.most.join(' – ') || '—'} ({month.wing_summary.most_count})
+              </dd>
+              {month.wing_summary.unassigned_count > 0 ? (
+                <p className="mt-1 text-xs font-semibold text-warning">
+                  {t('inmateStats.counts.unassignedWings', {
+                    count: month.wing_summary.unassigned_count,
+                  })}
+                </p>
+              ) : null}
             </div>
           </dl>
         ) : null}
       </header>
+
+      {month ? (
+        <WorkflowControls month={month} register={register} onCorrectEntry={correctEntry} />
+      ) : null}
 
       {register.isLoading ? (
         <div className="space-y-3" aria-label={t('common.loading')}>
@@ -294,18 +320,15 @@ export function StatisticsTab(): React.JSX.Element {
           </Tabs>
 
           <Sheet open={sheetOpen} onOpenChange={setSheetOpen}>
-            <SheetContent className="w-[min(94vw,28rem)] overflow-y-auto p-4 lg:hidden">
+            <SheetContent
+              aria-describedby={undefined}
+              className="w-[min(94vw,28rem)] overflow-y-auto p-4 lg:hidden"
+            >
               <SheetTitle className="sr-only">{t('inmateStats.inspector.title')}</SheetTitle>
               {inspector}
             </SheetContent>
           </Sheet>
 
-          <CloseControls
-            month={month}
-            isWriting={register.isWriting}
-            onClose={register.closeMonth}
-            onReopen={register.reopenMonth}
-          />
         </>
       )}
     </div>

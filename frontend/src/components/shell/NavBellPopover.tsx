@@ -30,6 +30,7 @@ import { useFlagCount } from '@/pages/ledger/outlook/useFlagCount'
 import { useScanBack } from '@/pages/scanBack/useScanBack'
 import { useScanInboxCount } from '@/pages/scanInbox/useScanInboxCount'
 import {
+  formatRegisterMonth,
   inmateRegisterHref,
   newestAwaitingMonth,
 } from '@/pages/application/statistics/registerModel'
@@ -67,7 +68,7 @@ function shortDateLabel(iso: string): string {
 }
 
 export function NavBellPopover(): React.JSX.Element {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const navigate = useNavigate()
   const qc = useQueryClient()
   const [open, setOpen] = useState(false)
@@ -106,10 +107,10 @@ export function NavBellPopover(): React.JSX.Element {
     ? (pendingQuery.data ?? []).filter((u) => u.status === 'pending').length
     : 0
 
-  const violationMonthsQuery = useInmateAwaitingClose(isAdmin)
-  const violationMonths = isAdmin ? (violationMonthsQuery.data?.months ?? []) : []
+  const violationMonthsQuery = useInmateAwaitingClose()
+  const violationMonths = violationMonthsQuery.data?.months ?? []
   const newestViolationMonth = newestAwaitingMonth(violationMonths)
-  const awaitingViolationMonths = isAdmin ? (violationMonthsQuery.data?.count ?? 0) : 0
+  const awaitingViolationMonths = violationMonthsQuery.data?.count ?? 0
 
   const expiryQuery = useQuery({
     queryKey: ['expiry', 'summary'],
@@ -261,8 +262,8 @@ export function NavBellPopover(): React.JSX.Element {
             </button>
           )}
 
-          {/* Ended inmate-violation months still awaiting their admin seal */}
-          {isAdmin && awaitingViolationMonths > 0 && newestViolationMonth && (
+          {/* Ended inmate-violation months awaiting the current user's action */}
+          {awaitingViolationMonths > 0 && newestViolationMonth && (
             <button
               type="button"
               onClick={() => {
@@ -278,10 +279,14 @@ export function NavBellPopover(): React.JSX.Element {
               </Avatar>
               <div className="flex min-w-0 flex-1 flex-col">
                 <span className="truncate text-[0.9em] font-semibold text-foreground">
-                  {t('dashboard.widgetLabels.violation_months')}
+                  {formatRegisterMonth(
+                    newestViolationMonth.year,
+                    newestViolationMonth.month,
+                    i18n.language,
+                  )}
                 </span>
                 <span className="text-[0.78em] text-muted-foreground">
-                  {t('inmateStats.awaiting.open')}
+                  {t(`inmateStats.workflow.${newestViolationMonth.stage}`)}
                 </span>
               </div>
               <span

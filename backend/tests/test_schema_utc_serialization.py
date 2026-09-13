@@ -10,11 +10,12 @@ contract that a serializer-based fix would have destroyed.
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import UTC, datetime
 
 from pydantic import BaseModel
 
 from app.schemas.book import BookRead, BookVersionRead
+from app.schemas.inmate_statistics import WorkflowActorOut
 from app.schemas.notify import NotifyMessageRead
 
 NAIVE = datetime(2026, 8, 4, 5, 51, 31)
@@ -67,13 +68,25 @@ def test_none_timestamp_survives() -> None:
     assert '"delivery_checked_at":null' in _notify().model_dump_json()
 
 
+def test_workflow_actor_timestamp_is_utc_date_time_string() -> None:
+    schema = WorkflowActorOut.model_json_schema(mode="serialization")
+    dumped = WorkflowActorOut(
+        user_id=1,
+        name_ar="موظف",
+        employee_id="G1",
+        acted_at=datetime(2025, 1, 2, 3, 4, 5, tzinfo=UTC),
+    ).model_dump(mode="json")
+    assert dumped["acted_at"] == "2025-01-02T03:04:05Z"
+    assert schema["properties"]["acted_at"]["type"] == "string"
+    assert schema["properties"]["acted_at"]["format"] == "date-time"
+
+
 def test_non_datetime_fields_are_untouched() -> None:
     dumped = _notify().model_dump_json()
     assert '"status":"sent"' in dumped and '"event_ref":"leave_permit:812"' in dumped
 
 
 def test_already_aware_timestamp_is_left_alone() -> None:
-    from datetime import UTC
 
     aware = datetime(2026, 8, 4, 5, 51, 31, tzinfo=UTC)
     assert _notify(created_at=aware).created_at == aware

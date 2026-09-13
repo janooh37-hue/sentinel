@@ -13,12 +13,18 @@ import { toast } from 'sonner'
 
 import {
   api,
+  ApiError,
   apiErrorMessage,
   type InmateCompletionIn,
   type InmateManualRowIn,
   type InmateManualRowPatch,
-  type InmateRegisterClose,
+  type InmateRegisterApprove,
   type InmateRegisterMonth,
+  type InmateRegisterPrepare,
+  type InmateRegisterReopen,
+  type InmateRegisterReturn,
+  type InmateRegisterReview,
+  type InmateWorkflowCandidate,
 } from '@/lib/api'
 
 export const inmateRegisterKey = (year: number, month: number) =>
@@ -26,21 +32,38 @@ export const inmateRegisterKey = (year: number, month: number) =>
 export const inmateNationalitiesKey = ['inmate-nationalities'] as const
 export const inmateAwaitingCloseKey = ['inmate-register', 'awaiting-close'] as const
 
+interface MutationCallbacks {
+  onSuccess?: () => void
+}
+
 export interface UseInmateRegister {
   month: InmateRegisterMonth | undefined
   isLoading: boolean
   isError: boolean
+  error: unknown
   refetch: () => void
-  createManualRow: (body: InmateManualRowIn) => void
-  updateManualRow: (args: { rowId: number; body: InmateManualRowPatch }) => void
-  deleteManualRow: (rowId: number) => void
+  reviewers: InmateWorkflowCandidate[]
+  managers: InmateWorkflowCandidate[]
+  candidatesLoading: boolean
+  candidatesError: unknown
+  retryCandidates: () => void
+  createManualRow: (body: InmateManualRowIn, options?: MutationCallbacks) => void
+  updateManualRow: (
+    args: { rowId: number; body: InmateManualRowPatch },
+    options?: MutationCallbacks
+  ) => void
+  deleteManualRow: (rowId: number, options?: MutationCallbacks) => void
   completeImport: (args: { bookId: number; body: InmateCompletionIn }) => void
-  closeMonth: (body?: InmateRegisterClose) => void
-  reopenMonth: () => void
+  prepareMonth: (body: InmateRegisterPrepare) => void
+  reviewMonth: (body: InmateRegisterReview) => void
+  returnMonth: (body: InmateRegisterReturn) => void
+  approveMonth: (body: InmateRegisterApprove) => void
+  reopenMonth: (body: InmateRegisterReopen) => void
   isWriting: boolean
+  mutationError: string | null
 }
 
-/** The closed nationality list plus the alias table history resolves through. */
+/** The closed nationality list and its known alternate labels. */
 export function useInmateNationalities() {
   return useQuery({
     queryKey: inmateNationalitiesKey,
@@ -49,18 +72,17 @@ export function useInmateNationalities() {
   })
 }
 
-/** Admin-only standing state: ended months that still carry no seal. */
-export function useInmateAwaitingClose(enabled = true) {
+/** Ended months the current caller can act on. */
+export function useInmateAwaitingClose() {
   return useQuery({
     queryKey: inmateAwaitingCloseKey,
     queryFn: () => api.getInmateRegisterAwaitingClose(),
-    enabled,
     staleTime: 60_000,
   })
 }
 
 export function useInmateRegister(year: number, month: number): UseInmateRegister {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const qc = useQueryClient()
   const key = inmateRegisterKey(year, month)
 
@@ -69,14 +91,36 @@ export function useInmateRegister(year: number, month: number): UseInmateRegiste
     queryFn: () => api.getInmateRegisterMonth({ year, month }),
   })
 
+  const reviewers = useQuery({
+    queryKey: [...key, 'candidates', 'review', query.data?.workflow.version],
+    queryFn: () => api.getInmateRegisterCandidates({ year, month }, 'review'),
+    enabled: query.data?.workflow.allowed_actions.includes('prepare') ?? false,
+  })
+
+  const managers = useQuery({
+    queryKey: [...key, 'candidates', 'approve', query.data?.workflow.version],
+    queryFn: () => api.getInmateRegisterCandidates({ year, month }, 'approve'),
+    enabled: query.data?.workflow.allowed_actions.includes('review') ?? false,
+  })
+
+  const invalidate = (): void => {
+    void qc.invalidateQueries({ queryKey: inmateAwaitingCloseKey })
+    void qc.invalidateQueries({ queryKey: ['notifications', 'counts'] })
+  }
+
   const settle = (fresh: InmateRegisterMonth, message: string): void => {
     qc.setQueryData(inmateRegisterKey(fresh.year, fresh.month), fresh)
-    void qc.invalidateQueries({ queryKey: inmateAwaitingCloseKey })
+    invalidate()
     toast.success(message)
   }
 
+  const errorMessage = (error: unknown): string => {
+    const key = error instanceof ApiError ? `inmateStats.workflow.errors.${error.code}` : ''
+    return key && i18n.exists(key) ? t(key) : apiErrorMessage(error)
+  }
+
   const failed = (error: unknown): void => {
-    toast.error(apiErrorMessage(error))
+    toast.error(errorMessage(error))
   }
 
   const create = useMutation({
@@ -109,36 +153,70 @@ export function useInmateRegister(year: number, month: number): UseInmateRegiste
     onError: failed,
   })
 
-  const close = useMutation({
-    mutationFn: (body: InmateRegisterClose) =>
-      api.closeInmateRegisterMonth({ year, month }, body),
+  const prepare = useMutation({
+    mutationFn: (body: InmateRegisterPrepare) =>
+      api.prepareInmateRegisterMonth({ year, month }, body),
+    onSuccess: (fresh) => settle(fresh, t('inmateStats.workflow.preparedToast')),
+    onError: failed,
+  })
+
+  const review = useMutation({
+    mutationFn: (body: InmateRegisterReview) =>
+      api.reviewInmateRegisterMonth({ year, month }, body),
+    onSuccess: (fresh) => settle(fresh, t('inmateStats.workflow.reviewedToast')),
+    onError: failed,
+  })
+
+  const returnReport = useMutation({
+    mutationFn: (body: InmateRegisterReturn) =>
+      api.returnInmateRegisterMonth({ year, month }, body),
+    onSuccess: (fresh) => settle(fresh, t('inmateStats.workflow.returnedToast')),
+    onError: failed,
+  })
+
+  const approve = useMutation({
+    mutationFn: (body: InmateRegisterApprove) =>
+      api.approveInmateRegisterMonth({ year, month }, body),
     onSuccess: (fresh) => settle(fresh, t('inmateStats.toasts.closed')),
     onError: failed,
   })
 
   const reopen = useMutation({
-    mutationFn: () => api.reopenInmateRegisterMonth({ year, month }),
+    mutationFn: (body: InmateRegisterReopen) =>
+      api.reopenInmateRegisterMonth({ year, month }, body),
     onSuccess: (fresh) => settle(fresh, t('inmateStats.toasts.reopened')),
     onError: failed,
   })
+
+  const writes = [create, update, remove, complete, prepare, review, returnReport, approve, reopen]
+  const latestError = writes
+    .filter((write) => write.error)
+    .sort((left, right) => right.submittedAt - left.submittedAt)[0]?.error
 
   return {
     month: query.data,
     isLoading: query.isLoading,
     isError: query.isError,
+    error: query.error,
     refetch: () => void query.refetch(),
+    reviewers: reviewers.data ?? [],
+    managers: managers.data ?? [],
+    candidatesLoading: reviewers.isFetching || managers.isFetching,
+    candidatesError: reviewers.error ?? managers.error,
+    retryCandidates: () => {
+      if (query.data?.workflow.allowed_actions.includes('prepare')) void reviewers.refetch()
+      if (query.data?.workflow.allowed_actions.includes('review')) void managers.refetch()
+    },
     createManualRow: create.mutate,
     updateManualRow: update.mutate,
     deleteManualRow: remove.mutate,
     completeImport: complete.mutate,
-    closeMonth: (body = {}) => close.mutate(body),
+    prepareMonth: prepare.mutate,
+    reviewMonth: review.mutate,
+    returnMonth: returnReport.mutate,
+    approveMonth: approve.mutate,
     reopenMonth: reopen.mutate,
-    isWriting:
-      create.isPending ||
-      update.isPending ||
-      remove.isPending ||
-      complete.isPending ||
-      close.isPending ||
-      reopen.isPending,
+    isWriting: writes.some((write) => write.isPending),
+    mutationError: latestError ? errorMessage(latestError) : null,
   }
 }

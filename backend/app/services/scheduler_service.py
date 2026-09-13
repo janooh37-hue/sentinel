@@ -477,6 +477,8 @@ _KIND_META: dict[str, str] = {
     "scan": "/scan-inbox",
     "email": "/ledger",
     "scanback": "/scan-back",
+    "monthly_review": notification_service.MONTHLY_TASKS_URL,
+    "monthly_approval": notification_service.MONTHLY_TASKS_URL,
 }
 
 
@@ -553,6 +555,35 @@ def _doc_push(
     noun_en = "documents awaiting your signature" if is_sign else "documents awaiting your review"
     noun_ar = "مستندات بانتظار توقيعك" if is_sign else "مستندات بانتظار مراجعتك"
     return _localized(f"{n} {noun_en}", f"{n} {noun_ar}"), section_url
+
+
+def _monthly_push(
+    kind: str,
+    new_items: list[notification_service.ActionableItem],
+    section_url: str,
+) -> tuple[dict[str, tuple[str, str]], str]:
+    """Monthly report handoffs are recorded review/approval, not Book signing."""
+    approval = kind == "monthly_approval"
+    stage_en = "approval" if approval else "review"
+    stage_ar = "اعتمادك" if approval else "مراجعتك"
+    if len(new_items) == 1:
+        item = new_items[0]
+        return (
+            _localized(
+                f"Monthly inmate violations report · {item.label}\nAwaiting your {stage_en}",
+                f"""تقرير مخالفات النزلاء الشهري · \u2066{item.label}\u2069
+بانتظار {stage_ar}""",
+            ),
+            item.url,
+        )
+    count = len(new_items)
+    return (
+        _localized(
+            f"{count} monthly inmate violations reports awaiting your {stage_en}",
+            f"تقارير مخالفات النزلاء الشهرية بانتظار {stage_ar} · \u2066{count}\u2069",
+        ),
+        section_url,
+    )
 
 
 def _scan_push(
@@ -639,6 +670,8 @@ def _build_push(
         return _scan_push(new_items, section_url)
     if kind == "scanback":
         return _scanback_push(new_items, section_url)
+    if kind in {"monthly_review", "monthly_approval"}:
+        return _monthly_push(kind, new_items, section_url)
     return _doc_push(kind, new_items, section_url)
 
 

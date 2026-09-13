@@ -61,6 +61,12 @@ requirements.
   sensitive HR data boundaries, and auditable actions.
 - Microsoft Word COM remains part of document rendering and conversion in the
   Windows operating environment.
+- Monthly inmate-violation reports use a recorded three-person lifecycle:
+  preparation selects a reviewer, review selects an approving manager, and
+  only manager approval after month-end closes the register. The three actors
+  must be distinct linked employees. Reopening is reasoned, keeps the previous
+  seal and its actor history in the audit log, and starts a completely new
+  approval cycle.
 
 ## Brand Commitments
 
@@ -128,6 +134,10 @@ fabricate them.
    density, but also refuse SaaS hero energy. Find the third lane:
    structured, calm, deliberate, official. Closer to a printed form
    than to a marketing page.
+6. **Approval means the exact reviewed rows.** Preparing and reviewing a
+   monthly inmate report do not lock the register. Any source or correction
+   change retires the submitted report and requires a new review; final
+   approval seals only rows still identical to the ones that were reviewed.
 
 ## Accessibility & Inclusion
 

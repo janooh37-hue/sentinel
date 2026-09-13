@@ -48,6 +48,7 @@ export function ManualEntryForm({
   onDelete,
 }: ManualEntryFormProps): React.JSX.Element {
   const { t } = useTranslation()
+  const formId = useId()
   const reporterLabelId = useId()
   const nationalities = useInmateNationalities()
   const [deleteOpen, setDeleteOpen] = useState(false)
@@ -116,12 +117,12 @@ export function ManualEntryForm({
 
       <div className="grid gap-3 sm:grid-cols-2">
         <div className="space-y-1.5 sm:col-span-2">
-          <Label htmlFor="register-manual-name">
+          <Label htmlFor={`${formId}-name`}>
             {t('inmateStats.manualForm.name')}
             <span className="ms-0.5 text-destructive">*</span>
           </Label>
           <Input
-            id="register-manual-name"
+            id={`${formId}-name`}
             value={name}
             onChange={(event) => setName(event.target.value)}
             required
@@ -129,12 +130,12 @@ export function ManualEntryForm({
           />
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor="register-manual-date">
+          <Label htmlFor={`${formId}-date`}>
             {t('inmateStats.manualForm.violationDate')}
             <span className="ms-0.5 text-destructive">*</span>
           </Label>
           <Input
-            id="register-manual-date"
+            id={`${formId}-date`}
             type="date"
             value={violationDate}
             onChange={(event) => setViolationDate(event.target.value)}
@@ -143,9 +144,9 @@ export function ManualEntryForm({
           />
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor="register-manual-uid">{t('inmateStats.manualForm.uid')}</Label>
+          <Label htmlFor={`${formId}-uid`}>{t('inmateStats.manualForm.uid')}</Label>
           <Input
-            id="register-manual-uid"
+            id={`${formId}-uid`}
             value={uid}
             onChange={(event) => setUid(event.target.value)}
             dir="ltr"
@@ -165,12 +166,12 @@ export function ManualEntryForm({
           unresolved={entry?.nationality_code === 'XX'}
         />
         <div className="space-y-1.5">
-          <Label htmlFor="register-manual-wing">{t('inmateStats.manualForm.wing')}</Label>
+          <Label htmlFor={`${formId}-wing`}>{t('inmateStats.manualForm.wing')}</Label>
           <Select
-            value={wing || EMPTY_WING}
+            value={WINGS.includes(wing) ? wing : EMPTY_WING}
             onValueChange={(value) => setWing(value === EMPTY_WING ? '' : value)}
           >
-            <SelectTrigger id="register-manual-wing">
+            <SelectTrigger id={`${formId}-wing`}>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -182,11 +183,16 @@ export function ManualEntryForm({
               ))}
             </SelectContent>
           </Select>
+          {wing && !WINGS.includes(wing) ? (
+            <p className="text-sm text-warning">
+              {t('inmateStats.workflow.invalidWing')} <bdi dir="ltr">{wing}</bdi>
+            </p>
+          ) : null}
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor="register-manual-holding">{t('inmateStats.manualForm.holdingNo')}</Label>
+          <Label htmlFor={`${formId}-holding`}>{t('inmateStats.manualForm.holdingNo')}</Label>
           <Input
-            id="register-manual-holding"
+            id={`${formId}-holding`}
             value={holdingNo}
             onChange={(event) => setHoldingNo(event.target.value)}
             dir="ltr"
@@ -205,9 +211,9 @@ export function ManualEntryForm({
           </p>
         </div>
         <div className="space-y-1.5 sm:col-span-2">
-          <Label htmlFor="register-manual-details">{t('inmateStats.manualForm.details')}</Label>
+          <Label htmlFor={`${formId}-details`}>{t('inmateStats.manualForm.details')}</Label>
           <Textarea
-            id="register-manual-details"
+            id={`${formId}-details`}
             value={detailsText}
             onChange={(event) => setDetailsText(event.target.value)}
             rows={5}
@@ -216,12 +222,12 @@ export function ManualEntryForm({
           <p className="text-xs text-muted-foreground">{t('inmateStats.manualForm.detailsHint')}</p>
         </div>
         <div className="space-y-1.5 sm:col-span-2">
-          <Label htmlFor="register-manual-reason">
+          <Label htmlFor={`${formId}-reason`}>
             {t('inmateStats.manualForm.reason')}
             <span className="ms-0.5 text-destructive">*</span>
           </Label>
           <Textarea
-            id="register-manual-reason"
+            id={`${formId}-reason`}
             value={reason}
             onChange={(event) => setReason(event.target.value)}
             rows={3}

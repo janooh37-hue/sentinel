@@ -24,7 +24,7 @@ from __future__ import annotations
 
 import datetime as dt
 from datetime import UTC, date, datetime
-from typing import Final
+from typing import Any, Final
 
 from sqlalchemy import (
     JSON,
@@ -2034,6 +2034,7 @@ class InmateViolationPeriod(Base):
     closed_by: Mapped[int | None] = mapped_column(Integer, nullable=True)
     reopened_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     reopened_by: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    #: Read-only history: a month forced closed before the approval workflow.
     force_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
     export_path: Mapped[str | None] = mapped_column(String(255), nullable=True)
     rows: Mapped[list[InmateViolationStatRow]] = relationship(
@@ -2044,6 +2045,53 @@ class InmateViolationPeriod(Base):
         UniqueConstraint("year", "month", name="uq_inmate_violation_periods_month"),
         CheckConstraint("month BETWEEN 1 AND 12", name="ck_inmate_violation_periods_month"),
         CheckConstraint("year BETWEEN 2000 AND 2100", name="ck_inmate_violation_periods_year"),
+    )
+
+
+class InmateViolationWorkflow(Base):
+    """Approval state for one register month (migration 0088).
+
+    ``content_hash`` fingerprints the projection that was prepared, so final
+    approval can prove the rows it seals are exactly the reviewed ones without
+    storing a second copy of them. ``actors`` holds the accepted
+    prepared/reviewed/approved facts as immutable snapshots — an archived
+    signature must not follow a later account or employee edit.
+    """
+
+    __tablename__ = "inmate_violation_workflows"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    year: Mapped[int] = mapped_column(Integer, nullable=False)
+    month: Mapped[int] = mapped_column(Integer, nullable=False)
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    state: Mapped[str] = mapped_column(
+        String(24), nullable=False, default="draft", server_default="draft"
+    )
+    content_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    #: Selected at handoff, paired with the employee ID captured then.
+    reviewer_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    reviewer_employee_id: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    manager_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    manager_employee_id: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    #: ``{stage: {user_id, name_ar, employee_id, acted_at}}`` for the stages
+    #: actually performed in the current cycle. Cleared when a cycle restarts.
+    actors: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+
+    __table_args__ = (
+        UniqueConstraint("year", "month", name="uq_inmate_violation_workflows_month"),
+        CheckConstraint("month BETWEEN 1 AND 12", name="ck_inmate_violation_workflows_month"),
+        CheckConstraint("year BETWEEN 2000 AND 2100", name="ck_inmate_violation_workflows_year"),
+        CheckConstraint("version >= 0", name="ck_inmate_violation_workflows_version"),
+        CheckConstraint(
+            "state IN ('draft','awaiting_review','awaiting_manager','closed')",
+            name="ck_inmate_violation_workflows_state",
+        ),
+        Index("ix_inmate_violation_workflows_reviewer", "reviewer_user_id"),
+        Index("ix_inmate_violation_workflows_manager", "manager_user_id"),
     )
 
 

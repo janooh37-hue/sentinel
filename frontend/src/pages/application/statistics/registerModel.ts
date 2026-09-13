@@ -76,7 +76,7 @@ export function parseMonthKey(key: string): { year: number; month: number } | nu
   if (!match) return null
   const year = Number(match[1])
   const month = Number(match[2])
-  if (month < 1 || month > 12) return null
+  if (year < 2000 || year > 2100 || month < 1 || month > 12) return null
   return { year, month }
 }
 

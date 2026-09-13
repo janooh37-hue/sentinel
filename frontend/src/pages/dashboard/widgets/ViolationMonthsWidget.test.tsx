@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import { I18nextProvider } from 'react-i18next'
 import { MemoryRouter, useLocation } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -9,7 +9,6 @@ import i18n from '@/lib/i18n'
 import { NavBellPopover } from '@/components/shell/NavBellPopover'
 import { ViolationMonthsWidget } from './ViolationMonthsWidget'
 
-const identityState = vi.hoisted(() => ({ isAdmin: true }))
 
 function LocationProbe(): React.JSX.Element {
   const location = useLocation()
@@ -25,7 +24,7 @@ vi.mock('@/lib/api', () => ({
   apiErrorMessage: (error: unknown) => String(error),
 }))
 vi.mock('@/lib/useIdentity', () => ({
-  useIdentity: () => ({ isAdmin: identityState.isAdmin }),
+  useIdentity: () => ({ isAdmin: false }),
 }))
 vi.mock('@/lib/useCapabilities', () => ({
   useCapabilities: () => ({ has: () => false }),
@@ -74,33 +73,26 @@ function renderWidgetAndBell() {
 }
 
 beforeEach(() => {
-  identityState.isAdmin = true
   vi.mocked(api.getInmateRegisterAwaitingClose).mockReset()
 })
 
 describe('ViolationMonthsWidget', () => {
-  it('renders nothing and issues no admin request for a non-admin', async () => {
-    identityState.isAdmin = false
-
-    const { container } = renderWidget()
-
-    expect(container).toBeEmptyDOMElement()
-    await waitFor(() => expect(api.getInmateRegisterAwaitingClose).not.toHaveBeenCalled())
-  })
 
   it('distinguishes blocked and closable months in Arabic', async () => {
     vi.mocked(api.getInmateRegisterAwaitingClose).mockResolvedValue({
       months: [
-        { year: 2026, month: 7, row_count: 4, pending_count: 0, closable: true },
-        { year: 2026, month: 8, row_count: 7, pending_count: 2, closable: false },
+        { year: 2026, month: 7, row_count: 4, pending_count: 0, closable: true, stage: 'approve', assigned: true },
+        { year: 2026, month: 8, row_count: 7, pending_count: 2, closable: false, stage: 'prepare', assigned: false },
       ],
       count: 2,
     })
 
     renderWidget('ar')
 
-    expect(await screen.findByText('مطلوب إكمالها: 2')).toBeInTheDocument()
-    expect(screen.getByText('جاهز للإغلاق')).toBeInTheDocument()
+    expect(await screen.findByText('جاهز للإغلاق')).toBeInTheDocument()
+    expect(screen.getByText('اعتماد التقارير الشهرية')).toBeInTheDocument()
+    expect(screen.getByText('اعتماد وإغلاق · 4 سطر')).toBeInTheDocument()
+    expect(screen.getByText('إرسال للمراجعة · 7 سطر')).toBeInTheDocument()
     expect(screen.getAllByRole('link').map((link) => link.getAttribute('href'))).toEqual([
       '/application?form=inmate_conduct_violations&mode=stats&stats_month=2026-07',
       '/application?form=inmate_conduct_violations&mode=stats&stats_month=2026-08',
@@ -116,6 +108,8 @@ describe('ViolationMonthsWidget', () => {
         row_count: index + 1,
         pending_count: 0,
         closable: true,
+        stage: 'review' as const,
+        assigned: true,
       })),
       count: 7,
     })
@@ -136,8 +130,8 @@ describe('ViolationMonthsWidget', () => {
   it('shares one awaiting-close query and adds its month count to the bell', async () => {
     vi.mocked(api.getInmateRegisterAwaitingClose).mockResolvedValue({
       months: [
-        { year: 2026, month: 7, row_count: 4, pending_count: 0, closable: true },
-        { year: 2026, month: 8, row_count: 7, pending_count: 2, closable: false },
+        { year: 2026, month: 7, row_count: 4, pending_count: 0, closable: true, stage: 'approve', assigned: true },
+        { year: 2026, month: 8, row_count: 7, pending_count: 2, closable: false, stage: 'review', assigned: true },
       ],
       count: 2,
     })
@@ -152,7 +146,7 @@ describe('ViolationMonthsWidget', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Notifications, 2 unread' }))
     fireEvent.click(
       await screen.findByRole('button', {
-        name: /Months awaiting close/,
+        name: /August 2026/,
       }),
     )
     expect(screen.getByTestId('location')).toHaveTextContent(
