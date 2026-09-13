@@ -219,9 +219,24 @@ function Read-DotEnv([string] $path) {
 }
 
 function Get-UpdateGitAuthentication([string] $remoteUrl) {
-    # SSH remotes and local remotes already have their own authentication
-    # mechanism. Only the private GitHub HTTPS remote needs the PAT flow.
+    # SSH remotes and local remotes already have their own authentication.
+    # HTTPS credentials are only safe to use for this repository's canonical
+    # GitHub origin; fail closed before reading any secret for another origin.
     if ($remoteUrl -notmatch '^https://') { return $null }
+
+    $remoteUri = $null
+    $validUri = [Uri]::TryCreate($remoteUrl, [UriKind]::Absolute, [ref]$remoteUri)
+    $expectedPath = '/janooh37-hue/sentinel'
+    if (-not $validUri -or
+        $remoteUri.Scheme -ine 'https' -or
+        $remoteUri.Host -ine 'github.com' -or
+        ($remoteUri.Port -ne -1 -and $remoteUri.Port -ne 443) -or
+        -not [string]::IsNullOrEmpty($remoteUri.UserInfo) -or
+        -not [string]::IsNullOrEmpty($remoteUri.Query) -or
+        -not [string]::IsNullOrEmpty($remoteUri.Fragment) -or
+        $remoteUri.AbsolutePath.TrimEnd('/') -notmatch ('^{0}(?:\.git)?$' -f [regex]::Escape($expectedPath))) {
+        throw "Refusing to send Sentinel credentials to unexpected HTTPS origin '$remoteUrl'. Set origin to https://github.com/janooh37-hue/sentinel.git and rerun: mng update"
+    }
 
     $envFile = Join-Path $Root '.env'
     $values = Read-DotEnv $envFile
@@ -238,6 +253,7 @@ function Get-UpdateGitAuthentication([string] $remoteUrl) {
 
 function Invoke-AuthenticatedGitPull($authentication) {
     $askPassPath = $null
+    $askPassCommandPath = $null
     $oldAskPass = $env:GIT_ASKPASS
     $oldTerminalPrompt = $env:GIT_TERMINAL_PROMPT
     $oldUsername = $env:MNG_UPDATE_GIT_USERNAME
@@ -247,6 +263,7 @@ function Invoke-AuthenticatedGitPull($authentication) {
             $askPassDir = Join-Path ([IO.Path]::GetTempPath()) ('mng-git-' + [Guid]::NewGuid().ToString('N'))
             New-Item -ItemType Directory -Path $askPassDir -Force | Out-Null
             $askPassPath = Join-Path $askPassDir 'askpass.ps1'
+            $askPassCommandPath = Join-Path $askPassDir 'askpass.cmd'
             # The helper contains no credential; Git passes the prompt and the
             # values travel only through this process's environment.
             Set-Content -LiteralPath $askPassPath -Encoding UTF8 -Value @'
@@ -261,13 +278,24 @@ if ($Prompt -match '(?i)password|passphrase') {
 }
 exit 1
 '@
+            $powerShell = (Get-Command powershell.exe -ErrorAction Stop).Source
+            Set-Content -LiteralPath $askPassCommandPath -Encoding ASCII -Value @"
+@echo off
+"$powerShell" -NoProfile -ExecutionPolicy Bypass -File "$askPassPath" %*
+"@
             $env:MNG_UPDATE_GIT_USERNAME = $authentication.Username
             $env:MNG_UPDATE_GIT_TOKEN = $authentication.Token
-            $env:GIT_ASKPASS = "powershell.exe -NoProfile -ExecutionPolicy Bypass -File `"$askPassPath`""
+            $env:GIT_ASKPASS = $askPassCommandPath
             $env:GIT_TERMINAL_PROMPT = '0'
         }
-        & git pull --ff-only
-        $gitExitCode = $LASTEXITCODE
+        $prevEAP = $ErrorActionPreference
+        $ErrorActionPreference = 'Continue'
+        try {
+            & git pull --ff-only 2>&1 | ForEach-Object { Write-Host $_ }
+            $gitExitCode = $LASTEXITCODE
+        } finally {
+            $ErrorActionPreference = $prevEAP
+        }
     } finally {
         if ($null -eq $oldAskPass) { Remove-Item Env:GIT_ASKPASS -ErrorAction SilentlyContinue } else { $env:GIT_ASKPASS = $oldAskPass }
         if ($null -eq $oldTerminalPrompt) { Remove-Item Env:GIT_TERMINAL_PROMPT -ErrorAction SilentlyContinue } else { $env:GIT_TERMINAL_PROMPT = $oldTerminalPrompt }
@@ -551,7 +579,7 @@ function Invoke-Update {
     try {
         Write-Host '  Fetching latest from git ...' -ForegroundColor Cyan
         $before = (git rev-parse HEAD).Trim()
-        $remoteUrl = [string](git remote get-url origin 2>$null | Select-Object -First 1)
+        $remoteUrl = [string](git config --get remote.origin.url 2>$null | Select-Object -First 1)
         $remoteUrl = $remoteUrl.Trim()
         if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($remoteUrl)) {
             throw 'git origin remote is not configured; set origin to the Sentinel repository, then rerun: mng update'
