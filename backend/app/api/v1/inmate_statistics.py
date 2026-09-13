@@ -21,7 +21,10 @@ from app.core.nationalities import NATIONALITIES, NATIONALITY_ALIASES
 from app.db.models import User
 from app.db.session import get_db
 from app.schemas.inmate_statistics import (
+    ApproveIn,
     ArrivedAfterCloseOut,
+    AwaitingCloseOut,
+    AwaitingMonthOut,
     BlockingEntryOut,
     CompletionIn,
     ManualProvenanceOut,
@@ -36,12 +39,8 @@ from app.schemas.inmate_statistics import (
     ReopenIn,
     ReturnIn,
     ReviewIn,
-    SubmissionActionIn,
-    SubmissionOut,
-    SubmissionSummaryOut,
     UncountedRecordOut,
     WorkflowCandidateOut,
-    WorkflowTasksOut,
 )
 from app.services import inmate_statistics_service as register
 from app.services import perm_service
@@ -147,6 +146,8 @@ def _month_out(month: register.MonthRegister, *, today: date | None = None) -> M
         reopened_at=month.reopened_at,
         reopened_by=month.reopened_by,
         reopened_by_name=month.reopened_by_name,
+        force_reason=month.force_reason,
+        force_closed=month.force_reason is not None,
         projection_fingerprint=month.projection_fingerprint,
         wing_summary=month.wing_summary,
         workflow=month.workflow,
@@ -209,13 +210,29 @@ def list_nationalities(
     )
 
 
-@router.get("/statistics/tasks", response_model=WorkflowTasksOut)
-def workflow_tasks(
-    user: Annotated[User, Depends(get_current_user)],
+@router.get("/statistics/awaiting-close", response_model=AwaitingCloseOut)
+def awaiting_close(
+    user: Annotated[User, Depends(register_reader)],
     db: Annotated[Session, Depends(get_db)],
-) -> WorkflowTasksOut:
-    items = register.workflow_tasks(db, actor=user)
-    return WorkflowTasksOut(items=items, count=len(items))
+) -> AwaitingCloseOut:
+    """Unsealed months waiting on this caller — the bell and widget source."""
+
+    months = register.awaiting_close(db, actor=user)
+    return AwaitingCloseOut(
+        months=[
+            AwaitingMonthOut(
+                year=item.year,
+                month=item.month,
+                row_count=item.row_count,
+                pending_count=item.pending_count,
+                closable=item.closable,
+                stage=item.stage,
+                assigned=item.assigned,
+            )
+            for item in months
+        ],
+        count=len(months),
+    )
 
 
 @router.get("/statistics/{year}/{month}", response_model=MonthOut)
@@ -236,7 +253,6 @@ def export_month(
     db: Annotated[Session, Depends(get_db)],
     language: Language = "ar",
     populations: Annotated[list[str] | None, Query()] = None,
-    submission_id: Annotated[int | None, Query(gt=0)] = None,
 ) -> Response:
     """Download the register workbook. This never closes or re-closes a month.
 
@@ -253,7 +269,7 @@ def export_month(
             http_status=422,
         )
     payload, filename = register.export_workbook(
-        db, year, month, language=language, populations=scope, submission_id=submission_id
+        db, year, month, language=language, populations=scope
     )
     return Response(
         content=payload,
@@ -307,7 +323,7 @@ def return_month(
 def approve_month(
     year: Year,
     month: Month,
-    body: SubmissionActionIn,
+    body: ApproveIn,
     user: Annotated[User, Depends(register_reader)],
     db: Annotated[Session, Depends(get_db)],
 ) -> MonthOut:
@@ -323,31 +339,6 @@ def workflow_candidates(
     db: Annotated[Session, Depends(get_db)],
 ) -> list[dict[str, Any]]:
     return register.workflow_candidates(db, year, month, actor=user, stage=stage)
-
-
-@router.get("/statistics/{year}/{month}/submissions", response_model=list[SubmissionSummaryOut])
-def submission_history(
-    year: Year,
-    month: Month,
-    _user: Annotated[User, Depends(register_reader)],
-    db: Annotated[Session, Depends(get_db)],
-) -> list[dict[str, Any]]:
-    return register.submission_history(db, year, month)
-
-
-@router.get("/statistics/{year}/{month}/submissions/{submission_id}", response_model=SubmissionOut)
-def get_submission(
-    year: Year,
-    month: Month,
-    submission_id: int,
-    _user: Annotated[User, Depends(register_reader)],
-    db: Annotated[Session, Depends(get_db)],
-) -> SubmissionOut:
-    view = register.submission_month(db, year, month, submission_id)
-    return SubmissionOut(
-        **_month_out(view).model_dump(),
-        **register.submission_detail(db, year, month, submission_id),
-    )
 
 
 @router.post("/statistics/{year}/{month}/reopen", response_model=MonthOut)

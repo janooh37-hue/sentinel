@@ -2365,12 +2365,11 @@ excludes masthead, metadata, and actor blocks. Its plain-text twin preserves
 the same values. Table headers repeat across printed pages; rows have no fixed
 height or clipping, and the complete actor block appears once at the end.
 
-Workflow status and report selection are separate. The live controls always
-show the root month's current state, while preview/export may be pinned to an
-immutable historical submission. A current draft has no performed actors or
-closure timestamp inherited from an earlier revision. Review and final
-approval actions are enabled only while the exact active submission is open;
-server-provided allowed actions and blockers remain authoritative.
+Workflow status is separate from the paper. The controls show the month's
+current state and the server's allowed actions and blockers remain
+authoritative; a draft shows no performed actors and no closure timestamp. A
+month closed before this lifecycle existed prints empty actor blocks rather
+than invented approvals.
 
 ---
 

@@ -21,12 +21,12 @@ import {
 import { Textarea } from '@/components/ui/textarea'
 import { EmployeePicker } from '../EmployeePicker'
 import { NationalityPicker } from './RegisterPickers'
+import { WINGS } from './registerModel'
 import { useInmateNationalities } from './useInmateRegister'
 
 const EMPTY_WING = '__none__'
 
 interface ManualEntryFormProps {
-  wings: readonly string[]
   entry: InmateRegisterEntry | null
   year: number
   month: number
@@ -38,7 +38,6 @@ interface ManualEntryFormProps {
 }
 
 export function ManualEntryForm({
-  wings,
   entry,
   year,
   month,
@@ -169,7 +168,7 @@ export function ManualEntryForm({
         <div className="space-y-1.5">
           <Label htmlFor={`${formId}-wing`}>{t('inmateStats.manualForm.wing')}</Label>
           <Select
-            value={wings.includes(wing) ? wing : EMPTY_WING}
+            value={WINGS.includes(wing) ? wing : EMPTY_WING}
             onValueChange={(value) => setWing(value === EMPTY_WING ? '' : value)}
           >
             <SelectTrigger id={`${formId}-wing`}>
@@ -177,14 +176,18 @@ export function ManualEntryForm({
             </SelectTrigger>
             <SelectContent>
               <SelectItem value={EMPTY_WING}>—</SelectItem>
-              {wings.map((value) => (
+              {WINGS.map((value) => (
                 <SelectItem key={value} value={value}>
                   <bdi dir="ltr">{value}</bdi>
                 </SelectItem>
               ))}
             </SelectContent>
           </Select>
-          {wing && !wings.includes(wing) ? <p className="text-sm text-warning">{t('inmateStats.workflow.invalidWing')} <bdi dir="ltr">{wing}</bdi></p> : null}
+          {wing && !WINGS.includes(wing) ? (
+            <p className="text-sm text-warning">
+              {t('inmateStats.workflow.invalidWing')} <bdi dir="ltr">{wing}</bdi>
+            </p>
+          ) : null}
         </div>
         <div className="space-y-1.5">
           <Label htmlFor={`${formId}-holding`}>{t('inmateStats.manualForm.holdingNo')}</Label>

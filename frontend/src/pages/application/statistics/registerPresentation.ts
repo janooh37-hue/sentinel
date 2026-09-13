@@ -103,7 +103,7 @@ function entryValues(entry: InmateRegisterEntry, key: InmatePopulation, options:
 }
 
 /** Selected rows plus the server's whole-month summary; never aggregate wings here. */
-export function buildRegisterPresentation(month: InmateRegisterMonth, options: RegisterExportOptions, t: TFunction, submissionId?: number) {
+export function buildRegisterPresentation(month: InmateRegisterMonth, options: RegisterExportOptions, t: TFunction) {
   const ar = (key: string) => t(key, { lng: 'ar' })
   const groups = registerGroupsForScope(month, options.scope)
   const tables: ReportTable[] = groups.map((group) => {
@@ -121,7 +121,7 @@ export function buildRegisterPresentation(month: InmateRegisterMonth, options: R
   })
   const wingValue = (wings: string[], count: number): string => wings.length > 0 && count > 0
     ? `${wings.join(' – ')} (${count})` : ar('inmateStats.document.noPositiveWings')
-  const workflowState = submissionId === undefined ? 'draft' : month.workflow.state
+  const workflowState = month.workflow.state
   const summaryRows: ReportSummaryRow[] = [
     { label: ar('inmateStats.populations.citizens'), value: String(month.counts.citizens), direction: 'ltr' },
     { label: ar('inmateStats.populations.expats'), value: String(month.counts.expats), direction: 'ltr' },

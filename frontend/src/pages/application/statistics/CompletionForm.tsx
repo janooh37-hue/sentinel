@@ -17,6 +17,7 @@ import {
 import { Textarea } from '@/components/ui/textarea'
 import { EmployeePicker } from '../EmployeePicker'
 import { NationalityPicker } from './RegisterPickers'
+import { WINGS } from './registerModel'
 import { useInmateNationalities } from './useInmateRegister'
 
 const EMPTY_WING = '__none__'
@@ -33,7 +34,6 @@ interface CompletionLine {
 }
 
 interface CompletionFormProps {
-  wings: readonly string[]
   sourceEntry: InmateRegisterEntry
   reportEntries: readonly InmateRegisterEntry[]
   isWriting: boolean
@@ -55,7 +55,6 @@ function lineFromEntry(entry: InmateRegisterEntry): CompletionLine {
 }
 
 export function CompletionForm({
-  wings,
   sourceEntry,
   reportEntries,
   isWriting,
@@ -247,7 +246,7 @@ export function CompletionForm({
               <div className="space-y-1.5">
                 <Label htmlFor={`${formId}-${line.key}-wing`}>{t('inmateStats.inspector.wing')}</Label>
                 <Select
-                  value={wings.includes(line.wing) ? line.wing : EMPTY_WING}
+                  value={WINGS.includes(line.wing) ? line.wing : EMPTY_WING}
                   onValueChange={(value) =>
                     updateLine(line.key, { wing: value === EMPTY_WING ? '' : value })
                   }
@@ -257,14 +256,18 @@ export function CompletionForm({
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value={EMPTY_WING}>—</SelectItem>
-                    {wings.map((value) => (
+                    {WINGS.map((value) => (
                       <SelectItem key={value} value={value}>
                         <bdi dir="ltr">{value}</bdi>
                       </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
-                {line.wing && !wings.includes(line.wing) ? <p className="text-sm text-warning">{t('inmateStats.workflow.invalidWing')} <bdi dir="ltr">{line.wing}</bdi></p> : null}
+                {line.wing && !WINGS.includes(line.wing) ? (
+                  <p className="text-sm text-warning">
+                    {t('inmateStats.workflow.invalidWing')} <bdi dir="ltr">{line.wing}</bdi>
+                  </p>
+                ) : null}
               </div>
               <div className="space-y-1.5">
                 <Label htmlFor={`${formId}-${line.key}-holding`}>{t('inmateStats.inspector.holdingNo')}</Label>

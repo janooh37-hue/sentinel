@@ -76,7 +76,7 @@ def _workbook(
     language: str = "ar",
     closed_at: datetime | None = None,
     closed_by_name: str | None = None,
-    legacy_force_reason: str | None = None,
+    force_reason: str | None = None,
 ) -> Any:
     payload = build_register_workbook(
         year=2026,
@@ -84,7 +84,7 @@ def _workbook(
         sections=_sections(pending=pending),
         closed_at=closed_at,
         closed_by_name=closed_by_name,
-        legacy_force_reason=legacy_force_reason,
+        force_reason=force_reason,
         language=language,
     )
     return load_workbook(BytesIO(payload))
@@ -100,7 +100,7 @@ def test_three_section_closed_month_has_fixed_register_geometry() -> None:
     workbook = _workbook(
         closed_at=datetime(2026, 8, 1, 10, 30, tzinfo=UTC),
         closed_by_name="مدير النظام",
-        legacy_force_reason="اعتماد الشهر رغم نقص الجنسية",
+        force_reason="اعتماد الشهر رغم نقص الجنسية",
     )
 
     assert workbook.sheetnames == ["المواطنون", "الوافدون", "قيد الإكمال", "الملخص"]

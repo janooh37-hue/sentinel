@@ -64,12 +64,9 @@ requirements.
 - Monthly inmate-violation reports use a recorded three-person lifecycle:
   preparation selects a reviewer, review selects an approving manager, and
   only manager approval after month-end closes the register. The three actors
-  must be distinct linked employees. Reopening is reasoned, preserves prior
-  revisions and actor history, and starts a completely new approval cycle.
-- Monthly report revisions are immutable operational evidence. Exports of a
-  selected revision use that revision's sealed rows, aggregates, actors, and
-  timestamps; a current draft never inherits approval facts from an earlier
-  revision.
+  must be distinct linked employees. Reopening is reasoned, keeps the previous
+  seal and its actor history in the audit log, and starts a completely new
+  approval cycle.
 
 ## Brand Commitments
 
@@ -137,10 +134,10 @@ fabricate them.
    density, but also refuse SaaS hero energy. Find the third lane:
    structured, calm, deliberate, official. Closer to a printed form
    than to a marketing page.
-6. **Approval means an exact reviewed snapshot.** Preparing and reviewing a
+6. **Approval means the exact reviewed rows.** Preparing and reviewing a
    monthly inmate report do not lock the register. Any source or correction
-   change invalidates the submitted projection and requires a new review;
-   final approval seals only the exact revision the manager opened.
+   change retires the submitted report and requires a new review; final
+   approval seals only rows still identical to the ones that were reviewed.
 
 ## Accessibility & Inclusion
 

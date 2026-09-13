@@ -8,12 +8,12 @@ from app.services.notification_service import ActionableItem
 APP = "GSSG Manager"
 
 
-def test_monthly_push_names_report_stage_and_links_to_exact_submission():
+def test_monthly_push_names_report_stage_and_links_to_month():
     for kind, en, ar in [
         ("monthly_review", "review", "مراجعتك"),
         ("monthly_approval", "approval", "اعتمادك"),
     ]:
-        target = "/application?form=inmate_conduct_violations&mode=stats&stats_month=2026-08&stats_submission=42"
+        target = "/application?form=inmate_conduct_violations&mode=stats&stats_month=2026-08"
         messages, url = ss._build_push(kind, [_item(kind, label="2026-08", url=target)], "/section")
         assert "Monthly inmate violations report" in messages["en"][1]
         assert en in messages["en"][1]
@@ -23,19 +23,16 @@ def test_monthly_push_names_report_stage_and_links_to_exact_submission():
         assert url == target
 
 
-def test_grouped_monthly_push_opens_monthly_tasks_section():
+def test_grouped_monthly_push_links_to_month_section():
     for kind in ("monthly_review", "monthly_approval"):
-        assert (
-            ss._KIND_META.get(kind)
-            == "/application?form=inmate_conduct_violations&mode=stats#monthly-tasks"
-        )
+        assert ss._KIND_META.get(kind) == ns.MONTHLY_TASKS_URL
         messages, url = ss._build_push(
-            kind, [_item(kind), _item(kind, ref="inmate-submission:2")], ss._KIND_META[kind]
+            kind, [_item(kind), _item(kind, ref="inmate-month:2026-09:review")], ss._KIND_META[kind]
         )
         assert "2 monthly inmate violations reports" in messages["en"][1]
         assert "\u20662\u2069" in messages["ar"][1]
         assert "\u2066" not in messages["en"][1]
-        assert url.endswith("#monthly-tasks")
+        assert url == ns.MONTHLY_TASKS_URL
 
 
 def _item(kind, **kw):

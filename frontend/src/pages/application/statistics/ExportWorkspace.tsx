@@ -130,7 +130,7 @@ function MethodCard({
   )
 }
 
-export function ExportWorkspace({ month, submissionId }: { month: InmateRegisterMonth; submissionId?: number }): React.JSX.Element {
+export function ExportWorkspace({ month }: { month: InmateRegisterMonth }): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const [draftIssuedAt] = useState(() => new Date().toISOString())
   const [options, setOptions] = useState<RegisterExportOptions>(() => ({
@@ -146,8 +146,8 @@ export function ExportWorkspace({ month, submissionId }: { month: InmateRegister
   const paperRef = useRef<HTMLDivElement>(null)
 
   const clipboardPayload = useMemo(
-    () => buildRegisterClipboard(month, options, t, submissionId),
-    [month, options, t, submissionId],
+    () => buildRegisterClipboard(month, options, t),
+    [month, options, t],
   )
   const groups = registerGroupsForScope(month, options.scope)
   const includedEntries = groups.flatMap((group) => group.entries)
@@ -162,7 +162,7 @@ export function ExportWorkspace({ month, submissionId }: { month: InmateRegister
   const download = useMutation({
     mutationFn: () =>
       api.fetchInmateRegisterExport(
-        { year: month.year, month: month.month, language: 'ar', populations, submission_id: submissionId },
+        { year: month.year, month: month.month, language: 'ar', populations },
         `inmate-violations-${month.year}-${String(month.month).padStart(2, '0')}.xlsx`,
       ),
     onSuccess: (file) => {
@@ -219,12 +219,19 @@ export function ExportWorkspace({ month, submissionId }: { month: InmateRegister
 
   const printDocument = async (): Promise<void> => {
     await document.fonts?.ready
-    await Promise.all(Array.from(document.querySelectorAll<HTMLImageElement>('[data-inmate-register-document] img'), async (image) => {
-      if (!image.complete) await new Promise<void>((resolve) => {
-        image.addEventListener('load', () => resolve(), { once: true })
-        image.addEventListener('error', () => resolve(), { once: true })
-      })
-    }))
+    await Promise.all(
+      Array.from(
+        document.querySelectorAll<HTMLImageElement>('[data-inmate-register-document] img'),
+        async (image) => {
+          if (!image.complete) {
+            await new Promise<void>((resolve) => {
+              image.addEventListener('load', () => resolve(), { once: true })
+              image.addEventListener('error', () => resolve(), { once: true })
+            })
+          }
+        },
+      ),
+    )
     window.print()
     toast.success(t('inmateStats.export.printSent'))
   }
@@ -425,14 +432,14 @@ export function ExportWorkspace({ month, submissionId }: { month: InmateRegister
                   transformOrigin: i18n.dir() === 'rtl' ? '100% 0' : '0 0',
                 }}
               >
-                <RegisterDocument month={month} options={options} submissionId={submissionId} draftIssuedAt={draftIssuedAt} />
+                <RegisterDocument month={month} options={options} draftIssuedAt={draftIssuedAt} />
               </div>
             </div>
           </div>
         </section>
       </div>
 
-      <RegisterDocument month={month} options={options} submissionId={submissionId} draftIssuedAt={draftIssuedAt} forPrint />
+      <RegisterDocument month={month} options={options} draftIssuedAt={draftIssuedAt} forPrint />
     </div>
   )
 }

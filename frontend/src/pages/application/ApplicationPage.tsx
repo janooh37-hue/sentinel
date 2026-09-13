@@ -258,7 +258,7 @@ export function ApplicationPage(): React.JSX.Element {
   // changes.  This is the canonical URL-param-hydration pattern: we can't
   // seed `useState` because the templates query is asynchronous.
   useEffect(() => {
-    // Statistics task URLs remain canonical and are consumed per navigation below.
+    // Monthly-register URLs remain canonical and are consumed per navigation below.
     if (requestedStatsMode) return
     if (!formFromUrl || templates.length === 0 || selectedTemplate) return
     const id = resolveTemplateIdFromSlug(formFromUrl, templates)
@@ -701,20 +701,34 @@ export function ApplicationPage(): React.JSX.Element {
     setPendingWordSession(null)
   }, [form])
 
-  // The shell stays mounted on same-path bell navigation. Hydrate each task
+  // The shell stays mounted on same-path bell navigation. Hydrate each register
   // navigation (including the same URL again), not only the initial page mount.
   // Keep the canonical form parameter so reloads retain the statistics service.
   useEffect(() => {
-    if (!requestedStatsMode || capabilitiesLoading || approvedImportBusy ||
-      hydratedStatsNavigationRef.current === location.key) return
+    if (
+      !requestedStatsMode ||
+      capabilitiesLoading ||
+      approvedImportBusy ||
+      hydratedStatsNavigationRef.current === location.key
+    ) {
+      return
+    }
     const id = resolveTemplateIdFromSlug('inmate_conduct_violations', templates)
     if (!id) return
     hydratedStatsNavigationRef.current = location.key
     if (selectedTemplate !== id) handleSelectTemplate(id)
     setInmateEntryMode(has('books.view') ? 'stats' : 'create')
     setApprovedImport(null)
-  }, [requestedStatsMode, capabilitiesLoading, approvedImportBusy, location.key,
-    templates, selectedTemplate, handleSelectTemplate, has])
+  }, [
+    requestedStatsMode,
+    capabilitiesLoading,
+    approvedImportBusy,
+    location.key,
+    templates,
+    selectedTemplate,
+    handleSelectTemplate,
+    has,
+  ])
 
   // Restore the draft once the template + schema-query are in hand. Running
   // after the schema query resolves means RHF's defaultValues machinery is

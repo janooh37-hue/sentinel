@@ -5921,13 +5921,14 @@
         }
       }
     },
-    "/api/v1/inmate-violations/statistics/tasks": {
+    "/api/v1/inmate-violations/statistics/awaiting-close": {
       "get": {
         "tags": [
           "inmate-violations"
         ],
-        "summary": "Workflow Tasks",
-        "operationId": "workflow_tasks_api_v1_inmate_violations_statistics_tasks_get",
+        "summary": "Awaiting Close",
+        "description": "Unsealed months waiting on this caller — the bell and widget source.",
+        "operationId": "awaiting_close_api_v1_inmate_violations_statistics_awaiting_close_get",
         "parameters": [
           {
             "name": "gssg_session",
@@ -5952,7 +5953,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/WorkflowTasksOut"
+                  "$ref": "#/components/schemas/AwaitingCloseOut"
                 }
               }
             }
@@ -6100,23 +6101,6 @@
                 }
               ],
               "title": "Populations"
-            }
-          },
-          {
-            "name": "submission_id",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "integer",
-                  "exclusiveMinimum": 0
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Submission Id"
             }
           },
           {
@@ -6453,7 +6437,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/SubmissionActionIn"
+                "$ref": "#/components/schemas/ApproveIn"
               }
             }
           }
@@ -6553,161 +6537,6 @@
                     "$ref": "#/components/schemas/WorkflowCandidateOut"
                   },
                   "title": "Response Workflow Candidates Api V1 Inmate Violations Statistics  Year   Month  Candidates Get"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/inmate-violations/statistics/{year}/{month}/submissions": {
-      "get": {
-        "tags": [
-          "inmate-violations"
-        ],
-        "summary": "Submission History",
-        "operationId": "submission_history_api_v1_inmate_violations_statistics__year___month__submissions_get",
-        "parameters": [
-          {
-            "name": "year",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "maximum": 2100,
-              "minimum": 2000,
-              "title": "Year"
-            }
-          },
-          {
-            "name": "month",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "maximum": 12,
-              "minimum": 1,
-              "title": "Month"
-            }
-          },
-          {
-            "name": "gssg_session",
-            "in": "cookie",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Gssg Session"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/SubmissionSummaryOut"
-                  },
-                  "title": "Response Submission History Api V1 Inmate Violations Statistics  Year   Month  Submissions Get"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/v1/inmate-violations/statistics/{year}/{month}/submissions/{submission_id}": {
-      "get": {
-        "tags": [
-          "inmate-violations"
-        ],
-        "summary": "Get Submission",
-        "operationId": "get_submission_api_v1_inmate_violations_statistics__year___month__submissions__submission_id__get",
-        "parameters": [
-          {
-            "name": "year",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "maximum": 2100,
-              "minimum": 2000,
-              "title": "Year"
-            }
-          },
-          {
-            "name": "month",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "maximum": 12,
-              "minimum": 1,
-              "title": "Month"
-            }
-          },
-          {
-            "name": "submission_id",
-            "in": "path",
-            "required": true,
-            "schema": {
-              "type": "integer",
-              "title": "Submission Id"
-            }
-          },
-          {
-            "name": "gssg_session",
-            "in": "cookie",
-            "required": false,
-            "schema": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Gssg Session"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/SubmissionOut"
                 }
               }
             }
@@ -27209,6 +27038,21 @@
         "title": "ApprovalLogResponse",
         "description": "Paged approvals log — mirrors the BookListResponse envelope shape."
       },
+      "ApproveIn": {
+        "properties": {
+          "expected_version": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Expected Version"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "expected_version"
+        ],
+        "title": "ApproveIn"
+      },
       "ApproveRequest": {
         "properties": {
           "role": {
@@ -28672,6 +28516,76 @@
         ],
         "title": "AuditEntryRead",
         "description": "One user-management event, projected for the History tab."
+      },
+      "AwaitingCloseOut": {
+        "properties": {
+          "months": {
+            "items": {
+              "$ref": "#/components/schemas/AwaitingMonthOut"
+            },
+            "type": "array",
+            "title": "Months"
+          },
+          "count": {
+            "type": "integer",
+            "title": "Count"
+          }
+        },
+        "type": "object",
+        "required": [
+          "months",
+          "count"
+        ],
+        "title": "AwaitingCloseOut",
+        "description": "Unsealed months the caller can move. A standing state, not an event."
+      },
+      "AwaitingMonthOut": {
+        "properties": {
+          "year": {
+            "type": "integer",
+            "title": "Year"
+          },
+          "month": {
+            "type": "integer",
+            "title": "Month"
+          },
+          "row_count": {
+            "type": "integer",
+            "title": "Row Count"
+          },
+          "pending_count": {
+            "type": "integer",
+            "title": "Pending Count"
+          },
+          "closable": {
+            "type": "boolean",
+            "title": "Closable"
+          },
+          "stage": {
+            "type": "string",
+            "enum": [
+              "prepare",
+              "review",
+              "approve"
+            ],
+            "title": "Stage"
+          },
+          "assigned": {
+            "type": "boolean",
+            "title": "Assigned"
+          }
+        },
+        "type": "object",
+        "required": [
+          "year",
+          "month",
+          "row_count",
+          "pending_count",
+          "closable",
+          "stage",
+          "assigned"
+        ],
+        "title": "AwaitingMonthOut"
       },
       "BlockingEntryOut": {
         "properties": {
@@ -39745,6 +39659,21 @@
             ],
             "title": "Reopened By Name"
           },
+          "force_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Force Reason"
+          },
+          "force_closed": {
+            "type": "boolean",
+            "title": "Force Closed"
+          },
           "projection_fingerprint": {
             "type": "string",
             "title": "Projection Fingerprint"
@@ -39807,6 +39736,8 @@
           "reopened_at",
           "reopened_by",
           "reopened_by_name",
+          "force_reason",
+          "force_closed",
           "projection_fingerprint",
           "wing_summary",
           "workflow",
@@ -42074,17 +42005,6 @@
             "type": "integer",
             "exclusiveMinimum": 0.0,
             "title": "Reviewer User Id"
-          },
-          "supersede_reason": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Supersede Reason"
           }
         },
         "additionalProperties": false,
@@ -42094,7 +42014,8 @@
           "expected_projection_fingerprint",
           "reviewer_user_id"
         ],
-        "title": "PrepareIn"
+        "title": "PrepareIn",
+        "description": "The fingerprint is the report the preparer actually previewed."
       },
       "ProviderPersonMappingWrite": {
         "properties": {
@@ -43017,11 +42938,6 @@
             "minimum": 0.0,
             "title": "Expected Version"
           },
-          "submission_id": {
-            "type": "integer",
-            "exclusiveMinimum": 0.0,
-            "title": "Submission Id"
-          },
           "reason": {
             "type": "string",
             "minLength": 1,
@@ -43032,7 +42948,6 @@
         "type": "object",
         "required": [
           "expected_version",
-          "submission_id",
           "reason"
         ],
         "title": "ReturnIn"
@@ -43117,11 +43032,6 @@
             "minimum": 0.0,
             "title": "Expected Version"
           },
-          "submission_id": {
-            "type": "integer",
-            "exclusiveMinimum": 0.0,
-            "title": "Submission Id"
-          },
           "manager_user_id": {
             "type": "integer",
             "exclusiveMinimum": 0.0,
@@ -43132,7 +43042,6 @@
         "type": "object",
         "required": [
           "expected_version",
-          "submission_id",
           "manager_user_id"
         ],
         "title": "ReviewIn"
@@ -44440,310 +44349,6 @@
         ],
         "title": "StagedAttachmentRead",
         "description": "Response of ``POST /documents/attachments/stage``."
-      },
-      "SubmissionActionIn": {
-        "properties": {
-          "expected_version": {
-            "type": "integer",
-            "minimum": 0.0,
-            "title": "Expected Version"
-          },
-          "submission_id": {
-            "type": "integer",
-            "exclusiveMinimum": 0.0,
-            "title": "Submission Id"
-          }
-        },
-        "additionalProperties": false,
-        "type": "object",
-        "required": [
-          "expected_version",
-          "submission_id"
-        ],
-        "title": "SubmissionActionIn"
-      },
-      "SubmissionOut": {
-        "properties": {
-          "year": {
-            "type": "integer",
-            "title": "Year"
-          },
-          "month": {
-            "type": "integer",
-            "title": "Month"
-          },
-          "closed": {
-            "type": "boolean",
-            "title": "Closed"
-          },
-          "closed_at": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "date-time"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Closed At"
-          },
-          "closed_by": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Closed By"
-          },
-          "closed_by_name": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Closed By Name"
-          },
-          "reopened_at": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "date-time"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Reopened At"
-          },
-          "reopened_by": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Reopened By"
-          },
-          "reopened_by_name": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Reopened By Name"
-          },
-          "projection_fingerprint": {
-            "type": "string",
-            "title": "Projection Fingerprint"
-          },
-          "wing_summary": {
-            "$ref": "#/components/schemas/WingSummaryOut"
-          },
-          "workflow": {
-            "$ref": "#/components/schemas/WorkflowOut"
-          },
-          "first_closable_date": {
-            "type": "string",
-            "format": "date",
-            "title": "First Closable Date"
-          },
-          "export_ready": {
-            "type": "boolean",
-            "title": "Export Ready"
-          },
-          "counts": {
-            "$ref": "#/components/schemas/MonthCountsOut"
-          },
-          "entries": {
-            "items": {
-              "$ref": "#/components/schemas/RegisterEntryOut"
-            },
-            "type": "array",
-            "title": "Entries"
-          },
-          "uncounted": {
-            "items": {
-              "$ref": "#/components/schemas/UncountedRecordOut"
-            },
-            "type": "array",
-            "title": "Uncounted"
-          },
-          "arrived_after_close": {
-            "items": {
-              "$ref": "#/components/schemas/ArrivedAfterCloseOut"
-            },
-            "type": "array",
-            "title": "Arrived After Close"
-          },
-          "blocking": {
-            "items": {
-              "$ref": "#/components/schemas/BlockingEntryOut"
-            },
-            "type": "array",
-            "title": "Blocking"
-          },
-          "submission_id": {
-            "type": "integer",
-            "title": "Submission Id"
-          },
-          "sequence": {
-            "type": "integer",
-            "title": "Sequence"
-          },
-          "created_at": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "date-time"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Created At"
-          },
-          "report_state": {
-            "type": "string",
-            "enum": [
-              "prepared",
-              "reviewed",
-              "approved",
-              "legacy"
-            ],
-            "title": "Report State"
-          },
-          "current": {
-            "type": "boolean",
-            "title": "Current"
-          },
-          "stale": {
-            "type": "boolean",
-            "title": "Stale"
-          },
-          "actions": {
-            "items": {
-              "$ref": "#/components/schemas/WorkflowActionOut"
-            },
-            "type": "array",
-            "title": "Actions"
-          }
-        },
-        "type": "object",
-        "required": [
-          "year",
-          "month",
-          "closed",
-          "closed_at",
-          "closed_by",
-          "closed_by_name",
-          "reopened_at",
-          "reopened_by",
-          "reopened_by_name",
-          "projection_fingerprint",
-          "wing_summary",
-          "workflow",
-          "first_closable_date",
-          "export_ready",
-          "counts",
-          "entries",
-          "uncounted",
-          "arrived_after_close",
-          "blocking",
-          "submission_id",
-          "sequence",
-          "created_at",
-          "report_state",
-          "current",
-          "stale",
-          "actions"
-        ],
-        "title": "SubmissionOut"
-      },
-      "SubmissionSummaryOut": {
-        "properties": {
-          "id": {
-            "type": "integer",
-            "title": "Id"
-          },
-          "sequence": {
-            "type": "integer",
-            "title": "Sequence"
-          },
-          "origin": {
-            "type": "string",
-            "enum": [
-              "workflow",
-              "legacy"
-            ],
-            "title": "Origin"
-          },
-          "created_at": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "date-time"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Created At"
-          },
-          "report_state": {
-            "type": "string",
-            "enum": [
-              "prepared",
-              "reviewed",
-              "approved",
-              "legacy"
-            ],
-            "title": "Report State"
-          },
-          "approved_at": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "date-time"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Approved At"
-          },
-          "current": {
-            "type": "boolean",
-            "title": "Current"
-          },
-          "stale": {
-            "type": "boolean",
-            "title": "Stale"
-          }
-        },
-        "type": "object",
-        "required": [
-          "id",
-          "sequence",
-          "origin",
-          "created_at",
-          "report_state",
-          "approved_at",
-          "current",
-          "stale"
-        ],
-        "title": "SubmissionSummaryOut"
       },
       "SubmitterCreate": {
         "properties": {
@@ -50231,82 +49836,6 @@
         ],
         "title": "WorkCrewWrite"
       },
-      "WorkflowActionOut": {
-        "properties": {
-          "action": {
-            "type": "string",
-            "enum": [
-              "prepared",
-              "reviewed",
-              "approved",
-              "returned",
-              "superseded",
-              "invalidated",
-              "reopened"
-            ],
-            "title": "Action"
-          },
-          "occurred_at": {
-            "type": "string",
-            "format": "date-time",
-            "title": "Occurred At"
-          },
-          "actor_user_id": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Actor User Id"
-          },
-          "actor_name_ar": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Actor Name Ar"
-          },
-          "actor_employee_id": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Actor Employee Id"
-          },
-          "reason": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Reason"
-          }
-        },
-        "type": "object",
-        "required": [
-          "action",
-          "occurred_at",
-          "actor_user_id",
-          "actor_name_ar",
-          "actor_employee_id",
-          "reason"
-        ],
-        "title": "WorkflowActionOut"
-      },
       "WorkflowActorOut": {
         "properties": {
           "user_id": {
@@ -50426,6 +49955,78 @@
         ],
         "title": "WorkflowCandidateOut"
       },
+      "WorkflowEventOut": {
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "returned",
+              "reopened"
+            ],
+            "title": "Action"
+          },
+          "user_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Id"
+          },
+          "name_ar": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name Ar"
+          },
+          "employee_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Employee Id"
+          },
+          "acted_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Acted At"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "action",
+          "user_id",
+          "name_ar",
+          "employee_id",
+          "acted_at",
+          "reason"
+        ],
+        "title": "WorkflowEventOut",
+        "description": "The last return or reopen, kept until the next preparation replaces it."
+      },
       "WorkflowOut": {
         "properties": {
           "version": {
@@ -50441,21 +50042,6 @@
               "closed"
             ],
             "title": "State"
-          },
-          "active_submission_id": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Active Submission Id"
-          },
-          "current_sequence": {
-            "type": "integer",
-            "title": "Current Sequence"
           },
           "reviewer": {
             "anyOf": [
@@ -50507,6 +50093,16 @@
               }
             ]
           },
+          "last_event": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WorkflowEventOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "needs_review": {
             "type": "boolean",
             "title": "Needs Review"
@@ -50531,122 +50127,23 @@
             },
             "type": "array",
             "title": "Allowed Actions"
-          },
-          "legacy": {
-            "type": "boolean",
-            "title": "Legacy"
-          },
-          "legacy_metadata": {
-            "anyOf": [
-              {
-                "additionalProperties": true,
-                "type": "object"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Legacy Metadata"
           }
         },
         "type": "object",
         "required": [
           "version",
           "state",
-          "active_submission_id",
-          "current_sequence",
           "reviewer",
           "manager",
           "prepared",
           "reviewed",
           "approved",
+          "last_event",
           "needs_review",
           "blockers",
-          "allowed_actions",
-          "legacy",
-          "legacy_metadata"
+          "allowed_actions"
         ],
         "title": "WorkflowOut"
-      },
-      "WorkflowTaskOut": {
-        "properties": {
-          "year": {
-            "type": "integer",
-            "title": "Year"
-          },
-          "month": {
-            "type": "integer",
-            "title": "Month"
-          },
-          "kind": {
-            "type": "string",
-            "enum": [
-              "prepare",
-              "review",
-              "approve",
-              "correction",
-              "recovery"
-            ],
-            "title": "Kind"
-          },
-          "submission_id": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Submission Id"
-          },
-          "code": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Code"
-          },
-          "row_count": {
-            "type": "integer",
-            "title": "Row Count"
-          }
-        },
-        "type": "object",
-        "required": [
-          "year",
-          "month",
-          "kind",
-          "submission_id",
-          "code",
-          "row_count"
-        ],
-        "title": "WorkflowTaskOut"
-      },
-      "WorkflowTasksOut": {
-        "properties": {
-          "items": {
-            "items": {
-              "$ref": "#/components/schemas/WorkflowTaskOut"
-            },
-            "type": "array",
-            "title": "Items"
-          },
-          "count": {
-            "type": "integer",
-            "title": "Count"
-          }
-        },
-        "type": "object",
-        "required": [
-          "items",
-          "count"
-        ],
-        "title": "WorkflowTasksOut"
       },
       "WorkforceAccessRead": {
         "properties": {

@@ -23,7 +23,6 @@ const EXPECTED_PLACEHOLDERS = [
   '{{name}}',
   '{{ref}}',
   '{{rows}}',
-  '{{sequence}}',
   '{{tables}}',
   '{{total}}',
 ]
@@ -74,7 +73,6 @@ const AR_KEYS = logicalKeys(AR)
 const RETIRED_KEYS = [
   'inmateStats.actions.close',
   'inmateStats.actions.forceClose',
-  'inmateStats.awaiting',
   'inmateStats.close',
   'inmateStats.document.titleEn',
   'inmateStats.export.options.language',
@@ -149,7 +147,7 @@ describe('inmate statistics i18n parity', () => {
     await i18n.changeLanguage('en')
     try {
       expect(i18n.t('application.approvedViolation.monthlyStatistics')).toBe('Monthly statistics')
-      expect(i18n.t('dashboard.widgetLabels.violation_months')).toBe('Monthly report tasks')
+      expect(i18n.t('dashboard.widgetLabels.violation_months')).toBe('Monthly report workflow')
       expect(i18n.t('inmateStats.inspector.createdBy', { name: 'Ali', date: '2026-09-10' })).toBe(
         'Added by Ali on 2026-09-10',
       )
@@ -177,7 +175,7 @@ describe('inmate statistics i18n parity', () => {
 
       await i18n.changeLanguage('ar')
       expect(i18n.t('application.approvedViolation.openRegister')).toBe('فتح السجل الشهري')
-      expect(i18n.t('dashboard.widgetLabels.violation_months')).toBe('مهام التقارير الشهرية')
+      expect(i18n.t('dashboard.widgetLabels.violation_months')).toBe('اعتماد التقارير الشهرية')
       expect(i18n.t('inmateStats.inspector.createdBy', { name: 'علي', date: '2026-09-10' })).toBe(
         'أضافه علي في 2026-09-10',
       )

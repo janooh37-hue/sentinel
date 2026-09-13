@@ -126,7 +126,7 @@ describe('monthly report and clipboard', () => {
     expect(payload.text).toContain(htmlDocument(payload.html).querySelector('caption')?.textContent)
   })
 
-  it('retains the selected revision whole-month totals when only citizens are copied', () => {
+  it('retains the whole-month totals when only citizens are copied', () => {
     const payload = buildRegisterClipboard(sampleMonth(), { ...options, scope: ['citizens'] }, i18n.t)
     const tables = htmlDocument(payload.html).querySelectorAll('table')
     expect(tables).toHaveLength(2)
@@ -151,20 +151,10 @@ describe('monthly report and clipboard', () => {
     expect(payload.html).not.toContain('G700')
   })
 
-  it('never gives the live draft actors or issue time from an earlier submitted cycle', () => {
-    const month = sampleMonth()
-    month.workflow = { ...month.workflow, prepared: actor, reviewed: { ...actor, name_ar: 'مراجع سابق' }, state: 'awaiting_manager' }
-    const { container } = render(createElement(RegisterDocument, { month, options, draftIssuedAt }))
-    expect(container).not.toHaveTextContent(actor.name_ar)
-    expect(container).not.toHaveTextContent('G700')
-    expect(container.querySelector('[data-report-issued-at]')).toHaveAttribute('data-report-issued-at', draftIssuedAt)
-    expect(container.querySelectorAll('[data-report-stage]')).toHaveLength(3)
-  })
-
-  it('uses only performed actors and their persisted times for the selected submission', () => {
+  it('uses only performed actors and their persisted times', () => {
     const month = sampleMonth()
     month.workflow = { ...month.workflow, prepared: actor, reviewer: { ...actor, name_ar: 'مُعيّن لم يعمل', eligible: true }, state: 'awaiting_review' }
-    const { container } = render(createElement(RegisterDocument, { month, options, submissionId: 42, draftIssuedAt }))
+    const { container } = render(createElement(RegisterDocument, { month, options, draftIssuedAt }))
     expect(container).toHaveTextContent(actor.name_ar)
     expect(container).toHaveTextContent('G700')
     expect(container).not.toHaveTextContent('مُعيّن لم يعمل')
@@ -172,14 +162,14 @@ describe('monthly report and clipboard', () => {
     expect(container.querySelector('[data-report-closed-at]')).toHaveAttribute('data-report-closed-at', '')
   })
 
-  it('preserves legacy pending rows and uses dashes for unavailable historical actor and issue facts', () => {
+  it('preserves pending rows and uses dashes for unavailable pre-feature actor facts', () => {
     const month = sampleMonth()
-    month.entries.push(reportEntry('legacy-pending', 'pending'))
-    month.workflow = { ...month.workflow, legacy: true, state: 'closed' }
+    month.entries.push(reportEntry('prefeature-pending', 'pending'))
+    month.workflow = { ...month.workflow, state: 'closed' }
     month.closed = true
     month.closed_at = '2026-09-01T04:00:00Z'
-    const { container } = render(createElement(RegisterDocument, { month, options, submissionId: 41, draftIssuedAt }))
-    expect(container).toHaveTextContent('legacy-pending')
+    const { container } = render(createElement(RegisterDocument, { month, options, draftIssuedAt }))
+    expect(container).toHaveTextContent('prefeature-pending')
     expect(container.querySelector('[data-report-issued-at]')).toHaveAttribute('data-report-issued-at', '')
     expect(container.querySelector('[data-report-closed-at]')).toHaveAttribute('data-report-closed-at', month.closed_at)
     expect(Array.from(container.querySelectorAll('[data-report-stage] dd'), (item) => item.textContent)).toEqual(['—', '—', '—'])

@@ -35,14 +35,7 @@ vi.mock('./useInmateRegister', () => ({
     managers: [{ user_id: 3, employee_id: 'G300', name_ar: 'مدير تجريبي' }],
     candidatesLoading: false,
     candidatesError: null,
-    history: [],
-    historyLoading: false,
-    historyError: null,
-    selectedReport: undefined,
-    reportLoading: false,
-    reportError: null,
-    mutationError: null,
-    refreshReport: vi.fn(),
+    retryCandidates: vi.fn(),
     ...mutations,
     isWriting: false,
   }),
@@ -51,7 +44,6 @@ vi.mock('./useInmateRegister', () => ({
     isLoading: false,
     isError: false,
   }),
-  useInmateTasks: () => ({ data: { items: [], count: 0 }, isSuccess: true }),
 }))
 vi.mock('@/lib/useIdentity', () => ({
   useIdentity: () => ({ isAdmin: false }),
@@ -146,31 +138,43 @@ beforeEach(() => {
 describe('StatisticsTab', () => {
   it('keeps four summary tiles and places pending inside the month total', () => {
     currentMonth = month([entry('pending', 'pending')])
-    currentMonth.wing_summary = { ...currentMonth.wing_summary, most: ['1A', '1B'], most_count: 2 }
+    currentMonth.wing_summary = {
+      ...currentMonth.wing_summary,
+      most: ['1A', '1B'],
+      most_count: 2,
+      unassigned_count: 1,
+    }
     const { container } = renderTab()
     const summary = container.querySelector('header dl')!
     expect(summary.children).toHaveLength(4)
     expect(summary.children[2]).toHaveTextContent('Pending completion')
     expect(summary.children[3]).toHaveTextContent('1A')
     expect(summary.children[3]).toHaveTextContent('1B')
+    expect(summary.children[3]).toHaveTextContent(
+      i18n.t('inmateStats.counts.unassignedWings', { count: 1 }),
+    )
   })
 
-  it('offers only server-allowed workflow actions and keeps reviewed register editable', () => {
-    currentMonth = month([])
-    currentMonth.workflow = { ...currentMonth.workflow, state: 'awaiting_manager', allowed_actions: [] }
-    renderTab()
-    expect(screen.getByRole('region', { name: i18n.t('inmateStats.workflow.title') })).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: i18n.t('inmateStats.workflow.approve') })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: i18n.t('inmateStats.workflow.prepare') })).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Add a manual entry' })).toBeInTheDocument()
-  })
-
-  it('uses the API wing choices in the manual correction form', async () => {
+  it('offers the twelve canonical wings in the manual correction form', async () => {
     currentMonth = month([])
     renderTab()
     await userEvent.click(screen.getByRole('button', { name: 'Add a manual entry' }))
     await userEvent.click(screen.getByRole('combobox', { name: 'Wing' }))
-    expect(screen.getAllByRole('option').map((option) => option.textContent)).toEqual(['—', '1A', '1B'])
+    expect(screen.getAllByRole('option').map((option) => option.textContent)).toEqual([
+      '—',
+      '1A',
+      '1B',
+      '2A',
+      '2B',
+      '3A',
+      '3B',
+      '4A',
+      '4B',
+      '5A',
+      '5B',
+      '6A',
+      '6B',
+    ])
   })
 
   it('opens the exact blocker correction in the mobile inspector across populations', async () => {

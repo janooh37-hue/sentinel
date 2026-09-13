@@ -4,20 +4,30 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter, useLocation } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
+
+import type * as ApiModule from '@/lib/api'
+import { NavBellPopover } from '@/components/shell/NavBellPopover'
 import { api } from '@/lib/api'
 import i18n from '@/lib/i18n'
-import { NavBellPopover } from '@/components/shell/NavBellPopover'
 import { ApplicationPage } from './ApplicationPage'
 import { inmateRegisterHref } from './statistics/registerModel'
-import { workflowMonth, workflowSubmission } from './statistics/workflowFixtures'
+import { workflowMonth } from './statistics/workflowFixtures'
 
 vi.mock('@/lib/api', async (original) => {
-  const actual = await original<typeof import('@/lib/api')>()
-  return { ...actual, api: { ...actual.api,
-    listTemplates: vi.fn(), getSettings: vi.fn(), getTemplateFields: vi.fn(),
-    getInmateRegisterMonth: vi.fn(), getInmateRegisterSubmissions: vi.fn(),
-    getInmateRegisterSubmission: vi.fn(), getInmateRegisterTasks: vi.fn(),
-  } }
+  const actual = await original<typeof ApiModule>()
+  return {
+    ...actual,
+    api: {
+      ...actual.api,
+      listTemplates: vi.fn(),
+      getSettings: vi.fn(),
+      getTemplateFields: vi.fn(),
+      getInmateRegisterMonth: vi.fn(),
+      getInmateRegisterAwaitingClose: vi.fn(),
+      getInmateRegisterCandidates: vi.fn(),
+      listInmateNationalities: vi.fn(),
+    },
+  }
 })
 vi.mock('@/lib/useCapabilities', () => ({ useCapabilities: () => ({
   isLoading: false,
@@ -41,7 +51,7 @@ vi.mock('@/components/books/SavedRecordActions', () => ({ SavedRecordActions: ()
 vi.mock('./notifyToggle', () => ({ shouldShowNotifyToggle: () => false }))
 vi.mock('./ApprovedViolationUpload', () => ({ ApprovedViolationUpload: () => <div data-testid="approved-upload" /> }))
 
-function LocationProbe() {
+function LocationProbe(): React.JSX.Element {
   const location = useLocation()
   return <output data-testid="location">{location.pathname}{location.search}</output>
 }
@@ -54,37 +64,37 @@ beforeEach(() => {
   })) } as never)
   vi.mocked(api.getSettings).mockResolvedValue({ sms_autosend_enabled: false } as never)
   vi.mocked(api.getTemplateFields).mockResolvedValue({ meta: {}, needs_manager: false, needs_submitter: false, fields: [], attachment_slots: [] } as never)
-  const month = workflowMonth()
-  month.workflow = { ...month.workflow, state: 'awaiting_manager', active_submission_id: 42, allowed_actions: ['approve'] }
-  vi.mocked(api.getInmateRegisterMonth).mockResolvedValue(month)
-  vi.mocked(api.getInmateRegisterTasks).mockResolvedValue({ count: 1, items: [
-    { year: 2026, month: 8, kind: 'approve', submission_id: 42, code: null, row_count: 0 },
-  ] })
-  vi.mocked(api.getInmateRegisterSubmissions).mockResolvedValue([
-    { id: 42, sequence: 2, origin: 'workflow', created_at: '2026-08-20T08:00:00Z', approved_at: null, report_state: 'reviewed', current: true, stale: false },
-  ])
-  vi.mocked(api.getInmateRegisterSubmission).mockResolvedValue(workflowSubmission({ submission_id: 42, sequence: 2, report_state: 'reviewed' }))
+  vi.mocked(api.getInmateRegisterMonth).mockResolvedValue(workflowMonth())
+  vi.mocked(api.getInmateRegisterAwaitingClose).mockResolvedValue({
+    months: [{ year: 2026, month: 8, row_count: 0, pending_count: 0, closable: true, stage: 'prepare', assigned: false }],
+    count: 1,
+  })
+  vi.mocked(api.getInmateRegisterCandidates).mockResolvedValue([])
+  vi.mocked(api.listInmateNationalities).mockResolvedValue({ items: [], aliases: {} })
 })
 
-describe('ApplicationPage same-path monthly task navigation', () => {
-  it.each(['another form', 'create', 'upload'])('opens exact statistics from the bell while already showing %s', async (mode) => {
+describe('ApplicationPage same-path monthly navigation', () => {
+  it('rehydrates statistics when the bell navigates from another form', async () => {
     const user = userEvent.setup()
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-    render(<QueryClientProvider client={client}><MemoryRouter initialEntries={[
-      `/application?form=${mode === 'another form' ? 'demo' : 'inmate_conduct_violations'}`,
-    ]}><NavBellPopover /><ApplicationPage /><LocationProbe /></MemoryRouter></QueryClientProvider>)
+    render(
+      <QueryClientProvider client={client}>
+        <MemoryRouter initialEntries={['/application?form=demo']}>
+          <NavBellPopover />
+          <ApplicationPage />
+          <LocationProbe />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    )
+
     expect(await screen.findByTestId('template-form')).toBeVisible()
-    if (mode === 'upload') {
-      await user.click(screen.getByRole('button', { name: 'Upload approved copy' }))
-      expect(screen.getByTestId('approved-upload')).toBeVisible()
-    }
     await user.click(await screen.findByRole('button', { name: 'Notifications, 1 unread' }))
     await user.click(screen.getByRole('button', { name: /August 2026/ }))
-    await waitFor(() => expect(screen.getByRole('button', { name: i18n.t('application.approvedViolation.monthlyStatistics') })).toHaveAttribute('aria-pressed', 'true'))
-    await waitFor(() => expect(api.getInmateRegisterSubmission).toHaveBeenCalledWith({ year: 2026, month: 8 }, 42))
-    expect(screen.getByRole('button', { name: i18n.t('inmateStats.views.export') })).toHaveAttribute('aria-pressed', 'true')
+
+    await waitFor(() => expect(api.getInmateRegisterMonth).toHaveBeenCalledWith({ year: 2026, month: 8 }))
+    expect(screen.getByRole('button', { name: i18n.t('application.approvedViolation.monthlyStatistics') })).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('button', { name: i18n.t('inmateStats.views.register') })).toHaveAttribute('aria-pressed', 'true')
     expect(screen.getByTestId('template-form')).not.toBeVisible()
-    expect(screen.queryByTestId('approved-upload')).not.toBeInTheDocument()
-    expect(screen.getByTestId('location')).toHaveTextContent(inmateRegisterHref(2026, 8, 42))
+    expect(screen.getByTestId('location')).toHaveTextContent(inmateRegisterHref(2026, 8))
   })
 })

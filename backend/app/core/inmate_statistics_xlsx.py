@@ -67,7 +67,6 @@ _SUMMARY_LABELS: Final[dict[str, dict[str, str]]] = {
         "total": "إجمالي مخالفات الشهر",
         "status": "الحالة",
         "closed": "مغلق",
-        "legacy": "تقرير سابق محفوظ",
         "open": "مفتوح — إسقاط حي",
         "closed_at": "تاريخ الإغلاق",
         "closed_by": "أغلق بواسطة",
@@ -83,7 +82,6 @@ _SUMMARY_LABELS: Final[dict[str, dict[str, str]]] = {
         "total": "Month total",
         "status": "Status",
         "closed": "Closed",
-        "legacy": "Legacy report",
         "open": "Open — live projection",
         "closed_at": "Closed at",
         "closed_by": "Closed by",
@@ -232,9 +230,8 @@ def _write_summary_sheet(
     sections: dict[str, RegisterSection],
     closed_at: datetime | None,
     closed_by_name: str | None,
-    legacy_force_reason: str | None,
+    force_reason: str | None,
     language: str,
-    legacy: bool,
 ) -> None:
     labels = _SUMMARY_LABELS[language]
     sheet = workbook.create_sheet("الملخص")
@@ -253,14 +250,7 @@ def _write_summary_sheet(
     rows.extend(
         (
             (labels["total"], sum(counts[key] for key in _SECTION_KEYS)),
-            (
-                labels["status"],
-                labels["legacy"]
-                if legacy
-                else labels["closed"]
-                if closed_at is not None
-                else labels["open"],
-            ),
+            (labels["status"], labels["closed"] if closed_at is not None else labels["open"]),
         )
     )
     if closed_at is not None:
@@ -270,11 +260,11 @@ def _write_summary_sheet(
                 (labels["closed_by"], closed_by_name or ""),
             )
         )
-        if legacy_force_reason is not None:
+        if force_reason is not None:
             rows.extend(
                 (
                     (labels["forced"], ""),
-                    (labels["reason"], legacy_force_reason),
+                    (labels["reason"], force_reason),
                 )
             )
 
@@ -300,9 +290,8 @@ def build_register_workbook(
     sections: Sequence[RegisterSection],
     closed_at: datetime | None,
     closed_by_name: str | None,
-    legacy_force_reason: str | None,
+    force_reason: str | None,
     language: str,
-    legacy: bool = False,
 ) -> bytes:
     """Render one monthly register without reading a database or filesystem."""
 
@@ -322,9 +311,8 @@ def build_register_workbook(
         sections=section_map,
         closed_at=closed_at,
         closed_by_name=closed_by_name,
-        legacy_force_reason=legacy_force_reason,
+        force_reason=force_reason,
         language=language,
-        legacy=legacy,
     )
 
     buffer = io.BytesIO()

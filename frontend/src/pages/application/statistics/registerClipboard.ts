@@ -18,8 +18,8 @@ function inlineStyle(style: CSSProperties): string {
 }
 
 /** Escaped HTML and TSV share report values and inline styles, never DOM HTML. */
-export function buildRegisterClipboard(month: InmateRegisterMonth, options: RegisterExportOptions, t: TFunction, submissionId?: number): RegisterClipboardPayload {
-  const report = buildRegisterPresentation(month, options, t, submissionId)
+export function buildRegisterClipboard(month: InmateRegisterMonth, options: RegisterExportOptions, t: TFunction): RegisterClipboardPayload {
+  const report = buildRegisterPresentation(month, options, t)
   const html = report.tables.map((table, index) => {
     const caption = index === 0 && report.caption ? `<caption dir="rtl" style="${inlineStyle(styles.caption)}">${escapeHtml(report.caption)}</caption>` : ''
     const columns = table.columns.map((column) => `<col style="width: ${column.width};">`).join('')

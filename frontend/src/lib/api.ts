@@ -976,23 +976,21 @@ export type InmateRegisterArrived = components['schemas']['ArrivedAfterCloseOut'
 export type InmateRegisterBlocking = components['schemas']['BlockingEntryOut']
 export type InmateNationality = components['schemas']['NationalityOut']
 export type InmateNationalityList = components['schemas']['NationalityListOut']
-export type InmateWorkflowTasks = components['schemas']['WorkflowTasksOut']
-export type InmateWorkflowTask = components['schemas']['WorkflowTaskOut']
+export type InmateAwaitingClose = components['schemas']['AwaitingCloseOut']
+export type InmateAwaitingMonth = components['schemas']['AwaitingMonthOut']
 export type InmateWorkflow = components['schemas']['WorkflowOut']
 export type InmateWorkflowActor = components['schemas']['WorkflowActorOut']
 export type InmateWorkflowAssignment = components['schemas']['WorkflowAssignmentOut']
 export type InmateWorkflowCandidate = components['schemas']['WorkflowCandidateOut']
 export type InmateWorkflowBlocker = components['schemas']['WorkflowBlockerOut']
 export type InmateWingSummary = components['schemas']['WingSummaryOut']
-export type InmateSubmission = components['schemas']['SubmissionOut']
-export type InmateSubmissionSummary = components['schemas']['SubmissionSummaryOut']
 export type InmateManualRowIn = components['schemas']['ManualRowIn']
 export type InmateManualRowPatch = components['schemas']['ManualRowPatch']
 export type InmateCompletionIn = components['schemas']['CompletionIn']
 export type InmateRegisterPrepare = components['schemas']['PrepareIn']
 export type InmateRegisterReview = components['schemas']['ReviewIn']
 export type InmateRegisterReturn = components['schemas']['ReturnIn']
-export type InmateRegisterApprove = components['schemas']['SubmissionActionIn']
+export type InmateRegisterApprove = components['schemas']['ApproveIn']
 export type InmateRegisterReopen = components['schemas']['ReopenIn']
 /** The three register groups: two inmate populations plus pending completion. */
 export type InmatePopulation = 'citizens' | 'expats' | 'pending'
@@ -2565,25 +2563,15 @@ export const api = {
   /** One Violation month: live entries while open, frozen entries once closed. */
   getInmateRegisterMonth: (p: InmateRegisterMonthParams) =>
     request<InmateRegisterMonth>('GET', `/inmate-violations/statistics/${p.year}/${p.month}`),
-  /** The closed inmate nationality list plus the history alias table. */
+  /** The closed inmate nationality list and its known alternate labels. */
   listInmateNationalities: () =>
     request<InmateNationalityList>('GET', '/inmate-violations/nationalities'),
-  getInmateRegisterTasks: () =>
-    request<InmateWorkflowTasks>('GET', '/inmate-violations/statistics/tasks'),
+  getInmateRegisterAwaitingClose: () =>
+    request<InmateAwaitingClose>('GET', '/inmate-violations/statistics/awaiting-close'),
   getInmateRegisterCandidates: (p: InmateRegisterMonthParams, stage: 'review' | 'approve') =>
     request<InmateWorkflowCandidate[]>(
       'GET',
       `/inmate-violations/statistics/${p.year}/${p.month}/candidates${qs({ stage })}`,
-    ),
-  getInmateRegisterSubmissions: (p: InmateRegisterMonthParams) =>
-    request<InmateSubmissionSummary[]>(
-      'GET',
-      `/inmate-violations/statistics/${p.year}/${p.month}/submissions`,
-    ),
-  getInmateRegisterSubmission: (p: InmateRegisterMonthParams, submissionId: number) =>
-    request<InmateSubmission>(
-      'GET',
-      `/inmate-violations/statistics/${p.year}/${p.month}/submissions/${submissionId}`,
     ),
   prepareInmateRegisterMonth: (p: InmateRegisterMonthParams, body: InmateRegisterPrepare) =>
     request<InmateRegisterMonth>(
@@ -2609,7 +2597,7 @@ export const api = {
       `/inmate-violations/statistics/${p.year}/${p.month}/approve`,
       body,
     ),
-  /** Admin-only reasoned reopen. Preserves the previous report and actors. */
+  /** Reopen a closed month with a recorded reason. */
   reopenInmateRegisterMonth: (p: InmateRegisterMonthParams, body: InmateRegisterReopen) =>
     request<InmateRegisterMonth>(
       'POST',
@@ -2649,13 +2637,12 @@ export const api = {
     p: InmateRegisterMonthParams & {
       language?: 'ar' | 'en'
       populations?: readonly InmatePopulation[]
-      submission_id?: number
     },
     fallbackName: string,
   ) => {
     const query = new URLSearchParams()
     if (p.language) query.set('language', p.language)
-    if (p.submission_id !== undefined) query.set('submission_id', String(p.submission_id))
+
     for (const key of p.populations ?? []) query.append('populations', key)
     const suffix = query.size > 0 ? `?${query.toString()}` : ''
     return fetchAttachment(

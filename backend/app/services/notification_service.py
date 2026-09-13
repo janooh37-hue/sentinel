@@ -46,29 +46,25 @@ _TAG_RE = re.compile(r"<[^>]+>")
 _WS_RE = re.compile(r"\s+")
 _ADDR_RE = re.compile(r"\s*<[^>]*>\s*$")
 
-MONTHLY_TASKS_URL = "/application?form=inmate_conduct_violations&mode=stats#monthly-tasks"
+MONTHLY_TASKS_URL = "/application?form=inmate_conduct_violations&mode=stats"
 
 
 def _monthly_items(db: Session, user: User) -> list[ActionableItem]:
-    """Use the route's task policy; unowned preparation/recovery never pushes."""
-    items = []
-    for task in inmate_statistics_service.workflow_tasks(db, actor=user):
-        if task["kind"] not in {"review", "approve"}:
-            continue
-        month = f"{task['year']}-{task['month']:02d}"
-        submission_id = task["submission_id"]
-        items.append(
-            ActionableItem(
-                kind="monthly_review" if task["kind"] == "review" else "monthly_approval",
-                ref=f"inmate-submission:{submission_id}",
-                url=(
-                    "/application?form=inmate_conduct_violations&mode=stats"
-                    f"&stats_month={month}&stats_submission={submission_id}"
-                ),
-                label=month,
-            )
+    """Monthly report stages selected for this user.
+
+    Only an assignment pushes: an unowned preparation reminder belongs on the
+    dashboard, not in everyone's notifications.
+    """
+
+    return [
+        ActionableItem(
+            kind="monthly_review" if stage == "review" else "monthly_approval",
+            ref=f"inmate-month:{year}-{month:02d}:{stage}",
+            url=f"{MONTHLY_TASKS_URL}&stats_month={year}-{month:02d}",
+            label=f"{year}-{month:02d}",
         )
-    return items
+        for year, month, stage in inmate_statistics_service.assigned_stages(db, user)
+    ]
 
 
 def _email_preview(notes_html: str | None, limit: int = 140) -> str:

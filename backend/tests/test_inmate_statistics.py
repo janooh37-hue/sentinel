@@ -147,7 +147,6 @@ def _approve_test_month(db: Session, year: int, month: int, *, actor: User, toda
         month,
         actor=reviewer,
         expected_version=view.workflow["version"],
-        submission_id=view.workflow["active_submission_id"],
         manager_user_id=actor.id,
     )
     return register.approve_month(
@@ -156,7 +155,6 @@ def _approve_test_month(db: Session, year: int, month: int, *, actor: User, toda
         month,
         actor=actor,
         expected_version=view.workflow["version"],
-        submission_id=view.workflow["active_submission_id"],
         today=today,
     )
 
@@ -691,7 +689,9 @@ def test_close_freezes_the_entries_and_audits(db_session: Session) -> None:
     logged = db_session.scalars(
         select(AuditLog).where(AuditLog.action == "inmate_violation_month_closed")
     ).all()
-    assert json.loads(logged[0].payload or "{}")["row_count"] == 2
+    payload = json.loads(logged[0].payload or "{}")
+    assert payload["year"] == CLOSED_YEAR
+    assert set(payload["actors"]) == {"prepared", "reviewed", "approved"}
 
 
 def test_a_sealed_month_is_never_re_derived(db_session: Session) -> None:
@@ -799,14 +799,16 @@ def test_awaiting_close_lists_ended_months_with_entries_and_no_seal(db_session: 
     _record(db_session, report_date="2026-07-04", inmates=[_inmate("يوليو")])
     _record(db_session, report_date="2026-08-05", imported_names=["أغسطس قيد الإكمال"])
     _record(db_session, report_date="2026-09-03", inmates=[_inmate("سبتمبر الجاري")])
-    _approve_test_month(db_session, 2026, 7, actor=_actor(db_session), today=TODAY)
+    actor = _actor(db_session)
+    _approve_test_month(db_session, 2026, 7, actor=actor, today=TODAY)
 
-    months = register.awaiting_close(db_session, today=TODAY)
+    months = register.awaiting_close(db_session, actor=actor, today=TODAY)
 
     # July is sealed; September has not ended.
     assert [(item.year, item.month) for item in months] == [(2026, 8)]
     assert months[0].pending_count == 1
     assert months[0].closable is False
+    assert months[0].stage == "prepare"
 
 
 # --------------------------------------------------------------------------- #
@@ -877,14 +879,38 @@ def test_manual_row_routes_round_trip_and_return_the_month(
     assert deleted.json()["counts"]["total"] == 0
 
 
-def test_tasks_route_is_accessible_to_non_admins(
+def test_awaiting_close_shows_selected_reviewer_not_unrelated_reader(
     api_db: Session, operator_client: TestClient
 ) -> None:
-    assert operator_client.get("/api/v1/inmate-violations/statistics/tasks").status_code == 200
-    assert (
-        "/api/v1/inmate-violations/statistics/awaiting-close"
-        not in operator_client.app.openapi()["paths"]
+    _closable_month(api_db)
+    preparer = _actor(api_db, role="manager", email="preparer@x.ae")
+    reviewer_client = _client_for(api_db, "manager", "reviewer-awaiting@x.ae")
+    users = [
+        preparer,
+        api_db.get(User, reviewer_client.user_id),
+        api_db.get(User, operator_client.user_id),
+    ]
+    for index, user in enumerate(users):
+        employee = Employee(id=f"GAWAIT{index}", name_en="Actor", name_ar=f"موظف {index}")
+        api_db.add(employee)
+        user.employee_id = employee.id
+    api_db.commit()
+    view = register.build_month(api_db, 2026, 8, actor=preparer)
+    register.prepare_month(
+        api_db,
+        2026,
+        8,
+        actor=preparer,
+        expected_version=view.workflow["version"],
+        expected_projection_fingerprint=view.projection_fingerprint,
+        reviewer_user_id=reviewer_client.user_id,
     )
+    selected = reviewer_client.get("/api/v1/inmate-violations/statistics/awaiting-close").json()
+    unrelated = operator_client.get("/api/v1/inmate-violations/statistics/awaiting-close").json()
+    assert [(item["month"], item["stage"], item["assigned"]) for item in selected["months"]] == [
+        (8, "review", True)
+    ]
+    assert unrelated == {"months": [], "count": 0}
 
 
 def test_nationality_list_route_carries_the_closed_list(operator_client: TestClient) -> None:
@@ -920,9 +946,6 @@ def test_close_materialises_one_workbook_copy(api_db: Session, admin_client: Tes
     )
 
     period = api_db.scalars(select(InmateViolationPeriod)).one()
-    assert (
-        period.export_path
-        == f"inmate_violations/2026-08-submission-{view.workflow['active_submission_id']}.xlsx"
-    )
+    assert period.export_path == f"inmate_violations/2026-08-v{view.workflow['version']}.xlsx"
     stored = get_settings().data_dir / period.export_path
     assert stored.is_file()

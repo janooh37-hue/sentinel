@@ -86,7 +86,7 @@ export function useNotificationStream(enabled = true): void {
       void qc.invalidateQueries({ queryKey: ['ledger-unread-count'] })
       void qc.invalidateQueries({ queryKey: ['ledger-log'] })
       void qc.invalidateQueries({ queryKey: ['notifications', 'counts'] })
-      void qc.invalidateQueries({ queryKey: ['inmate-register', 'tasks'] })
+      void qc.invalidateQueries({ queryKey: ['inmate-register', 'awaiting-close'] })
     }
 
     const notifyFor = (next: NotificationCounts): void => {

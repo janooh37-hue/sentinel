@@ -148,21 +148,29 @@ class WorkflowBlockerOut(BaseModel):
     details: dict[str, Any] = Field(default_factory=dict)
 
 
+class WorkflowEventOut(ORMBase):
+    """The last return or reopen, kept until the next preparation replaces it."""
+
+    action: Literal["returned", "reopened"]
+    user_id: int | None
+    name_ar: str | None
+    employee_id: str | None
+    acted_at: datetime
+    reason: str | None
+
+
 class WorkflowOut(BaseModel):
     version: int
     state: Literal["draft", "awaiting_review", "awaiting_manager", "closed"]
-    active_submission_id: int | None
-    current_sequence: int
     reviewer: WorkflowAssignmentOut | None
     manager: WorkflowAssignmentOut | None
     prepared: WorkflowActorOut | None
     reviewed: WorkflowActorOut | None
     approved: WorkflowActorOut | None
+    last_event: WorkflowEventOut | None
     needs_review: bool
     blockers: list[WorkflowBlockerOut]
     allowed_actions: list[Literal["prepare", "review", "return", "approve", "reopen"]]
-    legacy: bool
-    legacy_metadata: dict[str, Any] | None
 
 
 class MonthOut(ORMBase):
@@ -175,6 +183,9 @@ class MonthOut(ORMBase):
     reopened_at: datetime | None
     reopened_by: int | None
     reopened_by_name: str | None
+    #: Read-only history of a month forced closed before the approval workflow.
+    force_reason: str | None
+    force_closed: bool
     projection_fingerprint: str
     wing_summary: WingSummaryOut
     workflow: WorkflowOut
@@ -188,17 +199,21 @@ class MonthOut(ORMBase):
     blocking: list[BlockingEntryOut]
 
 
-class WorkflowTaskOut(BaseModel):
+class AwaitingMonthOut(BaseModel):
     year: int
     month: int
-    kind: Literal["prepare", "review", "approve", "correction", "recovery"]
-    submission_id: int | None
-    code: str | None
     row_count: int
+    pending_count: int
+    closable: bool
+    #: The stage this month waits on, and whether the caller is its actor.
+    stage: Literal["prepare", "review", "approve"]
+    assigned: bool
 
 
-class WorkflowTasksOut(BaseModel):
-    items: list[WorkflowTaskOut]
+class AwaitingCloseOut(BaseModel):
+    """Unsealed months the caller can move. A standing state, not an event."""
+
+    months: list[AwaitingMonthOut]
     count: int
 
 
@@ -258,54 +273,23 @@ class WorkflowVersionIn(BaseModel):
 
 
 class PrepareIn(WorkflowVersionIn):
+    """The fingerprint is the report the preparer actually previewed."""
+
     expected_projection_fingerprint: str = Field(pattern="^[a-f0-9]{64}$")
     reviewer_user_id: int = Field(gt=0)
-    supersede_reason: str | None = None
 
 
-class SubmissionActionIn(WorkflowVersionIn):
-    submission_id: int = Field(gt=0)
-
-
-class ReviewIn(SubmissionActionIn):
+class ReviewIn(WorkflowVersionIn):
     manager_user_id: int = Field(gt=0)
 
 
-class ReturnIn(SubmissionActionIn):
+class ReturnIn(WorkflowVersionIn):
     reason: str = Field(min_length=1)
+
+
+class ApproveIn(WorkflowVersionIn):
+    pass
 
 
 class ReopenIn(WorkflowVersionIn):
     reason: str = Field(min_length=1)
-
-
-class SubmissionSummaryOut(ORMBase):
-    id: int
-    sequence: int
-    origin: Literal["workflow", "legacy"]
-    created_at: datetime | None
-    report_state: Literal["prepared", "reviewed", "approved", "legacy"]
-    approved_at: datetime | None
-    current: bool
-    stale: bool
-
-
-class WorkflowActionOut(ORMBase):
-    action: Literal[
-        "prepared", "reviewed", "approved", "returned", "superseded", "invalidated", "reopened"
-    ]
-    occurred_at: datetime
-    actor_user_id: int | None
-    actor_name_ar: str | None
-    actor_employee_id: str | None
-    reason: str | None
-
-
-class SubmissionOut(MonthOut):
-    submission_id: int
-    sequence: int
-    created_at: datetime | None
-    report_state: Literal["prepared", "reviewed", "approved", "legacy"]
-    current: bool
-    stale: bool
-    actions: list[WorkflowActionOut]

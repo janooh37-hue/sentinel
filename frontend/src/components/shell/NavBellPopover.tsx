@@ -30,11 +30,11 @@ import { useFlagCount } from '@/pages/ledger/outlook/useFlagCount'
 import { useScanBack } from '@/pages/scanBack/useScanBack'
 import { useScanInboxCount } from '@/pages/scanInbox/useScanInboxCount'
 import {
-  inmateRegisterHref,
-  inmateMonthlyTasksHref,
   formatRegisterMonth,
+  inmateRegisterHref,
+  newestAwaitingMonth,
 } from '@/pages/application/statistics/registerModel'
-import { useInmateTasks } from '@/pages/application/statistics/useInmateRegister'
+import { useInmateAwaitingClose } from '@/pages/application/statistics/useInmateRegister'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { EmptyState } from '@/components/ui/empty-state'
 import { NavBell } from './NavBell'
@@ -107,9 +107,10 @@ export function NavBellPopover(): React.JSX.Element {
     ? (pendingQuery.data ?? []).filter((u) => u.status === 'pending').length
     : 0
 
-  const violationMonthsQuery = useInmateTasks()
-  const monthlyTasks = (violationMonthsQuery.data?.items ?? []).filter((item) => item.kind === 'review' || item.kind === 'approve')
-  const awaitingViolationMonths = monthlyTasks.length
+  const violationMonthsQuery = useInmateAwaitingClose()
+  const violationMonths = violationMonthsQuery.data?.months ?? []
+  const newestViolationMonth = newestAwaitingMonth(violationMonths)
+  const awaitingViolationMonths = violationMonthsQuery.data?.count ?? 0
 
   const expiryQuery = useQuery({
     queryKey: ['expiry', 'summary'],
@@ -261,13 +262,13 @@ export function NavBellPopover(): React.JSX.Element {
             </button>
           )}
 
-          {monthlyTasks.slice(0, 5).map((task) => (
+          {/* Ended inmate-violation months awaiting the current user's action */}
+          {awaitingViolationMonths > 0 && newestViolationMonth && (
             <button
-              key={`${task.year}-${task.month}-${task.kind}-${task.submission_id}`}
               type="button"
               onClick={() => {
                 setOpen(false)
-                navigate(inmateRegisterHref(task.year, task.month, task.submission_id))
+                navigate(inmateRegisterHref(newestViolationMonth.year, newestViolationMonth.month))
               }}
               className="flex w-full items-center gap-3 border-b border-hairline px-4 py-3 text-start transition-colors hover:bg-surface-tinted focus-visible:bg-surface-tinted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
             >
@@ -278,16 +279,25 @@ export function NavBellPopover(): React.JSX.Element {
               </Avatar>
               <div className="flex min-w-0 flex-1 flex-col">
                 <span className="truncate text-[0.9em] font-semibold text-foreground">
-                  {formatRegisterMonth(task.year, task.month, i18n.language)}
+                  {formatRegisterMonth(
+                    newestViolationMonth.year,
+                    newestViolationMonth.month,
+                    i18n.language,
+                  )}
                 </span>
                 <span className="text-[0.78em] text-muted-foreground">
-                  {t(`inmateStats.workflow.tasks.${task.kind}`)}
+                  {t(`inmateStats.workflow.${newestViolationMonth.stage}`)}
                 </span>
               </div>
+              <span
+                dir="ltr"
+                className="rounded-full bg-warning/15 px-2 py-0.5 font-mono text-[0.7em] font-semibold text-warning"
+              >
+                {awaitingViolationMonths}
+              </span>
               <ArrowRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground rtl:rotate-180" strokeWidth={1.8} />
             </button>
-          ))}
-          {monthlyTasks.length > 5 ? <Link to={inmateMonthlyTasksHref} onClick={() => setOpen(false)} className="block border-b border-hairline px-4 py-3 text-sm text-primary hover:underline">{t('inmateStats.workflow.allTasks')}</Link> : null}
+          )}
 
           {/* Awaiting MY approval (books.approve-gated) — Phase 4 LAN */}
           {canApproveBooks && awaitingApproval > 0 && (

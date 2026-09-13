@@ -1400,15 +1400,18 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/inmate-violations/statistics/tasks": {
+    "/api/v1/inmate-violations/statistics/awaiting-close": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /** Workflow Tasks */
-        get: operations["workflow_tasks_api_v1_inmate_violations_statistics_tasks_get"];
+        /**
+         * Awaiting Close
+         * @description Unsealed months waiting on this caller — the bell and widget source.
+         */
+        get: operations["awaiting_close_api_v1_inmate_violations_statistics_awaiting_close_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1535,40 +1538,6 @@ export interface paths {
         };
         /** Workflow Candidates */
         get: operations["workflow_candidates_api_v1_inmate_violations_statistics__year___month__candidates_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/inmate-violations/statistics/{year}/{month}/submissions": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Submission History */
-        get: operations["submission_history_api_v1_inmate_violations_statistics__year___month__submissions_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/inmate-violations/statistics/{year}/{month}/submissions/{submission_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Get Submission */
-        get: operations["get_submission_api_v1_inmate_violations_statistics__year___month__submissions__submission_id__get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -6217,6 +6186,11 @@ export interface components {
             /** Offset */
             offset: number;
         };
+        /** ApproveIn */
+        ApproveIn: {
+            /** Expected Version */
+            expected_version: number;
+        };
         /** ApproveRequest */
         ApproveRequest: {
             /**
@@ -6639,6 +6613,36 @@ export interface components {
              * Format: date-time
              */
             ts: string;
+        };
+        /**
+         * AwaitingCloseOut
+         * @description Unsealed months the caller can move. A standing state, not an event.
+         */
+        AwaitingCloseOut: {
+            /** Months */
+            months: components["schemas"]["AwaitingMonthOut"][];
+            /** Count */
+            count: number;
+        };
+        /** AwaitingMonthOut */
+        AwaitingMonthOut: {
+            /** Year */
+            year: number;
+            /** Month */
+            month: number;
+            /** Row Count */
+            row_count: number;
+            /** Pending Count */
+            pending_count: number;
+            /** Closable */
+            closable: boolean;
+            /**
+             * Stage
+             * @enum {string}
+             */
+            stage: "prepare" | "review" | "approve";
+            /** Assigned */
+            assigned: boolean;
         };
         /** BlockingEntryOut */
         BlockingEntryOut: {
@@ -10392,6 +10396,10 @@ export interface components {
             reopened_by: number | null;
             /** Reopened By Name */
             reopened_by_name: string | null;
+            /** Force Reason */
+            force_reason: string | null;
+            /** Force Closed */
+            force_closed: boolean;
             /** Projection Fingerprint */
             projection_fingerprint: string;
             wing_summary: components["schemas"]["WingSummaryOut"];
@@ -11105,7 +11113,10 @@ export interface components {
             /** Nationality */
             nationality?: string | null;
         };
-        /** PrepareIn */
+        /**
+         * PrepareIn
+         * @description The fingerprint is the report the preparer actually previewed.
+         */
         PrepareIn: {
             /** Expected Version */
             expected_version: number;
@@ -11113,8 +11124,6 @@ export interface components {
             expected_projection_fingerprint: string;
             /** Reviewer User Id */
             reviewer_user_id: number;
-            /** Supersede Reason */
-            supersede_reason?: string | null;
         };
         /** ProviderPersonMappingWrite */
         ProviderPersonMappingWrite: {
@@ -11442,8 +11451,6 @@ export interface components {
         ReturnIn: {
             /** Expected Version */
             expected_version: number;
-            /** Submission Id */
-            submission_id: number;
             /** Reason */
             reason: string;
         };
@@ -11476,8 +11483,6 @@ export interface components {
         ReviewIn: {
             /** Expected Version */
             expected_version: number;
-            /** Submission Id */
-            submission_id: number;
             /** Manager User Id */
             manager_user_id: number;
         };
@@ -11918,96 +11923,6 @@ export interface components {
             filename: string;
             /** Size */
             size: number;
-        };
-        /** SubmissionActionIn */
-        SubmissionActionIn: {
-            /** Expected Version */
-            expected_version: number;
-            /** Submission Id */
-            submission_id: number;
-        };
-        /** SubmissionOut */
-        SubmissionOut: {
-            /** Year */
-            year: number;
-            /** Month */
-            month: number;
-            /** Closed */
-            closed: boolean;
-            /** Closed At */
-            closed_at: string | null;
-            /** Closed By */
-            closed_by: number | null;
-            /** Closed By Name */
-            closed_by_name: string | null;
-            /** Reopened At */
-            reopened_at: string | null;
-            /** Reopened By */
-            reopened_by: number | null;
-            /** Reopened By Name */
-            reopened_by_name: string | null;
-            /** Projection Fingerprint */
-            projection_fingerprint: string;
-            wing_summary: components["schemas"]["WingSummaryOut"];
-            workflow: components["schemas"]["WorkflowOut"];
-            /**
-             * First Closable Date
-             * Format: date
-             */
-            first_closable_date: string;
-            /** Export Ready */
-            export_ready: boolean;
-            counts: components["schemas"]["MonthCountsOut"];
-            /** Entries */
-            entries: components["schemas"]["RegisterEntryOut"][];
-            /** Uncounted */
-            uncounted: components["schemas"]["UncountedRecordOut"][];
-            /** Arrived After Close */
-            arrived_after_close: components["schemas"]["ArrivedAfterCloseOut"][];
-            /** Blocking */
-            blocking: components["schemas"]["BlockingEntryOut"][];
-            /** Submission Id */
-            submission_id: number;
-            /** Sequence */
-            sequence: number;
-            /** Created At */
-            created_at: string | null;
-            /**
-             * Report State
-             * @enum {string}
-             */
-            report_state: "prepared" | "reviewed" | "approved" | "legacy";
-            /** Current */
-            current: boolean;
-            /** Stale */
-            stale: boolean;
-            /** Actions */
-            actions: components["schemas"]["WorkflowActionOut"][];
-        };
-        /** SubmissionSummaryOut */
-        SubmissionSummaryOut: {
-            /** Id */
-            id: number;
-            /** Sequence */
-            sequence: number;
-            /**
-             * Origin
-             * @enum {string}
-             */
-            origin: "workflow" | "legacy";
-            /** Created At */
-            created_at: string | null;
-            /**
-             * Report State
-             * @enum {string}
-             */
-            report_state: "prepared" | "reviewed" | "approved" | "legacy";
-            /** Approved At */
-            approved_at: string | null;
-            /** Current */
-            current: boolean;
-            /** Stale */
-            stale: boolean;
         };
         /** SubmitterCreate */
         SubmitterCreate: {
@@ -13766,27 +13681,6 @@ export interface components {
              */
             active: boolean;
         };
-        /** WorkflowActionOut */
-        WorkflowActionOut: {
-            /**
-             * Action
-             * @enum {string}
-             */
-            action: "prepared" | "reviewed" | "approved" | "returned" | "superseded" | "invalidated" | "reopened";
-            /**
-             * Occurred At
-             * Format: date-time
-             */
-            occurred_at: string;
-            /** Actor User Id */
-            actor_user_id: number | null;
-            /** Actor Name Ar */
-            actor_name_ar: string | null;
-            /** Actor Employee Id */
-            actor_employee_id: string | null;
-            /** Reason */
-            reason: string | null;
-        };
         /** WorkflowActorOut */
         WorkflowActorOut: {
             /** User Id */
@@ -13830,6 +13724,30 @@ export interface components {
             /** Employee Id */
             employee_id: string;
         };
+        /**
+         * WorkflowEventOut
+         * @description The last return or reopen, kept until the next preparation replaces it.
+         */
+        WorkflowEventOut: {
+            /**
+             * Action
+             * @enum {string}
+             */
+            action: "returned" | "reopened";
+            /** User Id */
+            user_id: number | null;
+            /** Name Ar */
+            name_ar: string | null;
+            /** Employee Id */
+            employee_id: string | null;
+            /**
+             * Acted At
+             * Format: date-time
+             */
+            acted_at: string;
+            /** Reason */
+            reason: string | null;
+        };
         /** WorkflowOut */
         WorkflowOut: {
             /** Version */
@@ -13839,52 +13757,18 @@ export interface components {
              * @enum {string}
              */
             state: "draft" | "awaiting_review" | "awaiting_manager" | "closed";
-            /** Active Submission Id */
-            active_submission_id: number | null;
-            /** Current Sequence */
-            current_sequence: number;
             reviewer: components["schemas"]["WorkflowAssignmentOut"] | null;
             manager: components["schemas"]["WorkflowAssignmentOut"] | null;
             prepared: components["schemas"]["WorkflowActorOut"] | null;
             reviewed: components["schemas"]["WorkflowActorOut"] | null;
             approved: components["schemas"]["WorkflowActorOut"] | null;
+            last_event: components["schemas"]["WorkflowEventOut"] | null;
             /** Needs Review */
             needs_review: boolean;
             /** Blockers */
             blockers: components["schemas"]["WorkflowBlockerOut"][];
             /** Allowed Actions */
             allowed_actions: ("prepare" | "review" | "return" | "approve" | "reopen")[];
-            /** Legacy */
-            legacy: boolean;
-            /** Legacy Metadata */
-            legacy_metadata: {
-                [key: string]: unknown;
-            } | null;
-        };
-        /** WorkflowTaskOut */
-        WorkflowTaskOut: {
-            /** Year */
-            year: number;
-            /** Month */
-            month: number;
-            /**
-             * Kind
-             * @enum {string}
-             */
-            kind: "prepare" | "review" | "approve" | "correction" | "recovery";
-            /** Submission Id */
-            submission_id: number | null;
-            /** Code */
-            code: string | null;
-            /** Row Count */
-            row_count: number;
-        };
-        /** WorkflowTasksOut */
-        WorkflowTasksOut: {
-            /** Items */
-            items: components["schemas"]["WorkflowTaskOut"][];
-            /** Count */
-            count: number;
         };
         /** WorkforceAccessRead */
         WorkforceAccessRead: {
@@ -17370,7 +17254,7 @@ export interface operations {
             };
         };
     };
-    workflow_tasks_api_v1_inmate_violations_statistics_tasks_get: {
+    awaiting_close_api_v1_inmate_violations_statistics_awaiting_close_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -17387,7 +17271,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["WorkflowTasksOut"];
+                    "application/json": components["schemas"]["AwaitingCloseOut"];
                 };
             };
             /** @description Validation Error */
@@ -17440,7 +17324,6 @@ export interface operations {
             query?: {
                 language?: string;
                 populations?: string[] | null;
-                submission_id?: number | null;
             };
             header?: never;
             path: {
@@ -17601,7 +17484,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["SubmissionActionIn"];
+                "application/json": components["schemas"]["ApproveIn"];
             };
         };
         responses: {
@@ -17648,75 +17531,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["WorkflowCandidateOut"][];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    submission_history_api_v1_inmate_violations_statistics__year___month__submissions_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                year: number;
-                month: number;
-            };
-            cookie?: {
-                gssg_session?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SubmissionSummaryOut"][];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_submission_api_v1_inmate_violations_statistics__year___month__submissions__submission_id__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                year: number;
-                month: number;
-                submission_id: number;
-            };
-            cookie?: {
-                gssg_session?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SubmissionOut"];
                 };
             };
             /** @description Validation Error */
