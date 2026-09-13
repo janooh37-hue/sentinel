@@ -7,9 +7,21 @@
         "hooks": [
           {
             "type": "command",
-            "command": "powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\Admin\\sentinel\\.codex\\hooks\\pre-deploy.ps1\"",
+            "command": "powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\Amh\\Documents\\projects\\sentinel\\.codex\\hooks\\pre-deploy.ps1\"",
             "timeout": 15,
             "statusMessage": "Checking production deploy safety"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\Amh\\Documents\\projects\\sentinel\\.herdr\\hooks\\notify-plan-stop.ps1\"",
+            "timeout": 20,
+            "statusMessage": "Notifying pipeline orchestrator"
           }
         ]
       }
@@ -20,7 +32,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\Admin\\sentinel\\.codex\\hooks\\post-edit.ps1\"",
+            "command": "powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\Amh\\Documents\\projects\\sentinel\\.codex\\hooks\\post-edit.ps1\"",
             "timeout": 90,
             "statusMessage": "Checking edited files"
           }

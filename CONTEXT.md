@@ -220,6 +220,22 @@ The replacement of a vehicle's current license validity period with a new period
 while retaining the ended period, renewal cost, and prior license scan in its history.
 _Avoid_: License edit, expiry reminder
 
+### Walker
+
+**Walker**:
+The agent that uses the app as a signed-in persona to find UX friction, seeing
+both the user's screen and the backend's reaction.
+_Avoid_: Tester bot, UX agent, crawler
+
+**Walk**:
+One Walker cycle through one workflow, in one language, as one persona.
+_Avoid_: Run, session, test pass
+
+**Friction finding**:
+One observed UX obstacle from a Walk, raised as a single issue attributed to
+the Walker.
+_Avoid_: Bug report, UX ticket, finding batch
+
 ## Implementation mappings
 
 These names preserve current database and API spellings while product prose uses
