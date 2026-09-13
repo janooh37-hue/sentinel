@@ -1348,10 +1348,24 @@ def _reserve(
         ),
     )
     if changed.rowcount == 0:
-        # Absent roots start at version zero. Existing roots cannot be reset.
+        # Absent roots start at version zero. A month sealed before this
+        # feature existed has no workflow row; initialize it as closed so an
+        # administrator can still reopen it, instead of a synthetic draft
+        # that can never satisfy this call's own ``states=("closed",)``.
+        closed_at = db.scalar(
+            select(InmateViolationPeriod.closed_at).where(
+                InmateViolationPeriod.year == year,
+                InmateViolationPeriod.month == month,
+            )
+        )
         db.execute(
             insert(InmateViolationWorkflow)
-            .values(year=year, month=month, version=0, state="draft")
+            .values(
+                year=year,
+                month=month,
+                version=0,
+                state="closed" if closed_at is not None else "draft",
+            )
             .on_conflict_do_nothing(index_elements=["year", "month"])
         )
         changed = cast(
