@@ -58,4 +58,8 @@ scripts\mng.ps1 logs
 - `sync-api-types`: regenerate and validate the frontend API contract.
 - `new-migration`: create one reversible, SQLite-safe migration on the current head.
 
+## Planning artifacts
+
+Keep plans in `mockups/plan/`. New planning documents belong there instead of a top-level `Plans/` directory.
+
 Read `PRODUCT.md` for product voice and accessibility requirements, and `DESIGN.md` for UI tokens and interaction conventions when those files are present.

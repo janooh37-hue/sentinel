@@ -156,8 +156,8 @@ backend/scripts/_run_sample_report.bat
 mockups/shots/
 mockups/refreance/
 
-# Feature planning drafts dropped in mockups/ (scratch, not shared design source)
-mockups/*_PLAN.md
+# Feature planning drafts belong in mockups/plan/ (scratch, not shared design source)
+mockups/plan/
 
 # Agent worktrees
 %TEMP%/
