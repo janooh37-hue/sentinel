@@ -29,9 +29,11 @@ import {
   accidentTone,
   dueTone,
   expiryTone,
+  paymentTone,
   type AccidentStatus,
   type DueState,
   type ExpiryStatus,
+  type PaymentStatus,
   type VehicleTone,
 } from '../vehicleUtils'
 
@@ -39,6 +41,7 @@ type Family =
   | { family: 'expiry'; status: ExpiryStatus }
   | { family: 'due'; status: DueState }
   | { family: 'accident'; status: AccidentStatus }
+  | { family: 'payment'; status: PaymentStatus }
 
 type Props = Family & {
   className?: string
@@ -66,6 +69,9 @@ const ICONS = {
   scheduled: CalendarClock,
   open: CircleDot,
   closed: CheckCircle2,
+  paid: CheckCircle2,
+  unpaid: Clock,
+  unknown: CircleDot,
 } as const
 
 export function VehicleStatusBadge(props: Props): React.JSX.Element {
@@ -77,18 +83,24 @@ export function VehicleStatusBadge(props: Props): React.JSX.Element {
       ? expiryTone(props.status)
       : props.family === 'due'
         ? dueTone(props.status)
-        : accidentTone(props.status)
+        : props.family === 'accident'
+          ? accidentTone(props.status)
+          : paymentTone(props.status)
 
   // `valid | expired | overdue | scheduled` are their own locale keys; the
-  // accident pair is named differently, and a maintenance date that is merely
-  // approaching says «Due soon» — `vehicles.due` is the license wording
-  // («ينتهي قريباً», an expiry), which a service date must not borrow.
+  // accident and payment pairs are named differently — a maintenance date
+  // that is merely approaching says «Due soon» (`vehicles.due`, an expiry
+  // key a service date must not borrow), and payment status lives under its
+  // own `vehicles.fines.status.*` namespace.
   const label =
     props.family === 'accident'
       ? t(props.status === 'open' ? 'vehicles.openStatus' : 'vehicles.closedStatus')
-      : props.family === 'due' && props.status === 'due'
-        ? t('vehicles.dueSoon')
-        : t(`vehicles.${props.status}`)
+      : props.family === 'payment'
+        ? t(`vehicles.fines.status.${props.status}`)
+        : props.family === 'due' && props.status === 'due'
+          ? t('vehicles.dueSoon')
+          : t(`vehicles.${props.status}`)
+
 
   const Icon = ICONS[props.status]
   const content = (

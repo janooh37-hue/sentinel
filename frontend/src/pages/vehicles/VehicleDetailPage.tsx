@@ -84,6 +84,7 @@ import {
   employeeLabel,
   formatAed,
   formatDateTime,
+  formatFilsAed,
   formatIsoDate,
   formatNumber,
   invalidateVehicleQueries,
@@ -94,7 +95,10 @@ import {
 } from './vehicleUtils'
 import { AccidentCard } from './components/AccidentCard'
 import { AccidentDialog } from './components/AccidentDialog'
+import { FineActions, type FineActionCallbacks } from './components/FineActions'
+import { FineAmount } from './components/FineAmount'
 import { FineDialog } from './components/FineDialog'
+import { FinePaymentDialog, type FinePaymentMode } from './components/FinePaymentDialog'
 import { MaintenanceDialog } from './components/MaintenanceDialog'
 import { PlateChip } from './components/PlateChip'
 import { RenewLicenseDialog } from './components/RenewLicenseDialog'
@@ -154,6 +158,11 @@ export function VehicleDetailPage(): React.JSX.Element {
   const [photoToDelete, setPhotoToDelete] = useState<VehicleFileRead | null>(null)
   const [archiveConfirmOpen, setArchiveConfirmOpen] = useState(false)
   const [restoreConfirmOpen, setRestoreConfirmOpen] = useState(false)
+  const [paymentTarget, setPaymentTarget] = useState<
+    { fine: VehicleFineRead; mode: FinePaymentMode } | null
+  >(null)
+  const [fineArchiveTarget, setFineArchiveTarget] = useState<VehicleFineRead | null>(null)
+  const [showArchivedFines, setShowArchivedFines] = useState(false)
 
   const vehicleQuery = useQuery({
     queryKey: VEHICLE_QUERY_KEYS.detail(vehicleId ?? 0),
@@ -187,14 +196,44 @@ export function VehicleDetailPage(): React.JSX.Element {
   )
 
   const deleteFine = useMutation({
-    mutationFn: (target: { vehicleId: number; fineId: number }) =>
-      api.deleteVehicleFine(target.vehicleId, target.fineId),
+    mutationFn: (target: { vehicleId: number; fineId: number; version: string }) =>
+      api.deleteVehicleFine(target.vehicleId, target.fineId, target.version),
     onSuccess: (_updated, target) => {
       invalidateVehicleQueries(queryClient, {
         vehicleId: target.vehicleId,
         registers: ['fines'],
       })
       toast.success(t('vehicles.fineDeleted'))
+    },
+    onError: (err) => toast.error(vehicleErrorMessage(err, t)),
+  })
+
+  const markFineUnpaid = useMutation({
+    mutationFn: (target: { vehicleId: number; fineId: number; version: string }) =>
+      api.updateVehicleFine(target.vehicleId, target.fineId, { payment_status: 'unpaid' }, target.version),
+    onSuccess: (_updated, target) => {
+      invalidateVehicleQueries(queryClient, { vehicleId: target.vehicleId, registers: ['fines'] })
+      toast.success(t('vehicles.fines.classified'))
+    },
+    onError: (err) => toast.error(vehicleErrorMessage(err, t)),
+  })
+
+  const archiveFine = useMutation({
+    mutationFn: (target: { vehicleId: number; id: number; version: string }) =>
+      api.archiveVehicleFines([{ id: target.id, version: target.version }]),
+    onSuccess: (_result, target) => {
+      invalidateVehicleQueries(queryClient, { vehicleId: target.vehicleId, registers: ['fines'] })
+      toast.success(t('vehicles.fines.archived', { count: 1 }))
+    },
+    onError: (err) => toast.error(vehicleErrorMessage(err, t)),
+  })
+
+  const restoreFine = useMutation({
+    mutationFn: (target: { vehicleId: number; id: number; version: string }) =>
+      api.restoreVehicleFines([{ id: target.id, version: target.version }]),
+    onSuccess: (_result, target) => {
+      invalidateVehicleQueries(queryClient, { vehicleId: target.vehicleId, registers: ['fines'] })
+      toast.success(t('vehicles.fines.restored', { count: 1 }))
     },
     onError: (err) => toast.error(vehicleErrorMessage(err, t)),
   })
@@ -508,9 +547,20 @@ export function VehicleDetailPage(): React.JSX.Element {
                   canEdit={canMutate}
                   canDelete={canDeleteMutate}
                   isMobile={isMobile}
-                  busy={deleteFine.isPending}
+                  busy={deleteFine.isPending || restoreFine.isPending}
+                  showArchived={showArchivedFines}
+                  onToggleShowArchived={() => setShowArchivedFines((value) => !value)}
                   onEdit={(fine) => setFineTarget({ mode: 'edit', fine })}
                   onDelete={setFineToDelete}
+                  onRecordPayment={(fine) => setPaymentTarget({ fine, mode: 'payment' })}
+                  onAttachReceipt={(fine) => setPaymentTarget({ fine, mode: 'receipt' })}
+                  onMarkUnpaid={(fine) =>
+                    markFineUnpaid.mutate({ vehicleId: fine.vehicle_id, fineId: fine.id, version: fine.version })
+                  }
+                  onArchive={setFineArchiveTarget}
+                  onRestore={(fine) =>
+                    restoreFine.mutate({ vehicleId: fine.vehicle_id, id: fine.id, version: fine.version })
+                  }
                 />
               )}
               {tab === 'renewals' && (
@@ -612,6 +662,18 @@ export function VehicleDetailPage(): React.JSX.Element {
         </>
       )}
 
+      {paymentTarget && (
+        <FinePaymentDialog
+          open
+          key={`fine-payment-${paymentTarget.fine.id}-${paymentTarget.mode}`}
+          fine={paymentTarget.fine}
+          mode={paymentTarget.mode}
+          onOpenChange={(open) => {
+            if (!open) setPaymentTarget(null)
+          }}
+        />
+      )}
+
       {vehicle && canDeleteMutate && (
         <>
           <ConfirmDialog
@@ -625,9 +687,32 @@ export function VehicleDetailPage(): React.JSX.Element {
             destructive
             onConfirm={() => {
               if (fineToDelete) {
-                deleteFine.mutate({ vehicleId: vehicle.id, fineId: fineToDelete.id })
+                deleteFine.mutate({
+                  vehicleId: vehicle.id,
+                  fineId: fineToDelete.id,
+                  version: fineToDelete.version,
+                })
               }
               setFineToDelete(null)
+            }}
+          />
+          <ConfirmDialog
+            open={fineArchiveTarget != null}
+            onOpenChange={(open) => {
+              if (!open) setFineArchiveTarget(null)
+            }}
+            title={t('vehicles.fines.archiveOne')}
+            description={t('vehicles.fines.archiveOneConfirm')}
+            confirmLabel={t('vehicles.fines.archive')}
+            onConfirm={() => {
+              if (fineArchiveTarget) {
+                archiveFine.mutate({
+                  vehicleId: fineArchiveTarget.vehicle_id,
+                  id: fineArchiveTarget.id,
+                  version: fineArchiveTarget.version,
+                })
+              }
+              setFineArchiveTarget(null)
             }}
           />
           <ConfirmDialog
@@ -1014,8 +1099,15 @@ function FinesPanel({
   canDelete,
   isMobile,
   busy,
+  showArchived,
+  onToggleShowArchived,
   onEdit,
   onDelete,
+  onRecordPayment,
+  onAttachReceipt,
+  onMarkUnpaid,
+  onArchive,
+  onRestore,
 }: {
   vehicle: VehicleRead
   fines: readonly VehicleFineRead[]
@@ -1023,12 +1115,30 @@ function FinesPanel({
   canDelete: boolean
   isMobile: boolean
   busy: boolean
+  showArchived: boolean
+  onToggleShowArchived: () => void
   onEdit: (fine: VehicleFineRead) => void
   onDelete: (fine: VehicleFineRead) => void
+  onRecordPayment: (fine: VehicleFineRead) => void
+  onAttachReceipt: (fine: VehicleFineRead) => void
+  onMarkUnpaid: (fine: VehicleFineRead) => void
+  onArchive: (fine: VehicleFineRead) => void
+  onRestore: (fine: VehicleFineRead) => void
 }): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const lang = i18n.language
   const showActions = canEdit || canDelete
+  const archivedCount = fines.filter((fine) => fine.archived_at).length
+  const visible = showArchived ? fines : fines.filter((fine) => !fine.archived_at)
+  const actions = {
+    onEdit,
+    onDelete,
+    onRecordPayment,
+    onAttachReceipt,
+    onMarkUnpaid,
+    onArchive,
+    onRestore,
+  }
 
   return (
     <Panel>
@@ -1036,18 +1146,30 @@ function FinesPanel({
         title={t('vehicles.tabFines')}
         subtitle={
           <bdi>
-            {`${formatNumber(fines.length, lang)} ${t('vehicles.fineCount')} · ${formatAed(
-              vehicle.fines_amount,
+            {`${formatNumber(fines.length, lang)} ${t('vehicles.fineCount')} · ${formatFilsAed(
+              vehicle.fines_amount_fils,
               lang,
             )} · ${formatNumber(vehicle.black_points, lang)} ${t('vehicles.points')}`}
           </bdi>
         }
+        actions={
+          archivedCount > 0 && (
+            <Button type="button" variant="ghost" size="sm" onClick={onToggleShowArchived}>
+              {showArchived
+                ? t('vehicles.fines.hideArchived')
+                : t('vehicles.fines.showArchived', { count: archivedCount })}
+            </Button>
+          )
+        }
       />
-      {fines.length === 0 ? (
-        <EmptyState icon={FileText} message={t('vehicles.noFines')} />
+      {visible.length === 0 ? (
+        <EmptyState
+          icon={FileText}
+          message={t(fines.length === 0 ? 'vehicles.noFines' : 'vehicles.fines.noActiveFines')}
+        />
       ) : isMobile ? (
         <div className="flex flex-col gap-2.5 p-2.5">
-          {fines.map((fine, index) => (
+          {visible.map((fine, index) => (
             <FineCard
               key={fine.id}
               fine={fine}
@@ -1055,14 +1177,13 @@ function FinesPanel({
               canEdit={canEdit}
               canDelete={canDelete}
               busy={busy}
-              onEdit={onEdit}
-              onDelete={onDelete}
+              {...actions}
             />
           ))}
         </div>
       ) : (
         <div className="w-full overflow-x-auto">
-          <table className="w-full min-w-[720px] text-sm">
+          <table className="w-full min-w-[860px] text-sm">
             <TableHeader>
               <TableRow>
                 <TableHead className="w-[54px]">{t('vehicles.sequence')}</TableHead>
@@ -1071,11 +1192,12 @@ function FinesPanel({
                 <TableHead>{t('vehicles.date')}</TableHead>
                 <TableHead>{t('vehicles.amount')}</TableHead>
                 <TableHead>{t('vehicles.blackPoints')}</TableHead>
+                <TableHead>{t('vehicles.fines.statusColumn')}</TableHead>
                 {showActions && <TableHead className="text-end">{t('vehicles.action')}</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
-              {fines.map((fine, index) => (
+              {visible.map((fine, index) => (
                 <TableRow key={fine.id}>
                   <TableCell className="w-[54px] font-mono text-[0.72rem] tabular-nums text-muted-foreground">
                     {formatNumber(index + 1, lang)}
@@ -1102,21 +1224,26 @@ function FinesPanel({
                     <Mono>{formatDateTime(fine.date, fine.time)}</Mono>
                   </TableCell>
                   <TableCell className="text-[0.76rem] font-medium">
-                    <bdi>{formatAed(fine.amount, lang)}</bdi>
+                    <FineAmount fils={fine.amount_fils} />
                   </TableCell>
                   <TableCell className="font-mono text-[0.74rem] tabular-nums">
                     {formatNumber(fine.black_points, lang)}
                   </TableCell>
+                  <TableCell>
+                    <div className="flex flex-col items-start gap-1">
+                      <VehicleStatusBadge family="payment" status={fine.payment_status} />
+                      {fine.receipt && (
+                        <VehicleFileThumb
+                          vehicleId={vehicle.id}
+                          file={fine.receipt}
+                          className="h-[26px] w-[36px]"
+                        />
+                      )}
+                    </div>
+                  </TableCell>
                   {showActions && (
                     <TableCell className="text-end">
-                      <FineActions
-                        fine={fine}
-                        canEdit={canEdit}
-                        canDelete={canDelete}
-                        busy={busy}
-                        onEdit={onEdit}
-                        onDelete={onDelete}
-                      />
+                      <FineActions fine={fine} canEdit={canEdit} canDelete={canDelete} busy={busy} {...actions} />
                     </TableCell>
                   )}
                 </TableRow>
@@ -1129,55 +1256,6 @@ function FinesPanel({
   )
 }
 
-/** Edit (assign a driver, fix an amount) and delete, shared by row and card. */
-function FineActions({
-  fine,
-  canEdit,
-  canDelete,
-  busy,
-  onEdit,
-  onDelete,
-}: {
-  fine: VehicleFineRead
-  canEdit: boolean
-  canDelete: boolean
-  busy: boolean
-  onEdit: (fine: VehicleFineRead) => void
-  onDelete: (fine: VehicleFineRead) => void
-}): React.JSX.Element {
-  const { t } = useTranslation()
-  return (
-    <div className="flex items-center justify-end gap-1">
-      {canEdit && (
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-sm"
-          aria-label={t('vehicles.editFine')}
-          title={t('vehicles.editFine')}
-          onClick={() => onEdit(fine)}
-        >
-          <Pencil className="h-4 w-4" aria-hidden />
-        </Button>
-      )}
-      {canDelete && (
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon-sm"
-          className="text-muted-foreground hover:text-destructive"
-          disabled={busy}
-          aria-label={t('vehicles.delete')}
-          title={t('vehicles.delete')}
-          onClick={() => onDelete(fine)}
-        >
-          <Trash2 className="h-4 w-4" aria-hidden />
-        </Button>
-      )}
-    </div>
-  )
-}
-
 function FineCard({
   fine,
   index,
@@ -1186,14 +1264,17 @@ function FineCard({
   busy,
   onEdit,
   onDelete,
-}: {
+  onRecordPayment,
+  onAttachReceipt,
+  onMarkUnpaid,
+  onArchive,
+  onRestore,
+}: FineActionCallbacks & {
   fine: VehicleFineRead
   index: number
   canEdit: boolean
   canDelete: boolean
   busy: boolean
-  onEdit: (fine: VehicleFineRead) => void
-  onDelete: (fine: VehicleFineRead) => void
 }): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const lang = i18n.language
@@ -1222,6 +1303,11 @@ function FineCard({
             busy={busy}
             onEdit={onEdit}
             onDelete={onDelete}
+            onRecordPayment={onRecordPayment}
+            onAttachReceipt={onAttachReceipt}
+            onMarkUnpaid={onMarkUnpaid}
+            onArchive={onArchive}
+            onRestore={onRestore}
           />
         )}
       </div>
@@ -1230,12 +1316,18 @@ function FineCard({
           <Mono>{formatDateTime(fine.date, fine.time)}</Mono>
         </InfoItem>
         <InfoItem label={t('vehicles.amount')}>
-          <bdi>{formatAed(fine.amount, lang)}</bdi>
+          <FineAmount fils={fine.amount_fils} />
         </InfoItem>
         <InfoItem label={t('vehicles.blackPoints')}>
           <Mono>{formatNumber(fine.black_points, lang)}</Mono>
         </InfoItem>
       </dl>
+      <div className="mt-2 flex flex-wrap items-center gap-2">
+        <VehicleStatusBadge family="payment" status={fine.payment_status} />
+        {fine.receipt && (
+          <VehicleFileThumb vehicleId={fine.vehicle_id} file={fine.receipt} className="h-[26px] w-[36px]" />
+        )}
+      </div>
       {fine.location && (
         <p className="mt-2 text-[0.7rem] text-muted-foreground" dir="auto">
           {fine.location}

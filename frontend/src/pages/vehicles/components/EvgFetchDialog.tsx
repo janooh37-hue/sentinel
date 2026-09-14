@@ -60,7 +60,8 @@ import { cn } from '@/lib/utils'
 import {
   EMPTY_VALUE,
   VEHICLE_QUERY_KEYS,
-  formatAed,
+  formatFilsAed,
+  formatFilsNumber,
   formatDateTime,
   formatNumber,
   invalidateVehicleQueries,
@@ -365,7 +366,7 @@ function EvgPanel({
     return [{ ...row, vehicle_id: vehicleId }]
   })
 
-  const selectedTotal = selectedRows.reduce((sum, row) => sum + row.amount, 0)
+  const selectedTotal = selectedRows.reduce((sum, row) => sum + row.amount_fils, 0)
 
   const plateById = useMemo(() => {
     const map = new Map<number, string>()
@@ -530,7 +531,7 @@ function EvgPanel({
               <span dir="auto">
                 {t('vehicles.selectedSummary', {
                   count: selectedRows.length,
-                  total: formatNumber(selectedTotal, lang),
+                  total: formatFilsNumber(selectedTotal),
                 })}
               </span>
               <span dir="auto">
@@ -722,7 +723,7 @@ function EvgRow(props: RowProps): React.JSX.Element {
         <bdi dir="ltr">{formatDateTime(row.date, row.time)}</bdi>
       </TableCell>
       <TableCell className="text-[0.76rem] font-semibold text-foreground">
-        <bdi>{formatAed(row.amount, lang)}</bdi>
+        <bdi>{formatFilsAed(row.amount_fils, lang)}</bdi>
       </TableCell>
       <TableCell className="font-mono text-[0.74rem] tabular-nums text-foreground">
         <bdi>{formatNumber(row.black_points, lang)}</bdi>
@@ -780,7 +781,7 @@ function EvgCard(props: RowProps): React.JSX.Element {
             {t('vehicles.amount')}
           </dt>
           <dd className="mt-0.5 text-[0.76rem] font-semibold text-foreground">
-            <bdi>{`${formatAed(row.amount, lang)} · ${formatNumber(row.black_points, lang)} ${t('vehicles.points')}`}</bdi>
+            <bdi>{`${formatFilsAed(row.amount_fils, lang)} · ${formatNumber(row.black_points, lang)} ${t('vehicles.points')}`}</bdi>
           </dd>
         </div>
       </dl>

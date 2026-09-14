@@ -31,7 +31,7 @@ function vehicle(overrides: Partial<VehicleListItem> = {}): VehicleListItem {
     expiry_status: 'valid',
     days_to_expiry: 100,
     fines_count: 0,
-    fines_amount: 0,
+    fines_amount_fils: 0,
     black_points: 0,
     photo_url: null,
     insurance_expiry: '2027-01-03',

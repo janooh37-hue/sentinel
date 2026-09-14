@@ -35,6 +35,10 @@ export const loadVehicleFinesReportPage = () =>
   import('@/pages/vehicles/VehicleFinesReportPage').then((m) => ({
     default: m.VehicleFinesReportPage,
   }))
+export const loadVehicleFinesPage = () =>
+  import('@/pages/vehicles/VehicleFinesPage').then((m) => ({
+    default: m.VehicleFinesPage,
+  }))
 export const loadVehicleAccidentsPage = () =>
   import('@/pages/vehicles/VehicleAccidentsPage').then((m) => ({
     default: m.VehicleAccidentsPage,

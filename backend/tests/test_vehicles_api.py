@@ -148,7 +148,7 @@ def _add_fine(client: TestClient, vehicle_id: int) -> dict[str, Any]:
             "employee_id": None,
             "date": "2026-08-20",
             "time": "08:30",
-            "amount": 600,
+            "amount_fils": 60000,
             "black_points": 4,
             "location": "Abu Dhabi",
             "description": "Test fine",
@@ -347,19 +347,18 @@ def test_add_fine_without_employee_is_unassigned_and_increments_summary(
 ) -> None:
     vehicle = _create_vehicle(admin_client)
 
-    updated_vehicle = _add_fine(admin_client, int(vehicle["id"]))
+    fine = _add_fine(admin_client, int(vehicle["id"]))
 
-    assert len(updated_vehicle["fines"]) == 1
-    fine = updated_vehicle["fines"][0]
     assert fine["employee_id"] is None
     assert fine["employee_name_ar"] is None
     assert fine["employee_name_en"] is None
+    assert fine["payment_status"] == "unpaid"
 
     summary_response = admin_client.get("/api/v1/vehicles/summary")
     assert summary_response.status_code == 200, summary_response.text
     summary = summary_response.json()
     assert summary["fines_count"] == 1
-    assert summary["fines_amount"] == 600
+    assert summary["fines_amount_fils"] == 60000
     assert summary["black_points"] == 4
 
 
@@ -367,16 +366,16 @@ def test_patch_fine_assigns_an_existing_employee(
     admin_client: TestClient, employee: Employee
 ) -> None:
     vehicle = _create_vehicle(admin_client)
-    with_fine = _add_fine(admin_client, int(vehicle["id"]))
-    fine_id = with_fine["fines"][0]["id"]
+    fine = _add_fine(admin_client, int(vehicle["id"]))
 
     response = admin_client.patch(
-        f"/api/v1/vehicles/{vehicle['id']}/fines/{fine_id}",
+        f"/api/v1/vehicles/{vehicle['id']}/fines/{fine['id']}",
         json={"employee_id": employee.id},
+        headers={"If-Match": fine["version"]},
     )
 
     assert response.status_code == 200, response.text
-    assigned = next(row for row in response.json()["fines"] if row["id"] == fine_id)
+    assigned = next(row for row in response.json()["fines"] if row["id"] == fine["id"])
     assert assigned["employee_id"] == employee.id
     assert assigned["employee_name_en"] == employee.name_en
     assert assigned["employee_name_ar"] == employee.name_ar
@@ -386,16 +385,18 @@ def test_user_with_edit_but_without_delete_cannot_delete_fine(
     admin_client: TestClient, vehicle_editor_client: TestClient
 ) -> None:
     vehicle = _create_vehicle(admin_client)
-    with_fine = _add_fine(admin_client, int(vehicle["id"]))
-    fine_id = with_fine["fines"][0]["id"]
+    fine = _add_fine(admin_client, int(vehicle["id"]))
 
-    response = vehicle_editor_client.delete(f"/api/v1/vehicles/{vehicle['id']}/fines/{fine_id}")
+    response = vehicle_editor_client.delete(
+        f"/api/v1/vehicles/{vehicle['id']}/fines/{fine['id']}",
+        headers={"If-Match": fine["version"]},
+    )
 
     assert response.status_code == 403
     assert response.json()["error"]["details"]["capability"] == "vehicles.delete"
     persisted = admin_client.get(f"/api/v1/vehicles/{vehicle['id']}")
     assert persisted.status_code == 200, persisted.text
-    assert [row["id"] for row in persisted.json()["fines"]] == [fine_id]
+    assert [row["id"] for row in persisted.json()["fines"]] == [fine["id"]]
 
 
 def test_accident_lifecycle_and_delete_capability(
@@ -1312,7 +1313,7 @@ def test_archive_lifecycle_retains_history_and_guards_every_write_path(
                 "employee_id": None,
                 "date": "2026-08-20",
                 "time": None,
-                "amount": 100,
+                "amount_fils": 10000,
                 "black_points": 0,
                 "location": None,
                 "description": None,

@@ -58,7 +58,7 @@ const CREATED_VEHICLE = {
   expiry_status: 'valid',
   days_to_expiry: 364,
   fines_count: 0,
-  fines_amount: 0,
+  fines_amount_fils: 0,
   black_points: 0,
   contract_note_ar: null,
   contract_note_en: null,
