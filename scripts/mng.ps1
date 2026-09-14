@@ -334,7 +334,15 @@ exit 1
         $prevEAP = $ErrorActionPreference
         $ErrorActionPreference = 'Continue'
         try {
-            & git -c credential.helper= pull --ff-only 2>&1 | ForEach-Object { Write-Host $_ }
+            if ($authentication) {
+                # Disable credential helpers while PAT credentials are active so
+                # stale helpers cannot override the repository PAT.
+                & git -c credential.helper= pull --ff-only 2>&1 | ForEach-Object { Write-Host $_ }
+            } else {
+                # Preserve the user's configured helper for SSH, local, and
+                # non-HTTPS remotes, matching the historical plain `git pull`.
+                & git pull --ff-only 2>&1 | ForEach-Object { Write-Host $_ }
+            }
             $gitExitCode = $LASTEXITCODE
         } finally {
             $ErrorActionPreference = $prevEAP

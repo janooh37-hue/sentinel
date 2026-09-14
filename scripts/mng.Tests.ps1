@@ -339,12 +339,18 @@ server.serve_forever()
             }
             $ready | Should Be $true
 
-            Invoke-TestGit $repoRoot @('remote', 'set-url', 'origin', $expectedRemote)
             $Root = $repoRoot
             $script:Root = $repoRoot
             $env:MNG_GIT_USERNAME = $username
             $env:MNG_GIT_TOKEN = $token
             $authentication = Get-UpdateGitAuthentication $expectedRemote
+            $script:authenticationForTest = $authentication
+            $script:observedRemote = $null
+            Mock Get-UpdateGitAuthentication {
+                param([string] $remoteUrl)
+                $script:observedRemote = $remoteUrl
+                return $script:authenticationForTest
+            }
 
             $staleHelper = Join-Path $TestDrive 'stale-credential-helper.cmd'
             $staleHelperMarker = Join-Path $TestDrive 'stale-credential-helper.used'
@@ -355,12 +361,8 @@ server.serve_forever()
                 'echo password=stale-token'
             )
             Invoke-TestGit $repoRoot @('config', 'credential.helper', $staleHelper)
-            Invoke-TestGit $repoRoot @(
-                'remote',
-                'set-url',
-                'origin',
-                "http://127.0.0.1:$port/sentinel.git"
-            )
+            $fixtureRemote = "http://127.0.0.1:$port/sentinel.git"
+            Invoke-TestGit $repoRoot @('remote', 'set-url', 'origin', $fixtureRemote)
             Set-Content -LiteralPath (Join-Path $seedRoot 'README.txt') -Value 'pulled update' -Encoding UTF8
             Invoke-TestGit $seedRoot @('add', 'README.txt')
             Invoke-TestGit $seedRoot @('commit', '-qm', 'authenticated fixture update')
@@ -369,14 +371,43 @@ server.serve_forever()
             $pullOutput = & {
                 Push-Location $repoRoot
                 try {
-                    Invoke-AuthenticatedGitPull $authentication
+                    Invoke-Update
                 } finally {
                     Pop-Location
                 }
             } 6>&1 2>&1 | Out-String
+            $script:observedRemote | Should Be $fixtureRemote
             $pullOutput | Should Not Match ([regex]::Escape($token))
             (Get-Content -LiteralPath (Join-Path $repoRoot 'README.txt') -Raw) | Should Match 'pulled update'
             (Test-Path -LiteralPath $staleHelperMarker) | Should Be $false
+
+            $fakeGitDir = Join-Path $TestDrive 'plain-pull-git'
+            $helperMarker = Join-Path $TestDrive 'plain-pull-git.args'
+            New-Item -ItemType Directory -Path $fakeGitDir | Out-Null
+            Set-Content -LiteralPath (Join-Path $fakeGitDir 'git.cmd') -Encoding ASCII -Value @(
+                '@echo off',
+                "echo %* > `"$helperMarker`"",
+                'exit /b 0'
+            )
+            $oldPath = $env:PATH
+            try {
+                $env:PATH = "$fakeGitDir;$oldPath"
+                $helperResult = & {
+                    Push-Location $repoRoot
+                    try {
+                        Invoke-AuthenticatedGitPull $null
+                    } finally {
+                        Pop-Location
+                    }
+                } 6>&1 2>&1 | Out-String
+            } finally {
+                $env:PATH = $oldPath
+            }
+            $helperResult | Should Match '0'
+            (Get-Content -LiteralPath $helperMarker -Raw) | Should Match 'pull --ff-only'
+            (Get-Content -LiteralPath $helperMarker -Raw) | Should Not Match 'credential\.helper='
+            (Get-Content -LiteralPath (Join-Path $repoRoot 'README.txt') -Raw) | Should Match 'pulled update'
+
             $repositoryText = @(
                 Get-ChildItem -LiteralPath $repoRoot -File -Recurse -Force |
                     ForEach-Object {
