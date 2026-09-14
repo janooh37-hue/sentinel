@@ -10,7 +10,7 @@ from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date, timedelta
 from pathlib import Path
-from threading import Barrier
+from threading import Barrier, Event
 from typing import Any
 
 import pytest
@@ -36,6 +36,7 @@ from app.db.models import (
 )
 from app.db.session import attach_sqlite_pragmas, get_db
 from app.main import create_app
+from app.schemas.vehicle import VehicleCertificateUpdate
 from app.services import vehicle_evg_jobs, vehicle_photo_service, vehicle_service
 
 _PNG_1X1 = base64.b64decode(
@@ -1979,5 +1980,136 @@ def test_concurrent_certificate_replacement_publishes_at_most_one_successor(
                 .where(VehicleFile.kind == "certificate")
             )
             assert total_certificates == 2
+    finally:
+        engine.dispose()
+
+
+def test_concurrent_certificate_restore_cannot_reactivate_replaced_predecessor(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    settings = get_settings()
+    monkeypatch.setattr(settings, "data_dir", tmp_path / "restore-replace-cert-data")
+    settings.ensure_dirs()
+    engine = create_engine(
+        f"sqlite:///{tmp_path / 'restore-replace-cert.db'}",
+        future=True,
+        connect_args={"check_same_thread": False, "timeout": 10},
+    )
+    attach_sqlite_pragmas(engine, wal=False)
+    Base.metadata.create_all(engine)
+    test_session = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False, future=True)
+
+    with test_session() as setup_db:
+        site = VehicleSite(name_ar="موقع", name_en="Site", active=True)
+        setup_db.add(site)
+        setup_db.flush()
+        vehicle = Vehicle(
+            plate_code="14",
+            plate_number="58216",
+            traffic_code="1180021637",
+            type_ar="تويوتا هايس",
+            type_en="Toyota Hiace",
+            class_ar="باص خفيف",
+            class_en="Light bus",
+            site_id=site.id,
+            license_start=date(2026, 1, 1),
+            license_expiry=date(2099, 12, 31),
+        )
+        setup_db.add(vehicle)
+        setup_db.commit()
+        vehicle_id = vehicle.id
+        predecessor = vehicle_service.store_file(
+            setup_db,
+            vehicle_id,
+            kind="certificate",
+            filename="old.png",
+            data=_PNG_1X1,
+            media_type="image/png",
+            label_ar="Old",
+            label_en="Old",
+            expiry_date=date(2026, 6, 1),
+        )
+        predecessor.is_historical = True
+        setup_db.commit()
+        predecessor_id = predecessor.id
+
+    restore_loaded = Event()
+    replacement_committed = Event()
+    real_owned_file = vehicle_service._owned_file
+
+    def pause_restore_after_read(
+        db: Session,
+        owned_vehicle_id: int,
+        file_id: int,
+        *,
+        kind: str | None = None,
+    ) -> VehicleFile:
+        row = real_owned_file(db, owned_vehicle_id, file_id, kind=kind)
+        if kind == "certificate":
+            restore_loaded.set()
+            assert replacement_committed.wait(timeout=10)
+        return row
+
+    monkeypatch.setattr(vehicle_service, "_owned_file", pause_restore_after_read)
+
+    def restore() -> Any:
+        with test_session() as db:
+            try:
+                return vehicle_service.update_certificate(
+                    db,
+                    vehicle_id,
+                    predecessor_id,
+                    VehicleCertificateUpdate(is_historical=False),
+                )
+            except Exception as exc:
+                return exc
+
+    def replace() -> Any:
+        assert restore_loaded.wait(timeout=10)
+        with test_session() as db:
+            try:
+                return vehicle_service.store_file(
+                    db,
+                    vehicle_id,
+                    kind="certificate",
+                    filename="replacement.png",
+                    data=_PNG_1X1,
+                    media_type="image/png",
+                    label_ar="Replacement",
+                    label_en="Replacement",
+                    expiry_date=date(2027, 1, 1),
+                    replaces_file_id=predecessor_id,
+                )
+            except Exception as exc:
+                return exc
+            finally:
+                replacement_committed.set()
+
+    try:
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            restore_future = executor.submit(restore)
+            replacement_future = executor.submit(replace)
+            restore_result = restore_future.result(timeout=15)
+            replacement_result = replacement_future.result(timeout=15)
+
+        assert not isinstance(replacement_result, Exception), replacement_result
+        assert isinstance(restore_result, ConflictError), restore_result
+        assert restore_result.code == "VEHICLE_CERTIFICATE_HAS_REPLACEMENT"
+
+        with test_session() as db:
+            predecessor_row = db.get(VehicleFile, predecessor_id)
+            assert predecessor_row is not None
+            assert predecessor_row.is_historical is True
+            assert predecessor_row.superseded_by_file_id == replacement_result.id
+            current_count = db.scalar(
+                select(func.count())
+                .select_from(VehicleFile)
+                .where(
+                    VehicleFile.kind == "certificate",
+                    VehicleFile.is_historical.is_(False),
+                )
+            )
+            assert current_count == 1
     finally:
         engine.dispose()
