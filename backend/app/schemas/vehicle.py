@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.schemas._base import ORMBase
 
-VehicleFileKind = Literal["photo", "license", "gallery", "accident", "receipt"]
+VehicleFileKind = Literal["photo", "license", "gallery", "accident", "receipt", "certificate"]
 VehicleExpiryStatus = Literal["valid", "due", "expired"]
 MaintenanceDueState = Literal["overdue", "due", "scheduled"]
 MaintenanceType = Literal["service", "repair", "tires", "other"]
@@ -46,6 +46,22 @@ class VehicleFileRead(ORMBase):
     original_name: str
     media_type: str
     url: str = ""
+    expiry_date: date_t | None = None
+    is_historical: bool = False
+    superseded_by_file_id: int | None = None
+
+
+class VehicleCertificateUpdate(BaseModel):
+    """PATCH body for a certificate's expiry and history state.
+
+    ``model_fields_set`` distinguishes an omitted property from an explicit
+    one: touching either expiry field re-runs the same exact-one validator
+    upload uses, and a history-only update leaves the date untouched.
+    """
+
+    expiry_date: date_t | None = None
+    no_expiry: bool = False
+    is_historical: bool = False
 
 
 class VehiclePhotoRead(ORMBase):
@@ -371,6 +387,7 @@ class VehicleRead(VehicleListItem):
     photo_asset_id: int | None = None
     license_file_id: int | None = None
     license_files: list[VehicleFileRead] = Field(default_factory=list)
+    certificates: list[VehicleFileRead] = Field(default_factory=list)
 
 
 class VehiclesSummary(BaseModel):

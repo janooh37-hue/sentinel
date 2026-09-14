@@ -570,6 +570,15 @@ class VehicleFile(Base):
     media_type: Mapped[str] = mapped_column(String(64), nullable=False)
     size: Mapped[int] = mapped_column(Integer, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_utcnow)
+    # Certificate-only metadata (migration 0089). Every other kind leaves these
+    # NULL/false; the certificate service path is the only writer.
+    expiry_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    expiry_reminder_sent_for: Mapped[date | None] = mapped_column(Date, nullable=True)
+    is_historical: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    # Points from a superseded certificate to the row that replaced it. No SQL
+    # foreign key: same-vehicle/certificate ownership is enforced in the
+    # service layer, mirroring `Vehicle.photo_asset_id`/`license_file_id`.
+    superseded_by_file_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     vehicle: Mapped[Vehicle] = relationship(back_populates="files")
 

@@ -8,14 +8,16 @@ import re
 import uuid
 from datetime import UTC, date, datetime
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
-from sqlalchemy import func, inspect, select, text
+from sqlalchemy import func, inspect, select, text, update
+from sqlalchemy.engine import CursorResult
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, object_session, selectinload
 
 from app.api.errors import ConflictError, NotFoundError, ValidationFailedError
 from app.config import get_settings
+from app.core.vehicle_certificates import Profile, optimize_certificate
 from app.db.models import (
     AuditLog,
     Employee,
@@ -33,6 +35,7 @@ from app.schemas.vehicle import (
     LicenseRenewCreate,
     VehicleAccidentCreate,
     VehicleAccidentRead,
+    VehicleCertificateUpdate,
     VehicleCreate,
     VehicleFileRead,
     VehicleFineCreate,
@@ -57,7 +60,9 @@ _ALLOWED_EXTENSIONS = frozenset({".pdf", ".png", ".jpg", ".jpeg", ".webp"})
 _IMAGE_EXTENSIONS = frozenset({".png", ".jpg", ".jpeg", ".webp"})
 _IMAGE_KINDS = frozenset({"photo", "gallery", "accident"})
 _PHOTO_KINDS = frozenset({"photo", "gallery"})
-_FILE_KINDS = frozenset({"photo", "license", "gallery", "accident", "receipt"})
+_FILE_KINDS = frozenset({"photo", "license", "gallery", "accident", "receipt", "certificate"})
+_CERTIFICATE_LABEL_MAX_LENGTH = 128
+_CERTIFICATE_PROCESSING_TIMEOUT = 120
 _ALLOWED_MEDIA_BY_EXTENSION: dict[str, frozenset[str]] = {
     ".pdf": frozenset({"application/pdf"}),
     ".png": frozenset({"image/png"}),
@@ -295,6 +300,14 @@ def to_read(
                 _file_read(file_row)
                 for file_row in sorted(
                     (item for item in row.files if item.kind == "license"),
+                    key=lambda item: (item.created_at, item.id),
+                    reverse=True,
+                )
+            ],
+            "certificates": [
+                _file_read(file_row)
+                for file_row in sorted(
+                    (item for item in row.files if item.kind == "certificate"),
                     key=lambda item: (item.created_at, item.id),
                     reverse=True,
                 )
@@ -1304,19 +1317,14 @@ def _safe_filename(filename: str) -> str:
     return name or "vehicle-file"
 
 
-def _store_file_record(
-    db: Session,
-    vehicle_id: int,
-    *,
-    kind: str,
-    filename: str,
-    data: bytes,
-    media_type: str,
-    label_ar: str | None = None,
-    label_en: str | None = None,
-) -> tuple[VehicleFile, Path]:
-    """Write and flush a vehicle file without owning the transaction."""
-    require_active_vehicle(db, vehicle_id)
+def _validate_upload(
+    kind: str, filename: str, data: bytes, media_type: str
+) -> tuple[str, str, str]:
+    """Validate kind/size/extension/media-type; return (safe_name, extension, normalized_media).
+
+    Runs before any decoding — including certificate compression — so a
+    malformed upload never reaches the optimizer.
+    """
     if kind not in _FILE_KINDS:
         raise ValidationFailedError(
             "VEHICLE_FILE_BAD_KIND",
@@ -1354,6 +1362,31 @@ def _store_file_record(
             extension=extension,
             media_type=media_type,
         )
+    return safe_name, extension, normalized_media
+
+
+def _prepare_file_record(
+    db: Session,
+    vehicle_id: int,
+    *,
+    kind: str,
+    filename: str,
+    data: bytes,
+    media_type: str,
+    label_ar: str | None = None,
+    label_en: str | None = None,
+    expiry_date: date | None = None,
+) -> tuple[VehicleFile, Path]:
+    """Validate and write a file to disk, without touching the session.
+
+    Returns a transient (unpersisted) ``VehicleFile`` and the path its bytes
+    were written to. Splitting this out of ``_store_file_record`` lets the
+    certificate replacement flow prepare two files' bytes on disk — the new
+    upload and, when replacing, a recompressed predecessor — before either
+    takes a database write lock (see ``store_file``).
+    """
+    require_active_vehicle(db, vehicle_id)
+    safe_name, _extension, normalized_media = _validate_upload(kind, filename, data, media_type)
 
     data_dir = get_settings().data_dir.resolve()
     destination_dir = data_dir / "vehicle_files" / str(vehicle_id) / kind
@@ -1370,13 +1403,142 @@ def _store_file_record(
             original_name=safe_name,
             media_type=normalized_media,
             size=len(data),
+            expiry_date=expiry_date,
         )
+    except Exception:
+        destination.unlink(missing_ok=True)
+        raise
+    return row, destination
+
+
+def _store_file_record(
+    db: Session,
+    vehicle_id: int,
+    *,
+    kind: str,
+    filename: str,
+    data: bytes,
+    media_type: str,
+    label_ar: str | None = None,
+    label_en: str | None = None,
+    expiry_date: date | None = None,
+) -> tuple[VehicleFile, Path]:
+    """Prepare, add, and flush a vehicle file without owning the transaction."""
+    row, destination = _prepare_file_record(
+        db,
+        vehicle_id,
+        kind=kind,
+        filename=filename,
+        data=data,
+        media_type=media_type,
+        label_ar=label_ar,
+        label_en=label_en,
+        expiry_date=expiry_date,
+    )
+    try:
         db.add(row)
         db.flush()
     except Exception:
         destination.unlink(missing_ok=True)
         raise
     return row, destination
+
+
+def _optimize_certificate_worker(data: bytes, media_type: str, profile: str) -> bytes:
+    """Top-level so ``ProcessPoolExecutor`` can pickle it for submission —
+    matches ``_pdf_executor._convert_in_subprocess``'s convention."""
+    return optimize_certificate(data, media_type, profile=cast("Profile", profile))
+
+
+def _optimize_certificate(data: bytes, media_type: str, *, profile: Profile = "current") -> bytes:
+    """Compress a certificate's bytes in the shared single-worker process pool.
+
+    Native PyMuPDF/Pillow work never runs on the event loop or shares a
+    process with Word COM. A worker ``ValueError`` (see
+    ``app.core.vehicle_certificates``) carries a ``VEHICLE_CERTIFICATE_*``
+    code and is translated to ``ValidationFailedError``; a timeout or any
+    other worker failure becomes ``VEHICLE_CERTIFICATE_PROCESSING_FAILED`` —
+    no file is created and the client can retry explicitly.
+    """
+    from app.services._pdf_executor import get_executor
+
+    future = get_executor().submit(_optimize_certificate_worker, data, media_type, profile)
+    try:
+        return future.result(timeout=_CERTIFICATE_PROCESSING_TIMEOUT)
+    except ValueError as exc:
+        code = exc.args[0] if exc.args else "VEHICLE_CERTIFICATE_INVALID"
+        raise ValidationFailedError(code, str(exc) or code) from exc
+    except Exception as exc:
+        raise ValidationFailedError(
+            "VEHICLE_CERTIFICATE_PROCESSING_FAILED",
+            "The certificate could not be processed. Try uploading it again.",
+        ) from exc
+
+
+def _certificate_expiry_date(expiry_date: date | None, no_expiry: bool) -> date | None:
+    """Require exactly one of a date or the explicit No-expiry choice."""
+    if expiry_date is not None and no_expiry:
+        raise ValidationFailedError(
+            "VEHICLE_CERTIFICATE_EXPIRY_CONFLICT",
+            "Choose an expiry date or No expiry, not both.",
+        )
+    if expiry_date is None and not no_expiry:
+        raise ValidationFailedError(
+            "VEHICLE_CERTIFICATE_EXPIRY_REQUIRED",
+            "Enter an expiry date or select No expiry.",
+        )
+    return expiry_date
+
+
+def _validate_certificate_scope(
+    kind: str,
+    expiry_date: date | None,
+    no_expiry: bool,
+    replaces_file_id: int | None,
+) -> None:
+    """Certificate-only inputs on any other kind are a caller error, not a
+    silently ignored field — omitted defaults leave every other kind's
+    upload behavior unchanged."""
+    if kind == "certificate":
+        return
+    if expiry_date is not None or no_expiry or replaces_file_id is not None:
+        raise ValidationFailedError(
+            "VEHICLE_CERTIFICATE_REQUIRED",
+            "This action is only available for certificate files.",
+            kind=kind,
+        )
+
+
+def _validate_certificate_label(label: str | None) -> str | None:
+    if label is None:
+        return None
+    trimmed = label.strip()
+    if not trimmed:
+        return None
+    if len(trimmed) > _CERTIFICATE_LABEL_MAX_LENGTH:
+        raise ValidationFailedError(
+            "VEHICLE_CERTIFICATE_LABEL_TOO_LONG",
+            f"Document names must be {_CERTIFICATE_LABEL_MAX_LENGTH} characters or fewer.",
+            max_length=_CERTIFICATE_LABEL_MAX_LENGTH,
+        )
+    return trimmed
+
+
+def _certificate_predecessor(db: Session, vehicle_id: int, replaces_file_id: int) -> VehicleFile:
+    row = _owned_file(db, vehicle_id, replaces_file_id)
+    if row.kind != "certificate":
+        raise ValidationFailedError(
+            "VEHICLE_CERTIFICATE_REQUIRED",
+            "This action is only available for certificate files.",
+            file_id=replaces_file_id,
+        )
+    if row.superseded_by_file_id is not None:
+        raise ConflictError(
+            "VEHICLE_CERTIFICATE_REPLACED",
+            "This certificate already has a replacement.",
+            file_id=replaces_file_id,
+        )
+    return row
 
 
 def store_file(
@@ -1389,25 +1551,193 @@ def store_file(
     media_type: str,
     label_ar: str | None = None,
     label_en: str | None = None,
+    expiry_date: date | None = None,
+    no_expiry: bool = False,
+    replaces_file_id: int | None = None,
+    actor: str | None = None,
 ) -> VehicleFile:
+    is_certificate = kind == "certificate"
+    _validate_certificate_scope(kind, expiry_date, no_expiry, replaces_file_id)
+
+    effective_expiry: date | None = None
+    effective_label_ar, effective_label_en = label_ar, label_en
+    if is_certificate:
+        effective_expiry = _certificate_expiry_date(expiry_date, no_expiry)
+        effective_label_ar = _validate_certificate_label(label_ar)
+        effective_label_en = _validate_certificate_label(label_en)
+
+    predecessor: VehicleFile | None = None
+    if is_certificate and replaces_file_id is not None:
+        predecessor = _certificate_predecessor(db, vehicle_id, replaces_file_id)
+
+    processed_data = data
+    if is_certificate:
+        _safe_name, _extension, normalized_media = _validate_upload(
+            kind, filename, data, media_type
+        )
+        processed_data = _optimize_certificate(data, normalized_media, profile="current")
+
     path: Path | None = None
+    historical_path: Path | None = None
+    predecessor_path: Path | None = None
     try:
-        row, path = _store_file_record(
+        row, path = _prepare_file_record(
             db,
             vehicle_id,
             kind=kind,
             filename=filename,
-            data=data,
+            data=processed_data,
             media_type=media_type,
-            label_ar=label_ar,
-            label_en=label_en,
+            label_ar=effective_label_ar,
+            label_en=effective_label_en,
+            expiry_date=effective_expiry,
         )
+
+        historical_candidate: bytes | None = None
+        if predecessor is not None:
+            predecessor_path = _resolve_file_path(predecessor)
+            predecessor_bytes = predecessor_path.read_bytes()
+            candidate = _optimize_certificate(
+                predecessor_bytes, predecessor.media_type, profile="historical"
+            )
+            if len(candidate) < len(predecessor_bytes):
+                historical_candidate = candidate
+
+        db.add(row)
+        db.flush()
+
+        if predecessor is not None:
+            # Recheck the vehicle is still active right before publication —
+            # an archive mid-upload must reject the replacement.
+            require_active_vehicle(db, vehicle_id)
+            update_values: dict[str, Any] = {
+                "is_historical": True,
+                "superseded_by_file_id": row.id,
+            }
+            if historical_candidate is not None:
+                data_dir = get_settings().data_dir.resolve()
+                destination_dir = data_dir / "vehicle_files" / str(vehicle_id) / "certificate"
+                destination_dir.mkdir(parents=True, exist_ok=True)
+                new_path = destination_dir / f"{uuid.uuid4().hex}-{predecessor.original_name}"
+                new_path.write_bytes(historical_candidate)
+                historical_path = new_path
+                update_values["path"] = new_path.relative_to(data_dir).as_posix()
+                update_values["size"] = len(historical_candidate)
+
+            # An UPDATE without RETURNING produces CursorResult, including its rowcount.
+            result = cast(
+                CursorResult[Any],
+                db.execute(
+                    update(VehicleFile)
+                    .where(
+                        VehicleFile.id == predecessor.id,
+                        VehicleFile.vehicle_id == vehicle_id,
+                        VehicleFile.kind == "certificate",
+                        VehicleFile.superseded_by_file_id.is_(None),
+                        VehicleFile.path == predecessor.path,
+                    )
+                    .values(**update_values)
+                ),
+            )
+            if result.rowcount != 1:
+                raise ConflictError(
+                    "VEHICLE_CERTIFICATE_REPLACED",
+                    "This certificate already has a replacement.",
+                    file_id=predecessor.id,
+                )
+            _add_audit(
+                db,
+                "certificate.replaced",
+                vehicle_id,
+                actor,
+                {
+                    "old_file_id": predecessor.id,
+                    "new_file_id": row.id,
+                    "old_size": predecessor.size,
+                    "stored_size": update_values.get("size", predecessor.size),
+                },
+            )
+
         db.commit()
     except Exception:
         db.rollback()
         if path is not None:
             path.unlink(missing_ok=True)
+        if historical_path is not None:
+            historical_path.unlink(missing_ok=True)
         raise
+    db.refresh(row)
+
+    if predecessor is not None and historical_path is not None and predecessor_path is not None:
+        # Only after commit: the superseded pre-compression bytes are no
+        # longer reachable through any row, so the disk copy can go too.
+        try:
+            predecessor_path.unlink(missing_ok=True)
+        except OSError:
+            log.warning(
+                "vehicle certificate %s predecessor could not be removed",
+                predecessor.id,
+                exc_info=True,
+            )
+    return row
+
+
+def update_certificate(
+    db: Session,
+    vehicle_id: int,
+    file_id: int,
+    payload: VehicleCertificateUpdate,
+    *,
+    actor: str | None = None,
+) -> VehicleFile:
+    require_active_vehicle(db, vehicle_id)
+    row = _owned_file(db, vehicle_id, file_id, kind="certificate")
+
+    fields_set = payload.model_fields_set
+    touches_expiry = "expiry_date" in fields_set or "no_expiry" in fields_set
+    touches_history = "is_historical" in fields_set
+    if not touches_expiry and not touches_history:
+        raise ValidationFailedError(
+            "VEHICLE_CERTIFICATE_EMPTY_UPDATE",
+            "Choose an expiry or history change to save.",
+        )
+
+    def _snapshot() -> dict[str, Any]:
+        return {
+            "expiry_date": row.expiry_date.isoformat() if row.expiry_date else None,
+            "is_historical": row.is_historical,
+        }
+
+    before = _snapshot()
+
+    if touches_expiry:
+        new_expiry = _certificate_expiry_date(payload.expiry_date, payload.no_expiry)
+        if new_expiry != row.expiry_date:
+            row.expiry_reminder_sent_for = None
+        row.expiry_date = new_expiry
+
+    if touches_history:
+        if payload.is_historical:
+            row.is_historical = True
+        elif row.superseded_by_file_id is not None:
+            raise ConflictError(
+                "VEHICLE_CERTIFICATE_HAS_REPLACEMENT",
+                "This historical certificate has a newer replacement and cannot be made current.",
+                file_id=file_id,
+            )
+        else:
+            row.is_historical = False
+
+    after = _snapshot()
+    if before != after:
+        _add_audit(
+            db,
+            "certificate.updated",
+            vehicle_id,
+            actor,
+            {"file_id": file_id, "before": before, "after": after},
+        )
+    db.commit()
     db.refresh(row)
     return row
 
@@ -1445,10 +1775,10 @@ def delete_file(
 ) -> None:
     vehicle = require_active_vehicle(db, vehicle_id)
     row = _owned_file(db, vehicle_id, file_id)
-    if row.kind not in _PHOTO_KINDS:
+    if row.kind not in _PHOTO_KINDS and row.kind != "certificate":
         raise ValidationFailedError(
             "FILE_NOT_DELETABLE",
-            "Only photo and gallery files can be deleted.",
+            "Only photo, gallery, and certificate files can be deleted.",
             file_id=file_id,
             kind=row.kind,
         )
@@ -1489,6 +1819,14 @@ def delete_file(
             "The file is referenced by a vehicle accident.",
             file_id=file_id,
             accident_id=blocking_accident_id,
+        )
+    if row.kind == "certificate":
+        db.execute(
+            update(VehicleFile)
+            .where(
+                VehicleFile.vehicle_id == vehicle_id, VehicleFile.superseded_by_file_id == file_id
+            )
+            .values(superseded_by_file_id=None)
         )
     path = _resolve_file_path(row)
     db.delete(row)

@@ -4913,6 +4913,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/vehicles/{vehicle_id}/files/{file_id}/certificate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update Vehicle Certificate */
+        patch: operations["update_vehicle_certificate_api_v1_vehicles__vehicle_id__files__file_id__certificate_patch"];
+        trace?: never;
+    };
     "/api/v1/vehicles/{vehicle_id}/files/{file_id}/photo-asset": {
         parameters: {
             query?: never;
@@ -6890,6 +6907,15 @@ export interface components {
             label_ar?: string | null;
             /** Label En */
             label_en?: string | null;
+            /** Expiry Date */
+            expiry_date?: string | null;
+            /**
+             * No Expiry
+             * @default false
+             */
+            no_expiry: boolean;
+            /** Replaces File Id */
+            replaces_file_id?: number | null;
         };
         /** Body_upload_vehicle_photo_library_item_api_v1_vehicles_photo_library_post */
         Body_upload_vehicle_photo_library_item_api_v1_vehicles_photo_library_post: {
@@ -12544,6 +12570,28 @@ export interface components {
              */
             status: "open" | "closed";
         };
+        /**
+         * VehicleCertificateUpdate
+         * @description PATCH body for a certificate's expiry and history state.
+         *
+         *     ``model_fields_set`` distinguishes an omitted property from an explicit
+         *     one: touching either expiry field re-runs the same exact-one validator
+         *     upload uses, and a history-only update leaves the date untouched.
+         */
+        VehicleCertificateUpdate: {
+            /** Expiry Date */
+            expiry_date?: string | null;
+            /**
+             * No Expiry
+             * @default false
+             */
+            no_expiry: boolean;
+            /**
+             * Is Historical
+             * @default false
+             */
+            is_historical: boolean;
+        };
         /** VehicleCreate */
         VehicleCreate: {
             /** Plate Code */
@@ -12614,7 +12662,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "photo" | "license" | "gallery" | "accident" | "receipt";
+            kind: "photo" | "license" | "gallery" | "accident" | "receipt" | "certificate";
             /** Label Ar */
             label_ar: string | null;
             /** Label En */
@@ -12628,6 +12676,15 @@ export interface components {
              * @default
              */
             url: string;
+            /** Expiry Date */
+            expiry_date?: string | null;
+            /**
+             * Is Historical
+             * @default false
+             */
+            is_historical: boolean;
+            /** Superseded By File Id */
+            superseded_by_file_id?: number | null;
         };
         /** VehicleFineCreate */
         VehicleFineCreate: {
@@ -13344,6 +13401,8 @@ export interface components {
             license_file_id?: number | null;
             /** License Files */
             license_files?: components["schemas"]["VehicleFileRead"][];
+            /** Certificates */
+            certificates?: components["schemas"]["VehicleFileRead"][];
         };
         /** VehicleSiteCreate */
         VehicleSiteCreate: {
@@ -25316,6 +25375,44 @@ export interface operations {
         requestBody: {
             content: {
                 "multipart/form-data": components["schemas"]["Body_upload_vehicle_file_api_v1_vehicles__vehicle_id__files_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VehicleFileRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_vehicle_certificate_api_v1_vehicles__vehicle_id__files__file_id__certificate_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                vehicle_id: number;
+                file_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VehicleCertificateUpdate"];
             };
         };
         responses: {

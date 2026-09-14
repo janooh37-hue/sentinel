@@ -36,6 +36,7 @@ vi.mock('@/lib/api', async (importOriginal) => {
       listVehicleSites: vi.fn(),
       uploadVehicleFile: vi.fn(),
       updateVehicle: vi.fn(),
+      updateVehicleCertificate: vi.fn(),
       deleteVehicleFile: vi.fn(),
       promoteVehiclePhoto: vi.fn(),
       listVehiclePhotos: vi.fn(),
@@ -57,6 +58,24 @@ function vehicleFile(id: number, kind: VehicleFileRead['kind'], name: string): V
     original_name: name,
     media_type: 'image/jpeg',
     url: `/api/v1/vehicles/101/files/${id}`,
+    is_historical: false,
+  }
+}
+
+function certFile(
+  id: number,
+  name: string,
+  overrides: Partial<VehicleFileRead> = {},
+): VehicleFileRead {
+  return {
+    ...vehicleFile(id, 'certificate', name),
+    label_ar: `مستند ${id}`,
+    label_en: `Document ${id}`,
+    media_type: 'image/png',
+    expiry_date: '2027-06-01',
+    is_historical: false,
+    superseded_by_file_id: null,
+    ...overrides,
   }
 }
 
@@ -125,7 +144,7 @@ const PHOTO_ASSET: VehiclePhotoRead = {
   usage_count: 0,
 }
 
-function renderPage(tab?: 'renewals' | 'photos') {
+function renderPage(tab?: 'renewals' | 'photos' | 'certificates') {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   })
@@ -266,5 +285,122 @@ describe('VehicleDetailPage', () => {
     await waitFor(() =>
       expect(toast.error).toHaveBeenCalledWith('Only gallery photos can be deleted.'),
     )
+  })
+
+  describe('certificates', () => {
+    it('renders dated, no-expiry, and historical certificates', async () => {
+      vi.mocked(api.getVehicle).mockResolvedValue(
+        baseVehicle({
+          certificates: [
+            certFile(201, 'inspection.pdf', { expiry_date: '2027-06-01' }),
+            certFile(202, 'permanent.png', { expiry_date: null }),
+            certFile(203, 'old-scan.jpg', { expiry_date: '2026-01-01', is_historical: true }),
+          ],
+        }),
+      )
+      renderPage('certificates')
+
+      expect(await screen.findByText('inspection.pdf')).toBeInTheDocument()
+      expect(screen.getByText('permanent.png')).toBeInTheDocument()
+      expect(screen.getByText('No expiry')).toBeInTheDocument()
+      expect(screen.getByText('Historical')).toBeInTheDocument()
+    })
+
+    it('blocks submission until every pending row has a name and a date or No expiry', async () => {
+      const user = userEvent.setup()
+      vi.mocked(api.getVehicle).mockResolvedValue(baseVehicle({ certificates: [] }))
+      const first = new File(['a'], 'a.png', { type: 'image/png' })
+      const second = new File(['b'], 'b.png', { type: 'image/png' })
+      const { container } = renderPage('certificates')
+
+      await screen.findByText('Add certificates')
+      const input = container.querySelector<HTMLInputElement>('input[type="file"][multiple]')
+      expect(input).not.toBeNull()
+      await user.upload(input as HTMLInputElement, [first, second])
+
+      const submit = screen.getByRole('button', { name: 'Upload certificates' })
+      expect(submit).toBeDisabled()
+
+      const dateInputs = screen.getAllByLabelText('Expiry date')
+      await user.type(dateInputs[0], '2027-01-01')
+      expect(submit).toBeDisabled() // second row still has neither a date nor No expiry
+
+      const noExpiryCheckboxes = screen.getAllByRole('checkbox', { name: 'No expiry' })
+      await user.click(noExpiryCheckboxes[1])
+      expect(dateInputs[1]).toBeDisabled()
+      expect(submit).not.toBeDisabled()
+
+      await user.click(noExpiryCheckboxes[1])
+      expect(submit).toBeDisabled() // unchecking requires the date to be re-entered
+    })
+
+    it('retains only the failed pending row and applies the succeeded upload after refetch', async () => {
+      const user = userEvent.setup()
+      vi.mocked(api.getVehicle)
+        .mockResolvedValueOnce(baseVehicle({ certificates: [] }))
+        .mockResolvedValue(
+          baseVehicle({ certificates: [certFile(301, 'saved.png', { expiry_date: '2027-01-01' })] }),
+        )
+      vi.mocked(api.uploadVehicleFile).mockImplementation(async (_id, _kind, file) => {
+        if (file.name === 'failed.png') throw new ApiError(422, 'VEHICLE_CERTIFICATE_INVALID', 'bad')
+        return certFile(301, file.name, { expiry_date: '2027-01-01' })
+      })
+      const saved = new File(['s'], 'saved.png', { type: 'image/png' })
+      const failed = new File(['f'], 'failed.png', { type: 'image/png' })
+      const { container } = renderPage('certificates')
+
+      await screen.findByText('Add certificates')
+      const input = container.querySelector<HTMLInputElement>('input[type="file"][multiple]')
+      await user.upload(input as HTMLInputElement, [saved, failed])
+      for (const dateInput of screen.getAllByLabelText('Expiry date')) {
+        await user.type(dateInput, '2027-01-01')
+      }
+
+      await user.click(screen.getByRole('button', { name: 'Upload certificates' }))
+
+      await waitFor(() => expect(api.uploadVehicleFile).toHaveBeenCalledTimes(2))
+      expect(await screen.findByText('failed.png')).toBeInTheDocument()
+      expect(screen.queryByDisplayValue('saved')).not.toBeInTheDocument()
+      await waitFor(() => expect(screen.getByText('saved.png')).toBeInTheDocument())
+    })
+
+    it('cancelling Edit expiry sends no certificate update', async () => {
+      const user = userEvent.setup()
+      vi.mocked(api.getVehicle).mockResolvedValue(
+        baseVehicle({ certificates: [certFile(401, 'a.pdf', { expiry_date: '2027-01-01' })] }),
+      )
+      renderPage('certificates')
+
+      await user.click(await screen.findByRole('button', { name: 'Edit expiry' }))
+      const dateInput = screen.getByLabelText('Expiry date')
+      await user.clear(dateInput)
+      await user.type(dateInput, '2028-01-01')
+      await user.click(screen.getByRole('button', { name: 'Cancel' }))
+
+      expect(api.updateVehicleCertificate).not.toHaveBeenCalled()
+      expect(screen.queryByLabelText('Expiry date')).not.toBeInTheDocument()
+    })
+
+    it('deletes only the certificate selected among two rows sharing a name', async () => {
+      const user = userEvent.setup()
+      vi.mocked(api.getVehicle).mockResolvedValue(
+        baseVehicle({
+          certificates: [
+            certFile(501, 'copy.pdf', { expiry_date: '2027-01-01' }),
+            certFile(502, 'copy.pdf', { expiry_date: '2028-01-01' }),
+          ],
+        }),
+      )
+      vi.mocked(api.deleteVehicleFile).mockResolvedValue(undefined)
+      renderPage('certificates')
+
+      const deleteButtons = await screen.findAllByRole('button', { name: 'Delete' })
+      await user.click(deleteButtons[0])
+      const dialog = await screen.findByRole('dialog')
+      await user.click(within(dialog).getByRole('button', { name: 'Delete' }))
+
+      await waitFor(() => expect(api.deleteVehicleFile).toHaveBeenCalledWith(101, 501))
+      expect(api.deleteVehicleFile).not.toHaveBeenCalledWith(101, 502)
+    })
   })
 })

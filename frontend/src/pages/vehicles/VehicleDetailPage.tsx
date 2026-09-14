@@ -36,6 +36,7 @@ import {
   Image as ImageIcon,
   Loader2,
   Pencil,
+  RotateCcw,
   Star,
   Trash2,
   Upload,
@@ -65,6 +66,7 @@ import {
 } from '@/components/ui/table'
 import { ApiError, api } from '@/lib/api'
 import type {
+  VehicleCertificateUpdate,
   VehicleFileRead,
   VehicleFineRead,
   VehicleMaintenanceRead,
@@ -82,6 +84,7 @@ import {
   IMAGE_ACCEPT,
   VEHICLE_QUERY_KEYS,
   employeeLabel,
+  fileLabel,
   formatAed,
   formatDateTime,
   formatIsoDate,
@@ -92,6 +95,7 @@ import {
   plateLabel,
   vehicleErrorMessage,
 } from './vehicleUtils'
+import type { Translate } from './vehicleUtils'
 import { AccidentCard } from './components/AccidentCard'
 import { AccidentDialog } from './components/AccidentDialog'
 import { FineDialog } from './components/FineDialog'
@@ -104,7 +108,7 @@ import { VehiclePhotoPicker } from './components/VehiclePhotoPicker'
 
 /** The registers, in the order they are worked. `fines` is the default and is
  *  therefore the one state the URL does not spell out. */
-const TABS = ['fines', 'renewals', 'accidents', 'maintenance', 'photos'] as const
+const TABS = ['fines', 'renewals', 'accidents', 'maintenance', 'photos', 'certificates'] as const
 type VehicleTab = (typeof TABS)[number]
 
 const TAB_LABELS: Record<VehicleTab, string> = {
@@ -113,6 +117,7 @@ const TAB_LABELS: Record<VehicleTab, string> = {
   accidents: 'vehicles.tabAccidents',
   maintenance: 'vehicles.tabMaintenance',
   photos: 'vehicles.tabPhotos',
+  certificates: 'vehicles.tabCertificates',
 }
 
 /** One archived license period (`VehicleRead.renewals[]`). */
@@ -309,6 +314,7 @@ export function VehicleDetailPage(): React.JSX.Element {
   const accidents = vehicle?.accidents ?? []
   const maintenance = vehicle?.maintenance ?? []
   const photos = vehicle?.photos ?? []
+  const certificates = vehicle?.certificates ?? []
   const galleryCount =
     photos.length + (vehicle?.photo_url ? 1 : 0) + (vehicle?.license_url ? 1 : 0)
 
@@ -329,6 +335,7 @@ export function VehicleDetailPage(): React.JSX.Element {
     accidents: accidents.length,
     maintenance: maintenance.length,
     photos: galleryCount,
+    certificates: certificates.length,
   }
 
   const site = sitesQuery.data?.find((candidate) => candidate.id === vehicle?.site_id)
@@ -559,6 +566,15 @@ export function VehicleDetailPage(): React.JSX.Element {
                     promoteGalleryPhoto.mutate({ vehicleId: vehicle.id, fileId: photo.id })
                   }
                   onDelete={setPhotoToDelete}
+                />
+              )}
+              {tab === 'certificates' && (
+                <CertificatesPanel
+                  key={vehicle.id}
+                  vehicleId={vehicle.id}
+                  certificates={certificates}
+                  canEdit={canMutate}
+                  canDelete={canDeleteMutate}
                 />
               )}
             </div>
@@ -1811,6 +1827,505 @@ function PhotosPanel({
           </div>
         )}
       </div>
+    </Panel>
+  )
+}
+// ── Certificates ────────────────────────────────────────────────────────────
+
+/** Server error codes mapped to certificate-panel-local copy. `VEHICLE_FILE_*`
+ *  rows re-target the shared upload codes so this panel never leaks the
+ *  generic wording used by photo/license uploads elsewhere in the module. */
+const CERTIFICATE_ERROR_KEYS: Record<string, string> = {
+  VEHICLE_CERTIFICATE_INVALID: 'vehicles.certificateErrors.invalid',
+  VEHICLE_CERTIFICATE_ANIMATED: 'vehicles.certificateErrors.animated',
+  VEHICLE_CERTIFICATE_DIMENSIONS_TOO_LARGE: 'vehicles.certificateErrors.dimensionsTooLarge',
+  VEHICLE_CERTIFICATE_LABEL_TOO_LONG: 'vehicles.certificateErrors.labelTooLong',
+  VEHICLE_CERTIFICATE_PROCESSING_FAILED: 'vehicles.certificateErrors.processingFailed',
+  VEHICLE_CERTIFICATE_EXPIRY_REQUIRED: 'vehicles.certificateErrors.expiryRequired',
+  VEHICLE_CERTIFICATE_EXPIRY_CONFLICT: 'vehicles.certificateErrors.expiryConflict',
+  VEHICLE_CERTIFICATE_REQUIRED: 'vehicles.certificateErrors.certificateRequired',
+  VEHICLE_CERTIFICATE_EMPTY_UPDATE: 'vehicles.certificateErrors.emptyUpdate',
+  VEHICLE_CERTIFICATE_REPLACED: 'vehicles.certificateErrors.alreadyReplaced',
+  VEHICLE_CERTIFICATE_HAS_REPLACEMENT: 'vehicles.certificateErrors.hasReplacement',
+  VEHICLE_FILE_TOO_LARGE: 'vehicles.certificateErrors.tooLarge',
+  VEHICLE_FILE_EMPTY: 'vehicles.certificateErrors.invalid',
+  VEHICLE_FILE_BAD_EXTENSION: 'vehicles.certificateErrors.invalid',
+  VEHICLE_FILE_MEDIA_MISMATCH: 'vehicles.certificateErrors.invalid',
+}
+
+function certificateErrorMessage(err: unknown, t: Translate): string {
+  if (err instanceof ApiError) {
+    const key = CERTIFICATE_ERROR_KEYS[err.code]
+    if (key) return t(key)
+  }
+  return vehicleErrorMessage(err, t)
+}
+
+const CERTIFICATE_NAME_MAX_LENGTH = 128
+
+/** The filename without its extension, trimmed to the same limit the server
+ *  enforces on the document name — the operator can still rename it. */
+function certificateNameFromFilename(filename: string): string {
+  const withoutExtension = filename.replace(/\.[^./\\]+$/, '')
+  return (withoutExtension || filename).slice(0, CERTIFICATE_NAME_MAX_LENGTH)
+}
+
+interface PendingCertificate {
+  id: string
+  file: File
+  name: string
+  expiryDate: string
+  noExpiry: boolean
+  replacesFileId: number | null
+  error: string | null
+}
+
+function pendingCertificateIsValid(entry: PendingCertificate): boolean {
+  return entry.name.trim().length > 0 && (entry.noExpiry || entry.expiryDate !== '')
+}
+
+function CertificatesPanel({
+  vehicleId,
+  certificates,
+  canEdit,
+  canDelete,
+}: {
+  vehicleId: number
+  certificates: readonly VehicleFileRead[]
+  canEdit: boolean
+  canDelete: boolean
+}): React.JSX.Element {
+  const { t, i18n } = useTranslation()
+  const lang = i18n.language
+  const queryClient = useQueryClient()
+
+  const [pending, setPending] = useState<PendingCertificate[]>([])
+  const [batchBusy, setBatchBusy] = useState(false)
+  const [certificateToDelete, setCertificateToDelete] = useState<VehicleFileRead | null>(null)
+  const [historicalTarget, setHistoricalTarget] = useState<VehicleFileRead | null>(null)
+  const [editingId, setEditingId] = useState<number | null>(null)
+  const [editExpiryDate, setEditExpiryDate] = useState('')
+  const [editNoExpiry, setEditNoExpiry] = useState(false)
+
+  const uploadCertificate = useMutation({
+    mutationFn: (entry: PendingCertificate) =>
+      api.uploadVehicleFile(vehicleId, 'certificate', entry.file, {
+        label_ar: entry.name,
+        label_en: entry.name,
+        expiry_date: entry.noExpiry ? null : entry.expiryDate,
+        no_expiry: entry.noExpiry,
+        replaces_file_id: entry.replacesFileId,
+      }),
+  })
+
+  const deleteCertificate = useMutation({
+    mutationFn: (target: { vehicleId: number; fileId: number }) =>
+      api.deleteVehicleFile(target.vehicleId, target.fileId),
+    onSuccess: (_result, target) => {
+      invalidateVehicleQueries(queryClient, { vehicleId: target.vehicleId })
+      toast.success(t('common.deletedToast'))
+    },
+    onError: (err) => toast.error(certificateErrorMessage(err, t)),
+  })
+
+  const updateCertificate = useMutation({
+    mutationFn: (target: {
+      vehicleId: number
+      fileId: number
+      body: Partial<VehicleCertificateUpdate>
+    }) => api.updateVehicleCertificate(target.vehicleId, target.fileId, target.body),
+    onSuccess: (_result, target) => {
+      invalidateVehicleQueries(queryClient, { vehicleId: target.vehicleId })
+    },
+    onError: (err) => toast.error(certificateErrorMessage(err, t)),
+  })
+
+  function addPendingFiles(files: readonly File[]): void {
+    setPending((current) => [
+      ...current,
+      ...files.map((file) => ({
+        id: `${Date.now()}-${Math.random().toString(36).slice(2)}-${file.name}`,
+        file,
+        name: certificateNameFromFilename(file.name),
+        expiryDate: '',
+        noExpiry: false,
+        replacesFileId: null,
+        error: null,
+      })),
+    ]
+    )
+  }
+
+  function updatePending(id: string, patch: Partial<PendingCertificate>): void {
+    setPending((current) =>
+      current.map((entry) => (entry.id === id ? { ...entry, ...patch, error: null } : entry)),
+    )
+  }
+
+  function removePending(id: string): void {
+    setPending((current) => current.filter((entry) => entry.id !== id))
+  }
+
+  async function submitPending(): Promise<void> {
+    const capturedVehicleId = vehicleId
+    const batch = pending.filter(pendingCertificateIsValid)
+    if (batch.length === 0) return
+    setBatchBusy(true)
+    for (const entry of batch) {
+      try {
+        await uploadCertificate.mutateAsync(entry)
+        setPending((current) => current.filter((item) => item.id !== entry.id))
+        invalidateVehicleQueries(queryClient, { vehicleId: capturedVehicleId })
+      } catch (err) {
+        const message = certificateErrorMessage(err, t)
+        setPending((current) =>
+          current.map((item) => (item.id === entry.id ? { ...item, error: message } : item)),
+        )
+      }
+    }
+    setBatchBusy(false)
+  }
+
+  function replacementOptions(rowId: string): readonly VehicleFileRead[] {
+    const chosenByOthers = new Set(
+      pending
+        .filter((entry) => entry.id !== rowId && entry.replacesFileId != null)
+        .map((entry) => entry.replacesFileId),
+    )
+    return certificates.filter(
+      (candidate) => !candidate.superseded_by_file_id && !chosenByOthers.has(candidate.id),
+    )
+  }
+
+  function beginEditExpiry(certificate: VehicleFileRead): void {
+    setEditingId(certificate.id)
+    setEditExpiryDate(certificate.expiry_date ? certificate.expiry_date.slice(0, 10) : '')
+    setEditNoExpiry(certificate.expiry_date == null)
+  }
+
+  function saveEditExpiry(): void {
+    if (editingId == null) return
+    updateCertificate.mutate({
+      vehicleId,
+      fileId: editingId,
+      body: { expiry_date: editNoExpiry ? null : editExpiryDate, no_expiry: editNoExpiry },
+    })
+    setEditingId(null)
+  }
+
+  const allValid = pending.length > 0 && pending.every(pendingCertificateIsValid)
+  const controlsDisabled = batchBusy
+
+  return (
+    <Panel>
+      <PanelHeader
+        title={t('vehicles.tabCertificates')}
+        subtitle={<bdi>{formatNumber(certificates.length, lang)}</bdi>}
+      />
+      <div className="flex flex-col gap-3 p-2.5">
+        {certificates.length === 0 && pending.length === 0 && !canEdit && (
+          <EmptyState icon={FileText} message={t('vehicles.noCertificates')} />
+        )}
+
+        {certificates.map((certificate) => {
+          const isEditing = editingId === certificate.id
+          const canRestore = certificate.is_historical && !certificate.superseded_by_file_id
+          return (
+            <div
+              key={certificate.id}
+              className="flex flex-wrap items-center gap-3 rounded-lg border border-border bg-surface p-2.5"
+            >
+              <VehicleFileThumb
+                vehicleId={vehicleId}
+                file={certificate}
+                siblings={certificates}
+                className="h-[54px] w-[54px] shrink-0"
+              />
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium text-foreground" dir="auto">
+                  {fileLabel(certificate, lang)}
+                  {certificate.is_historical && (
+                    <span className="ms-2 rounded-full bg-surface-tinted px-2 py-0.5 text-[0.65em] font-semibold uppercase tracking-wide text-muted-foreground">
+                      {t('vehicles.certificateHistorical')}
+                    </span>
+                  )}
+                </p>
+                <p className="truncate text-xs text-muted-foreground" dir="auto">
+                  {certificate.original_name}
+                </p>
+                {isEditing ? (
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    <input
+                      type="date"
+                      aria-label={t('vehicles.certificateExpiryDate')}
+                      value={editExpiryDate}
+                      disabled={editNoExpiry}
+                      onChange={(event) => setEditExpiryDate(event.target.value)}
+                      className="h-9 rounded-md border border-input bg-surface px-3 font-mono text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+                    />
+                    <label className="flex items-center gap-1.5 text-xs text-foreground">
+                      <input
+                        type="checkbox"
+                        checked={editNoExpiry}
+                        onChange={(event) => setEditNoExpiry(event.target.checked)}
+                        className="h-4 w-4 rounded border-input accent-primary"
+                      />
+                      {t('vehicles.certificateNoExpiry')}
+                    </label>
+                    <Button type="button" size="sm" onClick={saveEditExpiry}>
+                      {t('common.save')}
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => setEditingId(null)}
+                    >
+                      {t('common.cancel')}
+                    </Button>
+                  </div>
+                ) : (
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    <span className="font-medium text-foreground">
+                      {t('vehicles.certificateExpiryDate')}:
+                    </span>{' '}
+                    <bdi>
+                      {certificate.expiry_date
+                        ? formatIsoDate(certificate.expiry_date)
+                        : t('vehicles.certificateNoExpiry')}
+                    </bdi>
+                  </p>
+                )}
+              </div>
+              {canEdit && !isEditing && (
+                <div className="flex shrink-0 flex-wrap items-center gap-1.5">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => beginEditExpiry(certificate)}
+                  >
+                    <Pencil className="h-3.5 w-3.5" aria-hidden />
+                    {t('vehicles.editCertificateExpiry')}
+                  </Button>
+                  {certificate.is_historical ? (
+                    canRestore && (
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        onClick={() =>
+                          updateCertificate.mutate({
+                            vehicleId,
+                            fileId: certificate.id,
+                            body: { is_historical: false },
+                          })
+                        }
+                      >
+                        <RotateCcw className="h-3.5 w-3.5" aria-hidden />
+                        {t('vehicles.restoreCertificateCurrent')}
+                      </Button>
+                    )
+                  ) : (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => setHistoricalTarget(certificate)}
+                    >
+                      <History className="h-3.5 w-3.5" aria-hidden />
+                      {t('vehicles.markCertificateHistorical')}
+                    </Button>
+                  )}
+                </div>
+              )}
+              {canDelete && !isEditing && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  className="shrink-0 text-muted-foreground hover:text-destructive"
+                  aria-label={t('vehicles.delete')}
+                  title={t('vehicles.delete')}
+                  onClick={() => setCertificateToDelete(certificate)}
+                >
+                  <Trash2 className="h-3.5 w-3.5" aria-hidden />
+                </Button>
+              )}
+            </div>
+          )
+        })}
+
+        {canEdit && (
+          <div className="flex flex-col gap-3">
+            {pending.length > 0 && (
+              <div className="flex flex-col gap-2.5 rounded-lg border border-dashed border-border p-2.5">
+                {pending.map((entry) => (
+                  <div
+                    key={entry.id}
+                    className="flex flex-col gap-2 rounded-md border border-border bg-surface p-2.5"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0 flex-1">
+                        <label className="text-xs font-medium text-muted-foreground">
+                          {t('vehicles.certificateName')}
+                        </label>
+                        <input
+                          type="text"
+                          value={entry.name}
+                          maxLength={CERTIFICATE_NAME_MAX_LENGTH}
+                          disabled={controlsDisabled}
+                          onChange={(event) => updatePending(entry.id, { name: event.target.value })}
+                          className="mt-0.5 h-9 w-full rounded-md border border-input bg-surface px-3 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        />
+                        <p className="mt-0.5 truncate text-[0.7em] text-muted-foreground" dir="auto">
+                          {entry.file.name}
+                        </p>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon-sm"
+                        disabled={controlsDisabled}
+                        aria-label={t('common.remove')}
+                        onClick={() => removePending(entry.id)}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" aria-hidden />
+                      </Button>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2">
+                      <input
+                        type="date"
+                        aria-label={t('vehicles.certificateExpiryDate')}
+                        value={entry.expiryDate}
+                        disabled={entry.noExpiry || controlsDisabled}
+                        required={!entry.noExpiry}
+                        onChange={(event) =>
+                          updatePending(entry.id, { expiryDate: event.target.value })
+                        }
+                        className="h-9 rounded-md border border-input bg-surface px-3 font-mono text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+                      />
+                      <label className="flex items-center gap-1.5 text-xs text-foreground">
+                        <input
+                          type="checkbox"
+                          checked={entry.noExpiry}
+                          disabled={controlsDisabled}
+                          onChange={(event) =>
+                            updatePending(entry.id, {
+                              noExpiry: event.target.checked,
+                              expiryDate: event.target.checked ? '' : entry.expiryDate,
+                            })
+                          }
+                          className="h-4 w-4 rounded border-input accent-primary"
+                        />
+                        {t('vehicles.certificateNoExpiry')}
+                      </label>
+                    </div>
+
+                    <div className="flex flex-col gap-1">
+                      <label className="text-xs font-medium text-muted-foreground">
+                        {t('vehicles.certificateReplaces')}
+                      </label>
+                      <select
+                        value={entry.replacesFileId == null ? '' : String(entry.replacesFileId)}
+                        disabled={controlsDisabled}
+                        onChange={(event) =>
+                          updatePending(entry.id, {
+                            replacesFileId: event.target.value ? Number(event.target.value) : null,
+                          })
+                        }
+                        className="h-9 w-full rounded-md border border-input bg-surface px-2.5 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background"
+                      >
+                        <option value="">{t('vehicles.certificateIndependent')}</option>
+                        {replacementOptions(entry.id).map((candidate) => (
+                          <option key={candidate.id} value={candidate.id}>
+                            {`${fileLabel(candidate, lang)} · ${candidate.original_name} · #${candidate.id}`}
+                          </option>
+                        ))}
+                      </select>
+                      {entry.replacesFileId != null && (
+                        <p className="text-[0.72em] text-muted-foreground">
+                          {t('vehicles.certificateReplacementHint')}
+                        </p>
+                      )}
+                    </div>
+
+                    {entry.error && (
+                      <p className="text-xs text-destructive" role="alert">
+                        {entry.error}
+                      </p>
+                    )}
+                  </div>
+                ))}
+                <div className="flex justify-end">
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={!allValid || controlsDisabled}
+                    onClick={() => void submitPending()}
+                  >
+                    {batchBusy ? (
+                      <Loader2
+                        className="h-3.5 w-3.5 animate-spin motion-reduce:animate-none"
+                        aria-hidden
+                      />
+                    ) : null}
+                    {t('vehicles.uploadCertificates')}
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            <MultiFileUploadZone
+              accept={DOCUMENT_ACCEPT}
+              label={t('vehicles.addCertificates')}
+              busy={false}
+              disabled={controlsDisabled}
+              onFiles={addPendingFiles}
+            />
+            <p className="text-xs text-muted-foreground">{t('vehicles.certificateUploadHint')}</p>
+          </div>
+        )}
+      </div>
+
+      <ConfirmDialog
+        open={certificateToDelete != null}
+        onOpenChange={(open) => {
+          if (!open) setCertificateToDelete(null)
+        }}
+        title={t('vehicles.delete')}
+        description={
+          certificateToDelete ? fileLabel(certificateToDelete, lang) : t('vehicles.deleteConfirm')
+        }
+        confirmLabel={t('vehicles.delete')}
+        destructive
+        onConfirm={() => {
+          if (certificateToDelete) {
+            deleteCertificate.mutate({ vehicleId, fileId: certificateToDelete.id })
+          }
+          setCertificateToDelete(null)
+        }}
+      />
+      <ConfirmDialog
+        open={historicalTarget != null}
+        onOpenChange={(open) => {
+          if (!open) setHistoricalTarget(null)
+        }}
+        title={t('vehicles.markCertificateHistorical')}
+        description={t('vehicles.certificateHistoricalConfirm')}
+        confirmLabel={t('vehicles.markCertificateHistorical')}
+        onConfirm={() => {
+          if (historicalTarget) {
+            updateCertificate.mutate({
+              vehicleId,
+              fileId: historicalTarget.id,
+              body: { is_historical: true },
+            })
+          }
+          setHistoricalTarget(null)
+        }}
+      />
     </Panel>
   )
 }
