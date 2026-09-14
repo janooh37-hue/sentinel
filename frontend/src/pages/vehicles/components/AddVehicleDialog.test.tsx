@@ -72,6 +72,7 @@ const LICENSE_FILE: VehicleFileRead = {
   original_name: 'licence.jpg',
   media_type: 'image/jpeg',
   url: '/api/vehicles/101/files/501',
+  is_historical: false,
 }
 const PHOTO_ASSET: VehiclePhotoRead = {
   id: 21,

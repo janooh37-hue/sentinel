@@ -6,7 +6,9 @@ requires-python = ">=3.12,<3.13"
 readme = "README.md"
 dependencies = [
     "pytesseract>=0.3.13",
-    "PyMuPDF>=1.24",  # fitz — every PDF rasterise / text-layer path needs it
+    "PyMuPDF>=1.28.2,<2.0",  # fitz — every PDF rasterise/text-layer/certificate-compression
+    # path needs it; the floor is the installed version whose Document.rewrite_images
+    # API vehicle certificate compression depends on.
     "Pillow>=12.2.0,<13.0",
     "mrz>=0.6.2",
     "rapidfuzz>=3.14.5",

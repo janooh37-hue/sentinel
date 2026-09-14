@@ -30,6 +30,7 @@ from app.schemas.vehicle import (
     VehicleAccidentCreate,
     VehicleAccidentRead,
     VehicleAccidentStatusUpdate,
+    VehicleCertificateUpdate,
     VehicleCreate,
     VehicleFileRead,
     VehicleFineBatchRequest,
@@ -552,14 +553,18 @@ def renew_vehicle_license(
 async def upload_vehicle_file(
     vehicle_id: int,
     db: Annotated[Session, Depends(get_db)],
-    _user: Annotated[User, Depends(require_capability("vehicles.edit"))],
+    user: Annotated[User, Depends(require_capability("vehicles.edit"))],
     kind: Annotated[str, Form()],
     file: Annotated[UploadFile, File()],
     label_ar: Annotated[str | None, Form()] = None,
     label_en: Annotated[str | None, Form()] = None,
+    expiry_date: Annotated[date_t | None, Form()] = None,
+    no_expiry: Annotated[bool, Form()] = False,
+    replaces_file_id: Annotated[int | None, Form()] = None,
 ) -> VehicleFileRead:
     data = await file.read(vehicle_service.MAX_FILE_BYTES + 1)
-    row = vehicle_service.store_file(
+    row = await run_in_threadpool(
+        vehicle_service.store_file,
         db,
         vehicle_id,
         kind=kind,
@@ -568,7 +573,28 @@ async def upload_vehicle_file(
         media_type=file.content_type or "application/octet-stream",
         label_ar=label_ar,
         label_en=label_en,
+        expiry_date=expiry_date,
+        no_expiry=no_expiry,
+        replaces_file_id=replaces_file_id,
+        actor=user.email,
     )
+    return VehicleFileRead.model_validate(row).model_copy(
+        update={"url": f"/api/v1/vehicles/{vehicle_id}/files/{row.id}"}
+    )
+
+
+@router.patch(
+    "/{vehicle_id}/files/{file_id}/certificate",
+    response_model=VehicleFileRead,
+)
+def update_vehicle_certificate(
+    vehicle_id: int,
+    file_id: int,
+    payload: VehicleCertificateUpdate,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(require_capability("vehicles.edit"))],
+) -> VehicleFileRead:
+    row = vehicle_service.update_certificate(db, vehicle_id, file_id, payload, actor=user.email)
     return VehicleFileRead.model_validate(row).model_copy(
         update={"url": f"/api/v1/vehicles/{vehicle_id}/files/{row.id}"}
     )

@@ -717,3 +717,134 @@ def test_0089_downgrade_refuses_fractional_amounts(
 
     with pytest.raises(RuntimeError, match="Cannot downgrade"):
         command.downgrade(config, "0088_inmate_statistics_workflow")
+
+
+CERTIFICATE_COLUMNS = {
+    "expiry_date",
+    "expiry_reminder_sent_for",
+    "is_historical",
+    "superseded_by_file_id",
+}
+
+
+def _vehicle_file_columns(connection: Any) -> set[str]:
+    return {column["name"] for column in inspect(connection).get_columns("vehicle_files")}
+
+
+def test_0090_certificate_columns_round_trip_over_populated_vehicle_files(
+    tmp_path: Path,
+) -> None:
+    config = _config(tmp_path / "vehicle-certificates-migration.db")
+    command.upgrade(config, "0089_vehicle_fines_ledger")
+    engine = create_engine(config.get_main_option("sqlalchemy.url"))
+
+    try:
+        with engine.begin() as connection:
+            assert CERTIFICATE_COLUMNS.isdisjoint(_vehicle_file_columns(connection))
+            _seed_vehicle_and_site(connection)
+            # A pre-existing non-certificate file row (photo) survives untouched.
+            connection.execute(
+                text(
+                    "INSERT INTO vehicle_files ("
+                    "vehicle_id, kind, label_ar, label_en, path, original_name, media_type, size, "
+                    "created_at"
+                    ") VALUES ("
+                    "1, 'photo', NULL, NULL, 'vehicle_files/1/photo/a.jpg', 'a.jpg', "
+                    "'image/jpeg', 1024, '2026-01-01 00:00:00'"
+                    ")"
+                )
+            )
+
+        command.upgrade(config, "0090_vehicle_certificates")
+
+        with engine.begin() as connection:
+            assert _vehicle_file_columns(connection) >= CERTIFICATE_COLUMNS
+            photo_row = (
+                connection.execute(
+                    text(
+                        "SELECT expiry_date, expiry_reminder_sent_for, is_historical, "
+                        "superseded_by_file_id FROM vehicle_files WHERE kind = 'photo'"
+                    )
+                )
+                .mappings()
+                .one()
+            )
+            assert photo_row["expiry_date"] is None
+            assert photo_row["expiry_reminder_sent_for"] is None
+            assert photo_row["is_historical"] == 0
+            assert photo_row["superseded_by_file_id"] is None
+
+            # Dated, non-expiring, historical, and replacement metadata all persist.
+            connection.execute(
+                text(
+                    "INSERT INTO vehicle_files ("
+                    "vehicle_id, kind, label_ar, label_en, path, original_name, media_type, size, "
+                    "created_at, expiry_date, expiry_reminder_sent_for, is_historical, "
+                    "superseded_by_file_id"
+                    ") VALUES ("
+                    "1, 'certificate', 'شهادة', 'Certificate', "
+                    "'vehicle_files/1/certificate/b.pdf', 'b.pdf', 'application/pdf', 2048, "
+                    "'2026-02-01 00:00:00', '2027-01-01', NULL, 0, NULL"
+                    ")"
+                )
+            )
+            connection.execute(
+                text(
+                    "INSERT INTO vehicle_files ("
+                    "vehicle_id, kind, label_ar, label_en, path, original_name, media_type, size, "
+                    "created_at, expiry_date, expiry_reminder_sent_for, is_historical, "
+                    "superseded_by_file_id"
+                    ") VALUES ("
+                    "1, 'certificate', 'شهادة قديمة', 'Old certificate', "
+                    "'vehicle_files/1/certificate/c.pdf', 'c.pdf', 'application/pdf', 1024, "
+                    "'2026-01-15 00:00:00', '2026-06-01', '2026-06-01', 1, 2"
+                    ")"
+                )
+            )
+
+        command.downgrade(config, "0089_vehicle_fines_ledger")
+
+        with engine.begin() as connection:
+            assert CERTIFICATE_COLUMNS.isdisjoint(_vehicle_file_columns(connection))
+            surviving = (
+                connection.execute(
+                    text("SELECT kind, original_name, size FROM vehicle_files ORDER BY id")
+                )
+                .mappings()
+                .all()
+            )
+            assert [dict(row) for row in surviving] == [
+                {"kind": "photo", "original_name": "a.jpg", "size": 1024},
+                {"kind": "certificate", "original_name": "b.pdf", "size": 2048},
+                {"kind": "certificate", "original_name": "c.pdf", "size": 1024},
+            ]
+
+        command.upgrade(config, "head")
+
+        with engine.connect() as connection:
+            assert _vehicle_file_columns(connection) >= CERTIFICATE_COLUMNS
+            # Re-upgrading never resurrects the removed metadata.
+            rows = (
+                connection.execute(
+                    text(
+                        "SELECT expiry_date, expiry_reminder_sent_for, is_historical, "
+                        "superseded_by_file_id FROM vehicle_files ORDER BY id"
+                    )
+                )
+                .mappings()
+                .all()
+            )
+            assert len(rows) == 3
+            for row in rows:
+                assert row["expiry_date"] is None
+                assert row["expiry_reminder_sent_for"] is None
+                assert row["is_historical"] == 0
+                assert row["superseded_by_file_id"] is None
+    finally:
+        engine.dispose()
+
+
+def test_alembic_history_has_exactly_one_head(tmp_path: Path) -> None:
+    config = _config(tmp_path / "heads-check.db")
+    script = ScriptDirectory.from_config(config)
+    assert len(script.get_heads()) == 1

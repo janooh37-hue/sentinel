@@ -289,6 +289,7 @@ export type VehicleSiteRead = components['schemas']['VehicleSiteRead']
 export type VehicleSiteCreate = components['schemas']['VehicleSiteCreate']
 export type VehicleSiteUpdate = components['schemas']['VehicleSiteUpdate']
 export type VehicleFileRead = components['schemas']['VehicleFileRead']
+export type VehicleCertificateUpdate = components['schemas']['VehicleCertificateUpdate']
 export type VehiclePhotoRead = components['schemas']['VehiclePhotoRead']
 export type VehicleFineCreate = components['schemas']['VehicleFineCreate']
 export type VehicleFineUpdate = components['schemas']['VehicleFineUpdate']
@@ -1583,15 +1584,28 @@ export const api = {
     id: number,
     kind: VehicleFileRead['kind'],
     file: File,
-    labels: { label_ar?: string; label_en?: string } = {},
+    options: {
+      label_ar?: string
+      label_en?: string
+      expiry_date?: string | null
+      no_expiry?: boolean
+      replaces_file_id?: number | null
+    } = {},
   ) => {
     const form = new FormData()
     form.append('file', file)
     form.append('kind', kind)
-    if (labels.label_ar !== undefined) form.append('label_ar', labels.label_ar)
-    if (labels.label_en !== undefined) form.append('label_en', labels.label_en)
+    if (options.label_ar !== undefined) form.append('label_ar', options.label_ar)
+    if (options.label_en !== undefined) form.append('label_en', options.label_en)
+    if (options.expiry_date != null) form.append('expiry_date', options.expiry_date)
+    if (options.no_expiry !== undefined) form.append('no_expiry', String(options.no_expiry))
+    if (options.replaces_file_id != null) {
+      form.append('replaces_file_id', String(options.replaces_file_id))
+    }
     return multipart<VehicleFileRead>(`/vehicles/${id}/files`, form)
   },
+  updateVehicleCertificate: (id: number, fileId: number, body: Partial<VehicleCertificateUpdate>) =>
+    request<VehicleFileRead>('PATCH', `/vehicles/${id}/files/${fileId}/certificate`, body),
   deleteVehicleFile: (id: number, fileId: number) =>
     request<void>('DELETE', `/vehicles/${id}/files/${fileId}`),
   vehicleFileUrl: (id: number, fileId: number) =>

@@ -1,7 +1,7 @@
 """account email tokens
 
-Revision ID: 0090_account_email_tokens
-Revises: 0089_vehicle_fines_ledger
+Revision ID: 0091_account_email_tokens
+Revises: 0090_vehicle_certificates
 Create Date: 2026-09-14 00:00:00.000000
 """
 
@@ -12,8 +12,8 @@ from collections.abc import Sequence
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "0090_account_email_tokens"
-down_revision: str | Sequence[str] | None = "0089_vehicle_fines_ledger"
+revision: str = "0091_account_email_tokens"
+down_revision: str | Sequence[str] | None = "0090_vehicle_certificates"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
