@@ -108,3 +108,7 @@ agent to review; the `alembic-heads-guard` hook warns on a split head.
   agents; `/deploy`, `/sync-api-types`, `/new-migration` skills) is local-only /
   gitignored. Hooks load at session start — reload after editing them.
 - Strict gates are real: mypy is `strict`, pytest runs with `filterwarnings=error`.
+
+## Planning artifacts
+
+Keep plans in `mockups/plan/`. New planning documents belong there instead of a top-level `Plans/` directory.

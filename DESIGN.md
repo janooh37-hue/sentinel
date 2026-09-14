@@ -2354,7 +2354,12 @@ Arabic and RTL. The paper is fixed to A4 portrait and retains physical
 reference proportions; application language, theme, and font scale do not
 change the official document's language, colors, measurements, or typography.
 IDs, dates, references, and wing codes inside the RTL report use explicit LTR
-direction. There are no report language or orientation controls.
+change the official document's language, colors, measurements, or typography.
+IDs, dates, references, and wing codes inside the RTL report use explicit LTR
+direction. There are no report language or orientation controls. Save as PDF
+suggests the Arabic report title plus the selected year and month
+(`سجل مخالفات المسلكية الشهـري_2026-09`), never the application's generic tab
+title, and the tab title is restored once the print dialog closes.
 
 Save as PDF suggests the Arabic report title plus the selected year and month
 (`سجل مخالفات المسلكية الشهـري_2026-09`), never the application's generic tab

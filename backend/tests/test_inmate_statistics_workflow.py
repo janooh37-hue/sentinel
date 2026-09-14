@@ -2,7 +2,7 @@
 
 import json
 from concurrent.futures import ThreadPoolExecutor
-from datetime import date
+from datetime import UTC, date, datetime
 from threading import Event
 
 import pytest
@@ -525,3 +525,186 @@ def test_routes_complete_chain_refresh_actions_and_reject_direct_or_forced_close
     reopen = {"expected_version": closed["workflow"]["version"], "reason": "x"}
     assert post("reopen", reopen, forced=True).status_code == 422
     assert post("close", {}).status_code == 404
+
+
+def test_routes_reopen_legacy_month_and_require_new_approval_cycle(api_db, people):
+    live(api_db)
+    entries = s.build_month(api_db, 2026, 8).entries
+    period = m.InmateViolationPeriod(
+        year=2026, month=8, closed_at=datetime(2026, 9, 1, tzinfo=UTC), closed_by=people[4].id
+    )
+    api_db.add(period)
+    api_db.flush()
+    s._freeze(api_db, period, entries)
+    api_db.commit()
+    assert api_db.scalar(select(func.count()).select_from(m.InmateViolationWorkflow)) == 0
+
+    current = {"user": people[4]}
+    app = FastAPI()
+    app.include_router(router, prefix="/api/v1")
+    install_handlers(app)
+    app.dependency_overrides[get_db] = lambda: api_db
+    app.dependency_overrides[get_current_user] = lambda: current["user"]
+    client = TestClient(app)
+    path = "/api/v1/inmate-violations/statistics/2026/8"
+
+    viewed = client.get(path).json()
+    assert viewed["closed"] is True
+    workflow = viewed["workflow"]
+    assert workflow["state"] == "closed"
+    assert workflow["version"] == 0
+    assert workflow["allowed_actions"] == ["reopen"]
+    assert workflow["reviewer"] is None
+    assert workflow["manager"] is None
+    assert workflow["prepared"] is None
+    assert workflow["reviewed"] is None
+    assert workflow["approved"] is None
+    assert api_db.scalar(select(func.count()).select_from(m.InmateViolationWorkflow)) == 0
+
+    def reopen_events():
+        return api_db.scalars(
+            select(m.AuditLog).where(m.AuditLog.action == "inmate_violation_month_reopened")
+        ).all()
+
+    stale = client.post(f"{path}/reopen", json={"expected_version": 1, "reason": "x"})
+    assert stale.status_code == 409
+    assert stale.json()["error"]["code"] == "INMATE_REGISTER_STALE_WORKFLOW"
+
+    blank_reason = client.post(f"{path}/reopen", json={"expected_version": 0, "reason": " "})
+    assert blank_reason.status_code == 422
+    assert blank_reason.json()["error"]["code"] == "INMATE_REGISTER_REASON_REQUIRED"
+
+    current["user"] = people[0]
+    forbidden = client.post(f"{path}/reopen", json={"expected_version": 0, "reason": "تصحيح"})
+    assert forbidden.status_code == 403
+    current["user"] = people[4]
+
+    assert api_db.scalar(select(func.count()).select_from(m.InmateViolationWorkflow)) == 0
+    still_closed = client.get(path).json()
+    assert still_closed["closed"] is True
+    assert still_closed["workflow"]["state"] == "closed"
+    assert still_closed["workflow"]["version"] == 0
+    assert len(reopen_events()) == 0
+
+    response = client.post(f"{path}/reopen", json={"expected_version": 0, "reason": "تصحيح"})
+    assert response.status_code == 200
+    opened = response.json()
+    assert opened["closed"] is False
+    assert opened["workflow"]["state"] == "draft"
+    assert opened["workflow"]["version"] == 1
+    assert opened["workflow"]["prepared"] is None
+    assert opened["workflow"]["reviewed"] is None
+    assert opened["workflow"]["approved"] is None
+    assert opened["workflow"]["reviewer"] is None
+    assert opened["workflow"]["manager"] is None
+    assert opened["workflow"]["last_event"]["action"] == "reopened"
+    assert opened["workflow"]["last_event"]["user_id"] == people[4].id
+    assert opened["workflow"]["last_event"]["reason"] == "تصحيح"
+
+    fresh = Session(api_db.bind)
+    try:
+        fresh_period = fresh.scalar(
+            select(m.InmateViolationPeriod).where(
+                m.InmateViolationPeriod.year == 2026, m.InmateViolationPeriod.month == 8
+            )
+        )
+        assert fresh_period.closed_at is None
+        assert fresh_period.closed_by is None
+        fresh_workflow = fresh.scalar(
+            select(m.InmateViolationWorkflow).where(
+                m.InmateViolationWorkflow.year == 2026, m.InmateViolationWorkflow.month == 8
+            )
+        )
+        assert fresh_workflow.state == "draft"
+        assert fresh_workflow.version == 1
+        assert (
+            fresh.scalar(
+                select(func.count())
+                .select_from(m.InmateViolationStatRow)
+                .where(m.InmateViolationStatRow.period_id == fresh_period.id)
+            )
+            == 1
+        )
+    finally:
+        fresh.close()
+
+    logs = reopen_events()
+    assert len(logs) == 1
+    reopen_payload = json.loads(logs[0].payload)
+    assert logs[0].actor == people[4].email
+    assert reopen_payload["reason"] == "تصحيح"
+    assert reopen_payload["actors"] == {}
+
+    repeat = client.post(f"{path}/reopen", json={"expected_version": 0, "reason": "تصحيح"})
+    assert repeat.status_code == 409
+    assert len(reopen_events()) == 1
+
+    current["user"] = people[0]
+    draft = client.get(path).json()
+    assert draft["workflow"]["allowed_actions"] == ["prepare"]
+    prepared = client.post(
+        f"{path}/prepare",
+        json={
+            "expected_version": draft["workflow"]["version"],
+            "expected_projection_fingerprint": draft["projection_fingerprint"],
+            "reviewer_user_id": people[1].id,
+        },
+    ).json()
+    assert prepared["workflow"]["state"] == "awaiting_review"
+    assert prepared["closed"] is False
+
+    current["user"] = people[1]
+    reviewing = client.get(path).json()
+    assert set(reviewing["workflow"]["allowed_actions"]) == {"review", "return"}
+    reviewed = client.post(
+        f"{path}/review",
+        json={
+            "expected_version": prepared["workflow"]["version"],
+            "manager_user_id": people[2].id,
+        },
+    ).json()
+    assert reviewed["workflow"]["state"] == "awaiting_manager"
+    assert reviewed["closed"] is False
+
+    current["user"] = people[2]
+    approving = client.get(path).json()
+    assert set(approving["workflow"]["allowed_actions"]) == {"approve", "return"}
+    approved = client.post(
+        f"{path}/approve", json={"expected_version": reviewed["workflow"]["version"]}
+    ).json()
+    assert approved["closed"] is True
+    assert approved["export_ready"] is True
+    stage_ids = [
+        approved["workflow"][stage]["user_id"] for stage in ("prepared", "reviewed", "approved")
+    ]
+    assert stage_ids == [u.id for u in people[:3]]
+    assert len(set(stage_ids)) == 3
+
+    fresh = Session(api_db.bind)
+    try:
+        fresh_period = fresh.scalar(
+            select(m.InmateViolationPeriod).where(
+                m.InmateViolationPeriod.year == 2026, m.InmateViolationPeriod.month == 8
+            )
+        )
+        assert fresh_period.closed_at is not None
+        fresh_workflow = fresh.scalar(
+            select(m.InmateViolationWorkflow).where(
+                m.InmateViolationWorkflow.year == 2026, m.InmateViolationWorkflow.month == 8
+            )
+        )
+        assert fresh_workflow.state == "closed"
+    finally:
+        fresh.close()
+
+    logs = reopen_events()
+    assert len(logs) == 1
+    assert json.loads(logs[0].payload) == reopen_payload
+
+    current["user"] = people[4]
+    final_attempt = client.post(f"{path}/reopen", json={"expected_version": 0, "reason": "تصحيح"})
+    assert final_attempt.status_code == 409
+    assert len(reopen_events()) == 1
+    still_final = client.get(path).json()
+    assert still_final["closed"] is True
+    assert still_final["workflow"]["version"] == approved["workflow"]["version"]
