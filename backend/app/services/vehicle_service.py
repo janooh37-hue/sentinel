@@ -2020,13 +2020,27 @@ def update_certificate(
     if touches_history:
         if payload.is_historical:
             row.is_historical = True
-        elif row.superseded_by_file_id is not None:
-            raise ConflictError(
-                "VEHICLE_CERTIFICATE_HAS_REPLACEMENT",
-                "This historical certificate has a newer replacement and cannot be made current.",
-                file_id=file_id,
-            )
         else:
+            result = cast(
+                CursorResult[Any],
+                db.execute(
+                    update(VehicleFile)
+                    .where(
+                        VehicleFile.id == file_id,
+                        VehicleFile.vehicle_id == vehicle_id,
+                        VehicleFile.kind == "certificate",
+                        VehicleFile.superseded_by_file_id.is_(None),
+                    )
+                    .values(is_historical=False)
+                ),
+            )
+            if result.rowcount != 1:
+                db.rollback()
+                raise ConflictError(
+                    "VEHICLE_CERTIFICATE_HAS_REPLACEMENT",
+                    "This historical certificate has a newer replacement and cannot be made current.",
+                    file_id=file_id,
+                )
             row.is_historical = False
 
     after = _snapshot()
