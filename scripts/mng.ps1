@@ -185,6 +185,180 @@ function Assert-Admin([string] $verb) {
 }
 
 # -- Commands -----------------------------------------------------------------
+function Get-DotEnvValue([hashtable] $values, [string] $name) {
+    # Process environment variables take precedence over .env, matching the
+    # behavior of the backend's dotenv loader and allowing service managers to
+    # inject secrets without writing them to disk.
+    $processValue = [Environment]::GetEnvironmentVariable($name, 'Process')
+    if (-not [string]::IsNullOrWhiteSpace($processValue)) { return $processValue }
+    if ($values.ContainsKey($name) -and -not [string]::IsNullOrWhiteSpace($values[$name])) {
+        return $values[$name]
+    }
+    return $null
+}
+
+function Read-DotEnv([string] $path) {
+    $values = @{}
+    if (-not (Test-Path -LiteralPath $path)) { return $values }
+    foreach ($line in Get-Content -LiteralPath $path -ErrorAction Stop) {
+        if ($line -notmatch '^\s*(?:export\s+)?([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*?)\s*$') { continue }
+        $name = $Matches[1]
+        $value = $Matches[2]
+        # Accept the common quoted dotenv forms, including comments after a
+        # quoted value, and strip comments from unquoted values only.
+        if ($value -match '^"(.*)"(?:\s+#.*)?$') {
+            $value = $Matches[1]
+        } elseif ($value -match "^'(.*)'(?:\s+#.*)?$") {
+            $value = $Matches[1]
+        } elseif ($value -match '^(.*?)\s+#') {
+            $value = $Matches[1].TrimEnd()
+        }
+        $values[$name] = $value
+    }
+    return $values
+}
+
+function Resolve-GitRemoteUrl([string] $remoteUrl) {
+    # Git applies url.<base>.insteadOf rewrites before contacting the remote.
+    # Resolve the longest applicable rewrite so credentials are never sent to
+    # an origin that only looks canonical in remote.origin.url.
+    $bestPrefix = $null
+    $bestReplacement = $null
+    $rewriteLines = @()
+    Push-Location $Root
+    try {
+        $rewriteLines = @(git config --get-regexp '^url\..*\.insteadof$' 2>$null)
+    } finally {
+        Pop-Location
+    }
+    foreach ($line in $rewriteLines) {
+        $parts = ([string]$line) -split '\s+', 2
+        if ($parts.Count -ne 2 -or $parts[0] -notmatch '^url\.(.+)\.insteadof$') { continue }
+        $replacement = $Matches[1]
+        $prefix = $parts[1]
+        if ($remoteUrl.StartsWith($prefix, [StringComparison]::Ordinal) -and
+            ($null -eq $bestPrefix -or $prefix.Length -gt $bestPrefix.Length)) {
+            $bestPrefix = $prefix
+            $bestReplacement = $replacement
+        }
+    }
+    if ($null -eq $bestPrefix) { return $remoteUrl }
+    return $bestReplacement + $remoteUrl.Substring($bestPrefix.Length)
+}
+
+function Get-UpdateGitAuthentication([string] $remoteUrl) {
+    # SSH remotes and local remotes already have their own authentication.
+    # HTTPS credentials are only safe to use for this repository's canonical
+    # GitHub origin; fail closed before reading any secret for another origin.
+    if ($remoteUrl -notmatch '^https://') { return $null }
+
+    $expectedOrigin = 'https://github.com/janooh37-hue/sentinel.git'
+    $expectedPath = '/janooh37-hue/sentinel'
+    $remoteUri = $null
+    $validUri = [Uri]::TryCreate($remoteUrl, [UriKind]::Absolute, [ref]$remoteUri)
+    if (-not $validUri -or
+        $remoteUri.Scheme -ine 'https' -or
+        $remoteUri.Host -ine 'github.com' -or
+        ($remoteUri.Port -ne -1 -and $remoteUri.Port -ne 443) -or
+        -not [string]::IsNullOrEmpty($remoteUri.UserInfo) -or
+        -not [string]::IsNullOrEmpty($remoteUri.Query) -or
+        -not [string]::IsNullOrEmpty($remoteUri.Fragment) -or
+        $remoteUri.AbsolutePath.TrimEnd('/') -notmatch ('^{0}(?:\.git)?$' -f [regex]::Escape($expectedPath))) {
+        throw "Refusing to send Sentinel credentials to an unexpected HTTPS origin. Set origin to $expectedOrigin and rerun: mng update"
+    }
+
+    $effectiveUrl = Resolve-GitRemoteUrl $remoteUrl
+    $effectiveUri = $null
+    $effectiveValid = [Uri]::TryCreate($effectiveUrl, [UriKind]::Absolute, [ref]$effectiveUri)
+    if (-not $effectiveValid -or
+        $effectiveUri.Scheme -ine 'https' -or
+        $effectiveUri.Host -ine 'github.com' -or
+        ($effectiveUri.Port -ne -1 -and $effectiveUri.Port -ne 443) -or
+        -not [string]::IsNullOrEmpty($effectiveUri.UserInfo) -or
+        -not [string]::IsNullOrEmpty($effectiveUri.Query) -or
+        -not [string]::IsNullOrEmpty($effectiveUri.Fragment) -or
+        $effectiveUri.AbsolutePath.TrimEnd('/') -notmatch ('^{0}(?:\.git)?$' -f [regex]::Escape($expectedPath))) {
+        throw "Refusing to send Sentinel credentials to an unexpected HTTPS origin. Set origin to $expectedOrigin and rerun: mng update"
+    }
+
+    $envFile = Join-Path $Root '.env'
+    $values = Read-DotEnv $envFile
+    $username = Get-DotEnvValue $values 'MNG_GIT_USERNAME'
+    $token = Get-DotEnvValue $values 'MNG_GIT_TOKEN'
+    if ([string]::IsNullOrWhiteSpace($username) -or [string]::IsNullOrWhiteSpace($token)) {
+        $message = 'Private repository authentication is not configured. Set MNG_GIT_USERNAME and '
+        $message += 'MNG_GIT_TOKEN in {0} (copy .env.example to .env), using a GitHub PAT with ' -f $envFile
+        $message += 'Contents: Read access. The credential values are never printed.'
+        throw $message
+    }
+    return [pscustomobject]@{ Username = $username; Token = $token }
+}
+
+function Invoke-AuthenticatedGitPull($authentication) {
+    $askPassPath = $null
+    $askPassCommandPath = $null
+    $oldAskPass = $env:GIT_ASKPASS
+    $oldTerminalPrompt = $env:GIT_TERMINAL_PROMPT
+    $oldUsername = $env:MNG_UPDATE_GIT_USERNAME
+    $oldToken = $env:MNG_UPDATE_GIT_TOKEN
+    try {
+        if ($authentication) {
+            $askPassDir = Join-Path ([IO.Path]::GetTempPath()) ('mng-git-' + [Guid]::NewGuid().ToString('N'))
+            New-Item -ItemType Directory -Path $askPassDir -Force | Out-Null
+            $askPassPath = Join-Path $askPassDir 'askpass.ps1'
+            $askPassCommandPath = Join-Path $askPassDir 'askpass.cmd'
+            # The helper contains no credential; Git passes the prompt and the
+            # values travel only through this process's environment.
+            Set-Content -LiteralPath $askPassPath -Encoding UTF8 -Value @'
+param([string] $Prompt)
+if ($Prompt -match '(?i)username') {
+    [Console]::Write($env:MNG_UPDATE_GIT_USERNAME)
+    exit 0
+}
+if ($Prompt -match '(?i)password|passphrase') {
+    [Console]::Write($env:MNG_UPDATE_GIT_TOKEN)
+    exit 0
+}
+exit 1
+'@
+            $powerShell = (Get-Command powershell.exe -ErrorAction Stop).Source
+            Set-Content -LiteralPath $askPassCommandPath -Encoding ASCII -Value @"
+@echo off
+"$powerShell" -NoProfile -ExecutionPolicy Bypass -File "$askPassPath" %*
+"@
+            $env:MNG_UPDATE_GIT_USERNAME = $authentication.Username
+            $env:MNG_UPDATE_GIT_TOKEN = $authentication.Token
+            $env:GIT_ASKPASS = $askPassCommandPath
+            $env:GIT_TERMINAL_PROMPT = '0'
+        }
+        $prevEAP = $ErrorActionPreference
+        $ErrorActionPreference = 'Continue'
+        try {
+            if ($authentication) {
+                # Disable credential helpers while PAT credentials are active so
+                # stale helpers cannot override the repository PAT.
+                & git -c credential.helper= pull --ff-only 2>&1 | ForEach-Object { Write-Host $_ }
+            } else {
+                # Preserve the user's configured helper for SSH, local, and
+                # non-HTTPS remotes, matching the historical plain `git pull`.
+                & git pull --ff-only 2>&1 | ForEach-Object { Write-Host $_ }
+            }
+            $gitExitCode = $LASTEXITCODE
+        } finally {
+            $ErrorActionPreference = $prevEAP
+        }
+    } finally {
+        if ($null -eq $oldAskPass) { Remove-Item Env:GIT_ASKPASS -ErrorAction SilentlyContinue } else { $env:GIT_ASKPASS = $oldAskPass }
+        if ($null -eq $oldTerminalPrompt) { Remove-Item Env:GIT_TERMINAL_PROMPT -ErrorAction SilentlyContinue } else { $env:GIT_TERMINAL_PROMPT = $oldTerminalPrompt }
+        if ($null -eq $oldUsername) { Remove-Item Env:MNG_UPDATE_GIT_USERNAME -ErrorAction SilentlyContinue } else { $env:MNG_UPDATE_GIT_USERNAME = $oldUsername }
+        if ($null -eq $oldToken) { Remove-Item Env:MNG_UPDATE_GIT_TOKEN -ErrorAction SilentlyContinue } else { $env:MNG_UPDATE_GIT_TOKEN = $oldToken }
+        if ($askPassPath) {
+            Remove-Item -LiteralPath (Split-Path -Parent $askPassPath) -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }
+    return $gitExitCode
+}
+
 function Show-Status {
     $port = Get-Port
     $svc  = Get-Service -Name $Service -ErrorAction SilentlyContinue
@@ -456,8 +630,16 @@ function Invoke-Update {
     try {
         Write-Host '  Fetching latest from git ...' -ForegroundColor Cyan
         $before = (git rev-parse HEAD).Trim()
-        git pull --ff-only
-        if ($LASTEXITCODE -ne 0) { throw 'git pull failed (resolve manually, then run: mng deploy)' }
+        $remoteOutput = @(git config --get remote.origin.url 2>$null)
+        $remoteConfigExitCode = $LASTEXITCODE
+        $remoteUrl = [string]($remoteOutput | Select-Object -First 1)
+        $remoteUrl = $remoteUrl.Trim()
+        if ($remoteConfigExitCode -ne 0 -or [string]::IsNullOrWhiteSpace($remoteUrl)) {
+            throw 'git origin remote is not configured; set origin to the Sentinel repository, then rerun: mng update'
+        }
+        $authentication = Get-UpdateGitAuthentication $remoteUrl
+        $gitExitCode = Invoke-AuthenticatedGitPull $authentication
+        if ($gitExitCode -ne 0) { throw 'git pull failed (resolve manually, then run: mng deploy)' }
         $after = (git rev-parse HEAD).Trim()
         # Pathspecs are cwd-relative, so the frontend diff must run while we are
         # still at the repo root. `git diff --name-only` prints nothing when the
@@ -526,6 +708,7 @@ function Show-Help {
     Write-Host '    mng build       rebuild frontend bundle -> backend\app\static'
     Write-Host '    mng deploy      sync deps + backup + build + migrate + smoke check + restart'
     Write-Host '    mng update      git pull; if changed -> sync deps + deploy (skips untouched frontend)'
+    Write-Host '  update HTTPS remotes use MNG_GIT_USERNAME and MNG_GIT_TOKEN from .env.' -ForegroundColor Gray
     Write-Host '    mng logs        tail service log   (-Tail N, -Stderr)'
     Write-Host '    mng open        open the app in the browser'
     Write-Host ''
