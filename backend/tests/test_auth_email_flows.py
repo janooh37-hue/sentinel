@@ -26,7 +26,7 @@ from app.api.v1 import auth as auth_api
 from app.config import Settings
 from app.core import ratelimit
 from app.db import session as session_mod
-from app.db.models import AccountEmailToken, AuditLog, User
+from app.db.models import AccountEmailToken, AuditLog, AuthSession, User
 from app.db.session import get_db
 from app.main import create_app
 from app.services import account_mail_templates, account_mailer, account_token_service, auth_service
@@ -462,6 +462,255 @@ def test_password_reset_full_flow(
     )
     assert audit_row is not None
     assert audit_row.actor == "self-service"
+
+
+def test_admin_password_reset_invalidates_emailed_reset_links_and_live_sessions(
+    api_db: Session, mail_on: Settings
+) -> None:
+    from app.core import security
+
+    admin = _make_user(
+        api_db,
+        email="reset-admin@x.ae",
+        role="admin",
+        status="active",
+        verified=True,
+    )
+    user = _make_user(
+        api_db,
+        email="admin-reset-target@x.ae",
+        status="active",
+        verified=True,
+    )
+    reset_token = account_token_service.issue(
+        api_db, user, account_token_service.PURPOSE_RESET
+    )
+    verification_token = account_token_service.issue(
+        api_db, user, account_token_service.PURPOSE_VERIFY
+    )
+    session_token = auth_service.start_session(api_db, user)
+
+    client = _client(api_db, admin)
+    response = client.post(
+        f"/api/v1/auth/users/{user.id}/reset-password",
+        json={"password": "admin-chosen-2"},
+    )
+
+    assert response.status_code == 200
+    stale_link = client.post(
+        "/api/v1/auth/password-reset/complete",
+        json={
+            "token": reset_token,
+            "password": "link-overwrite-3",
+            "password_confirmation": "link-overwrite-3",
+        },
+    )
+    assert stale_link.status_code == 400
+    assert stale_link.json()["error"]["code"] == "PASSWORD_RESET_LINK_INVALID"
+
+    api_db.expire_all()
+    reset_row = api_db.scalar(
+        select(AccountEmailToken).where(
+            AccountEmailToken.token_hash == security.hash_token(reset_token)
+        )
+    )
+    verification_row = api_db.scalar(
+        select(AccountEmailToken).where(
+            AccountEmailToken.token_hash == security.hash_token(verification_token)
+        )
+    )
+    session_row = api_db.scalar(
+        select(AuthSession).where(
+            AuthSession.token_hash == security.hash_token(session_token)
+        )
+    )
+    stored_user = api_db.get(User, user.id)
+    assert reset_row is not None and reset_row.used_at is not None
+    assert verification_row is not None and verification_row.used_at is None
+    assert session_row is not None and session_row.revoked is True
+    assert stored_user is not None
+    assert security.verify_password("admin-chosen-2", stored_user.password_hash)
+
+    audit_row = api_db.scalar(
+        select(AuditLog)
+        .where(
+            AuditLog.entity_id == str(user.id),
+            AuditLog.action == "reset_password",
+        )
+        .order_by(AuditLog.id.desc())
+    )
+    assert audit_row is not None
+    assert audit_row.actor == admin.email
+
+
+def test_password_reset_rolls_back_if_session_revocation_fails(
+    api_db: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from app.core import security
+
+    user = _make_user(
+        api_db,
+        email="rollback-reset@x.ae",
+        status="active",
+        verified=True,
+    )
+    reset_token = account_token_service.issue(
+        api_db, user, account_token_service.PURPOSE_RESET
+    )
+    session_token = auth_service.start_session(api_db, user)
+    real_execute = api_db.execute
+
+    def fail_session_revoke(statement: object, *args: object, **kwargs: object) -> object:
+        table = getattr(statement, "table", None)
+        if getattr(table, "name", None) == "auth_sessions":
+            raise RuntimeError("session revocation failed")
+        return real_execute(statement, *args, **kwargs)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(api_db, "execute", fail_session_revoke)
+    with pytest.raises(RuntimeError, match="session revocation failed"):
+        auth_service.complete_password_reset(api_db, reset_token, "should-not-stick-2")
+    api_db.rollback()
+    monkeypatch.setattr(api_db, "execute", real_execute)
+    api_db.expire_all()
+
+    token_row = api_db.scalar(
+        select(AccountEmailToken).where(
+            AccountEmailToken.token_hash == security.hash_token(reset_token)
+        )
+    )
+    session_row = api_db.scalar(
+        select(AuthSession).where(
+            AuthSession.token_hash == security.hash_token(session_token)
+        )
+    )
+    stored_user = api_db.get(User, user.id)
+    reset_audit = api_db.scalar(
+        select(AuditLog).where(
+            AuditLog.entity_id == str(user.id),
+            AuditLog.action == "reset_password",
+        )
+    )
+    assert token_row is not None and token_row.used_at is None
+    assert session_row is not None and session_row.revoked is False
+    assert stored_user is not None
+    assert security.verify_password("correct-horse-1", stored_user.password_hash)
+    assert not security.verify_password("should-not-stick-2", stored_user.password_hash)
+    assert reset_audit is None
+
+
+def test_flag_off_rejects_existing_link_completion_without_consuming_tokens(
+    api_db: Session, mail_off: Settings
+) -> None:
+    from app.core import security
+
+    user = _make_user(
+        api_db,
+        email="mail-disabled-links@x.ae",
+        status="active",
+        verified=True,
+    )
+    verification_token = account_token_service.issue(
+        api_db, user, account_token_service.PURPOSE_VERIFY
+    )
+    reset_token = account_token_service.issue(
+        api_db, user, account_token_service.PURPOSE_RESET
+    )
+    client = _client(api_db)
+
+    verify_response = client.post(
+        "/api/v1/auth/verify-email",
+        json={"token": verification_token},
+    )
+    reset_response = client.post(
+        "/api/v1/auth/password-reset/complete",
+        json={
+            "token": reset_token,
+            "password": "disabled-reset-2",
+            "password_confirmation": "disabled-reset-2",
+        },
+    )
+
+    assert verify_response.status_code == 503
+    assert verify_response.json()["error"]["code"] == "ACCOUNT_MAIL_DISABLED"
+    assert reset_response.status_code == 503
+    assert reset_response.json()["error"]["code"] == "ACCOUNT_MAIL_DISABLED"
+    api_db.expire_all()
+    rows = {
+        row.purpose: row
+        for row in api_db.scalars(
+            select(AccountEmailToken).where(AccountEmailToken.user_id == user.id)
+        )
+    }
+    assert rows[account_token_service.PURPOSE_VERIFY].used_at is None
+    assert rows[account_token_service.PURPOSE_RESET].used_at is None
+    stored_user = api_db.get(User, user.id)
+    assert stored_user is not None
+    assert security.verify_password("correct-horse-1", stored_user.password_hash)
+
+
+def test_failed_older_send_does_not_invalidate_newer_delivered_reset_link(
+    api_db: Session,
+    mail_on: Settings,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.core import security
+
+    user = _make_user(
+        api_db,
+        email="overlapping-reset@x.ae",
+        status="active",
+        verified=True,
+    )
+    first_sending = threading.Event()
+    newer_sent = threading.Event()
+    sent_tokens: list[str] = []
+    calls_lock = threading.Lock()
+
+    def send_password_reset_email(
+        *, recipient: str, raw_token: str, locale: str
+    ) -> None:
+        del recipient, locale
+        with calls_lock:
+            sent_tokens.append(raw_token)
+            call_number = len(sent_tokens)
+        if call_number == 1:
+            first_sending.set()
+            assert newer_sent.wait(timeout=5)
+            raise account_mailer.AccountMailError(500, "older-failed")
+        newer_sent.set()
+
+    monkeypatch.setattr(
+        account_mailer,
+        "send_password_reset_email",
+        send_password_reset_email,
+    )
+    older = threading.Thread(
+        target=auth_service.request_email_link,
+        args=(user.email, account_token_service.PURPOSE_RESET, "en"),
+    )
+    older.start()
+    assert first_sending.wait(timeout=5)
+
+    auth_service.request_email_link(
+        user.email,
+        account_token_service.PURPOSE_RESET,
+        "en",
+    )
+    older.join(timeout=5)
+    assert not older.is_alive()
+    assert len(sent_tokens) == 2
+
+    api_db.expire_all()
+    token_rows = {
+        row.token_hash: row
+        for row in api_db.scalars(
+            select(AccountEmailToken).where(AccountEmailToken.user_id == user.id)
+        )
+    }
+    older_row = token_rows[security.hash_token(sent_tokens[0])]
+    newer_row = token_rows[security.hash_token(sent_tokens[1])]
+    assert older_row.used_at is not None
+    assert newer_row.used_at is None
 
 
 def test_password_reset_of_locked_user_reactivates_account(

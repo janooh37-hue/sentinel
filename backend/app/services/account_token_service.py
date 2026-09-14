@@ -42,6 +42,24 @@ def invalidate_open(db: Session, user_id: int, purpose: str, *, now: datetime) -
     )
 
 
+def invalidate_issued(db: Session, raw: str, purpose: str, *, now: datetime) -> None:
+    """Mark only the named issued token used. Caller commits.
+
+    Mail delivery can overlap with a newer resend. Limiting cleanup to the
+    failed send's token prevents that older failure from consuming the newer,
+    successfully delivered link.
+    """
+    db.execute(
+        update(AccountEmailToken)
+        .where(
+            AccountEmailToken.token_hash == security.hash_token(raw),
+            AccountEmailToken.purpose == purpose,
+            AccountEmailToken.used_at.is_(None),
+        )
+        .values(used_at=now)
+    )
+
+
 def issue(db: Session, user: User, purpose: str) -> str:
     """Invalidate any open token of the same purpose and mint a fresh one.
 
@@ -101,5 +119,6 @@ __all__ = [
     "VERIFY_TTL",
     "claim",
     "invalidate_open",
+    "invalidate_issued",
     "issue",
 ]

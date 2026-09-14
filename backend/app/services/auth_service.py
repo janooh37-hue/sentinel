@@ -303,16 +303,20 @@ def set_default_manager(
 
 
 def _apply_password_reset(db: Session, user: User, new_password: str, *, actor: str | None) -> None:
+    """Apply password, token, session, and audit changes in one transaction."""
+    now = _utcnow()
     user.password_hash = security.hash_password(new_password)
     user.failed_attempts = 0
     user.locked_at = None
     if user.status == "locked":
         user.status = "active"
+    account_token_service.invalidate_open(
+        db, user.id, account_token_service.PURPOSE_RESET, now=now
+    )
+    _stage_user_session_revocation(db, user.id)
     _audit(db, actor, "reset_password", user)
     db.commit()
     db.refresh(user)
-    # Kill any live sessions so the old password's cookies can't keep a seat.
-    revoke_user_sessions(db, user.id)
 
 
 def reset_password(
@@ -499,12 +503,8 @@ def resolve_session(db: Session, raw_token: str) -> User | None:
     return user
 
 
-def revoke_user_sessions(db: Session, user_id: int) -> int:
-    """Mark every one of a user's sessions revoked. Returns the count.
-
-    Used when a password is reset or the account is locked/disabled so any
-    live cookie dies immediately. Caller need not commit — this commits.
-    """
+def _stage_user_session_revocation(db: Session, user_id: int) -> int:
+    """Mark all live sessions revoked without committing the caller's transaction."""
     result = cast(
         "CursorResult[Any]",
         db.execute(
@@ -513,8 +513,14 @@ def revoke_user_sessions(db: Session, user_id: int) -> int:
             .values(revoked=True)
         ),
     )
-    db.commit()
     return int(result.rowcount or 0)
+
+
+def revoke_user_sessions(db: Session, user_id: int) -> int:
+    """Mark every one of a user's sessions revoked, commit, and return the count."""
+    count = _stage_user_session_revocation(db, user_id)
+    db.commit()
+    return count
 
 
 def revoke_session(db: Session, raw_token: str) -> None:
@@ -581,10 +587,6 @@ def complete_password_reset(db: Session, raw_token: str, new_password: str) -> U
     if user is None or user.status not in ("active", "locked") or user.email_verified_at is None:
         db.rollback()
         raise invalid
-    # Defensive: also close out any other open reset tokens for this user.
-    account_token_service.invalidate_open(
-        db, user.id, account_token_service.PURPOSE_RESET, now=_utcnow()
-    )
     _apply_password_reset(db, user, new_password, actor="self-service")
     return user
 
@@ -622,7 +624,7 @@ def request_email_link(email: str, purpose: str, locale: str) -> None:
                     recipient=user.email, raw_token=raw, locale=locale
                 )
         except Exception as exc:  # mailer failure must not raise into the background-task queue
-            account_token_service.invalidate_open(db, user.id, purpose, now=_utcnow())
+            account_token_service.invalidate_issued(db, raw, purpose, now=_utcnow())
             db.commit()
             log.warning(
                 "account mail: %s link not delivered (user_id=%s): %s",

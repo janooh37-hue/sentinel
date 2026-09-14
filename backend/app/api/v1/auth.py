@@ -104,6 +104,15 @@ def _set_session_cookie(response: Response, token: str) -> None:
     )
 
 
+def _require_account_mail() -> None:
+    if not get_settings().account_mail_enabled:
+        raise AppError(
+            "ACCOUNT_MAIL_DISABLED",
+            "Email delivery is not configured. Contact IT.",
+            http_status=503,
+        )
+
+
 @router.post("/register", response_model=RegisterResult)
 def register(
     payload: RegisterRequest,
@@ -187,12 +196,7 @@ def request_email_verification(
     request: Request,
     background_tasks: BackgroundTasks,
 ) -> AcceptedResult:
-    if not get_settings().account_mail_enabled:
-        raise AppError(
-            "ACCOUNT_MAIL_DISABLED",
-            "Email delivery is not configured. Contact IT.",
-            http_status=503,
-        )
+    _require_account_mail()
     ratelimit.enforce(ratelimit.email_verify_limiter, request)
     normalized = auth_service.normalize_email(payload.email)
     # Never reveal whether the address exists: always 202, lookup happens in
@@ -208,6 +212,7 @@ def request_email_verification(
 def verify_email(
     payload: TokenRequest, request: Request, db: Annotated[Session, Depends(get_db)]
 ) -> VerifyEmailResult:
+    _require_account_mail()
     ratelimit.enforce(ratelimit.email_verify_limiter, request)
     auth_service.verify_email(db, payload.token)
     return VerifyEmailResult()
@@ -223,12 +228,7 @@ def request_password_reset(
     request: Request,
     background_tasks: BackgroundTasks,
 ) -> AcceptedResult:
-    if not get_settings().account_mail_enabled:
-        raise AppError(
-            "ACCOUNT_MAIL_DISABLED",
-            "Email delivery is not configured. Contact IT.",
-            http_status=503,
-        )
+    _require_account_mail()
     ratelimit.enforce(ratelimit.password_reset_limiter, request)
     normalized = auth_service.normalize_email(payload.email)
     if ratelimit.email_address_limiter.allow(normalized):
@@ -245,6 +245,7 @@ def complete_password_reset(
     response: Response,
     db: Annotated[Session, Depends(get_db)],
 ) -> PasswordResetCompleteResult:
+    _require_account_mail()
     ratelimit.enforce(ratelimit.password_reset_limiter, request)
     auth_service.complete_password_reset(db, payload.token, payload.password)
     # An already-signed-in browser's cookie was just revoked server-side —

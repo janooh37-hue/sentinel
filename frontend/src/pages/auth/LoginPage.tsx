@@ -344,13 +344,15 @@ export function LoginPage({ entry }: { entry?: LoginPageEntry } = {}): React.JSX
                 mail={mail}
                 locale={locale}
                 initialEmail={picked?.email ?? email}
-                onBack={goPicker}
+                onBack={entry ? backToSignIn : goPicker}
                 onSent={() => setScreen('forgotSent')}
                 onCopy={copyEmail}
                 copied={copied}
               />
             )}
-            {screen === 'forgotSent' && <ForgotSentScreen t={t} onBack={goPicker} />}
+            {screen === 'forgotSent' && (
+              <ForgotSentScreen t={t} onBack={entry ? backToSignIn : goPicker} />
+            )}
             {screen === 'locked' && (
               <LockedScreen t={t} isAr={isAr} name={lockedName} onBack={goPicker} onCopy={copyEmail} copied={copied} />
             )}
@@ -373,10 +375,7 @@ export function LoginPage({ entry }: { entry?: LoginPageEntry } = {}): React.JSX
                   await refetch()
                   setScreen('resetDone')
                 }}
-                onGoForgot={() => {
-                  if (entry) navigate('/', { replace: true })
-                  setScreen('forgot')
-                }}
+                onGoForgot={() => setScreen('forgot')}
                 onBack={backToSignIn}
               />
             )}
