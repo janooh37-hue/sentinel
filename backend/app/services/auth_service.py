@@ -310,9 +310,7 @@ def _apply_password_reset(db: Session, user: User, new_password: str, *, actor: 
     user.locked_at = None
     if user.status == "locked":
         user.status = "active"
-    account_token_service.invalidate_open(
-        db, user.id, account_token_service.PURPOSE_RESET, now=now
-    )
+    account_token_service.invalidate_open(db, user.id, account_token_service.PURPOSE_RESET, now=now)
     _stage_user_session_revocation(db, user.id)
     _audit(db, actor, "reset_password", user)
     db.commit()

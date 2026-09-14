@@ -118,7 +118,7 @@ __all__ = [
     "RESET_TTL",
     "VERIFY_TTL",
     "claim",
-    "invalidate_open",
     "invalidate_issued",
+    "invalidate_open",
     "issue",
 ]

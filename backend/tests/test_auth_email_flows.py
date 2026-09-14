@@ -482,9 +482,7 @@ def test_admin_password_reset_invalidates_emailed_reset_links_and_live_sessions(
         status="active",
         verified=True,
     )
-    reset_token = account_token_service.issue(
-        api_db, user, account_token_service.PURPOSE_RESET
-    )
+    reset_token = account_token_service.issue(api_db, user, account_token_service.PURPOSE_RESET)
     verification_token = account_token_service.issue(
         api_db, user, account_token_service.PURPOSE_VERIFY
     )
@@ -520,9 +518,7 @@ def test_admin_password_reset_invalidates_emailed_reset_links_and_live_sessions(
         )
     )
     session_row = api_db.scalar(
-        select(AuthSession).where(
-            AuthSession.token_hash == security.hash_token(session_token)
-        )
+        select(AuthSession).where(AuthSession.token_hash == security.hash_token(session_token))
     )
     stored_user = api_db.get(User, user.id)
     assert reset_row is not None and reset_row.used_at is not None
@@ -554,9 +550,7 @@ def test_password_reset_rolls_back_if_session_revocation_fails(
         status="active",
         verified=True,
     )
-    reset_token = account_token_service.issue(
-        api_db, user, account_token_service.PURPOSE_RESET
-    )
+    reset_token = account_token_service.issue(api_db, user, account_token_service.PURPOSE_RESET)
     session_token = auth_service.start_session(api_db, user)
     real_execute = api_db.execute
 
@@ -579,9 +573,7 @@ def test_password_reset_rolls_back_if_session_revocation_fails(
         )
     )
     session_row = api_db.scalar(
-        select(AuthSession).where(
-            AuthSession.token_hash == security.hash_token(session_token)
-        )
+        select(AuthSession).where(AuthSession.token_hash == security.hash_token(session_token))
     )
     stored_user = api_db.get(User, user.id)
     reset_audit = api_db.scalar(
@@ -612,9 +604,7 @@ def test_flag_off_rejects_existing_link_completion_without_consuming_tokens(
     verification_token = account_token_service.issue(
         api_db, user, account_token_service.PURPOSE_VERIFY
     )
-    reset_token = account_token_service.issue(
-        api_db, user, account_token_service.PURPOSE_RESET
-    )
+    reset_token = account_token_service.issue(api_db, user, account_token_service.PURPOSE_RESET)
     client = _client(api_db)
 
     verify_response = client.post(
@@ -666,9 +656,7 @@ def test_failed_older_send_does_not_invalidate_newer_delivered_reset_link(
     sent_tokens: list[str] = []
     calls_lock = threading.Lock()
 
-    def send_password_reset_email(
-        *, recipient: str, raw_token: str, locale: str
-    ) -> None:
+    def send_password_reset_email(*, recipient: str, raw_token: str, locale: str) -> None:
         del recipient, locale
         with calls_lock:
             sent_tokens.append(raw_token)
