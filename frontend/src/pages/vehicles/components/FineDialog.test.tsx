@@ -30,8 +30,8 @@ const fine: VehicleFineRead = {
   employee_name_en: 'Ahmed Ali',
   date: '2026-08-14',
   time: '09:45:00',
-  amount: 650,
-  amount_after_discount: null,
+  amount_fils: 65000,
+  amount_after_discount_fils: null,
   black_points: 6,
   source: 'manual',
   evg_ticket_no: null,
@@ -39,6 +39,10 @@ const fine: VehicleFineRead = {
   description: 'Speeding',
   fine_type: null,
   created_at: '2026-08-14T10:00:00Z',
+  payment_status: 'unpaid',
+  receipt: null,
+  archived_at: null,
+  version: '"fine-v1"',
   vehicle_plate_label: '10 \\ 36348',
   vehicle_type_ar: 'مركبة خفيفة',
   vehicle_type_en: 'Light vehicle',
@@ -112,7 +116,7 @@ describe('FineDialog edit mode', () => {
     expect(screen.getByRole('dialog', { name: 'Edit fine' })).toBeInTheDocument()
     expect(screen.getByLabelText(/^Date/)).toHaveValue('2026-08-14')
     expect(screen.getByLabelText('Time')).toHaveValue('09:45')
-    expect(screen.getByLabelText(/^Amount/)).toHaveValue(650)
+    expect(screen.getByLabelText(/^Amount/)).toHaveValue('650')
     expect(screen.getByLabelText(/^Black points/)).toHaveValue(6)
     expect(screen.getByLabelText('Location')).toHaveValue('Al Raha')
     expect(screen.getByLabelText('Description')).toHaveValue('Speeding')
@@ -126,15 +130,20 @@ describe('FineDialog edit mode', () => {
     await user.click(screen.getByRole('button', { name: 'Save' }))
 
     await waitFor(() =>
-      expect(api.updateVehicleFine).toHaveBeenCalledWith(17, 42, {
-        employee_id: 'G2002',
-        date: '2026-08-14',
-        time: '09:45',
-        amount: 650,
-        black_points: 6,
-        location: 'Al Raha',
-        description: 'Speeding',
-      }),
+      expect(api.updateVehicleFine).toHaveBeenCalledWith(
+        17,
+        42,
+        {
+          employee_id: 'G2002',
+          date: '2026-08-14',
+          time: '09:45',
+          amount_fils: 65000,
+          black_points: 6,
+          location: 'Al Raha',
+          description: 'Speeding',
+        },
+        '"fine-v1"',
+      ),
     )
     expect(api.updateVehicleFine).toHaveBeenCalledTimes(1)
   })
@@ -156,6 +165,7 @@ describe('FineDialog edit mode', () => {
         17,
         42,
         expect.objectContaining({ employee_id: null }),
+        '"fine-v1"',
       ),
     )
   })

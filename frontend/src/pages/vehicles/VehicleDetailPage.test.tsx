@@ -97,7 +97,7 @@ function baseVehicle(overrides: Partial<VehicleRead> = {}): VehicleRead {
     expiry_status: 'valid',
     days_to_expiry: 100,
     fines_count: 0,
-    fines_amount: 0,
+    fines_amount_fils: 0,
     black_points: 0,
     photo_asset_id: 1,
     photo_url: '/api/v1/vehicles/photo-library/1/image/preview',

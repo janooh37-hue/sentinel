@@ -54,7 +54,7 @@ import { cn } from '@/lib/utils'
 import {
   EMPTY_VALUE,
   VEHICLE_QUERY_KEYS,
-  formatAed,
+  formatFilsAed,
   formatIsoDate,
   formatNumber,
   invalidateVehicleQueries,
@@ -371,7 +371,7 @@ export function VehiclesHubPage(): React.JSX.Element {
     const known: readonly VehicleSiteRead[] = sites ?? []
     const groupOf = (siteId: number, label: string, vehicles: VehicleListItem[]): SiteGroup => {
       let finesAmount = 0
-      for (const vehicle of vehicles) finesAmount += vehicle.fines_amount
+      for (const vehicle of vehicles) finesAmount += vehicle.fines_amount_fils
       return { siteId, label, vehicles, finesAmount }
     }
     for (const wantActive of [true, false]) {
@@ -390,7 +390,7 @@ export function VehiclesHubPage(): React.JSX.Element {
   }, [rows, sites, lang])
 
   const finesFigure = summary
-    ? `${formatNumber(summary.fines_count, lang)} · ${formatAed(summary.fines_amount, lang)}`
+    ? `${formatNumber(summary.fines_count, lang)} · ${formatFilsAed(summary.fines_amount_fils, lang)}`
     : EMPTY_VALUE
   const figure = (value: number | undefined): string =>
     value == null ? EMPTY_VALUE : formatNumber(value, lang)
@@ -450,7 +450,7 @@ export function VehiclesHubPage(): React.JSX.Element {
         >
           <ServiceCard
             artwork="vehicle-fines"
-            to="/vehicles/fines-report"
+            to="/vehicles/fines"
             title={t('vehicles.finesService')}
             description={t('vehicles.finesServiceDesc')}
             count={finesFigure}
@@ -763,7 +763,7 @@ export function VehiclesHubPage(): React.JSX.Element {
                     {group.finesAmount > 0 && (
                       <span className="text-[0.68rem] text-muted-foreground">
                         {`${t('vehicles.fines')} · `}
-                        <bdi>{formatAed(group.finesAmount, lang)}</bdi>
+                        <bdi>{formatFilsAed(group.finesAmount, lang)}</bdi>
                       </span>
                     )}
                   </header>
@@ -1076,7 +1076,7 @@ function FinesFigure({ vehicle }: { vehicle: VehicleListItem }): React.JSX.Eleme
   return (
     <span className="flex flex-col">
       <strong className="text-[0.76rem] font-semibold text-foreground">
-        <bdi>{`${formatNumber(vehicle.fines_count, i18n.language)} · ${formatAed(vehicle.fines_amount, i18n.language)}`}</bdi>
+        <bdi>{`${formatNumber(vehicle.fines_count, i18n.language)} · ${formatFilsAed(vehicle.fines_amount_fils, i18n.language)}`}</bdi>
       </strong>
       <small className="text-[0.66rem] text-muted-foreground">
         <bdi>{`${formatNumber(vehicle.black_points, i18n.language)} ${t('vehicles.points')}`}</bdi>

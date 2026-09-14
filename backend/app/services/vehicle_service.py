@@ -39,6 +39,7 @@ from app.schemas.vehicle import (
     VehicleCreate,
     VehicleFileRead,
     VehicleFineCreate,
+    VehicleFinePaymentRecord,
     VehicleFineRead,
     VehicleFineUpdate,
     VehicleListItem,
@@ -52,6 +53,8 @@ from app.schemas.vehicle import (
     VehicleUpdate,
 )
 from app.services import settings_service, vehicle_photo_service
+from app.services.workforce_etag import require_if_match, row_etag
+from app.services.workforce_schedule_service import acquire_schedule_write_lock
 
 log = logging.getLogger(__name__)
 
@@ -71,6 +74,17 @@ _ALLOWED_MEDIA_BY_EXTENSION: dict[str, frozenset[str]] = {
     ".webp": frozenset({"image/webp"}),
 }
 _UNSAFE_CHARS = re.compile('[\\\\/:*?"<>|\x00-\x1f\u200b-\u200f\u202a-\u202e\u2066-\u2069\ufeff]')
+
+# Fine receipts use a narrower policy than the generic vehicle-file upload:
+# no WebP, a lower size cap, and a magic-byte sniff so a renamed file cannot
+# masquerade as one of the three accepted formats.
+FINE_RECEIPT_MAX_BYTES = 10 * 1024 * 1024
+_FINE_RECEIPT_SIGNATURES: dict[str, bytes] = {
+    ".pdf": b"%PDF-",
+    ".png": b"\x89PNG\r\n\x1a\n",
+    ".jpg": b"\xff\xd8\xff",
+    ".jpeg": b"\xff\xd8\xff",
+}
 
 
 def _utcnow() -> datetime:
@@ -128,13 +142,37 @@ def _vehicle_file(row: Vehicle, file_id: int | None) -> VehicleFile | None:
     return next((item for item in row.files if item.id == file_id), None)
 
 
-def fine_read(row: VehicleFine, *, vehicle: Vehicle | None = None) -> VehicleFineRead:
+_FINE_RECEIPT_UNSET = object()
+
+
+def _fine_etag(row: VehicleFine) -> str:
+    return row_etag(
+        row,
+        extra={
+            "payment_status": row.payment_status,
+            "receipt_file_id": row.receipt_file_id,
+            "archived_at": row.archived_at,
+        },
+    )
+
+
+def fine_read(
+    row: VehicleFine,
+    *,
+    vehicle: Vehicle | None = None,
+    receipt: VehicleFile | None = _FINE_RECEIPT_UNSET,  # type: ignore[assignment]
+) -> VehicleFineRead:
     owner = vehicle or row.vehicle
     employee = row.employee
+    resolved_receipt = (
+        _vehicle_file(owner, row.receipt_file_id) if receipt is _FINE_RECEIPT_UNSET else receipt
+    )
     return VehicleFineRead.model_validate(row).model_copy(
         update={
             "employee_name_ar": employee.name_ar if employee is not None else None,
             "employee_name_en": employee.name_en if employee is not None else None,
+            "receipt": _file_read(resolved_receipt) if resolved_receipt is not None else None,
+            "version": _fine_etag(row),
             "vehicle_plate_label": plate_label(owner),
             "vehicle_type_ar": owner.type_ar,
             "vehicle_type_en": owner.type_en,
@@ -216,7 +254,7 @@ def to_list_item(
             ),
             "days_to_expiry": (row.license_expiry - current_day).days,
             "fines_count": len(row.fines),
-            "fines_amount": sum(item.amount for item in row.fines),
+            "fines_amount_fils": sum(item.amount_fils for item in row.fines),
             "black_points": sum(item.black_points for item in row.fines),
             **photo_urls,
             "insurance_status": insurance_status,
@@ -899,7 +937,7 @@ def add_fine(
     *,
     actor: str | None = None,
     created_by_user_id: int | None = None,
-) -> Vehicle:
+) -> VehicleFine:
     row = require_active_vehicle(db, vehicle_id)
     _validate_employee(db, payload.employee_id)
     fine = VehicleFine(
@@ -907,11 +945,12 @@ def add_fine(
         employee_id=payload.employee_id,
         date=payload.date,
         time=payload.time,
-        amount=payload.amount,
+        amount_fils=payload.amount_fils,
         black_points=payload.black_points,
         source="manual",
         location=payload.location,
         description=payload.description,
+        payment_status="unpaid",
         created_by_user_id=created_by_user_id,
     )
     db.add(fine)
@@ -922,9 +961,9 @@ def add_fine(
         "fine.added",
         row.id,
         actor,
-        {"fine_id": fine.id, "amount": fine.amount},
+        {"fine_id": fine.id, "amount_fils": fine.amount_fils},
     )
-    return get_vehicle(db, row.id)
+    return fine
 
 
 def _get_fine(db: Session, vehicle_id: int, fine_id: int) -> VehicleFine:
@@ -947,15 +986,23 @@ def update_fine(
     fine_id: int,
     payload: VehicleFineUpdate,
     *,
+    if_match: str | None,
     actor: str | None = None,
 ) -> Vehicle:
     require_active_vehicle(db, vehicle_id)
     row = _get_fine(db, vehicle_id, fine_id)
+    if row.archived_at is not None:
+        raise ValidationFailedError(
+            "VEHICLE_FINE_ARCHIVED",
+            "Archived fines cannot be edited; restore it first.",
+            fine_id=fine_id,
+        )
+    require_if_match(if_match, _fine_etag(row), code="VEHICLE_FINE_VERSION_CONFLICT")
     data = payload.model_dump(exclude_unset=True)
     cleared_required = next(
         (
             field
-            for field in ("date", "amount", "black_points")
+            for field in ("date", "amount_fils", "black_points")
             if field in data and data[field] is None
         ),
         None,
@@ -968,6 +1015,13 @@ def update_fine(
         )
     if "employee_id" in data:
         _validate_employee(db, data["employee_id"])
+    if "payment_status" in data and row.payment_status not in ("unknown", "unpaid"):
+        raise ConflictError(
+            "VEHICLE_FINE_INVALID_TRANSITION",
+            "Only an unknown or unpaid fine can be classified as unpaid.",
+            fine_id=fine_id,
+            current_status=row.payment_status,
+        )
     for field, value in data.items():
         setattr(row, field, value)
     row.updated_at = _utcnow()
@@ -987,14 +1041,261 @@ def delete_fine(
     vehicle_id: int,
     fine_id: int,
     *,
+    if_match: str | None,
     actor: str | None = None,
 ) -> Vehicle:
     require_active_vehicle(db, vehicle_id)
     row = _get_fine(db, vehicle_id, fine_id)
+    require_if_match(if_match, _fine_etag(row), code="VEHICLE_FINE_VERSION_CONFLICT")
+    receipt = (
+        _owned_file(db, vehicle_id, row.receipt_file_id, kind="receipt")
+        if row.receipt_file_id is not None
+        else None
+    )
+    receipt_path = _resolve_file_path(receipt) if receipt is not None else None
     db.delete(row)
+    if receipt is not None:
+        db.delete(receipt)
     db.commit()
+    if receipt_path is not None:
+        try:
+            receipt_path.unlink(missing_ok=True)
+        except OSError:
+            log.warning(
+                "vehicle fine receipt %s could not be removed from disk",
+                receipt_path,
+                exc_info=True,
+            )
     _audit(db, "fine.deleted", vehicle_id, actor, {"fine_id": fine_id})
     return get_vehicle(db, vehicle_id)
+
+
+def _validate_fine_receipt(*, filename: str, data: bytes, media_type: str) -> None:
+    if not data:
+        raise ValidationFailedError("VEHICLE_FINE_RECEIPT_EMPTY", "Uploaded receipt is empty.")
+    if len(data) > FINE_RECEIPT_MAX_BYTES:
+        raise ValidationFailedError(
+            "VEHICLE_FINE_RECEIPT_TOO_LARGE",
+            f"Receipt exceeds {FINE_RECEIPT_MAX_BYTES // (1024 * 1024)} MiB.",
+            size=len(data),
+        )
+    safe_name = _safe_filename(filename)
+    extension = Path(safe_name).suffix.lower()
+    signature = _FINE_RECEIPT_SIGNATURES.get(extension)
+    normalized_media = media_type.partition(";")[0].strip().lower()
+    allowed_media = _ALLOWED_MEDIA_BY_EXTENSION.get(extension, frozenset())
+    if signature is None or not data.startswith(signature) or normalized_media not in allowed_media:
+        raise ValidationFailedError(
+            "VEHICLE_FINE_RECEIPT_BAD_FORMAT",
+            "Receipts must be a PDF, PNG, or JPEG file.",
+            extension=extension,
+            media_type=media_type,
+        )
+
+
+def record_payment(
+    db: Session,
+    vehicle_id: int,
+    fine_id: int,
+    *,
+    if_match: str | None,
+    filename: str | None,
+    data: bytes | None,
+    media_type: str | None,
+    actor: str | None = None,
+) -> VehicleFine:
+    """Atomically mark an unknown/unpaid fine paid, with an optional receipt."""
+    require_active_vehicle(db, vehicle_id)
+    acquire_schedule_write_lock(db)
+    row = _get_fine(db, vehicle_id, fine_id)
+    if row.archived_at is not None:
+        raise ValidationFailedError(
+            "VEHICLE_FINE_ARCHIVED",
+            "Archived fines cannot be edited; restore it first.",
+            fine_id=fine_id,
+        )
+    require_if_match(if_match, _fine_etag(row), code="VEHICLE_FINE_VERSION_CONFLICT")
+    if row.payment_status == "paid":
+        raise ConflictError(
+            "VEHICLE_FINE_ALREADY_PAID", "This fine is already marked paid.", fine_id=fine_id
+        )
+
+    receipt_file: VehicleFile | None = None
+    destination: Path | None = None
+    if data:
+        _validate_fine_receipt(filename=filename or "", data=data, media_type=media_type or "")
+        receipt_file, destination = _store_file_record(
+            db,
+            vehicle_id,
+            kind="receipt",
+            filename=filename or "receipt",
+            data=data,
+            media_type=media_type or "",
+        )
+    try:
+        row.payment_status = "paid"
+        if receipt_file is not None:
+            row.receipt_file_id = receipt_file.id
+        row.updated_at = _utcnow()
+        db.commit()
+    except Exception:
+        db.rollback()
+        if destination is not None:
+            destination.unlink(missing_ok=True)
+        raise
+    db.refresh(row)
+    _audit(
+        db,
+        "fine.payment.recorded",
+        vehicle_id,
+        actor,
+        {
+            "fine_id": fine_id,
+            "amount_fils": row.amount_fils,
+            "receipt_attached": receipt_file is not None,
+        },
+    )
+    return row
+
+
+def attach_receipt(
+    db: Session,
+    vehicle_id: int,
+    fine_id: int,
+    *,
+    if_match: str | None,
+    filename: str,
+    data: bytes,
+    media_type: str,
+    actor: str | None = None,
+) -> VehicleFine:
+    """Attach a receipt to an already-paid fine that has none yet."""
+    require_active_vehicle(db, vehicle_id)
+    acquire_schedule_write_lock(db)
+    row = _get_fine(db, vehicle_id, fine_id)
+    if row.archived_at is not None:
+        raise ValidationFailedError(
+            "VEHICLE_FINE_ARCHIVED",
+            "Archived fines cannot be edited; restore it first.",
+            fine_id=fine_id,
+        )
+    require_if_match(if_match, _fine_etag(row), code="VEHICLE_FINE_VERSION_CONFLICT")
+    if row.payment_status != "paid":
+        raise ConflictError(
+            "VEHICLE_FINE_RECEIPT_REQUIRES_PAID",
+            "Only a paid fine can receive a receipt.",
+            fine_id=fine_id,
+        )
+    if row.receipt_file_id is not None:
+        raise ConflictError(
+            "VEHICLE_FINE_RECEIPT_ALREADY_ATTACHED",
+            "This fine already has a receipt.",
+            fine_id=fine_id,
+        )
+    _validate_fine_receipt(filename=filename, data=data, media_type=media_type)
+    receipt_file, destination = _store_file_record(
+        db, vehicle_id, kind="receipt", filename=filename, data=data, media_type=media_type
+    )
+    try:
+        row.receipt_file_id = receipt_file.id
+        row.updated_at = _utcnow()
+        db.commit()
+    except Exception:
+        db.rollback()
+        destination.unlink(missing_ok=True)
+        raise
+    db.refresh(row)
+    _audit(
+        db,
+        "fine.receipt.attached",
+        vehicle_id,
+        actor,
+        {"fine_id": fine_id, "file_id": receipt_file.id},
+    )
+    return row
+
+
+def get_files_by_id(db: Session, file_ids: set[int]) -> dict[int, VehicleFile]:
+    """One bounded lookup for the fleet ledger's receipt column."""
+    if not file_ids:
+        return {}
+    rows = db.scalars(select(VehicleFile).where(VehicleFile.id.in_(file_ids))).all()
+    return {row.id: row for row in rows}
+
+
+def _load_fine_batch(
+    db: Session, rows: list[VehicleFinePaymentRecord]
+) -> list[tuple[VehicleFine, str]]:
+    ids = [item.id for item in rows]
+    found = {
+        fine.id: fine
+        for fine in db.scalars(select(VehicleFine).where(VehicleFine.id.in_(ids))).all()
+    }
+    missing = [fine_id for fine_id in ids if fine_id not in found]
+    if missing:
+        raise NotFoundError(
+            "VEHICLE_FINE_NOT_FOUND", "One or more fines were not found.", fine_ids=missing
+        )
+    return [(found[item.id], item.version) for item in rows]
+
+
+def archive_fines(
+    db: Session, rows: list[VehicleFinePaymentRecord], *, actor: str | None = None
+) -> int:
+    """Archive paid, active fines. Validates the whole batch before mutating any row."""
+    acquire_schedule_write_lock(db)
+    fines = _load_fine_batch(db, rows)
+    for vehicle_id in {fine.vehicle_id for fine, _ in fines}:
+        require_active_vehicle(db, vehicle_id)
+    for fine, expected_version in fines:
+        require_if_match(expected_version, _fine_etag(fine), code="VEHICLE_FINE_VERSION_CONFLICT")
+        if fine.payment_status != "paid" or fine.archived_at is not None:
+            raise ConflictError(
+                "VEHICLE_FINE_ARCHIVE_STATE_MISMATCH",
+                "Only a paid, active fine can be archived.",
+                fine_id=fine.id,
+                payment_status=fine.payment_status,
+            )
+    now = _utcnow()
+    by_vehicle: dict[int, list[int]] = {}
+    for fine, _version in fines:
+        fine.archived_at = now
+        fine.updated_at = now
+        by_vehicle.setdefault(fine.vehicle_id, []).append(fine.id)
+    if fines:
+        db.commit()
+    for vehicle_id, ids in by_vehicle.items():
+        _audit(db, "fine.archived", vehicle_id, actor, {"count": len(ids), "fine_ids": ids})
+    return len(fines)
+
+
+def restore_fines(
+    db: Session, rows: list[VehicleFinePaymentRecord], *, actor: str | None = None
+) -> int:
+    """Restore archived fines. Validates the whole batch before mutating any row."""
+    acquire_schedule_write_lock(db)
+    fines = _load_fine_batch(db, rows)
+    for vehicle_id in {fine.vehicle_id for fine, _ in fines}:
+        require_active_vehicle(db, vehicle_id)
+    for fine, expected_version in fines:
+        require_if_match(expected_version, _fine_etag(fine), code="VEHICLE_FINE_VERSION_CONFLICT")
+        if fine.archived_at is None:
+            raise ConflictError(
+                "VEHICLE_FINE_ARCHIVE_STATE_MISMATCH",
+                "Only an archived fine can be restored.",
+                fine_id=fine.id,
+            )
+    now = _utcnow()
+    by_vehicle: dict[int, list[int]] = {}
+    for fine, _version in fines:
+        fine.archived_at = None
+        fine.updated_at = now
+        by_vehicle.setdefault(fine.vehicle_id, []).append(fine.id)
+    if fines:
+        db.commit()
+    for vehicle_id, ids in by_vehicle.items():
+        _audit(db, "fine.restored", vehicle_id, actor, {"count": len(ids), "fine_ids": ids})
+    return len(fines)
 
 
 def create_accident(
@@ -1257,10 +1558,10 @@ def summary(db: Session) -> VehiclesSummary:
     vehicles = list(
         db.execute(select(Vehicle).where(Vehicle.archived_at.is_(None))).scalars().all()
     )
-    fines_count, fines_amount, black_points = db.execute(
+    fines_count, fines_amount_fils, black_points = db.execute(
         select(
             func.count(VehicleFine.id),
-            func.coalesce(func.sum(VehicleFine.amount), 0),
+            func.coalesce(func.sum(VehicleFine.amount_fils), 0),
             func.coalesce(func.sum(VehicleFine.black_points), 0),
         )
         .join(VehicleFine.vehicle)
@@ -1290,7 +1591,7 @@ def summary(db: Session) -> VehiclesSummary:
     return VehiclesSummary(
         vehicles=len(vehicles),
         fines_count=int(fines_count),
-        fines_amount=int(fines_amount),
+        fines_amount_fils=int(fines_amount_fils),
         black_points=int(black_points),
         license_attention=sum(
             expiry_status(row.license_expiry, today=today, notify_days=notify_days) != "valid"

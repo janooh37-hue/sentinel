@@ -1,7 +1,7 @@
 """Add vehicle certificate expiry, history, and replacement metadata.
 
-Revision ID: 0089_vehicle_certificates
-Revises: 0088_inmate_statistics_workflow
+Revision ID: 0090_vehicle_certificates
+Revises: 0089_vehicle_fines_ledger
 
 Adds four nullable/defaulted columns to ``vehicle_files``: `expiry_date` and
 `expiry_reminder_sent_for` (certificate-only, mirroring the existing
@@ -18,8 +18,8 @@ from __future__ import annotations
 import sqlalchemy as sa
 from alembic import op
 
-revision = "0089_vehicle_certificates"
-down_revision = "0088_inmate_statistics_workflow"
+revision = "0090_vehicle_certificates"
+down_revision = "0089_vehicle_fines_ledger"
 branch_labels = None
 depends_on = None
 

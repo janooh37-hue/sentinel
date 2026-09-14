@@ -48,6 +48,7 @@ import {
   loadVehicleImportPage,
   loadVehicleDetailPage,
   loadVehicleFinesLetterPage,
+  loadVehicleFinesPage,
   loadVehicleFinesReportPage,
   loadVehicleMaintenancePage,
   loadVehiclesHubPage,
@@ -80,6 +81,7 @@ const VehicleDetailPage = lazy(loadVehicleDetailPage)
 const VehicleEditPage = lazy(loadVehicleEditPage)
 const VehicleImportPage = lazy(loadVehicleImportPage)
 const VehicleFinesLetterPage = lazy(loadVehicleFinesLetterPage)
+const VehicleFinesPage = lazy(loadVehicleFinesPage)
 const VehicleFinesReportPage = lazy(loadVehicleFinesReportPage)
 const VehicleAccidentsPage = lazy(loadVehicleAccidentsPage)
 const VehicleAccidentLetterPage = lazy(loadVehicleAccidentLetterPage)
@@ -348,6 +350,14 @@ function Shell(): React.JSX.Element {
                 element={
                   <RequireCapability cap="vehicles.view">
                     <VehiclesHubPage />
+                  </RequireCapability>
+                }
+              />
+              <Route
+                path="/vehicles/fines"
+                element={
+                  <RequireCapability cap="vehicles.view">
+                    <VehicleFinesPage />
                   </RequireCapability>
                 }
               />

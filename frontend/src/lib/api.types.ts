@@ -4550,6 +4550,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/vehicles/fines/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Archive Vehicle Fines */
+        post: operations["archive_vehicle_fines_api_v1_vehicles_fines_archive_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/vehicles/fines/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Restore Vehicle Fines */
+        post: operations["restore_vehicle_fines_api_v1_vehicles_fines_restore_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/vehicles/fines/evg/preview": {
         parameters: {
             query?: never;
@@ -5015,6 +5049,40 @@ export interface paths {
         head?: never;
         /** Update Vehicle Fine */
         patch: operations["update_vehicle_fine_api_v1_vehicles__vehicle_id__fines__fine_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/vehicles/{vehicle_id}/fines/{fine_id}/payment": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Record Vehicle Fine Payment */
+        post: operations["record_vehicle_fine_payment_api_v1_vehicles__vehicle_id__fines__fine_id__payment_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/vehicles/{vehicle_id}/fines/{fine_id}/receipt": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Attach Vehicle Fine Receipt */
+        put: operations["attach_vehicle_fine_receipt_api_v1_vehicles__vehicle_id__fines__fine_id__receipt_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/vehicles/{vehicle_id}/accidents/{accident_id}/letter": {
@@ -6691,6 +6759,14 @@ export interface components {
              */
             as_signed: boolean;
         };
+        /** Body_attach_vehicle_fine_receipt_api_v1_vehicles__vehicle_id__fines__fine_id__receipt_put */
+        Body_attach_vehicle_fine_receipt_api_v1_vehicles__vehicle_id__fines__fine_id__receipt_put: {
+            /**
+             * File
+             * Format: binary
+             */
+            file: string;
+        };
         /** Body_create_extraction_api_v1_extractions_post */
         Body_create_extraction_api_v1_extractions_post: {
             /**
@@ -6753,6 +6829,11 @@ export interface components {
              * Format: binary
              */
             file: string;
+        };
+        /** Body_record_vehicle_fine_payment_api_v1_vehicles__vehicle_id__fines__fine_id__payment_post */
+        Body_record_vehicle_fine_payment_api_v1_vehicles__vehicle_id__fines__fine_id__payment_post: {
+            /** File */
+            file?: string | null;
         };
         /** Body_replace_book_attachment_api_v1_books__book_id__attachments__index__put */
         Body_replace_book_attachment_api_v1_books__book_id__attachments__index__put: {
@@ -9135,10 +9216,10 @@ export interface components {
             plate_number: string;
             /** Plate Code */
             plate_code: string | null;
-            /** Amount */
-            amount: number;
-            /** Amount After Discount */
-            amount_after_discount?: number | null;
+            /** Amount Fils */
+            amount_fils: number;
+            /** Amount After Discount Fils */
+            amount_after_discount_fils?: number | null;
             /** Black Points */
             black_points: number;
             /** Fine Type */
@@ -9209,10 +9290,10 @@ export interface components {
             plate_number: string;
             /** Plate Code */
             plate_code: string | null;
-            /** Amount */
-            amount: number;
-            /** Amount After Discount */
-            amount_after_discount?: number | null;
+            /** Amount Fils */
+            amount_fils: number;
+            /** Amount After Discount Fils */
+            amount_after_discount_fils?: number | null;
             /** Black Points */
             black_points: number;
             /** Fine Type */
@@ -12686,6 +12767,16 @@ export interface components {
             /** Superseded By File Id */
             superseded_by_file_id?: number | null;
         };
+        /** VehicleFineBatchRequest */
+        VehicleFineBatchRequest: {
+            /** Fines */
+            fines: components["schemas"]["VehicleFinePaymentRecord"][];
+        };
+        /** VehicleFineBatchResult */
+        VehicleFineBatchResult: {
+            /** Changed Count */
+            changed_count: number;
+        };
         /** VehicleFineCreate */
         VehicleFineCreate: {
             /** Employee Id */
@@ -12697,8 +12788,8 @@ export interface components {
             date: string;
             /** Time */
             time?: string | null;
-            /** Amount */
-            amount: number;
+            /** Amount Fils */
+            amount_fils: number;
             /**
              * Black Points
              * @default 0
@@ -12708,6 +12799,16 @@ export interface components {
             location?: string | null;
             /** Description */
             description?: string | null;
+        };
+        /**
+         * VehicleFinePaymentRecord
+         * @description `{fines: [{id, version}]}` batch archive/restore request row.
+         */
+        VehicleFinePaymentRecord: {
+            /** Id */
+            id: number;
+            /** Version */
+            version: string;
         };
         /** VehicleFineRead */
         VehicleFineRead: {
@@ -12728,10 +12829,10 @@ export interface components {
             date: string;
             /** Time */
             time: string | null;
-            /** Amount */
-            amount: number;
-            /** Amount After Discount */
-            amount_after_discount: number | null;
+            /** Amount Fils */
+            amount_fils: number;
+            /** Amount After Discount Fils */
+            amount_after_discount_fils: number | null;
             /** Black Points */
             black_points: number;
             /**
@@ -12748,10 +12849,23 @@ export interface components {
             /** Fine Type */
             fine_type: string | null;
             /**
+             * Payment Status
+             * @enum {string}
+             */
+            payment_status: "unknown" | "unpaid" | "paid";
+            receipt?: components["schemas"]["VehicleFileRead"] | null;
+            /** Archived At */
+            archived_at: string | null;
+            /**
              * Created At
              * Format: date-time
              */
             created_at: string;
+            /**
+             * Version
+             * @default
+             */
+            version: string;
             /**
              * Vehicle Plate Label
              * @default
@@ -12781,14 +12895,16 @@ export interface components {
             date?: string | null;
             /** Time */
             time?: string | null;
-            /** Amount */
-            amount?: number | null;
+            /** Amount Fils */
+            amount_fils?: number | null;
             /** Black Points */
             black_points?: number | null;
             /** Location */
             location?: string | null;
             /** Description */
             description?: string | null;
+            /** Payment Status */
+            payment_status?: "unpaid" | null;
         };
         /** VehicleImportChange */
         VehicleImportChange: {
@@ -13103,10 +13219,10 @@ export interface components {
              */
             fines_count: number;
             /**
-             * Fines Amount
+             * Fines Amount Fils
              * @default 0
              */
-            fines_amount: number;
+            fines_amount_fils: number;
             /**
              * Black Points
              * @default 0
@@ -13336,10 +13452,10 @@ export interface components {
              */
             fines_count: number;
             /**
-             * Fines Amount
+             * Fines Amount Fils
              * @default 0
              */
-            fines_amount: number;
+            fines_amount_fils: number;
             /**
              * Black Points
              * @default 0
@@ -13497,8 +13613,8 @@ export interface components {
             vehicles: number;
             /** Fines Count */
             fines_count: number;
-            /** Fines Amount */
-            fines_amount: number;
+            /** Fines Amount Fils */
+            fines_amount_fils: number;
             /** Black Points */
             black_points: number;
             /** License Attention */
@@ -24473,6 +24589,76 @@ export interface operations {
             };
         };
     };
+    archive_vehicle_fines_api_v1_vehicles_fines_archive_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VehicleFineBatchRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VehicleFineBatchResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    restore_vehicle_fines_api_v1_vehicles_fines_restore_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VehicleFineBatchRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VehicleFineBatchResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     preview_evg_fines_api_v1_vehicles_fines_evg_preview_post: {
         parameters: {
             query?: never;
@@ -25561,7 +25747,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["VehicleRead"];
+                    "application/json": components["schemas"]["VehicleFineRead"];
                 };
             };
             /** @description Validation Error */
@@ -25615,7 +25801,9 @@ export interface operations {
     delete_vehicle_fine_api_v1_vehicles__vehicle_id__fines__fine_id__delete: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "If-Match"?: string | null;
+            };
             path: {
                 vehicle_id: number;
                 fine_id: number;
@@ -25649,7 +25837,9 @@ export interface operations {
     update_vehicle_fine_api_v1_vehicles__vehicle_id__fines__fine_id__patch: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "If-Match"?: string | null;
+            };
             path: {
                 vehicle_id: number;
                 fine_id: number;
@@ -25671,6 +25861,86 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["VehicleRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    record_vehicle_fine_payment_api_v1_vehicles__vehicle_id__fines__fine_id__payment_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string | null;
+            };
+            path: {
+                vehicle_id: number;
+                fine_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_record_vehicle_fine_payment_api_v1_vehicles__vehicle_id__fines__fine_id__payment_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VehicleFineRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    attach_vehicle_fine_receipt_api_v1_vehicles__vehicle_id__fines__fine_id__receipt_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string | null;
+            };
+            path: {
+                vehicle_id: number;
+                fine_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_attach_vehicle_fine_receipt_api_v1_vehicles__vehicle_id__fines__fine_id__receipt_put"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VehicleFineRead"];
                 };
             };
             /** @description Validation Error */

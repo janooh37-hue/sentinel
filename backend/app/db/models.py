@@ -570,7 +570,7 @@ class VehicleFile(Base):
     media_type: Mapped[str] = mapped_column(String(64), nullable=False)
     size: Mapped[int] = mapped_column(Integer, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_utcnow)
-    # Certificate-only metadata (migration 0089). Every other kind leaves these
+    # Certificate-only metadata (migration 0090). Every other kind leaves these
     # NULL/false; the certificate service path is the only writer.
     expiry_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     expiry_reminder_sent_for: Mapped[date | None] = mapped_column(Date, nullable=True)
@@ -614,8 +614,8 @@ class VehicleFine(Base):
     employee_id: Mapped[str | None] = mapped_column(ForeignKey("employees.id"), nullable=True)
     date: Mapped[date] = mapped_column(Date, nullable=False)
     time: Mapped[str | None] = mapped_column(String(8), nullable=True)
-    amount: Mapped[int] = mapped_column(Integer, nullable=False)
-    amount_after_discount: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    amount_fils: Mapped[int] = mapped_column(Integer, nullable=False)
+    amount_after_discount_fils: Mapped[int | None] = mapped_column(Integer, nullable=True)
     black_points: Mapped[int] = mapped_column(
         Integer, nullable=False, default=0, server_default="0"
     )
@@ -626,6 +626,11 @@ class VehicleFine(Base):
     location: Mapped[str | None] = mapped_column(Text, nullable=True)
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     fine_type: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    payment_status: Mapped[str] = mapped_column(
+        String(8), nullable=False, default="unpaid", server_default="unpaid"
+    )
+    receipt_file_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    archived_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     created_by_user_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_utcnow)
     updated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

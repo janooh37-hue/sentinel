@@ -294,6 +294,9 @@ export type VehiclePhotoRead = components['schemas']['VehiclePhotoRead']
 export type VehicleFineCreate = components['schemas']['VehicleFineCreate']
 export type VehicleFineUpdate = components['schemas']['VehicleFineUpdate']
 export type VehicleFineRead = components['schemas']['VehicleFineRead']
+export type VehicleFinePaymentStatus = VehicleFineRead['payment_status']
+export type VehicleFinePaymentRecord = components['schemas']['VehicleFinePaymentRecord']
+export type VehicleFineBatchResult = components['schemas']['VehicleFineBatchResult']
 export type LicenseRenewCreate = components['schemas']['LicenseRenewCreate']
 export type VehicleAccidentCreate = components['schemas']['VehicleAccidentCreate']
 export type VehicleAccidentRead = components['schemas']['VehicleAccidentRead']
@@ -1116,6 +1119,46 @@ async function multipart<T>(path: string, form: FormData, method = 'POST'): Prom
   )
 }
 
+/** A body-versioned mutation: the caller reads `version` off the resource it
+ *  last fetched and sends it back as `If-Match`; a stale value fails with the
+ *  server's 409 rather than silently clobbering a concurrent edit. Unlike
+ *  `requestVersioned`, the version lives in the JSON body (`VehicleFineRead.
+ *  version`), not a response `ETag` header — these routes don't set one. */
+async function requestWithIfMatch<T>(
+  method: string,
+  path: string,
+  ifMatch: string,
+  body?: unknown,
+): Promise<T> {
+  const headers: Record<string, string> = { 'If-Match': requireEtag(ifMatch) }
+  if (body !== undefined) headers['content-type'] = 'application/json'
+  return unwrap<T>(
+    await fetch(`${BASE}${path}`, {
+      method,
+      cache: 'no-store',
+      credentials: 'same-origin',
+      headers,
+      body: body === undefined ? undefined : JSON.stringify(body),
+    }),
+  )
+}
+
+async function multipartWithIfMatch<T>(
+  path: string,
+  form: FormData,
+  ifMatch: string,
+  method = 'POST',
+): Promise<T> {
+  return unwrap<T>(
+    await fetch(`${BASE}${path}`, {
+      method,
+      body: form,
+      credentials: 'same-origin',
+      headers: { 'If-Match': requireEtag(ifMatch) },
+    }),
+  )
+}
+
 /** Decode a base64 body to a Blob, tagging its MIME type from magic bytes so a
  *  `blob:` URL opened in a new tab renders (a typeless PDF blob shows as raw
  *  gibberish text instead of the document).
@@ -1554,11 +1597,34 @@ export const api = {
   vehicleFileUrl: (id: number, fileId: number) =>
     `${BASE}/vehicles/${id}/files/${fileId}`,
   addVehicleFine: (id: number, body: VehicleFineCreate) =>
-    request<VehicleRead>('POST', `/vehicles/${id}/fines`, body),
-  updateVehicleFine: (id: number, fineId: number, body: VehicleFineUpdate) =>
-    request<VehicleRead>('PATCH', `/vehicles/${id}/fines/${fineId}`, body),
-  deleteVehicleFine: (id: number, fineId: number) =>
-    request<VehicleRead>('DELETE', `/vehicles/${id}/fines/${fineId}`),
+    request<VehicleFineRead>('POST', `/vehicles/${id}/fines`, body),
+  updateVehicleFine: (id: number, fineId: number, body: VehicleFineUpdate, ifMatch: string) =>
+    requestWithIfMatch<VehicleRead>('PATCH', `/vehicles/${id}/fines/${fineId}`, ifMatch, body),
+  deleteVehicleFine: (id: number, fineId: number, ifMatch: string) =>
+    requestWithIfMatch<VehicleRead>('DELETE', `/vehicles/${id}/fines/${fineId}`, ifMatch),
+  recordVehicleFinePayment: (id: number, fineId: number, ifMatch: string, file?: File | null) => {
+    const form = new FormData()
+    if (file) form.append('file', file)
+    return multipartWithIfMatch<VehicleFineRead>(
+      `/vehicles/${id}/fines/${fineId}/payment`,
+      form,
+      ifMatch,
+    )
+  },
+  attachVehicleFineReceipt: (id: number, fineId: number, ifMatch: string, file: File) => {
+    const form = new FormData()
+    form.append('file', file)
+    return multipartWithIfMatch<VehicleFineRead>(
+      `/vehicles/${id}/fines/${fineId}/receipt`,
+      form,
+      ifMatch,
+      'PUT',
+    )
+  },
+  archiveVehicleFines: (fines: VehicleFinePaymentRecord[]) =>
+    request<VehicleFineBatchResult>('POST', '/vehicles/fines/archive', { fines }),
+  restoreVehicleFines: (fines: VehicleFinePaymentRecord[]) =>
+    request<VehicleFineBatchResult>('POST', '/vehicles/fines/restore', { fines }),
   generateFinesLetter: (id: number, body: FinesLetterRequest) =>
     request<LetterResult>('POST', `/vehicles/${id}/fines/letter`, body),
   listVehicleFines: (
