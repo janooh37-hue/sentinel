@@ -22,6 +22,23 @@ vi.mock('@/lib/api', () => ({
 // Import AFTER mock so the module is swapped.
 import { PermissionRequestDialog } from './PermissionRequestDialog'
 import { api } from '@/lib/api'
+import type { CapabilityRequestState } from '@/lib/useCapabilityCatalog'
+import i18n from '@/lib/i18n'
+
+const REQUEST: Extract<CapabilityRequestState, { kind: 'requestable' }> = {
+  kind: 'requestable',
+  entry: {
+    id: 'documents.scan',
+    domain: 'documents',
+    label_en: 'Scan documents',
+    label_ar: 'مسح المستندات',
+    description_en: 'OCR-scan uploaded documents.',
+    description_ar: 'مسح المستندات المرفوعة ضوئياً.',
+    sensitive: false,
+    requestable: true,
+    default_roles: ['operator', 'manager', 'admin'],
+  },
+}
 
 function makeClient() {
   return new QueryClient({
@@ -38,23 +55,45 @@ function Wrapper({ children }: { children: React.ReactNode }) {
 }
 
 describe('PermissionRequestDialog', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.clearAllMocks()
+    await i18n.changeLanguage('en')
   })
 
   it('renders the label in the dialog body', () => {
     render(
       <Wrapper>
         <PermissionRequestDialog
-          capability="documents.scan"
-          label="Scan documents"
-          description="Lets you OCR-scan uploaded documents."
+          request={REQUEST}
           open
           onClose={() => {}}
+          returnFocusRef={React.createRef<HTMLElement>()}
         />
       </Wrapper>,
     )
     expect(screen.getByText(/Scan documents/i)).toBeInTheDocument()
+  })
+
+  it('directionally isolates Arabic catalog values in the interpolated body', async () => {
+    await i18n.changeLanguage('ar')
+    render(
+      <Wrapper>
+        <PermissionRequestDialog
+          request={REQUEST}
+          open
+          onClose={() => {}}
+          returnFocusRef={React.createRef<HTMLElement>()}
+        />
+      </Wrapper>,
+    )
+
+    const body = screen.getByText(
+      (_, element) =>
+        element?.tagName === 'P' &&
+        element.textContent?.includes('\u2068مسح المستندات\u2069') === true,
+    )
+    expect(body).toHaveTextContent('\u2068مسح المستندات\u2069')
+    expect(body).toHaveTextContent('\u2068مسح المستندات المرفوعة ضوئياً.\u2069')
   })
 
   it('calls api.requestPermission with the capability when Request is clicked', async () => {
@@ -62,11 +101,10 @@ describe('PermissionRequestDialog', () => {
     render(
       <Wrapper>
         <PermissionRequestDialog
-          capability="documents.scan"
-          label="Scan documents"
-          description="Lets you OCR-scan uploaded documents."
+          request={REQUEST}
           open
           onClose={onClose}
+          returnFocusRef={React.createRef<HTMLElement>()}
         />
       </Wrapper>,
     )
@@ -85,11 +123,10 @@ describe('PermissionRequestDialog', () => {
     render(
       <Wrapper>
         <PermissionRequestDialog
-          capability="documents.scan"
-          label="Scan documents"
-          description="Lets you OCR-scan uploaded documents."
+          request={REQUEST}
           open
           onClose={onClose}
+          returnFocusRef={React.createRef<HTMLElement>()}
         />
       </Wrapper>,
     )
@@ -106,11 +143,10 @@ describe('PermissionRequestDialog', () => {
     render(
       <Wrapper>
         <PermissionRequestDialog
-          capability="documents.scan"
-          label="Scan documents"
-          description="Lets you OCR-scan uploaded documents."
+          request={REQUEST}
           open
           onClose={onClose}
+          returnFocusRef={React.createRef<HTMLElement>()}
         />
       </Wrapper>,
     )

@@ -29,6 +29,11 @@ import {
   type UserPermissionRead,
 } from '@/lib/api'
 import { QUICK_ACTION_IDS, type QuickActionId } from '@/lib/dashboardLayout'
+import {
+  localizeCapability,
+  type CapabilityCatalog,
+  useCapabilityCatalog,
+} from '@/lib/useCapabilityCatalog'
 import { cn } from '@/lib/utils'
 import { artworkForTemplate, emojiForTemplate } from '@/pages/application/formEmoji'
 
@@ -99,6 +104,7 @@ const PAGE_BLUEPRINT: readonly PageBlueprintItem[] = [
   { key: 'nav.services', capability: 'documents.generate' },
   { key: 'nav.records', capability: 'books.view' },
   { key: 'nav.permits', capability: 'permits.view' },
+  { key: 'nav.vehicles', capability: 'vehicles.view' },
   { key: 'access.permissions.pages.settings', capability: 'settings.view' },
   { key: 'access.permissions.pages.expiry', capability: 'expiry.view' },
 ]
@@ -366,7 +372,7 @@ function MirrorDevice({
       className={cn(
         'mirror-device flex flex-col rounded-[1.9rem] bg-primary p-2 text-primary-foreground shadow-xl min-[900px]:sticky min-[900px]:top-4 min-[900px]:self-start',
         mobile &&
-          'fixed inset-x-3 z-[45] max-h-[min(68vh,620px)] shadow-2xl [bottom:calc(4.875rem+env(safe-area-inset-bottom))]',
+          'fixed inset-x-3 z-[45] max-h-[min(68vh,620px)] shadow-2xl [bottom:calc(4.875rem+var(--safe-bottom))]',
       )}
     >
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[1.4rem] bg-primary text-primary-foreground">
@@ -536,10 +542,12 @@ function MirrorDevice({
 
 function RequestStrip({
   requests,
+  catalog,
   decidingId,
   onDecide,
 }: {
   requests: PermissionRequestRead[]
+  catalog: Pick<CapabilityCatalog, 'byId'>
   decidingId: number | null
   onDecide: (id: number, userId: number, decision: 'permanent' | 'refused') => void
 }): React.JSX.Element | null {
@@ -561,38 +569,51 @@ function RequestStrip({
         </Link>
       </div>
       <div className="space-y-2">
-        {requests.map((request) => (
-          <div key={request.id} className="flex flex-col gap-2 rounded-lg bg-surface/70 p-3 sm:flex-row sm:items-center">
-            <span className="min-w-0 flex-1">
-              <bdi className="block text-[0.82em] font-semibold" dir="auto">
-                {t(`access.permissions.caps.${request.capability}`, {
-                  defaultValue: request.capability_label,
-                })}
-              </bdi>
-              <span className="block font-mono text-[0.68em] text-muted-foreground">
-                {formatter.format(new Date(request.created_at))}
+        {requests.map((request) => {
+          const text = localizeCapability(
+            catalog.byId.get(request.capability),
+            request.capability,
+            i18n.language,
+          )
+          return (
+            <div
+              key={request.id}
+              className="flex flex-col gap-2 rounded-lg bg-surface/70 p-3 sm:flex-row sm:items-center"
+            >
+              <span className="min-w-0 flex-1">
+                <bdi className="block text-[0.82em] font-semibold" dir="auto">
+                  {text.label}
+                </bdi>
+                {text.description ? (
+                  <bdi className="block text-[0.72em] text-muted-foreground" dir="auto">
+                    {text.description}
+                  </bdi>
+                ) : null}
+                <span className="block font-mono text-[0.68em] text-muted-foreground">
+                  {formatter.format(new Date(request.created_at))}
+                </span>
               </span>
-            </span>
-            <span className="flex gap-2">
-              <button
-                type="button"
-                disabled={decidingId !== null}
-                onClick={() => onDecide(request.id, request.user_id, 'permanent')}
-                className="min-h-11 rounded-full bg-primary px-4 text-[0.78em] font-semibold text-primary-foreground hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
-              >
-                {t('access.permissions.mirror.approve')}
-              </button>
-              <button
-                type="button"
-                disabled={decidingId !== null}
-                onClick={() => onDecide(request.id, request.user_id, 'refused')}
-                className="min-h-11 rounded-full border border-accent/30 bg-surface px-4 text-[0.78em] font-semibold text-accent hover:bg-accent-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
-              >
-                {t('access.permissions.mirror.refuse')}
-              </button>
-            </span>
-          </div>
-        ))}
+              <span className="flex gap-2">
+                <button
+                  type="button"
+                  disabled={decidingId !== null}
+                  onClick={() => onDecide(request.id, request.user_id, 'permanent')}
+                  className="min-h-11 rounded-full bg-primary px-4 text-[0.78em] font-semibold text-primary-foreground hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+                >
+                  {t('access.permissions.mirror.approve')}
+                </button>
+                <button
+                  type="button"
+                  disabled={decidingId !== null}
+                  onClick={() => onDecide(request.id, request.user_id, 'refused')}
+                  className="min-h-11 rounded-full border border-accent/30 bg-surface px-4 text-[0.78em] font-semibold text-accent hover:bg-accent-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
+                >
+                  {t('access.permissions.mirror.refuse')}
+                </button>
+              </span>
+            </div>
+          )
+        })}
       </div>
     </div>
   )
@@ -615,12 +636,9 @@ export function PermissionsPage(): React.JSX.Element {
   const beamTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const mobile = useMirrorMobile()
   const isAr = i18n.language.startsWith('ar')
+  const capabilityCatalog = useCapabilityCatalog()
 
   const usersQuery = useQuery({ queryKey: ['auth-users'], queryFn: api.listAuthUsers })
-  const capabilitiesQuery = useQuery({
-    queryKey: ['capabilities'],
-    queryFn: api.listCapabilities,
-  })
   const templatesQuery = useQuery({
     queryKey: ['templates'],
     queryFn: api.listTemplates,
@@ -1109,7 +1127,7 @@ export function PermissionsPage(): React.JSX.Element {
                 <EmptyState icon={ShieldCheck} message={t('access.permissions.empty')} />
               )
             ) : permissionsQuery.isError ||
-              capabilitiesQuery.isError ||
+              capabilityCatalog.status === 'error' ||
               categoriesQuery.isError ? (
               <EmptyState message={t('access.permissions.loadError')} />
             ) : permissionsQuery.isLoading || !permissions ? (
@@ -1240,6 +1258,7 @@ export function PermissionsPage(): React.JSX.Element {
 
                       <RequestStrip
                         requests={selectedRequests}
+                        catalog={capabilityCatalog}
                         decidingId={decidingId}
                         onDecide={(id, userId, decision) =>
                           decideMutation.mutate({ id, userId, decision })
@@ -1338,13 +1357,13 @@ export function PermissionsPage(): React.JSX.Element {
           {selectedUser != null &&
           permissions != null &&
           !permissionsQuery.isError &&
-          !capabilitiesQuery.isError &&
+          capabilityCatalog.status !== 'error' &&
           !categoriesQuery.isError ? (
             <aside className="min-w-0 min-[1100px]:sticky min-[1100px]:top-4 min-[1100px]:self-start">
               <AdvancedPermissionsPanel
                 user={selectedUser}
                 perms={permissions}
-                capabilities={capabilitiesQuery.data ?? []}
+                capabilities={capabilityCatalog.entries}
               />
             </aside>
           ) : null}

@@ -16,6 +16,13 @@ frontend/node_modules/
 frontend/dist/
 frontend/.vite/
 
+# Stray root-level npm/pnpm installs (the project's only package.json lives
+# in frontend/; a root one is always an accidental `npm install` here)
+/node_modules/
+/package.json
+/package-lock.json
+/pnpm-lock.yaml
+
 # Built artifacts (frontend → backend bundle)
 backend/app/static/assets/
 backend/app/static/index.html
@@ -127,17 +134,40 @@ passport-sample-report.txt
 pytest_output.txt
 backend/scripts/_run_sample_report.bat
 
+# Throwaway verification stacks (isolated databases seeded with real fleet rows).
+.scratch/
+# Vehicle-fines source docs at repo root — real plates, employee names and
+# license scans (PII in a public repo). The tokenized production template will
+# live in backend/templates/ in a later round, sanitized.
+/PLATE NUMBER.docx
+/project vhicels.xlsx
+~$*.docx
+
 # Local agent/tooling state
 .playwright-cli/
 
 # swarm agent memory (binary tool state)
 .swarm/
 
+# Local Herdr agent-pipeline tooling (personal automation, not shared repo source)
+.herdr/
+
 # design mockup screenshots and reference images (large binaries, local only)
 mockups/shots/
 mockups/refreance/
+
+# Feature planning drafts belong in mockups/plan/ (scratch, not shared design source)
+mockups/plan/
 
 # Agent worktrees
 %TEMP%/
 .opencode/package-lock.json
 .worktrees/
+
+# Local synthetic env used for isolated feature-worktree verification
+.synthdata/
+
+# Internal planning scratch + host-specific ops runbook (real hostnames/paths -
+# not needed by repo consumers; kept on disk, never tracked).
+/GSSG_MANAGER_PLAN.md
+/SERVER-MIGRATION.md

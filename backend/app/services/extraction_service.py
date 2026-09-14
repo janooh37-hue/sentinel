@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass, field
-from typing import Protocol
+from typing import Protocol, TypedDict
 
 from rapidfuzz import fuzz
 from rapidfuzz import utils as fuzz_utils
@@ -16,7 +17,7 @@ _CANDIDATE_LIMIT = 3
 _CANDIDATE_FLOOR = 55.0  # rapidfuzz 0..100
 
 
-class _Emp(Protocol):
+class EmployeeLike(Protocol):
     id: str
     name_en: str
     name_ar: str | None
@@ -24,12 +25,20 @@ class _Emp(Protocol):
     passport_no: str | None
 
 
+class EmployeeCandidate(TypedDict):
+    employee_id: str
+    name_en: str
+    name_ar: str | None
+    score: float
+
+
 @dataclass(frozen=True)
 class PipelineResult:
     extraction: Extraction
     matched_employee_id: str | None
     match_score: float
-    candidates: list[dict] = field(default_factory=list)
+    candidates: list[EmployeeCandidate] = field(default_factory=list)
+    name_match_ties: tuple[str, ...] = ()
 
 
 def _extract(doc_type: DocType, text: str) -> Extraction:
@@ -46,9 +55,9 @@ def _extract(doc_type: DocType, text: str) -> Extraction:
     return Extraction(DocType.UNKNOWN, 0.2, [], raw_text=text)
 
 
-def _name_scores(name: str, employees: list[_Emp]) -> list[tuple[_Emp, float]]:
-    """(_Emp, best-of-EN/AR score 0..100) for each employee, sorted desc."""
-    scored: list[tuple[_Emp, float]] = []
+def _name_scores(name: str, employees: Sequence[EmployeeLike]) -> list[tuple[EmployeeLike, float]]:
+    """(employee, best-of-EN/AR score 0..100) pairs sorted descending."""
+    scored: list[tuple[EmployeeLike, float]] = []
     for emp in employees:
         best = 0.0
         for cand in (emp.name_en, emp.name_ar):
@@ -64,11 +73,11 @@ def _name_scores(name: str, employees: list[_Emp]) -> list[tuple[_Emp, float]]:
 
 def match_employee_candidates(
     fields: dict[str, str],
-    employees: list[_Emp],
+    employees: Sequence[EmployeeLike],
     *,
     limit: int = _CANDIDATE_LIMIT,
     floor: float = _CANDIDATE_FLOOR,
-) -> list[dict]:
+) -> list[EmployeeCandidate]:
     """Top-N fuzzy NAME near-misses (denormalized), for the triage suggestion chips.
 
     Exact ID/passport hits never reach here — those resolve to a single certain
@@ -76,7 +85,7 @@ def match_employee_candidates(
     name = fields.get("name_en") or fields.get("name_ar")
     if not name:
         return []
-    out: list[dict] = []
+    out: list[EmployeeCandidate] = []
     for emp, score in _name_scores(name, employees):
         if score < floor:
             break
@@ -93,7 +102,9 @@ def match_employee_candidates(
     return out
 
 
-def match_employee(fields: dict[str, str], employees: list[_Emp]) -> tuple[_Emp | None, float]:
+def match_employee(
+    fields: dict[str, str], employees: Sequence[EmployeeLike]
+) -> tuple[EmployeeLike | None, float]:
     """Exact ID/passport match first (certain), then fuzzy name match."""
     uae_id = fields.get("uae_id_no")
     passport = fields.get("passport_no")
@@ -115,7 +126,7 @@ def match_employee(fields: dict[str, str], employees: list[_Emp]) -> tuple[_Emp 
     return None, best_score / 100.0
 
 
-def run_pipeline(*, ocr_text: str, employees: list[_Emp]) -> PipelineResult:
+def run_pipeline(*, ocr_text: str, employees: Sequence[EmployeeLike]) -> PipelineResult:
     doc_type, conf, alts = classify(ocr_text)
     extraction = _extract(doc_type, ocr_text)
     # carry classifier confidence + alternatives onto the extraction
@@ -129,15 +140,36 @@ def run_pipeline(*, ocr_text: str, employees: list[_Emp]) -> PipelineResult:
     )
     field_map = {f.key: f.value for f in extraction.fields}
     emp, score = match_employee(field_map, employees)
+    name_match_ties: tuple[str, ...] = ()
+    if emp is not None:
+        exact = (bool(field_map.get("uae_id_no")) and field_map["uae_id_no"] == emp.uae_id_no) or (
+            bool(field_map.get("passport_no")) and field_map["passport_no"] == emp.passport_no
+        )
+        name = field_map.get("name_en") or field_map.get("name_ar")
+        if not exact and name:
+            scores = _name_scores(name, employees)
+            ties = tuple(
+                sorted(
+                    {
+                        candidate.id
+                        for candidate, candidate_score in scores
+                        if candidate_score == scores[0][1]
+                    }
+                )
+            )
+            if len(ties) > 1:
+                name_match_ties = ties
     return PipelineResult(
         extraction=extraction,
         matched_employee_id=emp.id if emp else None,
         match_score=score,
         candidates=match_employee_candidates(field_map, employees),
+        name_match_ties=name_match_ties,
     )
 
 
 __all__ = [
+    "EmployeeLike",
     "PipelineResult",
     "is_valid_iban",
     "match_employee",

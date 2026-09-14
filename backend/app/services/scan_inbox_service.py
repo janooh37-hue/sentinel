@@ -23,6 +23,7 @@ from app.core.extraction import ocr
 from app.core.extraction.dates import parse_date
 from app.db.models import Employee, ScanInbox, User
 from app.services import book_service, scan_triage_service, vault_service
+from app.services.document_reader import DocumentReader, read_document
 
 log = logging.getLogger(__name__)
 
@@ -89,7 +90,7 @@ def enqueue_email_attachment(
 # ─────────────────────────────── drain (OCR + route) ───────────────────────────
 
 
-def drain_pending(db: Session, *, limit: int = 20) -> int:
+def drain_pending(db: Session, *, limit: int = 20, reader: DocumentReader | None = None) -> int:
     """OCR + route a batch of ``pending_ocr`` rows. Returns the number processed."""
     rows = list(
         db.execute(
@@ -100,54 +101,59 @@ def drain_pending(db: Session, *, limit: int = 20) -> int:
             .limit(limit)
         ).scalars()
     )
+    document_reader = read_document if reader is None else reader
     for item in rows:
-        _process_one(db, item)
+        _process_one(db, item, reader=document_reader)
     return len(rows)
 
 
-def _process_one(db: Session, item: ScanInbox) -> None:
+def _process_one(db: Session, item: ScanInbox, *, reader: DocumentReader) -> None:
     item.attempts += 1
-    abs_path = _abs(item.file_path)
     try:
-        raw = abs_path.read_bytes()
+        raw = abs_file_path(item).read_bytes()
+    except NotFoundError as exc:
+        item.state = "error"
+        item.error_detail = str(exc)[:512]
+        db.commit()
+        return
     except OSError:
         item.state = "error"
         item.error_detail = "file missing on disk"
         db.commit()
         return
 
-    with ocr.OCR_GATE:
-        qr_refs = ocr.qr_refs_from_bytes(raw)
-        try:
-            text = ocr.ocr_bytes_to_text(raw)
-        except ocr.OcrUnavailableError:
-            if not qr_refs:
-                # OCR down + nothing to go on: leave pending for retry; cap to error.
-                if item.attempts >= MAX_OCR_ATTEMPTS:
-                    item.state = "error"
-                    item.error_detail = "OCR unavailable"
-                db.commit()
-                return
-            text = ""
-        except ocr.InvalidImageError as exc:
-            item.state = "error"
-            item.error_detail = str(exc)[:512]
-            db.commit()
-            return
-
     employees = list(db.execute(select(Employee)).scalars())
-    decision = scan_triage_service.route(
-        ocr_text=text,
-        qr_refs=qr_refs,
-        db=db,
-        employees=employees,  # type: ignore[arg-type]
-    )
+    try:
+        classification = scan_triage_service.classify(
+            raw, db=db, employees=employees, reader=reader
+        )
+    except ocr.InvalidImageError as exc:
+        item.state = "error"
+        item.error_detail = str(exc)[:512]
+        db.commit()
+        return
+    read = classification.read
+    if read.text_source == "unavailable" and not read.qr_refs:
+        if item.attempts >= MAX_OCR_ATTEMPTS:
+            item.state = "error"
+            item.error_detail = "OCR unavailable"
+        db.commit()
+        return
+    decision = scan_triage_service.project_inbox(classification)
     item.document_type = decision.document_type
     item.fields = decision.fields or {}
-    item.candidates = decision.candidates or []
-    item.raw_text = text
+    item.candidates = [
+        {
+            "employee_id": candidate.employee_id,
+            "name_en": candidate.name_en,
+            "name_ar": candidate.name_ar,
+            "score": candidate.score,
+        }
+        for candidate in decision.candidates
+    ]
+    item.raw_text = read.text
     item.confidence = decision.confidence
-    item.qr_refs = qr_refs
+    item.qr_refs = list(read.qr_refs)
     item.proposed_route = decision.proposed_route
     item.proposed_book_id = decision.proposed_book_id
     item.proposed_ref = decision.proposed_ref
@@ -187,7 +193,7 @@ def _apply_file(
     explicitly authorising the action — a scan-back flip (awaiting_scan book) is a
     valid, intended outcome there even though it isn't undoable via detach_attachment.
     """
-    raw = _abs(item.file_path).read_bytes()
+    raw = abs_file_path(item).read_bytes()
     if item.proposed_route == "book_attach" and item.proposed_book_id is not None:
         book = book_service.add_attachment(db, item.proposed_book_id, item.filename, raw, user=user)
         if book.attachment_paths:
@@ -280,6 +286,7 @@ def route_item(
     _check_owner(item, user)
     if item.state not in {"awaiting_confirmation", "unrouted"}:
         raise ValidationFailedError("SCAN_BAD_STATE", f"Cannot route in state {item.state}")
+    abs_file_path(item)  # validate before staging a new proposed destination
     if book_id is not None:
         item.proposed_route = "book_attach"
         item.proposed_book_id = book_id
@@ -314,13 +321,23 @@ def undo(db: Session, item_id: int, *, user: User | None) -> ScanInbox:
     _check_owner(item, user)
     if item.state not in {"auto_filed"}:
         raise ValidationFailedError("SCAN_BAD_STATE", f"Cannot undo in state {item.state}")
-    token = item.undo_token or ""
-    if token.startswith("book:"):
-        _, book_id, rel = token.split(":", 2)
-        book_service.detach_attachment(db, int(book_id), rel)
-    elif token.startswith("vault:"):
-        _, vf_id = token.split(":", 1)
-        vault_service.delete_vault_file(db, int(vf_id))
+    parts = (item.undo_token or "").split(":", 2)
+    try:
+        valid_book = len(parts) == 3 and parts[0] == "book" and bool(parts[2])
+        valid_vault = len(parts) == 2 and parts[0] == "vault"
+        if not (valid_book or valid_vault):
+            raise ValueError("missing undo target")
+        target_id = int(parts[1])
+        if target_id <= 0:
+            raise ValueError("invalid undo target ID")
+    except ValueError:
+        raise ValidationFailedError(
+            "SCAN_BAD_STATE", "Scan item has no valid undo target."
+        ) from None
+    if valid_book:
+        book_service.detach_attachment(db, target_id, parts[2])
+    else:
+        vault_service.delete_vault_file(db, target_id)
     item.state = "awaiting_confirmation"
     item.undo_token = None
     item.resolution = None

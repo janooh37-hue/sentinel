@@ -1,10 +1,9 @@
-"""Email account + IMAP sync service.
+"""Email accounts, IMAP sync, draft creation, and sent-mail reconciliation.
 
-Single-row account at ``EmailAccount.id == 1``. ``sync_now()`` connects to
-the configured IMAP server, fetches inbox + sent-folder messages (since the
-last successful sync, or last 30 days on first run), parses them, and
-inserts one ``LedgerEntry`` per message. Message-Id is appended as a tag
-(prefixed ``msgid:``) so re-running sync is idempotent.
+``sync_now()`` connects to one owner's configured IMAP server, fetches inbox
+and sent-folder messages since the last successful sync, and inserts one
+``LedgerEntry`` per message. Message-Id is appended as a tag (prefixed
+``msgid:``) so re-running sync is idempotent.
 
 Direction inference:
     INBOX folder      → incoming
@@ -22,32 +21,86 @@ import email as stdlib_email
 import imaplib
 import logging
 import re
-import smtplib
 import ssl
 import threading
+import time
+from collections.abc import Callable, Sequence
+from contextlib import suppress
 from datetime import UTC, date, datetime, timedelta
 from email.header import decode_header, make_header
 from email.message import EmailMessage, Message
-from email.utils import getaddresses, make_msgid, parsedate_to_datetime
+from email.utils import formatdate, getaddresses, make_msgid, parsedate_to_datetime
 from pathlib import Path
-from typing import Final
+from typing import Final, Protocol
 
 import nh3
 from sqlalchemy import select, text
 from sqlalchemy.orm import Session
+from sqlalchemy.sql.elements import TextClause
 
+from app.api.errors import NotFoundError
 from app.config import get_settings
 from app.core import crypto
-from app.db.models import EmailAccount, LedgerEntry
+from app.core.subject import normalise_subject
+from app.db.models import Book, EmailAccount, LedgerEntry
 from app.schemas.email import (
     EmailAccountUpsert,
-    EmailSendRequest,
-    EmailSendResult,
     EmailSyncResult,
     EmailSyncStatus,
+    HandoffAttachment,
 )
+from app.services import book_service, correspondence_service, ledger_service
+
+# Keep in sync with BOOK_REF_SOURCE in frontend/src/lib/smartLinks.ts.
+_BOOK_REF_RE = re.compile(r"\b(?:GS|HR|NAT|SC|\d{1,2})-\d{3,4}\b")
 
 log = logging.getLogger(__name__)
+
+type ImapStatus = str | bytes
+type ImapData = Sequence[bytes | None]
+type ImapResponse = tuple[ImapStatus, ImapData]
+type ImapFetchItem = bytes | tuple[bytes, bytes] | None
+type ImapFetchResponse = tuple[ImapStatus, Sequence[ImapFetchItem]]
+
+
+class ImapConnection(Protocol):
+    def noop(self) -> ImapResponse: ...
+
+    def list(self) -> ImapFetchResponse: ...
+
+    def select(self, mailbox: str, readonly: bool = False) -> ImapResponse: ...
+
+    def search(self, charset: None, criterion: str) -> ImapResponse: ...
+
+    def fetch(self, message_set: str, message_parts: str) -> ImapFetchResponse: ...
+
+    def append(
+        self,
+        mailbox: str,
+        flags: str,
+        date_time: str,
+        message: bytes,
+    ) -> ImapResponse: ...
+
+    def create(self, mailbox: str) -> ImapResponse: ...
+
+    def logout(self) -> ImapFetchResponse: ...
+
+
+type Connector = Callable[[EmailAccount], ImapConnection]
+
+HANDOFF_TAG: Final[str] = "outlook-pending"
+STALE_TAG: Final[str] = "outlook-stale"
+HANDOFF_HEADER: Final[str] = "X-GSSG-Handoff"
+
+
+class HandoffValidationError(ValueError):
+    """The handoff request cannot be fulfilled as submitted."""
+
+
+class HandoffDeliveryError(RuntimeError):
+    """The configured Drafts folder could not accept the prepared message."""
+
 
 # Serialise IMAP sync runs across ALL users: a manual POST /email/sync and the
 # scheduled tick must never overlap (concurrent IMAP fetch + per-row commits race
@@ -66,14 +119,45 @@ class SyncInProgressError(RuntimeError):
 
 # Wider than ledger_service.ALLOWED_DOC_EXTS — emails routinely carry common
 # Office and archive types. Executables are excluded.
-EMAIL_ATTACHMENT_ALLOWED_EXTS: Final[frozenset[str]] = frozenset({
-    ".pdf", ".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".bmp", ".heic",
-    ".docx", ".doc", ".xlsx", ".xls", ".pptx", ".ppt", ".odt", ".ods",
-    ".txt", ".csv", ".rtf", ".md",
-    ".zip", ".7z", ".rar", ".tar", ".gz", ".tgz",
-    ".eml", ".msg", ".ics", ".vcf",
-    ".html", ".htm", ".xml", ".json",
-})
+EMAIL_ATTACHMENT_ALLOWED_EXTS: Final[frozenset[str]] = frozenset(
+    {
+        ".pdf",
+        ".png",
+        ".jpg",
+        ".jpeg",
+        ".gif",
+        ".webp",
+        ".svg",
+        ".bmp",
+        ".heic",
+        ".docx",
+        ".doc",
+        ".xlsx",
+        ".xls",
+        ".pptx",
+        ".ppt",
+        ".odt",
+        ".ods",
+        ".txt",
+        ".csv",
+        ".rtf",
+        ".md",
+        ".zip",
+        ".7z",
+        ".rar",
+        ".tar",
+        ".gz",
+        ".tgz",
+        ".eml",
+        ".msg",
+        ".ics",
+        ".vcf",
+        ".html",
+        ".htm",
+        ".xml",
+        ".json",
+    }
+)
 EMAIL_ATTACHMENT_MAX_BYTES: Final[int] = 25 * 1024 * 1024  # 25 MiB
 
 
@@ -82,8 +166,24 @@ EMAIL_ATTACHMENT_MAX_BYTES: Final[int] = 25 * 1024 * 1024  # 25 MiB
 # rust) drops <script>/<style>, event handlers, and javascript:/data: URLs while
 # keeping common formatting, links, and images.
 _ALLOWED_HTML_TAGS: Final[set[str]] = nh3.ALLOWED_TAGS | {
-    "img", "span", "div", "pre", "table", "thead", "tbody", "tr", "td", "th",
-    "h1", "h2", "h3", "h4", "h5", "h6", "hr", "font",
+    "img",
+    "span",
+    "div",
+    "pre",
+    "table",
+    "thead",
+    "tbody",
+    "tr",
+    "td",
+    "th",
+    "h1",
+    "h2",
+    "h3",
+    "h4",
+    "h5",
+    "h6",
+    "hr",
+    "font",
 }
 _ALLOWED_HTML_ATTRS: Final[dict[str, set[str]]] = {
     **nh3.ALLOWED_ATTRIBUTES,
@@ -114,7 +214,7 @@ _BIDI_ZW = "".join(
         *range(0x200B, 0x2010),  # ZWSP..RLM (U+200B..U+200F)
         *range(0x202A, 0x202F),  # LRE..RLO (U+202A..U+202E)
         *range(0x2066, 0x206A),  # isolates (U+2066..U+2069)
-        0xFEFF,                  # BOM / ZWNBSP
+        0xFEFF,  # BOM / ZWNBSP
     )
 )
 
@@ -248,7 +348,11 @@ def _apply_signature(html: str, signature: str) -> str:
         return html
     if SIGNATURE_MARKER in html:
         return html
-    return f"{html}{SIGNATURE_MARKER}<br><div data-gssg-signature>{signature}</div>{SIGNATURE_MARKER}"
+    return (
+        f"{html}{SIGNATURE_MARKER}<br><div data-gssg-signature>{signature}</div>{SIGNATURE_MARKER}"
+    )
+
+
 # Per-folder cap. IMAP latency is ~100 ms RTT; even with bulk fetch a few
 # hundred messages each carrying attachments will blow past the HTTP client
 # timeout. Keep it tight — operators can re-run "Sync now" if the mailbox is
@@ -301,6 +405,7 @@ def upsert_account(
             smtp_port=payload.smtp_port,
             smtp_use_tls=payload.smtp_use_tls,
             sent_folder=payload.sent_folder,
+            drafts_folder=payload.drafts_folder,
             inbox_folder=payload.inbox_folder,
             enabled=payload.enabled,
             sync_interval_minutes=payload.sync_interval_minutes,
@@ -319,6 +424,7 @@ def upsert_account(
         existing.smtp_port = payload.smtp_port
         existing.smtp_use_tls = payload.smtp_use_tls
         existing.sent_folder = payload.sent_folder
+        existing.drafts_folder = payload.drafts_folder
         existing.inbox_folder = payload.inbox_folder
         existing.enabled = payload.enabled
         existing.sync_interval_minutes = payload.sync_interval_minutes
@@ -356,7 +462,7 @@ def delete_account(db: Session, owner_user_id: int | None = None) -> None:
 # ─── Connection / test ──────────────────────────────────────────────────────
 
 
-def _connect(account: EmailAccount) -> imaplib.IMAP4:
+def connect_imap(account: EmailAccount) -> ImapConnection:
     if account.use_ssl:
         ctx = ssl.create_default_context()
         conn: imaplib.IMAP4 = imaplib.IMAP4_SSL(
@@ -369,178 +475,19 @@ def _connect(account: EmailAccount) -> imaplib.IMAP4:
     return conn
 
 
-
-
-def test_connection(account: EmailAccount) -> None:
+def test_connection(
+    account: EmailAccount,
+    *,
+    connector: Connector | None = None,
+) -> None:
     """Raises on failure; returns None on success."""
-    conn = _connect(account)
+    connect = connect_imap if connector is None else connector
+    conn = connect(account)
     try:
         conn.noop()
     finally:
-        try:
+        with suppress(Exception):
             conn.logout()
-        except Exception:
-            pass
-
-
-# ─── SMTP send ─────────────────────────────────────────────────────────────
-
-
-def send_email(
-    db: Session,
-    payload: EmailSendRequest,
-    *,
-    owner_user_id: int,
-    attachments: list[tuple[str, bytes]] | None = None,
-) -> EmailSendResult:
-    """Send an email via SMTP using the caller's own account, then record a
-    ledger entry with direction=outgoing (or internal when both ends are in
-    the operator's domain) so the message shows up immediately.
-
-    ``owner_user_id`` is required and keyword-only — it identifies the sending
-    user. The ledger entry is stamped with the same owner so the message
-    appears in **their** mailbox, not the lowest-id account.
-
-    ``attachments`` is a list of ``(filename, bytes)`` pairs to attach to
-    both the MIME message and the resulting ledger entry's vault."""
-    attachments = attachments or []
-    account = get_account(db, owner_user_id=owner_user_id)
-    if account is None:
-        raise ValueError("no email account configured")
-    if not account.enabled:
-        raise ValueError("email account is disabled")
-
-    if not payload.to:
-        raise ValueError("at least one recipient is required")
-    if not payload.subject.strip():
-        raise ValueError("subject is required")
-
-    password = crypto.decrypt(account.password_encrypted)
-    account_domain = _domain_of(account.email)
-
-    final_html = payload.html
-    if payload.use_signature:
-        final_html = _apply_signature(final_html, _get_signature(db))
-
-    # Build the multipart message. We emit both HTML and a plain-text fallback.
-    msg = EmailMessage()
-    msg["From"] = account.email
-    msg["To"] = ", ".join(payload.to)
-    if payload.cc:
-        msg["Cc"] = ", ".join(payload.cc)
-    msg["Subject"] = payload.subject
-    msg["Date"] = stdlib_email.utils.formatdate(localtime=True)
-    new_msg_id = make_msgid(domain=account_domain or None)
-    msg["Message-ID"] = new_msg_id
-    if payload.in_reply_to:
-        msg["In-Reply-To"] = payload.in_reply_to
-    if payload.references:
-        msg["References"] = payload.references
-
-    # Plain-text fallback: strip tags very loosely.
-    text_fallback = re.sub(r"<br\s*/?>", "\n", final_html, flags=re.IGNORECASE)
-    text_fallback = re.sub(r"</p>", "\n\n", text_fallback, flags=re.IGNORECASE)
-    text_fallback = re.sub(r"<[^>]+>", "", text_fallback).strip()
-    msg.set_content(text_fallback or " ")
-    msg.add_alternative(final_html, subtype="html")
-
-    # Attachments
-    for fname, data in attachments:
-        maintype, subtype = "application", "octet-stream"
-        ext = Path(fname).suffix.lower()
-        if ext in {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp"}:
-            maintype = "image"
-            subtype = ext.lstrip(".") if ext != ".jpg" else "jpeg"
-        elif ext == ".pdf":
-            subtype = "pdf"
-        elif ext in {".txt", ".csv", ".md", ".html", ".htm"}:
-            maintype = "text"
-            subtype = "plain" if ext in {".txt", ".md", ".csv"} else "html"
-        msg.add_attachment(
-            data, maintype=maintype, subtype=subtype, filename=_safe_email_filename(fname)
-        )
-
-    # Hand off to SMTP.
-    if account.smtp_use_tls:
-        ctx = ssl.create_default_context()
-        with smtplib.SMTP(account.smtp_host, account.smtp_port, timeout=30) as smtp:
-            smtp.ehlo()
-            smtp.starttls(context=ctx)
-            smtp.ehlo()
-            smtp.login(account.username, password)
-            smtp.send_message(msg)
-    else:
-        ctx = ssl.create_default_context()
-        with smtplib.SMTP_SSL(
-            account.smtp_host, account.smtp_port, timeout=30, context=ctx
-        ) as smtp:
-            smtp.login(account.username, password)
-            smtp.send_message(msg)
-
-    # Persist as a ledger entry so the user sees it immediately. Subsequent
-    # IMAP sync from Sent folder will dedup via the Message-Id tag.
-    direction = "outgoing"
-    if account_domain:
-        recipient_addrs = payload.to + payload.cc
-        recipient_domains = {_domain_of(a) for a in recipient_addrs if a}
-        if recipient_domains and recipient_domains == {account_domain}:
-            direction = "internal"
-
-    counterparty = payload.to[0] if payload.to else "(unknown)"
-    entry = LedgerEntry(
-        entry_date=date.today(),
-        direction=direction,
-        channel="email",
-        counterparty=counterparty[:256],
-        subject=payload.subject[:256],
-        notes_html=final_html,
-        tags=["email", "sent-from-app", _msgid_tag(new_msg_id)],
-        attachment_paths=[],
-        owner_user_id=account.owner_user_id,
-        to_recipients=[{"name": "", "address": a} for a in payload.to],
-        cc_recipients=[{"name": "", "address": a} for a in payload.cc],
-        bcc_recipients=[],
-        message_id=new_msg_id,
-        in_reply_to=payload.in_reply_to,
-        email_references=payload.references,
-        # We authored & sent it — never "unread" (also keeps internal-sent mail
-        # out of the unread badge, which now counts internal as received).
-        read_at=datetime.now(UTC).replace(tzinfo=None),
-    )
-    db.add(entry)
-    db.flush()  # need entry.id to name the attachment folder
-
-    saved_paths: list[str] = []
-    for fname, data in attachments:
-        rel = _save_email_attachment(entry.id, fname, data)
-        if rel:
-            saved_paths.append(rel)
-    if saved_paths:
-        entry.attachment_paths = saved_paths
-
-    # ── Phase 3: optional shared Correspondence Log row (default rule OFF). ──
-    try:
-        from app.services import correspondence_service
-
-        correspondence_service.log_event(
-            db,
-            trigger="email_sent",
-            source_kind="sent_email",
-            source_book_id=None,
-            subject=payload.subject[:255],
-            employee_id=None,
-            submitter=None,
-            entry_date=date.today(),
-            condition_fields={"direction": direction},
-            direction="outgoing",
-        )
-    except Exception:
-        log.warning("correspondence auto-log failed on email send", exc_info=True)
-
-    db.commit()
-    db.refresh(entry)
-
-    return EmailSendResult(sent=True, message_id=new_msg_id, ledger_entry_id=entry.id)
 
 
 # ─── Sync ───────────────────────────────────────────────────────────────────
@@ -555,7 +502,7 @@ def _decode(value: str | None) -> str:
         return value
 
 
-def _first_address(value: str | None) -> str:
+def first_email_address(value: str | None) -> str:
     """Return the bare email address from a To/From-style header.
 
     Falls back to the display name only when the parsed address is empty,
@@ -569,6 +516,417 @@ def _first_address(value: str | None) -> str:
         return ""
     name, addr = parsed[0]
     return addr or _decode(name) or ""
+
+
+def _attachment_content_type(filename: str) -> tuple[str, str]:
+    maintype, subtype = "application", "octet-stream"
+    ext = Path(filename).suffix.lower()
+    if ext in {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp"}:
+        maintype = "image"
+        subtype = ext.lstrip(".") if ext != ".jpg" else "jpeg"
+    elif ext == ".pdf":
+        subtype = "pdf"
+    elif ext in {".txt", ".csv", ".md", ".html", ".htm"}:
+        maintype = "text"
+        subtype = "plain" if ext in {".txt", ".md", ".csv"} else "html"
+    return maintype, subtype
+
+
+def _plain_text(html: str) -> str:
+    plain = re.sub(r"<br\s*/?>", "\n", html, flags=re.IGNORECASE)
+    plain = re.sub(r"</p>", "\n\n", plain, flags=re.IGNORECASE)
+    return re.sub(r"<[^>]+>", "", plain).strip() or " "
+
+
+def _is_ok(result: ImapResponse) -> bool:
+    status = result[0]
+    if isinstance(status, bytes):
+        status = status.decode("ascii", errors="ignore")
+    return status.upper() == "OK"
+
+
+def _remove_saved_attachments(paths: list[str]) -> None:
+    data_dir = get_settings().data_dir.resolve()
+    parents: set[Path] = set()
+    for rel_path in paths:
+        path = (data_dir / rel_path).resolve()
+        try:
+            path.relative_to(data_dir)
+        except ValueError:
+            continue
+        parents.add(path.parent)
+        with suppress(OSError):
+            path.unlink(missing_ok=True)
+    for parent in parents:
+        with suppress(OSError):
+            parent.rmdir()
+
+
+def _append_draft(
+    account: EmailAccount,
+    message: EmailMessage,
+    *,
+    connector: Connector,
+) -> None:
+    conn = connector(account)
+    try:
+        append_args = (
+            account.drafts_folder,
+            "(\\Draft)",
+            imaplib.Time2Internaldate(time.time()),
+            message.as_bytes(),
+        )
+        if _is_ok(conn.append(*append_args)):
+            return
+        if not _is_ok(conn.create(account.drafts_folder)):
+            raise HandoffDeliveryError("could not create the Outlook Drafts folder")
+        if not _is_ok(conn.append(*append_args)):
+            raise HandoffDeliveryError("could not append the message to Outlook Drafts")
+    finally:
+        with suppress(Exception):
+            conn.logout()
+
+
+def draft_outgoing(
+    db: Session,
+    *,
+    owner_user_id: int,
+    to: list[str],
+    cc: list[str],
+    subject: str,
+    html: str,
+    mode: str,
+    related_book_id: int | None,
+    related_employee_id: str | None,
+    in_reply_to: str | None,
+    references: str | None,
+    use_signature: bool,
+    attachments: list[HandoffAttachment],
+    connector: Connector | None = None,
+) -> LedgerEntry:
+    """Persist a pending outgoing email and optionally append its IMAP draft."""
+    connect = connect_imap if connector is None else connector
+    if not to:
+        raise HandoffValidationError("at least one recipient is required")
+    if not subject.strip():
+        raise HandoffValidationError("subject is required")
+    if mode not in {"mailto", "draft"}:
+        raise HandoffValidationError("mode must be 'mailto' or 'draft'")
+
+    account = get_account(db, owner_user_id=owner_user_id)
+    if mode == "draft":
+        if account is None:
+            raise HandoffValidationError("no email account configured")
+        if not account.enabled:
+            raise HandoffValidationError("email account is disabled")
+
+    account_domain = _domain_of(account.email) if account is not None else ""
+    direction = "outgoing"
+    if account_domain:
+        recipient_domains = {_domain_of(address) for address in [*to, *cc] if address}
+        if recipient_domains and recipient_domains == {account_domain}:
+            direction = "internal"
+
+    final_html = _sanitize_html(html)
+    if mode == "draft" and use_signature:
+        final_html = _apply_signature(final_html, _get_signature(db))
+
+    new_message_id = make_msgid(domain=account_domain or None) if mode == "draft" else None
+    tags = ["email", HANDOFF_TAG]
+    if new_message_id is not None:
+        tags.append(_msgid_tag(new_message_id))
+
+    entry = LedgerEntry(
+        entry_date=date.today(),
+        direction=direction,
+        channel="email",
+        counterparty=to[0][:255],
+        subject=subject[:255],
+        notes_html=final_html,
+        tags=tags,
+        attachment_paths=[],
+        owner_user_id=owner_user_id,
+        to_recipients=[{"name": "", "address": address} for address in to],
+        cc_recipients=[{"name": "", "address": address} for address in cc],
+        bcc_recipients=[],
+        message_id=new_message_id,
+        in_reply_to=in_reply_to,
+        email_references=references,
+        related_book_id=related_book_id,
+        related_employee_id=related_employee_id,
+        read_at=datetime.now(UTC).replace(tzinfo=None),
+    )
+    saved_paths: list[str] = []
+    try:
+        db.add(entry)
+        db.flush()
+
+        for filename, _content_type, data in attachments:
+            rel_path = _save_email_attachment(entry.id, filename, data)
+            if rel_path:
+                saved_paths.append(rel_path)
+        if saved_paths:
+            entry.attachment_paths = saved_paths
+
+        if mode == "draft":
+            assert account is not None
+            assert new_message_id is not None
+            message = EmailMessage()
+            message["From"] = account.email
+            message["To"] = ", ".join(to)
+            if cc:
+                message["Cc"] = ", ".join(cc)
+            message["Subject"] = subject
+            message["Date"] = formatdate(localtime=True)
+            message["Message-ID"] = new_message_id
+            if in_reply_to:
+                message["In-Reply-To"] = in_reply_to
+            if references:
+                message["References"] = references
+            message[HANDOFF_HEADER] = str(entry.id)
+            message.set_content(_plain_text(final_html))
+            message.add_alternative(final_html, subtype="html")
+            for filename, _content_type, data in attachments:
+                maintype, subtype = _attachment_content_type(filename)
+                message.add_attachment(
+                    data,
+                    maintype=maintype,
+                    subtype=subtype,
+                    filename=_safe_email_filename(filename),
+                )
+            _append_draft(
+                account,
+                message,
+                connector=connect,
+            )
+
+        db.commit()
+        db.refresh(entry)
+        return entry
+    except Exception as exc:
+        db.rollback()
+        _remove_saved_attachments(saved_paths)
+        if isinstance(exc, HandoffDeliveryError):
+            raise
+        if mode == "draft":
+            raise HandoffDeliveryError(f"Outlook draft handoff failed: {exc!s}") from exc
+        raise
+
+
+def _tag_filter(tag: str, param: str, *, negate: bool = False) -> TextClause:
+    keyword = "NOT EXISTS" if negate else "EXISTS"
+    return text(
+        f"{keyword} (SELECT 1 FROM json_each(ledger_entries.tags) WHERE json_each.value = :{param})"
+    ).bindparams(**{param: tag})
+
+
+def _live_pending_by_id(
+    db: Session,
+    *,
+    entry_id: int,
+    owner_user_id: int,
+) -> LedgerEntry | None:
+    pending = db.get(LedgerEntry, entry_id)
+    if (
+        pending is None
+        or pending.deleted_at is not None
+        or pending.owner_user_id != owner_user_id
+        or HANDOFF_TAG not in (pending.tags or [])
+    ):
+        return None
+    return pending
+
+
+def _find_pending_match(
+    db: Session,
+    *,
+    entry: LedgerEntry,
+    msg: Message,
+    owner_user_id: int,
+) -> LedgerEntry | None:
+    raw_handoff_id = msg.get(HANDOFF_HEADER)
+    if raw_handoff_id:
+        try:
+            pending_id = int(str(raw_handoff_id).strip())
+        except (TypeError, ValueError):
+            pending_id = 0
+        if pending_id > 0:
+            pending = _live_pending_by_id(
+                db,
+                entry_id=pending_id,
+                owner_user_id=owner_user_id,
+            )
+            if pending is not None:
+                return pending
+
+    raw_message_id = msg.get("Message-ID")
+    if raw_message_id:
+        message_id_tag = _msgid_tag(str(raw_message_id))
+        pending = (
+            db.execute(
+                select(LedgerEntry)
+                .where(
+                    LedgerEntry.owner_user_id == owner_user_id,
+                    LedgerEntry.channel == "email",
+                    LedgerEntry.deleted_at.is_(None),
+                    _tag_filter(HANDOFF_TAG, "handoff_exact_tag"),
+                    _tag_filter(message_id_tag, "handoff_msgid_tag"),
+                )
+                .order_by(LedgerEntry.created_at.asc(), LedgerEntry.id.asc())
+                .limit(1)
+            )
+            .scalars()
+            .first()
+        )
+        if pending is not None:
+            return pending
+
+    cutoff = entry.entry_date - timedelta(days=14)
+    candidates = db.execute(
+        select(LedgerEntry)
+        .where(
+            LedgerEntry.owner_user_id == owner_user_id,
+            LedgerEntry.channel == "email",
+            LedgerEntry.deleted_at.is_(None),
+            LedgerEntry.entry_date >= cutoff,
+            _tag_filter(HANDOFF_TAG, "handoff_fallback_tag"),
+        )
+        .order_by(LedgerEntry.created_at.asc(), LedgerEntry.id.asc())
+    ).scalars()
+    sent_subject = normalise_subject(entry.subject)
+    sent_recipients = {
+        str(recipient.get("address", "")).strip().casefold()
+        for recipient in (entry.to_recipients or [])
+        if isinstance(recipient, dict) and recipient.get("address")
+    }
+    if not sent_subject or not sent_recipients:
+        return None
+    for pending in candidates:
+        if normalise_subject(pending.subject) != sent_subject:
+            continue
+        pending_to = pending.to_recipients or []
+        if not pending_to or not isinstance(pending_to[0], dict):
+            continue
+        first_address = str(pending_to[0].get("address", "")).strip().casefold()
+        if first_address and first_address in sent_recipients:
+            return pending
+    return None
+
+
+def _resolve_book(db: Session, entry: LedgerEntry) -> Book | None:
+    if entry.related_book_id is not None:
+        try:
+            return book_service.get_book(db, entry.related_book_id)
+        except NotFoundError:
+            return None
+
+    for match in _BOOK_REF_RE.finditer(entry.subject.upper()):
+        try:
+            return book_service.get_book_by_ref(db, match.group(0).upper())
+        except NotFoundError:
+            continue
+    return None
+
+
+def reconcile_sent_entry(
+    db: Session,
+    *,
+    entry: LedgerEntry,
+    msg: Message,
+    account: EmailAccount,
+) -> None:
+    """Merge a newly imported Sent row with its pending outgoing handoff."""
+    owner_user_id = account.owner_user_id
+    if (
+        owner_user_id is None
+        or entry.owner_user_id != owner_user_id
+        or entry.channel != "email"
+        or entry.direction not in {"outgoing", "internal"}
+        or entry.deleted_at is not None
+    ):
+        return
+
+    pending = _find_pending_match(
+        db,
+        entry=entry,
+        msg=msg,
+        owner_user_id=owner_user_id,
+    )
+    if pending is not None:
+        if entry.related_book_id is None:
+            entry.related_book_id = pending.related_book_id
+        if entry.related_employee_id is None:
+            entry.related_employee_id = pending.related_employee_id
+        pending.deleted_at = datetime.now(UTC).replace(tzinfo=None)
+
+    book = _resolve_book(db, entry)
+    if book is not None:
+        if entry.related_book_id is None:
+            entry.related_book_id = book.id
+        if entry.related_employee_id is None:
+            entry.related_employee_id = book.employee_id
+        try:
+            with db.begin_nested():
+                correspondence_service.log_event(
+                    db,
+                    trigger="email_sent",
+                    source_kind="sent_email",
+                    source_book_id=book.id,
+                    subject=entry.subject,
+                    employee_id=book.employee_id,
+                    submitter=account.email,
+                    entry_date=entry.entry_date,
+                    condition_fields={
+                        "direction": entry.direction,
+                        "category": book.category_id,
+                    },
+                )
+        except Exception:
+            log.warning(
+                "correspondence auto-log failed for sent ledger entry id=%s",
+                entry.id,
+                exc_info=True,
+            )
+
+    db.commit()
+
+
+def flag_stale_handoffs(db: Session, *, account: EmailAccount) -> None:
+    """Flag pending outgoing handoffs older than 48 hours exactly once."""
+    owner_user_id = account.owner_user_id
+    if owner_user_id is None:
+        return
+
+    cutoff = datetime.now(UTC).replace(tzinfo=None) - timedelta(hours=48)
+    stale_entries = (
+        db.execute(
+            select(LedgerEntry)
+            .where(
+                LedgerEntry.owner_user_id == owner_user_id,
+                LedgerEntry.channel == "email",
+                LedgerEntry.deleted_at.is_(None),
+                LedgerEntry.created_at < cutoff,
+                _tag_filter(HANDOFF_TAG, "stale_handoff_tag"),
+                _tag_filter(STALE_TAG, "already_stale_tag", negate=True),
+            )
+            .order_by(LedgerEntry.created_at.asc(), LedgerEntry.id.asc())
+        )
+        .scalars()
+        .all()
+    )
+    if not stale_entries:
+        return
+
+    today = date.today()
+    for entry in stale_entries:
+        ledger_service._upsert_flag(
+            db,
+            entry_id=entry.id,
+            user_id=owner_user_id,
+            due=today,
+        )
+        entry.tags = [*(entry.tags or []), STALE_TAG]
+    db.commit()
 
 
 def _all_addresses(value: str | None) -> list[str]:
@@ -669,6 +1027,8 @@ def _extract_body(msg: Message) -> tuple[str, bool]:
         payload = chosen.get_payload(decode=True)
         if payload is None:
             return "", False
+        if not isinstance(payload, bytes):
+            raise TypeError("decoded email payload is not bytes")
         charset = chosen.get_content_charset() or "utf-8"
         try:
             text = payload.decode(charset, errors="replace")
@@ -679,6 +1039,8 @@ def _extract_body(msg: Message) -> tuple[str, bool]:
     payload = msg.get_payload(decode=True)
     if payload is None:
         return "", False
+    if not isinstance(payload, bytes):
+        raise TypeError("decoded email payload is not bytes")
     charset = msg.get_content_charset() or "utf-8"
     try:
         text = payload.decode(charset, errors="replace")
@@ -697,16 +1059,22 @@ def _msgid_tag(msg_id: str) -> str:
 
 
 def _existing_msgids(db: Session) -> dict[str, tuple[int, int]]:
-    """Map ``msgid_tag → (entry_id, current_attachment_count)``.
+    """Map confirmed ``msgid_tag → (entry_id, attachment_count)``.
 
-    Used both for dedup (presence check) and for cheap attachment backfill
-    (an entry with 0 attachments on a re-sync gets its attachments populated
-    even though we skip re-inserting the row).
+    Pending Outlook drafts are deliberately excluded: Outlook may preserve the
+    draft Message-ID when sending, and that Sent-folder copy still has to be
+    imported before reconciliation can replace the pending row.
     """
     rows = db.execute(
         select(LedgerEntry.id, LedgerEntry.tags, LedgerEntry.attachment_paths)
         .where(LedgerEntry.channel == "email")
         .where(LedgerEntry.deleted_at.is_(None))
+        .where(
+            text(
+                "NOT EXISTS (SELECT 1 FROM json_each(ledger_entries.tags) "
+                "WHERE json_each.value = :pending_handoff_tag)"
+            ).bindparams(pending_handoff_tag=HANDOFF_TAG)
+        )
     ).all()
     out: dict[str, tuple[int, int]] = {}
     for entry_id, tags, paths in rows:
@@ -724,7 +1092,7 @@ def _existing_msgids(db: Session) -> dict[str, tuple[int, int]]:
 # IMAP LIST line shape: (flags) "delim" "name"   — names may be quoted or
 # bare; delimiter is usually "/" on most servers and "." on some.
 _LIST_PATTERN = re.compile(
-    r'^\((?P<flags>[^)]*)\)\s+'
+    r"^\((?P<flags>[^)]*)\)\s+"
     r'(?P<delim>"(?:[^"\\]|\\.)*"|NIL|\S+)\s+'
     r'(?P<name>"(?:[^"\\]|\\.)*"|\S+)\s*$'
 )
@@ -748,9 +1116,7 @@ def _parse_list_line(line: str) -> tuple[str, str, str] | None:
     return name, m.group("flags").lower(), delim
 
 
-def _discover_folders(
-    conn: imaplib.IMAP4, root: str
-) -> list[str]:
+def _discover_folders(conn: ImapConnection, root: str) -> list[str]:
     """All selectable folders == ``root`` or under ``root``/<sub>.
 
     Tolerates servers where the delimiter is "." instead of "/". Skips any
@@ -790,11 +1156,11 @@ def _discover_folders(
 
 
 def _fetch_folder(
-    conn: imaplib.IMAP4,
+    conn: ImapConnection,
     folder: str,
     since: datetime,
 ) -> tuple[list[tuple[bytes, Message]], int]:
-    """Returns ``([(uid, parsed_message)], pending)`` from ``folder`` since ``since``.
+    """Return parsed messages with sequence IDs and the truncated backlog count.
 
     Bulk-fetches up to ``PER_SYNC_FETCH_LIMIT`` messages in ``FETCH_CHUNK``-
     sized batches so we make ~2 round trips for 50 messages instead of 50.
@@ -809,9 +1175,12 @@ def _fetch_folder(
         return [], 0
     date_str = since.strftime("%d-%b-%Y")
     typ, data = conn.search(None, f"(SINCE {date_str})")
-    if typ != "OK" or not data or not data[0]:
+    if typ != "OK" or not data:
         return [], 0
-    all_ids = data[0].split()
+    search_data = data[0]
+    if not search_data:
+        return [], 0
+    all_ids = search_data.split()
     pending = max(0, len(all_ids) - PER_SYNC_FETCH_LIMIT)
     ids = all_ids[-PER_SYNC_FETCH_LIMIT:]
     if not ids:
@@ -819,7 +1188,7 @@ def _fetch_folder(
     out: list[tuple[bytes, Message]] = []
     for i in range(0, len(ids), FETCH_CHUNK):
         chunk = ids[i : i + FETCH_CHUNK]
-        # IMAP FETCH accepts comma-separated UID list — one round trip per chunk.
+        # IMAP FETCH accepts comma-separated sequence IDs, one round trip per chunk.
         id_set = b",".join(chunk).decode("ascii")
         typ, payload = conn.fetch(id_set, "(RFC822)")
         if typ != "OK" or not payload:
@@ -836,10 +1205,8 @@ def _fetch_folder(
             except Exception:
                 idx += 1
                 continue
-            # Best-effort UID — fall back to ordinal when the FETCH response
-            # doesn't include the explicit UID field.
-            uid = chunk[idx] if idx < len(chunk) else b"?"
-            out.append((uid, msg))
+            sequence_id = chunk[idx] if idx < len(chunk) else b"?"
+            out.append((sequence_id, msg))
             idx += 1
     return out, pending
 
@@ -863,8 +1230,8 @@ def _build_entry(
     if direction != "internal" and _is_internal(msg, account_domain):
         direction = "internal"
     subject = _decode(msg.get("Subject")) or "(no subject)"
-    from_addr = _first_address(msg.get("From"))
-    to_addr = _first_address(msg.get("To"))
+    from_addr = first_email_address(msg.get("From"))
+    to_addr = first_email_address(msg.get("To"))
     counterparty = from_addr if direction == "incoming" else to_addr or from_addr
     counterparty = counterparty or "(unknown)"
 
@@ -890,9 +1257,7 @@ def _build_entry(
     else:
         # Plain text → escape and wrap. Cheap path that avoids importing
         # markdown or html sanitisers for now.
-        escaped = (
-            body.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
-        )
+        escaped = body.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
         notes_html = f"<pre style='white-space:pre-wrap;font-family:inherit;'>{escaped}</pre>"
 
     raw_msg_id = (msg.get("Message-ID") or "").strip() or None
@@ -927,14 +1292,15 @@ _DEFAULT_SUBJECT_CLEAN = re.compile(r"^\s*(re|fw|fwd|رد|توجيه)\s*:", re.I
 
 def list_enabled_accounts(db: Session) -> list[EmailAccount]:
     """Every account with ``enabled=True`` — the scheduler iterates these."""
-    return list(
-        db.execute(
-            select(EmailAccount).where(EmailAccount.enabled.is_(True))
-        ).scalars()
-    )
+    return list(db.execute(select(EmailAccount).where(EmailAccount.enabled.is_(True))).scalars())
 
 
-def sync_now(db: Session, owner_user_id: int | None = None) -> EmailSyncResult:
+def sync_now(
+    db: Session,
+    owner_user_id: int | None = None,
+    *,
+    connector: Connector | None = None,
+) -> EmailSyncResult:
     """Run a sync for the caller's account, refusing to overlap an in-flight one.
 
     Non-blocking: if another sync (manual or scheduled) holds ``_SYNC_LOCK``
@@ -948,7 +1314,8 @@ def sync_now(db: Session, owner_user_id: int | None = None) -> EmailSyncResult:
             raise ValueError("no email account configured")
         if not account.enabled:
             raise ValueError("email account is disabled")
-        return _sync_account_locked(db, account)
+        connect = connect_imap if connector is None else connector
+        return _sync_account_locked(db, account, connector=connect)
     finally:
         _SYNC_LOCK.release()
 
@@ -973,7 +1340,11 @@ def get_sync_status(db: Session, owner_user_id: int | None = None) -> EmailSyncS
     )
 
 
-def sync_all_accounts(db: Session) -> list[EmailSyncResult]:
+def sync_all_accounts(
+    db: Session,
+    *,
+    connector: Connector | None = None,
+) -> list[EmailSyncResult]:
     """Sync every enabled account in turn (used by the scheduler).
 
     Each account is synced under its own owner so the resulting entries carry
@@ -984,10 +1355,11 @@ def sync_all_accounts(db: Session) -> list[EmailSyncResult]:
     if not _SYNC_LOCK.acquire(blocking=False):
         raise SyncInProgressError("a sync is already running")
     try:
+        connect = connect_imap if connector is None else connector
         results: list[EmailSyncResult] = []
         for account in list_enabled_accounts(db):
             try:
-                results.append(_sync_account_locked(db, account))
+                results.append(_sync_account_locked(db, account, connector=connect))
             except Exception:
                 log.exception("scheduler: sync failed for account id=%s", account.id)
         return results
@@ -995,7 +1367,12 @@ def sync_all_accounts(db: Session) -> list[EmailSyncResult]:
         _SYNC_LOCK.release()
 
 
-def _sync_account_locked(db: Session, account: EmailAccount) -> EmailSyncResult:
+def _sync_account_locked(
+    db: Session,
+    account: EmailAccount,
+    *,
+    connector: Connector,
+) -> EmailSyncResult:
     """Sync a single (already-resolved) account. Caller holds ``_SYNC_LOCK``."""
     now = datetime.now(UTC).replace(tzinfo=None)
     since = account.last_synced_at or (now - timedelta(days=INITIAL_LOOKBACK_DAYS))
@@ -1006,7 +1383,7 @@ def _sync_account_locked(db: Session, account: EmailAccount) -> EmailSyncResult:
     existing_msgids = _existing_msgids(db)
 
     try:
-        conn = _connect(account)
+        conn = connector(account)
     except Exception as e:
         account.last_sync_error = f"connect: {e!s}"
         db.commit()
@@ -1045,7 +1422,7 @@ def _sync_account_locked(db: Session, account: EmailAccount) -> EmailSyncResult:
                 # the backlog so a busy mailbox is discoverable. Re-run "Sync now".
                 errors.append(f"{folder}: fetch limit hit ({pending} pending)")
 
-            for _uid, msg in msgs:
+            for _sequence_id, msg in msgs:
                 msg_id = msg.get("Message-ID", "")
                 if not msg_id:
                     # Fabricate a deterministic ID from date+subject+sender so
@@ -1082,9 +1459,7 @@ def _sync_account_locked(db: Session, account: EmailAccount) -> EmailSyncResult:
                     # Back-fill empty recipient/message-id columns on historical
                     # rows so a single re-sync repopulates them (idempotent).
                     existing_row = db.get(LedgerEntry, entry_id)
-                    if existing_row is not None and _apply_recipient_backfill(
-                        existing_row, msg
-                    ):
+                    if existing_row is not None and _apply_recipient_backfill(existing_row, msg):
                         db.commit()
                     skipped += 1
                     continue
@@ -1114,21 +1489,32 @@ def _sync_account_locked(db: Session, account: EmailAccount) -> EmailSyncResult:
                     if cid_map:
                         entry.inline_images = cid_map
 
-                    # Commit per-row so the write transaction is tiny and
-                    # concurrent HTTP requests (link employee, save settings,
-                    # add ledger entry) don't see SQLite "database is locked".
+                    # Commit the imported row before reconciliation so a
+                    # correlation failure cannot roll back or duplicate real
+                    # Sent-folder mail.
                     db.commit()
-
                     existing_msgids[tag] = (entry.id, len(saved_paths))
                     imported += 1
+
+                    if direction != "incoming":
+                        reconcile_sent_entry(
+                            db,
+                            entry=entry,
+                            msg=msg,
+                            account=account,
+                        )
                 except Exception as e:
                     errors.append(f"parse {msg_id}: {e!s}")
                     db.rollback()
     finally:
-        try:
+        with suppress(Exception):
             conn.logout()
-        except Exception:
-            pass
+
+    try:
+        flag_stale_handoffs(db, account=account)
+    except Exception as e:
+        errors.append(f"stale Outlook handoffs: {e!s}")
+        db.rollback()
 
     # Cheap backfill: any previously-imported email entry whose counterparty
     # is clearly on the operator's domain is almost certainly internal — flip

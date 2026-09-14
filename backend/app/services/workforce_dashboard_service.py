@@ -33,10 +33,7 @@ from app.db.workforce_models import (
     WorkShiftDefinition,
     WorkShiftOccurrence,
 )
-from app.services.workforce_admin_service import (
-    active_attendance_adjustments,
-    overlay_attendance_adjustment,
-)
+from app.services import attendance_correction_service
 from app.services.workforce_scope_service import normalize_scope_value, scope_allows
 from app.services.workforce_seed_service import OFFICE_CREW_CODE
 
@@ -101,21 +98,6 @@ def _is_active_employee(status: str | None) -> bool:
     return (status or "").strip().casefold() == _ACTIVE_EMPLOYEE_STATUS
 
 
-def _leave_kind(leave: Leave) -> str | None:
-    """Classify lifecycle-live records without treating any leave as presence."""
-    group = leave_lifecycle.classify_group(leave.leave_type)
-    status = leave_lifecycle.canonical_status(leave.status)
-    if group == "national_service":
-        return "national_service" if status in {"Pending", "Completed"} else None
-    if group == "sick":
-        return "sick" if status == "Approved" else None
-    if group == "request":
-        return "annual" if status == "Approved" else None
-    # Record kinds are intentionally excluded here.  Their work-excusing status
-    # comes from the typed configuration evaluated by the attendance domain.
-    return None
-
-
 def _live_leaves(db: Session, *, operational_date: date) -> dict[str, str]:
     """Return one stable lifecycle category per employee on the local date."""
     priority = {"national_service": 3, "sick": 2, "annual": 1, "other": 0}
@@ -128,7 +110,11 @@ def _live_leaves(db: Session, *, operational_date: date) -> dict[str, str]:
         )
     )
     for row in rows:
-        kind = _leave_kind(row)
+        kind = leave_lifecycle.live_kind(
+            row.leave_type,
+            row.status,
+            deleted=row.deleted_at is not None,
+        )
         if kind is None:
             continue
         previous = result.get(row.employee_id)
@@ -272,7 +258,9 @@ def _case_metrics(
     adjustments = (
         adjustments
         if adjustments is not None
-        else active_attendance_adjustments(db, (case.id for case in cases))
+        else attendance_correction_service.active_corrections(
+            db, (case.id for case in cases)
+        )
     )
     queued = _queued_case_ids(db, cases)
     scheduled = len(cases)
@@ -286,7 +274,7 @@ def _case_metrics(
         working: int | None = None
     else:
         working = sum(
-            overlay_attendance_adjustment(
+            attendance_correction_service.overlay(
                 {"presence_state": latest[case.id].presence_state},
                 adjustments.get(case.id),
             )["presence_state"] in {"on_duty", "completed"}
@@ -360,9 +348,11 @@ def _self_block(db: Session, *, employee_id: str, as_of_naive: datetime, operati
             "scheduled_end_at": None,
         }
     latest = _latest_evaluations(db, [case.id]).get(case.id)
-    adjustment = active_attendance_adjustments(db, [case.id]).get(case.id)
+    adjustment = attendance_correction_service.active_corrections(db, [case.id]).get(
+        case.id
+    )
     effective = (
-        overlay_attendance_adjustment(
+        attendance_correction_service.overlay(
             {"presence_state": latest.presence_state, "reason_code": latest.reason_code},
             adjustment,
         )
@@ -761,6 +751,8 @@ def get_coverage_children(
     ]
     # Each branch selects a different hierarchy depth, so the grouping key is
     # a variable-length tuple of snapshot column names.
+    child_kind: str
+    fields: tuple[str, ...]
     if parent_kind == "organization":
         child_kind, fields = "department", ("department_snapshot",)
     elif parent_kind == "department":
@@ -779,7 +771,9 @@ def get_coverage_children(
     live = _live_leaves(db, operational_date=operational_date)
     health = _stream_health(db, now=datetime.now(UTC))
     latest = _latest_evaluations(db, (case.id for case in cases))
-    adjustments = active_attendance_adjustments(db, (case.id for case in cases))
+    adjustments = attendance_correction_service.active_corrections(
+        db, (case.id for case in cases)
+    )
     buckets: dict[tuple[str | None, ...], list[AttendanceCase]] = defaultdict(list)
     for case in cases:
         buckets[tuple(normalize_scope_value(getattr(case, field)) for field in fields)].append(case)
@@ -822,7 +816,9 @@ def get_workforce_analytics(
     ]
     live = _live_leaves(db, operational_date=operational_date)
     latest = _latest_evaluations(db, (case.id for case in cases))
-    adjustments = active_attendance_adjustments(db, (case.id for case in cases))
+    adjustments = attendance_correction_service.active_corrections(
+        db, (case.id for case in cases)
+    )
     by_department: dict[str | None, list[AttendanceCase]] = defaultdict(list)
     by_shift: dict[str, list[AttendanceCase]] = defaultdict(list)
     for case in cases:

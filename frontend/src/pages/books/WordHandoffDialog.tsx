@@ -17,13 +17,14 @@
  * page view.
  */
 
-import { lazy, Suspense, useState } from 'react'
+import { lazy, Suspense, useContext, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { api, apiErrorMessage } from '@/lib/api'
+import { AppLockContext } from '@/lib/appLockContext'
 import { bidi } from '@/lib/bidi'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { cn } from '@/lib/utils'
@@ -54,12 +55,14 @@ export function WordHandoffDialog({ session, open, onClose }: Props): React.JSX.
   const isAr = i18n.language.startsWith('ar')
   const { has } = useCapabilities()
   const qc = useQueryClient()
+  const locked = useContext(AppLockContext)
   const [discardOpen, setDiscardOpen] = useState(false)
   // Set once Finish succeeds — flips the dialog to the rendered-PDF view so
   // the operator sees the final book the same way the rich-editor flow shows
   // its generated preview.
   const [finishedBook, setFinishedBook] = useState<BookRead | null>(null)
   const [saveTplOpen, setSaveTplOpen] = useState(false)
+  const [presentedSessionToken, setPresentedSessionToken] = useState<string | null>(null)
   const [tplName, setTplName] = useState('')
   const handleClose = () => {
     setFinishedBook(null)
@@ -78,6 +81,9 @@ export function WordHandoffDialog({ session, open, onClose }: Props): React.JSX.
     setFinishedBook(null)
     setSaveTplOpen(false)
     setTplName('')
+    setPresentedSessionToken(null)
+  } else if ((!open || !session) && presentedSessionToken !== null) {
+    setPresentedSessionToken(null)
   }
 
   // Poll the book while dialog is open to detect the first Word save.
@@ -130,7 +136,17 @@ export function WordHandoffDialog({ session, open, onClose }: Props): React.JSX.
     },
   })
 
-  if (!session) return null
+  const shouldPresent =
+    open &&
+    session != null &&
+    (!locked || presentedSessionToken === session.token)
+  if (!session || !shouldPresent) return null
+
+  const markSessionPresented = (): void => {
+    if (presentedSessionToken !== session.token) {
+      setPresentedSessionToken(session.token)
+    }
+  }
 
   // ------------------------------------------------------------------
   // Finished view — the saved version's PDF, rendered with the same
@@ -153,8 +169,11 @@ export function WordHandoffDialog({ session, open, onClose }: Props): React.JSX.
     const docxUrl = latest?.docx_url ?? undefined
     return (
       <>
-          <DialogRoot open={open} onOpenChange={(v) => { if (!v) handleClose() }}>
-          <DialogContent className="max-w-3xl p-0 overflow-hidden">
+          <DialogRoot key={session.token} open={open} onOpenChange={(v) => { if (!v) handleClose() }}>
+          <DialogContent
+            className="max-w-3xl p-0 overflow-hidden"
+            onOpenAutoFocus={markSessionPresented}
+          >
             <div className="h-2 bg-[#0d2845]" aria-hidden />
             <div className="flex max-h-[85vh] flex-col px-6 pb-6 pt-4">
               <DialogHeader className="mb-3">
@@ -264,9 +283,10 @@ export function WordHandoffDialog({ session, open, onClose }: Props): React.JSX.
 
   return (
     <>
-      <DialogRoot open={open} onOpenChange={(v) => { if (!v) handleClose() }}>
+      <DialogRoot key={session.token} open={open} onOpenChange={(v) => { if (!v) handleClose() }}>
         <DialogContent
           className={cn('p-0 overflow-hidden', hasSave ? 'max-w-3xl' : 'max-w-lg')}
+          onOpenAutoFocus={markSessionPresented}
           // Prevent accidental close while the Word session is live.
           onInteractOutside={(e) => e.preventDefault()}
         >

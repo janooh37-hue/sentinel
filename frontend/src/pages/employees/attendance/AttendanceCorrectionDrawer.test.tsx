@@ -93,12 +93,19 @@ const CASE = {
 function renderDrawer(caseId: number | null = 42) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   const onClose = vi.fn()
-  render(
+  const view = render(
     <QueryClientProvider client={client}>
       <AttendanceCorrectionDrawer caseId={caseId} onClose={onClose} />
     </QueryClientProvider>,
   )
-  return { client, onClose }
+  const rerenderCase = (nextCaseId: number | null): void => {
+    view.rerender(
+      <QueryClientProvider client={client}>
+        <AttendanceCorrectionDrawer caseId={nextCaseId} onClose={onClose} />
+      </QueryClientProvider>,
+    )
+  }
+  return { client, onClose, rerenderCase }
 }
 
 beforeEach(() => {
@@ -181,9 +188,9 @@ describe('AttendanceCorrectionDrawer', () => {
 
     await waitFor(() => expect(createAttendanceAdjustment).toHaveBeenCalledWith(42, 'case-v1', {
       replacement_presence_state: 'absent',
-      replacement_first_in_at: '2026-08-19T01:00:00',
-      replacement_latest_in_at: '2026-08-19T01:05:00',
-      replacement_final_out_at: '2026-08-19T09:00:00',
+      replacement_first_in_at: '2026-08-19T01:00:00Z',
+      replacement_latest_in_at: '2026-08-19T01:05:00Z',
+      replacement_final_out_at: '2026-08-19T09:00:00Z',
       replacement_late_minutes: 5,
       replacement_early_exit_minutes: 2,
       replacement_missing_checkout: false,
@@ -253,6 +260,7 @@ describe('AttendanceCorrectionDrawer', () => {
     getAttendanceCase
       .mockResolvedValueOnce({ data: CASE, etag: 'case-v1' })
       .mockResolvedValue({ data: { ...CASE, effective: { ...CASE.effective, late_minutes: 9 } }, etag: 'case-v2' })
+    createAttendanceAdjustment.mockResolvedValue({ data: { id: 5, case_id: 42 }, etag: 'case-v3' })
     const { client } = renderDrawer()
 
     await screen.findByText('Correction')
@@ -262,7 +270,7 @@ describe('AttendanceCorrectionDrawer', () => {
     await client.invalidateQueries({ queryKey: ['attendance-case', 42] })
 
     await waitFor(() => expect(getAttendanceCase).toHaveBeenCalledTimes(2))
-    await waitFor(() => expect(screen.getByLabelText('Correction presence')).toHaveValue('completed'))
+    expect(screen.getByLabelText('Correction presence')).toHaveValue('completed')
     expect(screen.getByLabelText('Correction reason')).toHaveValue('')
     expect(screen.getByLabelText('Late minutes')).toHaveValue(9)
 
@@ -270,6 +278,53 @@ describe('AttendanceCorrectionDrawer', () => {
     expect(save).toBeDisabled()
     await user.click(save)
     expect(createAttendanceAdjustment).not.toHaveBeenCalled()
+
+    await user.selectOptions(screen.getByLabelText('Correction presence'), 'off')
+    await user.type(screen.getByLabelText('Correction reason'), 'Reviewed refreshed evidence')
+    await user.click(save)
+
+    await waitFor(() => expect(createAttendanceAdjustment).toHaveBeenCalledWith(
+      42,
+      'case-v2',
+      expect.objectContaining({
+        replacement_presence_state: 'off',
+        replacement_late_minutes: 9,
+        reason: 'Reviewed refreshed evidence',
+      }),
+    ))
+  })
+
+  it('resets the correction draft when the selected case changes', async () => {
+    const user = userEvent.setup()
+    hasCapability.mockReturnValue(true)
+    getAttendanceCase.mockImplementation(async (caseId: number) => (
+      caseId === 42
+        ? { data: CASE, etag: 'case-v1' }
+        : {
+            data: {
+              ...CASE,
+              id: 43,
+              employee_id: 'G-9002',
+              effective: { ...CASE.effective, presence_state: 'scheduled', late_minutes: 0 },
+            },
+            etag: 'case-43-v1',
+          }
+    ))
+    const { rerenderCase } = renderDrawer()
+
+    await screen.findByText('Correction')
+    await user.selectOptions(screen.getByLabelText('Correction presence'), 'absent')
+    await user.type(screen.getByLabelText('Correction reason'), 'Case 42 draft')
+    await user.type(screen.getByLabelText('Revoke reason'), 'Case 42 revoke')
+
+    rerenderCase(43)
+
+    await waitFor(() => expect(getAttendanceCase).toHaveBeenCalledWith(43))
+    await waitFor(() =>
+      expect(screen.getByLabelText('Correction presence')).toHaveValue('scheduled'),
+    )
+    expect(screen.getByLabelText('Correction reason')).toHaveValue('')
+    expect(screen.getByLabelText('Revoke reason')).toHaveValue('')
   })
 
   it('restores the conflicted draft on refreshed evidence without retrying', async () => {

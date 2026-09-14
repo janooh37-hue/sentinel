@@ -20,6 +20,7 @@ from app.core.constants import ARABIC_MONTHS
 from app.db import session as session_mod
 from app.db.models import (
     Absence,
+    AuditLog,
     Base,
     Employee,
     Leave,
@@ -177,7 +178,7 @@ def test_the_grid_response_loses_no_field(client, db_session):
 
     grid_fields = {f.name for f in fields(svc.MonthGrid)}
     row_fields = {f.name for f in fields(svc.GridRow)}
-    assert len(grid_fields) == 11 and len(row_fields) == 16
+    assert len(grid_fields) == 11 and len(row_fields) == 17
     assert set(body) == grid_fields
     row = body["rows"][0]
     assert set(row) == row_fields
@@ -266,10 +267,17 @@ def test_put_cell_marks_absence(client, db_session):
 
 def test_a_cell_edit_records_who_made_it(client, db_session):
     _guard(db_session)
-    client.put(
-        "/api/v1/timesheet/2026/7/cell", json={"employee_id": "G1001", "day": 9, "code": "AB"}
+    response = client.put(
+        "/api/v1/timesheet/2026/7/cell",
+        json={"employee_id": "G1001", "day": 14, "code": "AB"},
     )
+    assert response.status_code == 200
+    body = response.json()
+    row = next(row for row in body["rows"] if row["employee_id"] == "G1001")
+    assert row["edits"]["14"]["by"] == "mgr@x.ae"
     assert db_session.query(Absence).one().created_by == client.user_id
+    audit = db_session.query(AuditLog).filter_by(action="timesheet.cell_set").one()
+    assert audit.actor == "mgr@x.ae"
 
 
 def test_a_bad_cell_code_answers_with_the_service_error(client, db_session):
@@ -995,8 +1003,44 @@ def test_regenerating_the_same_certificate_supersedes_it_again(client, db_sessio
     assert db_session.query(Absence).count() == 0
 
 
+def test_generating_a_leave_permit_clears_the_absence(client, db_session, generation_env):
+    _guard(db_session)
+    client.put(
+        "/api/v1/timesheet/2026/7/cell", json={"employee_id": "G1001", "day": 9, "code": "AB"}
+    )
+    generation_env.generate_document(
+        db_session,
+        employee_id="G1001",
+        template_id="Leave Permit Form",
+        fields={"date": "2026-07-09"},
+        commit=True,
+    )
+    assert db_session.query(Absence).count() == 0
+
+
+def test_generating_an_administrative_leave_clears_the_absence(client, db_session, generation_env):
+    _guard(db_session)
+    for day in (9, 10):
+        client.put(
+            "/api/v1/timesheet/2026/7/cell",
+            json={"employee_id": "G1001", "day": day, "code": "AB"},
+        )
+    generation_env.generate_document(
+        db_session,
+        employee_id="G1001",
+        template_id="Administrative Leave Form",
+        fields={
+            "start_date": "2026-07-09",
+            "end_date": "2026-07-10",
+            "duration": 2,
+        },
+        commit=True,
+    )
+    assert db_session.query(Absence).count() == 0
+
+
 def test_a_leave_that_is_no_day_code_leaves_the_absence_alone(client, db_session, generation_env):
-    """The gate is ``leave_code``, so a Passport Release supersedes nothing."""
+    """The gate is supersedes_absence, so a Passport Release supersedes nothing."""
 
     _guard(db_session)
     client.put(

@@ -72,6 +72,8 @@ const KEYS = [
   // reasons a cell can carry.
   'timesheet.asPrinted',
   'timesheet.cellLabel',
+  'timesheet.editedBy',
+  'timesheet.editedByUnknown',
   'timesheet.note',
   'timesheet.colRow',
   'timesheet.colDay',
@@ -242,7 +244,7 @@ const KEYS = [
   // `Issue.kind` is the stable machine string; the panel owns the words, so
   // every kind `timesheet_service` can emit needs a pair here. Blocking:
   // no_designation, no_nationality. Warning: unknown_leave, overlapping_leave,
-  // departed_but_active, no_doj, duplicate_name.
+  // departed_but_active, no_doj, duplicate_name, amended_leave, deleted_leave.
   'timesheet.issues.no_designation',
   'timesheet.issues.no_nationality',
   'timesheet.issues.unknown_leave',
@@ -250,6 +252,8 @@ const KEYS = [
   'timesheet.issues.departed_but_active',
   'timesheet.issues.no_doj',
   'timesheet.issues.duplicate_name',
+  'timesheet.issues.amended_leave',
+  'timesheet.issues.deleted_leave',
   'timesheet.employee.sheet',
   'timesheet.employee.hint',
   'timesheet.employee.placeholder',
@@ -303,8 +307,6 @@ const KEYS = [
   'timesheet.openRecord',
   'timesheet.openLookup',
   'access.permissions.domains.timesheet',
-  'access.permissions.caps.timesheet.view',
-  'access.permissions.caps.timesheet.edit',
 ]
 
 describe('timesheet i18n parity', () => {

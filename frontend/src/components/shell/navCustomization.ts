@@ -70,7 +70,6 @@ export const SIGNAL_ENTRIES: readonly DockEntry[] = [
 export const DEFAULT_SLOT_IDS: readonly string[] = [
   'sec:/',
   'sec:/employees',
-  'sec:/ledger',
   'sec:/application',
   'sec:/books',
 ]
@@ -98,9 +97,10 @@ export function isNavEntryAllowed(
 }
 
 function normalizeSlotIds(ids: readonly unknown[]): string[] {
-  if (ids.length !== DEFAULT_SLOT_IDS.length) return [...DEFAULT_SLOT_IDS]
+  if (ids.length < DEFAULT_SLOT_IDS.length) return [...DEFAULT_SLOT_IDS]
+  const trimmed = ids.slice(0, DEFAULT_SLOT_IDS.length)
 
-  const normalized = ids.map((id, index) =>
+  const normalized = trimmed.map((id, index) =>
     typeof id === 'string' && entryById(id) ? id : DEFAULT_SLOT_IDS[index],
   )
 

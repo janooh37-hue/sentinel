@@ -1,7 +1,8 @@
 """Deterministic allocation of immutable attendance punches to current cases."""
+
 from __future__ import annotations
 
-from datetime import UTC, date, datetime, timedelta
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -11,10 +12,9 @@ from app.db.workforce_models import (
     AttendanceProviderPerson,
     AttendancePunch,
     AttendancePunchAssignment,
-    WorkAttendancePolicy,
-    WorkShiftOccurrence,
     WorkShiftOverride,
 )
+from app.services.attendance_policy import policy_for_case
 
 ALLOCATION_ALGORITHM_VERSION = "attendance-punch-allocation-v1"
 
@@ -31,49 +31,6 @@ def _naive_utc(value: datetime) -> datetime:
     return _aware_utc(value).replace(tzinfo=None)
 
 
-def _effective_policy(
-    db: Session, *, operational_date: date, shift_definition_id: int | None = None
-) -> WorkAttendancePolicy | None:
-    """Return the approved policy applicable to one materialized case date."""
-
-    policies = db.scalars(
-        select(WorkAttendancePolicy).where(
-            WorkAttendancePolicy.approved_at.is_not(None),
-            WorkAttendancePolicy.approved_by_user_id.is_not(None),
-            WorkAttendancePolicy.effective_from <= operational_date,
-            (WorkAttendancePolicy.effective_to.is_(None))
-            | (WorkAttendancePolicy.effective_to > operational_date),
-        )
-    ).all()
-    applicable = [
-        policy
-        for policy in policies
-        if policy.shift_definition_id is None or policy.shift_definition_id == shift_definition_id
-    ]
-    if not applicable:
-        return None
-    # A shift-specific approved policy takes precedence; newest effective policy wins within it.
-    applicable.sort(
-        key=lambda policy: (
-            policy.shift_definition_id is not None,
-            policy.effective_from,
-            policy.id,
-        ),
-        reverse=True,
-    )
-    return applicable[0]
-
-
-def _case_shift_definition_id(
-    *,
-    occurrence_shift_definition_id: int | None,
-    override_shift_definition_id: int | None,
-) -> int | None:
-    """Return the source shift definition captured by an occurrence or exact override."""
-
-    return occurrence_shift_definition_id or override_shift_definition_id
-
-
 def _eligible_case_candidates(
     db: Session, *, punch: AttendancePunch, employee_id: str
 ) -> list[AttendanceCase]:
@@ -83,12 +40,7 @@ def _eligible_case_candidates(
     case_sources = db.execute(
         select(
             AttendanceCase,
-            WorkShiftOccurrence.shift_definition_id,
             WorkShiftOverride.shift_definition_id,
-        )
-        .outerjoin(
-            WorkShiftOccurrence,
-            AttendanceCase.shift_occurrence_id == WorkShiftOccurrence.id,
         )
         .outerjoin(
             WorkShiftOverride,
@@ -97,21 +49,20 @@ def _eligible_case_candidates(
         .where(AttendanceCase.employee_id == employee_id)
     ).all()
     candidates: list[AttendanceCase] = []
-    for case, occurrence_shift_definition_id, override_shift_definition_id in case_sources:
-        policy = _effective_policy(
+    for case, override_shift_definition_id in case_sources:
+        policy = policy_for_case(
             db,
-            operational_date=case.operational_date,
-            shift_definition_id=_case_shift_definition_id(
-                occurrence_shift_definition_id=occurrence_shift_definition_id,
-                override_shift_definition_id=override_shift_definition_id,
-            ),
+            case,
+            override_shift_definition_id=override_shift_definition_id,
         )
         if policy is None:
             continue
         starts_at = _aware_utc(case.scheduled_start_at)
         ends_at = _aware_utc(case.scheduled_end_at)
-        if starts_at - timedelta(minutes=policy.match_before_minutes) <= occurred_at <= (
-            ends_at + timedelta(minutes=policy.match_after_minutes)
+        if (
+            starts_at - timedelta(minutes=policy.match_before_minutes)
+            <= occurred_at
+            <= (ends_at + timedelta(minutes=policy.match_after_minutes))
         ):
             candidates.append(case)
     return candidates

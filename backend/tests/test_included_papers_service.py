@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib
 import json
+import shutil
 import threading
 import uuid
 from pathlib import Path
@@ -212,7 +213,13 @@ def test_existing_generated_package_reconstructs_form_and_companion_before_paper
         )
     )
     db_session.commit()
-    monkeypatch.setattr(document_service, "convert_docx_to_pdf", lambda _path: form)
+
+    def reconstruct(path: Path) -> Path:
+        output = path.with_suffix(".pdf")
+        shutil.copyfile(form, output)
+        return output
+
+    monkeypatch.setattr(document_service, "convert_docx_to_pdf", reconstruct)
     service = _service()
 
     package = service.get_package(db_session, book.id, user_id=creator.id)

@@ -9,6 +9,7 @@ statistics keep-sets, the filler lookback, the notes column, the seal) and the
 two controller rulings.
 """
 
+import json
 from datetime import date, datetime
 
 import pytest
@@ -25,6 +26,7 @@ from app.core.timesheet_codes import (
 )
 from app.db.models import (
     Absence,
+    AuditLog,
     Employee,
     Leave,
     TimesheetDesignation,
@@ -36,7 +38,7 @@ from app.db.models import (
     TimesheetStatFiller,
 )
 from app.schemas.timesheet import TimesheetRosterAssignmentWrite
-from app.services import absence_service
+from app.services import absence_service, leave_service
 from app.services import timesheet_service as svc
 from tests.conftest import make_user
 
@@ -86,6 +88,25 @@ def _row(db, year, month, employee_id, *, sheet="main"):
     """The one grid row for ``employee_id``; KeyError-loud if he is not on it."""
     grid = svc.build_month(db, year, month, sheet=sheet)
     return next(r for r in grid.rows if r.employee_id == employee_id)
+
+
+def test_grid_reports_persisted_edits_with_the_editor(db_session, guards):
+    user = make_user(db_session, email="editor@x.ae")
+
+    svc.set_cell(db_session, 2026, 7, "G1001", 14, "AB", user_id=user.id)
+    absence = db_session.query(Absence).filter_by(employee_id="G1001").one()
+    expected_absence = svc.CellEdit("AB", user.display_name or user.email, absence.created_at)
+    assert _row(db_session, 2026, 7, "G1001").edits[14] == expected_absence
+
+    svc.set_cell(db_session, 2026, 7, "G1001", 15, "X", user_id=user.id)
+    override = db_session.query(TimesheetOverride).filter_by(day=15).one()
+    expected_override = svc.CellEdit("X", user.display_name or user.email, override.created_at)
+    assert _row(db_session, 2026, 7, "G1001").edits[15] == expected_override
+
+    svc.close_month(db_session, 2026, 7)
+    sealed = _row(db_session, 2026, 7, "G1001")
+    assert sealed.edits[14] == expected_absence
+    assert sealed.edits[15] == expected_override
 
 
 def test_effective_roster_assignment_wins_by_month_and_explicit_null_unassigns(db_session, guards):
@@ -657,6 +678,48 @@ def test_a_non_absence_code_writes_an_override_and_none_clears_it(db_session, gu
     assert _row(db_session, 2026, 7, "G1001").codes[9] == CODE_PRESENT
 
 
+def test_set_cell_writes_an_audit_row(db_session, guards):
+    user = make_user(db_session, email="editor@x.ae")
+
+    svc.set_cell(
+        db_session,
+        2026,
+        7,
+        "G1001",
+        14,
+        "AB",
+        note="no show",
+        user_id=user.id,
+        actor=user.email,
+    )
+
+    rows = db_session.query(AuditLog).all()
+    assert len(rows) == 1
+    assert rows[0].actor == user.email
+    assert rows[0].entity_type == "timesheet_cell"
+    assert rows[0].entity_id == "G1001:2026-07-14"
+    payload = json.loads(rows[0].payload)
+    assert payload == {"from": "P", "to": "AB", "code": "AB", "note": "no show"}
+
+    svc.set_cell(
+        db_session,
+        2026,
+        7,
+        "G1001",
+        14,
+        None,
+        user_id=user.id,
+        actor=user.email,
+    )
+
+    rows = db_session.query(AuditLog).order_by(AuditLog.id).all()
+    assert len(rows) == 2
+    cleared = json.loads(rows[1].payload)
+    assert cleared["from"] == "AB"
+    assert cleared["to"] == "P"
+    assert cleared["code"] is None
+
+
 def test_switching_a_cell_never_leaves_two_records_fighting(db_session, guards):
     """The cell must show what was last set, so setting one form clears the other."""
     svc.set_cell(db_session, 2026, 7, "G1001", 10, "X")
@@ -857,6 +920,64 @@ def test_a_missing_doj_and_overlapping_leave_are_warnings(db_session, guards):
     assert ("G1002", "overlapping_leave") in kinds
     assert sum(1 for i in grid.warnings if i.kind == "overlapping_leave") == 1
     assert grid.blocking == []
+
+
+def test_amended_and_deleted_leaves_are_warnings(db_session, guards):
+    amended = Leave(
+        employee_id="G1001",
+        leave_type="Annual Leave",
+        start_date=date(2026, 7, 15),
+        end_date=date(2026, 7, 20),
+        days=6,
+        status="Approved",
+    )
+    deleted = Leave(
+        employee_id="G1001",
+        leave_type="Annual Leave",
+        start_date=date(2026, 7, 1),
+        end_date=date(2026, 7, 3),
+        days=3,
+        status="Approved",
+    )
+    covered = Leave(
+        employee_id="G1001",
+        leave_type="Annual Leave",
+        start_date=date(2026, 7, 5),
+        end_date=date(2026, 7, 7),
+        days=3,
+        status="Approved",
+    )
+    replacement = Leave(
+        employee_id="G1001",
+        leave_type="Annual Leave",
+        start_date=date(2026, 7, 5),
+        end_date=date(2026, 7, 9),
+        days=5,
+        status="Approved",
+    )
+    db_session.add_all((amended, deleted, covered, replacement))
+    db_session.commit()
+
+    leave_service.amend_approved_leave(
+        db_session,
+        amended.id,
+        end_date=date(2026, 7, 18),
+        reason="x",
+        actor="mgr@x.ae",
+    )
+    leave_service.soft_delete_leave(db_session, deleted.id, actor="mgr@x.ae")
+    leave_service.soft_delete_leave(db_session, covered.id, actor="mgr@x.ae")
+
+    warnings = svc.build_month(db_session, 2026, 7).warnings
+    kinds = {(warning.employee_id, warning.kind) for warning in warnings}
+    assert ("G1001", "amended_leave") in kinds
+    assert ("G1001", "deleted_leave") in kinds
+    amended_detail = next(w.detail for w in warnings if w.kind == "amended_leave")
+    assert "end 2026-07-20 → 2026-07-18" in amended_detail
+    assert "G1001: Annual Leave from 2026-07-15 was amended by mgr@x.ae" in amended_detail
+    deleted_details = [w.detail for w in warnings if w.kind == "deleted_leave"]
+    assert any("2026-07-01 → 2026-07-03" in detail for detail in deleted_details)
+    assert not any("2026-07-05 → 2026-07-07" in detail for detail in deleted_details)
 
 
 def test_a_void_or_deleted_leave_never_reaches_the_sheet(db_session, guards):
@@ -1067,7 +1188,7 @@ def test_build_month_does_not_query_once_per_row(db_session, guards, count_queri
     assert len(grid.rows) == 33
     assert grid.rows[-1].stat_filler == CODE_SICK  # the batched lookback really ran
     assert large.count == small.count
-    assert large.count <= 12
+    assert large.count <= 13
 
 
 # --- fix round 1: the three writers agree, and the seal's two halves ---------

@@ -36,7 +36,6 @@ describe('navigation slot storage', () => {
       DEFAULT_SLOT_IDS[0],
       DEFAULT_SLOT_IDS[2],
       DEFAULT_SLOT_IDS[3],
-      DEFAULT_SLOT_IDS[4],
     ])
   })
 
@@ -56,6 +55,18 @@ describe('navigation slot storage', () => {
 
     expect(JSON.parse(localStorage.getItem(NAV_SLOTS_STORAGE_KEY) ?? '')).toEqual({ v: 1, ids: custom })
     expect(loadSlotIds()).toEqual(custom)
+  })
+
+  it('keeps the first four slots of a legacy five-slot layout', () => {
+    localStorage.setItem(
+      NAV_SLOTS_STORAGE_KEY,
+      JSON.stringify({
+        v: 1,
+        ids: ['sec:/', 'sec:/ledger', 'sec:/employees', 'sig:approvals', 'sec:/books'],
+      }),
+    )
+
+    expect(loadSlotIds()).toEqual(['sec:/', 'sec:/ledger', 'sec:/employees', 'sig:approvals'])
   })
 })
 
@@ -80,7 +91,6 @@ describe('navigation slot placement', () => {
       DEFAULT_SLOT_IDS[1],
       DEFAULT_SLOT_IDS[2],
       DEFAULT_SLOT_IDS[0],
-      DEFAULT_SLOT_IDS[4],
     ])
     expect(ids).toEqual(DEFAULT_SLOT_IDS)
   })

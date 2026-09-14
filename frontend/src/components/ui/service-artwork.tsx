@@ -17,6 +17,12 @@ import reportArtwork from '@/assets/service-icons/report.webp'
 import resignationLetterArtwork from '@/assets/service-icons/resignation-letter.webp'
 import salaryDeductionArtwork from '@/assets/service-icons/salary-deduction.webp'
 import salaryTransferArtwork from '@/assets/service-icons/salary-transfer.webp'
+import vehicleAccidentArtwork from '@/assets/service-icons/vehicle-accident.webp'
+import vehicleFinesArtwork from '@/assets/service-icons/vehicle-fines.webp'
+import vehicleLicenceRenewalArtwork from '@/assets/service-icons/vehicle-licence-renewal.webp'
+import vehicleMaintenanceArtwork from '@/assets/service-icons/vehicle-maintenance.webp'
+import vehicleRegisterArtwork from '@/assets/service-icons/vehicle-register.webp'
+import vehicleSitesArtwork from '@/assets/service-icons/vehicle-sites.webp'
 import violationArtwork from '@/assets/service-icons/violation.webp'
 import warningArtwork from '@/assets/service-icons/warning.webp'
 
@@ -42,6 +48,12 @@ export type ServiceArtworkId =
   | 'resignation-letter'
   | 'salary-deduction'
   | 'salary-transfer'
+  | 'vehicle-accident'
+  | 'vehicle-fines'
+  | 'vehicle-licence-renewal'
+  | 'vehicle-maintenance'
+  | 'vehicle-register'
+  | 'vehicle-sites'
   | 'violation'
   | 'warning'
 
@@ -87,6 +99,12 @@ const ARTWORK_SRC: Record<ServiceArtworkId, string> = {
   'resignation-letter': resignationLetterArtwork,
   'salary-deduction': salaryDeductionArtwork,
   'salary-transfer': salaryTransferArtwork,
+  'vehicle-accident': vehicleAccidentArtwork,
+  'vehicle-fines': vehicleFinesArtwork,
+  'vehicle-licence-renewal': vehicleLicenceRenewalArtwork,
+  'vehicle-maintenance': vehicleMaintenanceArtwork,
+  'vehicle-register': vehicleRegisterArtwork,
+  'vehicle-sites': vehicleSitesArtwork,
   violation: violationArtwork,
   warning: warningArtwork,
 }

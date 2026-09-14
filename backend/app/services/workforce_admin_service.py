@@ -3,13 +3,12 @@
 Network providers are intentionally absent.  Callers open no provider connection while
 using these write functions, and own only the final commit boundary.
 """
+
 from __future__ import annotations
 
-import hashlib
 import json
-from collections.abc import Iterable, Mapping, Sequence
+from collections.abc import Iterable, Mapping
 from datetime import UTC, datetime
-from typing import Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -17,9 +16,6 @@ from sqlalchemy.orm import Session
 from app.api.errors import ConflictError, NotFoundError, ValidationFailedError
 from app.db.models import AuditLog, Employee, User
 from app.db.workforce_models import (
-    AttendanceAdjustment,
-    AttendanceCase,
-    AttendanceEvaluation,
     AttendanceProviderPerson,
     WorkAttendancePolicy,
     WorkCrew,
@@ -28,10 +24,22 @@ from app.db.workforce_models import (
     WorkShiftOccurrence,
     WorkShiftOverride,
 )
+from app.services.workforce_access_service import require_organization
+from app.services.workforce_etag import etag_for, require_if_match, row_etag
+from app.services.workforce_scope_service import WorkforceScope
+
+_ORGANIZATION_SCHEDULE_MESSAGE = (
+    "Organization workforce scope is required for crew and anchor changes."
+)
+_ORGANIZATION_WORKFORCE_MESSAGE = "Organization workforce scope is required for this change."
 
 
 def _utc_naive(value: datetime) -> datetime:
-    return value.replace(tzinfo=None) if value.tzinfo is None else value.astimezone(UTC).replace(tzinfo=None)
+    return (
+        value.replace(tzinfo=None)
+        if value.tzinfo is None
+        else value.astimezone(UTC).replace(tzinfo=None)
+    )
 
 
 def _require_int(values: Mapping[str, object], key: str) -> int:
@@ -46,42 +54,20 @@ def _require_int(values: Mapping[str, object], key: str) -> int:
     return value
 
 
-def _optional_utc_naive(values: Mapping[str, object], key: str) -> datetime | None:
-    value = values.get(key)
-    if value is None:
-        return None
-    if not isinstance(value, datetime):
-        raise ValidationFailedError("ATTENDANCE_ADJUSTMENT_INVALID", f"{key} must be a datetime.")
-    return _utc_naive(value)
-
-
-def etag_for(value: object) -> str:
-    """A quoted strong tag over canonical non-secret state."""
-    encoded = json.dumps(value, sort_keys=True, separators=(",", ":"), default=str).encode("utf-8")
-    return '"' + hashlib.sha256(encoded).hexdigest() + '"'
-
-
-def row_etag(row: object, *, extra: Mapping[str, object] | None = None) -> str:
-    return etag_for(
-        {
-            "id": getattr(row, "id", None),
-            "updated_at": getattr(row, "updated_at", None),
-            "created_at": getattr(row, "created_at", None),
-            **(dict(extra) if extra else {}),
-        }
-    )
-
-
-def require_if_match(if_match: str | None, current: str, *, code: str = "WORKFORCE_VERSION_CONFLICT") -> None:
-    if if_match is None or if_match != current:
-        raise ConflictError(code, "The workforce record was modified; refresh and retry.")
-
-
 def _actor(user: User) -> str:
     return user.employee_id or user.email
 
 
-def _audit(db: Session, *, user: User, action: str, entity_type: str, entity_id: int | str | None, before: object | None = None, after: object | None = None) -> None:
+def _audit(
+    db: Session,
+    *,
+    user: User,
+    action: str,
+    entity_type: str,
+    entity_id: int | str | None,
+    before: object | None = None,
+    after: object | None = None,
+) -> None:
     db.add(
         AuditLog(
             actor=_actor(user),
@@ -113,8 +99,32 @@ def _crew_is_referenced(db: Session, crew_id: int) -> bool:
     )
 
 
-def create_crew(db: Session, *, payload: Mapping[str, object], actor: User) -> WorkCrew:
+def crew_collection_etag(rows: Iterable[WorkCrew]) -> str:
+    """Return the canonical ID-ordered version of the global crew collection."""
+    return etag_for(
+        [
+            {
+                "id": row.id,
+                "updated_at": row.updated_at,
+                "created_at": row.created_at,
+            }
+            for row in sorted(rows, key=lambda item: item.id)
+        ]
+    )
+
+
+def create_crew(
+    db: Session,
+    *,
+    scope: WorkforceScope,
+    if_match: str | None,
+    payload: Mapping[str, object],
+    actor: User,
+) -> WorkCrew:
+    require_organization(scope, message=_ORGANIZATION_SCHEDULE_MESSAGE)
     _acquire_crew_write_lock(db)
+    current = list(db.scalars(select(WorkCrew).order_by(WorkCrew.id)))
+    require_if_match(if_match, crew_collection_etag(current))
     code = str(payload["code"]).strip()
     if db.scalar(select(WorkCrew).where(WorkCrew.code == code)) is not None:
         raise ConflictError("WORKFORCE_VERSION_CONFLICT", "Crew code already exists.")
@@ -140,11 +150,13 @@ def create_crew(db: Session, *, payload: Mapping[str, object], actor: User) -> W
 def update_crew(
     db: Session,
     *,
+    scope: WorkforceScope,
     crew_id: int,
     payload: Mapping[str, object],
     if_match: str | None,
     actor: User,
 ) -> WorkCrew:
+    require_organization(scope, message=_ORGANIZATION_SCHEDULE_MESSAGE)
     _acquire_crew_write_lock(db)
     crew = db.get(WorkCrew, crew_id)
     if crew is None:
@@ -177,7 +189,9 @@ def update_crew(
             setattr(
                 crew,
                 key,
-                str(value).strip() if key in {"code", "name_en", "name_ar"} and value is not None else value,
+                str(value).strip()
+                if key in {"code", "name_en", "name_ar"} and value is not None
+                else value,
             )
     if not crew.name_en and not crew.name_ar:
         raise ValidationFailedError(
@@ -203,10 +217,16 @@ def update_crew(
 
 
 def retire_crew(
-    db: Session, *, crew_id: int, if_match: str | None, actor: User
+    db: Session,
+    *,
+    scope: WorkforceScope,
+    crew_id: int,
+    if_match: str | None,
+    actor: User,
 ) -> WorkCrew:
     """Retire a named crew without deleting its historical identity."""
 
+    require_organization(scope, message=_ORGANIZATION_SCHEDULE_MESSAGE)
     _acquire_crew_write_lock(db)
     crew = db.get(WorkCrew, crew_id)
     if crew is None:
@@ -227,7 +247,14 @@ def retire_crew(
     return crew
 
 
-def create_attendance_policy(db: Session, *, payload: Mapping[str, object], actor: User) -> WorkAttendancePolicy:
+def create_attendance_policy(
+    db: Session,
+    *,
+    scope: WorkforceScope,
+    payload: Mapping[str, object],
+    actor: User,
+) -> WorkAttendancePolicy:
+    require_organization(scope, message=_ORGANIZATION_WORKFORCE_MESSAGE)
     values = dict(payload)
     policy = WorkAttendancePolicy(
         shift_definition_id=values.get("shift_definition_id"),
@@ -243,11 +270,27 @@ def create_attendance_policy(db: Session, *, payload: Mapping[str, object], acto
     )
     db.add(policy)
     db.flush()
-    _audit(db, user=actor, action="workforce.attendance_policy.created", entity_type="work_attendance_policy", entity_id=policy.id, after={"effective_from": policy.effective_from, "effective_to": policy.effective_to})
+    _audit(
+        db,
+        user=actor,
+        action="workforce.attendance_policy.created",
+        entity_type="work_attendance_policy",
+        entity_id=policy.id,
+        after={"effective_from": policy.effective_from, "effective_to": policy.effective_to},
+    )
     return policy
 
 
-def approve_attendance_policy(db: Session, *, policy_id: int, if_match: str | None, actor: User, now: datetime | None = None) -> WorkAttendancePolicy:
+def approve_attendance_policy(
+    db: Session,
+    *,
+    scope: WorkforceScope,
+    policy_id: int,
+    if_match: str | None,
+    actor: User,
+    now: datetime | None = None,
+) -> WorkAttendancePolicy:
+    require_organization(scope, message=_ORGANIZATION_WORKFORCE_MESSAGE)
     policy = db.get(WorkAttendancePolicy, policy_id)
     if policy is None:
         raise NotFoundError("WORKFORCE_POLICY_NOT_FOUND", "Attendance policy was not found.")
@@ -256,15 +299,39 @@ def approve_attendance_policy(db: Session, *, policy_id: int, if_match: str | No
         raise ConflictError("WORKFORCE_VERSION_CONFLICT", "Attendance policy is already approved.")
     policy.approved_by_user_id = actor.id
     policy.approved_at = _utc_naive(now or datetime.now(UTC))
-    _audit(db, user=actor, action="workforce.attendance_policy.approved", entity_type="work_attendance_policy", entity_id=policy.id, before={"approved_at": None}, after={"approved_at": policy.approved_at})
+    _audit(
+        db,
+        user=actor,
+        action="workforce.attendance_policy.approved",
+        entity_type="work_attendance_policy",
+        entity_id=policy.id,
+        before={"approved_at": None},
+        after={"approved_at": policy.approved_at},
+    )
     return policy
 
 
-def update_provider_mapping(db: Session, *, person_id: int, employee_id: str | None, mapping_state: str, if_match: str | None, actor: User, now: datetime | None = None) -> AttendanceProviderPerson:
+def update_provider_mapping(
+    db: Session,
+    *,
+    scope: WorkforceScope,
+    person_id: int,
+    employee_id: str | None,
+    mapping_state: str,
+    if_match: str | None,
+    actor: User,
+    now: datetime | None = None,
+) -> AttendanceProviderPerson:
+    require_organization(scope, message=_ORGANIZATION_WORKFORCE_MESSAGE)
     row = db.get(AttendanceProviderPerson, person_id)
     if row is None:
-        raise NotFoundError("ATTENDANCE_PROVIDER_PERSON_NOT_FOUND", "Provider person was not found.")
-    require_if_match(if_match, row_etag(row, extra={"mapping_state": row.mapping_state, "employee_id": row.employee_id}))
+        raise NotFoundError(
+            "ATTENDANCE_PROVIDER_PERSON_NOT_FOUND", "Provider person was not found."
+        )
+    require_if_match(
+        if_match,
+        row_etag(row, extra={"mapping_state": row.mapping_state, "employee_id": row.employee_id}),
+    )
     before = {"employee_id": row.employee_id, "mapping_state": row.mapping_state}
     if mapping_state == "verified":
         if not employee_id or db.get(Employee, employee_id) is None:
@@ -278,7 +345,9 @@ def update_provider_mapping(db: Session, *, person_id: int, employee_id: str | N
             )
         )
         if duplicate is not None:
-            raise ConflictError("WORKFORCE_VERSION_CONFLICT", "Employee already has a verified provider mapping.")
+            raise ConflictError(
+                "WORKFORCE_VERSION_CONFLICT", "Employee already has a verified provider mapping."
+            )
         row.employee_id = employee_id
         row.verified_by_user_id = actor.id
         row.verified_at = _utc_naive(now or datetime.now(UTC))
@@ -287,191 +356,26 @@ def update_provider_mapping(db: Session, *, person_id: int, employee_id: str | N
         row.verified_by_user_id = None
         row.verified_at = None
     row.mapping_state = mapping_state
-    _audit(db, user=actor, action="workforce.provider_mapping.updated", entity_type="attendance_provider_person", entity_id=row.id, before=before, after={"employee_id": row.employee_id, "mapping_state": row.mapping_state})
-    return row
-
-
-def _latest_evaluation(db: Session, case_id: int) -> AttendanceEvaluation:
-    row = db.scalar(
-        select(AttendanceEvaluation)
-        .where(AttendanceEvaluation.attendance_case_id == case_id)
-        .order_by(AttendanceEvaluation.revision.desc())
-    )
-    if row is None:
-        raise ConflictError("ATTENDANCE_CASE_VERSION_CONFLICT", "Attendance case has no automatic evaluation.")
-    return row
-
-
-
-
-
-
-def active_attendance_adjustment(
-    rows: Sequence[AttendanceAdjustment],
-) -> AttendanceAdjustment | None:
-    unrevoked = [row for row in rows if row.revoked_at is None]
-    superseded = {
-        row.supersedes_adjustment_id
-        for row in unrevoked
-        if row.supersedes_adjustment_id is not None
-    }
-    return next((row for row in reversed(unrevoked) if row.id not in superseded), None)
-
-def active_attendance_adjustments(
-    db: Session, case_ids: Iterable[int]
-) -> dict[int, AttendanceAdjustment]:
-    """Batch the one unrevoked correction leaf for each attendance case."""
-    ids = list(case_ids)
-    if not ids:
-        return {}
-    rows_by_case: dict[int, list[AttendanceAdjustment]] = {}
-    for row in db.scalars(
-        select(AttendanceAdjustment)
-        .where(AttendanceAdjustment.attendance_case_id.in_(ids))
-        .order_by(
-            AttendanceAdjustment.attendance_case_id,
-            AttendanceAdjustment.created_at,
-            AttendanceAdjustment.id,
-        )
-    ):
-        rows_by_case.setdefault(row.attendance_case_id, []).append(row)
-    return {
-        case_id: active
-        for case_id, rows in rows_by_case.items()
-        if (active := active_attendance_adjustment(rows)) is not None
-    }
-
-
-def overlay_attendance_adjustment(
-    automatic: Mapping[str, Any], adjustment: AttendanceAdjustment | None
-) -> dict[str, Any]:
-    """Apply every field from an active full correction snapshot, including nulls."""
-    values = dict(automatic)
-    if adjustment is None:
-        return values
-    values.update(
-        {
-            "presence_state": adjustment.replacement_presence_state,
-            "first_in_at": adjustment.replacement_first_in_at,
-            "latest_in_at": adjustment.replacement_latest_in_at,
-            "final_out_at": adjustment.replacement_final_out_at,
-            "late_minutes": adjustment.replacement_late_minutes,
-            "early_exit_minutes": adjustment.replacement_early_exit_minutes,
-            "missing_checkout": adjustment.replacement_missing_checkout,
-            "adjustment_id": adjustment.id,
-        }
-    )
-    return values
-
-
-def _active_adjustment(db: Session, case_id: int) -> AttendanceAdjustment | None:
-    rows = list(
-        db.scalars(
-            select(AttendanceAdjustment)
-            .where(AttendanceAdjustment.attendance_case_id == case_id)
-            .order_by(AttendanceAdjustment.created_at, AttendanceAdjustment.id)
-        )
-    )
-    return active_attendance_adjustment(rows)
-
-
-def attendance_case_etag_for(
-    *, case_id: int, latest: AttendanceEvaluation | None, active: AttendanceAdjustment | None
-) -> str:
-    return etag_for(
-        {
-            "case_id": case_id,
-            "automatic_evaluation_id": latest.id if latest else None,
-            "automatic_revision": latest.revision if latest else None,
-            "active_adjustment_id": active.id if active else None,
-            "active_adjustment_revoked_at": active.revoked_at if active else None,
-        }
-    )
-
-
-def attendance_case_etag(db: Session, case_id: int) -> str:
-    return attendance_case_etag_for(
-        case_id=case_id,
-        latest=_latest_evaluation(db, case_id),
-        active=_active_adjustment(db, case_id),
-    )
-
-
-def apply_adjustment(db: Session, *, case_id: int, payload: Mapping[str, object], if_match: str | None, actor: User) -> AttendanceAdjustment:
-    case = db.get(AttendanceCase, case_id)
-    if case is None:
-        raise NotFoundError("ATTENDANCE_CASE_NOT_FOUND", "Attendance case was not found.")
-    current = _active_adjustment(db, case_id)
-    latest = _latest_evaluation(db, case_id)
-    require_if_match(
-        if_match,
-        attendance_case_etag(db, case_id),
-        code="ATTENDANCE_CASE_VERSION_CONFLICT",
-    )
-    values = dict(payload)
-    adjustment = AttendanceAdjustment(
-        attendance_case_id=case_id,
-        base_evaluation_id=latest.id,
-        replacement_presence_state=values.get("replacement_presence_state"),
-        replacement_first_in_at=_optional_utc_naive(values, "replacement_first_in_at"),
-        replacement_latest_in_at=_optional_utc_naive(values, "replacement_latest_in_at"),
-        replacement_final_out_at=_optional_utc_naive(values, "replacement_final_out_at"),
-        replacement_late_minutes=values.get("replacement_late_minutes"),
-        replacement_early_exit_minutes=values.get("replacement_early_exit_minutes"),
-        replacement_missing_checkout=values.get("replacement_missing_checkout"),
-        reason=str(values["reason"]).strip(),
-        created_by_user_id=actor.id,
-        supersedes_adjustment_id=current.id if current else None,
-    )
-    db.add(adjustment)
-    db.flush()
     _audit(
         db,
         user=actor,
-        action="workforce.attendance_adjustment.created",
-        entity_type="attendance_adjustment",
-        entity_id=adjustment.id,
-        before={"superseded_adjustment_id": current.id if current else None},
-        after={
-            "case_id": case_id,
-            "base_evaluation_id": latest.id,
-            "reason": adjustment.reason,
-        },
+        action="workforce.provider_mapping.updated",
+        entity_type="attendance_provider_person",
+        entity_id=row.id,
+        before=before,
+        after={"employee_id": row.employee_id, "mapping_state": row.mapping_state},
     )
-    return adjustment
-
-
-def revoke_adjustment(db: Session, *, case_id: int, adjustment_id: int, reason: str, if_match: str | None, actor: User, now: datetime | None = None) -> AttendanceAdjustment:
-    row = db.get(AttendanceAdjustment, adjustment_id)
-    if row is None or row.attendance_case_id != case_id:
-        raise NotFoundError("ATTENDANCE_ADJUSTMENT_NOT_FOUND", "Attendance adjustment was not found.")
-    require_if_match(
-        if_match,
-        attendance_case_etag(db, case_id),
-        code="ATTENDANCE_CASE_VERSION_CONFLICT",
-    )
-    if row.revoked_at is not None:
-        raise ConflictError("ATTENDANCE_CASE_VERSION_CONFLICT", "Attendance adjustment is already revoked.")
-    row.revoked_at = _utc_naive(now or datetime.now(UTC))
-    row.revoked_by_user_id = actor.id
-    _audit(db, user=actor, action="workforce.attendance_adjustment.revoked", entity_type="attendance_adjustment", entity_id=row.id, before={"revoked_at": None}, after={"revoked_at": row.revoked_at, "reason": reason})
     return row
 
 
 __all__ = [
-    "apply_adjustment",
-    "active_attendance_adjustment",
-    "active_attendance_adjustments",
-    "attendance_case_etag",
-    "attendance_case_etag_for",
     "approve_attendance_policy",
     "create_attendance_policy",
     "create_crew",
+    "crew_collection_etag",
     "etag_for",
-    "overlay_attendance_adjustment",
     "require_if_match",
     "retire_crew",
-    "revoke_adjustment",
     "row_etag",
     "update_crew",
     "update_provider_mapping",

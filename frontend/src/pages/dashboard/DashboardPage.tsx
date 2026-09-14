@@ -56,6 +56,7 @@ import { EmailSyncStatusWidget } from '@/components/dashboard/widgets/EmailSyncS
 import { BooksAwaitingWidget } from '@/pages/dashboard/widgets/BooksAwaitingWidget'
 import { ExpiringSoonWidget } from '@/pages/dashboard/widgets/ExpiringSoonWidget'
 import { PendingDeparturesWidget } from '@/pages/dashboard/widgets/PendingDeparturesWidget'
+import { ViolationMonthsWidget } from '@/pages/dashboard/widgets/ViolationMonthsWidget'
 import { WaitingApprovalsCard } from '@/pages/dashboard/widgets/WaitingApprovalsCard'
 import { WorkforceCoverageSheet } from '@/pages/dashboard/widgets/WorkforceCoverageSheet'
 import { WorkforcePulseWidget } from '@/pages/dashboard/widgets/WorkforcePulseWidget'
@@ -75,6 +76,7 @@ import {
   type WidgetId,
   type WidgetZone,
 } from '@/lib/dashboardLayout'
+import { hijriToday } from '@/lib/hijri'
 import { useAuth } from '@/lib/authContext'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { QUICK_ACTION_META } from '@/lib/quickActions'
@@ -138,21 +140,6 @@ function heroGreetingKey(): 'morning' | 'afternoon' | 'evening' {
   if (h < 12) return 'morning'
   if (h < 17) return 'afternoon'
   return 'evening'
-}
-
-/** Today's Hijri date in Arabic-Indic numerals (umm al-qura), regardless of
- *  UI language — the UAE context stays present even in the English hero.
- *  Returns '' if the runtime lacks the islamic calendar (graceful omit). */
-function hijriToday(): string {
-  try {
-    return new Intl.DateTimeFormat('ar-SA-u-ca-islamic-umalqura', {
-      day: 'numeric',
-      month: 'long',
-      year: 'numeric',
-    }).format(new Date())
-  } catch {
-    return ''
-  }
 }
 
 /** Join names with a locale-aware list conjunction ("A, B and C" / "A، B و C"). */
@@ -418,6 +405,8 @@ export function DashboardPage({ onNavigate }: DashboardPageProps): React.JSX.Ele
         return <ExpiringSoonWidget />
       case 'pending_departures':
         return <PendingDeparturesWidget />
+      case 'violation_months':
+        return <ViolationMonthsWidget />
       case 'workforce_pulse':
         return <WorkforcePulseWidget onOpenCoverage={() => setCoverageOpen(true)} />
       case 'on_leave_today':
@@ -796,7 +785,7 @@ function DashboardHero({
 
   return (
     <div
-      className="anim-fade-up relative mb-6 flex min-h-[150px] flex-col gap-4 overflow-hidden rounded-2xl px-5 py-5 md:flex-row md:items-stretch md:gap-5 md:px-8 md:py-6"
+      className="anim-fade-up relative mb-4 flex min-h-0 flex-col gap-4 overflow-hidden rounded-2xl px-4 py-4 md:mb-6 md:min-h-[150px] md:flex-row md:items-stretch md:gap-5 md:px-8 md:py-6"
       style={{ background: 'var(--hero-grad)', animationDelay: '0ms' }}
     >
       {/* Soft white circle highlight (upper-right) */}
@@ -810,14 +799,14 @@ function DashboardHero({
         className="pointer-events-none absolute inset-x-0 bottom-0 h-14 bg-gradient-to-b from-transparent to-black/[0.18]"
       />
 
-      <div className="relative z-[1] flex min-w-0 flex-1 flex-col gap-2 text-white">
+      <div className="relative z-[1] flex min-w-0 flex-1 flex-col gap-2 text-white max-md:pe-14">
         <span className="text-[0.68em] font-medium uppercase tracking-[0.08em] text-white/60">
           {greeting}
         </span>
         {isLoading && !name ? (
           <Skeleton className="h-7 w-72 bg-white/20" />
         ) : (
-          <h2 className="m-0 text-[1.3em] font-semibold leading-tight tracking-tight [hyphens:none] [word-break:keep-all] md:text-[1.5em]">{headline}</h2>
+          <h2 className="m-0 text-[1.2em] font-semibold leading-tight tracking-tight [hyphens:none] [word-break:keep-all] md:text-[1.5em]">{headline}</h2>
         )}
 
         {/* Date + status strip */}
@@ -864,10 +853,11 @@ function DashboardHero({
         </div>
       </div>
 
-      {/* Mobile: small rounded-square crest wrap (44×44, matches .m-hero__crest-wrap).
-           Desktop (md+): transparent passthrough — the img itself carries the 80×80 circle style.
-           order-first below md so the crest appears above the text in column layout. */}
-      <div className="relative z-[1] flex h-11 w-11 shrink-0 items-center justify-center self-start rounded-xl bg-white/10 shadow-[0_0_0_1px_rgba(255,255,255,0.18)] max-md:order-first md:h-auto md:w-auto md:self-center md:rounded-none md:bg-transparent md:shadow-none">
+      {/* Mobile: small rounded-square crest wrap (44×44, matches .m-hero__crest-wrap),
+           absolutely pinned to the top inline-end corner (text column reserves
+           space for it via max-md:pe-14 above) so it never overlaps the headline.
+           Desktop (md+): transparent passthrough — the img itself carries the 80×80 circle style. */}
+      <div className="relative z-[1] flex h-11 w-11 shrink-0 items-center justify-center self-start rounded-xl bg-white/10 shadow-[0_0_0_1px_rgba(255,255,255,0.18)] max-md:absolute max-md:top-4 max-md:end-4 md:h-auto md:w-auto md:self-center md:rounded-none md:bg-transparent md:shadow-none">
         <img
           src="/brand/gssg-logo.png"
           alt=""

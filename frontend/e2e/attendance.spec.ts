@@ -48,6 +48,15 @@ async function gotoAttendance(page: Page): Promise<void> {
   await expect(page.getByTestId('attendance-register-unit').first()).toBeVisible({ timeout: 15_000 })
 }
 
+async function selectFixtureMonth(page: Page): Promise<void> {
+  const now = new Date()
+  const monthDelta = (2026 - now.getUTCFullYear()) * 12 + (7 - now.getUTCMonth())
+  const direction = monthDelta < 0 ? '‹' : '›'
+  for (let step = 0; step < Math.abs(monthDelta); step += 1) {
+    await page.getByRole('button', { name: direction, exact: true }).click()
+  }
+}
+
 /** No element may stick out of the viewport on either side. */
 async function expectNoHorizontalOverflow(page: Page): Promise<void> {
   const overflow = await page.evaluate(() => ({
@@ -137,6 +146,7 @@ test.describe('Attendance register', () => {
     await page.getByTestId('attendance-register-post').first().getByRole('button').first().click()
 
     await expect(page).toHaveURL(/\/employees\/G-\d+\?tab=attendance/)
+    await selectFixtureMonth(page)
     await expect(page.getByTestId('attendance-month-grid')).toBeVisible({ timeout: 15_000 })
     await expect(page.getByTestId('attendance-month-cell')).toHaveCount(31)
   })

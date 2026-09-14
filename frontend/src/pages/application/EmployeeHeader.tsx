@@ -11,7 +11,7 @@
  * is chosen.
  */
 
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
 import { Pencil, User } from 'lucide-react'
@@ -46,11 +46,6 @@ export function EmployeeHeader({ selectedId, onSelect }: EmployeeHeaderProps): R
     enabled: !!selectedId,
     staleTime: 60_000,
   })
-
-  // When the parent clears the selection, drop back to the picker view.
-  useEffect(() => {
-    if (!selectedId) setEditing(true)
-  }, [selectedId])
 
   const handleSelect = (id: string | null): void => {
     onSelect(id)

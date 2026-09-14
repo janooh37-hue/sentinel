@@ -169,6 +169,35 @@ def test_reopen_creates_active_session_and_working_file(db_session, tmp_path, mo
     assert db_session.query(BookVersion).filter_by(book_id=book.id).one() == version
 
 
+def test_reopen_commit_failure_removes_uncommitted_working_copy(db_session, tmp_path, monkeypatch):
+    """A failed session commit leaves the finished source intact and no orphan copy."""
+    from app.services import word_book_service
+
+    monkeypatch.setattr(word_book_service, "get_settings", lambda: _settings(tmp_path))
+    user = _user(db_session)
+    book, doc, _version = _make_finished_book(db_session, user, tmp_path)
+    source = Path(doc.docx_path)
+    source_bytes = source.read_bytes()
+    working = (
+        tmp_path
+        / "data"
+        / "editing"
+        / f"book-{book.id}"
+        / f"{book.ref_number.replace('/', '-')}.docx"
+    )
+
+    monkeypatch.setattr(
+        db_session,
+        "commit",
+        lambda: (_ for _ in ()).throw(RuntimeError("commit failed")),
+    )
+    with pytest.raises(RuntimeError, match="commit failed"):
+        word_book_service.reopen_word_session(db_session, user=user, book_id=book.id)
+
+    assert source.read_bytes() == source_bytes
+    assert not working.exists()
+
+
 def test_reopen_resolves_relative_document_path_from_data_dir(db_session, tmp_path, monkeypatch):
     """Generated documents store paths relative to data_dir; reopen must resolve them."""
     from app.services import word_book_service

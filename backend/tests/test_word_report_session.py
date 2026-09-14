@@ -20,6 +20,17 @@ from app.services import perm_service
 # worker thread) can reuse the same connection created in the test thread.
 @pytest.fixture()
 def api_db(monkeypatch, tmp_path: Path) -> Session:
+    from app.config import Settings, get_settings
+    from app.services import artifact_service, word_book_service
+
+    current_settings = get_settings()
+    isolated_settings = Settings(
+        data_dir=tmp_path / "data",
+        templates_dir=current_settings.templates_dir,
+        public_base_url=current_settings.public_base_url,
+    )
+    monkeypatch.setattr(word_book_service, "get_settings", lambda: isolated_settings)
+    monkeypatch.setattr(artifact_service, "get_settings", lambda: isolated_settings)
     db_file = tmp_path / "word_report_session.db"
     eng = create_engine(
         f"sqlite:///{db_file}",

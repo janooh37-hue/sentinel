@@ -1,0 +1,18 @@
+{
+  "presets": [
+    { "ar": "مركبة خفيفة", "en": "Light vehicle" },
+    { "ar": "باص خفيف", "en": "Light bus" },
+    { "ar": "باص ثقيل", "en": "Heavy bus" },
+    { "ar": "بيك أب", "en": "Pickup" },
+    { "ar": "بيك أب ثقيل", "en": "Heavy pickup" },
+    { "ar": "فرع الأمن", "en": "Security branch" },
+    { "ar": "مندوب", "en": "Messenger vehicle" }
+  ],
+  "aliases": {
+    "ar": {
+      "بيك اب ثقيل": "بيك أب ثقيل",
+      "فرع الامن": "فرع الأمن"
+    },
+    "en": {}
+  }
+}

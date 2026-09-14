@@ -31,10 +31,10 @@ from app.db.session import get_db
 from app.schemas.email import (
     EmailAccountRead,
     EmailAccountUpsert,
-    EmailSendRequest,
-    EmailSendResult,
+    EmailHandoffResult,
     EmailSyncResult,
     EmailSyncStatus,
+    HandoffAttachment,
 )
 from app.services import email_service, scheduler_service
 
@@ -56,6 +56,7 @@ def _to_read(account: object) -> EmailAccountRead:
         smtp_port=account.smtp_port,  # type: ignore[attr-defined]
         smtp_use_tls=account.smtp_use_tls,  # type: ignore[attr-defined]
         sent_folder=account.sent_folder,  # type: ignore[attr-defined]
+        drafts_folder=account.drafts_folder,  # type: ignore[attr-defined]
         inbox_folder=account.inbox_folder,  # type: ignore[attr-defined]
         enabled=account.enabled,  # type: ignore[attr-defined]
         sync_interval_minutes=account.sync_interval_minutes,  # type: ignore[attr-defined]
@@ -142,41 +143,58 @@ def sync_status(
     return email_service.get_sync_status(db, owner_user_id=current_user.id)
 
 
-@router.post("/send", response_model=EmailSendResult)
-async def send_email(
+@router.post(
+    "/handoff",
+    response_model=EmailHandoffResult,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_handoff(
     db: Annotated[Session, Depends(get_db)],
     current_user: Annotated[User, Depends(require_capability("ledger.send"))],
     to: Annotated[str, Form()],
     subject: Annotated[str, Form()],
     html: Annotated[str, Form()],
+    mode: Annotated[str, Form()],
     cc: Annotated[str, Form()] = "",
+    related_book_id: Annotated[int | None, Form()] = None,
+    related_employee_id: Annotated[str | None, Form()] = None,
     in_reply_to: Annotated[str | None, Form()] = None,
     references: Annotated[str | None, Form()] = None,
     use_signature: Annotated[bool, Form()] = True,
     files: Annotated[list[UploadFile] | None, File()] = None,
-) -> EmailSendResult:
-    """Multipart endpoint. ``to`` / ``cc`` are comma-separated lists of
-    addresses; ``files`` carries optional attachments."""
-    to_list = [s.strip() for s in to.split(",") if s.strip()]
-    cc_list = [s.strip() for s in cc.split(",") if s.strip()]
-    payload = EmailSendRequest(
-        to=to_list,
-        cc=cc_list,
-        subject=subject,
-        html=html,
-        in_reply_to=in_reply_to,
-        references=references,
-        use_signature=use_signature,
-    )
-    attachments: list[tuple[str, bytes]] = []
+) -> EmailHandoffResult:
+    """Create a pending ledger row and optionally push a draft to Outlook."""
+    to_list = [address.strip() for address in to.split(",") if address.strip()]
+    cc_list = [address.strip() for address in cc.split(",") if address.strip()]
+    attachments: list[HandoffAttachment] = []
     if files:
-        for up in files:
-            data = await up.read()
+        for upload in files:
+            data = await upload.read()
             if data:
-                attachments.append((up.filename or "attachment", data))
+                attachments.append(
+                    (upload.filename or "attachment", upload.content_type, data)
+                )
     try:
-        return email_service.send_email(db, payload, owner_user_id=current_user.id, attachments=attachments)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e)) from e
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"send failed: {e!s}") from e
+        entry = email_service.draft_outgoing(
+            db,
+            owner_user_id=current_user.id,
+            to=to_list,
+            cc=cc_list,
+            subject=subject,
+            html=html,
+            mode=mode,
+            related_book_id=related_book_id,
+            related_employee_id=related_employee_id,
+            in_reply_to=in_reply_to,
+            references=references,
+            use_signature=use_signature,
+            attachments=attachments,
+        )
+    except email_service.HandoffValidationError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except email_service.HandoffDeliveryError as exc:
+        log.exception("Outlook draft handoff failed")
+        raise HTTPException(status_code=502, detail=str(exc)) from exc
+    result_mode = "draft" if mode == "draft" else "mailto"
+    return EmailHandoffResult(ledger_entry_id=entry.id, mode=result_mode)
+

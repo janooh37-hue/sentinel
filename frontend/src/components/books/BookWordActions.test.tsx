@@ -31,6 +31,7 @@ void i18n.use(initReactI18next).init({
         'books.word.needsPc': 'التحرير في Word يتطلب جهاز كمبيوتر مثبّت عليه Word',
         'books.word.openInWord': 'فتح في Word',
         'books.word.editNewVersion': 'تعديل في Word (ينشئ إصداراً جديداً)',
+        'books.word.reserved': 'تم إنشاء الكتاب وحجز الرقم',
         'books.word.saveAsTemplate': 'حفظ كقالب',
         'common.cancel': 'إلغاء',
         'common.confirm': 'تأكيد',
@@ -246,6 +247,35 @@ describe('Word action components', () => {
     )
     await userEvent.click(screen.getByRole('button', { name: /تعديل في Word/ }))
     await waitFor(() => expect(apiMod.api.reopenWordSession).toHaveBeenCalledWith(1))
+  })
+
+  it('(j) keeps the reopened handoff mounted after edit_session flips active', async () => {
+    vi.spyOn(apiMod.api, 'reopenWordSession').mockResolvedValue(MOCK_SESSION)
+    vi.spyOn(apiMod.api, 'getBook').mockResolvedValue(FINISHED_BOOK)
+    const qc = makeQc()
+    const view = render(createElement(WordReopenButton, { book: FINISHED_BOOK }), { wrapper: wrapper(qc) })
+    await userEvent.click(screen.getByRole('button', { name: /تعديل في Word/ }))
+    const dialog = await screen.findByRole('dialog', { name: 'تم إنشاء الكتاب وحجز الرقم' })
+
+    view.rerender(
+      createElement(WordReopenButton, {
+        book: { ...FINISHED_BOOK, edit_session: { user_id: 1, user_name: 'x', state: 'active', last_put_at: null, created_at: '2026-07-01T00:00:00Z' } },
+      }),
+    )
+    expect(screen.getByRole('dialog', { name: 'تم إنشاء الكتاب وحجز الرقم' })).toBe(dialog)
+    expect(screen.queryByRole('button', { name: /تعديل في Word/ })).toBeNull()
+  })
+
+  it('(k) drops the retained handoff when the record changes', async () => {
+    vi.spyOn(apiMod.api, 'reopenWordSession').mockResolvedValue(MOCK_SESSION)
+    vi.spyOn(apiMod.api, 'getBook').mockResolvedValue(FINISHED_BOOK)
+    const qc = makeQc()
+    const view = render(createElement(WordReopenButton, { book: FINISHED_BOOK }), { wrapper: wrapper(qc) })
+    await userEvent.click(screen.getByRole('button', { name: /تعديل في Word/ }))
+    await screen.findByRole('dialog', { name: 'تم إنشاء الكتاب وحجز الرقم' })
+
+    view.rerender(createElement(WordReopenButton, { book: { ...BASE_BOOK, id: 2 } }))
+    expect(screen.queryByRole('dialog')).toBeNull()
   })
 
   it('(h) on mobile, editNewVersion button is disabled with needsPc hint', () => {

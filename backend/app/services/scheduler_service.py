@@ -54,11 +54,13 @@ from app.services import (
     push_service,
     scan_inbox_service,
     settings_service,
+    vehicle_reminder_service,
     workforce_retention_service,
     workforce_schedule_service,
     workforce_seed_service,
 )
 from app.services.attendance_provider import AttendanceProvider
+from app.services.workforce_access_service import organization_scope
 
 log = logging.getLogger(__name__)
 
@@ -83,6 +85,7 @@ _WORKFORCE_ATTENDANCE_SYNC_JOB_ID = "workforce-attendance-sync"
 _WORKFORCE_QUEUE_DRAIN_JOB_ID = "workforce-evaluation-queue-drain"
 _WORKFORCE_RETENTION_JOB_ID = "workforce-retention"
 _WORKFORCE_PROFILE_JOB_ID = "workforce-punch-profiles"
+_VEHICLE_REMINDER_JOB_ID = "vehicle_reminders"
 _WORKFORCE_OCCURRENCE_INTERVAL_MINUTES = 15
 _WORKFORCE_QUEUE_DRAIN_INTERVAL_MINUTES = 1
 _WORKFORCE_OCCURRENCE_HISTORY = timedelta(days=7)
@@ -177,9 +180,7 @@ def _local_day_horizon(now: datetime) -> datetime:
     that day to appear.
     """
     zone = ZoneInfo(workforce_seed_service.SITE_TIMEZONE)
-    local_end = datetime.combine(
-        now.astimezone(zone).date(), time.max, tzinfo=zone
-    )
+    local_end = datetime.combine(now.astimezone(zone).date(), time.max, tzinfo=zone)
     return local_end.astimezone(UTC)
 
 
@@ -197,9 +198,7 @@ def _materialize_scheduled_cases(session: Session, *, now: datetime) -> int:
         return 0
     horizon = _local_day_horizon(now)
     created = 0
-    for employee_id in session.scalars(
-        select(WorkCrewMembership.employee_id).distinct()
-    ).all():
+    for employee_id in session.scalars(select(WorkCrewMembership.employee_id).distinct()).all():
         cases = attendance_evaluation_service.materialize_scheduled_cases(
             session,
             employee_id=employee_id,
@@ -229,6 +228,7 @@ def _run_workforce_occurrence_generation() -> None:
             len(
                 workforce_schedule_service.generate_occurrences(
                     session,
+                    scope=organization_scope(),
                     crew_id=crew_id,
                     starts_at=starts_at,
                     ends_at=ends_at,
@@ -257,9 +257,7 @@ def run_workforce_evaluation_queue_drain_once() -> int:
     """Drain one durable evaluation batch and commit its atomic queue mutation."""
     session = SessionLocal()
     try:
-        result = attendance_queue_service.drain_evaluation_queue(
-            session, now=datetime.now(UTC)
-        )
+        result = attendance_queue_service.drain_evaluation_queue(session, now=datetime.now(UTC))
         session.commit()
         return result.completed
     except Exception:
@@ -479,6 +477,8 @@ _KIND_META: dict[str, str] = {
     "scan": "/scan-inbox",
     "email": "/ledger",
     "scanback": "/scan-back",
+    "monthly_review": notification_service.MONTHLY_TASKS_URL,
+    "monthly_approval": notification_service.MONTHLY_TASKS_URL,
 }
 
 
@@ -496,7 +496,9 @@ def _attachments_line(n: int) -> tuple[str, str]:
     return en, ar
 
 
-def _email_push(new_items: list, section_url: str) -> tuple[dict, str]:
+def _email_push(
+    new_items: list[notification_service.ActionableItem], section_url: str
+) -> tuple[dict[str, tuple[str, str]], str]:
     """Email push — name the sender, subject, a content preview and attachment
     count (single), or summarize the burst and name the latest (several)."""
     n = len(new_items)
@@ -520,13 +522,18 @@ def _email_push(new_items: list, section_url: str) -> tuple[dict, str]:
     return (
         _localized(
             f"{n} new emails\nLatest · {who} — {subj}",
-            f"{n} رسائل بريد جديدة\nالأحدث · {who} — {subj}",
+            f"""{n} رسائل بريد جديدة
+الأحدث · {who} — {subj}""",
         ),
         section_url,
     )
 
 
-def _doc_push(kind: str, new_items: list, section_url: str) -> tuple[dict, str]:
+def _doc_push(
+    kind: str,
+    new_items: list[notification_service.ActionableItem],
+    section_url: str,
+) -> tuple[dict[str, tuple[str, str]], str]:
     """Approval / review push — name the record, who it's from, deep-link to it
     (single); count the queue (several)."""
     n = len(new_items)
@@ -550,7 +557,38 @@ def _doc_push(kind: str, new_items: list, section_url: str) -> tuple[dict, str]:
     return _localized(f"{n} {noun_en}", f"{n} {noun_ar}"), section_url
 
 
-def _scan_push(new_items: list, section_url: str) -> tuple[dict, str]:
+def _monthly_push(
+    kind: str,
+    new_items: list[notification_service.ActionableItem],
+    section_url: str,
+) -> tuple[dict[str, tuple[str, str]], str]:
+    """Monthly report handoffs are recorded review/approval, not Book signing."""
+    approval = kind == "monthly_approval"
+    stage_en = "approval" if approval else "review"
+    stage_ar = "اعتمادك" if approval else "مراجعتك"
+    if len(new_items) == 1:
+        item = new_items[0]
+        return (
+            _localized(
+                f"Monthly inmate violations report · {item.label}\nAwaiting your {stage_en}",
+                f"""تقرير مخالفات النزلاء الشهري · \u2066{item.label}\u2069
+بانتظار {stage_ar}""",
+            ),
+            item.url,
+        )
+    count = len(new_items)
+    return (
+        _localized(
+            f"{count} monthly inmate violations reports awaiting your {stage_en}",
+            f"تقارير مخالفات النزلاء الشهرية بانتظار {stage_ar} · \u2066{count}\u2069",
+        ),
+        section_url,
+    )
+
+
+def _scan_push(
+    new_items: list[notification_service.ActionableItem], section_url: str
+) -> tuple[dict[str, tuple[str, str]], str]:
     """Scan-inbox push — a scanned document is waiting to be reviewed/routed."""
     n = len(new_items)
     if n == 1:
@@ -558,7 +596,8 @@ def _scan_push(new_items: list, section_url: str) -> tuple[dict, str]:
         return (
             _localized(
                 f"New scan to review · {label}\nWaiting in your scan inbox",
-                f"ملف ممسوح جديد للمراجعة · {label}\nبانتظار المراجعة في صندوق الوارد",
+                f"""ملف ممسوح جديد للمراجعة · {label}
+بانتظار المراجعة في صندوق الوارد""",
             ),
             new_items[0].url,
         )
@@ -585,7 +624,9 @@ def _ar_records_waiting(n: int) -> str:
     return f"{n} سجل بانتظار نسخته الموقّعة"
 
 
-def _scanback_push(new_items: list, section_url: str) -> tuple[dict, str]:
+def _scanback_push(
+    new_items: list[notification_service.ActionableItem], section_url: str
+) -> tuple[dict[str, tuple[str, str]], str]:
     """Scan-back push — a printed paper was signed but never scanned into the app.
 
     Deliberately NOT routed through `_doc_push`: that copy says "Signature
@@ -599,7 +640,8 @@ def _scanback_push(new_items: list, section_url: str) -> tuple[dict, str]:
         return (
             _localized(
                 f"Signed copy not filed · {it.label}{subj}\nScan it into the record",
-                f"لم تُرفع النسخة الموقّعة · {it.label}{subj}\nامسحها وأرفقها بالسجل",
+                f"""لم تُرفع النسخة الموقّعة · {it.label}{subj}
+امسحها وأرفقها بالسجل""",
             ),
             it.url,
         )
@@ -613,7 +655,9 @@ def _scanback_push(new_items: list, section_url: str) -> tuple[dict, str]:
 
 
 def _build_push(
-    kind: str, new_items: list, section_url: str
+    kind: str,
+    new_items: list[notification_service.ActionableItem],
+    section_url: str,
 ) -> tuple[dict[str, tuple[str, str]], str]:
     """Localized {lang: (title, body)} pairs + the click deep-link URL.
 
@@ -626,15 +670,17 @@ def _build_push(
         return _scan_push(new_items, section_url)
     if kind == "scanback":
         return _scanback_push(new_items, section_url)
+    if kind in {"monthly_review", "monthly_approval"}:
+        return _monthly_push(kind, new_items, section_url)
     return _doc_push(kind, new_items, section_url)
 
 
-def _notify_user(session, user: User) -> None:
+def _notify_user(session: Session, user: User) -> None:
     """Push each NEW owned actionable item once, deep-linked, in the device's
     language. State lives in the durable ``push_sent`` ledger, so restarts no
     longer replay still-open items."""
     items = notification_service.actionable_items(session, user)
-    by_kind: dict[str, list] = {}
+    by_kind: dict[str, list[notification_service.ActionableItem]] = {}
     for it in items:
         by_kind.setdefault(it.kind, []).append(it)
     for kind, section_url in _KIND_META.items():
@@ -677,6 +723,20 @@ def _run_leave_ending_reminder() -> None:
                 log.info("scheduler: %d leave-ending reminder(s) sent", n)
         except Exception:
             log.exception("scheduler: leave-ending reminder failed")
+
+
+def _run_vehicle_reminders() -> None:
+    """Daily 09:10 Asia/Dubai — send due vehicle licence and maintenance pushes."""
+    with SessionLocal() as session:
+        try:
+            n = vehicle_reminder_service.send_due_reminders(
+                session,
+                today=datetime.now(ZoneInfo("Asia/Dubai")).date(),
+            )
+            if n:
+                log.info("scheduler: %d vehicle reminder(s) sent", n)
+        except Exception:
+            log.exception("scheduler: vehicle reminders failed")
 
 
 _DEPARTURE_LABELS: Final[dict[str, tuple[str, str]]] = {
@@ -886,6 +946,13 @@ def start() -> None:
                 replace_existing=True,
             )
             log.info("scheduler: pending-departure flip daily at 09:05 Asia/Dubai")
+            _scheduler.add_job(
+                _run_vehicle_reminders,
+                trigger=CronTrigger(hour=9, minute=10, timezone="Asia/Dubai"),
+                id=_VEHICLE_REMINDER_JOB_ID,
+                replace_existing=True,
+            )
+            log.info("scheduler: vehicle reminders daily at 09:10 Asia/Dubai")
     reschedule_workforce_sync()
 
 

@@ -8,6 +8,8 @@ Results are ordered-unique so the caller can iterate in confidence order.
 from __future__ import annotations
 
 import re
+from dataclasses import dataclass
+from typing import Literal
 
 # Matches the explicit ``Ref: GS-0048`` stamp written into the document header.
 # Book ref_number is ``{category_id}-{NNNN}`` where the category id is a short
@@ -55,6 +57,31 @@ _CONFUSION = str.maketrans(
 )
 
 
+@dataclass(frozen=True, slots=True)
+class ReferenceObservation:
+    observed: str
+    source: Literal["ocr_stamped", "ocr_bare"]
+
+
+def reference_observations(text: str) -> list[ReferenceObservation]:
+    """Return ordered strict captures without discarding their literal case."""
+    observations = [
+        ReferenceObservation(observed=match, source="ocr_stamped")
+        for match in _STAMPED_RE.findall(text)
+    ]
+    observations.extend(
+        ReferenceObservation(observed=match, source="ocr_bare") for match in _BARE_RE.findall(text)
+    )
+    seen: set[str] = set()
+    result: list[ReferenceObservation] = []
+    for observation in observations:
+        normalized = observation.observed.upper()
+        if normalized not in seen:
+            seen.add(normalized)
+            result.append(observation)
+    return result
+
+
 def candidate_refs(text: str) -> list[str]:
     """Return candidate ref strings from *text*, stamped hits first.
 
@@ -67,16 +94,7 @@ def candidate_refs(text: str) -> list[str]:
     """
     # Ref numbers are stored uppercase ("GS-0048"); normalise so a lowercase OCR
     # read still matches the DB. Dedup preserves stamped-first ordering.
-    stamped = [m.upper() for m in _STAMPED_RE.findall(text)]
-    bare = [m.upper() for m in _BARE_RE.findall(text)]
-
-    seen: set[str] = set()
-    result: list[str] = []
-    for ref in stamped + bare:
-        if ref not in seen:
-            seen.add(ref)
-            result.append(ref)
-    return result
+    return [observation.observed.upper() for observation in reference_observations(text)]
 
 
 def canonical_ref(ref: str) -> str:
@@ -84,10 +102,25 @@ def canonical_ref(ref: str) -> str:
     return ref.upper().translate(_CONFUSION)
 
 
+def stamped_observations(text: str) -> list[ReferenceObservation]:
+    """Keep literal loose Ref:-anchored OCR tokens for confirmation matching."""
+    return [
+        ReferenceObservation(observed=match, source="ocr_stamped")
+        for match in _STAMPED_LOOSE_RE.findall(text)
+    ]
+
+
 def stamped_tokens(text: str) -> list[str]:
     """Raw ``Ref:``-anchored tokens, including malformed ones the strict
     pattern rejects (e.g. ``50-@315``) — input for fuzzy matching."""
-    return [m.upper() for m in _STAMPED_LOOSE_RE.findall(text)]
+    return [observation.observed.upper() for observation in stamped_observations(text)]
 
 
-__all__ = ["candidate_refs", "canonical_ref", "stamped_tokens"]
+__all__ = [
+    "ReferenceObservation",
+    "candidate_refs",
+    "canonical_ref",
+    "reference_observations",
+    "stamped_observations",
+    "stamped_tokens",
+]

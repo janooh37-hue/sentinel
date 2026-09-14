@@ -432,16 +432,8 @@ function MarkPopover({
         className,
         // Closed-keyboard is bottom:0 (sheetBottom is 0, and 0 != null) — the
         // state the composer opens in on every phone, since autoFocus is
-        // desktop-only. Floor the bottom padding at the design's own 12px
-        // (p-3, matched here as 0.75rem) and grow to the safe area only where
-        // one exists — a bare `env(safe-area-inset-bottom)` with no fallback
-        // resolves to 0 on every device without an inset (all Android, older
-        // iPhones, desktop), which would have *removed* the sheet's existing
-        // bottom padding instead of adding to it. Ordered after `className`
-        // (whose `p-3` would otherwise win the padding-bottom conflict), and
-        // this never touches `bottom` so it can't disturb the keyboard-open
-        // offset.
-        sheetBottom != null && 'pb-[max(0.75rem,env(safe-area-inset-bottom))]',
+        // desktop-only. --safe-bottom carries the 0px fallback (index.css); max() keeps the sheet's own padding on inset-less devices.
+        sheetBottom != null && 'pb-[max(0.75rem,var(--safe-bottom))]',
       )}
       style={sheetBottom != null ? { bottom: `${sheetBottom}px` } : undefined}
     >

@@ -1,7 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useIsMutating, useMutation, useQueryClient } from '@tanstack/react-query'
 import { ChevronDown, Search, ShieldCheck, X } from 'lucide-react'
-import type { TFunction } from 'i18next'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
@@ -15,6 +14,7 @@ import {
   type UserPermissionRead,
 } from '@/lib/api'
 import { isQuickActionId } from '@/lib/dashboardLayout'
+import { localizeCapability } from '@/lib/useCapabilityCatalog'
 import { cn } from '@/lib/utils'
 
 type Effect = PermissionEffect | 'default'
@@ -22,18 +22,15 @@ type Effect = PermissionEffect | 'default'
 function capMatches(
   cap: CapabilityRead,
   query: string,
-  t: TFunction,
+  language: string,
 ): boolean {
   const normalized = query.trim().toLowerCase()
   if (!normalized) return true
-  const localized = t(`access.permissions.caps.${cap.id}`, { defaultValue: '' }).toLowerCase()
-  const localizedDescription = t(`perms.caps.${cap.id}.desc`, { defaultValue: '' }).toLowerCase()
+  const localized = localizeCapability(cap, cap.id, language)
   return (
     cap.id.toLowerCase().includes(normalized) ||
-    cap.label.toLowerCase().includes(normalized) ||
-    cap.description.toLowerCase().includes(normalized) ||
-    localized.includes(normalized) ||
-    localizedDescription.includes(normalized)
+    localized.label.toLowerCase().includes(normalized) ||
+    localized.description.toLowerCase().includes(normalized)
   )
 }
 
@@ -122,7 +119,7 @@ function DomainGroup({
   writePending: boolean
   query: string
 }): React.JSX.Element {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const domainLabel =
     domain === 'services'
       ? t('access.permissions.mirror.blueprintServices')
@@ -130,8 +127,8 @@ function DomainGroup({
   const [open, setOpen] = useState(true)
   const roleDefaults = new Set(perms.role_defaults)
   const visible = useMemo(
-    () => (query.trim() ? caps.filter((cap) => capMatches(cap, query, t)) : caps),
-    [caps, query, t],
+    () => (query.trim() ? caps.filter((cap) => capMatches(cap, query, i18n.language)) : caps),
+    [caps, i18n.language, query],
   )
 
   if (query.trim() && visible.length === 0) return <></>
@@ -179,21 +176,20 @@ function DomainGroup({
             const roleDefault = roleDefaults.has(cap.id)
             const override = perms.overrides[cap.id]
             const value: Effect = override ?? 'default'
-            const label = t(`access.permissions.caps.${cap.id}`, { defaultValue: cap.label })
-            const description = t(`perms.caps.${cap.id}.desc`, {
-              defaultValue: cap.description,
-            })
+            const { label, description } = localizeCapability(cap, cap.id, i18n.language)
             return (
               <div
                 key={cap.id}
                 className="flex flex-col gap-3 px-5 py-4"
               >
                 <div className="flex min-w-0 flex-col gap-1">
-                  <span className="text-sm font-medium text-foreground">{label}</span>
+                  <bdi className="text-sm font-medium text-foreground" dir="auto">
+                    {label}
+                  </bdi>
                   {description ? (
-                    <span className="text-xs leading-relaxed text-muted-foreground">
+                    <bdi className="text-xs leading-relaxed text-muted-foreground" dir="auto">
                       {description}
-                    </span>
+                    </bdi>
                   ) : null}
                   <span className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                     <bdi className="font-mono text-[0.8em] text-muted-foreground/60" dir="ltr">
@@ -244,9 +240,9 @@ export function AdvancedPermissionsPanel({
 }: {
   user: AdminUserRead
   perms: UserPermissionRead
-  capabilities: CapabilityRead[]
+  capabilities: readonly CapabilityRead[]
 }): React.JSX.Element {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const queryClient = useQueryClient()
   const [query, setQuery] = useState('')
   const [saving, setSaving] = useState<string | null>(null)
@@ -278,7 +274,7 @@ export function AdvancedPermissionsPanel({
   }, [catalog])
 
   const visibleCount = query.trim()
-    ? catalog.filter((cap) => capMatches(cap, query, t)).length
+    ? catalog.filter((cap) => capMatches(cap, query, i18n.language)).length
     : catalog.length
 
   const setMutation = useMutation({

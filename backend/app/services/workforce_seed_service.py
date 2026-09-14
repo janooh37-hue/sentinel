@@ -45,6 +45,13 @@ from app.db.workforce_models import (
     WorkShiftOccurrence,
 )
 from app.services import workforce_schedule_service
+from app.services.workforce_access_service import require_organization
+from app.services.workforce_etag import etag_for
+from app.services.workforce_scope_service import WorkforceScope
+
+_ORGANIZATION_SCHEDULE_MESSAGE = (
+    "Organization workforce scope is required for crew and anchor changes."
+)
 
 SITE_TIMEZONE = "Asia/Dubai"
 _ZONE = ZoneInfo(SITE_TIMEZONE)
@@ -118,7 +125,9 @@ _CREWS: tuple[_CrewSpec, ...] = (
     _CrewSpec("crew_4", "Fourth Company", "السرية الرابعة", PATTERN_GUARD, date(2026, 8, 20)),
     _CrewSpec("crew_5", "Fifth Company", "السرية الخامسة", PATTERN_GUARD, date(2026, 8, 21)),
     # 17 Aug 2026 is a Monday, which is where the office week begins.
-    _CrewSpec(OFFICE_CREW_CODE, "Official Hours", "الدوام الرسمي", PATTERN_OFFICE, date(2026, 8, 17)),
+    _CrewSpec(
+        OFFICE_CREW_CODE, "Official Hours", "الدوام الرسمي", PATTERN_OFFICE, date(2026, 8, 17)
+    ),
 )
 
 #: ``Employee.duty_unit`` value -> crew code. The duty unit is already recorded
@@ -232,6 +241,7 @@ def _ensure_schedules(
     patterns: dict[str, WorkRotationPattern],
     shifts: dict[str, WorkShiftDefinition],
     actor_user_id: int,
+    scope: WorkforceScope,
 ) -> int:
     created = 0
     for spec in _CREWS:
@@ -243,6 +253,8 @@ def _ensure_schedules(
         anchor = _local_start(spec.anchor_date, shifts[offset_zero].start_local_time)
         workforce_schedule_service.create_crew_schedule(
             db,
+            scope=scope,
+            if_match=etag_for([]),
             crew_id=crew.id,
             pattern_id=pattern.id,
             anchor_at=anchor,
@@ -297,13 +309,18 @@ class SeedResult:
 
 
 def seed_workforce_roster(
-    db: Session, *, actor_user_id: int, effective_from: date | None = None
+    db: Session,
+    *,
+    scope: WorkforceScope,
+    actor_user_id: int,
+    effective_from: date | None = None,
 ) -> SeedResult:
     """Install shifts, rotation patterns, crews, anchors, and the default policy.
 
     Safe to run repeatedly: every step is keyed on a natural identifier and
     skipped when already present. The caller owns the transaction.
     """
+    require_organization(scope, message=_ORGANIZATION_SCHEDULE_MESSAGE)
     before_shifts = db.scalar(select(WorkShiftDefinition).limit(1)) is not None
     shifts, corrected = _ensure_shifts(db)
     if corrected:
@@ -313,10 +330,12 @@ def seed_workforce_roster(
         # and this domain never rewrites those: refuse instead, and let an
         # operator retire the old schedule deliberately.
         judged = db.scalar(
-            select(AttendanceCase.id).join(
+            select(AttendanceCase.id)
+            .join(
                 WorkShiftOccurrence,
                 WorkShiftOccurrence.id == AttendanceCase.shift_occurrence_id,
-            ).limit(1)
+            )
+            .limit(1)
         )
         if judged is not None:
             raise ValueError(
@@ -347,7 +366,12 @@ def seed_workforce_roster(
     }
     crews = _ensure_crews(db)
     schedules = _ensure_schedules(
-        db, crews=crews, patterns=patterns, shifts=shifts, actor_user_id=actor_user_id
+        db,
+        crews=crews,
+        patterns=patterns,
+        shifts=shifts,
+        actor_user_id=actor_user_id,
+        scope=scope,
     )
     policy_created = _ensure_policy(
         db,

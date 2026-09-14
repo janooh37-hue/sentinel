@@ -37,6 +37,7 @@ import { shouldShowNotifyToggle } from './notifyToggle'
 import { GeneratedSaveActions } from './GeneratedSaveActions'
 import { savedGenerationFromJob, type SavedGeneration } from './savedGeneration'
 import { ApprovedViolationUpload } from './ApprovedViolationUpload'
+import { StatisticsTab } from './statistics/StatisticsTab'
 import { SavedRecordActions, type NotificationChoice } from '@/components/books/SavedRecordActions'
 import { api, apiErrorMessage } from '@/lib/api'
 import type {
@@ -90,7 +91,7 @@ import {
 import { WordHandoffDialog } from '@/pages/books/WordHandoffDialog'
 
 type TabValue = 'fields' | 'preview'
-type InmateEntryMode = 'create' | 'upload'
+type InmateEntryMode = 'create' | 'upload' | 'stats'
 
 // Adapter: translate the api response into the shape TemplateForm expects
 function adaptSchema(raw: Awaited<ReturnType<typeof api.getTemplateFields>>): TemplateDetailResponse {
@@ -126,7 +127,7 @@ function formWidthClass(fields: readonly TemplateField[] | undefined): string {
 export function ApplicationPage(): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const isAr = i18n.language.startsWith('ar')
-  const { has } = useCapabilities()
+  const { has, isLoading: capabilitiesLoading } = useCapabilities()
 
   // Per-template email-basket counts → the marker on each gallery tile.
   const { baskets } = useEmailBasket()
@@ -214,6 +215,9 @@ export function ApplicationPage(): React.JSX.Element {
   const [lastSaved, setLastSaved] = useState<
     (SavedGeneration & { notification?: NotificationChoice }) | null
   >(null)
+  const requestedStatsMode =
+    formFromUrl === 'inmate_conduct_violations' && searchParams.get('mode') === 'stats'
+  const hydratedStatsNavigationRef = useRef<string | null>(null)
   const [inmateEntryMode, setInmateEntryMode] = useState<InmateEntryMode>('create')
   const [approvedImport, setApprovedImport] = useState<ApprovedViolationImportRead | null>(null)
   const [approvedImportBusy, setApprovedImportBusy] = useState(false)
@@ -242,7 +246,9 @@ export function ApplicationPage(): React.JSX.Element {
   const templates = useMemo(
     () =>
       allTemplates.filter(
-        (template) => !isQuickActionId(template.id) || isQuickActionAllowed(template.id, has),
+        (template) =>
+          !template.feature_minted &&
+          (!isQuickActionId(template.id) || isQuickActionAllowed(template.id, has)),
       ),
     [allTemplates, has],
   )
@@ -252,6 +258,8 @@ export function ApplicationPage(): React.JSX.Element {
   // changes.  This is the canonical URL-param-hydration pattern: we can't
   // seed `useState` because the templates query is asynchronous.
   useEffect(() => {
+    // Monthly-register URLs remain canonical and are consumed per navigation below.
+    if (requestedStatsMode) return
     if (!formFromUrl || templates.length === 0 || selectedTemplate) return
     const id = resolveTemplateIdFromSlug(formFromUrl, templates)
     if (id) {
@@ -267,7 +275,7 @@ export function ApplicationPage(): React.JSX.Element {
       { replace: true },
     )
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [formFromUrl, templates.length])
+  }, [formFromUrl, templates.length, requestedStatsMode])
 
   // Employee data for basket item — dedupes with EmployeeHeader's query.
   const employeeQuery = useQuery({
@@ -617,9 +625,9 @@ export function ApplicationPage(): React.JSX.Element {
       setPreviewJobStatus(job.status)
       const saved = savedGenerationFromJob(job)
       void qc.invalidateQueries({ queryKey: ['books'] })
-      // A generated sick/annual leave supersedes the absence days it covers.
+      // A generated superseding leave removes the absence days it covers.
       // The rows are deleted on the FIRST job that covers them (usually the
-      // preview), so this announcement is not gated on the committed save.
+      // preview), so this announcement and invalidation are not gated on the committed save.
       const superseded = job.superseded_absence_dates ?? []
       const [firstDay, lastDay] = [superseded[0], superseded[superseded.length - 1]]
       if (firstDay && lastDay) {
@@ -638,6 +646,7 @@ export function ApplicationPage(): React.JSX.Element {
         )
         void qc.invalidateQueries({ queryKey: ['employee-absences'] })
         void qc.invalidateQueries({ queryKey: ['employee-detail'] })
+        void qc.invalidateQueries({ queryKey: ['absence-register'] })
       }
       if (pendingCommitRef.current && selectedTemplate) {
         if (saved) {
@@ -691,6 +700,35 @@ export function ApplicationPage(): React.JSX.Element {
     setTemplateName(null)
     setPendingWordSession(null)
   }, [form])
+
+  // The shell stays mounted on same-path bell navigation. Hydrate each register
+  // navigation (including the same URL again), not only the initial page mount.
+  // Keep the canonical form parameter so reloads retain the statistics service.
+  useEffect(() => {
+    if (
+      !requestedStatsMode ||
+      capabilitiesLoading ||
+      approvedImportBusy ||
+      hydratedStatsNavigationRef.current === location.key
+    ) {
+      return
+    }
+    const id = resolveTemplateIdFromSlug('inmate_conduct_violations', templates)
+    if (!id) return
+    hydratedStatsNavigationRef.current = location.key
+    if (selectedTemplate !== id) handleSelectTemplate(id)
+    setInmateEntryMode(has('books.view') ? 'stats' : 'create')
+    setApprovedImport(null)
+  }, [
+    requestedStatsMode,
+    capabilitiesLoading,
+    approvedImportBusy,
+    location.key,
+    templates,
+    selectedTemplate,
+    handleSelectTemplate,
+    has,
+  ])
 
   // Restore the draft once the template + schema-query are in hand. Running
   // after the schema query resolves means RHF's defaultValues machinery is
@@ -1016,7 +1054,7 @@ export function ApplicationPage(): React.JSX.Element {
             </header>
 
             {isInmateService && (
-              <div className="mb-4 inline-flex rounded-xl border border-border bg-surface-tinted p-1">
+              <div data-print-hide className="mb-4 inline-flex rounded-xl border border-border bg-surface-tinted p-1">
                 <Button
                   type="button"
                   size="sm"
@@ -1045,6 +1083,22 @@ export function ApplicationPage(): React.JSX.Element {
                 >
                   {t('application.approvedViolation.uploadApproved')}
                 </Button>
+                {has('books.view') && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={inmateEntryMode === 'stats' ? 'default' : 'ghost'}
+                    aria-pressed={inmateEntryMode === 'stats'}
+                    disabled={approvedImportBusy}
+                    onClick={() => {
+                      if (approvedImportBusy) return
+                      setInmateEntryMode('stats')
+                      setApprovedImport(null)
+                    }}
+                  >
+                    {t('application.approvedViolation.monthlyStatistics')}
+                  </Button>
+                )}
               </div>
             )}
 
@@ -1064,7 +1118,16 @@ export function ApplicationPage(): React.JSX.Element {
                       refNumber={approvedImport.ref_number}
                       detail={t('application.approvedViolation.approvedCopyFiled')}
                     />
-                    <div className="flex justify-end">
+                    <div className="flex flex-wrap justify-end gap-2">
+                      {has('books.view') && (
+                        <Button
+                          type="button"
+                          variant="link"
+                          onClick={() => setInmateEntryMode('stats')}
+                        >
+                          {t('application.approvedViolation.openRegister')}
+                        </Button>
+                      )}
                       <Button
                         type="button"
                         variant="outline"
@@ -1082,8 +1145,13 @@ export function ApplicationPage(): React.JSX.Element {
                 )}
               </section>
             )}
+            {isInmateService && inmateEntryMode === 'stats' && has('books.view') && (
+              <section className="rounded-2xl bg-surface px-4 py-6 sm:px-7">
+                <StatisticsTab />
+              </section>
+            )}
             <section
-              hidden={isInmateService && inmateEntryMode === 'upload'}
+              hidden={isInmateService && inmateEntryMode !== 'create'}
               className="rounded-2xl bg-surface px-4 py-6 sm:px-7"
             >
               {/* Tab strip — Fields / Preview */}

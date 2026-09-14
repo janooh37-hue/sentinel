@@ -202,7 +202,10 @@ function buildShape(fields: TemplateField[], t: TFunction): Record<string, AnyZo
           // .min(1) and print as a numbered but nameless inmate row) and
           // normalizes the stored value to the trimmed text.
           name: z.string().trim().min(1, { message: t('application.validation.required') }),
-          nationality: z.string().optional(),
+          nationality: z
+            .string()
+            .trim()
+            .min(1, { message: t('application.validation.required') }),
           wing: z.string().optional(),
           uid: z.string().optional(),
           holding_no: z.string().optional(),

@@ -10,3 +10,5 @@ class NotificationCounts(BaseModel):
     leaves: int  # leave rows needing action (pending + awaiting-return), org-wide
     scans: int  # scan-inbox items awaiting MY confirmation/routing
     emails: int  # unread received email in MY mailbox
+    monthly_reviews: int  # eligible monthly report assignments awaiting MY review
+    monthly_approvals: int  # eligible monthly report assignments awaiting MY approval

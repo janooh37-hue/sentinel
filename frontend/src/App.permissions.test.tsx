@@ -12,7 +12,22 @@ vi.mock('@/lib/useCapabilities', () => ({
   }),
 }))
 vi.mock('@/lib/api', () => ({
-  api: { listCapabilities: vi.fn().mockResolvedValue([]) },
+  api: {
+    listCapabilities: vi.fn().mockResolvedValue([
+      {
+        id: 'users.manage',
+        domain: 'users',
+        label_en: 'Manage users and permissions',
+        label_ar: 'إدارة المستخدمين والصلاحيات',
+        description_en: 'Manage user accounts and effective permissions.',
+        description_ar: 'إدارة حسابات المستخدمين وصلاحياتهم الفعلية.',
+        sensitive: true,
+        requestable: false,
+        default_roles: ['admin'],
+      },
+    ]),
+    postCrashReport: vi.fn().mockResolvedValue(undefined),
+  },
 }))
 vi.mock('@/lib/AuthProvider', () => ({ AuthProvider: ({ children }: { children: React.ReactNode }) => children }))
 vi.mock('@/lib/authContext', () => ({
@@ -20,6 +35,7 @@ vi.mock('@/lib/authContext', () => ({
 }))
 vi.mock('@/lib/useIsMobile', () => ({ useIsMobile: () => false }))
 vi.mock('@/lib/useLockState', () => ({
+  DEFAULT_IDLE_LOCK_SECONDS: 1800,
   useLockState: () => ({ locked: false, lock: vi.fn(), unlock: vi.fn() }),
 }))
 vi.mock('@/hooks/useNotificationStream', () => ({ useNotificationStream: vi.fn() }))
@@ -56,6 +72,16 @@ vi.mock('@/lib/routeLoaders', () => ({
   loadLedgerPage: () => Promise.resolve({ default: () => <div>ledger-page</div> }),
   loadPermissionsPage: () => Promise.resolve({ default: () => <div>permissions-page</div> }),
   loadPermitsPage: () => Promise.resolve({ default: () => <div>permits-page</div> }),
+  loadVehicleAccidentLetterPage: () => Promise.resolve({ default: () => <div>vehicle-accident-letter-page</div> }),
+  loadVehicleAccidentsPage: () => Promise.resolve({ default: () => <div>vehicle-accidents-page</div> }),
+  loadVehicleDetailPage: () => Promise.resolve({ default: () => <div>vehicle-detail-page</div> }),
+  loadVehicleEditPage: () => Promise.resolve({ default: () => <div>vehicle-edit-page</div> }),
+  loadVehicleImportPage: () => Promise.resolve({ default: () => <div>vehicle-import-page</div> }),
+  loadVehicleFinesLetterPage: () => Promise.resolve({ default: () => <div>vehicle-fines-letter-page</div> }),
+  loadVehicleFinesPage: () => Promise.resolve({ default: () => <div>vehicle-fines-page</div> }),
+  loadVehicleFinesReportPage: () => Promise.resolve({ default: () => <div>vehicle-fines-report-page</div> }),
+  loadVehicleMaintenancePage: () => Promise.resolve({ default: () => <div>vehicle-maintenance-page</div> }),
+  loadVehiclesHubPage: () => Promise.resolve({ default: () => <div>vehicles-hub-page</div> }),
   loadScanBackPage: () => Promise.resolve({ default: () => <div>scanback-page</div> }),
   loadScanInboxPage: () => Promise.resolve({ default: () => <div>scan-inbox-page</div> }),
   loadSendToGroupPage: () => Promise.resolve({ default: () => <div>send-page</div> }),
@@ -76,6 +102,17 @@ const routes = [
   ['/settings', ['settings.view'], 'settings-page'],
   ['/expiry', ['expiry.view'], 'expiry-page'],
   ['/permissions', ['users.manage'], 'permissions-page'],
+  ['/vehicles', ['vehicles.view'], 'vehicles-hub-page'],
+  ['/vehicles/fines', ['vehicles.view'], 'vehicle-fines-page'],
+  ['/vehicles/fines-report', ['vehicles.view'], 'vehicle-fines-report-page'],
+  ['/vehicles/accidents', ['vehicles.view'], 'vehicle-accidents-page'],
+  ['/vehicles/accidents/17/letter', ['vehicles.view'], 'vehicle-accident-letter-page'],
+  ['/vehicles/maintenance', ['vehicles.view'], 'vehicle-maintenance-page'],
+  ['/vehicles/42', ['vehicles.view'], 'vehicle-detail-page'],
+  ['/vehicles/42/fines-letter', ['vehicles.view'], 'vehicle-fines-letter-page'],
+  ['/vehicles/edit', ['vehicles.view', 'vehicles.edit'], 'vehicle-edit-page'],
+  ['/vehicles/edit/42', ['vehicles.view', 'vehicles.edit'], 'vehicle-edit-page'],
+  ['/vehicles/import', ['vehicles.view', 'vehicles.edit'], 'vehicle-import-page'],
 ] as const
 
 const eitherCapabilityRoutes = [
@@ -101,6 +138,17 @@ describe('App route capability gates', () => {
         ? 'Access to this area is managed by administrators and cannot be requested.'
         : "You don't have access to this page"
     expect(await screen.findByText(denialCopy)).toBeVisible()
+  })
+
+  it.each([
+    ['/employees', "You don't have access to this page"],
+    ['/permissions', 'Access to this area is managed by administrators and cannot be requested.'],
+  ] as const)('offers no request action for the %s route denial state', async (path, copy) => {
+    window.history.pushState({}, '', path)
+    render(<App />)
+
+    expect(await screen.findByText(copy)).toBeVisible()
+    expect(screen.queryByRole('button', { name: 'Request access' })).not.toBeInTheDocument()
   })
 
   it.each(routes)('renders %s with all required capabilities', async (path, capabilities, pageText) => {
@@ -132,6 +180,18 @@ describe('App route capability gates', () => {
 
       expect(await screen.findByText("You don't have access to this page")).toBeVisible()
       expect(screen.queryByText('scanback-page')).not.toBeInTheDocument()
+    },
+  )
+
+  it.each(['vehicles.view', 'vehicles.edit'])(
+    'denies /vehicles/edit when %s is the only granted capability',
+    async (capability) => {
+      capabilityState.allowed = new Set([capability])
+      window.history.pushState({}, '', '/vehicles/edit')
+      render(<App />)
+
+      expect(await screen.findByText("You don't have access to this page")).toBeVisible()
+      expect(screen.queryByText('vehicle-edit-page')).not.toBeInTheDocument()
     },
   )
 

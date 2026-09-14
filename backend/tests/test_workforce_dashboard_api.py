@@ -24,11 +24,12 @@ from app.api.deps import get_current_user
 from app.db.session import attach_sqlite_pragmas, get_db
 from app.main import app
 from app.services import (
+    attendance_correction_service,
     perm_service,
-    workforce_admin_service,
     workforce_dashboard_service,
     workforce_read_service,
 )
+from app.services.workforce_access_service import organization_scope
 from app.services.workforce_scope_service import resolve_workforce_scope
 
 # The snapshot route derives its operational date from the real clock, so the
@@ -272,10 +273,11 @@ def test_correction_and_revocation_update_roster_and_every_dashboard_metric(
     scope = resolve_workforce_scope(workforce_api_db, admin)
     now = NOW.replace(tzinfo=UTC)
 
-    correction = workforce_admin_service.apply_adjustment(
+    correction = attendance_correction_service.correct(
         workforce_api_db,
+        scope=organization_scope(),
         case_id=case.id,
-        payload={
+        snapshot={
             "replacement_presence_state": "absent",
             "replacement_first_in_at": evaluation.first_in_at,
             "replacement_latest_in_at": evaluation.latest_in_at,
@@ -285,7 +287,7 @@ def test_correction_and_revocation_update_roster_and_every_dashboard_metric(
             "replacement_missing_checkout": evaluation.missing_checkout,
             "reason": "Confirmed post absence",
         },
-        if_match=workforce_admin_service.attendance_case_etag(workforce_api_db, case.id),
+        if_match=attendance_correction_service.case_etag(workforce_api_db, case.id),
         actor=admin,
     )
 
@@ -325,12 +327,13 @@ def test_correction_and_revocation_update_roster_and_every_dashboard_metric(
         "Gate B": 1,
     }
 
-    workforce_admin_service.revoke_adjustment(
+    attendance_correction_service.revoke(
         workforce_api_db,
+        scope=organization_scope(),
         case_id=case.id,
         adjustment_id=correction.id,
         reason="Automatic attendance restored",
-        if_match=workforce_admin_service.attendance_case_etag(workforce_api_db, case.id),
+        if_match=attendance_correction_service.case_etag(workforce_api_db, case.id),
         actor=admin,
     )
     workforce_api_db.flush()
@@ -370,6 +373,78 @@ def test_correction_and_revocation_update_roster_and_every_dashboard_metric(
         "Gate A": 1,
         "Gate B": 1,
     }
+
+
+def test_deleted_sick_leave_is_absent_from_dashboard_leave_composition(
+    workforce_api_db: Session,
+) -> None:
+    from app.db.models import Leave
+
+    admin = _create_user(
+        workforce_api_db, email="deleted-leave-dashboard@test.ae", role="admin"
+    )
+    employee = _add_employee(
+        workforce_api_db, "G-DELETED-SICK", name="Deleted sick leave"
+    )
+    workforce_api_db.add(
+        Leave(
+            employee_id=employee.id,
+            leave_type="Sick Leave",
+            start_date=TODAY,
+            end_date=TODAY,
+            days=1,
+            status="Approved",
+            deleted_at=NOW,
+        )
+    )
+    workforce_api_db.commit()
+
+    with _client_for(workforce_api_db, admin) as client:
+        response = client.get("/api/v1/workforce/dashboard/snapshot")
+
+    assert response.status_code == 200, response.text
+    assert response.json()["leave_today"]["sick"] == 0
+
+
+def test_approved_unknown_request_leave_does_not_enter_dashboard_annual_bucket(
+    workforce_api_db: Session,
+) -> None:
+    from app.db.models import Leave
+
+    admin = _create_user(
+        workforce_api_db, email="typed-leave-dashboard@test.ae", role="admin"
+    )
+    unknown = _add_employee(
+        workforce_api_db, "G-UNKNOWN-LEAVE", name="Unknown request leave"
+    )
+    annual = _add_employee(workforce_api_db, "G-ANNUAL-LEAVE", name="Annual leave")
+    workforce_api_db.add_all(
+        [
+            Leave(
+                employee_id=unknown.id,
+                leave_type="Compassionate Leave",
+                start_date=TODAY,
+                end_date=TODAY,
+                days=1,
+                status="Approved",
+            ),
+            Leave(
+                employee_id=annual.id,
+                leave_type="Annual Leave",
+                start_date=TODAY,
+                end_date=TODAY,
+                days=1,
+                status="Approved",
+            ),
+        ]
+    )
+    workforce_api_db.commit()
+
+    with _client_for(workforce_api_db, admin) as client:
+        response = client.get("/api/v1/workforce/dashboard/snapshot")
+
+    assert response.status_code == 200, response.text
+    assert response.json()["leave_today"]["annual"] == 1
 
 
 def _contains_value(value: Any, needle: str) -> bool:

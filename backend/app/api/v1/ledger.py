@@ -31,14 +31,12 @@ from sqlalchemy.orm import Session
 
 from app.api._responses import maybe_base64
 from app.api.deps import require_capability
-from app.api.errors import AppError
 from app.config import get_settings
 from app.db.models import LedgerEntry, User
 from app.db.session import get_db
 from app.schemas.contacts import AddressBookContactCreate, AddressBookContactRead
 from app.schemas.correspondence import CorrespondenceLogItem, CorrespondenceLogRecord
 from app.schemas.ledger import (
-    DraftWrite,
     LedgerAttachmentMeta,
     LedgerEntryCreate,
     LedgerEntryRead,
@@ -492,115 +490,6 @@ def mark_unread(
     return _flagged_read(db, row, current_user.id)
 
 
-# ---------------------------------------------------------------------------
-# Drafts — Phase 16
-# ---------------------------------------------------------------------------
-
-
-@router.get("/drafts", response_model=list[LedgerEntryRead])
-def list_drafts(
-    db: Annotated[Session, Depends(get_db)],
-    current_user: Annotated[User, Depends(require_capability("ledger.view"))],
-    limit: int = Query(LIST_DEFAULT_LIMIT, ge=1, le=LIST_MAX_LIMIT),
-    offset: int = Query(0, ge=0),
-) -> list[LedgerEntryRead]:
-    rows, _ = ledger_service.list_entries(
-        db,
-        tag=ledger_service.DRAFT_TAG,
-        include_drafts=True,
-        limit=limit,
-        offset=offset,
-        owner_user_id=current_user.id,
-    )
-    return [LedgerEntryRead.model_validate(r) for r in rows]
-
-
-@router.post(
-    "/drafts",
-    response_model=LedgerEntryRead,
-    status_code=status.HTTP_201_CREATED,
-)
-def create_draft(
-    payload: DraftWrite,
-    db: Annotated[Session, Depends(get_db)],
-    current_user: Annotated[User, Depends(require_capability("ledger.create"))],
-) -> LedgerEntryRead:
-    row = ledger_service.upsert_draft(db, None, payload, author_employee_id=current_user.employee_id, owner_user_id=current_user.id)
-    return LedgerEntryRead.model_validate(row)
-
-
-@router.patch("/drafts/{draft_id}", response_model=LedgerEntryRead)
-def update_draft(
-    draft_id: int,
-    payload: DraftWrite,
-    db: Annotated[Session, Depends(get_db)],
-    current_user: Annotated[User, Depends(require_capability("ledger.edit"))],
-) -> LedgerEntryRead:
-    # owner_user_id guard: cross-owner draft is a 404 (don't leak existence).
-    existing = ledger_service.get_entry(db, draft_id, owner_user_id=current_user.id)
-    # Secondary created_by guard: if the draft has a known author and the caller
-    # is a different (linked) employee, deny. Unlinked callers (employee_id=None)
-    # are allowed through — they can't be matched, so we don't 403.
-    if (
-        existing.created_by is not None
-        and current_user.employee_id is not None
-        and existing.created_by != current_user.employee_id
-    ):
-        raise AppError(
-            "DRAFT_NOT_OWNER",
-            "You can only edit your own drafts",
-            http_status=403,
-        )
-    row = ledger_service.upsert_draft(db, draft_id, payload)
-    return LedgerEntryRead.model_validate(row)
-
-
-@router.delete("/drafts/{draft_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_draft(
-    draft_id: int,
-    db: Annotated[Session, Depends(get_db)],
-    current_user: Annotated[User, Depends(require_capability("ledger.delete"))],
-) -> Response:
-    # owner_user_id guard: cross-owner draft is a 404 (don't leak existence).
-    existing = ledger_service.get_entry(db, draft_id, owner_user_id=current_user.id)
-    # Secondary created_by guard — see update_draft. Unlinked callers (employee_id=None)
-    # can't be matched, so they're allowed through.
-    if (
-        existing.created_by is not None
-        and current_user.employee_id is not None
-        and existing.created_by != current_user.employee_id
-    ):
-        raise AppError(
-            "DRAFT_NOT_OWNER",
-            "You can only delete your own drafts",
-            http_status=403,
-        )
-    ledger_service.delete_draft(db, draft_id)
-    return Response(status_code=status.HTTP_204_NO_CONTENT)
-
-
-@router.post("/drafts/{draft_id}/send", response_model=LedgerEntryRead)
-def send_draft(
-    draft_id: int,
-    db: Annotated[Session, Depends(get_db)],
-    current_user: Annotated[User, Depends(require_capability("ledger.send"))],
-) -> LedgerEntryRead:
-    # owner_user_id guard: cross-owner draft is a 404 (don't leak existence).
-    existing = ledger_service.get_entry(db, draft_id, owner_user_id=current_user.id)
-    # Secondary created_by guard — see update_draft. Unlinked callers (employee_id=None)
-    # can't be matched, so they're allowed through.
-    if (
-        existing.created_by is not None
-        and current_user.employee_id is not None
-        and existing.created_by != current_user.employee_id
-    ):
-        raise AppError(
-            "DRAFT_NOT_OWNER",
-            "You can only send your own drafts",
-            http_status=403,
-        )
-    row = ledger_service.promote_draft_to_sent(db, draft_id)
-    return LedgerEntryRead.model_validate(row)
 
 
 # ---------------------------------------------------------------------------

@@ -1,0 +1,18 @@
+{
+  "description": "GSSG Manager pipeline glue: notify the plan/omp stage when this review stage settles.",
+  "hooks": {
+    "Stop": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\Amh\\Documents\\projects\\sentinel\\.herdr\\hooks\\notify-plan-stop.ps1\"",
+            "timeout": 20,
+            "statusMessage": "Notifying pipeline orchestrator"
+          }
+        ]
+      }
+    ]
+  }
+}

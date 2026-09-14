@@ -115,7 +115,7 @@ export function ScanBackDock(): React.JSX.Element | null {
         // App.tsx's <main> already reserves on mobile, so one value covers
         // both viewports. A stack of several toasts can still reach higher —
         // accepted residual, not solved here.
-        'bottom-[calc(5.5rem+env(safe-area-inset-bottom))] md:bottom-[5.5rem]',
+        'bottom-[calc(5.5rem+var(--safe-bottom))] md:bottom-[5.5rem]',
         'rtl:items-start',
       )}
     >

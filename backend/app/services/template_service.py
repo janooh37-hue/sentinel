@@ -16,7 +16,7 @@ from app.api.errors import NotFoundError
 from app.core import form_policy
 from app.core.constants import COMPANION_TEMPLATE_IDS, TEMPLATE_FILES
 from app.core.docx_engine import template_has_code
-from app.core.form_kind import SERVICE_ALIASES
+from app.core.form_kind import FEATURE_MINTED_TEMPLATE_IDS, SERVICE_ALIASES
 from app.core.form_policy import SigningPath
 from app.services import notify_format
 from app.services.document_service import load_fields_meta
@@ -37,6 +37,9 @@ class TemplateMeta(BaseModel):
     # ref code. True for every form today; False only for future forms with no
     # clear corner (see _NO_CODE_FORMS) — drives the Services-tile indicator.
     has_code: bool
+    # Minted by a feature workflow rather than offered for manual generation.
+    # These templates still own Records rail entries and service capabilities.
+    feature_minted: bool
 
     notifies_employee: bool
 
@@ -110,6 +113,7 @@ def _build_meta(template_id: str, entry: dict[str, Any]) -> TemplateMeta:
         category=entry.get("category", "personnel"),
         signing_path=signing_path,
         has_code=template_has_code(template_id),
+        feature_minted=template_id in FEATURE_MINTED_TEMPLATE_IDS,
         notifies_employee=template_id in notify_format.AUTO_NOTIFY_TEMPLATE_IDS,
     )
 
@@ -121,6 +125,8 @@ def list_templates() -> TemplateListResponse:
     a companion of their primary, never as a standalone service. Aliased forms
     (form_kind.SERVICE_ALIASES) are excluded too — they are minted by their own
     feature, never picked from the gallery, and report as their target service.
+    Feature-minted templates remain in this response because Records uses it
+    for service labels; manual generators filter them by ``feature_minted``.
     """
     meta_map = load_fields_meta()
     items: list[TemplateMeta] = []

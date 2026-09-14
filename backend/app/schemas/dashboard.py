@@ -19,7 +19,7 @@ from app.schemas._base import ORMBase
 #   - Promoted section cards: on_leave_today, upcoming_leave
 #   - New widgets:           recent_docs, email_sync_status,
 #                            waiting_approvals, expiring_soon, recent_ledger,
-#                            pending_departures
+#                            pending_departures, violation_months
 #
 # Quick-action IDs are services only: one entry per selectable ``template_id``
 # from `app.core.constants.TEMPLATE_FILES`, so every tile deep-links into a
@@ -41,6 +41,7 @@ DASHBOARD_WIDGET_IDS = (
     "recent_ledger",
     "pending_departures",
     "workforce_pulse",
+    "violation_months",
 )
 DASHBOARD_QUICK_ACTION_IDS = (
     "General Book",
@@ -78,6 +79,7 @@ DashboardWidgetId = Literal[
     "recent_ledger",
     "pending_departures",
     "workforce_pulse",
+    "violation_months",
 ]
 DashboardQuickActionId = Literal[
     "General Book",

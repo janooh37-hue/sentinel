@@ -42,6 +42,7 @@ from app.services import (
     workforce_schedule_service,
     workforce_seed_service,
 )
+from app.services.workforce_access_service import organization_scope
 
 DUBAI = ZoneInfo("Asia/Dubai")
 
@@ -108,6 +109,7 @@ def _memberships(db, *, actor: User, effective_from: datetime) -> tuple[int, lis
     created = 0
     no_unit: list[str] = []
     no_record: list[str] = []
+    trusted_scope = organization_scope()
     for employee in db.scalars(select(Employee).where(Employee.status == "Active")):
         code = workforce_seed_service.DUTY_UNIT_TO_CREW.get((employee.duty_unit or "").strip())
         if code is None:
@@ -122,6 +124,16 @@ def _memberships(db, *, actor: User, effective_from: datetime) -> tuple[int, lis
             continue
         workforce_schedule_service.create_crew_membership(
             db,
+            scope=trusted_scope,
+            if_match=workforce_schedule_service.crew_membership_collection_etag(
+                list(
+                    db.scalars(
+                        select(WorkCrewMembership).where(
+                            WorkCrewMembership.crew_id == crews[code].id
+                        )
+                    )
+                )
+            ),
             employee_id=employee.id,
             crew_id=crews[code].id,
             effective_from=effective_from,
@@ -234,9 +246,7 @@ def main(argv: list[str] | None = None) -> int:
             if first_occurrence is not None
             else datetime.combine(earliest, datetime.min.time(), tzinfo=DUBAI).astimezone(UTC)
         )
-        created, no_unit, no_record = _memberships(
-            db, actor=actor, effective_from=effective_from
-        )
+        created, no_unit, no_record = _memberships(db, actor=actor, effective_from=effective_from)
         print(f"crew memberships created: {created}")
         print(f"NO_DUTY_UNIT (duty_unit maps to no crew): {len(no_unit)}")
         print(f"NO_PROVIDER_RECORD (no verified BioTime mapping): {len(no_record)}")

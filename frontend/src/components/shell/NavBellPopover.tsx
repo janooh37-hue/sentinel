@@ -29,6 +29,12 @@ import { useAwaitingReturnCount } from '@/pages/leaves/useAwaitingReturnCount'
 import { useFlagCount } from '@/pages/ledger/outlook/useFlagCount'
 import { useScanBack } from '@/pages/scanBack/useScanBack'
 import { useScanInboxCount } from '@/pages/scanInbox/useScanInboxCount'
+import {
+  formatRegisterMonth,
+  inmateRegisterHref,
+  newestAwaitingMonth,
+} from '@/pages/application/statistics/registerModel'
+import { useInmateAwaitingClose } from '@/pages/application/statistics/useInmateRegister'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { EmptyState } from '@/components/ui/empty-state'
 import { NavBell } from './NavBell'
@@ -62,7 +68,7 @@ function shortDateLabel(iso: string): string {
 }
 
 export function NavBellPopover(): React.JSX.Element {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const navigate = useNavigate()
   const qc = useQueryClient()
   const [open, setOpen] = useState(false)
@@ -100,6 +106,11 @@ export function NavBellPopover(): React.JSX.Element {
   const pendingRequests = isAdmin
     ? (pendingQuery.data ?? []).filter((u) => u.status === 'pending').length
     : 0
+
+  const violationMonthsQuery = useInmateAwaitingClose()
+  const violationMonths = violationMonthsQuery.data?.months ?? []
+  const newestViolationMonth = newestAwaitingMonth(violationMonths)
+  const awaitingViolationMonths = violationMonthsQuery.data?.count ?? 0
 
   const expiryQuery = useQuery({
     queryKey: ['expiry', 'summary'],
@@ -171,12 +182,31 @@ export function NavBellPopover(): React.JSX.Element {
   const items = canViewLedger ? (recentQuery.data?.items ?? []) : []
   const totalUnread = canViewLedger ? (recentQuery.data?.total_unread ?? 0) : 0
   const moreCount = Math.max(0, totalUnread - items.length)
-  const hasNothing = items.length === 0 && pendingRequests === 0 && expiryUrgent === 0 && awaitingReturn === 0 && scanInbox === 0 && awaitingApproval === 0 && followUps === 0 && scanBackCount === 0
+  const hasNothing =
+    items.length === 0 &&
+    pendingRequests === 0 &&
+    expiryUrgent === 0 &&
+    awaitingReturn === 0 &&
+    scanInbox === 0 &&
+    awaitingApproval === 0 &&
+    followUps === 0 &&
+    scanBackCount === 0 &&
+    awaitingViolationMonths === 0
 
   return (
     <div ref={rootRef} className="relative">
       <NavBell
-        count={totalUnread + pendingRequests + expiryUrgent + awaitingReturn + scanInbox + awaitingApproval + followUps + scanBackCount}
+        count={
+          totalUnread +
+          pendingRequests +
+          expiryUrgent +
+          awaitingReturn +
+          scanInbox +
+          awaitingApproval +
+          followUps +
+          scanBackCount +
+          awaitingViolationMonths
+        }
         onClick={() => setOpen((v) => !v)}
       />
 
@@ -228,6 +258,43 @@ export function NavBellPopover(): React.JSX.Element {
                   {t('access.settingsCard.pending', { count: pendingRequests })}
                 </span>
               </div>
+              <ArrowRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground rtl:rotate-180" strokeWidth={1.8} />
+            </button>
+          )}
+
+          {/* Ended inmate-violation months awaiting the current user's action */}
+          {awaitingViolationMonths > 0 && newestViolationMonth && (
+            <button
+              type="button"
+              onClick={() => {
+                setOpen(false)
+                navigate(inmateRegisterHref(newestViolationMonth.year, newestViolationMonth.month))
+              }}
+              className="flex w-full items-center gap-3 border-b border-hairline px-4 py-3 text-start transition-colors hover:bg-surface-tinted focus-visible:bg-surface-tinted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+            >
+              <Avatar className="h-8 w-8 bg-warning-soft text-warning">
+                <AvatarFallback className="bg-transparent">
+                  <CalendarClock className="h-4 w-4" strokeWidth={1.8} />
+                </AvatarFallback>
+              </Avatar>
+              <div className="flex min-w-0 flex-1 flex-col">
+                <span className="truncate text-[0.9em] font-semibold text-foreground">
+                  {formatRegisterMonth(
+                    newestViolationMonth.year,
+                    newestViolationMonth.month,
+                    i18n.language,
+                  )}
+                </span>
+                <span className="text-[0.78em] text-muted-foreground">
+                  {t(`inmateStats.workflow.${newestViolationMonth.stage}`)}
+                </span>
+              </div>
+              <span
+                dir="ltr"
+                className="rounded-full bg-warning/15 px-2 py-0.5 font-mono text-[0.7em] font-semibold text-warning"
+              >
+                {awaitingViolationMonths}
+              </span>
               <ArrowRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground rtl:rotate-180" strokeWidth={1.8} />
             </button>
           )}

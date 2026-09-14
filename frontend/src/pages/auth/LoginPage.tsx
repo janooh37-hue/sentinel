@@ -684,7 +684,7 @@ function RequestScreen(props: {
       <div style={{ height: 18 }} />
       <button className="btn btn--primary" type="submit" disabled={props.submitting}>
         {props.submitting ? (
-          <><span className="spin" aria-hidden="true" />{t('auth.signingIn')}</>
+          <><span className="spin" aria-hidden="true" />{t('auth.sending')}</>
         ) : (
           t('auth.submitForReview')
         )}

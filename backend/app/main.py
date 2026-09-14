@@ -18,6 +18,7 @@ from app import __version__
 from app.api import dav
 from app.api.deps import get_current_user
 from app.api.errors import install_handlers
+from app.api.v1 import absences as absences_v1
 from app.api.v1 import announcements as announcements_v1
 from app.api.v1 import auth as auth_v1
 from app.api.v1 import books as books_v1
@@ -33,6 +34,7 @@ from app.api.v1 import employees as employees_v1
 from app.api.v1 import expiry as expiry_v1
 from app.api.v1 import extractions as extractions_v1
 from app.api.v1 import identity as identity_v1
+from app.api.v1 import inmate_statistics as inmate_statistics_v1
 from app.api.v1 import intake as intake_v1
 from app.api.v1 import leaves as leaves_v1
 from app.api.v1 import ledger as ledger_v1
@@ -52,9 +54,10 @@ from app.api.v1 import submitters as submitters_v1
 from app.api.v1 import system as system_v1
 from app.api.v1 import templates as templates_v1
 from app.api.v1 import timesheet as timesheet_v1
+from app.api.v1 import vehicles as vehicles_v1
 from app.config import get_settings
 from app.logging import configure_logging
-from app.services import scheduler_service
+from app.services import scheduler_service, vehicle_evg_jobs
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 
@@ -141,7 +144,7 @@ class BodySizeLimitMiddleware:
 
 @asynccontextmanager
 async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
-    """Boot the background scheduler on startup; shut it down on exit."""
+    """Boot the scheduler on startup; drain it and the EVG worker on exit."""
     # Reconcile role_permissions with the in-code presets so capabilities added
     # to a role preset after the initial seed (e.g. books.approve added to manager)
     # reach already-deployed DBs without a manual migration.
@@ -162,7 +165,10 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
     try:
         yield
     finally:
-        scheduler_service.shutdown()
+        try:
+            scheduler_service.shutdown()
+        finally:
+            vehicle_evg_jobs.shutdown()
 
 
 def create_app() -> FastAPI:
@@ -207,8 +213,10 @@ def create_app() -> FastAPI:
     app.include_router(settings_v1.router, prefix="/api/v1", dependencies=auth_gate)
     app.include_router(employees_v1.router, prefix="/api/v1", dependencies=auth_gate)
     app.include_router(employees_v1.violations_router, prefix="/api/v1", dependencies=auth_gate)
+    app.include_router(absences_v1.router, prefix="/api/v1", dependencies=auth_gate)
     app.include_router(leaves_v1.router, prefix="/api/v1", dependencies=auth_gate)
     app.include_router(timesheet_v1.router, prefix="/api/v1", dependencies=auth_gate)
+    app.include_router(inmate_statistics_v1.router, prefix="/api/v1", dependencies=auth_gate)
     app.include_router(templates_v1.router, prefix="/api/v1", dependencies=auth_gate)
     app.include_router(documents_v1.documents_router, prefix="/api/v1", dependencies=auth_gate)
     app.include_router(documents_v1.jobs_router, prefix="/api/v1", dependencies=auth_gate)
@@ -240,6 +248,7 @@ def create_app() -> FastAPI:
     app.include_router(push_v1.router, prefix="/api/v1", dependencies=auth_gate)
     app.include_router(permissions_v1.router, prefix="/api/v1", dependencies=auth_gate)
     app.include_router(permits_v1.router, prefix="/api/v1", dependencies=auth_gate)
+    app.include_router(vehicles_v1.router, prefix="/api/v1", dependencies=auth_gate)
     # Workforce depends on the optional attendance persistence surface.  Import
     # it only while constructing the application so routine module imports
     # (including migration tooling) do not eagerly initialize that surface.

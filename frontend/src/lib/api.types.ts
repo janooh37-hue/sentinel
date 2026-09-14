@@ -582,7 +582,7 @@ export interface paths {
         };
         /**
          * List Capabilities
-         * @description The static catalog followed by dynamic service/category capabilities.
+         * @description The bilingual catalog, available to every signed-in user.
          */
         get: operations["list_capabilities_api_v1_auth_capabilities_get"];
         put?: never;
@@ -931,7 +931,11 @@ export interface paths {
         };
         /** List Employee Absence Episodes */
         get: operations["list_employee_absence_episodes_api_v1_employees__employee_id__absences_episodes_get"];
-        put?: never;
+        /**
+         * Update Employee Absence Episode
+         * @description Redraw one register row (dates and note) in a single unit of work.
+         */
+        put: operations["update_employee_absence_episode_api_v1_employees__employee_id__absences_episodes_put"];
         post?: never;
         delete?: never;
         options?: never;
@@ -1115,6 +1119,26 @@ export interface paths {
         head?: never;
         /** Update Violation */
         patch: operations["update_violation_api_v1_violations__violation_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/absences/episodes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Absence Register
+         * @description Every employee's absence rows, newest first — the Services register.
+         */
+        get: operations["list_absence_register_api_v1_absences_episodes_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/leaves": {
@@ -1435,6 +1459,244 @@ export interface paths {
         get: operations["export_employee_api_v1_timesheet_employee__employee_id___year___month__export_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/inmate-violations/nationalities": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Nationalities
+         * @description The closed inmate nationality list, for the entry form and the register.
+         */
+        get: operations["list_nationalities_api_v1_inmate_violations_nationalities_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/inmate-violations/statistics/awaiting-close": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Awaiting Close
+         * @description Unsealed months waiting on this caller — the bell and widget source.
+         */
+        get: operations["awaiting_close_api_v1_inmate_violations_statistics_awaiting_close_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/inmate-violations/statistics/{year}/{month}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Month */
+        get: operations["get_month_api_v1_inmate_violations_statistics__year___month__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/inmate-violations/statistics/{year}/{month}/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export Month
+         * @description Download the register workbook. This never closes or re-closes a month.
+         *
+         *     ``populations`` narrows the table blocks; omitted, every group is carried,
+         *     because an export that silently omits a filed occurrence is the one failure
+         *     this register cannot have.
+         */
+        get: operations["export_month_api_v1_inmate_violations_statistics__year___month__export_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/inmate-violations/statistics/{year}/{month}/prepare": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Prepare Month */
+        post: operations["prepare_month_api_v1_inmate_violations_statistics__year___month__prepare_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/inmate-violations/statistics/{year}/{month}/review": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Review Month */
+        post: operations["review_month_api_v1_inmate_violations_statistics__year___month__review_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/inmate-violations/statistics/{year}/{month}/return": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Return Month */
+        post: operations["return_month_api_v1_inmate_violations_statistics__year___month__return_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/inmate-violations/statistics/{year}/{month}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Approve Month */
+        post: operations["approve_month_api_v1_inmate_violations_statistics__year___month__approve_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/inmate-violations/statistics/{year}/{month}/candidates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Workflow Candidates */
+        get: operations["workflow_candidates_api_v1_inmate_violations_statistics__year___month__candidates_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/inmate-violations/statistics/{year}/{month}/reopen": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reopen Month */
+        post: operations["reopen_month_api_v1_inmate_violations_statistics__year___month__reopen_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/inmate-violations/statistics/{year}/{month}/manual-rows": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Create Manual Row */
+        post: operations["create_manual_row_api_v1_inmate_violations_statistics__year___month__manual_rows_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/inmate-violations/statistics/manual-rows/{row_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Manual Row */
+        delete: operations["delete_manual_row_api_v1_inmate_violations_statistics_manual_rows__row_id__delete"];
+        options?: never;
+        head?: never;
+        /** Update Manual Row */
+        patch: operations["update_manual_row_api_v1_inmate_violations_statistics_manual_rows__row_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/inmate-violations/statistics/completions/{book_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Complete Import
+         * @description Fill in an uploaded approved copy so its occurrences become countable.
+         */
+        post: operations["complete_import_api_v1_inmate_violations_statistics_completions__book_id__post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3022,59 +3284,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/ledger/drafts": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** List Drafts */
-        get: operations["list_drafts_api_v1_ledger_drafts_get"];
-        put?: never;
-        /** Create Draft */
-        post: operations["create_draft_api_v1_ledger_drafts_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/ledger/drafts/{draft_id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        /** Delete Draft */
-        delete: operations["delete_draft_api_v1_ledger_drafts__draft_id__delete"];
-        options?: never;
-        head?: never;
-        /** Update Draft */
-        patch: operations["update_draft_api_v1_ledger_drafts__draft_id__patch"];
-        trace?: never;
-    };
-    "/api/v1/ledger/drafts/{draft_id}/send": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /** Send Draft */
-        post: operations["send_draft_api_v1_ledger_drafts__draft_id__send_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/ledger/flag-count": {
         parameters: {
             query?: never;
@@ -3511,7 +3720,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/email/send": {
+    "/api/v1/email/handoff": {
         parameters: {
             query?: never;
             header?: never;
@@ -3521,11 +3730,10 @@ export interface paths {
         get?: never;
         put?: never;
         /**
-         * Send Email
-         * @description Multipart endpoint. ``to`` / ``cc`` are comma-separated lists of
-         *     addresses; ``files`` carries optional attachments.
+         * Create Handoff
+         * @description Create a pending ledger row and optionally push a draft to Outlook.
          */
-        post: operations["send_email_api_v1_email_send_post"];
+        post: operations["create_handoff_api_v1_email_handoff_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -4341,6 +4549,662 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/vehicles/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Vehicles Summary */
+        get: operations["vehicles_summary_api_v1_vehicles_summary_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/vehicles/notify-days": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Update Notify Days */
+        put: operations["update_notify_days_api_v1_vehicles_notify_days_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/vehicles/sites": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Vehicle Sites */
+        get: operations["list_vehicle_sites_api_v1_vehicles_sites_get"];
+        put?: never;
+        /** Create Vehicle Site */
+        post: operations["create_vehicle_site_api_v1_vehicles_sites_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/vehicles/sites/{site_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update Vehicle Site */
+        patch: operations["update_vehicle_site_api_v1_vehicles_sites__site_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/vehicles/fines": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Vehicle Fines */
+        get: operations["list_vehicle_fines_api_v1_vehicles_fines_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/vehicles/fines/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Archive Vehicle Fines */
+        post: operations["archive_vehicle_fines_api_v1_vehicles_fines_archive_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/vehicles/fines/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Restore Vehicle Fines */
+        post: operations["restore_vehicle_fines_api_v1_vehicles_fines_restore_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/vehicles/fines/evg/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Preview Evg Fines */
+        post: operations["preview_evg_fines_api_v1_vehicles_fines_evg_preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/vehicles/fines/evg/preview/{job_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Evg Preview Job */
+        get: operations["get_evg_preview_job_api_v1_vehicles_fines_evg_preview__job_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/vehicles/fines/evg/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Confirm Evg Fines */
+        post: operations["confirm_evg_fines_api_v1_vehicles_fines_evg_confirm_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/vehicles/accidents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Vehicle Accidents */
+        get: operations["list_vehicle_accidents_api_v1_vehicles_accidents_get"];
+        put?: never;
+        /** Create Vehicle Accident */
+        post: operations["create_vehicle_accident_api_v1_vehicles_accidents_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/vehicles/maintenance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Vehicle Maintenance */
+        get: operations["list_vehicle_maintenance_api_v1_vehicles_maintenance_get"];
+        put?: never;
+        /** Create Vehicle Maintenance */
+        post: operations["create_vehicle_maintenance_api_v1_vehicles_maintenance_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/vehicles/photo-library": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Vehicle Photo Library */
+        get: operations["list_vehicle_photo_library_api_v1_vehicles_photo_library_get"];
+        put?: never;
+        /** Upload Vehicle Photo Library Item */
+        post: operations["upload_vehicle_photo_library_item_api_v1_vehicles_photo_library_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/vehicles/photo-library/{photo_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Vehicle Photo Library Item */
+        get: operations["get_vehicle_photo_library_item_api_v1_vehicles_photo_library__photo_id__get"];
+        put?: never;
+        post?: never;
+        /** Delete Vehicle Photo Library Item */
+        delete: operations["delete_vehicle_photo_library_item_api_v1_vehicles_photo_library__photo_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/vehicles/photo-library/{photo_id}/image/{variant}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Vehicle Photo Library Image */
+        get: operations["get_vehicle_photo_library_image_api_v1_vehicles_photo_library__photo_id__image__variant__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/vehicles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Vehicles */
+        get: operations["list_vehicles_api_v1_vehicles_get"];
+        put?: never;
+        /** Create Vehicle */
+        post: operations["create_vehicle_api_v1_vehicles_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/vehicles/scan-licence": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Scan Vehicle Licence */
+        post: operations["scan_vehicle_licence_api_v1_vehicles_scan_licence_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/vehicles/imports/template": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Download Vehicle Import Template */
+        get: operations["download_vehicle_import_template_api_v1_vehicles_imports_template_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/vehicles/imports/inspect": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Inspect Vehicle Import */
+        post: operations["inspect_vehicle_import_api_v1_vehicles_imports_inspect_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/vehicles/imports/{token}/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Preview Vehicle Import */
+        post: operations["preview_vehicle_import_api_v1_vehicles_imports__token__preview_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/vehicles/imports/{token}/images/{image_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Vehicle Import Image */
+        get: operations["get_vehicle_import_image_api_v1_vehicles_imports__token__images__image_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/vehicles/imports/{token}/images/{image_id}/scan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Scan Vehicle Import Image */
+        post: operations["scan_vehicle_import_image_api_v1_vehicles_imports__token__images__image_id__scan_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/vehicles/imports/{token}/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Confirm Vehicle Import */
+        post: operations["confirm_vehicle_import_api_v1_vehicles_imports__token__confirm_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/vehicles/{vehicle_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Vehicle */
+        get: operations["get_vehicle_api_v1_vehicles__vehicle_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update Vehicle */
+        patch: operations["update_vehicle_api_v1_vehicles__vehicle_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/vehicles/{vehicle_id}/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Archive Vehicle */
+        post: operations["archive_vehicle_api_v1_vehicles__vehicle_id__archive_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/vehicles/{vehicle_id}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Restore Vehicle */
+        post: operations["restore_vehicle_api_v1_vehicles__vehicle_id__restore_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/vehicles/{vehicle_id}/renew": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Renew Vehicle License */
+        post: operations["renew_vehicle_license_api_v1_vehicles__vehicle_id__renew_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/vehicles/{vehicle_id}/files": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Upload Vehicle File */
+        post: operations["upload_vehicle_file_api_v1_vehicles__vehicle_id__files_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/vehicles/{vehicle_id}/files/{file_id}/photo-asset": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Promote Vehicle File To Photo Asset */
+        post: operations["promote_vehicle_file_to_photo_asset_api_v1_vehicles__vehicle_id__files__file_id__photo_asset_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/vehicles/{vehicle_id}/files/{file_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Vehicle File */
+        get: operations["get_vehicle_file_api_v1_vehicles__vehicle_id__files__file_id__get"];
+        put?: never;
+        post?: never;
+        /** Delete Vehicle File */
+        delete: operations["delete_vehicle_file_api_v1_vehicles__vehicle_id__files__file_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/vehicles/{vehicle_id}/fines": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Add Vehicle Fine */
+        post: operations["add_vehicle_fine_api_v1_vehicles__vehicle_id__fines_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/vehicles/{vehicle_id}/fines/letter": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Generate Vehicle Fines Letter */
+        post: operations["generate_vehicle_fines_letter_api_v1_vehicles__vehicle_id__fines_letter_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/vehicles/{vehicle_id}/fines/{fine_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Vehicle Fine */
+        delete: operations["delete_vehicle_fine_api_v1_vehicles__vehicle_id__fines__fine_id__delete"];
+        options?: never;
+        head?: never;
+        /** Update Vehicle Fine */
+        patch: operations["update_vehicle_fine_api_v1_vehicles__vehicle_id__fines__fine_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/vehicles/{vehicle_id}/fines/{fine_id}/payment": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Record Vehicle Fine Payment */
+        post: operations["record_vehicle_fine_payment_api_v1_vehicles__vehicle_id__fines__fine_id__payment_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/vehicles/{vehicle_id}/fines/{fine_id}/receipt": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Attach Vehicle Fine Receipt */
+        put: operations["attach_vehicle_fine_receipt_api_v1_vehicles__vehicle_id__fines__fine_id__receipt_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/vehicles/{vehicle_id}/accidents/{accident_id}/letter": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Generate Vehicle Accident Letter */
+        post: operations["generate_vehicle_accident_letter_api_v1_vehicles__vehicle_id__accidents__accident_id__letter_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/vehicles/{vehicle_id}/accidents/{accident_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Vehicle Accident */
+        delete: operations["delete_vehicle_accident_api_v1_vehicles__vehicle_id__accidents__accident_id__delete"];
+        options?: never;
+        head?: never;
+        /** Update Vehicle Accident Status */
+        patch: operations["update_vehicle_accident_status_api_v1_vehicles__vehicle_id__accidents__accident_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/vehicles/{vehicle_id}/maintenance/{maintenance_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Vehicle Maintenance */
+        delete: operations["delete_vehicle_maintenance_api_v1_vehicles__vehicle_id__maintenance__maintenance_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workforce/dashboard/snapshot": {
         parameters: {
             query?: never;
@@ -5089,6 +5953,8 @@ export interface components {
             created: components["schemas"]["AbsenceRead"][];
             /** Skipped Off Roster */
             skipped_off_roster: string[];
+            /** Skipped On Leave */
+            skipped_on_leave?: string[];
         };
         /**
          * AbsenceEpisodeRead
@@ -5109,6 +5975,34 @@ export interface components {
             days: number;
             /** Notes */
             notes?: string | null;
+        };
+        /**
+         * AbsenceEpisodeUpdate
+         * @description Redraw one register row: the span it has, then the span it should have.
+         */
+        AbsenceEpisodeUpdate: {
+            /**
+             * Start Date
+             * Format: date
+             */
+            start_date: string;
+            /**
+             * End Date
+             * Format: date
+             */
+            end_date: string;
+            /**
+             * New Start Date
+             * Format: date
+             */
+            new_start_date: string;
+            /**
+             * New End Date
+             * Format: date
+             */
+            new_end_date: string;
+            /** Note */
+            note?: string | null;
         };
         /** AbsenceRead */
         AbsenceRead: {
@@ -5146,6 +6040,41 @@ export interface components {
             duty_unit?: string | null;
             /** Episodes */
             episodes: components["schemas"]["AbsenceEpisodeRead"][];
+        };
+        /** AbsenceRegisterRead */
+        AbsenceRegisterRead: {
+            /** Rows */
+            rows: components["schemas"]["AbsenceRegisterRowRead"][];
+        };
+        /**
+         * AbsenceRegisterRowRead
+         * @description One register row across all employees: who, plus the episode.
+         */
+        AbsenceRegisterRowRead: {
+            /** Employee Id */
+            employee_id: string;
+            /** Employee Name En */
+            employee_name_en?: string | null;
+            /** Employee Name Ar */
+            employee_name_ar?: string | null;
+            /** Duty Post */
+            duty_post?: string | null;
+            /** Duty Unit */
+            duty_unit?: string | null;
+            /**
+             * Start Date
+             * Format: date
+             */
+            start_date: string;
+            /**
+             * End Date
+             * Format: date
+             */
+            end_date: string;
+            /** Days */
+            days: number;
+            /** Notes */
+            notes?: string | null;
         };
         /** AcceptedResult */
         AcceptedResult: {
@@ -5421,6 +6350,11 @@ export interface components {
             /** Offset */
             offset: number;
         };
+        /** ApproveIn */
+        ApproveIn: {
+            /** Expected Version */
+            expected_version: number;
+        };
         /** ApproveRequest */
         ApproveRequest: {
             /**
@@ -5503,6 +6437,25 @@ export interface components {
              * @default false
              */
             is_default: boolean;
+        };
+        /**
+         * ArrivedAfterCloseOut
+         * @description An occurrence edited into this month after it was sealed.
+         */
+        ArrivedAfterCloseOut: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /**
+             * Violation Date
+             * Format: date
+             */
+            violation_date: string;
+            /** Ref Number */
+            ref_number: string | null;
+            /** Source Book Id */
+            source_book_id: number | null;
         };
         /** AttachmentSlotRead */
         AttachmentSlotRead: {
@@ -5833,6 +6786,45 @@ export interface components {
             /** Account Mail */
             account_mail: boolean;
         };
+        /**
+         * AwaitingCloseOut
+         * @description Unsealed months the caller can move. A standing state, not an event.
+         */
+        AwaitingCloseOut: {
+            /** Months */
+            months: components["schemas"]["AwaitingMonthOut"][];
+            /** Count */
+            count: number;
+        };
+        /** AwaitingMonthOut */
+        AwaitingMonthOut: {
+            /** Year */
+            year: number;
+            /** Month */
+            month: number;
+            /** Row Count */
+            row_count: number;
+            /** Pending Count */
+            pending_count: number;
+            /** Closable */
+            closable: boolean;
+            /**
+             * Stage
+             * @enum {string}
+             */
+            stage: "prepare" | "review" | "approve";
+            /** Assigned */
+            assigned: boolean;
+        };
+        /** BlockingEntryOut */
+        BlockingEntryOut: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Missing */
+            missing: string[];
+        };
         /** Body_add_attachment_api_v1_ledger__entry_id__attachments_post */
         Body_add_attachment_api_v1_ledger__entry_id__attachments_post: {
             /**
@@ -5854,6 +6846,14 @@ export interface components {
              */
             as_signed: boolean;
         };
+        /** Body_attach_vehicle_fine_receipt_api_v1_vehicles__vehicle_id__fines__fine_id__receipt_put */
+        Body_attach_vehicle_fine_receipt_api_v1_vehicles__vehicle_id__fines__fine_id__receipt_put: {
+            /**
+             * File
+             * Format: binary
+             */
+            file: string;
+        };
         /** Body_create_extraction_api_v1_extractions_post */
         Body_create_extraction_api_v1_extractions_post: {
             /**
@@ -5862,8 +6862,47 @@ export interface components {
              */
             file: string;
         };
+        /** Body_create_handoff_api_v1_email_handoff_post */
+        Body_create_handoff_api_v1_email_handoff_post: {
+            /** To */
+            to: string;
+            /** Subject */
+            subject: string;
+            /** Html */
+            html: string;
+            /** Mode */
+            mode: string;
+            /**
+             * Cc
+             * @default
+             */
+            cc: string;
+            /** Related Book Id */
+            related_book_id?: number | null;
+            /** Related Employee Id */
+            related_employee_id?: string | null;
+            /** In Reply To */
+            in_reply_to?: string | null;
+            /** References */
+            references?: string | null;
+            /**
+             * Use Signature
+             * @default true
+             */
+            use_signature: boolean;
+            /** Files */
+            files?: string[] | null;
+        };
         /** Body_inspect_approved_violation_api_v1_documents_inmate_violations_approved_imports_inspect_post */
         Body_inspect_approved_violation_api_v1_documents_inmate_violations_approved_imports_inspect_post: {
+            /**
+             * Upload
+             * Format: binary
+             */
+            upload: string;
+        };
+        /** Body_inspect_vehicle_import_api_v1_vehicles_imports_inspect_post */
+        Body_inspect_vehicle_import_api_v1_vehicles_imports_inspect_post: {
             /**
              * Upload
              * Format: binary
@@ -5877,6 +6916,11 @@ export interface components {
              * Format: binary
              */
             file: string;
+        };
+        /** Body_record_vehicle_fine_payment_api_v1_vehicles__vehicle_id__fines__fine_id__payment_post */
+        Body_record_vehicle_fine_payment_api_v1_vehicles__vehicle_id__fines__fine_id__payment_post: {
+            /** File */
+            file?: string | null;
         };
         /** Body_replace_book_attachment_api_v1_books__book_id__attachments__index__put */
         Body_replace_book_attachment_api_v1_books__book_id__attachments__index__put: {
@@ -5910,6 +6954,14 @@ export interface components {
              */
             upload: string;
         };
+        /** Body_scan_vehicle_licence_api_v1_vehicles_scan_licence_post */
+        Body_scan_vehicle_licence_api_v1_vehicles_scan_licence_post: {
+            /**
+             * Upload
+             * Format: binary
+             */
+            upload: string;
+        };
         /** Body_send_announcement_api_v1_announcements_send_post */
         Body_send_announcement_api_v1_announcements_send_post: {
             /** Group Ids */
@@ -5927,31 +6979,6 @@ export interface components {
             file?: string | null;
             /** Mentions */
             mentions?: string[] | null;
-        };
-        /** Body_send_email_api_v1_email_send_post */
-        Body_send_email_api_v1_email_send_post: {
-            /** To */
-            to: string;
-            /** Subject */
-            subject: string;
-            /** Html */
-            html: string;
-            /**
-             * Cc
-             * @default
-             */
-            cc: string;
-            /** In Reply To */
-            in_reply_to?: string | null;
-            /** References */
-            references?: string | null;
-            /**
-             * Use Signature
-             * @default true
-             */
-            use_signature: boolean;
-            /** Files */
-            files?: string[] | null;
         };
         /** Body_stage_attachment_api_v1_documents_attachments_stage_post */
         Body_stage_attachment_api_v1_documents_attachments_stage_post: {
@@ -6034,6 +7061,32 @@ export interface components {
              * Format: binary
              */
             upload: string;
+        };
+        /** Body_upload_vehicle_file_api_v1_vehicles__vehicle_id__files_post */
+        Body_upload_vehicle_file_api_v1_vehicles__vehicle_id__files_post: {
+            /** Kind */
+            kind: string;
+            /**
+             * File
+             * Format: binary
+             */
+            file: string;
+            /** Label Ar */
+            label_ar?: string | null;
+            /** Label En */
+            label_en?: string | null;
+        };
+        /** Body_upload_vehicle_photo_library_item_api_v1_vehicles_photo_library_post */
+        Body_upload_vehicle_photo_library_item_api_v1_vehicles_photo_library_post: {
+            /**
+             * File
+             * Format: binary
+             */
+            file: string;
+            /** Label Ar */
+            label_ar?: string | null;
+            /** Label En */
+            label_en?: string | null;
         };
         /**
          * BookAnnotationCreate
@@ -6397,6 +7450,11 @@ export interface components {
             approval_steps?: components["schemas"]["BookApprovalStepRead"][];
         };
         /**
+         * CanonicalWing
+         * @enum {string}
+         */
+        CanonicalWing: "1A" | "1B" | "2A" | "2B" | "3A" | "3B" | "4A" | "4B" | "5A" | "5B" | "6A" | "6B";
+        /**
          * CapabilityRead
          * @description One capability in the catalog, with which roles grant it by default.
          */
@@ -6405,12 +7463,32 @@ export interface components {
             id: string;
             /** Domain */
             domain: string;
-            /** Label */
-            label: string;
-            /** Description */
-            description: string;
+            /** Label En */
+            label_en: string;
+            /** Label Ar */
+            label_ar: string | null;
+            /** Description En */
+            description_en: string;
+            /** Description Ar */
+            description_ar: string | null;
+            /** Sensitive */
+            sensitive: boolean;
+            /** Requestable */
+            requestable: boolean;
             /** Default Roles */
             default_roles: string[];
+            /**
+             * Label
+             * @deprecated
+             * @description Deprecated English alias for label_en.
+             */
+            label: string;
+            /**
+             * Description
+             * @deprecated
+             * @description Deprecated English alias for description_en.
+             */
+            description: string;
         };
         /** ClassificationListResponse */
         ClassificationListResponse: {
@@ -6447,6 +7525,33 @@ export interface components {
             top_missing: components["schemas"]["MissingFieldCount"][];
             /** First Incomplete Id */
             first_incomplete_id: string | null;
+        };
+        /**
+         * CompletionIn
+         * @description ``report_time``, ``reporter_id`` and the narrative are the save gate.
+         */
+        CompletionIn: {
+            /** Report Time */
+            report_time: string;
+            /** Reporter Id */
+            reporter_id: string;
+            /** Violation Details */
+            violation_details: string;
+            /** Inmates */
+            inmates: components["schemas"]["CompletionInmateIn"][];
+        };
+        /** CompletionInmateIn */
+        CompletionInmateIn: {
+            /** Name */
+            name: string;
+            /** Uid */
+            uid?: string | null;
+            /** Nationality */
+            nationality?: string | null;
+            /** Wing */
+            wing?: string | null;
+            /** Holding No */
+            holding_no?: string | null;
         };
         /**
          * ConfigurationPatch
@@ -7135,7 +8240,7 @@ export interface components {
              * Id
              * @enum {string}
              */
-            id: "pending" | "workspace" | "violations" | "drafts" | "ledger" | "on_leave_today" | "upcoming_leave" | "recent_docs" | "email_sync_status" | "waiting_approvals" | "expiring_soon" | "recent_ledger" | "pending_departures" | "workforce_pulse";
+            id: "pending" | "workspace" | "violations" | "drafts" | "ledger" | "on_leave_today" | "upcoming_leave" | "recent_docs" | "email_sync_status" | "waiting_approvals" | "expiring_soon" | "recent_ledger" | "pending_departures" | "workforce_pulse" | "violation_months";
             /**
              * Visible
              * @default true
@@ -7295,42 +8400,6 @@ export interface components {
              * @enum {string}
              */
             role: "primary" | "companion";
-        };
-        /**
-         * DraftWrite
-         * @description Payload for creating or updating an email draft.
-         *
-         *     Drafts borrow the LedgerEntry shape (channel='email', direction='outgoing',
-         *     tag='draft'). ``to``/``cc``/``in_reply_to``/``references`` aren't first-
-         *     class on LedgerEntry, so they're persisted as ``draft_meta`` JSON.
-         *     ``subject`` and ``html`` map to ``subject`` and ``notes_html``.
-         *     ``use_signature`` is persisted in draft_meta and forwarded to
-         *     ``email_service.send_email`` when the draft is promoted to sent.
-         */
-        DraftWrite: {
-            /** To */
-            to?: string[];
-            /** Cc */
-            cc?: string[];
-            /**
-             * Subject
-             * @default
-             */
-            subject: string;
-            /**
-             * Html
-             * @default
-             */
-            html: string;
-            /** In Reply To */
-            in_reply_to?: string | null;
-            /** References */
-            references?: string | null;
-            /**
-             * Use Signature
-             * @default true
-             */
-            use_signature: boolean;
         };
         /** DutyAssignmentEventRead */
         DutyAssignmentEventRead: {
@@ -7511,6 +8580,11 @@ export interface components {
             smtp_use_tls: boolean;
             /** Sent Folder */
             sent_folder: string;
+            /**
+             * Drafts Folder
+             * @default Drafts
+             */
+            drafts_folder: string;
             /** Inbox Folder */
             inbox_folder: string;
             /** Enabled */
@@ -7578,6 +8652,11 @@ export interface components {
              */
             sent_folder: string;
             /**
+             * Drafts Folder
+             * @default Drafts
+             */
+            drafts_folder: string;
+            /**
              * Inbox Folder
              * @default INBOX
              */
@@ -7595,6 +8674,16 @@ export interface components {
             /** Linked Employee Id */
             linked_employee_id?: string | null;
         };
+        /** EmailHandoffResult */
+        EmailHandoffResult: {
+            /** Ledger Entry Id */
+            ledger_entry_id: number;
+            /**
+             * Mode
+             * @enum {string}
+             */
+            mode: "mailto" | "draft";
+        };
         /**
          * EmailLinkRequest
          * @description Request a verify or password-reset link be emailed to ``email``.
@@ -7608,15 +8697,6 @@ export interface components {
              * @enum {string}
              */
             locale: "en" | "ar";
-        };
-        /** EmailSendResult */
-        EmailSendResult: {
-            /** Sent */
-            sent: boolean;
-            /** Message Id */
-            message_id: string;
-            /** Ledger Entry Id */
-            ledger_entry_id: number;
         };
         /** EmailSyncResult */
         EmailSyncResult: {
@@ -8199,6 +9279,134 @@ export interface components {
             /** Last Error Code */
             last_error_code?: string | null;
         };
+        /** EvgConfirmRequest */
+        EvgConfirmRequest: {
+            /** Rows */
+            rows: components["schemas"]["EvgConfirmRow"][];
+        };
+        /** EvgConfirmResult */
+        EvgConfirmResult: {
+            /** Created */
+            created: number;
+            /** Skipped */
+            skipped: number;
+        };
+        /** EvgConfirmRow */
+        EvgConfirmRow: {
+            /** Ticket No */
+            ticket_no: string;
+            /**
+             * Date
+             * Format: date
+             */
+            date: string;
+            /** Time */
+            time: string | null;
+            /** Location */
+            location: string;
+            /** Plate Number */
+            plate_number: string;
+            /** Plate Code */
+            plate_code: string | null;
+            /** Amount Fils */
+            amount_fils: number;
+            /** Amount After Discount Fils */
+            amount_after_discount_fils?: number | null;
+            /** Black Points */
+            black_points: number;
+            /** Fine Type */
+            fine_type: string;
+            /** Description */
+            description: string | null;
+            /** Vehicle Id */
+            vehicle_id: number;
+            /**
+             * Match
+             * @enum {string}
+             */
+            match: "matched" | "ambiguous" | "unmatched" | "already_imported";
+        };
+        /** EvgPreviewJobCreated */
+        EvgPreviewJobCreated: {
+            /** Job Id */
+            job_id: string;
+        };
+        /** EvgPreviewJobStatus */
+        EvgPreviewJobStatus: {
+            /** Job Id */
+            job_id: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "queued" | "running" | "done" | "failed";
+            result?: components["schemas"]["EvgPreviewResponse"] | null;
+            /** Error Code */
+            error_code?: string | null;
+            /** Error Message */
+            error_message?: string | null;
+        };
+        /** EvgPreviewRequest */
+        EvgPreviewRequest: {
+            /** Traffic Codes */
+            traffic_codes?: string[] | null;
+        };
+        /** EvgPreviewResponse */
+        EvgPreviewResponse: {
+            /** Rows */
+            rows: components["schemas"]["EvgPreviewRow"][];
+            /** Traffic Codes */
+            traffic_codes: string[];
+            /**
+             * Fetched At
+             * Format: date-time
+             */
+            fetched_at: string;
+            /** Vehicles */
+            vehicles: components["schemas"]["EvgVehicleOption"][];
+        };
+        /** EvgPreviewRow */
+        EvgPreviewRow: {
+            /** Ticket No */
+            ticket_no: string;
+            /**
+             * Date
+             * Format: date
+             */
+            date: string;
+            /** Time */
+            time: string | null;
+            /** Location */
+            location: string;
+            /** Plate Number */
+            plate_number: string;
+            /** Plate Code */
+            plate_code: string | null;
+            /** Amount Fils */
+            amount_fils: number;
+            /** Amount After Discount Fils */
+            amount_after_discount_fils?: number | null;
+            /** Black Points */
+            black_points: number;
+            /** Fine Type */
+            fine_type: string;
+            /** Description */
+            description: string | null;
+            /** Vehicle Id */
+            vehicle_id: number | null;
+            /**
+             * Match
+             * @enum {string}
+             */
+            match: "matched" | "ambiguous" | "unmatched" | "already_imported";
+        };
+        /** EvgVehicleOption */
+        EvgVehicleOption: {
+            /** Id */
+            id: number;
+            /** Plate Label */
+            plate_label: string;
+        };
         /** ExpiryItemOut */
         ExpiryItemOut: {
             /** Employee Id */
@@ -8308,6 +9516,16 @@ export interface components {
             matched_employee_name_en?: string | null;
             /** Matched Employee Name Ar */
             matched_employee_name_ar?: string | null;
+        };
+        /** FinesLetterRequest */
+        FinesLetterRequest: {
+            /** Fine Ids */
+            fine_ids: number[];
+            /**
+             * Hide Names
+             * @default false
+             */
+            hide_names: boolean;
         };
         /** FlagCountResponse */
         FlagCountResponse: {
@@ -8799,6 +10017,8 @@ export interface components {
             created_at: string;
             /** Updated At */
             updated_at?: string | null;
+            /** Linked Documents */
+            linked_documents?: components["schemas"]["LinkedDocumentRead"][];
         };
         /**
          * LeaveReturnRequest
@@ -9070,6 +10290,58 @@ export interface components {
             /** Offset */
             offset: number;
         };
+        /** LetterResult */
+        LetterResult: {
+            /** Book Id */
+            book_id: number;
+            /** Document Id */
+            document_id: number;
+            /** Ref Number */
+            ref_number: string;
+            /** Pdf Available */
+            pdf_available: boolean;
+        };
+        /** LicenseRenewCreate */
+        LicenseRenewCreate: {
+            /**
+             * Start
+             * Format: date
+             */
+            start: string;
+            /**
+             * Expiry
+             * Format: date
+             */
+            expiry: string;
+            /** Cost */
+            cost: number;
+            /** Scan File Id */
+            scan_file_id?: number | null;
+        };
+        /** LicenseRenewalRead */
+        LicenseRenewalRead: {
+            /** Id */
+            id: number;
+            /**
+             * Start
+             * Format: date
+             */
+            start: string;
+            /**
+             * Expiry
+             * Format: date
+             */
+            expiry: string;
+            /**
+             * Renewed On
+             * Format: date
+             */
+            renewed_on: string;
+            /** Cost */
+            cost: number | null;
+            /** Scan Url */
+            scan_url?: string | null;
+        };
         /**
          * LinkSelfRequest
          * @description Set (or clear, admin-only) the signed-in user's own employee link.
@@ -9079,6 +10351,21 @@ export interface components {
         LinkSelfRequest: {
             /** Employee Id */
             employee_id?: string | null;
+        };
+        /**
+         * LinkedDocumentRead
+         * @description A committed generated Document attached to a leave/violation.
+         */
+        LinkedDocumentRead: {
+            /** Id */
+            id: number;
+            /** Template Id */
+            template_id: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
         };
         /**
          * LockLayoutRequest
@@ -9163,6 +10450,70 @@ export interface components {
             /** User Id */
             user_id?: number | null;
         };
+        /**
+         * ManualProvenanceOut
+         * @description Why a hand-typed entry exists, and who typed it. Screen only.
+         */
+        ManualProvenanceOut: {
+            /** Row Id */
+            row_id?: number | null;
+            /** Reason */
+            reason?: string | null;
+            /** Created By */
+            created_by?: number | null;
+            /** Created By Name */
+            created_by_name?: string | null;
+            /** Created At */
+            created_at?: string | null;
+        };
+        /** ManualRowIn */
+        ManualRowIn: {
+            /** Name */
+            name: string;
+            /**
+             * Violation Date
+             * Format: date
+             */
+            violation_date: string;
+            /** Reason */
+            reason: string;
+            /** Uid */
+            uid?: string | null;
+            /** Nationality Label */
+            nationality_label?: string | null;
+            /** Wing */
+            wing?: string | null;
+            /** Holding No */
+            holding_no?: string | null;
+            /** Reporter Id */
+            reporter_id?: string | null;
+            /** Details Text */
+            details_text?: string | null;
+        };
+        /**
+         * ManualRowPatch
+         * @description Only the supplied cells change; the rest keep their stored values.
+         */
+        ManualRowPatch: {
+            /** Name */
+            name?: string | null;
+            /** Violation Date */
+            violation_date?: string | null;
+            /** Reason */
+            reason?: string | null;
+            /** Uid */
+            uid?: string | null;
+            /** Nationality Label */
+            nationality_label?: string | null;
+            /** Wing */
+            wing?: string | null;
+            /** Holding No */
+            holding_no?: string | null;
+            /** Reporter Id */
+            reporter_id?: string | null;
+            /** Details Text */
+            details_text?: string | null;
+        };
         /** MarkAllReadResponse */
         MarkAllReadResponse: {
             /** Updated */
@@ -9213,6 +10564,62 @@ export interface components {
             /** Count */
             count: number;
         };
+        /** MonthCountsOut */
+        MonthCountsOut: {
+            /** Citizens */
+            citizens: number;
+            /** Expats */
+            expats: number;
+            /** Pending */
+            pending: number;
+            /** Total */
+            total: number;
+        };
+        /** MonthOut */
+        MonthOut: {
+            /** Year */
+            year: number;
+            /** Month */
+            month: number;
+            /** Closed */
+            closed: boolean;
+            /** Closed At */
+            closed_at: string | null;
+            /** Closed By */
+            closed_by: number | null;
+            /** Closed By Name */
+            closed_by_name: string | null;
+            /** Reopened At */
+            reopened_at: string | null;
+            /** Reopened By */
+            reopened_by: number | null;
+            /** Reopened By Name */
+            reopened_by_name: string | null;
+            /** Force Reason */
+            force_reason: string | null;
+            /** Force Closed */
+            force_closed: boolean;
+            /** Projection Fingerprint */
+            projection_fingerprint: string;
+            wing_summary: components["schemas"]["WingSummaryOut"];
+            workflow: components["schemas"]["WorkflowOut"];
+            /**
+             * First Closable Date
+             * Format: date
+             */
+            first_closable_date: string;
+            /** Export Ready */
+            export_ready: boolean;
+            counts: components["schemas"]["MonthCountsOut"];
+            /** Entries */
+            entries: components["schemas"]["RegisterEntryOut"][];
+            /** Uncounted */
+            uncounted: components["schemas"]["UncountedRecordOut"][];
+            /** Arrived After Close */
+            arrived_after_close: components["schemas"]["ArrivedAfterCloseOut"][];
+            /** Blocking */
+            blocking: components["schemas"]["BlockingEntryOut"][];
+        };
         /** MyDocumentActivityRead */
         MyDocumentActivityRead: {
             /** Documents Today */
@@ -9226,6 +10633,29 @@ export interface components {
             nationality: string;
             /** Count */
             count: number;
+        };
+        /** NationalityListOut */
+        NationalityListOut: {
+            /** Items */
+            items: components["schemas"]["NationalityOut"][];
+            /** Aliases */
+            aliases: {
+                [key: string]: string;
+            };
+        };
+        /**
+         * NationalityOut
+         * @description One entry of the closed inmate nationality list.
+         */
+        NationalityOut: {
+            /** Code */
+            code: string;
+            /** Label Ar */
+            label_ar: string;
+            /** Label En */
+            label_en: string;
+            /** Selectable */
+            selectable: boolean;
         };
         /** NextShiftRead */
         NextShiftRead: {
@@ -9254,6 +10684,15 @@ export interface components {
             scans: number;
             /** Emails */
             emails: number;
+            /** Monthly Reviews */
+            monthly_reviews: number;
+            /** Monthly Approvals */
+            monthly_approvals: number;
+        };
+        /** NotifyDaysUpdate */
+        NotifyDaysUpdate: {
+            /** Days */
+            days: number;
         };
         /** NotifyMessageRead */
         NotifyMessageRead: {
@@ -9422,7 +10861,11 @@ export interface components {
             requester_name: string;
             /** Capability */
             capability: string;
-            /** Capability Label */
+            /**
+             * Capability Label
+             * @deprecated
+             * @description Deprecated English capability label derived from the catalog.
+             */
             capability_label: string;
             /** Status */
             status: string;
@@ -9887,6 +11330,18 @@ export interface components {
             /** Nationality */
             nationality?: string | null;
         };
+        /**
+         * PrepareIn
+         * @description The fingerprint is the report the preparer actually previewed.
+         */
+        PrepareIn: {
+            /** Expected Version */
+            expected_version: number;
+            /** Expected Projection Fingerprint */
+            expected_projection_fingerprint: string;
+            /** Reviewer User Id */
+            reviewer_user_id: number;
+        };
         /** ProviderPersonMappingWrite */
         ProviderPersonMappingWrite: {
             /** Employee Id */
@@ -9994,6 +11449,8 @@ export interface components {
             days: number;
             /** Status */
             status: string;
+            /** Linked Documents */
+            linked_documents?: components["schemas"]["LinkedDocumentRead"][];
         };
         /** RecentLedgerRead */
         RecentLedgerRead: {
@@ -10026,6 +11483,8 @@ export interface components {
             status: string;
             /** Description */
             description?: string | null;
+            /** Linked Documents */
+            linked_documents?: components["schemas"]["LinkedDocumentRead"][];
         };
         /** RecipientCreate */
         RecipientCreate: {
@@ -10098,6 +11557,59 @@ export interface components {
             /** Name Ar */
             name_ar: string | null;
         };
+        /** RegisterEntryOut */
+        RegisterEntryOut: {
+            /** Id */
+            id: string;
+            /** Origin */
+            origin: string;
+            /** Row No */
+            row_no: number;
+            /** Population */
+            population: string;
+            /** Name */
+            name: string;
+            /** Uid */
+            uid: string;
+            /** Nationality Label */
+            nationality_label: string;
+            /** Nationality Code */
+            nationality_code: string | null;
+            /**
+             * Violation Date
+             * Format: date
+             */
+            violation_date: string;
+            /** Duty Unit */
+            duty_unit: string;
+            /** Details Text */
+            details_text: string;
+            /** Wing */
+            wing: string;
+            /** Holding No */
+            holding_no: string;
+            /** Reporter Id */
+            reporter_id: string | null;
+            /** Reporter Name */
+            reporter_name: string | null;
+            /** Source Book Id */
+            source_book_id: number | null;
+            /** Source Version No */
+            source_version_no: number | null;
+            /** Source Row Index */
+            source_row_index: number | null;
+            /** Source Ref Number */
+            source_ref_number: string | null;
+            /** Incomplete Marks */
+            incomplete_marks: string[];
+            /** Missing */
+            missing: string[];
+            /** Duplicate Of */
+            duplicate_of: string | null;
+            /** Completion Book Id */
+            completion_book_id: number | null;
+            manual: components["schemas"]["ManualProvenanceOut"] | null;
+        };
         /**
          * RegisterRequest
          * @description Request-access (or bootstrap-admin) payload.
@@ -10148,10 +11660,24 @@ export interface components {
             /** New Name */
             new_name: string;
         };
+        /** ReopenIn */
+        ReopenIn: {
+            /** Expected Version */
+            expected_version: number;
+            /** Reason */
+            reason: string;
+        };
         /** ResetPasswordRequest */
         ResetPasswordRequest: {
             /** Password */
             password: string;
+        };
+        /** ReturnIn */
+        ReturnIn: {
+            /** Expected Version */
+            expected_version: number;
+            /** Reason */
+            reason: string;
         };
         /** ReturnedFormOut */
         ReturnedFormOut: {
@@ -10177,6 +11703,13 @@ export interface components {
             employee_id?: string | null;
             /** Employee Name */
             employee_name?: string | null;
+        };
+        /** ReviewIn */
+        ReviewIn: {
+            /** Expected Version */
+            expected_version: number;
+            /** Manager User Id */
+            manager_user_id: number;
         };
         /** ReviewRequest */
         ReviewRequest: {
@@ -10715,8 +12248,25 @@ export interface components {
             signing_path: "auto" | "in_app" | "scan" | "chain";
             /** Has Code */
             has_code: boolean;
+            /** Feature Minted */
+            feature_minted: boolean;
             /** Notifies Employee */
             notifies_employee: boolean;
+        };
+        /**
+         * TimesheetCellEdit
+         * @description A persisted manual cell and who set it.
+         */
+        TimesheetCellEdit: {
+            /** Code */
+            code: string;
+            /** By */
+            by: string | null;
+            /**
+             * At
+             * Format: date-time
+             */
+            at: string;
         };
         /**
          * TimesheetCellUpdate
@@ -10925,6 +12475,10 @@ export interface components {
             notes: {
                 [key: string]: string;
             };
+            /** Edits */
+            edits: {
+                [key: string]: components["schemas"]["TimesheetCellEdit"];
+            };
             /** Designation Id */
             designation_id?: number | null;
         };
@@ -10945,6 +12499,18 @@ export interface components {
         TransferAdminRequest: {
             /** Employee Id */
             employee_id: string;
+        };
+        /**
+         * UncountedRecordOut
+         * @description A filed Record that belongs to no Violation month.
+         */
+        UncountedRecordOut: {
+            /** Book Id */
+            book_id: number;
+            /** Ref Number */
+            ref_number: string;
+            /** Reason */
+            reason: string;
         };
         /** UnreadCountResponse */
         UnreadCountResponse: {
@@ -11097,6 +12663,575 @@ export interface components {
                 [key: string]: components["schemas"]["VaultEntry"][];
             };
         };
+        /** VehicleAccidentCreate */
+        VehicleAccidentCreate: {
+            /** Vehicle Id */
+            vehicle_id: number;
+            /** Employee Id */
+            employee_id?: string | null;
+            /**
+             * Date
+             * Format: date
+             */
+            date: string;
+            /** Time */
+            time: string;
+            /** Location Ar */
+            location_ar: string;
+            /** Location En */
+            location_en?: string | null;
+            /** Description Ar */
+            description_ar: string;
+            /** Description En */
+            description_en?: string | null;
+            /** Police Ref */
+            police_ref?: string | null;
+            /**
+             * Damage Cost
+             * @default 0
+             */
+            damage_cost: number;
+            /** Photo File Ids */
+            photo_file_ids?: number[];
+        };
+        /** VehicleAccidentRead */
+        VehicleAccidentRead: {
+            /** Id */
+            id: number;
+            /** Vehicle Id */
+            vehicle_id: number;
+            /** Employee Id */
+            employee_id: string | null;
+            /** Employee Name Ar */
+            employee_name_ar?: string | null;
+            /** Employee Name En */
+            employee_name_en?: string | null;
+            /**
+             * Date
+             * Format: date
+             */
+            date: string;
+            /** Time */
+            time: string | null;
+            /** Location Ar */
+            location_ar: string;
+            /** Location En */
+            location_en: string | null;
+            /** Description Ar */
+            description_ar: string;
+            /** Description En */
+            description_en: string | null;
+            /** Police Ref */
+            police_ref: string | null;
+            /** Damage Cost */
+            damage_cost: number;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "open" | "closed";
+            /** Photo File Ids */
+            photo_file_ids: number[];
+            /** Photos */
+            photos?: components["schemas"]["VehicleFileRead"][];
+            /** Letter Book Id */
+            letter_book_id: number | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Updated At */
+            updated_at: string | null;
+            /**
+             * Vehicle Plate Label
+             * @default
+             */
+            vehicle_plate_label: string;
+            /**
+             * Vehicle Type Ar
+             * @default
+             */
+            vehicle_type_ar: string;
+            /**
+             * Vehicle Type En
+             * @default
+             */
+            vehicle_type_en: string;
+            /** Vehicle Vin */
+            vehicle_vin?: string | null;
+            /**
+             * Vehicle Site Id
+             * @default 0
+             */
+            vehicle_site_id: number;
+        };
+        /** VehicleAccidentStatusUpdate */
+        VehicleAccidentStatusUpdate: {
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "open" | "closed";
+        };
+        /** VehicleCreate */
+        VehicleCreate: {
+            /** Plate Code */
+            plate_code?: string | null;
+            /** Plate Number */
+            plate_number: string;
+            /** Traffic Code */
+            traffic_code: string;
+            /** Type Ar */
+            type_ar: string;
+            /** Type En */
+            type_en: string;
+            /** Class Ar */
+            class_ar: string;
+            /** Class En */
+            class_en: string;
+            /** Vin */
+            vin?: string | null;
+            /** Site Id */
+            site_id?: number | null;
+            new_site?: components["schemas"]["VehicleSiteCreate"] | null;
+            /** Contract Note Ar */
+            contract_note_ar?: string | null;
+            /** Contract Note En */
+            contract_note_en?: string | null;
+            /**
+             * License Start
+             * Format: date
+             */
+            license_start: string;
+            /**
+             * License Expiry
+             * Format: date
+             */
+            license_expiry: string;
+            /** Photo Asset Id */
+            photo_asset_id?: number | null;
+            /** License File Id */
+            license_file_id?: number | null;
+            /** Make */
+            make?: string | null;
+            /** Model */
+            model?: string | null;
+            /** Model Year */
+            model_year?: number | null;
+            /** Colour */
+            colour?: string | null;
+            /** Insurance Expiry */
+            insurance_expiry?: string | null;
+            /** Inmate Capacity */
+            inmate_capacity?: number | null;
+            /** Passenger Capacity */
+            passenger_capacity?: number | null;
+            /** Accessories Ar */
+            accessories_ar?: string | null;
+            /** Accessories En */
+            accessories_en?: string | null;
+            /** Notes Ar */
+            notes_ar?: string | null;
+            /** Notes En */
+            notes_en?: string | null;
+        };
+        /** VehicleFileRead */
+        VehicleFileRead: {
+            /** Id */
+            id: number;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "photo" | "license" | "gallery" | "accident" | "receipt";
+            /** Label Ar */
+            label_ar: string | null;
+            /** Label En */
+            label_en: string | null;
+            /** Original Name */
+            original_name: string;
+            /** Media Type */
+            media_type: string;
+            /**
+             * Url
+             * @default
+             */
+            url: string;
+        };
+        /** VehicleFineBatchRequest */
+        VehicleFineBatchRequest: {
+            /** Fines */
+            fines: components["schemas"]["VehicleFinePaymentRecord"][];
+        };
+        /** VehicleFineBatchResult */
+        VehicleFineBatchResult: {
+            /** Changed Count */
+            changed_count: number;
+        };
+        /** VehicleFineCreate */
+        VehicleFineCreate: {
+            /** Employee Id */
+            employee_id?: string | null;
+            /**
+             * Date
+             * Format: date
+             */
+            date: string;
+            /** Time */
+            time?: string | null;
+            /** Amount Fils */
+            amount_fils: number;
+            /**
+             * Black Points
+             * @default 0
+             */
+            black_points: number;
+            /** Location */
+            location?: string | null;
+            /** Description */
+            description?: string | null;
+        };
+        /**
+         * VehicleFinePaymentRecord
+         * @description `{fines: [{id, version}]}` batch archive/restore request row.
+         */
+        VehicleFinePaymentRecord: {
+            /** Id */
+            id: number;
+            /** Version */
+            version: string;
+        };
+        /** VehicleFineRead */
+        VehicleFineRead: {
+            /** Id */
+            id: number;
+            /** Vehicle Id */
+            vehicle_id: number;
+            /** Employee Id */
+            employee_id: string | null;
+            /** Employee Name Ar */
+            employee_name_ar?: string | null;
+            /** Employee Name En */
+            employee_name_en?: string | null;
+            /**
+             * Date
+             * Format: date
+             */
+            date: string;
+            /** Time */
+            time: string | null;
+            /** Amount Fils */
+            amount_fils: number;
+            /** Amount After Discount Fils */
+            amount_after_discount_fils: number | null;
+            /** Black Points */
+            black_points: number;
+            /**
+             * Source
+             * @enum {string}
+             */
+            source: "manual" | "evg";
+            /** Evg Ticket No */
+            evg_ticket_no: string | null;
+            /** Location */
+            location: string | null;
+            /** Description */
+            description: string | null;
+            /** Fine Type */
+            fine_type: string | null;
+            /**
+             * Payment Status
+             * @enum {string}
+             */
+            payment_status: "unknown" | "unpaid" | "paid";
+            receipt?: components["schemas"]["VehicleFileRead"] | null;
+            /** Archived At */
+            archived_at: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Version
+             * @default
+             */
+            version: string;
+            /**
+             * Vehicle Plate Label
+             * @default
+             */
+            vehicle_plate_label: string;
+            /**
+             * Vehicle Type Ar
+             * @default
+             */
+            vehicle_type_ar: string;
+            /**
+             * Vehicle Type En
+             * @default
+             */
+            vehicle_type_en: string;
+            /**
+             * Vehicle Site Id
+             * @default 0
+             */
+            vehicle_site_id: number;
+        };
+        /** VehicleFineUpdate */
+        VehicleFineUpdate: {
+            /** Employee Id */
+            employee_id?: string | null;
+            /** Date */
+            date?: string | null;
+            /** Time */
+            time?: string | null;
+            /** Amount Fils */
+            amount_fils?: number | null;
+            /** Black Points */
+            black_points?: number | null;
+            /** Location */
+            location?: string | null;
+            /** Description */
+            description?: string | null;
+            /** Payment Status */
+            payment_status?: "unpaid" | null;
+        };
+        /** VehicleImportChange */
+        VehicleImportChange: {
+            /** Field */
+            field: string;
+            /** Before */
+            before: string | number | null;
+            /** After */
+            after: string | number | null;
+        };
+        /** VehicleImportConfirmRequest */
+        VehicleImportConfirmRequest: {
+            /** Revision */
+            revision: string;
+            /** Row Ids */
+            row_ids: string[];
+        };
+        /** VehicleImportCounts */
+        VehicleImportCounts: {
+            /**
+             * Create
+             * @default 0
+             */
+            create: number;
+            /**
+             * Update
+             * @default 0
+             */
+            update: number;
+            /**
+             * Unchanged
+             * @default 0
+             */
+            unchanged: number;
+            /**
+             * Invalid
+             * @default 0
+             */
+            invalid: number;
+            /**
+             * Archived
+             * @default 0
+             */
+            archived: number;
+            /**
+             * Excluded
+             * @default 0
+             */
+            excluded: number;
+        };
+        /** VehicleImportImage */
+        VehicleImportImage: {
+            /** Image Id */
+            image_id: string;
+            /** Url */
+            url: string;
+            /** Row Id */
+            row_id?: string | null;
+            /** Original Name */
+            original_name: string;
+            /** Kind */
+            kind?: ("photo" | "license") | null;
+        };
+        /** VehicleImportInspectRow */
+        VehicleImportInspectRow: {
+            /** Row Id */
+            row_id: string;
+            /** Section Id */
+            section_id: string;
+            /** Sheet */
+            sheet: string;
+            /** Row Number */
+            row_number: number;
+            /** Raw */
+            raw: {
+                [key: string]: string | null;
+            };
+            /** Values */
+            values: {
+                [key: string]: string | number | null;
+            };
+            /** Image Ids */
+            image_ids?: string[];
+        };
+        /** VehicleImportInspection */
+        VehicleImportInspection: {
+            /** Token */
+            token: string;
+            /**
+             * Expires At
+             * Format: date-time
+             */
+            expires_at: string;
+            /** Filename */
+            filename: string;
+            /** Sections */
+            sections: components["schemas"]["VehicleImportSection"][];
+            /** Rows */
+            rows: components["schemas"]["VehicleImportInspectRow"][];
+            /** Images */
+            images: components["schemas"]["VehicleImportImage"][];
+            /** Warnings */
+            warnings?: components["schemas"]["VehicleImportIssue"][];
+        };
+        /** VehicleImportIssue */
+        VehicleImportIssue: {
+            /** Row Id */
+            row_id?: string | null;
+            /** Field */
+            field?: string | null;
+            /** Code */
+            code: string;
+            /** Message */
+            message: string;
+        };
+        /** VehicleImportPreview */
+        VehicleImportPreview: {
+            /** Revision */
+            revision: string;
+            /** Rows */
+            rows: components["schemas"]["VehicleImportPreviewRow"][];
+            counts: components["schemas"]["VehicleImportCounts"];
+        };
+        /** VehicleImportPreviewDraftRow */
+        VehicleImportPreviewDraftRow: {
+            /** Row Id */
+            row_id: string;
+            /**
+             * Excluded
+             * @default false
+             */
+            excluded: boolean;
+            /** Values */
+            values: {
+                [key: string]: string | number | null;
+            };
+            /** Image Ids */
+            image_ids?: string[];
+            /** Image Roles */
+            image_roles?: {
+                [key: string]: "photo" | "license";
+            };
+            /** Photo Action */
+            photo_action?: ("keep_current" | "use_imported") | null;
+            /** Primary Image Id */
+            primary_image_id?: string | null;
+            /** License Action */
+            license_action?: ("keep_current" | "use_imported") | null;
+            /** License Image Id */
+            license_image_id?: string | null;
+            /** Ocr Reviewed Image Ids */
+            ocr_reviewed_image_ids?: string[];
+            /** Ocr Manual Image Ids */
+            ocr_manual_image_ids?: string[];
+            /** Ocr Identity Confirmed Image Ids */
+            ocr_identity_confirmed_image_ids?: string[];
+        };
+        /** VehicleImportPreviewRequest */
+        VehicleImportPreviewRequest: {
+            /** Site Mappings */
+            site_mappings?: {
+                [key: string]: number;
+            };
+            /** Rows */
+            rows: components["schemas"]["VehicleImportPreviewDraftRow"][];
+            /** Excluded Image Ids */
+            excluded_image_ids?: string[];
+        };
+        /** VehicleImportPreviewRow */
+        VehicleImportPreviewRow: {
+            /** Row Id */
+            row_id: string;
+            /**
+             * Action
+             * @enum {string}
+             */
+            action: "create" | "update" | "unchanged" | "invalid" | "archived" | "excluded";
+            /** Vehicle Id */
+            vehicle_id?: number | null;
+            /** Values */
+            values: {
+                [key: string]: string | number | null;
+            };
+            /** Changes */
+            changes?: components["schemas"]["VehicleImportChange"][];
+            /** Errors */
+            errors?: components["schemas"]["VehicleImportIssue"][];
+            /** Warnings */
+            warnings?: components["schemas"]["VehicleImportIssue"][];
+            /** Current Photo Url */
+            current_photo_url?: string | null;
+            /** Current License Url */
+            current_license_url?: string | null;
+            /** Images */
+            images?: components["schemas"]["VehicleImportImage"][];
+            /**
+             * Photo Choice Required
+             * @default false
+             */
+            photo_choice_required: boolean;
+            /**
+             * License Choice Required
+             * @default false
+             */
+            license_choice_required: boolean;
+            /**
+             * Ocr Review Required
+             * @default false
+             */
+            ocr_review_required: boolean;
+        };
+        /** VehicleImportResult */
+        VehicleImportResult: {
+            /** Created */
+            created: number;
+            /** Updated */
+            updated: number;
+            /** Unchanged */
+            unchanged: number;
+            /** Images Added */
+            images_added: number;
+            /** Images Skipped */
+            images_skipped: number;
+            /** Vehicle Ids */
+            vehicle_ids: number[];
+        };
+        /** VehicleImportSection */
+        VehicleImportSection: {
+            /** Id */
+            id: string;
+            /** Sheet */
+            sheet: string;
+            /** Title */
+            title: string;
+        };
         /**
          * VehicleLicenceScan
          * @description OCR pre-fill result for a vehicle licence (mulkiya). All optional; the
@@ -11121,6 +13256,469 @@ export interface components {
             reg_expiry?: string | null;
             /** Driver Name */
             driver_name?: string | null;
+        };
+        /** VehicleListItem */
+        VehicleListItem: {
+            /** Id */
+            id: number;
+            /** Plate Code */
+            plate_code: string | null;
+            /** Plate Number */
+            plate_number: string;
+            /**
+             * Plate Label
+             * @default
+             */
+            plate_label: string;
+            /** Traffic Code */
+            traffic_code: string;
+            /** Type Ar */
+            type_ar: string;
+            /** Type En */
+            type_en: string;
+            /** Class Ar */
+            class_ar: string;
+            /** Class En */
+            class_en: string;
+            /** Vin */
+            vin: string | null;
+            /** Site Id */
+            site_id: number;
+            /**
+             * License Start
+             * Format: date
+             */
+            license_start: string;
+            /**
+             * License Expiry
+             * Format: date
+             */
+            license_expiry: string;
+            /**
+             * Expiry Status
+             * @default valid
+             * @enum {string}
+             */
+            expiry_status: "valid" | "due" | "expired";
+            /**
+             * Days To Expiry
+             * @default 0
+             */
+            days_to_expiry: number;
+            /**
+             * Fines Count
+             * @default 0
+             */
+            fines_count: number;
+            /**
+             * Fines Amount Fils
+             * @default 0
+             */
+            fines_amount_fils: number;
+            /**
+             * Black Points
+             * @default 0
+             */
+            black_points: number;
+            /** Photo Asset Id */
+            photo_asset_id?: number | null;
+            /** Photo Url */
+            photo_url?: string | null;
+            /** Photo Thumbnail Url */
+            photo_thumbnail_url?: string | null;
+            /** Photo Full Url */
+            photo_full_url?: string | null;
+            /** Make */
+            make?: string | null;
+            /** Model */
+            model?: string | null;
+            /** Model Year */
+            model_year?: number | null;
+            /** Colour */
+            colour?: string | null;
+            /** Insurance Expiry */
+            insurance_expiry?: string | null;
+            /** Insurance Status */
+            insurance_status?: ("valid" | "due" | "expired") | null;
+            /** Days To Insurance Expiry */
+            days_to_insurance_expiry?: number | null;
+            /** Archived At */
+            archived_at?: string | null;
+        };
+        /** VehicleMaintenanceCreate */
+        VehicleMaintenanceCreate: {
+            /** Vehicle Id */
+            vehicle_id: number;
+            /**
+             * Date
+             * Format: date
+             */
+            date: string;
+            /**
+             * Type
+             * @enum {string}
+             */
+            type: "service" | "repair" | "tires" | "other";
+            /** Odometer Km */
+            odometer_km?: number | null;
+            /**
+             * Cost
+             * @default 0
+             */
+            cost: number;
+            /** Vendor Ar */
+            vendor_ar?: string | null;
+            /** Vendor En */
+            vendor_en?: string | null;
+            /** Next Due */
+            next_due?: string | null;
+            /** Receipt File Id */
+            receipt_file_id?: number | null;
+        };
+        /** VehicleMaintenanceRead */
+        VehicleMaintenanceRead: {
+            /** Id */
+            id: number;
+            /** Vehicle Id */
+            vehicle_id: number;
+            /**
+             * Date
+             * Format: date
+             */
+            date: string;
+            /**
+             * Type
+             * @enum {string}
+             */
+            type: "service" | "repair" | "tires" | "other";
+            /** Odometer Km */
+            odometer_km: number | null;
+            /** Cost */
+            cost: number;
+            /** Vendor Ar */
+            vendor_ar: string | null;
+            /** Vendor En */
+            vendor_en: string | null;
+            /** Next Due */
+            next_due: string | null;
+            /** Receipt File Id */
+            receipt_file_id: number | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Due State */
+            due_state?: ("overdue" | "due" | "scheduled") | null;
+            /** Receipt Url */
+            receipt_url?: string | null;
+            /**
+             * Vehicle Plate Label
+             * @default
+             */
+            vehicle_plate_label: string;
+            /**
+             * Vehicle Type Ar
+             * @default
+             */
+            vehicle_type_ar: string;
+            /**
+             * Vehicle Type En
+             * @default
+             */
+            vehicle_type_en: string;
+        };
+        /** VehiclePhotoRead */
+        VehiclePhotoRead: {
+            /** Id */
+            id: number;
+            /** Label Ar */
+            label_ar: string | null;
+            /** Label En */
+            label_en: string | null;
+            /** Original Name */
+            original_name: string;
+            /** Thumbnail Url */
+            thumbnail_url: string;
+            /** Preview Url */
+            preview_url: string;
+            /** Full Url */
+            full_url: string;
+            /** Width */
+            width: number | null;
+            /** Height */
+            height: number | null;
+            /** Usage Count */
+            usage_count: number;
+        };
+        /** VehicleProfileScan */
+        VehicleProfileScan: {
+            /** Plate Code */
+            plate_code?: string | null;
+            /** Plate Number */
+            plate_number?: string | null;
+            /** Traffic Code */
+            traffic_code?: string | null;
+            /** Vin */
+            vin?: string | null;
+            /** Make */
+            make?: string | null;
+            /** Model */
+            model?: string | null;
+            /** Model Year */
+            model_year?: number | null;
+            /** Colour */
+            colour?: string | null;
+            /** Type Ar */
+            type_ar?: string | null;
+            /** Type En */
+            type_en?: string | null;
+            /** Class Ar */
+            class_ar?: string | null;
+            /** Class En */
+            class_en?: string | null;
+            /** License Start */
+            license_start?: string | null;
+            /** License Expiry */
+            license_expiry?: string | null;
+            /** Insurance Expiry */
+            insurance_expiry?: string | null;
+            /** Unmapped */
+            unmapped?: {
+                [key: string]: string;
+            };
+            /** Warnings */
+            warnings?: ("OCR_UNAVAILABLE" | "OCR_NO_FIELDS" | "OCR_REVIEW_REQUIRED")[];
+        };
+        /** VehicleRead */
+        VehicleRead: {
+            /** Id */
+            id: number;
+            /** Plate Code */
+            plate_code: string | null;
+            /** Plate Number */
+            plate_number: string;
+            /**
+             * Plate Label
+             * @default
+             */
+            plate_label: string;
+            /** Traffic Code */
+            traffic_code: string;
+            /** Type Ar */
+            type_ar: string;
+            /** Type En */
+            type_en: string;
+            /** Class Ar */
+            class_ar: string;
+            /** Class En */
+            class_en: string;
+            /** Vin */
+            vin: string | null;
+            /** Site Id */
+            site_id: number;
+            /**
+             * License Start
+             * Format: date
+             */
+            license_start: string;
+            /**
+             * License Expiry
+             * Format: date
+             */
+            license_expiry: string;
+            /**
+             * Expiry Status
+             * @default valid
+             * @enum {string}
+             */
+            expiry_status: "valid" | "due" | "expired";
+            /**
+             * Days To Expiry
+             * @default 0
+             */
+            days_to_expiry: number;
+            /**
+             * Fines Count
+             * @default 0
+             */
+            fines_count: number;
+            /**
+             * Fines Amount Fils
+             * @default 0
+             */
+            fines_amount_fils: number;
+            /**
+             * Black Points
+             * @default 0
+             */
+            black_points: number;
+            /** Photo Asset Id */
+            photo_asset_id?: number | null;
+            /** Photo Url */
+            photo_url?: string | null;
+            /** Photo Thumbnail Url */
+            photo_thumbnail_url?: string | null;
+            /** Photo Full Url */
+            photo_full_url?: string | null;
+            /** Make */
+            make?: string | null;
+            /** Model */
+            model?: string | null;
+            /** Model Year */
+            model_year?: number | null;
+            /** Colour */
+            colour?: string | null;
+            /** Insurance Expiry */
+            insurance_expiry?: string | null;
+            /** Insurance Status */
+            insurance_status?: ("valid" | "due" | "expired") | null;
+            /** Days To Insurance Expiry */
+            days_to_insurance_expiry?: number | null;
+            /** Archived At */
+            archived_at?: string | null;
+            /** Contract Note Ar */
+            contract_note_ar: string | null;
+            /** Contract Note En */
+            contract_note_en: string | null;
+            /** License Url */
+            license_url?: string | null;
+            /** Fines */
+            fines?: components["schemas"]["VehicleFineRead"][];
+            /** Renewals */
+            renewals?: components["schemas"]["LicenseRenewalRead"][];
+            /** Accidents */
+            accidents?: components["schemas"]["VehicleAccidentRead"][];
+            /** Maintenance */
+            maintenance?: components["schemas"]["VehicleMaintenanceRead"][];
+            /** Photos */
+            photos?: components["schemas"]["VehicleFileRead"][];
+            /** Inmate Capacity */
+            inmate_capacity?: number | null;
+            /** Passenger Capacity */
+            passenger_capacity?: number | null;
+            /** Accessories Ar */
+            accessories_ar?: string | null;
+            /** Accessories En */
+            accessories_en?: string | null;
+            /** Notes Ar */
+            notes_ar?: string | null;
+            /** Notes En */
+            notes_en?: string | null;
+            /** License File Id */
+            license_file_id?: number | null;
+            /** License Files */
+            license_files?: components["schemas"]["VehicleFileRead"][];
+        };
+        /** VehicleSiteCreate */
+        VehicleSiteCreate: {
+            /** Name Ar */
+            name_ar: string;
+            /** Name En */
+            name_en: string;
+        };
+        /** VehicleSiteRead */
+        VehicleSiteRead: {
+            /** Id */
+            id: number;
+            /** Name Ar */
+            name_ar: string;
+            /** Name En */
+            name_en: string;
+            /** Active */
+            active: boolean;
+            /**
+             * Vehicle Count
+             * @default 0
+             */
+            vehicle_count: number;
+        };
+        /** VehicleSiteUpdate */
+        VehicleSiteUpdate: {
+            /** Name Ar */
+            name_ar?: string | null;
+            /** Name En */
+            name_en?: string | null;
+            /** Active */
+            active?: boolean | null;
+        };
+        /** VehicleUpdate */
+        VehicleUpdate: {
+            /** Plate Code */
+            plate_code?: string | null;
+            /** Plate Number */
+            plate_number?: string | null;
+            /** Traffic Code */
+            traffic_code?: string | null;
+            /** Type Ar */
+            type_ar?: string | null;
+            /** Type En */
+            type_en?: string | null;
+            /** Class Ar */
+            class_ar?: string | null;
+            /** Class En */
+            class_en?: string | null;
+            /** Vin */
+            vin?: string | null;
+            /** Site Id */
+            site_id?: number | null;
+            /** Contract Note Ar */
+            contract_note_ar?: string | null;
+            /** Contract Note En */
+            contract_note_en?: string | null;
+            /** License Start */
+            license_start?: string | null;
+            /** License Expiry */
+            license_expiry?: string | null;
+            /** Photo Asset Id */
+            photo_asset_id?: number | null;
+            /** License File Id */
+            license_file_id?: number | null;
+            /** Make */
+            make?: string | null;
+            /** Model */
+            model?: string | null;
+            /** Model Year */
+            model_year?: number | null;
+            /** Colour */
+            colour?: string | null;
+            /** Insurance Expiry */
+            insurance_expiry?: string | null;
+            /** Inmate Capacity */
+            inmate_capacity?: number | null;
+            /** Passenger Capacity */
+            passenger_capacity?: number | null;
+            /** Accessories Ar */
+            accessories_ar?: string | null;
+            /** Accessories En */
+            accessories_en?: string | null;
+            /** Notes Ar */
+            notes_ar?: string | null;
+            /** Notes En */
+            notes_en?: string | null;
+        };
+        /** VehiclesSummary */
+        VehiclesSummary: {
+            /** Vehicles */
+            vehicles: number;
+            /** Fines Count */
+            fines_count: number;
+            /** Fines Amount Fils */
+            fines_amount_fils: number;
+            /** Black Points */
+            black_points: number;
+            /** License Attention */
+            license_attention: number;
+            /** Insurance Attention */
+            insurance_attention: number;
+            /** Open Accidents */
+            open_accidents: number;
+            /** Maintenance Due */
+            maintenance_due: number;
+            /** Active Sites */
+            active_sites: number;
+            /** Notify Days */
+            notify_days: number;
         };
         /** VerifyEmailResult */
         VerifyEmailResult: {
@@ -11192,6 +13790,8 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+            /** Linked Documents */
+            linked_documents?: components["schemas"]["LinkedDocumentRead"][];
         };
         /** ViolationUpdate */
         ViolationUpdate: {
@@ -11209,6 +13809,29 @@ export interface components {
             status?: string | null;
             /** Doc Path */
             doc_path?: string | null;
+        };
+        /** WingCountOut */
+        WingCountOut: {
+            wing: components["schemas"]["CanonicalWing"];
+            /** Violations */
+            violations: number;
+        };
+        /** WingSummaryOut */
+        WingSummaryOut: {
+            /** Counts */
+            counts: components["schemas"]["WingCountOut"][];
+            /** Most */
+            most: components["schemas"]["CanonicalWing"][];
+            /** Most Count */
+            most_count: number;
+            /** Least */
+            least: components["schemas"]["CanonicalWing"][];
+            /** Least Count */
+            least_count: number;
+            /** Zero */
+            zero: components["schemas"]["CanonicalWing"][];
+            /** Unassigned Count */
+            unassigned_count: number;
         };
         /** WordBookCreate */
         WordBookCreate: {
@@ -11331,6 +13954,95 @@ export interface components {
              * @default true
              */
             active: boolean;
+        };
+        /** WorkflowActorOut */
+        WorkflowActorOut: {
+            /** User Id */
+            user_id: number;
+            /** Name Ar */
+            name_ar: string;
+            /** Employee Id */
+            employee_id: string;
+            /**
+             * Acted At
+             * Format: date-time
+             */
+            acted_at: string;
+        };
+        /** WorkflowAssignmentOut */
+        WorkflowAssignmentOut: {
+            /** User Id */
+            user_id: number | null;
+            /** Name Ar */
+            name_ar: string | null;
+            /** Employee Id */
+            employee_id: string | null;
+            /** Eligible */
+            eligible: boolean;
+        };
+        /** WorkflowBlockerOut */
+        WorkflowBlockerOut: {
+            /** Code */
+            code: string;
+            /** Details */
+            details?: {
+                [key: string]: unknown;
+            };
+        };
+        /** WorkflowCandidateOut */
+        WorkflowCandidateOut: {
+            /** User Id */
+            user_id: number;
+            /** Name Ar */
+            name_ar: string;
+            /** Employee Id */
+            employee_id: string;
+        };
+        /**
+         * WorkflowEventOut
+         * @description The last return or reopen, kept until the next preparation replaces it.
+         */
+        WorkflowEventOut: {
+            /**
+             * Action
+             * @enum {string}
+             */
+            action: "returned" | "reopened";
+            /** User Id */
+            user_id: number | null;
+            /** Name Ar */
+            name_ar: string | null;
+            /** Employee Id */
+            employee_id: string | null;
+            /**
+             * Acted At
+             * Format: date-time
+             */
+            acted_at: string;
+            /** Reason */
+            reason: string | null;
+        };
+        /** WorkflowOut */
+        WorkflowOut: {
+            /** Version */
+            version: number;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "draft" | "awaiting_review" | "awaiting_manager" | "closed";
+            reviewer: components["schemas"]["WorkflowAssignmentOut"] | null;
+            manager: components["schemas"]["WorkflowAssignmentOut"] | null;
+            prepared: components["schemas"]["WorkflowActorOut"] | null;
+            reviewed: components["schemas"]["WorkflowActorOut"] | null;
+            approved: components["schemas"]["WorkflowActorOut"] | null;
+            last_event: components["schemas"]["WorkflowEventOut"] | null;
+            /** Needs Review */
+            needs_review: boolean;
+            /** Blockers */
+            blockers: components["schemas"]["WorkflowBlockerOut"][];
+            /** Allowed Actions */
+            allowed_actions: ("prepare" | "review" | "return" | "approve" | "reopen")[];
         };
         /** WorkforceAccessRead */
         WorkforceAccessRead: {
@@ -13592,6 +16304,43 @@ export interface operations {
             };
         };
     };
+    update_employee_absence_episode_api_v1_employees__employee_id__absences_episodes_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                employee_id: string;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AbsenceEpisodeUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AbsenceCreateResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_employee_vault_api_v1_employees__employee_id__vault_get: {
         parameters: {
             query?: never;
@@ -14061,6 +16810,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ViolationRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_absence_register_api_v1_absences_episodes_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AbsenceRegisterRead"];
                 };
             };
             /** @description Validation Error */
@@ -14856,6 +17636,510 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_nationalities_api_v1_inmate_violations_nationalities_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["NationalityListOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    awaiting_close_api_v1_inmate_violations_statistics_awaiting_close_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AwaitingCloseOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_month_api_v1_inmate_violations_statistics__year___month__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                year: number;
+                month: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MonthOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    export_month_api_v1_inmate_violations_statistics__year___month__export_get: {
+        parameters: {
+            query?: {
+                language?: string;
+                populations?: string[] | null;
+            };
+            header?: never;
+            path: {
+                year: number;
+                month: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    prepare_month_api_v1_inmate_violations_statistics__year___month__prepare_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                year: number;
+                month: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PrepareIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MonthOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    review_month_api_v1_inmate_violations_statistics__year___month__review_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                year: number;
+                month: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReviewIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MonthOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    return_month_api_v1_inmate_violations_statistics__year___month__return_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                year: number;
+                month: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReturnIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MonthOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    approve_month_api_v1_inmate_violations_statistics__year___month__approve_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                year: number;
+                month: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ApproveIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MonthOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    workflow_candidates_api_v1_inmate_violations_statistics__year___month__candidates_get: {
+        parameters: {
+            query: {
+                stage: "review" | "approve";
+            };
+            header?: never;
+            path: {
+                year: number;
+                month: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WorkflowCandidateOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reopen_month_api_v1_inmate_violations_statistics__year___month__reopen_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                year: number;
+                month: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReopenIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MonthOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_manual_row_api_v1_inmate_violations_statistics__year___month__manual_rows_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                year: number;
+                month: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ManualRowIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MonthOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_manual_row_api_v1_inmate_violations_statistics_manual_rows__row_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                row_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MonthOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_manual_row_api_v1_inmate_violations_statistics_manual_rows__row_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                row_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ManualRowPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MonthOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    complete_import_api_v1_inmate_violations_statistics_completions__book_id__post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                book_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CompletionIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MonthOut"];
                 };
             };
             /** @description Validation Error */
@@ -18302,176 +21586,6 @@ export interface operations {
             };
         };
     };
-    list_drafts_api_v1_ledger_drafts_get: {
-        parameters: {
-            query?: {
-                limit?: number;
-                offset?: number;
-            };
-            header?: never;
-            path?: never;
-            cookie?: {
-                gssg_session?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["LedgerEntryRead"][];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    create_draft_api_v1_ledger_drafts_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: {
-                gssg_session?: string | null;
-            };
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["DraftWrite"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["LedgerEntryRead"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    delete_draft_api_v1_ledger_drafts__draft_id__delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                draft_id: number;
-            };
-            cookie?: {
-                gssg_session?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    update_draft_api_v1_ledger_drafts__draft_id__patch: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                draft_id: number;
-            };
-            cookie?: {
-                gssg_session?: string | null;
-            };
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["DraftWrite"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["LedgerEntryRead"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    send_draft_api_v1_ledger_drafts__draft_id__send_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                draft_id: number;
-            };
-            cookie?: {
-                gssg_session?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["LedgerEntryRead"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     get_flag_count_api_v1_ledger_flag_count_get: {
         parameters: {
             query?: never;
@@ -19656,7 +22770,7 @@ export interface operations {
             };
         };
     };
-    send_email_api_v1_email_send_post: {
+    create_handoff_api_v1_email_handoff_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -19667,17 +22781,17 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "multipart/form-data": components["schemas"]["Body_send_email_api_v1_email_send_post"];
+                "multipart/form-data": components["schemas"]["Body_create_handoff_api_v1_email_handoff_post"];
             };
         };
         responses: {
             /** @description Successful Response */
-            200: {
+            201: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["EmailSendResult"];
+                    "application/json": components["schemas"]["EmailHandoffResult"];
                 };
             };
             /** @description Validation Error */
@@ -21510,6 +24624,1673 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["PermitVisitRead"];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    vehicles_summary_api_v1_vehicles_summary_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VehiclesSummary"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_notify_days_api_v1_vehicles_notify_days_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["NotifyDaysUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VehiclesSummary"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_vehicle_sites_api_v1_vehicles_sites_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VehicleSiteRead"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_vehicle_site_api_v1_vehicles_sites_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VehicleSiteCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VehicleSiteRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_vehicle_site_api_v1_vehicles_sites__site_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                site_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VehicleSiteUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VehicleSiteRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_vehicle_fines_api_v1_vehicles_fines_get: {
+        parameters: {
+            query?: {
+                site_id?: number | null;
+                date_from?: string | null;
+                date_to?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VehicleFineRead"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    archive_vehicle_fines_api_v1_vehicles_fines_archive_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VehicleFineBatchRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VehicleFineBatchResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    restore_vehicle_fines_api_v1_vehicles_fines_restore_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VehicleFineBatchRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VehicleFineBatchResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_evg_fines_api_v1_vehicles_fines_evg_preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EvgPreviewRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EvgPreviewJobCreated"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_evg_preview_job_api_v1_vehicles_fines_evg_preview__job_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: string;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EvgPreviewJobStatus"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    confirm_evg_fines_api_v1_vehicles_fines_evg_confirm_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EvgConfirmRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EvgConfirmResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_vehicle_accidents_api_v1_vehicles_accidents_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VehicleAccidentRead"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_vehicle_accident_api_v1_vehicles_accidents_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VehicleAccidentCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VehicleAccidentRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_vehicle_maintenance_api_v1_vehicles_maintenance_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VehicleMaintenanceRead"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_vehicle_maintenance_api_v1_vehicles_maintenance_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VehicleMaintenanceCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VehicleMaintenanceRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_vehicle_photo_library_api_v1_vehicles_photo_library_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VehiclePhotoRead"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    upload_vehicle_photo_library_item_api_v1_vehicles_photo_library_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_upload_vehicle_photo_library_item_api_v1_vehicles_photo_library_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VehiclePhotoRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_vehicle_photo_library_item_api_v1_vehicles_photo_library__photo_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                photo_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VehiclePhotoRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_vehicle_photo_library_item_api_v1_vehicles_photo_library__photo_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                photo_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_vehicle_photo_library_image_api_v1_vehicles_photo_library__photo_id__image__variant__get: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-None-Match"?: string | null;
+            };
+            path: {
+                photo_id: number;
+                variant: string;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_vehicles_api_v1_vehicles_get: {
+        parameters: {
+            query?: {
+                q?: string | null;
+                site_id?: number | null;
+                expiry?: string;
+                state?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VehicleListItem"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_vehicle_api_v1_vehicles_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VehicleCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VehicleRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    scan_vehicle_licence_api_v1_vehicles_scan_licence_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_scan_vehicle_licence_api_v1_vehicles_scan_licence_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VehicleProfileScan"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    download_vehicle_import_template_api_v1_vehicles_imports_template_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    inspect_vehicle_import_api_v1_vehicles_imports_inspect_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_inspect_vehicle_import_api_v1_vehicles_imports_inspect_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VehicleImportInspection"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_vehicle_import_api_v1_vehicles_imports__token__preview_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VehicleImportPreviewRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VehicleImportPreview"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_vehicle_import_image_api_v1_vehicles_imports__token__images__image_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+                image_id: string;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    scan_vehicle_import_image_api_v1_vehicles_imports__token__images__image_id__scan_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+                image_id: string;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VehicleProfileScan"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    confirm_vehicle_import_api_v1_vehicles_imports__token__confirm_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VehicleImportConfirmRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VehicleImportResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_vehicle_api_v1_vehicles__vehicle_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                vehicle_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VehicleRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_vehicle_api_v1_vehicles__vehicle_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                vehicle_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VehicleUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VehicleRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    archive_vehicle_api_v1_vehicles__vehicle_id__archive_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                vehicle_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VehicleRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    restore_vehicle_api_v1_vehicles__vehicle_id__restore_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                vehicle_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VehicleRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    renew_vehicle_license_api_v1_vehicles__vehicle_id__renew_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                vehicle_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LicenseRenewCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VehicleRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    upload_vehicle_file_api_v1_vehicles__vehicle_id__files_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                vehicle_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_upload_vehicle_file_api_v1_vehicles__vehicle_id__files_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VehicleFileRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    promote_vehicle_file_to_photo_asset_api_v1_vehicles__vehicle_id__files__file_id__photo_asset_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                vehicle_id: number;
+                file_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VehiclePhotoRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_vehicle_file_api_v1_vehicles__vehicle_id__files__file_id__get: {
+        parameters: {
+            query?: {
+                encoding?: string | null;
+            };
+            header?: never;
+            path: {
+                vehicle_id: number;
+                file_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_vehicle_file_api_v1_vehicles__vehicle_id__files__file_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                vehicle_id: number;
+                file_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    add_vehicle_fine_api_v1_vehicles__vehicle_id__fines_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                vehicle_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VehicleFineCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VehicleFineRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    generate_vehicle_fines_letter_api_v1_vehicles__vehicle_id__fines_letter_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                vehicle_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["FinesLetterRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LetterResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_vehicle_fine_api_v1_vehicles__vehicle_id__fines__fine_id__delete: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string | null;
+            };
+            path: {
+                vehicle_id: number;
+                fine_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VehicleRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_vehicle_fine_api_v1_vehicles__vehicle_id__fines__fine_id__patch: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string | null;
+            };
+            path: {
+                vehicle_id: number;
+                fine_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VehicleFineUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VehicleRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    record_vehicle_fine_payment_api_v1_vehicles__vehicle_id__fines__fine_id__payment_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string | null;
+            };
+            path: {
+                vehicle_id: number;
+                fine_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_record_vehicle_fine_payment_api_v1_vehicles__vehicle_id__fines__fine_id__payment_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VehicleFineRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    attach_vehicle_fine_receipt_api_v1_vehicles__vehicle_id__fines__fine_id__receipt_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string | null;
+            };
+            path: {
+                vehicle_id: number;
+                fine_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_attach_vehicle_fine_receipt_api_v1_vehicles__vehicle_id__fines__fine_id__receipt_put"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VehicleFineRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    generate_vehicle_accident_letter_api_v1_vehicles__vehicle_id__accidents__accident_id__letter_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                vehicle_id: number;
+                accident_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LetterResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_vehicle_accident_api_v1_vehicles__vehicle_id__accidents__accident_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                vehicle_id: number;
+                accident_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_vehicle_accident_status_api_v1_vehicles__vehicle_id__accidents__accident_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                vehicle_id: number;
+                accident_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VehicleAccidentStatusUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VehicleAccidentRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_vehicle_maintenance_api_v1_vehicles__vehicle_id__maintenance__maintenance_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                vehicle_id: number;
+                maintenance_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {

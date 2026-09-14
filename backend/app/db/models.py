@@ -22,8 +22,9 @@ Schema decisions worth flagging (more in plans/02-data-layer.md):
 
 from __future__ import annotations
 
+import datetime as dt
 from datetime import UTC, date, datetime
-from typing import Final
+from typing import Any, Final
 
 from sqlalchemy import (
     JSON,
@@ -40,7 +41,7 @@ from sqlalchemy import (
     func,
     text,
 )
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, foreign, mapped_column, relationship
 
 from app.db.base import Base
 
@@ -441,6 +442,252 @@ class Violation(Base):
     documents: Mapped[list[Document]] = relationship(back_populates="violation")
 
     __table_args__ = (Index("ix_violations_employee_date", "employee_id", "date"),)
+
+
+class VehicleSite(Base):
+    __tablename__ = "vehicle_sites"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    name_ar: Mapped[str] = mapped_column(String(128), nullable=False)
+    name_en: Mapped[str] = mapped_column(String(128), nullable=False)
+    active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="1")
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_utcnow)
+
+    vehicles: Mapped[list[Vehicle]] = relationship(back_populates="site")
+
+
+class VehiclePhotoAsset(Base):
+    """Independent immutable main-photo content shared by fleet vehicles."""
+
+    __tablename__ = "vehicle_photo_assets"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    label_ar: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    label_en: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    original_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    original_path: Mapped[str | None] = mapped_column(Text, nullable=True)
+    content_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    width: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    height: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    thumbnail_path: Mapped[str | None] = mapped_column(Text, nullable=True)
+    preview_path: Mapped[str | None] = mapped_column(Text, nullable=True)
+    full_path: Mapped[str | None] = mapped_column(Text, nullable=True)
+    legacy_file_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    canonical_asset_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_utcnow)
+
+    __table_args__ = (
+        UniqueConstraint("content_hash", name="uq_vehicle_photo_assets_content_hash"),
+        UniqueConstraint("legacy_file_id", name="uq_vehicle_photo_assets_legacy_file_id"),
+    )
+
+
+class Vehicle(Base):
+    __tablename__ = "vehicles"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    plate_code: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    plate_number: Mapped[str] = mapped_column(String(16), nullable=False)
+    traffic_code: Mapped[str] = mapped_column(String(16), nullable=False)
+    type_ar: Mapped[str] = mapped_column(String(128), nullable=False)
+    type_en: Mapped[str] = mapped_column(String(128), nullable=False)
+    class_ar: Mapped[str] = mapped_column(String(64), nullable=False)
+    class_en: Mapped[str] = mapped_column(String(64), nullable=False)
+    vin: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    site_id: Mapped[int] = mapped_column(ForeignKey("vehicle_sites.id"), nullable=False)
+    contract_note_ar: Mapped[str | None] = mapped_column(Text, nullable=True)
+    contract_note_en: Mapped[str | None] = mapped_column(Text, nullable=True)
+    license_start: Mapped[date] = mapped_column(Date, nullable=False)
+    license_expiry: Mapped[date] = mapped_column(Date, nullable=False)
+    # File and photo-asset foreign keys are enforced by the vehicle service to
+    # avoid circular table dependencies and SQLite batch-ALTER constraints.
+    photo_asset_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    license_file_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    make: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    model: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    model_year: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    colour: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    insurance_expiry: Mapped[date | None] = mapped_column(Date, nullable=True)
+    inmate_capacity: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    passenger_capacity: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    accessories_ar: Mapped[str | None] = mapped_column(Text, nullable=True)
+    accessories_en: Mapped[str | None] = mapped_column(Text, nullable=True)
+    notes_ar: Mapped[str | None] = mapped_column(Text, nullable=True)
+    notes_en: Mapped[str | None] = mapped_column(Text, nullable=True)
+    archived_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    insurance_reminder_sent_for: Mapped[date | None] = mapped_column(Date, nullable=True)
+    expiry_reminder_sent_for: Mapped[date | None] = mapped_column(Date, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_utcnow)
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    site: Mapped[VehicleSite] = relationship(back_populates="vehicles")
+    photo_asset: Mapped[VehiclePhotoAsset | None] = relationship(
+        primaryjoin=lambda: foreign(Vehicle.photo_asset_id) == VehiclePhotoAsset.id,
+        viewonly=True,
+    )
+    files: Mapped[list[VehicleFile]] = relationship(
+        back_populates="vehicle", cascade="all, delete-orphan"
+    )
+    renewals: Mapped[list[VehicleLicenseRenewal]] = relationship(
+        back_populates="vehicle", cascade="all, delete-orphan"
+    )
+    fines: Mapped[list[VehicleFine]] = relationship(
+        back_populates="vehicle", cascade="all, delete-orphan"
+    )
+    accidents: Mapped[list[VehicleAccident]] = relationship(
+        back_populates="vehicle", cascade="all, delete-orphan"
+    )
+    maintenance: Mapped[list[VehicleMaintenance]] = relationship(
+        back_populates="vehicle", cascade="all, delete-orphan"
+    )
+
+    __table_args__ = (
+        Index("uq_vehicles_plate", "plate_code", "plate_number", unique=True),
+        Index(
+            "uq_vehicles_plate_without_code",
+            "plate_number",
+            unique=True,
+            sqlite_where=text("plate_code IS NULL"),
+        ),
+        Index("ix_vehicles_site", "site_id"),
+        Index("ix_vehicles_photo_asset", "photo_asset_id"),
+        Index("ix_vehicles_plate_number", "plate_number"),
+    )
+
+
+class VehicleFile(Base):
+    __tablename__ = "vehicle_files"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    vehicle_id: Mapped[int] = mapped_column(
+        ForeignKey("vehicles.id", ondelete="CASCADE"), nullable=False
+    )
+    kind: Mapped[str] = mapped_column(String(16), nullable=False)
+    label_ar: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    label_en: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    path: Mapped[str] = mapped_column(Text, nullable=False)
+    original_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    media_type: Mapped[str] = mapped_column(String(64), nullable=False)
+    size: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_utcnow)
+
+    vehicle: Mapped[Vehicle] = relationship(back_populates="files")
+
+    __table_args__ = (Index("ix_vehicle_files_vehicle", "vehicle_id"),)
+
+
+class VehicleLicenseRenewal(Base):
+    __tablename__ = "vehicle_license_renewals"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    vehicle_id: Mapped[int] = mapped_column(
+        ForeignKey("vehicles.id", ondelete="CASCADE"), nullable=False
+    )
+    start: Mapped[date] = mapped_column(Date, nullable=False)
+    expiry: Mapped[date] = mapped_column(Date, nullable=False)
+    renewed_on: Mapped[date] = mapped_column(Date, nullable=False)
+    cost: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    scan_file_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_utcnow)
+
+    vehicle: Mapped[Vehicle] = relationship(back_populates="renewals")
+
+    __table_args__ = (Index("ix_vehicle_license_renewals_vehicle", "vehicle_id"),)
+
+
+class VehicleFine(Base):
+    __tablename__ = "vehicle_fines"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    vehicle_id: Mapped[int] = mapped_column(
+        ForeignKey("vehicles.id", ondelete="CASCADE"), nullable=False
+    )
+    employee_id: Mapped[str | None] = mapped_column(ForeignKey("employees.id"), nullable=True)
+    date: Mapped[date] = mapped_column(Date, nullable=False)
+    time: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    amount_fils: Mapped[int] = mapped_column(Integer, nullable=False)
+    amount_after_discount_fils: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    black_points: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
+    source: Mapped[str] = mapped_column(
+        String(8), nullable=False, default="manual", server_default="manual"
+    )
+    evg_ticket_no: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    location: Mapped[str | None] = mapped_column(Text, nullable=True)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    fine_type: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    payment_status: Mapped[str] = mapped_column(
+        String(8), nullable=False, default="unpaid", server_default="unpaid"
+    )
+    receipt_file_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    archived_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    created_by_user_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_utcnow)
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    vehicle: Mapped[Vehicle] = relationship(back_populates="fines")
+    employee: Mapped[Employee | None] = relationship()
+
+    __table_args__ = (
+        Index("uq_vehicle_fines_evg_ticket", "evg_ticket_no", unique=True),
+        Index("ix_vehicle_fines_vehicle_date", "vehicle_id", "date"),
+    )
+
+
+class VehicleAccident(Base):
+    __tablename__ = "vehicle_accidents"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    vehicle_id: Mapped[int] = mapped_column(
+        ForeignKey("vehicles.id", ondelete="CASCADE"), nullable=False
+    )
+    employee_id: Mapped[str | None] = mapped_column(ForeignKey("employees.id"), nullable=True)
+    date: Mapped[date] = mapped_column(Date, nullable=False)
+    time: Mapped[str | None] = mapped_column(String(5), nullable=True)
+    location_ar: Mapped[str] = mapped_column(Text, nullable=False)
+    location_en: Mapped[str | None] = mapped_column(Text, nullable=True)
+    description_ar: Mapped[str] = mapped_column(Text, nullable=False)
+    description_en: Mapped[str | None] = mapped_column(Text, nullable=True)
+    police_ref: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    damage_cost: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    status: Mapped[str] = mapped_column(
+        String(8), nullable=False, default="open", server_default="open"
+    )
+    photo_file_ids: Mapped[list[int]] = mapped_column(
+        JSON, nullable=False, default=list, server_default="[]"
+    )
+    letter_book_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_utcnow)
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    vehicle: Mapped[Vehicle] = relationship(back_populates="accidents")
+    employee: Mapped[Employee | None] = relationship()
+
+    __table_args__ = (Index("ix_vehicle_accidents_vehicle", "vehicle_id"),)
+
+
+class VehicleMaintenance(Base):
+    __tablename__ = "vehicle_maintenance"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    vehicle_id: Mapped[int] = mapped_column(
+        ForeignKey("vehicles.id", ondelete="CASCADE"), nullable=False
+    )
+    date: Mapped[dt.date] = mapped_column(Date, nullable=False)
+    type: Mapped[str] = mapped_column(String(16), nullable=False)
+    odometer_km: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    cost: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    vendor_ar: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    vendor_en: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    next_due: Mapped[dt.date | None] = mapped_column(Date, nullable=True)
+    receipt_file_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    reminder_sent_for: Mapped[dt.date | None] = mapped_column(Date, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_utcnow)
+
+    vehicle: Mapped[Vehicle] = relationship(back_populates="maintenance")
+
+    __table_args__ = (Index("ix_vehicle_maintenance_vehicle", "vehicle_id"),)
 
 
 class Permit(Base):
@@ -1025,6 +1272,9 @@ class EmailAccount(Base):
     smtp_use_tls: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     # Sent-mail folder for outgoing classification; defaults to "Sent".
     sent_folder: Mapped[str] = mapped_column(String(64), nullable=False, default="Sent")
+    drafts_folder: Mapped[str] = mapped_column(
+        String(64), nullable=False, default="Drafts", server_default="Drafts"
+    )
     inbox_folder: Mapped[str] = mapped_column(String(64), nullable=False, default="INBOX")
     enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     # 0 disables the background scheduler; positive int = minutes between runs.
@@ -1162,6 +1412,10 @@ class User(Base):
     """
 
     __tablename__ = "users"
+    # Request-scoped capability memo, deliberately not mapped or persisted.
+    # The attribute is populated lazily by perm_service.effective_caps.
+    __allow_unmapped__ = True
+    _effective_caps_cache: frozenset[str] | None
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     email: Mapped[str] = mapped_column(String(256), nullable=False)  # stored lowercased
@@ -1789,6 +2043,173 @@ class TimesheetStartAck(Base):
     )
 
 
+class InmateViolationPeriod(Base):
+    """One closed inmate-conduct register month (migration 0085).
+
+    A row exists only after the month is closed. The close freezes the register
+    rows and workbook path so later record corrections cannot silently alter
+    the copy already filed. ``closed_by`` and reopen audit fields deliberately
+    carry no foreign keys, mirroring :class:`TimesheetPeriod`.
+    """
+
+    __tablename__ = "inmate_violation_periods"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    year: Mapped[int] = mapped_column(Integer, nullable=False)
+    month: Mapped[int] = mapped_column(Integer, nullable=False)
+    closed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    closed_by: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    reopened_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    reopened_by: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    #: Read-only history: a month forced closed before the approval workflow.
+    force_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    export_path: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    rows: Mapped[list[InmateViolationStatRow]] = relationship(
+        back_populates="period", cascade="all, delete-orphan"
+    )
+
+    __table_args__ = (
+        UniqueConstraint("year", "month", name="uq_inmate_violation_periods_month"),
+        CheckConstraint("month BETWEEN 1 AND 12", name="ck_inmate_violation_periods_month"),
+        CheckConstraint("year BETWEEN 2000 AND 2100", name="ck_inmate_violation_periods_year"),
+    )
+
+
+class InmateViolationWorkflow(Base):
+    """Approval state for one register month (migration 0088).
+
+    ``content_hash`` fingerprints the projection that was prepared, so final
+    approval can prove the rows it seals are exactly the reviewed ones without
+    storing a second copy of them. ``actors`` holds the accepted
+    prepared/reviewed/approved facts as immutable snapshots — an archived
+    signature must not follow a later account or employee edit.
+    """
+
+    __tablename__ = "inmate_violation_workflows"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    year: Mapped[int] = mapped_column(Integer, nullable=False)
+    month: Mapped[int] = mapped_column(Integer, nullable=False)
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    state: Mapped[str] = mapped_column(
+        String(24), nullable=False, default="draft", server_default="draft"
+    )
+    content_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    #: Selected at handoff, paired with the employee ID captured then.
+    reviewer_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    reviewer_employee_id: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    manager_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )
+    manager_employee_id: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    #: ``{stage: {user_id, name_ar, employee_id, acted_at}}`` for the stages
+    #: actually performed in the current cycle. Cleared when a cycle restarts.
+    actors: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
+
+    __table_args__ = (
+        UniqueConstraint("year", "month", name="uq_inmate_violation_workflows_month"),
+        CheckConstraint("month BETWEEN 1 AND 12", name="ck_inmate_violation_workflows_month"),
+        CheckConstraint("year BETWEEN 2000 AND 2100", name="ck_inmate_violation_workflows_year"),
+        CheckConstraint("version >= 0", name="ck_inmate_violation_workflows_version"),
+        CheckConstraint(
+            "state IN ('draft','awaiting_review','awaiting_manager','closed')",
+            name="ck_inmate_violation_workflows_state",
+        ),
+        Index("ix_inmate_violation_workflows_reviewer", "reviewer_user_id"),
+        Index("ix_inmate_violation_workflows_manager", "manager_user_id"),
+    )
+
+
+class InmateViolationStatRow(Base):
+    """One frozen inmate line from a closed conduct register (migration 0085).
+
+    Names, nationality, duty unit, details and reporter are resolved at close
+    and stored. Source identifiers deliberately carry no foreign keys: the
+    snapshot and its provenance must outlive the Record that produced it.
+    """
+
+    __tablename__ = "inmate_violation_stat_rows"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    period_id: Mapped[int] = mapped_column(
+        ForeignKey("inmate_violation_periods.id", ondelete="CASCADE"), nullable=False
+    )
+    row_handle: Mapped[str] = mapped_column(String(64), nullable=False)
+    origin: Mapped[str] = mapped_column(String(8), nullable=False)
+    row_no: Mapped[int] = mapped_column(Integer, nullable=False)
+    population: Mapped[str] = mapped_column(String(16), nullable=False)
+    name: Mapped[str] = mapped_column(String(160), nullable=False)
+    uid: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    nationality_label: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    nationality_code: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    violation_date: Mapped[date] = mapped_column(Date, nullable=False)
+    duty_unit: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    details_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    wing: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    holding_no: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    reporter_id: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    reporter_name: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    source_book_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    source_version_no: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    source_row_index: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    source_ref_number: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    incomplete_marks: Mapped[list[str] | None] = mapped_column(JSON, nullable=True)
+    manual_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    manual_created_by: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    manual_created_by_name: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    manual_created_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    period: Mapped[InmateViolationPeriod] = relationship(back_populates="rows")
+
+    __table_args__ = (
+        UniqueConstraint("period_id", "row_handle", name="uq_inmate_violation_stat_rows_handle"),
+        CheckConstraint(
+            "origin IN ('derived','manual')", name="ck_inmate_violation_stat_rows_origin"
+        ),
+        CheckConstraint(
+            "population IN ('citizens','expats','pending')",
+            name="ck_inmate_violation_stat_rows_population",
+        ),
+        Index("ix_inmate_violation_stat_rows_period_id", "period_id"),
+    )
+
+
+class InmateViolationManualRow(Base):
+    """A manually supplied inmate line in an open register month (migration 0085).
+
+    The overlay is keyed directly by year and month rather than a period:
+    periods exist only for closed months. Closing copies each manual line into
+    the frozen snapshot together with its reason and creator audit fields.
+    """
+
+    __tablename__ = "inmate_violation_manual_rows"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    year: Mapped[int] = mapped_column(Integer, nullable=False)
+    month: Mapped[int] = mapped_column(Integer, nullable=False)
+    name: Mapped[str] = mapped_column(String(160), nullable=False)
+    violation_date: Mapped[date] = mapped_column(Date, nullable=False)
+    uid: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    nationality_label: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    wing: Mapped[str | None] = mapped_column(String(8), nullable=True)
+    holding_no: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    reporter_id: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    details_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    reason: Mapped[str] = mapped_column(Text, nullable=False)
+    created_by: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=_utcnow, server_default=func.current_timestamp()
+    )
+    updated_by: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    __table_args__ = (
+        Index("ix_inmate_violation_manual_rows_month", "year", "month"),
+        CheckConstraint("month BETWEEN 1 AND 12", name="ck_inmate_violation_manual_rows_month"),
+    )
+
+
 # Imported last on purpose: workforce models reference tables defined above, so
 # a top-of-module import would close a circular import at class-definition time.
 from app.db.workforce_models import (  # noqa: E402
@@ -1844,6 +2265,9 @@ __all__ = [
     "EmailAccount",
     "Employee",
     "GeneralBookRecipient",
+    "InmateViolationManualRow",
+    "InmateViolationPeriod",
+    "InmateViolationStatRow",
     "Leave",
     "LedgerEntry",
     "LedgerFlag",
@@ -1866,6 +2290,7 @@ __all__ = [
     "UserPermission",
     "UserWorkforceScope",
     "VaultFile",
+    "VehiclePhotoAsset",
     "Violation",
     "WorkAttendancePolicy",
     "WorkCrew",

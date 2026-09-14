@@ -69,6 +69,8 @@ TEMPLATE_FILES: Final[Mapping[str, str]] = MappingProxyType(
         "Passport Release List": "GSSG-HR_300-004b_Passport_Release_List.docx",
         "Report": "GSSG-GS_300-004_Report.docx",
         "Inmate Conduct Violations": "GSSG-NAT_300-005_Inmate_Conduct_Violations.docx",
+        "Vehicle Fines": "GSSG-VF_300-001_Vehicle_Fines.docx",
+        "Vehicle Accident Report": "GSSG-VA_300-001_Vehicle_Accident_Report.docx",
     }
 )
 
@@ -91,6 +93,12 @@ TEMPLATE_FILES: Final[Mapping[str, str]] = MappingProxyType(
 #: ref, a plain-text body, no page-2 footer and a stray English ref stamp
 #: painted over the Arabic paper.
 CLASSIFIED_BOOK_FORMS: Final[frozenset[str]] = frozenset({"General Book", "Security Permit"})
+
+#: Vehicle letterhead papers minted only by the vehicles module. Their refs
+#: print in the body's «الرقم:» line instead of the English header stamp.
+VEHICLE_LETTER_FORMS: Final[frozenset[str]] = frozenset(
+    {"Vehicle Fines", "Vehicle Accident Report"}
+)
 
 
 # --- Project / company strings ---------------------------------------------

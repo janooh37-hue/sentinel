@@ -58,16 +58,12 @@ class AppError(Exception):
 
 class NotFoundError(AppError):
     def __init__(self, code: str, message: str, **details: Any) -> None:
-        super().__init__(
-            code, message, http_status=status.HTTP_404_NOT_FOUND, details=details
-        )
+        super().__init__(code, message, http_status=status.HTTP_404_NOT_FOUND, details=details)
 
 
 class ConflictError(AppError):
     def __init__(self, code: str, message: str, **details: Any) -> None:
-        super().__init__(
-            code, message, http_status=status.HTTP_409_CONFLICT, details=details
-        )
+        super().__init__(code, message, http_status=status.HTTP_409_CONFLICT, details=details)
 
 
 class ValidationFailedError(AppError):
@@ -77,6 +73,18 @@ class ValidationFailedError(AppError):
             message,
             http_status=status.HTTP_422_UNPROCESSABLE_ENTITY,
             details=details,
+        )
+
+
+class EvgError(AppError):
+    """EVG upstream failure exposed as a stable upstream-service error."""
+
+    def __init__(self, code: str, message: str) -> None:
+        super().__init__(
+            code,
+            message,
+            http_status=status.HTTP_502_BAD_GATEWAY,
+            details={"text": message},
         )
 
 
@@ -92,9 +100,7 @@ def install_handlers(app: FastAPI) -> None:
         return JSONResponse(status_code=exc.http_status, content=exc.envelope())
 
     @app.exception_handler(RequestValidationError)
-    async def _validation_error(
-        _: Request, exc: RequestValidationError
-    ) -> JSONResponse:
+    async def _validation_error(_: Request, exc: RequestValidationError) -> JSONResponse:
         # Pydantic v2 error dicts can contain ``ctx`` values that are raw
         # exception instances (e.g. our ValueError from ``model_validator``).
         # ``jsonable_encoder`` coerces those to strings so the response stays
@@ -135,6 +141,7 @@ def install_handlers(app: FastAPI) -> None:
 __all__ = [
     "AppError",
     "ConflictError",
+    "EvgError",
     "NotFoundError",
     "ValidationFailedError",
     "install_handlers",

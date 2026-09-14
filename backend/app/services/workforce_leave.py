@@ -54,6 +54,12 @@ _REASON_PRIORITY = {
     "LEAVE_ANNUAL": 2,
 }
 
+_REASON_BY_LIVE_KIND = {
+    "national_service": "LEAVE_NATIONAL_SERVICE",
+    "sick": "LEAVE_SICK",
+    "annual": "LEAVE_ANNUAL",
+}
+
 
 def _excusing_reason(leave: Leave) -> str | None:
     """Return the workforce excuse reason for one lifecycle-live leave row.
@@ -62,18 +68,12 @@ def _excusing_reason(leave: Leave) -> str | None:
     live for each leave kind.  Record rows (including Leave Permit, Passport
     Release, and Duty Resumption) have no configured workforce excuse here.
     """
-    if leave.deleted_at is not None:
-        return None
-
-    group = leave_lifecycle.classify_group(leave.leave_type)
-    status = leave_lifecycle.canonical_status(leave.status)
-    if group == "national_service" and status in {"Pending", "Completed"}:
-        return "LEAVE_NATIONAL_SERVICE"
-    if group == "sick" and status == "Approved":
-        return "LEAVE_SICK"
-    if leave_lifecycle.is_annual(leave.leave_type) and status == "Approved":
-        return "LEAVE_ANNUAL"
-    return None
+    kind = leave_lifecycle.live_kind(
+        leave.leave_type,
+        leave.status,
+        deleted=leave.deleted_at is not None,
+    )
+    return _REASON_BY_LIVE_KIND.get(kind) if kind is not None else None
 
 
 def _operational_date(starts_at: datetime, ends_at: datetime) -> date:

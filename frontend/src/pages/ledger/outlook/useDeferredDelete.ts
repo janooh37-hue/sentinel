@@ -9,7 +9,6 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 
 export interface PendingDelete {
   id: number
-  kind: 'entry' | 'draft'
 }
 
 export interface NotifyArgs {

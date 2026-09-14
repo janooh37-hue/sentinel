@@ -514,6 +514,7 @@ export function useSetCell(params: TimesheetParams) {
       }
       const queued = queuedCellWrites(qc, cellKey, input)
       qc.setQueryData(key, queued.reduce((next, write) => paintCell(next, write), grid))
+      void qc.invalidateQueries({ queryKey: ['absence-register'] })
     },
     onSettled: (_grid, _err, input) => {
       // Held while another write to the same cell is still unanswered — that

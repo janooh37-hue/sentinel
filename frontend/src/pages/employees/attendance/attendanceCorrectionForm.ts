@@ -56,8 +56,13 @@ function optionalUtc(value: string): string | null {
   return value === '' ? null : localDubaiInputToUtc(value)
 }
 
+function retainedUtc(value: string | null): string | null {
+  if (value === null || /[zZ]$|[+-]\d\d:\d\d$/.test(value)) return value
+  return `${value}Z`
+}
+
 function snapshotUtc(draftValue: string, effectiveValue: string | null): string | null {
-  return draftValue === toLocalInput(effectiveValue) ? effectiveValue : optionalUtc(draftValue)
+  return draftValue === toLocalInput(effectiveValue) ? retainedUtc(effectiveValue) : optionalUtc(draftValue)
 }
 
 export function draftFromEffective(effective: AttendanceEffective): AttendanceCorrectionDraft {

@@ -22,18 +22,20 @@ filler lookback alone would otherwise be 275 round trips.
 from __future__ import annotations
 
 import calendar
+import json
 from collections import defaultdict
 from collections.abc import Iterable, Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
-from typing import Final
+from itertools import chain
+from typing import Final, cast
 
 from sqlalchemy import and_, func, select
 from sqlalchemy.orm import Session
 
 from app.api.errors import ConflictError, NotFoundError, ValidationFailedError
 from app.core.constants import DESIGNATION_SEED, TIMESHEET_SHEETS, nationality_en
-from app.core.leave_lifecycle import english_part
+from app.core.leave_lifecycle import canonical_status, english_part
 from app.core.timesheet_codes import (
     CODE_ABSENT,
     CODE_ANNUAL,
@@ -47,10 +49,12 @@ from app.core.timesheet_codes import (
     LeaveSpan,
     in_roster,
     is_void,
+    leave_code,
     month_codes,
 )
 from app.db.models import (
     Absence,
+    AuditLog,
     Employee,
     Leave,
     TimesheetDesignation,
@@ -121,6 +125,7 @@ class GridRow:
     start_confirmed: bool  # operator acknowledged the NG head
     notes: dict[int, str]  # day -> absence note, for the cell tooltip
     designation_id: int | None = None
+    edits: dict[int, CellEdit] = field(default_factory=dict)
 
 
 @dataclass(frozen=True, slots=True)
@@ -129,8 +134,16 @@ class Issue:
     kind: str
     #  blocking: "no_designation" | "no_nationality"
     #  warning:  "unknown_leave" | "overlapping_leave" | "departed_but_active"
-    #            | "no_doj" | "duplicate_name"
+    #            | "no_doj" | "duplicate_name" | "amended_leave" | "deleted_leave"
     detail: str
+
+
+@dataclass(frozen=True, slots=True)
+class CellEdit:
+    """A persisted manual cell: the override or absence row behind it."""
+    code: str
+    by: str | None
+    at: datetime
 
 
 @dataclass(frozen=True, slots=True)
@@ -246,6 +259,32 @@ def _edge_day(value: date | None, year: int, month: int) -> int | None:
     if value is not None and (value.year, value.month) == (year, month):
         return value.day
     return None
+
+
+def _edits(
+    overrides: Iterable[TimesheetOverride],
+    absences: Iterable[Absence],
+    names: Mapping[int, str],
+) -> dict[int, CellEdit]:
+    edits = {
+        row.date.day: CellEdit(
+            CODE_ABSENT,
+            names.get(row.created_by) if row.created_by is not None else None,
+            row.created_at,
+        )
+        for row in absences
+    }
+    edits.update(
+        {
+            row.day: CellEdit(
+                row.code,
+                names.get(row.created_by) if row.created_by is not None else None,
+                row.created_at,
+            )
+            for row in overrides
+        }
+    )
+    return edits
 
 
 def _notes(absences: Iterable[Absence]) -> dict[int, str]:
@@ -407,15 +446,17 @@ def _absences_by_employee(
     return out
 
 
-def _overrides_by_employee(db: Session, year: int, month: int) -> dict[str, dict[int, str]]:
+def _overrides_by_employee(
+    db: Session, year: int, month: int
+) -> dict[str, list[TimesheetOverride]]:
     rows = db.execute(
         select(TimesheetOverride).where(
             TimesheetOverride.year == year, TimesheetOverride.month == month
         )
     ).scalars()
-    out: dict[str, dict[int, str]] = defaultdict(dict)
+    out: dict[str, list[TimesheetOverride]] = defaultdict(list)
     for row in rows:
-        out[row.employee_id][row.day] = row.code
+        out[row.employee_id].append(row)
     return out
 
 
@@ -468,6 +509,14 @@ def _employees_by_id(db: Session, employee_ids: Sequence[str]) -> dict[str, Empl
         return {}
     rows = db.execute(select(Employee).where(Employee.id.in_(employee_ids))).scalars()
     return {row.id: row for row in rows}
+
+
+def _display_names(db: Session, user_ids: Iterable[int | None]) -> dict[int, str]:
+    ids = {user_id for user_id in user_ids if user_id is not None}
+    if not ids:
+        return {}
+    users = db.execute(select(User).where(User.id.in_(ids))).scalars()
+    return {user.id: user.display_name or user.email for user in users}
 
 
 def _display_name(db: Session, user_id: int | None) -> str | None:
@@ -542,6 +591,120 @@ def _overlapping_leave_issues(employee: Employee, leaves: Sequence[Leave]) -> li
     return issues
 
 
+def _leave_change_issues(
+    db: Session,
+    members: Sequence[tuple[Employee, TimesheetDesignation | None]],
+    *,
+    leaves_by_employee: Mapping[str, list[Leave]],
+    month_start: date,
+    month_end: date,
+) -> list[Issue]:
+    """Warn when an approved leave changed or disappeared after approval."""
+
+    employees = {employee.id: employee for employee, _designation in members}
+    member_ids = tuple(employees)
+    if not member_ids:
+        return []
+
+    deleted_candidates: list[Leave] = []
+    deleted_rows = db.execute(
+        select(Leave).where(
+            Leave.deleted_at.is_not(None),
+            Leave.employee_id.in_(member_ids),
+            Leave.start_date <= month_end,
+            Leave.end_date >= month_start,
+        )
+    ).scalars()
+    for row in deleted_rows:
+        code = leave_code(row.leave_type)
+        if code is None or canonical_status(row.status) not in ("Approved", "Completed"):
+            continue
+        first = max(row.start_date, month_start)
+        last = min(row.end_date, month_end)
+        required_days = set(range(first.day, last.day + 1))
+        covered_days: set[int] = set()
+        for live in _live_leaves(leaves_by_employee.get(row.employee_id, ())):
+            if leave_code(live.leave_type) != code:
+                continue
+            live_first = max(live.start_date, month_start)
+            live_last = min(live.end_date, month_end)
+            if live_first <= live_last:
+                covered_days.update(range(live_first.day, live_last.day + 1))
+        if required_days <= covered_days:
+            continue
+        deleted_candidates.append(row)
+
+    candidates: list[tuple[str, Leave, str]] = [
+        (row.employee_id, row, "deleted_leave") for row in deleted_candidates
+    ]
+    candidates.extend(
+        (employee.id, row, "amended_leave")
+        for employee, _designation in members
+        for row in _live_leaves(leaves_by_employee.get(employee.id, ()))
+    )
+    candidate_ids = [str(row.id) for _employee_id, row, _kind in candidates]
+    if not candidate_ids:
+        return []
+
+    audit_rows = db.execute(
+        select(AuditLog)
+        .where(
+            AuditLog.entity_type == "leave",
+            AuditLog.action.in_(("leave.amended", "leave.deleted")),
+            AuditLog.entity_id.in_(candidate_ids),
+        )
+        .order_by(AuditLog.ts, AuditLog.id)
+    ).scalars()
+    audits: dict[tuple[str, str], AuditLog] = {}
+    for audit_row in audit_rows:
+        if audit_row.entity_id is None:
+            continue
+        audits[(audit_row.entity_id, audit_row.action)] = audit_row
+
+    actor_emails = {audit.actor for audit in audits.values() if audit.actor is not None}
+    actor_names: dict[str, str] = {}
+    if actor_emails:
+        users = db.execute(select(User).where(User.email.in_(actor_emails))).scalars()
+        actor_names = {user.email: user.display_name or user.email for user in users}
+
+    def who(audit: AuditLog | None) -> str:
+        if audit is None or audit.actor is None:
+            return "an unrecorded user"
+        return actor_names.get(audit.actor, audit.actor)
+
+    issues: list[tuple[str, date, int, Issue]] = []
+    for employee_id, row, kind in candidates:
+        employee = employees[employee_id]
+        action = "leave.deleted" if kind == "deleted_leave" else "leave.amended"
+        change_audit = audits.get((str(row.id), action))
+        if kind == "deleted_leave":
+            when = change_audit.ts if change_audit is not None else row.deleted_at
+            assert when is not None
+            detail = (
+                f"{employee.name_en}: {english_part(row.leave_type)} "
+                f"{row.start_date:%Y-%m-%d} → {row.end_date:%Y-%m-%d} "
+                f"({canonical_status(row.status)}) was deleted by {who(change_audit)} "
+                f"on {when:%Y-%m-%d}."
+            )
+        else:
+            if change_audit is None:
+                continue
+            data = json.loads(change_audit.payload or "{}")
+            old = data.get("from", {}).get("end")
+            new = data.get("to", {}).get("end")
+            reason = data.get("reason") or ""
+            detail = (
+                f"{employee.name_en}: {english_part(row.leave_type)} "
+                f"from {row.start_date:%Y-%m-%d} was amended by {who(change_audit)} "
+                f"on {change_audit.ts:%Y-%m-%d}: end {old} → {new}"
+                f"{f' ({reason})' if reason else ''}. The printed form still shows {old}."
+            )
+        issues.append((employee_id, row.start_date, row.id, Issue(employee_id, kind, detail)))
+
+    issues.sort(key=lambda item: (item[0], item[1], item[2]))
+    return [issue for _employee_id, _start_date, _leave_id, issue in issues]
+
+
 def _warning_issues(
     db: Session,
     members: Sequence[tuple[Employee, TimesheetDesignation | None]],
@@ -550,6 +713,7 @@ def _warning_issues(
     assignments: Mapping[str, TimesheetRosterAssignment],
     designations: Mapping[int, TimesheetDesignation],
     month_start: date,
+    month_end: date,
     sheet: str,
 ) -> list[Issue]:
     """Everything worth telling the operator that does not stop the download."""
@@ -575,6 +739,16 @@ def _warning_issues(
                     )
                 )
         issues.extend(_overlapping_leave_issues(employee, leaves))
+
+    issues.extend(
+        _leave_change_issues(
+            db,
+            members,
+            leaves_by_employee=leaves_by_employee,
+            month_start=month_start,
+            month_end=month_end,
+        )
+    )
 
     for name, sharers in names.items():
         if len(sharers) > 1:
@@ -717,16 +891,17 @@ def _live_rows(
     leaves_by_employee: Mapping[str, list[Leave]],
     post_count: int,
     absences: Mapping[str, list[Absence]],
+    overrides: Mapping[str, list[TimesheetOverride]],
+    names: Mapping[int, str],
     fillers: Mapping[str, str],
     acks: set[str],
 ) -> list[GridRow]:
     """Recompute the whole sheet from the live records."""
 
-    overrides = _overrides_by_employee(db, year, month)
-
     rows: list[GridRow] = []
     for row_no, (employee, designation) in enumerate(members, start=1):
         employee_absences = absences.get(employee.id, [])
+        employee_overrides = overrides.get(employee.id, [])
         codes = month_codes(
             year,
             month,
@@ -734,7 +909,7 @@ def _live_rows(
             end_date=employee.end_date,
             leaves=_leave_spans(leaves_by_employee.get(employee.id, ())),
             absences=[row.date for row in employee_absences],
-            overrides=overrides.get(employee.id),
+            overrides={row.day: row.code for row in employee_overrides},
         )
         block = 1 if row_no <= post_count else 2
         filler = fillers.get(employee.id, DEFAULT_STAT_FILLER)
@@ -760,6 +935,7 @@ def _live_rows(
                 start_confirmed=employee.id in acks,
                 notes=_notes(employee_absences),
                 designation_id=designation.id if designation is not None else None,
+                edits=_edits(employee_overrides, employee_absences, names),
             )
         )
 
@@ -775,6 +951,8 @@ def _sealed_rows(
     *,
     sheet: str,
     absences: Mapping[str, list[Absence]],
+    overrides: Mapping[str, list[TimesheetOverride]],
+    names: Mapping[int, str],
     fillers: Mapping[str, str],
     acks: set[str],
 ) -> list[GridRow]:
@@ -805,6 +983,7 @@ def _sealed_rows(
     for frozen in snapshot:
         employee = employees.get(frozen.employee_id)
         employee_absences = absences.get(frozen.employee_id, [])
+        employee_overrides = overrides.get(frozen.employee_id, [])
         rows.append(
             GridRow(
                 employee_id=frozen.employee_id,
@@ -833,6 +1012,7 @@ def _sealed_rows(
                 start_confirmed=frozen.employee_id in acks,
                 notes=_notes(employee_absences),
                 designation_id=None,
+                edits=_edits(employee_overrides, employee_absences, names),
             )
         )
     return rows
@@ -859,6 +1039,21 @@ def build_month(db: Session, year: int, month: int, *, sheet: str = "main") -> M
     post_count = DEFAULT_POST_COUNT if period is None else period.post_count
 
     absences = _absences_by_employee(db, month_start, month_end)
+    overrides = _overrides_by_employee(db, year, month)
+    names = _display_names(
+        db,
+        (
+            row.created_by
+            for rows in chain(
+                cast(Iterable[Sequence[Absence] | Sequence[TimesheetOverride]], absences.values()),
+                cast(
+                    Iterable[Sequence[Absence] | Sequence[TimesheetOverride]],
+                    overrides.values(),
+                ),
+            )
+            for row in rows
+        ),
+    )
     fillers = _fillers_by_employee(db, year, month)
     acks = _start_acks(db, year, month)
     members = _members(
@@ -870,9 +1065,17 @@ def build_month(db: Session, year: int, month: int, *, sheet: str = "main") -> M
         sheet=sheet,
     )
     leaves_by_employee = _leaves_by_employee(db, month_start, month_end)
-
     if period is not None and period.closed_at is not None:
-        rows = _sealed_rows(db, period, sheet=sheet, absences=absences, fillers=fillers, acks=acks)
+        rows = _sealed_rows(
+            db,
+            period,
+            sheet=sheet,
+            absences=absences,
+            overrides=overrides,
+            names=names,
+            fillers=fillers,
+            acks=acks,
+        )
         blocking = _sealed_issues(rows)
         closed_at: datetime | None = period.closed_at
         closed_by = _display_name(db, period.closed_by)
@@ -886,6 +1089,8 @@ def build_month(db: Session, year: int, month: int, *, sheet: str = "main") -> M
             leaves_by_employee=leaves_by_employee,
             post_count=post_count,
             absences=absences,
+            overrides=overrides,
+            names=names,
             fillers=fillers,
             acks=acks,
         )
@@ -899,6 +1104,7 @@ def build_month(db: Session, year: int, month: int, *, sheet: str = "main") -> M
         assignments=assignments,
         designations=designations,
         month_start=month_start,
+        month_end=month_end,
         sheet=sheet,
     )
 
@@ -1246,6 +1452,7 @@ def set_cell(
     *,
     note: str | None = None,
     user_id: int | None = None,
+    actor: str | None = None,
 ) -> None:
     """Force one cell: ``AB`` records an absence, anything else an override.
 
@@ -1310,25 +1517,38 @@ def set_cell(
             db.delete(stale)
     db.flush()
 
+    derived = _derived_cell_code(db, year, month, employee, day)
+    before = (
+        override.code if override is not None else CODE_ABSENT if absence is not None else derived
+    )
+    after = code if code is not None else derived
+
     if code == CODE_ABSENT:
         db.add(Absence(employee_id=employee_id, date=cell_date, note=note, created_by=user_id))
-    elif code is not None:
-        derived_code = _derived_cell_code(db, year, month, employee, day)
+    elif code is not None and derived != code:
         # An override equal to the derived value is a silent pin that stops the
         # cell tracking records; skip it because this is what Undo last change
         # depends on when it restores a displayed derived code.
-        if derived_code != code:
-            db.add(
-                TimesheetOverride(
-                    year=year,
-                    month=month,
-                    day=day,
-                    employee_id=employee_id,
-                    code=code,
-                    note=note,
-                    created_by=user_id,
-                )
+        db.add(
+            TimesheetOverride(
+                year=year,
+                month=month,
+                day=day,
+                employee_id=employee_id,
+                code=code,
+                note=note,
+                created_by=user_id,
             )
+        )
+    db.add(
+        AuditLog(
+            actor=actor,
+            action="timesheet.cell_set",
+            entity_type="timesheet_cell",
+            entity_id=f"{employee_id}:{cell_date:%Y-%m-%d}",
+            payload=json.dumps({"from": before, "to": after, "code": code, "note": note}),
+        )
+    )
     db.commit()
 
 

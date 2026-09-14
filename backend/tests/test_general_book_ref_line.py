@@ -76,7 +76,7 @@ def test_ref_renders_ltr_segment_order_directly_after_label(tmp_path):
     assert value_run.font.rtl is False
 
 
-def test_ref_line_is_calibri_16pt_italic_with_rtl_label(tmp_path):
+def test_ref_line_preserves_canonical_template_size_with_rtl_label(tmp_path):
     from docx import Document
     from docx.oxml.ns import qn
 
@@ -84,22 +84,29 @@ def test_ref_line_is_calibri_16pt_italic_with_rtl_label(tmp_path):
     DocxEngine(TEMPLATES_DIR).fill("General Book", {**_BASE_DATA, "ref": "1/5/142"}, out)
     doc = Document(str(out))
     paragraph = next(p for p in doc.paragraphs if "1/5/142" in p.text)
+    date_paragraph = next(p for p in doc.paragraphs if "التاريخ:" in p.text)
     runs = [r for r in paragraph.runs if r.text]
+    date_size = next(r.font.size for r in date_paragraph.runs if r.text)
+
     assert [r.text for r in runs] == ["الرقم: ", "1/5/142"]
     assert paragraph._p.pPr.find(qn("w:bidi")) is not None
     assert runs[0].font.rtl is True
     assert runs[1].font.rtl is False
-    assert all(r.font.name == "Calibri" for r in runs)
-    assert all(r.font.size.pt == 16 for r in runs)
-    assert all(r.font.italic is True for r in runs)
+    assert date_size is not None and date_size.pt == 10
+    assert all(r.font.size == date_size for r in runs)
+    assert all(not r.font.italic for r in runs)
 
-
-def test_library_template_uses_same_ref_format(tmp_path):
+def test_library_template_preserves_ref_run_format(tmp_path):
     from docx import Document
+    from docx.shared import Pt
 
     template = tmp_path / "library.docx"
     doc = Document()
-    doc.add_paragraph("الرقم: {{ ref }}")
+    paragraph = doc.add_paragraph()
+    template_run = paragraph.add_run("الرقم: {{ ref }}")
+    template_run.font.name = "Arial"
+    template_run.font.size = Pt(9)
+    template_run.font.bold = True
     doc.add_paragraph(GENERAL_BOOK_BODY_SENTINEL)
     doc.save(template)
 
@@ -110,9 +117,29 @@ def test_library_template_uses_same_ref_format(tmp_path):
     rendered = Document(out)
     paragraph = next(p for p in rendered.paragraphs if "1/5/142" in p.text)
     runs = [r for r in paragraph.runs if r.text]
+
     assert [r.text for r in runs] == ["الرقم: ", "1/5/142"]
     assert runs[1].font.rtl is False
-    assert all(r.font.name == "Calibri" and r.font.size.pt == 16 and r.font.italic for r in runs)
+    assert all(r.font.name == "Arial" and r.font.size.pt == 9 and r.font.bold for r in runs)
+
+
+def test_word_template_keeps_intro_without_large_blank_gap(tmp_path):
+    from docx import Document
+
+    out = tmp_path / "word-book.docx"
+    data = {**_BASE_DATA, "body_html": ""}
+    DocxEngine(TEMPLATES_DIR).fill("General Book", {**data, "ref": "1/5/142"}, out)
+    paragraphs = [p.text.strip() for p in Document(out).paragraphs]
+
+    subject_idx = next(i for i, text in enumerate(paragraphs) if text.startswith("الموضوع:"))
+    intro_idx = paragraphs.index(
+        "يطيب لنا أن نتقدم لكم بأطيب التحيات والتقدير، "
+        "ننوه على الموضوع أعلاه انه"
+    )
+    closing_idx = paragraphs.index("للتفضل بالعلم وإجراءاتكم")
+
+    assert intro_idx - subject_idx <= 2
+    assert closing_idx - intro_idx <= 2
 
 
 def test_word_book_has_ref_line_and_no_header_stamp(db_session, admin_user):

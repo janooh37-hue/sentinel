@@ -2,19 +2,21 @@
 
 from __future__ import annotations
 
-from datetime import date
-
+from datetime import UTC, date, datetime, timedelta
+from types import SimpleNamespace
 from typing import Any
 
 from fastapi.testclient import TestClient
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
 from app.db.models import Employee, User, UserWorkforceScope
 from app.db.session import get_db
+from app.db.workforce_models import AttendanceEvaluationQueue, WorkCrew
 from app.main import create_app
+from app.services import attendance_sync_service, perm_service, scheduler_service, settings_service
 from tests.factories.attendance import build_attendance_day
-
 
 
 def _employee(employee_id: str, *, department: str, duty_unit: str, name: str) -> Employee:
@@ -167,13 +169,118 @@ def test_workforce_routes_fail_closed_for_an_operator_without_the_required_capab
         ("get", "/api/v1/workforce/configuration"),
     ]
     for method, path in denied_requests:
-        response = (
-            client.post(path, json={})
-            if method == "post"
-            else getattr(client, method)(path)
-        )
+        response = client.post(path, json={}) if method == "post" else getattr(client, method)(path)
         assert response.status_code == 403, f"{method.upper()} {path}: {response.text}"
 
+
+def test_crew_get_etag_is_valid_for_create_when_display_and_id_order_differ(
+    api_db: Session,
+) -> None:
+    fixture = build_attendance_day(
+        api_db, operational_date=date(2026, 8, 19), posts=[("Gate 1", 1)]
+    )
+    crews = list(api_db.scalars(select(WorkCrew).order_by(WorkCrew.id).limit(2)))
+    assert len(crews) == 2
+    crews[0].code = "zz-etag-order"
+    crews[1].code = "aa-etag-order"
+    api_db.commit()
+    client = _client(api_db, fixture.admin)
+
+    listed = client.get("/api/v1/workforce/crews?limit=500")
+    assert listed.status_code == 200, listed.text
+    displayed_codes = [item["code"] for item in listed.json()["items"]]
+    assert displayed_codes == sorted(displayed_codes)
+    assert displayed_codes.index("aa-etag-order") < displayed_codes.index("zz-etag-order")
+
+    created = client.post(
+        "/api/v1/workforce/crews",
+        headers={"If-Match": listed.headers["etag"]},
+        json={"code": "etag-new", "name_en": "ETag New Crew", "active": True},
+    )
+    assert created.status_code == 201, created.text
+
+
+def test_department_manager_retains_capability_global_metadata_reads(
+    api_db: Session,
+) -> None:
+    build_attendance_day(api_db, operational_date=date(2026, 8, 19), posts=[("Gate 1", 1)])
+    manager = _user(api_db, email="global-metadata@test.ae")
+    for capability in (
+        "workforce.schedule.manage",
+        "workforce.policy.manage",
+        "workforce.integration.manage",
+    ):
+        perm_service.set_user_override(api_db, manager.id, capability, "grant")
+    _scope(api_db, manager, kind="department", department="Operations")
+    client = _client(api_db, manager)
+
+    definitions = client.get("/api/v1/workforce/schedule/definitions")
+    rotation = client.get("/api/v1/workforce/schedule/rotation")
+    crews = client.get("/api/v1/workforce/crews")
+    policies = client.get("/api/v1/workforce/policies")
+    integration = client.get("/api/v1/workforce/integration/status")
+    for response in (definitions, rotation, crews, policies, integration):
+        assert response.status_code == 200, response.text
+
+    crew_id = crews.json()["items"][0]["id"]
+    crew = client.get(f"/api/v1/workforce/crews/{crew_id}")
+    schedules = client.get(f"/api/v1/workforce/crews/{crew_id}/schedules")
+    assert crew.status_code == 200, crew.text
+    assert schedules.status_code == 200, schedules.text
+    schedule_id = schedules.json()["items"][0]["id"]
+    detail = client.get(f"/api/v1/workforce/crews/{crew_id}/schedules/{schedule_id}")
+    assert detail.status_code == 200, detail.text
+
+
+def test_department_manager_retains_capability_global_integration_actions(
+    api_db: Session, monkeypatch
+) -> None:
+    fixture = build_attendance_day(
+        api_db, operational_date=date(2026, 8, 19), posts=[("Gate 1", 1)]
+    )
+    manager = _user(api_db, email="global-integration@test.ae")
+    perm_service.set_user_override(api_db, manager.id, "workforce.integration.manage", "grant")
+    _scope(api_db, manager, kind="department", department="Operations")
+    now = datetime(2026, 8, 20, tzinfo=UTC)
+    failed = AttendanceEvaluationQueue(
+        employee_id=fixture.employees[0].id,
+        window_start_at=now - timedelta(days=1),
+        window_end_at=now,
+        reason_codes=["TEST"],
+        available_at=now,
+        failed_at=now,
+        attempts=5,
+        last_error_code="TEST_FAILURE",
+    )
+    api_db.add(failed)
+    api_db.commit()
+
+    class Provider:
+        def test_connection(self):
+            return SimpleNamespace(status="ok", summary="Synthetic provider")
+
+    monkeypatch.setattr(
+        scheduler_service, "_resolve_verified_attendance_provider", lambda: Provider()
+    )
+    monkeypatch.setattr(
+        settings_service,
+        "get_workforce_configuration",
+        lambda _db: SimpleNamespace(initial_backfill_start_at=now - timedelta(days=30)),
+    )
+    monkeypatch.setattr(attendance_sync_service, "sync_people", lambda *args, **kwargs: 2)
+    monkeypatch.setattr(attendance_sync_service, "sync_punches", lambda *args, **kwargs: 3)
+    client = _client(api_db, manager)
+
+    tested = client.post("/api/v1/workforce/integration/test")
+    synced = client.post("/api/v1/workforce/integration/sync")
+    retried = client.post(f"/api/v1/workforce/integration/evaluation-queue/{failed.id}/retry")
+
+    assert tested.status_code == 200, tested.text
+    assert tested.json() == {"status": "ok", "summary": "Synthetic provider"}
+    assert synced.status_code == 202, synced.text
+    assert synced.json() == {"imported_people": 2, "imported_punches": 3}
+    assert retried.status_code == 200, retried.text
+    assert retried.json()["id"] == failed.id
 
 
 def test_double_shift_attendance_responses_publish_exact_case_ids(api_db: Session) -> None:
@@ -213,6 +320,7 @@ def test_double_shift_attendance_responses_publish_exact_case_ids(api_db: Sessio
         if row["employee_id"] == employee.id
     }
     assert exception_case_ids == expected
+
 
 def test_self_capability_can_read_only_its_self_snapshot_block(api_db: Session) -> None:
     """Self view remains usable but never acts as aggregate or person-level authorization."""

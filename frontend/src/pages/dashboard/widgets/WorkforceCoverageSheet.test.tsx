@@ -78,6 +78,40 @@ describe('WorkforceCoverageSheet', () => {
     expect(screen.queryByText('G1001')).not.toBeInTheDocument()
   })
 
+  it('returns to the organization level after a parent-controlled close and reopen', async () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const view = render(
+      <QueryClientProvider client={queryClient}>
+        <I18nextProvider i18n={i18n}>
+          <WorkforceCoverageSheet open onOpenChange={vi.fn()} operationalDate="2026-08-24" />
+        </I18nextProvider>
+      </QueryClientProvider>,
+    )
+    const user = userEvent.setup()
+
+    await user.click(await screen.findByRole('button', { name: 'Security' }))
+    expect(await screen.findByRole('button', { name: 'Security Gate' })).toBeInTheDocument()
+
+    view.rerender(
+      <QueryClientProvider client={queryClient}>
+        <I18nextProvider i18n={i18n}>
+          <WorkforceCoverageSheet open={false} onOpenChange={vi.fn()} operationalDate="2026-08-24" />
+        </I18nextProvider>
+      </QueryClientProvider>,
+    )
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    view.rerender(
+      <QueryClientProvider client={queryClient}>
+        <I18nextProvider i18n={i18n}>
+          <WorkforceCoverageSheet open onOpenChange={vi.fn()} operationalDate="2026-08-24" />
+        </I18nextProvider>
+      </QueryClientProvider>,
+    )
+
+    expect(await screen.findByRole('button', { name: 'All departments' })).toHaveAttribute('aria-current', 'page')
+    expect(screen.queryByRole('button', { name: 'Back' })).not.toBeInTheDocument()
+  })
+
   it('resets descendants when a different department is selected and backs up one level', async () => {
     renderSheet(true)
     const user = userEvent.setup()

@@ -124,6 +124,26 @@ def is_annual(leave_type: str) -> bool:
     return english_part(leave_type).lower() in _ANNUAL
 
 
+def live_kind(
+    leave_type: str,
+    status: str,
+    *,
+    deleted: bool,
+) -> Literal["national_service", "sick", "annual"] | None:
+    """Classify a lifecycle-live leave kind used by workforce attendance."""
+    if deleted:
+        return None
+    group = classify_group(leave_type)
+    current_status = canonical_status(status)
+    if group == "national_service" and current_status in {"Pending", "Completed"}:
+        return "national_service"
+    if group == "sick" and current_status == "Approved":
+        return "sick"
+    if is_annual(leave_type) and current_status == "Approved":
+        return "annual"
+    return None
+
+
 def is_returnable(leave_type: str) -> bool:
     """Kinds that require a Duty Resumption (return) form to close out.
 
@@ -210,7 +230,9 @@ __all__ = [
     "canonical_status",
     "classify_group",
     "ending_soon",
+    "english_part",
     "is_annual",
     "is_returnable",
+    "live_kind",
     "needs_action",
 ]

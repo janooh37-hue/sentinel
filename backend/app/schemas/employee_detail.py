@@ -14,11 +14,12 @@ from datetime import date as date_t
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from app.schemas._base import ORMBase
 from app.schemas.employee import EmployeeRead
 from app.schemas.employee_completeness import CompletenessRead
+from app.schemas.linked_document import LinkedDocumentRead
 from app.schemas.notify import NotifyMessageRead as NotifyMessageRead
 
 
@@ -50,6 +51,7 @@ class RecentLeaveRead(ORMBase):
     end_date: date_t
     days: int
     status: str
+    linked_documents: list[LinkedDocumentRead] = Field(default_factory=list)
 
 
 class RecentViolationRead(ORMBase):
@@ -58,6 +60,7 @@ class RecentViolationRead(ORMBase):
     violation_type: str
     status: str
     description: str | None = None
+    linked_documents: list[LinkedDocumentRead] = Field(default_factory=list)
 
 
 class RecentAbsenceRead(ORMBase):

@@ -27,7 +27,6 @@ vi.mock('@/lib/api', () => ({
         user_id: 5,
         requester_name: 'Saeed',
         capability: 'books.approve',
-        capability_label: 'Approve / reject books',
         status: 'pending',
         decision: null,
         created_at: new Date().toISOString(),
@@ -37,9 +36,13 @@ vi.mock('@/lib/api', () => ({
       {
         id: 'books.approve',
         domain: 'books',
-        label: 'Approve / reject books',
-        description: 'Allows approving or rejecting submitted books.',
-        default_roles: [],
+        label_en: 'Approve / reject records',
+        label_ar: 'اعتماد / رفض السجلات',
+        description_en: 'Approve or reject submitted records.',
+        description_ar: 'اعتماد السجلات المقدمة أو رفضها.',
+        sensitive: false,
+        requestable: true,
+        default_roles: ['manager', 'admin'],
       },
     ]),
     decidePermissionRequest: vi.fn().mockResolvedValue({}),
@@ -47,9 +50,14 @@ vi.mock('@/lib/api', () => ({
   ApiError: class ApiError extends Error {},
 }))
 
+vi.mock('@/lib/authContext', () => ({
+  useAuth: () => ({ status: 'authed', user: { id: 1 } }),
+}))
+
 // Import AFTER mock so the module is swapped.
 import { PermissionRequestsTab } from './PermissionRequestsTab'
 import { api } from '@/lib/api'
+import i18n from '@/lib/i18n'
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -74,8 +82,9 @@ function Wrapper({ children }: { children: React.ReactNode }) {
 // ---------------------------------------------------------------------------
 
 describe('PermissionRequestsTab — decide-body contract', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.clearAllMocks()
+    await i18n.changeLanguage('en')
     // Re-apply default resolved values after clearAllMocks wipes them.
     vi.mocked(api.listPermissionRequests).mockResolvedValue([
       {
@@ -83,7 +92,6 @@ describe('PermissionRequestsTab — decide-body contract', () => {
         user_id: 5,
         requester_name: 'Saeed',
         capability: 'books.approve',
-        capability_label: 'Approve / reject books',
         status: 'pending',
         decision: null,
         created_at: new Date().toISOString(),
@@ -93,9 +101,13 @@ describe('PermissionRequestsTab — decide-body contract', () => {
       {
         id: 'books.approve',
         domain: 'books',
-        label: 'Approve / reject books',
-        description: 'Allows approving or rejecting submitted books.',
-        default_roles: [],
+        label_en: 'Approve / reject records',
+        label_ar: 'اعتماد / رفض السجلات',
+        description_en: 'Approve or reject submitted records.',
+        description_ar: 'اعتماد السجلات المقدمة أو رفضها.',
+        sensitive: false,
+        requestable: true,
+        default_roles: ['manager', 'admin'],
       },
     ])
     vi.mocked(api.decidePermissionRequest).mockResolvedValue({})
@@ -167,5 +179,66 @@ describe('PermissionRequestsTab — decide-body contract', () => {
         note: 'Not eligible yet',
       })
     })
+  })
+
+  it('joins a pending request to Arabic catalog label and description', async () => {
+    await i18n.changeLanguage('ar')
+    vi.mocked(api.listPermissionRequests).mockResolvedValueOnce([
+      {
+        id: 2,
+        user_id: 5,
+        requester_name: 'Saeed',
+        capability: 'books.category.special',
+        status: 'pending',
+        decision: null,
+        created_at: new Date().toISOString(),
+      },
+    ])
+    vi.mocked(api.listCapabilities).mockResolvedValueOnce([
+      {
+        id: 'books.category.special',
+        domain: 'books',
+        label_en: 'Special records',
+        label_ar: 'السجلات الخاصة',
+        description_en: 'View records in Special.',
+        description_ar: 'عرض السجلات ضمن الخاصة.',
+        sensitive: false,
+        requestable: true,
+        default_roles: ['operator', 'manager', 'admin'],
+      },
+    ])
+
+    render(
+      <Wrapper>
+        <PermissionRequestsTab />
+      </Wrapper>,
+    )
+
+    expect(await screen.findByText('السجلات الخاصة')).toBeVisible()
+    expect(screen.getByText('عرض السجلات ضمن الخاصة.')).toBeVisible()
+  })
+
+  it('keeps an historical request reviewable when its capability is no longer catalogued', async () => {
+    vi.mocked(api.listPermissionRequests).mockResolvedValueOnce([
+      {
+        id: 3,
+        user_id: 5,
+        requester_name: 'Saeed',
+        capability: 'retired.export',
+        status: 'pending',
+        decision: null,
+        created_at: new Date().toISOString(),
+      },
+    ])
+    vi.mocked(api.listCapabilities).mockResolvedValueOnce([])
+
+    render(
+      <Wrapper>
+        <PermissionRequestsTab />
+      </Wrapper>,
+    )
+
+    expect(await screen.findByText('retired.export')).toHaveAttribute('dir', 'auto')
+    expect(screen.getByRole('button', { name: /grant permanently/i })).toBeVisible()
   })
 })

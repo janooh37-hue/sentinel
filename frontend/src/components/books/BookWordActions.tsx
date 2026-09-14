@@ -112,6 +112,14 @@ export function WordReopenButton({
   const { t } = useTranslation()
   const qc = useQueryClient()
   const [reopenSession, setReopenSession] = useState<WordSessionRead | null>(null)
+  // The same instance is reused across records (BookRecordPage QueueNav,
+  // RecordPane selection). A session retained for record A must not present
+  // over record B.
+  const [sessionBookId, setSessionBookId] = useState(book.id)
+  if (sessionBookId !== book.id) {
+    setSessionBookId(book.id)
+    setReopenSession(null)
+  }
   const invalidate = () => void qc.invalidateQueries({ queryKey: ['books'] })
 
   const reopenMutation = useMutation({
@@ -125,34 +133,39 @@ export function WordReopenButton({
 
   const hasActiveSession = book.edit_session?.state === 'active'
   const isFinished = (book.versions?.length ?? 0) > 0 && !hasActiveSession
-  if (book.voided_at || !isFinished) return null
+  // Reopen flips `book.edit_session` active via the `invalidate()` refetch,
+  // often before the user sees the dialog (always when a lock defers it):
+  // keep the retained session mounted instead of reading that as "nothing to show".
+  if (book.voided_at || (!isFinished && reopenSession == null)) return null
 
   const label = t('books.word.editNewVersion')
   const title = isMobile ? t('books.word.needsPc') : label
 
   return (
     <>
-      <div className="flex flex-col gap-1">
-        <button
-          type="button"
-          disabled={isMobile || reopenMutation.isPending}
-          onClick={() => reopenMutation.mutate()}
-          aria-label={iconOnly ? label : undefined}
-          title={iconOnly ? title : undefined}
-          className={cn(
-            'inline-flex items-center gap-1.5 rounded-lg border text-[0.82em] font-semibold text-[#185abd] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50',
-            iconOnly ? 'h-9 w-9 justify-center p-0' : 'px-3 py-2',
-          )}
-          style={{ borderColor: '#185abd55' }}
-        >
-          {iconOnly ? <FilePenLine className="h-4 w-4" aria-hidden="true" /> : label}
-        </button>
-        {isMobile && !iconOnly ? (
-          <span className="text-[0.72em] text-muted-foreground">
-            {t('books.word.needsPc')}
-          </span>
-        ) : null}
-      </div>
+      {isFinished && (
+        <div className="flex flex-col gap-1">
+          <button
+            type="button"
+            disabled={isMobile || reopenMutation.isPending}
+            onClick={() => reopenMutation.mutate()}
+            aria-label={iconOnly ? label : undefined}
+            title={iconOnly ? title : undefined}
+            className={cn(
+              'inline-flex items-center gap-1.5 rounded-lg border text-[0.82em] font-semibold text-[#185abd] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50',
+              iconOnly ? 'h-9 w-9 justify-center p-0' : 'px-3 py-2',
+            )}
+            style={{ borderColor: '#185abd55' }}
+          >
+            {iconOnly ? <FilePenLine className="h-4 w-4" aria-hidden="true" /> : label}
+          </button>
+          {isMobile && !iconOnly ? (
+            <span className="text-[0.72em] text-muted-foreground">
+              {t('books.word.needsPc')}
+            </span>
+          ) : null}
+        </div>
+      )}
 
       <WordHandoffDialog
         session={reopenSession}

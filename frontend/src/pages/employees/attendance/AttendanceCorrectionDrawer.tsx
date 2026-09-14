@@ -1,7 +1,7 @@
 import * as Dialog from '@radix-ui/react-dialog'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { X } from 'lucide-react'
-import { useEffect, useRef, useState } from 'react'
+import { useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
@@ -86,6 +86,17 @@ function effectiveAdjustmentId(attendanceCase: AttendanceCase | undefined): numb
   return value && typeof value.adjustment_id === 'number' ? value.adjustment_id : null
 }
 
+interface CorrectionDraftState {
+  draft: AttendanceCorrectionDraft
+  etag: string
+}
+
+interface RevokeTarget {
+  id: number
+  reason: string
+  etag: string
+}
+
 function display(value: unknown): string {
   if (value === null || value === undefined || value === '') return '—'
   if (typeof value === 'boolean') return value ? 'Yes' : 'No'
@@ -114,18 +125,21 @@ function Facts({ items }: { items: ReadonlyArray<readonly [string, unknown]> }):
   )
 }
 
-export function AttendanceCorrectionDrawer({ caseId, onClose }: Props): React.JSX.Element {
+export function AttendanceCorrectionDrawer(props: Props): React.JSX.Element {
+  return <AttendanceCorrectionDrawerContent key={props.caseId ?? 'closed'} {...props} />
+}
+
+function AttendanceCorrectionDrawerContent({ caseId, onClose }: Props): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const { has: hasCapability } = useCapabilities()
   const queryClient = useQueryClient()
   const priorFocusRef = useRef<HTMLElement | null>(null)
-  const [draft, setDraft] = useState<AttendanceCorrectionDraft | null>(null)
-  const [draftEtag, setDraftEtag] = useState<string | null>(null)
+  const [draftOverride, setDraftOverride] = useState<CorrectionDraftState | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
   const [conflictWarning, setConflictWarning] = useState<string | null>(null)
   const [liveMessage, setLiveMessage] = useState<string | null>(null)
   const [revokeReason, setRevokeReason] = useState('')
-  const [revokeTarget, setRevokeTarget] = useState<{ id: number; reason: string; etag: string } | null>(null)
+  const [revokeTarget, setRevokeTarget] = useState<RevokeTarget | null>(null)
   const caseQuery = useQuery({
     queryKey: ['attendance-case', caseId] as const,
     queryFn: () => api.getAttendanceCase(caseId as number),
@@ -136,35 +150,33 @@ export function AttendanceCorrectionDrawer({ caseId, onClose }: Props): React.JS
   const canCorrect = hasCapability('workforce.attendance.correct')
   const etag = caseQuery.data?.etag ?? ''
   const caseSnapshotIsCurrent = caseQuery.isSuccess && !caseQuery.isFetching && etag !== ''
-  const draftIsCurrent = caseSnapshotIsCurrent && draft !== null && draftEtag === etag
+  const draftState =
+    draftOverride !== null && draftOverride.etag === etag
+      ? draftOverride
+      : effective !== null && etag !== ''
+        ? { draft: draftFromEffective(effective), etag }
+        : null
+  const draft = draftState?.draft ?? null
+  const draftEtag = draftState?.etag ?? null
+  const draftIsCurrent = caseSnapshotIsCurrent && draftState !== null && draftEtag === etag
   const activeAdjustmentId = effectiveAdjustmentId(attendanceCase)
   const effectiveAdjustment = attendanceCase?.adjustments?.find((adjustment) => adjustment.id === activeAdjustmentId)
 
-  useEffect(() => {
-    setDraft(null)
-    setDraftEtag(null)
-    setActionError(null)
-    setConflictWarning(null)
-    setLiveMessage(null)
-    setRevokeReason('')
-    if (caseId !== null) {
-      priorFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
+  const setDraft = (next: AttendanceCorrectionDraft): void => {
+    if (draftState !== null) {
+      setDraftOverride({ ...draftState, draft: next })
     }
-  }, [caseId])
-
-  useEffect(() => {
-    if (!caseSnapshotIsCurrent || effective === null || draftEtag === etag) return
-    setDraft(draftFromEffective(effective))
-    setDraftEtag(etag)
-  }, [caseSnapshotIsCurrent, draftEtag, effective, etag])
+  }
 
   const reloadEvidence = async (resetDraft: boolean) => {
     const result = await caseQuery.refetch()
     if (resetDraft && result.data?.data) {
       const refreshedEffective = effectiveFromCase(result.data.data)
       if (refreshedEffective) {
-        setDraft(draftFromEffective(refreshedEffective))
-        setDraftEtag(result.data.etag)
+        setDraftOverride({
+          draft: draftFromEffective(refreshedEffective),
+          etag: result.data.etag,
+        })
       }
     }
     return result.data
@@ -186,9 +198,12 @@ export function AttendanceCorrectionDrawer({ caseId, onClose }: Props): React.JS
     if (error instanceof ApiError && error.code === 'ATTENDANCE_CASE_VERSION_CONFLICT') {
       const conflictedDraft = draft
       const refreshed = await reloadEvidence(false)
-      if (conflictedDraft && refreshed?.etag) {
-        setDraft(conflictedDraft)
-        setDraftEtag(refreshed.etag)
+      const refreshedEffective = effectiveFromCase(refreshed?.data)
+      if (conflictedDraft && refreshed?.etag && refreshedEffective) {
+        setDraftOverride({
+          draft: conflictedDraft,
+          etag: refreshed.etag,
+        })
       }
       setConflictWarning(t('attendance.review.conflictWarning'))
       return
@@ -213,7 +228,7 @@ export function AttendanceCorrectionDrawer({ caseId, onClose }: Props): React.JS
   })
 
   const revokeMutation = useMutation({
-    mutationFn: (target: { id: number; reason: string; etag: string }) =>
+    mutationFn: (target: RevokeTarget) =>
       api.revokeAttendanceAdjustment(caseId as number, target.id, target.etag, { reason: target.reason }),
     retry: false,
     onSuccess: async () => {
@@ -242,6 +257,10 @@ export function AttendanceCorrectionDrawer({ caseId, onClose }: Props): React.JS
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-50 bg-black/40 backdrop-blur-[2px]" />
         <Dialog.Content
+          onOpenAutoFocus={() => {
+            priorFocusRef.current =
+              document.activeElement instanceof HTMLElement ? document.activeElement : null
+          }}
           aria-modal="true"
           aria-describedby={undefined}
           onCloseAutoFocus={(event) => {
@@ -367,7 +386,7 @@ export function AttendanceCorrectionDrawer({ caseId, onClose }: Props): React.JS
                         setActionError(null)
                         setConflictWarning(null)
                         const baselineEtag = draftEtag
-                        if (!draftIsCurrent || baselineEtag === null) return
+                        if (!draftIsCurrent || baselineEtag === null || draftState === null) return
                         try {
                           correctionMutation.mutate({
                             etag: baselineEtag,
@@ -490,7 +509,11 @@ export function AttendanceCorrectionDrawer({ caseId, onClose }: Props): React.JS
                           disabled={revokeMutation.isPending || revokeReason.trim() === '' || !caseSnapshotIsCurrent}
                           onClick={() => {
                             if (caseSnapshotIsCurrent) {
-                              setRevokeTarget({ id: effectiveAdjustment.id, reason: revokeReason.trim(), etag })
+                              setRevokeTarget({
+                                id: effectiveAdjustment.id,
+                                reason: revokeReason.trim(),
+                                etag,
+                              })
                             }
                           }}
                           className="mt-3 h-9 rounded-md border border-accent px-3 text-sm font-semibold text-accent disabled:cursor-not-allowed disabled:opacity-50"

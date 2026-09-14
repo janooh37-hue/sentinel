@@ -221,6 +221,9 @@ export type AbsenceCreateResult = components['schemas']['AbsenceCreateResult']
 export type AbsenceEpisodeRead = components['schemas']['AbsenceEpisodeRead']
 export type AbsenceRecordRead = components['schemas']['AbsenceRecordRead']
 export type RecentAbsenceRead = components['schemas']['RecentAbsenceRead']
+export type AbsenceEpisodeUpdate = components['schemas']['AbsenceEpisodeUpdate']
+export type AbsenceRegisterRowRead = components['schemas']['AbsenceRegisterRowRead']
+export type AbsenceRegisterRead = components['schemas']['AbsenceRegisterRead']
 
 // The backend now returns the employee's bilingual name alongside each leave
 // row so the Records table can render a name instead of a raw G-number. These
@@ -277,6 +280,51 @@ export type PersonIdScan = components['schemas']['PersonIdScan']
 export type PermitUpdate = components['schemas']['PermitUpdate']
 export type PermitSummary = components['schemas']['PermitSummary']
 
+// ─── Fleet vehicles ──────────────────────────────────────────────────────────
+export type VehicleListItem = components['schemas']['VehicleListItem']
+export type VehicleRead = components['schemas']['VehicleRead']
+export type VehicleCreate = components['schemas']['VehicleCreate']
+export type VehicleUpdate = components['schemas']['VehicleUpdate']
+export type VehicleSiteRead = components['schemas']['VehicleSiteRead']
+export type VehicleSiteCreate = components['schemas']['VehicleSiteCreate']
+export type VehicleSiteUpdate = components['schemas']['VehicleSiteUpdate']
+export type VehicleFileRead = components['schemas']['VehicleFileRead']
+export type VehiclePhotoRead = components['schemas']['VehiclePhotoRead']
+export type VehicleFineCreate = components['schemas']['VehicleFineCreate']
+export type VehicleFineUpdate = components['schemas']['VehicleFineUpdate']
+export type VehicleFineRead = components['schemas']['VehicleFineRead']
+export type VehicleFinePaymentStatus = VehicleFineRead['payment_status']
+export type VehicleFinePaymentRecord = components['schemas']['VehicleFinePaymentRecord']
+export type VehicleFineBatchResult = components['schemas']['VehicleFineBatchResult']
+export type LicenseRenewCreate = components['schemas']['LicenseRenewCreate']
+export type VehicleAccidentCreate = components['schemas']['VehicleAccidentCreate']
+export type VehicleAccidentRead = components['schemas']['VehicleAccidentRead']
+export type VehicleMaintenanceCreate = components['schemas']['VehicleMaintenanceCreate']
+export type VehicleMaintenanceRead = components['schemas']['VehicleMaintenanceRead']
+export type VehiclesSummary = components['schemas']['VehiclesSummary']
+export type VehicleProfileScan = components['schemas']['VehicleProfileScan']
+export type VehicleImportChange = components['schemas']['VehicleImportChange']
+export type VehicleImportConfirmRequest = components['schemas']['VehicleImportConfirmRequest']
+export type VehicleImportCounts = components['schemas']['VehicleImportCounts']
+export type VehicleImportImage = components['schemas']['VehicleImportImage']
+export type VehicleImportInspectRow = components['schemas']['VehicleImportInspectRow']
+export type VehicleImportInspection = components['schemas']['VehicleImportInspection']
+export type VehicleImportIssue = components['schemas']['VehicleImportIssue']
+export type VehicleImportPreview = components['schemas']['VehicleImportPreview']
+export type VehicleImportPreviewDraftRow = components['schemas']['VehicleImportPreviewDraftRow']
+export type VehicleImportPreviewRequest = components['schemas']['VehicleImportPreviewRequest']
+export type VehicleImportPreviewRow = components['schemas']['VehicleImportPreviewRow']
+export type VehicleImportResult = components['schemas']['VehicleImportResult']
+export type VehicleImportSection = components['schemas']['VehicleImportSection']
+export type FinesLetterRequest = components['schemas']['FinesLetterRequest']
+export type LetterResult = components['schemas']['LetterResult']
+export type EvgPreviewResponse = components['schemas']['EvgPreviewResponse']
+export type EvgPreviewJobCreated = components['schemas']['EvgPreviewJobCreated']
+export type EvgPreviewJobStatus = components['schemas']['EvgPreviewJobStatus']
+export type EvgPreviewRow = components['schemas']['EvgPreviewRow']
+export type EvgConfirmRequest = components['schemas']['EvgConfirmRequest']
+export type EvgConfirmResult = components['schemas']['EvgConfirmResult']
+
 export interface LeaveReturnBody {
   resumption_date: string // ISO yyyy-mm-dd
   delay_reason?: string
@@ -323,25 +371,29 @@ export type EditorTemplateListResponse = components['schemas']['EditorTemplateLi
 export type EditorTemplateCreate = components['schemas']['EditorTemplateCreate']
 export type EditorTemplateUpdate = components['schemas']['EditorTemplateUpdate']
 
-// Phase 13 — Email integration (IMAP → ledger auto-create + SMTP send)
+// Phase 13 — Email integration (IMAP sync + Outlook handoff)
 export type EmailAccountRead = components['schemas']['EmailAccountRead']
 export type EmailAccountUpsert = components['schemas']['EmailAccountUpsert']
 export type EmailSyncResult = components['schemas']['EmailSyncResult']
 export type EmailSyncStatus = components['schemas']['EmailSyncStatus']
-// ``/email/send`` is a multipart endpoint so openapi-typescript can't infer
-// its body shape. Mirror the Pydantic schema by hand.
-export interface EmailSendRequest {
+// ``/email/handoff`` is multipart as well — same hand-mirroring as above.
+export interface EmailHandoffRequest {
   to: string[]
   cc?: string[]
   subject: string
   html: string
+  /** `draft` IMAP-APPENDs a full MIME draft (HTML + signature + attachments)
+   *  into the user's Outlook Drafts folder; `mailto` only records the pending
+   *  ledger row — the caller opens the `mailto:` URL itself. */
+  mode: 'draft' | 'mailto'
+  related_book_id?: number | null
+  related_employee_id?: string | null
   in_reply_to?: string | null
   references?: string | null
-  /** Phase 15 — when true (default) the backend appends the configured
-   * `settings.email_signature` to the outgoing HTML body. */
+  /** Draft mode only. Mailto relies on Outlook's own signature. */
   use_signature?: boolean
 }
-export type EmailSendResult = components['schemas']['EmailSendResult']
+export type EmailHandoffResult = components['schemas']['EmailHandoffResult']
 
 // Phase 14 — Identity linking. `email` was added to the backend schema
 // (2026-05-26 identity collapse) but openapi-typescript hasn't regenerated yet,
@@ -434,8 +486,12 @@ export type PermissionEffect = 'grant' | 'deny'
 export interface CapabilityRead {
   id: string
   domain: string
-  label: string
-  description: string
+  label_en: string
+  label_ar: string | null
+  description_en: string
+  description_ar: string | null
+  sensitive: boolean
+  requestable: boolean
   default_roles: Array<'operator' | 'manager' | 'admin'>
 }
 
@@ -447,7 +503,6 @@ export interface PermissionRequestRead {
   user_id: number
   requester_name: string | null
   capability: string
-  capability_label: string
   status: PermissionRequestStatus
   decision: string | null
   created_at: string
@@ -463,15 +518,7 @@ export interface UserPermissionRead {
 }
 
 // Phase 07 — Ledger
-// `inline_images` (Phase 15) + `draft_meta` (Phase 16) are added to the backend
-// schema; openapi-typescript may not yet have regenerated it. Hand-merge until
-// `npm run gen:api` runs.
-export interface LedgerDraftMeta {
-  to?: string[]
-  cc?: string[]
-  in_reply_to?: string | null
-  references?: string | null
-}
+// `inline_images` is hand-merged until `npm run gen:api` runs.
 /** Per-attachment metadata (name + byte size) returned by GET /ledger/{id}.
  * Hand-typed until backend regenerates openapi.json. `size` is 0 when the
  * file is missing on disk. */
@@ -484,7 +531,6 @@ export interface LedgerAttachmentMeta {
 }
 export type LedgerEntryRead = components['schemas']['LedgerEntryRead'] & {
   inline_images?: Record<string, string>
-  draft_meta?: LedgerDraftMeta | null
   /** Phase 17 — `read_at` is set the first time an incoming email entry is
    * opened in the drawer. NULL means the entry is unread and counts toward
    * the NavBell badge total. Hand-typed until backend regenerates openapi. */
@@ -523,8 +569,7 @@ export interface UnreadRecentResponse {
   total_unread: number
 }
 
-// Phase 16 — Search + drafts + send-to-vault.
-// Hand-typed until backend regenerates openapi.json.
+// Phase 16 — Search + send-to-vault.
 export interface LedgerSearchHit {
   entry: LedgerEntryRead
   snippet: string
@@ -533,14 +578,6 @@ export interface LedgerSearchHit {
 export interface LedgerSearchResponse {
   hits: LedgerSearchHit[]
   total: number
-}
-export interface DraftWrite {
-  to: string[]
-  cc?: string[]
-  subject: string
-  html: string
-  in_reply_to?: string | null
-  references?: string | null
 }
 export type LedgerEntryCreate = components['schemas']['LedgerEntryCreate']
 export type LedgerEntryUpdate = components['schemas']['LedgerEntryUpdate']
@@ -689,13 +726,7 @@ export interface ScanInboxCount {
 }
 
 // Phase 4 LAN — Notification counts (SSE + JSON safety-poll).
-// Hand-mirrored from backend/app/schemas/notifications.py NotificationCounts.
-export interface NotificationCounts {
-  approvals: number
-  leaves: number
-  scans: number
-  emails: number
-}
+export type NotificationCounts = components['schemas']['NotificationCounts']
 
 // Phase 05 — Books
 // ``attachment_paths`` (Task 1 / migration 0023) is not yet in api.types.ts;
@@ -951,6 +982,42 @@ export interface TimesheetMonth {
   sheet?: TimesheetSheet
 }
 
+// Monthly inmate conduct violation register (wayfinder #91) — one month of the
+// six-column register, its two populations, and the group of entries whose
+// nationality is not yet known.
+export type InmateRegisterMonth = components['schemas']['MonthOut']
+export type InmateRegisterEntry = components['schemas']['RegisterEntryOut']
+export type InmateRegisterCounts = components['schemas']['MonthCountsOut']
+export type InmateRegisterUncounted = components['schemas']['UncountedRecordOut']
+export type InmateRegisterArrived = components['schemas']['ArrivedAfterCloseOut']
+export type InmateRegisterBlocking = components['schemas']['BlockingEntryOut']
+export type InmateNationality = components['schemas']['NationalityOut']
+export type InmateNationalityList = components['schemas']['NationalityListOut']
+export type InmateAwaitingClose = components['schemas']['AwaitingCloseOut']
+export type InmateAwaitingMonth = components['schemas']['AwaitingMonthOut']
+export type InmateWorkflow = components['schemas']['WorkflowOut']
+export type InmateWorkflowActor = components['schemas']['WorkflowActorOut']
+export type InmateWorkflowAssignment = components['schemas']['WorkflowAssignmentOut']
+export type InmateWorkflowCandidate = components['schemas']['WorkflowCandidateOut']
+export type InmateWorkflowBlocker = components['schemas']['WorkflowBlockerOut']
+export type InmateWingSummary = components['schemas']['WingSummaryOut']
+export type InmateManualRowIn = components['schemas']['ManualRowIn']
+export type InmateManualRowPatch = components['schemas']['ManualRowPatch']
+export type InmateCompletionIn = components['schemas']['CompletionIn']
+export type InmateRegisterPrepare = components['schemas']['PrepareIn']
+export type InmateRegisterReview = components['schemas']['ReviewIn']
+export type InmateRegisterReturn = components['schemas']['ReturnIn']
+export type InmateRegisterApprove = components['schemas']['ApproveIn']
+export type InmateRegisterReopen = components['schemas']['ReopenIn']
+/** The three register groups: two inmate populations plus pending completion. */
+export type InmatePopulation = 'citizens' | 'expats' | 'pending'
+
+/** The month coordinates every register call needs. */
+export interface InmateRegisterMonthParams {
+  year: number
+  month: number
+}
+
 /** A file the caller is expected to save, not preview. */
 export interface DownloadedFile {
   blob: Blob
@@ -992,7 +1059,23 @@ async function unwrap<T>(res: Response): Promise<T> {
     return undefined as T
   }
   const text = await res.text()
-  const parsed = text ? (JSON.parse(text) as unknown) : undefined
+  let parsed: unknown
+  try {
+    parsed = text ? (JSON.parse(text) as unknown) : undefined
+  } catch {
+    // A reverse proxy can answer a slow request with HTML; losing the HTTP
+    // status here is what turned that response into a user-visible SyntaxError.
+    const details = { content_type: res.headers.get('content-type') ?? '' }
+    if (!res.ok) {
+      throw new ApiError(
+        res.status,
+        `HTTP_${res.status}`,
+        res.statusText || `HTTP ${res.status}`,
+        details,
+      )
+    }
+    throw new ApiError(res.status, 'INVALID_RESPONSE', `HTTP ${res.status}`, details)
+  }
   if (!res.ok) {
     const envelope = (parsed as ErrorEnvelope | undefined)?.error
     throw new ApiError(
@@ -1046,6 +1129,46 @@ function requireEtag(etag: string): string {
 async function multipart<T>(path: string, form: FormData, method = 'POST'): Promise<T> {
   return unwrap<T>(
     await fetch(`${BASE}${path}`, { method, body: form, credentials: 'same-origin' }),
+  )
+}
+
+/** A body-versioned mutation: the caller reads `version` off the resource it
+ *  last fetched and sends it back as `If-Match`; a stale value fails with the
+ *  server's 409 rather than silently clobbering a concurrent edit. Unlike
+ *  `requestVersioned`, the version lives in the JSON body (`VehicleFineRead.
+ *  version`), not a response `ETag` header — these routes don't set one. */
+async function requestWithIfMatch<T>(
+  method: string,
+  path: string,
+  ifMatch: string,
+  body?: unknown,
+): Promise<T> {
+  const headers: Record<string, string> = { 'If-Match': requireEtag(ifMatch) }
+  if (body !== undefined) headers['content-type'] = 'application/json'
+  return unwrap<T>(
+    await fetch(`${BASE}${path}`, {
+      method,
+      cache: 'no-store',
+      credentials: 'same-origin',
+      headers,
+      body: body === undefined ? undefined : JSON.stringify(body),
+    }),
+  )
+}
+
+async function multipartWithIfMatch<T>(
+  path: string,
+  form: FormData,
+  ifMatch: string,
+  method = 'POST',
+): Promise<T> {
+  return unwrap<T>(
+    await fetch(`${BASE}${path}`, {
+      method,
+      body: form,
+      credentials: 'same-origin',
+      headers: { 'If-Match': requireEtag(ifMatch) },
+    }),
   )
 }
 
@@ -1263,6 +1386,13 @@ export const api = {
       'DELETE',
       `/employees/${encodeURIComponent(employeeId)}/absences?start_date=${startDate}&end_date=${endDate}`,
     ),
+  updateEmployeeAbsenceEpisode: (employeeId: string, body: AbsenceEpisodeUpdate) =>
+    request<AbsenceCreateResult>(
+      'PUT',
+      `/employees/${encodeURIComponent(employeeId)}/absences/episodes`,
+      body,
+    ),
+  listAbsenceRegister: () => request<AbsenceRegisterRead>('GET', '/absences/episodes'),
 
   // --- leaves (Phase 06 — standalone collection) ---
   listLeaves: (params: {
@@ -1364,6 +1494,175 @@ export const api = {
     form.append('file', file)
     return multipart<PersonIdScan>('/permits/scan-emirates-id', form)
   },
+
+  // --- fleet vehicles ---
+  vehiclesSummary: () => request<VehiclesSummary>('GET', '/vehicles/summary'),
+  setVehicleNotifyDays: (days: number) =>
+    request<VehiclesSummary>('PUT', '/vehicles/notify-days', { days }),
+  listVehicleSites: () => request<VehicleSiteRead[]>('GET', '/vehicles/sites'),
+  createVehicleSite: (body: VehicleSiteCreate) =>
+    request<VehicleSiteRead>('POST', '/vehicles/sites', body),
+  updateVehicleSite: (siteId: number, body: VehicleSiteUpdate) =>
+    request<VehicleSiteRead>('PATCH', `/vehicles/sites/${siteId}`, body),
+  listVehicles: (
+    params: {
+      q?: string
+      site_id?: number
+      expiry?: 'all' | 'attention' | 'valid' | 'due' | 'expired'
+      state?: 'active' | 'archived'
+    } = {},
+  ) => request<VehicleListItem[]>('GET', `/vehicles${qs({ ...params })}`),
+  createVehicle: (body: VehicleCreate) => request<VehicleRead>('POST', '/vehicles', body),
+  getVehicle: (id: number) => request<VehicleRead>('GET', `/vehicles/${id}`),
+  updateVehicle: (id: number, body: VehicleUpdate) =>
+    request<VehicleRead>('PATCH', `/vehicles/${id}`, body),
+  listVehiclePhotos: () => request<VehiclePhotoRead[]>('GET', '/vehicles/photo-library'),
+  uploadVehiclePhoto: (
+    file: File,
+    labels: { label_ar: string; label_en: string },
+  ): Promise<VehiclePhotoRead> => {
+    const form = new FormData()
+    form.append('file', file)
+    form.append('label_ar', labels.label_ar)
+    form.append('label_en', labels.label_en)
+    return multipart<VehiclePhotoRead>('/vehicles/photo-library', form)
+  },
+  promoteVehiclePhoto: (vehicleId: number, fileId: number) =>
+    request<VehiclePhotoRead>(
+      'POST',
+      `/vehicles/${vehicleId}/files/${fileId}/photo-asset`,
+    ),
+  archiveVehicle: (id: number) => request<VehicleRead>('POST', `/vehicles/${id}/archive`),
+  restoreVehicle: (id: number) => request<VehicleRead>('POST', `/vehicles/${id}/restore`),
+  /** OCR-extract vehicle profile fields from a licence image/PDF, reviewed before applying. */
+  scanVehicleProfile: (file: File): Promise<VehicleProfileScan> => {
+    const form = new FormData()
+    form.append('file', file)
+    return multipart<VehicleProfileScan>('/vehicles/scan-licence', form)
+  },
+  downloadVehicleImportTemplate: (): Promise<Blob> =>
+    fetchAttachment('/vehicles/imports/template', 'vehicle-import-template.xlsx').then(
+      (file) => file.blob,
+    ),
+  inspectVehicleImport: (file: File): Promise<VehicleImportInspection> => {
+    const form = new FormData()
+    form.append('file', file)
+    return multipart<VehicleImportInspection>('/vehicles/imports/inspect', form)
+  },
+  previewVehicleImport: (
+    token: string,
+    body: VehicleImportPreviewRequest,
+  ): Promise<VehicleImportPreview> =>
+    request<VehicleImportPreview>(
+      'POST',
+      `/vehicles/imports/${encodeURIComponent(token)}/preview`,
+      body,
+    ),
+  vehicleImportImageUrl: (token: string, imageId: string): string =>
+    `${BASE}/vehicles/imports/${encodeURIComponent(token)}/images/${encodeURIComponent(imageId)}`,
+  scanVehicleImportImage: (
+    token: string,
+    imageId: string,
+  ): Promise<VehicleProfileScan> =>
+    request<VehicleProfileScan>(
+      'POST',
+      `/vehicles/imports/${encodeURIComponent(token)}/images/${encodeURIComponent(imageId)}/scan`,
+    ),
+  confirmVehicleImport: (
+    token: string,
+    body: VehicleImportConfirmRequest,
+  ): Promise<VehicleImportResult> =>
+    request<VehicleImportResult>(
+      'POST',
+      `/vehicles/imports/${encodeURIComponent(token)}/confirm`,
+      body,
+    ),
+  renewVehicleLicense: (id: number, body: LicenseRenewCreate) =>
+    request<VehicleRead>('POST', `/vehicles/${id}/renew`, body),
+  uploadVehicleFile: (
+    id: number,
+    kind: VehicleFileRead['kind'],
+    file: File,
+    labels: { label_ar?: string; label_en?: string } = {},
+  ) => {
+    const form = new FormData()
+    form.append('file', file)
+    form.append('kind', kind)
+    if (labels.label_ar !== undefined) form.append('label_ar', labels.label_ar)
+    if (labels.label_en !== undefined) form.append('label_en', labels.label_en)
+    return multipart<VehicleFileRead>(`/vehicles/${id}/files`, form)
+  },
+  deleteVehicleFile: (id: number, fileId: number) =>
+    request<void>('DELETE', `/vehicles/${id}/files/${fileId}`),
+  vehicleFileUrl: (id: number, fileId: number) =>
+    `${BASE}/vehicles/${id}/files/${fileId}`,
+  addVehicleFine: (id: number, body: VehicleFineCreate) =>
+    request<VehicleFineRead>('POST', `/vehicles/${id}/fines`, body),
+  updateVehicleFine: (id: number, fineId: number, body: VehicleFineUpdate, ifMatch: string) =>
+    requestWithIfMatch<VehicleRead>('PATCH', `/vehicles/${id}/fines/${fineId}`, ifMatch, body),
+  deleteVehicleFine: (id: number, fineId: number, ifMatch: string) =>
+    requestWithIfMatch<VehicleRead>('DELETE', `/vehicles/${id}/fines/${fineId}`, ifMatch),
+  recordVehicleFinePayment: (id: number, fineId: number, ifMatch: string, file?: File | null) => {
+    const form = new FormData()
+    if (file) form.append('file', file)
+    return multipartWithIfMatch<VehicleFineRead>(
+      `/vehicles/${id}/fines/${fineId}/payment`,
+      form,
+      ifMatch,
+    )
+  },
+  attachVehicleFineReceipt: (id: number, fineId: number, ifMatch: string, file: File) => {
+    const form = new FormData()
+    form.append('file', file)
+    return multipartWithIfMatch<VehicleFineRead>(
+      `/vehicles/${id}/fines/${fineId}/receipt`,
+      form,
+      ifMatch,
+      'PUT',
+    )
+  },
+  archiveVehicleFines: (fines: VehicleFinePaymentRecord[]) =>
+    request<VehicleFineBatchResult>('POST', '/vehicles/fines/archive', { fines }),
+  restoreVehicleFines: (fines: VehicleFinePaymentRecord[]) =>
+    request<VehicleFineBatchResult>('POST', '/vehicles/fines/restore', { fines }),
+  generateFinesLetter: (id: number, body: FinesLetterRequest) =>
+    request<LetterResult>('POST', `/vehicles/${id}/fines/letter`, body),
+  listVehicleFines: (
+    params: { site_id?: number; date_from?: string; date_to?: string } = {},
+  ) => request<VehicleFineRead[]>('GET', `/vehicles/fines${qs({ ...params })}`),
+  evgPreview: (body: { traffic_codes?: string[] | null }) =>
+    request<EvgPreviewJobCreated>('POST', '/vehicles/fines/evg/preview', body),
+  evgPreviewJob: (jobId: string) =>
+    request<EvgPreviewJobStatus>('GET', `/vehicles/fines/evg/preview/${jobId}`),
+  evgConfirm: (body: EvgConfirmRequest) =>
+    request<EvgConfirmResult>('POST', '/vehicles/fines/evg/confirm', body),
+  listVehicleAccidents: () =>
+    request<VehicleAccidentRead[]>('GET', '/vehicles/accidents'),
+  createVehicleAccident: (body: VehicleAccidentCreate) =>
+    request<VehicleAccidentRead>('POST', '/vehicles/accidents', body),
+  setAccidentStatus: (
+    vehicleId: number,
+    accidentId: number,
+    status: VehicleAccidentRead['status'],
+  ) =>
+    request<VehicleAccidentRead>(
+      'PATCH',
+      `/vehicles/${vehicleId}/accidents/${accidentId}`,
+      { status },
+    ),
+  deleteVehicleAccident: (vehicleId: number, accidentId: number) =>
+    request<void>('DELETE', `/vehicles/${vehicleId}/accidents/${accidentId}`),
+  generateAccidentLetter: (vehicleId: number, accidentId: number) =>
+    request<LetterResult>(
+      'POST',
+      `/vehicles/${vehicleId}/accidents/${accidentId}/letter`,
+    ),
+  listVehicleMaintenance: () =>
+    request<VehicleMaintenanceRead[]>('GET', '/vehicles/maintenance'),
+  createVehicleMaintenance: (body: VehicleMaintenanceCreate) =>
+    request<VehicleMaintenanceRead>('POST', '/vehicles/maintenance', body),
+  deleteVehicleMaintenance: (vehicleId: number, maintenanceId: number) =>
+    request<void>('DELETE', `/vehicles/${vehicleId}/maintenance/${maintenanceId}`),
   uploadLeaveCertificate: (id: number, file: File) => {
     const form = new FormData()
     form.append('file', file)
@@ -1883,9 +2182,6 @@ export const api = {
     has_attachment?: boolean
     /** Phase 15 — entries on or after this ISO date (inclusive). */
     since?: string
-    /** Phase 16 — when true, draft entries (tag=draft) are included. The list
-     * endpoint defaults to excluding them. */
-    include_drafts?: boolean
     /** Phase 6 — 'all' (admin only) widens to the whole-office inbox; default own. */
     scope?: 'mine' | 'all'
     /** Phase 2 (D1) — quick filters. `unread` keeps only unread entries;
@@ -2041,19 +2337,6 @@ export const api = {
   deleteRecipientList: (id: number) =>
     request<void>('DELETE', `/ledger/recipient-lists/${id}`),
 
-  // --- Phase 16: drafts ---
-  createDraft: (body: DraftWrite) =>
-    request<LedgerEntryRead>('POST', '/ledger/drafts', body),
-  updateDraft: (id: number, body: DraftWrite) =>
-    request<LedgerEntryRead>('PATCH', `/ledger/drafts/${id}`, body),
-  /** Upsert helper — POST when id is null, PATCH otherwise. */
-  upsertDraft: (id: number | null, body: DraftWrite) =>
-    id == null
-      ? request<LedgerEntryRead>('POST', '/ledger/drafts', body)
-      : request<LedgerEntryRead>('PATCH', `/ledger/drafts/${id}`, body),
-  deleteDraft: (id: number) => request<void>('DELETE', `/ledger/drafts/${id}`),
-  sendDraft: (id: number) =>
-    request<LedgerEntryRead>('POST', `/ledger/drafts/${id}/send`),
 
   // --- Phase 16: send attachment to vault ---
   sendAttachmentToVault: (
@@ -2129,19 +2412,26 @@ export const api = {
   testEmailConnection: () => request<void>('POST', '/email/test'),
   syncEmail: () => request<EmailSyncResult>('POST', '/email/sync'),
   getEmailSyncStatus: () => request<EmailSyncStatus>('GET', '/email/sync/status'),
-  sendEmail: (body: EmailSendRequest, files: File[] = []) => {
+  emailHandoff: (body: EmailHandoffRequest, files: File[] = []) => {
     const form = new FormData()
-    form.set('to', (body.to ?? []).join(','))
+    form.set('to', body.to.join(','))
     form.set('cc', (body.cc ?? []).join(','))
     form.set('subject', body.subject)
     form.set('html', body.html)
+    form.set('mode', body.mode)
+    if (body.related_book_id != null) {
+      form.set('related_book_id', String(body.related_book_id))
+    }
+    if (body.related_employee_id) {
+      form.set('related_employee_id', body.related_employee_id)
+    }
     if (body.in_reply_to) form.set('in_reply_to', body.in_reply_to)
     if (body.references) form.set('references', body.references)
     if (body.use_signature !== undefined) {
       form.set('use_signature', body.use_signature ? 'true' : 'false')
     }
     for (const f of files) form.append('files', f)
-    return multipart<EmailSendResult>('/email/send', form)
+    return multipart<EmailHandoffResult>('/email/handoff', form)
   },
 
   // --- email signature (Phase 15) ---
@@ -2361,6 +2651,98 @@ export const api = {
       `/timesheet/employee/${encodeURIComponent(p.employeeId)}/${p.year}/${p.month}/export${qs({ months: p.months })}`,
       fallbackName,
     ),
+
+  // --- monthly inmate violation register (wayfinder #91) ---
+  /** One Violation month: live entries while open, frozen entries once closed. */
+  getInmateRegisterMonth: (p: InmateRegisterMonthParams) =>
+    request<InmateRegisterMonth>('GET', `/inmate-violations/statistics/${p.year}/${p.month}`),
+  /** The closed inmate nationality list and its known alternate labels. */
+  listInmateNationalities: () =>
+    request<InmateNationalityList>('GET', '/inmate-violations/nationalities'),
+  getInmateRegisterAwaitingClose: () =>
+    request<InmateAwaitingClose>('GET', '/inmate-violations/statistics/awaiting-close'),
+  getInmateRegisterCandidates: (p: InmateRegisterMonthParams, stage: 'review' | 'approve') =>
+    request<InmateWorkflowCandidate[]>(
+      'GET',
+      `/inmate-violations/statistics/${p.year}/${p.month}/candidates${qs({ stage })}`,
+    ),
+  prepareInmateRegisterMonth: (p: InmateRegisterMonthParams, body: InmateRegisterPrepare) =>
+    request<InmateRegisterMonth>(
+      'POST',
+      `/inmate-violations/statistics/${p.year}/${p.month}/prepare`,
+      body,
+    ),
+  reviewInmateRegisterMonth: (p: InmateRegisterMonthParams, body: InmateRegisterReview) =>
+    request<InmateRegisterMonth>(
+      'POST',
+      `/inmate-violations/statistics/${p.year}/${p.month}/review`,
+      body,
+    ),
+  returnInmateRegisterMonth: (p: InmateRegisterMonthParams, body: InmateRegisterReturn) =>
+    request<InmateRegisterMonth>(
+      'POST',
+      `/inmate-violations/statistics/${p.year}/${p.month}/return`,
+      body,
+    ),
+  approveInmateRegisterMonth: (p: InmateRegisterMonthParams, body: InmateRegisterApprove) =>
+    request<InmateRegisterMonth>(
+      'POST',
+      `/inmate-violations/statistics/${p.year}/${p.month}/approve`,
+      body,
+    ),
+  /** Reopen a closed month with a recorded reason. */
+  reopenInmateRegisterMonth: (p: InmateRegisterMonthParams, body: InmateRegisterReopen) =>
+    request<InmateRegisterMonth>(
+      'POST',
+      `/inmate-violations/statistics/${p.year}/${p.month}/reopen`,
+      body,
+    ),
+  createInmateManualRow: (p: InmateRegisterMonthParams, body: InmateManualRowIn) =>
+    request<InmateRegisterMonth>(
+      'POST',
+      `/inmate-violations/statistics/${p.year}/${p.month}/manual-rows`,
+      body,
+    ),
+  updateInmateManualRow: (rowId: number, body: InmateManualRowPatch) =>
+    request<InmateRegisterMonth>(
+      'PATCH',
+      `/inmate-violations/statistics/manual-rows/${rowId}`,
+      body,
+    ),
+  deleteInmateManualRow: (rowId: number) =>
+    request<InmateRegisterMonth>(
+      'DELETE',
+      `/inmate-violations/statistics/manual-rows/${rowId}`,
+    ),
+  /** Fill in an uploaded approved copy so its occurrences become countable. */
+  completeInmateImport: (bookId: number, body: InmateCompletionIn) =>
+    request<InmateRegisterMonth>(
+      'POST',
+      `/inmate-violations/statistics/completions/${bookId}`,
+      body,
+    ),
+  /** The register workbook. Downloading NEVER closes the month.
+   *
+   *  `populations` narrows the table blocks; omitted, the server carries every
+   *  group, because an export must not silently drop a filed occurrence.
+   */
+  fetchInmateRegisterExport: (
+    p: InmateRegisterMonthParams & {
+      language?: 'ar' | 'en'
+      populations?: readonly InmatePopulation[]
+    },
+    fallbackName: string,
+  ) => {
+    const query = new URLSearchParams()
+    if (p.language) query.set('language', p.language)
+
+    for (const key of p.populations ?? []) query.append('populations', key)
+    const suffix = query.size > 0 ? `?${query.toString()}` : ''
+    return fetchAttachment(
+      `/inmate-violations/statistics/${p.year}/${p.month}/export${suffix}`,
+      fallbackName,
+    )
+  },
 
   // --- notifications (Phase 4 LAN) ---
   /** JSON safety-poll fallback; used when EventSource is unavailable. */

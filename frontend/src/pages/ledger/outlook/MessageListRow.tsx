@@ -19,7 +19,7 @@
  */
 
 import { useMemo } from 'react'
-import { Paperclip, Trash2 } from 'lucide-react'
+import { Clock, Paperclip, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import { StarButton } from '@/components/ledger/StarButton'
@@ -27,6 +27,7 @@ import type { LedgerListItem } from '@/lib/api'
 import { cn } from '@/lib/utils'
 import { FlagPopover } from './FlagPopover'
 import { isOverdue } from './useFlagMutations'
+import { OUTLOOK_PENDING_TAG } from './mailboxTypes'
 
 /** Direction → avatar gradient (matches the prototype's `.av.in/.out/.int`). */
 const AVATAR_GRAD: Record<string, string> = {
@@ -71,6 +72,9 @@ export function MessageListRow({
   // Unread is driven solely by `read_at`: null/absent = unread.
   const unread = entry.read_at == null
   const isStarred = entry.tags.includes('starred')
+  // Handed to Outlook but not yet seen in the Sent folder. Text + glyph, never
+  // colour alone — the row may already be tinted by an overdue follow-up.
+  const awaitingOutlook = entry.tags.includes(OUTLOOK_PENDING_TAG)
   const hasAttachments = (entry.attachment_count ?? 0) > 0
   const flagged = entry.flagged ?? false
   const overdue = flagged && isOverdue(entry.followup_due)
@@ -162,6 +166,12 @@ export function MessageListRow({
         >
           {entry.subject}
         </span>
+        {awaitingOutlook && (
+          <span className="mt-1 inline-flex items-center gap-1 rounded-sm bg-warning-soft px-1.5 py-px text-[0.7em] font-semibold text-warning">
+            <Clock className="h-2.5 w-2.5" strokeWidth={2.6} aria-hidden="true" />
+            <span dir="auto">{t('ledger.outlook.handoff.pending')}</span>
+          </span>
+        )}
         {entry.snippet && (
           <span
             className="mt-0.5 block truncate text-[0.8em] leading-snug text-faint"

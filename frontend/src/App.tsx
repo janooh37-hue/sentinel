@@ -22,6 +22,7 @@ import { MigrationGate } from '@/pages/system/MigrationWizard'
 import { KeyboardShortcutsProvider } from '@/lib/keyboardShortcuts'
 import { AuthProvider } from '@/lib/AuthProvider'
 import { useAuth } from '@/lib/authContext'
+import { AppLockContext } from '@/lib/appLockContext'
 import { useIsMobile } from '@/lib/useIsMobile'
 import { DEFAULT_IDLE_LOCK_SECONDS, useLockState } from '@/lib/useLockState'
 import { type Page, PAGE_PATHS, buildPagePath } from '@/lib/pageNav'
@@ -42,6 +43,16 @@ import {
   loadLeavesPage,
   loadLedgerPage,
   loadPermitsPage,
+  loadVehicleAccidentLetterPage,
+  loadVehicleAccidentsPage,
+  loadVehicleEditPage,
+  loadVehicleImportPage,
+  loadVehicleDetailPage,
+  loadVehicleFinesLetterPage,
+  loadVehicleFinesPage,
+  loadVehicleFinesReportPage,
+  loadVehicleMaintenancePage,
+  loadVehiclesHubPage,
   loadScanBackPage,
   loadScanInboxPage,
   loadSendToGroupPage,
@@ -66,6 +77,16 @@ const ApprovalsPage = lazy(loadApprovalsPage)
 const BookRecordPage = lazy(loadBookRecordPage)
 const LeavesPage = lazy(loadLeavesPage)
 const PermitsPage = lazy(loadPermitsPage)
+const VehiclesHubPage = lazy(loadVehiclesHubPage)
+const VehicleDetailPage = lazy(loadVehicleDetailPage)
+const VehicleEditPage = lazy(loadVehicleEditPage)
+const VehicleImportPage = lazy(loadVehicleImportPage)
+const VehicleFinesLetterPage = lazy(loadVehicleFinesLetterPage)
+const VehicleFinesPage = lazy(loadVehicleFinesPage)
+const VehicleFinesReportPage = lazy(loadVehicleFinesReportPage)
+const VehicleAccidentsPage = lazy(loadVehicleAccidentsPage)
+const VehicleAccidentLetterPage = lazy(loadVehicleAccidentLetterPage)
+const VehicleMaintenancePage = lazy(loadVehicleMaintenancePage)
 const LedgerPage = lazy(loadLedgerPage)
 const SettingsPage = lazy(loadSettingsPage)
 const DashboardPage = lazy(loadDashboardPage)
@@ -201,11 +222,12 @@ function Shell(): React.JSX.Element {
   }
 
   return (
-    <>
+    <AppLockContext.Provider value={locked}>
       <div className="flex h-screen flex-col bg-background">
         <TopProgressBar />
         <a
           href="#main-content"
+          data-print-hide
           className="sr-only focus:not-sr-only focus:absolute focus:inset-inline-start-4 focus:top-4 focus:z-[100] focus:rounded-md focus:bg-primary focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:text-primary-foreground focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2"
         >
           {t('a11y.skipToContent')}
@@ -232,7 +254,7 @@ function Shell(): React.JSX.Element {
             {/* Route-keyed entrance: remounting on pathname change replays the
                 shared fade-up so every page gets a consistent enter motion
                 (reduced-motion guarded in index.css). */}
-            <main id="main-content" tabIndex={-1} key={location.pathname} className="anim-fade-up flex flex-1 overflow-hidden pb-[calc(5rem+env(safe-area-inset-bottom))] md:pb-0">
+            <main id="main-content" tabIndex={-1} key={location.pathname} className="anim-fade-up flex flex-1 overflow-hidden pb-[calc(5rem+var(--safe-bottom))] md:pb-0">
             <Routes>
               <Route path="/" element={<DashboardRoute />} />
               <Route
@@ -345,6 +367,100 @@ function Shell(): React.JSX.Element {
                 }
               />
               <Route
+                path="/vehicles"
+                element={
+                  <RequireCapability cap="vehicles.view">
+                    <VehiclesHubPage />
+                  </RequireCapability>
+                }
+              />
+              <Route
+                path="/vehicles/fines"
+                element={
+                  <RequireCapability cap="vehicles.view">
+                    <VehicleFinesPage />
+                  </RequireCapability>
+                }
+              />
+              <Route
+                path="/vehicles/fines-report"
+                element={
+                  <RequireCapability cap="vehicles.view">
+                    <VehicleFinesReportPage />
+                  </RequireCapability>
+                }
+              />
+              <Route
+                path="/vehicles/accidents"
+                element={
+                  <RequireCapability cap="vehicles.view">
+                    <VehicleAccidentsPage />
+                  </RequireCapability>
+                }
+              />
+              <Route
+                path="/vehicles/accidents/:accidentId/letter"
+                element={
+                  <RequireCapability cap="vehicles.view">
+                    <VehicleAccidentLetterPage />
+                  </RequireCapability>
+                }
+              />
+              <Route
+                path="/vehicles/maintenance"
+                element={
+                  <RequireCapability cap="vehicles.view">
+                    <VehicleMaintenancePage />
+                  </RequireCapability>
+                }
+              />
+              <Route
+                path="/vehicles/import"
+                element={
+                  <RequireCapability cap="vehicles.view">
+                    <RequireCapability cap="vehicles.edit">
+                      <VehicleImportPage />
+                    </RequireCapability>
+                  </RequireCapability>
+                }
+              />
+              <Route
+                path="/vehicles/edit"
+                element={
+                  <RequireCapability cap="vehicles.view">
+                    <RequireCapability cap="vehicles.edit">
+                      <VehicleEditPage />
+                    </RequireCapability>
+                  </RequireCapability>
+                }
+              />
+              <Route
+                path="/vehicles/edit/:id"
+                element={
+                  <RequireCapability cap="vehicles.view">
+                    <RequireCapability cap="vehicles.edit">
+                      <VehicleEditPage />
+                    </RequireCapability>
+                  </RequireCapability>
+                }
+              />
+              <Route
+                path="/vehicles/:id"
+                element={
+                  <RequireCapability cap="vehicles.view">
+                    <VehicleDetailPage />
+                  </RequireCapability>
+                }
+              />
+              <Route
+                path="/vehicles/:id/fines-letter"
+                element={
+                  <RequireCapability cap="vehicles.view">
+                    <VehicleFinesLetterPage />
+                  </RequireCapability>
+                }
+              />
+              <Route
                 path="/ledger"
                 element={
                   <RequireCapability cap="ledger.view">
@@ -441,7 +557,7 @@ function Shell(): React.JSX.Element {
           }}
         />
       )}
-    </>
+    </AppLockContext.Provider>
   )
 }
 

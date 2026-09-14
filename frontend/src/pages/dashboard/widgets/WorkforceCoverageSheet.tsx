@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import { useInfiniteQuery } from '@tanstack/react-query'
 import { ArrowLeft, ChevronRight, CircleAlert, Users } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
@@ -27,6 +27,28 @@ export function WorkforceCoverageSheet({
   onOpenChange,
   operationalDate,
 }: WorkforceCoverageSheetProps): React.JSX.Element {
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent aria-describedby={undefined} className="w-screen max-w-none bg-surface p-0 md:w-[42rem] md:max-w-[92vw]">
+        <WorkforceCoverageContent
+          key={open ? 'open' : 'closed'}
+          open={open}
+          operationalDate={operationalDate}
+        />
+      </SheetContent>
+    </Sheet>
+  )
+}
+
+interface WorkforceCoverageContentProps {
+  open: boolean
+  operationalDate: string
+}
+
+function WorkforceCoverageContent({
+  open,
+  operationalDate,
+}: WorkforceCoverageContentProps): React.JSX.Element {
   const { t } = useTranslation()
   const [selection, setSelection] = useState<CoverageSelection>(INITIAL_SELECTION)
   const parentKind = selection.department == null
@@ -34,10 +56,6 @@ export function WorkforceCoverageSheet({
     : selection.dutyUnit == null
       ? 'department'
       : 'duty_unit'
-
-  useEffect(() => {
-    if (!open) setSelection(INITIAL_SELECTION)
-  }, [open])
 
   const coverageQuery = useInfiniteQuery({
     queryKey: ['workforce', 'coverage', operationalDate, parentKind, selection.department, selection.dutyUnit],
@@ -72,134 +90,125 @@ export function WorkforceCoverageSheet({
     else setSelection(INITIAL_SELECTION)
   }
 
-  const handleOpenChange = (nextOpen: boolean) => {
-    if (!nextOpen) setSelection(INITIAL_SELECTION)
-    onOpenChange(nextOpen)
-  }
-
   return (
-    <Sheet open={open} onOpenChange={handleOpenChange}>
-      <SheetContent aria-describedby={undefined} className="w-screen max-w-none bg-surface p-0 md:w-[42rem] md:max-w-[92vw]">
-        <div className="flex h-full min-h-0 flex-col" dir="auto">
-          <header className="flex-none border-b border-hairline px-4 py-3.5 sm:px-5">
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
-                <div className="flex items-center gap-2">
-                  <Users className="h-4 w-4 shrink-0 text-primary" strokeWidth={1.8} aria-hidden />
-                  <SheetTitle className="text-base font-semibold text-foreground">
-                    {t('dashboard.workforcePulse.coverage.title')}
-                  </SheetTitle>
-                </div>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  {t('dashboard.workforcePulse.coverage.operationalDate', { date: operationalDate })}
-                </p>
-              </div>
-              <SheetClose
-                className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-surface-tinted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                aria-label={t('common.close', { defaultValue: 'Close' })}
-              >
-                <span aria-hidden>×</span>
-              </SheetClose>
+    <div className="flex h-full min-h-0 flex-col" dir="auto">
+      <header className="flex-none border-b border-hairline px-4 py-3.5 sm:px-5">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <Users className="h-4 w-4 shrink-0 text-primary" strokeWidth={1.8} aria-hidden />
+              <SheetTitle className="text-base font-semibold text-foreground">
+                {t('dashboard.workforcePulse.coverage.title')}
+              </SheetTitle>
             </div>
-          </header>
+            <p className="mt-1 text-sm text-muted-foreground">
+              {t('dashboard.workforcePulse.coverage.operationalDate', { date: operationalDate })}
+            </p>
+          </div>
+          <SheetClose
+            className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-surface-tinted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            aria-label={t('common.close', { defaultValue: 'Close' })}
+          >
+            <span aria-hidden>×</span>
+          </SheetClose>
+        </div>
+      </header>
 
-          <div className="flex flex-none items-center gap-2 border-b border-hairline px-4 py-2.5 sm:px-5">
-            {canGoBack ? (
-              <Button type="button" variant="ghost" size="sm" onClick={goBack} className="shrink-0 gap-1.5">
-                <ArrowLeft className="h-4 w-4 rtl:rotate-180" aria-hidden />
-                {t('dashboard.workforcePulse.coverage.back')}
+      <div className="flex flex-none items-center gap-2 border-b border-hairline px-4 py-2.5 sm:px-5">
+        {canGoBack ? (
+          <Button type="button" variant="ghost" size="sm" onClick={goBack} className="shrink-0 gap-1.5">
+            <ArrowLeft className="h-4 w-4 rtl:rotate-180" aria-hidden />
+            {t('dashboard.workforcePulse.coverage.back')}
+          </Button>
+        ) : null}
+        <nav aria-label={t('dashboard.workforcePulse.coverage.breadcrumb')} className="min-w-0 overflow-x-auto">
+          <ol className="flex min-w-max items-center gap-1 text-sm">
+            <li>
+              <button
+                type="button"
+                onClick={() => setSelection(INITIAL_SELECTION)}
+                aria-current={selection.department == null ? 'page' : undefined}
+                className="rounded px-1.5 py-1 font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                {t('dashboard.workforcePulse.coverage.allDepartments')}
+              </button>
+            </li>
+            {selection.department != null ? (
+              <li className="flex items-center gap-1" key={selection.department}>
+                <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground rtl:rotate-180" aria-hidden />
+                <button
+                  type="button"
+                  onClick={() => setSelection((current) => ({ ...current, dutyUnit: null }))}
+                  aria-current={selection.dutyUnit == null ? 'page' : undefined}
+                  className="rounded px-1.5 py-1 font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  {selection.department}
+                </button>
+              </li>
+            ) : null}
+            {selection.dutyUnit != null ? (
+              <li className="flex items-center gap-1" key={selection.dutyUnit}>
+                <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground rtl:rotate-180" aria-hidden />
+                <span className="px-1.5 py-1 font-medium text-foreground" aria-current="page">{selection.dutyUnit}</span>
+              </li>
+            ) : null}
+          </ol>
+        </nav>
+      </div>
+
+      <main className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-5" aria-live="polite">
+        <p className="mb-3 font-mono text-[0.7em] font-semibold uppercase tracking-wide text-muted-foreground">{levelTitle}</p>
+        {coverageQuery.isPending ? (
+          <div className="space-y-3" aria-label={t('common.loading')}>
+            <Skeleton className="h-24 w-full" />
+            <Skeleton className="h-24 w-full" />
+          </div>
+        ) : coverageQuery.isError ? (
+          <EmptyState icon={CircleAlert} message={t('common.loadError')} className="py-12" />
+        ) : rows.length === 0 ? (
+          <EmptyState icon={Users} message={t('dashboard.workforcePulse.coverage.empty')} className="py-12" />
+        ) : (
+          <div className="space-y-3">
+            <ul className="space-y-2" aria-label={levelTitle}>
+              {rows.map((row, index) => {
+                const identifier = rowName(row)
+                const name = identifier?.trim() || t('dashboard.workforcePulse.coverage.unassigned')
+                const isNavigable = Boolean(identifier?.trim()) && parentKind !== 'duty_unit' && row.child_count > 0
+                return (
+                  <li key={`${row.kind}:${identifier ?? 'unassigned'}:${index}`} className="rounded-xl border border-hairline bg-surface-raised">
+                    {isNavigable ? (
+                      <button
+                        type="button"
+                        aria-label={name}
+                        onClick={() => selectRow(row)}
+                        className="block w-full rounded-xl p-3.5 text-start transition-colors hover:bg-surface-tinted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:p-4"
+                      >
+                        <CoverageRow row={row} name={name} expandable />
+                      </button>
+                    ) : (
+                      <div className="p-3.5 sm:p-4"><CoverageRow row={row} name={name} /></div>
+                    )}
+                  </li>
+                )
+              })}
+            </ul>
+            {coverageQuery.hasNextPage ? (
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full"
+                onClick={() => void coverageQuery.fetchNextPage()}
+                disabled={coverageQuery.isFetchingNextPage}
+              >
+                {coverageQuery.isFetchingNextPage
+                  ? t('common.loading')
+                  : t('dashboard.workforcePulse.coverage.loadMore')}
               </Button>
             ) : null}
-            <nav aria-label={t('dashboard.workforcePulse.coverage.breadcrumb')} className="min-w-0 overflow-x-auto">
-              <ol className="flex min-w-max items-center gap-1 text-sm">
-                <li>
-                  <button
-                    type="button"
-                    onClick={() => setSelection(INITIAL_SELECTION)}
-                    aria-current={selection.department == null ? 'page' : undefined}
-                    className="rounded px-1.5 py-1 font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  >
-                    {t('dashboard.workforcePulse.coverage.allDepartments')}
-                  </button>
-                </li>
-                {selection.department != null ? (
-                  <li className="flex items-center gap-1" key={selection.department}>
-                    <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground rtl:rotate-180" aria-hidden />
-                    <button
-                      type="button"
-                      onClick={() => setSelection((current) => ({ ...current, dutyUnit: null }))}
-                      aria-current={selection.dutyUnit == null ? 'page' : undefined}
-                      className="rounded px-1.5 py-1 font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                    >
-                      {selection.department}
-                    </button>
-                  </li>
-                ) : null}
-                {selection.dutyUnit != null ? (
-                  <li className="flex items-center gap-1" key={selection.dutyUnit}>
-                    <ChevronRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground rtl:rotate-180" aria-hidden />
-                    <span className="px-1.5 py-1 font-medium text-foreground" aria-current="page">{selection.dutyUnit}</span>
-                  </li>
-                ) : null}
-              </ol>
-            </nav>
           </div>
-
-          <main className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-5" aria-live="polite">
-            <p className="mb-3 font-mono text-[0.7em] font-semibold uppercase tracking-wide text-muted-foreground">{levelTitle}</p>
-            {coverageQuery.isPending ? (
-              <div className="space-y-3" aria-label={t('common.loading')}>
-                <Skeleton className="h-24 w-full" />
-                <Skeleton className="h-24 w-full" />
-              </div>
-            ) : coverageQuery.isError ? (
-              <EmptyState icon={CircleAlert} message={t('common.loadError')} className="py-12" />
-            ) : rows.length === 0 ? (
-              <EmptyState icon={Users} message={t('dashboard.workforcePulse.coverage.empty')} className="py-12" />
-            ) : (
-              <div className="space-y-3">
-                <ul className="space-y-2" aria-label={levelTitle}>
-                  {rows.map((row, index) => {
-                    const identifier = rowName(row)
-                    const name = identifier?.trim() || t('dashboard.workforcePulse.coverage.unassigned')
-                    const isNavigable = Boolean(identifier?.trim()) && parentKind !== 'duty_unit' && row.child_count > 0
-                    return (
-                      <li key={`${row.kind}:${identifier ?? 'unassigned'}:${index}`} className="rounded-xl border border-hairline bg-surface-raised">
-                        {isNavigable ? (
-                          <button
-                            type="button"
-                            aria-label={name}
-                            onClick={() => selectRow(row)}
-                            className="block w-full rounded-xl p-3.5 text-start transition-colors hover:bg-surface-tinted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:p-4"
-                          >
-                            <CoverageRow row={row} name={name} expandable />
-                          </button>
-                        ) : (
-                          <div className="p-3.5 sm:p-4"><CoverageRow row={row} name={name} /></div>
-                        )}
-                      </li>
-                    )
-                  })}
-                </ul>
-                {coverageQuery.hasNextPage ? (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="w-full"
-                    onClick={() => void coverageQuery.fetchNextPage()}
-                    disabled={coverageQuery.isFetchingNextPage}
-                  >
-                    {coverageQuery.isFetchingNextPage
-                      ? t('common.loading')
-                      : t('dashboard.workforcePulse.coverage.loadMore')}
-                  </Button>
-                ) : null}
-              </div>
-            )}
-          </main>
-        </div>
-      </SheetContent>
-    </Sheet>
+        )}
+      </main>
+    </div>
   )
 }
 

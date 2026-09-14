@@ -3,6 +3,8 @@ Resumption (return) form. All other request-group kinds — Compassionate, Duty,
 Emergency, Hajj, and legacy 'Others' — are NOT returnable: once Approved they are
 terminal (no AwaitingReturn, no return action, no needs-action nudge)."""
 
+import pytest
+
 from app.core import leave_lifecycle as ll
 
 _RETURNABLE = ["Annual Leave", "National Service"]
@@ -91,3 +93,28 @@ def test_can_amend_annual_approved_only():
     assert ll.can_amend("Sick Leave", "Approved") is False
     assert ll.can_amend("National Service", "Approved") is False
     assert ll.can_amend("Emergency Leave", "Approved") is False
+
+
+@pytest.mark.parametrize(
+    ("leave_type", "status", "deleted", "expected"),
+    [
+        ("Sick Leave", "Approved", False, "sick"),
+        ("Sick Leave", "Pending", False, None),
+        ("Annual Leave", "Approved", False, "annual"),
+        ("Annual", "Approved - موافق", False, "annual"),
+        ("National Service", "Pending", False, "national_service"),
+        ("National Service", "Completed", False, "national_service"),
+        ("Leave Permit", "Approved", False, None),
+        ("Sick Leave", "Approved", True, None),
+        ("Sick Leave - الإجازة المرضية", "Approved", False, "sick"),
+        ("Unknown", "Approved", False, None),
+        ("Compassionate Leave", "Approved", False, None),
+    ],
+)
+def test_live_kind_follows_kind_specific_status_and_deletion_rules(
+    leave_type: str,
+    status: str,
+    deleted: bool,
+    expected: str | None,
+):
+    assert ll.live_kind(leave_type, status, deleted=deleted) == expected

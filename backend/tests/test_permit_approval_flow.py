@@ -12,6 +12,7 @@ from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any
 
+import fitz
 import pytest
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -28,6 +29,15 @@ from app.db.models import (
 )
 from app.schemas.permit import PermitCreate
 from app.services import document_service, permit_service
+
+
+def _valid_pdf_for(docx_path: Path) -> Path:
+    pdf_path = docx_path.with_suffix(".pdf")
+    pdf = fitz.open()
+    pdf.new_page()
+    pdf.save(pdf_path)
+    pdf.close()
+    return pdf_path
 
 
 def _seed_gs(db: Session) -> None:
@@ -256,6 +266,7 @@ def test_regen_draft_attributes_activity_to_editing_actor(gen_env: Session) -> N
     assert regenerated.id == initial.id
     assert regenerated.created_by_user_id == editor.id
 
+
 def test_manual_submit_happy_path(gen_env: Session) -> None:
     db = gen_env
     _actor(db)
@@ -346,9 +357,7 @@ def test_pending_word_version_survives_structured_regeneration(gen_env, tmp_path
     db = gen_env
     settings = Settings(data_dir=tmp_path / "data", templates_dir=tmp_path / "templates")
     monkeypatch.setattr(word_book_service, "get_settings", lambda: settings)
-    monkeypatch.setattr(
-        word_book_service, "convert_docx_to_pdf", lambda path: path.with_suffix(".pdf")
-    )
+    monkeypatch.setattr(word_book_service, "convert_docx_to_pdf", _valid_pdf_for)
 
     _actor(db)
     manager, _ = _linked_manager(db)

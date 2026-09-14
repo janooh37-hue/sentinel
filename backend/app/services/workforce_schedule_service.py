@@ -9,7 +9,7 @@ uses timestamp arithmetic from each schedule anchor -- never weekdays -- so the
 from __future__ import annotations
 
 import json
-from collections.abc import Mapping
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, time, timedelta
 from math import floor
@@ -20,9 +20,11 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import or_, select, text
 from sqlalchemy.orm import Session
 
-from app.db.models import AuditLog, User
+from app.api.errors import AppError, NotFoundError, ValidationFailedError
+from app.db.models import AuditLog, Employee, User
 from app.db.workforce_models import (
     AttendanceCase,
+    WorkCrew,
     WorkCrewMembership,
     WorkCrewSchedule,
     WorkRotationPattern,
@@ -31,6 +33,17 @@ from app.db.workforce_models import (
     WorkShiftOccurrence,
     WorkShiftOverride,
     WorkStaffingRequirement,
+)
+from app.services.workforce_access_service import (
+    allows_hierarchy,
+    employee_in_scope,
+    require_organization,
+)
+from app.services.workforce_etag import etag_for, require_if_match, row_etag
+from app.services.workforce_scope_service import WorkforceScope
+
+_ORGANIZATION_SCHEDULE_MESSAGE = (
+    "Organization workforce scope is required for crew and anchor changes."
 )
 
 
@@ -59,6 +72,7 @@ class AssignmentResolution:
     occurrence: WorkShiftOccurrence | None
     reason_code: str | None = None
     override: WorkShiftOverride | None = None
+
 
 def _utc_naive(value: datetime) -> datetime:
     if value.tzinfo is None:
@@ -192,7 +206,66 @@ def _schedule_rows_for_window(
     )
 
 
-def _pattern_steps(db: Session, pattern_id: int) -> list[tuple[WorkRotationStep, WorkShiftDefinition]]:
+def crew_schedule_collection_etag(rows: Iterable[WorkCrewSchedule]) -> str:
+    """Return the version for the global schedule collection of one crew."""
+    return etag_for(
+        [
+            {
+                "id": row.id,
+                "version": row.version,
+                "updated_at": row.updated_at,
+                "created_at": row.created_at,
+            }
+            for row in sorted(rows, key=lambda item: (item.effective_from, item.version))
+        ]
+    )
+
+
+def crew_membership_collection_etag(rows: Iterable[WorkCrewMembership]) -> str:
+    """Return the version for an already-authorized membership snapshot."""
+    return etag_for(
+        [
+            {
+                "id": row.id,
+                "updated_at": row.updated_at,
+                "created_at": row.created_at,
+            }
+            for row in sorted(rows, key=lambda item: (item.effective_from, item.id))
+        ]
+    )
+
+
+def _visible_crew_memberships(
+    db: Session, *, crew_id: int, scope: WorkforceScope
+) -> list[WorkCrewMembership]:
+    rows = list(
+        db.scalars(
+            select(WorkCrewMembership)
+            .where(WorkCrewMembership.crew_id == crew_id)
+            .order_by(WorkCrewMembership.effective_from, WorkCrewMembership.id)
+        )
+    )
+    employee_ids = {row.employee_id for row in rows}
+    employees = {
+        row.id: row for row in db.scalars(select(Employee).where(Employee.id.in_(employee_ids)))
+    }
+    visible = [
+        row
+        for row in rows
+        if (employee := employees.get(row.employee_id)) is not None
+        and scope.allows_employee(
+            employee_id=employee.id,
+            department=employee.department,
+            duty_unit=employee.duty_unit,
+            duty_post=employee.duty_post,
+        )
+    ]
+    return visible
+
+
+def _pattern_steps(
+    db: Session, pattern_id: int
+) -> list[tuple[WorkRotationStep, WorkShiftDefinition]]:
     rows = db.execute(
         select(WorkRotationStep, WorkShiftDefinition)
         .join(WorkShiftDefinition, WorkShiftDefinition.id == WorkRotationStep.shift_definition_id)
@@ -235,9 +308,7 @@ def _validate_schedule_alignment(
     ):
         raise ValueError("schedule effective boundaries must be Dubai shift boundaries")
     offset_zero_steps = [
-        shift
-        for step, shift in _pattern_steps(db, pattern.id)
-        if step.start_offset_minutes == 0
+        shift for step, shift in _pattern_steps(db, pattern.id) if step.start_offset_minutes == 0
     ]
     if len(offset_zero_steps) != 1:
         raise ValueError("rotation pattern must have exactly one offset-zero shift")
@@ -345,7 +416,7 @@ def _enqueue_shift_override_evaluation(db: Session, *, override: WorkShiftOverri
     )
 
 
-def create_crew_schedule(
+def _append_crew_schedule(
     db: Session,
     *,
     crew_id: int,
@@ -356,17 +427,10 @@ def create_crew_schedule(
     current_user: User | None = None,
     actor_user_id: int | None = None,
 ) -> WorkCrewSchedule:
-    """Create a non-overlapping schedule version without committing.
-
-    The caller owns transaction boundaries; occurrences are materialized by the
-    bounded generator and historical rows are never rewritten here.
-    """
-
     anchor = _utc_naive(anchor_at)
     starts = _utc_naive(effective_from)
     ends = _utc_naive(effective_to) if effective_to is not None else None
     _validate_window(starts, ends, label="schedule")
-    acquire_schedule_write_lock(db)
     pattern = db.get(WorkRotationPattern, pattern_id)
     if pattern is None:
         raise ValueError("rotation pattern does not exist")
@@ -377,11 +441,7 @@ def create_crew_schedule(
         effective_from=starts,
         effective_to=ends,
     )
-    existing = list(
-        db.scalars(
-            select(WorkCrewSchedule).where(WorkCrewSchedule.crew_id == crew_id)
-        )
-    )
+    existing = list(db.scalars(select(WorkCrewSchedule).where(WorkCrewSchedule.crew_id == crew_id)))
     if any(_overlaps(row.effective_from, row.effective_to, starts, ends) for row in existing):
         raise ValueError("schedule effective window overlap")
     version = max((row.version for row in existing), default=0) + 1
@@ -415,14 +475,62 @@ def create_crew_schedule(
     return schedule
 
 
-def replace_crew_schedule(
+def create_crew_schedule(
     db: Session,
     *,
+    scope: WorkforceScope,
+    if_match: str | None,
     crew_id: int,
     pattern_id: int,
     anchor_at: datetime,
     effective_from: datetime,
-    expected_version: int,
+    effective_to: datetime | None = None,
+    current_user: User | None = None,
+    actor_user_id: int | None = None,
+) -> WorkCrewSchedule:
+    """Create a non-overlapping schedule version without committing.
+
+    The caller owns transaction boundaries; occurrences are materialized by the
+    bounded generator and historical rows are never rewritten here.
+    """
+
+    require_organization(scope, message=_ORGANIZATION_SCHEDULE_MESSAGE)
+    acquire_schedule_write_lock(db)
+    crew = db.get(WorkCrew, crew_id)
+    if crew is None:
+        raise NotFoundError("WORKFORCE_CREW_NOT_FOUND", "Crew was not found.")
+    if not crew.active:
+        raise ValidationFailedError("WORKFORCE_CREW_INACTIVE", "Crew is retired.")
+    schedules = list(
+        db.scalars(
+            select(WorkCrewSchedule)
+            .where(WorkCrewSchedule.crew_id == crew_id)
+            .order_by(WorkCrewSchedule.effective_from, WorkCrewSchedule.version)
+        )
+    )
+    require_if_match(if_match, crew_schedule_collection_etag(schedules))
+    return _append_crew_schedule(
+        db,
+        crew_id=crew_id,
+        pattern_id=pattern_id,
+        anchor_at=anchor_at,
+        effective_from=effective_from,
+        effective_to=effective_to,
+        current_user=current_user,
+        actor_user_id=actor_user_id,
+    )
+
+
+def replace_crew_schedule(
+    db: Session,
+    *,
+    scope: WorkforceScope,
+    crew_id: int,
+    schedule_id: int,
+    if_match: str | None,
+    pattern_id: int,
+    anchor_at: datetime,
+    effective_from: datetime,
     current_user: User | None = None,
     actor_user_id: int | None = None,
     now: datetime | None = None,
@@ -434,10 +542,15 @@ def replace_crew_schedule(
     started boundary.
     """
 
+    require_organization(scope, message=_ORGANIZATION_SCHEDULE_MESSAGE)
     boundary = _utc_naive(effective_from)
     replacement_anchor = _utc_naive(anchor_at)
     replacement_now = _utc_naive(now) if now is not None else _now()
     acquire_schedule_write_lock(db)
+    requested = db.get(WorkCrewSchedule, schedule_id)
+    if requested is None or requested.crew_id != crew_id:
+        raise NotFoundError("WORKFORCE_SCHEDULE_NOT_FOUND", "Crew schedule was not found.")
+    require_if_match(if_match, row_etag(requested))
     if boundary <= replacement_now:
         raise ValueError("schedule replacement boundary has already started")
     current = db.scalar(
@@ -454,7 +567,7 @@ def replace_crew_schedule(
     )
     if current is None:
         raise ValueError("no schedule is effective at replacement boundary")
-    if current.version != expected_version:
+    if current.id != requested.id:
         raise ValueError("schedule version conflict")
     if boundary <= current.effective_from:
         raise ValueError("replacement must begin after the active schedule starts")
@@ -469,11 +582,7 @@ def replace_crew_schedule(
         effective_from=boundary,
         effective_to=replacement_ends,
     )
-    existing = list(
-        db.scalars(
-            select(WorkCrewSchedule).where(WorkCrewSchedule.crew_id == crew_id)
-        )
-    )
+    existing = list(db.scalars(select(WorkCrewSchedule).where(WorkCrewSchedule.crew_id == crew_id)))
     if any(
         row.id != current.id
         and _overlaps(row.effective_from, row.effective_to, boundary, replacement_ends)
@@ -497,13 +606,14 @@ def replace_crew_schedule(
             WorkShiftOccurrence.starts_at > replacement_now,
         )
     ):
-        if db.scalar(
-            select(AttendanceCase.id).where(
-                AttendanceCase.shift_occurrence_id == occurrence.id
+        if (
+            db.scalar(
+                select(AttendanceCase.id).where(AttendanceCase.shift_occurrence_id == occurrence.id)
             )
-        ) is None:
+            is None
+        ):
             db.delete(occurrence)
-    replacement = create_crew_schedule(
+    replacement = _append_crew_schedule(
         db,
         crew_id=crew_id,
         pattern_id=pattern_id,
@@ -528,12 +638,14 @@ def replace_crew_schedule(
 def generate_occurrences(
     db: Session,
     *,
+    scope: WorkforceScope,
     crew_id: int,
     starts_at: datetime,
     ends_at: datetime,
 ) -> list[WorkShiftOccurrence]:
     """Idempotently materialize starts in ``[starts_at, ends_at)`` for one crew."""
 
+    require_organization(scope, message=_ORGANIZATION_SCHEDULE_MESSAGE)
     starts = _utc_naive(starts_at)
     ends = _utc_naive(ends_at)
     if ends <= starts:
@@ -571,9 +683,9 @@ def generate_occurrences(
                 if existing is not None:
                     continue
                 occurrence_end = occurrence_start + timedelta(minutes=shift.duration_minutes)
-                operational_date = _utc_aware(occurrence_start).astimezone(
-                    ZoneInfo(pattern.timezone)
-                ).date()
+                operational_date = (
+                    _utc_aware(occurrence_start).astimezone(ZoneInfo(pattern.timezone)).date()
+                )
                 occurrence = WorkShiftOccurrence(
                     crew_id=crew_id,
                     crew_schedule_id=schedule.id,
@@ -595,6 +707,8 @@ def generate_occurrences(
 def create_crew_membership(
     db: Session,
     *,
+    scope: WorkforceScope,
+    if_match: str | None,
     employee_id: str,
     crew_id: int,
     effective_from: datetime,
@@ -605,16 +719,28 @@ def create_crew_membership(
 ) -> WorkCrewMembership:
     """Append an effective crew membership after rejecting all overlaps."""
 
+    acquire_schedule_write_lock(db)
+    employee_in_scope(db, scope=scope, employee_id=employee_id)
+    crew = db.get(WorkCrew, crew_id)
+    if crew is None:
+        raise NotFoundError("WORKFORCE_CREW_NOT_FOUND", "Crew was not found.")
+    if not crew.active:
+        raise ValidationFailedError("WORKFORCE_CREW_INACTIVE", "Crew is retired.")
+    require_if_match(
+        if_match,
+        crew_membership_collection_etag(
+            _visible_crew_memberships(db, crew_id=crew_id, scope=scope)
+        ),
+    )
     starts = _utc_naive(effective_from)
     ends = _utc_naive(effective_to) if effective_to is not None else None
     _validate_window(starts, ends, label="membership")
-    acquire_schedule_write_lock(db)
-    if not _is_shift_boundary(db, starts) or (ends is not None and not _is_shift_boundary(db, ends)):
+    if not _is_shift_boundary(db, starts) or (
+        ends is not None and not _is_shift_boundary(db, ends)
+    ):
         raise ValueError("membership changes must use Dubai shift boundaries")
     existing = list(
-        db.scalars(
-            select(WorkCrewMembership).where(WorkCrewMembership.employee_id == employee_id)
-        )
+        db.scalars(select(WorkCrewMembership).where(WorkCrewMembership.employee_id == employee_id))
     )
     if any(_overlaps(row.effective_from, row.effective_to, starts, ends) for row in existing):
         raise ValueError("crew membership effective window overlap")
@@ -658,7 +784,10 @@ def create_crew_membership(
 def end_crew_membership(
     db: Session,
     *,
+    scope: WorkforceScope,
+    crew_id: int,
     membership_id: int,
+    if_match: str | None,
     effective_to: datetime,
     end_reason: str,
     current_user: User | None = None,
@@ -668,8 +797,10 @@ def end_crew_membership(
 
     acquire_schedule_write_lock(db)
     membership = db.get(WorkCrewMembership, membership_id)
-    if membership is None:
-        raise ValueError("crew membership does not exist")
+    if membership is None or membership.crew_id != crew_id:
+        raise NotFoundError("WORKFORCE_MEMBERSHIP_NOT_FOUND", "Crew membership was not found.")
+    employee_in_scope(db, scope=scope, employee_id=membership.employee_id)
+    require_if_match(if_match, row_etag(membership))
     boundary = _utc_naive(effective_to)
     if boundary <= membership.effective_from or not _is_shift_boundary(db, boundary):
         raise ValueError("membership end must be a later Dubai shift boundary")
@@ -701,6 +832,7 @@ def end_crew_membership(
 def create_shift_override(
     db: Session,
     *,
+    scope: WorkforceScope,
     employee_id: str,
     assignment_kind: Literal["work", "off"],
     reason_kind: Literal[
@@ -720,6 +852,7 @@ def create_shift_override(
 ) -> WorkShiftOverride:
     """Create one non-swap, non-contradictory dated exception."""
 
+    employee_in_scope(db, scope=scope, employee_id=employee_id)
     starts = _utc_naive(starts_at)
     ends = _utc_naive(ends_at)
     acquire_schedule_write_lock(db)
@@ -769,6 +902,7 @@ def create_shift_override(
 def create_shift_swap(
     db: Session,
     *,
+    scope: WorkforceScope,
     from_employee_id: str,
     to_employee_id: str,
     starts_at: datetime,
@@ -780,6 +914,8 @@ def create_shift_swap(
 ) -> tuple[WorkShiftOverride, WorkShiftOverride, str]:
     """Atomically create the surrendered-off and acquired-work swap legs."""
 
+    employee_in_scope(db, scope=scope, employee_id=from_employee_id)
+    employee_in_scope(db, scope=scope, employee_id=to_employee_id)
     starts = _utc_naive(starts_at)
     ends = _utc_naive(ends_at)
     if from_employee_id == to_employee_id:
@@ -858,7 +994,9 @@ def create_shift_swap(
 def cancel_shift_override(
     db: Session,
     *,
+    scope: WorkforceScope,
     override_id: int,
+    if_match: str | None,
     current_user: User | None = None,
     actor_user_id: int | None = None,
     now: datetime | None = None,
@@ -867,7 +1005,9 @@ def cancel_shift_override(
 
     override = db.get(WorkShiftOverride, override_id)
     if override is None:
-        raise ValueError("shift override does not exist")
+        raise NotFoundError("WORKFORCE_OVERRIDE_NOT_FOUND", "Shift override was not found.")
+    employee_in_scope(db, scope=scope, employee_id=override.employee_id)
+    require_if_match(if_match, row_etag(override))
     if override.cancelled_at is not None:
         raise ValueError("shift override is already cancelled")
     cancelled = _utc_naive(now) if now is not None else _now()
@@ -895,6 +1035,7 @@ def cancel_shift_override(
 def create_staffing_requirement(
     db: Session,
     *,
+    scope: WorkforceScope,
     scope_kind: Literal["department", "duty_unit", "duty_post"],
     department: str | None,
     duty_unit: str | None,
@@ -908,6 +1049,17 @@ def create_staffing_requirement(
 ) -> WorkStaffingRequirement:
     """Create a draft target, rejecting same-scope effective conflicts."""
 
+    if not allows_hierarchy(
+        scope,
+        department=department,
+        duty_unit=duty_unit,
+        duty_post=duty_post,
+    ):
+        raise AppError(
+            "FORBIDDEN",
+            "Requested filter is outside workforce scope.",
+            http_status=403,
+        )
     if minimum_headcount < 0:
         raise ValueError("minimum_headcount must be non-negative")
     if effective_to is not None and effective_to <= effective_from:
@@ -978,8 +1130,9 @@ def create_staffing_requirement(
 def approve_staffing_requirement(
     db: Session,
     *,
+    scope: WorkforceScope,
     requirement_id: int,
-    expected_updated_at: datetime | None = None,
+    if_match: str | None,
     current_user: User | None = None,
     actor_user_id: int | None = None,
     now: datetime | None = None,
@@ -988,11 +1141,23 @@ def approve_staffing_requirement(
 
     requirement = db.get(WorkStaffingRequirement, requirement_id)
     if requirement is None:
-        raise ValueError("staffing requirement does not exist")
+        raise NotFoundError(
+            "WORKFORCE_REQUIREMENT_NOT_FOUND", "Staffing requirement was not found."
+        )
+    if not allows_hierarchy(
+        scope,
+        department=requirement.department,
+        duty_unit=requirement.duty_unit,
+        duty_post=requirement.duty_post,
+    ):
+        raise AppError(
+            "FORBIDDEN",
+            "Requested filter is outside workforce scope.",
+            http_status=403,
+        )
+    require_if_match(if_match, row_etag(requirement))
     if requirement.approved_at is not None:
         raise ValueError("staffing requirement is already approved")
-    if expected_updated_at is not None and _utc_naive(expected_updated_at) != requirement.updated_at:
-        raise ValueError("staffing requirement version conflict")
     approved_at = _utc_naive(now) if now is not None else _now()
     requirement.approved_by_user_id = _actor_id(db, current_user, actor_user_id)
     requirement.approved_at = approved_at
@@ -1103,6 +1268,8 @@ __all__ = [
     "create_shift_override",
     "create_shift_swap",
     "create_staffing_requirement",
+    "crew_membership_collection_etag",
+    "crew_schedule_collection_etag",
     "end_crew_membership",
     "generate_occurrences",
     "replace_crew_schedule",

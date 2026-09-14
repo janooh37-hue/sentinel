@@ -62,6 +62,7 @@ Other pages will be appended under §4 as they're documented.
    4.7  SectionCard
    4.8  Row variants (OnLeave / Upcoming / Document / Ledger)
    4.9  Edit dialogs (WidgetEditDialog)
+   4.10 Monthly inmate report workspace
 5. Animation appendix
 6. Not yet documented
 ```
@@ -1376,11 +1377,50 @@ Western digits.
 ### 3.7 LockOverlay
 
 **Sources:** `components/shell/LockOverlay.tsx`,
-`components/shell/LockOverlay.css`, and `lib/useLockState.ts`.
+`components/shell/LockOverlay.css`, `lib/useLockState.ts`, and
+`lib/appLockContext.ts`.
 
-Full-screen privacy lock rendered above all routes at `z-index: 100`. The
-authenticated session remains valid behind the overlay; unlocking re-verifies
-the signed-in user's password through `/auth/verify-password`.
+Full-screen privacy lock rendered above all routes as a controlled,
+non-dismissible Radix `Dialog.Root` (`z-index: 99` overlay, lock content
+above it). The authenticated session remains valid behind the overlay;
+unlocking re-verifies the signed-in user's password through
+`/auth/verify-password`. Only a successful verification closes it — Escape,
+outside pointer/focus interaction, and any background dialog's own close
+control are all suppressed on the lock's root. Toasts are hidden while the
+lock is open (`body:has([data-lock-overlay]) [data-sonner-toaster]`).
+
+**Modal focus ownership:** the lock is a real Radix `Dialog.Root`/`Portal`/
+`Content`, not a plain `<div>` with dialog ARIA attributes — visual stacking
+alone doesn't grant DOM focus/pointer ownership, and an already-open Radix
+modal elsewhere in the tree (notably the Word handoff dialog,
+`pages/books/WordHandoffDialog.tsx`) keeps its own focus trap and pointer
+capture active underneath a lock that isn't itself part of the same
+focus-scope stack. Being a real `Dialog.Root` lets the lock join that stack
+and reliably become topmost. Password focus is set in `onOpenAutoFocus`
+(after the modal has acquired ownership, not on a bare mount effect); a
+successful unlock restores focus to the prior workflow's control, or the
+next surviving open dialog, or `#main-content` as a last resort — see
+`restoreSurvivingWorkflowFocus` in the source. `aria-hidden` on an ancestor
+is deliberately **not** treated as non-focusable there: unlike `inert` (see
+`CapabilityGate.tsx`), `aria-hidden` alone doesn't remove real DOM focus, and
+rejecting it can drop restoration silently when Radix's shared `hideOthers`
+bookkeeping has marked a still-usable dialog hidden for an unrelated reason.
+
+**Preserving an in-progress Word handoff across a lock cycle:**
+`lib/appLockContext.ts` exposes the shell's existing lock boolean read-only
+(`Shell` in `App.tsx` provides it; no second timer or lock store).
+`WordHandoffDialog` consumes it to defer presenting a **newly arrived**
+session while locked — it keeps polling and retains the session, but
+doesn't mount a competing dialog over the password field; unlocking presents
+it once, without a second create/reopen request. An already-open handoff
+(and any of its own nested dialogs, e.g. the Discard confirmation) stays
+mounted through the whole lock cycle untouched. `components/books/
+BookWordActions.tsx`'s `WordReopenButton` mounts its dialog whenever it
+holds a retained (non-voided) session, not only while the record's
+`edit_session` is still absent — that flag can flip active via an
+`invalidateQueries` refetch before the user ever sees the dialog, reliably
+so once presentation is deferred by a lock, so the button must not read it
+as "nothing to show."
 
 **Automatic lock:**
 
@@ -2291,6 +2331,54 @@ mt-5 flex items-center justify-between border-t border-hairline pt-4
   local draft state is fresh on every open. Avoids a `useEffect` to sync
   props → state.
 - Outside-click / Escape / overlay-click all close.
+
+---
+
+### 4.10 Monthly inmate report workspace
+
+**Sources:** `pages/application/statistics/StatisticsTab.tsx`,
+`WorkflowControls.tsx`, `ExportWorkspace.tsx`, `RegisterDocument.tsx`, and
+`registerPresentation.ts`.
+
+The surrounding workspace is ordinary bilingual application UI: controls,
+task labels, validation, actor selection, history, and notifications resolve
+from the active English or Arabic locale and follow the document direction.
+Control layout uses logical start/end properties, action labels may wrap, and
+the same preparation, review, approval, return, and reasoned-reopen controls
+must remain reachable at desktop and narrow widths and at every supported font
+scale.
+
+The report paper is intentionally different from its shell. Preview, print,
+PDF, and rich clipboard table content initiated by this workspace are always
+Arabic and RTL. The paper is fixed to A4 portrait and retains physical
+reference proportions; application language, theme, and font scale do not
+change the official document's language, colors, measurements, or typography.
+IDs, dates, references, and wing codes inside the RTL report use explicit LTR
+change the official document's language, colors, measurements, or typography.
+IDs, dates, references, and wing codes inside the RTL report use explicit LTR
+direction. There are no report language or orientation controls. Save as PDF
+suggests the Arabic report title plus the selected year and month
+(`سجل مخالفات المسلكية الشهـري_2026-09`), never the application's generic tab
+title, and the tab title is restored once the print dialog closes.
+
+Save as PDF suggests the Arabic report title plus the selected year and month
+(`سجل مخالفات المسلكية الشهـري_2026-09`), never the application's generic tab
+title, and the tab title is restored once the print dialog closes.
+
+The report contains an Arabic masthead, exactly two four-cell metadata rows,
+the selected population tables, an optional eight-row whole-month summary,
+and three performed-actor identity blocks. A partial extract keeps its extract
+caption even when the summary is disabled. Rich clipboard output includes the
+selected tables, extract caption when applicable, and optional summary, but
+excludes masthead, metadata, and actor blocks. Its plain-text twin preserves
+the same values. Table headers repeat across printed pages; rows have no fixed
+height or clipping, and the complete actor block appears once at the end.
+
+Workflow status is separate from the paper. The controls show the month's
+current state and the server's allowed actions and blockers remain
+authoritative; a draft shows no performed actors and no closure timestamp. A
+month closed before this lifecycle existed prints empty actor blocks rather
+than invented approvals.
 
 ---
 

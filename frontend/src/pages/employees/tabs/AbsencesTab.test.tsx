@@ -48,11 +48,12 @@ const RECORD = {
 
 function renderTab() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  return render(
+  const rendered = render(
     <QueryClientProvider client={client}>
       <AbsencesTab employeeId="G1001" />
     </QueryClientProvider>,
   )
+  return { ...rendered, client }
 }
 
 beforeEach(() => {
@@ -73,7 +74,8 @@ describe('AbsencesTab', () => {
 
   it('confirms and deletes an episode by day range', async () => {
     deleteEmployeeAbsenceRange.mockResolvedValue(undefined)
-    renderTab()
+    const { client } = renderTab()
+    client.setQueryData(['absence-register'], { rows: [{ employee_id: 'G1001' }] })
     const user = userEvent.setup()
 
     await screen.findByText('Jul 9, 2026')
@@ -86,6 +88,7 @@ describe('AbsencesTab', () => {
     await waitFor(() =>
       expect(deleteEmployeeAbsenceRange).toHaveBeenCalledWith('G1001', '2026-07-09', '2026-07-10'),
     )
+    expect(client.getQueryState(['absence-register'])?.isInvalidated).toBe(true)
   })
 
   it('hides the remove affordance without leaves.edit', async () => {
@@ -99,7 +102,7 @@ describe('AbsencesTab', () => {
     listEmployeeAbsenceEpisodes.mockResolvedValue({ ...RECORD, episodes: [] })
     renderTab()
     expect(
-      await screen.findByText('No absences recorded for this employee.'),
+      await screen.findByText('No absences recorded yet.'),
     ).toBeInTheDocument()
   })
 })

@@ -1,6 +1,6 @@
 /**
  * Pure helpers for the attach-reference-PDF toggle. The async fetch + Map state
- * live in LedgerEmailCompose; this module holds the DOM-free decisions so they
+ * live in OutlookHandoffDialog; this module holds the DOM-free decisions so they
  * can be unit-tested.
  */
 import type { ComposeReference } from '@/components/ledger/ReferencePicker'

@@ -40,7 +40,7 @@ export const DEFAULT_CANVAS_WIDTH: CanvasWidth = 'compact'
 export type WidgetSource = 'employees' | 'leaves' | 'records' | 'ledger' | 'workforce'
 export const WIDGET_SOURCES = ['employees', 'leaves', 'records', 'ledger', 'workforce'] as const
 
-/** All 14 canonical widget ids (order = catalog order in the editor). */
+/** All 15 canonical widget ids (order = catalog order in the editor). */
 export const WIDGET_IDS = [
   'pending',
   'workspace',
@@ -56,6 +56,7 @@ export const WIDGET_IDS = [
   'recent_ledger',
   'pending_departures',
   'workforce_pulse',
+  'violation_months',
 ] as const
 
 export type WidgetId = (typeof WIDGET_IDS)[number]
@@ -82,13 +83,15 @@ export const WIDGET_SIZE: Record<WidgetId, WidgetSize> = {
   recent_ledger: 'panel',
   pending_departures: 'panel',
   workforce_pulse: 'panel',
+  violation_months: 'panel',
 }
 
 /**
  * Which destination a widget draws from — the editor groups by this so a
  * widget can be found by the page it belongs to. Each entry follows the
  * widget's own action target, not a guess:
- *   • records  — pending/waiting_approvals/drafts all open `/books…`
+ *   • records  — pending/waiting_approvals/drafts open `/books…`; violation
+ *                months opens the Inmate Conduct Violations application service
  *   • employees — workspace, violations, recent_docs, expiring_soon and
  *                 pending_departures all open an employee or `/employees`
  *   • leaves   — on_leave_today, upcoming_leave open a leave
@@ -111,6 +114,7 @@ export const WIDGET_SOURCE: Record<WidgetId, WidgetSource> = {
   recent_ledger: 'ledger',
   pending_departures: 'employees',
   workforce_pulse: 'workforce',
+  violation_months: 'records',
 }
 
 export const LOWER_ZONES = ['under_workspace', 'under_quick_actions'] as const
@@ -202,10 +206,12 @@ function zoneOf(w: DashboardWidgetConfig): WidgetZone {
 }
 
 /**
- * Canonical "no saved layout" default — reproduces the pre-rework dashboard:
+ * Canonical "no saved layout" default — reproduces the pre-rework dashboard,
+ * plus the app-wide inmate-register reminder:
  *   • Top: pending + workspace (visible).
- *   • Under Workspace: violations, drafts, ledger (visible); the rest of the
- *     catalog present-but-hidden so the operator opts in via the editor.
+ *   • Under Workspace: violations, drafts, ledger and violation_months
+ *     (visible); the rest of the catalog is present-but-hidden so the operator
+ *     opts in via the editor.
  *   • Quick actions: the first 4 service tiles visible.
  *   • Canvas: compact (1180px), the incumbent measure.
  */
@@ -217,7 +223,11 @@ export const DEFAULT_LAYOUT: DashboardLayout = {
     if (id === 'waiting_approvals') {
       return { id, visible: false, order, zone: 'top' as WidgetZone }
     }
-    const visible = id === 'violations' || id === 'drafts' || id === 'ledger'
+    const visible =
+      id === 'violations' ||
+      id === 'drafts' ||
+      id === 'ledger' ||
+      id === 'violation_months'
     return { id, visible, order, zone: 'under_workspace' as WidgetZone }
   }) as DashboardWidgetConfig[],
   quick_actions: QUICK_ACTION_IDS.map((id, order) => ({

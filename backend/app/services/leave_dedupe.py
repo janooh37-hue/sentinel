@@ -16,17 +16,19 @@ The CLI wrapper (``backend/scripts/dedupe_leaves.py``) is dry-run by default.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from app.db.models import Document, Leave
 
+LeaveNaturalKey = tuple[str, str, date, date]
+
 
 @dataclass
 class DupeGroup:
-    key: tuple
+    key: LeaveNaturalKey
     keep_id: int
     drop_ids: list[int]
 
@@ -38,7 +40,7 @@ def plan_dedupe(db: Session) -> list[DupeGroup]:
         .where(Leave.deleted_at.is_(None))
         .order_by(Leave.id)
     ).all()
-    groups: dict[tuple, list[int]] = {}
+    groups: dict[LeaveNaturalKey, list[int]] = {}
     for r in rows:
         groups.setdefault((r.employee_id, r.leave_type, r.start_date, r.end_date), []).append(r.id)
     return [DupeGroup(key, ids[0], ids[1:]) for key, ids in groups.items() if len(ids) > 1]
@@ -49,10 +51,11 @@ def apply_dedupe(db: Session, groups: list[DupeGroup]) -> int:
     number of rows soft-deleted. Idempotent: already-deleted rows are skipped."""
     now = datetime.now(UTC).replace(tzinfo=None)
     dropped = 0
+    document_table = Document.metadata.tables[Document.__tablename__]
     for group in groups:
         for drop_id in group.drop_ids:
             db.execute(
-                Document.__table__.update()
+                update(document_table)
                 .where(Document.leave_id == drop_id)
                 .values(leave_id=group.keep_id)
             )

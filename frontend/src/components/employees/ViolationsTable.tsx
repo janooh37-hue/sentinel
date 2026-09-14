@@ -33,6 +33,7 @@ import {
 } from '@/components/ui/table'
 import type { ViolationCreate, ViolationRead, ViolationUpdate } from '@/lib/api'
 import { cn } from '@/lib/utils'
+import type { PreviewDoc } from '@/lib/docPreview'
 import { SendButton } from '@/components/notify/SendButton'
 interface Props {
   rows: ViolationRead[]
@@ -45,6 +46,7 @@ interface Props {
   onCreate: (v: ViolationCreate) => Promise<void>
   onUpdate: (id: number, v: ViolationUpdate) => Promise<void>
   onDelete: (id: number) => Promise<void>
+  onPreviewDocs?: (docs: PreviewDoc[]) => void
 }
 
 export function ViolationsTable({
@@ -58,6 +60,7 @@ export function ViolationsTable({
   onCreate,
   onUpdate,
   onDelete,
+  onPreviewDocs,
 }: Props): React.JSX.Element {
   const { t } = useTranslation()
   const [adding, setAdding] = useState(false)
@@ -162,6 +165,23 @@ export function ViolationsTable({
                     </TableCell>
                     <TableCell>
                       <div className="flex items-center justify-end gap-1.5">
+                        {(row.linked_documents?.length ?? 0) > 0 && onPreviewDocs ? (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="xs"
+                            onClick={() =>
+                              onPreviewDocs(
+                                (row.linked_documents ?? []).map((document) => ({
+                                  id: document.id,
+                                  name: document.template_id,
+                                })),
+                              )
+                            }
+                          >
+                            {t('common.preview')}
+                          </Button>
+                        ) : null}
                         <SendButton eventType="violation" recordId={row.id} />
                         {canEdit && (
                           <Button

@@ -33,6 +33,8 @@ describe('Services-gallery artwork registry', () => {
   it('resolves calibrated artwork for service templates and leaves unknown ids unset', () => {
     expect(artworkForTemplate('Report')).toBe('report')
     expect(artworkForTemplate('Warning Form')).toBe('warning')
+    expect(artworkForTemplate('Vehicle Fines')).toBe('vehicle-fines')
+    expect(artworkForTemplate('Vehicle Accident Report')).toBe('vehicle-accident')
     expect(artworkForTemplate('Nope')).toBeUndefined()
   })
 })

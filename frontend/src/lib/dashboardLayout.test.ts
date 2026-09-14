@@ -6,6 +6,7 @@ import {
   QUICK_ACTION_IDS,
   TOP_ELIGIBLE_SET,
   WIDGET_IDS,
+  WIDGET_SIZE,
   WIDGET_SOURCE,
   WIDGET_SOURCES,
   resolveLayout,
@@ -130,6 +131,34 @@ describe('pending_departures widget is hidden by default', () => {
     const resolved = resolveLayout(saved)
     const widget = resolved.widgets.find((w) => w.id === 'pending_departures')
     expect(widget).toMatchObject({ visible: false })
+  })
+})
+
+describe('violation_months widget defaults', () => {
+  it('is visible in the action-needed zone in DEFAULT_LAYOUT', () => {
+    const widget = DEFAULT_LAYOUT.widgets.find((w) => w.id === 'violation_months')
+    expect(widget).toMatchObject({
+      id: 'violation_months',
+      visible: true,
+      zone: 'under_workspace',
+    })
+  })
+
+  it('resolveLayout appends it hidden for a saved layout that never mentioned it', () => {
+    const saved = {
+      widgets: [{ id: 'pending', visible: true, order: 0, zone: 'top' }],
+      quick_actions: [],
+    } as unknown as DashboardLayout
+
+    const resolved = resolveLayout(saved)
+    const widget = resolved.widgets.find((w) => w.id === 'violation_months')
+    expect(widget).toMatchObject({ visible: false })
+  })
+
+  it('is a full-row records widget and cannot occupy the top zone', () => {
+    expect(WIDGET_SIZE.violation_months).toBe('panel')
+    expect(WIDGET_SOURCE.violation_months).toBe('records')
+    expect(TOP_ELIGIBLE_SET.has('violation_months')).toBe(false)
   })
 })
 

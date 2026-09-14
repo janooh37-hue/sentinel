@@ -72,7 +72,7 @@ def suggest(db: Session, *, user_id: int) -> list[Suggestion]:
     already covered by one of the caller's active folders (same ``rule_value``)
     or dismissed by the caller. Returns the top ``SUGGEST_TOP_N`` by count.
     """
-    from app.services.email_service import _first_address
+    from app.services.email_service import first_email_address
 
     stmt = (
         select(LedgerEntry.subject, LedgerEntry.counterparty)
@@ -89,7 +89,7 @@ def suggest(db: Session, *, user_id: int) -> list[Suggestion]:
             continue
         bucket = clusters.setdefault(key, _Cluster())
         bucket.count += 1
-        addr = _first_address(counterparty) or (counterparty or "")
+        addr = first_email_address(counterparty) or (counterparty or "")
         if addr:
             bucket.correspondents.add(addr)
         raw = (subject or "").strip()

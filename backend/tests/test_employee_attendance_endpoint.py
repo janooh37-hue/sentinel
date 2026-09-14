@@ -16,9 +16,14 @@ from datetime import date, time, timedelta
 
 import pytest
 
-from app.api.errors import ValidationFailedError
+from app.api.errors import AppError, ValidationFailedError
+from app.db.workforce_models import AttendancePunchProfile
 from app.services import perm_service, workforce_read_service
-from app.services.workforce_scope_service import resolve_workforce_scope
+from app.services.workforce_scope_service import (
+    WorkforceScope,
+    WorkforceScopeEntry,
+    resolve_workforce_scope,
+)
 from tests.conftest import make_user
 from tests.factories.attendance import build_attendance_day
 
@@ -26,7 +31,7 @@ from tests.factories.attendance import build_attendance_day
 # monkeypatched SessionLocal, which is what lets TestClient's worker thread
 # share the test's database. A conftest `db_session` cannot: SQLite objects are
 # thread-affine, so API calls would raise ProgrammingError.
-from tests.test_workforce_api_permissions import _client
+from tests.test_workforce_api_permissions import _client, _scope
 
 DAY = date(2026, 8, 19)
 
@@ -98,9 +103,7 @@ def test_each_day_publishes_the_grace_and_both_judgment_boundaries(db_session) -
 
 def test_self_view_reads_own_record_only(api_db) -> None:
     """workforce.self.view is a self-scoped grant, not a roster grant."""
-    fixture = build_attendance_day(
-        api_db, operational_date=DAY, posts=[("البوابة الرئيسية", 2)]
-    )
+    fixture = build_attendance_day(api_db, operational_date=DAY, posts=[("البوابة الرئيسية", 2)])
     mine, theirs = fixture.employees[0], fixture.employees[1]
 
     viewer = make_user(api_db, role="operator", email="self-view@test.ae")
@@ -119,13 +122,56 @@ def test_self_view_reads_own_record_only(api_db) -> None:
     assert denied.status_code == 403, denied.text
 
 
-def test_roster_reader_needs_both_review_and_people_view(api_db) -> None:
+def test_foreign_range_denies_before_loading_punch_habits(db_session, monkeypatch) -> None:
     fixture = build_attendance_day(
-        api_db, operational_date=DAY, posts=[("التفتيش", 1)]
+        db_session, operational_date=DAY, posts=[("البوابة الرئيسية", 1)]
     )
+    target = fixture.employees[0]
+    target.department = "Finance"
+    db_session.add(
+        AttendancePunchProfile(
+            employee_id=target.id,
+            shift_code="morning",
+            sample_days=10,
+            arrival_early_offset=-30,
+            arrival_typical_offset=5,
+            departure_typical_offset=0,
+            departure_late_offset=30,
+            suggested_shift_code=None,
+            window_days=30,
+        )
+    )
+    db_session.commit()
+    scope = WorkforceScope(
+        entries=(WorkforceScopeEntry(scope_kind="department", department="Operations"),)
+    )
+    original_scalars = db_session.scalars
+    profile_queries = []
+
+    def recording_scalars(statement, *args, **kwargs):
+        if "attendance_punch_profiles" in str(statement):
+            profile_queries.append(statement)
+        return original_scalars(statement, *args, **kwargs)
+
+    monkeypatch.setattr(db_session, "scalars", recording_scalars)
+    with pytest.raises(AppError) as denied:
+        workforce_read_service.employee_attendance_range(
+            db_session,
+            scope=scope,
+            employee_id=target.id,
+            from_date=date(2026, 8, 1),
+            to_date=date(2026, 8, 31),
+        )
+    assert denied.value.code == "FORBIDDEN"
+    assert profile_queries == []
+
+
+def test_roster_reader_needs_both_review_and_people_view(api_db) -> None:
+    fixture = build_attendance_day(api_db, operational_date=DAY, posts=[("التفتيش", 1)])
     target = fixture.employees[0]
 
     half = make_user(api_db, role="operator", email="half-capability@test.ae")
+    _scope(api_db, half, kind="organization")
     perm_service.set_user_override(api_db, half.id, "workforce.people.view", "grant")
     api_db.commit()
 
@@ -135,9 +181,7 @@ def test_roster_reader_needs_both_review_and_people_view(api_db) -> None:
     )
     assert response.status_code == 403, response.text
 
-    perm_service.set_user_override(
-        api_db, half.id, "workforce.attendance.review", "grant"
-    )
+    perm_service.set_user_override(api_db, half.id, "workforce.attendance.review", "grant")
     api_db.commit()
 
     allowed = _client(api_db, half).get(
@@ -155,9 +199,7 @@ def test_roster_reader_needs_both_review_and_people_view(api_db) -> None:
     ],
 )
 def test_invalid_windows_are_rejected(db_session, from_date: date, to_date: date) -> None:
-    fixture = build_attendance_day(
-        db_session, operational_date=DAY, posts=[("التفتيش", 1)]
-    )
+    fixture = build_attendance_day(db_session, operational_date=DAY, posts=[("التفتيش", 1)])
     scope = resolve_workforce_scope(db_session, fixture.admin)
 
     with pytest.raises(ValidationFailedError):
@@ -172,9 +214,7 @@ def test_invalid_windows_are_rejected(db_session, from_date: date, to_date: date
 
 def test_over_wide_window_is_a_422_through_the_api(api_db) -> None:
     """The bound must surface as 422, not as a 500 from the catch-all handler."""
-    fixture = build_attendance_day(
-        api_db, operational_date=DAY, posts=[("التفتيش", 1)]
-    )
+    fixture = build_attendance_day(api_db, operational_date=DAY, posts=[("التفتيش", 1)])
 
     response = _client(api_db, fixture.admin).get(
         f"/api/v1/workforce/employees/{fixture.employees[0].id}/attendance",

@@ -19,6 +19,11 @@ import { toast } from 'sonner'
 import { BadgeCheck, Check, Clock, Inbox, X } from 'lucide-react'
 
 import { api, type PermissionRequestRead, apiErrorMessage } from '@/lib/api'
+import {
+  localizeCapability,
+  type LocalizedCapabilityText,
+  useCapabilityCatalog,
+} from '@/lib/useCapabilityCatalog'
 import { EmptyState } from '@/components/ui/empty-state'
 import { Skeleton } from '@/components/ui/skeleton'
 
@@ -60,12 +65,12 @@ type Window = '2h' | 'today' | 'week'
 
 function PermissionRequestCard({
   req,
-  capDesc,
+  capabilityText,
   deciding,
   onDecide,
 }: {
   req: PermissionRequestRead
-  capDesc: string
+  capabilityText: LocalizedCapabilityText
   deciding: boolean
   onDecide: (id: number, decision: 'once' | 'permanent' | 'refused', opts?: { window?: Window; note?: string }) => void
 }): React.JSX.Element {
@@ -104,11 +109,13 @@ function PermissionRequestCard({
               {req.requester_name ?? `#${req.user_id}`}
             </span>
             <span className="rounded-full bg-surface-tinted px-2 py-0.5 text-[0.72em] font-medium text-muted-foreground">
-              {t(`access.permissions.caps.${req.capability}`, { defaultValue: req.capability_label })}
+              <bdi dir="auto">{capabilityText.label}</bdi>
             </span>
           </div>
-          {capDesc && (
-            <p className="mt-1 text-[0.82em] leading-snug text-muted-foreground">{capDesc}</p>
+          {capabilityText.description && (
+            <p className="mt-1 text-[0.82em] leading-snug text-muted-foreground">
+              <bdi dir="auto">{capabilityText.description}</bdi>
+            </p>
           )}
           <div className="mt-1.5 flex items-center gap-1 text-[0.78em] text-muted-foreground">
             <Clock className="h-3 w-3 shrink-0" strokeWidth={1.8} />
@@ -216,25 +223,15 @@ function PermissionRequestCard({
 // ---------------------------------------------------------------------------
 
 export function PermissionRequestsTab(): React.JSX.Element {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const qc = useQueryClient()
   const [decidingId, setDecidingId] = useState<number | null>(null)
+  const catalog = useCapabilityCatalog()
 
   const requestsQuery = useQuery({
     queryKey: ['permission-requests'],
     queryFn: () => api.listPermissionRequests(),
   })
-
-  const capsQuery = useQuery({
-    queryKey: ['capabilities'],
-    queryFn: () => api.listCapabilities(),
-  })
-
-  // Build a quick lookup: capability id → description
-  const capDescMap = new Map<string, string>()
-  for (const cap of capsQuery.data ?? []) {
-    capDescMap.set(cap.id, cap.description)
-  }
 
   function invalidate(): void {
     void qc.invalidateQueries({ queryKey: ['permission-requests'] })
@@ -314,7 +311,11 @@ export function PermissionRequestsTab(): React.JSX.Element {
         <PermissionRequestCard
           key={req.id}
           req={req}
-          capDesc={capDescMap.get(req.capability) ?? ''}
+          capabilityText={localizeCapability(
+            catalog.byId.get(req.capability),
+            req.capability,
+            i18n.language,
+          )}
           deciding={decidingId === req.id}
           onDecide={handleDecide}
         />

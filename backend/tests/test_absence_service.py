@@ -12,7 +12,7 @@ from datetime import date
 import pytest
 
 from app.api.errors import NotFoundError, ValidationFailedError
-from app.db.models import Absence, Employee
+from app.db.models import Absence, Employee, Leave
 from app.services import absence_service
 
 
@@ -31,6 +31,23 @@ def _emp(
 
 def _dates(rows) -> list[date]:
     return [row.date for row in rows]
+
+
+@pytest.mark.parametrize(
+    ("leave_type", "expected"),
+    [
+        ("Sick Leave - الإجازة المرضية", True),
+        ("Annual Leave", True),
+        ("Leave Permit", True),
+        ("Administrative Leave", True),
+        ("Unknown", True),
+        ("Passport Release", False),
+        ("Duty Resumption", False),
+        ("Duty Leave", False),
+    ],
+)
+def test_supersedes_absence_matrix(leave_type, expected):
+    assert absence_service.supersedes_absence(leave_type) is expected
 
 
 def test_add_range_creates_one_row_per_day_inclusive(db_session):
@@ -75,6 +92,61 @@ def test_add_range_skips_days_already_marked(db_session):
     assert kept.note == "earlier"
 
 
+def test_add_range_skips_and_reports_days_inside_a_superseding_leave(db_session):
+    _emp(db_session)
+    db_session.add(
+        Leave(
+            employee_id="G1001",
+            leave_type="Sick Leave",
+            start_date=date(2026, 7, 10),
+            end_date=date(2026, 7, 10),
+            days=1,
+            status="Approved",
+        )
+    )
+    db_session.commit()
+
+    result = absence_service.add_range(
+        db_session, "G1001", start=date(2026, 7, 9), end=date(2026, 7, 11)
+    )
+
+    assert _dates(result.created) == [date(2026, 7, 9), date(2026, 7, 11)]
+    assert result.skipped_on_leave == [date(2026, 7, 10)]
+    assert result.skipped_off_roster == []
+
+
+def test_add_range_ignores_non_superseding_and_void_leaves(db_session):
+    _emp(db_session)
+    db_session.add_all(
+        [
+            Leave(
+                employee_id="G1001",
+                leave_type="Passport Release",
+                start_date=date(2026, 7, 10),
+                end_date=date(2026, 7, 10),
+                days=1,
+                status="Approved",
+            ),
+            Leave(
+                employee_id="G1001",
+                leave_type="Sick Leave",
+                start_date=date(2026, 7, 11),
+                end_date=date(2026, 7, 11),
+                days=1,
+                status="Cancelled",
+            ),
+        ]
+    )
+    db_session.commit()
+
+    result = absence_service.add_range(
+        db_session, "G1001", start=date(2026, 7, 9), end=date(2026, 7, 11)
+    )
+
+    assert _dates(result.created) == [date(2026, 7, 9), date(2026, 7, 10), date(2026, 7, 11)]
+    assert result.skipped_on_leave == []
+
+
 def test_add_range_skips_and_reports_days_before_joining(db_session):
     _emp(db_session, doj=date(2026, 7, 10))
     result = absence_service.add_range(
@@ -104,6 +176,61 @@ def test_add_range_rejects_an_inverted_range(db_session):
 def test_add_range_unknown_employee(db_session):
     with pytest.raises(NotFoundError):
         absence_service.add_range(db_session, "G9999", start=date(2026, 7, 9), end=date(2026, 7, 9))
+
+
+def test_replace_episode_redraws_the_row_in_one_unit(db_session):
+    _emp(db_session)
+    absence_service.add_range(
+        db_session,
+        "G1001",
+        start=date(2026, 7, 9),
+        end=date(2026, 7, 11),
+        note="a",
+    )
+
+    absence_service.replace_episode(
+        db_session,
+        "G1001",
+        old_start=date(2026, 7, 9),
+        old_end=date(2026, 7, 11),
+        start=date(2026, 7, 10),
+        end=date(2026, 7, 12),
+        note="b",
+        user_id=17,
+    )
+
+    rows = db_session.query(Absence).order_by(Absence.date).all()
+    assert _dates(rows) == [date(2026, 7, 10), date(2026, 7, 11), date(2026, 7, 12)]
+    assert [row.note for row in rows] == ["b", "b", "b"]
+    assert [row.created_by for row in rows] == [17, 17, 17]
+
+
+def test_replace_episode_rejects_an_inverted_new_range(db_session):
+    _emp(db_session)
+    absence_service.add_range(
+        db_session,
+        "G1001",
+        start=date(2026, 7, 9),
+        end=date(2026, 7, 11),
+        note="a",
+    )
+
+    with pytest.raises(ValidationFailedError) as error:
+        absence_service.replace_episode(
+            db_session,
+            "G1001",
+            old_start=date(2026, 7, 9),
+            old_end=date(2026, 7, 11),
+            start=date(2026, 7, 12),
+            end=date(2026, 7, 10),
+            note="b",
+            user_id=17,
+        )
+
+    assert error.value.code == "ABSENCE_RANGE_INVERTED"
+    rows = db_session.query(Absence).order_by(Absence.date).all()
+    assert _dates(rows) == [date(2026, 7, 9), date(2026, 7, 10), date(2026, 7, 11)]
+    assert [row.note for row in rows] == ["a", "a", "a"]
 
 
 def test_list_for_employee_is_newest_first(db_session):
@@ -212,6 +339,39 @@ def test_list_episodes_joins_distinct_notes_in_day_order(db_session):
 def test_list_episodes_unknown_employee(db_session):
     with pytest.raises(NotFoundError):
         absence_service.list_episodes(db_session, "G9999")
+
+
+def test_list_register_orders_newest_last_day_first_across_employees(db_session):
+    _emp(db_session, "G1001")
+    _emp(db_session, "G1002")
+    absence_service.add_range(db_session, "G1001", start=date(2026, 7, 1), end=date(2026, 7, 2))
+    absence_service.add_range(db_session, "G1001", start=date(2026, 7, 20), end=date(2026, 7, 20))
+    absence_service.add_range(db_session, "G1002", start=date(2026, 7, 10), end=date(2026, 7, 10))
+
+    register = absence_service.list_register(db_session)
+
+    assert [(employee.id, episode.start, episode.end) for employee, episode in register] == [
+        ("G1001", date(2026, 7, 20), date(2026, 7, 20)),
+        ("G1002", date(2026, 7, 10), date(2026, 7, 10)),
+        ("G1001", date(2026, 7, 1), date(2026, 7, 2)),
+    ]
+
+
+def test_list_register_breaks_equal_end_dates_by_employee_id(db_session):
+    _emp(db_session, "G1002")
+    _emp(db_session, "G1001")
+    absence_service.add_range(db_session, "G1002", start=date(2026, 7, 10), end=date(2026, 7, 10))
+    absence_service.add_range(db_session, "G1001", start=date(2026, 7, 10), end=date(2026, 7, 10))
+
+    register = absence_service.list_register(db_session)
+
+    assert [employee.id for employee, _episode in register] == ["G1001", "G1002"]
+
+
+def test_list_register_returns_empty_when_there_are_no_absences(db_session):
+    _emp(db_session)
+
+    assert absence_service.list_register(db_session) == []
 
 
 def test_supersede_returns_the_dates_it_removed(db_session):
