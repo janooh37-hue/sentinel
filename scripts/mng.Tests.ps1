@@ -341,15 +341,17 @@ server.serve_forever()
 
             $Root = $repoRoot
             $script:Root = $repoRoot
-            $env:MNG_GIT_USERNAME = $username
-            $env:MNG_GIT_TOKEN = $token
-            $authentication = Get-UpdateGitAuthentication $expectedRemote
-            $script:authenticationForTest = $authentication
-            $script:observedRemote = $null
-            Mock Get-UpdateGitAuthentication {
+            $envFile = Join-Path $repoRoot '.env'
+            Set-Content -LiteralPath $envFile -Encoding UTF8 -Value @(
+                "MNG_GIT_USERNAME=$username"
+                "MNG_GIT_TOKEN=$token"
+            )
+            $script:expectedRemoteForTest = $expectedRemote
+            Mock Resolve-GitRemoteUrl {
+                # Keep authentication pointed at the canonical origin while
+                # Git's local url.*.insteadOf rule routes the pull to the fixture.
                 param([string] $remoteUrl)
-                $script:observedRemote = $remoteUrl
-                return $script:authenticationForTest
+                return $script:expectedRemoteForTest
             }
 
             $staleHelper = Join-Path $TestDrive 'stale-credential-helper.cmd'
@@ -361,8 +363,8 @@ server.serve_forever()
                 'echo password=stale-token'
             )
             Invoke-TestGit $repoRoot @('config', 'credential.helper', $staleHelper)
-            $fixtureRemote = "http://127.0.0.1:$port/sentinel.git"
-            Invoke-TestGit $repoRoot @('remote', 'set-url', 'origin', $fixtureRemote)
+            Invoke-TestGit $repoRoot @('config', ('url.http://127.0.0.1:{0}/.insteadOf' -f $port), 'https://github.com/janooh37-hue/')
+            Invoke-TestGit $repoRoot @('remote', 'set-url', 'origin', $expectedRemote)
             Set-Content -LiteralPath (Join-Path $seedRoot 'README.txt') -Value 'pulled update' -Encoding UTF8
             Invoke-TestGit $seedRoot @('add', 'README.txt')
             Invoke-TestGit $seedRoot @('commit', '-qm', 'authenticated fixture update')
@@ -376,7 +378,8 @@ server.serve_forever()
                     Pop-Location
                 }
             } 6>&1 2>&1 | Out-String
-            $script:observedRemote | Should Be $fixtureRemote
+            Remove-Item -LiteralPath $envFile -Force
+            (Test-Path -LiteralPath $envFile) | Should Be $false
             $pullOutput | Should Not Match ([regex]::Escape($token))
             (Get-Content -LiteralPath (Join-Path $repoRoot 'README.txt') -Raw) | Should Match 'pulled update'
             (Test-Path -LiteralPath $staleHelperMarker) | Should Be $false

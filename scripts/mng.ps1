@@ -630,9 +630,11 @@ function Invoke-Update {
     try {
         Write-Host '  Fetching latest from git ...' -ForegroundColor Cyan
         $before = (git rev-parse HEAD).Trim()
-        $remoteUrl = [string](git config --get remote.origin.url 2>$null | Select-Object -First 1)
+        $remoteOutput = @(git config --get remote.origin.url 2>$null)
+        $remoteConfigExitCode = $LASTEXITCODE
+        $remoteUrl = [string]($remoteOutput | Select-Object -First 1)
         $remoteUrl = $remoteUrl.Trim()
-        if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($remoteUrl)) {
+        if ($remoteConfigExitCode -ne 0 -or [string]::IsNullOrWhiteSpace($remoteUrl)) {
             throw 'git origin remote is not configured; set origin to the Sentinel repository, then rerun: mng update'
         }
         $authentication = Get-UpdateGitAuthentication $remoteUrl
