@@ -1880,8 +1880,25 @@ interface PendingCertificate {
   error: string | null
 }
 
-function pendingCertificateIsValid(entry: PendingCertificate): boolean {
-  return entry.name.trim().length > 0 && (entry.noExpiry || entry.expiryDate !== '')
+function pendingHasDuplicateReplacement(
+  entry: PendingCertificate,
+  allPending: readonly PendingCertificate[],
+): boolean {
+  return (
+    entry.replacesFileId != null &&
+    allPending.some((other) => other.id !== entry.id && other.replacesFileId === entry.replacesFileId)
+  )
+}
+
+function pendingCertificateIsValid(
+  entry: PendingCertificate,
+  allPending: readonly PendingCertificate[],
+): boolean {
+  return (
+    entry.name.trim().length > 0 &&
+    (entry.noExpiry || entry.expiryDate !== '') &&
+    !pendingHasDuplicateReplacement(entry, allPending)
+  )
 }
 
 function CertificatesPanel({
@@ -1968,7 +1985,7 @@ function CertificatesPanel({
 
   async function submitPending(): Promise<void> {
     const capturedVehicleId = vehicleId
-    const batch = pending.filter(pendingCertificateIsValid)
+    const batch = pending.filter((entry) => pendingCertificateIsValid(entry, pending))
     if (batch.length === 0) return
     setBatchBusy(true)
     for (const entry of batch) {
@@ -2013,7 +2030,8 @@ function CertificatesPanel({
     setEditingId(null)
   }
 
-  const allValid = pending.length > 0 && pending.every(pendingCertificateIsValid)
+  const allValid =
+    pending.length > 0 && pending.every((entry) => pendingCertificateIsValid(entry, pending))
   const controlsDisabled = batchBusy
 
   return (
@@ -2181,6 +2199,11 @@ function CertificatesPanel({
                         <p className="mt-0.5 truncate text-[0.7em] text-muted-foreground" dir="auto">
                           {entry.file.name}
                         </p>
+                        {entry.name.trim().length === 0 && (
+                          <p className="mt-0.5 text-[0.72em] text-destructive">
+                            {t('vehicles.certificateErrors.nameRequired')}
+                          </p>
+                        )}
                       </div>
                       <Button
                         type="button"
@@ -2244,11 +2267,16 @@ function CertificatesPanel({
                           </option>
                         ))}
                       </select>
-                      {entry.replacesFileId != null && (
-                        <p className="text-[0.72em] text-muted-foreground">
-                          {t('vehicles.certificateReplacementHint')}
-                        </p>
-                      )}
+                      {entry.replacesFileId != null &&
+                        (pendingHasDuplicateReplacement(entry, pending) ? (
+                          <p className="text-[0.72em] text-destructive" role="alert">
+                            {t('vehicles.certificateDuplicateReplacement')}
+                          </p>
+                        ) : (
+                          <p className="text-[0.72em] text-muted-foreground">
+                            {t('vehicles.certificateReplacementHint')}
+                          </p>
+                        ))}
                     </div>
 
                     {entry.error && (
