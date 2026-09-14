@@ -13,6 +13,7 @@ if ($errors.Count -gt 0) {
 $functionNames = @(
     'Get-DotEnvValue',
     'Read-DotEnv',
+    'Resolve-GitRemoteUrl',
     'Get-UpdateGitAuthentication',
     'Invoke-AuthenticatedGitPull',
     'Invoke-Update'
@@ -41,8 +42,8 @@ function Invoke-TestGit {
     }
 }
 
-# Invoke-Update's post-pull deployment is intentionally stubbed here. The pull
-# itself remains a real git client operation against the authenticated fixture.
+# The update's post-pull deployment is intentionally stubbed in this suite.
+# The pull itself remains a real git client operation against the fixture.
 function Assert-Admin([string] $verb) {}
 function Sync-BackendDependencies {}
 function Invoke-Migrate {}
@@ -59,6 +60,7 @@ $savedToken = [Environment]::GetEnvironmentVariable('MNG_GIT_TOKEN', 'Process')
 
 Describe 'mng update repository authentication' {
     BeforeEach {
+        $script:Root = $TestDrive
         $Root = $TestDrive
         Remove-Item Env:MNG_GIT_USERNAME -ErrorAction SilentlyContinue
         Remove-Item Env:MNG_GIT_TOKEN -ErrorAction SilentlyContinue
@@ -98,6 +100,48 @@ Describe 'mng update repository authentication' {
         $thrown | Should Be $true
         $message | Should Match 'unexpected HTTPS origin'
         $message | Should Not Match ([regex]::Escape($token))
+    }
+
+    It 'does not print credentials from a rejected HTTPS remote URL' {
+        $remote = 'https://sentinel-user:sentinel-secret@github.com/janooh37-hue/sentinel.git'
+        $thrown = $false
+        try {
+            Get-UpdateGitAuthentication $remote
+        } catch {
+            $thrown = $true
+            $message = $_.Exception.Message
+        }
+
+        $thrown | Should Be $true
+        $message | Should Match 'unexpected HTTPS origin'
+        $message | Should Not Match ([regex]::Escape($remote))
+        $message | Should Not Match 'sentinel-secret'
+    }
+
+    It 'fails closed when Git rewrites the canonical origin to an unrelated destination' {
+        $repoRoot = Join-Path $TestDrive 'rewritten-origin'
+        New-Item -ItemType Directory -Path $repoRoot | Out-Null
+        Invoke-TestGit $repoRoot @('init', '-q')
+        Invoke-TestGit $repoRoot @(
+            'config',
+            'url.https://attacker.example.invalid/.insteadOf',
+            'https://github.com/janooh37-hue/'
+        )
+        $token = 'sentinel-rewrite-token-' + [Guid]::NewGuid().ToString('N')
+        $script:Root = $repoRoot
+        $env:MNG_GIT_USERNAME = 'sentinel-test-user'
+        $Root = $repoRoot
+        try {
+            Get-UpdateGitAuthentication 'https://github.com/janooh37-hue/sentinel.git'
+        } catch {
+            $thrown = $true
+            $message = $_.Exception.Message
+        }
+
+        $thrown | Should Be $true
+        $message | Should Match 'unexpected HTTPS origin'
+        $message | Should Not Match ([regex]::Escape($token))
+        $message | Should Not Match 'attacker\.example'
     }
 
     It 'reports both missing HTTPS credential settings without exposing a value' {
@@ -296,24 +340,43 @@ server.serve_forever()
             $ready | Should Be $true
 
             Invoke-TestGit $repoRoot @('remote', 'set-url', 'origin', $expectedRemote)
-            Invoke-TestGit $repoRoot @('config', 'credential.helper', '')
+            $Root = $repoRoot
+            $script:Root = $repoRoot
+            $env:MNG_GIT_USERNAME = $username
+            $env:MNG_GIT_TOKEN = $token
+            $authentication = Get-UpdateGitAuthentication $expectedRemote
+
+            $staleHelper = Join-Path $TestDrive 'stale-credential-helper.cmd'
+            $staleHelperMarker = Join-Path $TestDrive 'stale-credential-helper.used'
+            Set-Content -LiteralPath $staleHelper -Encoding ASCII -Value @(
+                '@echo off',
+                "echo used > `"$staleHelperMarker`"",
+                'echo username=stale-user',
+                'echo password=stale-token'
+            )
+            Invoke-TestGit $repoRoot @('config', 'credential.helper', $staleHelper)
             Invoke-TestGit $repoRoot @(
-                'config',
-                "url.http://127.0.0.1:$port/.insteadOf",
-                'https://github.com/janooh37-hue/'
+                'remote',
+                'set-url',
+                'origin',
+                "http://127.0.0.1:$port/sentinel.git"
             )
             Set-Content -LiteralPath (Join-Path $seedRoot 'README.txt') -Value 'pulled update' -Encoding UTF8
             Invoke-TestGit $seedRoot @('add', 'README.txt')
             Invoke-TestGit $seedRoot @('commit', '-qm', 'authenticated fixture update')
             Invoke-TestGit $seedRoot @('push', '-q', 'origin', 'main')
 
-            $Root = $repoRoot
-            $script:Root = $repoRoot
-            $env:MNG_GIT_USERNAME = $username
-            $env:MNG_GIT_TOKEN = $token
-            $capturedOutput = (& { Invoke-Update } 6>&1 2>&1 | Out-String)
+            $pullOutput = & {
+                Push-Location $repoRoot
+                try {
+                    Invoke-AuthenticatedGitPull $authentication
+                } finally {
+                    Pop-Location
+                }
+            } 6>&1 2>&1 | Out-String
+            $pullOutput | Should Not Match ([regex]::Escape($token))
             (Get-Content -LiteralPath (Join-Path $repoRoot 'README.txt') -Raw) | Should Match 'pulled update'
-            $capturedOutput | Should Not Match ([regex]::Escape($token))
+            (Test-Path -LiteralPath $staleHelperMarker) | Should Be $false
             $repositoryText = @(
                 Get-ChildItem -LiteralPath $repoRoot -File -Recurse -Force |
                     ForEach-Object {

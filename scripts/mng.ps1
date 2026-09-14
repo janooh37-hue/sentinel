@@ -218,15 +218,44 @@ function Read-DotEnv([string] $path) {
     return $values
 }
 
+function Resolve-GitRemoteUrl([string] $remoteUrl) {
+    # Git applies url.<base>.insteadOf rewrites before contacting the remote.
+    # Resolve the longest applicable rewrite so credentials are never sent to
+    # an origin that only looks canonical in remote.origin.url.
+    $bestPrefix = $null
+    $bestReplacement = $null
+    $rewriteLines = @()
+    Push-Location $Root
+    try {
+        $rewriteLines = @(git config --get-regexp '^url\..*\.insteadof$' 2>$null)
+    } finally {
+        Pop-Location
+    }
+    foreach ($line in $rewriteLines) {
+        $parts = ([string]$line) -split '\s+', 2
+        if ($parts.Count -ne 2 -or $parts[0] -notmatch '^url\.(.+)\.insteadof$') { continue }
+        $replacement = $Matches[1]
+        $prefix = $parts[1]
+        if ($remoteUrl.StartsWith($prefix, [StringComparison]::Ordinal) -and
+            ($null -eq $bestPrefix -or $prefix.Length -gt $bestPrefix.Length)) {
+            $bestPrefix = $prefix
+            $bestReplacement = $replacement
+        }
+    }
+    if ($null -eq $bestPrefix) { return $remoteUrl }
+    return $bestReplacement + $remoteUrl.Substring($bestPrefix.Length)
+}
+
 function Get-UpdateGitAuthentication([string] $remoteUrl) {
     # SSH remotes and local remotes already have their own authentication.
     # HTTPS credentials are only safe to use for this repository's canonical
     # GitHub origin; fail closed before reading any secret for another origin.
     if ($remoteUrl -notmatch '^https://') { return $null }
 
+    $expectedOrigin = 'https://github.com/janooh37-hue/sentinel.git'
+    $expectedPath = '/janooh37-hue/sentinel'
     $remoteUri = $null
     $validUri = [Uri]::TryCreate($remoteUrl, [UriKind]::Absolute, [ref]$remoteUri)
-    $expectedPath = '/janooh37-hue/sentinel'
     if (-not $validUri -or
         $remoteUri.Scheme -ine 'https' -or
         $remoteUri.Host -ine 'github.com' -or
@@ -235,7 +264,21 @@ function Get-UpdateGitAuthentication([string] $remoteUrl) {
         -not [string]::IsNullOrEmpty($remoteUri.Query) -or
         -not [string]::IsNullOrEmpty($remoteUri.Fragment) -or
         $remoteUri.AbsolutePath.TrimEnd('/') -notmatch ('^{0}(?:\.git)?$' -f [regex]::Escape($expectedPath))) {
-        throw "Refusing to send Sentinel credentials to unexpected HTTPS origin '$remoteUrl'. Set origin to https://github.com/janooh37-hue/sentinel.git and rerun: mng update"
+        throw "Refusing to send Sentinel credentials to an unexpected HTTPS origin. Set origin to $expectedOrigin and rerun: mng update"
+    }
+
+    $effectiveUrl = Resolve-GitRemoteUrl $remoteUrl
+    $effectiveUri = $null
+    $effectiveValid = [Uri]::TryCreate($effectiveUrl, [UriKind]::Absolute, [ref]$effectiveUri)
+    if (-not $effectiveValid -or
+        $effectiveUri.Scheme -ine 'https' -or
+        $effectiveUri.Host -ine 'github.com' -or
+        ($effectiveUri.Port -ne -1 -and $effectiveUri.Port -ne 443) -or
+        -not [string]::IsNullOrEmpty($effectiveUri.UserInfo) -or
+        -not [string]::IsNullOrEmpty($effectiveUri.Query) -or
+        -not [string]::IsNullOrEmpty($effectiveUri.Fragment) -or
+        $effectiveUri.AbsolutePath.TrimEnd('/') -notmatch ('^{0}(?:\.git)?$' -f [regex]::Escape($expectedPath))) {
+        throw "Refusing to send Sentinel credentials to an unexpected HTTPS origin. Set origin to $expectedOrigin and rerun: mng update"
     }
 
     $envFile = Join-Path $Root '.env'
@@ -291,7 +334,7 @@ exit 1
         $prevEAP = $ErrorActionPreference
         $ErrorActionPreference = 'Continue'
         try {
-            & git pull --ff-only 2>&1 | ForEach-Object { Write-Host $_ }
+            & git -c credential.helper= pull --ff-only 2>&1 | ForEach-Object { Write-Host $_ }
             $gitExitCode = $LASTEXITCODE
         } finally {
             $ErrorActionPreference = $prevEAP
