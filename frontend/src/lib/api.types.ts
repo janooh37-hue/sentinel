@@ -186,6 +186,91 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/features": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Auth Features */
+        get: operations["auth_features_api_v1_auth_features_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/verify-email/request": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Request Email Verification */
+        post: operations["request_email_verification_api_v1_auth_verify_email_request_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/verify-email": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Verify Email */
+        post: operations["verify_email_api_v1_auth_verify_email_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/password-reset/request": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Request Password Reset */
+        post: operations["request_password_reset_api_v1_auth_password_reset_request_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/password-reset/complete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Complete Password Reset */
+        post: operations["complete_password_reset_api_v1_auth_password_reset_complete_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/me": {
         parameters: {
             query?: never;
@@ -6175,6 +6260,15 @@ export interface components {
             /** Notes */
             notes?: string | null;
         };
+        /** AcceptedResult */
+        AcceptedResult: {
+            /**
+             * Status
+             * @default accepted
+             * @constant
+             */
+            status: "accepted";
+        };
         /** ActivityItemRead */
         ActivityItemRead: {
             /**
@@ -6277,6 +6371,8 @@ export interface components {
              * @default false
              */
             is_default_manager: boolean;
+            /** Email Verified At */
+            email_verified_at?: string | null;
         };
         /** AnnouncementOut */
         AnnouncementOut: {
@@ -6865,6 +6961,14 @@ export interface components {
              * Format: date-time
              */
             ts: string;
+        };
+        /**
+         * AuthFeatures
+         * @description Feature flags the login page needs before a session exists.
+         */
+        AuthFeatures: {
+            /** Account Mail */
+            account_mail: boolean;
         };
         /**
          * AwaitingCloseOut
@@ -8772,6 +8876,20 @@ export interface components {
              * @enum {string}
              */
             mode: "mailto" | "draft";
+        };
+        /**
+         * EmailLinkRequest
+         * @description Request a verify or password-reset link be emailed to ``email``.
+         */
+        EmailLinkRequest: {
+            /** Email */
+            email: string;
+            /**
+             * Locale
+             * @default en
+             * @enum {string}
+             */
+            locale: "en" | "ar";
         };
         /** EmailSyncResult */
         EmailSyncResult: {
@@ -10924,6 +11042,24 @@ export interface components {
             /** Scan Filename */
             scan_filename: string | null;
         };
+        /** PasswordResetCompleteRequest */
+        PasswordResetCompleteRequest: {
+            /** Token */
+            token: string;
+            /** Password */
+            password: string;
+            /** Password Confirmation */
+            password_confirmation: string;
+        };
+        /** PasswordResetCompleteResult */
+        PasswordResetCompleteResult: {
+            /**
+             * Status
+             * @default reset
+             * @constant
+             */
+            status: "reset";
+        };
         /** PermissionRequestRead */
         PermissionRequestRead: {
             /** Id */
@@ -11696,6 +11832,12 @@ export interface components {
             password: string;
             /** Display Name */
             display_name?: string | null;
+            /**
+             * Locale
+             * @default en
+             * @enum {string}
+             */
+            locale: "en" | "ar";
         };
         /**
          * RegisterResult
@@ -11703,7 +11845,9 @@ export interface components {
          *
          *     ``status='active'`` means the account was the first one and was
          *     auto-promoted to admin (``user`` is populated + a session is set);
-         *     ``status='pending'`` means it awaits admin approval.
+         *     ``status='pending'`` means it awaits admin approval;
+         *     ``status='verify_email'`` means the account was created and a
+         *     confirmation link was sent — no session, no admin queue entry yet.
          */
         RegisterResult: {
             /** Status */
@@ -12688,6 +12832,11 @@ export interface components {
         TimesheetStartAckRequest: {
             /** Employee Id */
             employee_id: string;
+        };
+        /** TokenRequest */
+        TokenRequest: {
+            /** Token */
+            token: string;
         };
         /** TransferAdminRequest */
         TransferAdminRequest: {
@@ -13947,6 +14096,15 @@ export interface components {
             /** Notify Days */
             notify_days: number;
         };
+        /** VerifyEmailResult */
+        VerifyEmailResult: {
+            /**
+             * Status
+             * @default verified
+             * @constant
+             */
+            status: "verified";
+        };
         /** VerifyPasswordRequest */
         VerifyPasswordRequest: {
             /** Password */
@@ -14906,6 +15064,158 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    auth_features_api_v1_auth_features_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthFeatures"];
+                };
+            };
+        };
+    };
+    request_email_verification_api_v1_auth_verify_email_request_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EmailLinkRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AcceptedResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    verify_email_api_v1_auth_verify_email_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TokenRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VerifyEmailResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    request_password_reset_api_v1_auth_password_reset_request_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EmailLinkRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AcceptedResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    complete_password_reset_api_v1_auth_password_reset_complete_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PasswordResetCompleteRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PasswordResetCompleteResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
             };
         };
     };

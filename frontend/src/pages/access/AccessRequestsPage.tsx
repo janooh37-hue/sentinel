@@ -32,6 +32,7 @@ import {
   KeyRound,
   Lock,
   Mail,
+  MailWarning,
   MoreVertical,
   ShieldCheck,
   SlidersHorizontal,
@@ -299,11 +300,13 @@ function Modal({
 function RequestCard({
   req,
   approving,
+  requireVerified,
   onApprove,
   onReject,
 }: {
   req: AdminUserRead
   approving: boolean
+  requireVerified: boolean
   onApprove: (role: Role) => void
   onReject: () => void
 }): React.JSX.Element {
@@ -361,6 +364,18 @@ function RequestCard({
                 </span>
               </>
             )}
+            {requireVerified && !req.email_verified_at && (
+              <>
+                <span className="text-border-strong">·</span>
+                <span
+                  title={t('access.pending.emailUnverified', { defaultValue: 'Email not confirmed' })}
+                  className="inline-flex items-center gap-1 rounded-full bg-accent-soft px-2 py-0.5 font-mono font-semibold text-accent"
+                >
+                  <MailWarning className="h-3 w-3" strokeWidth={2} />
+                  {t('access.pending.emailUnverified', { defaultValue: 'Email not confirmed' })}
+                </span>
+              </>
+            )}
             <span className="text-border-strong">·</span>
             <span className="inline-flex items-center gap-1">
               <Clock className="h-3 w-3" strokeWidth={1.8} />
@@ -398,7 +413,12 @@ function RequestCard({
           </button>
           <button
             type="button"
-            disabled={approving}
+            disabled={approving || (requireVerified && !req.email_verified_at)}
+            title={
+              requireVerified && !req.email_verified_at
+                ? t('access.pending.emailUnverified', { defaultValue: 'Email not confirmed' })
+                : undefined
+            }
             onClick={() => (open ? onApprove(role) : setOpen(true))}
             className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-full bg-primary px-4 py-1.5 text-[0.82em] font-semibold text-primary-foreground transition-colors hover:bg-primary-hover disabled:opacity-60 md:flex-none"
           >
@@ -809,6 +829,11 @@ export function AccessRequestsPage(): React.JSX.Element {
     queryKey: ['auth-users'],
     queryFn: () => api.listAuthUsers(),
   })
+  const featuresQuery = useQuery({
+    queryKey: ['auth-features'],
+    queryFn: () => api.authFeatures(),
+    staleTime: Infinity,
+  })
   const auditQuery = useQuery({
     queryKey: ['auth-audit'],
     queryFn: () => api.listAuthAudit(80),
@@ -832,6 +857,13 @@ export function AccessRequestsPage(): React.JSX.Element {
   function onError(e: unknown): void {
     toast.error(apiErrorMessage(e))
   }
+  function onApproveError(e: unknown): void {
+    if (e instanceof ApiError && e.code === 'EMAIL_NOT_VERIFIED') {
+      toast.error(t('access.toast.emailNotVerified'))
+      return
+    }
+    toast.error(apiErrorMessage(e))
+  }
 
   const approveMut = useMutation({
     mutationFn: ({ id, role }: { id: number; role: Role }) => api.approveAuthUser(id, role),
@@ -840,7 +872,7 @@ export function AccessRequestsPage(): React.JSX.Element {
       toast.success(t('access.toast.approved', { name: displayName(u) }))
       invalidate()
     },
-    onError,
+    onError: onApproveError,
     onSettled: () => setApprovingId(null),
   })
   const rejectMut = useMutation({
@@ -968,6 +1000,7 @@ export function AccessRequestsPage(): React.JSX.Element {
                       key={req.id}
                       req={req}
                       approving={approvingId === req.id}
+                      requireVerified={featuresQuery.data?.account_mail === true}
                       onApprove={(role) => approveMut.mutate({ id: req.id, role })}
                       onReject={() => setRejectTarget(req)}
                     />

@@ -1,10 +1,17 @@
 """Multi-user authentication endpoints.
 
-POST /auth/register          → request access (or bootstrap the first admin)
-POST /auth/login             → verify + set the gssg_session cookie
-POST /auth/logout            → revoke session + clear cookie
-GET  /auth/me                → the signed-in user (401 if not signed in)
-POST /auth/verify-password   → re-auth for the lock screen
+POST /auth/register               → request access (or bootstrap the first admin)
+POST /auth/login                  → verify + set the gssg_session cookie
+POST /auth/logout                 → revoke session + clear cookie
+GET  /auth/me                     → the signed-in user (401 if not signed in)
+POST /auth/verify-password        → re-auth for the lock screen
+
+Public, unauthenticated (email-mail feature; disabled → 503 where applicable):
+GET  /auth/features               → { account_mail: bool }
+POST /auth/verify-email/request   → mail a fresh confirmation link
+POST /auth/verify-email           → consume a confirmation link
+POST /auth/password-reset/request → mail a fresh reset link
+POST /auth/password-reset/complete → consume a reset link, set new password
 
 Admin (require_admin):
 GET   /auth/users
@@ -19,24 +26,39 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, File, Request, Response, UploadFile, status
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    Depends,
+    File,
+    Request,
+    Response,
+    UploadFile,
+    status,
+)
 from sqlalchemy.orm import Session
 
 from app.api.deps import COOKIE_NAME, get_current_user, require_admin
+from app.api.errors import AppError
 from app.config import get_settings
 from app.core import ratelimit
 from app.db.models import User
 from app.db.session import get_db
 from app.schemas.auth import (
+    AcceptedResult,
     AdminUserRead,
     ApproveRequest,
     AuditEntryRead,
+    AuthFeatures,
     CapabilityRead,
     DefaultManagerRequest,
+    EmailLinkRequest,
     LinkSelfRequest,
     LockLayoutRequest,
     LockTimerRequest,
     LoginRequest,
+    PasswordResetCompleteRequest,
+    PasswordResetCompleteResult,
     RegisterRequest,
     RegisterResult,
     RejectRequest,
@@ -45,7 +67,9 @@ from app.schemas.auth import (
     SetPermissionBulkRequest,
     SetPermissionRequest,
     SetRoleRequest,
+    TokenRequest,
     UserPermissionRead,
+    VerifyEmailResult,
     VerifyPasswordRequest,
 )
 from app.services import (
@@ -80,11 +104,21 @@ def _set_session_cookie(response: Response, token: str) -> None:
     )
 
 
+def _require_account_mail() -> None:
+    if not get_settings().account_mail_enabled:
+        raise AppError(
+            "ACCOUNT_MAIL_DISABLED",
+            "Email delivery is not configured. Contact IT.",
+            http_status=503,
+        )
+
+
 @router.post("/register", response_model=RegisterResult)
 def register(
     payload: RegisterRequest,
     request: Request,
     response: Response,
+    background_tasks: BackgroundTasks,
     db: Annotated[Session, Depends(get_db)],
 ) -> RegisterResult:
     # Throttle anonymous account creation (internet-reachable via gssg.app):
@@ -98,6 +132,13 @@ def register(
         g_number=payload.g_number,
         display_name=payload.display_name,
     )
+    if get_settings().account_mail_enabled:
+        # Every account — including the first — must confirm its email before
+        # it can sign in or be approved, so no cookie is set here either way.
+        background_tasks.add_task(
+            auth_service.request_email_link, user.email, "verify", payload.locale
+        )
+        return RegisterResult(status="verify_email", is_first=is_first, user=None)
     if is_first:
         token = auth_service.start_session(db, user)
         _set_session_cookie(response, token)
@@ -137,6 +178,80 @@ def logout(
     resp = Response(status_code=status.HTTP_204_NO_CONTENT)
     resp.delete_cookie(COOKIE_NAME, path="/")
     return resp
+
+
+# ─── Account mail: verification + self-service password reset (public) ─────
+
+
+@router.get("/features", response_model=AuthFeatures)
+def auth_features() -> AuthFeatures:
+    return AuthFeatures(account_mail=get_settings().account_mail_enabled)
+
+
+@router.post(
+    "/verify-email/request", response_model=AcceptedResult, status_code=status.HTTP_202_ACCEPTED
+)
+def request_email_verification(
+    payload: EmailLinkRequest,
+    request: Request,
+    background_tasks: BackgroundTasks,
+) -> AcceptedResult:
+    _require_account_mail()
+    ratelimit.enforce(ratelimit.email_verify_limiter, request)
+    normalized = auth_service.normalize_email(payload.email)
+    # Never reveal whether the address exists: always 202, lookup happens in
+    # the background task after this response is sent.
+    if ratelimit.email_address_limiter.allow(normalized):
+        background_tasks.add_task(
+            auth_service.request_email_link, normalized, "verify", payload.locale
+        )
+    return AcceptedResult()
+
+
+@router.post("/verify-email", response_model=VerifyEmailResult)
+def verify_email(
+    payload: TokenRequest, request: Request, db: Annotated[Session, Depends(get_db)]
+) -> VerifyEmailResult:
+    _require_account_mail()
+    ratelimit.enforce(ratelimit.email_verify_limiter, request)
+    auth_service.verify_email(db, payload.token)
+    return VerifyEmailResult()
+
+
+@router.post(
+    "/password-reset/request",
+    response_model=AcceptedResult,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+def request_password_reset(
+    payload: EmailLinkRequest,
+    request: Request,
+    background_tasks: BackgroundTasks,
+) -> AcceptedResult:
+    _require_account_mail()
+    ratelimit.enforce(ratelimit.password_reset_limiter, request)
+    normalized = auth_service.normalize_email(payload.email)
+    if ratelimit.email_address_limiter.allow(normalized):
+        background_tasks.add_task(
+            auth_service.request_email_link, normalized, "reset", payload.locale
+        )
+    return AcceptedResult()
+
+
+@router.post("/password-reset/complete", response_model=PasswordResetCompleteResult)
+def complete_password_reset(
+    payload: PasswordResetCompleteRequest,
+    request: Request,
+    response: Response,
+    db: Annotated[Session, Depends(get_db)],
+) -> PasswordResetCompleteResult:
+    _require_account_mail()
+    ratelimit.enforce(ratelimit.password_reset_limiter, request)
+    auth_service.complete_password_reset(db, payload.token, payload.password)
+    # An already-signed-in browser's cookie was just revoked server-side —
+    # drop it client-side too so the app doesn't keep presenting a dead session.
+    response.delete_cookie(COOKIE_NAME, path="/")
+    return PasswordResetCompleteResult()
 
 
 @router.get("/me", response_model=SessionUser)
