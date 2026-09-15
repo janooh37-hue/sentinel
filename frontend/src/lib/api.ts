@@ -329,7 +329,18 @@ export interface LeaveReturnBody {
   resumption_date: string // ISO yyyy-mm-dd
   delay_reason?: string
   manager_id?: number | null
+  embed_manager_signature?: boolean
 }
+
+// ─── Signature placement editor (approval-signature-placement plan §8) ────────
+export type SignaturePageRead = components['schemas']['SignaturePageRead']
+export type SignatureRead = components['schemas']['SignatureRead']
+export type LegacyCandidateRead = components['schemas']['LegacyCandidateRead']
+export type SignatureEditorRead = components['schemas']['SignatureEditorRead']
+export type SignaturePositionRequest = components['schemas']['SignaturePositionRequest']
+export type SignatureIdentifyRequest = components['schemas']['SignatureIdentifyRequest']
+export type SignatureHistoryItemRead = components['schemas']['SignatureHistoryItemRead']
+export type SignatureHistoryRead = components['schemas']['SignatureHistoryRead']
 
 // Duty Locations & Internal Transfers — frozen API contract (backend in
 // parallel; hand-mirrored until `gen:api`). One transfer letter carries one
@@ -1177,9 +1188,13 @@ function base64ToBlob(b64: string): Blob {
   return type ? new Blob([bytes], { type }) : new Blob([bytes])
 }
 
-/** IDM-safe attachment fetch (base64 → Blob) shared by the permit endpoints. */
+/** IDM-safe attachment fetch (base64 → Blob) — originated for the permit
+ *  endpoints, now shared by anything needing the same inline-preview
+ *  pattern (e.g. the signature-placement editor). Appends `encoding=base64`
+ *  after `?` or `&` depending on whether *path* already carries a query
+ *  string. */
 async function fetchPermitBlob(path: string): Promise<Blob> {
-  const res = await fetch(`${BASE}${path}?encoding=base64`, {
+  const res = await fetch(`${BASE}${path}${path.includes('?') ? '&' : '?'}encoding=base64`, {
     cache: 'no-store',
     credentials: 'same-origin',
   })
@@ -2547,6 +2562,65 @@ export const api = {
       '/documents/inmate-violations/approved-imports',
       body,
     ),
+
+  // --- signature placement editor (approval-signature-placement plan §8) ---
+  /** Cheap capability/source-state description by default; `measure: true`
+   *  performs the actual Word-COM verification/layout — only call that once
+   *  the workspace is genuinely opened. */
+  getSignatureEditor: (documentId: number, measure = false) =>
+    request<SignatureEditorRead>(
+      'GET',
+      `/documents/${documentId}/signature-editor${qs({ measure: measure || undefined })}`,
+    ),
+  /** The verified current standalone primary PDF (not the combined
+   *  included-papers package) — `DocPdfCanvas`'s own `pdfUrl` mode fetches
+   *  and base64-decodes this URL itself (`toBase64Url`). */
+  signatureEditorPdfUrl: (documentId: number, signatureRevision: number) =>
+    `${BASE}/documents/${documentId}/signature-editor/pdf?signature_revision=${signatureRevision}`,
+  /** One signature's original embedded image (no crop/rotation transform),
+   *  as an IDM-safe base64 blob — the drag overlay's `<img>`. */
+  fetchSignatureImageBlob: (
+    documentId: number,
+    signatureId: string,
+    signatureRevision: number,
+  ): Promise<Blob> =>
+    fetchPermitBlob(
+      `/documents/${documentId}/signature-editor/images/${encodeURIComponent(signatureId)}` +
+        `?signature_revision=${signatureRevision}`,
+    ),
+  /** Admin-only legacy candidate thumbnail. */
+  fetchSignatureCandidateImageBlob: (documentId: number, candidateId: string): Promise<Blob> =>
+    fetchPermitBlob(
+      `/documents/${documentId}/signature-editor/candidates/${encodeURIComponent(candidateId)}/image`,
+    ),
+  /** The standalone primary PDF with only *signatureId* hidden — the drag
+   *  preview's `DocPdfCanvas` background, swapped in while that signature is
+   *  selected/dragging. Same base64 `pdfUrl` mode as `signatureEditorPdfUrl`. */
+  signatureEditorBackgroundUrl: (
+    documentId: number,
+    signatureId: string,
+    signatureRevision: number,
+  ) =>
+    `${BASE}/documents/${documentId}/signature-editor/background` +
+    `?signature_id=${encodeURIComponent(signatureId)}&signature_revision=${signatureRevision}`,
+  identifySignature: (documentId: number, body: SignatureIdentifyRequest) =>
+    request<SignatureEditorRead>(
+      'POST',
+      `/documents/${documentId}/signature-identifications`,
+      body,
+    ),
+  moveSignature: (documentId: number, signatureId: string, body: SignaturePositionRequest) =>
+    request<SignatureEditorRead>(
+      'PUT',
+      `/documents/${documentId}/signatures/${encodeURIComponent(signatureId)}/position`,
+      body,
+    ),
+  getSignatureHistory: (documentId: number) =>
+    request<SignatureHistoryRead>('GET', `/documents/${documentId}/signature-history`),
+  /** Retained historical copy download URL — the original signing-path
+   *  DOCX lock still applies server-side. */
+  signatureHistoryDownloadUrl: (documentId: number, revision: number, format: 'docx' | 'pdf') =>
+    `${BASE}/documents/${documentId}/signature-history/${revision}/download?format=${format}`,
 
   // --- monthly time sheet (site JD 908) ---
   /** The printable designation catalog, in the rank order both workbooks

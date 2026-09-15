@@ -50,7 +50,10 @@ from docx.shared import Pt, RGBColor
 
 from app.core._docx_helpers import (
     fill_image_behind_text_in_paragraph,
+    fill_image_inline_in_paragraph,
+    find_bookmark_index,
     float_inline_images_in_cell,
+    prevent_row_split,
     replace_paragraph_text,
 )
 from app.core.constants import (
@@ -300,7 +303,7 @@ def _adapt_general_book(data: dict[str, Any]) -> dict[str, Any]:
     """Date format is `dd-mm-yyyy` for the General Book (not v3's default `dd/mm/yyyy`).
 
     ``recipient_id`` → ``recipient_name`` resolution happens upstream on the
-    request session (``document_service`` / ``render_signed_pdf``, before
+    request session (``document_service`` / ``render_signed_artifact``, before
     ``engine.fill``); this adapter only defaults the token to "" so the template
     renders cleanly. It does NOT open its own DB session.
 
@@ -456,8 +459,40 @@ def _place_manager_sig_above_name(doc: Any, ctx: dict[str, Any]) -> None:
     size_mm = float(ctx.get("_sig_size_mm", DEFAULT_SIG_SIZE_MM))
     boldness = int(ctx.get("_sig_boldness", DEFAULT_SIG_BOLDNESS))
     fill_image_behind_text_in_paragraph(
-        anchor, sig_path, width_inches=size_mm / 25.4, dilate_radius_px=boldness
+        anchor,
+        sig_path,
+        width_inches=size_mm / 25.4,
+        dilate_radius_px=boldness,
+        signature_role="manager",
     )
+
+
+def _keep_manager_signing_block_together(
+    doc: Any,
+    signature_paragraph: Any | None,
+    name_paragraph: Any | None,
+    title_paragraph: Any | None,
+) -> None:
+    """Keep the manager signature image + name + title together as one
+    visual block: if it can't fit on the current page, Word pushes the
+    WHOLE group to the next page rather than splitting the image from its
+    name/title (the defect this exists to fix). ``keep_together``
+    (``w:keepLines``) keeps each paragraph's own lines from splitting;
+    ``keep_with_next`` (``w:keepNext``) chains a paragraph to the one right
+    after it. The title paragraph ENDS the group — it gets no
+    ``keep_with_next``, so the body text or CC list that follows is never
+    pulled along with it. ``doc`` is unused (kept for a uniform call
+    signature with future table-row handling) — silence the unused-arg
+    warning by referencing it.
+    """
+    _ = doc
+    for paragraph in (signature_paragraph, name_paragraph, title_paragraph):
+        if paragraph is not None:
+            paragraph.paragraph_format.keep_together = True
+    if signature_paragraph is not None:
+        signature_paragraph.paragraph_format.keep_with_next = True
+    if name_paragraph is not None:
+        name_paragraph.paragraph_format.keep_with_next = True
 
 
 _TATWEEL_WS = re.compile(r"[\sـ]+")  # whitespace + Arabic tatweel (U+0640)
@@ -471,6 +506,162 @@ _CC_LABEL_NORM = "نسخةإلى"  # "نسخة إلى" normalized — CC lines c
 _SIG_LABEL_NORM = "التوقيع"  # "التوقيع" normalized — Report paper signature label
 
 
+class SignatureAnchorAmbiguousError(RuntimeError):
+    """More than one candidate manager closing block was found in a
+    General Book/Security Permit source lacking the ``GSSG_ManagerSignature``
+    bookmark. Raised instead of silently signing whichever a reverse text
+    scan hit first."""
+
+
+def _find_manager_closing_block(
+    pool: list[Any], wanted: list[str], title_norm: str | None
+) -> list[int]:
+    """Every index in *pool* whose normalized text exactly matches one of
+    *wanted* AND whose immediately following paragraph's normalized text
+    matches *title_norm* (when given) or is simply non-blank — a validated
+    "name directly followed by its title" closing block, not just any line
+    that happens to quote the manager's name. Exhaustive (every candidate,
+    not stop-at-first) so real ambiguity is detected rather than resolved
+    by scan order.
+    """
+    hits: list[int] = []
+    for i, p in enumerate(pool):
+        text = _norm_name(p.text)
+        if not text or text.startswith(_CC_LABEL_NORM):
+            continue
+        if not any(w == text for w in wanted):
+            continue
+        if i + 1 >= len(pool):
+            continue
+        next_text = _norm_name(pool[i + 1].text)
+        if not next_text:
+            continue
+        if title_norm is not None and next_text != title_norm:
+            continue
+        hits.append(i)
+    return hits
+
+
+def _find_name_anchor(pool: list[Any], wanted: list[str], *, exact: bool) -> int | None:
+    """Reverse scan for a single paragraph whose normalized text matches one
+    of *wanted* (exact equality, or substring containment when
+    ``exact=False``). Stops at the first hit from the end — the original,
+    less rigorous single-candidate search, kept as a fallback for a closing
+    that has no separate title line to validate against (so
+    ``_find_manager_closing_block`` finds nothing) — a plain "name, no
+    title" sign-off must still succeed, exactly as it always has.
+    """
+    for i in range(len(pool) - 1, -1, -1):
+        text = _norm_name(pool[i].text)
+        if not text or text.startswith(_CC_LABEL_NORM):
+            continue
+        if exact:
+            if any(w == text for w in wanted):
+                return i
+        elif any(w in text for w in wanted):
+            return i
+    return None
+
+
+def _stamp_manager_signing_block(
+    doc: Any,
+    paras: list[Any],
+    table_paras: list[Any],
+    sig_path: str,
+    names: Sequence[str],
+    *,
+    size_mm: float,
+    boldness: int,
+    manager_title: str | None,
+) -> bool:
+    """``keep_manager_block_together`` mode of ``stamp_signature_above_name``.
+
+    1. Bookmark first: resolve ``GSSG_ManagerSignature`` (left by
+       ``docx_render.render`` around the template's manager-signature slot)
+       and insert the image INLINE there — not floated — so Word counts its
+       height when keeping the signature/name/title group together.
+    2. A validated name-then-title closing block (exhaustive across body AND
+       table paragraphs): exactly one candidate is used; more than one
+       raises ``SignatureAnchorAmbiguousError`` rather than guessing.
+    3. A name-only match (no title line follows it — a plain sign-off);
+       keeps its historical single-candidate reverse-scan semantics, so a
+       source that always signed successfully before this feature still
+       does. The keep-together group is just signature + name (no title).
+    4. Last non-empty paragraph (body, then table) — the ultimate fallback
+       every prior version of this function had; a "signed" paper with no
+       visible signature is the exact defect class this exists to prevent.
+    """
+    width_inches = size_mm / 25.4
+
+    def _stamp_at(
+        anchor: Any, name_paragraph: Any | None, title_paragraph: Any | None, *, in_table: bool
+    ) -> bool:
+        placed = fill_image_inline_in_paragraph(
+            anchor,
+            sig_path,
+            width_inches=width_inches,
+            dilate_radius_px=boldness,
+            signature_role="manager",
+        )
+        if placed:
+            _keep_manager_signing_block_together(doc, anchor, name_paragraph, title_paragraph)
+            if in_table:
+                prevent_row_split(anchor)
+        return placed
+
+    bookmark_idx = find_bookmark_index(paras, "GSSG_ManagerSignature")
+    container: list[Any] = paras
+    if bookmark_idx is None:
+        bookmark_idx = find_bookmark_index(table_paras, "GSSG_ManagerSignature")
+        container = table_paras
+    if bookmark_idx is not None:
+        name_p = container[bookmark_idx + 1] if bookmark_idx + 1 < len(container) else None
+        title_p = container[bookmark_idx + 2] if bookmark_idx + 2 < len(container) else None
+        return _stamp_at(
+            container[bookmark_idx], name_p, title_p, in_table=container is table_paras
+        )
+
+    wanted = [_norm_name(n) for n in names if n and _norm_name(n)]
+    title_norm = _norm_name(manager_title) if manager_title else None
+    body_hits = _find_manager_closing_block(paras, wanted, title_norm)
+    table_hits = _find_manager_closing_block(table_paras, wanted, title_norm)
+    if len(body_hits) + len(table_hits) > 1:
+        raise SignatureAnchorAmbiguousError(
+            f"{len(body_hits) + len(table_hits)} candidate manager closing "
+            "blocks found; refusing to guess"
+        )
+    if body_hits:
+        name_idx = body_hits[0]
+        anchor = paras[name_idx - 1] if name_idx > 0 else paras[name_idx]
+        return _stamp_at(anchor, paras[name_idx], paras[name_idx + 1], in_table=False)
+    if table_hits:
+        name_idx = table_hits[0]
+        return _stamp_at(table_paras[name_idx], None, None, in_table=True)
+
+    # No validated name+title block — fall back to the original, looser
+    # single-candidate search so a plain "name, no title" sign-off (or any
+    # source that already relied on this) still signs successfully.
+    idx = _find_name_anchor(paras, wanted, exact=True)
+    if idx is None:
+        idx = _find_name_anchor(paras, wanted, exact=False)
+    if idx is not None:
+        anchor = paras[idx - 1] if idx > 0 else paras[idx]
+        return _stamp_at(anchor, paras[idx], None, in_table=False)
+
+    t_idx = _find_name_anchor(table_paras, wanted, exact=True)
+    if t_idx is None:
+        t_idx = _find_name_anchor(table_paras, wanted, exact=False)
+    if t_idx is not None:
+        return _stamp_at(table_paras[t_idx], None, None, in_table=True)
+
+    last = next((p for p in reversed(paras) if p.text.strip()), None) or next(
+        (p for p in reversed(table_paras) if p.text.strip()), None
+    )
+    if last is None:
+        return False
+    return _stamp_at(last, None, None, in_table=last in table_paras)
+
+
 def stamp_signature_above_name(
     docx_path: Path | str,
     sig_path: str,
@@ -479,6 +670,8 @@ def stamp_signature_above_name(
     size_mm: float = DEFAULT_SIG_SIZE_MM,
     boldness: int = DEFAULT_SIG_BOLDNESS,
     date_below: str | None = None,
+    keep_manager_block_together: bool = False,
+    manager_title: str | None = None,
 ) -> bool:
     """Float *sig_path* above the closing-name line of an ALREADY-RENDERED docx.
 
@@ -508,6 +701,13 @@ def stamp_signature_above_name(
     paragraph is blank, write the date string below the signature image as an
     RTL run (Sakkal Majalla 12pt).  Never overwrites existing text.
 
+    ``keep_manager_block_together`` (General Book / Security Permit signing)
+    replaces the whole search above with ``_stamp_manager_signing_block``:
+    bookmark-first, inline (not floated) insertion, and a validated
+    name-then-title closing-block fallback that raises
+    ``SignatureAnchorAmbiguousError`` on real ambiguity instead of guessing.
+    Report never sets this flag, so its "التوقيع" label path is untouched.
+
     Returns False when the signature file is unusable or no anchor exists —
     callers must treat that as a FAILURE, not a soft skip (a "signed" paper
     without a visible signature is the defect this function exists to prevent).
@@ -519,6 +719,22 @@ def stamp_signature_above_name(
     table_paras = [
         p for tbl in doc.tables for row in tbl.rows for c in row.cells for p in c.paragraphs
     ]
+
+    if keep_manager_block_together:
+        placed = _stamp_manager_signing_block(
+            doc,
+            paras,
+            table_paras,
+            sig_path,
+            names,
+            size_mm=size_mm,
+            boldness=boldness,
+            manager_title=manager_title,
+        )
+        if placed:
+            doc.save(str(docx_path))
+        return placed
+
     wanted = [_norm_name(n) for n in names if n and _norm_name(n)]
 
     def _find(pool: list[Any], *, exact: bool) -> int | None:
@@ -576,6 +792,7 @@ def stamp_signature_above_name(
         width_inches=size_mm / 25.4,
         dilate_radius_px=boldness,
         center_horizontal=label_anchor,
+        signature_role="manager",
     )
     if placed and date_below and not anchor.text.strip():
         from docx.oxml import OxmlElement
@@ -758,8 +975,14 @@ def _pp_general_book(doc: Any, ctx: dict[str, Any]) -> None:
     Calibri/12pt is the HugeRTE editor's default body font, so plain text
     renders at that; inner spans/headings override per their inline styling.
 
-    Signature images are not auto-embedded — operators hand-sign or paste
-    images manually.
+    Signature images are not auto-embedded at generation time — operators
+    hand-sign or paste images manually, or an approver's signature is
+    injected at SIGNING time (``render_signed_artifact``'s re-render, which sets
+    ``data["sig1_path"]``). When it is, ``_apply_manager_signing_block_keep_together``
+    keeps that image + the manager name/title as one page-break-safe group —
+    a no-op when the ``GSSG_ManagerSignature`` bookmark isn't present (Report
+    shares this hook but is never registered with the bookmark, so this is
+    inert for it).
     """
     from app.core.arabic_rtl import html_to_docx
 
@@ -770,16 +993,34 @@ def _pp_general_book(doc: Any, ctx: dict[str, Any]) -> None:
     anchor = _find_general_book_body_anchor(doc)
     if anchor is None:
         log.warning("General Book: no body anchor paragraph found — body not rendered")
-        return
+    else:
+        body_html = ctx.get("body_html", "") or ""
+        if not body_html.strip():
+            # No body content — just clear the sentinel so it never shows.
+            for run in list(anchor.runs):
+                run.text = ""
+        else:
+            html_to_docx(body_html, anchor, default_family=_CALIBRI, default_size=12.0)
 
-    body_html = ctx.get("body_html", "") or ""
-    if not body_html.strip():
-        # No body content — just clear the sentinel so it never shows.
-        for run in list(anchor.runs):
-            run.text = ""
-        return
+    _apply_manager_signing_block_keep_together(doc)
 
-    html_to_docx(body_html, anchor, default_family=_CALIBRI, default_size=12.0)
+
+def _apply_manager_signing_block_keep_together(doc: Any) -> None:
+    """Rich General Book/Security Permit: keep the manager signature image,
+    name, and title together as one visual block, using the
+    ``GSSG_ManagerSignature`` bookmark ``docx_render.render`` marks around
+    the template's ``{{ manager_sig }}`` paragraph before Jinja rendering.
+    No-op when the bookmark is absent — an unregistered form (Report), or a
+    render that never went through the bookmark-preparing path.
+    """
+    paras = list(doc.paragraphs)
+    idx = find_bookmark_index(paras, "GSSG_ManagerSignature")
+    if idx is None:
+        return
+    signature_paragraph = paras[idx]
+    name_paragraph = paras[idx + 1] if idx + 1 < len(paras) else None
+    title_paragraph = paras[idx + 2] if idx + 2 < len(paras) else None
+    _keep_manager_signing_block_together(doc, signature_paragraph, name_paragraph, title_paragraph)
 
 
 def _format_general_book_ref_line(doc: Any) -> None:
@@ -895,11 +1136,19 @@ _FORM_REGISTRY: dict[str, dict[str, Any]] = {
     "Leave Application Form": {"adapter": _adapt_common, "post_process": None},
     "Passport Release Form": {"adapter": _adapt_common, "post_process": None},
     "Duty Resumption Form": {"adapter": _adapt_common, "post_process": None},
-    "General Book": {"adapter": _adapt_general_book, "post_process": _pp_general_book},
+    "General Book": {
+        "adapter": _adapt_general_book,
+        "post_process": _pp_general_book,
+        "manager_signature_bookmark": True,
+    },
     # Security Permit: the 1/5 permit letter. Same General Book adapter and
     # post-process (body + footer pipeline); only the .docx underneath differs,
     # so the permit paper can be edited without touching every other letter.
-    "Security Permit": {"adapter": _adapt_general_book, "post_process": _pp_general_book},
+    "Security Permit": {
+        "adapter": _adapt_general_book,
+        "post_process": _pp_general_book,
+        "manager_signature_bookmark": True,
+    },
     "Leave Permit Form": {"adapter": _adapt_common, "post_process": _pp_leave_permit},
     "Administrative Leave Form": {
         "adapter": _adapt_admin_leave,
@@ -963,7 +1212,13 @@ class DocxEngine:
         adapter: Callable[[dict[str, Any]], dict[str, Any]] = spec["adapter"]
         post_process = spec.get("post_process")
         prepared = adapter(dict(data))
-        return render(template, prepared, Path(output_path), post_process=post_process)
+        return render(
+            template,
+            prepared,
+            Path(output_path),
+            post_process=post_process,
+            ensure_manager_signature_bookmark=bool(spec.get("manager_signature_bookmark", False)),
+        )
 
     def fill_general_book_path(
         self,

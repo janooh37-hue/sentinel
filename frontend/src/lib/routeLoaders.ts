@@ -87,3 +87,7 @@ export const loadSendToGroupPage = () =>
   import('@/pages/announcements/SendToGroupPage').then((m) => ({ default: m.SendToGroupPage }))
 export const loadScanBackPage = () =>
   import('@/pages/scanBack/ScanBackPage').then((m) => ({ default: m.ScanBackPage }))
+export const loadSignaturePlacementPage = () =>
+  import('@/pages/documents/SignaturePlacementPage').then((m) => ({
+    default: m.SignaturePlacementPage,
+  }))

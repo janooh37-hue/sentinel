@@ -334,6 +334,15 @@ class BookVersion(Base):
     )
     signed_by_user_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     signed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    # Active tracked signature-placement artifact revision (0 = none tracked
+    # yet — an older row, or a version that never got a manager/approver
+    # drawing marked). Only actual manager/approver drawings activate this;
+    # see SignatureArtifactRevision. Bumped by signature_placement_service on
+    # correction; unfile/physical-copy replacement resets it to 0 without
+    # deleting prior SignatureArtifactRevision history rows.
+    signature_revision: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default="0"
+    )
 
     book: Mapped[Book] = relationship(back_populates="versions")
     approval_steps: Mapped[list[BookApprovalStep]] = relationship(
@@ -382,6 +391,66 @@ class BookAnnotation(Base):
     version: Mapped[BookVersion] = relationship(back_populates="annotations")
 
     __table_args__ = (Index("ix_book_annotations_version", "version_id"),)
+
+
+class SignatureArtifactRevision(Base):
+    """Append-only history of a BookVersion's retained signed DOCX/PDF pair
+    and every placement correction applied to it (approval-signature-
+    placement plan §5).
+
+    Revisions never overwrite: ``initial`` captures the first successful
+    approval signing or manager-embedded generation that actually contains a
+    manager/approver drawing; ``identify`` and ``move`` append a row per
+    administrator legacy-image confirmation / per position change. The
+    current active revision is ``BookVersion.signature_revision`` (0 = none
+    tracked). A later signing cycle after unfile/replace starts its own
+    fresh history rather than reusing a revision number.
+    """
+
+    __tablename__ = "signature_artifact_revisions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    version_id: Mapped[int] = mapped_column(
+        ForeignKey("book_versions.id", ondelete="CASCADE"), nullable=False
+    )
+    revision: Mapped[int] = mapped_column(Integer, nullable=False)
+    # auto_manager | approval — which pipeline produced this artifact.
+    source_kind: Mapped[str] = mapped_column(String(16), nullable=False)
+    # Original recorded signing account — never inferred from the document
+    # creator or current manager-user mapping. NULL for an automatically
+    # embedded manager signature with no recorded signer (admin-only to
+    # correct; see signature_placement_service authorization).
+    signer_user_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Immutable retained artifact paths (relative to data_dir). PDF is only
+    # ever null for an existing generation-time DOCX-only fallback.
+    docx_path: Mapped[str] = mapped_column(Text, nullable=False)
+    primary_pdf_path: Mapped[str | None] = mapped_column(Text, nullable=True)
+    published_pdf_path: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Exact full published copy immediately before THIS row's correction,
+    # including its then-current included papers. NULL on the initial row.
+    previous_published_pdf_path: Mapped[str | None] = mapped_column(Text, nullable=True)
+    docx_sha256: Mapped[str] = mapped_column(String(64), nullable=False)
+    # [{signature_id, role, image_sha256, width_emu, height_emu, page, x, y,
+    #   default_page, default_x, default_y}, ...] — populated once measured.
+    manifest: Mapped[list[dict[str, object]]] = mapped_column(
+        JSON, nullable=False, default=list, server_default="[]"
+    )
+    # initial | identify | move
+    action: Mapped[str] = mapped_column(String(16), nullable=False)
+    signature_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    before_geometry: Mapped[dict[str, object] | None] = mapped_column(JSON, nullable=True)
+    after_geometry: Mapped[dict[str, object] | None] = mapped_column(JSON, nullable=True)
+    actor_user_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_utcnow)
+
+    version: Mapped[BookVersion] = relationship()
+
+    __table_args__ = (
+        UniqueConstraint(
+            "version_id", "revision", name="uq_signature_artifact_revisions_version_revision"
+        ),
+        Index("ix_signature_artifact_revisions_version", "version_id"),
+    )
 
 
 class Leave(Base):

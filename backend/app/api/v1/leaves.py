@@ -173,6 +173,7 @@ def file_leave_return(
         resumption_date=payload.resumption_date,
         delay_reason=payload.delay_reason,
         manager_id=payload.manager_id,
+        embed_manager_signature=payload.embed_manager_signature,
         actor=user.email,
         current_user=user,
     )

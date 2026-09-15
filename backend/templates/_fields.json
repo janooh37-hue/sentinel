@@ -227,6 +227,14 @@
         "required": false
       },
       {
+        "key": "hand_sign_manager",
+        "type": "hand_sign_checkbox",
+        "label_en": "Include manager signature",
+        "label_ar": "تضمين توقيع المدير",
+        "required": false,
+        "default": "true"
+      },
+      {
         "key": "submitter_id",
         "type": "submitter_picker",
         "label_en": "Submitter",

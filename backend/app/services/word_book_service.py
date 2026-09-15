@@ -481,18 +481,17 @@ def finish_word_session(
         if session.sign_on_finish and session.signer_employee_id:
             _n, _t, sig = report_service._resolve_signer(db, session.signer_employee_id)
             if sig is not None:
-                db.flush()  # version needs a document_id for render_signed_pdf
-                # fields MUST stay {} here → routes render_signed_pdf to _sign_authored_docx,
-                # not the template re-render path (which would blank the Word-authored body).
+                db.flush()  # version needs a document_id for render_signed_artifact
+                # fields MUST stay {} here → routes render_signed_artifact to
+                # _sign_authored_docx, not the template re-render path (which
+                # would blank the Word-authored body).
                 emp = db.get(Employee, session.signer_employee_id)
                 assert emp is not None  # _resolve_signer already raised if missing
                 names = [n for n in (emp.name_ar, emp.name_en) if n]
-                signed_rel = document_service.render_signed_pdf(
+                signed_artifact = document_service.render_signed_artifact(
                     db, version=version, signer_signature_path=sig, signer_names=names
                 )
-                signed_primary = Path(signed_rel)
-                if not signed_primary.is_absolute():
-                    signed_primary = get_settings().data_dir / signed_primary
+                signed_primary = signed_artifact.conversion.pdf_path or signed_artifact.docx_path
                 if signed_primary.suffix.lower() != ".pdf" and book.merged_attachment_paths:
                     with contextlib.suppress(OSError):
                         signed_primary.unlink()
@@ -506,6 +505,12 @@ def finish_word_session(
                             physical_scan=False,
                             data_dir=get_settings().data_dir,
                         )
+                    else:
+                        settings = get_settings()
+                        try:
+                            signed_rel = signed_primary.relative_to(settings.data_dir).as_posix()
+                        except ValueError:
+                            signed_rel = str(signed_primary)
                     version.signed_pdf_path = signed_rel
                     version.signed_by_user_id = user.id
                     version.signed_at = now

@@ -1795,6 +1795,173 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/documents/{document_id}/signature-editor": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Signature Editor */
+        get: operations["get_signature_editor_api_v1_documents__document_id__signature_editor_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/documents/{document_id}/signature-editor/pdf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Signature Editor Pdf
+         * @description The verified current standalone primary PDF — NOT the combined
+         *     included-papers package. Editor/identification authority required.
+         */
+        get: operations["get_signature_editor_pdf_api_v1_documents__document_id__signature_editor_pdf_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/documents/{document_id}/signature-editor/images/{signature_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Signature Editor Image */
+        get: operations["get_signature_editor_image_api_v1_documents__document_id__signature_editor_images__signature_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/documents/{document_id}/signature-editor/candidates/{candidate_id}/image": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Signature Editor Candidate Image */
+        get: operations["get_signature_editor_candidate_image_api_v1_documents__document_id__signature_editor_candidates__candidate_id__image_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/documents/{document_id}/signature-editor/background": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Signature Editor Background
+         * @description The standalone primary PDF with ONLY *signature_id* hidden — the drag
+         *     preview's background while the client overlays the extracted original
+         *     image on top.
+         */
+        get: operations["get_signature_editor_background_api_v1_documents__document_id__signature_editor_background_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/documents/{document_id}/signature-identifications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Post Signature Identification */
+        post: operations["post_signature_identification_api_v1_documents__document_id__signature_identifications_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/documents/{document_id}/signatures/{signature_id}/position": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Put Signature Position */
+        put: operations["put_signature_position_api_v1_documents__document_id__signatures__signature_id__position_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/documents/{document_id}/signature-history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Signature History */
+        get: operations["get_signature_history_api_v1_documents__document_id__signature_history_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/documents/{document_id}/signature-history/{revision}/download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Signature History Download
+         * @description Serve a retained historical copy. The original signing-path DOCX lock
+         *     still applies here — a DOCX from an ``approval`` source_kind is never
+         *     served to a non-admin, matching the live download endpoint's rule.
+         */
+        get: operations["get_signature_history_download_api_v1_documents__document_id__signature_history__revision__download_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/jobs/{job_id}": {
         parameters: {
             query?: never;
@@ -9916,6 +10083,11 @@ export interface components {
             delay_reason?: string | null;
             /** Manager Id */
             manager_id?: number | null;
+            /**
+             * Embed Manager Signature
+             * @default true
+             */
+            embed_manager_signature: boolean;
         };
         /**
          * LeaveUpdate
@@ -10171,6 +10343,17 @@ export interface components {
             limit: number;
             /** Offset */
             offset: number;
+        };
+        /** LegacyCandidateRead */
+        LegacyCandidateRead: {
+            /** Candidate Id */
+            candidate_id: string;
+            /** Width Emu */
+            width_emu: number;
+            /** Height Emu */
+            height_emu: number;
+            /** Thumbnail Url */
+            thumbnail_url: string;
         };
         /** LetterResult */
         LetterResult: {
@@ -11886,6 +12069,112 @@ export interface components {
             /** Reason */
             reason: string;
         };
+        /** SignatureEditorRead */
+        SignatureEditorRead: {
+            /** Document Id */
+            document_id: number;
+            /** Version Id */
+            version_id: number;
+            /** Signature Revision */
+            signature_revision: number;
+            /** Package Revision */
+            package_revision: number;
+            /** Source Sha256 */
+            source_sha256: string | null;
+            /** Can Adjust */
+            can_adjust: boolean;
+            /** Can Identify */
+            can_identify: boolean;
+            /** Unavailable Code */
+            unavailable_code: string | null;
+            /** Measured */
+            measured: boolean;
+            /** Pdf Url */
+            pdf_url: string | null;
+            /** Pages */
+            pages: components["schemas"]["SignaturePageRead"][];
+            /** Signatures */
+            signatures: components["schemas"]["SignatureRead"][];
+            /** Candidates */
+            candidates: components["schemas"]["LegacyCandidateRead"][] | null;
+        };
+        /** SignatureHistoryItemRead */
+        SignatureHistoryItemRead: {
+            /** Revision */
+            revision: number;
+            /**
+             * Action
+             * @enum {string}
+             */
+            action: "initial" | "identify" | "move";
+            /** Signature Id */
+            signature_id: string | null;
+            /** Before Geometry */
+            before_geometry: {
+                [key: string]: number;
+            } | null;
+            /** After Geometry */
+            after_geometry: {
+                [key: string]: number;
+            } | null;
+            /** Actor User Id */
+            actor_user_id: number | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Pdf Download Url */
+            pdf_download_url: string | null;
+            /** Docx Download Url */
+            docx_download_url: string | null;
+        };
+        /** SignatureHistoryRead */
+        SignatureHistoryRead: {
+            /** Items */
+            items: components["schemas"]["SignatureHistoryItemRead"][];
+        };
+        /**
+         * SignatureIdentifyRequest
+         * @description ``POST /documents/{document_id}/signature-identifications``.
+         */
+        SignatureIdentifyRequest: {
+            /** Signature Revision */
+            signature_revision: number;
+            /** Package Revision */
+            package_revision: number;
+            /** Source Sha256 */
+            source_sha256: string;
+            /** Candidate Id */
+            candidate_id: string;
+        };
+        /** SignaturePageRead */
+        SignaturePageRead: {
+            /** Page */
+            page: number;
+            /** Width Pt */
+            width_pt: number;
+            /** Height Pt */
+            height_pt: number;
+        };
+        /**
+         * SignaturePositionRequest
+         * @description ``PUT /documents/{document_id}/signatures/{signature_id}/position``.
+         */
+        SignaturePositionRequest: {
+            /** Signature Revision */
+            signature_revision: number;
+            /** Package Revision */
+            package_revision: number;
+            /** Source Sha256 */
+            source_sha256: string;
+            /** Page */
+            page: number;
+            /** X */
+            x: number;
+            /** Y */
+            y: number;
+        };
         /** SignaturePreviewRequest */
         SignaturePreviewRequest: {
             /** Size Mm */
@@ -11901,6 +12190,34 @@ export interface components {
             size_mm: number;
             /** Boldness */
             boldness: number;
+        };
+        /** SignatureRead */
+        SignatureRead: {
+            /** Id */
+            id: string;
+            /**
+             * Role
+             * @enum {string}
+             */
+            role: "manager" | "employee" | "submitter";
+            /** Page */
+            page: number | null;
+            /** X */
+            x: number | null;
+            /** Y */
+            y: number | null;
+            /** Width Pt */
+            width_pt: number | null;
+            /** Height Pt */
+            height_pt: number | null;
+            /** Default Page */
+            default_page?: number | null;
+            /** Default X */
+            default_x?: number | null;
+            /** Default Y */
+            default_y?: number | null;
+            /** Image Url */
+            image_url: string;
         };
         /**
          * SmartFolderCreate
@@ -18121,6 +18438,329 @@ export interface operations {
             header?: never;
             path: {
                 document_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_signature_editor_api_v1_documents__document_id__signature_editor_get: {
+        parameters: {
+            query?: {
+                measure?: boolean;
+            };
+            header?: never;
+            path: {
+                document_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignatureEditorRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_signature_editor_pdf_api_v1_documents__document_id__signature_editor_pdf_get: {
+        parameters: {
+            query: {
+                signature_revision: number;
+                encoding?: string | null;
+            };
+            header?: never;
+            path: {
+                document_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_signature_editor_image_api_v1_documents__document_id__signature_editor_images__signature_id__get: {
+        parameters: {
+            query: {
+                signature_revision: number;
+            };
+            header?: never;
+            path: {
+                document_id: number;
+                signature_id: string;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_signature_editor_candidate_image_api_v1_documents__document_id__signature_editor_candidates__candidate_id__image_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                document_id: number;
+                candidate_id: string;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_signature_editor_background_api_v1_documents__document_id__signature_editor_background_get: {
+        parameters: {
+            query: {
+                signature_id: string;
+                signature_revision: number;
+                encoding?: string | null;
+            };
+            header?: never;
+            path: {
+                document_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    post_signature_identification_api_v1_documents__document_id__signature_identifications_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                document_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SignatureIdentifyRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignatureEditorRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    put_signature_position_api_v1_documents__document_id__signatures__signature_id__position_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                document_id: number;
+                signature_id: string;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SignaturePositionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignatureEditorRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_signature_history_api_v1_documents__document_id__signature_history_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                document_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignatureHistoryRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_signature_history_download_api_v1_documents__document_id__signature_history__revision__download_get: {
+        parameters: {
+            query?: {
+                format?: "docx" | "pdf";
+                encoding?: string | null;
+            };
+            header?: never;
+            path: {
+                document_id: number;
+                revision: number;
             };
             cookie?: {
                 gssg_session?: string | null;

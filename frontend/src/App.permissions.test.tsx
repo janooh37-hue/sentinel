@@ -83,6 +83,8 @@ vi.mock('@/lib/routeLoaders', () => ({
   loadVehicleMaintenancePage: () => Promise.resolve({ default: () => <div>vehicle-maintenance-page</div> }),
   loadVehiclesHubPage: () => Promise.resolve({ default: () => <div>vehicles-hub-page</div> }),
   loadScanBackPage: () => Promise.resolve({ default: () => <div>scanback-page</div> }),
+  loadSignaturePlacementPage: () =>
+    Promise.resolve({ default: () => <div>signature-placement-page</div> }),
   loadScanInboxPage: () => Promise.resolve({ default: () => <div>scan-inbox-page</div> }),
   loadSendToGroupPage: () => Promise.resolve({ default: () => <div>send-page</div> }),
   loadSettingsPage: () => Promise.resolve({ default: () => <div>settings-page</div> }),
@@ -221,6 +223,14 @@ describe('App route capability gates', () => {
     render(<App />)
 
     expect(await screen.findByText('book-record-page')).toBeVisible()
+    expect(screen.queryByText("You don't have access to this page")).not.toBeInTheDocument()
+  })
+
+  it('renders the signature-placement route for an authenticated user without book capabilities', async () => {
+    window.history.pushState({}, '', '/documents/9/signature-placement')
+    render(<App />)
+
+    expect(await screen.findByText('signature-placement-page')).toBeVisible()
     expect(screen.queryByText("You don't have access to this page")).not.toBeInTheDocument()
   })
 

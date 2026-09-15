@@ -499,13 +499,21 @@ def file_return(
     resumption_date: date,
     delay_reason: str | None = None,
     manager_id: int | None = None,
+    embed_manager_signature: bool = True,
     actor: str | None = None,
     current_user: User | None = None,
 ) -> Leave:
     """File the Duty Resumption (return) form for a returnable leave.
 
     Generates the Duty Resumption document, embedding the employee's saved
-    vault signature when present. Attaches it to THIS leave (no standalone
+    vault signature when present, and the manager's saved signature when
+    ``embed_manager_signature`` is true (default) AND the resolved manager
+    has one on file — ``document_service.generate_document`` raises
+    ``MANAGER_SIGNATURE_REQUIRED`` before allocating a reference or
+    committing anything when a REQUESTED manager signature is unavailable,
+    so filing never silently lands as an unsigned "signed" copy. Turning
+    the checkbox off only skips that embed; it never blanks the printed
+    manager name/title. Attaches the result to THIS leave (no standalone
     register row), records the return date, and sets status -> Completed.
     NS requires a certificate already on file.
     """
@@ -544,7 +552,7 @@ def file_return(
         template_id="Duty Resumption Form",
         fields=fields,
         manager_id=manager_id,
-        embed_signature={"employee": True},
+        embed_signature={"employee": True, "manager": embed_manager_signature},
         current_user=current_user,
         return_for_leave_id=leave_id,
     )
@@ -672,6 +680,7 @@ def _utcnow() -> datetime:
     from datetime import UTC
 
     return datetime.now(UTC).replace(tzinfo=None)
+
 
 def _workforce_leave_snapshot(row: Leave) -> Leave:
     """Capture the fields that determine an attendance leave decision pre-mutation."""

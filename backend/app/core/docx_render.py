@@ -66,6 +66,55 @@ log = logging.getLogger(__name__)
 DEFAULT_SIG_WIDTH_MM = DEFAULT_SIG_SIZE_MM
 
 
+class SignatureInlineImage(InlineImage):  # type: ignore[misc]
+    """``InlineImage`` that tags its inserted drawing with a stable
+    per-occurrence identity marker (``wp:docPr`` ``@name``/``@descr`` — see
+    ``app.core.signature_layout``).
+
+    docxtpl renumbers drawing ids and deduplicates identical media on every
+    render, so neither survives as an identity for "this particular
+    signature occurrence" (a form with a repeated manager image, e.g.
+    Employee Clearance, gets ONE media part shared by several drawings).
+    Assigning a fresh UUID here, at insertion time, is unaffected by either.
+
+    Overrides only ``_insert_image`` — the run-boundary wrapper text emitted
+    by ``InlineImage.__str__``/``__html__`` is untouched, so this is a
+    drop-in replacement wherever an ``InlineImage`` was used.
+    """
+
+    def __init__(
+        self,
+        tpl: DocxTemplate,
+        image_descriptor: Any,
+        *,
+        role: str,
+        width: Any = None,
+        height: Any = None,
+        anchor: str | None = None,
+    ) -> None:
+        super().__init__(tpl, image_descriptor, width=width, height=height, anchor=anchor)
+        self._signature_role = role
+
+    def _insert_image(self) -> str:
+        from docx.oxml import parse_xml
+
+        from app.core.signature_layout import marker_descr, marker_name, new_signature_id
+
+        inline = self.tpl.current_rendering_part.new_pic_inline(
+            self.image_descriptor, self.width, self.height
+        )
+        signature_id = new_signature_id()
+        inline.docPr.name = marker_name(signature_id)
+        inline.docPr.set("descr", marker_descr(self._signature_role, signature_id))  # type: ignore[arg-type]
+        pic = inline.xml
+        if self.anchor:
+            run = parse_xml(pic)
+            if run.xpath(".//a:blip"):
+                hyperlink = self._add_hyperlink(run, self.anchor, self.tpl.current_rendering_part)
+                pic = hyperlink.xml
+        return f'</w:t></w:r><w:r><w:drawing>{pic}</w:drawing></w:r><w:r><w:t xml:space="preserve">'
+
+
 class _SilentUndefined(Undefined):
     """Render missing tokens as empty string instead of raising — v3 was
     lenient (missing keys → ``""``) and we preserve that behaviour."""
@@ -143,6 +192,8 @@ def _resolve_sig(
     path: str | Path | None,
     width_mm: int = DEFAULT_SIG_WIDTH_MM,
     dilate_radius_px: int = DEFAULT_SIG_BOLDNESS,
+    *,
+    role: str | None = None,
 ) -> InlineImage | str:
     if not path:
         return ""
@@ -159,19 +210,17 @@ def _resolve_sig(
         except (ValueError, base64.binascii.Error) as e:  # type: ignore[attr-defined]
             log.warning("_resolve_sig: base64 decode failed: %s", e)
             return ""
-        return InlineImage(
-            tpl,
-            BytesIO(prepare_signature(raw, dilate_radius_px=dilate_radius_px)),
-            width=Mm(width_mm),
-        )
+        prepared = BytesIO(prepare_signature(raw, dilate_radius_px=dilate_radius_px))
+        if role is not None:
+            return SignatureInlineImage(tpl, prepared, role=role, width=Mm(width_mm))
+        return InlineImage(tpl, prepared, width=Mm(width_mm))
     p = Path(path)
     if not p.exists():
         return ""
-    return InlineImage(
-        tpl,
-        BytesIO(prepare_signature(p.read_bytes(), dilate_radius_px=dilate_radius_px)),
-        width=Mm(width_mm),
-    )
+    prepared = BytesIO(prepare_signature(p.read_bytes(), dilate_radius_px=dilate_radius_px))
+    if role is not None:
+        return SignatureInlineImage(tpl, prepared, role=role, width=Mm(width_mm))
+    return InlineImage(tpl, prepared, width=Mm(width_mm))
 
 
 def _arabic_weekday(today_str: str) -> str:
@@ -197,6 +246,41 @@ def _apply_context_defaults(context: dict[str, Any]) -> None:
     context.setdefault("now_time", _arabic_clock(datetime.now()))
 
 
+def _prepare_manager_signature_bookmark(template_path: Path) -> Path | BytesIO:
+    """Return a source to render *template_path* from that carries the
+    ``GSSG_ManagerSignature`` bookmark around its ``{{ manager_sig }}``
+    paragraph — added BEFORE Jinja substitution removes the empty token, so
+    the paragraph is still identifiable afterward regardless of whether the
+    token resolved to an image or stayed blank (approval-signature-placement
+    plan §3; General Book / Security Permit only).
+
+    Returns *template_path* unchanged when the bookmark is already present
+    (idempotent) or the token paragraph can't be found (caller falls back to
+    text-anchor detection at signing time —
+    ``docx_engine._stamp_manager_signing_block``). Otherwise returns an
+    in-memory ``BytesIO`` (``DocxTemplate`` accepts either a path or a
+    stream) — never writes to the tracked template file, and a stream needs
+    no temp-file cleanup since ``docxtpl`` only reads it lazily inside
+    ``.render()``, well after this function returns.
+    """
+    from docx import Document as _Document
+
+    from app.core._docx_helpers import find_bookmark_index, wrap_paragraph_in_bookmark
+
+    doc = _Document(str(template_path))
+    paras = list(doc.paragraphs)
+    if find_bookmark_index(paras, "GSSG_ManagerSignature") is not None:
+        return template_path
+    target = next((p for p in paras if p.text.strip() == "{{ manager_sig }}"), None)
+    if target is None:
+        return template_path
+    wrap_paragraph_in_bookmark(target, "GSSG_ManagerSignature")
+    buf = BytesIO()
+    doc.save(buf)
+    buf.seek(0)
+    return buf
+
+
 def render(
     template_path: Path | str,
     data: Mapping[str, Any],
@@ -205,6 +289,7 @@ def render(
     post_process: Callable[[Any, dict[str, Any]], None] | None = None,
     strict: bool = False,
     sandboxed: bool = False,
+    ensure_manager_signature_bookmark: bool = False,
 ) -> Path:
     """Render `template_path` with `data` and save to `output_path`.
 
@@ -215,6 +300,12 @@ def render(
         post_process: Optional hook ``(doc, context) -> None`` called after
             Jinja rendering.
         strict: If True, raise on missing tokens (useful in tests).
+        ensure_manager_signature_bookmark: Mark the template's
+            ``{{ manager_sig }}`` paragraph with the ``GSSG_ManagerSignature``
+            bookmark before rendering (General Book / Security Permit's
+            keep-together signing block; see
+            ``_prepare_manager_signature_bookmark``). The tracked template
+            file itself is never modified.
 
     Returns:
         `output_path` as a Path.
@@ -224,18 +315,28 @@ def render(
     if not template_path.exists():
         raise FileNotFoundError(template_path)
 
-    tpl = DocxTemplate(str(template_path))
+    render_source: Path | BytesIO = template_path
+    if ensure_manager_signature_bookmark:
+        render_source = _prepare_manager_signature_bookmark(template_path)
+
+    tpl = DocxTemplate(render_source if isinstance(render_source, BytesIO) else str(render_source))
 
     context: dict[str, Any] = dict(data)
     _apply_context_defaults(context)
 
     # _sig_path → _sig (InlineImage or "").
+    from app.core.signature_layout import role_for_sig_key
+
     sig_w = int(context.get("_sig_size_mm", DEFAULT_SIG_WIDTH_MM))
     sig_b = int(context.get("_sig_boldness", DEFAULT_SIG_BOLDNESS))
     for key in list(context):
         if key.endswith("_sig_path"):
             context[key[:-5]] = _resolve_sig(
-                tpl, context[key], width_mm=sig_w, dilate_radius_px=sig_b
+                tpl,
+                context[key],
+                width_mm=sig_w,
+                dilate_radius_px=sig_b,
+                role=role_for_sig_key(key),
             )
 
     env_cls = SandboxedEnvironment if sandboxed else Environment
