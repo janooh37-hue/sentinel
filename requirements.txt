@@ -19,7 +19,7 @@ openpyxl>=3.1,<4.0  # monthly time sheet: fills the .xlsx template (logo + style
 hijri-converter>=2.3,<3.0  # vehicle letters: Umm al-Qura date line
 
 # OCR / document extraction
-PyMuPDF>=1.24,<2.0
+PyMuPDF>=1.28.2,<2.0  # floor: Document.rewrite_images used by vehicle certificate compression
 pytesseract>=0.3.13,<0.4
 rapidfuzz>=3.9,<4.0
 mrz>=0.6.2,<1.0  # passport MRZ (TD3) parser for OCR passport extraction

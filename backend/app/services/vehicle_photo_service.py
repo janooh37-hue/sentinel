@@ -373,7 +373,18 @@ def materialize_photo_asset(db: Session, photo_id: int) -> VehiclePhotoAsset:
             "The staged vehicle photo has no recoverable legacy source.",
             photo_id=photo_id,
         )
-    legacy = db.get(VehicleFile, asset.legacy_file_id)
+    legacy = (
+        db.execute(
+            select(
+                VehicleFile.path,
+                VehicleFile.original_name,
+                VehicleFile.label_ar,
+                VehicleFile.label_en,
+            ).where(VehicleFile.id == asset.legacy_file_id)
+        )
+        .mappings()
+        .one_or_none()
+    )
     if legacy is None:
         raise NotFoundError(
             "VEHICLE_PHOTO_SOURCE_MISSING",
@@ -381,7 +392,7 @@ def materialize_photo_asset(db: Session, photo_id: int) -> VehiclePhotoAsset:
             photo_id=photo_id,
             legacy_file_id=asset.legacy_file_id,
         )
-    source = _resolve_data_path(legacy.path, photo_id=photo_id, library_only=False)
+    source = _resolve_data_path(legacy["path"], photo_id=photo_id, library_only=False)
     data = source.read_bytes()
     processed = process_photo(data)
     canonical = db.scalar(
@@ -424,17 +435,17 @@ def materialize_photo_asset(db: Session, photo_id: int) -> VehiclePhotoAsset:
     created_root: Path | None = None
     try:
         paths, created_root = _write_photo_files(
-            filename=legacy.original_name,
+            filename=legacy["original_name"],
             original=data,
             processed=processed,
         )
-        asset.label_ar = _usable_label(asset.label_ar) or _usable_label(legacy.label_ar)
+        asset.label_ar = _usable_label(asset.label_ar) or _usable_label(legacy["label_ar"])
         asset.label_en = (
             _usable_label(asset.label_en)
-            or _usable_label(legacy.label_en)
-            or Path(legacy.original_name).stem
+            or _usable_label(legacy["label_en"])
+            or Path(legacy["original_name"]).stem
         )
-        asset.original_name = _safe_filename(legacy.original_name)
+        asset.original_name = _safe_filename(legacy["original_name"])
         asset.content_hash = processed.content_hash
         asset.width = processed.width
         asset.height = processed.height

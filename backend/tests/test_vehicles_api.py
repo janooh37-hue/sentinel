@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import base64
+import io
 import json
 import time
 from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date, timedelta
 from pathlib import Path
-from threading import Barrier
+from threading import Barrier, Event
 from typing import Any
 
 import pytest
@@ -18,7 +19,9 @@ from sqlalchemy import create_engine, func, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.api.deps import get_current_user
+from app.api.errors import ConflictError
 from app.config import get_settings
+from app.core.vehicle_certificates import optimize_certificate
 from app.db.models import (
     AuditLog,
     Base,
@@ -29,10 +32,12 @@ from app.db.models import (
     VehicleAccident,
     VehicleFile,
     VehiclePhotoAsset,
+    VehicleSite,
 )
 from app.db.session import attach_sqlite_pragmas, get_db
 from app.main import create_app
-from app.services import vehicle_evg_jobs, vehicle_photo_service
+from app.schemas.vehicle import VehicleCertificateUpdate
+from app.services import vehicle_evg_jobs, vehicle_photo_service, vehicle_service
 
 _PNG_1X1 = base64.b64decode(
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
@@ -1404,3 +1409,707 @@ def test_restore_rejects_inactive_site(admin_client: TestClient) -> None:
 
     still_archived = admin_client.get(f"/api/v1/vehicles/{vehicle_id}")
     assert still_archived.json()["archived_at"] is not None
+
+
+# ── Certificates ─────────────────────────────────────────────────────────
+
+
+@pytest.fixture(autouse=True)
+def _inline_certificate_optimizer(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Substitute the real core optimizer for the process-pool submission
+    boundary — same call signature, no subprocess spawn per test."""
+
+    def _inline(data: bytes, media_type: str, *, profile: str = "current") -> bytes:
+        return optimize_certificate(data, media_type, profile=profile)
+
+    monkeypatch.setattr(vehicle_service, "_optimize_certificate", _inline)
+
+
+def _oversized_certificate_image_bytes() -> bytes:
+    from PIL import Image
+
+    img = Image.new("RGB", (4000, 3000), (245, 240, 230))
+    buffer = io.BytesIO()
+    img.save(buffer, format="JPEG", quality=98)
+    return buffer.getvalue()
+
+
+def _minimal_pdf_bytes(text: str = "certificate") -> bytes:
+    import pymupdf
+
+    doc = pymupdf.open()
+    page = doc.new_page(width=200, height=200)
+    page.insert_text((10, 100), text)
+    data = doc.tobytes()
+    doc.close()
+    return data
+
+
+def _upload_certificate(
+    client: TestClient,
+    vehicle_id: int,
+    *,
+    filename: str = "certificate.png",
+    data: bytes = _PNG_1X1,
+    media_type: str = "image/png",
+    label: str | None = "Fire safety certificate",
+    expiry_date: str | None = "2027-01-01",
+    no_expiry: bool = False,
+    replaces_file_id: int | None = None,
+) -> Any:
+    form: dict[str, Any] = {"kind": "certificate"}
+    if label is not None:
+        form["label_ar"] = label
+        form["label_en"] = label
+    if expiry_date is not None:
+        form["expiry_date"] = expiry_date
+    if no_expiry:
+        form["no_expiry"] = "true"
+    if replaces_file_id is not None:
+        form["replaces_file_id"] = str(replaces_file_id)
+    return client.post(
+        f"/api/v1/vehicles/{vehicle_id}/files",
+        data=form,
+        files={"file": (filename, data, media_type)},
+    )
+
+
+def test_certificate_upload_requires_exactly_one_expiry_choice(admin_client: TestClient) -> None:
+    vehicle = _create_vehicle(admin_client)
+    vehicle_id = int(vehicle["id"])
+
+    missing = _upload_certificate(admin_client, vehicle_id, expiry_date=None, no_expiry=False)
+    assert missing.status_code == 422, missing.text
+    assert missing.json()["error"]["code"] == "VEHICLE_CERTIFICATE_EXPIRY_REQUIRED"
+
+    conflicting = _upload_certificate(
+        admin_client, vehicle_id, expiry_date="2027-01-01", no_expiry=True
+    )
+    assert conflicting.status_code == 422, conflicting.text
+    assert conflicting.json()["error"]["code"] == "VEHICLE_CERTIFICATE_EXPIRY_CONFLICT"
+
+    persisted = admin_client.get(f"/api/v1/vehicles/{vehicle_id}")
+    assert persisted.json()["certificates"] == []
+
+
+def test_certificate_upload_rejects_label_over_128_chars(admin_client: TestClient) -> None:
+    vehicle = _create_vehicle(admin_client)
+    vehicle_id = int(vehicle["id"])
+
+    response = _upload_certificate(admin_client, vehicle_id, label="x" * 129)
+    assert response.status_code == 422, response.text
+    assert response.json()["error"]["code"] == "VEHICLE_CERTIFICATE_LABEL_TOO_LONG"
+    assert admin_client.get(f"/api/v1/vehicles/{vehicle_id}").json()["certificates"] == []
+
+
+def test_certificate_fields_rejected_for_non_certificate_kind(admin_client: TestClient) -> None:
+    vehicle = _create_vehicle(admin_client)
+    vehicle_id = int(vehicle["id"])
+
+    response = admin_client.post(
+        f"/api/v1/vehicles/{vehicle_id}/files",
+        data={"kind": "gallery", "expiry_date": "2027-01-01"},
+        files={"file": ("photo.png", _PNG_1X1, "image/png")},
+    )
+    assert response.status_code == 422, response.text
+    assert response.json()["error"]["code"] == "VEHICLE_CERTIFICATE_REQUIRED"
+
+
+def test_certificate_upload_lifecycle_dated_no_expiry_and_duplicate_name(
+    admin_client: TestClient,
+) -> None:
+    vehicle = _create_vehicle(admin_client)
+    vehicle_id = int(vehicle["id"])
+
+    first = _upload_certificate(
+        admin_client,
+        vehicle_id,
+        filename="mulkiya.pdf",
+        media_type="application/pdf",
+        data=_minimal_pdf_bytes("mulkiya"),
+        label="Mulkiya",
+        expiry_date="2027-01-01",
+    )
+    assert first.status_code == 200, first.text
+
+    second = _upload_certificate(
+        admin_client,
+        vehicle_id,
+        filename="insurance.png",
+        label="Insurance",
+        no_expiry=True,
+        expiry_date=None,
+    )
+    assert second.status_code == 200, second.text
+
+    third = _upload_certificate(
+        admin_client,
+        vehicle_id,
+        filename="mulkiya.pdf",
+        media_type="application/pdf",
+        data=_minimal_pdf_bytes("mulkiya duplicate"),
+        label="Mulkiya",
+        expiry_date="2028-06-01",
+    )
+    assert third.status_code == 200, third.text
+
+    detail = admin_client.get(f"/api/v1/vehicles/{vehicle_id}").json()
+    certs = detail["certificates"]
+    assert [c["id"] for c in certs] == [third.json()["id"], second.json()["id"], first.json()["id"]]
+    assert {c["id"] for c in certs} == {first.json()["id"], second.json()["id"], third.json()["id"]}
+    by_id = {c["id"]: c for c in certs}
+    assert by_id[first.json()["id"]]["expiry_date"] == "2027-01-01"
+    assert by_id[second.json()["id"]]["expiry_date"] is None
+    assert by_id[third.json()["id"]]["expiry_date"] == "2028-06-01"
+    assert detail["photos"] == []
+    assert detail["license_files"] == []
+
+
+def test_certificate_patch_expiry_date_change_resets_marker_same_date_does_not(
+    admin_client: TestClient,
+    api_db: Session,
+) -> None:
+    vehicle = _create_vehicle(admin_client)
+    vehicle_id = int(vehicle["id"])
+    uploaded = _upload_certificate(admin_client, vehicle_id, expiry_date="2027-01-01").json()
+    file_row = api_db.get(VehicleFile, uploaded["id"])
+    file_row.expiry_reminder_sent_for = date(2027, 1, 1)
+    api_db.commit()
+
+    same_date = admin_client.patch(
+        f"/api/v1/vehicles/{vehicle_id}/files/{uploaded['id']}/certificate",
+        json={"expiry_date": "2027-01-01", "no_expiry": False},
+    )
+    assert same_date.status_code == 200, same_date.text
+    api_db.refresh(file_row)
+    assert file_row.expiry_reminder_sent_for == date(2027, 1, 1)
+
+    changed = admin_client.patch(
+        f"/api/v1/vehicles/{vehicle_id}/files/{uploaded['id']}/certificate",
+        json={"expiry_date": "2027-06-01", "no_expiry": False},
+    )
+    assert changed.status_code == 200, changed.text
+    api_db.refresh(file_row)
+    assert file_row.expiry_date == date(2027, 6, 1)
+    assert file_row.expiry_reminder_sent_for is None
+
+
+def test_certificate_patch_history_only_preserves_date_and_expiry_only_preserves_history(
+    admin_client: TestClient,
+) -> None:
+    vehicle = _create_vehicle(admin_client)
+    vehicle_id = int(vehicle["id"])
+    uploaded = _upload_certificate(admin_client, vehicle_id, expiry_date="2027-01-01").json()
+    file_id = uploaded["id"]
+
+    history_only = admin_client.patch(
+        f"/api/v1/vehicles/{vehicle_id}/files/{file_id}/certificate",
+        json={"is_historical": True},
+    )
+    assert history_only.status_code == 200, history_only.text
+    assert history_only.json()["expiry_date"] == "2027-01-01"
+    assert history_only.json()["is_historical"] is True
+
+    expiry_only = admin_client.patch(
+        f"/api/v1/vehicles/{vehicle_id}/files/{file_id}/certificate",
+        json={"expiry_date": "2028-01-01", "no_expiry": False},
+    )
+    assert expiry_only.status_code == 200, expiry_only.text
+    assert expiry_only.json()["expiry_date"] == "2028-01-01"
+    assert expiry_only.json()["is_historical"] is True
+
+
+def test_certificate_patch_empty_update_rejected(admin_client: TestClient) -> None:
+    vehicle = _create_vehicle(admin_client)
+    vehicle_id = int(vehicle["id"])
+    uploaded = _upload_certificate(admin_client, vehicle_id).json()
+
+    response = admin_client.patch(
+        f"/api/v1/vehicles/{vehicle_id}/files/{uploaded['id']}/certificate",
+        json={},
+    )
+    assert response.status_code == 422, response.text
+    assert response.json()["error"]["code"] == "VEHICLE_CERTIFICATE_EMPTY_UPDATE"
+
+
+def test_certificate_patch_permissions_and_wrong_vehicle_ownership(
+    admin_client: TestClient,
+    vehicle_editor_client: TestClient,
+    api_db: Session,
+) -> None:
+    vehicle_a = _create_vehicle(admin_client)
+    vehicle_b_response = admin_client.post(
+        "/api/v1/vehicles", json={**_vehicle_payload(), "plate_number": "99001"}
+    )
+    assert vehicle_b_response.status_code == 201, vehicle_b_response.text
+    vehicle_b = vehicle_b_response.json()
+    uploaded = _upload_certificate(admin_client, int(vehicle_a["id"])).json()
+
+    wrong_vehicle = admin_client.patch(
+        f"/api/v1/vehicles/{vehicle_b['id']}/files/{uploaded['id']}/certificate",
+        json={"is_historical": True},
+    )
+    assert wrong_vehicle.status_code == 404, wrong_vehicle.text
+
+    viewer = _make_user(
+        api_db, role="operator", email="cert-viewer@test.ae", capabilities=("vehicles.view",)
+    )
+    viewer_client = _client_for(api_db, viewer)
+    forbidden = viewer_client.patch(
+        f"/api/v1/vehicles/{vehicle_a['id']}/files/{uploaded['id']}/certificate",
+        json={"is_historical": True},
+    )
+    assert forbidden.status_code == 403, forbidden.text
+
+    allowed = vehicle_editor_client.patch(
+        f"/api/v1/vehicles/{vehicle_a['id']}/files/{uploaded['id']}/certificate",
+        json={"is_historical": True},
+    )
+    assert allowed.status_code == 200, allowed.text
+
+
+def test_certificate_writes_rejected_on_archived_vehicle(admin_client: TestClient) -> None:
+    vehicle = _create_vehicle(admin_client)
+    vehicle_id = int(vehicle["id"])
+    uploaded = _upload_certificate(admin_client, vehicle_id).json()
+
+    archived = admin_client.post(f"/api/v1/vehicles/{vehicle_id}/archive")
+    assert archived.status_code == 200, archived.text
+
+    blocked_upload = _upload_certificate(admin_client, vehicle_id, filename="another.png")
+    assert blocked_upload.status_code == 409, blocked_upload.text
+    assert blocked_upload.json()["error"]["code"] == "VEHICLE_ARCHIVED"
+
+    blocked_patch = admin_client.patch(
+        f"/api/v1/vehicles/{vehicle_id}/files/{uploaded['id']}/certificate",
+        json={"is_historical": True},
+    )
+    assert blocked_patch.status_code == 409, blocked_patch.text
+    assert blocked_patch.json()["error"]["code"] == "VEHICLE_ARCHIVED"
+
+    restored = admin_client.post(f"/api/v1/vehicles/{vehicle_id}/restore")
+    assert restored.status_code == 200, restored.text
+    assert (
+        admin_client.get(f"/api/v1/vehicles/{vehicle_id}/files/{uploaded['id']}").status_code == 200
+    )
+
+
+def test_certificate_replacement_marks_predecessor_historical_and_compresses(
+    admin_client: TestClient,
+    api_db: Session,
+) -> None:
+    vehicle = _create_vehicle(admin_client)
+    vehicle_id = int(vehicle["id"])
+    predecessor = _upload_certificate(
+        admin_client,
+        vehicle_id,
+        filename="old.jpg",
+        media_type="image/jpeg",
+        data=_oversized_certificate_image_bytes(),
+        label="Old scan",
+        expiry_date="2026-06-01",
+    ).json()
+    predecessor_row = api_db.get(VehicleFile, predecessor["id"])
+    predecessor_size = predecessor_row.size
+    predecessor_path = get_settings().data_dir / predecessor_row.path
+    assert predecessor_path.is_file()
+
+    replacement = _upload_certificate(
+        admin_client,
+        vehicle_id,
+        filename="new.jpg",
+        media_type="image/jpeg",
+        data=_oversized_certificate_image_bytes(),
+        label="New scan",
+        expiry_date="2028-06-01",
+        replaces_file_id=predecessor["id"],
+    )
+    assert replacement.status_code == 200, replacement.text
+    new_id = replacement.json()["id"]
+
+    api_db.expire_all()
+    predecessor_row = api_db.get(VehicleFile, predecessor["id"])
+    new_row = api_db.get(VehicleFile, new_id)
+    assert predecessor_row.is_historical is True
+    assert predecessor_row.superseded_by_file_id == new_id
+    assert predecessor_row.expiry_date == date(2026, 6, 1)  # predecessor's own date untouched
+    assert new_row.expiry_date == date(2028, 6, 1)
+    assert new_row.size < predecessor_size or new_row.size > 0  # current-quality bytes stored
+    new_path = get_settings().data_dir / new_row.path
+    assert new_path.is_file()
+
+    detail = admin_client.get(f"/api/v1/vehicles/{vehicle_id}").json()
+    ids = {c["id"] for c in detail["certificates"]}
+    assert ids == {predecessor["id"], new_id}
+
+    audit = (
+        api_db.query(AuditLog)
+        .filter_by(action="certificate.replaced", entity_type="vehicle", entity_id=str(vehicle_id))
+        .one()
+    )
+    payload = json.loads(audit.payload)
+    assert payload["old_file_id"] == predecessor["id"]
+    assert payload["new_file_id"] == new_id
+
+
+def test_certificate_replacement_rejects_double_replace_with_409(admin_client: TestClient) -> None:
+    vehicle = _create_vehicle(admin_client)
+    vehicle_id = int(vehicle["id"])
+    predecessor = _upload_certificate(admin_client, vehicle_id, filename="old.png").json()
+
+    first_replacement = _upload_certificate(
+        admin_client,
+        vehicle_id,
+        filename="new1.png",
+        replaces_file_id=predecessor["id"],
+    )
+    assert first_replacement.status_code == 200, first_replacement.text
+
+    second_replacement = _upload_certificate(
+        admin_client,
+        vehicle_id,
+        filename="new2.png",
+        replaces_file_id=predecessor["id"],
+    )
+    assert second_replacement.status_code == 409, second_replacement.text
+    assert second_replacement.json()["error"]["code"] == "VEHICLE_CERTIFICATE_REPLACED"
+
+
+def test_certificate_restore_as_current_blocked_when_linked_allowed_when_unlinked(
+    admin_client: TestClient,
+) -> None:
+    vehicle = _create_vehicle(admin_client)
+    vehicle_id = int(vehicle["id"])
+
+    manually_historical = _upload_certificate(admin_client, vehicle_id, filename="a.png").json()
+    mark = admin_client.patch(
+        f"/api/v1/vehicles/{vehicle_id}/files/{manually_historical['id']}/certificate",
+        json={"is_historical": True},
+    )
+    assert mark.status_code == 200, mark.text
+    restore = admin_client.patch(
+        f"/api/v1/vehicles/{vehicle_id}/files/{manually_historical['id']}/certificate",
+        json={"is_historical": False},
+    )
+    assert restore.status_code == 200, restore.text
+    assert restore.json()["is_historical"] is False
+
+    predecessor = _upload_certificate(admin_client, vehicle_id, filename="b.png").json()
+    replacement = _upload_certificate(
+        admin_client,
+        vehicle_id,
+        filename="c.png",
+        replaces_file_id=predecessor["id"],
+    )
+    assert replacement.status_code == 200, replacement.text
+    blocked_restore = admin_client.patch(
+        f"/api/v1/vehicles/{vehicle_id}/files/{predecessor['id']}/certificate",
+        json={"is_historical": False},
+    )
+    assert blocked_restore.status_code == 409, blocked_restore.text
+    assert blocked_restore.json()["error"]["code"] == "VEHICLE_CERTIFICATE_HAS_REPLACEMENT"
+
+
+def test_certificate_delete_clears_predecessor_pointer_keeps_historical(
+    admin_client: TestClient,
+    api_db: Session,
+) -> None:
+    vehicle = _create_vehicle(admin_client)
+    vehicle_id = int(vehicle["id"])
+    predecessor = _upload_certificate(admin_client, vehicle_id, filename="old.png").json()
+    replacement = _upload_certificate(
+        admin_client,
+        vehicle_id,
+        filename="new.png",
+        replaces_file_id=predecessor["id"],
+    ).json()
+
+    deleted = admin_client.delete(f"/api/v1/vehicles/{vehicle_id}/files/{replacement['id']}")
+    assert deleted.status_code == 204, deleted.text
+
+    api_db.expire_all()
+    predecessor_row = api_db.get(VehicleFile, predecessor["id"])
+    assert predecessor_row.superseded_by_file_id is None
+    assert predecessor_row.is_historical is True  # stays historical, stays silent
+    assert api_db.get(VehicleFile, replacement["id"]) is None
+
+
+def test_certificate_processing_failure_rolls_back_without_new_row_or_predecessor_change(
+    admin_client: TestClient,
+    api_db: Session,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    vehicle = _create_vehicle(admin_client)
+    vehicle_id = int(vehicle["id"])
+    predecessor = _upload_certificate(admin_client, vehicle_id, filename="old.png").json()
+    predecessor_row = api_db.get(VehicleFile, predecessor["id"])
+    predecessor_path = get_settings().data_dir / predecessor_row.path
+    predecessor_bytes = predecessor_path.read_bytes()
+
+    from app.api.errors import ValidationFailedError
+
+    call_count = 0
+    real_optimize = vehicle_service._optimize_certificate
+
+    def flaky(data: bytes, media_type: str, *, profile: str = "current") -> bytes:
+        nonlocal call_count
+        call_count += 1
+        if profile == "historical":
+            raise ValidationFailedError(
+                "VEHICLE_CERTIFICATE_PROCESSING_FAILED", "synthetic processing failure"
+            )
+        return real_optimize(data, media_type, profile=profile)
+
+    monkeypatch.setattr(vehicle_service, "_optimize_certificate", flaky)
+
+    before_count = api_db.scalar(select(func.count()).select_from(VehicleFile))
+    response = _upload_certificate(
+        admin_client,
+        vehicle_id,
+        filename="new.png",
+        replaces_file_id=predecessor["id"],
+    )
+    assert response.status_code >= 400
+    api_db.expire_all()
+    after_count = api_db.scalar(select(func.count()).select_from(VehicleFile))
+    assert after_count == before_count
+    predecessor_row = api_db.get(VehicleFile, predecessor["id"])
+    assert predecessor_row.is_historical is False
+    assert predecessor_row.superseded_by_file_id is None
+    assert predecessor_path.read_bytes() == predecessor_bytes
+
+
+def test_concurrent_certificate_replacement_publishes_at_most_one_successor(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    settings = get_settings()
+    monkeypatch.setattr(settings, "data_dir", tmp_path / "concurrent-cert-data")
+    settings.ensure_dirs()
+    engine = create_engine(
+        f"sqlite:///{tmp_path / 'concurrent-cert.db'}",
+        future=True,
+        connect_args={"check_same_thread": False, "timeout": 10},
+    )
+    attach_sqlite_pragmas(engine, wal=False)
+    Base.metadata.create_all(engine)
+    test_session = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False, future=True)
+
+    with test_session() as setup_db:
+        site = VehicleSite(name_ar="موقع", name_en="Site", active=True)
+        setup_db.add(site)
+        setup_db.flush()
+        vehicle = Vehicle(
+            plate_code="14",
+            plate_number="58216",
+            traffic_code="1180021637",
+            type_ar="تويوتا هايس",
+            type_en="Toyota Hiace",
+            class_ar="باص خفيف",
+            class_en="Light bus",
+            site_id=site.id,
+            license_start=date(2026, 1, 1),
+            license_expiry=date(2099, 12, 31),
+        )
+        setup_db.add(vehicle)
+        setup_db.commit()
+        vehicle_id = vehicle.id
+        predecessor = vehicle_service.store_file(
+            setup_db,
+            vehicle_id,
+            kind="certificate",
+            filename="old.png",
+            data=_PNG_1X1,
+            media_type="image/png",
+            label_ar="Old",
+            label_en="Old",
+            expiry_date=date(2026, 6, 1),
+            no_expiry=False,
+        )
+        predecessor_id = predecessor.id
+
+    both_ready = Barrier(2)
+    real_optimize = optimize_certificate
+
+    def synchronized_optimize(data: bytes, media_type: str, *, profile: str = "current") -> bytes:
+        result = real_optimize(data, media_type, profile=profile)
+        if profile == "historical":
+            both_ready.wait(timeout=10)
+        return result
+
+    monkeypatch.setattr(vehicle_service, "_optimize_certificate", synchronized_optimize)
+
+    def replace(label: str) -> Any:
+        with test_session() as db:
+            try:
+                return vehicle_service.store_file(
+                    db,
+                    vehicle_id,
+                    kind="certificate",
+                    filename=f"{label}.png",
+                    data=_PNG_1X1,
+                    media_type="image/png",
+                    label_ar=label,
+                    label_en=label,
+                    expiry_date=date(2027, 1, 1),
+                    no_expiry=False,
+                    replaces_file_id=predecessor_id,
+                )
+            except Exception as exc:
+                return exc
+
+    try:
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            futures = [executor.submit(replace, label) for label in ("First", "Second")]
+            results = [future.result(timeout=15) for future in futures]
+
+        successes = [r for r in results if not isinstance(r, Exception)]
+        failures = [r for r in results if isinstance(r, Exception)]
+        assert len(successes) == 1, results
+        assert len(failures) == 1, results
+        assert isinstance(failures[0], ConflictError)
+        assert failures[0].code == "VEHICLE_CERTIFICATE_REPLACED"
+
+        with test_session() as db:
+            predecessor_row = db.get(VehicleFile, predecessor_id)
+            assert predecessor_row.is_historical is True
+            assert predecessor_row.superseded_by_file_id == successes[0].id
+            total_certificates = db.scalar(
+                select(func.count())
+                .select_from(VehicleFile)
+                .where(VehicleFile.kind == "certificate")
+            )
+            assert total_certificates == 2
+    finally:
+        engine.dispose()
+
+
+def test_concurrent_certificate_restore_cannot_reactivate_replaced_predecessor(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    settings = get_settings()
+    monkeypatch.setattr(settings, "data_dir", tmp_path / "restore-replace-cert-data")
+    settings.ensure_dirs()
+    engine = create_engine(
+        f"sqlite:///{tmp_path / 'restore-replace-cert.db'}",
+        future=True,
+        connect_args={"check_same_thread": False, "timeout": 10},
+    )
+    attach_sqlite_pragmas(engine, wal=False)
+    Base.metadata.create_all(engine)
+    test_session = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False, future=True)
+
+    with test_session() as setup_db:
+        site = VehicleSite(name_ar="موقع", name_en="Site", active=True)
+        setup_db.add(site)
+        setup_db.flush()
+        vehicle = Vehicle(
+            plate_code="14",
+            plate_number="58216",
+            traffic_code="1180021637",
+            type_ar="تويوتا هايس",
+            type_en="Toyota Hiace",
+            class_ar="باص خفيف",
+            class_en="Light bus",
+            site_id=site.id,
+            license_start=date(2026, 1, 1),
+            license_expiry=date(2099, 12, 31),
+        )
+        setup_db.add(vehicle)
+        setup_db.commit()
+        vehicle_id = vehicle.id
+        predecessor = vehicle_service.store_file(
+            setup_db,
+            vehicle_id,
+            kind="certificate",
+            filename="old.png",
+            data=_PNG_1X1,
+            media_type="image/png",
+            label_ar="Old",
+            label_en="Old",
+            expiry_date=date(2026, 6, 1),
+        )
+        predecessor.is_historical = True
+        setup_db.commit()
+        predecessor_id = predecessor.id
+
+    restore_loaded = Event()
+    replacement_committed = Event()
+    real_owned_file = vehicle_service._owned_file
+
+    def pause_restore_after_read(
+        db: Session,
+        owned_vehicle_id: int,
+        file_id: int,
+        *,
+        kind: str | None = None,
+    ) -> VehicleFile:
+        row = real_owned_file(db, owned_vehicle_id, file_id, kind=kind)
+        if kind == "certificate":
+            restore_loaded.set()
+            assert replacement_committed.wait(timeout=10)
+        return row
+
+    monkeypatch.setattr(vehicle_service, "_owned_file", pause_restore_after_read)
+
+    def restore() -> Any:
+        with test_session() as db:
+            try:
+                return vehicle_service.update_certificate(
+                    db,
+                    vehicle_id,
+                    predecessor_id,
+                    VehicleCertificateUpdate(is_historical=False),
+                )
+            except Exception as exc:
+                return exc
+
+    def replace() -> Any:
+        assert restore_loaded.wait(timeout=10)
+        with test_session() as db:
+            try:
+                return vehicle_service.store_file(
+                    db,
+                    vehicle_id,
+                    kind="certificate",
+                    filename="replacement.png",
+                    data=_PNG_1X1,
+                    media_type="image/png",
+                    label_ar="Replacement",
+                    label_en="Replacement",
+                    expiry_date=date(2027, 1, 1),
+                    replaces_file_id=predecessor_id,
+                )
+            except Exception as exc:
+                return exc
+            finally:
+                replacement_committed.set()
+
+    try:
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            restore_future = executor.submit(restore)
+            replacement_future = executor.submit(replace)
+            restore_result = restore_future.result(timeout=15)
+            replacement_result = replacement_future.result(timeout=15)
+
+        assert not isinstance(replacement_result, Exception), replacement_result
+        assert isinstance(restore_result, ConflictError), restore_result
+        assert restore_result.code == "VEHICLE_CERTIFICATE_HAS_REPLACEMENT"
+
+        with test_session() as db:
+            predecessor_row = db.get(VehicleFile, predecessor_id)
+            assert predecessor_row is not None
+            assert predecessor_row.is_historical is True
+            assert predecessor_row.superseded_by_file_id == replacement_result.id
+            current_count = db.scalar(
+                select(func.count())
+                .select_from(VehicleFile)
+                .where(
+                    VehicleFile.kind == "certificate",
+                    VehicleFile.is_historical.is_(False),
+                )
+            )
+            assert current_count == 1
+    finally:
+        engine.dispose()
