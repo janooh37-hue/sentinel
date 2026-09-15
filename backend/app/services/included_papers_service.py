@@ -403,17 +403,15 @@ def _reconstruct_signed_base(
         employee = db.get(Employee, signer.employee_id)
         if employee is not None:
             signer_names.extend(name for name in (employee.name_ar, employee.name_en) if name)
-    rendered = document_service.render_signed_pdf(
+    artifact = document_service.render_signed_artifact(
         db,
         version=version,
         signer_signature_path=str(signature),
         signer_names=signer_names,
         output_dir=temp_dir,
     )
-    primary = Path(rendered)
-    if not primary.is_absolute():
-        primary = get_settings().data_dir / primary
-    if not primary.is_file() or primary.suffix.lower() != ".pdf":
+    primary = artifact.conversion.pdf_path
+    if primary is None or not primary.is_file():
         raise ValidationFailedError(
             "INCLUDED_PAPERS_SIGNED_BASE_RECONSTRUCTION_FAILED",
             "The signed form could not be reconstructed",
@@ -683,9 +681,17 @@ def publish_signed_package(
     signed_primary: Path,
     *,
     physical_scan: bool,
+    advance_revision: bool = True,
     data_dir: Path | None = None,
 ) -> str:
-    """Preserve a signed fixed base, append current papers, and update paths."""
+    """Preserve a signed fixed base, append current papers, and update paths.
+
+    ``advance_revision=False`` skips the ``included_papers_revision`` bump —
+    a placement correction (approval-signature-placement plan §7.7) already
+    performed its own compare-and-set on that counter before calling this;
+    bumping it again here would double-increment and desync the caller's
+    CAS from the value it just verified. Ordinary signing callers keep the
+    default ``True``."""
     if not signed_primary.is_file() or signed_primary.suffix.lower() != ".pdf":
         raise ValidationFailedError(
             "INCLUDED_PAPERS_SIGNED_BASE_UNREADABLE",
@@ -708,7 +714,8 @@ def publish_signed_package(
     document = db.get(Document, version.document_id)
     if document is None:
         raise NotFoundError("INCLUDED_PAPERS_PDF_MISSING", "The record PDF is not available")
-    advance_package_revision(db, book)
+    if advance_revision:
+        advance_package_revision(db, book)
     first_physical_scan = physical_scan and not version.signed_pdf_path
     metadata = [
         {**item, "embedded": first_physical_scan} for item in _effective_metadata(book, version)

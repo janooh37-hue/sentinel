@@ -60,6 +60,7 @@ import { cn } from '@/lib/utils'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { BookStatusChips } from '@/components/books/BookStatusChips'
 import { WordReopenButton, WordSessionActions } from '@/components/books/BookWordActions'
+import { AdjustSignatureAction } from '@/components/signature/AdjustSignatureAction'
 import { IncludedPapersDialog } from './IncludedPapersDialog'
 import { QueueNav } from './QueueNav'
 import { MarkToggle } from './MarkToggle'
@@ -865,6 +866,9 @@ export function BookRecordPage(): React.JSX.Element {
           )}
           {canMark && (
             <MarkToggle armed={armed} onToggle={() => setArmedFor(armed ? null : bookId)} />
+          )}
+          {current?.document_id != null && (
+            <AdjustSignatureAction documentId={current.document_id} iconOnly />
           )}
           {book && <WordReopenButton book={book} isMobile={isMobile} iconOnly />}
 

@@ -1714,7 +1714,9 @@
       "resumptionDate": "Return (resumption) date",
       "delayReason": "Reason for delay (if any)",
       "fileButton": "File & complete",
-      "filed": "Return form filed — leave completed"
+      "filed": "Return form filed — leave completed",
+      "managerSignatureHelp": "Turning this off still prints the manager's name and title — it only skips embedding their signature image.",
+      "managerSignatureRequired": "Select a manager with a saved signature, or turn off \"Include manager signature\"."
     },
     "amend": {
       "action": "Edit leave",
@@ -4522,6 +4524,46 @@
     "previewAlt": "Signer signature",
     "noSig": "No saved signature for this signer — the report will be created unsigned",
     "signingOff": "Signing is off — tick “Sign now” to stamp this signature"
+  },
+  "signaturePlacement": {
+    "adjustAction": "Adjust signature",
+    "title": "Adjust signature position",
+    "back": "Back",
+    "scopeNote": "This changes the image's position only — it does not change approval.",
+    "page": "Page",
+    "left": "Left (mm)",
+    "top": "Top (mm)",
+    "reset": "Reset position",
+    "save": "Save position",
+    "saved": "Signature position saved.",
+    "conflict": "This document changed since the workspace opened. Reloading the latest copy.",
+    "signatureLabel": "Signature — drag or use the arrow keys to move",
+    "unsavedTitle": "Discard unsaved changes?",
+    "unsavedDesc": "You have not saved the new position. Leaving now discards it.",
+    "discard": "Discard changes",
+    "identify": "Identify signature",
+    "identifyHint": "Confirm which image in the original document is the manager/approver signature. This does not move or replace it.",
+    "identifyConfirmTitle": "Confirm this signature?",
+    "identifyConfirmDesc": "This marks the selected image as the manager/approver signature. It changes no pixels — positioning becomes available afterward.",
+    "identified": "Signature identified.",
+    "candidateSize": "{{w}}×{{h}} mm",
+    "history": "Placement history",
+    "historyAction": {
+      "initial": "Signed",
+      "identify": "Signature identified",
+      "move": "Position corrected"
+    },
+    "historyPages": "page {{from}} → {{to}}",
+    "role": {
+      "manager": "Manager signature",
+      "employee": "Employee signature",
+      "submitter": "Submitter signature"
+    },
+    "unavailable": {
+      "default": "Signature placement is not available for this document.",
+      "SIGNATURE_LAYOUT_UNSUPPORTED": "This is an older version of the record — only the latest version can be adjusted.",
+      "SIGNATURE_SOURCE_UNAVAILABLE": "No tracked signature source is available for this document."
+    }
   },
   "timesheet": {
     "eyebrow": "Monthly deliverables · Site JD 908",

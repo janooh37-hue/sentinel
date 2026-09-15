@@ -17,7 +17,7 @@ from app.db.models import (
     Document,
     User,
 )
-from app.services import book_service, document_service
+from app.services import artifact_service, book_service, document_service
 
 
 def _service():
@@ -229,8 +229,12 @@ def test_in_app_sign_book_publishes_signed_base_and_current_papers(
     signed_form = _pdf(tmp_path / "signed-form.pdf", ["SIGNED-FORM"])
     monkeypatch.setattr(
         document_service,
-        "render_signed_pdf",
-        lambda *_args, **_kwargs: str(signed_form),
+        "render_signed_artifact",
+        lambda *_args, **_kwargs: artifact_service.ArtifactResult(
+            docx_path=signed_form.with_suffix(".docx"),
+            conversion=artifact_service.ConversionOutcome(status="success", pdf_path=signed_form),
+            created_paths=(signed_form,),
+        ),
     )
 
     signed = book_service.sign_book(db_session, book.id, user_id=signer.id)
@@ -285,8 +289,12 @@ def test_in_app_signing_refuses_docx_fallback_when_papers_are_included(
     signed_docx.write_bytes(b"docx")
     monkeypatch.setattr(
         document_service,
-        "render_signed_pdf",
-        lambda *_args, **_kwargs: str(signed_docx),
+        "render_signed_artifact",
+        lambda *_args, **_kwargs: artifact_service.ArtifactResult(
+            docx_path=signed_docx,
+            conversion=artifact_service.ConversionOutcome(status="unavailable"),
+            created_paths=(signed_docx,),
+        ),
     )
 
     with pytest.raises(ValidationFailedError) as error:

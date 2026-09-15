@@ -55,6 +55,7 @@ import {
   loadScanBackPage,
   loadScanInboxPage,
   loadSendToGroupPage,
+  loadSignaturePlacementPage,
   loadSettingsPage,
   loadTimesheetPage,
 } from '@/lib/routeLoaders'
@@ -106,6 +107,7 @@ const DutyLocationsPage = lazy(loadDutyLocationsPage)
 const ScanInboxPage = lazy(loadScanInboxPage)
 const SendToGroupPage = lazy(loadSendToGroupPage)
 const ScanBackPage = lazy(loadScanBackPage)
+const SignaturePlacementPage = lazy(loadSignaturePlacementPage)
 const APPROVALS_ROUTE_CAPS = ['books.view', 'books.approve'] as const
 
 const queryClient = new QueryClient({
@@ -311,6 +313,13 @@ function Shell(): React.JSX.Element {
               {/* Pending approval/reviewer assignment is row authority even
                   without global book caps; the API owns that decision. */}
               <Route path="/books/:id" element={<BookRecordPage />} />
+              {/* Reached only via `AdjustSignatureAction` — the same
+                  row-authority gate as `/books/:id`, not a top-nav capability
+                  route (approval-signature-placement plan §9.1). */}
+              <Route
+                path="/documents/:documentId/signature-placement"
+                element={<SignaturePlacementPage />}
+              />
               <Route
                 path="/scan-back"
                 element={

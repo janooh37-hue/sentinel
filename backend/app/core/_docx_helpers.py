@@ -9,16 +9,24 @@ After the move to docxtpl token rendering, only a few helpers survive:
   leave forms so the manager-signature image anchors as a floating "behind
   text" shape on the signature line above the manager name, without growing
   the block. python-docx has no public API for this; we build the OOXML by hand.
+* `fill_image_inline_in_paragraph` — the General Book/Security Permit
+  "keep-together" signing block wants the image counted in the paragraph's
+  natural layout height (a behind-text float has zero height and would let
+  Word split the image from its name/title), so it stays a plain inline run.
 * `float_inline_images_in_cell` — the same behind-text technique for images
   already placed inline via a `{{ token }}` (Material Request).
 * `replace_paragraph_text` — used by the Resignation Letter post-process
   to swap dotted-line paragraphs for the reason text when the reason is
   too long to fit in the inline X slot.
+* `wrap_paragraph_in_bookmark` / `find_bookmark_index` / `prevent_row_split`
+  — the `GSSG_ManagerSignature` signing-slot bookmark (approval-signature-
+  placement plan §3) and its table-row keep-together counterpart.
 """
 
 from __future__ import annotations
 
 import io
+from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
@@ -124,6 +132,55 @@ def float_inline_images_in_cell(cell: Any, *, bottom_align: bool = False) -> int
     return converted
 
 
+def _embed_image_run(
+    paragraph: Any,
+    image_path: Path | str | None,
+    *,
+    width_inches: float,
+    dilate_radius_px: int,
+) -> Any | None:
+    """Add *image_path* as a new inline run in *paragraph*. Returns the
+    resulting ``<w:drawing>`` element, or None if the image is missing or
+    unreadable."""
+    if not image_path or not Path(image_path).exists():
+        return None
+    run = paragraph.add_run()
+    try:
+        run.add_picture(
+            io.BytesIO(
+                prepare_signature(Path(image_path).read_bytes(), dilate_radius_px=dilate_radius_px)
+            ),
+            width=Inches(width_inches),
+        )
+    except (OSError, ValueError):
+        return None
+    return run._element.find(qn("w:drawing"))
+
+
+def _mark_signature_drawing(drawing: Any, *, signature_role: str | None) -> None:
+    """Tag a freshly-inserted ``<w:drawing>``'s ``wp:docPr`` with a stable
+    per-occurrence identity marker (``app.core.signature_layout``), so later
+    placement/movement code can find this exact occurrence regardless of
+    image-byte deduplication or Word-conversion drawing-id renumbering.
+    No-op when ``signature_role`` is None (non-signature images: logos,
+    Aztec codes, headers)."""
+    if signature_role is None:
+        return
+    from app.core.signature_layout import marker_descr, marker_name, new_signature_id
+
+    container = drawing.find(f"{{{_WP_NS}}}inline")
+    if container is None:
+        container = drawing.find(f"{{{_WP_NS}}}anchor")
+    if container is None:
+        return
+    docpr = container.find(f"{{{_WP_NS}}}docPr")
+    if docpr is None:
+        return
+    signature_id = new_signature_id()
+    docpr.set("name", marker_name(signature_id))
+    docpr.set("descr", marker_descr(signature_role, signature_id))  # type: ignore[arg-type]
+
+
 def fill_image_behind_text_in_paragraph(
     paragraph: Any,
     image_path: Path | str | None,
@@ -131,6 +188,7 @@ def fill_image_behind_text_in_paragraph(
     width_inches: float = 1.4,
     dilate_radius_px: int = DEFAULT_SIG_BOLDNESS,
     center_horizontal: bool = False,
+    signature_role: str | None = None,
 ) -> bool:
     """Place *image_path* as a behind-text float resting on *paragraph*'s line
     and rising UP into the blank space above it — used for the Leave Permit /
@@ -141,29 +199,46 @@ def fill_image_behind_text_in_paragraph(
     layout height, so it never grows the block or pushes content onto the
     footer) and bottom-aligned to *paragraph*'s line. ``center_horizontal``
     centres it in the column; otherwise it pins to the left edge to sit above a
-    left-aligned name block. Returns True iff the image embedded.
+    left-aligned name block. ``signature_role`` marks the drawing for the
+    placement/identity scheme (None for non-signature images). Returns True
+    iff the image embedded.
     """
-    if not image_path or not Path(image_path).exists():
-        return False
-    run = paragraph.add_run()
-    try:
-        run.add_picture(
-            io.BytesIO(
-                prepare_signature(Path(image_path).read_bytes(), dilate_radius_px=dilate_radius_px)
-            ),
-            width=Inches(width_inches),
-        )
-    except (OSError, ValueError):
-        return False
-    drawing = run._element.find(qn("w:drawing"))
+    drawing = _embed_image_run(
+        paragraph, image_path, width_inches=width_inches, dilate_radius_px=dilate_radius_px
+    )
     if drawing is None:
         return False
+    _mark_signature_drawing(drawing, signature_role=signature_role)
     try:
         return _convert_inline_drawing_to_anchor(
             drawing, bottom_align=True, center_horizontal=center_horizontal
         )
     except (ValueError, AttributeError):
         return True  # image is embedded (inline); float conversion failed only
+
+
+def fill_image_inline_in_paragraph(
+    paragraph: Any,
+    image_path: Path | str | None,
+    *,
+    width_inches: float = 1.4,
+    dilate_radius_px: int = DEFAULT_SIG_BOLDNESS,
+    signature_role: str | None = None,
+) -> bool:
+    """Place *image_path* as an ordinary INLINE image occupying *paragraph*'s
+    natural layout height — used for the General Book/Security Permit
+    "keep-together" signing block, where Word must count the image's height
+    when deciding whether the whole signature/name/title group fits on the
+    current page (a behind-text float has zero layout height and would let
+    Word split the group across pages). Returns True iff the image embedded.
+    """
+    drawing = _embed_image_run(
+        paragraph, image_path, width_inches=width_inches, dilate_radius_px=dilate_radius_px
+    )
+    if drawing is None:
+        return False
+    _mark_signature_drawing(drawing, signature_role=signature_role)
+    return True
 
 
 def insert_floating_image_in_header(
@@ -256,11 +331,68 @@ def replace_paragraph_text(
     run.font.bold = bold
 
 
+def wrap_paragraph_in_bookmark(paragraph: Any, name: str, *, bookmark_id: int = 9001) -> None:
+    """Wrap *paragraph* in a ``w:bookmarkStart``/``w:bookmarkEnd`` pair named
+    *name*.
+
+    Bookmarks are inert to docxtpl's Jinja substitution — it only rewrites
+    text inside ``<w:t>`` runs — so this survives template rendering and
+    identifies the paragraph again afterward regardless of whether its token
+    resolved to an image or stayed blank. Used to mark the General Book /
+    Security Permit manager-signature slot (``GSSG_ManagerSignature``,
+    approval-signature-placement plan §3) before Jinja removes the empty
+    ``{{ manager_sig }}`` token.
+    """
+    start = OxmlElement("w:bookmarkStart")
+    start.set(qn("w:id"), str(bookmark_id))
+    start.set(qn("w:name"), name)
+    end = OxmlElement("w:bookmarkEnd")
+    end.set(qn("w:id"), str(bookmark_id))
+    p = paragraph._p
+    p.insert(0, start)
+    p.append(end)
+
+
+def find_bookmark_index(paragraphs: Sequence[Any], name: str) -> int | None:
+    """Index within *paragraphs* of the one wrapped by a ``w:bookmarkStart``
+    named *name*, or None if absent."""
+    for i, p in enumerate(paragraphs):
+        for start in p._p.findall(qn("w:bookmarkStart")):
+            if start.get(qn("w:name")) == name:
+                return i
+    return None
+
+
+def prevent_row_split(paragraph: Any) -> None:
+    """When *paragraph* lives inside a table cell, stop its containing row
+    from splitting across a page break — the table-contained counterpart of
+    the body-paragraph keep-together rule, so a table-pasted manager signing
+    block stays whole too. No-op outside a table."""
+    node = paragraph._p.getparent()
+    while node is not None and node.tag != qn("w:tc"):
+        node = node.getparent()
+    if node is None:
+        return
+    tr = node.getparent()
+    if tr is None or tr.tag != qn("w:tr"):
+        return
+    tr_pr = tr.find(qn("w:trPr"))
+    if tr_pr is None:
+        tr_pr = OxmlElement("w:trPr")
+        tr.insert(0, tr_pr)
+    if tr_pr.find(qn("w:cantSplit")) is None:
+        tr_pr.append(OxmlElement("w:cantSplit"))
+
+
 __all__ = [
     "fill_image_behind_text_in_paragraph",
+    "fill_image_inline_in_paragraph",
+    "find_bookmark_index",
     "float_inline_images_in_cell",
     "insert_floating_image_in_header",
+    "prevent_row_split",
     "replace_paragraph_text",
+    "wrap_paragraph_in_bookmark",
 ]
 
 
