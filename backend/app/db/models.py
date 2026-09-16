@@ -308,6 +308,7 @@ class BookVersion(Base):
     )
     template_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     fields: Mapped[dict[str, object] | None] = mapped_column(JSON, nullable=True)
+    approval_context: Mapped[dict[str, object] | None] = mapped_column(JSON, nullable=True)
     # initial | revision
     trigger: Mapped[str] = mapped_column(
         String(16), nullable=False, default="initial", server_default="initial"
@@ -342,6 +343,10 @@ class BookVersion(Base):
         order_by="BookApprovalStep.step_order",
         cascade="all, delete-orphan",
     )
+    revision_access: Mapped[list[BookRevisionAccess]] = relationship(
+        back_populates="version",
+        cascade="all, delete-orphan",
+    )
     annotations: Mapped[list[BookAnnotation]] = relationship(
         back_populates="version",
         cascade="all, delete-orphan",
@@ -351,6 +356,54 @@ class BookVersion(Base):
     __table_args__ = (
         UniqueConstraint("book_id", "version_no", name="uq_book_versions_book_version"),
         Index("ix_book_versions_book", "book_id"),
+    )
+
+
+class BookRevisionAccess(Base):
+    """Durable revision-scoped access earned by completing an assigned step."""
+
+    __tablename__ = "book_revision_access"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    version_id: Mapped[int] = mapped_column(
+        ForeignKey("book_versions.id", ondelete="CASCADE"), nullable=False
+    )
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="RESTRICT"), nullable=False
+    )
+    kind: Mapped[str] = mapped_column(String(16), nullable=False)
+    state: Mapped[str] = mapped_column(String(32), nullable=False)
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    assigned_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    decided_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    revoked_by_user_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    revocation_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    version: Mapped[BookVersion] = relationship(back_populates="revision_access")
+
+    __table_args__ = (
+        UniqueConstraint(
+            "version_id",
+            "user_id",
+            "kind",
+            name="uq_book_revision_access_version_user_kind",
+        ),
+        Index(
+            "ix_book_revision_access_user_revoked_version",
+            "user_id",
+            "revoked_at",
+            "version_id",
+        ),
+        CheckConstraint(
+            "kind IN ('approver', 'reviewer')",
+            name="ck_book_revision_access_kind",
+        ),
+        CheckConstraint(
+            "state IN ('approved', 'rejected', 'returned', 'reviewed', "
+            "'changes_requested')",
+            name="ck_book_revision_access_state",
+        ),
     )
 
 

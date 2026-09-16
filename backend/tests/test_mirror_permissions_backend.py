@@ -18,6 +18,7 @@ from app.core.form_kind import OTHER_SERVICE_ID, SERVICE_IDS
 from app.db.models import (
     Book,
     BookApprovalStep,
+    BookRevisionAccess,
     BookCategory,
     BookVersion,
     Document,
@@ -32,7 +33,6 @@ from app.schemas.permit import PermitCreate
 from app.services import (
     book_service,
     document_service,
-    included_papers_service,
     notification_service,
     perm_service,
     permit_service,
@@ -141,7 +141,7 @@ def _book(
     return row
 
 
-def _assign_pending_step(db: Session, book: Book, user: User) -> None:
+def _assign_pending_step(db: Session, book: Book, user: User) -> BookVersion:
     version = db.scalar(select(BookVersion).where(BookVersion.book_id == book.id))
     assert version is not None
     db.add(
@@ -156,11 +156,17 @@ def _assign_pending_step(db: Session, book: Book, user: User) -> None:
         )
     )
     db.commit()
+    return version
 
 
 def _assign_decided_step(db: Session, book: Book, user: User) -> None:
+    """Craft a decided step AND its retained-access row — mirroring what
+    ``book_service.decide_step``/``sign_book`` do in production. A decided
+    ``BookApprovalStep`` alone does not grant read access (that would defeat
+    revocation); the durable ``BookRevisionAccess`` row is what does."""
     version = db.scalar(select(BookVersion).where(BookVersion.book_id == book.id))
     assert version is not None
+    decided_at = datetime.now()
     db.add(
         BookApprovalStep(
             book_id=book.id,
@@ -170,7 +176,16 @@ def _assign_decided_step(db: Session, book: Book, user: User) -> None:
             assignee_user_id=user.id,
             state="approved",
             kind="approver",
-            decided_at=datetime.now(),
+            decided_at=decided_at,
+        )
+    )
+    db.add(
+        BookRevisionAccess(
+            version_id=version.id,
+            user_id=user.id,
+            kind="approver",
+            state="approved",
+            decided_at=decided_at,
         )
     )
     db.commit()
@@ -720,10 +735,8 @@ def test_api_create_endpoints_use_stored_record_classification(
     assert system_row.category_id == "HIDDEN"
 
 
-def test_assigned_pending_approvals_bypass_record_type_denies_but_history_does_not(
+def test_assignment_access_bypasses_type_denials_and_retains_decided_revision(
     mirror_api: ApiHarness,
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
 ) -> None:
     _category(mirror_api.db, "APP", name_en="Approvals")
     manager = _user(
@@ -731,22 +744,6 @@ def test_assigned_pending_approvals_bypass_record_type_denies_but_history_does_n
         role="manager",
         email="approvals-manager@test.ae",
     )
-    signature_path = tmp_path / "manager-signature.png"
-    signature_path.write_bytes(b"signature")
-    manager.signature_path = str(signature_path)
-    signed_pdf_path = tmp_path / "signed.pdf"
-    signed_pdf_path.write_bytes(b"%PDF-signed")
-    monkeypatch.setattr(
-        document_service,
-        "render_signed_pdf",
-        lambda *_args, **_kwargs: str(signed_pdf_path),
-    )
-    monkeypatch.setattr(
-        included_papers_service,
-        "publish_signed_package",
-        lambda *_args, **_kwargs: str(signed_pdf_path),
-    )
-    mirror_api.db.commit()
     admin = mirror_api.actor
     hidden_pending = _book(
         mirror_api.db,
@@ -766,7 +763,7 @@ def test_assigned_pending_approvals_bypass_record_type_denies_but_history_does_n
         user_id=manager.id,
         submitted_by_user_id=manager.id,
     )
-    _assign_pending_step(mirror_api.db, hidden_pending, manager)
+    hidden_pending_version = _assign_pending_step(mirror_api.db, hidden_pending, manager)
     _assign_pending_step(mirror_api.db, visible_pending, manager)
     hidden_decided = _book(
         mirror_api.db,
@@ -845,12 +842,17 @@ def test_assigned_pending_approvals_bypass_record_type_denies_but_history_does_n
 
     received = mirror_api.client.get(
         "/api/v1/books/approval-log",
-        params={"scope": "received"},
+        params={"scope": "received", "status": "all"},
     )
     assert received.status_code == 200, received.text
+    # hidden_decided appears too: retained access (BookRevisionAccess) grants
+    # read regardless of a later record-type denial — that is the entire
+    # point of retained revision access, distinct from RECORD_TYPE_FORBIDDEN
+    # masking on a cold, unrelated record.
     assert {item["ref_number"] for item in received.json()["items"]} == {
         hidden_pending.ref_number,
         visible_pending.ref_number,
+        hidden_decided.ref_number,
         visible_decided.ref_number,
     }
 
@@ -874,19 +876,23 @@ def test_assigned_pending_approvals_bypass_record_type_denies_but_history_does_n
     assigned_detail = mirror_api.client.get(f"/api/v1/books/{hidden_pending.id}")
     assert assigned_detail.status_code == 200, assigned_detail.text
 
-    decided = mirror_api.client.post(f"/api/v1/books/{hidden_pending.id}/sign")
+    decided = mirror_api.client.post(
+        f"/api/v1/books/{hidden_pending.id}/return",
+        json={"version_id": hidden_pending_version.id, "note": "Needs revision"},
+    )
     assert decided.status_code == 200, decided.text
-    assert decided.json()["approval_state"] == "approved"
+    assert decided.json()["approval_state"] == "returned"
 
-    hidden_after_decision = mirror_api.client.get(f"/api/v1/books/{hidden_pending.id}")
-    assert hidden_after_decision.status_code == 403
-    assert _error_code(hidden_after_decision) == "RECORD_TYPE_FORBIDDEN"
+    hidden_after_decision = mirror_api.client.get(
+        f"/api/v1/books/{hidden_pending.id}",
+        params={"version_id": hidden_pending_version.id},
+    )
+    assert hidden_after_decision.status_code == 200, hidden_after_decision.text
+    assert hidden_after_decision.json()["access_scope"] == "assigned_revision"
 
 
-def test_approve_only_assignee_can_open_and_sign_denied_record(
+def test_approve_only_assignee_can_reach_signing_and_decide_denied_record(
     mirror_api: ApiHarness,
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
 ) -> None:
     _category(mirror_api.db, "ASSIGNED", name_en="Assigned reviews")
     _category(mirror_api.db, "OPEN", name_en="Open records")
@@ -895,22 +901,6 @@ def test_approve_only_assignee_can_open_and_sign_denied_record(
         role="manager",
         email="approve-only-reviewer@test.ae",
     )
-    signature_path = tmp_path / "approve-only-signature.png"
-    signature_path.write_bytes(b"signature")
-    reviewer.signature_path = str(signature_path)
-    signed_pdf_path = tmp_path / "approve-only-signed.pdf"
-    signed_pdf_path.write_bytes(b"%PDF-signed")
-    monkeypatch.setattr(
-        document_service,
-        "render_signed_pdf",
-        lambda *_args, **_kwargs: str(signed_pdf_path),
-    )
-    monkeypatch.setattr(
-        included_papers_service,
-        "publish_signed_package",
-        lambda *_args, **_kwargs: str(signed_pdf_path),
-    )
-    mirror_api.db.commit()
 
     assigned = _book(
         mirror_api.db,
@@ -921,7 +911,7 @@ def test_approve_only_assignee_can_open_and_sign_denied_record(
         user_id=reviewer.id,
         submitted_by_user_id=reviewer.id,
     )
-    _assign_pending_step(mirror_api.db, assigned, reviewer)
+    assigned_version = _assign_pending_step(mirror_api.db, assigned, reviewer)
     unassigned = _book(
         mirror_api.db,
         ref_number="ASSIGNED-UNASSIGNED",
@@ -986,13 +976,26 @@ def test_approve_only_assignee_can_open_and_sign_denied_record(
     assigned_detail = mirror_api.client.get(f"/api/v1/books/{assigned.id}")
     assert assigned_detail.status_code == 200, assigned_detail.text
 
-    signed = mirror_api.client.post(f"/api/v1/books/{assigned.id}/sign")
-    assert signed.status_code == 200, signed.text
-    assert signed.json()["approval_state"] == "approved"
+    unsigned = mirror_api.client.post(
+        f"/api/v1/books/{assigned.id}/sign",
+        json={"version_id": assigned_version.id},
+    )
+    assert unsigned.status_code == 422, unsigned.text
+    assert _error_code(unsigned) == "NO_SIGNATURE"
 
-    after_decision = mirror_api.client.get(f"/api/v1/books/{assigned.id}")
-    assert after_decision.status_code == 403
-    assert _error_code(after_decision) == "FORBIDDEN"
+    decided = mirror_api.client.post(
+        f"/api/v1/books/{assigned.id}/return",
+        json={"version_id": assigned_version.id, "note": "Needs revision"},
+    )
+    assert decided.status_code == 200, decided.text
+    assert decided.json()["approval_state"] == "returned"
+
+    after_decision = mirror_api.client.get(
+        f"/api/v1/books/{assigned.id}",
+        params={"version_id": assigned_version.id},
+    )
+    assert after_decision.status_code == 200, after_decision.text
+    assert after_decision.json()["access_scope"] == "assigned_revision"
 
     received_after_decision = mirror_api.client.get(
         "/api/v1/books/approval-log",
@@ -1000,6 +1003,283 @@ def test_approve_only_assignee_can_open_and_sign_denied_record(
     )
     assert received_after_decision.status_code == 200, received_after_decision.text
     assert received_after_decision.json()["items"] == []
+
+
+def test_late_reviewer_completion_retains_only_the_assigned_revision(
+    mirror_api: ApiHarness,
+) -> None:
+    _category(mirror_api.db, "LATE", name_en="Late review")
+    _category(mirror_api.db, "SECRET", name_en="Future secret")
+    reviewer = _user(
+        mirror_api.db,
+        role="operator",
+        email="late-reviewer@test.ae",
+    )
+    book = _book(
+        mirror_api.db,
+        ref_number="LATE-REVIEW-V1",
+        category_id="LATE",
+        service_id="General Book",
+        state="approved",
+        user_id=mirror_api.actor.id,
+        submitted_by_user_id=mirror_api.actor.id,
+    )
+    book.subject = "Visible v1 subject"
+    version_v1 = book.versions[0]
+    version_v1.status = "approved"
+    version_v1.approval_context = {
+        "subject": "Visible v1 subject",
+        "category_id": "LATE",
+        "category_name_ar": None,
+        "category_name_en": "Late review",
+        "priority": "Normal",
+        "direction": "outgoing",
+        "stamp_style": None,
+        "employee_id": None,
+        "employee_name_snapshot": None,
+        "submitted_by_user_id": mirror_api.actor.id,
+        "submitted_by_name": "Mirror Admin",
+        "doc_manager_user_id": None,
+        "doc_manager_name": None,
+        "submitted_at": "2026-01-02T03:04:05+00:00",
+    }
+    decided_at = datetime(2026, 1, 2, 4, 5, 6)
+    approver_step = BookApprovalStep(
+        book_id=book.id,
+        version_id=version_v1.id,
+        step_order=0,
+        stage_label="Approve",
+        assignee_user_id=mirror_api.actor.id,
+        state="approved",
+        kind="approver",
+        decided_at=decided_at,
+    )
+    reviewer_step = BookApprovalStep(
+        book_id=book.id,
+        version_id=version_v1.id,
+        step_order=1,
+        stage_label="Review",
+        assignee_user_id=reviewer.id,
+        state="pending",
+        kind="reviewer",
+    )
+    mirror_api.db.add_all([approver_step, reviewer_step])
+    mirror_api.db.commit()
+    perm_service.set_user_overrides(
+        mirror_api.db,
+        reviewer.id,
+        [
+            ("books.view", "deny", None),
+            ("books.approve", "deny", None),
+        ],
+        actor=mirror_api.actor,
+    )
+    mirror_api.as_user(reviewer)
+
+    pending = mirror_api.client.get(
+        f"/api/v1/books/{book.id}",
+        params={"version_id": version_v1.id},
+    )
+    assert pending.status_code == 200, pending.text
+    assert pending.json()["access_scope"] == "assigned_revision"
+    assert pending.json()["selected_version_id"] == version_v1.id
+    assert pending.json()["can_review"] is True
+    assert pending.json()["can_sign"] is False
+
+    reviewed = mirror_api.client.post(
+        f"/api/v1/books/{book.id}/review",
+        json={
+            "version_id": version_v1.id,
+            "decision": "reviewed",
+            "note": "Late advisory feedback",
+        },
+    )
+    assert reviewed.status_code == 200, reviewed.text
+    assert reviewed.json()["approval_state"] == "approved"
+    assert reviewed.json()["can_review"] is False
+
+    mirror_api.db.refresh(book)
+    mirror_api.db.refresh(version_v1)
+    mirror_api.db.refresh(approver_step)
+    mirror_api.db.refresh(reviewer_step)
+    assert book.approval_state == "approved"
+    assert version_v1.status == "approved"
+    assert approver_step.state == "approved"
+    assert reviewer_step.state == "reviewed"
+    retained = mirror_api.db.scalar(
+        select(BookRevisionAccess).where(
+            BookRevisionAccess.version_id == version_v1.id,
+            BookRevisionAccess.user_id == reviewer.id,
+            BookRevisionAccess.kind == "reviewer",
+        )
+    )
+    assert retained is not None
+    assert retained.state == "reviewed"
+
+    book.subject = "FUTURE V2 SECRET SUBJECT"
+    book.category_id = "SECRET"
+    book.priority = "High"
+    book.direction = "incoming"
+    book.stamp_style = "FUTURE V2 SECRET STAMP"
+    book.attachment_paths = ["book_attachments/FUTURE-V2-SECRET.pdf"]
+    version_v2 = BookVersion(
+        book_id=book.id,
+        version_no=2,
+        template_id="FUTURE V2 SECRET TEMPLATE",
+        fields={"future_secret": "FUTURE V2 SECRET FIELD"},
+        status="pending",
+        created_by_user_id=mirror_api.actor.id,
+        approval_context={
+            "subject": "FUTURE V2 SECRET SUBJECT",
+            "category_id": "SECRET",
+            "category_name_ar": None,
+            "category_name_en": "Future secret",
+            "priority": "High",
+            "direction": "incoming",
+            "stamp_style": "FUTURE V2 SECRET STAMP",
+            "employee_id": None,
+            "employee_name_snapshot": None,
+            "submitted_by_user_id": mirror_api.actor.id,
+            "submitted_by_name": "FUTURE V2 SECRET SUBMITTER",
+            "doc_manager_user_id": None,
+            "doc_manager_name": "FUTURE V2 SECRET MANAGER",
+            "submitted_at": "2026-02-03T04:05:06+00:00",
+        },
+    )
+    mirror_api.db.add(version_v2)
+    book.approval_state = "pending"
+    mirror_api.db.commit()
+
+    for response in (
+        mirror_api.client.get(f"/api/v1/books/{book.id}"),
+        mirror_api.client.get(f"/api/v1/books/by-ref/{book.ref_number}"),
+    ):
+        assert response.status_code == 200, response.text
+        payload = response.json()
+        assert payload["access_scope"] == "assigned_revision"
+        assert payload["selected_version_id"] == version_v1.id
+        assert payload["subject"] == "Visible v1 subject"
+        assert payload["category_id"] == "LATE"
+        assert payload["priority"] == "Normal"
+        assert payload["direction"] == "outgoing"
+        assert payload["submitted_by_name"] == "Mirror Admin"
+        assert payload["stamp_style"] is None
+        assert payload["approval_state"] == "approved"
+        assert payload["attachment_paths"] == []
+        assert [version["id"] for version in payload["versions"]] == [version_v1.id]
+        assert payload["can_sign"] is False
+        assert payload["can_review"] is False
+        assert "FUTURE V2 SECRET" not in response.text
+
+    forbidden_v2 = mirror_api.client.get(
+        f"/api/v1/books/{book.id}",
+        params={"version_id": version_v2.id},
+    )
+    assert forbidden_v2.status_code == 403
+    assert _error_code(forbidden_v2) == "FORBIDDEN"
+    assert "FUTURE V2 SECRET" not in forbidden_v2.text
+
+
+@pytest.mark.parametrize(
+    ("action", "kind", "payload"),
+    [
+        pytest.param("sign", "approver", {}, id="sign"),
+        pytest.param("reject", "approver", {"note": "Reject stale"}, id="reject"),
+        pytest.param("return", "approver", {"note": "Return stale"}, id="return"),
+        pytest.param("note", "approver", {"note": "Note stale"}, id="note"),
+        pytest.param(
+            "review",
+            "reviewer",
+            {"decision": "reviewed", "note": "Review stale"},
+            id="review",
+        ),
+    ],
+)
+def test_stale_revision_actions_conflict_without_mutating_the_newer_revision(
+    mirror_api: ApiHarness,
+    action: str,
+    kind: str,
+    payload: dict[str, str],
+) -> None:
+    _category(mirror_api.db, "STALE", name_en="Stale action")
+    actor = _user(
+        mirror_api.db,
+        role="manager",
+        email=f"stale-{action}@test.ae",
+    )
+    book = _book(
+        mirror_api.db,
+        ref_number=f"STALE-{action.upper()}",
+        category_id="STALE",
+        service_id="General Book",
+        state="pending",
+        user_id=actor.id,
+        submitted_by_user_id=actor.id,
+    )
+    version_v1 = book.versions[0]
+    stale_step = BookApprovalStep(
+        book_id=book.id,
+        version_id=version_v1.id,
+        step_order=0,
+        stage_label="Review" if kind == "reviewer" else "Approve",
+        assignee_user_id=actor.id,
+        state="pending",
+        kind=kind,
+    )
+    version_v2 = BookVersion(
+        book_id=book.id,
+        version_no=2,
+        template_id="General Book",
+        fields={},
+        status="pending",
+        created_by_user_id=actor.id,
+    )
+    mirror_api.db.add_all([stale_step, version_v2])
+    mirror_api.db.flush()
+    current_step = BookApprovalStep(
+        book_id=book.id,
+        version_id=version_v2.id,
+        step_order=0,
+        stage_label="Review" if kind == "reviewer" else "Approve",
+        assignee_user_id=actor.id,
+        state="pending",
+        kind=kind,
+    )
+    mirror_api.db.add(current_step)
+    mirror_api.db.commit()
+    mirror_api.as_user(actor)
+
+    response = mirror_api.client.post(
+        f"/api/v1/books/{book.id}/{action}",
+        json={"version_id": version_v1.id, **payload},
+    )
+    assert response.status_code == 409, response.text
+    assert _error_code(response) == "REVISION_CHANGED"
+
+    mirror_api.db.refresh(book)
+    mirror_api.db.refresh(version_v1)
+    mirror_api.db.refresh(version_v2)
+    mirror_api.db.refresh(stale_step)
+    mirror_api.db.refresh(current_step)
+    assert book.approval_state == "pending"
+    assert version_v1.status == "pending"
+    assert version_v2.status == "pending"
+    assert version_v2.signed_pdf_path is None
+    assert stale_step.state == "pending"
+    assert stale_step.note is None
+    assert stale_step.decided_at is None
+    assert current_step.state == "pending"
+    assert current_step.note is None
+    assert current_step.decided_at is None
+    assert (
+        mirror_api.db.scalar(
+            select(BookRevisionAccess.id).where(
+                BookRevisionAccess.user_id == actor.id,
+                BookRevisionAccess.version_id.in_([version_v1.id, version_v2.id]),
+            )
+        )
+        is None
+    )
 
 
 def test_old_version_pending_assignment_does_not_bypass_record_type_denial(
@@ -1048,7 +1328,7 @@ def test_old_version_pending_assignment_does_not_bypass_record_type_denial(
 
     detail = mirror_api.client.get(f"/api/v1/books/{revised.id}")
     assert detail.status_code == 403
-    assert _error_code(detail) == "RECORD_TYPE_FORBIDDEN"
+    assert _error_code(detail) == "FORBIDDEN"
 
 
 def test_dashboard_book_totals_hide_denied_record_types(
@@ -1794,7 +2074,7 @@ def test_dashboard_document_stats_exclude_denied_service_and_category(
 
 
 @pytest.mark.parametrize("source", ["record_document", "record_attachment"])
-def test_generation_attachment_sources_require_source_book_access_but_allow_assignee(
+def test_generation_attachment_sources_require_full_source_book_access(
     mirror_api: ApiHarness,
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
@@ -1862,6 +2142,21 @@ def test_generation_attachment_sources_require_source_book_access_but_allow_assi
 
     _assign_pending_step(mirror_api.db, source_book, manager)
     mirror_api.db.expire_all()
+    with pytest.raises(AppError) as assigned_but_denied:
+        document_service._resolve_attachment_sources(
+            mirror_api.db,
+            [spec],
+            record_access_user=manager,
+        )
+    assert assigned_but_denied.value.code == "RECORD_TYPE_FORBIDDEN"
+
+    perm_service.set_user_override(
+        mirror_api.db,
+        manager.id,
+        "books.category.SOURCE",
+        None,
+        actor=mirror_api.actor,
+    )
     resolved = document_service._resolve_attachment_sources(
         mirror_api.db,
         [spec],
@@ -1929,6 +2224,7 @@ def test_generate_revision_preflights_edit_and_source_row_access(
         "deny",
         actor=admin,
     )
+    _assign_pending_step(mirror_api.db, source_book, manager)
     before_versions = len(source_book.versions)
     denied_source = mirror_api.client.post("/api/v1/documents/generate", json=payload)
     assert denied_source.status_code == 403, denied_source.text
@@ -2011,7 +2307,7 @@ def test_permit_edit_regenerates_version_without_record_capabilities(
 
 
 @pytest.mark.parametrize("source", ["record_document", "record_attachment"])
-def test_generate_attachment_source_preflight_uses_assignment_aware_row_guard(
+def test_generate_attachment_source_preflight_requires_full_record_access(
     mirror_api: ApiHarness,
     monkeypatch: pytest.MonkeyPatch,
     source: str,
@@ -2032,12 +2328,13 @@ def test_generate_attachment_source_preflight_uses_assignment_aware_row_guard(
         role="manager",
         email=f"{source}-route-guard@test.ae",
     )
+    admin = mirror_api.actor
     perm_service.set_user_override(
         mirror_api.db,
         manager.id,
         "books.category.SOURCE",
         "deny",
-        actor=mirror_api.actor,
+        actor=admin,
     )
     monkeypatch.setattr(documents_api, "_run_generation", lambda *_args, **_kwargs: None)
     mirror_api.as_user(manager)
@@ -2060,6 +2357,17 @@ def test_generate_attachment_source_preflight_uses_assignment_aware_row_guard(
 
     _assign_pending_step(mirror_api.db, source_book, manager)
     mirror_api.db.expire_all()
+    still_denied = mirror_api.client.post("/api/v1/documents/generate", json=payload)
+    assert still_denied.status_code == 403, still_denied.text
+    assert _error_code(still_denied) == "RECORD_TYPE_FORBIDDEN"
+
+    perm_service.set_user_override(
+        mirror_api.db,
+        manager.id,
+        "books.category.SOURCE",
+        None,
+        actor=admin,
+    )
     allowed = mirror_api.client.post("/api/v1/documents/generate", json=payload)
     assert allowed.status_code == 202, allowed.text
 

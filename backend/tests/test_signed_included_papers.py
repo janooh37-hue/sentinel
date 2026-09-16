@@ -233,7 +233,12 @@ def test_in_app_sign_book_publishes_signed_base_and_current_papers(
         lambda *_args, **_kwargs: str(signed_form),
     )
 
-    signed = book_service.sign_book(db_session, book.id, user_id=signer.id)
+    signed = book_service.sign_book(
+        db_session,
+        book.id,
+        user_id=signer.id,
+        version_id=version.id,
+    )
     db_session.refresh(version)
 
     assert signed.approval_state == "approved"
@@ -290,7 +295,12 @@ def test_in_app_signing_refuses_docx_fallback_when_papers_are_included(
     )
 
     with pytest.raises(ValidationFailedError) as error:
-        book_service.sign_book(db_session, book.id, user_id=signer.id)
+        book_service.sign_book(
+            db_session,
+            book.id,
+            user_id=signer.id,
+            version_id=version.id,
+        )
 
     assert error.value.code == "INCLUDED_PAPERS_SIGNED_PDF_REQUIRED"
     assert not signed_docx.exists()

@@ -26,9 +26,21 @@ vi.mock('@/lib/api', async (original) => {
       getInmateRegisterAwaitingClose: vi.fn(),
       getInmateRegisterCandidates: vi.fn(),
       listInmateNationalities: vi.fn(),
+      getApprovalSummary: vi.fn().mockResolvedValue({
+        can_view_sent: false,
+        available_received_kinds: [],
+        signature: { count: 0, oldest: null },
+        review: { count: 0, oldest: null },
+        sent: { count: 0, oldest: null },
+        returned_count: 0,
+        actionable_count: 0,
+      }),
     },
   }
 })
+vi.mock('@/lib/authContext', () => ({
+  useAuth: () => ({ user: { id: 1 }, status: 'authed' }),
+}))
 vi.mock('@/lib/useCapabilities', () => ({ useCapabilities: () => ({
   isLoading: false,
   has: (capability: string) => capability === 'books.view' || capability === 'documents.generate' || capability.startsWith('books.service.'),

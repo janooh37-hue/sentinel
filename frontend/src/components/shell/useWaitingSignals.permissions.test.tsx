@@ -9,7 +9,15 @@ vi.mock('@/lib/authContext', () => ({
 vi.mock('@/lib/api', () => ({
   api: {
     myCapabilities: vi.fn(),
-    listAwaitingBooks: vi.fn().mockResolvedValue([]),
+    getApprovalSummary: vi.fn().mockResolvedValue({
+      can_view_sent: false,
+      available_received_kinds: [],
+      signature: { count: 0, oldest: null },
+      review: { count: 0, oldest: null },
+      sent: { count: 0, oldest: null },
+      returned_count: 0,
+      actionable_count: 0,
+    }),
     listAwaitingScanBooks: vi.fn().mockResolvedValue([]),
     getLedgerUnreadRecent: vi.fn().mockResolvedValue({ items: [], total_unread: 0 }),
   },
@@ -38,21 +46,26 @@ beforeEach(() => {
 })
 
 describe('useWaitingSignals permission matrix', () => {
-  it('queries approvals with books.approve alone but not scan-back without books.view', async () => {
-    const capabilities = ['books.approve', 'books.edit']
+  it('always queries the assignment-aware approvals summary once authenticated — no capability gate', async () => {
+    const capabilities: string[] = []
     const client = renderSignals(capabilities)
     await waitForCapabilities(client, capabilities)
 
-    expect(api.listAwaitingBooks).toHaveBeenCalledOnce()
-    expect(api.listAwaitingScanBooks).not.toHaveBeenCalled()
+    // Never gated behind books.approve: a review-only user's late feedback
+    // is just as actionable as a signer's pending decision.
+    expect(api.getApprovalSummary).toHaveBeenCalledOnce()
   })
 
-  it('queries approvals and scan-back when each full capability pair is present', async () => {
-    const capabilities = ['books.view', 'books.approve', 'books.edit']
-    const client = renderSignals(capabilities)
-    await waitForCapabilities(client, capabilities)
+  it('queries scan-back only when both books.view and books.edit are present', async () => {
+    const withoutEdit = ['books.view']
+    const deniedClient = renderSignals(withoutEdit)
+    await waitForCapabilities(deniedClient, withoutEdit)
+    expect(api.listAwaitingScanBooks).not.toHaveBeenCalled()
 
-    expect(api.listAwaitingBooks).toHaveBeenCalledOnce()
+    vi.clearAllMocks()
+    const withEdit = ['books.view', 'books.edit']
+    const allowedClient = renderSignals(withEdit)
+    await waitForCapabilities(allowedClient, withEdit)
     expect(api.listAwaitingScanBooks).toHaveBeenCalledWith('mine')
   })
 

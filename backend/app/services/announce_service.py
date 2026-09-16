@@ -83,7 +83,7 @@ def resolve_book_pdf(db: Session, book_id: int) -> tuple[str, bytes]:
     # ------------------------------------------------------------------ #
     # 3. Signed-lock swap (mirrors download_document non-original path)    #
     # ------------------------------------------------------------------ #
-    locked, signed_rel = book_service.is_document_signed_locked(db, document_id)
+    locked, signed_rel = book_service.is_document_signed_locked(db, current_version)
 
     merge_companions = False
     if locked and signed_rel is not None:

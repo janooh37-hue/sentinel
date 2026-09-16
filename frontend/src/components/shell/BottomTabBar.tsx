@@ -14,6 +14,7 @@ import {
   SECTION_ENTRIES,
   SIGNAL_ENTRIES,
   entryById,
+  isApprovalsSignalAvailable,
   isNavEntryAllowed,
   loadSlotIds,
   placeEntry,
@@ -22,6 +23,7 @@ import {
   type DockEntry,
 } from './navCustomization'
 import { useWaitingSignals } from './useWaitingSignals'
+import { useApprovalSummary } from '@/lib/useApprovalSummary'
 
 interface DockSlotVisualProps {
   Icon: LucideIcon
@@ -116,6 +118,8 @@ export function BottomTabBar(): React.JSX.Element {
   const { has } = useCapabilities()
   const navigate = useNavigate()
   const signals = useWaitingSignals(true)
+  const { data: approvalSummary } = useApprovalSummary()
+  const approvalsAvailable = isApprovalsSignalAvailable(approvalSummary)
   const [slotIds, setSlotIds] = useState(loadSlotIds)
   const [sheet, setSheet] = useState<'closed' | 'browse' | 'edit'>('closed')
   const [selectedSlot, setSelectedSlot] = useState<number | null>(null)
@@ -127,19 +131,28 @@ export function BottomTabBar(): React.JSX.Element {
     setSelectedSlot(null)
   }, [])
 
+  // Composes the static capability gate with the assignment-aware approvals
+  // check — `sig:approvals` carries no static `cap`, so it passes
+  // `isNavEntryAllowed` unconditionally; this is what actually gates it.
+  const entryAllowed = useCallback(
+    (entry: DockEntry): boolean =>
+      isNavEntryAllowed(entry, has) && (entry.id !== 'sig:approvals' || approvalsAvailable),
+    [has, approvalsAvailable],
+  )
+
   const renderedSlots = (() => {
     const used = new Set<string>()
-    const allowedSections = SECTION_ENTRIES.filter((entry) => isNavEntryAllowed(entry, has))
+    const allowedSections = SECTION_ENTRIES.filter(entryAllowed)
     return slotIds.flatMap((slotId, index) => {
       const requested = entryById(slotId)
       const preferred = entryById(DEFAULT_SLOT_IDS[index] ?? '')
       const entry =
-        requested && isNavEntryAllowed(requested, has) && !used.has(requested.id)
+        requested && entryAllowed(requested) && !used.has(requested.id)
           ? requested
           : [preferred, ...allowedSections].find(
               (candidate) =>
                 candidate != null &&
-                isNavEntryAllowed(candidate, has) &&
+                entryAllowed(candidate) &&
                 !used.has(candidate.id),
             )
       if (!entry) return []
@@ -177,8 +190,8 @@ export function BottomTabBar(): React.JSX.Element {
     })
   }
 
-  const availableSections = SECTION_ENTRIES.filter((entry) => isNavEntryAllowed(entry, has))
-  const availableSignals = SIGNAL_ENTRIES.filter((entry) => isNavEntryAllowed(entry, has))
+  const availableSections = SECTION_ENTRIES.filter(entryAllowed)
+  const availableSignals = SIGNAL_ENTRIES.filter(entryAllowed)
 
   return (
     // modal={false}: a modal dialog sets pointer-events:none on <body>, which would

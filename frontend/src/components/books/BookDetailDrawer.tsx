@@ -282,6 +282,7 @@ export function BookDetailDrawer({ bookId, onClose, onSubmitForApproval }: Props
 
   const { decideMutation, signMutation } = useBookApprovalActions({
     bookId: book?.id,
+    versionId: current?.id,
     onDecided: () => {
       setNoteText('')
       setNoteFor(null)
@@ -561,9 +562,9 @@ export function BookDetailDrawer({ bookId, onClose, onSubmitForApproval }: Props
           )}
 
           {/* reviewer footer */}
-          {action === 'review' && book && (
+          {action === 'review' && book && current && (
             <footer className="border-t border-hairline px-5 py-4">
-              <ReviewerActions bookId={book.id} onDone={onClose} />
+              <ReviewerActions bookId={book.id} versionId={current.id} onDone={onClose} />
             </footer>
           )}
 

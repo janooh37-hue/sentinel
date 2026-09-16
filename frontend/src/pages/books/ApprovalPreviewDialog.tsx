@@ -7,6 +7,8 @@ import { Loader2, X } from 'lucide-react'
 
 import { api } from '@/lib/api'
 import type { ApprovalLogItem } from '@/lib/api'
+import { approvalRecordUrl } from '@/lib/approvals'
+import type { ApprovalContext } from '@/lib/approvals'
 import { cn } from '@/lib/utils'
 
 const DocPdfCanvas = lazy(() => import('@/pages/application/DocPdfCanvas'))
@@ -15,6 +17,20 @@ interface Props {
   item: ApprovalLogItem | null
   triggerRef: RefObject<HTMLButtonElement | null>
   onClose: () => void
+  /** The originating queue context — carried into "Open full record" so it
+   *  lands with the same context the row itself would have used. */
+  context: ApprovalContext
+}
+
+/** Canonical preview source: the selected revision's signed artifact once
+ *  approved, otherwise its generated PDF. Null when neither exists — the
+ *  caller renders an explicit unavailable state rather than crashing on an
+ *  absent document_id. */
+function previewPdfUrl(item: ApprovalLogItem): string | null {
+  if (item.verdict === 'approved' && item.version_id != null) {
+    return api.signedDocumentUrl(item.book_id, item.version_id)
+  }
+  return item.document_id != null ? api.documentDownloadUrl(item.document_id, 'pdf') : null
 }
 
 export function StatusChip({ item }: { item: ApprovalLogItem }): React.JSX.Element {
@@ -48,7 +64,7 @@ export function StatusChip({ item }: { item: ApprovalLogItem }): React.JSX.Eleme
   )
 }
 
-export function ApprovalPreviewDialog({ item, triggerRef, onClose }: Props): React.JSX.Element {
+export function ApprovalPreviewDialog({ item, triggerRef, onClose, context }: Props): React.JSX.Element {
   const { t } = useTranslation()
   const navigate = useNavigate()
 
@@ -110,17 +126,24 @@ export function ApprovalPreviewDialog({ item, triggerRef, onClose }: Props): Rea
                 }}
               >
                 <div className="relative mx-auto w-full max-w-[760px]">
-                  <Suspense
-                    fallback={
-                      <div className="flex min-h-[300px] items-center justify-center text-muted-foreground">
-                        <Loader2 className="h-6 w-6 animate-spin" aria-hidden />
+                  {(() => {
+                    const src = previewPdfUrl(item)
+                    return src ? (
+                      <Suspense
+                        fallback={
+                          <div className="flex min-h-[300px] items-center justify-center text-muted-foreground">
+                            <Loader2 className="h-6 w-6 animate-spin" aria-hidden />
+                          </div>
+                        }
+                      >
+                        <DocPdfCanvas pdfUrl={src} />
+                      </Suspense>
+                    ) : (
+                      <div className="flex min-h-[300px] items-center justify-center text-[0.85em] text-muted-foreground">
+                        {t('books.record.noDocument')}
                       </div>
-                    }
-                  >
-                    <DocPdfCanvas
-                      pdfUrl={api.documentDownloadUrl(item.document_id!, 'pdf')}
-                    />
-                  </Suspense>
+                    )
+                  })()}
                 </div>
               </div>
 
@@ -137,7 +160,7 @@ export function ApprovalPreviewDialog({ item, triggerRef, onClose }: Props): Rea
                   type="button"
                   onClick={() => {
                     onClose()
-                    navigate(`/books/${item.book_id}`)
+                    navigate(approvalRecordUrl(item.book_id, item.version_id ?? null, context))
                   }}
                   className="inline-flex h-9 items-center rounded-lg bg-primary px-4 text-[0.82em] font-semibold text-primary-foreground transition-colors hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >

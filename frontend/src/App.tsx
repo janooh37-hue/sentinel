@@ -8,10 +8,7 @@ import { BottomTabBar } from '@/components/shell/BottomTabBar'
 import { LockOverlay } from '@/components/shell/LockOverlay'
 import { MobileTopBar } from '@/components/shell/MobileTopBar'
 import { NavDrawer } from '@/components/shell/NavDrawer'
-import {
-  RequireAnyCapability,
-  RequireCapability,
-} from '@/components/shell/RequireCapability'
+import { RequireCapability } from '@/components/shell/RequireCapability'
 import { TopNav } from '@/components/shell/TopNav'
 import { ErrorBoundary } from '@/components/ui/error-boundary'
 import { ShortcutsHelpDialog } from '@/components/ui/shortcuts-help'
@@ -104,7 +101,6 @@ const DutyLocationsPage = lazy(loadDutyLocationsPage)
 const ScanInboxPage = lazy(loadScanInboxPage)
 const SendToGroupPage = lazy(loadSendToGroupPage)
 const ScanBackPage = lazy(loadScanBackPage)
-const APPROVALS_ROUTE_CAPS = ['books.view', 'books.approve'] as const
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -297,15 +293,11 @@ function Shell(): React.JSX.Element {
                 }
               />
               {/* Static segment outranks /books/:id in react-router's ranking —
-                  same pattern as /employees/timesheet. */}
-              <Route
-                path="/books/approvals"
-                element={
-                  <RequireAnyCapability caps={APPROVALS_ROUTE_CAPS}>
-                    <ApprovalsPage />
-                  </RequireAnyCapability>
-                }
-              />
+                  same pattern as /employees/timesheet. Authenticated only: a
+                  pending signature/review assignment grants worklist access
+                  without books.view/books.approve — the API owns that decision,
+                  same as /books/:id below. */}
+              <Route path="/books/approvals" element={<ApprovalsPage />} />
               {/* Pending approval/reviewer assignment is row authority even
                   without global book caps; the API owns that decision. */}
               <Route path="/books/:id" element={<BookRecordPage />} />

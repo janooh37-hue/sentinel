@@ -57,6 +57,7 @@ from app.db.models import (
     Book,
     BookApprovalStep,
     BookCategory,
+    BookRevisionAccess,
     BookVersion,
     Document,
     Employee,
@@ -954,7 +955,7 @@ def _resolve_attachment_sources(
 
     ``staged`` resolves the parked upload token. For interactive generation,
     ``record_document`` and ``record_attachment`` first enforce the referenced
-    book's assignment-aware row policy, then resolve its current PDF or film-strip
+    book's normal full-record read policy, then resolve its current PDF or film-strip
     scan. Invalid locators fail fast before reference allocation.
     """
     from app.services import book_service, staging_service
@@ -982,7 +983,7 @@ def _resolve_attachment_sources(
                     slot_key=spec.slot_key,
                 )
             if record_access_user is not None:
-                book_service.require_book_access(db, record_access_user, book)
+                book_service.require_full_book_access(db, record_access_user, book)
             if spec.source == "record_document":
                 version = book.versions[-1] if book.versions else None
                 doc = (
@@ -1028,6 +1029,36 @@ def _ordered_attachment_specs(
     )
     extras = [item for item in resolved if not item[0].slot_key]
     return [*keyed, *extras]
+
+
+def _freeze_legacy_current_approval_context(
+    db: Session, book: Book, version: BookVersion
+) -> None:
+    """Snapshot a current legacy revision without inventing its submission time."""
+    if version.approval_context is not None:
+        return
+    from app.services import book_service
+
+    submitted_at = min(
+        (step.created_at for step in version.approval_steps if step.created_at is not None),
+        default=None,
+    )
+    if submitted_at is not None:
+        book_service.capture_approval_context(
+            db,
+            book,
+            version,
+            submitted_by_user_id=book.submitted_by_user_id,
+            submitted_at=submitted_at,
+        )
+        return
+    version.approval_context = book_service._approval_context(
+        db,
+        book,
+        version,
+        submitted_by_user_id=book.submitted_by_user_id,
+        submitted_at=None,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -1190,7 +1221,7 @@ def generate_document(
                     http_status=403,
                     details={"capability": "books.edit"},
                 )
-            book_service.require_book_access(db, record_access_user, revise_book)
+            book_service.require_full_book_access(db, record_access_user, revise_book)
         if revise_book.approval_state not in (
             "returned",
             "rejected",
@@ -1453,9 +1484,24 @@ def generate_document(
         if revise_book is not None:
             _logged_book = revise_book
             latest = revise_book.versions[-1] if revise_book.versions else None
-            if revise_book.approval_state == "none" and latest is not None:
-                # Draft edit — regenerate in place: replace the current version's
-                # document/fields, keep version_no, stay a draft.
+            has_approval_assignments = bool(latest and latest.approval_steps)
+            has_retained_provenance = (
+                latest is not None
+                and db.scalar(
+                    select(BookRevisionAccess.id)
+                    .where(BookRevisionAccess.version_id == latest.id)
+                    .limit(1)
+                )
+                is not None
+            )
+            if (
+                revise_book.approval_state == "none"
+                and latest is not None
+                and not has_approval_assignments
+                and not has_retained_provenance
+            ):
+                # An untouched draft may be replaced in place. Once assignments
+                # or retained decisions exist, preserve its revision and files.
                 old_doc = db.get(Document, latest.document_id) if latest.document_id else None
                 # Capture paths BEFORE db.delete so we can unlink post-commit
                 # (B1: file deletion is irreversible; must not run before the
@@ -1474,6 +1520,8 @@ def generate_document(
                 db.flush()
                 _state_version = latest
             else:
+                if latest is not None:
+                    _freeze_legacy_current_approval_context(db, revise_book, latest)
                 # Revise after return/reject/awaiting-scan — append a new
                 # version (existing behavior).
                 next_no = (
@@ -1496,7 +1544,7 @@ def generate_document(
                     created_by_user_id=current_user.id if current_user is not None else None,
                     created_at=ts.replace(tzinfo=None),
                 )
-                db.add(revision_row)
+                revise_book.versions.append(revision_row)
                 revise_book.approval_state = "none"
                 revise_book.submitted_by_user_id = None
                 revise_book.doc_path = _rel(docx_path) or str(docx_path)
@@ -1547,7 +1595,7 @@ def generate_document(
                 created_by_user_id=current_user.id if current_user is not None else None,
                 created_at=ts.replace(tzinfo=None),
             )
-            db.add(initial_row)
+            book_row.versions.append(initial_row)
             db.flush()
             _state_version = initial_row
         else:
@@ -1621,6 +1669,7 @@ def generate_document(
                 ).scalar_one_or_none()
                 assignee_id = default_mgr.id if default_mgr is not None else None
             if assignee_id is not None:
+                submitted_at = datetime.now(UTC).replace(tzinfo=None)
                 _state_version.approval_steps.append(
                     BookApprovalStep(
                         book_id=_logged_book.id,
@@ -1630,12 +1679,24 @@ def generate_document(
                         assignee_user_id=assignee_id,
                         kind="approver",
                         state="pending",
+                        created_at=submitted_at,
                     )
                 )
                 _logged_book.approval_state = "pending"
                 _state_version.status = "pending"
                 _logged_book.submitted_by_user_id = (
                     current_user.id if current_user is not None else None
+                )
+                from app.services import book_service
+
+                book_service.capture_approval_context(
+                    db,
+                    _logged_book,
+                    _state_version,
+                    submitted_by_user_id=(
+                        current_user.id if current_user is not None else None
+                    ),
+                    submitted_at=submitted_at,
                 )
         db.flush()
 
@@ -2193,25 +2254,50 @@ def render_signed_pdf(
     return _rel(pdf_path) if pdf_path is not None else _rel(docx_path)
 
 
-def download_filename_for(row: Document, ext: str, *, db: Session | None = None) -> str:
-    """Filename for a document download, per export-naming rules (spec 2026-07-01)."""
+def download_filename_for(
+    row: Document, ext: str, *, db: Session | None = None, version: BookVersion | None = None,
+) -> str:
+    """Filename for a document download, per export-naming rules (spec 2026-07-01).
+
+    ``version`` is the caller's already-authorized owning revision. For a
+    classified book form, the filename subject comes from that revision's
+    frozen ``approval_context`` snapshot when present; a historical revision
+    with no trustworthy snapshot gets an empty subject rather than leaking
+    the book's current (possibly later) subject onto old bytes. Only the
+    current revision falls back to the live ``Book.subject``.
+    """
     from app.core.export_naming import book_download_filename, export_filename
 
     if row.template_id in CLASSIFIED_BOOK_FORMS and db is not None:
-        book = (
-            db.execute(
-                select(Book)
-                .join(BookVersion, BookVersion.book_id == Book.id)
-                .where(BookVersion.document_id == row.id)
+        resolved_version = version
+        if resolved_version is None:
+            resolved_version = (
+                db.execute(
+                    select(BookVersion).where(BookVersion.document_id == row.id)
+                )
+                .scalars()
+                .first()
             )
-            .scalars()
-            .first()
-        )
-        if book is not None:
+        if resolved_version is not None and resolved_version.book is not None:
+            book = resolved_version.book
+            context = (
+                resolved_version.approval_context
+                if isinstance(resolved_version.approval_context, dict)
+                else {}
+            )
+            context_subject = context.get("subject")
+            current = max(book.versions, key=lambda v: v.version_no, default=None)
+            is_current = current is not None and current.id == resolved_version.id
+            if isinstance(context_subject, str):
+                subject = context_subject
+            elif is_current:
+                subject = book.subject or ""
+            else:
+                subject = ""
             return book_download_filename(
                 ref=book.ref_number,
-                subject=book.subject or "",
-                when=book.created_at,
+                subject=subject,
+                when=resolved_version.created_at,
                 ext=ext,
             )
 

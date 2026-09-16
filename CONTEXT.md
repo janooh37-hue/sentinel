@@ -27,6 +27,49 @@ One committed version of a Record's generated artifact, ordered within that
 Record and carrying its own review or signing state.
 _Avoid_: Edit, draft, file version
 
+**Submitter**:
+The person who sends a Record's Revision for approval, who may differ from its
+original author.
+_Avoid_: Employee or creator as a synonym
+
+**Signer**:
+The person assigned to approve a Record's Revision through their signature.
+_Avoid_: Manager as a synonym for the assignment
+
+**Advisory reviewer**:
+A person asked to review a Record's Revision and provide feedback; their review
+does not itself authorize or block signing.
+_Avoid_: Signer, required approval stage
+
+**Awaiting signature**:
+A submitted Revision that has not yet received its signing decision.
+_Avoid_: All open work, review requested
+
+**Returned for correction**:
+A submitted Revision that the signer has sent back with a reason for correction
+rather than approving or rejecting it.
+_Avoid_: Advisory changes requested, rejected
+
+**Approval worklist**:
+A person's approval-related Records grouped by responsibility, with one entry
+per Record rather than separate entries for each submission attempt. It shows
+current information where authorized, otherwise only information from
+assigned Revisions the person may read.
+_Avoid_: Submission-history ledger, decision audit log
+
+**Late advisory feedback**:
+An advisory review completed after the signer has approved, returned, or
+rejected the reviewed Revision. It provides feedback without reopening or
+changing the signing decision.
+_Avoid_: Reapproval, reversal, blocking review
+
+**Retained revision access**:
+A completed assignee's continuing right to read the Revisions they were
+assigned, without automatic expiry, subject to explicit administrative
+revocation. It does not authorize later Revisions or confer editing/signing
+authority.
+_Avoid_: Record ownership, permanent access to the whole Record
+
 ### Attendance and leave
 
 **Attendance case**:

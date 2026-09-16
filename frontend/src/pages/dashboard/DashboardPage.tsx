@@ -34,7 +34,7 @@ import {
 } from 'lucide-react'
 
 import { api } from '@/lib/api'
-import { APPROVALS_RECEIVED_DEEPLINK } from '@/lib/approvals'
+import { APPROVALS_LOG_PATH, approvalQueueUrl, defaultApprovalContext } from '@/lib/approvals'
 import type {
   DashboardLayout,
   DashboardOnLeaveItem,
@@ -58,6 +58,7 @@ import { ExpiringSoonWidget } from '@/pages/dashboard/widgets/ExpiringSoonWidget
 import { PendingDeparturesWidget } from '@/pages/dashboard/widgets/PendingDeparturesWidget'
 import { ViolationMonthsWidget } from '@/pages/dashboard/widgets/ViolationMonthsWidget'
 import { WaitingApprovalsCard } from '@/pages/dashboard/widgets/WaitingApprovalsCard'
+import { SentApprovalsWidget } from '@/pages/dashboard/widgets/SentApprovalsWidget'
 import { WorkforceCoverageSheet } from '@/pages/dashboard/widgets/WorkforceCoverageSheet'
 import { WorkforcePulseWidget } from '@/pages/dashboard/widgets/WorkforcePulseWidget'
 import {
@@ -77,6 +78,7 @@ import {
   type WidgetZone,
 } from '@/lib/dashboardLayout'
 import { hijriToday } from '@/lib/hijri'
+import { useApprovalSummary } from '@/lib/useApprovalSummary'
 import { useAuth } from '@/lib/authContext'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { QUICK_ACTION_META } from '@/lib/quickActions'
@@ -178,6 +180,11 @@ export function DashboardPage({ onNavigate }: DashboardPageProps): React.JSX.Ele
   })
 
   const summary: DashboardSummary | undefined = summaryQuery.data
+
+  // #31 — shared with WaitingApprovalsCard/BooksAwaitingWidget/SentApprovalsWidget
+  // (same cache entry); used here only to build the top-card's click target
+  // via the generic Approvals landing rule.
+  const approvalSummary = useApprovalSummary().data
 
   // Layout: read this user's private dashboard layout; fall back to
   // `DEFAULT_LAYOUT` until they customise it.
@@ -338,10 +345,18 @@ export function DashboardPage({ onNavigate }: DashboardPageProps): React.JSX.Ele
         )
       case 'waiting_approvals':
         return zone === 'top' ? (
-          <WaitingApprovalsCard onReview={() => navigate(APPROVALS_RECEIVED_DEEPLINK)} />
+          <WaitingApprovalsCard
+            onReview={() =>
+              navigate(
+                approvalSummary ? approvalQueueUrl(defaultApprovalContext(approvalSummary) ?? { tab: 'received', kind: 'sign', status: 'all', sort: 'oldest', page: 1 }) : APPROVALS_LOG_PATH,
+              )
+            }
+          />
         ) : (
           <BooksAwaitingWidget />
         )
+      case 'sent_approvals':
+        return <SentApprovalsWidget />
       case 'violations': {
         const openViolations = summary?.totals.open_violations_count ?? 0
         return (

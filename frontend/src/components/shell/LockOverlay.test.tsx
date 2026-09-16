@@ -180,7 +180,7 @@ describe('LockOverlay', () => {
 
   it('renders the console digest as a strip below the unlock form, and inline for band', async () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-    client.setQueryData(['books', 'awaiting'], [{ id: 1 }, { id: 2 }, { id: 3 }])
+    client.setQueryData(['books', 'approval-summary', 0], { actionable_count: 3 })
     client.setQueryData(['ledger', 'unread-recent'], { items: [], total_unread: 2 })
     client.setQueryData(['expiry', 'summary'], { expired: 0, critical: 1, urgent: 1 })
 
@@ -216,7 +216,7 @@ describe('LockOverlay', () => {
 
   it('shows only privacy-safe cached digest counts', async () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-    client.setQueryData(['books', 'awaiting'], [{ id: 1 }, { id: 2 }, { id: 3 }])
+    client.setQueryData(['books', 'approval-summary', 0], { actionable_count: 3 })
     client.setQueryData(['ledger', 'unread-recent'], {
       items: [{ id: 7, subject: 'Sensitive subject', counterparty: 'Private sender' }],
       total_unread: 2,

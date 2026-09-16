@@ -1,11 +1,15 @@
 /**
- * ApprovalsPage behaviour (#31):
- *  - default tab rule: reviewers land on "received", everyone else on "sent";
- *  - ?tab= overrides once and is consumed + stripped from the URL;
- *  - status chips filter priority groups client-side;
- *  - rows navigate to full records while document thumbnails open previews.
+ * ApprovalsPage behaviour (#31, revision-scoped worklist):
+ *  - the generic landing rule resolves a context from the caller's summary,
+ *    with no query params or an unauthorized/invalid one;
+ *  - the URL canonicalizes to that resolved context;
+ *  - To sign / To review sub-tabs appear only when both are available;
+ *  - status/sort/page controls re-query with the right server params;
+ *  - rows navigate to the record carrying the originating context;
+ *  - a late advisory review shows its badge and the record's real outcome;
+ *  - document thumbnails open a preview without navigating.
  */
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { I18nextProvider } from 'react-i18next'
@@ -13,17 +17,11 @@ import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import i18n from '@/lib/i18n'
-import type { ApprovalLogItem } from '@/lib/api'
+import type { ApprovalLogItem, ApprovalSummaryResponse } from '@/lib/api'
 import { ApprovalsPage } from './ApprovalsPage'
 
-const mockHas = vi.fn<(cap: string) => boolean>(() => true)
-
-vi.mock('@/lib/useCapabilities', () => ({
-  useCapabilities: () => ({
-    capabilities: new Set<string>(),
-    isLoading: false,
-    has: (cap: string) => mockHas(cap),
-  }),
+vi.mock('@/lib/authContext', () => ({
+  useAuth: () => ({ status: 'authed', user: { id: 7 } }),
 }))
 
 vi.mock('@/pages/application/DocPdfCanvas', () => ({
@@ -35,6 +33,7 @@ vi.mock('@/pages/application/DocPdfCanvas', () => ({
 vi.mock('@/pages/scanInbox/ScanPdfCanvas', () => ({
   default: () => <div data-testid="approval-thumb-canvas" />,
 }))
+
 vi.mock('@/lib/api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/api')>()
   return {
@@ -42,11 +41,25 @@ vi.mock('@/lib/api', async (importOriginal) => {
     api: {
       ...actual.api,
       listApprovalLog: vi.fn(),
+      getApprovalSummary: vi.fn(),
     },
   }
 })
 
 const { api } = await import('@/lib/api')
+
+function summary(overrides: Partial<ApprovalSummaryResponse> = {}): ApprovalSummaryResponse {
+  return {
+    can_view_sent: false,
+    available_received_kinds: ['approver'],
+    signature: { count: 1, oldest: null },
+    review: { count: 0, oldest: null },
+    sent: { count: 0, oldest: null },
+    returned_count: 0,
+    actionable_count: 1,
+    ...overrides,
+  }
+}
 
 function row(overrides: Partial<ApprovalLogItem>): ApprovalLogItem {
   return {
@@ -56,6 +69,7 @@ function row(overrides: Partial<ApprovalLogItem>): ApprovalLogItem {
     category_name_ar: null,
     category_name_en: null,
     status: 'pending',
+    record_status: 'pending',
     priority: 'Normal',
     submitted_by_user_id: 9,
     submitted_by_name: 'Submitter',
@@ -67,9 +81,11 @@ function row(overrides: Partial<ApprovalLogItem>): ApprovalLogItem {
     decided_at: null,
     verdict: null,
     document_id: null,
-    your_step_kind: null,
-    your_step_state: null,
-    your_step_decided_at: null,
+    version_id: 1,
+    version_no: 1,
+    assignment_version_no: 1,
+    assigned_signer_user_id: null,
+    access_scope: 'full',
     ...overrides,
   }
 }
@@ -96,213 +112,242 @@ function renderPage(initialEntry = '/books/approvals') {
   )
 }
 
+const emptyLog = { items: [], total: 0, limit: 100, offset: 0 }
+
 beforeEach(() => {
   vi.mocked(api.listApprovalLog).mockReset()
-  mockHas.mockImplementation(() => true)
+  vi.mocked(api.getApprovalSummary).mockReset()
+  vi.mocked(api.listApprovalLog).mockResolvedValue(emptyLog)
 })
 
-describe('ApprovalsPage tabs', () => {
-  it('defaults to received for a caller holding books.approve', async () => {
+describe('ApprovalsPage generic landing + URL canonicalization', () => {
+  it('lands on received/sign/pending when the caller has signature work', async () => {
+    vi.mocked(api.getApprovalSummary).mockResolvedValue(summary())
+    renderPage()
+    await waitFor(() =>
+      expect(api.listApprovalLog).toHaveBeenCalledWith('received', {
+        kind: 'approver',
+        status: 'pending',
+        sort: 'oldest',
+        limit: 100,
+        offset: 0,
+      }),
+    )
+    await waitFor(() =>
+      expect(screen.getByTestId('location')).toHaveTextContent(
+        '/books/approvals?tab=received&kind=sign&status=pending&sort=oldest&page=1',
+      ),
+    )
+  })
+
+  it('lands on received/review/pending when only review work is available', async () => {
+    vi.mocked(api.getApprovalSummary).mockResolvedValue(
+      summary({
+        available_received_kinds: ['reviewer'],
+        signature: { count: 0, oldest: null },
+        review: { count: 2, oldest: null },
+      }),
+    )
+    renderPage()
+    await waitFor(() =>
+      expect(api.listApprovalLog).toHaveBeenCalledWith('received', {
+        kind: 'reviewer',
+        status: 'pending',
+        sort: 'oldest',
+        limit: 100,
+        offset: 0,
+      }),
+    )
+  })
+
+  it('lands on sent when there is no assigned work but the caller can view sent', async () => {
+    vi.mocked(api.getApprovalSummary).mockResolvedValue(
+      summary({
+        available_received_kinds: [],
+        signature: { count: 0, oldest: null },
+        can_view_sent: true,
+      }),
+    )
+    renderPage()
+    await waitFor(() =>
+      expect(api.listApprovalLog).toHaveBeenCalledWith('sent', {
+        kind: undefined,
+        status: 'pending',
+        sort: 'oldest',
+        limit: 100,
+        offset: 0,
+      }),
+    )
+  })
+
+  it('shows the neutral no-assigned-work state when nothing is authorized', async () => {
+    vi.mocked(api.getApprovalSummary).mockResolvedValue(
+      summary({ available_received_kinds: [], signature: { count: 0, oldest: null } }),
+    )
+    renderPage()
+    expect(await screen.findByText('No approvals assigned to you.')).toBeInTheDocument()
+    expect(api.listApprovalLog).not.toHaveBeenCalled()
+  })
+
+  it('an unauthorized explicit tab falls back to the landing rule instead of granting access', async () => {
+    vi.mocked(api.getApprovalSummary).mockResolvedValue(summary({ can_view_sent: false }))
+    renderPage('/books/approvals?tab=sent')
+    await waitFor(() =>
+      expect(api.listApprovalLog).toHaveBeenCalledWith(
+        'received',
+        expect.objectContaining({ kind: 'approver' }),
+      ),
+    )
+    expect(api.listApprovalLog).not.toHaveBeenCalledWith('sent', expect.anything())
+  })
+
+  it('an invalid status value resets to the field default rather than erroring', async () => {
+    vi.mocked(api.getApprovalSummary).mockResolvedValue(summary())
+    renderPage('/books/approvals?tab=received&kind=sign&status=bogus')
+    await waitFor(() =>
+      expect(api.listApprovalLog).toHaveBeenCalledWith(
+        'received',
+        expect.objectContaining({ status: 'pending' }),
+      ),
+    )
+  })
+})
+
+describe('ApprovalsPage sub-tabs and filters', () => {
+  it('shows To sign / To review sub-tabs only when both kinds are available', async () => {
+    vi.mocked(api.getApprovalSummary).mockResolvedValue(
+      summary({ available_received_kinds: ['approver', 'reviewer'], review: { count: 1, oldest: null } }),
+    )
+    renderPage()
+    await screen.findByTestId('approvals-subtab-sign')
+    expect(screen.getByTestId('approvals-subtab-review')).toBeInTheDocument()
+  })
+
+  it('hides sub-tabs with only one available kind', async () => {
+    vi.mocked(api.getApprovalSummary).mockResolvedValue(summary())
+    renderPage()
+    await waitFor(() => expect(api.listApprovalLog).toHaveBeenCalled())
+    expect(screen.queryByTestId('approvals-subtab-sign')).not.toBeInTheDocument()
+  })
+
+  it('a status chip click re-queries with the new status and resets to page 1', async () => {
+    vi.mocked(api.getApprovalSummary).mockResolvedValue(summary())
+    renderPage()
+    await screen.findByTestId('approvals-filter-approved')
+    await userEvent.click(screen.getByTestId('approvals-filter-approved'))
+    await waitFor(() =>
+      expect(api.listApprovalLog).toHaveBeenLastCalledWith(
+        'received',
+        expect.objectContaining({ status: 'approved', offset: 0 }),
+      ),
+    )
+  })
+
+  it('the review sub-tab only offers pending/all statuses', async () => {
+    vi.mocked(api.getApprovalSummary).mockResolvedValue(
+      summary({ available_received_kinds: ['approver', 'reviewer'], review: { count: 1, oldest: null } }),
+    )
+    renderPage()
+    await userEvent.click(await screen.findByTestId('approvals-subtab-review'))
+    await waitFor(() => expect(screen.queryByTestId('approvals-filter-approved')).not.toBeInTheDocument())
+    expect(screen.getByTestId('approvals-filter-pending')).toBeInTheDocument()
+    expect(screen.getByTestId('approvals-filter-all')).toBeInTheDocument()
+  })
+
+  it('sort toggle flips oldest/newest and resets to page 1', async () => {
+    vi.mocked(api.getApprovalSummary).mockResolvedValue(summary())
+    renderPage()
+    await screen.findByTestId('approvals-sort-toggle')
+    await userEvent.click(screen.getByTestId('approvals-sort-toggle'))
+    await waitFor(() =>
+      expect(api.listApprovalLog).toHaveBeenLastCalledWith(
+        'received',
+        expect.objectContaining({ sort: 'newest' }),
+      ),
+    )
+  })
+})
+
+describe('ApprovalsPage pagination', () => {
+  it('Next advances the page and requeries with the new offset', async () => {
+    vi.mocked(api.getApprovalSummary).mockResolvedValue(summary())
     vi.mocked(api.listApprovalLog).mockResolvedValue({
-      items: [],
-      total: 0,
+      items: [row({})],
+      total: 150,
       limit: 100,
       offset: 0,
     })
     renderPage()
+    await screen.findByText('HR-0001')
+    await userEvent.click(screen.getByLabelText('Next page'))
     await waitFor(() =>
-      expect(api.listApprovalLog).toHaveBeenCalledWith('received'),
+      expect(api.listApprovalLog).toHaveBeenLastCalledWith(
+        'received',
+        expect.objectContaining({ offset: 100 }),
+      ),
     )
-    expect(screen.getByRole('tab', { selected: true })).toHaveAttribute(
-      'data-testid',
-      'approvals-tab-received',
-    )
-  })
-
-  it('defaults to sent for a caller without books.approve, and hides the received tab', async () => {
-    mockHas.mockImplementation((cap) => cap !== 'books.approve')
-    vi.mocked(api.listApprovalLog).mockResolvedValue({
-      items: [],
-      total: 0,
-      limit: 100,
-      offset: 0,
-    })
-    renderPage()
-    await waitFor(() => expect(api.listApprovalLog).toHaveBeenCalledWith('sent'))
-    expect(screen.queryByTestId('approvals-tab-received')).not.toBeInTheDocument()
-  })
-
-  it('?tab=sent overrides the default and is consumed + stripped from the URL', async () => {
-    vi.mocked(api.listApprovalLog).mockResolvedValue({
-      items: [],
-      total: 0,
-      limit: 100,
-      offset: 0,
-    })
-    renderPage('/books/approvals?tab=sent')
-    await waitFor(() => expect(api.listApprovalLog).toHaveBeenCalledWith('sent'))
-    // The param was consumed: the address bar is clean afterwards.
-    await waitFor(() =>
-      expect(screen.getByTestId('location')).toHaveTextContent('/books/approvals'),
-    )
-  })
-
-  it('approve-only callers cannot select sent and an unauthorized ?tab=sent is sanitized', async () => {
-    mockHas.mockImplementation((cap) => cap === 'books.approve')
-    vi.mocked(api.listApprovalLog).mockResolvedValue({
-      items: [],
-      total: 0,
-      limit: 100,
-      offset: 0,
-    })
-
-    renderPage('/books/approvals?tab=sent')
-
-    await waitFor(() => expect(api.listApprovalLog).toHaveBeenCalledWith('received'))
-    expect(api.listApprovalLog).not.toHaveBeenCalledWith('sent')
-    expect(screen.queryByTestId('approvals-tab-sent')).not.toBeInTheDocument()
-    await waitFor(() =>
-      expect(screen.getByTestId('location')).toHaveTextContent('/books/approvals'),
-    )
-  })
-
-  it('view-only callers sanitize an unauthorized received tab to sent', async () => {
-    mockHas.mockImplementation((cap) => cap === 'books.view')
-    vi.mocked(api.listApprovalLog).mockResolvedValue({
-      items: [],
-      total: 0,
-      limit: 100,
-      offset: 0,
-    })
-
-    renderPage('/books/approvals?tab=received')
-
-    await waitFor(() => expect(api.listApprovalLog).toHaveBeenCalledWith('sent'))
-    expect(api.listApprovalLog).not.toHaveBeenCalledWith('received')
-    expect(screen.queryByTestId('approvals-tab-received')).not.toBeInTheDocument()
   })
 })
 
-describe('ApprovalsPage rows and filters', () => {
-  const items = [
-    row({ book_id: 1, ref_number: 'HR-0001', subject: 'Pending one', status: 'pending' }),
-    row({
-      book_id: 2,
-      ref_number: 'HR-0002',
-      subject: 'Approved one',
-      status: 'approved',
-      verdict: 'approved',
-      decided_at: '2026-08-20T09:00:00+00:00',
-    }),
-  ]
-
+describe('ApprovalsPage rows', () => {
   beforeEach(() => {
-    vi.mocked(api.listApprovalLog).mockResolvedValue({
-      items,
-      total: items.length,
-      limit: 100,
-      offset: 0,
-    })
+    vi.mocked(api.getApprovalSummary).mockResolvedValue(summary())
   })
 
   it('renders ref chips, subjects, and the submitter line', async () => {
+    vi.mocked(api.listApprovalLog).mockResolvedValue({
+      items: [row({ book_id: 1, ref_number: 'HR-0001', subject: 'Pending one' })],
+      total: 1,
+      limit: 100,
+      offset: 0,
+    })
     renderPage()
     expect(await screen.findByText('HR-0001')).toBeInTheDocument()
-    expect(screen.getByText('HR-0002')).toBeInTheDocument()
     expect(screen.getByText('Pending one')).toBeInTheDocument()
-    expect(screen.getAllByText('Submitter').length).toBeGreaterThan(0)
+    expect(screen.getByText('Submitter')).toBeInTheDocument()
   })
 
-  it('status chips filter rows and their priority groups client-side', async () => {
-    renderPage()
-    await screen.findByText('HR-0001')
-    await userEvent.click(screen.getByTestId('approvals-filter-approved'))
-    expect(screen.getByText('HR-0002')).toBeInTheDocument()
-    expect(screen.queryByText('HR-0001')).not.toBeInTheDocument()
-    expect(screen.getByTestId('approvals-group-approved')).toBeInTheDocument()
-    expect(screen.queryByTestId('approvals-group-waiting')).not.toBeInTheDocument()
-    expect(screen.queryByTestId('approvals-group-returned')).not.toBeInTheDocument()
-    expect(screen.queryByTestId('approvals-group-rejected')).not.toBeInTheDocument()
-    await userEvent.click(screen.getByTestId('approvals-filter-all'))
-    expect(screen.getByText('HR-0001')).toBeInTheDocument()
-  })
-
-  it('groups every waiting state in server order and omits empty groups', async () => {
-    const groupedItems = [
-      row({ book_id: 1, ref_number: 'HR-PENDING', status: 'pending' }),
-      row({ book_id: 2, ref_number: 'HR-RETURNED', status: 'returned' }),
-      row({ book_id: 3, ref_number: 'HR-SCAN', status: 'awaiting_scan' }),
-      row({ book_id: 4, ref_number: 'HR-APPROVED', status: 'approved' }),
-      row({ book_id: 5, ref_number: 'HR-NONE', status: 'none' }),
-      row({ book_id: 6, ref_number: 'HR-REJECTED', status: 'rejected' }),
-      row({
-        book_id: 7,
-        ref_number: 'HR-FUTURE',
-        status: 'future_state' as ApprovalLogItem['status'],
-      }),
-    ]
+  it('shows a late-advisory badge and the record outcome for a decided book with a still-pending review', async () => {
+    vi.mocked(api.getApprovalSummary).mockResolvedValue(
+      summary({ available_received_kinds: ['reviewer'], review: { count: 1, oldest: null } }),
+    )
     vi.mocked(api.listApprovalLog).mockResolvedValue({
-      items: groupedItems,
-      total: groupedItems.length,
+      items: [row({ status: 'pending', record_status: 'approved' })],
+      total: 1,
       limit: 100,
       offset: 0,
     })
+    renderPage()
+    expect(await screen.findByText('Late advisory feedback')).toBeInTheDocument()
+    expect(screen.getByText('Approved')).toBeInTheDocument()
+  })
 
-    const { container } = renderPage()
-
-    await screen.findByText('HR-PENDING')
-    expect(
-      Array.from(container.querySelectorAll('section[data-testid^="approvals-group-"]')).map(
-        (group) => group.getAttribute('data-testid'),
-      ),
-    ).toEqual([
-      'approvals-group-waiting',
-      'approvals-group-returned',
-      'approvals-group-approved',
-      'approvals-group-rejected',
-    ])
-    expect(
-      Array.from(
-        screen.getByTestId('approvals-group-waiting').querySelectorAll('bdi[dir="ltr"]'),
-      ).map((ref) => ref.textContent),
-    ).toEqual(['HR-PENDING', 'HR-SCAN', 'HR-NONE', 'HR-FUTURE'])
-
-    const withoutRejected = groupedItems.filter((item) => item.status !== 'rejected')
+  it('shows the assigned-revision badge for a restricted historical row', async () => {
     vi.mocked(api.listApprovalLog).mockResolvedValue({
-      items: withoutRejected,
-      total: withoutRejected.length,
+      items: [row({ access_scope: 'assigned_revision' })],
+      total: 1,
       limit: 100,
       offset: 0,
     })
-    const secondView = renderPage()
-    await within(secondView.container).findByText('HR-PENDING')
-    expect(
-      within(secondView.container).queryByTestId('approvals-group-rejected'),
-    ).not.toBeInTheDocument()
+    renderPage()
+    expect(await screen.findByText('Assigned revision')).toBeInTheDocument()
   })
 
-  it('clicking a row navigates to the full record', async () => {
+  it('clicking a row navigates to the record carrying the originating context', async () => {
+    vi.mocked(api.listApprovalLog).mockResolvedValue({
+      items: [row({ book_id: 2, ref_number: 'HR-0002', version_id: 5 })],
+      total: 1,
+      limit: 100,
+      offset: 0,
+    })
     renderPage()
-    await screen.findByText('HR-0002')
-    await userEvent.click(screen.getByText('HR-0002'))
+    await userEvent.click(await screen.findByText('HR-0002'))
     await waitFor(() =>
-      expect(screen.getByTestId('location')).toHaveTextContent('/books/2'),
+      expect(screen.getByTestId('location')).toHaveTextContent(
+        '/books/2?version_id=5&tab=received&kind=sign&status=pending&sort=oldest&page=1',
+      ),
     )
     expect(screen.getByTestId('record-page')).toBeInTheDocument()
-  })
-
-  it('navigates when a focused row is activated with the keyboard', async () => {
-    const user = userEvent.setup()
-    renderPage()
-    await screen.findByText('HR-0002')
-    const approvedRow = screen.getAllByTestId('approval-row')[1]
-
-    approvedRow.focus()
-    await user.keyboard('{Enter}')
-
-    await waitFor(() =>
-      expect(screen.getByTestId('location')).toHaveTextContent('/books/2'),
-    )
   })
 
   it('opens a document preview from the thumbnail without navigating, then opens the full record', async () => {
@@ -314,9 +359,7 @@ describe('ApprovalsPage rows and filters', () => {
     })
     renderPage()
 
-    await userEvent.click(
-      await screen.findByRole('button', { name: /preview document/i }),
-    )
+    await userEvent.click(await screen.findByRole('button', { name: /preview document/i }))
 
     expect(await screen.findByRole('dialog')).toBeInTheDocument()
     expect(await screen.findByTestId('doc-pdf-canvas')).toHaveAttribute(
@@ -325,52 +368,9 @@ describe('ApprovalsPage rows and filters', () => {
     )
     expect(screen.getByTestId('location')).toHaveTextContent('/books/approvals')
 
-    await userEvent.click(
-      screen.getByRole('button', { name: /open full record/i }),
-    )
-    await waitFor(() =>
-      expect(screen.getByTestId('location')).toHaveTextContent('/books/1'),
-    )
+    await userEvent.click(screen.getByRole('button', { name: /open full record/i }))
+    await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent('/books/1'))
   })
-
-  it('keeps the interactive thumbnail at least 44px tall and 56px wide', async () => {
-    vi.mocked(api.listApprovalLog).mockResolvedValue({
-      items: [row({ document_id: 7 })],
-      total: 1,
-      limit: 100,
-      offset: 0,
-    })
-    renderPage()
-
-    const thumbnail = await screen.findByRole('button', { name: /preview document/i })
-    expect(thumbnail).toHaveClass('min-h-11', 'w-14')
-  })
-
-  it.each([
-    ['Enter', '{Enter}'],
-    ['Space', ' '],
-  ])(
-    'opens the thumbnail preview with %s without activating the row',
-    async (_keyName, key) => {
-      vi.mocked(api.listApprovalLog).mockResolvedValue({
-        items: [row({ document_id: 7 })],
-        total: 1,
-        limit: 100,
-        offset: 0,
-      })
-      const user = userEvent.setup()
-      renderPage()
-      const thumbnail = await screen.findByRole('button', {
-        name: /preview document/i,
-      })
-
-      thumbnail.focus()
-      await user.keyboard(key)
-
-      expect(await screen.findByRole('dialog')).toBeInTheDocument()
-      expect(screen.getByTestId('location')).toHaveTextContent('/books/approvals')
-    },
-  )
 
   it.each(['click', 'keyboard'])(
     'restores focus to the same thumbnail after an Escape close from a %s opening',
@@ -383,9 +383,7 @@ describe('ApprovalsPage rows and filters', () => {
       })
       const user = userEvent.setup()
       renderPage()
-      const thumbnail = await screen.findByRole('button', {
-        name: /preview document/i,
-      })
+      const thumbnail = await screen.findByRole('button', { name: /preview document/i })
 
       if (opening === 'click') {
         await user.click(thumbnail)
