@@ -114,21 +114,30 @@ def test_restricted_reviewer_reaches_only_own_revision_signed_artifact(api_db, t
     api_db.add(book)
     api_db.flush()
     v1 = BookVersion(
-        book_id=book.id, version_no=1, status="approved",
+        book_id=book.id,
+        version_no=1,
+        status="approved",
         signed_pdf_path="book_attachments/v1.pdf",
     )
     book.versions.append(v1)
     api_db.flush()
     step = BookApprovalStep(
-        book_id=book.id, version_id=v1.id, step_order=0, stage_label="Review",
-        assignee_user_id=reviewer.id, kind="reviewer", state="reviewed",
+        book_id=book.id,
+        version_id=v1.id,
+        step_order=0,
+        stage_label="Review",
+        assignee_user_id=reviewer.id,
+        kind="reviewer",
+        state="reviewed",
         decided_at=datetime.now(UTC).replace(tzinfo=None),
     )
     v1.approval_steps.append(step)
     api_db.flush()
     book_service.retain_revision_access(api_db, v1, step)
     v2 = BookVersion(
-        book_id=book.id, version_no=2, status="approved",
+        book_id=book.id,
+        version_no=2,
+        status="approved",
         signed_pdf_path="book_attachments/v2.pdf",
     )
     book.versions.append(v2)
@@ -159,14 +168,21 @@ def test_revoke_revision_access_requires_admin_reason_and_is_idempotent(api_db, 
     api_db.add(book)
     api_db.flush()
     version = BookVersion(
-        book_id=book.id, version_no=1, status="approved",
+        book_id=book.id,
+        version_no=1,
+        status="approved",
         signed_pdf_path="book_attachments/v1.pdf",
     )
     book.versions.append(version)
     api_db.flush()
     step = BookApprovalStep(
-        book_id=book.id, version_id=version.id, step_order=1, stage_label="Review",
-        assignee_user_id=reviewer.id, kind="reviewer", state="reviewed",
+        book_id=book.id,
+        version_id=version.id,
+        step_order=1,
+        stage_label="Review",
+        assignee_user_id=reviewer.id,
+        kind="reviewer",
+        state="reviewed",
         decided_at=datetime.now(UTC).replace(tzinfo=None),
     )
     version.approval_steps.append(step)
@@ -184,32 +200,32 @@ def test_revoke_revision_access_requires_admin_reason_and_is_idempotent(api_db, 
 
     editor_client = _client(api_db, editor)
     denied = editor_client.post(
-        f"/api/v1/books/{book.id}/revision-access/{grant.id}/revoke", json={"reason": "test"},
+        f"/api/v1/books/{book.id}/revision-access/{grant.id}/revoke",
+        json={"reason": "test"},
     )
     assert denied.status_code == 403
 
     admin_client = _client(api_db, admin)
     blank = admin_client.post(
-        f"/api/v1/books/{book.id}/revision-access/{grant.id}/revoke", json={"reason": "  "},
+        f"/api/v1/books/{book.id}/revision-access/{grant.id}/revoke",
+        json={"reason": " "},
     )
     assert blank.status_code == 422
 
     first = admin_client.post(
         f"/api/v1/books/{book.id}/revision-access/{grant.id}/revoke",
-        json={"reason": "Departed employee"},
+        json={"reason": " x "},
     )
     assert first.status_code == 200, first.text
     body = first.json()
     assert len(body) == 1
     assert body[0]["revoked_by_user_id"] == admin.id
-    assert body[0]["revocation_reason"] == "Departed employee"
+    assert body[0]["revocation_reason"] == "x"
     api_db.refresh(grant)
     first_revoked_at = grant.revoked_at
     assert first_revoked_at is not None
 
-    audit = api_db.scalar(
-        select(AuditLog).where(AuditLog.action == "book_revision_access_revoked")
-    )
+    audit = api_db.scalar(select(AuditLog).where(AuditLog.action == "book_revision_access_revoked"))
     assert audit is not None and str(book.id) == audit.entity_id
 
     second = admin_client.post(
@@ -219,11 +235,9 @@ def test_revoke_revision_access_requires_admin_reason_and_is_idempotent(api_db, 
     assert second.status_code == 200, second.text
     api_db.refresh(grant)
     assert grant.revoked_at == first_revoked_at
-    assert grant.revocation_reason == "Departed employee"
+    assert grant.revocation_reason == "x"
     assert (
-        api_db.scalar(
-            select(AuditLog).where(AuditLog.action == "book_revision_access_revoked")
-        )
+        api_db.scalar(select(AuditLog).where(AuditLog.action == "book_revision_access_revoked"))
         is not None
     )
     remaining_audits = list(
@@ -253,12 +267,24 @@ def test_revoke_revokes_every_role_grant_for_same_user_and_revision(api_db):
     api_db.flush()
     now = datetime.now(UTC).replace(tzinfo=None)
     approver_step = BookApprovalStep(
-        book_id=book.id, version_id=version.id, step_order=0, stage_label="Approve",
-        assignee_user_id=dual.id, kind="approver", state="approved", decided_at=now,
+        book_id=book.id,
+        version_id=version.id,
+        step_order=0,
+        stage_label="Approve",
+        assignee_user_id=dual.id,
+        kind="approver",
+        state="approved",
+        decided_at=now,
     )
     reviewer_step = BookApprovalStep(
-        book_id=book.id, version_id=version.id, step_order=1, stage_label="Review",
-        assignee_user_id=dual.id, kind="reviewer", state="reviewed", decided_at=now,
+        book_id=book.id,
+        version_id=version.id,
+        step_order=1,
+        stage_label="Review",
+        assignee_user_id=dual.id,
+        kind="reviewer",
+        state="reviewed",
+        decided_at=now,
     )
     version.approval_steps.extend([approver_step, reviewer_step])
     api_db.flush()

@@ -1960,16 +1960,14 @@ export const api = {
    *  (default) is authenticated and assignment-scoped; `scope=sent` needs
    *  books.view. `status` defaults to `pending` for received and `all` for
    *  sent server-side — omit it to get that default. */
-  listApprovalLog: (
-    scope: 'sent' | 'received',
-    params: {
-      kind?: ApprovalKindParam
-      status?: ApprovalStatusParam
-      sort?: ApprovalSortParam
-      limit?: number
-      offset?: number
-    } = {},
-  ) => request<ApprovalLogResponse>('GET', `/books/approval-log${qs({ scope, ...params })}`),
+  listApprovalLog: (options: {
+    scope: 'sent' | 'received'
+    kind?: ApprovalKindParam
+    status?: ApprovalStatusParam
+    sort?: ApprovalSortParam
+    limit?: number
+    offset?: number
+  }) => request<ApprovalLogResponse>('GET', `/books/approval-log${qs(options)}`),
   /** GET /books/approval-summary — counts + oldest row driving the generic
    *  Approvals landing rule and Home summaries. Authenticated; empty for a
    *  caller with no assignments. */
@@ -2516,9 +2514,10 @@ export const api = {
   generateDocument: (body: DocumentGenerateRequest) =>
     request<DocumentGenerateResponse>('POST', '/documents/generate', body),
   getJob: (jobId: string) => request<JobStatusResponse>('GET', `/jobs/${jobId}`),
-  getDocument: (docId: number) => request<DocumentRead>('GET', `/documents/${docId}`),
-  documentDownloadUrl: (docId: number, format: 'docx' | 'pdf') =>
-    `${BASE}/documents/${docId}/download?format=${format}`,
+  getDocument: (docId: number, versionId?: number) =>
+    request<DocumentRead>('GET', `/documents/${docId}${qs({ version_id: versionId })}`),
+  documentDownloadUrl: (docId: number, format: 'docx' | 'pdf', versionId?: number) =>
+    `${BASE}/documents/${docId}/download${qs({ format, version_id: versionId })}`,
   /** Park an attachment upload for a later generate call; the returned token
    * is echoed back inside `DocumentGenerateRequest.attachments`
    * (`source: 'staged'`). Forms signing paths & attachments, 2026-06-11. */

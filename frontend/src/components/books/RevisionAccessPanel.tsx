@@ -92,12 +92,13 @@ export function RevisionAccessPanel({ bookId, onClose }: Props): React.JSX.Eleme
           )}
         />
         <RadixDialog.Content
+          aria-describedby={undefined}
           data-testid="revision-access-dialog"
           className={cn(
             'bottom-sheet fixed inset-x-0 bottom-0 z-50 flex max-h-[92dvh] flex-col rounded-t-2xl bg-surface shadow-2xl',
             'focus-visible:outline-none',
-            'md:inset-auto md:left-1/2 md:top-1/2 md:max-h-[80dvh] md:w-full md:max-w-lg',
-            'md:-translate-x-1/2 md:-translate-y-1/2 md:rounded-2xl',
+            'md:inset-x-0 md:inset-y-auto md:top-1/2 md:mx-auto md:max-h-[80dvh] md:w-full md:max-w-lg',
+            'md:-translate-y-1/2 md:rounded-2xl',
           )}
           aria-modal
         >

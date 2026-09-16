@@ -55,12 +55,12 @@ export function WaitingApprovalsCard({
       <button
         type="button"
         onClick={onReview}
-        aria-label={t('dashboard.widgetLabels.waiting_approvals_aria', { count, defaultValue: 'Waiting approvals: {{count}}. Review.' })}
+        aria-label={t(primaryIsReview ? 'dashboard.widgetLabels.waiting_reviews_aria' : 'dashboard.widgetLabels.waiting_approvals_aria', { count })}
         className="block w-full cursor-pointer text-start focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
       >
         <div className="flex items-center gap-2 text-[0.86em] font-medium text-muted-foreground">
           <Stamp className="h-4 w-4" strokeWidth={1.8} aria-hidden />
-          {t(primaryIsReview ? 'books.approvals.headingReview' : 'dashboard.widgetLabels.waiting_approvals')}
+          {t(primaryIsReview ? 'books.approvals.headingReview' : 'books.approvals.headingSign')}
         </div>
 
         <div className="mt-2.5 text-[2.4em] font-bold leading-none tracking-tight text-foreground tabular-nums">
@@ -86,7 +86,7 @@ export function WaitingApprovalsCard({
           ) : (
             <span className="flex items-center gap-1.5 text-success">
               <CheckCircle2 className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
-              {t('books.approval.awaitingEmpty')}
+              {t(primaryIsReview ? 'books.approval.reviewEmpty' : 'books.approval.awaitingEmpty')}
             </span>
           )}
           <span

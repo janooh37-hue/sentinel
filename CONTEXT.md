@@ -27,29 +27,6 @@ One committed version of a Record's generated artifact, ordered within that
 Record and carrying its own review or signing state.
 _Avoid_: Edit, draft, file version
 
-**Submitter**:
-The person who sends a Record's Revision for approval, who may differ from its
-original author.
-_Avoid_: Employee or creator as a synonym
-
-**Signer**:
-The person assigned to approve a Record's Revision through their signature.
-_Avoid_: Manager as a synonym for the assignment
-
-**Advisory reviewer**:
-A person asked to review a Record's Revision and provide feedback; their review
-does not itself authorize or block signing.
-_Avoid_: Signer, required approval stage
-
-**Awaiting signature**:
-A submitted Revision that has not yet received its signing decision.
-_Avoid_: All open work, review requested
-
-**Returned for correction**:
-A submitted Revision that the signer has sent back with a reason for correction
-rather than approving or rejecting it.
-_Avoid_: Advisory changes requested, rejected
-
 **Approval worklist**:
 A person's approval-related Records grouped by responsibility, with one entry
 per Record rather than separate entries for each submission attempt. It shows

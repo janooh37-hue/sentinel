@@ -18,7 +18,7 @@ import { ar as arLocale } from 'date-fns/locale'
 import { ArrowLeftRight, ChevronRight, Inbox } from 'lucide-react'
 
 import { api, type ApprovalLogItem } from '@/lib/api'
-import { apiKindOf, approvalQueueUrl, approvalRecordUrl } from '@/lib/approvals'
+import { apiKindOf, approvalQueueUrl, approvalRecordUrl, isLateAdvisory } from '@/lib/approvals'
 import type { ApprovalContext, ApprovalKind } from '@/lib/approvals'
 import { useApprovalSummary } from '@/lib/useApprovalSummary'
 import { useAuth } from '@/lib/authContext'
@@ -37,27 +37,14 @@ function relTime(iso: string | null | undefined, locale?: Locale): string {
   }
 }
 
-/** True when a review row is actionable ("pending") but the record already
- *  carries a different, real decision — late advisory feedback. */
-function isLateAdvisory(item: ApprovalLogItem, kind: ApprovalKind): boolean {
-  return (
-    kind === 'review' &&
-    item.status === 'pending' &&
-    item.record_status != null &&
-    item.record_status !== 'pending' &&
-    item.record_status !== 'none'
-  )
-}
 
 function AwaitingRow({
   item,
-  kind,
   isAr,
   dfLocale,
   context,
 }: {
   item: ApprovalLogItem
-  kind: ApprovalKind
   isAr: boolean
   dfLocale?: Locale
   context: ApprovalContext
@@ -65,7 +52,7 @@ function AwaitingRow({
   const { t } = useTranslation()
   const priIsHigh = item.priority === 'High'
   const catName = isAr ? (item.category_name_ar ?? item.category_name_en) : item.category_name_en
-  const late = isLateAdvisory(item, kind)
+  const late = isLateAdvisory(item)
 
   return (
     <Link
@@ -79,7 +66,7 @@ function AwaitingRow({
       {/* ── head ── */}
       <header className="flex items-center gap-2">
         <span className="shrink-0 rounded-md bg-surface-tinted px-1.5 py-0.5 font-mono text-[0.72em] font-semibold text-foreground">
-          {item.ref_number}
+          <bdi dir="ltr">{item.ref_number}</bdi>
         </span>
         <span className="min-w-0 flex-1 truncate text-[0.78em] text-muted-foreground">
           {catName}
@@ -154,7 +141,8 @@ export function BooksAwaitingWidget(): React.JSX.Element | null {
   const previewQuery = useQuery({
     queryKey: ['books', 'approval-log', user?.id ?? 0, 'preview', context],
     queryFn: () =>
-      api.listApprovalLog('received', {
+      api.listApprovalLog({
+        scope: 'received',
         kind: apiKindOf(context!.kind),
         status: 'pending',
         sort: 'oldest',
@@ -177,7 +165,7 @@ export function BooksAwaitingWidget(): React.JSX.Element | null {
       {/* Header */}
       <div className="flex items-center justify-between border-b border-hairline px-5 py-3.5">
         <h3 className="text-[0.86em] font-semibold text-foreground">
-          {t('books.approval.awaitingTitle')}
+          {t(primaryKind === 'review' ? 'books.approvals.headingReview' : 'books.approval.awaitingTitle')}
         </h3>
         {(isLoading || (summary?.actionable_count ?? 0) > 0) && (
           <span className="rounded-full bg-warning/15 px-2 py-0.5 font-mono text-[0.7em] font-semibold text-warning">
@@ -203,14 +191,13 @@ export function BooksAwaitingWidget(): React.JSX.Element | null {
             onAction={() => void previewQuery.refetch()}
           />
         ) : isEmpty ? (
-          <EmptyState icon={Inbox} message={t('books.approval.awaitingEmpty')} />
+          <EmptyState icon={Inbox} message={t(primaryKind === 'review' ? 'books.approval.reviewEmpty' : 'books.approval.awaitingEmpty')} />
         ) : (
           context &&
           rows.map((item) => (
             <AwaitingRow
               key={item.book_id}
               item={item}
-              kind={context.kind}
               isAr={isAr}
               dfLocale={dfLocale}
               context={context}

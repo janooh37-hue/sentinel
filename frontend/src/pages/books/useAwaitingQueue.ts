@@ -59,9 +59,3 @@ export function useAwaitingQueue(
     nextVersionId: data.next?.version_id ?? null,
   }
 }
-
-/** Where a return/reject lands with no queue context: the same record's list
- *  fallback — the next book still awaiting, else the list. */
-export function nextAfterDecision(nextId: number | null): string {
-  return nextId != null ? `/books/${nextId}` : '/books'
-}

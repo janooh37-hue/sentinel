@@ -442,7 +442,11 @@ export function BookDetailDrawer({ bookId, onClose, onSubmitForApproval }: Props
                 )}
 
                 {/* reviewer rows */}
-                <ReviewerList reviewers={reviewerSteps(currentSteps)} />
+                <ReviewerList
+                  reviewers={reviewerSteps(currentSteps)}
+                  versionNo={current?.version_no}
+                  currentVersionNo={current?.version_no}
+                />
 
                 {/* executed copies (copied from BookApprovalSheet) */}
                 {book && book.attachment_paths && book.attachment_paths.length > 0 && (

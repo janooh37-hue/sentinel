@@ -20,7 +20,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import i18n from '@/lib/i18n'
 import { approvalQueueUrl } from '@/lib/approvals'
-import type { ApprovalSummaryResponse } from '@/lib/api'
+import type { ApprovalLogItem, ApprovalSummaryResponse } from '@/lib/api'
 import { BooksAwaitingWidget } from './BooksAwaitingWidget'
 import { WaitingApprovalsCard } from './WaitingApprovalsCard'
 
@@ -52,6 +52,45 @@ const SIGNER_SUMMARY: ApprovalSummaryResponse = {
   sent: { count: 0, oldest: null },
   returned_count: 0,
   actionable_count: 1,
+}
+
+const REVIEWER_SUMMARY: ApprovalSummaryResponse = {
+  ...SIGNER_SUMMARY,
+  available_received_kinds: ['reviewer'],
+  signature: { count: 0, oldest: null },
+  review: { count: 1, oldest: null },
+}
+
+const IDLE_REVIEWER_SUMMARY: ApprovalSummaryResponse = {
+  ...REVIEWER_SUMMARY,
+  review: { count: 0, oldest: null },
+  actionable_count: 0,
+}
+
+const PREVIEW_ROW: ApprovalLogItem = {
+  book_id: 1,
+  ref_number: 'HR-0001',
+  subject: 'Subject',
+  category_name_ar: null,
+  category_name_en: null,
+  status: 'pending',
+  record_status: 'pending',
+  priority: 'Normal',
+  submitted_by_user_id: 9,
+  submitted_by_name: 'Submitter',
+  doc_manager_user_id: null,
+  doc_manager_name: null,
+  approver_name: null,
+  reviewer_names: [],
+  submitted_at: '2026-08-01T09:00:00+00:00',
+  decided_at: null,
+  verdict: null,
+  document_id: null,
+  version_id: 1,
+  version_no: 1,
+  assignment_version_no: 1,
+  assigned_signer_user_id: null,
+  access_scope: 'full',
 }
 
 const NO_WORK_SUMMARY: ApprovalSummaryResponse = {
@@ -110,6 +149,31 @@ describe('BooksAwaitingWidget navigation', () => {
     expect(await screen.findByTestId('approvals-full-log-link')).toBeInTheDocument()
   })
 
+  it('uses review copy and the object API contract for an idle review-only bucket', async () => {
+    vi.mocked(api.getApprovalSummary).mockResolvedValue(IDLE_REVIEWER_SUMMARY)
+    renderInRouter(<BooksAwaitingWidget />)
+
+    expect(await screen.findByRole('heading', { name: 'To review' })).toBeInTheDocument()
+    expect(await screen.findByText('Nothing to review')).toBeInTheDocument()
+    expect(api.listApprovalLog).toHaveBeenCalledWith({
+      scope: 'received',
+      kind: 'reviewer',
+      status: 'pending',
+      sort: 'oldest',
+      limit: 5,
+    })
+  })
+
+  it('isolates the record reference direction', async () => {
+    vi.mocked(api.getApprovalSummary).mockResolvedValue(SIGNER_SUMMARY)
+    vi.mocked(api.listApprovalLog).mockResolvedValue({ items: [PREVIEW_ROW], total: 1, limit: 5, offset: 0 })
+    renderInRouter(<BooksAwaitingWidget />)
+
+    const ref = await screen.findByText('HR-0001')
+    expect(ref.tagName).toBe('BDI')
+    expect(ref).toHaveAttribute('dir', 'ltr')
+  })
+
   it('self-hides only when the caller has no assigned received kind at all', async () => {
     vi.mocked(api.getApprovalSummary).mockResolvedValue(NO_WORK_SUMMARY)
     renderInRouter(<BooksAwaitingWidget />)
@@ -137,6 +201,18 @@ describe('WaitingApprovalsCard click contract', () => {
     await screen.findByRole('button')
     await userEvent.click(screen.getByRole('button'))
     expect(onReview).toHaveBeenCalledTimes(1)
+  })
+
+  it('uses signature and review-specific card copy', async () => {
+    vi.mocked(api.getApprovalSummary).mockResolvedValue(SIGNER_SUMMARY)
+    const signer = renderInRouter(<WaitingApprovalsCard onReview={vi.fn()} />)
+    expect(await screen.findByText('Needs my signature')).toBeInTheDocument()
+    signer.unmount()
+
+    vi.mocked(api.getApprovalSummary).mockResolvedValue(REVIEWER_SUMMARY)
+    renderInRouter(<WaitingApprovalsCard onReview={vi.fn()} />)
+    expect(await screen.findByRole('button', { name: 'To review: 1. Open.' })).toBeInTheDocument()
+    expect(screen.getAllByText('To review')).toHaveLength(2)
   })
 
   it('self-hides only when the caller has no assigned received kind at all', async () => {

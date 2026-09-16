@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import ClassVar, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, Field, computed_field
+from pydantic import BaseModel, ConfigDict, Field, computed_field
 
 from app.core.form_kind import resolve_service
 from app.schemas._base import ORMBase
@@ -96,15 +96,14 @@ class BookStateOverrideRequest(BaseModel):
     a state on every records surface. ``reason`` is required for the negative
     verdicts, mirroring the normal return/reject contract."""
 
-    state: Literal[
-        "none", "pending", "awaiting_scan", "approved", "returned", "rejected", "voided"
-    ]
+    state: Literal["none", "pending", "awaiting_scan", "approved", "returned", "rejected", "voided"]
     reason: str | None = Field(default=None, max_length=2000)
 
 
 class RevokeRevisionAccessRequest(BaseModel):
-    reason: str = Field(min_length=1, max_length=2000)
+    model_config = ConfigDict(str_strip_whitespace=True)
 
+    reason: str = Field(min_length=1, max_length=2000)
 
 
 class BookApprovalStepRead(ORMBase):
@@ -540,9 +539,7 @@ class ApprovalSummaryResponse(BaseModel):
     summaries — the caller's full authorized set, not one page."""
 
     can_view_sent: bool
-    available_received_kinds: list[Literal["approver", "reviewer"]] = Field(
-        default_factory=list
-    )
+    available_received_kinds: list[Literal["approver", "reviewer"]] = Field(default_factory=list)
     signature: ApprovalSummaryBucket
     review: ApprovalSummaryBucket
     sent: ApprovalSummaryBucket

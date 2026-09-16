@@ -526,10 +526,7 @@ def list_awaiting(
 ) -> list[BookRead]:
     """Return the caller's actionable signing and advisory assignments."""
     rows = book_service.list_awaiting(db, user_id=user.id)
-    return [
-        _build_book_response(db, row, user, detail=False)
-        for row in rows
-    ]
+    return [_build_book_response(db, row, user, detail=False) for row in rows]
 
 
 @router.get("/awaiting-scan", response_model=list[BookRead])
@@ -554,15 +551,22 @@ def list_awaiting_scan(
         user_id=None if scope == "all" else user.id,
         user=user,
     )
-    return [
-        _build_book_response(db, row, user, detail=False)
-        for row in rows
-    ]
+    return [_build_book_response(db, row, user, detail=False) for row in rows]
 
 
 _SENT_STATUSES = frozenset(
     {"all", "none", "pending", "awaiting_scan", "approved", "rejected", "returned"}
 )
+
+
+def _require_sent_scope(db: Session, user: User) -> None:
+    if not perm_service.has_capability(db, user, "books.view"):
+        raise AppError(
+            "FORBIDDEN",
+            "Missing capability: books.view",
+            http_status=403,
+            details={"capability": "books.view"},
+        )
 
 
 @router.get("/approval-log", response_model=ApprovalLogResponse)
@@ -589,26 +593,35 @@ def get_approval_log(
     if scope == "sent":
         if kind is not None:
             raise AppError(
-                "BAD_KIND", "kind is only valid for scope=received", http_status=422,
+                "BAD_KIND",
+                "kind is only valid for scope=received",
+                http_status=422,
             )
-        if not perm_service.has_capability(db, user, "books.view"):
-            raise AppError(
-                "FORBIDDEN", "Missing capability: books.view", http_status=403,
-                details={"capability": "books.view"},
-            )
+        _require_sent_scope(db, user)
         resolved_status = status if status is not None else "all"
         if resolved_status not in _SENT_STATUSES:
             raise AppError(
-                "BAD_STATUS", f"{resolved_status!r} is not a valid status", http_status=422,
+                "BAD_STATUS",
+                f"{resolved_status!r} is not a valid status",
+                http_status=422,
             )
         items, total = book_service.approval_log_sent(
-            db, user_id=user.id, user=user, limit=limit, offset=offset,
-            status=resolved_status, sort=sort,
+            db,
+            user=user,
+            limit=limit,
+            offset=offset,
+            status=resolved_status,
+            sort=sort,
         )
     else:
         items, total = book_service.approval_log_received(
-            db, user=user, kind=kind or "approver", status=status or "pending", sort=sort,
-            limit=limit, offset=offset,
+            db,
+            user=user,
+            kind=kind or "approver",
+            status=status or "pending",
+            sort=sort,
+            limit=limit,
+            offset=offset,
         )
     return ApprovalLogResponse(items=items, total=total, limit=limit, offset=offset)
 
@@ -627,7 +640,8 @@ def get_approval_summary(
 
 
 @router.get(
-    "/approval-log/{book_id}/neighbors", response_model=ApprovalLogNeighborsResponse,
+    "/approval-log/{book_id}/neighbors",
+    response_model=ApprovalLogNeighborsResponse,
 )
 def get_approval_log_neighbors(
     book_id: int,
@@ -641,14 +655,25 @@ def get_approval_log_neighbors(
 ) -> ApprovalLogNeighborsResponse:
     """Previous/next in the same filtered/ordered worklist the log page uses —
     for header navigation, without a full client-side page download."""
-    if scope == "sent" and kind is not None:
-        raise AppError("BAD_KIND", "kind is only valid for scope=received", http_status=422)
+    if scope == "sent":
+        if kind is not None:
+            raise AppError("BAD_KIND", "kind is only valid for scope=received", http_status=422)
+        _require_sent_scope(db, user)
     position, total, previous, following = book_service.approval_log_neighbors(
-        db, user=user, scope=scope, kind=kind or "approver", status=status, sort=sort,
-        book_id=book_id, version_id=version_id,
+        db,
+        user=user,
+        scope=scope,
+        kind=kind or "approver",
+        status=status,
+        sort=sort,
+        book_id=book_id,
+        version_id=version_id,
     )
     return ApprovalLogNeighborsResponse(
-        position=position, total=total, previous=previous, next=following,
+        position=position,
+        total=total,
+        previous=previous,
+        next=following,
     )
 
 
@@ -724,9 +749,7 @@ def _build_versions(
     for version in versions:
         docx_url = pdf_url = None
         document = (
-            documents_by_id.get(version.document_id)
-            if version.document_id is not None
-            else None
+            documents_by_id.get(version.document_id) if version.document_id is not None else None
         )
         if document is not None:
             base = f"/api/v1/documents/{document.id}/download"
@@ -736,9 +759,7 @@ def _build_versions(
                 else None
             )
             signed_path = version.signed_pdf_path if version.status == "approved" else None
-            if document.pdf_path is not None and (
-                signed_path is None or _is_pdf_path(signed_path)
-            ):
+            if document.pdf_path is not None and (signed_path is None or _is_pdf_path(signed_path)):
                 pdf_url = f"{base}?format=pdf&version_id={version.id}"
 
         step_reads: list[BookApprovalStepRead] = []
@@ -791,7 +812,11 @@ def _build_versions(
                     legacy_current=version.id == current_version_id,
                 ),
                 created_at=version.created_at,
-                created_by_name=names_by_id.get(version.created_by_user_id),
+                created_by_name=(
+                    names_by_id.get(version.created_by_user_id)
+                    if version.created_by_user_id is not None
+                    else None
+                ),
                 docx_url=docx_url,
                 pdf_url=pdf_url,
                 manager_sig_embedded=version.manager_sig_embedded,
@@ -895,18 +920,12 @@ def _version_submitted_at(
     *,
     legacy_current: bool,
 ) -> datetime | None:
-    context = (
-        version.approval_context
-        if isinstance(version.approval_context, dict)
-        else {}
-    )
+    context = version.approval_context if isinstance(version.approval_context, dict) else {}
     submitted_at = _context_datetime(context, "submitted_at")
     if submitted_at is not None or not legacy_current:
         return submitted_at
     step_times = [
-        step.created_at
-        for step in version.approval_steps
-        if isinstance(step.created_at, datetime)
+        step.created_at for step in version.approval_steps if isinstance(step.created_at, datetime)
     ]
     return min(step_times, default=None)
 
@@ -955,12 +974,9 @@ def _action_flags(
         and perm_service.has_capability(db, user, "books.approve")
     )
     can_review = (
-        row.approval_state in ("pending", "approved", "returned", "rejected")
-        and reviewer_pending
+        row.approval_state in ("pending", "approved", "returned", "rejected") and reviewer_pending
     )
-    your_step_kind = (
-        "approver" if approver_pending else "reviewer" if reviewer_pending else None
-    )
+    your_step_kind = "approver" if approver_pending else "reviewer" if reviewer_pending else None
     return can_sign, can_review, your_step_kind
 
 
@@ -973,11 +989,7 @@ def _build_scoped_book_response(
     allowed_version_ids: frozenset[int],
     access_scope: Literal["full", "assigned_revision"],
 ) -> BookRead:
-    context = (
-        selected.approval_context
-        if isinstance(selected.approval_context, dict)
-        else {}
-    )
+    context = selected.approval_context if isinstance(selected.approval_context, dict) else {}
     category_id = _context_string(context, "category_id")
     versions = _build_versions(db, row, version_ids=allowed_version_ids)
     selected_read = next(version for version in versions if version.id == selected.id)
@@ -1044,17 +1056,11 @@ def _build_book_response(
         version_id=version_id,
     )
     selected = next(
-        (
-            version
-            for version in row.versions
-            if version.id == access.selected_version_id
-        ),
+        (version for version in row.versions if version.id == access.selected_version_id),
         None,
     )
     current = max(row.versions, key=lambda item: item.version_no, default=None)
-    selected_is_current = (
-        selected is None and current is None
-    ) or (
+    selected_is_current = (selected is None and current is None) or (
         selected is not None and current is not None and selected.id == current.id
     )
 
@@ -1702,7 +1708,10 @@ def get_signed_document(
     if (b64 := maybe_base64(abs_path.read_bytes(), encoding)) is not None:
         return b64
     return FileResponse(
-        abs_path, filename=filename, media_type="application/pdf", content_disposition_type="inline",
+        abs_path,
+        filename=filename,
+        media_type="application/pdf",
+        content_disposition_type="inline",
     )
 
 
@@ -1751,7 +1760,11 @@ def revoke_revision_access(
     """Revoke a user's retained revision access, with a required reason."""
     book_service.get_book(db, book_id)
     grants = book_service.revoke_revision_access(
-        db, book_id=book_id, access_id=access_id, reason=payload.reason, actor=user,
+        db,
+        book_id=book_id,
+        access_id=access_id,
+        reason=payload.reason,
+        actor=user,
     )
     names = book_service.resolve_names_by_ids(db, {grant.user_id for grant in grants})
     return [

@@ -18,15 +18,29 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import i18n from '@/lib/i18n'
 import type { ApprovalLogItem, ApprovalSummaryResponse } from '@/lib/api'
+import type { Paper } from './recordPapers'
 import { ApprovalsPage } from './ApprovalsPage'
 
 vi.mock('@/lib/authContext', () => ({
   useAuth: () => ({ status: 'authed', user: { id: 7 } }),
 }))
 
-vi.mock('@/pages/application/DocPdfCanvas', () => ({
-  default: ({ pdfUrl }: { pdfUrl: string }) => (
-    <div data-testid="doc-pdf-canvas" data-pdf-url={pdfUrl} />
+vi.mock('@/pages/books/RecordPaperViewer', () => ({
+  default: ({
+    papers,
+    paperIndex,
+    isOverlay,
+  }: {
+    papers: Paper[]
+    paperIndex: number
+    isOverlay?: boolean
+  }) => (
+    <div
+      data-testid="record-paper-viewer"
+      data-paper-kind={papers[paperIndex]?.kind}
+      data-paper-url={papers[paperIndex]?.url}
+      data-overlay={isOverlay ? 'true' : 'false'}
+    />
   ),
 }))
 
@@ -125,7 +139,8 @@ describe('ApprovalsPage generic landing + URL canonicalization', () => {
     vi.mocked(api.getApprovalSummary).mockResolvedValue(summary())
     renderPage()
     await waitFor(() =>
-      expect(api.listApprovalLog).toHaveBeenCalledWith('received', {
+      expect(api.listApprovalLog).toHaveBeenCalledWith({
+        scope: 'received',
         kind: 'approver',
         status: 'pending',
         sort: 'oldest',
@@ -150,7 +165,8 @@ describe('ApprovalsPage generic landing + URL canonicalization', () => {
     )
     renderPage()
     await waitFor(() =>
-      expect(api.listApprovalLog).toHaveBeenCalledWith('received', {
+      expect(api.listApprovalLog).toHaveBeenCalledWith({
+        scope: 'received',
         kind: 'reviewer',
         status: 'pending',
         sort: 'oldest',
@@ -170,7 +186,8 @@ describe('ApprovalsPage generic landing + URL canonicalization', () => {
     )
     renderPage()
     await waitFor(() =>
-      expect(api.listApprovalLog).toHaveBeenCalledWith('sent', {
+      expect(api.listApprovalLog).toHaveBeenCalledWith({
+        scope: 'sent',
         kind: undefined,
         status: 'pending',
         sort: 'oldest',
@@ -194,11 +211,33 @@ describe('ApprovalsPage generic landing + URL canonicalization', () => {
     renderPage('/books/approvals?tab=sent')
     await waitFor(() =>
       expect(api.listApprovalLog).toHaveBeenCalledWith(
-        'received',
-        expect.objectContaining({ kind: 'approver' }),
+        expect.objectContaining({ scope: 'received', kind: 'approver' }),
       ),
     )
-    expect(api.listApprovalLog).not.toHaveBeenCalledWith('sent', expect.anything())
+    expect(api.listApprovalLog).not.toHaveBeenCalledWith(
+      expect.objectContaining({ scope: 'sent' }),
+    )
+  })
+
+  it('falls back from an unauthorized signing kind to the reviewer default status', async () => {
+    vi.mocked(api.getApprovalSummary).mockResolvedValue(
+      summary({
+        available_received_kinds: ['reviewer'],
+        signature: { count: 0, oldest: null },
+        review: { count: 0, oldest: null },
+      }),
+    )
+    renderPage('/books/approvals?tab=received&kind=sign')
+    await waitFor(() =>
+      expect(api.listApprovalLog).toHaveBeenCalledWith(
+        expect.objectContaining({ scope: 'received', kind: 'reviewer', status: 'all' }),
+      ),
+    )
+    await waitFor(() =>
+      expect(screen.getByTestId('location')).toHaveTextContent(
+        '/books/approvals?tab=received&kind=review&status=all&sort=oldest&page=1',
+      ),
+    )
   })
 
   it('an invalid status value resets to the field default rather than erroring', async () => {
@@ -206,8 +245,7 @@ describe('ApprovalsPage generic landing + URL canonicalization', () => {
     renderPage('/books/approvals?tab=received&kind=sign&status=bogus')
     await waitFor(() =>
       expect(api.listApprovalLog).toHaveBeenCalledWith(
-        'received',
-        expect.objectContaining({ status: 'pending' }),
+        expect.objectContaining({ scope: 'received', status: 'pending' }),
       ),
     )
   })
@@ -237,8 +275,7 @@ describe('ApprovalsPage sub-tabs and filters', () => {
     await userEvent.click(screen.getByTestId('approvals-filter-approved'))
     await waitFor(() =>
       expect(api.listApprovalLog).toHaveBeenLastCalledWith(
-        'received',
-        expect.objectContaining({ status: 'approved', offset: 0 }),
+        expect.objectContaining({ scope: 'received', status: 'approved', offset: 0 }),
       ),
     )
   })
@@ -261,8 +298,7 @@ describe('ApprovalsPage sub-tabs and filters', () => {
     await userEvent.click(screen.getByTestId('approvals-sort-toggle'))
     await waitFor(() =>
       expect(api.listApprovalLog).toHaveBeenLastCalledWith(
-        'received',
-        expect.objectContaining({ sort: 'newest' }),
+        expect.objectContaining({ scope: 'received', sort: 'newest' }),
       ),
     )
   })
@@ -282,8 +318,7 @@ describe('ApprovalsPage pagination', () => {
     await userEvent.click(screen.getByLabelText('Next page'))
     await waitFor(() =>
       expect(api.listApprovalLog).toHaveBeenLastCalledWith(
-        'received',
-        expect.objectContaining({ offset: 100 }),
+        expect.objectContaining({ scope: 'received', offset: 100 }),
       ),
     )
   })
@@ -309,7 +344,11 @@ describe('ApprovalsPage rows', () => {
 
   it('shows a late-advisory badge and the record outcome for a decided book with a still-pending review', async () => {
     vi.mocked(api.getApprovalSummary).mockResolvedValue(
-      summary({ available_received_kinds: ['reviewer'], review: { count: 1, oldest: null } }),
+      summary({
+        available_received_kinds: ['reviewer'],
+        signature: { count: 0, oldest: null },
+        review: { count: 1, oldest: null },
+      }),
     )
     vi.mocked(api.listApprovalLog).mockResolvedValue({
       items: [row({ status: 'pending', record_status: 'approved' })],
@@ -362,10 +401,12 @@ describe('ApprovalsPage rows', () => {
     await userEvent.click(await screen.findByRole('button', { name: /preview document/i }))
 
     expect(await screen.findByRole('dialog')).toBeInTheDocument()
-    expect(await screen.findByTestId('doc-pdf-canvas')).toHaveAttribute(
-      'data-pdf-url',
-      api.documentDownloadUrl(7, 'pdf'),
+    expect(await screen.findByTestId('record-paper-viewer')).toHaveAttribute(
+      'data-paper-url',
+      '/api/v1/documents/7/download?format=pdf&version_id=1',
     )
+    expect(screen.getByTestId('record-paper-viewer')).toHaveAttribute('data-paper-kind', 'generated')
+    expect(screen.getByTestId('record-paper-viewer')).toHaveAttribute('data-overlay', 'true')
     expect(screen.getByTestId('location')).toHaveTextContent('/books/approvals')
 
     await userEvent.click(screen.getByRole('button', { name: /open full record/i }))

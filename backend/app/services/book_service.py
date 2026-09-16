@@ -97,8 +97,6 @@ def count_my_generated_documents(db: Session, *, user_id: int) -> dict[str, int]
     }
 
 
-
-
 # ---------------------------------------------------------------------------
 # Category helpers
 # ---------------------------------------------------------------------------
@@ -337,7 +335,11 @@ class BookReadAccess(NamedTuple):
 
 
 def resolve_book_read_access(
-    db: Session, user: User, book: Book, *, version_id: int | None = None,
+    db: Session,
+    user: User,
+    book: Book,
+    *,
+    version_id: int | None = None,
 ) -> BookReadAccess:
     """Resolve the exact readable revisions without granting record mutation authority."""
     if book.deleted_at is not None and not perm_service.has_capability(db, user, "users.manage"):
@@ -359,17 +361,22 @@ def resolve_book_read_access(
             record_type_error = exc
     if full:
         return BookReadAccess(True, ids, version_id or (versions[-1].id if versions else None))
-    allowed = set(db.scalars(
-        select(BookRevisionAccess.version_id).join(BookVersion).where(
-            BookVersion.book_id == book.id,
-            BookRevisionAccess.user_id == user.id,
-            BookRevisionAccess.revoked_at.is_(None),
+    allowed = set(
+        db.scalars(
+            select(BookRevisionAccess.version_id)
+            .join(BookVersion)
+            .where(
+                BookVersion.book_id == book.id,
+                BookRevisionAccess.user_id == user.id,
+                BookRevisionAccess.revoked_at.is_(None),
+            )
         )
-    ))
+    )
     if versions and book.deleted_at is None and book.voided_at is None:
         current = versions[-1]
         if any(
-            step.assignee_user_id == user.id and step.state == "pending"
+            step.assignee_user_id == user.id
+            and step.state == "pending"
             and step.kind in ("approver", "reviewer")
             for step in current.approval_steps
         ):
@@ -394,21 +401,23 @@ def resolve_book_read_access(
         if record_type_error is not None and never_assigned:
             raise record_type_error
         raise AppError(
-            "FORBIDDEN", "You do not have access to this revision.", http_status=403,
+            "FORBIDDEN",
+            "You do not have access to this revision.",
+            http_status=403,
         )
-    selected = version_id or next(version.id for version in reversed(versions) if version.id in allowed)
+    selected = version_id or next(
+        version.id for version in reversed(versions) if version.id in allowed
+    )
     return BookReadAccess(False, frozenset(allowed), selected)
-
-
-def require_book_access(db: Session, user: User, row: Book) -> None:
-    resolve_book_read_access(db, user, row)
 
 
 def require_full_book_access(db: Session, user: User, row: Book) -> None:
     """Require normal books.view + type visibility. Never satisfied by an assignment."""
     if not perm_service.has_capability(db, user, "books.view"):
         raise AppError(
-            "FORBIDDEN", "Missing capability: books.view", http_status=403,
+            "FORBIDDEN",
+            "Missing capability: books.view",
+            http_status=403,
             details={"capability": "books.view"},
         )
     assert_record_type_visible(db, user, row)
@@ -817,7 +826,8 @@ def _approval_context(
     subject = fields.get("subject")
     subject = subject.strip() if isinstance(subject, str) and subject.strip() else book.subject
     instant = (
-        submitted_at.replace(tzinfo=UTC) if submitted_at and submitted_at.tzinfo is None
+        submitted_at.replace(tzinfo=UTC)
+        if submitted_at and submitted_at.tzinfo is None
         else submitted_at
     )
     return {
@@ -844,11 +854,14 @@ def capture_approval_context(
     version: BookVersion,
     *,
     submitted_by_user_id: int | None,
-    submitted_at: datetime,
+    submitted_at: datetime | None,
 ) -> None:
     version.approval_context = _approval_context(
-        db, book, version,
-        submitted_by_user_id=submitted_by_user_id, submitted_at=submitted_at,
+        db,
+        book,
+        version,
+        submitted_by_user_id=submitted_by_user_id,
+        submitted_at=submitted_at,
     )
 
 
@@ -861,21 +874,29 @@ def retain_revision_access(db: Session, version: BookVersion, step: BookApproval
         or step.version_id != version.id
     ):
         return
-    grants = list(db.scalars(select(BookRevisionAccess).where(
-        BookRevisionAccess.version_id == version.id,
-        BookRevisionAccess.user_id == step.assignee_user_id,
-    )))
+    grants = list(
+        db.scalars(
+            select(BookRevisionAccess).where(
+                BookRevisionAccess.version_id == version.id,
+                BookRevisionAccess.user_id == step.assignee_user_id,
+            )
+        )
+    )
     grants.extend(
-        grant for grant in db.new
+        grant
+        for grant in db.new
         if isinstance(grant, BookRevisionAccess)
-        and grant.version_id == version.id and grant.user_id == step.assignee_user_id
+        and grant.version_id == version.id
+        and grant.user_id == step.assignee_user_id
         and grant not in grants
     )
     existing = next((grant for grant in grants if grant.kind == step.kind), None)
     revoked = next((grant for grant in grants if grant.revoked_at is not None), None)
     if existing is None:
         existing = BookRevisionAccess(
-            version_id=version.id, user_id=step.assignee_user_id, kind=step.kind,
+            version_id=version.id,
+            user_id=step.assignee_user_id,
+            kind=step.kind,
         )
         db.add(existing)
     if existing.decided_at is None or existing.decided_at <= step.decided_at:
@@ -985,7 +1006,10 @@ def submit_for_approval(
     book.priority = priority
     book.submitted_by_user_id = submitted_by_user_id
     capture_approval_context(
-        db, book, version, submitted_by_user_id=submitted_by_user_id,
+        db,
+        book,
+        version,
+        submitted_by_user_id=submitted_by_user_id,
         submitted_at=datetime.now(UTC),
     )
     _recompute_approval_state(book)
@@ -995,15 +1019,20 @@ def submit_for_approval(
 
 
 def _require_current_revision(
-    db: Session, book: Book, version_id: int,
+    db: Session,
+    book: Book,
+    version_id: int,
 ) -> BookVersion:
     current_id = db.scalar(
-        select(BookVersion.id).where(BookVersion.book_id == book.id)
-        .order_by(BookVersion.version_no.desc()).limit(1)
+        select(BookVersion.id)
+        .where(BookVersion.book_id == book.id)
+        .order_by(BookVersion.version_no.desc())
+        .limit(1)
     )
     if current_id != version_id:
         raise AppError(
-            "REVISION_CHANGED", "The record has a newer revision. Reopen the current task.",
+            "REVISION_CHANGED",
+            "The record has a newer revision. Reopen the current task.",
             http_status=409,
         )
     version = next((version for version in book.versions if version.id == version_id), None)
@@ -1013,7 +1042,11 @@ def _require_current_revision(
 
 
 def _require_assignment_action(
-    db: Session, book: Book, user_id: int, *, reviewer: bool = False,
+    db: Session,
+    book: Book,
+    user_id: int,
+    *,
+    reviewer: bool = False,
 ) -> None:
     user = db.get(User, user_id)
     if user is None or user.status != "active":
@@ -1021,7 +1054,11 @@ def _require_assignment_action(
     if not reviewer and not perm_service.has_capability(db, user, "books.approve"):
         raise AppError("FORBIDDEN", "Signing capability is required.", http_status=403)
     states = ("pending", "approved", "returned", "rejected") if reviewer else ("pending",)
-    if book.voided_at is not None or book.deleted_at is not None or book.approval_state not in states:
+    if (
+        book.voided_at is not None
+        or book.deleted_at is not None
+        or book.approval_state not in states
+    ):
         raise ValidationFailedError(
             "NOT_A_REVIEWER" if reviewer else "NO_PENDING_STEP",
             "There is no actionable assignment on this revision.",
@@ -1060,7 +1097,8 @@ def decide_step(
         raise ValidationFailedError("BAD_DECISION", f"{decision!r} is not a valid decision")
     if decision in ("returned", "rejected") and not (note and note.strip()):
         raise ValidationFailedError(
-            "REASON_REQUIRED", "A nonblank reason is required to return or reject.",
+            "REASON_REQUIRED",
+            "A nonblank reason is required to return or reject.",
         )
     current.state = decision
     current.note = note.strip() if note else None
@@ -1336,7 +1374,8 @@ def sign_book(db: Session, book_id: int, *, user_id: int, version_id: int) -> Bo
     _require_current_revision(db, book, version_id)
     db.refresh(book, attribute_names=["approval_state", "voided_at", "deleted_at"])
     refreshed_step = db.scalar(
-        select(BookApprovalStep).where(BookApprovalStep.id == current.id)
+        select(BookApprovalStep)
+        .where(BookApprovalStep.id == current.id)
         .execution_options(populate_existing=True)
     )
     _require_assignment_action(db, book, user_id)
@@ -1421,7 +1460,12 @@ def is_document_signed_locked(db: Session, version: BookVersion) -> tuple[bool, 
 
 
 def add_note(
-    db: Session, book_id: int, *, user_id: int, version_id: int, note: str | None = None,
+    db: Session,
+    book_id: int,
+    *,
+    user_id: int,
+    version_id: int,
+    note: str | None = None,
 ) -> Book:
     """Attach a note to the current pending step without changing its state.
 
@@ -1635,7 +1679,9 @@ def your_step_kind(book: Book, user_id: int) -> str | None:
 
 _APPROVAL_VERDICTS: frozenset[str] = frozenset({"approved", "rejected", "returned"})
 RECEIVED_KINDS: frozenset[str] = frozenset({"approver", "reviewer"})
-RECEIVED_STATUSES: frozenset[str] = frozenset({"pending", "returned", "approved", "rejected", "all"})
+RECEIVED_STATUSES: frozenset[str] = frozenset(
+    {"pending", "returned", "approved", "rejected", "all"}
+)
 REVIEW_ALLOWED_STATUSES: frozenset[str] = frozenset({"pending", "all"})
 
 
@@ -1648,7 +1694,9 @@ class _WorklistRow(NamedTuple):
 
 
 def _current_pending_step_of_kind(
-    book: Book, user_id: int, kind: str,
+    book: Book,
+    user_id: int,
+    kind: str,
 ) -> BookApprovalStep | None:
     version = _current_version(book)
     if version is None:
@@ -1792,9 +1840,7 @@ def _approval_worklist(db: Session, user: User, *, kind: str, status: str) -> li
 
 
 def _worklist_submitted_at(row: _WorklistRow) -> datetime | None:
-    context = (
-        row.version.approval_context if isinstance(row.version.approval_context, dict) else {}
-    )
+    context = row.version.approval_context if isinstance(row.version.approval_context, dict) else {}
     value = context.get("submitted_at")
     if isinstance(value, str):
         try:
@@ -1809,10 +1855,12 @@ def _sort_worklist(rows: list[_WorklistRow], *, sort: str) -> list[_WorklistRow]
     """Normalized submission time, nulls last in both directions, then stable
     Book ID ascending."""
     timed = [(row, _worklist_submitted_at(row)) for row in rows]
-    with_ts = sorted(
-        (pair for pair in timed if pair[1] is not None),
-        key=lambda pair: (pair[1], pair[0].book.id),
-        reverse=(sort == "newest"),
+    with_ts = [(row, stamp) for row, stamp in timed if stamp is not None]
+    with_ts.sort(
+        key=lambda pair: (
+            -pair[1].timestamp() if sort == "newest" else pair[1].timestamp(),
+            pair[0].book.id,
+        )
     )
     without_ts = sorted(
         (pair for pair in timed if pair[1] is None), key=lambda pair: pair[0].book.id
@@ -1837,7 +1885,12 @@ def _worklist_subject(book: Book, version: BookVersion) -> str | None:
 
 
 def _worklist_doc_manager(
-    db: Session, book: Book, version: BookVersion, *, full: bool, names_by_id: dict[int, str],
+    db: Session,
+    book: Book,
+    version: BookVersion,
+    *,
+    full: bool,
+    names_by_id: dict[int, str],
 ) -> tuple[int | None, str | None]:
     context = version.approval_context if isinstance(version.approval_context, dict) else {}
     raw_id = context.get("doc_manager_user_id")
@@ -1853,7 +1906,10 @@ def _worklist_doc_manager(
 
 
 def _build_worklist_item(
-    db: Session, row: _WorklistRow, *, names_by_id: dict[int, str],
+    db: Session,
+    row: _WorklistRow,
+    *,
+    names_by_id: dict[int, str],
 ) -> ApprovalLogItem:
     book, version, full = row.book, row.version, row.access_scope == "full"
     approver_steps = [s for s in version.approval_steps if (s.kind or "approver") == "approver"]
@@ -1875,11 +1931,13 @@ def _build_worklist_item(
     raw_category_ar = context.get("category_name_ar")
     raw_category_en = context.get("category_name_en")
     category_name_ar = (
-        raw_category_ar if isinstance(raw_category_ar, str)
+        raw_category_ar
+        if isinstance(raw_category_ar, str)
         else (book.category.name_ar if full and book.category is not None else None)
     )
     category_name_en = (
-        raw_category_en if isinstance(raw_category_en, str)
+        raw_category_en
+        if isinstance(raw_category_en, str)
         else (book.category.name_en if full and book.category is not None else None)
     )
     verdict = row.status if row.status in _APPROVAL_VERDICTS else None
@@ -1932,11 +1990,42 @@ def _worklist_names(db: Session, rows: list[_WorklistRow]) -> dict[int, str]:
     return resolve_names_by_ids(db, user_ids)
 
 
+def _sent_worklist_rows(
+    db: Session,
+    user: User,
+    *,
+    status: str,
+) -> list[_WorklistRow]:
+    stmt = (
+        select(Book)
+        .options(
+            selectinload(Book.category),
+            selectinload(Book.versions).selectinload(BookVersion.approval_steps),
+        )
+        .where(Book.deleted_at.is_(None), Book.submitted_by_user_id == user.id)
+    )
+    visibility = user_visibility_clause(db, user)
+    if visibility is not None:
+        stmt = stmt.where(visibility)
+    if status != "all":
+        stmt = stmt.where(Book.approval_state == status)
+    return [
+        _WorklistRow(
+            book=book,
+            version=current,
+            access_scope="full",
+            status=book.approval_state,
+            assignment_version_no=current.version_no,
+        )
+        for book in db.execute(stmt).scalars().all()
+        if (current := _current_version(book)) is not None
+    ]
+
+
 def approval_log_sent(
     db: Session,
     *,
-    user_id: int,
-    user: User | None = None,
+    user: User,
     limit: int,
     offset: int,
     status: str = "all",
@@ -1947,39 +2036,18 @@ def approval_log_sent(
     count_stmt = (
         select(func.count())
         .select_from(Book)
-        .where(Book.deleted_at.is_(None), Book.submitted_by_user_id == user_id)
+        .where(Book.deleted_at.is_(None), Book.submitted_by_user_id == user.id)
     )
-    visibility = user_visibility_clause(db, user) if user is not None else None
+    visibility = user_visibility_clause(db, user)
     if visibility is not None:
         count_stmt = count_stmt.where(visibility)
     if status != "all":
         count_stmt = count_stmt.where(Book.approval_state == status)
     total = db.execute(count_stmt).scalar_one()
-    stmt = (
-        select(Book)
-        .options(
-            selectinload(Book.category),
-            selectinload(Book.versions).selectinload(BookVersion.approval_steps),
-        )
-        .where(Book.deleted_at.is_(None), Book.submitted_by_user_id == user_id)
-    )
-    if visibility is not None:
-        stmt = stmt.where(visibility)
-    if status != "all":
-        stmt = stmt.where(Book.approval_state == status)
-    rows = list(db.execute(stmt).scalars().all())
-    worklist_rows = [
-        _WorklistRow(
-            book=book,
-            version=current,
-            access_scope="full",
-            status=book.approval_state,
-            assignment_version_no=current.version_no,
-        )
-        for book in rows
-        if (current := _current_version(book)) is not None
-    ]
-    ordered = _sort_worklist(worklist_rows, sort=sort)[offset : offset + limit]
+    ordered = _sort_worklist(
+        _sent_worklist_rows(db, user, status=status),
+        sort=sort,
+    )[offset : offset + limit]
     names_by_id = _worklist_names(db, ordered)
     items = [_build_worklist_item(db, row, names_by_id=names_by_id) for row in ordered]
     return items, total
@@ -2021,34 +2089,8 @@ def approval_log_neighbors(
     rows = (
         _sort_worklist(_approval_worklist(db, user, kind=kind, status=status), sort=sort)
         if scope == "received"
-        else None
+        else _sort_worklist(_sent_worklist_rows(db, user, status=status), sort=sort)
     )
-    if rows is None:
-        # scope == "sent": rebuild the same ordered book-scoped rows directly.
-        stmt = (
-            select(Book)
-            .options(
-                selectinload(Book.category),
-                selectinload(Book.versions).selectinload(BookVersion.approval_steps),
-            )
-            .where(Book.deleted_at.is_(None), Book.submitted_by_user_id == user.id)
-        )
-        visibility = user_visibility_clause(db, user)
-        if visibility is not None:
-            stmt = stmt.where(visibility)
-        if status != "all":
-            stmt = stmt.where(Book.approval_state == status)
-        rows = _sort_worklist(
-            [
-                _WorklistRow(
-                    book=book, version=current, access_scope="full",
-                    status=book.approval_state, assignment_version_no=current.version_no,
-                )
-                for book in db.execute(stmt).scalars().all()
-                if (current := _current_version(book)) is not None
-            ],
-            sort=sort,
-        )
     index = next(
         (
             i
@@ -2082,14 +2124,14 @@ def approval_summary(db: Session, user: User) -> ApprovalSummaryResponse:
     reviewer_history = _approval_worklist(db, user, kind="reviewer", status="all")
     can_view_sent = perm_service.has_capability(db, user, "books.view")
     sent_items, sent_total = (
-        approval_log_sent(db, user_id=user.id, user=user, limit=1, offset=0, status="pending")
+        approval_log_sent(db, user=user, limit=1, offset=0, status="pending")
         if can_view_sent
         else ([], 0)
     )
     # Signer-returned submissions only: records this caller SENT that a
     # signer returned for changes — not their own received-approver history.
     _, returned_total = (
-        approval_log_sent(db, user_id=user.id, user=user, limit=0, offset=0, status="returned")
+        approval_log_sent(db, user=user, limit=0, offset=0, status="returned")
         if can_view_sent
         else ([], 0)
     )
@@ -2226,8 +2268,13 @@ def _my_pending_reviewer_step(book: Book, user_id: int) -> BookApprovalStep | No
 
 
 def record_review(
-    db: Session, book_id: int, *, user_id: int, version_id: int,
-    decision: str, note: str | None = None,
+    db: Session,
+    book_id: int,
+    *,
+    user_id: int,
+    version_id: int,
+    decision: str,
+    note: str | None = None,
 ) -> Book:
     """Record an advisory reviewer verdict. Never recomputes approval_state."""
     if decision not in _REVIEW_DECISIONS:
@@ -2278,8 +2325,11 @@ def add_reviewers(db: Session, book_id: int, *, user_ids: Sequence[int]) -> Book
     assert version is not None
     if version.approval_context is None:
         timestamps = [step.created_at for step in version.approval_steps if step.created_at]
-        version.approval_context = _approval_context(
-            db, book, version, submitted_by_user_id=book.submitted_by_user_id,
+        capture_approval_context(
+            db,
+            book,
+            version,
+            submitted_by_user_id=book.submitted_by_user_id,
             submitted_at=min(timestamps) if timestamps else None,
         )
     existing = {s.assignee_user_id for s in version.approval_steps}
@@ -2935,7 +2985,12 @@ def list_revision_access(db: Session, book_id: int) -> list[BookRevisionAccess]:
 
 
 def revoke_revision_access(
-    db: Session, *, book_id: int, access_id: int, reason: str, actor: User,
+    db: Session,
+    *,
+    book_id: int,
+    access_id: int,
+    reason: str,
+    actor: User,
 ) -> list[BookRevisionAccess]:
     """Revoke every retained role grant a user holds on one revision.
 
@@ -2947,7 +3002,9 @@ def revoke_revision_access(
     target = db.get(BookRevisionAccess, access_id)
     if target is None or target.version.book_id != book_id:
         raise NotFoundError(
-            "REVISION_ACCESS_NOT_FOUND", f"Revision access {access_id} not found", id=access_id,
+            "REVISION_ACCESS_NOT_FOUND",
+            f"Revision access {access_id} not found",
+            id=access_id,
         )
     trimmed = (reason or "").strip()
     if not trimmed:
@@ -3053,7 +3110,6 @@ __all__ = [
     "remove_reviewer",
     "replace_attachment",
     "replace_signed_copy",
-    "require_book_access",
     "require_record_type_access",
     "resolve_attachment_path",
     "resolve_doc_manager_user",

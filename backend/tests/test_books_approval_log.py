@@ -201,8 +201,14 @@ def test_sent_scope_status_filter_narrows_to_one_state(api_db: Session):
     approver = _user(api_db, "approver@x.ae", "manager")
     _submitted_book(api_db, book_id=1, ref="HR-0001", submitter=submitter, approver=approver)
     _submitted_book(
-        api_db, book_id=2, ref="HR-0002", submitter=submitter, approver=approver,
-        state="returned", approver_state="returned", decided_at=_days_ago(1),
+        api_db,
+        book_id=2,
+        ref="HR-0002",
+        submitter=submitter,
+        approver=approver,
+        state="returned",
+        approver_state="returned",
+        decided_at=_days_ago(1),
     )
 
     client = _client(api_db, submitter)
@@ -297,9 +303,7 @@ def test_received_scope_decided_history_requires_all_status(api_db: Session):
     default_page = client.get("/api/v1/books/approval-log").json()
     assert default_page["total"] == 0
 
-    row = client.get(
-        "/api/v1/books/approval-log", params={"status": "all"}
-    ).json()["items"][0]
+    row = client.get("/api/v1/books/approval-log", params={"status": "all"}).json()["items"][0]
     assert row["book_id"] == 1
     assert row["status"] == "rejected"
     assert row["verdict"] == "rejected"
@@ -322,9 +326,7 @@ def test_received_scope_history_has_no_30_day_cutoff(api_db: Session):
         decided_at=_days_ago(400),
     )
 
-    body = _client(api_db, me).get(
-        "/api/v1/books/approval-log", params={"status": "all"}
-    ).json()
+    body = _client(api_db, me).get("/api/v1/books/approval-log", params={"status": "all"}).json()
     assert [row["book_id"] for row in body["items"]] == [1]
 
 
@@ -346,9 +348,11 @@ def test_received_scope_reviewer_pending_step_counts(api_db: Session):
     )
     api_db.commit()
 
-    row = _client(api_db, me).get(
-        "/api/v1/books/approval-log", params={"kind": "reviewer"}
-    ).json()["items"][0]
+    row = (
+        _client(api_db, me)
+        .get("/api/v1/books/approval-log", params={"kind": "reviewer"})
+        .json()["items"][0]
+    )
     assert row["book_id"] == 1
     assert row["status"] == "pending"
     assert row["reviewer_names"] == ["me@x.ae"]
@@ -362,20 +366,32 @@ def test_received_scope_late_review_stays_actionable_after_signer_decision(api_d
     approver = _user(api_db, "approver@x.ae", "manager")
     submitter = _user(api_db, "submitter@x.ae", "operator")
     book = _submitted_book(
-        api_db, book_id=1, ref="HR-0001", submitter=submitter, approver=approver,
-        state="approved", approver_state="approved", decided_at=_days_ago(1),
+        api_db,
+        book_id=1,
+        ref="HR-0001",
+        submitter=submitter,
+        approver=approver,
+        state="approved",
+        approver_state="approved",
+        decided_at=_days_ago(1),
     )
     book.versions[0].approval_steps.append(
         BookApprovalStep(
-            book_id=1, step_order=1, stage_label="Review",
-            assignee_user_id=reviewer.id, kind="reviewer", state="pending",
+            book_id=1,
+            step_order=1,
+            stage_label="Review",
+            assignee_user_id=reviewer.id,
+            kind="reviewer",
+            state="pending",
         )
     )
     api_db.commit()
 
-    row = _client(api_db, reviewer).get(
-        "/api/v1/books/approval-log", params={"kind": "reviewer"}
-    ).json()["items"][0]
+    row = (
+        _client(api_db, reviewer)
+        .get("/api/v1/books/approval-log", params={"kind": "reviewer"})
+        .json()["items"][0]
+    )
     assert row["book_id"] == 1
     assert row["status"] == "pending"
     # The review itself is still actionable ("pending"), but record_status
@@ -413,7 +429,8 @@ def test_received_scope_reviewer_status_rejects_non_pending_all(api_db: Session)
 def test_received_scope_sent_kind_is_rejected(api_db: Session):
     me = _user(api_db, "me@x.ae", "manager")
     response = _client(api_db, me).get(
-        "/api/v1/books/approval-log", params={"scope": "sent", "kind": "approver"},
+        "/api/v1/books/approval-log",
+        params={"scope": "sent", "kind": "approver"},
     )
     assert response.status_code == 422
 
@@ -449,14 +466,26 @@ def test_approval_summary_returned_count_is_signer_returned_submissions_only(api
     reviewer = _user(api_db, "returned-reviewer@x.ae", "operator")
     # The submitter's own record, returned by the signer.
     _submitted_book(
-        api_db, book_id=1, ref="HR-0001", submitter=submitter, approver=signer,
-        state="returned", approver_state="returned", decided_at=_days_ago(1),
+        api_db,
+        book_id=1,
+        ref="HR-0001",
+        submitter=submitter,
+        approver=signer,
+        state="returned",
+        approver_state="returned",
+        decided_at=_days_ago(1),
     )
     # A record the SIGNER themself returned as approver — must not count
     # toward the signer's own returned_count (they didn't submit it).
     _submitted_book(
-        api_db, book_id=2, ref="HR-0002", submitter=reviewer, approver=signer,
-        state="returned", approver_state="returned", decided_at=_days_ago(1),
+        api_db,
+        book_id=2,
+        ref="HR-0002",
+        submitter=reviewer,
+        approver=signer,
+        state="returned",
+        approver_state="returned",
+        decided_at=_days_ago(1),
     )
 
     submitter_summary = _client(api_db, submitter).get("/api/v1/books/approval-summary").json()
@@ -471,13 +500,15 @@ def test_approval_log_neighbors_reports_position_and_adjacent_rows(api_db: Sessi
     submitter = _user(api_db, "submitter@x.ae", "operator")
     for i in range(1, 4):
         _submitted_book(
-            api_db, book_id=i, ref=f"HR-{i:04d}", submitter=submitter, approver=me,
+            api_db,
+            book_id=i,
+            ref=f"HR-{i:04d}",
+            submitter=submitter,
+            approver=me,
         )
 
     client = _client(api_db, me)
-    middle = client.get(
-        "/api/v1/books/approval-log/2/neighbors", params={"sort": "oldest"}
-    ).json()
+    middle = client.get("/api/v1/books/approval-log/2/neighbors", params={"sort": "oldest"}).json()
     assert middle["position"] == 2
     assert middle["total"] == 3
     assert middle["previous"]["book_id"] == 1
@@ -491,16 +522,63 @@ def test_approval_log_neighbors_reports_position_and_adjacent_rows(api_db: Sessi
     assert missing["next"] is None
 
 
+def test_sent_scope_neighbors_requires_books_view(api_db: Session):
+    from app.db.models import UserPermission
+
+    submitter = _user(api_db, "sent-neighbors@x.ae", "operator")
+    denied_submitter = _user(api_db, "denied-sent-neighbors@x.ae", "operator")
+    approver = _user(api_db, "sent-neighbors-approver@x.ae", "manager")
+    book = _submitted_book(
+        api_db,
+        book_id=1,
+        ref="HR-0001",
+        submitter=submitter,
+        approver=approver,
+    )
+    denied_book = _submitted_book(
+        api_db,
+        book_id=2,
+        ref="HR-0002",
+        submitter=denied_submitter,
+        approver=approver,
+    )
+    api_db.add(
+        UserPermission(
+            user_id=denied_submitter.id,
+            capability="books.view",
+            effect="deny",
+        )
+    )
+    api_db.commit()
+
+    allowed = _client(api_db, submitter).get(
+        f"/api/v1/books/approval-log/{book.id}/neighbors",
+        params={"scope": "sent"},
+    )
+    assert allowed.status_code == 200, allowed.text
+
+    denied = _client(api_db, denied_submitter).get(
+        f"/api/v1/books/approval-log/{denied_book.id}/neighbors",
+        params={"scope": "sent"},
+    )
+    assert denied.status_code == 403
+    assert denied.json()["error"]["code"] == "FORBIDDEN"
+    assert denied.json()["error"]["details"] == {"capability": "books.view"}
+
+
 # ── pagination ────────────────────────────────────────────────────────────────
 
 
 def test_sent_scope_pagination(api_db: Session):
     submitter = _user(api_db, "submitter@x.ae", "operator")
     approver = _user(api_db, "approver@x.ae", "manager")
+    tied = _days_ago(1)
     for i in range(1, 4):
-        _submitted_book(
+        book = _submitted_book(
             api_db, book_id=i, ref=f"HR-{i:04d}", submitter=submitter, approver=approver
         )
+        book.versions[0].approval_context = {"submitted_at": tied.isoformat()}
+    api_db.commit()
 
     client = _client(api_db, submitter)
     page1 = client.get(
@@ -517,6 +595,11 @@ def test_sent_scope_pagination(api_db: Session):
     assert len(page2["items"]) == 1
     all_refs = {r["ref_number"] for r in page1["items"]} | {page2["items"][0]["ref_number"]}
     assert all_refs == {"HR-0001", "HR-0002", "HR-0003"}
+    newest = client.get(
+        "/api/v1/books/approval-log",
+        params={"scope": "sent", "sort": "newest", "limit": 3},
+    ).json()
+    assert [row["book_id"] for row in newest["items"]] == [1, 2, 3]
 
 
 def test_received_scope_pagination_covers_total_not_page(api_db: Session):
@@ -567,16 +650,26 @@ def test_completed_review_survives_resubmission_without_reviving_revocation(api_
     signer = _user(api_db, "signer@x.ae", "manager")
     reviewer = _user(api_db, "reviewer@x.ae", "operator")
     book = _submitted_book(
-        api_db, book_id=1, ref="HR-0001", submitter=submitter, approver=signer,
+        api_db,
+        book_id=1,
+        ref="HR-0001",
+        submitter=submitter,
+        approver=signer,
     )
     book_service.add_reviewers(api_db, book.id, user_ids=[reviewer.id])
     book_service.record_review(
-        api_db, book.id, user_id=reviewer.id, decision="reviewed", note="Original feedback",
+        api_db,
+        book.id,
+        user_id=reviewer.id,
+        decision="reviewed",
+        note="Original feedback",
         version_id=book.versions[0].id,
     )
-    grant = api_db.scalar(select(BookRevisionAccess).where(
-        BookRevisionAccess.user_id == reviewer.id,
-    ))
+    grant = api_db.scalar(
+        select(BookRevisionAccess).where(
+            BookRevisionAccess.user_id == reviewer.id,
+        )
+    )
     assert grant is not None
     revoked_at = _days_ago(0)
     grant.revoked_at = revoked_at
@@ -584,13 +677,21 @@ def test_completed_review_survives_resubmission_without_reviving_revocation(api_
     grant.revocation_reason = "Synthetic administrator reason"
     api_db.commit()
     book_service.submit_for_approval(
-        api_db, book.id, priority="Normal", approver_user_id=signer.id,
-        reviewer_user_ids=[reviewer.id], submitted_by_user_id=submitter.id,
+        api_db,
+        book.id,
+        priority="Normal",
+        approver_user_id=signer.id,
+        reviewer_user_ids=[reviewer.id],
+        submitted_by_user_id=submitter.id,
     )
     assert grant.note == "Original feedback"
     assert grant.revoked_at == revoked_at
     book_service.record_review(
-        api_db, book.id, user_id=reviewer.id, decision="changes_requested", note="Later feedback",
+        api_db,
+        book.id,
+        user_id=reviewer.id,
+        decision="changes_requested",
+        note="Later feedback",
         version_id=book.versions[0].id,
     )
     assert grant.note == "Later feedback"
@@ -608,13 +709,25 @@ def test_state_override_does_not_manufacture_completed_assignment(api_db: Sessio
     administrator = _user(api_db, "administrator@x.ae", "admin")
     signer = _user(api_db, "signer@x.ae", "manager")
     book = _submitted_book(
-        api_db, book_id=1, ref="HR-0001", submitter=administrator, approver=signer,
+        api_db,
+        book_id=1,
+        ref="HR-0001",
+        submitter=administrator,
+        approver=signer,
     )
     book_service.override_state(
-        api_db, book.id, target_state="rejected", actor=administrator, reason="Administrative change",
+        api_db,
+        book.id,
+        target_state="rejected",
+        actor=administrator,
+        reason="Administrative change",
     )
     book_service.override_state(
-        api_db, book.id, target_state="none", actor=administrator, reason="Draft reset",
+        api_db,
+        book.id,
+        target_state="none",
+        actor=administrator,
+        reason="Draft reset",
     )
     assert list(api_db.scalars(select(BookRevisionAccess))) == []
 
@@ -628,7 +741,11 @@ def test_revision_changed_during_signing_does_not_publish_decision(api_db, monke
 
     signer = _user(api_db, "racing-signer@x.ae", "manager")
     book = _submitted_book(
-        api_db, book_id=1, ref="HR-0001", submitter=signer, approver=signer,
+        api_db,
+        book_id=1,
+        ref="HR-0001",
+        submitter=signer,
+        approver=signer,
     )
     first = book.versions[0]
     signature = tmp_path / "signature.png"
@@ -661,11 +778,18 @@ def test_unfinished_superseded_reviewer_has_no_retained_read_access(api_db):
     reviewer = _user(api_db, "restricted@x.ae", "operator")
     api_db.add(UserPermission(user_id=reviewer.id, capability="books.view", effect="deny"))
     book = _submitted_book(
-        api_db, book_id=1, ref="HR-0001", submitter=signer, approver=signer,
+        api_db,
+        book_id=1,
+        ref="HR-0001",
+        submitter=signer,
+        approver=signer,
     )
     first = book.versions[0]
     book_service.add_reviewers(api_db, book.id, user_ids=[reviewer.id])
-    assert book_service.resolve_book_read_access(api_db, reviewer, book).selected_version_id == first.id
+    assert (
+        book_service.resolve_book_read_access(api_db, reviewer, book).selected_version_id
+        == first.id
+    )
     book.versions.append(BookVersion(book_id=book.id, version_no=2, status="none"))
     book.approval_state = "none"
     api_db.commit()
@@ -697,30 +821,47 @@ def test_revoked_retained_access_is_skipped_not_a_500_across_the_callers_worklis
     # A second, unrelated record the reviewer can still see after the first
     # grant is revoked — proves the worklist keeps going instead of failing.
     other_book = _submitted_book(
-        api_db, book_id=1, ref="HR-0001", submitter=submitter, approver=signer,
+        api_db,
+        book_id=1,
+        ref="HR-0001",
+        submitter=submitter,
+        approver=signer,
     )
     book_service.add_reviewers(api_db, other_book.id, user_ids=[reviewer.id])
 
     revoked_book = _submitted_book(
-        api_db, book_id=2, ref="HR-0002", submitter=submitter, approver=signer,
+        api_db,
+        book_id=2,
+        ref="HR-0002",
+        submitter=submitter,
+        approver=signer,
     )
     book_service.add_reviewers(api_db, revoked_book.id, user_ids=[reviewer.id])
     book_service.record_review(
-        api_db, revoked_book.id, user_id=reviewer.id, version_id=revoked_book.versions[0].id,
-        decision="reviewed", note="Completed then revoked",
+        api_db,
+        revoked_book.id,
+        user_id=reviewer.id,
+        version_id=revoked_book.versions[0].id,
+        decision="reviewed",
+        note="Completed then revoked",
     )
     grant = api_db.scalar(
         select(BookRevisionAccess).where(BookRevisionAccess.user_id == reviewer.id)
     )
     assert grant is not None
     book_service.revoke_revision_access(
-        api_db, book_id=revoked_book.id, access_id=grant.id, actor=admin,
+        api_db,
+        book_id=revoked_book.id,
+        access_id=grant.id,
+        actor=admin,
         reason="Synthetic revocation regression test",
     )
 
-    body = _client(api_db, reviewer).get(
-        "/api/v1/books/approval-log", params={"kind": "reviewer", "status": "all"}
-    ).json()
+    body = (
+        _client(api_db, reviewer)
+        .get("/api/v1/books/approval-log", params={"kind": "reviewer", "status": "all"})
+        .json()
+    )
     assert body["total"] == 1
     assert [row["book_id"] for row in body["items"]] == [other_book.id]
 
@@ -744,12 +885,21 @@ def test_restricted_worklist_row_never_leaks_the_live_current_submitter_name(api
     secret_resubmitter = _user(api_db, "secret-resubmitter@x.ae", "operator")
     api_db.add(UserPermission(user_id=signer.id, capability="books.view", effect="deny"))
     book = _submitted_book(
-        api_db, book_id=1, ref="HR-0001", submitter=original_submitter, approver=signer,
-        state="returned", approver_state="returned", decided_at=_days_ago(1),
+        api_db,
+        book_id=1,
+        ref="HR-0001",
+        submitter=original_submitter,
+        approver=signer,
+        state="returned",
+        approver_state="returned",
+        decided_at=_days_ago(1),
     )
     v1 = book.versions[0]
     book_service.capture_approval_context(
-        api_db, book, v1, submitted_by_user_id=original_submitter.id,
+        api_db,
+        book,
+        v1,
+        submitted_by_user_id=original_submitter.id,
         submitted_at=v1.approval_steps[0].created_at,
     )
     book_service.retain_revision_access(api_db, v1, v1.approval_steps[0])

@@ -18,8 +18,8 @@ from app.core.form_kind import OTHER_SERVICE_ID, SERVICE_IDS
 from app.db.models import (
     Book,
     BookApprovalStep,
-    BookRevisionAccess,
     BookCategory,
+    BookRevisionAccess,
     BookVersion,
     Document,
     RolePermission,

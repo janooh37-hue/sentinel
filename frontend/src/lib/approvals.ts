@@ -11,7 +11,12 @@
  * `sign`/`review`; the API vocabulary is `approver`/`reviewer` — this module
  * is the one place that translates between them.
  */
-import type { ApprovalKindParam, ApprovalStatusParam, ApprovalSummaryResponse } from './api'
+import type {
+  ApprovalKindParam,
+  ApprovalLogItem,
+  ApprovalStatusParam,
+  ApprovalSummaryResponse,
+} from './api'
 
 export type ApprovalScope = 'sent' | 'received'
 export type ApprovalKind = 'sign' | 'review'
@@ -28,7 +33,20 @@ export const APPROVALS_LOG_PATH = '/books/approvals'
 /** Fixed page size — `page` is one-based; API `offset = (page - 1) * PAGE_SIZE`. */
 export const APPROVALS_PAGE_SIZE = 100
 
-const STATUSES: readonly ApprovalStatus[] = ['pending', 'returned', 'approved', 'rejected', 'all']
+export const RECEIVED_STATUSES: readonly ApprovalStatus[] = [
+  'pending',
+  'returned',
+  'approved',
+  'rejected',
+  'all',
+]
+export const SENT_STATUSES: readonly ApprovalStatus[] = [
+  'all',
+  'pending',
+  'approved',
+  'rejected',
+  'returned',
+]
 const REVIEW_STATUSES: readonly ApprovalStatus[] = ['pending', 'all']
 const SORTS: readonly ApprovalSort[] = ['oldest', 'newest']
 
@@ -42,7 +60,7 @@ function isApprovalKind(value: string | null): value is ApprovalKind {
 
 function isApprovalStatus(value: string | null, kind?: ApprovalKind): value is ApprovalStatus {
   if (value === null) return false
-  const allowed = kind === 'review' ? REVIEW_STATUSES : STATUSES
+  const allowed = kind === 'review' ? REVIEW_STATUSES : RECEIVED_STATUSES
   return (allowed as readonly string[]).includes(value)
 }
 
@@ -58,6 +76,16 @@ export function apiKindOf(kind: ApprovalKind): ApprovalKindParam {
 /** API kind param -> UI kind. */
 export function uiKindOf(kind: ApprovalKindParam): ApprovalKind {
   return kind === 'approver' ? 'sign' : 'review'
+}
+
+/** True when pending advisory feedback outlives the signing decision. */
+export function isLateAdvisory(item: ApprovalLogItem): boolean {
+  return (
+    item.status === 'pending' &&
+    item.record_status != null &&
+    item.record_status !== 'pending' &&
+    item.record_status !== 'none'
+  )
 }
 
 /** The generic Approvals landing rule, from the caller's authorized summary:
@@ -107,19 +135,13 @@ export function normalizeApprovalContext(
     const kindParam = params.get('kind')
     const kind = isApprovalKind(kindParam) ? kindParam : null
     const available = summary.available_received_kinds ?? []
-    const authorizedKind =
-      kind !== null && available.includes(apiKindOf(kind))
-        ? kind
-        : available.includes('approver')
-          ? 'sign'
-          : available.includes('reviewer')
-            ? 'review'
-            : null
-    if (authorizedKind === null) return defaultApprovalContext(summary)
-    const status = isApprovalStatus(params.get('status'), authorizedKind)
+    if (kind === null || !available.includes(apiKindOf(kind))) {
+      return defaultApprovalContext(summary)
+    }
+    const status = isApprovalStatus(params.get('status'), kind)
       ? (params.get('status') as ApprovalStatus)
       : 'pending'
-    return { tab: 'received', kind: authorizedKind, status, sort, page }
+    return { tab: 'received', kind, status, sort, page }
   }
 
   return defaultApprovalContext(summary)

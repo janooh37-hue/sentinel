@@ -31,13 +31,16 @@ import { api } from '@/lib/api'
 import type { ApprovalLogItem } from '@/lib/api'
 import {
   APPROVALS_PAGE_SIZE,
+  RECEIVED_STATUSES,
+  SENT_STATUSES,
   apiKindOf,
   approvalQueueUrl,
   approvalRecordUrl,
+  isLateAdvisory,
   normalizeApprovalContext,
   resetPage,
 } from '@/lib/approvals'
-import type { ApprovalContext, ApprovalKind, ApprovalSort, ApprovalStatus } from '@/lib/approvals'
+import type { ApprovalContext, ApprovalSort, ApprovalStatus } from '@/lib/approvals'
 import { useApprovalSummary } from '@/lib/useApprovalSummary'
 import { useAuth } from '@/lib/authContext'
 import { cn } from '@/lib/utils'
@@ -45,9 +48,7 @@ import { ApprovalPreviewDialog, StatusChip } from './ApprovalPreviewDialog'
 
 const ScanPdfCanvas = lazy(() => import('@/pages/scanInbox/ScanPdfCanvas'))
 
-const RECEIVED_STATUSES: readonly ApprovalStatus[] = ['pending', 'returned', 'approved', 'rejected', 'all']
 const REVIEW_STATUSES: readonly ApprovalStatus[] = ['pending', 'all']
-const SENT_STATUSES: readonly ApprovalStatus[] = ['all', 'pending', 'approved', 'rejected', 'returned']
 
 interface QueueHistoryState {
   scrollY?: number
@@ -140,31 +141,17 @@ function ApprovalThumb({
   )
 }
 
-/** True when a review row is actionable ("pending") but the underlying
- *  record already carries a different, real decision — late advisory
- *  feedback, never a change to the signing outcome. */
-function isLateAdvisory(item: ApprovalLogItem, kind: ApprovalKind | null): boolean {
-  return (
-    kind === 'review' &&
-    item.status === 'pending' &&
-    item.record_status != null &&
-    item.record_status !== 'pending' &&
-    item.record_status !== 'none'
-  )
-}
-
 interface RowProps {
   item: ApprovalLogItem
-  kind: ApprovalKind | null
   tab: 'sent' | 'received'
   dfLocale?: typeof arLocale
   onOpen: () => void
   onPreview: (trigger: HTMLButtonElement) => void
 }
 
-function ApprovalRow({ item, kind, tab, dfLocale, onOpen, onPreview }: RowProps): React.JSX.Element {
+function ApprovalRow({ item, tab, dfLocale, onOpen, onPreview }: RowProps): React.JSX.Element {
   const { t } = useTranslation()
-  const late = isLateAdvisory(item, kind)
+  const late = isLateAdvisory(item)
   const restricted = item.access_scope === 'assigned_revision'
   const counterpartyLabel = tab === 'sent' ? t('books.approvals.assignedSigner') : t('books.approval.submitter')
   const counterpartyName = tab === 'sent' ? item.approver_name : item.submitted_by_name
@@ -284,7 +271,8 @@ export function ApprovalsPage(): React.JSX.Element {
   const logQuery = useQuery({
     queryKey: ['books', 'approval-log', user?.id ?? 0, context],
     queryFn: () =>
-      api.listApprovalLog(context!.tab, {
+      api.listApprovalLog({
+        scope: context!.tab,
         kind: context!.tab === 'received' ? apiKindOf(context!.kind) : undefined,
         status: context!.status,
         sort: context!.sort,
@@ -565,7 +553,6 @@ export function ApprovalsPage(): React.JSX.Element {
               <ApprovalRow
                 key={item.book_id}
                 item={item}
-                kind={context.tab === 'received' ? context.kind : null}
                 tab={context.tab}
                 dfLocale={dfLocale}
                 onOpen={() => openRow(item)}

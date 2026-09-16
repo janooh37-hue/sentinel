@@ -13,6 +13,7 @@ import { useQuery } from '@tanstack/react-query'
 
 import { api } from '@/lib/api'
 import { useAuth } from '@/lib/authContext'
+import { useApprovalSummary } from '@/lib/useApprovalSummary'
 
 import type { WaitingSignalId } from './navCustomization'
 
@@ -36,13 +37,7 @@ export function useWaitingSignals(enabled: boolean): Partial<Record<WaitingSigna
   const canEditBooks = capabilities?.includes('books.edit') === true
   const canViewLedger = capabilities?.includes('ledger.view') === true
 
-  const approvalSummaryQuery = useQuery({
-    queryKey: ['books', 'approval-summary'],
-    queryFn: api.getApprovalSummary,
-    enabled: authenticated,
-    staleTime: STALE_TIME,
-    refetchInterval: REFRESH_INTERVAL,
-  })
+  const approvalSummaryQuery = useApprovalSummary()
   const scanBackQuery = useQuery({
     queryKey: ['books', 'awaiting-scan', 'mine'],
     queryFn: () => api.listAwaitingScanBooks('mine'),

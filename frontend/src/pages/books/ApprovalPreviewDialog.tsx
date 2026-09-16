@@ -11,7 +11,9 @@ import { approvalRecordUrl } from '@/lib/approvals'
 import type { ApprovalContext } from '@/lib/approvals'
 import { cn } from '@/lib/utils'
 
-const DocPdfCanvas = lazy(() => import('@/pages/application/DocPdfCanvas'))
+import type { Paper } from './recordPapers'
+
+const RecordPaperViewer = lazy(() => import('@/pages/books/RecordPaperViewer'))
 
 interface Props {
   item: ApprovalLogItem | null
@@ -22,16 +24,6 @@ interface Props {
   context: ApprovalContext
 }
 
-/** Canonical preview source: the selected revision's signed artifact once
- *  approved, otherwise its generated PDF. Null when neither exists — the
- *  caller renders an explicit unavailable state rather than crashing on an
- *  absent document_id. */
-function previewPdfUrl(item: ApprovalLogItem): string | null {
-  if (item.verdict === 'approved' && item.version_id != null) {
-    return api.signedDocumentUrl(item.book_id, item.version_id)
-  }
-  return item.document_id != null ? api.documentDownloadUrl(item.document_id, 'pdf') : null
-}
 
 export function StatusChip({ item }: { item: ApprovalLogItem }): React.JSX.Element {
   const { t } = useTranslation()
@@ -67,6 +59,24 @@ export function StatusChip({ item }: { item: ApprovalLogItem }): React.JSX.Eleme
 export function ApprovalPreviewDialog({ item, triggerRef, onClose, context }: Props): React.JSX.Element {
   const { t } = useTranslation()
   const navigate = useNavigate()
+  const signed = item?.status === 'approved' && item.version_id != null
+  const pdfUrl = item
+    ? signed
+      ? api.signedDocumentUrl(item.book_id, item.version_id!)
+      : item.document_id != null
+        ? api.documentDownloadUrl(item.document_id, 'pdf', item.version_id ?? undefined)
+        : null
+    : null
+  const papers: Paper[] =
+    item && pdfUrl
+      ? [{
+          kind: signed ? 'signed' : 'generated',
+          url: pdfUrl,
+          downloadUrl: pdfUrl,
+          filename: `${item.ref_number}${signed ? '-signed' : ''}.pdf`,
+          isPdf: true,
+        }]
+      : []
 
   return (
     <Dialog.Root open={item !== null} onOpenChange={(open) => !open && onClose()}>
@@ -118,32 +128,29 @@ export function ApprovalPreviewDialog({ item, triggerRef, onClose, context }: Pr
                 </Dialog.Close>
               </header>
 
-              <div
-                className="max-h-[70vh] min-h-0 flex-1 overflow-auto px-5 py-5"
-                style={{
-                  background:
-                    'radial-gradient(150% 100% at 40% -10%, var(--surface) 0%, var(--surface-tinted) 70%, var(--bg) 100%)',
-                }}
-              >
-                <div className="relative mx-auto w-full max-w-[760px]">
-                  {(() => {
-                    const src = previewPdfUrl(item)
-                    return src ? (
-                      <Suspense
-                        fallback={
-                          <div className="flex min-h-[300px] items-center justify-center text-muted-foreground">
-                            <Loader2 className="h-6 w-6 animate-spin" aria-hidden />
-                          </div>
-                        }
-                      >
-                        <DocPdfCanvas pdfUrl={src} />
-                      </Suspense>
-                    ) : (
-                      <div className="flex min-h-[300px] items-center justify-center text-[0.85em] text-muted-foreground">
-                        {t('books.record.noDocument')}
-                      </div>
-                    )
-                  })()}
+              <div className="h-[70dvh] min-h-0 flex-1 overflow-hidden bg-[rgba(10,14,24,0.78)] px-5 py-5">
+                <div className="relative mx-auto h-full w-full max-w-[760px]">
+                  {pdfUrl ? (
+                    <Suspense
+                      fallback={
+                        <div className="flex min-h-[300px] items-center justify-center text-muted-foreground">
+                          <Loader2 className="h-6 w-6 animate-spin" aria-hidden />
+                        </div>
+                      }
+                    >
+                      <RecordPaperViewer
+                        papers={papers}
+                        paperIndex={0}
+                        onPaperIndexChange={() => undefined}
+                        baseWidth={620}
+                        isOverlay
+                      />
+                    </Suspense>
+                  ) : (
+                    <div className="flex min-h-[300px] items-center justify-center text-[0.85em] text-muted-foreground">
+                      {t('books.record.noDocument')}
+                    </div>
+                  )}
                 </div>
               </div>
 
