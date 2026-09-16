@@ -8,7 +8,7 @@ from datetime import date
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
-from app.db.models import User, Vehicle, VehicleMaintenance
+from app.db.models import User, Vehicle, VehicleFile, VehicleMaintenance
 from app.services import perm_service, push_service, settings_service, vehicle_service
 
 log = logging.getLogger(__name__)
@@ -79,6 +79,37 @@ def _insurance_messages(vehicle: Vehicle, state: str) -> dict[str, tuple[str, st
         en_detail = f"{plate} · {vehicle.type_en} insurance expires on {expiry}"
         ar_heading = "تأمين على وشك الانتهاء"
         ar_detail = f"{_isolate(plate)} · {vehicle.type_ar} تأمينها ينتهي في {expiry}"
+    return {
+        "en": (_TITLE, f"{en_heading}\n{en_detail}"),
+        "ar": (_TITLE, f"{ar_heading}\n{ar_detail}"),
+    }
+
+
+def _certificate_name(certificate: VehicleFile, locale: str) -> str:
+    """Requested locale's label, then its peer, then the stored filename —
+    entered names may be blank in either language."""
+    primary = certificate.label_ar if locale == "ar" else certificate.label_en
+    peer = certificate.label_en if locale == "ar" else certificate.label_ar
+    return primary or peer or certificate.original_name
+
+
+def _certificate_messages(certificate: VehicleFile, state: str) -> dict[str, tuple[str, str]]:
+    vehicle = certificate.vehicle
+    plate = vehicle_service.plate_label(vehicle)
+    assert certificate.expiry_date is not None  # guarded by caller
+    expiry = certificate.expiry_date.strftime("%d/%m/%Y")
+    name_en = _isolate(_certificate_name(certificate, "en"))
+    name_ar = _isolate(_certificate_name(certificate, "ar"))
+    if state == "expired":
+        en_heading = "Certificate expired"
+        en_detail = f"{plate} · {vehicle.type_en} · {name_en} expired on {expiry}"
+        ar_heading = "انتهت الشهادة"
+        ar_detail = f"{_isolate(plate)} · {vehicle.type_ar} · {name_ar} انتهت في {expiry}"
+    else:
+        en_heading = "Certificate expiring"
+        en_detail = f"{plate} · {vehicle.type_en} · {name_en} expires on {expiry}"
+        ar_heading = "شهادة على وشك الانتهاء"
+        ar_detail = f"{_isolate(plate)} · {vehicle.type_ar} · {name_ar} تنتهي في {expiry}"
     return {
         "en": (_TITLE, f"{en_heading}\n{en_detail}"),
         "ar": (_TITLE, f"{ar_heading}\n{ar_detail}"),
@@ -194,6 +225,42 @@ def send_due_reminders(db: Session, *, today: date) -> int:
         sent += delivered
         if delivered:
             maintenance.reminder_sent_for = next_due
+            db.commit()
+
+    certificate_rows = list(
+        db.scalars(
+            select(VehicleFile)
+            .join(VehicleFile.vehicle)
+            .where(
+                VehicleFile.kind == "certificate",
+                VehicleFile.expiry_date.is_not(None),
+                VehicleFile.is_historical.is_(False),
+                Vehicle.archived_at.is_(None),
+            )
+            .options(selectinload(VehicleFile.vehicle))
+            .order_by(VehicleFile.id)
+        )
+    )
+    for certificate in certificate_rows:
+        expiry_date = certificate.expiry_date
+        if expiry_date is None:
+            continue
+        certificate_state = vehicle_service.expiry_status(
+            expiry_date,
+            today=today,
+            notify_days=notify_days,
+        )
+        if certificate_state == "valid" or certificate.expiry_reminder_sent_for == expiry_date:
+            continue
+        delivered = _send_to_recipients(
+            db,
+            recipient_ids,
+            _certificate_messages(certificate, certificate_state),
+            f"/vehicles/{certificate.vehicle_id}?tab=certificates",
+        )
+        sent += delivered
+        if delivered:
+            certificate.expiry_reminder_sent_for = expiry_date
             db.commit()
 
     return sent

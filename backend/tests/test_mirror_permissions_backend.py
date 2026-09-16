@@ -6,6 +6,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
 
+import fitz
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import select
@@ -744,6 +745,7 @@ def test_assignment_access_bypasses_type_denials_and_retains_decided_revision(
         role="manager",
         email="approvals-manager@test.ae",
     )
+
     admin = mirror_api.actor
     hidden_pending = _book(
         mirror_api.db,
@@ -1859,10 +1861,19 @@ def test_pending_assignees_can_read_linked_documents_until_their_decision(
     from app.api.v1 import documents as documents_api
 
     _category(mirror_api.db, "REVIEW", name_en="Assigned reviews")
-    unsigned_pdf = tmp_path / "assigned-unsigned.pdf"
-    unsigned_pdf.write_bytes(b"%PDF-unsigned")
-    locked_pdf = tmp_path / "assigned-locked.pdf"
-    locked_pdf.write_bytes(b"%PDF-locked")
+
+    def _real_pdf(path: Path, label: str) -> Path:
+        doc = fitz.open()
+        try:
+            page = doc.new_page(width=300, height=400)
+            page.insert_text((40, 80), label)
+            doc.save(path)
+        finally:
+            doc.close()
+        return path
+
+    unsigned_pdf = _real_pdf(tmp_path / "assigned-unsigned.pdf", "UNSIGNED")
+    locked_pdf = _real_pdf(tmp_path / "assigned-locked.pdf", "LOCKED")
 
     def linked_document(
         *,
@@ -1904,8 +1915,7 @@ def test_pending_assignees_can_read_linked_documents_until_their_decision(
         pdf_path=unsigned_pdf,
         signed_path=locked_pdf,
     )
-    companion_pdf = tmp_path / "assigned-companion.pdf"
-    companion_pdf.write_bytes(b"%PDF-companion")
+    companion_pdf = _real_pdf(tmp_path / "assigned-companion.pdf", "COMPANION")
     companion_document = Document(
         template_id="Leave Undertaking",
         ref_number=unsigned_document.ref_number,
@@ -1948,6 +1958,11 @@ def test_pending_assignees_can_read_linked_documents_until_their_decision(
         "get_settings",
         lambda: SimpleNamespace(data_dir=tmp_path),
     )
+    monkeypatch.setattr(
+        document_service,
+        "get_settings",
+        lambda: SimpleNamespace(data_dir=tmp_path),
+    )
     mirror_api.as_user(assignee)
 
     unsigned_metadata = mirror_api.client.get(f"/api/v1/documents/{unsigned_document.id}")
@@ -1961,13 +1976,16 @@ def test_pending_assignees_can_read_linked_documents_until_their_decision(
     assert unsigned_metadata.status_code == 200, unsigned_metadata.text
     assert unsigned_metadata.json()["id"] == unsigned_document.id
     assert unsigned_download.status_code == 200, unsigned_download.text
-    assert unsigned_download.content == b"%PDF-unsigned"
+    with fitz.open(stream=unsigned_download.content, filetype="pdf") as merged_unsigned:
+        assert [page.get_text().strip() for page in merged_unsigned] == ["UNSIGNED", "COMPANION"]
     assert locked_download.status_code == 200, locked_download.text
-    assert locked_download.content == b"%PDF-locked"
+    with fitz.open(stream=locked_download.content, filetype="pdf") as merged_locked:
+        assert [page.get_text().strip() for page in merged_locked] == ["LOCKED"]
     assert companion_metadata.status_code == 200, companion_metadata.text
     assert companion_metadata.json()["id"] == companion_document.id
     assert companion_download.status_code == 200, companion_download.text
-    assert companion_download.content == b"%PDF-companion"
+    with fitz.open(stream=companion_download.content, filetype="pdf") as companion_only:
+        assert [page.get_text().strip() for page in companion_only] == ["COMPANION"]
 
     for step in mirror_api.db.scalars(
         select(BookApprovalStep).where(

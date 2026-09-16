@@ -737,7 +737,7 @@ def test_revision_changed_during_signing_does_not_publish_decision(api_db, monke
 
     from app.api.errors import AppError
     from app.db.models import BookRevisionAccess
-    from app.services import book_service, document_service
+    from app.services import artifact_service, book_service, document_service
 
     signer = _user(api_db, "racing-signer@x.ae", "manager")
     book = _submitted_book(
@@ -756,9 +756,14 @@ def test_revision_changed_during_signing_does_not_publish_decision(api_db, monke
         book.versions.append(BookVersion(book_id=book.id, version_no=2, status="none"))
         book.approval_state = "none"
         api_db.commit()
-        return str(tmp_path / "not-published.pdf")
+        unpublished = tmp_path / "not-published.pdf"
+        return artifact_service.ArtifactResult(
+            docx_path=unpublished.with_suffix(".docx"),
+            conversion=artifact_service.ConversionOutcome(status="success", pdf_path=unpublished),
+            created_paths=(unpublished,),
+        )
 
-    monkeypatch.setattr(document_service, "render_signed_pdf", render_while_revision_changes)
+    monkeypatch.setattr(document_service, "render_signed_artifact", render_while_revision_changes)
     with pytest.raises(AppError) as caught:
         book_service.sign_book(api_db, book.id, user_id=signer.id, version_id=first.id)
     assert caught.value.code == "REVISION_CHANGED"

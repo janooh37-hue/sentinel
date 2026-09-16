@@ -258,7 +258,7 @@ def test_existing_in_app_signature_becomes_immutable_legacy_snapshot(
     db_session.commit()
     monkeypatch.setattr(
         document_service,
-        "render_signed_pdf",
+        "render_signed_artifact",
         lambda *_args, **_kwargs: pytest.fail("legacy signed PDF must not be regenerated"),
     )
     service = _service()

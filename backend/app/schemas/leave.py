@@ -68,6 +68,11 @@ class LeaveReturnRequest(BaseModel):
     resumption_date: date
     delay_reason: str | None = None
     manager_id: int | None = None
+    # Duty Resumption's manager checkbox starts checked (matches the
+    # Services template's `hand_sign_manager` field default). Unticking
+    # skips embedding the manager signature image only — the printed
+    # manager name/title are unaffected.
+    embed_manager_signature: bool = True
 
 
 class LeaveRead(ORMBase):

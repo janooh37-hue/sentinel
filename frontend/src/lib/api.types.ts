@@ -1795,6 +1795,173 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/documents/{document_id}/signature-editor": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Signature Editor */
+        get: operations["get_signature_editor_api_v1_documents__document_id__signature_editor_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/documents/{document_id}/signature-editor/pdf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Signature Editor Pdf
+         * @description The verified current standalone primary PDF — NOT the combined
+         *     included-papers package. Editor/identification authority required.
+         */
+        get: operations["get_signature_editor_pdf_api_v1_documents__document_id__signature_editor_pdf_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/documents/{document_id}/signature-editor/images/{signature_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Signature Editor Image */
+        get: operations["get_signature_editor_image_api_v1_documents__document_id__signature_editor_images__signature_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/documents/{document_id}/signature-editor/candidates/{candidate_id}/image": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Signature Editor Candidate Image */
+        get: operations["get_signature_editor_candidate_image_api_v1_documents__document_id__signature_editor_candidates__candidate_id__image_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/documents/{document_id}/signature-editor/background": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Signature Editor Background
+         * @description The standalone primary PDF with ONLY *signature_id* hidden — the drag
+         *     preview's background while the client overlays the extracted original
+         *     image on top.
+         */
+        get: operations["get_signature_editor_background_api_v1_documents__document_id__signature_editor_background_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/documents/{document_id}/signature-identifications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Post Signature Identification */
+        post: operations["post_signature_identification_api_v1_documents__document_id__signature_identifications_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/documents/{document_id}/signatures/{signature_id}/position": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Put Signature Position */
+        put: operations["put_signature_position_api_v1_documents__document_id__signatures__signature_id__position_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/documents/{document_id}/signature-history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Signature History */
+        get: operations["get_signature_history_api_v1_documents__document_id__signature_history_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/documents/{document_id}/signature-history/{revision}/download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Signature History Download
+         * @description Serve a retained historical copy. The original signing-path DOCX lock
+         *     still applies here — a DOCX from an ``approval`` source_kind is never
+         *     served to a non-admin, matching the live download endpoint's rule.
+         */
+        get: operations["get_signature_history_download_api_v1_documents__document_id__signature_history__revision__download_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/jobs/{job_id}": {
         parameters: {
             query?: never;
@@ -4656,6 +4823,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/vehicles/fines/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Archive Vehicle Fines */
+        post: operations["archive_vehicle_fines_api_v1_vehicles_fines_archive_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/vehicles/fines/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Restore Vehicle Fines */
+        post: operations["restore_vehicle_fines_api_v1_vehicles_fines_restore_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/vehicles/fines/evg/preview": {
         parameters: {
             query?: never;
@@ -5019,6 +5220,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/vehicles/{vehicle_id}/files/{file_id}/certificate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update Vehicle Certificate */
+        patch: operations["update_vehicle_certificate_api_v1_vehicles__vehicle_id__files__file_id__certificate_patch"];
+        trace?: never;
+    };
     "/api/v1/vehicles/{vehicle_id}/files/{file_id}/photo-asset": {
         parameters: {
             query?: never;
@@ -5104,6 +5322,40 @@ export interface paths {
         head?: never;
         /** Update Vehicle Fine */
         patch: operations["update_vehicle_fine_api_v1_vehicles__vehicle_id__fines__fine_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/vehicles/{vehicle_id}/fines/{fine_id}/payment": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Record Vehicle Fine Payment */
+        post: operations["record_vehicle_fine_payment_api_v1_vehicles__vehicle_id__fines__fine_id__payment_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/vehicles/{vehicle_id}/fines/{fine_id}/receipt": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Attach Vehicle Fine Receipt */
+        put: operations["attach_vehicle_fine_receipt_api_v1_vehicles__vehicle_id__fines__fine_id__receipt_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/vehicles/{vehicle_id}/accidents/{accident_id}/letter": {
@@ -6817,6 +7069,14 @@ export interface components {
              */
             as_signed: boolean;
         };
+        /** Body_attach_vehicle_fine_receipt_api_v1_vehicles__vehicle_id__fines__fine_id__receipt_put */
+        Body_attach_vehicle_fine_receipt_api_v1_vehicles__vehicle_id__fines__fine_id__receipt_put: {
+            /**
+             * File
+             * Format: binary
+             */
+            file: string;
+        };
         /** Body_create_extraction_api_v1_extractions_post */
         Body_create_extraction_api_v1_extractions_post: {
             /**
@@ -6879,6 +7139,11 @@ export interface components {
              * Format: binary
              */
             file: string;
+        };
+        /** Body_record_vehicle_fine_payment_api_v1_vehicles__vehicle_id__fines__fine_id__payment_post */
+        Body_record_vehicle_fine_payment_api_v1_vehicles__vehicle_id__fines__fine_id__payment_post: {
+            /** File */
+            file?: string | null;
         };
         /** Body_replace_book_attachment_api_v1_books__book_id__attachments__index__put */
         Body_replace_book_attachment_api_v1_books__book_id__attachments__index__put: {
@@ -7033,6 +7298,15 @@ export interface components {
             label_ar?: string | null;
             /** Label En */
             label_en?: string | null;
+            /** Expiry Date */
+            expiry_date?: string | null;
+            /**
+             * No Expiry
+             * @default false
+             */
+            no_expiry: boolean;
+            /** Replaces File Id */
+            replaces_file_id?: number | null;
         };
         /** Body_upload_vehicle_photo_library_item_api_v1_vehicles_photo_library_post */
         Body_upload_vehicle_photo_library_item_api_v1_vehicles_photo_library_post: {
@@ -9311,10 +9585,10 @@ export interface components {
             plate_number: string;
             /** Plate Code */
             plate_code: string | null;
-            /** Amount */
-            amount: number;
-            /** Amount After Discount */
-            amount_after_discount?: number | null;
+            /** Amount Fils */
+            amount_fils: number;
+            /** Amount After Discount Fils */
+            amount_after_discount_fils?: number | null;
             /** Black Points */
             black_points: number;
             /** Fine Type */
@@ -9385,10 +9659,10 @@ export interface components {
             plate_number: string;
             /** Plate Code */
             plate_code: string | null;
-            /** Amount */
-            amount: number;
-            /** Amount After Discount */
-            amount_after_discount?: number | null;
+            /** Amount Fils */
+            amount_fils: number;
+            /** Amount After Discount Fils */
+            amount_after_discount_fils?: number | null;
             /** Black Points */
             black_points: number;
             /** Fine Type */
@@ -10037,6 +10311,11 @@ export interface components {
             delay_reason?: string | null;
             /** Manager Id */
             manager_id?: number | null;
+            /**
+             * Embed Manager Signature
+             * @default true
+             */
+            embed_manager_signature: boolean;
         };
         /**
          * LeaveUpdate
@@ -10292,6 +10571,17 @@ export interface components {
             limit: number;
             /** Offset */
             offset: number;
+        };
+        /** LegacyCandidateRead */
+        LegacyCandidateRead: {
+            /** Candidate Id */
+            candidate_id: string;
+            /** Width Emu */
+            width_emu: number;
+            /** Height Emu */
+            height_emu: number;
+            /** Thumbnail Url */
+            thumbnail_url: string;
         };
         /** LetterResult */
         LetterResult: {
@@ -12032,6 +12322,112 @@ export interface components {
             /** Reason */
             reason: string;
         };
+        /** SignatureEditorRead */
+        SignatureEditorRead: {
+            /** Document Id */
+            document_id: number;
+            /** Version Id */
+            version_id: number;
+            /** Signature Revision */
+            signature_revision: number;
+            /** Package Revision */
+            package_revision: number;
+            /** Source Sha256 */
+            source_sha256: string | null;
+            /** Can Adjust */
+            can_adjust: boolean;
+            /** Can Identify */
+            can_identify: boolean;
+            /** Unavailable Code */
+            unavailable_code: string | null;
+            /** Measured */
+            measured: boolean;
+            /** Pdf Url */
+            pdf_url: string | null;
+            /** Pages */
+            pages: components["schemas"]["SignaturePageRead"][];
+            /** Signatures */
+            signatures: components["schemas"]["SignatureRead"][];
+            /** Candidates */
+            candidates: components["schemas"]["LegacyCandidateRead"][] | null;
+        };
+        /** SignatureHistoryItemRead */
+        SignatureHistoryItemRead: {
+            /** Revision */
+            revision: number;
+            /**
+             * Action
+             * @enum {string}
+             */
+            action: "initial" | "identify" | "move";
+            /** Signature Id */
+            signature_id: string | null;
+            /** Before Geometry */
+            before_geometry: {
+                [key: string]: number;
+            } | null;
+            /** After Geometry */
+            after_geometry: {
+                [key: string]: number;
+            } | null;
+            /** Actor User Id */
+            actor_user_id: number | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Pdf Download Url */
+            pdf_download_url: string | null;
+            /** Docx Download Url */
+            docx_download_url: string | null;
+        };
+        /** SignatureHistoryRead */
+        SignatureHistoryRead: {
+            /** Items */
+            items: components["schemas"]["SignatureHistoryItemRead"][];
+        };
+        /**
+         * SignatureIdentifyRequest
+         * @description ``POST /documents/{document_id}/signature-identifications``.
+         */
+        SignatureIdentifyRequest: {
+            /** Signature Revision */
+            signature_revision: number;
+            /** Package Revision */
+            package_revision: number;
+            /** Source Sha256 */
+            source_sha256: string;
+            /** Candidate Id */
+            candidate_id: string;
+        };
+        /** SignaturePageRead */
+        SignaturePageRead: {
+            /** Page */
+            page: number;
+            /** Width Pt */
+            width_pt: number;
+            /** Height Pt */
+            height_pt: number;
+        };
+        /**
+         * SignaturePositionRequest
+         * @description ``PUT /documents/{document_id}/signatures/{signature_id}/position``.
+         */
+        SignaturePositionRequest: {
+            /** Signature Revision */
+            signature_revision: number;
+            /** Package Revision */
+            package_revision: number;
+            /** Source Sha256 */
+            source_sha256: string;
+            /** Page */
+            page: number;
+            /** X */
+            x: number;
+            /** Y */
+            y: number;
+        };
         /** SignaturePreviewRequest */
         SignaturePreviewRequest: {
             /** Size Mm */
@@ -12047,6 +12443,34 @@ export interface components {
             size_mm: number;
             /** Boldness */
             boldness: number;
+        };
+        /** SignatureRead */
+        SignatureRead: {
+            /** Id */
+            id: string;
+            /**
+             * Role
+             * @enum {string}
+             */
+            role: "manager" | "employee" | "submitter";
+            /** Page */
+            page: number | null;
+            /** X */
+            x: number | null;
+            /** Y */
+            y: number | null;
+            /** Width Pt */
+            width_pt: number | null;
+            /** Height Pt */
+            height_pt: number | null;
+            /** Default Page */
+            default_page?: number | null;
+            /** Default X */
+            default_x?: number | null;
+            /** Default Y */
+            default_y?: number | null;
+            /** Image Url */
+            image_url: string;
         };
         /**
          * SmartFolderCreate
@@ -12771,6 +13195,28 @@ export interface components {
              */
             status: "open" | "closed";
         };
+        /**
+         * VehicleCertificateUpdate
+         * @description PATCH body for a certificate's expiry and history state.
+         *
+         *     ``model_fields_set`` distinguishes an omitted property from an explicit
+         *     one: touching either expiry field re-runs the same exact-one validator
+         *     upload uses, and a history-only update leaves the date untouched.
+         */
+        VehicleCertificateUpdate: {
+            /** Expiry Date */
+            expiry_date?: string | null;
+            /**
+             * No Expiry
+             * @default false
+             */
+            no_expiry: boolean;
+            /**
+             * Is Historical
+             * @default false
+             */
+            is_historical: boolean;
+        };
         /** VehicleCreate */
         VehicleCreate: {
             /** Plate Code */
@@ -12841,7 +13287,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "photo" | "license" | "gallery" | "accident" | "receipt";
+            kind: "photo" | "license" | "gallery" | "accident" | "receipt" | "certificate";
             /** Label Ar */
             label_ar: string | null;
             /** Label En */
@@ -12855,6 +13301,25 @@ export interface components {
              * @default
              */
             url: string;
+            /** Expiry Date */
+            expiry_date?: string | null;
+            /**
+             * Is Historical
+             * @default false
+             */
+            is_historical: boolean;
+            /** Superseded By File Id */
+            superseded_by_file_id?: number | null;
+        };
+        /** VehicleFineBatchRequest */
+        VehicleFineBatchRequest: {
+            /** Fines */
+            fines: components["schemas"]["VehicleFinePaymentRecord"][];
+        };
+        /** VehicleFineBatchResult */
+        VehicleFineBatchResult: {
+            /** Changed Count */
+            changed_count: number;
         };
         /** VehicleFineCreate */
         VehicleFineCreate: {
@@ -12867,8 +13332,8 @@ export interface components {
             date: string;
             /** Time */
             time?: string | null;
-            /** Amount */
-            amount: number;
+            /** Amount Fils */
+            amount_fils: number;
             /**
              * Black Points
              * @default 0
@@ -12878,6 +13343,16 @@ export interface components {
             location?: string | null;
             /** Description */
             description?: string | null;
+        };
+        /**
+         * VehicleFinePaymentRecord
+         * @description `{fines: [{id, version}]}` batch archive/restore request row.
+         */
+        VehicleFinePaymentRecord: {
+            /** Id */
+            id: number;
+            /** Version */
+            version: string;
         };
         /** VehicleFineRead */
         VehicleFineRead: {
@@ -12898,10 +13373,10 @@ export interface components {
             date: string;
             /** Time */
             time: string | null;
-            /** Amount */
-            amount: number;
-            /** Amount After Discount */
-            amount_after_discount: number | null;
+            /** Amount Fils */
+            amount_fils: number;
+            /** Amount After Discount Fils */
+            amount_after_discount_fils: number | null;
             /** Black Points */
             black_points: number;
             /**
@@ -12918,10 +13393,23 @@ export interface components {
             /** Fine Type */
             fine_type: string | null;
             /**
+             * Payment Status
+             * @enum {string}
+             */
+            payment_status: "unknown" | "unpaid" | "paid";
+            receipt?: components["schemas"]["VehicleFileRead"] | null;
+            /** Archived At */
+            archived_at: string | null;
+            /**
              * Created At
              * Format: date-time
              */
             created_at: string;
+            /**
+             * Version
+             * @default
+             */
+            version: string;
             /**
              * Vehicle Plate Label
              * @default
@@ -12951,14 +13439,16 @@ export interface components {
             date?: string | null;
             /** Time */
             time?: string | null;
-            /** Amount */
-            amount?: number | null;
+            /** Amount Fils */
+            amount_fils?: number | null;
             /** Black Points */
             black_points?: number | null;
             /** Location */
             location?: string | null;
             /** Description */
             description?: string | null;
+            /** Payment Status */
+            payment_status?: "unpaid" | null;
         };
         /** VehicleImportChange */
         VehicleImportChange: {
@@ -13273,10 +13763,10 @@ export interface components {
              */
             fines_count: number;
             /**
-             * Fines Amount
+             * Fines Amount Fils
              * @default 0
              */
-            fines_amount: number;
+            fines_amount_fils: number;
             /**
              * Black Points
              * @default 0
@@ -13506,10 +13996,10 @@ export interface components {
              */
             fines_count: number;
             /**
-             * Fines Amount
+             * Fines Amount Fils
              * @default 0
              */
-            fines_amount: number;
+            fines_amount_fils: number;
             /**
              * Black Points
              * @default 0
@@ -13571,6 +14061,8 @@ export interface components {
             license_file_id?: number | null;
             /** License Files */
             license_files?: components["schemas"]["VehicleFileRead"][];
+            /** Certificates */
+            certificates?: components["schemas"]["VehicleFileRead"][];
         };
         /** VehicleSiteCreate */
         VehicleSiteCreate: {
@@ -13665,8 +14157,8 @@ export interface components {
             vehicles: number;
             /** Fines Count */
             fines_count: number;
-            /** Fines Amount */
-            fines_amount: number;
+            /** Fines Amount Fils */
+            fines_amount_fils: number;
             /** Black Points */
             black_points: number;
             /** License Attention */
@@ -18235,6 +18727,329 @@ export interface operations {
             header?: never;
             path: {
                 document_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_signature_editor_api_v1_documents__document_id__signature_editor_get: {
+        parameters: {
+            query?: {
+                measure?: boolean;
+            };
+            header?: never;
+            path: {
+                document_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignatureEditorRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_signature_editor_pdf_api_v1_documents__document_id__signature_editor_pdf_get: {
+        parameters: {
+            query: {
+                signature_revision: number;
+                encoding?: string | null;
+            };
+            header?: never;
+            path: {
+                document_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_signature_editor_image_api_v1_documents__document_id__signature_editor_images__signature_id__get: {
+        parameters: {
+            query: {
+                signature_revision: number;
+            };
+            header?: never;
+            path: {
+                document_id: number;
+                signature_id: string;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_signature_editor_candidate_image_api_v1_documents__document_id__signature_editor_candidates__candidate_id__image_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                document_id: number;
+                candidate_id: string;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_signature_editor_background_api_v1_documents__document_id__signature_editor_background_get: {
+        parameters: {
+            query: {
+                signature_id: string;
+                signature_revision: number;
+                encoding?: string | null;
+            };
+            header?: never;
+            path: {
+                document_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    post_signature_identification_api_v1_documents__document_id__signature_identifications_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                document_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SignatureIdentifyRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignatureEditorRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    put_signature_position_api_v1_documents__document_id__signatures__signature_id__position_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                document_id: number;
+                signature_id: string;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SignaturePositionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignatureEditorRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_signature_history_api_v1_documents__document_id__signature_history_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                document_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignatureHistoryRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_signature_history_download_api_v1_documents__document_id__signature_history__revision__download_get: {
+        parameters: {
+            query?: {
+                format?: "docx" | "pdf";
+                encoding?: string | null;
+            };
+            header?: never;
+            path: {
+                document_id: number;
+                revision: number;
             };
             cookie?: {
                 gssg_session?: string | null;
@@ -24831,6 +25646,76 @@ export interface operations {
             };
         };
     };
+    archive_vehicle_fines_api_v1_vehicles_fines_archive_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VehicleFineBatchRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VehicleFineBatchResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    restore_vehicle_fines_api_v1_vehicles_fines_restore_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VehicleFineBatchRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VehicleFineBatchResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     preview_evg_fines_api_v1_vehicles_fines_evg_preview_post: {
         parameters: {
             query?: never;
@@ -25756,6 +26641,44 @@ export interface operations {
             };
         };
     };
+    update_vehicle_certificate_api_v1_vehicles__vehicle_id__files__file_id__certificate_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                vehicle_id: number;
+                file_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VehicleCertificateUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VehicleFileRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     promote_vehicle_file_to_photo_asset_api_v1_vehicles__vehicle_id__files__file_id__photo_asset_post: {
         parameters: {
             query?: never;
@@ -25881,7 +26804,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["VehicleRead"];
+                    "application/json": components["schemas"]["VehicleFineRead"];
                 };
             };
             /** @description Validation Error */
@@ -25935,7 +26858,9 @@ export interface operations {
     delete_vehicle_fine_api_v1_vehicles__vehicle_id__fines__fine_id__delete: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "If-Match"?: string | null;
+            };
             path: {
                 vehicle_id: number;
                 fine_id: number;
@@ -25969,7 +26894,9 @@ export interface operations {
     update_vehicle_fine_api_v1_vehicles__vehicle_id__fines__fine_id__patch: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                "If-Match"?: string | null;
+            };
             path: {
                 vehicle_id: number;
                 fine_id: number;
@@ -25991,6 +26918,86 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["VehicleRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    record_vehicle_fine_payment_api_v1_vehicles__vehicle_id__fines__fine_id__payment_post: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string | null;
+            };
+            path: {
+                vehicle_id: number;
+                fine_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_record_vehicle_fine_payment_api_v1_vehicles__vehicle_id__fines__fine_id__payment_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VehicleFineRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    attach_vehicle_fine_receipt_api_v1_vehicles__vehicle_id__fines__fine_id__receipt_put: {
+        parameters: {
+            query?: never;
+            header?: {
+                "If-Match"?: string | null;
+            };
+            path: {
+                vehicle_id: number;
+                fine_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_attach_vehicle_fine_receipt_api_v1_vehicles__vehicle_id__fines__fine_id__receipt_put"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VehicleFineRead"];
                 };
             };
             /** @description Validation Error */

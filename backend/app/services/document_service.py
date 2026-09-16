@@ -29,7 +29,7 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Literal
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import InstrumentedAttribute, Session
@@ -63,6 +63,7 @@ from app.db.models import (
     Employee,
     Leave,
     Manager,
+    SignatureArtifactRevision,
     Submitter,
     User,
     Violation,
@@ -284,6 +285,188 @@ def companion_pdf_paths(db: Session, primary: Document) -> list[Path]:
         if p.is_file():
             out.append(p)
     return out
+
+
+@dataclass(frozen=True, slots=True)
+class ResolvedDocumentArtifact:
+    """The current/original artifact selection for a download — path,
+    media type/extension, and companion PDFs to append (approval-signature-
+    placement plan §8.1). Absolute, already containment-checked, already
+    confirmed to exist on disk."""
+
+    path: Path
+    media_type: str
+    ext: str
+    companion_paths: tuple[Path, ...]
+
+
+_DOCX_MEDIA_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+
+
+def _check_contained(path: Path, data_dir: Path) -> Path:
+    """Refuse a path that resolves outside *data_dir* — a corrupt/tampered
+    DB path (e.g. ``../../etc/passwd``) could otherwise escape. Returns the
+    resolved path."""
+    resolved_root = data_dir.resolve()
+    try:
+        resolved = path.resolve()
+    except OSError:
+        resolved = path
+    if resolved_root not in resolved.parents and resolved != resolved_root:
+        raise NotFoundError("FILE_NOT_FOUND", f"File not found on disk: {path}")
+    return resolved
+
+
+def resolve_document_artifact(
+    db: Session,
+    document_id: int,
+    *,
+    format: Literal["docx", "pdf"],
+    original: bool = False,
+    version: BookVersion | None = None,
+) -> ResolvedDocumentArtifact:
+    """The current (or, with ``original=True``, pre-correction/pre-signature)
+    artifact for *document_id* — the selection logic behind
+    ``GET /documents/{id}/download`` (plan §8.1-8.2), factored out so the
+    signature-editor's own current-publication interpretation reuses it.
+
+    Normal chain PDF selection is `Document.pdf_path`'s signed replacement
+    (``signed_pdf_path`` once locked); normal auto PDF selection is the
+    current generated package (`Document.pdf_path`, already kept in sync by
+    a placement correction's own publish step — no divergence to handle
+    here). Normal auto DOCX selection prefers the version's ACTIVE retained
+    corrected DOCX when a placement correction has landed (`Document.
+    docx_path` still holds the pre-correction bytes; the correction owns a
+    separate retained copy). ``original=True`` for an auto-corrected record
+    prefers that version's first retained (`revision=1`) published PDF over
+    the now-corrected `Document.pdf_path`; for every other record
+    ``original=True`` is unchanged — `Document.pdf_path` already IS the
+    original.
+
+    Raises the same `NotFoundError`/`AppError` codes the inline logic in
+    `download_document` previously raised directly.
+
+    ``version`` is the already-authorized owning revision when the caller has
+    one (the download route resolves it through the revision-scoped read gate);
+    otherwise the document's own version is looked up. The signed-lock decision
+    is made on that revision, never re-derived from a different one.
+    """
+    from app.services import book_service, signature_placement_service
+
+    row = db.get(Document, document_id)
+    if row is None:
+        raise NotFoundError(
+            "DOCUMENT_NOT_FOUND", f"Document {document_id} not found", id=document_id
+        )
+    settings = get_settings()
+    data_dir = settings.data_dir
+
+    if original:
+        if not row.pdf_path:
+            raise NotFoundError(
+                "PDF_NOT_AVAILABLE",
+                f"No PDF rendition exists for document {document_id}",
+                id=document_id,
+            )
+        orig_path = data_dir / row.pdf_path
+        version = db.execute(
+            select(BookVersion).where(BookVersion.document_id == document_id)
+        ).scalar_one_or_none()
+        if version is not None:
+            initial_row = db.execute(
+                select(SignatureArtifactRevision).where(
+                    SignatureArtifactRevision.version_id == version.id,
+                    SignatureArtifactRevision.revision == 1,
+                    SignatureArtifactRevision.source_kind
+                    == signature_placement_service.SOURCE_KIND_AUTO_MANAGER,
+                )
+            ).scalar_one_or_none()
+            if initial_row is not None and initial_row.published_pdf_path:
+                candidate = data_dir / initial_row.published_pdf_path
+                if candidate.is_file():
+                    orig_path = candidate
+        orig_path = _check_contained(orig_path, data_dir)
+        if not orig_path.is_file():
+            raise NotFoundError(
+                "FILE_NOT_FOUND",
+                f"File not found on disk for document {document_id}",
+                id=document_id,
+            )
+        comp_paths = () if row.base_pdf_path else tuple(companion_pdf_paths(db, row))
+        return ResolvedDocumentArtifact(
+            path=orig_path, media_type="application/pdf", ext=".pdf", companion_paths=comp_paths
+        )
+
+    docx_path = row.docx_path
+    if format == "docx" and not docx_path:
+        raise NotFoundError(
+            "DOCX_NOT_AVAILABLE",
+            f"No editable DOCX exists for document {document_id}",
+            id=document_id,
+        )
+
+    if version is None:
+        version = db.scalars(
+            select(BookVersion).where(BookVersion.document_id == document_id)
+        ).first()
+    locked, signed_rel = (
+        book_service.is_document_signed_locked(db, version)
+        if version is not None
+        else (False, None)
+    )
+    merge_companions = False
+    if locked and signed_rel is not None:
+        if format == "docx":
+            raise AppError(
+                "DOCX_LOCKED_AFTER_SIGNING",
+                "This document is signed; the editable DOCX is locked",
+                http_status=403,
+            )
+        file_path = data_dir / signed_rel
+        if signed_rel.lower().endswith(".docx"):
+            media_type, ext = _DOCX_MEDIA_TYPE, ".docx"
+        else:
+            media_type, ext = "application/pdf", ".pdf"
+    elif format == "pdf" and row.pdf_path:
+        file_path = data_dir / row.pdf_path
+        media_type, ext = "application/pdf", ".pdf"
+        merge_companions = not bool(row.base_pdf_path)
+    elif format == "pdf":
+        raise NotFoundError(
+            "PDF_NOT_AVAILABLE",
+            f"No PDF rendition exists for document {document_id}",
+            id=document_id,
+        )
+    else:
+        assert docx_path is not None
+        file_path = data_dir / docx_path
+        media_type, ext = _DOCX_MEDIA_TYPE, ".docx"
+        version = db.execute(
+            select(BookVersion).where(BookVersion.document_id == document_id)
+        ).scalar_one_or_none()
+        if version is not None and version.signature_revision > 0:
+            active_row = db.execute(
+                select(SignatureArtifactRevision).where(
+                    SignatureArtifactRevision.version_id == version.id,
+                    SignatureArtifactRevision.revision == version.signature_revision,
+                )
+            ).scalar_one_or_none()
+            if active_row is not None:
+                candidate = data_dir / active_row.docx_path
+                if candidate.is_file():
+                    file_path = candidate
+
+    file_path = _check_contained(file_path, data_dir)
+    if not file_path.is_file():
+        raise NotFoundError(
+            "FILE_NOT_FOUND",
+            f"File not found on disk for document {document_id}",
+            id=document_id,
+        )
+    comp_paths = tuple(companion_pdf_paths(db, row)) if merge_companions else ()
+    return ResolvedDocumentArtifact(
+        path=file_path, media_type=media_type, ext=ext, companion_paths=comp_paths
+    )
 
 
 def _record_pending_resignation(
@@ -960,7 +1143,6 @@ def _resolve_attachment_sources(
     """
     from app.services import book_service, staging_service
 
-    data_dir = get_settings().data_dir
     resolved: list[tuple[GenerateAttachmentSpec, Path]] = []
     for spec in specs:
         path: Path | None
@@ -986,13 +1168,15 @@ def _resolve_attachment_sources(
                 book_service.require_full_book_access(db, record_access_user, book)
             if spec.source == "record_document":
                 version = book.versions[-1] if book.versions else None
-                doc = (
-                    db.get(Document, version.document_id)
-                    if version is not None and version.document_id is not None
-                    else None
-                )
-                rel = doc.pdf_path if doc is not None else None
-                path = (data_dir / rel) if rel else None
+                doc_id = version.document_id if version is not None else None
+                path = None
+                if doc_id is not None:
+                    try:
+                        artifact = resolve_document_artifact(db, doc_id, format="pdf")
+                    except (NotFoundError, AppError):
+                        path = None
+                    else:
+                        path = artifact.path
                 if path is None or not path.is_file():
                     raise ValidationFailedError(
                         "ATTACHMENT_PDF_MISSING",
@@ -1031,9 +1215,7 @@ def _ordered_attachment_specs(
     return [*keyed, *extras]
 
 
-def _freeze_legacy_current_approval_context(
-    db: Session, book: Book, version: BookVersion
-) -> None:
+def _freeze_legacy_current_approval_context(db: Session, book: Book, version: BookVersion) -> None:
     """Snapshot a current legacy revision without inventing its submission time."""
     if version.approval_context is not None:
         return
@@ -1175,6 +1357,24 @@ def generate_document(
         # An explicit {"manager": False} from the caller is left untouched.
         embed_signature["manager"] = True
 
+    # Duty Resumption checkbox contract (approval-signature-placement plan
+    # §4): a REQUESTED manager signature that cannot be embedded must stop
+    # filing before any reference is allocated or record committed — never
+    # silently fall through to an unsigned "signed" copy. Scoped to this one
+    # form; every other form keeps its existing signing policy (unticking
+    # the checkbox bypasses only this requirement, not manager-ID validity).
+    if template_id == "Duty Resumption Form" and embed_signature.get("manager"):
+        if manager_id is not None and db.get(Manager, manager_id) is None:
+            raise NotFoundError(
+                "MANAGER_NOT_FOUND", f"Manager {manager_id} does not exist", id=manager_id
+            )
+        _gate_manager = resolve_manager(db, explicit_manager_id=manager_id)
+        _gate_sig = (_gate_manager.sig_path or "") if _gate_manager is not None else ""
+        if not _gate_sig or not Path(_gate_sig).exists():
+            raise ValidationFailedError(
+                "MANAGER_SIGNATURE_REQUIRED",
+                "Select a manager with a saved signature or turn off Include manager signature.",
+            )
     is_personnel = form_meta.get("category", "personnel") == "personnel"
 
     employee: Employee | None = None
@@ -1654,6 +1854,23 @@ def generate_document(
                     ),
                 )
             )
+            # Retain the paired DOCX/PDF for placement-correction history — a
+            # no-op unless the generated copy actually carries a marked
+            # manager drawing. Plan §5: automatically embedded manager
+            # signatures with no recorded signing account are admin-only to
+            # correct (signer_user_id=None), distinct from an approval-chain
+            # signature.
+            from app.services import signature_placement_service
+
+            signature_placement_service.capture_initial_revision(
+                db,
+                version=_state_version,
+                source_kind=signature_placement_service.SOURCE_KIND_AUTO_MANAGER,
+                signer_user_id=None,
+                docx_path=docx_path,
+                primary_pdf_path=pdf_path,
+                published_pdf_path=pdf_path,
+            )
         elif signing_path == "scan":
             _logged_book.approval_state = "awaiting_scan"
             _state_version.status = "awaiting_scan"
@@ -1693,9 +1910,7 @@ def generate_document(
                     db,
                     _logged_book,
                     _state_version,
-                    submitted_by_user_id=(
-                        current_user.id if current_user is not None else None
-                    ),
+                    submitted_by_user_id=(current_user.id if current_user is not None else None),
                     submitted_at=submitted_at,
                 )
         db.flush()
@@ -2031,6 +2246,13 @@ def _authored_docx_of(db: Session, version: BookVersion) -> Path | None:
     return p if p.exists() else None
 
 
+# General Book / Security Permit signing keeps the manager signature image
+# + name + title together as one page-break-safe block (approval-signature-
+# placement plan §3). Report shares docx_engine._pp_general_book but is
+# deliberately excluded — its "التوقيع" label/date seal is untouched.
+_KEEP_MANAGER_BLOCK_TOGETHER_TEMPLATES = frozenset({"General Book", "Security Permit"})
+
+
 def _sign_authored_docx(
     db: Session,
     *,
@@ -2040,12 +2262,13 @@ def _sign_authored_docx(
     signer_names: Sequence[str] = (),
     output_dir: Path | None = None,
     converter: artifact_service.PdfConverter | None = None,
-) -> str:
+) -> artifact_service.ArtifactResult:
     """Signed artifact for a Word-authored book: copy docx → stamp signature →
     convert. The paper already carries ref/date/footer/Aztec from its own
     render — nothing is re-generated (re-rendering from the empty ``fields``
     blob is what blanked signed Word books, 2026-07-19)."""
-    from app.core.constants import DEFAULT_MANAGER_NAME
+    from app.core import docx_engine
+    from app.core.constants import DEFAULT_MANAGER_NAME, DEFAULT_MANAGER_TITLE
     from app.services import settings_service
 
     book = version.book
@@ -2063,11 +2286,19 @@ def _sign_authored_docx(
     # Anchor candidates: the signer (a delegated approver may have typed their
     # own closing in Word), the linked manager, then the default manager.
     names: list[str] = list(signer_names)
-    if book.doc_manager_id is not None:
-        mgr = db.get(Manager, book.doc_manager_id)
-        if mgr is not None:
-            names += [n for n in (mgr.name_ar, mgr.name_en) if n]
+    linked_manager = (
+        db.get(Manager, book.doc_manager_id) if book.doc_manager_id is not None else None
+    )
+    if linked_manager is not None:
+        names += [n for n in (linked_manager.name_ar, linked_manager.name_en) if n]
     names.append(DEFAULT_MANAGER_NAME)
+
+    keep_together = template_id in _KEEP_MANAGER_BLOCK_TOGETHER_TEMPLATES
+    manager_title = None
+    if keep_together:
+        manager_title = (linked_manager.title if linked_manager is not None else None) or (
+            DEFAULT_MANAGER_TITLE
+        )
 
     _appearance = settings_service.get_settings(db)
     try:
@@ -2083,10 +2314,24 @@ def _sign_authored_docx(
                     date_below=(
                         ts.strftime("%d/%m/%Y") if book.ref_number.startswith("REPORT-") else None
                     ),
+                    keep_manager_block_together=keep_together,
+                    manager_title=manager_title,
                 )
             ),
             converter=converter or convert_docx_to_pdf,
         )
+    except docx_engine.SignatureAnchorAmbiguousError as exc:
+        log.error(
+            "signature anchor ambiguous for book %s (%s) — %s candidates",
+            book.id,
+            destination.name,
+            exc,
+        )
+        raise AppError(
+            "SIGNATURE_ANCHOR_AMBIGUOUS",
+            "تعذر تحديد موضع التوقيع بثقة — الكتاب يحتوي أكثر من كتلة إغلاق محتملة",
+            http_status=409,
+        ) from exc
     except artifact_service.ArtifactStampError as exc:
         # A "signed" paper with no visible signature is the exact defect class
         # this path exists to fix — fail LOUDLY, like the rich path does when
@@ -2104,26 +2349,15 @@ def _sign_authored_docx(
         ) from exc
 
     docx_path = artifact.docx_path
-    pdf_path = artifact.conversion.pdf_path
     if artifact.conversion.status == "error":
         log.error("Signed PDF conversion crashed for %s: %s", docx_path, artifact.conversion.error)
     elif artifact.conversion.status == "unavailable":
         log.warning("Signed PDF unavailable for %s — returning signed DOCX", docx_path)
 
-    settings = get_settings()
-
-    def _rel(p: Path) -> str:
-        # Output dirs can live OUTSIDE data_dir (AppData/Desktop roots) —
-        # same fallback as the re-render path below.
-        try:
-            return p.relative_to(settings.data_dir).as_posix()
-        except ValueError:
-            return str(p)
-
-    return _rel(pdf_path) if pdf_path is not None else _rel(docx_path)
+    return artifact
 
 
-def render_signed_pdf(
+def render_signed_artifact(
     db: Session,
     *,
     version: BookVersion,
@@ -2131,16 +2365,18 @@ def render_signed_pdf(
     signer_names: Sequence[str] = (),
     output_dir: Path | None = None,
     converter: artifact_service.PdfConverter | None = None,
-) -> str:
+) -> artifact_service.ArtifactResult:
     """Re-render ``version``'s document with the signer's signature embedded in
-    the manager slot (``sig1_path``); return the signed PDF path relative to
-    data_dir.
+    the manager slot (``sig1_path``); return the retained ``ArtifactResult``
+    (DOCX path + PDF conversion outcome) — callers select
+    ``.conversion.pdf_path`` or ``.docx_path`` for their existing publication
+    behavior; ``signature_placement_service`` retains BOTH for its paired
+    artifact registry.
 
     Reuses the version's stored ``template_id`` + ``fields`` + the book's
     employee. Does NOT allocate a ref, Book, or new version — this is a derived
-    artifact. PDF conversion can fail / return None (no Word on the host), in
-    which case the signed DOCX path is returned as a fallback, mirroring
-    ``generate_document``.
+    artifact. PDF conversion can fail / return None (no Word on the host); the
+    conversion outcome on the returned ``ArtifactResult`` tells the caller.
 
     Word-authored versions (``fields == {}``) carry their truth in the DOCX,
     not in re-renderable fields — those are signed in place via
@@ -2233,7 +2469,6 @@ def render_signed_pdf(
         converter=converter or convert_docx_to_pdf,
     )
     docx_path = signed_artifact.docx_path
-    pdf_path = signed_artifact.conversion.pdf_path
     if signed_artifact.conversion.status == "error":
         log.error(
             "Signed PDF conversion crashed for %s: %s",
@@ -2243,19 +2478,15 @@ def render_signed_pdf(
     if signed_artifact.conversion.status in {"unavailable", "error"}:
         log.warning("Signed PDF unavailable for %s — conversion returned no file", docx_path)
 
-    settings = get_settings()
-
-    def _rel(p: Path) -> str:
-        try:
-            return p.relative_to(settings.data_dir).as_posix()
-        except ValueError:
-            return str(p)
-
-    return _rel(pdf_path) if pdf_path is not None else _rel(docx_path)
+    return signed_artifact
 
 
 def download_filename_for(
-    row: Document, ext: str, *, db: Session | None = None, version: BookVersion | None = None,
+    row: Document,
+    ext: str,
+    *,
+    db: Session | None = None,
+    version: BookVersion | None = None,
 ) -> str:
     """Filename for a document download, per export-naming rules (spec 2026-07-01).
 
@@ -2272,9 +2503,7 @@ def download_filename_for(
         resolved_version = version
         if resolved_version is None:
             resolved_version = (
-                db.execute(
-                    select(BookVersion).where(BookVersion.document_id == row.id)
-                )
+                db.execute(select(BookVersion).where(BookVersion.document_id == row.id))
                 .scalars()
                 .first()
             )

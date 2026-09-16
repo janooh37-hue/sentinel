@@ -1327,10 +1327,10 @@ def sign_book(db: Session, book_id: int, *, user_id: int, version_id: int) -> Bo
     the book (and current version) approved.
 
     Mirrors ``decide_step``'s authorization + state machine, but instead of
-    merely advancing the step it physically signs: ``render_signed_pdf``
+    merely advancing the step it physically signs: ``render_signed_artifact``
     re-renders the version's document with the signer's signature injected.
     """
-    from app.services import document_service, included_papers_service
+    from app.services import document_service, included_papers_service, signature_placement_service
 
     book = _get_book_with_versions(db, book_id)
     _require_current_revision(db, book, version_id)
@@ -1364,7 +1364,7 @@ def sign_book(db: Session, book_id: int, *, user_id: int, version_id: int) -> Bo
         emp = db.get(Employee, signer.employee_id)
         if emp is not None:
             signer_names += [n for n in (emp.name_ar, emp.name_en) if n]
-    signed_rel = document_service.render_signed_pdf(
+    artifact = document_service.render_signed_artifact(
         db,
         version=version,
         signer_signature_path=str(abs_sig),
@@ -1383,9 +1383,7 @@ def sign_book(db: Session, book_id: int, *, user_id: int, version_id: int) -> Bo
     current = refreshed_step
     if current.assignee_user_id != user_id:
         raise ValidationFailedError("NOT_YOUR_STEP", "This signature is assigned to another user")
-    signed_primary = Path(signed_rel)
-    if not signed_primary.is_absolute():
-        signed_primary = get_settings().data_dir / signed_primary
+    signed_primary = artifact.conversion.pdf_path or artifact.docx_path
     if signed_primary.suffix.lower() != ".pdf" and book.merged_attachment_paths:
         with contextlib.suppress(OSError):
             signed_primary.unlink()
@@ -1393,6 +1391,7 @@ def sign_book(db: Session, book_id: int, *, user_id: int, version_id: int) -> Bo
             "INCLUDED_PAPERS_SIGNED_PDF_REQUIRED",
             "The signed PDF could not be created; the record was not approved",
         )
+    published_pdf_abs: Path | None = None
     if signed_primary.suffix.lower() == ".pdf":
         signed_rel = included_papers_service.publish_signed_package(
             db,
@@ -1401,6 +1400,16 @@ def sign_book(db: Session, book_id: int, *, user_id: int, version_id: int) -> Bo
             signed_primary,
             physical_scan=False,
         )
+        settings = get_settings()
+        published_pdf_abs = (
+            Path(signed_rel) if Path(signed_rel).is_absolute() else settings.data_dir / signed_rel
+        )
+    else:
+        settings = get_settings()
+        try:
+            signed_rel = signed_primary.relative_to(settings.data_dir).as_posix()
+        except ValueError:
+            signed_rel = str(signed_primary)
     version.signed_pdf_path = signed_rel
     version.signed_by_user_id = user_id
     version.signed_at = datetime.now(UTC).replace(tzinfo=None)
@@ -1408,6 +1417,17 @@ def sign_book(db: Session, book_id: int, *, user_id: int, version_id: int) -> Bo
     current.decided_at = version.signed_at
     retain_revision_access(db, version, current)
     _recompute_approval_state(book)  # mirrors version.status + book.approval_state -> approved
+    # Retain the paired DOCX/PDF for placement-correction history — a no-op
+    # unless the signed copy actually carries a marked manager drawing.
+    signature_placement_service.capture_initial_revision(
+        db,
+        version=version,
+        source_kind=signature_placement_service.SOURCE_KIND_APPROVAL,
+        signer_user_id=user_id,
+        docx_path=artifact.docx_path,
+        primary_pdf_path=artifact.conversion.pdf_path,
+        published_pdf_path=published_pdf_abs,
+    )
     # ── Phase 3: re-file in the shared Correspondence Log on signing. ──
     try:
         from app.services import correspondence_service
@@ -2838,7 +2858,7 @@ def replace_signed_copy(
             "Resolved attachment path escaped the data directory",
             http_status=500,
         )
-    from app.services import included_papers_service
+    from app.services import included_papers_service, signature_placement_service
 
     old_paths = {
         path.resolve()
@@ -2875,6 +2895,7 @@ def replace_signed_copy(
         if user is not None:
             version.signed_by_user_id = user.id
         version.signed_at = datetime.now(UTC).replace(tzinfo=None)
+        signature_placement_service.invalidate_revision(db, version=version)
         db.commit()
     except Exception:
         db.rollback()
@@ -2897,7 +2918,7 @@ def unfile_signed_copy(db: Session, book_id: int, *, user: User | None = None) -
     ``unfile_signed_copy`` AuditLog row (the original scan-back sign entry is left
     in place — an audit trail of what happened)."""
     from app.core import form_policy
-    from app.services import included_papers_service
+    from app.services import included_papers_service, signature_placement_service
 
     book = get_book(db, book_id)
     version = _current_version(book)
@@ -2922,6 +2943,7 @@ def unfile_signed_copy(db: Session, book_id: int, *, user: User | None = None) -
     version.signed_by_user_id = None
     version.signed_at = None
     included_papers_service.advance_package_revision(db, book)
+    signature_placement_service.invalidate_revision(db, version=version)
     if form_policy.signing_path_of(version.template_id) == "scan":
         # scan-path forms carry no approver steps (the scan IS the signature).
         version.status = "awaiting_scan"

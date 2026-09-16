@@ -289,10 +289,14 @@ export type VehicleSiteRead = components['schemas']['VehicleSiteRead']
 export type VehicleSiteCreate = components['schemas']['VehicleSiteCreate']
 export type VehicleSiteUpdate = components['schemas']['VehicleSiteUpdate']
 export type VehicleFileRead = components['schemas']['VehicleFileRead']
+export type VehicleCertificateUpdate = components['schemas']['VehicleCertificateUpdate']
 export type VehiclePhotoRead = components['schemas']['VehiclePhotoRead']
 export type VehicleFineCreate = components['schemas']['VehicleFineCreate']
 export type VehicleFineUpdate = components['schemas']['VehicleFineUpdate']
 export type VehicleFineRead = components['schemas']['VehicleFineRead']
+export type VehicleFinePaymentStatus = VehicleFineRead['payment_status']
+export type VehicleFinePaymentRecord = components['schemas']['VehicleFinePaymentRecord']
+export type VehicleFineBatchResult = components['schemas']['VehicleFineBatchResult']
 export type LicenseRenewCreate = components['schemas']['LicenseRenewCreate']
 export type VehicleAccidentCreate = components['schemas']['VehicleAccidentCreate']
 export type VehicleAccidentRead = components['schemas']['VehicleAccidentRead']
@@ -326,7 +330,18 @@ export interface LeaveReturnBody {
   resumption_date: string // ISO yyyy-mm-dd
   delay_reason?: string
   manager_id?: number | null
+  embed_manager_signature?: boolean
 }
+
+// ─── Signature placement editor (approval-signature-placement plan §8) ────────
+export type SignaturePageRead = components['schemas']['SignaturePageRead']
+export type SignatureRead = components['schemas']['SignatureRead']
+export type LegacyCandidateRead = components['schemas']['LegacyCandidateRead']
+export type SignatureEditorRead = components['schemas']['SignatureEditorRead']
+export type SignaturePositionRequest = components['schemas']['SignaturePositionRequest']
+export type SignatureIdentifyRequest = components['schemas']['SignatureIdentifyRequest']
+export type SignatureHistoryItemRead = components['schemas']['SignatureHistoryItemRead']
+export type SignatureHistoryRead = components['schemas']['SignatureHistoryRead']
 
 // Duty Locations & Internal Transfers — frozen API contract (backend in
 // parallel; hand-mirrored until `gen:api`). One transfer letter carries one
@@ -1123,6 +1138,46 @@ async function multipart<T>(path: string, form: FormData, method = 'POST'): Prom
   )
 }
 
+/** A body-versioned mutation: the caller reads `version` off the resource it
+ *  last fetched and sends it back as `If-Match`; a stale value fails with the
+ *  server's 409 rather than silently clobbering a concurrent edit. Unlike
+ *  `requestVersioned`, the version lives in the JSON body (`VehicleFineRead.
+ *  version`), not a response `ETag` header — these routes don't set one. */
+async function requestWithIfMatch<T>(
+  method: string,
+  path: string,
+  ifMatch: string,
+  body?: unknown,
+): Promise<T> {
+  const headers: Record<string, string> = { 'If-Match': requireEtag(ifMatch) }
+  if (body !== undefined) headers['content-type'] = 'application/json'
+  return unwrap<T>(
+    await fetch(`${BASE}${path}`, {
+      method,
+      cache: 'no-store',
+      credentials: 'same-origin',
+      headers,
+      body: body === undefined ? undefined : JSON.stringify(body),
+    }),
+  )
+}
+
+async function multipartWithIfMatch<T>(
+  path: string,
+  form: FormData,
+  ifMatch: string,
+  method = 'POST',
+): Promise<T> {
+  return unwrap<T>(
+    await fetch(`${BASE}${path}`, {
+      method,
+      body: form,
+      credentials: 'same-origin',
+      headers: { 'If-Match': requireEtag(ifMatch) },
+    }),
+  )
+}
+
 /** Decode a base64 body to a Blob, tagging its MIME type from magic bytes so a
  *  `blob:` URL opened in a new tab renders (a typeless PDF blob shows as raw
  *  gibberish text instead of the document).
@@ -1142,9 +1197,13 @@ function base64ToBlob(b64: string): Blob {
   return type ? new Blob([bytes], { type }) : new Blob([bytes])
 }
 
-/** IDM-safe attachment fetch (base64 → Blob) shared by the permit endpoints. */
+/** IDM-safe attachment fetch (base64 → Blob) — originated for the permit
+ *  endpoints, now shared by anything needing the same inline-preview
+ *  pattern (e.g. the signature-placement editor). Appends `encoding=base64`
+ *  after `?` or `&` depending on whether *path* already carries a query
+ *  string. */
 async function fetchPermitBlob(path: string): Promise<Blob> {
-  const res = await fetch(`${BASE}${path}?encoding=base64`, {
+  const res = await fetch(`${BASE}${path}${path.includes('?') ? '&' : '?'}encoding=base64`, {
     cache: 'no-store',
     credentials: 'same-origin',
   })
@@ -1534,25 +1593,61 @@ export const api = {
     id: number,
     kind: VehicleFileRead['kind'],
     file: File,
-    labels: { label_ar?: string; label_en?: string } = {},
+    options: {
+      label_ar?: string
+      label_en?: string
+      expiry_date?: string | null
+      no_expiry?: boolean
+      replaces_file_id?: number | null
+    } = {},
   ) => {
     const form = new FormData()
     form.append('file', file)
     form.append('kind', kind)
-    if (labels.label_ar !== undefined) form.append('label_ar', labels.label_ar)
-    if (labels.label_en !== undefined) form.append('label_en', labels.label_en)
+    if (options.label_ar !== undefined) form.append('label_ar', options.label_ar)
+    if (options.label_en !== undefined) form.append('label_en', options.label_en)
+    if (options.expiry_date != null) form.append('expiry_date', options.expiry_date)
+    if (options.no_expiry !== undefined) form.append('no_expiry', String(options.no_expiry))
+    if (options.replaces_file_id != null) {
+      form.append('replaces_file_id', String(options.replaces_file_id))
+    }
     return multipart<VehicleFileRead>(`/vehicles/${id}/files`, form)
   },
+  updateVehicleCertificate: (id: number, fileId: number, body: Partial<VehicleCertificateUpdate>) =>
+    request<VehicleFileRead>('PATCH', `/vehicles/${id}/files/${fileId}/certificate`, body),
   deleteVehicleFile: (id: number, fileId: number) =>
     request<void>('DELETE', `/vehicles/${id}/files/${fileId}`),
   vehicleFileUrl: (id: number, fileId: number) =>
     `${BASE}/vehicles/${id}/files/${fileId}`,
   addVehicleFine: (id: number, body: VehicleFineCreate) =>
-    request<VehicleRead>('POST', `/vehicles/${id}/fines`, body),
-  updateVehicleFine: (id: number, fineId: number, body: VehicleFineUpdate) =>
-    request<VehicleRead>('PATCH', `/vehicles/${id}/fines/${fineId}`, body),
-  deleteVehicleFine: (id: number, fineId: number) =>
-    request<VehicleRead>('DELETE', `/vehicles/${id}/fines/${fineId}`),
+    request<VehicleFineRead>('POST', `/vehicles/${id}/fines`, body),
+  updateVehicleFine: (id: number, fineId: number, body: VehicleFineUpdate, ifMatch: string) =>
+    requestWithIfMatch<VehicleRead>('PATCH', `/vehicles/${id}/fines/${fineId}`, ifMatch, body),
+  deleteVehicleFine: (id: number, fineId: number, ifMatch: string) =>
+    requestWithIfMatch<VehicleRead>('DELETE', `/vehicles/${id}/fines/${fineId}`, ifMatch),
+  recordVehicleFinePayment: (id: number, fineId: number, ifMatch: string, file?: File | null) => {
+    const form = new FormData()
+    if (file) form.append('file', file)
+    return multipartWithIfMatch<VehicleFineRead>(
+      `/vehicles/${id}/fines/${fineId}/payment`,
+      form,
+      ifMatch,
+    )
+  },
+  attachVehicleFineReceipt: (id: number, fineId: number, ifMatch: string, file: File) => {
+    const form = new FormData()
+    form.append('file', file)
+    return multipartWithIfMatch<VehicleFineRead>(
+      `/vehicles/${id}/fines/${fineId}/receipt`,
+      form,
+      ifMatch,
+      'PUT',
+    )
+  },
+  archiveVehicleFines: (fines: VehicleFinePaymentRecord[]) =>
+    request<VehicleFineBatchResult>('POST', '/vehicles/fines/archive', { fines }),
+  restoreVehicleFines: (fines: VehicleFinePaymentRecord[]) =>
+    request<VehicleFineBatchResult>('POST', '/vehicles/fines/restore', { fines }),
   generateFinesLetter: (id: number, body: FinesLetterRequest) =>
     request<LetterResult>('POST', `/vehicles/${id}/fines/letter`, body),
   listVehicleFines: (
@@ -2540,6 +2635,65 @@ export const api = {
       '/documents/inmate-violations/approved-imports',
       body,
     ),
+
+  // --- signature placement editor (approval-signature-placement plan §8) ---
+  /** Cheap capability/source-state description by default; `measure: true`
+   *  performs the actual Word-COM verification/layout — only call that once
+   *  the workspace is genuinely opened. */
+  getSignatureEditor: (documentId: number, measure = false) =>
+    request<SignatureEditorRead>(
+      'GET',
+      `/documents/${documentId}/signature-editor${qs({ measure: measure || undefined })}`,
+    ),
+  /** The verified current standalone primary PDF (not the combined
+   *  included-papers package) — `DocPdfCanvas`'s own `pdfUrl` mode fetches
+   *  and base64-decodes this URL itself (`toBase64Url`). */
+  signatureEditorPdfUrl: (documentId: number, signatureRevision: number) =>
+    `${BASE}/documents/${documentId}/signature-editor/pdf?signature_revision=${signatureRevision}`,
+  /** One signature's original embedded image (no crop/rotation transform),
+   *  as an IDM-safe base64 blob — the drag overlay's `<img>`. */
+  fetchSignatureImageBlob: (
+    documentId: number,
+    signatureId: string,
+    signatureRevision: number,
+  ): Promise<Blob> =>
+    fetchPermitBlob(
+      `/documents/${documentId}/signature-editor/images/${encodeURIComponent(signatureId)}` +
+        `?signature_revision=${signatureRevision}`,
+    ),
+  /** Admin-only legacy candidate thumbnail. */
+  fetchSignatureCandidateImageBlob: (documentId: number, candidateId: string): Promise<Blob> =>
+    fetchPermitBlob(
+      `/documents/${documentId}/signature-editor/candidates/${encodeURIComponent(candidateId)}/image`,
+    ),
+  /** The standalone primary PDF with only *signatureId* hidden — the drag
+   *  preview's `DocPdfCanvas` background, swapped in while that signature is
+   *  selected/dragging. Same base64 `pdfUrl` mode as `signatureEditorPdfUrl`. */
+  signatureEditorBackgroundUrl: (
+    documentId: number,
+    signatureId: string,
+    signatureRevision: number,
+  ) =>
+    `${BASE}/documents/${documentId}/signature-editor/background` +
+    `?signature_id=${encodeURIComponent(signatureId)}&signature_revision=${signatureRevision}`,
+  identifySignature: (documentId: number, body: SignatureIdentifyRequest) =>
+    request<SignatureEditorRead>(
+      'POST',
+      `/documents/${documentId}/signature-identifications`,
+      body,
+    ),
+  moveSignature: (documentId: number, signatureId: string, body: SignaturePositionRequest) =>
+    request<SignatureEditorRead>(
+      'PUT',
+      `/documents/${documentId}/signatures/${encodeURIComponent(signatureId)}/position`,
+      body,
+    ),
+  getSignatureHistory: (documentId: number) =>
+    request<SignatureHistoryRead>('GET', `/documents/${documentId}/signature-history`),
+  /** Retained historical copy download URL — the original signing-path
+   *  DOCX lock still applies server-side. */
+  signatureHistoryDownloadUrl: (documentId: number, revision: number, format: 'docx' | 'pdf') =>
+    `${BASE}/documents/${documentId}/signature-history/${revision}/download?format=${format}`,
 
   // --- monthly time sheet (site JD 908) ---
   /** The printable designation catalog, in the rank order both workbooks

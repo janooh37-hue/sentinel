@@ -3,7 +3,7 @@
 was chosen at generation time.
 
 The chosen manager is stored on ``Book.doc_manager_id`` (not in
-``BookVersion.fields``). ``render_signed_pdf`` used to re-render with
+``BookVersion.fields``). ``render_signed_artifact`` used to re-render with
 ``manager_id=None``, which blanked the ``{{ manager_name }}`` cell in the
 signed copy (SC-0425). It must resolve the book's ``doc_manager_id`` instead.
 """
@@ -66,7 +66,7 @@ def test_signed_copy_keeps_doc_manager_name(db_session, tmp_path, monkeypatch):
     db_session.flush()
     private_output = tmp_path / "private-signed-base"
 
-    rel = document_service.render_signed_pdf(
+    artifact = document_service.render_signed_artifact(
         db_session,
         version=version,
         signer_signature_path=str(sig),
@@ -76,4 +76,4 @@ def test_signed_copy_keeps_doc_manager_name(db_session, tmp_path, monkeypatch):
     docx = next(private_output.glob("*_signed.docx"))
     text = _docx_text(docx)
     assert "SAEED RASHED" in text, "signed copy dropped the manager name"
-    assert rel  # a path was returned
+    assert artifact.docx_path == docx

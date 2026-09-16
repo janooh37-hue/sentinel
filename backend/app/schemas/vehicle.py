@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 
 from app.schemas._base import ORMBase
 
-VehicleFileKind = Literal["photo", "license", "gallery", "accident", "receipt"]
+VehicleFileKind = Literal["photo", "license", "gallery", "accident", "receipt", "certificate"]
 VehicleExpiryStatus = Literal["valid", "due", "expired"]
 MaintenanceDueState = Literal["overdue", "due", "scheduled"]
 MaintenanceType = Literal["service", "repair", "tires", "other"]
@@ -46,6 +46,22 @@ class VehicleFileRead(ORMBase):
     original_name: str
     media_type: str
     url: str = ""
+    expiry_date: date_t | None = None
+    is_historical: bool = False
+    superseded_by_file_id: int | None = None
+
+
+class VehicleCertificateUpdate(BaseModel):
+    """PATCH body for a certificate's expiry and history state.
+
+    ``model_fields_set`` distinguishes an omitted property from an explicit
+    one: touching either expiry field re-runs the same exact-one validator
+    upload uses, and a history-only update leaves the date untouched.
+    """
+
+    expiry_date: date_t | None = None
+    no_expiry: bool = False
+    is_historical: bool = False
 
 
 class VehiclePhotoRead(ORMBase):
@@ -184,7 +200,7 @@ class VehicleListItem(ORMBase):
     expiry_status: VehicleExpiryStatus = "valid"
     days_to_expiry: int = 0
     fines_count: int = 0
-    fines_amount: int = 0
+    fines_amount_fils: int = 0
     black_points: int = 0
     photo_asset_id: int | None = None
     photo_url: str | None = None
@@ -200,24 +216,31 @@ class VehicleListItem(ORMBase):
     archived_at: datetime | None = None
 
 
+VehicleFinePaymentStatus = Literal["unknown", "unpaid", "paid"]
+
+
 class VehicleFineCreate(BaseModel):
     employee_id: str | None = None
     date: date_t
     time: str | None = None
-    amount: int = Field(ge=1)
-    black_points: int = Field(default=0, ge=0)
-    location: str | None = None
-    description: str | None = None
+    amount_fils: int = Field(ge=100, le=999_999_999)
+    black_points: int = Field(default=0, ge=0, le=999)
+    location: str | None = Field(default=None, max_length=512)
+    description: str | None = Field(default=None, max_length=2048)
 
 
 class VehicleFineUpdate(BaseModel):
     employee_id: str | None = None
     date: date_t | None = None
     time: str | None = None
-    amount: int | None = Field(default=None, ge=1)
-    black_points: int | None = Field(default=None, ge=0)
-    location: str | None = None
-    description: str | None = None
+    amount_fils: int | None = Field(default=None, ge=100, le=999_999_999)
+    black_points: int | None = Field(default=None, ge=0, le=999)
+    location: str | None = Field(default=None, max_length=512)
+    description: str | None = Field(default=None, max_length=2048)
+    # The only status transition a plain edit may perform: an operator
+    # classifying a historical `unknown` fine as unpaid. `paid` only ever
+    # comes from the dedicated payment endpoint.
+    payment_status: Literal["unpaid"] | None = None
 
 
 class VehicleFineRead(ORMBase):
@@ -228,19 +251,46 @@ class VehicleFineRead(ORMBase):
     employee_name_en: str | None = None
     date: date_t
     time: str | None
-    amount: int
-    amount_after_discount: int | None
+    amount_fils: int
+    amount_after_discount_fils: int | None
     black_points: int
     source: Literal["manual", "evg"]
     evg_ticket_no: str | None
     location: str | None
     description: str | None
     fine_type: str | None
+    payment_status: VehicleFinePaymentStatus
+    receipt: VehicleFileRead | None = None
+    archived_at: datetime | None
     created_at: datetime
+    version: str = ""
     vehicle_plate_label: str = ""
     vehicle_type_ar: str = ""
     vehicle_type_en: str = ""
     vehicle_site_id: int = 0
+
+
+class VehicleFinePaymentRecord(BaseModel):
+    """`{fines: [{id, version}]}` batch archive/restore request row."""
+
+    id: int
+    version: str
+
+
+class VehicleFineBatchRequest(BaseModel):
+    fines: list[VehicleFinePaymentRecord] = Field(min_length=1)
+
+    @field_validator("fines")
+    @classmethod
+    def _unique_ids(cls, value: list[VehicleFinePaymentRecord]) -> list[VehicleFinePaymentRecord]:
+        ids = [row.id for row in value]
+        if len(ids) != len(set(ids)):
+            raise ValueError("Fine ids in a batch request must be unique.")
+        return value
+
+
+class VehicleFineBatchResult(BaseModel):
+    changed_count: int
 
 
 class FinesLetterRequest(BaseModel):
@@ -371,12 +421,13 @@ class VehicleRead(VehicleListItem):
     photo_asset_id: int | None = None
     license_file_id: int | None = None
     license_files: list[VehicleFileRead] = Field(default_factory=list)
+    certificates: list[VehicleFileRead] = Field(default_factory=list)
 
 
 class VehiclesSummary(BaseModel):
     vehicles: int
     fines_count: int
-    fines_amount: int
+    fines_amount_fils: int
     black_points: int
     license_attention: int
     insurance_attention: int
@@ -409,8 +460,8 @@ class EvgPreviewRow(BaseModel):
     location: str
     plate_number: str
     plate_code: str | None
-    amount: int = Field(ge=1)
-    amount_after_discount: int | None = Field(default=None, ge=0)
+    amount_fils: int = Field(ge=1)
+    amount_after_discount_fils: int | None = Field(default=None, ge=0)
     black_points: int = Field(ge=0)
     fine_type: str
     description: str | None

@@ -78,6 +78,14 @@ class SignatureStamp:
     size_mm: float
     boldness: int
     date_below: str | None = None
+    # General Book / Security Permit signing: keep the signature image, the
+    # manager name, and the title together as one page-break-safe block
+    # (approval-signature-placement plan §3). ``manager_title`` supplies the
+    # fallback closing-block search's expected title text; both are inert
+    # for every other form (Report included — it keeps its "التوقيع"
+    # label/date behaviour unchanged).
+    keep_manager_block_together: bool = False
+    manager_title: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -204,6 +212,8 @@ def _apply_stamps(target: Path, stamps: StampPlan) -> None:
             size_mm=signature.size_mm,
             boldness=signature.boldness,
             date_below=signature.date_below,
+            keep_manager_block_together=signature.keep_manager_block_together,
+            manager_title=signature.manager_title,
         ):
             raise ArtifactStampError("signature")
 
