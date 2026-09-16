@@ -369,18 +369,16 @@ def test_phase6_windows_word_artifact_smoke() -> None:
         assert not working.exists()
         shutil.copy2(finished, evidence_dir / "authored-finished.docx")
 
-        signed_value = document_service.render_signed_pdf(
+        artifact = document_service.render_signed_artifact(
             db,
             version=version,
             signer_signature_path=str(signature),
             signer_names=("Phase Six Manager", "مدير المرحلة السادسة"),
             converter=_real_dispatch_ex_converter,
         )
-        signed = Path(signed_value)
-        if not signed.is_absolute():
-            signed = settings.data_dir / signed
-        assert signed.suffix.lower() == ".pdf"
-        signed_docx = signed.with_suffix(".docx")
+        signed = artifact.conversion.pdf_path
+        assert signed is not None and signed.suffix.lower() == ".pdf"
+        signed_docx = artifact.docx_path
         assert signed_docx.is_file()
         signed_manifest = _manifest(signed_docx)
         for key in ("tables", "table_xml", "headers", "footers", "section_xml"):
@@ -417,6 +415,156 @@ def test_phase6_windows_word_artifact_smoke() -> None:
                 "preview_old_sha256": _sha256(evidence_dir / "preview-old.pdf"),
                 "preview_new_sha256": _sha256(evidence_dir / "preview-new.pdf"),
                 "signed_pdf_sha256": _sha256(signed),
+            },
+            ensure_ascii=False,
+            indent=2,
+            sort_keys=True,
+        ),
+        encoding="utf-8",
+    )
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="requires Microsoft Word on Windows")
+def test_signature_placement_word_smoke(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Isolated Word-COM proof of the measurement/movement engine
+    (approval-signature-placement plan §6/verification item 1&4): a real
+    generated signed document, measured and moved through the actual
+    isolated worker (`_pdf_executor.measure_signature_position` /
+    `move_signature_position`), landing within 1 point of the requested
+    normalized position with fixed physical size and unchanged page count —
+    never a build/typecheck-only stand-in for this proof."""
+    if os.environ.get("GSSG_RUN_WORD_ARTIFACT_SMOKE") != "1":
+        pytest.skip("set GSSG_RUN_WORD_ARTIFACT_SMOKE=1 for the isolated Word gate")
+    evidence_dir = Path(os.environ["GSSG_WORD_EVIDENCE_DIR"]).resolve(strict=True)
+    settings = get_settings()
+    assert settings.data_dir.resolve() != Path("C:/Users/Admin/sentinel/data").resolve()
+    assert settings.data_dir.resolve() != Path("C:/Users/GSSG/projects/sentinel/data").resolve()
+
+    # Real Word conversion inside this single pytest call is fine (proven
+    # empirically); the process-pool executor's own fork model is what is
+    # fragile under pytest, per _pdf_executor's docstring — route through
+    # the in-thread path instead.
+    monkeypatch.setenv("GSSG_INLINE_PDF", "1")
+
+    signature = evidence_dir / "sig-placement-signature.png"
+    image = Image.new("RGBA", (300, 100), (255, 255, 255, 0))
+    draw = ImageDraw.Draw(image)
+    draw.line([(20, 75), (80, 20), (145, 75), (220, 25), (280, 65)], fill="black", width=6)
+    image.save(signature)
+
+    with SessionLocal() as db:
+        perm_service.seed_role_defaults(db)
+        if db.get(BookCategory, "GS") is None:
+            db.add(BookCategory(id="GS", prefix="GS"))
+        employee = db.get(Employee, "P6-SIGPLACE-9001")
+        if employee is None:
+            employee = Employee(
+                id="P6-SIGPLACE-9001",
+                name_en="Sig Placement Employee",
+                name_ar="موظف اختبار الموضع",
+            )
+            db.add(employee)
+        user = db.scalar(select(User).where(User.email == "sigplace-word-smoke@example.invalid"))
+        if user is None:
+            user = User(
+                email="sigplace-word-smoke@example.invalid",
+                password_hash="synthetic",
+                role="admin",
+                status="active",
+                display_name="Sig Placement Operator",
+                employee_id=employee.id,
+            )
+            db.add(user)
+        manager = db.scalar(select(Manager).where(Manager.name_en == "Sig Placement Manager"))
+        if manager is None:
+            manager = Manager(
+                name_en="Sig Placement Manager",
+                name_ar="مدير اختبار الموضع",
+                title="مدير الاختبار / Test Manager",
+                sig_path=str(signature),
+            )
+            db.add(manager)
+        db.commit()
+
+        result = document_service.generate_document(
+            db,
+            employee_id=employee.id,
+            template_id="Leave Application Form",
+            fields={
+                "leave_type": "Sick Leave",
+                "start_date": "05/09/2026",
+                "end_date": "05/09/2026",
+                "total_days": 1,
+            },
+            manager_id=manager.id,
+            embed_signature={"manager": True},
+            commit=True,
+            current_user=user,
+            converter=_real_dispatch_ex_converter,
+        )
+        docx_path = result.docx_path
+        pdf_path = result.pdf_path
+        assert pdf_path is not None
+
+        from app.core.signature_layout import inspect_signature_drawings
+
+        drawings = inspect_signature_drawings(docx_path)
+        manager_drawings = [d for d in drawings if d.role == "manager"]
+        assert len(manager_drawings) == 1
+        signature_id = manager_drawings[0].signature_id
+
+        from app.services import _pdf_executor
+
+        layout = _pdf_executor.measure_signature_position(docx_path)
+        assert signature_id in layout.drawings
+        before = layout.drawings[signature_id]
+        assert len(layout.pages) >= 1
+
+        target_page = before.page
+        target_x, target_y = 0.15, 0.55
+        moved_dest = evidence_dir / "sig-placement-moved.docx"
+        after_layout, after_pdf = _pdf_executor.move_signature_position(
+            docx_path,
+            moved_dest,
+            signature_id=signature_id,
+            page=target_page,
+            x=target_x,
+            y=target_y,
+            layout=layout,
+            before_pdf=pdf_path,
+        )
+
+        after_geo = after_layout.drawings[signature_id]
+        assert after_geo.page == target_page
+        page_info = next(p for p in after_layout.pages if p.page == target_page)
+        assert abs(after_geo.x * page_info.width_pt - target_x * page_info.width_pt) <= 1.0
+        assert abs(after_geo.y * page_info.height_pt - target_y * page_info.height_pt) <= 1.0
+        assert after_geo.width_pt == pytest.approx(before.width_pt, abs=0.5)
+        assert after_geo.height_pt == pytest.approx(before.height_pt, abs=0.5)
+        # Page count unchanged after the move (validate_move already asserted
+        # this internally — reconfirm from the raw PDFs as an outer check).
+        with fitz.open(pdf_path) as before_pdf_doc, fitz.open(after_pdf) as after_pdf_doc:
+            assert before_pdf_doc.page_count == after_pdf_doc.page_count
+        # Source untouched.
+        assert docx_path.is_file()
+
+    shutil.copy2(docx_path, evidence_dir / "sig-placement-source.docx")
+    shutil.copy2(pdf_path, evidence_dir / "sig-placement-source.pdf")
+    if after_pdf.resolve() != (evidence_dir / "sig-placement-moved.pdf").resolve():
+        shutil.copy2(after_pdf, evidence_dir / "sig-placement-moved.pdf")
+    _copy_pdf_pages(pdf_path, evidence_dir / "pages", "sig-placement-source")
+    _copy_pdf_pages(after_pdf, evidence_dir / "pages", "sig-placement-moved")
+    (evidence_dir / "signature-placement-smoke.json").write_text(
+        json.dumps(
+            {
+                "signature_id": signature_id,
+                "before": {"page": before.page, "x": before.x, "y": before.y},
+                "requested": {"page": target_page, "x": target_x, "y": target_y},
+                "after": {"page": after_geo.page, "x": after_geo.x, "y": after_geo.y},
+                "source_sha256": _sha256(docx_path),
+                "moved_docx_sha256": _sha256(moved_dest),
+                "source_pdf_sha256": _sha256(pdf_path),
+                "moved_pdf_sha256": _sha256(after_pdf),
             },
             ensure_ascii=False,
             indent=2,

@@ -22,7 +22,6 @@ import type * as AuthContextModule from '@/lib/authContext'
 import { api } from '@/lib/api'
 import { BookRecordPage } from './BookRecordPage'
 import { QueueNav } from './QueueNav'
-import { nextAfterDecision } from './useAwaitingQueue'
 
 const mockHas = vi.fn<(cap: string) => boolean>(() => false)
 
@@ -128,15 +127,6 @@ describe('QueueNav (Arabic)', () => {
   })
 })
 
-describe('nextAfterDecision', () => {
-  it('advances to the next awaiting book', () => {
-    expect(nextAfterDecision(42)).toBe('/books/42')
-  })
-
-  it('falls back to the list when the queue is empty', () => {
-    expect(nextAfterDecision(null)).toBe('/books')
-  })
-})
 
 // ---------------------------------------------------------------------------
 // "Email via Outlook" — the record's own handoff entry point.

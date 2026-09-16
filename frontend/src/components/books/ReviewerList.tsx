@@ -12,8 +12,12 @@ import { useTranslation } from 'react-i18next'
 
 export function ReviewerList({
   reviewers,
+  versionNo,
+  currentVersionNo,
 }: {
   reviewers: BookApprovalStepRead[]
+  versionNo?: number
+  currentVersionNo?: number
 }): React.JSX.Element | null {
   const { t } = useTranslation()
   if (reviewers.length === 0) return null
@@ -26,6 +30,11 @@ export function ReviewerList({
       <ul className="flex flex-col gap-2">
         {reviewers.map((r) => {
           const d = reviewerDescriptor(r.state)
+          const endedOnOlderRevision =
+            r.state === 'pending' &&
+            versionNo != null &&
+            currentVersionNo != null &&
+            versionNo !== currentVersionNo
           return (
             <li
               key={r.id}
@@ -46,7 +55,9 @@ export function ReviewerList({
                   )}
                 >
                   <d.Icon className="h-3 w-3" />
-                  {t(d.labelKey)}
+                  {endedOnOlderRevision
+                    ? t('books.approval.reviewEndedNewerRevision')
+                    : t(d.labelKey)}
                 </span>
               </div>
               <p

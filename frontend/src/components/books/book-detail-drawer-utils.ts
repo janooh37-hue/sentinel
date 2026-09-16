@@ -11,7 +11,11 @@ export type FooterAction = 'decide' | 'revise' | 'submit' | 'review' | 'none'
  * caller's capabilities and whether they own the current pending step.
  *
  * - `pending` + caller is the assignee approver → `decide` (approve/reject/return/note)
- * - `pending` + caller is an advisory reviewer → `review`
+ * - caller is an advisory reviewer with a still-pending review step → `review`,
+ *   REGARDLESS of aggregate state: a reviewer's pending step remains
+ *   actionable — late advisory feedback — after the signer has already
+ *   approved, returned, or rejected the reviewed revision. Checked before the
+ *   state-gated branches below so it is never confined to `pending`.
  * - `returned`/`rejected` + revise authority (`books.edit`, `canRevise`) → `revise`
  * - `none` + submit authority (`books.submit`, `canSubmitBook`) → `submit`
  *   (independent of `canRevise`: submitting a draft does not require edit rights)
@@ -29,12 +33,9 @@ export function footerActionFor(
     isReviewer?: boolean
   },
 ): FooterAction {
+  if (state === 'pending' && caps.canApprove && caps.isAssignee) return 'decide'
+  if (caps.isReviewer) return 'review'
   if (state === 'awaiting_scan') return 'none'
-  if (state === 'pending') {
-    if (caps.canApprove && caps.isAssignee) return 'decide'
-    if (caps.isReviewer) return 'review'
-    return 'none'
-  }
   if ((state === 'returned' || state === 'rejected') && caps.canRevise) return 'revise'
   if (state === 'none' && caps.canSubmitBook) return 'submit'
   return 'none'

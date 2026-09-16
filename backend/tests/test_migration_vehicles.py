@@ -526,3 +526,325 @@ def test_0087_preserves_legacy_assignments_and_downgrades_live_selection_safely(
             assert restored[3] is not None
     finally:
         engine.dispose()
+
+
+@pytest.fixture
+def migrated_0088(tmp_path: Path) -> Iterator[tuple[Config, Engine]]:
+    config = _config(tmp_path / "vehicle-fines-ledger-migration.db")
+    command.upgrade(config, "0088_inmate_statistics_workflow")
+    engine = create_engine(config.get_main_option("sqlalchemy.url"))
+    try:
+        yield config, engine
+    finally:
+        engine.dispose()
+
+
+def _seed_vehicle_and_site(connection: Any) -> None:
+    connection.execute(
+        text(
+            "INSERT INTO vehicle_sites (name_ar, name_en, created_at) "
+            "VALUES ('الموقع', 'Site', '2026-01-01 00:00:00')"
+        )
+    )
+    connection.execute(
+        text(
+            "INSERT INTO vehicles ("
+            "plate_code, plate_number, traffic_code, type_ar, type_en, class_ar, class_en, "
+            "site_id, license_start, license_expiry, created_at"
+            ") VALUES ("
+            "'14', '58216', '1180021637', 'مركبة', 'Vehicle', 'خفيفة', 'Light', "
+            "1, '2026-01-01', '2026-12-31', '2026-01-01 00:00:00'"
+            ")"
+        )
+    )
+
+
+def test_0089_converts_legacy_amounts_to_exact_fils_and_backfills_unknown(
+    migrated_0088: tuple[Config, Engine],
+) -> None:
+    config, engine = migrated_0088
+
+    with engine.begin() as connection:
+        _seed_vehicle_and_site(connection)
+        connection.execute(
+            text(
+                "INSERT INTO vehicle_fines (vehicle_id, date, amount, amount_after_discount, "
+                "black_points, source, created_at) "
+                "VALUES (1, '2026-08-20', 349, 300, 4, 'manual', '2026-08-20 00:00:00')"
+            )
+        )
+        connection.execute(
+            text(
+                "INSERT INTO vehicle_fines (vehicle_id, date, amount, black_points, source, "
+                "created_at) "
+                "VALUES (1, '2026-08-21', 725, 0, 'manual', '2026-08-21 00:00:00')"
+            )
+        )
+
+    command.upgrade(config, "0089_vehicle_fines_ledger")
+
+    with engine.connect() as connection:
+        rows = (
+            connection.execute(
+                text(
+                    "SELECT amount_fils, amount_after_discount_fils, payment_status, "
+                    "receipt_file_id, archived_at FROM vehicle_fines ORDER BY id"
+                )
+            )
+            .mappings()
+            .all()
+        )
+        assert [dict(row) for row in rows] == [
+            {
+                "amount_fils": 34900,
+                "amount_after_discount_fils": 30000,
+                "payment_status": "unknown",
+                "receipt_file_id": None,
+                "archived_at": None,
+            },
+            {
+                "amount_fils": 72500,
+                "amount_after_discount_fils": None,
+                "payment_status": "unknown",
+                "receipt_file_id": None,
+                "archived_at": None,
+            },
+        ]
+        columns = {column["name"] for column in inspect(connection).get_columns("vehicle_fines")}
+        assert "amount" not in columns
+        assert "amount_after_discount" not in columns
+
+
+def test_0089_downgrade_restores_legacy_columns_for_untouched_rows(
+    migrated_0088: tuple[Config, Engine],
+) -> None:
+    config, engine = migrated_0088
+
+    with engine.begin() as connection:
+        _seed_vehicle_and_site(connection)
+        connection.execute(
+            text(
+                "INSERT INTO vehicle_fines (vehicle_id, date, amount, amount_after_discount, "
+                "black_points, source, created_at) "
+                "VALUES (1, '2026-08-20', 349, 300, 4, 'manual', '2026-08-20 00:00:00')"
+            )
+        )
+
+    command.upgrade(config, "0089_vehicle_fines_ledger")
+    command.downgrade(config, "0088_inmate_statistics_workflow")
+
+    with engine.connect() as connection:
+        row = dict(
+            connection.execute(
+                text("SELECT amount, amount_after_discount FROM vehicle_fines WHERE id = 1")
+            )
+            .mappings()
+            .one()
+        )
+        assert row == {"amount": 349, "amount_after_discount": 300}
+        columns = {column["name"] for column in inspect(connection).get_columns("vehicle_fines")}
+        assert "amount_fils" not in columns
+        assert "payment_status" not in columns
+        assert "receipt_file_id" not in columns
+        assert "archived_at" not in columns
+
+    command.upgrade(config, "head")
+    with engine.connect() as connection:
+        assert (
+            connection.scalar(text("SELECT version_num FROM alembic_version"))
+            == ScriptDirectory.from_config(config).get_current_head()
+        )
+
+
+@pytest.mark.parametrize(
+    "mutate_sql",
+    [
+        "UPDATE vehicle_fines SET payment_status = 'paid' WHERE id = 1",
+        "UPDATE vehicle_fines SET archived_at = '2026-09-01 00:00:00' WHERE id = 1",
+        "UPDATE vehicle_fines SET receipt_file_id = 999 WHERE id = 1",
+    ],
+)
+def test_0089_downgrade_refuses_to_discard_paid_archived_or_receipted_fines(
+    migrated_0088: tuple[Config, Engine],
+    mutate_sql: str,
+) -> None:
+    config, engine = migrated_0088
+
+    with engine.begin() as connection:
+        _seed_vehicle_and_site(connection)
+        connection.execute(
+            text(
+                "INSERT INTO vehicle_fines (vehicle_id, date, amount, black_points, source, "
+                "created_at) "
+                "VALUES (1, '2026-08-20', 349, 4, 'manual', '2026-08-20 00:00:00')"
+            )
+        )
+
+    command.upgrade(config, "0089_vehicle_fines_ledger")
+    with engine.begin() as connection:
+        connection.execute(text(mutate_sql))
+
+    with pytest.raises(RuntimeError, match="Cannot downgrade"):
+        command.downgrade(config, "0088_inmate_statistics_workflow")
+
+    # Refused before mutating: still on the fils schema with the row intact.
+    with engine.connect() as connection:
+        assert (
+            connection.scalar(text("SELECT COUNT(*) FROM vehicle_fines WHERE amount_fils = 34900"))
+            == 1
+        )
+
+
+def test_0089_downgrade_refuses_fractional_amounts(
+    migrated_0088: tuple[Config, Engine],
+) -> None:
+    config, engine = migrated_0088
+
+    with engine.begin() as connection:
+        _seed_vehicle_and_site(connection)
+        connection.execute(
+            text(
+                "INSERT INTO vehicle_fines (vehicle_id, date, amount, black_points, source, "
+                "created_at) "
+                "VALUES (1, '2026-08-20', 349, 4, 'manual', '2026-08-20 00:00:00')"
+            )
+        )
+
+    command.upgrade(config, "0089_vehicle_fines_ledger")
+    with engine.begin() as connection:
+        # A fractional fils amount (349.50 AED) has no whole-AED representation.
+        connection.execute(text("UPDATE vehicle_fines SET amount_fils = 34950 WHERE id = 1"))
+
+    with pytest.raises(RuntimeError, match="Cannot downgrade"):
+        command.downgrade(config, "0088_inmate_statistics_workflow")
+
+
+CERTIFICATE_COLUMNS = {
+    "expiry_date",
+    "expiry_reminder_sent_for",
+    "is_historical",
+    "superseded_by_file_id",
+}
+
+
+def _vehicle_file_columns(connection: Any) -> set[str]:
+    return {column["name"] for column in inspect(connection).get_columns("vehicle_files")}
+
+
+def test_0090_certificate_columns_round_trip_over_populated_vehicle_files(
+    tmp_path: Path,
+) -> None:
+    config = _config(tmp_path / "vehicle-certificates-migration.db")
+    command.upgrade(config, "0089_vehicle_fines_ledger")
+    engine = create_engine(config.get_main_option("sqlalchemy.url"))
+
+    try:
+        with engine.begin() as connection:
+            assert CERTIFICATE_COLUMNS.isdisjoint(_vehicle_file_columns(connection))
+            _seed_vehicle_and_site(connection)
+            # A pre-existing non-certificate file row (photo) survives untouched.
+            connection.execute(
+                text(
+                    "INSERT INTO vehicle_files ("
+                    "vehicle_id, kind, label_ar, label_en, path, original_name, media_type, size, "
+                    "created_at"
+                    ") VALUES ("
+                    "1, 'photo', NULL, NULL, 'vehicle_files/1/photo/a.jpg', 'a.jpg', "
+                    "'image/jpeg', 1024, '2026-01-01 00:00:00'"
+                    ")"
+                )
+            )
+
+        command.upgrade(config, "0090_vehicle_certificates")
+
+        with engine.begin() as connection:
+            assert _vehicle_file_columns(connection) >= CERTIFICATE_COLUMNS
+            photo_row = (
+                connection.execute(
+                    text(
+                        "SELECT expiry_date, expiry_reminder_sent_for, is_historical, "
+                        "superseded_by_file_id FROM vehicle_files WHERE kind = 'photo'"
+                    )
+                )
+                .mappings()
+                .one()
+            )
+            assert photo_row["expiry_date"] is None
+            assert photo_row["expiry_reminder_sent_for"] is None
+            assert photo_row["is_historical"] == 0
+            assert photo_row["superseded_by_file_id"] is None
+
+            # Dated, non-expiring, historical, and replacement metadata all persist.
+            connection.execute(
+                text(
+                    "INSERT INTO vehicle_files ("
+                    "vehicle_id, kind, label_ar, label_en, path, original_name, media_type, size, "
+                    "created_at, expiry_date, expiry_reminder_sent_for, is_historical, "
+                    "superseded_by_file_id"
+                    ") VALUES ("
+                    "1, 'certificate', 'شهادة', 'Certificate', "
+                    "'vehicle_files/1/certificate/b.pdf', 'b.pdf', 'application/pdf', 2048, "
+                    "'2026-02-01 00:00:00', '2027-01-01', NULL, 0, NULL"
+                    ")"
+                )
+            )
+            connection.execute(
+                text(
+                    "INSERT INTO vehicle_files ("
+                    "vehicle_id, kind, label_ar, label_en, path, original_name, media_type, size, "
+                    "created_at, expiry_date, expiry_reminder_sent_for, is_historical, "
+                    "superseded_by_file_id"
+                    ") VALUES ("
+                    "1, 'certificate', 'شهادة قديمة', 'Old certificate', "
+                    "'vehicle_files/1/certificate/c.pdf', 'c.pdf', 'application/pdf', 1024, "
+                    "'2026-01-15 00:00:00', '2026-06-01', '2026-06-01', 1, 2"
+                    ")"
+                )
+            )
+
+        command.downgrade(config, "0089_vehicle_fines_ledger")
+
+        with engine.begin() as connection:
+            assert CERTIFICATE_COLUMNS.isdisjoint(_vehicle_file_columns(connection))
+            surviving = (
+                connection.execute(
+                    text("SELECT kind, original_name, size FROM vehicle_files ORDER BY id")
+                )
+                .mappings()
+                .all()
+            )
+            assert [dict(row) for row in surviving] == [
+                {"kind": "photo", "original_name": "a.jpg", "size": 1024},
+                {"kind": "certificate", "original_name": "b.pdf", "size": 2048},
+                {"kind": "certificate", "original_name": "c.pdf", "size": 1024},
+            ]
+
+        command.upgrade(config, "head")
+
+        with engine.connect() as connection:
+            assert _vehicle_file_columns(connection) >= CERTIFICATE_COLUMNS
+            # Re-upgrading never resurrects the removed metadata.
+            rows = (
+                connection.execute(
+                    text(
+                        "SELECT expiry_date, expiry_reminder_sent_for, is_historical, "
+                        "superseded_by_file_id FROM vehicle_files ORDER BY id"
+                    )
+                )
+                .mappings()
+                .all()
+            )
+            assert len(rows) == 3
+            for row in rows:
+                assert row["expiry_date"] is None
+                assert row["expiry_reminder_sent_for"] is None
+                assert row["is_historical"] == 0
+                assert row["superseded_by_file_id"] is None
+    finally:
+        engine.dispose()
+
+
+def test_alembic_history_has_exactly_one_head(tmp_path: Path) -> None:
+    config = _config(tmp_path / "heads-check.db")
+    script = ScriptDirectory.from_config(config)
+    assert len(script.get_heads()) == 1

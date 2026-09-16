@@ -13,15 +13,16 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { Check, FileText } from 'lucide-react'
-import { api, apiErrorMessage } from '@/lib/api'
+import { api, ApiError, apiErrorMessage } from '@/lib/api'
 import { cn } from '@/lib/utils'
 
 interface Props {
   bookId: number
+  versionId: number
   onDone?: () => void
 }
 
-export function ReviewerActions({ bookId, onDone }: Props): React.JSX.Element {
+export function ReviewerActions({ bookId, versionId, onDone }: Props): React.JSX.Element {
   const { t } = useTranslation()
   const qc = useQueryClient()
   const [mode, setMode] = useState<'changes' | null>(null)
@@ -29,7 +30,7 @@ export function ReviewerActions({ bookId, onDone }: Props): React.JSX.Element {
 
   const mut = useMutation({
     mutationFn: (v: { decision: 'reviewed' | 'changes_requested'; note?: string }) =>
-      api.reviewBook(bookId, v.decision, v.note),
+      api.reviewBook(bookId, versionId, v.decision, v.note),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['books'] })
       void qc.invalidateQueries({ queryKey: ['books', 'detail', bookId] })
@@ -39,7 +40,14 @@ export function ReviewerActions({ bookId, onDone }: Props): React.JSX.Element {
       setNote('')
       onDone?.()
     },
-    onError: (e) => toast.error(apiErrorMessage(e)),
+    onError: (e) => {
+      if (e instanceof ApiError && e.code === 'REVISION_CHANGED') {
+        void qc.invalidateQueries({ queryKey: ['books', 'detail', bookId] })
+        toast.error(t('books.approval.revisionChanged'))
+        return
+      }
+      toast.error(apiErrorMessage(e))
+    },
   })
 
   const busy = mut.isPending

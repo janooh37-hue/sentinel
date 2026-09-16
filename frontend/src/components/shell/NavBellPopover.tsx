@@ -24,6 +24,9 @@ import { toast } from 'sonner'
 
 import { api, apiErrorMessage } from '@/lib/api'
 import { useCapabilities } from '@/lib/useCapabilities'
+import { useApprovalSummary } from '@/lib/useApprovalSummary'
+import { approvalQueueUrl, defaultApprovalContext } from '@/lib/approvals'
+import { isApprovalsSignalAvailable } from './navCustomization'
 import { useIdentity } from '@/lib/useIdentity'
 import { useAwaitingReturnCount } from '@/pages/leaves/useAwaitingReturnCount'
 import { useFlagCount } from '@/pages/ledger/outlook/useFlagCount'
@@ -80,7 +83,6 @@ export function NavBellPopover(): React.JSX.Element {
   const { isAdmin } = useIdentity()
   const { has } = useCapabilities()
   const canViewBooks = has('books.view')
-  const canApproveBooks = has('books.approve')
   const canEditBooks = has('books.edit')
   const canViewExpiry = has('expiry.view')
   const canViewLeaves = has('leaves.view')
@@ -126,16 +128,14 @@ export function NavBellPopover(): React.JSX.Element {
   const followUps = useFlagCount(canViewLedger)
   const { count: scanBackCount } = useScanBack('mine', canViewBooks && canEditBooks)
 
-  // Phase 4 LAN — awaiting MY approval (books.approve-gated).
-  // Query key ['books','awaiting'] is also invalidated by useNotificationStream.
-  const approvalsQuery = useQuery({
-    queryKey: ['books', 'awaiting'],
-    queryFn: api.listAwaitingBooks,
-    staleTime: 30_000,
-    refetchInterval: 120_000,
-    enabled: canApproveBooks,
-  })
-  const awaitingApproval = canApproveBooks ? (approvalsQuery.data?.length ?? 0) : 0
+  // #31 — assignment-aware approvals summary. Never gated behind
+  // books.approve: a review-only user's late feedback is just as actionable
+  // as a signer's pending decision. Badge/count is `actionable_count`, not
+  // signed-history or sent-waiting counts.
+  const approvalSummaryQuery = useApprovalSummary()
+  const approvalSummary = approvalSummaryQuery.data
+  const awaitingApproval = approvalSummary?.actionable_count ?? 0
+  const approvalsAvailable = isApprovalsSignalAvailable(approvalSummary)
 
   const markAllMutation = useMutation({
     mutationFn: () => api.markAllLedgerRead(),
@@ -299,13 +299,15 @@ export function NavBellPopover(): React.JSX.Element {
             </button>
           )}
 
-          {/* Awaiting MY approval (books.approve-gated) — Phase 4 LAN */}
-          {canApproveBooks && awaitingApproval > 0 && (
+          {/* Awaiting MY approval — #31, assignment-aware (sent access or any
+              received kind), never merely books.approve */}
+          {approvalsAvailable && awaitingApproval > 0 && (
             <button
               type="button"
               onClick={() => {
                 setOpen(false)
-                navigate('/books/approvals')
+                const context = approvalSummary ? defaultApprovalContext(approvalSummary) : null
+                navigate(context ? approvalQueueUrl(context) : '/books/approvals')
               }}
               className="flex w-full items-center gap-3 border-b border-hairline px-4 py-3 text-start transition-colors hover:bg-surface-tinted focus-visible:bg-surface-tinted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
             >

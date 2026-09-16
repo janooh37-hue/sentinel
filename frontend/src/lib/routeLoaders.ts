@@ -35,6 +35,10 @@ export const loadVehicleFinesReportPage = () =>
   import('@/pages/vehicles/VehicleFinesReportPage').then((m) => ({
     default: m.VehicleFinesReportPage,
   }))
+export const loadVehicleFinesPage = () =>
+  import('@/pages/vehicles/VehicleFinesPage').then((m) => ({
+    default: m.VehicleFinesPage,
+  }))
 export const loadVehicleAccidentsPage = () =>
   import('@/pages/vehicles/VehicleAccidentsPage').then((m) => ({
     default: m.VehicleAccidentsPage,
@@ -83,3 +87,7 @@ export const loadSendToGroupPage = () =>
   import('@/pages/announcements/SendToGroupPage').then((m) => ({ default: m.SendToGroupPage }))
 export const loadScanBackPage = () =>
   import('@/pages/scanBack/ScanBackPage').then((m) => ({ default: m.ScanBackPage }))
+export const loadSignaturePlacementPage = () =>
+  import('@/pages/documents/SignaturePlacementPage').then((m) => ({
+    default: m.SignaturePlacementPage,
+  }))

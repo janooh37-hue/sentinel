@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import math
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import date, datetime, time
+from decimal import Decimal, InvalidOperation
 from typing import cast
 
 # EVG's numeric PlateColorCode is offset from the fleet's plate code by 51. The
@@ -21,9 +23,9 @@ class EvgTicketRow:
     location: str
     plate_number: str
     plate_code: str | None
-    amount: int
+    amount_fils: int
     discount_pct: int
-    amount_after_discount: int | None
+    amount_after_discount_fils: int | None
     late_charges: int
     black_points: int
     fine_type: str
@@ -69,6 +71,25 @@ def _integer(value: object) -> int | None:
         return int(value)
     except (OverflowError, ValueError):
         return None
+
+
+def _fils(value: object) -> int | None:
+    """Exact fils from an EVG money field: no float rounding, no lost cents.
+
+    Rejects booleans, non-finite floats, and any value whose decimal
+    representation carries more precision than a fils (e.g. ``349.505``).
+    """
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    if isinstance(value, float) and not math.isfinite(value):
+        return None
+    try:
+        fils = Decimal(str(value)) * 100
+    except InvalidOperation:
+        return None
+    if fils != fils.to_integral_value():
+        return None
+    return int(fils)
 
 
 def _ticket_number(value: object) -> str | None:
@@ -132,21 +153,21 @@ def _parse_ticket(value: object) -> EvgTicketRow | None:
     ticket_no = _ticket_number(ticket_id.get("TicketNo"))
     ticket_date = _ticket_date(ticket_id.get("TicketDate"))
     plate_number = _ticket_number(plate_info.get("PlateNo"))
-    amount = _rounded_int(ticket.get("TotalAmount"))
+    amount_fils = _fils(ticket.get("TotalAmount"))
     discount_pct = _rounded_int(ticket.get("DiscountRate"))
     if (
         ticket_no is None
         or ticket_date is None
         or plate_number is None
-        or amount is None
-        or amount < 1
+        or amount_fils is None
+        or amount_fils < 1
         or discount_pct is None
     ):
         return None
 
     raw_after_discount = ticket.get("TotalAmountAfterDiscount")
-    amount_after_discount = None if raw_after_discount is None else _rounded_int(raw_after_discount)
-    if raw_after_discount is not None and amount_after_discount is None:
+    amount_after_discount_fils = None if raw_after_discount is None else _fils(raw_after_discount)
+    if raw_after_discount is not None and amount_after_discount_fils is None:
         return None
 
     raw_late_charges = ticket.get("LateCharges")
@@ -163,7 +184,7 @@ def _parse_ticket(value: object) -> EvgTicketRow | None:
         discount_pct < 0
         or late_charges < 0
         or black_points < 0
-        or (amount_after_discount is not None and amount_after_discount < 0)
+        or (amount_after_discount_fils is not None and amount_after_discount_fils < 0)
     ):
         return None
 
@@ -175,9 +196,9 @@ def _parse_ticket(value: object) -> EvgTicketRow | None:
         location=_text(ticket.get("LocationDescEn")) or _text(ticket.get("LocationDescAr")),
         plate_number=plate_number,
         plate_code=plate_code_from_color_code(plate_info.get("PlateColorCode")),
-        amount=amount,
+        amount_fils=amount_fils,
         discount_pct=discount_pct,
-        amount_after_discount=amount_after_discount,
+        amount_after_discount_fils=amount_after_discount_fils,
         late_charges=late_charges,
         black_points=black_points,
         fine_type=TICKET_TYPE_LABELS.get(ticket_type, ticket_type or "Unknown"),

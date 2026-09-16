@@ -42,15 +42,27 @@ from app.api.errors import AppError, NotFoundError
 from app.config import get_settings
 from app.core.form_kind import OTHER_SERVICE_ID, SERVICE_ALIASES, SERVICE_IDS
 from app.core.pdf_merge import merge_pdfs_to_bytes
+from app.core.roles import ADMIN_ROLE
 from app.db.models import Book, BookVersion, Document, User
 from app.db.session import SessionLocal, get_db
 from app.schemas._base import ORMBase
+from app.schemas.signature_placement import (
+    LegacyCandidateRead,
+    SignatureEditorRead,
+    SignatureHistoryItemRead,
+    SignatureHistoryRead,
+    SignatureIdentifyRequest,
+    SignaturePageRead,
+    SignaturePositionRequest,
+    SignatureRead,
+)
 from app.services import (
     approved_import_service,
     book_service,
     document_service,
     notify_dispatch,
     perm_service,
+    signature_placement_service,
     staging_service,
 )
 from app.services.job_registry import (
@@ -72,38 +84,55 @@ def _effective_document_service(template_id: str) -> str:
     return resolved if resolved in SERVICE_IDS else OTHER_SERVICE_ID
 
 
-def _require_document_record_access(db: Session, user: User, row: Document) -> None:
-    """Apply the complete read gate for a stored document.
+def _require_document_record_access(
+    db: Session,
+    user: User,
+    row: Document,
+    *,
+    expected_version_id: int | None = None,
+) -> BookVersion | None:
+    """Apply the complete read gate for a stored document; return its exact
+    owning ``BookVersion`` (``None`` for a standalone/unlinked document).
 
-    Linked documents inherit their book's row-level policy, including the
-    pending-assignment exception. Only unlinked documents require generation
-    access and their standalone service-type visibility.
+    Linked documents inherit their book's revision-scoped read policy for the
+    EXACT version that owns them, not merely the book in general — a caller
+    authorized only for a different revision must not reach these bytes.
+    Companion documents inherit the primary document's exact ownership.
+    ``expected_version_id``, when given, must match the resolved owning
+    version or the document is treated as not found (a stale cached link
+    pointing at a superseded revision must not silently serve different
+    bytes than the caller expects).
     """
-    linked_book = db.scalar(
-        select(Book)
+    owning = db.execute(
+        select(Book, BookVersion)
         .join(BookVersion, BookVersion.book_id == Book.id)
         .where(BookVersion.document_id == row.id)
-        .order_by(BookVersion.version_no.desc())
-        .limit(1)
-    )
-    if linked_book is not None:
-        book_service.require_book_access(db, user, linked_book)
-        return
-    if linked_book is None and row.role == "companion":
+    ).first()
+    if owning is None and row.role == "companion":
         primary_document_ids = select(Document.id).where(
             Document.submission_id == row.submission_id,
             Document.role == "primary",
         )
-        linked_book = db.scalar(
-            select(Book)
+        owning = db.execute(
+            select(Book, BookVersion)
             .join(BookVersion, BookVersion.book_id == Book.id)
             .where(BookVersion.document_id.in_(primary_document_ids))
-            .order_by(BookVersion.version_no.desc())
-            .limit(1)
+        ).first()
+    if owning is not None:
+        linked_book, owning_version = owning.tuple()
+        if expected_version_id is not None and expected_version_id != owning_version.id:
+            raise NotFoundError(
+                "DOCUMENT_NOT_FOUND",
+                f"Document {row.id} not found",
+                id=row.id,
+            )
+        book_service.resolve_book_read_access(
+            db,
+            user,
+            linked_book,
+            version_id=owning_version.id,
         )
-        if linked_book is not None:
-            book_service.require_book_access(db, user, linked_book)
-            return
+        return owning_version
     if not perm_service.has_capability(db, user, "documents.generate"):
         raise AppError(
             "FORBIDDEN",
@@ -115,6 +144,7 @@ def _require_document_record_access(db: Session, user: User, row: Document) -> N
         user,
         service_id=_effective_document_service(row.template_id),
     )
+    return None
 
 
 def _should_autosend(
@@ -248,6 +278,7 @@ class DocumentRead(ORMBase):
     violation_id: int | None = None
     submission_id: str
     role: Literal["primary", "companion"]
+
 
 class MyDocumentActivityRead(BaseModel):
     documents_today: int
@@ -410,14 +441,14 @@ def generate_document(
             )
         revise_book = db.get(Book, payload.revise_of_book_id)
         if revise_book is not None and revise_book.deleted_at is None:
-            book_service.require_book_access(db, user, revise_book)
+            book_service.require_full_book_access(db, user, revise_book)
 
     for source in payload.attachments or ():
         if source.source == "staged" or source.book_id is None:
             continue
         source_book = db.get(Book, source.book_id)
         if source_book is not None and source_book.deleted_at is None:
-            book_service.require_book_access(db, user, source_book)
+            book_service.require_full_book_access(db, user, source_book)
     job_id = submit_job()
     # The task opens its own session (the request session is closed once this
     # response returns). The caller is both the stamping identity and the
@@ -544,9 +575,7 @@ def get_my_document_activity(
     db: Annotated[Session, Depends(get_db)],
     user: Annotated[User, Depends(get_current_user)],
 ) -> MyDocumentActivityRead:
-    return MyDocumentActivityRead(
-        **book_service.count_my_generated_documents(db, user_id=user.id)
-    )
+    return MyDocumentActivityRead(**book_service.count_my_generated_documents(db, user_id=user.id))
 
 
 @documents_router.get("/{document_id}", response_model=DocumentRead)
@@ -554,6 +583,7 @@ def get_document(
     document_id: int,
     db: Annotated[Session, Depends(get_db)],
     user: Annotated[User, Depends(get_current_user)],
+    version_id: Annotated[int | None, Query(gt=0)] = None,
 ) -> DocumentRead:
     row: Document | None = db.get(Document, document_id)
 
@@ -573,7 +603,7 @@ def get_document(
             id=document_id,
         )
 
-    _require_document_record_access(db, user, row)
+    _require_document_record_access(db, user, row, expected_version_id=version_id)
     return DocumentRead.model_validate(row)
 
 
@@ -604,6 +634,7 @@ def download_document(
     format: Literal["docx", "pdf"] = Query("pdf"),
     original: Annotated[bool, Query()] = False,
     encoding: Annotated[str | None, Query(pattern="^base64$")] = None,
+    version_id: Annotated[int | None, Query(gt=0)] = None,
 ) -> Response:
     """Stream a generated document (PDF or DOCX).
 
@@ -627,154 +658,377 @@ def download_document(
             f"Document {document_id} not found",
             id=document_id,
         )
-    _require_document_record_access(db, user, row)
+    version = _require_document_record_access(db, user, row, expected_version_id=version_id)
 
-    settings = get_settings()
+    artifact = document_service.resolve_document_artifact(
+        db, document_id, format=format, original=original, version=version
+    )
 
-    _DOCX_MEDIA_TYPE = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-
-    # ``original=true`` short-circuit: serve the pre-signature generated PDF
-    # regardless of signed-lock. The linked-book or unlinked-document read gate
-    # above is complete, so no second blanket capability applies here.
-    if original:
-        if not row.pdf_path:
-            raise NotFoundError(
-                "PDF_NOT_AVAILABLE",
-                f"No PDF rendition exists for document {document_id}",
-                id=document_id,
-            )
-        orig_path = settings.data_dir / row.pdf_path
-        _dd = settings.data_dir.resolve()
-        try:
-            _op = orig_path.resolve()
-        except OSError:
-            _op = orig_path
-        if (_dd not in _op.parents and _op != _dd) or not orig_path.is_file():
-            raise NotFoundError(
-                "FILE_NOT_FOUND",
-                f"File not found on disk for document {document_id}",
-                id=document_id,
-            )
-        # Annual-leave / resignation forms file a companion (Leave Undertaking,
-        # etc.) as a separate doc sharing this submission. Append its pages so the
-        # record serves ONE merged PDF, not separate papers. Non-destructive.
-        comp_paths = [] if row.base_pdf_path else document_service.companion_pdf_paths(db, row)
-        if comp_paths:
-            merged = merge_pdfs_to_bytes(orig_path, comp_paths)
-            if (b64 := maybe_base64(merged, encoding)) is not None:
-                return b64
-            return _inline_pdf_response(
-                merged, document_service.download_filename_for(row, ".pdf", db=db)
-            )
-        if (b64 := maybe_base64(orig_path.read_bytes(), encoding)) is not None:
-            return b64
-        return FileResponse(
-            path=str(orig_path),
-            media_type="application/pdf",
-            filename=document_service.download_filename_for(row, ".pdf", db=db),
-            content_disposition_type="inline",
-        )
-
-    docx_path = row.docx_path
-    if format == "docx" and not docx_path:
-        raise NotFoundError(
-            "DOCX_NOT_AVAILABLE",
-            f"No editable DOCX exists for document {document_id}",
-            id=document_id,
-        )
-
-    # Once a version is SIGNED, the editable DOCX is locked: deny it, and serve
-    # the signed artifact for any other format. The signed artifact may be a
-    # .pdf (normal) or a .docx fallback (when PDF conversion is unavailable), so
-    # derive the media type / extension from the artifact's real suffix.
-    locked, signed_rel = book_service.is_document_signed_locked(db, document_id)
-
-    # Only the pre-signature generated PDF gets companion pages appended (not the
-    # signed scan-back, not DOCX). Set when we serve row.pdf_path below.
-    merge_companions = False
-    if locked and signed_rel is not None:
-        if format == "docx":
-            raise AppError(
-                "DOCX_LOCKED_AFTER_SIGNING",
-                "This document is signed; the editable DOCX is locked",
-                http_status=status.HTTP_403_FORBIDDEN,
-            )
-        file_path = settings.data_dir / signed_rel
-        if signed_rel.lower().endswith(".docx"):
-            media_type = _DOCX_MEDIA_TYPE
-            ext = ".docx"
-        else:
-            media_type = "application/pdf"
-            ext = ".pdf"
-    elif format == "pdf" and row.pdf_path:
-        file_path = settings.data_dir / row.pdf_path
-        media_type = "application/pdf"
-        ext = ".pdf"
-        # Managed record packages already contain automatic companions in their
-        # fixed base. Appending them again would duplicate those pages.
-        merge_companions = not bool(row.base_pdf_path)
-    elif format == "pdf":
-        # PDF explicitly requested but conversion never produced one (e.g. a
-        # DRAFT preview on a host without Word). Return a clean signal instead
-        # of silently serving DOCX bytes mislabeled as a PDF — the caller can
-        # branch to the "PDF unavailable, download DOCX" state.
-        raise NotFoundError(
-            "PDF_NOT_AVAILABLE",
-            f"No PDF rendition exists for document {document_id}",
-            id=document_id,
-        )
-    else:
-        assert docx_path is not None
-        file_path = settings.data_dir / docx_path
-        media_type = _DOCX_MEDIA_TYPE
-        ext = ".docx"
-
-    # B2: containment check — refuse to serve paths that resolve outside data_dir.
-    # A corrupt/tampered DB path (e.g. "../../etc/passwd") could otherwise escape.
-    _data_dir_resolved = settings.data_dir.resolve()
-    try:
-        _file_resolved = file_path.resolve()
-    except OSError:
-        _file_resolved = file_path
-    if _data_dir_resolved not in _file_resolved.parents and _file_resolved != _data_dir_resolved:
-        raise NotFoundError(
-            "FILE_NOT_FOUND",
-            f"File not found on disk for document {document_id}",
-            id=document_id,
-        )
-
-    if not file_path.is_file():
-        raise NotFoundError(
-            "FILE_NOT_FOUND",
-            f"File not found on disk for document {document_id}",
-            id=document_id,
-        )
-
-    # Merge companion pages onto the generated PDF (annual-leave Undertaking,
-    # etc.) so the record — and every consumer of this URL (preview, email,
-    # print) — sees one document, not separate papers. Non-destructive.
-    comp_paths = document_service.companion_pdf_paths(db, row) if merge_companions else []
-    if comp_paths:
-        merged = merge_pdfs_to_bytes(file_path, comp_paths)
+    if artifact.companion_paths:
+        merged = merge_pdfs_to_bytes(artifact.path, list(artifact.companion_paths))
         if (b64 := maybe_base64(merged, encoding)) is not None:
             return b64
         return _inline_pdf_response(
-            merged, document_service.download_filename_for(row, ".pdf", db=db)
+            merged, document_service.download_filename_for(row, ".pdf", db=db, version=version)
         )
 
     # base64 branch — opaque text/plain body that PDF handlers / download
     # accelerators won't claim. The frontend canvas decodes + renders.
-    if (b64 := maybe_base64(file_path.read_bytes(), encoding)) is not None:
+    if (b64 := maybe_base64(artifact.path.read_bytes(), encoding)) is not None:
         return b64
 
-    filename = document_service.download_filename_for(row, ext, db=db)
+    filename = document_service.download_filename_for(row, artifact.ext, db=db, version=version)
     # PDFs are served inline so the preview iframe can render them; the
     # frontend uses <a download> for explicit downloads which overrides
-    # disposition client-side. DOCX always downloads.
-    disposition = "inline" if format == "pdf" else "attachment"
+    # disposition client-side. DOCX always downloads. Based on the artifact
+    # actually served (``original=true`` always serves a PDF even if the
+    # caller passed ``format=docx``), not the raw query param.
+    disposition = "inline" if artifact.ext == ".pdf" else "attachment"
     return FileResponse(
-        path=str(file_path),
-        media_type=media_type,
+        path=str(artifact.path),
+        media_type=artifact.media_type,
         filename=filename,
         content_disposition_type=disposition,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Signature placement editor (approval-signature-placement plan §8)
+# ---------------------------------------------------------------------------
+
+
+def _editor_read(description: signature_placement_service.EditorDescription) -> SignatureEditorRead:
+    pdf_url = (
+        f"/api/v1/documents/{description.document_id}/signature-editor/pdf"
+        f"?signature_revision={description.signature_revision}"
+        if description.source_sha256 is not None
+        else None
+    )
+    signatures = [
+        SignatureRead(
+            id=s.id,
+            role=s.role,
+            page=s.page,
+            x=s.x,
+            y=s.y,
+            width_pt=s.width_pt,
+            height_pt=s.height_pt,
+            default_page=s.default_page,
+            default_x=s.default_x,
+            default_y=s.default_y,
+            image_url=(
+                f"/api/v1/documents/{description.document_id}/signature-editor/images/{s.id}"
+                f"?signature_revision={description.signature_revision}"
+            ),
+        )
+        for s in description.signatures
+    ]
+    candidates = (
+        [
+            LegacyCandidateRead(
+                candidate_id=c.candidate_id,
+                width_emu=c.width_emu,
+                height_emu=c.height_emu,
+                thumbnail_url=(
+                    f"/api/v1/documents/{description.document_id}"
+                    f"/signature-editor/candidates/{c.candidate_id}/image"
+                ),
+            )
+            for c in description.candidates
+        ]
+        if description.candidates is not None
+        else None
+    )
+    return SignatureEditorRead(
+        document_id=description.document_id,
+        version_id=description.version_id,
+        signature_revision=description.signature_revision,
+        package_revision=description.package_revision,
+        source_sha256=description.source_sha256,
+        can_adjust=description.can_adjust,
+        can_identify=description.can_identify,
+        unavailable_code=description.unavailable_code,
+        measured=description.measured,
+        pdf_url=pdf_url,
+        pages=[
+            SignaturePageRead(page=p.page, width_pt=p.width_pt, height_pt=p.height_pt)
+            for p in description.pages
+        ],
+        signatures=signatures,
+        candidates=candidates,
+    )
+
+
+def _document_or_404(db: Session, document_id: int) -> Document:
+    row = db.get(Document, document_id)
+    if row is None:
+        raise NotFoundError(
+            "DOCUMENT_NOT_FOUND", f"Document {document_id} not found", id=document_id
+        )
+    return row
+
+
+@documents_router.get("/{document_id}/signature-editor", response_model=SignatureEditorRead)
+def get_signature_editor(
+    document_id: int,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(get_current_user)],
+    measure: Annotated[bool, Query()] = False,
+) -> SignatureEditorRead:
+    row = _document_or_404(db, document_id)
+    _require_document_record_access(db, user, row)
+    description = signature_placement_service.describe_editor(
+        db, document_id, user=user, measure=measure
+    )
+    return _editor_read(description)
+
+
+@documents_router.get("/{document_id}/signature-editor/pdf")
+def get_signature_editor_pdf(
+    document_id: int,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(get_current_user)],
+    signature_revision: Annotated[int, Query(ge=0)],
+    encoding: Annotated[str | None, Query(pattern="^base64$")] = None,
+) -> Response:
+    """The verified current standalone primary PDF — NOT the combined
+    included-papers package. Editor/identification authority required."""
+    row = _document_or_404(db, document_id)
+    _require_document_record_access(db, user, row)
+    description = signature_placement_service.describe_editor(db, document_id, user=user)
+    if not (description.can_adjust or description.can_identify):
+        raise AppError("FORBIDDEN", "Signature editor access is required", http_status=403)
+    _version, active = signature_placement_service.resolve_active_artifact(db, document_id)
+    if active.revision != signature_revision:
+        raise AppError(
+            "SIGNATURE_REVISION_CONFLICT", "The record changed; reload and retry", http_status=409
+        )
+    settings = get_settings()
+    pdf_path = settings.data_dir / active.primary_pdf_path if active.primary_pdf_path else None
+    if pdf_path is None or not pdf_path.is_file():
+        raise NotFoundError("SIGNATURE_SOURCE_UNAVAILABLE", "No readable primary PDF is retained")
+    if (b64 := maybe_base64(pdf_path.read_bytes(), encoding)) is not None:
+        return b64
+    return FileResponse(
+        str(pdf_path), media_type="application/pdf", headers={"Cache-Control": "no-store"}
+    )
+
+
+@documents_router.get("/{document_id}/signature-editor/images/{signature_id}")
+def get_signature_editor_image(
+    document_id: int,
+    signature_id: str,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(get_current_user)],
+    signature_revision: Annotated[int, Query(ge=0)],
+) -> Response:
+    row = _document_or_404(db, document_id)
+    _require_document_record_access(db, user, row)
+    description = signature_placement_service.describe_editor(db, document_id, user=user)
+    if not (description.can_adjust or description.can_identify):
+        raise AppError("FORBIDDEN", "Signature editor access is required", http_status=403)
+    _version, active = signature_placement_service.resolve_active_artifact(db, document_id)
+    if active.revision != signature_revision:
+        raise AppError(
+            "SIGNATURE_REVISION_CONFLICT", "The record changed; reload and retry", http_status=409
+        )
+    settings = get_settings()
+    tracked_docx = settings.data_dir / active.docx_path
+    from app.core.signature_layout import extract_signature_image_bytes
+
+    image_bytes = extract_signature_image_bytes(tracked_docx, signature_id)
+    return Response(
+        content=image_bytes, media_type="image/png", headers={"Cache-Control": "no-store"}
+    )
+
+
+@documents_router.get("/{document_id}/signature-editor/candidates/{candidate_id}/image")
+def get_signature_editor_candidate_image(
+    document_id: int,
+    candidate_id: str,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(get_current_user)],
+) -> Response:
+    row = _document_or_404(db, document_id)
+    _require_document_record_access(db, user, row)
+    if user.role != ADMIN_ROLE:
+        raise AppError("FORBIDDEN", "Legacy identification is administrator-only", http_status=403)
+    candidate = signature_placement_service.resolve_legacy_candidate(db, document_id, candidate_id)
+    legacy_docx = signature_placement_service.resolve_legacy_docx(db, document_id)
+    from app.core.signature_layout import extract_candidate_image_bytes
+
+    image_bytes = extract_candidate_image_bytes(legacy_docx, candidate.docpr_name)
+    return Response(
+        content=image_bytes, media_type="image/png", headers={"Cache-Control": "no-store"}
+    )
+
+
+@documents_router.get("/{document_id}/signature-editor/background")
+def get_signature_editor_background(
+    document_id: int,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(get_current_user)],
+    signature_id: str,
+    signature_revision: Annotated[int, Query(ge=0)],
+    encoding: Annotated[str | None, Query(pattern="^base64$")] = None,
+) -> Response:
+    """The standalone primary PDF with ONLY *signature_id* hidden — the drag
+    preview's background while the client overlays the extracted original
+    image on top."""
+    row = _document_or_404(db, document_id)
+    _require_document_record_access(db, user, row)
+    description = signature_placement_service.describe_editor(db, document_id, user=user)
+    if not description.can_adjust:
+        raise AppError("FORBIDDEN", "Signature editor access is required", http_status=403)
+    _version, active = signature_placement_service.resolve_active_artifact(db, document_id)
+    if active.revision != signature_revision:
+        raise AppError(
+            "SIGNATURE_REVISION_CONFLICT", "The record changed; reload and retry", http_status=409
+        )
+    settings = get_settings()
+    tracked_docx = settings.data_dir / active.docx_path
+    from app.services import _pdf_executor
+
+    pdf_path = _pdf_executor.render_signature_free_background(
+        tracked_docx, signature_id=signature_id
+    )
+    if (b64 := maybe_base64(pdf_path.read_bytes(), encoding)) is not None:
+        return b64
+    return FileResponse(
+        str(pdf_path), media_type="application/pdf", headers={"Cache-Control": "no-store"}
+    )
+
+
+@documents_router.post(
+    "/{document_id}/signature-identifications", response_model=SignatureEditorRead
+)
+def post_signature_identification(
+    document_id: int,
+    payload: SignatureIdentifyRequest,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(get_current_user)],
+) -> SignatureEditorRead:
+    row = _document_or_404(db, document_id)
+    _require_document_record_access(db, user, row)
+    description = signature_placement_service.identify_signature(
+        db,
+        document_id,
+        user=user,
+        candidate_id=payload.candidate_id,
+        signature_revision=payload.signature_revision,
+        package_revision=payload.package_revision,
+        source_sha256=payload.source_sha256,
+    )
+    return _editor_read(description)
+
+
+@documents_router.put(
+    "/{document_id}/signatures/{signature_id}/position", response_model=SignatureEditorRead
+)
+def put_signature_position(
+    document_id: int,
+    signature_id: str,
+    payload: SignaturePositionRequest,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(get_current_user)],
+) -> SignatureEditorRead:
+    row = _document_or_404(db, document_id)
+    _require_document_record_access(db, user, row)
+    description = signature_placement_service.move_signature(
+        db,
+        document_id,
+        user=user,
+        signature_id=signature_id,
+        signature_revision=payload.signature_revision,
+        package_revision=payload.package_revision,
+        source_sha256=payload.source_sha256,
+        page=payload.page,
+        x=payload.x,
+        y=payload.y,
+    )
+    return _editor_read(description)
+
+
+@documents_router.get("/{document_id}/signature-history", response_model=SignatureHistoryRead)
+def get_signature_history(
+    document_id: int,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(get_current_user)],
+) -> SignatureHistoryRead:
+    row = _document_or_404(db, document_id)
+    _require_document_record_access(db, user, row)
+    rows = signature_placement_service.list_history(db, document_id)
+    items = [
+        SignatureHistoryItemRead(
+            revision=r.revision,
+            action=r.action,
+            signature_id=r.signature_id,
+            before_geometry=r.before_geometry,
+            after_geometry=r.after_geometry,
+            actor_user_id=r.actor_user_id,
+            created_at=r.created_at,
+            pdf_download_url=(
+                f"/api/v1/documents/{document_id}/signature-history/{r.revision}/download?format=pdf"
+                if r.published_pdf_path
+                else None
+            ),
+            docx_download_url=(
+                f"/api/v1/documents/{document_id}/signature-history/{r.revision}/download?format=docx"
+                if r.docx_path
+                else None
+            ),
+        )
+        for r in rows
+    ]
+    return SignatureHistoryRead(items=items)
+
+
+@documents_router.get("/{document_id}/signature-history/{revision}/download")
+def get_signature_history_download(
+    document_id: int,
+    revision: int,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(get_current_user)],
+    format: Literal["docx", "pdf"] = Query("pdf"),
+    encoding: Annotated[str | None, Query(pattern="^base64$")] = None,
+) -> Response:
+    """Serve a retained historical copy. The original signing-path DOCX lock
+    still applies here — a DOCX from an ``approval`` source_kind is never
+    served to a non-admin, matching the live download endpoint's rule."""
+    row = _document_or_404(db, document_id)
+    _require_document_record_access(db, user, row)
+    history_row = signature_placement_service.resolve_history_revision(db, document_id, revision)
+    if (
+        format == "docx"
+        and history_row.source_kind == signature_placement_service.SOURCE_KIND_APPROVAL
+        and user.role != ADMIN_ROLE
+    ):
+        raise AppError(
+            "DOCX_LOCKED_AFTER_SIGNING",
+            "This document is signed; the editable DOCX is locked",
+            http_status=status.HTTP_403_FORBIDDEN,
+        )
+    settings = get_settings()
+    if format == "pdf":
+        rel_path = history_row.published_pdf_path or history_row.primary_pdf_path
+        media_type = "application/pdf"
+    else:
+        rel_path = history_row.docx_path
+        media_type = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+    if not rel_path:
+        raise NotFoundError(
+            "FILE_NOT_FOUND", f"No {format} retained for revision {revision}", id=document_id
+        )
+    file_path = settings.data_dir / rel_path
+    if not file_path.is_file():
+        raise NotFoundError(
+            "FILE_NOT_FOUND", f"No {format} retained for revision {revision}", id=document_id
+        )
+    if (b64 := maybe_base64(file_path.read_bytes(), encoding)) is not None:
+        return b64
+    return FileResponse(
+        str(file_path),
+        media_type=media_type,
+        filename=file_path.name,
+        headers={"Cache-Control": "no-store"},
     )

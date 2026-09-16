@@ -1,15 +1,19 @@
 /**
  * Shared live counts for customizable mobile-dock waiting signals.
  *
- * Sources intentionally mirror their existing surfaces: approvals and scan-back
- * share the books queue queries, while ledger unread shares NavBell's unread
- * preview query, whose response carries the authoritative total. Every source
- * is optional: an unavailable capability or failed request produces no signal.
+ * Sources intentionally mirror their existing surfaces: scan-back shares the
+ * books awaiting-scan query, ledger unread shares NavBell's unread preview
+ * query (whose response carries the authoritative total), and approvals uses
+ * the assignment-aware worklist summary (#31) — never gated behind
+ * `books.approve`, since a review-only user's late feedback is just as
+ * actionable as a signer's pending decision. Every source is optional: an
+ * unavailable capability or failed request produces no signal.
  */
 import { useQuery } from '@tanstack/react-query'
 
 import { api } from '@/lib/api'
 import { useAuth } from '@/lib/authContext'
+import { useApprovalSummary } from '@/lib/useApprovalSummary'
 
 import type { WaitingSignalId } from './navCustomization'
 
@@ -30,17 +34,10 @@ export function useWaitingSignals(enabled: boolean): Partial<Record<WaitingSigna
   })
   const capabilities = capabilitiesQuery.data
   const canViewBooks = capabilities?.includes('books.view') === true
-  const canApproveBooks = capabilities?.includes('books.approve') === true
   const canEditBooks = capabilities?.includes('books.edit') === true
   const canViewLedger = capabilities?.includes('ledger.view') === true
 
-  const approvalsQuery = useQuery({
-    queryKey: ['books', 'awaiting'],
-    queryFn: api.listAwaitingBooks,
-    enabled: authenticated && canApproveBooks,
-    staleTime: STALE_TIME,
-    refetchInterval: REFRESH_INTERVAL,
-  })
+  const approvalSummaryQuery = useApprovalSummary()
   const scanBackQuery = useQuery({
     queryKey: ['books', 'awaiting-scan', 'mine'],
     queryFn: () => api.listAwaitingScanBooks('mine'),
@@ -57,8 +54,8 @@ export function useWaitingSignals(enabled: boolean): Partial<Record<WaitingSigna
   })
 
   const signals: Partial<Record<WaitingSignalId, number>> = {}
-  if (approvalsQuery.isSuccess && !approvalsQuery.isError) {
-    signals.approvals = approvalsQuery.data.length
+  if (approvalSummaryQuery.isSuccess && !approvalSummaryQuery.isError) {
+    signals.approvals = approvalSummaryQuery.data.actionable_count
   }
   if (scanBackQuery.isSuccess && !scanBackQuery.isError) {
     signals.scanback = scanBackQuery.data.length

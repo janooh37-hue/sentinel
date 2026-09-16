@@ -69,6 +69,7 @@ function vehicleFile(
     original_name: name,
     media_type: 'image/jpeg',
     url: `/api/v1/vehicles/101/files/${id}`,
+    is_historical: false,
   }
 }
 
@@ -262,6 +263,7 @@ describe('VehicleEditPage', () => {
           original_name: file.name,
           media_type: file.type,
           url: `/api/vehicles/101/files/${file.name}`,
+          is_historical: false,
         }
       },
     )
@@ -309,6 +311,7 @@ describe('VehicleEditPage', () => {
       original_name: replacement.name,
       media_type: replacement.type,
       url: '/api/vehicles/101/files/601',
+      is_historical: false,
     }
     const updatedVehicle = { ...vehicle, type_en: 'Toyota Hiace' }
     vi.mocked(api.getVehicle).mockResolvedValue(vehicle)

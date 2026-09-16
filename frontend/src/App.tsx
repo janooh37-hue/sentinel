@@ -8,10 +8,7 @@ import { BottomTabBar } from '@/components/shell/BottomTabBar'
 import { LockOverlay } from '@/components/shell/LockOverlay'
 import { MobileTopBar } from '@/components/shell/MobileTopBar'
 import { NavDrawer } from '@/components/shell/NavDrawer'
-import {
-  RequireAnyCapability,
-  RequireCapability,
-} from '@/components/shell/RequireCapability'
+import { RequireCapability } from '@/components/shell/RequireCapability'
 import { TopNav } from '@/components/shell/TopNav'
 import { ErrorBoundary } from '@/components/ui/error-boundary'
 import { ShortcutsHelpDialog } from '@/components/ui/shortcuts-help'
@@ -48,12 +45,14 @@ import {
   loadVehicleImportPage,
   loadVehicleDetailPage,
   loadVehicleFinesLetterPage,
+  loadVehicleFinesPage,
   loadVehicleFinesReportPage,
   loadVehicleMaintenancePage,
   loadVehiclesHubPage,
   loadScanBackPage,
   loadScanInboxPage,
   loadSendToGroupPage,
+  loadSignaturePlacementPage,
   loadSettingsPage,
   loadTimesheetPage,
 } from '@/lib/routeLoaders'
@@ -80,6 +79,7 @@ const VehicleDetailPage = lazy(loadVehicleDetailPage)
 const VehicleEditPage = lazy(loadVehicleEditPage)
 const VehicleImportPage = lazy(loadVehicleImportPage)
 const VehicleFinesLetterPage = lazy(loadVehicleFinesLetterPage)
+const VehicleFinesPage = lazy(loadVehicleFinesPage)
 const VehicleFinesReportPage = lazy(loadVehicleFinesReportPage)
 const VehicleAccidentsPage = lazy(loadVehicleAccidentsPage)
 const VehicleAccidentLetterPage = lazy(loadVehicleAccidentLetterPage)
@@ -104,7 +104,7 @@ const DutyLocationsPage = lazy(loadDutyLocationsPage)
 const ScanInboxPage = lazy(loadScanInboxPage)
 const SendToGroupPage = lazy(loadSendToGroupPage)
 const ScanBackPage = lazy(loadScanBackPage)
-const APPROVALS_ROUTE_CAPS = ['books.view', 'books.approve'] as const
+const SignaturePlacementPage = lazy(loadSignaturePlacementPage)
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -297,18 +297,21 @@ function Shell(): React.JSX.Element {
                 }
               />
               {/* Static segment outranks /books/:id in react-router's ranking —
-                  same pattern as /employees/timesheet. */}
-              <Route
-                path="/books/approvals"
-                element={
-                  <RequireAnyCapability caps={APPROVALS_ROUTE_CAPS}>
-                    <ApprovalsPage />
-                  </RequireAnyCapability>
-                }
-              />
+                  same pattern as /employees/timesheet. Authenticated only: a
+                  pending signature/review assignment grants worklist access
+                  without books.view/books.approve — the API owns that decision,
+                  same as /books/:id below. */}
+              <Route path="/books/approvals" element={<ApprovalsPage />} />
               {/* Pending approval/reviewer assignment is row authority even
                   without global book caps; the API owns that decision. */}
               <Route path="/books/:id" element={<BookRecordPage />} />
+              {/* Reached only via `AdjustSignatureAction` — the same
+                  row-authority gate as `/books/:id`, not a top-nav capability
+                  route (approval-signature-placement plan §9.1). */}
+              <Route
+                path="/documents/:documentId/signature-placement"
+                element={<SignaturePlacementPage />}
+              />
               <Route
                 path="/scan-back"
                 element={
@@ -348,6 +351,14 @@ function Shell(): React.JSX.Element {
                 element={
                   <RequireCapability cap="vehicles.view">
                     <VehiclesHubPage />
+                  </RequireCapability>
+                }
+              />
+              <Route
+                path="/vehicles/fines"
+                element={
+                  <RequireCapability cap="vehicles.view">
+                    <VehicleFinesPage />
                   </RequireCapability>
                 }
               />

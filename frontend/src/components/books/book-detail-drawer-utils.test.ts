@@ -82,6 +82,20 @@ describe('footerActionFor', () => {
     )
   })
 
+  it('keeps a late review actionable after the signer has already approved/returned/rejected', () => {
+    for (const state of ['approved', 'returned', 'rejected']) {
+      expect(
+        footerActionFor(state, { ...base, canRevise: false, canSubmitBook: false, isReviewer: true }),
+      ).toBe('review')
+    }
+  })
+
+  it('a late review outranks the revise action a full-access editor would otherwise see', () => {
+    expect(
+      footerActionFor('returned', { ...base, canRevise: true, canSubmitBook: false, isReviewer: true }),
+    ).toBe('review')
+  })
+
   it('never offers a footer action while awaiting the signed scan', () => {
     expect(footerActionFor('awaiting_scan', { ...base, canRevise: true, canSubmitBook: true })).toBe('none')
   })

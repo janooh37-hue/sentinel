@@ -49,6 +49,7 @@ def api_db(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Session:
         yield db
     finally:
         db.close()
+        engine.dispose()
         get_settings.cache_clear()
 
 

@@ -45,6 +45,7 @@ export const WIDGET_IDS = [
   'pending',
   'workspace',
   'waiting_approvals',
+  'sent_approvals',
   'violations',
   'drafts',
   'ledger',
@@ -72,6 +73,7 @@ export const WIDGET_SIZE: Record<WidgetId, WidgetSize> = {
   // Adaptive at render time (glance card in top); panel in lower zones so it
   // spans the full row when showing the BooksAwaitingWidget list.
   waiting_approvals: 'panel',
+  sent_approvals: 'metric',
   violations: 'metric',
   drafts: 'metric',
   ledger: 'metric',
@@ -103,6 +105,7 @@ export const WIDGET_SOURCE: Record<WidgetId, WidgetSource> = {
   pending: 'records',
   workspace: 'employees',
   waiting_approvals: 'records',
+  sent_approvals: 'records',
   violations: 'employees',
   drafts: 'records',
   ledger: 'ledger',
@@ -220,10 +223,9 @@ export const DEFAULT_LAYOUT: DashboardLayout = {
     if (id === 'pending' || id === 'workspace') {
       return { id, visible: true, order, zone: 'top' as WidgetZone }
     }
-    if (id === 'waiting_approvals') {
-      return { id, visible: false, order, zone: 'top' as WidgetZone }
-    }
     const visible =
+      id === 'waiting_approvals' ||
+      id === 'sent_approvals' ||
       id === 'violations' ||
       id === 'drafts' ||
       id === 'ledger' ||

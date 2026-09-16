@@ -20,7 +20,15 @@ vi.mock('@/lib/api', () => ({
     getLedgerUnreadRecent: vi.fn().mockResolvedValue({ items: [], total_unread: 0 }),
     listAuthUsers: vi.fn().mockResolvedValue([]),
     getExpirySummary: vi.fn().mockResolvedValue({ urgent: 1 }),
-    listAwaitingBooks: vi.fn().mockResolvedValue([{}]),
+    getApprovalSummary: vi.fn().mockResolvedValue({
+      can_view_sent: false,
+      available_received_kinds: ['approver'],
+      signature: { count: 1, oldest: null },
+      review: { count: 0, oldest: null },
+      sent: { count: 0, oldest: null },
+      returned_count: 0,
+      actionable_count: 1,
+    }),
     markAllLedgerRead: vi.fn().mockResolvedValue(undefined),
   },
   apiErrorMessage: (error: unknown) => String(error),
@@ -31,6 +39,9 @@ vi.mock('@/lib/useCapabilities', () => ({
     isLoading: false,
     has: (capability: string) => capabilityState.allowed.has(capability),
   }),
+}))
+vi.mock('@/lib/authContext', () => ({
+  useAuth: () => ({ status: 'authed', user: { id: 1 } }),
 }))
 vi.mock('@/lib/useIdentity', () => ({ useIdentity: () => ({ isAdmin: false }) }))
 vi.mock('@/pages/leaves/useAwaitingReturnCount', () => ({
@@ -54,7 +65,7 @@ beforeEach(() => {
   capabilityState.allowed = new Set(['books.approve', 'employees.view'])
 })
 
-it('shows assigned approvals with books.approve while other denied signals stay hidden', async () => {
+it('shows assigned approvals — assignment-aware, not merely books.approve — while other denied signals stay hidden', async () => {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   render(
     <QueryClientProvider client={client}>
@@ -69,7 +80,7 @@ it('shows assigned approvals with books.approve while other denied signals stay 
 
   await waitFor(() => {
     expect(api.getLedgerUnreadRecent).not.toHaveBeenCalled()
-    expect(api.listAwaitingBooks).toHaveBeenCalledOnce()
+    expect(api.getApprovalSummary).toHaveBeenCalledOnce()
     expect(api.getExpirySummary).not.toHaveBeenCalled()
   })
   expect(flagCount).toHaveBeenCalledWith(false)
@@ -78,12 +89,37 @@ it('shows assigned approvals with books.approve while other denied signals stay 
   expect(scanInboxCount).toHaveBeenCalledWith(false)
 
   await userEvent.click(screen.getByRole('button', { name: /notification/i }))
-  expect(screen.getByText('Awaiting your approval')).toBeVisible()
-  await userEvent.click(screen.getByText('Awaiting your approval'))
+  expect(screen.getByText('Needs your attention')).toBeVisible()
+  await userEvent.click(screen.getByText('Needs your attention'))
   expect(screen.getByText('approvals-route')).toBeVisible()
   expect(screen.queryByText('Expiring documents')).not.toBeInTheDocument()
   expect(screen.queryByText('Awaiting return form')).not.toBeInTheDocument()
   expect(screen.queryByRole('link', { name: /View all in inbox/i })).not.toBeInTheDocument()
+})
+
+it('shows the approvals row for a review-only user lacking books.approve entirely', async () => {
+  capabilityState.allowed = new Set(['employees.view'])
+  vi.mocked(api.getApprovalSummary).mockResolvedValue({
+    can_view_sent: false,
+    available_received_kinds: ['reviewer'],
+    signature: { count: 0, oldest: null },
+    review: { count: 1, oldest: null },
+    sent: { count: 0, oldest: null },
+    returned_count: 0,
+    actionable_count: 1,
+  })
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  render(
+    <QueryClientProvider client={client}>
+      <MemoryRouter>
+        <NavBellPopover />
+      </MemoryRouter>
+    </QueryClientProvider>,
+  )
+
+  await waitFor(() => expect(api.getApprovalSummary).toHaveBeenCalledOnce())
+  await userEvent.click(screen.getByRole('button', { name: /notification/i }))
+  expect(screen.getByText('Needs your attention')).toBeVisible()
 })
 
 it('requires books.edit for scan-back and documents.scan for scan-inbox', async () => {

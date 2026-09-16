@@ -19,7 +19,7 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import {
   api,
   apiErrorMessage,
-  type BookRead,
+  type ApprovalSummaryResponse,
   type ExpirySummary,
   type UnreadRecentResponse,
   type WorkforceCrewName,
@@ -442,14 +442,19 @@ function LockOverlayContent({ onUnlocked, onSignOut }: LockOverlayProps): React.
 
   const digest = useMemo(() => {
     const items: Array<{ key: 'approvals' | 'inbox' | 'expiry'; count: number }> = []
-    const approvals = queryClient.getQueryData<BookRead[]>(['books', 'awaiting'])
+    // #31 — the assignment-aware approvals summary replaced the old
+    // `['books','awaiting']` signing-only query; cache key includes the
+    // caller's id (see `useApprovalSummary`).
+    const approvals = queryClient.getQueryData<ApprovalSummaryResponse>([
+      'books', 'approval-summary', user?.id ?? 0,
+    ])
     const unread = queryClient.getQueryData<UnreadRecentResponse>(['ledger', 'unread-recent'])
     const expiry = queryClient.getQueryData<ExpirySummary>(['expiry', 'summary'])
-    if (approvals) items.push({ key: 'approvals', count: approvals.length })
+    if (approvals) items.push({ key: 'approvals', count: approvals.actionable_count })
     if (unread) items.push({ key: 'inbox', count: unread.total_unread })
     if (expiry) items.push({ key: 'expiry', count: expiry.urgent })
     return items
-  }, [queryClient])
+  }, [queryClient, user?.id])
 
   const documentsToday = activityQuery.data?.documents_today
   const documentsWeek = activityQuery.data?.documents_week

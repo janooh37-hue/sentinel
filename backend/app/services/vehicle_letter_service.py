@@ -101,7 +101,7 @@ def generate_fines_letter(
             employee_name_en=(fine.employee.name_en if fine.employee is not None else None),
             g_number=fine.employee.id if fine.employee is not None else None,
             date=fine.date,
-            amount=fine.amount,
+            amount_fils=fine.amount_fils,
             black_points=fine.black_points,
         )
         for seq, fine in enumerate(selected, start=1)

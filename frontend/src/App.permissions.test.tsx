@@ -78,10 +78,13 @@ vi.mock('@/lib/routeLoaders', () => ({
   loadVehicleEditPage: () => Promise.resolve({ default: () => <div>vehicle-edit-page</div> }),
   loadVehicleImportPage: () => Promise.resolve({ default: () => <div>vehicle-import-page</div> }),
   loadVehicleFinesLetterPage: () => Promise.resolve({ default: () => <div>vehicle-fines-letter-page</div> }),
+  loadVehicleFinesPage: () => Promise.resolve({ default: () => <div>vehicle-fines-page</div> }),
   loadVehicleFinesReportPage: () => Promise.resolve({ default: () => <div>vehicle-fines-report-page</div> }),
   loadVehicleMaintenancePage: () => Promise.resolve({ default: () => <div>vehicle-maintenance-page</div> }),
   loadVehiclesHubPage: () => Promise.resolve({ default: () => <div>vehicles-hub-page</div> }),
   loadScanBackPage: () => Promise.resolve({ default: () => <div>scanback-page</div> }),
+  loadSignaturePlacementPage: () =>
+    Promise.resolve({ default: () => <div>signature-placement-page</div> }),
   loadScanInboxPage: () => Promise.resolve({ default: () => <div>scan-inbox-page</div> }),
   loadSendToGroupPage: () => Promise.resolve({ default: () => <div>send-page</div> }),
   loadSettingsPage: () => Promise.resolve({ default: () => <div>settings-page</div> }),
@@ -102,6 +105,7 @@ const routes = [
   ['/expiry', ['expiry.view'], 'expiry-page'],
   ['/permissions', ['users.manage'], 'permissions-page'],
   ['/vehicles', ['vehicles.view'], 'vehicles-hub-page'],
+  ['/vehicles/fines', ['vehicles.view'], 'vehicle-fines-page'],
   ['/vehicles/fines-report', ['vehicles.view'], 'vehicle-fines-report-page'],
   ['/vehicles/accidents', ['vehicles.view'], 'vehicle-accidents-page'],
   ['/vehicles/accidents/17/letter', ['vehicles.view'], 'vehicle-accident-letter-page'],
@@ -111,10 +115,6 @@ const routes = [
   ['/vehicles/edit', ['vehicles.view', 'vehicles.edit'], 'vehicle-edit-page'],
   ['/vehicles/edit/42', ['vehicles.view', 'vehicles.edit'], 'vehicle-edit-page'],
   ['/vehicles/import', ['vehicles.view', 'vehicles.edit'], 'vehicle-import-page'],
-] as const
-
-const eitherCapabilityRoutes = [
-  ['/books/approvals', 'approvals-page'],
 ] as const
 
 beforeEach(() => {
@@ -193,25 +193,11 @@ describe('App route capability gates', () => {
     },
   )
 
-  it.each(eitherCapabilityRoutes)(
-    'denies %s without books.view or books.approve',
-    async (path) => {
-      window.history.pushState({}, '', path)
-      render(<App />)
-
-      expect(await screen.findByText("You don't have access to this page")).toBeVisible()
-    },
-  )
-
-  it.each(eitherCapabilityRoutes.flatMap(([path, pageText]) => [
-    [path, 'books.view', pageText],
-    [path, 'books.approve', pageText],
-  ] as const))('renders %s with %s', async (path, capability, pageText) => {
-    capabilityState.allowed = new Set([capability])
-    window.history.pushState({}, '', path)
+  it('renders /books/approvals for an authenticated user with no capabilities — plain authenticated, not capability-gated', async () => {
+    window.history.pushState({}, '', '/books/approvals')
     render(<App />)
 
-    expect(await screen.findByText(pageText)).toBeVisible()
+    expect(await screen.findByText('approvals-page')).toBeVisible()
   })
 
   it('renders an assigned-record route for an authenticated user without book capabilities', async () => {
@@ -219,6 +205,14 @@ describe('App route capability gates', () => {
     render(<App />)
 
     expect(await screen.findByText('book-record-page')).toBeVisible()
+    expect(screen.queryByText("You don't have access to this page")).not.toBeInTheDocument()
+  })
+
+  it('renders the signature-placement route for an authenticated user without book capabilities', async () => {
+    window.history.pushState({}, '', '/documents/9/signature-placement')
+    render(<App />)
+
+    expect(await screen.findByText('signature-placement-page')).toBeVisible()
     expect(screen.queryByText("You don't have access to this page")).not.toBeInTheDocument()
   })
 

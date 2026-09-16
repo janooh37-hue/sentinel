@@ -1,7 +1,12 @@
 import { describe, expect, it } from 'vitest'
 
 import { NAV_ITEMS } from './navItems'
-import { isNavEntryAllowed, SECTION_ENTRIES, SIGNAL_ENTRIES } from './navCustomization'
+import {
+  isApprovalsSignalAvailable,
+  isNavEntryAllowed,
+  SECTION_ENTRIES,
+  SIGNAL_ENTRIES,
+} from './navCustomization'
 
 const expectedPrimaryCaps: Record<string, string | undefined> = {
   '/': undefined,
@@ -33,8 +38,12 @@ describe('permission-aware navigation', () => {
       ]),
     )
     expect(signals).toMatchObject({
+      // No static capability gate: assignment-aware, resolved at render time
+      // via `isApprovalsSignalAvailable` from the caller's approvals
+      // summary — never merely `books.approve` (a review-only user with no
+      // signing capability still needs this entry for their own work).
       'sig:approvals': {
-        cap: 'books.approve',
+        cap: undefined,
         caps: undefined,
         to: '/books/approvals',
       },
@@ -55,5 +64,18 @@ describe('permission-aware navigation', () => {
         ['ledger.view', 'books.view'].includes(capability),
       ),
     ).toBe(false)
+  })
+
+  it('makes the approvals signal available for review-only work, not merely books.approve', () => {
+    expect(
+      isApprovalsSignalAvailable({ can_view_sent: false, available_received_kinds: ['reviewer'] }),
+    ).toBe(true)
+    expect(isApprovalsSignalAvailable({ can_view_sent: true, available_received_kinds: [] })).toBe(
+      true,
+    )
+    expect(
+      isApprovalsSignalAvailable({ can_view_sent: false, available_received_kinds: [] }),
+    ).toBe(false)
+    expect(isApprovalsSignalAvailable(undefined)).toBe(false)
   })
 })

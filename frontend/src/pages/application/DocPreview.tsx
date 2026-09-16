@@ -18,6 +18,7 @@ import { useTranslation } from 'react-i18next'
 import { FileText, ChevronLeft, ChevronRight, Loader2, Download } from 'lucide-react'
 
 import type { JobDocumentItem } from '@/lib/api'
+import { AdjustSignatureAction } from '@/components/signature/AdjustSignatureAction'
 
 const DocPdfCanvas = lazy(() => import('./DocPdfCanvas'))
 
@@ -123,7 +124,7 @@ export function DocPreview({ documents }: DocPreviewProps): React.JSX.Element {
 
       {/* Secondary download actions (always available when a preview is shown) */}
       {pdfUrl && (
-        <div className="mt-2 flex gap-2">
+        <div className="mt-2 flex flex-wrap gap-2">
           <a
             href={pdfUrl}
             download
@@ -140,6 +141,10 @@ export function DocPreview({ documents }: DocPreviewProps): React.JSX.Element {
             <Download className="h-3 w-3" strokeWidth={1.8} />
             {t('application.downloadDocx')}
           </a>
+          <AdjustSignatureAction
+            documentId={doc.document_id}
+            className="inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1 text-xs text-muted-foreground hover:bg-muted"
+          />
         </div>
       )}
     </div>

@@ -39,7 +39,7 @@ import { useId, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { ChevronLeft, ChevronRight, FileDown, FileText, Printer } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { Link } from 'react-router-dom'
+import { Link, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 
 import { RefreshButton } from '@/components/refresh/RefreshButton'
@@ -55,9 +55,9 @@ import {
   EMPTY_VALUE,
   VEHICLE_QUERY_KEYS,
   employeeLabel,
-  formatAed,
+  formatFilsAed,
   formatIsoDate,
-  formatLetterAed,
+  formatLetterFilsAed,
   formatLetterDate,
   formatNumber,
   isArabic,
@@ -65,6 +65,7 @@ import {
 } from './vehicleUtils'
 import { PaperNote, PaperSheet, PaperTable } from './components/PaperSheet'
 import { PlateChip } from './components/PlateChip'
+import { VehicleStatusBadge } from './components/VehicleStatusBadge'
 
 /** The letterhead ink, as `PaperSheet` pins it: a dark-theme operator must not
  *  print near-white rules onto white paper. */
@@ -93,12 +94,14 @@ const COLUMNS_NAMED = [
   'vehicles.paperFineDate',
   'vehicles.paperFineAmount',
   'vehicles.paperBlackPoints',
+  'vehicles.fines.paperStatus',
 ] as const
 const COLUMNS_ANONYMOUS = [
   'vehicles.sequence',
   'vehicles.paperFineDate',
   'vehicles.paperFineAmount',
   'vehicles.paperBlackPoints',
+  'vehicles.fines.paperStatus',
 ] as const
 
 /** One vehicle's block of the report. */
@@ -131,9 +134,15 @@ export function VehicleFinesReportPage(): React.JSX.Element {
   const toFieldId = useId()
   const paperHeadingId = useId()
 
-  const [siteId, setSiteId] = useState<number | null>(null)
-  const [from, setFrom] = useState('')
-  const [to, setTo] = useState('')
+  const [searchParams] = useSearchParams()
+  // One-shot seed from the ledger's Report link (`?site_id=&date_from=&date_to=`);
+  // this page's own toolbar owns the filters from here on, same as before.
+  const [siteId, setSiteId] = useState<number | null>(() => {
+    const raw = searchParams.get('site_id')
+    return raw && /^\d+$/.test(raw) ? Number(raw) : null
+  })
+  const [from, setFrom] = useState(() => searchParams.get('date_from') ?? '')
+  const [to, setTo] = useState(() => searchParams.get('date_to') ?? '')
   // ON by default: the fleet-wide copy exists for investigations.
   const [hideNames, setHideNames] = useState(true)
 
@@ -186,7 +195,7 @@ export function VehicleFinesReportPage(): React.JSX.Element {
         byVehicle.set(fine.vehicle_id, group)
       }
       group.fines.push(fine)
-      group.subtotal += fine.amount
+      group.subtotal += fine.amount_fils
       group.points += fine.black_points
     }
     const list = [...byVehicle.values()]
@@ -371,7 +380,7 @@ export function VehicleFinesReportPage(): React.JSX.Element {
                     <strong className="text-[0.88em] font-bold text-foreground">
                       {t('vehicles.grandTotal')}
                       {': '}
-                      <bdi>{formatAed(grandTotal, lang)}</bdi>
+                      <bdi>{formatFilsAed(grandTotal, lang)}</bdi>
                     </strong>
                     <span className="shrink-0 text-[0.76em] text-muted-foreground">
                       <bdi>{`${formatNumber(recordCount, lang)} ${t('vehicles.records')}`}</bdi>
@@ -424,7 +433,7 @@ export function VehicleFinesReportPage(): React.JSX.Element {
                     <span>
                       {t('vehicles.grandTotal', { lng: 'ar' })}
                       {': '}
-                      <bdi dir="ltr">{formatLetterAed(grandTotal)}</bdi>
+                      <bdi dir="ltr">{formatLetterFilsAed(grandTotal)}</bdi>
                     </span>
                     <span className="font-mono font-bold">
                       <bdi dir="ltr">{recordCount}</bdi>{' '}
@@ -571,19 +580,21 @@ function ReportTable({
                   <bdi dir="ltr">{formatLetterDate(fine.date)}</bdi>
                 </td>
                 <td>
-                  <bdi dir="ltr">{formatLetterAed(fine.amount)}</bdi>
+                  <bdi dir="ltr">{formatLetterFilsAed(fine.amount_fils)}</bdi>
                 </td>
                 <td className="font-mono">{fine.black_points}</td>
+                <td>{t(`vehicles.fines.status.${fine.payment_status}`, { lng: 'ar' })}</td>
               </tr>
             ))}
             <tr>
-              <th scope="row" colSpan={cols - 2} className="!text-end">
+              <th scope="row" colSpan={cols - 3} className="!text-end">
                 {t('vehicles.subtotal', { lng: 'ar' })}
               </th>
               <td className="font-bold">
-                <bdi dir="ltr">{formatLetterAed(group.subtotal)}</bdi>
+                <bdi dir="ltr">{formatLetterFilsAed(group.subtotal)}</bdi>
               </td>
               <td className="font-mono font-bold">{group.points}</td>
+              <td />
             </tr>
           </tbody>
         ))
@@ -623,7 +634,7 @@ function RecordCard({
           )}
         </div>
         <strong className="shrink-0 text-[0.84em] font-bold text-foreground">
-          <bdi>{formatAed(group.subtotal, lang)}</bdi>
+          <bdi>{formatFilsAed(group.subtotal, lang)}</bdi>
         </strong>
       </div>
 
@@ -655,9 +666,12 @@ function RecordCard({
                 </span>
               )}
             </span>
-            <strong className="shrink-0 text-[0.8em] font-semibold text-foreground">
-              <bdi>{formatAed(fine.amount, lang)}</bdi>
-            </strong>
+            <span className="flex shrink-0 flex-col items-end gap-1">
+              <strong className="text-[0.8em] font-semibold text-foreground">
+                <bdi>{formatFilsAed(fine.amount_fils, lang)}</bdi>
+              </strong>
+              <VehicleStatusBadge family="payment" status={fine.payment_status} />
+            </span>
           </li>
         ))}
       </ol>

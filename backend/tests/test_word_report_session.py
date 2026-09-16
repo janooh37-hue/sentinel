@@ -48,6 +48,7 @@ def api_db(monkeypatch, tmp_path: Path) -> Session:
         yield db
     finally:
         db.close()
+        eng.dispose()
 
 
 @pytest.fixture()
@@ -260,7 +261,7 @@ def test_finish_report_session_embeds_signature(db_session, tmp_path):
     assert ver.status == "approved"
     from app.services import book_service
 
-    assert book_service.is_document_signed_locked(db_session, ver.document_id) == (
+    assert book_service.is_document_signed_locked(db_session, ver) == (
         True,
         ver.signed_pdf_path,
     )

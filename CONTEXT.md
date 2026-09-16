@@ -27,6 +27,26 @@ One committed version of a Record's generated artifact, ordered within that
 Record and carrying its own review or signing state.
 _Avoid_: Edit, draft, file version
 
+**Approval worklist**:
+A person's approval-related Records grouped by responsibility, with one entry
+per Record rather than separate entries for each submission attempt. It shows
+current information where authorized, otherwise only information from
+assigned Revisions the person may read.
+_Avoid_: Submission-history ledger, decision audit log
+
+**Late advisory feedback**:
+An advisory review completed after the signer has approved, returned, or
+rejected the reviewed Revision. It provides feedback without reopening or
+changing the signing decision.
+_Avoid_: Reapproval, reversal, blocking review
+
+**Retained revision access**:
+A completed assignee's continuing right to read the Revisions they were
+assigned, without automatic expiry, subject to explicit administrative
+revocation. It does not authorize later Revisions or confer editing/signing
+authority.
+_Avoid_: Record ownership, permanent access to the whole Record
+
 ### Attendance and leave
 
 **Attendance case**:

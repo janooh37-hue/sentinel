@@ -23,7 +23,7 @@ describe('useBookApprovalActions', () => {
     vi.spyOn(apiMod.api, 'decideBook').mockResolvedValue({} as any)
     const onDecided = vi.fn()
     const { result } = renderHook(
-      () => useBookApprovalActions({ bookId: 5, onDecided, onSigned: vi.fn() }),
+      () => useBookApprovalActions({ bookId: 5, versionId: 11, onDecided, onSigned: vi.fn() }),
       { wrapper: wrapperFor(qc) },
     )
     result.current.decideMutation.mutate({ act: 'reject', note: 'x' })
@@ -41,7 +41,7 @@ describe('useBookApprovalActions', () => {
     )
     const onSigned = vi.fn()
     const { result } = renderHook(
-      () => useBookApprovalActions({ bookId: 5, onDecided: vi.fn(), onSigned }),
+      () => useBookApprovalActions({ bookId: 5, versionId: 11, onDecided: vi.fn(), onSigned }),
       { wrapper: wrapperFor(qc) },
     )
     result.current.signMutation.mutate()

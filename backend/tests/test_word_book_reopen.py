@@ -12,7 +12,16 @@ from pathlib import Path
 import fitz
 import pytest
 
-from app.db.models import Book, BookCategory, BookEditSession, BookVersion, Document, User
+from app.db.models import (
+    Book,
+    BookApprovalStep,
+    BookCategory,
+    BookEditSession,
+    BookVersion,
+    Document,
+    Employee,
+    User,
+)
 
 # ---------------------------------------------------------------------------
 # Helpers (mirrors test_word_book_finish.py)
@@ -261,6 +270,96 @@ def test_reopen_then_finish_gives_version_2_revision(db_session, tmp_path, monke
     assert doc_v1.docx_path == str(
         tmp_path / "output" / "General_Book" / f"{book.ref_number.replace('/', '-')}_v1.docx"
     )
+
+
+def test_approved_revision_becomes_resubmittable_and_report_stays_approved(
+    db_session, tmp_path, monkeypatch
+):
+    from app.config import get_settings
+    from app.services import artifact_service, book_service, report_service, word_book_service
+
+    settings = _settings(tmp_path)
+    settings.templates_dir = get_settings().templates_dir
+    monkeypatch.setattr(word_book_service, "get_settings", lambda: settings)
+    monkeypatch.setattr(artifact_service, "get_settings", lambda: settings)
+    monkeypatch.setattr(report_service, "get_settings", lambda: settings)
+    monkeypatch.setattr(word_book_service, "convert_docx_to_pdf", lambda _path: None)
+
+    submitter = _user(db_session)
+    approver = _user(db_session)
+    book, _doc, version_v1 = _make_finished_book(db_session, submitter, tmp_path)
+    book.approval_state = "approved"
+    version_v1.status = "approved"
+    approved_step = BookApprovalStep(
+        book_id=book.id,
+        version_id=version_v1.id,
+        step_order=0,
+        stage_label="Approve",
+        assignee_user_id=approver.id,
+        kind="approver",
+        state="approved",
+        decided_at=datetime.now(UTC).replace(tzinfo=None),
+    )
+    db_session.add(approved_step)
+    db_session.commit()
+    approved_step_id = approved_step.id
+
+    word_book_service.reopen_word_session(db_session, user=submitter, book_id=book.id)
+    active = db_session.query(BookEditSession).filter_by(book_id=book.id, state="active").one()
+    active.last_put_at = datetime.now(UTC).replace(tzinfo=None)
+    db_session.commit()
+
+    word_book_service.finish_word_session(db_session, user=submitter, book_id=book.id)
+
+    versions = (
+        db_session.query(BookVersion)
+        .filter_by(book_id=book.id)
+        .order_by(BookVersion.version_no)
+        .all()
+    )
+    db_session.refresh(book)
+    assert book.approval_state == "none"
+    assert book.submitted_by_user_id is None
+    assert versions[0].status == "approved"
+    assert [(step.id, step.state) for step in versions[0].approval_steps] == [
+        (approved_step_id, "approved")
+    ]
+    assert versions[1].status == "none"
+
+    book_service.submit_for_approval(
+        db_session,
+        book.id,
+        priority="Normal",
+        approver_user_id=approver.id,
+        reviewer_user_ids=[],
+        submitted_by_user_id=submitter.id,
+    )
+    assert book.approval_state == "pending"
+
+    db_session.add(Employee(id="G1042", name_en="Muhannad", name_ar="مهند", position="Head"))
+    db_session.commit()
+    report_info = word_book_service.create_report_word_book(
+        db_session,
+        user=submitter,
+        signer_employee_id="G1042",
+        recipient_id=None,
+        subject="تقرير",
+        date="2026-09-16",
+        sign=False,
+    )
+    report_session = (
+        db_session.query(BookEditSession)
+        .filter_by(book_id=report_info.book_id, state="active")
+        .one()
+    )
+    report_session.last_put_at = datetime.now(UTC).replace(tzinfo=None)
+    db_session.commit()
+
+    report = word_book_service.finish_word_session(
+        db_session, user=submitter, book_id=report_info.book_id
+    )
+    assert report.ref_number.startswith("REPORT-")
+    assert report.approval_state == "approved"
 
 
 def test_reopen_while_session_active_raises_409(db_session, tmp_path, monkeypatch):

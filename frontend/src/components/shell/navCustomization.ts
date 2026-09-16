@@ -44,7 +44,9 @@ export const SIGNAL_ENTRIES: readonly DockEntry[] = [
     labelKey: 'nav.signals.approvals',
     Icon: Hourglass,
     to: '/books/approvals',
-    cap: 'books.approve',
+    // No static capability gate: available whenever the caller's approvals
+    // summary shows sent access or any received kind — assignment-aware,
+    // resolved by the caller with `isApprovalsSignalAvailable`, not here.
     signal: 'approvals',
   },
   {
@@ -94,6 +96,15 @@ export function isNavEntryAllowed(
   has: (capability: string) => boolean,
 ): boolean {
   return (!entry.cap || has(entry.cap)) && (!entry.caps || entry.caps.every(has))
+}
+
+/** The `sig:approvals` entry has no static capability gate (see above) — it
+ *  is available whenever the caller's approvals summary shows sent access or
+ *  any received (sign/review) kind, never merely `books.approve`. */
+export function isApprovalsSignalAvailable(
+  summary: { can_view_sent: boolean; available_received_kinds?: readonly string[] } | undefined,
+): boolean {
+  return summary != null && (summary.can_view_sent || (summary.available_received_kinds?.length ?? 0) > 0)
 }
 
 function normalizeSlotIds(ids: readonly unknown[]): string[] {

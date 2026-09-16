@@ -10,7 +10,14 @@ from typing import Any
 import pytest
 from sqlalchemy.orm import Session
 
-from app.db.models import User, UserPermission, Vehicle, VehicleMaintenance, VehicleSite
+from app.db.models import (
+    User,
+    UserPermission,
+    Vehicle,
+    VehicleFile,
+    VehicleMaintenance,
+    VehicleSite,
+)
 from app.schemas.vehicle import LicenseRenewCreate
 from app.services import (
     scheduler_service,
@@ -586,3 +593,182 @@ def test_insurance_reminder_marker_stays_unset_when_nothing_actually_delivers(
     assert sent == 0
     db_session.refresh(vehicle)
     assert vehicle.insurance_reminder_sent_for is None
+
+
+def _make_certificate(
+    db: Session,
+    vehicle: Vehicle,
+    *,
+    expiry: date | None,
+    is_historical: bool = False,
+    label_en: str = "Fire extinguisher certificate",
+    label_ar: str = "شهادة طفاية الحريق",
+) -> VehicleFile:
+    row = VehicleFile(
+        vehicle_id=vehicle.id,
+        kind="certificate",
+        label_ar=label_ar,
+        label_en=label_en,
+        path=f"vehicle_files/{vehicle.id}/certificate/fixture.pdf",
+        original_name="certificate.pdf",
+        media_type="application/pdf",
+        size=100,
+        expiry_date=expiry,
+        is_historical=is_historical,
+    )
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    return row
+
+
+@pytest.mark.parametrize(
+    ("certificate_expiry", "expected_state"),
+    [
+        (_TODAY - timedelta(days=1), "expired"),
+        (_TODAY, "due"),
+        (_TODAY + timedelta(days=30), "due"),
+        (_TODAY + timedelta(days=31), "valid"),
+    ],
+)
+def test_certificate_expiry_boundaries_at_frozen_today(
+    db_session: Session,
+    monkeypatch: pytest.MonkeyPatch,
+    certificate_expiry: date,
+    expected_state: str,
+) -> None:
+    settings_service.set_vehicle_notify_days(db_session, 30)
+    vehicle = _make_vehicle(db_session, expiry=_TODAY + timedelta(days=365))
+    certificate = _make_certificate(db_session, vehicle, expiry=certificate_expiry)
+    _make_user(db_session, email="viewer@test.ae", can_view_vehicles=True)
+    pushes = _capture_pushes(monkeypatch)
+
+    sent = vehicle_reminder_service.send_due_reminders(db_session, today=_TODAY)
+    db_session.refresh(certificate)
+
+    if expected_state == "valid":
+        assert sent == 0
+        assert pushes == []
+        assert certificate.expiry_reminder_sent_for is None
+    else:
+        assert sent == 1
+        assert certificate.expiry_reminder_sent_for == certificate_expiry
+        heading = "Certificate expired" if expected_state == "expired" else "Certificate expiring"
+        assert heading in pushes[0][1]["en"][1]
+        assert pushes[0][2] == f"/vehicles/{vehicle.id}?tab=certificates"
+
+    # A second run never re-notifies for the same unchanged due date.
+    pushes.clear()
+    assert vehicle_reminder_service.send_due_reminders(db_session, today=_TODAY) == 0
+    assert pushes == []
+
+
+def test_no_expiry_historical_and_archived_certificates_never_notify(
+    db_session: Session,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    settings_service.set_vehicle_notify_days(db_session, 30)
+    vehicle = _make_vehicle(db_session, expiry=_TODAY + timedelta(days=365))
+    archived_vehicle = _make_vehicle(
+        db_session, expiry=_TODAY + timedelta(days=365), plate_number="58217"
+    )
+    archived_vehicle.archived_at = vehicle_service._utcnow()
+    db_session.commit()
+
+    no_expiry_cert = _make_certificate(db_session, vehicle, expiry=None, label_en="Open-ended")
+    historical_cert = _make_certificate(
+        db_session,
+        vehicle,
+        expiry=_TODAY,
+        is_historical=True,
+        label_en="Old copy",
+    )
+    archived_cert = _make_certificate(
+        db_session, archived_vehicle, expiry=_TODAY, label_en="Archived vehicle cert"
+    )
+    _make_user(db_session, email="viewer@test.ae", can_view_vehicles=True)
+    pushes = _capture_pushes(monkeypatch)
+
+    assert vehicle_reminder_service.send_due_reminders(db_session, today=_TODAY) == 0
+    assert pushes == []
+    db_session.refresh(no_expiry_cert)
+    db_session.refresh(historical_cert)
+    db_session.refresh(archived_cert)
+    assert no_expiry_cert.expiry_reminder_sent_for is None
+    assert historical_cert.expiry_reminder_sent_for is None
+    assert archived_cert.expiry_reminder_sent_for is None
+
+
+def test_two_independent_certificates_have_independent_sent_markers(
+    db_session: Session,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Same name and same date on one vehicle — markers still track separately."""
+    settings_service.set_vehicle_notify_days(db_session, 30)
+    vehicle = _make_vehicle(db_session, expiry=_TODAY + timedelta(days=365))
+    due_date = _TODAY + timedelta(days=5)
+    first = _make_certificate(db_session, vehicle, expiry=due_date, label_en="Insurance copy")
+    second = _make_certificate(db_session, vehicle, expiry=due_date, label_en="Insurance copy")
+    _make_user(db_session, email="viewer@test.ae", can_view_vehicles=True)
+    pushes = _capture_pushes(monkeypatch)
+
+    assert vehicle_reminder_service.send_due_reminders(db_session, today=_TODAY) == 2
+    db_session.refresh(first)
+    db_session.refresh(second)
+    assert first.expiry_reminder_sent_for == due_date
+    assert second.expiry_reminder_sent_for == due_date
+
+    # Editing only the first certificate's date resets only its own marker.
+    first.expiry_date = due_date + timedelta(days=1)
+    first.expiry_reminder_sent_for = None
+    db_session.commit()
+    pushes.clear()
+
+    assert vehicle_reminder_service.send_due_reminders(db_session, today=_TODAY) == 1
+    db_session.refresh(first)
+    db_session.refresh(second)
+    assert first.expiry_reminder_sent_for == due_date + timedelta(days=1)
+    assert second.expiry_reminder_sent_for == due_date  # unchanged, not re-sent
+
+
+def test_certificate_history_toggle_and_noop_date_save_do_not_manufacture_repeat_sends(
+    db_session: Session,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.schemas.vehicle import VehicleCertificateUpdate
+
+    settings_service.set_vehicle_notify_days(db_session, 30)
+    vehicle = _make_vehicle(db_session, expiry=_TODAY + timedelta(days=365))
+    certificate = _make_certificate(db_session, vehicle, expiry=_TODAY + timedelta(days=5))
+    _make_user(db_session, email="viewer@test.ae", can_view_vehicles=True)
+    pushes = _capture_pushes(monkeypatch)
+
+    assert vehicle_reminder_service.send_due_reminders(db_session, today=_TODAY) == 1
+    db_session.refresh(certificate)
+    sent_for = certificate.expiry_reminder_sent_for
+    assert sent_for is not None
+
+    # Saving the identical date again must not reset the marker.
+    vehicle_service.update_certificate(
+        db_session,
+        vehicle.id,
+        certificate.id,
+        VehicleCertificateUpdate(expiry_date=certificate.expiry_date, no_expiry=False),
+    )
+    db_session.refresh(certificate)
+    assert certificate.expiry_reminder_sent_for == sent_for
+
+    # A history-only PATCH must not touch the date or the marker.
+    vehicle_service.update_certificate(
+        db_session,
+        vehicle.id,
+        certificate.id,
+        VehicleCertificateUpdate(is_historical=True),
+    )
+    db_session.refresh(certificate)
+    assert certificate.expiry_reminder_sent_for == sent_for
+    assert certificate.expiry_date == _TODAY + timedelta(days=5)
+
+    pushes.clear()
+    assert vehicle_reminder_service.send_due_reminders(db_session, today=_TODAY) == 0
+    assert pushes == []

@@ -29,6 +29,7 @@ def db(tmp_path) -> Session:
         yield s
     finally:
         s.close()
+        eng.dispose()
 
 
 def _seed(db: Session, *, ref: str, hours_ago: float, owner_id: int, state="awaiting_scan") -> Book:

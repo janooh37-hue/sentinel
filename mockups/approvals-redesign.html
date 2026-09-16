@@ -1,174 +1,202 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" dir="ltr" data-theme="light">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>GSSG Manager — Approvals redesign mockup</title>
+<title>GSSG Manager — Approvals flow mockup</title>
 <style>
   /* ── GSSG tokens (verbatim from DESIGN.md §1.1) ─────────────────────── */
   [data-theme="light"] {
     --bg: #f5f4f1; --surface: #ffffff; --surface-raised: #fafaf6; --surface-tinted: #f0eee8;
     --primary: #0d2845; --primary-hover: #1d3a5e; --primary-soft: #e8edf3; --on-primary: #ffffff;
-    --accent: #c8102e; --accent-soft: #fbe5e8;
+    --accent: #c8102e; --accent-hover: #a30d24; --accent-soft: #fbe5e8;
     --success: #047857; --success-soft: #d6f0e4;
     --warning: #b45309; --warning-soft: #fbedd8;
     --info: #1d4ed8; --info-soft: #e0e8f8;
     --text: #1c1f24; --text-muted: #5a6068; --text-faint: #8b9098;
-    --border: #e6e4dd; --hairline: #efece5;
+    --border: #e6e4dd; --border-strong: #d4d1c8; --hairline: #efece5;
+    --focus-ring: #0d2845;
   }
   [data-theme="dark"] {
     --bg: #0a0e18; --surface: #131826; --surface-raised: #1a2034; --surface-tinted: #1f263b;
     --primary: #5778cf; --primary-hover: #7491db; --primary-soft: #1c2849; --on-primary: #0a0e18;
-    --accent: #ef4858; --accent-soft: #3a1820;
+    --accent: #ef4858; --accent-hover: #f56b78; --accent-soft: #3a1820;
     --success: #34d399; --success-soft: #142d23;
     --warning: #fbbf24; --warning-soft: #3a2a10;
     --info: #60a5fa; --info-soft: #1c2940;
     --text: #e6e9f2; --text-muted: #8a93a7; --text-faint: #5f6678;
-    --border: #2a3148; --hairline: #1f263b;
+    --border: #2a3148; --border-strong: #3a4360; --hairline: #1f263b;
+    --focus-ring: #7491db;
   }
   :root { color-scheme: light dark; }
   * { box-sizing: border-box; }
+  .visually-hidden {
+    position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+    overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0;
+  }
+  html, body { height: 100%; }
   body {
-    margin: 0; background: #26221c;
+    margin: 0; background: var(--bg); color: var(--text);
     font-family: "Inter", ui-sans-serif, system-ui, "Segoe UI", sans-serif;
+    font-size: 16px; line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    padding-bottom: 68px; /* leave room for the fixed demo bar */
   }
-  .frame-label {
-    max-width: 720px; margin: 28px auto 10px; padding: 0 4px;
-    font-size: 12px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase;
-    color: #b7ad9c; display: flex; justify-content: space-between; align-items: center;
+  [dir="rtl"] body { font-family: "Noto Sans Arabic", "Inter", system-ui, sans-serif; }
+  a { color: inherit; }
+  button, select, textarea { font-family: inherit; }
+  :focus-visible { outline: 2px solid var(--focus-ring); outline-offset: 2px; }
+  .skip-link {
+    position: fixed; top: -100px; inset-inline-start: 8px; z-index: 200;
+    background: var(--primary); color: var(--on-primary); padding: 10px 16px; border-radius: 8px;
+    font-size: 0.85em; font-weight: 700; transition: top 150ms ease;
   }
-  .theme-toggle {
-    font: inherit; text-transform: none; letter-spacing: 0; cursor: pointer;
-    background: none; border: 1px solid #55503f; color: #d8cfbe;
-    border-radius: 99px; padding: 4px 12px;
+  .skip-link:focus { top: 8px; }
+  @media (prefers-reduced-motion: reduce) {
+    * { animation-duration: 0.001ms !important; animation-iteration-count: 1 !important; transition-duration: 0.001ms !important; scroll-behavior: auto !important; }
   }
-  [lang="ar"] .frame-label { font-family: "Noto Sans Arabic", "Inter", sans-serif; }
 
-  /* ── The redesigned page ────────────────────────────────────────────── */
-  .page {
-    max-width: 720px; margin: 0 auto 40px; padding: 22px 24px 40px;
-    background: var(--bg); color: var(--text);
-    border-radius: 16px; box-shadow: 0 20px 50px rgba(0,0,0,.35);
-    font-size: 17px; line-height: 1.45;
+  /* ── App chrome ──────────────────────────────────────────────────────── */
+  .app-shell { max-width: 1000px; margin: 0 auto; padding: 0 20px; }
+  .topbar {
+    display: flex; align-items: center; gap: 20px; padding: 18px 0 16px;
+    border-bottom: 1px solid var(--border);
   }
-  [dir="rtl"] .page { font-family: "Noto Sans Arabic", "Inter", system-ui, sans-serif; }
-
-  header.page-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin-bottom: 18px; }
-  h1 { margin: 0; font-size: 1.45em; font-weight: 700; letter-spacing: -0.01em; }
-  .head-sub { margin-top: 2px; font-size: 0.8em; color: var(--text-muted); }
-  .head-sub b { color: var(--warning); font-weight: 600; }
-  .icon-btn {
-    width: 32px; height: 32px; border-radius: 8px; border: 1px solid var(--border);
-    background: var(--surface); color: var(--text-muted);
-    display: grid; place-items: center; cursor: pointer; transition: background-color 150ms ease, color 150ms ease;
+  .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 1.02em; letter-spacing: -0.01em; }
+  .brand .mark {
+    width: 30px; height: 30px; border-radius: 8px; background: var(--primary); color: var(--on-primary);
+    display: grid; place-items: center; font-weight: 800; font-size: 12px; flex: none;
   }
-  .icon-btn:hover { background: var(--surface-tinted); color: var(--text); }
+  .primary-nav { display: flex; gap: 4px; margin-inline-start: 8px; }
+  .nav-link {
+    appearance: none; border: 0; background: transparent; cursor: pointer; font: inherit;
+    padding: 8px 14px; border-radius: 8px; font-size: 0.88em; font-weight: 600; color: var(--text-muted);
+    transition: background-color 150ms ease, color 150ms ease; text-decoration: none;
+  }
+  .nav-link:hover { background: var(--surface-tinted); color: var(--text); }
+  .nav-link[aria-current="page"] { background: var(--primary-soft); color: var(--primary); }
+  .topbar-meta { margin-inline-start: auto; font-size: 0.78em; color: var(--text-muted); text-align: end; }
+  .topbar-meta b { color: var(--text); font-weight: 700; }
 
-  /* Tabs with counts */
-  .toolbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
-  .tabs { display: inline-flex; gap: 2px; background: var(--surface-tinted); border-radius: 99px; padding: 3px; }
-  .tab {
-    appearance: none; border: 0; cursor: pointer; border-radius: 99px; background: transparent;
-    padding: 6px 14px; font: inherit; font-size: 0.8em; font-weight: 600;
+  main.view { padding: 28px 0 48px; }
+  h1 { margin: 0; font-size: 1.5em; font-weight: 700; letter-spacing: -0.01em; }
+  h2 { margin: 0; font-size: 1.05em; font-weight: 700; }
+  .view-sub { margin: 4px 0 0; font-size: 0.85em; color: var(--text-muted); }
+
+  /* ── Home widget ─────────────────────────────────────────────────────── */
+  .home-head { margin-bottom: 22px; }
+  .home-columns { display: grid; grid-template-columns: 1fr; gap: 0; border: 1px solid var(--border); border-radius: 16px; overflow: hidden; background: var(--surface); }
+  .home-columns.two-up { grid-template-columns: 1fr 1fr; }
+  .home-col { padding: 22px; display: flex; flex-direction: column; gap: 16px; }
+  .home-columns.two-up .home-col + .home-col { border-inline-start: 1px solid var(--hairline); }
+  .home-columns:not(.two-up) .home-col + .home-col { border-top: 1px solid var(--hairline); }
+  .home-col-head { font-size: 0.78em; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--text-muted); }
+  .widget-primary { display: block; text-decoration: none; color: inherit; border-radius: 12px; padding: 14px 16px; border: 1px solid var(--border); background: var(--surface-raised); transition: border-color 150ms ease, background-color 150ms ease; }
+  .widget-primary:hover { border-color: var(--primary); background: var(--surface); }
+  .widget-count-row { display: flex; align-items: baseline; gap: 10px; }
+  .widget-count { font-size: 2.1em; font-weight: 800; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; line-height: 1; }
+  .widget-count.zero { color: var(--text-faint); }
+  .widget-label { font-size: 0.92em; font-weight: 700; }
+  .widget-detail { margin-top: 8px; font-size: 0.8em; color: var(--text-muted); }
+  .widget-detail .subj { color: var(--text); font-weight: 600; }
+  .widget-empty { margin-top: 8px; font-size: 0.8em; color: var(--text-muted); }
+  .sublink-row { display: flex; flex-wrap: wrap; gap: 8px; }
+  .sublink {
+    display: inline-flex; align-items: center; gap: 6px; text-decoration: none;
+    font-size: 0.8em; font-weight: 600; color: var(--primary);
+    border: 1px solid var(--border); border-radius: 999px; padding: 6px 12px;
+    background: var(--surface); transition: background-color 150ms ease, border-color 150ms ease;
+  }
+  .sublink:hover { background: var(--primary-soft); border-color: var(--primary); }
+  .sublink .n { font-family: "IBM Plex Mono", ui-monospace, Consolas, monospace; font-variant-numeric: tabular-nums; }
+  .sublink.warn { color: var(--warning); }
+  .quiet-link { font-size: 0.78em; color: var(--text-muted); text-decoration: underline; text-underline-offset: 2px; align-self: flex-start; }
+  .quiet-link:hover { color: var(--text); }
+  .neutral-access { padding: 20px; text-align: center; color: var(--text-muted); font-size: 0.85em; }
+
+  /* ── Tabs / filters / sort (queue toolbar) ──────────────────────────── */
+  .queue-toolbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
+  .tabs { display: inline-flex; gap: 2px; background: var(--surface-tinted); border-radius: 999px; padding: 3px; }
+  .tab, .kind-btn {
+    appearance: none; border: 0; cursor: pointer; border-radius: 999px; background: transparent;
+    padding: 7px 14px; font: inherit; font-size: 0.8em; font-weight: 600;
     color: var(--text-muted); display: inline-flex; align-items: center; gap: 7px;
     transition: color 150ms ease, background-color 150ms ease;
   }
-  .tab:hover { color: var(--text); }
-  .tab[aria-selected="true"] { background: var(--primary); color: var(--on-primary); }
-  .tab .n { font-family: "IBM Plex Mono", ui-monospace, Consolas, monospace; font-variant-numeric: tabular-nums; font-size: 0.85em; opacity: .75; }
-
-  .filters { margin-inline-start: auto; display: flex; gap: 6px; flex-wrap: wrap; }
+  .tab:hover, .kind-btn:hover { color: var(--text); }
+  .tab[aria-selected="true"], .kind-btn[aria-selected="true"] { background: var(--primary); color: var(--on-primary); }
+  .tab .n, .kind-btn .n { font-family: "IBM Plex Mono", ui-monospace, Consolas, monospace; font-variant-numeric: tabular-nums; font-size: 0.85em; opacity: .75; }
+  .kind-group { display: inline-flex; gap: 2px; background: var(--surface-tinted); border-radius: 999px; padding: 3px; }
+  .filters { display: flex; gap: 6px; flex-wrap: wrap; }
   .chip {
     appearance: none; cursor: pointer; font: inherit; font-size: 0.75em; font-weight: 600;
-    border-radius: 99px; padding: 4px 11px; display: inline-flex; gap: 6px; align-items: center;
-    border: 1px solid transparent; color: var(--text-muted); background: transparent;
+    border-radius: 999px; padding: 5px 12px; display: inline-flex; gap: 6px; align-items: center;
+    border: 1px solid var(--border); color: var(--text-muted); background: var(--surface);
     transition: background-color 150ms ease, color 150ms ease, border-color 150ms ease;
   }
   .chip:hover { background: var(--surface-tinted); color: var(--text); }
-  .chip[aria-pressed="true"] { border-color: color-mix(in srgb, var(--primary) 35%, transparent); background: color-mix(in srgb, var(--primary) 10%, transparent); color: var(--primary); }
-  .chip .n { font-family: "IBM Plex Mono", ui-monospace, Consolas, monospace; font-variant-numeric: tabular-nums; font-weight: 500; opacity: .7; }
-
-  /* ── The ledger ─────────────────────────────────────────────────────── */
-  .ledger { border: 1px solid var(--border); border-radius: 16px; background: var(--surface); overflow: hidden; }
-  .section-head {
-    display: flex; align-items: center; gap: 9px;
-    padding: 11px 20px 9px; background: var(--surface-raised);
-    border-bottom: 1px solid var(--hairline);
-    font-size: 0.72em; font-weight: 600; letter-spacing: .08em; text-transform: uppercase;
-    color: var(--text-muted);
+  .chip[aria-pressed="true"] { border-color: var(--primary); background: color-mix(in srgb, var(--primary) 10%, transparent); color: var(--primary); }
+  .sort-field { margin-inline-start: auto; display: flex; align-items: center; gap: 8px; }
+  .sort-field label { font-size: 0.75em; font-weight: 600; color: var(--text-muted); }
+  .sort-field select {
+    border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text);
+    padding: 6px 10px; font-size: 0.8em; font-weight: 600; min-height: 36px;
   }
-  .section-head .dot { width: 7px; height: 7px; border-radius: 99px; }
-  .section-head .n { font-family: "IBM Plex Mono", ui-monospace, Consolas, monospace; font-weight: 500; color: var(--text); }
-  .section-head + .section-head-guard { border-top: 0; }
-  .divider { border: 0; border-top: 1px solid var(--hairline); margin: 0; }
 
+  /* ── The ledger / rows ───────────────────────────────────────────────── */
+  .ledger { border: 1px solid var(--border); border-radius: 16px; background: var(--surface); overflow: hidden; }
+  .queue-empty { padding: 40px 24px; text-align: center; color: var(--text-muted); font-size: 0.88em; }
+  .divider { border: 0; border-top: 1px solid var(--hairline); margin: 0; }
   .row {
-    display: flex; align-items: center; gap: 14px;
-    padding: 13px 20px; cursor: pointer; position: relative;
-    transition: background-color 150ms ease;
+    display: flex; align-items: center; gap: 14px; width: 100%; text-align: start;
+    padding: 14px 20px; cursor: pointer; position: relative; background: transparent; border: 0;
+    transition: background-color 150ms ease; min-height: 44px;
   }
   .row:hover { background: var(--surface-raised); }
-  .row:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; border-radius: 8px; }
-
-  /* Fake document thumbnail */
   .thumb {
-    flex: none; width: 52px; height: 36px; border-radius: 6px;
+    flex: none; width: 48px; height: 36px; border-radius: 6px; cursor: pointer;
     border: 1px solid var(--border); background: #fff;
-    display: grid; place-items: center;
+    display: grid; place-items: center; transition: box-shadow 150ms ease, border-color 150ms ease;
   }
   [data-theme="dark"] .thumb { background: var(--surface-tinted); }
-  .thumb svg { display: block; }
-
+  .thumb:hover, .thumb:focus-visible { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-soft); }
   .row-main { min-width: 0; flex: 1; }
-  .row-title { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
-  .ref {
-    flex: none; font-family: "IBM Plex Mono", ui-monospace, Consolas, monospace;
-    font-size: 0.72em; font-weight: 500; color: var(--text-muted);
-    direction: ltr; unicode-bidi: isolate;
-  }
-  .subject {
-    margin: 0; font-size: 0.92em; font-weight: 550; color: var(--text);
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  }
-  .high-flag { flex: none; font-size: 0.65em; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; color: var(--accent); }
-  .row-meta { margin-top: 3px; font-size: 0.72em; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .row-meta .who { color: var(--text); }
-
-  .row-side { flex: none; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+  .row-title { display: flex; align-items: baseline; gap: 8px; min-width: 0; flex-wrap: wrap; }
+  .ref { flex: none; font-family: "IBM Plex Mono", ui-monospace, Consolas, monospace; font-size: 0.72em; font-weight: 500; color: var(--text-muted); direction: ltr; unicode-bidi: isolate; }
+  .subject { margin: 0; font-size: 0.92em; font-weight: 600; color: var(--text); overflow-wrap: anywhere; }
+  .row-meta { margin-top: 3px; font-size: 0.75em; color: var(--text-muted); }
+  .row-meta .who { color: var(--text); font-weight: 600; }
+  .row-meta .missing { color: var(--accent); font-weight: 600; }
+  .row-side { flex: none; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; max-width: 40%; }
   .pill {
-    font-size: 0.65em; font-weight: 700; letter-spacing: .05em; text-transform: uppercase;
-    border-radius: 99px; padding: 3px 9px; display: inline-flex; align-items: center; gap: 5px;
+    font-size: 0.65em; font-weight: 700; letter-spacing: .04em; text-transform: uppercase;
+    border-radius: 999px; padding: 3px 9px; display: inline-flex; align-items: center; gap: 5px; white-space: nowrap;
   }
   .pill svg { flex: none; }
   .pill.pending   { background: var(--warning-soft); color: var(--warning); }
   .pill.approved  { background: var(--success-soft); color: var(--success); }
   .pill.rejected  { background: var(--accent-soft); color: var(--accent); }
   .pill.returned  { background: var(--info-soft); color: var(--info); }
+  .rchip { font-size: 0.65em; font-weight: 700; border-radius: 999px; padding: 3px 9px; display: inline-flex; align-items: center; gap: 5px; }
+  .rchip.pending { background: var(--warning-soft); color: var(--warning); }
+  .rchip.reviewed { background: var(--success-soft); color: var(--success); }
+  .rchip.changes_requested { background: var(--info-soft); color: var(--info); }
   .when { font-family: "IBM Plex Mono", ui-monospace, Consolas, monospace; font-size: 0.68em; font-variant-numeric: tabular-nums; color: var(--text-faint); }
-  .waiting { font-size: 0.68em; font-weight: 600; color: var(--warning); }
+  .waiting { font-size: 0.7em; font-weight: 700; color: var(--warning); text-align: end; }
+  .waiting.missing { color: var(--accent); }
+
   /* ── Document preview lightbox ──────────────────────────────────────── */
-  .thumb { cursor: pointer; transition: box-shadow 150ms ease, border-color 150ms ease; }
-  .thumb:hover { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-soft); }
   .pv-root { position: fixed; inset: 0; z-index: 60; color: var(--text); }
   .pv-root[hidden] { display: none; }
-  .pv-root.rec-only .pv-shell { display: none; }
-  .pv-root:not(.rec-only) .pv-shell { z-index: 2; }
   .pv-scrim { position: absolute; inset: 0; background: rgba(6, 9, 15, .62); }
-  .pv-shell {
-    position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center;
-    padding: clamp(8px, 2.5vh, 24px) clamp(8px, 3vw, 24px); pointer-events: none;
-  }
-  .pv-bar {
-    pointer-events: auto; width: min(860px, 100%); display: flex; align-items: center; gap: 8px;
-    background: var(--surface); border: 1px solid var(--border); border-bottom: 0;
-    border-radius: 12px 12px 0 0; padding: 8px 10px;
-  }
+  .pv-shell { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; padding: clamp(8px, 2.5vh, 24px) clamp(8px, 3vw, 24px); pointer-events: none; }
+  .pv-bar { pointer-events: auto; width: min(860px, 100%); display: flex; align-items: center; gap: 8px; background: var(--surface); border: 1px solid var(--border); border-bottom: 0; border-radius: 12px 12px 0 0; padding: 8px 10px; }
   .pv-title { flex: 1; min-width: 0; font-size: .85em; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .pv-title .ref { margin-inline-end: 8px; }
   .pv-btn {
     appearance: none; cursor: pointer; font: inherit; font-size: .72em; font-weight: 600;
-    display: inline-flex; align-items: center; gap: 6px; min-height: 30px; flex: none;
-    border: 1px solid var(--border); border-radius: 8px; padding: 4px 10px;
+    display: inline-flex; align-items: center; gap: 6px; min-height: 36px; flex: none;
+    border: 1px solid var(--border); border-radius: 8px; padding: 6px 11px;
     background: var(--surface); color: var(--text-muted);
     transition: background-color 150ms ease, color 150ms ease;
   }
@@ -177,141 +205,147 @@
   .pv-btn.primary:hover { background: var(--primary-hover); color: var(--on-primary); }
   .pv-zoom { display: inline-flex; align-items: center; border: 1px solid var(--border); border-radius: 8px; padding: 1px; flex: none; }
   .pv-zoom .pv-btn { border: 0; }
-  .pv-zoom .zval {
-    width: 42px; text-align: center; font-family: "IBM Plex Mono", ui-monospace, Consolas, monospace;
-    font-size: .68em; color: var(--text-muted); font-variant-numeric: tabular-nums;
-  }
-  .pv-viewport {
-    pointer-events: auto; width: min(860px, 100%); flex: 1; overflow: auto; -webkit-overflow-scrolling: touch;
-    background: var(--surface-tinted); border: 1px solid var(--border); border-top: 0;
-    border-radius: 0 0 12px 12px; touch-action: pan-x pan-y;
-  }
-  .pv-doc {
-    width: min(600px, 100%); margin: 20px auto; background: #fff; color: #1c1f24;
-    padding: clamp(24px, 5vw, 52px); border-radius: 3px; box-shadow: 0 12px 32px rgba(0,0,0,.28);
-  }
+  .pv-zoom .zval { width: 42px; text-align: center; font-family: "IBM Plex Mono", ui-monospace, Consolas, monospace; font-size: .68em; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+  .pv-viewport { pointer-events: auto; width: min(860px, 100%); flex: 1; overflow: auto; -webkit-overflow-scrolling: touch; background: var(--surface-tinted); border: 1px solid var(--border); border-top: 0; border-radius: 0 0 12px 12px; touch-action: pan-x pan-y; }
+  .pv-doc { width: min(600px, 100%); margin: 20px auto; background: #fff; color: #1c1f24; padding: clamp(24px, 5vw, 52px); border-radius: 3px; box-shadow: 0 12px 32px rgba(0,0,0,.28); position: relative; }
   .doc-head { display: flex; align-items: center; gap: 12px; padding-bottom: 14px; border-bottom: 2px solid #0d2845; }
-  .doc-logo {
-    flex: none; width: 34px; height: 34px; border-radius: 8px; background: #0d2845; color: #fff;
-    display: grid; place-items: center; font-weight: 800; font-size: 12px;
-  }
+  .doc-logo { flex: none; width: 34px; height: 34px; border-radius: 8px; background: #0d2845; color: #fff; display: grid; place-items: center; font-weight: 800; font-size: 12px; }
   .doc-org b { display: block; font-size: 13px; letter-spacing: .04em; }
   .doc-org span { font-size: 10.5px; color: #5a6068; }
-  .doc-refline {
-    display: flex; justify-content: space-between; gap: 12px; margin: 14px 0 4px;
-    font-family: "IBM Plex Mono", ui-monospace, Consolas, monospace; font-size: 10.5px; color: #5a6068;
-  }
+  .doc-refline { display: flex; justify-content: space-between; gap: 12px; margin: 14px 0 4px; font-family: "IBM Plex Mono", ui-monospace, Consolas, monospace; font-size: 10.5px; color: #5a6068; }
   .doc-title { margin: 18px 0 10px; font-size: 15px; font-weight: 700; text-align: center; }
   .doc-meta { margin: 0 0 14px; font-size: 11.5px; color: #5a6068; }
   .doc-meta b { color: #1c1f24; font-weight: 600; }
   .doc-body p { margin: 0 0 10px; font-size: 12px; line-height: 1.7; }
   .doc-sig { margin-top: 22px; display: flex; justify-content: space-between; align-items: flex-end; }
   .doc-sig .name { font-size: 12px; font-weight: 700; border-top: 1px solid #1c1f24; padding-top: 4px; margin-top: 26px; }
-  .doc-stamp {
-    flex: none; width: 74px; height: 74px; border: 2px solid rgba(13,40,69,.45); border-radius: 99px;
-    display: grid; place-items: center; transform: rotate(-12deg);
-    color: rgba(13,40,69,.55); font-size: 9px; font-weight: 800; letter-spacing: .12em; text-align: center;
-  }
+  .doc-stamp { flex: none; width: 74px; height: 74px; border: 2px solid rgba(13,40,69,.45); border-radius: 999px; display: grid; place-items: center; transform: rotate(-12deg); color: rgba(13,40,69,.55); font-size: 9px; font-weight: 800; letter-spacing: .1em; text-align: center; }
+  .doc-signed-stamp { position: absolute; top: 30px; inset-inline-end: 30px; border: 3px solid #047857; color: #047857; border-radius: 10px; padding: 6px 14px; font-size: 11px; font-weight: 800; letter-spacing: .1em; transform: rotate(-8deg); }
 
-  /* ── Full record sheet ──────────────────────────────────────────────── */
-  .rec-sheet {
-    position: absolute; top: 0; bottom: 0; inset-inline-end: 0; width: min(440px, 100%);
-    background: var(--bg); border-inline-start: 1px solid var(--border);
-    box-shadow: -30px 0 70px rgba(0,0,0,.4);
-    display: flex; flex-direction: column;
-    transform: translateX(-100vw); transition: transform 280ms cubic-bezier(0.22, 1, 0.36, 1);
+  /* ── Detail (record) page ───────────────────────────────────────────── */
+  .backbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 18px; flex-wrap: wrap; }
+  .back-btn {
+    appearance: none; cursor: pointer; font: inherit; font-size: .82em; font-weight: 700;
+    border: 1px solid var(--border); background: var(--surface); color: var(--text);
+    border-radius: 8px; padding: 9px 14px; display: inline-flex; align-items: center; gap: 7px; min-height: 40px;
   }
-  [dir="rtl"] .rec-sheet { transform: translateX(100vw); }
-  .rec-sheet.open { transform: translateX(0); }
-  .rec-head {
-    display: flex; align-items: center; gap: 10px; padding: 12px 16px;
-    border-bottom: 1px solid var(--hairline); background: var(--surface-raised);
-  }
-  .rec-head h2 {
-    margin: 0; font-size: .95em; font-weight: 700; flex: 1; min-width: 0;
-    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-  }
-  .rec-body { flex: 1; overflow: auto; padding: 18px 16px 24px; }
-  .rec-meta { padding-bottom: 14px; margin-bottom: 16px; border-bottom: 1px solid var(--hairline); }
-  .rec-subject { margin: 0; font-size: 1.05em; font-weight: 700; }
-  .rec-status-row { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
-  .rec-status-row .priority { font-size: .68em; font-weight: 600; color: var(--text-muted); }
-  .rec-status-row .priority.high { color: var(--accent); }
-  .rec-parties { margin: 8px 0 0; font-size: .78em; color: var(--text-muted); }
-  .rec-doc-card {
+  .back-btn:hover { background: var(--surface-tinted); }
+  .detail-card { border: 1px solid var(--border); border-radius: 16px; background: var(--surface); overflow: hidden; }
+  .detail-header { padding: 20px 22px; border-bottom: 1px solid var(--hairline); background: var(--surface-raised); }
+  .detail-subject { margin: 6px 0 0; font-size: 1.2em; font-weight: 700; }
+  .detail-status-row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 10px; }
+  .detail-meta-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; margin-top: 14px; font-size: .82em; }
+  .meta-item .k { color: var(--text-muted); font-size: .85em; margin-bottom: 2px; }
+  .meta-item .v { font-weight: 600; }
+  .meta-item .v.missing { color: var(--accent); font-weight: 600; }
+  .detail-body { padding: 20px 22px; display: flex; flex-direction: column; gap: 20px; }
+  .banner { border-radius: 12px; padding: 14px 16px; font-size: .86em; font-weight: 600; display: flex; gap: 10px; align-items: flex-start; }
+  .banner.ok { background: var(--success-soft); color: var(--success); }
+  .banner.no { background: var(--accent-soft); color: var(--accent); }
+  .banner.ret { background: var(--info-soft); color: var(--info); }
+  .banner.err { background: var(--accent-soft); color: var(--accent); }
+  .banner .msg { flex: 1; }
+  .banner-actions { display: flex; gap: 10px; margin-top: 10px; flex-wrap: wrap; }
+  .next-empty { font-size: .82em; color: var(--text-muted); font-style: italic; }
+  .doc-card {
     display: flex; align-items: center; gap: 12px; padding: 12px; cursor: pointer;
     border: 1px solid var(--border); border-radius: 12px; background: var(--surface);
-    transition: border-color 150ms ease, background-color 150ms ease;
+    transition: border-color 150ms ease, background-color 150ms ease; text-align: start; width: 100%;
   }
-  .rec-doc-card:hover { border-color: var(--primary); background: var(--surface-raised); }
-  .rec-doc-card .grow { flex: 1; min-width: 0; }
-  .rec-doc-card .fname { font-size: .8em; font-weight: 600; font-family: "IBM Plex Mono", ui-monospace, Consolas, monospace; }
-  .rec-doc-card .fmeta { font-size: .68em; color: var(--text-muted); margin-top: 2px; }
-  .rec-actions { display: flex; gap: 8px; padding: 12px 16px; border-top: 1px solid var(--hairline); background: var(--surface-raised); }
-  .rec-btn {
-    flex: 1; appearance: none; cursor: pointer; font: inherit; font-size: .82em; font-weight: 700;
-    border-radius: 10px; padding: 11px 12px; min-height: 44px;
+  .doc-card:hover { border-color: var(--primary); background: var(--surface-raised); }
+  .doc-card .grow { flex: 1; min-width: 0; }
+  .doc-card .fname { font-size: .82em; font-weight: 600; font-family: "IBM Plex Mono", ui-monospace, Consolas, monospace; direction: ltr; unicode-bidi: isolate; display: block; }
+  .doc-card .fmeta { display: block; font-size: .7em; color: var(--text-muted); margin-top: 2px; }
+  .action-panel { display: flex; gap: 10px; flex-wrap: wrap; }
+  .act-btn {
+    flex: 1; min-width: 160px; appearance: none; cursor: pointer; font: inherit; font-size: .85em; font-weight: 700;
+    border-radius: 10px; padding: 12px 14px; min-height: 44px;
     display: inline-flex; align-items: center; justify-content: center; gap: 7px;
     border: 1px solid var(--border); background: var(--surface); color: var(--text);
     transition: background-color 150ms ease, color 150ms ease;
   }
-  .rec-btn.approve { background: var(--primary); border-color: var(--primary); color: var(--on-primary); }
-  .rec-btn.approve:hover { background: var(--primary-hover); }
-  .rec-btn.reject { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 40%, transparent); }
-  .rec-btn.reject:hover { background: var(--accent-soft); }
-  .rec-reason { flex: 1; }
-  .rec-reason textarea {
-    width: 100%; font: inherit; font-size: .8em; color: var(--text); background: var(--surface);
-    border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; min-height: 74px; resize: vertical;
+  .act-btn:disabled { opacity: .65; cursor: default; }
+  .act-btn.approve { background: var(--primary); border-color: var(--primary); color: var(--on-primary); }
+  .act-btn.approve:hover:not(:disabled) { background: var(--primary-hover); }
+  .act-btn.reject { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 40%, transparent); }
+  .act-btn.reject:hover:not(:disabled) { background: var(--accent-soft); }
+  .act-btn.review-ok { background: var(--success); border-color: var(--success); color: #fff; }
+  .reason-form { flex: 1; min-width: 240px; display: flex; flex-direction: column; gap: 8px; }
+  .reason-form label { font-size: .8em; font-weight: 600; color: var(--text-muted); }
+  .reason-form textarea {
+    width: 100%; font: inherit; font-size: .85em; color: var(--text); background: var(--surface);
+    border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px; min-height: 84px; resize: vertical;
   }
-  .rec-reason .confirm { margin-top: 8px; width: 100%; }
-  .rec-verdict {
-    margin-top: 14px; padding: 12px 14px; border-radius: 10px; font-size: .78em; font-weight: 600;
-    display: flex; gap: 8px; align-items: center;
-  }
-  .rec-verdict.ok { background: var(--success-soft); color: var(--success); }
-  .rec-verdict.no { background: var(--accent-soft); color: var(--accent); }
-  .rec-verdict.ret { background: var(--info-soft); color: var(--info); }
+  .field-error { font-size: .75em; color: var(--accent); font-weight: 600; }
+  .reason-form-actions { display: flex; gap: 8px; }
+  section.card-section { border: 1px solid var(--border); border-radius: 14px; padding: 16px 18px; background: var(--surface-raised); }
+  section.card-section > h3 { margin: 0 0 4px; font-size: .82em; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--text-muted); }
+  section.card-section > .hint { margin: 8px 0 0; font-size: .78em; color: var(--text-muted); }
+  .reviewer-list { display: flex; flex-direction: column; gap: 10px; }
+  .reviewer-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; padding: 10px 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; flex-wrap: wrap; }
+  .reviewer-row .who { font-weight: 600; font-size: .85em; }
+  .reviewer-row .comment { font-size: .78em; color: var(--text-muted); margin-top: 4px; max-width: 46ch; }
+  .activity-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+  .activity-list li { display: flex; gap: 12px; font-size: .85em; }
+  .activity-list .dot { flex: none; width: 8px; height: 8px; border-radius: 999px; background: var(--primary); margin-top: 6px; }
+  .activity-list .atext { flex: 1; }
+  .activity-list .atime { display: block; font-family: "IBM Plex Mono", ui-monospace, Consolas, monospace; font-size: .82em; color: var(--text-faint); margin-top: 2px; }
+  .activity-list .anote { display: block; margin-top: 4px; color: var(--text-muted); }
+  .unavailable-card { padding: 48px 24px; text-align: center; border: 1px solid var(--border); border-radius: 16px; background: var(--surface); color: var(--text-muted); }
+  .unavailable-card h2 { margin-bottom: 8px; }
+
+  /* ── Toast ───────────────────────────────────────────────────────────── */
   .toast {
-    position: fixed; bottom: 22px; inset-inline-start: 50%; transform: translateX(-50%);
-    background: var(--primary); color: var(--on-primary); font-size: .78em; font-weight: 600;
-    border-radius: 99px; padding: 9px 18px; box-shadow: 0 10px 26px rgba(0,0,0,.3);
-    opacity: 0; transition: opacity 200ms ease; pointer-events: none; z-index: 80; white-space: nowrap;
+    position: fixed; bottom: 78px; inset-inline-start: 50%; transform: translateX(-50%);
+    background: var(--primary); color: var(--on-primary); font-size: .8em; font-weight: 600;
+    border-radius: 999px; padding: 10px 18px; box-shadow: 0 10px 26px rgba(0,0,0,.3);
+    opacity: 0; transition: opacity 200ms ease; pointer-events: none; z-index: 90; max-width: 90vw; text-align: center;
   }
   [dir="rtl"] .toast { transform: translateX(50%); }
   .toast.show { opacity: 1; }
 
+  /* ── Demo toolbar (clearly separated from the product surface) ──────── */
+  .demo-bar {
+    position: fixed; bottom: 0; inset-inline: 0; z-index: 100;
+    background: #26221c; color: #e8e2d4; border-top: 2px dashed #6b6350;
+    padding: 8px 16px; display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+    font-size: 12.5px;
+  }
+  .demo-bar .demo-label { font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: #cfc6ad; flex: none; }
+  .demo-field { display: flex; align-items: center; gap: 6px; }
+  .demo-field label { color: #cfc6ad; font-weight: 600; }
+  .demo-bar select, .demo-bar button, .demo-bar a.demo-link {
+    font: inherit; background: #33301fee; color: #f2ede0; border: 1px solid #6b6350; border-radius: 6px;
+    padding: 5px 9px; cursor: pointer; text-decoration: none;
+  }
+  .demo-bar select:hover, .demo-bar button:hover, .demo-bar a.demo-link:hover { background: #423d29; }
+  .demo-bar .spacer { flex: 1; }
+  @media (max-width: 720px) {
+    .demo-bar { position: static; flex-direction: column; align-items: stretch; }
+    body { padding-bottom: 0; }
+  }
+
   @media (max-width: 640px) {
-    .page { padding: 14px 12px 32px; }
+    .topbar { flex-wrap: wrap; row-gap: 10px; }
+    .topbar-meta { flex-basis: 100%; text-align: start; order: 3; }
+    .app-shell { padding: 0 14px; }
+    .home-columns.two-up { grid-template-columns: 1fr; }
+    .home-columns.two-up .home-col + .home-col { border-inline-start: 0; border-top: 1px solid var(--hairline); }
     .row { padding: 12px 14px; gap: 10px; }
-    .section-head { padding: 10px 14px 8px; }
     .row .thumb { width: 44px; height: 44px; }
+    .row-side { max-width: 52%; }
     .pv-shell { padding: 0; }
     .pv-bar { width: 100%; border-radius: 0; border-inline: 0; border-top: 0; }
     .pv-viewport { width: 100%; border: 0; border-radius: 0; }
     .pv-btn .pv-label { display: none; }
-    .pv-btn { padding: 6px 9px; min-height: 38px; }
-    .rec-sheet {
-      width: 100%; inset-inline: 0; top: auto; height: 94%;
-      border: 0; border-radius: 16px 16px 0 0; box-shadow: 0 -24px 60px rgba(0,0,0,.45);
-      transform: translateY(105%);
-    }
-    [dir="rtl"] .rec-sheet { transform: translateY(105%); }
-    .rec-sheet.open { transform: translateY(0); }
-    .rec-sheet::before {
-      content: ""; position: absolute; top: 8px; inset-inline-start: 50%; margin-inline-start: -18px;
-      width: 36px; height: 4px; border-radius: 99px; background: var(--border);
-    }
-    .rec-body { padding-bottom: 20px; }
-    .rec-actions {
-      position: fixed; bottom: 0; inset-inline: 0;
-      padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
-    }
+    .sort-field { margin-inline-start: 0; width: 100%; }
+    .queue-toolbar { flex-direction: column; align-items: stretch; }
+    .act-btn { min-width: 100%; }
   }
   @media print {
     body { background: #fff; }
     body > *:not(.pv-root) { display: none !important; }
-    .pv-scrim, .pv-bar, .rec-sheet, .toast { display: none !important; }
+    .pv-scrim, .pv-bar, .toast { display: none !important; }
     .pv-shell { position: static; padding: 0; }
     .pv-viewport { overflow: visible; border: 0; border-radius: 0; background: #fff; }
     .pv-doc { zoom: 1 !important; box-shadow: none; margin: 0 auto; }
@@ -319,558 +353,1122 @@
 </style>
 </head>
 <body>
+<a class="skip-link" id="skipLink" href="#main">Skip to content</a>
 
-<!-- ══════════════════ Frame 1 · English · light ══════════════════ -->
-<div class="frame-label"><span>EN · Light · click row = record, thumbnail = preview</span></div>
-<section class="page" data-theme="light" lang="en" dir="ltr" data-frame>
-  <header class="page-head">
-    <div>
-      <h1>Approvals</h1>
-      <p class="head-sub">6 records &middot; <b>3 awaiting your decision</b></p>
-    </div>
-    <button class="icon-btn" aria-label="Refresh">
-      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
-    </button>
+<div class="app-shell">
+  <header class="topbar">
+    <div class="brand"><span class="mark">GS</span><span id="brandWord">GSSG Manager</span></div>
+    <nav class="primary-nav" id="primaryNav" aria-label="Primary">
+      <a class="nav-link" id="navHome" href="#/home">Home</a>
+      <a class="nav-link" id="navApprovals" href="#/approvals">Approvals</a>
+    </nav>
+    <div class="topbar-meta" id="topbarMeta"></div>
   </header>
 
-  <div class="toolbar">
-    <div class="tabs" role="tablist" aria-label="Approvals">
-      <button class="tab" role="tab" aria-selected="true">Received <span class="n">6</span></button>
-      <button class="tab" role="tab" aria-selected="false">Sent <span class="n">12</span></button>
-    </div>
-    <div class="filters" role="group" aria-label="Filter by status">
-      <button class="chip" aria-pressed="true">All <span class="n">6</span></button>
-      <button class="chip" aria-pressed="false">Pending <span class="n">3</span></button>
-      <button class="chip" aria-pressed="false">Approved <span class="n">1</span></button>
-      <button class="chip" aria-pressed="false">Rejected <span class="n">1</span></button>
-      <button class="chip" aria-pressed="false">Returned <span class="n">1</span></button>
-    </div>
-  </div>
+  <main id="main">
+    <section id="viewHome" class="view"></section>
+    <section id="viewApprovals" class="view" hidden></section>
+    <section id="viewRecord" class="view" hidden></section>
+  </main>
+</div>
 
-  <div class="ledger">
-    <div class="section-head">
-      <span class="dot" style="background:var(--warning)"></span>
-      Awaiting your decision <span class="n">3</span>
-    </div>
-
-    <div class="row" role="button" tabindex="0">
-      <div class="thumb" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8b9098" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg></div>
-      <div class="row-main">
-        <div class="row-title">
-          <span class="ref">GS-0412</span>
-          <p class="subject">Leave Clearance Form — M. Al Mansouri</p>
-          <span class="high-flag">High</span>
-        </div>
-        <p class="row-meta">Fatima Al Mansouri → Ahmed Al Suwaidi</p>
-      </div>
-      <div class="row-side">
-        <span class="pill pending"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>Pending</span>
-        <span class="when">18 Aug</span>
-        <span class="waiting">6 days waiting</span>
-      </div>
-    </div>
-    <hr class="divider">
-
-    <div class="row" role="button" tabindex="0">
-      <div class="thumb" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8b9098" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg></div>
-      <div class="row-main">
-        <div class="row-title">
-          <span class="ref">NAT-0642</span>
-          <p class="subject">Warning Notice — Attendance</p>
-        </div>
-        <p class="row-meta">Khalid Rashid → Ahmed Al Suwaidi</p>
-      </div>
-      <div class="row-side">
-        <span class="pill pending"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>Pending</span>
-        <span class="when">21 Aug</span>
-        <span class="waiting">3 days waiting</span>
-      </div>
-    </div>
-    <hr class="divider">
-
-    <div class="row" role="button" tabindex="0">
-      <div class="thumb" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8b9098" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg></div>
-      <div class="row-main">
-        <div class="row-title">
-          <span class="ref">HR-1189</span>
-          <p class="subject">Experience Certificate</p>
-        </div>
-        <p class="row-meta">Maryam Obaid → Ahmed Al Suwaidi</p>
-      </div>
-      <div class="row-side">
-        <span class="pill pending"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>Pending</span>
-        <span class="when">23 Aug</span>
-        <span class="waiting">1 day waiting</span>
-      </div>
-    </div>
-
-    <div class="section-head" style="border-top:1px solid var(--hairline)">
-      <span class="dot" style="background:var(--text-faint)"></span>
-      Recent verdicts <span class="n">3</span>
-    </div>
-
-    <div class="row" role="button" tabindex="0">
-      <div class="thumb" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8b9098" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg></div>
-      <div class="row-main">
-        <div class="row-title">
-          <span class="ref">GS-0401</span>
-          <p class="subject">Salary Certificate</p>
-        </div>
-        <p class="row-meta">Omar Hareb → Ahmed Al Suwaidi</p>
-      </div>
-      <div class="row-side">
-        <span class="pill approved"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>Approved</span>
-        <span class="when">decided 14 Aug</span>
-      </div>
-    </div>
-    <hr class="divider">
-
-    <div class="row" role="button" tabindex="0">
-      <div class="thumb" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8b9098" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg></div>
-      <div class="row-main">
-        <div class="row-title">
-          <span class="ref">NAT-0598</span>
-          <p class="subject">NOC — Vehicle Registration</p>
-        </div>
-        <p class="row-meta">Salem Khamis → Ahmed Al Suwaidi</p>
-      </div>
-      <div class="row-side">
-        <span class="pill returned"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m9 14-4-4 4-4"/><path d="M5 10h11a4 4 0 0 1 4 4v2"/></svg>Returned</span>
-        <span class="when">decided 11 Aug</span>
-      </div>
-    </div>
-    <hr class="divider">
-
-    <div class="row" role="button" tabindex="0">
-      <div class="thumb" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8b9098" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg></div>
-      <div class="row-main">
-        <div class="row-title">
-          <span class="ref">HR-1176</span>
-          <p class="subject">Contract Renewal Letter</p>
-        </div>
-        <p class="row-meta">Aisha Dhahi → Ahmed Al Suwaidi</p>
-      </div>
-      <div class="row-side">
-        <span class="pill rejected"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>Rejected</span>
-        <span class="when">decided 5 Aug</span>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- ══════════════════ Frame 2 · Arabic · RTL ══════════════════ -->
-<div class="frame-label"><span>AR · RTL · اضغط الصف للسجل، المصغّر للمعاينة</span><button class="theme-toggle" onclick="flip(this)">تبديل المظهر</button></div>
-<section class="page" data-theme="light" lang="ar" dir="rtl" data-frame>
-  <header class="page-head">
-    <div>
-      <h1>الاعتمادات</h1>
-      <p class="head-sub">6 سجلات &middot; <b>3 بانتظار قرارك</b></p>
-    </div>
-    <button class="icon-btn" aria-label="تحديث">
-      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
-    </button>
-  </header>
-
-  <div class="toolbar">
-    <div class="tabs" role="tablist" aria-label="الاعتمادات">
-      <button class="tab" role="tab" aria-selected="true">الواردة إليّ <span class="n">6</span></button>
-      <button class="tab" role="tab" aria-selected="false">المرسلة مني <span class="n">12</span></button>
-    </div>
-    <div class="filters" role="group" aria-label="تصفية حسب الحالة">
-      <button class="chip" aria-pressed="true">الكل <span class="n">6</span></button>
-      <button class="chip" aria-pressed="false">قيد الاعتماد <span class="n">3</span></button>
-      <button class="chip" aria-pressed="false">معتمد <span class="n">1</span></button>
-      <button class="chip" aria-pressed="false">مرفوض <span class="n">1</span></button>
-      <button class="chip" aria-pressed="false">معاد <span class="n">1</span></button>
-    </div>
-  </div>
-
-  <div class="ledger">
-    <div class="section-head">
-      <span class="dot" style="background:var(--warning)"></span>
-      بانتظار قرارك <span class="n">3</span>
-    </div>
-
-    <div class="row" role="button" tabindex="0">
-      <div class="thumb" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8b9098" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg></div>
-      <div class="row-main">
-        <div class="row-title">
-          <span class="ref">GS-0412</span>
-          <p class="subject">نموذج إخلاء طرف — م. المنصوري</p>
-          <span class="high-flag">عالية</span>
-        </div>
-        <p class="row-meta">فاطمة المنصوري ← أحمد السويدي</p>
-      </div>
-      <div class="row-side">
-        <span class="pill pending"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>قيد الاعتماد</span>
-        <span class="when">18 أغسطس</span>
-        <span class="waiting">بانتظار منذ 6 أيام</span>
-      </div>
-    </div>
-    <hr class="divider">
-
-    <div class="row" role="button" tabindex="0">
-      <div class="thumb" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8b9098" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg></div>
-      <div class="row-main">
-        <div class="row-title">
-          <span class="ref">NAT-0642</span>
-          <p class="subject">إخطار إنذار — الحضور</p>
-        </div>
-        <p class="row-meta">خالد راشد ← أحمد السويدي</p>
-      </div>
-      <div class="row-side">
-        <span class="pill pending"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>قيد الاعتماد</span>
-        <span class="when">21 أغسطس</span>
-        <span class="waiting">بانتظار منذ 3 أيام</span>
-      </div>
-    </div>
-    <hr class="divider">
-
-    <div class="row" role="button" tabindex="0">
-      <div class="thumb" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8b9098" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg></div>
-      <div class="row-main">
-        <div class="row-title">
-          <span class="ref">HR-1189</span>
-          <p class="subject">شهادة خبرة</p>
-        </div>
-        <p class="row-meta">مريم عبيد ← أحمد السويدي</p>
-      </div>
-      <div class="row-side">
-        <span class="pill pending"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>قيد الاعتماد</span>
-        <span class="when">23 أغسطس</span>
-        <span class="waiting">بانتظار منذ يوم واحد</span>
-      </div>
-    </div>
-
-    <div class="section-head" style="border-top:1px solid var(--hairline)">
-      <span class="dot" style="background:var(--text-faint)"></span>
-      قرارات حديثة <span class="n">3</span>
-    </div>
-
-    <div class="row" role="button" tabindex="0">
-      <div class="thumb" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8b9098" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg></div>
-      <div class="row-main">
-        <div class="row-title">
-          <span class="ref">GS-0401</span>
-          <p class="subject">شهادة راتب</p>
-        </div>
-        <p class="row-meta">عمر حارب ← أحمد السويدي</p>
-      </div>
-      <div class="row-side">
-        <span class="pill approved"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>معتمد</span>
-        <span class="when">قرر في 14 أغسطس</span>
-      </div>
-    </div>
-    <hr class="divider">
-
-    <div class="row" role="button" tabindex="0">
-      <div class="thumb" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8b9098" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg></div>
-      <div class="row-main">
-        <div class="row-title">
-          <span class="ref">NAT-0598</span>
-          <p class="subject">لا مانع — تسجيل مركبة</p>
-        </div>
-        <p class="row-meta">سالم خميس ← أحمد السويدي</p>
-      </div>
-      <div class="row-side">
-        <span class="pill returned"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m9 14-4-4 4-4"/><path d="M5 10h11a4 4 0 0 1 4 4v2"/></svg>معاد</span>
-        <span class="when">قرر في 11 أغسطس</span>
-      </div>
-    </div>
-    <hr class="divider">
-
-    <div class="row" role="button" tabindex="0">
-      <div class="thumb" aria-hidden="true"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8b9098" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg></div>
-      <div class="row-main">
-        <div class="row-title">
-          <span class="ref">HR-1176</span>
-          <p class="subject">خطاب تجديد عقد</p>
-        </div>
-        <p class="row-meta">عائشة الظاهي ← أحمد السويدي</p>
-      </div>
-      <div class="row-side">
-        <span class="pill rejected"><svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>مرفوض</span>
-        <span class="when">قرر في 5 أغسطس</span>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- ══════════════════ Overlay · document preview + full record ══════════════════ -->
-<div class="pv-root" id="pvRoot" data-theme="light" lang="en" dir="ltr" hidden>
+<!-- ══ Document preview modal (zoom/print only — record detail is a routed page) ══ -->
+<div class="pv-root" id="pvRoot" hidden>
   <div class="pv-scrim" id="pvScrim"></div>
   <div class="pv-shell">
     <div class="pv-bar">
       <button class="pv-btn" id="pvClose" aria-label="Close preview"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
       <div class="pv-title"><span class="ref" id="pvRef"></span><span id="pvSubject"></span></div>
-      <div class="pv-zoom" role="group" aria-label="Zoom">
+      <div class="pv-zoom" id="pvZoomGroup" role="group" aria-label="Zoom">
         <button class="pv-btn" id="zOut" aria-label="Zoom out"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M5 12h14"/></svg></button>
         <span class="zval" id="zVal">100%</span>
         <button class="pv-btn" id="zIn" aria-label="Zoom in"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></button>
       </div>
       <button class="pv-btn" id="pvPrint"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v8H6z"/></svg><span class="pv-label" id="pvPrintLbl">Print</span></button>
-      <button class="pv-btn primary" id="pvRecord"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9 15h6M9 11h2"/></svg><span class="pv-label" id="pvRecordLbl">Full record</span></button>
+      <button class="pv-btn primary" id="pvRecordBtn"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M9 15h6M9 11h2"/></svg><span class="pv-label" id="pvRecordLbl">Full record</span></button>
     </div>
     <div class="pv-viewport" id="pvViewport">
       <div class="pv-doc" id="pvDoc"></div>
     </div>
   </div>
-  <aside class="rec-sheet" id="recSheet" role="dialog" aria-modal="true">
-    <div class="rec-head">
-      <button class="pv-btn" id="recClose" aria-label="Close record"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg></button>
-      <h2 id="recTitle"></h2>
-      <span class="ref" id="recRef"></span>
-    </div>
-    <div class="rec-body" id="recBody"></div>
-    <div class="rec-actions" id="recActions"></div>
-  </aside>
-  <div class="toast" id="pvToast" role="status"></div>
+</div>
+
+<div class="toast" id="pvToast" role="status" aria-live="polite"></div>
+
+<!-- ══ Demo toolbar — not part of the product surface ══ -->
+<div class="demo-bar" role="region" id="demoBarRegion">
+  <span class="demo-label" id="demoBarLabel">Demo controls</span>
+  <div class="demo-field">
+    <label for="personaSelect" id="personaLabel">Persona</label>
+    <select id="personaSelect"></select>
+  </div>
+  <div class="demo-field">
+    <label for="scenarioSelect" id="scenarioLabel">Scenario</label>
+    <select id="scenarioSelect"></select>
+  </div>
+  <button type="button" id="langToggleBtn"></button>
+  <button type="button" id="themeToggleBtn"></button>
+  <button type="button" id="resetDemoBtn"></button>
+  <span class="spacer"></span>
+  <a class="demo-link" id="coldLinkAnchor" href="#/record/101" target="_blank" rel="noopener"></a>
 </div>
 
 <script>
-  // Theme flip for quick dark-mode review of any frame.
-  function flip(btn) {
-    const frame = btn.closest('.frame-label').nextElementSibling;
-    frame.dataset.theme = frame.dataset.theme === 'light' ? 'dark' : 'light';
-    btn.textContent = frame.dataset.theme === 'light' ? 'تبديل المظهر' : 'Toggle theme';
+'use strict';
+(function () {
+  /* ═══════════ Constants & fixtures ═══════════ */
+  var DAY_MS = 86400000;
+  var DEMO_NOW = Date.parse('2026-09-14T12:00:00Z');
+  function D(dateOnly) { return Date.parse(dateOnly + 'T12:00:00Z'); }
+
+  var PERSONS = {
+    1: { id: 1, label: { en: 'Demo Operator', ar: 'المستخدم التجريبي' }, caps: { sign: true, review: true, send: true } },
+    2: { id: 2, label: { en: 'Demo Signer', ar: 'الموقّع التجريبي' }, caps: { sign: true, review: false, send: false } },
+    3: { id: 3, label: { en: 'Demo Submitter', ar: 'مقدّم الطلب التجريبي' }, caps: { sign: false, review: false, send: true } }
+  };
+  var PERSONA_ORDER = [1, 2, 3];
+
+  function personName(id, lang) {
+    if (id === null || id === undefined) return null;
+    var p = PERSONS[id];
+    return p ? p.label[lang] : null;
+  }
+  function caps(personaId) { return PERSONS[personaId].caps; }
+
+  function baseFixtures() {
+    return [
+      { id: 101, submittedBy: 3, signerId: 1, status: 'pending',
+        subject: { en: 'Annual Leave Clearance — A. Al Naqbi', ar: 'تصفية إجازة سنوية — أ. النقبي' },
+        submittedAt: D('2026-09-08'), decidedAt: null, reviewers: [], decisionReason: null },
+      { id: 102, submittedBy: 3, signerId: 1, status: 'pending',
+        subject: { en: 'Duty Resumption Notice', ar: 'إشعار استئناف العمل' },
+        submittedAt: D('2026-09-11'), decidedAt: null, reviewers: [], decisionReason: null },
+      { id: 103, submittedBy: 3, signerId: 1, status: 'pending',
+        subject: { en: 'Salary Certificate Request', ar: 'طلب شهادة راتب' },
+        submittedAt: D('2026-09-13'), decidedAt: null, reviewers: [], decisionReason: null },
+      { id: 104, submittedBy: 1, signerId: 2, status: 'pending',
+        subject: { en: 'Vehicle Assignment Memo', ar: 'مذكرة تخصيص مركبة' },
+        submittedAt: D('2026-09-09'), decidedAt: null, reviewers: [], decisionReason: null },
+      { id: 105, submittedBy: 1, signerId: 2, status: 'pending',
+        subject: { en: 'Overtime Approval Sheet', ar: 'كشف اعتماد العمل الإضافي' },
+        submittedAt: D('2026-09-12'), decidedAt: null,
+        reviewers: [{ userId: 3, state: 'changes_requested', decidedAt: D('2026-09-13'),
+          comment: { en: 'Please attach the timesheet backup before signing.', ar: 'يرجى إرفاق كشف الدوام قبل التوقيع.' } }],
+        decisionReason: null },
+      { id: 106, submittedBy: 1, signerId: 2, status: 'returned',
+        subject: { en: 'Travel Advance Request', ar: 'طلب سلفة سفر' },
+        submittedAt: D('2026-09-07'), decidedAt: D('2026-09-13'), reviewers: [],
+        decisionReason: { en: 'Correct the requested dates.', ar: 'صحّح التواريخ المطلوبة.' } },
+      { id: 107, submittedBy: 1, signerId: 2, status: 'approved',
+        subject: { en: 'Experience Certificate', ar: 'شهادة خبرة' },
+        submittedAt: D('2026-09-05'), decidedAt: D('2026-09-06'), reviewers: [], decisionReason: null },
+      { id: 108, submittedBy: 1, signerId: 2, status: 'rejected',
+        subject: { en: 'Warning Notice — Attendance', ar: 'إشعار إنذار — الحضور' },
+        submittedAt: D('2026-09-06'), decidedAt: D('2026-09-07'), reviewers: [],
+        decisionReason: { en: 'Missing required signature page.', ar: 'ينقصه صفحة التوقيع المطلوبة.' } },
+      { id: 109, submittedBy: 3, signerId: 2, status: 'pending',
+        subject: { en: 'Duty Post Transfer Memo', ar: 'مذكرة نقل موقع عمل' },
+        submittedAt: D('2026-09-10'), decidedAt: null,
+        reviewers: [{ userId: 1, state: 'pending', decidedAt: null, comment: null }],
+        decisionReason: null }
+    ].map(function (r) { r.reference = 'DEMO-' + r.id; return r; });
   }
 
-  // ── Preview + record overlay ─────────────────────────────────────────
-  const T = (lang, en, ar) => (lang === 'ar' ? ar : en);
-  const pvRoot = document.getElementById('pvRoot');
-  const pvViewport = document.getElementById('pvViewport');
-  const pvDoc = document.getElementById('pvDoc');
-  const recSheet = document.getElementById('recSheet');
-  const recBody = document.getElementById('recBody');
-  const recActions = document.getElementById('recActions');
-  const zVal = document.getElementById('zVal');
-  const pvToast = document.getElementById('pvToast');
-  let cur = null; // { row, frame, lang }
-  let zoom = 1;
-  let toastTimer = null;
+  function buildScenarioFixtures(scenario) {
+    var records = baseFixtures();
+    if (scenario === 'empty') return [];
+    if (scenario === 'no-signatures') {
+      [101, 102, 103].forEach(function (id) {
+        var r = records.filter(function (x) { return x.id === id; })[0];
+        r.status = 'approved';
+        r.decidedAt = r.submittedAt + DAY_MS;
+      });
+    }
+    if (scenario === 'missing-info') {
+      var r104 = records.filter(function (x) { return x.id === 104; })[0];
+      r104.signerId = null;
+      r104.submittedAt = null;
+    }
+    return records;
+  }
 
-  const ICONS = {
+  var SCENARIOS = [
+    { id: 'normal', en: 'Normal', ar: 'عادي' },
+    { id: 'no-signatures', en: 'No signatures waiting', ar: 'لا توقيعات بانتظار' },
+    { id: 'empty', en: 'Empty inbox', ar: 'صندوق فارغ' },
+    { id: 'missing-info', en: 'Missing record info', ar: 'بيانات ناقصة' },
+    { id: 'action-error', en: 'Signing fails once', ar: 'فشل التوقيع مرة واحدة' }
+  ];
+
+  /* ═══════════ i18n helpers ═══════════ */
+  function tt(lang, en, ar) { return lang === 'ar' ? ar : en; }
+  function esc(s) {
+    if (s === null || s === undefined) return '';
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c];
+    });
+  }
+  var MONTHS = {
+    en: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
+    ar: ['يناير', 'فبراير', 'مارس', 'أبريل', 'مايو', 'يونيو', 'يوليو', 'أغسطس', 'سبتمبر', 'أكتوبر', 'نوفمبر', 'ديسمبر']
+  };
+  function formatDate(ts, lang) {
+    if (ts === null || ts === undefined) return null;
+    var d = new Date(ts);
+    return d.getUTCDate() + ' ' + MONTHS[lang][d.getUTCMonth()] + ' ' + d.getUTCFullYear();
+  }
+  function arDays(n) {
+    if (n === 1) return 'يوم واحد';
+    if (n === 2) return 'يومان';
+    if (n >= 3 && n <= 10) return n + ' أيام';
+    return n + ' يومًا';
+  }
+  function waitingLabel(days, lang) {
+    if (lang === 'ar') return arDays(days) + ' انتظار';
+    return days === 1 ? '1 day waiting' : (days + ' days waiting');
+  }
+
+  var STR = {
+    homeTitle: { en: 'Home', ar: 'الرئيسية' },
+    approvalsTitle: { en: 'Approvals', ar: 'الاعتمادات' },
+    needsSignature: { en: 'Needs my signature', ar: 'بانتظار توقيعي' },
+    toReview: { en: 'To review', ar: 'للمراجعة' },
+    sentByMe: { en: 'Sent by me', ar: 'طلباتي المرسلة' },
+    needsChanges: { en: 'Needs your changes', ar: 'تحتاج إلى تعديلك' },
+    allSent: { en: 'All requests I sent', ar: 'كل الطلبات التي أرسلتها' },
+    neutralAccess: { en: 'No approval work is assigned to this demo persona.', ar: 'لا يوجد عمل اعتماد مخصّص لهذه الشخصية التجريبية.' },
+    oldestSubject: { en: 'Oldest:', ar: 'الأقدم:' },
+    waitingSince: { en: 'Waiting since submission:', ar: 'بانتظار منذ الإرسال:' },
+    noSignaturesWaiting: { en: 'No signatures waiting right now.', ar: 'لا توجد توقيعات بانتظار الآن.' },
+    noSentWaiting: { en: 'Nothing you sent is waiting on a signature.', ar: 'لا يوجد طلب أرسلته بانتظار توقيع.' },
+    awaitingSigner: { en: 'Awaiting', ar: 'بانتظار توقيع' },
+    signerUnavailable: { en: 'Signer unavailable', ar: 'الموقّع غير متاح' },
+    submissionUnavailable: { en: 'Submission time unavailable', ar: 'وقت الإرسال غير متاح' },
+    backToApprovals: { en: 'Back to approvals', ar: 'العودة إلى الاعتمادات' },
+    signApprove: { en: 'Sign and approve', ar: 'توقيع واعتماد' },
+    returnCorrection: { en: 'Return for correction', ar: 'إعادة للتعديل' },
+    reject: { en: 'Reject', ar: 'رفض' },
+    reviewNext: { en: 'Review next waiting record', ar: 'مراجعة الطلب التالي' },
+    noSignaturesLeft: { en: 'No signatures waiting', ar: 'لا توجد توقيعات بانتظار' },
+    markReviewed: { en: 'Mark reviewed', ar: 'تمت المراجعة' },
+    requestChanges: { en: 'Request changes', ar: 'طلب تعديلات' },
+    advisoryHeading: { en: 'Advisory reviews (do not block signing)', ar: 'مراجعات استشارية (لا توقف التوقيع)' },
+    activityHeading: { en: 'Activity', ar: 'النشاط' },
+    signError: { en: 'Signature could not be saved. Try again.', ar: 'تعذر حفظ التوقيع. حاول مرة أخرى.' },
+    saving: { en: 'Saving…', ar: 'جارٍ الحفظ…' },
+    oldestFirst: { en: 'Oldest first', ar: 'الأقدم أولاً' },
+    newestFirst: { en: 'Newest first', ar: 'الأحدث أولاً' },
+    sortLabel: { en: 'Sort', ar: 'الترتيب' },
+    received: { en: 'Needs my signature', ar: 'بانتظار توقيعي' },
+    sent: { en: 'Sent by me', ar: 'طلباتي المرسلة' },
+    kindSign: { en: 'To sign', ar: 'للتوقيع' },
+    kindReview: { en: 'To review', ar: 'للمراجعة' },
+    filterWaiting: { en: 'Waiting', ar: 'قيد الانتظار' },
+    filterReturned: { en: 'Returned', ar: 'معاد' },
+    filterApproved: { en: 'Approved', ar: 'معتمد' },
+    filterRejected: { en: 'Rejected', ar: 'مرفوض' },
+    filterAll: { en: 'All', ar: 'الكل' },
+    filterAllReviews: { en: 'All reviews', ar: 'كل المراجعات' },
+    submittedBy: { en: 'Submitted by', ar: 'مقدَّم من' },
+    assignedSigner: { en: 'Assigned signer', ar: 'الموقّع المكلّف' },
+    submittedOn: { en: 'Submitted', ar: 'تاريخ الإرسال' },
+    decidedOn: { en: 'Decided', ar: 'تاريخ القرار' },
+    reasonLabel: { en: 'Reason', ar: 'السبب' },
+    recordUnavailable: { en: 'Record unavailable', ar: 'السجل غير متاح' },
+    recordUnavailableBody: { en: 'This record does not exist in the demo data, or is not associated with the current persona.', ar: 'هذا السجل غير موجود في بيانات العرض التجريبي، أو غير مرتبط بالشخصية الحالية.' },
+    openPreview: { en: 'Opens the full preview', ar: 'يفتح المعاينة الكاملة' },
+    previewBtn: { en: 'Preview', ar: 'معاينة' },
+    signedApproved: { en: 'Signed and approved', ar: 'تم التوقيع والاعتماد' },
+    returnedForCorrection: { en: 'Returned for correction', ar: 'أُعيد للتصحيح' },
+    rejectedStatus: { en: 'Rejected', ar: 'مرفوض' },
+    reasonRequired: { en: 'Enter a reason before continuing.', ar: 'أدخل سبباً قبل المتابعة.' },
+    confirmReturn: { en: 'Confirm return', ar: 'تأكيد الإعادة' },
+    confirmReject: { en: 'Confirm rejection', ar: 'تأكيد الرفض' },
+    reviewCommentRequired: { en: 'A comment is required to request changes.', ar: 'التعليق مطلوب لطلب التعديلات.' },
+    confirmRequestChanges: { en: 'Confirm request', ar: 'تأكيد الطلب' },
+    coldLink: { en: 'Open cold record link (new tab)', ar: 'فتح رابط سجل مباشر (تبويب جديد)' },
+    reset: { en: 'Reset demo', ar: 'إعادة ضبط العرض' },
+    reviewerCommentLabel: { en: 'Comment', ar: 'تعليق' },
+    followUpHint: { en: 'Follow up: correct and resubmit through the source form. Editing is not available in this mockup.', ar: 'المتابعة: صحّح وأعد الإرسال عبر النموذج المصدر. التعديل غير متاح في هذا العرض التجريبي.' },
+    unknownSubmitter: { en: 'Unknown submitter', ar: 'مُرسل غير معروف' },
+    reviewerFallback: { en: 'Reviewer', ar: 'مراجع' },
+    signerFallback: { en: 'Signer', ar: 'الموقّع' },
+    close: { en: 'Close', ar: 'إغلاق' },
+    print: { en: 'Print', ar: 'طباعة' },
+    fullRecord: { en: 'Full record', ar: 'السجل الكامل' },
+    zoomIn: { en: 'Zoom in', ar: 'تكبير' },
+    zoomOut: { en: 'Zoom out', ar: 'تصغير' },
+    closePreview: { en: 'Close preview', ar: 'إغلاق المعاينة' },
+    previewDoc: { en: 'Preview document', ar: 'معاينة المستند' },
+    demoControlsLabel: { en: 'Demo controls', ar: 'أدوات العرض التجريبي' },
+    personaLabel: { en: 'Persona', ar: 'الشخصية' },
+    scenarioLabel: { en: 'Scenario', ar: 'السيناريو' },
+    skipLink: { en: 'Skip to content', ar: 'تخطٍ إلى المحتوى' },
+    primaryNavLabel: { en: 'Primary', ar: 'التنقل الرئيسي' },
+    zoomGroup: { en: 'Zoom', ar: 'التكبير والتصغير' }
+  };
+  function T(key, lang) { return STR[key] ? STR[key][lang] : key; }
+
+  var STATUS_LABEL = {
+    pending: { en: 'Awaiting signature', ar: 'بانتظار التوقيع' },
+    approved: { en: 'Approved', ar: 'معتمد' },
+    rejected: { en: 'Rejected', ar: 'مرفوض' },
+    returned: { en: 'Returned for correction', ar: 'أُعيد للتصحيح' }
+  };
+  var FILTER_LABEL = {
+    pending: STR.filterWaiting, returned: STR.filterReturned, approved: STR.filterApproved,
+    rejected: STR.filterRejected, all: STR.filterAll
+  };
+  var REVIEW_FILTER_LABEL = { pending: STR.filterWaiting, all: STR.filterAllReviews };
+  var REVIEWER_STATE_LABEL = {
+    pending: { en: 'Review pending', ar: 'قيد المراجعة' },
+    reviewed: { en: 'Reviewed', ar: 'تمت المراجعة' },
+    changes_requested: { en: 'Changes requested', ar: 'طُلبت تعديلات' }
+  };
+
+  var ICONS = {
     pending: '<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>',
     approved: '<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>',
     rejected: '<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M18 6 6 18M6 6l12 12"/></svg>',
-    returned: '<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m9 14-4-4 4-4"/><path d="M5 10h11a4 4 0 0 1 4 4v2"/></svg>'
+    returned: '<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m9 14-4-4 4-4"/><path d="M5 10h11a4 4 0 0 1 4 4v2"/></svg>',
+    doc: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#8b9098" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>',
+    back: '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>',
+    warn: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>'
   };
-  const PILL_LABEL = {
-    pending: ['Pending', 'قيد الاعتماد'], approved: ['Approved', 'معتمد'],
-    rejected: ['Rejected', 'مرفوض'], returned: ['Returned', 'معاد']
+
+  /* ═══════════ App state ═══════════ */
+  var state = {
+    personaId: 1,
+    lang: 'en',
+    theme: 'light',
+    scenario: 'normal',
+    records: buildScenarioFixtures('normal'),
+    actionErrorConsumed: false,
+    errorBanner: null
   };
 
-  function rowData(row) {
-    const lang = cur.lang;
-    const parts = row.querySelector('.row-meta').textContent.split(lang === 'ar' ? '←' : '→').map(s => s.trim());
-    const pill = row.querySelector('.pill');
-    const status = [...pill.classList].find(c => PILL_LABEL[c]) || 'pending';
-    return {
-      ref: row.querySelector('.ref').textContent.trim(),
-      subject: row.querySelector('.subject').textContent.trim(),
-      from: parts[0], to: parts[1] || '', status,
-      high: !!row.querySelector('.high-flag'),
-      date: row.querySelector('.when').textContent.trim(),
-      waitingEl: row.querySelector('.waiting')
-    };
+  function resetFixtures() {
+    state.records = buildScenarioFixtures(state.scenario);
+    state.actionErrorConsumed = false;
+    state.errorBanner = null;
   }
 
-  function docMarkup(d, ar) {
-    return `
-      <div class="doc-head">
-        <div class="doc-logo">GS</div>
-        <div class="doc-org"><b>GSSG MANAGER</b><span>${ar ? 'إدارة الموارد البشرية والوثائق' : 'Human Resources & Documents'}</span></div>
-      </div>
-      <div class="doc-refline"><span>${ar ? 'الرقم' : 'Ref'}: ${d.ref}</span><span>${ar ? 'التاريخ' : 'Date'}: ${d.date.replace(/^decided |^قرر في /, '')}</span></div>
-      <h3 class="doc-title">${d.subject}</h3>
-      <p class="doc-meta">${ar ? 'مقدَّم من' : 'Submitted by'} <b>${d.from}</b> ${ar ? 'إلى' : 'to'} <b>${d.to}</b></p>
-      <div class="doc-body">
-        <p>${ar
-          ? 'تشير إلى أن الطلب المشار إليه أعلاه، المقدَّم من ' + d.from + '، قد تمت معالجته عبر نظام GSSG Manager ويُعرض الآن للمراجعة واتخاذ القرار وفق الصلاحيات المعتمدة.'
-          : 'This is to certify that the request referenced above, submitted by ' + d.from + ', has been processed through the GSSG Manager document workflow and is presented for review and decision under the delegated approval authority.'}</p>
-        <p>${ar
-          ? 'تم التحقق من السجل المرفق مقابل ملف الموظف، وأي تعديل لاحق يتطلب طلباً رسمياً من القسم المُصدر قبل التوقيع النهائي.'
-          : 'The attached record has been verified against the employee file. Any subsequent amendment requires a formal request through the issuing department before final sign-off.'}</p>
-      </div>
-      <div class="doc-sig">
-        <div class="name">${d.from}</div>
-        <div class="doc-stamp">GSSG<br>${ar ? 'رسمية' : 'OFFICIAL'}</div>
-      </div>`;
+  /* ═══════════ Domain queries ═══════════ */
+  function findRecord(id) {
+    var found = null;
+    state.records.forEach(function (r) { if (r.id === id) found = r; });
+    return found;
   }
-  function renderDoc() {
-    const d = rowData(cur.row), ar = cur.lang === 'ar';
-    document.getElementById('pvRef').textContent = d.ref;
-    document.getElementById('pvSubject').textContent = d.subject;
-    pvDoc.innerHTML = docMarkup(d, ar);
+  function reviewerOf(rec, personId) {
+    var found = null;
+    rec.reviewers.forEach(function (rv) { if (rv.userId === personId) found = rv; });
+    return found;
   }
-
-  function renderRecord() {
-    const d = rowData(cur.row), lang = cur.lang, ar = lang === 'ar';
-    document.getElementById('recTitle').textContent = T(lang, 'Full record', 'السجل الكامل');
-    document.getElementById('recRef').textContent = d.ref;
-    let verdict = '';
-    if (d.status === 'approved') verdict = `<div class="rec-verdict ok">${ICONS.approved}${T(lang, 'Approved · ', 'تم الاعتماد · ')}${d.date.replace('decided ', '').replace('قرر في ', '')}</div>`;
-    if (d.status === 'rejected') verdict = `<div class="rec-verdict no">${ICONS.rejected}${T(lang, 'Rejected · ', 'تم الرفض · ')}${d.date.replace('decided ', '').replace('قرر في ', '')}</div>`;
-    if (d.status === 'returned') verdict = `<div class="rec-verdict ret">${ICONS.returned}${T(lang, 'Returned to sender · ', 'أُعيد إلى المُرسل · ')}${d.date.replace('decided ', '').replace('قرر في ', '')}</div>`;
-    recBody.innerHTML = `
-      <div class="rec-meta">
-        <p class="rec-subject">${d.subject}</p>
-        <div class="rec-status-row">
-          <span class="pill ${d.status}">${ICONS[d.status]}${PILL_LABEL[d.status][ar ? 1 : 0]}</span>
-          <span class="when">${d.date}</span>
-          <span class="priority${d.high ? ' high' : ''}">${d.high ? T(lang, 'High priority', 'أولوية عالية') : T(lang, 'Normal priority', 'أولوية عادية')}</span>
-        </div>
-        <p class="rec-parties">${d.from} ${ar ? '←' : '→'} ${d.to}</p>
-      </div>
-      ${verdict}
-      <div class="rec-doc-card" id="recDocCard" role="button" tabindex="0" aria-label="${ar ? 'فتح المعاينة الكاملة للمستند' : 'Open the full document preview'}">
-        <div class="thumb" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#8b9098" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg></div>
-        <div class="grow">
-          <div class="fname">${d.ref}.pdf</div>
-          <div class="fmeta">${ar ? 'اضغط لفتح المعاينة الكاملة · قرّب بإصبعين' : 'Opens the full preview · pinch to zoom'}</div>
-        </div>
-        <button class="pv-btn primary" tabindex="-1">${ar ? 'معاينة' : 'Preview'}</button>
-      </div>`;
-    const openPv = () => { pvRoot.classList.remove('rec-only'); setZoom(1); renderDoc(); pvViewport.scrollTop = 0; document.getElementById('pvClose').focus(); };
-    const card = document.getElementById('recDocCard');
-    card.onclick = openPv;
-    card.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openPv(); } });
-    renderActions(d, lang);
+  function countSignatures(personId) {
+    return state.records.filter(function (r) { return r.status === 'pending' && r.signerId === personId; }).length;
   }
-
-  function renderActions(d, lang) {
-    const ar = lang === 'ar';
-    if (d.status !== 'pending') { recActions.innerHTML = ''; recActions.style.display = 'none'; return; }
-    recActions.style.display = '';
-    recActions.innerHTML = `
-      <button class="rec-btn reject" id="btnReject">${ar ? '✕ رفض' : '✕ Reject'}</button>
-      <button class="rec-btn approve" id="btnApprove">${ar ? '✓ اعتماد' : '✓ Approve'}</button>`;
-    document.getElementById('btnApprove').onclick = () => applyVerdict('approved');
-    document.getElementById('btnReject').onclick = showReason;
+  function countReview(personId) {
+    return state.records.filter(function (r) {
+      if (r.status !== 'pending') return false;
+      var rv = reviewerOf(r, personId);
+      return !!rv && rv.state === 'pending';
+    }).length;
   }
-
-  function showReason() {
-    const ar = cur.lang === 'ar';
-    recActions.innerHTML = `
-      <div class="rec-reason">
-        <textarea id="reasonTxt" placeholder="${ar ? 'سبب الرفض (مطلوب)' : 'Rejection reason (required)'}"></textarea>
-        <button class="rec-btn reject confirm" id="btnConfirm">${ar ? 'تأكيد الرفض' : 'Confirm rejection'}</button>
-      </div>`;
-    const txt = document.getElementById('reasonTxt');
-    document.getElementById('btnConfirm').onclick = () => {
-      if (!txt.value.trim()) { txt.focus(); return; }
-      applyVerdict('rejected');
-    };
-    txt.focus();
+  function countSentWaiting(personId) {
+    return state.records.filter(function (r) { return r.status === 'pending' && r.submittedBy === personId; }).length;
   }
-
-  function applyVerdict(status) {
-    const d = rowData(cur.row), ar = cur.lang === 'ar';
-    const pill = cur.row.querySelector('.pill');
-    pill.className = 'pill ' + status;
-    pill.innerHTML = ICONS[status] + PILL_LABEL[status][ar ? 1 : 0];
-    if (d.waitingEl) d.waitingEl.remove();
-    cur.row.querySelector('.when').textContent = ar ? 'قرر الآن' : 'decided now';
-    toast(ar ? d.ref + ': تم ' + (status === 'approved' ? 'الاعتماد' : 'الرفض')
-             : d.ref + (status === 'approved' ? ' approved' : ' rejected'));
-    renderRecord();
+  function countNeedsChanges(personId) {
+    return state.records.filter(function (r) { return r.status === 'returned' && r.submittedBy === personId; }).length;
   }
-
-  function toast(msg) {
-    pvToast.textContent = msg;
-    pvToast.classList.add('show');
-    clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => pvToast.classList.remove('show'), 2400);
+  function compareBySubmission(a, b, dir) {
+    var am = a.submittedAt, bm = b.submittedAt;
+    if (am === null && bm === null) return a.id - b.id;
+    if (am === null) return 1;
+    if (bm === null) return -1;
+    if (am === bm) return a.id - b.id;
+    return dir === 'newest' ? (bm - am) : (am - bm);
   }
-
-  function syncOverlay() {
-    pvRoot.dataset.theme = cur.frame.dataset.theme;
-    pvRoot.lang = cur.lang;
-    pvRoot.dir = cur.frame.dir;
-    document.getElementById('pvPrintLbl').textContent = T(cur.lang, 'Print', 'طباعة');
-    document.getElementById('pvRecordLbl').textContent = T(cur.lang, 'Full record', 'السجل الكامل');
+  function oldestOf(list) {
+    var sorted = list.slice().sort(function (a, b) { return compareBySubmission(a, b, 'oldest'); });
+    return sorted[0] || null;
   }
-  function openPreview(row) {
-    cur = { row, frame: row.closest('.page'), lang: row.closest('.page').lang };
-    syncOverlay();
-    pvViewport.scrollTop = 0;
-    setZoom(1);
-    renderDoc();
-    pvRoot.hidden = false;
-    document.getElementById('pvClose').focus();
-  }
-  function closePreview() {
-    if (recSheet.classList.contains('open')) {
-      pvRoot.classList.add('rec-only'); // collapse to record-only view
-    } else {
-      pvRoot.hidden = true;
-      pvRoot.classList.remove('rec-only');
+  function queueList(ctx) {
+    var personId = ctx.personaId;
+    var list = state.records.filter(function (r) {
+      if (ctx.tab === 'sent') return r.submittedBy === personId;
+      if (ctx.kind === 'review') return !!reviewerOf(r, personId);
+      return r.signerId === personId;
+    });
+    if (ctx.tab === 'received' && ctx.kind === 'review') {
+      if (ctx.status === 'pending') {
+        list = list.filter(function (r) {
+          return r.status === 'pending' && reviewerOf(r, personId).state === 'pending';
+        });
+      }
+    } else if (ctx.status !== 'all') {
+      list = list.filter(function (r) { return r.status === ctx.status; });
     }
-  }
-  function openRecord(row) {
-    cur = { row, frame: row.closest('.page'), lang: row.closest('.page').lang };
-    syncOverlay();
-    renderRecord();
-    if (pvRoot.hidden) { pvRoot.classList.add('rec-only'); pvRoot.hidden = false; }
-    recSheet.classList.add('open');
-    document.getElementById('recClose').focus();
-  }
-  function closeRecord() {
-    recSheet.classList.remove('open');
-    if (pvRoot.classList.contains('rec-only')) { pvRoot.hidden = true; pvRoot.classList.remove('rec-only'); }
+    list = list.slice().sort(function (a, b) { return compareBySubmission(a, b, ctx.sort); });
+    return list;
   }
 
-  // ── Zoom: buttons, ctrl+wheel, double-click, pinch ──────────────────
+  /* ═══════════ Routing ═══════════ */
+  function computeDefaultRoute(personId) {
+    var c = caps(personId);
+    if (c.sign && countSignatures(personId) > 0) return { tab: 'received', kind: 'sign', status: 'pending', sort: 'oldest' };
+    if (c.send) return { tab: 'sent', status: 'pending', sort: 'oldest' };
+    if (c.review && countReview(personId) > 0) return { tab: 'received', kind: 'review', status: 'pending', sort: 'oldest' };
+    return { tab: 'received', kind: 'sign', status: 'pending', sort: 'oldest' };
+  }
+  function normalizeApprovalsParams(params, personId) {
+    var c = caps(personId);
+    var tab = params.tab === 'sent' ? 'sent' : (params.tab === 'received' ? 'received' : null);
+    if (!tab) return computeDefaultRoute(personId);
+    if (tab === 'sent' && !c.send) return computeDefaultRoute(personId);
+    if (tab === 'received' && !c.sign && !c.review) return computeDefaultRoute(personId);
+    var sort = params.sort === 'newest' ? 'newest' : 'oldest';
+    if (tab === 'sent') {
+      var sAllowed = ['pending', 'returned', 'approved', 'rejected', 'all'];
+      var sStatus = sAllowed.indexOf(params.status) >= 0 ? params.status : 'pending';
+      return { tab: 'sent', status: sStatus, sort: sort };
+    }
+    var kind = params.kind === 'review' ? 'review' : 'sign';
+    if (kind === 'review' && !c.review) kind = c.sign ? 'sign' : null;
+    if (kind === 'sign' && !c.sign) kind = c.review ? 'review' : null;
+    if (!kind) return computeDefaultRoute(personId);
+    var status;
+    if (kind === 'review') {
+      status = params.status === 'all' ? 'all' : 'pending';
+    } else {
+      var rAllowed = ['pending', 'returned', 'approved', 'rejected', 'all'];
+      status = rAllowed.indexOf(params.status) >= 0 ? params.status : 'pending';
+    }
+    return { tab: 'received', kind: kind, status: status, sort: sort };
+  }
+  function buildApprovalsHash(ctx) {
+    var qp;
+    if (ctx.tab === 'sent') qp = 'tab=sent&status=' + ctx.status + '&sort=' + ctx.sort;
+    else qp = 'tab=received&kind=' + ctx.kind + '&status=' + ctx.status + '&sort=' + ctx.sort;
+    return '#/approvals?' + qp;
+  }
+  function buildRecordHash(id, ctx) {
+    return '#/record/' + id + '?' + buildApprovalsHash(ctx).split('?')[1];
+  }
+  function inferContextOrNull(rec, personId) {
+    var c = caps(personId);
+    if (c.sign && rec.signerId === personId) return { tab: 'received', kind: 'sign', status: 'pending', sort: 'oldest' };
+    if (c.review && reviewerOf(rec, personId)) return { tab: 'received', kind: 'review', status: 'pending', sort: 'oldest' };
+    if (c.send && rec.submittedBy === personId) return { tab: 'sent', status: 'pending', sort: 'oldest' };
+    return null;
+  }
+  function parseHash(hash) {
+    hash = hash || '#/home';
+    var body = hash.charAt(0) === '#' ? hash.slice(1) : hash;
+    var parts = body.split('?');
+    var segs = parts[0].split('/').filter(Boolean);
+    var params = {};
+    if (parts[1]) {
+      parts[1].split('&').forEach(function (pair) {
+        if (!pair) return;
+        var kv = pair.split('=');
+        params[decodeURIComponent(kv[0])] = decodeURIComponent(kv[1] || '');
+      });
+    }
+    if (segs[0] === 'record') return { view: 'record', id: Number(segs[1]), params: params };
+    if (segs[0] === 'approvals') return { view: 'approvals', params: params };
+    return { view: 'home', params: params };
+  }
+  function resolveRecordRoute(id, rawParams, personId) {
+    var rec = findRecord(id);
+    if (!rec) return { id: id, notFound: true, back: computeDefaultRoute(personId) };
+    var hasParams = rawParams && (rawParams.tab || rawParams.status || rawParams.sort || rawParams.kind);
+    if (hasParams) return { id: id, record: rec, back: normalizeApprovalsParams(rawParams, personId) };
+    var inferred = inferContextOrNull(rec, personId);
+    if (!inferred) return { id: id, notFound: true, back: computeDefaultRoute(personId) };
+    return { id: id, record: rec, back: inferred };
+  }
+
+  function navigatePush(hash) { history.pushState(null, '', hash); render(); }
+  function setApprovalsCtx(partial) {
+    var parsed = parseHash(location.hash);
+    var current = parsed.view === 'approvals' ? normalizeApprovalsParams(parsed.params, state.personaId) : computeDefaultRoute(state.personaId);
+    var next;
+    if (partial.tab === 'sent') next = { tab: 'sent', status: partial.status || (current.tab === 'sent' ? current.status : 'pending'), sort: partial.sort || current.sort };
+    else if (partial.tab === 'received') next = { tab: 'received', kind: partial.kind || (current.kind || 'sign'), status: partial.status || 'pending', sort: partial.sort || current.sort };
+    else next = Object.assign({}, current, partial);
+    var hash = buildApprovalsHash(next);
+    history.replaceState({ type: 'approvals', ctx: next }, '', hash);
+    render();
+  }
+  function openRecordFromRow(rec, ctx, rowEl) {
+    history.replaceState({ type: 'approvals', ctx: ctx, scrollY: window.scrollY, focusId: rec.id }, '', location.hash);
+    var hash = buildRecordHash(rec.id, ctx);
+    history.pushState({ type: 'record', id: rec.id, ctx: ctx }, '', hash);
+    render();
+  }
+  function goToNextRecord(id, ctx) {
+    var hash = buildRecordHash(id, ctx);
+    history.pushState({ type: 'record', id: id, ctx: ctx }, '', hash);
+    render();
+  }
+
+  function boot() {
+    var parsed = parseHash(location.hash);
+    if (parsed.view === 'record') {
+      var resolved = resolveRecordRoute(parsed.id, parsed.params, state.personaId);
+      var backCtx = resolved.back;
+      history.replaceState({ type: 'approvals', ctx: backCtx }, '', buildApprovalsHash(backCtx));
+      var fwdHash = resolved.record ? buildRecordHash(parsed.id, backCtx) : ('#/record/' + parsed.id);
+      history.pushState({ type: 'record', id: parsed.id, ctx: backCtx }, '', fwdHash);
+    } else if (parsed.view === 'approvals') {
+      var ctx = normalizeApprovalsParams(parsed.params, state.personaId);
+      history.replaceState({ type: 'approvals', ctx: ctx }, '', buildApprovalsHash(ctx));
+    } else {
+      history.replaceState({ type: 'home' }, '', '#/home');
+    }
+    render();
+  }
+
+  /* ═══════════ Rendering: shell ═══════════ */
+  var elHome = document.getElementById('viewHome');
+  var elApprovals = document.getElementById('viewApprovals');
+  var elRecord = document.getElementById('viewRecord');
+  var navHome = document.getElementById('navHome');
+  var navApprovals = document.getElementById('navApprovals');
+
+  function applyChrome() {
+    var lang = state.lang;
+    document.documentElement.lang = lang;
+    document.documentElement.dir = lang === 'ar' ? 'rtl' : 'ltr';
+    document.documentElement.dataset.theme = state.theme;
+    document.title = tt(lang, 'GSSG Manager — Approvals flow mockup', 'مدير GSSG — نموذج تدفق الاعتمادات');
+    document.getElementById('brandWord').textContent = tt(lang, 'GSSG Manager', 'مدير GSSG');
+    document.getElementById('skipLink').textContent = T('skipLink', lang);
+    document.getElementById('primaryNav').setAttribute('aria-label', T('primaryNavLabel', lang));
+    navHome.textContent = T('homeTitle', lang);
+    navApprovals.textContent = T('approvalsTitle', lang);
+    var p = PERSONS[state.personaId];
+    document.getElementById('topbarMeta').innerHTML = tt(lang, 'Signed in as ', 'مسجّل الدخول باسم ') + '<b>' + esc(p.label[lang]) + '</b>';
+    renderDemoBar();
+  }
+
+  function renderDemoBar() {
+    var lang = state.lang;
+    document.getElementById('demoBarLabel').textContent = T('demoControlsLabel', lang);
+    document.getElementById('demoBarRegion').setAttribute('aria-label', T('demoControlsLabel', lang));
+    document.getElementById('personaLabel').textContent = T('personaLabel', lang);
+    document.getElementById('scenarioLabel').textContent = T('scenarioLabel', lang);
+    var personaSelect = document.getElementById('personaSelect');
+    personaSelect.innerHTML = PERSONA_ORDER.map(function (id) {
+      return '<option value="' + id + '"' + (id === state.personaId ? ' selected' : '') + '>' + esc(PERSONS[id].label[lang]) + '</option>';
+    }).join('');
+    var scenarioSelect = document.getElementById('scenarioSelect');
+    scenarioSelect.innerHTML = SCENARIOS.map(function (s) {
+      return '<option value="' + s.id + '"' + (s.id === state.scenario ? ' selected' : '') + '>' + esc(s[lang]) + '</option>';
+    }).join('');
+    document.getElementById('langToggleBtn').textContent = lang === 'ar' ? 'EN' : 'AR';
+    document.getElementById('langToggleBtn').setAttribute('aria-label', tt(lang, 'Switch to Arabic', 'التبديل إلى الإنجليزية'));
+    document.getElementById('themeToggleBtn').textContent = state.theme === 'light' ? tt(lang, 'Dark theme', 'المظهر الداكن') : tt(lang, 'Light theme', 'المظهر الفاتح');
+    document.getElementById('resetDemoBtn').textContent = T('reset', lang);
+    var cold = document.getElementById('coldLinkAnchor');
+    cold.textContent = T('coldLink', lang);
+    cold.href = location.pathname + '#/record/101';
+  }
+
+  function setActiveView(view) {
+    elHome.hidden = view !== 'home';
+    elApprovals.hidden = view !== 'approvals';
+    elRecord.hidden = view !== 'record';
+    navHome.removeAttribute('aria-current');
+    navApprovals.removeAttribute('aria-current');
+    if (view === 'home') navHome.setAttribute('aria-current', 'page');
+    if (view === 'approvals' || view === 'record') navApprovals.setAttribute('aria-current', 'page');
+  }
+
+  /* ═══════════ Rendering: home ═══════════ */
+  function renderHome() {
+    setActiveView('home');
+    var lang = state.lang, personId = state.personaId, c = caps(personId);
+    var sections = [];
+
+    if (c.sign) {
+      var sigCount = countSignatures(personId);
+      var sigList = state.records.filter(function (r) { return r.status === 'pending' && r.signerId === personId; });
+      var oldestSig = oldestOf(sigList);
+      var href = buildApprovalsHash({ tab: 'received', kind: 'sign', status: 'pending', sort: 'oldest' });
+      var body = '<a class="widget-primary" href="' + href + '">' +
+        '<div class="widget-count-row"><span class="widget-count' + (sigCount === 0 ? ' zero' : '') + '">' + sigCount + '</span><span class="widget-label">' + T('needsSignature', lang) + '</span></div>';
+      if (oldestSig) {
+        var days = Math.floor((DEMO_NOW - oldestSig.submittedAt) / DAY_MS);
+        body += '<p class="widget-detail">' + T('oldestSubject', lang) + ' <span class="subj">' + esc(oldestSig.subject[lang]) + '</span><br>' + T('waitingSince', lang) + ' ' + waitingLabel(days, lang) + '</p>';
+      } else {
+        body += '<p class="widget-empty">' + T('noSignaturesWaiting', lang) + '</p>';
+      }
+      body += '</a>';
+      var subRow = '';
+      if (c.review) {
+        var revCount = countReview(personId);
+        subRow = '<div class="sublink-row"><a class="sublink' + (revCount === 0 ? '' : ' warn') + '" href="' + buildApprovalsHash({ tab: 'received', kind: 'review', status: 'pending', sort: 'oldest' }) + '">' + T('toReview', lang) + ' <span class="n">' + revCount + '</span></a></div>';
+      }
+      sections.push('<div class="home-col"><div class="home-col-head">' + T('needsSignature', lang) + '</div>' + body + subRow + '</div>');
+    }
+
+    if (c.send) {
+      var sentCount = countSentWaiting(personId);
+      var sentList = state.records.filter(function (r) { return r.status === 'pending' && r.submittedBy === personId; });
+      var oldestSent = oldestOf(sentList);
+      var hrefSent = buildApprovalsHash({ tab: 'sent', status: 'pending', sort: 'oldest' });
+      var body2 = '<a class="widget-primary" href="' + hrefSent + '">' +
+        '<div class="widget-count-row"><span class="widget-count' + (sentCount === 0 ? ' zero' : '') + '">' + sentCount + '</span><span class="widget-label">' + T('sentByMe', lang) + '</span></div>';
+      if (oldestSent) {
+        var days2 = oldestSent.submittedAt === null ? null : Math.floor((DEMO_NOW - oldestSent.submittedAt) / DAY_MS);
+        var signerNm = personName(oldestSent.signerId, lang);
+        var awaitTxt = signerNm ? (T('awaitingSigner', lang) + ' ' + esc(signerNm)) : T('signerUnavailable', lang);
+        var ageTxt = days2 === null ? T('submissionUnavailable', lang) : (T('waitingSince', lang) + ' ' + waitingLabel(days2, lang));
+        body2 += '<p class="widget-detail">' + T('oldestSubject', lang) + ' <span class="subj">' + esc(oldestSent.subject[lang]) + '</span><br>' + awaitTxt + ' &middot; ' + ageTxt + '</p>';
+      } else {
+        body2 += '<p class="widget-empty">' + T('noSentWaiting', lang) + '</p>';
+      }
+      body2 += '</a>';
+      var needsChangesCount = countNeedsChanges(personId);
+      var subRow2 = '<div class="sublink-row">' +
+        '<a class="sublink' + (needsChangesCount === 0 ? '' : ' warn') + '" href="' + buildApprovalsHash({ tab: 'sent', status: 'returned', sort: 'oldest' }) + '">' + T('needsChanges', lang) + ' <span class="n">' + needsChangesCount + '</span></a>' +
+        '</div>' +
+        '<a class="quiet-link" href="' + buildApprovalsHash({ tab: 'sent', status: 'all', sort: 'oldest' }) + '">' + T('allSent', lang) + '</a>';
+      sections.push('<div class="home-col"><div class="home-col-head">' + T('sentByMe', lang) + '</div>' + body2 + subRow2 + '</div>');
+    }
+
+    var columnsHtml;
+    if (sections.length === 0) {
+      columnsHtml = '<div class="home-columns"><div class="neutral-access">' + T('neutralAccess', lang) + '</div></div>';
+    } else {
+      columnsHtml = '<div class="home-columns' + (sections.length === 2 ? ' two-up' : '') + '">' + sections.join('') + '</div>';
+    }
+
+    elHome.innerHTML =
+      '<div class="home-head"><h1>' + T('homeTitle', lang) + '</h1><p class="view-sub">' + tt(lang, 'One approvals worklist, split by responsibility.', 'قائمة اعتماد واحدة، مقسّمة حسب المسؤولية.') + '</p></div>' +
+      columnsHtml;
+  }
+
+  /* ═══════════ Rendering: approvals queue ═══════════ */
+  function renderApprovals(ctx) {
+    setActiveView('approvals');
+    var lang = state.lang, personId = state.personaId, c = caps(personId);
+    var fullCtx = Object.assign({ personaId: personId }, ctx);
+    var list = queueList(fullCtx);
+
+    var tabsHtml = '';
+    if ((c.sign || c.review) && c.send) {
+      tabsHtml = '<div class="tabs" role="tablist" aria-label="' + T('approvalsTitle', lang) + '">' +
+        '<button type="button" class="tab" role="tab" aria-selected="' + (ctx.tab === 'received') + '" data-act="tab" data-tab="received">' + T('received', lang) + '</button>' +
+        '<button type="button" class="tab" role="tab" aria-selected="' + (ctx.tab === 'sent') + '" data-act="tab" data-tab="sent">' + T('sent', lang) + '</button>' +
+        '</div>';
+    }
+    var kindHtml = '';
+    if (ctx.tab === 'received' && c.sign && c.review) {
+      kindHtml = '<div class="kind-group" role="tablist" aria-label="' + tt(lang, 'Assignment kind', 'نوع التكليف') + '">' +
+        '<button type="button" class="kind-btn" role="tab" aria-selected="' + (ctx.kind === 'sign') + '" data-act="kind" data-kind="sign">' + T('kindSign', lang) + '</button>' +
+        '<button type="button" class="kind-btn" role="tab" aria-selected="' + (ctx.kind === 'review') + '" data-act="kind" data-kind="review">' + T('kindReview', lang) + '</button>' +
+        '</div>';
+    }
+    var isReview = ctx.tab === 'received' && ctx.kind === 'review';
+    var filterDict = isReview ? REVIEW_FILTER_LABEL : FILTER_LABEL;
+    var filterOrder = isReview ? ['pending', 'all'] : ['pending', 'returned', 'approved', 'rejected', 'all'];
+    var filtersHtml = '<div class="filters" role="group" aria-label="' + tt(lang, 'Filter by status', 'تصفية حسب الحالة') + '">' +
+      filterOrder.map(function (st) {
+        return '<button type="button" class="chip" aria-pressed="' + (ctx.status === st) + '" data-act="status" data-status="' + st + '">' + filterDict[st][lang] + '</button>';
+      }).join('') + '</div>';
+    var sortHtml = '<div class="sort-field"><label for="sortSelect">' + T('sortLabel', lang) + '</label>' +
+      '<select id="sortSelect" data-act="sort"><option value="oldest"' + (ctx.sort === 'oldest' ? ' selected' : '') + '>' + T('oldestFirst', lang) + '</option>' +
+      '<option value="newest"' + (ctx.sort === 'newest' ? ' selected' : '') + '>' + T('newestFirst', lang) + '</option></select></div>';
+
+    var heading = ctx.tab === 'sent' ? T('sent', lang) : (isReview ? T('kindReview', lang) : T('received', lang));
+
+    var rowsHtml;
+    if (list.length === 0) {
+      rowsHtml = '<div class="queue-empty">' + tt(lang, 'Nothing here for the selected filter.', 'لا يوجد شيء هنا وفق التصفية المحددة.') + '</div>';
+    } else {
+      rowsHtml = list.map(function (r, idx) {
+        var row = renderQueueRow(r, fullCtx, lang, isReview);
+        return row + (idx < list.length - 1 ? '<hr class="divider">' : '');
+      }).join('');
+    }
+
+    elApprovals.innerHTML =
+      '<div class="home-head"><h1 id="queueHeading" tabindex="-1">' + heading + '</h1></div>' +
+      '<div class="queue-toolbar">' + tabsHtml + kindHtml + filtersHtml + sortHtml + '</div>' +
+      '<div class="ledger" id="ledgerBody">' + rowsHtml + '</div>';
+
+    wireApprovalsControls(fullCtx);
+    wireQueueRows(list, fullCtx);
+    return fullCtx;
+  }
+
+  function renderQueueRow(r, ctx, lang, isReview) {
+    var closed = r.status !== 'pending';
+    var sideHtml;
+    if (isReview) {
+      var rv = reviewerOf(r, ctx.personaId);
+      sideHtml = '<span class="rchip ' + rv.state + '">' + esc(REVIEWER_STATE_LABEL[rv.state][lang]) + '</span>' +
+        '<span class="when">' + (formatDate(r.submittedAt, lang) || T('submissionUnavailable', lang)) + '</span>';
+    } else if (ctx.tab === 'sent') {
+      if (closed) {
+        sideHtml = '<span class="pill ' + r.status + '">' + ICONS[r.status] + esc(STATUS_LABEL[r.status][lang]) + '</span>' +
+          '<span class="when">' + tt(lang, 'decided ', 'قرر في ') + (formatDate(r.decidedAt, lang) || '') + '</span>';
+      } else {
+        var signerNm = personName(r.signerId, lang);
+        var awaitTxt = signerNm ? (T('awaitingSigner', lang) + ' ' + esc(signerNm)) : T('signerUnavailable', lang);
+        var subLine = r.submittedAt === null
+          ? '<span class="waiting missing">' + T('submissionUnavailable', lang) + '</span>'
+          : '<span class="waiting">' + waitingLabel(Math.floor((DEMO_NOW - r.submittedAt) / DAY_MS), lang) + '</span>';
+        sideHtml = '<span class="pill pending">' + ICONS.pending + esc(STATUS_LABEL.pending[lang]) + '</span><span class="when' + (signerNm ? '' : ' missing') + '">' + awaitTxt + '</span>' + subLine;
+      }
+    } else {
+      if (closed) {
+        sideHtml = '<span class="pill ' + r.status + '">' + ICONS[r.status] + esc(STATUS_LABEL[r.status][lang]) + '</span>' +
+          '<span class="when">' + tt(lang, 'decided ', 'قرر في ') + (formatDate(r.decidedAt, lang) || '') + '</span>';
+      } else {
+        var subLine2 = r.submittedAt === null
+          ? '<span class="waiting missing">' + T('submissionUnavailable', lang) + '</span>'
+          : '<span class="waiting">' + waitingLabel(Math.floor((DEMO_NOW - r.submittedAt) / DAY_MS), lang) + '</span>';
+        sideHtml = '<span class="pill pending">' + ICONS.pending + esc(STATUS_LABEL.pending[lang]) + '</span>' + subLine2;
+      }
+    }
+    var relatedName = ctx.tab === 'sent'
+      ? (personName(r.signerId, lang) || T('signerUnavailable', lang))
+      : (personName(r.submittedBy, lang) || T('unknownSubmitter', lang));
+    var submittedTitle = formatDate(r.submittedAt, lang) || T('submissionUnavailable', lang);
+    return '<div class="row" id="row-' + r.id + '" role="button" tabindex="0" data-row-id="' + r.id + '" title="' + tt(lang, 'Submitted ', 'أُرسل ') + submittedTitle + '">' +
+      '<span class="thumb" data-thumb-id="' + r.id + '" role="button" tabindex="0" aria-label="' + T('previewDoc', lang) + '">' + ICONS.doc + '</span>' +
+      '<span class="row-main"><span class="row-title"><span class="ref">' + esc(r.reference) + '</span><span class="subject">' + esc(r.subject[lang]) + '</span></span>' +
+      '<span class="row-meta"><span class="who">' + esc(relatedName) + '</span></span></span>' +
+      '<span class="row-side">' + sideHtml + '</span>' +
+      '</div>';
+  }
+
+  function wireApprovalsControls(ctx) {
+    document.querySelectorAll('[data-act="tab"]').forEach(function (btn) {
+      btn.addEventListener('click', function () { setApprovalsCtx({ tab: btn.dataset.tab, sort: ctx.sort }); });
+    });
+    document.querySelectorAll('[data-act="kind"]').forEach(function (btn) {
+      btn.addEventListener('click', function () { setApprovalsCtx({ tab: 'received', kind: btn.dataset.kind, status: 'pending', sort: ctx.sort }); });
+    });
+    document.querySelectorAll('[data-act="status"]').forEach(function (btn) {
+      btn.addEventListener('click', function () { setApprovalsCtx({ status: btn.dataset.status }); });
+    });
+    var sortSel = document.querySelector('[data-act="sort"]');
+    if (sortSel) sortSel.addEventListener('change', function () { setApprovalsCtx({ sort: sortSel.value }); });
+  }
+  function wireQueueRows(list, ctx) {
+    list.forEach(function (r) {
+      var rowEl = document.getElementById('row-' + r.id);
+      if (!rowEl) return;
+      rowEl.addEventListener('click', function (e) {
+        if (e.target.closest('[data-thumb-id]')) return;
+        openRecordFromRow(r, ctx, rowEl);
+      });
+      rowEl.addEventListener('keydown', function (e) {
+        if (e.target.closest('[data-thumb-id]')) return;
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openRecordFromRow(r, ctx, rowEl); }
+      });
+      var thumb = rowEl.querySelector('[data-thumb-id]');
+      thumb.addEventListener('click', function (e) { e.stopPropagation(); openPreviewModal(r, ctx); });
+      thumb.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); e.preventDefault(); openPreviewModal(r, ctx); }
+      });
+    });
+  }
+
+  /* ═══════════ Rendering: record detail ═══════════ */
+  function buildEvents(rec, lang) {
+    var events = [];
+    var submitterName = personName(rec.submittedBy, lang) || T('unknownSubmitter', lang);
+    events.push({ ts: rec.submittedAt, text: tt(lang, 'Submitted for approval by ' + submitterName, 'أُرسل للاعتماد من ' + submitterName) });
+    rec.reviewers.forEach(function (rv) {
+      if (rv.decidedAt) {
+        var name = personName(rv.userId, lang) || T('reviewerFallback', lang);
+        var verb = rv.state === 'reviewed'
+          ? tt(lang, name + ' marked the review complete', 'أنهى ' + name + ' المراجعة')
+          : tt(lang, name + ' requested changes', 'طلب ' + name + ' إجراء تعديلات');
+        events.push({ ts: rv.decidedAt, text: verb, note: rv.comment ? rv.comment[lang] : null });
+      }
+    });
+    if (rec.decidedAt) {
+      var signer = personName(rec.signerId, lang) || T('signerFallback', lang);
+      var text;
+      if (rec.status === 'approved') text = tt(lang, signer + ' signed and approved the record', 'وقّع ' + signer + ' واعتمد السجل');
+      else if (rec.status === 'rejected') text = tt(lang, signer + ' rejected the record', 'رفض ' + signer + ' السجل');
+      else if (rec.status === 'returned') text = tt(lang, signer + ' returned the record for correction', 'أعاد ' + signer + ' السجل للتصحيح');
+      events.push({ ts: rec.decidedAt, text: text, note: rec.decisionReason ? rec.decisionReason[lang] : null });
+    }
+    events.sort(function (a, b) { return (a.ts === null ? Infinity : a.ts) - (b.ts === null ? Infinity : b.ts); });
+    return events;
+  }
+
+  function metaItem(k, v, missing) {
+    return '<div class="meta-item"><div class="k">' + esc(k) + '</div><div class="v' + (missing ? ' missing' : '') + '">' + esc(v) + '</div></div>';
+  }
+
+  function renderRecordView(routeId, rawParams) {
+    setActiveView('record');
+    var lang = state.lang, personId = state.personaId;
+    var resolved = resolveRecordRoute(routeId, rawParams, personId);
+    var backCtx = resolved.back;
+    var backBtnHtml = '<button type="button" class="back-btn" id="backBtn">' + ICONS.back + T('backToApprovals', lang) + '</button>';
+
+    if (resolved.notFound) {
+      elRecord.innerHTML =
+        '<div class="backbar">' + backBtnHtml + '</div>' +
+        '<div class="unavailable-card"><h2>' + T('recordUnavailable', lang) + '</h2><p>' + T('recordUnavailableBody', lang) + '</p></div>';
+      document.getElementById('backBtn').addEventListener('click', function () { history.back(); });
+      return;
+    }
+
+    var rec = resolved.record;
+    var isSigner = rec.signerId === personId && caps(personId).sign;
+    var reviewerEntry = reviewerOf(rec, personId);
+    var isReviewer = !!reviewerEntry && caps(personId).review;
+    var isSubmitter = rec.submittedBy === personId;
+
+    var html = '<div class="backbar">' + backBtnHtml + '</div>';
+    html += '<div class="detail-card"><div class="detail-header">';
+    html += '<span class="ref">' + esc(rec.reference) + '</span><h1 class="detail-subject">' + esc(rec.subject[lang]) + '</h1>';
+    html += '<div class="detail-status-row"><span class="pill ' + rec.status + '">' + ICONS[rec.status] + esc(STATUS_LABEL[rec.status][lang]) + '</span></div>';
+    html += '<div class="detail-meta-grid">';
+    html += metaItem(T('submittedBy', lang), personName(rec.submittedBy, lang) || T('unknownSubmitter', lang));
+    html += metaItem(T('assignedSigner', lang), personName(rec.signerId, lang) || T('signerUnavailable', lang), !rec.signerId);
+    html += metaItem(T('submittedOn', lang), formatDate(rec.submittedAt, lang) || T('submissionUnavailable', lang), rec.submittedAt === null);
+    if (rec.decidedAt) html += metaItem(T('decidedOn', lang), formatDate(rec.decidedAt, lang));
+    html += '</div></div>';
+
+    html += '<div class="detail-body">';
+
+    if (state.errorBanner && state.errorBanner.recId === rec.id) {
+      html += '<div class="banner err">' + ICONS.warn + '<span class="msg">' + esc(state.errorBanner.msg) + '</span></div>';
+    }
+
+    if (rec.status === 'approved' && rec.signerId === personId && caps(personId).sign) {
+      var nextRec = queueList({ personaId: personId, tab: 'received', kind: 'sign', status: 'pending', sort: backCtx.sort }).filter(function (r) { return r.id !== rec.id; })[0];
+      html += '<div class="banner ok">' + ICONS.approved + '<span class="msg">' + T('signedApproved', lang) + '</span></div>';
+      html += '<div class="banner-actions">';
+      if (nextRec) html += '<button type="button" class="act-btn approve" id="nextBtn" data-next-id="' + nextRec.id + '">' + T('reviewNext', lang) + '</button>';
+      else html += '<span class="next-empty">' + T('noSignaturesLeft', lang) + '</span>';
+      html += '</div>';
+    } else if (rec.status === 'returned') {
+      html += '<div class="banner ret">' + ICONS.returned + '<span class="msg">' + T('returnedForCorrection', lang) + (rec.decisionReason ? ' — ' + esc(rec.decisionReason[lang]) : '') + '</span></div>';
+      if (isSubmitter) html += '<p class="hint">' + T('followUpHint', lang) + '</p>';
+    } else if (rec.status === 'rejected') {
+      html += '<div class="banner no">' + ICONS.rejected + '<span class="msg">' + T('rejectedStatus', lang) + (rec.decisionReason ? ' — ' + esc(rec.decisionReason[lang]) : '') + '</span></div>';
+    } else if (rec.status === 'pending' && isSigner) {
+      html += renderSignActions(lang);
+    }
+
+    if (rec.status === 'pending' && isReviewer && reviewerEntry.state === 'pending') {
+      html += renderReviewerActions(lang);
+    }
+
+    html += '<button type="button" class="doc-card" id="openDocCard"><span class="thumb" aria-hidden="true">' + ICONS.doc + '</span>' +
+      '<span class="grow"><span class="fname">' + esc(rec.reference) + '.pdf</span><span class="fmeta">' + T('openPreview', lang) + '</span></span>' +
+      '<span class="pv-btn primary" tabindex="-1">' + T('previewBtn', lang) + '</span></button>';
+
+    if (rec.reviewers.length > 0) {
+      html += '<section class="card-section"><h3>' + T('advisoryHeading', lang) + '</h3>';
+      html += '<div class="reviewer-list">' + rec.reviewers.map(function (rv) {
+        var name = personName(rv.userId, lang) || T('reviewerFallback', lang);
+        var chip = '<span class="rchip ' + rv.state + '">' + esc(REVIEWER_STATE_LABEL[rv.state][lang]) + '</span>';
+        var comment = rv.comment ? '<div class="comment">' + esc(rv.comment[lang]) + '</div>' : '';
+        return '<div class="reviewer-row"><div><div class="who">' + esc(name) + '</div>' + comment + '</div>' + chip + '</div>';
+      }).join('') + '</div></section>';
+    }
+
+    var events = buildEvents(rec, lang);
+    html += '<section class="card-section"><h3>' + T('activityHeading', lang) + '</h3><ul class="activity-list">' +
+      events.map(function (ev) {
+        return '<li><span class="dot" aria-hidden="true"></span><span class="atext">' + esc(ev.text) +
+          '<span class="atime">' + (formatDate(ev.ts, lang) || T('submissionUnavailable', lang)) + '</span>' +
+          (ev.note ? '<span class="anote">' + esc(ev.note) + '</span>' : '') + '</span></li>';
+      }).join('') + '</ul></section>';
+
+    html += '</div></div>';
+    elRecord.innerHTML = html;
+
+    document.getElementById('backBtn').addEventListener('click', function () { history.back(); });
+    var nextBtn = document.getElementById('nextBtn');
+    if (nextBtn) nextBtn.addEventListener('click', function () { goToNextRecord(Number(nextBtn.dataset.nextId), backCtx); });
+    document.getElementById('openDocCard').addEventListener('click', function () { openPreviewModal(rec, backCtx); });
+    wireSignActions(rec);
+    wireReviewerActions(rec);
+  }
+
+  function renderSignActions(lang) {
+    return '<div class="action-panel" id="signActionPanel">' +
+      '<button type="button" class="act-btn approve" id="btnSign">' + T('signApprove', lang) + '</button>' +
+      '<button type="button" class="act-btn" id="btnReturn">' + T('returnCorrection', lang) + '</button>' +
+      '<button type="button" class="act-btn reject" id="btnReject">' + T('reject', lang) + '</button>' +
+      '</div>';
+  }
+  function renderReviewerActions(lang) {
+    return '<div class="action-panel" id="reviewActionPanel">' +
+      '<button type="button" class="act-btn review-ok" id="btnMarkReviewed">' + T('markReviewed', lang) + '</button>' +
+      '<button type="button" class="act-btn" id="btnRequestChanges">' + T('requestChanges', lang) + '</button>' +
+      '</div>';
+  }
+
+  function wireSignActions(rec) {
+    var lang = state.lang;
+    var btnSign = document.getElementById('btnSign');
+    if (btnSign) btnSign.addEventListener('click', function () {
+      var panel = document.getElementById('signActionPanel');
+      panel.querySelectorAll('button').forEach(function (b) { b.disabled = true; });
+      btnSign.textContent = T('saving', lang);
+      setTimeout(function () {
+        state.errorBanner = null;
+        if (state.scenario === 'action-error' && !state.actionErrorConsumed) {
+          state.actionErrorConsumed = true;
+          state.errorBanner = { recId: rec.id, msg: T('signError', lang) };
+          render();
+          return;
+        }
+        rec.status = 'approved';
+        rec.decidedAt = DEMO_NOW;
+        render();
+      }, 350);
+    });
+    var btnReturn = document.getElementById('btnReturn');
+    if (btnReturn) btnReturn.addEventListener('click', function () { showReasonForm(rec, 'returned'); });
+    var btnReject = document.getElementById('btnReject');
+    if (btnReject) btnReject.addEventListener('click', function () { showReasonForm(rec, 'rejected'); });
+  }
+  function showReasonForm(rec, targetStatus) {
+    var lang = state.lang;
+    var panel = document.getElementById('signActionPanel');
+    var confirmLabel = targetStatus === 'returned' ? T('confirmReturn', lang) : T('confirmReject', lang);
+    var placeholder = targetStatus === 'returned' ? T('returnCorrection', lang) : T('reject', lang);
+    panel.innerHTML =
+      '<div class="reason-form">' +
+      '<label for="reasonTxt">' + T('reasonLabel', lang) + '</label>' +
+      '<textarea id="reasonTxt" aria-required="true" placeholder="' + esc(placeholder) + '"></textarea>' +
+      '<div class="field-error" id="reasonErr" hidden>' + T('reasonRequired', lang) + '</div>' +
+      '<div class="reason-form-actions">' +
+      '<button type="button" class="act-btn ' + (targetStatus === 'rejected' ? 'reject' : '') + '" id="btnConfirmReason">' + confirmLabel + '</button>' +
+      '</div></div>';
+    var txt = document.getElementById('reasonTxt');
+    txt.focus();
+    document.getElementById('btnConfirmReason').addEventListener('click', function () {
+      var val = txt.value.trim();
+      if (!val) { document.getElementById('reasonErr').hidden = false; txt.focus(); return; }
+      rec.status = targetStatus;
+      rec.decidedAt = DEMO_NOW;
+      rec.decisionReason = { en: val, ar: val };
+      render();
+    });
+  }
+  function wireReviewerActions(rec) {
+    var lang = state.lang, personId = state.personaId;
+    var btnMark = document.getElementById('btnMarkReviewed');
+    if (btnMark) btnMark.addEventListener('click', function () {
+      var rv = reviewerOf(rec, personId);
+      rv.state = 'reviewed'; rv.decidedAt = DEMO_NOW; rv.comment = null;
+      render();
+    });
+    var btnChanges = document.getElementById('btnRequestChanges');
+    if (btnChanges) btnChanges.addEventListener('click', function () {
+      var panel = document.getElementById('reviewActionPanel');
+      panel.innerHTML =
+        '<div class="reason-form">' +
+        '<label for="reviewCommentTxt">' + T('reviewerCommentLabel', lang) + '</label>' +
+        '<textarea id="reviewCommentTxt" aria-required="true"></textarea>' +
+        '<div class="field-error" id="reviewCommentErr" hidden>' + T('reviewCommentRequired', lang) + '</div>' +
+        '<div class="reason-form-actions"><button type="button" class="act-btn" id="btnConfirmChanges">' + T('confirmRequestChanges', lang) + '</button></div></div>';
+      var txt = document.getElementById('reviewCommentTxt');
+      txt.focus();
+      document.getElementById('btnConfirmChanges').addEventListener('click', function () {
+        var val = txt.value.trim();
+        if (!val) { document.getElementById('reviewCommentErr').hidden = false; txt.focus(); return; }
+        var rv = reviewerOf(rec, personId);
+        rv.state = 'changes_requested'; rv.decidedAt = DEMO_NOW; rv.comment = { en: val, ar: val };
+        render();
+      });
+    });
+  }
+
+  /* ═══════════ Document preview modal ═══════════ */
+  var pvRoot = document.getElementById('pvRoot');
+  var pvViewport = document.getElementById('pvViewport');
+  var pvDoc = document.getElementById('pvDoc');
+  var zVal = document.getElementById('zVal');
+  var zoom = 1, pvLastFocus = null, pvRecordCtx = null, pvSourceCtx = null;
+
+  function docMarkup(rec, lang) {
+    var ar = lang === 'ar';
+    var submitter = personName(rec.submittedBy, lang) || T('unknownSubmitter', lang);
+    var signer = personName(rec.signerId, lang) || T('signerUnavailable', lang);
+    var dateStr = formatDate(rec.submittedAt, lang) || T('submissionUnavailable', lang);
+    var stamp = rec.status === 'approved' ? '<div class="doc-signed-stamp">' + (ar ? 'موقَّع' : 'SIGNED') + '</div>' : '';
+    return stamp +
+      '<div class="doc-head"><div class="doc-logo">GS</div><div class="doc-org"><b>GSSG MANAGER</b><span>' + (ar ? 'إدارة الموارد البشرية والوثائق' : 'Human Resources &amp; Documents') + '</span></div></div>' +
+      '<div class="doc-refline"><span>' + (ar ? 'الرقم' : 'Ref') + ': ' + esc(rec.reference) + '</span><span>' + (ar ? 'التاريخ' : 'Date') + ': ' + dateStr + '</span></div>' +
+      '<h3 class="doc-title">' + esc(rec.subject[lang]) + '</h3>' +
+      '<p class="doc-meta">' + (ar ? 'مقدَّم من' : 'Submitted by') + ' <b>' + esc(submitter) + '</b> ' + (ar ? 'إلى' : 'to') + ' <b>' + esc(signer) + '</b></p>' +
+      '<div class="doc-body"><p>' + (ar
+        ? 'تشير هذه الوثيقة إلى أن الطلب المشار إليه أعلاه، المقدَّم من ' + esc(submitter) + '، قد تمت معالجته عبر نظام GSSG Manager ويُعرض الآن للمراجعة واتخاذ القرار وفق الصلاحيات المعتمدة.'
+        : 'This is to certify that the request referenced above, submitted by ' + esc(submitter) + ', has been processed through the GSSG Manager document workflow and is presented for review and decision under the delegated approval authority.') + '</p>' +
+      '<p>' + (ar
+        ? 'هذا مستند تجريبي لأغراض العرض فقط، ولا يمثل سجلاً رسمياً حقيقياً.'
+        : 'This is a synthetic demo document for illustration only; it is not a real official record.') + '</p></div>' +
+      '<div class="doc-sig"><div class="name">' + esc(submitter) + '</div><div class="doc-stamp">GSSG<br>' + (ar ? 'رسمية' : 'OFFICIAL') + '</div></div>';
+  }
   function setZoom(nz) {
     zoom = Math.min(3, Math.max(0.5, nz));
     pvDoc.style.zoom = zoom;
     zVal.textContent = Math.round(zoom * 100) + '%';
   }
-  document.getElementById('zIn').onclick = () => setZoom(zoom + 0.25);
-  document.getElementById('zOut').onclick = () => setZoom(zoom - 0.25);
-  pvViewport.addEventListener('wheel', e => {
+  function syncPvChrome() {
+    var lang = state.lang;
+    pvRoot.lang = lang;
+    pvRoot.dir = lang === 'ar' ? 'rtl' : 'ltr';
+    document.getElementById('pvClose').setAttribute('aria-label', T('closePreview', lang));
+    document.getElementById('zOut').setAttribute('aria-label', T('zoomOut', lang));
+    document.getElementById('zIn').setAttribute('aria-label', T('zoomIn', lang));
+    document.getElementById('pvZoomGroup').setAttribute('aria-label', T('zoomGroup', lang));
+    document.getElementById('pvPrintLbl').textContent = T('print', lang);
+    document.getElementById('pvRecordLbl').textContent = T('fullRecord', lang);
+    document.getElementById('pvPrint').setAttribute('aria-label', T('print', lang));
+    document.getElementById('pvRecordBtn').setAttribute('aria-label', T('fullRecord', lang));
+  }
+  function openPreviewModal(rec, ctx) {
+    pvRecordCtx = rec;
+    pvSourceCtx = ctx || null;
+    pvLastFocus = document.activeElement;
+    syncPvChrome();
+    var lang = state.lang;
+    document.getElementById('pvRef').textContent = rec.reference;
+    document.getElementById('pvSubject').textContent = rec.subject[lang];
+    pvDoc.innerHTML = docMarkup(rec, lang);
+    pvViewport.scrollTop = 0;
+    setZoom(1);
+    pvRoot.hidden = false;
+    document.getElementById('pvClose').focus();
+    document.addEventListener('keydown', trapPvFocus, true);
+  }
+  function closePreviewModal() {
+    pvRoot.hidden = true;
+    document.removeEventListener('keydown', trapPvFocus, true);
+    if (pvLastFocus && document.contains(pvLastFocus)) pvLastFocus.focus();
+  }
+  function trapPvFocus(e) {
+    if (pvRoot.hidden) return;
+    if (e.key === 'Escape') { closePreviewModal(); return; }
+    if (e.key !== 'Tab') return;
+    var focusable = pvRoot.querySelectorAll('button, [href], select, textarea, [tabindex]:not([tabindex="-1"])');
+    if (!focusable.length) return;
+    var first = focusable[0], last = focusable[focusable.length - 1];
+    if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+  }
+  document.getElementById('pvClose').addEventListener('click', closePreviewModal);
+  document.getElementById('pvScrim').addEventListener('click', closePreviewModal);
+  document.getElementById('pvPrint').addEventListener('click', function () { window.print(); });
+  document.getElementById('pvRecordBtn').addEventListener('click', function () {
+    closePreviewModal();
+    if (pvRecordCtx) {
+      var ctx = pvSourceCtx || inferContextOrNull(pvRecordCtx, state.personaId) || computeDefaultRoute(state.personaId);
+      openRecordFromRow(pvRecordCtx, ctx, null);
+    }
+  });
+  document.getElementById('zIn').addEventListener('click', function () { setZoom(zoom + 0.25); });
+  document.getElementById('zOut').addEventListener('click', function () { setZoom(zoom - 0.25); });
+  pvViewport.addEventListener('wheel', function (e) {
     if (!e.ctrlKey && !e.metaKey) return;
     e.preventDefault();
     setZoom(zoom + (e.deltaY < 0 ? 0.15 : -0.15));
   }, { passive: false });
-  pvViewport.addEventListener('dblclick', () => setZoom(zoom > 1.05 ? 1 : 2));
-  let pinch = null;
-  pvViewport.addEventListener('touchstart', e => {
+  pvViewport.addEventListener('dblclick', function () { setZoom(zoom > 1.05 ? 1 : 2); });
+  var pinch = null;
+  pvViewport.addEventListener('touchstart', function (e) {
     if (e.touches.length === 2) {
-      const [a, b] = e.touches;
+      var a = e.touches[0], b = e.touches[1];
       pinch = { d: Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY), z: zoom };
     } else pinch = null;
   }, { passive: true });
-  pvViewport.addEventListener('touchmove', e => {
+  pvViewport.addEventListener('touchmove', function (e) {
     if (!pinch || e.touches.length !== 2) return;
     e.preventDefault();
-    const [a, b] = e.touches;
+    var a = e.touches[0], b = e.touches[1];
     setZoom(pinch.z * (Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY) / pinch.d));
   }, { passive: false });
-  pvViewport.addEventListener('touchend', () => { pinch = null; }, { passive: true });
+  pvViewport.addEventListener('touchend', function () { pinch = null; }, { passive: true });
 
-  // ── Wiring ───────────────────────────────────────────────────────────
-  document.getElementById('pvClose').onclick = closePreview;
-  document.getElementById('recClose').onclick = closeRecord;
-  document.getElementById('pvScrim').onclick = () => (recSheet.classList.contains('open') ? closeRecord() : closePreview());
-  document.getElementById('pvRecord').onclick = () => openRecord(cur.row);
-  document.getElementById('pvPrint').onclick = () => window.print();
-  document.addEventListener('keydown', e => {
-    if (e.key !== 'Escape' || pvRoot.hidden) return;
-    recSheet.classList.contains('open') ? closeRecord() : closePreview();
+  /* ═══════════ Master render + event wiring ═══════════ */
+  function render() {
+    applyChrome();
+    var parsed = parseHash(location.hash);
+    if (parsed.view === 'record') {
+      renderRecordView(parsed.id, parsed.params);
+    } else if (parsed.view === 'approvals') {
+      var ctx = normalizeApprovalsParams(parsed.params, state.personaId);
+      var st = history.state;
+      renderApprovals(ctx);
+      if (st && st.type === 'approvals' && typeof st.scrollY === 'number') {
+        window.scrollTo(0, st.scrollY);
+        var focusRow = st.focusId ? document.getElementById('row-' + st.focusId) : null;
+        if (focusRow) focusRow.focus();
+        else { var heading = document.getElementById('queueHeading'); if (heading) heading.focus(); }
+      }
+    } else {
+      renderHome();
+    }
+  }
+
+  window.addEventListener('popstate', function () { render(); });
+  window.addEventListener('hashchange', function () {
+    var parsed = parseHash(location.hash);
+    if (!history.state) render();
   });
-  document.querySelectorAll('.page').forEach(frame => {
-    frame.querySelectorAll('.row').forEach(row => {
-      row.addEventListener('click', () => openRecord(row));
-      row.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openRecord(row); } });
-      const thumb = row.querySelector('.thumb');
-      thumb.setAttribute('role', 'button');
-      thumb.tabIndex = 0;
-      thumb.setAttribute('aria-label', frame.lang === 'ar' ? 'معاينة المستند' : 'Preview document');
-      thumb.addEventListener('click', e => { e.stopPropagation(); openPreview(row); });
-      thumb.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); e.preventDefault(); openPreview(row); } });
-    });
+
+  document.getElementById('navHome').addEventListener('click', function (e) {
+    e.preventDefault();
+    history.pushState({ type: 'home' }, '', '#/home');
+    render();
   });
+  document.getElementById('navApprovals').addEventListener('click', function (e) {
+    e.preventDefault();
+    var ctx = computeDefaultRoute(state.personaId);
+    history.pushState({ type: 'approvals', ctx: ctx }, '', buildApprovalsHash(ctx));
+    render();
+  });
+
+  document.getElementById('personaSelect').addEventListener('change', function (e) {
+    state.personaId = Number(e.target.value);
+    history.pushState({ type: 'home' }, '', '#/home');
+    render();
+  });
+  document.getElementById('scenarioSelect').addEventListener('change', function (e) {
+    state.scenario = e.target.value;
+    resetFixtures();
+    history.pushState({ type: 'home' }, '', '#/home');
+    render();
+  });
+  document.getElementById('langToggleBtn').addEventListener('click', function () {
+    state.lang = state.lang === 'ar' ? 'en' : 'ar';
+    render();
+  });
+  document.getElementById('themeToggleBtn').addEventListener('click', function () {
+    state.theme = state.theme === 'light' ? 'dark' : 'light';
+    render();
+  });
+  document.getElementById('resetDemoBtn').addEventListener('click', function () {
+    resetFixtures();
+    history.pushState({ type: 'home' }, '', '#/home');
+    render();
+  });
+
+  boot();
+
+  window.__approvalsDemo = {
+    state: state, render: function () { render(); }
+  };
+})();
 </script>
 </body>
 </html>

@@ -27,6 +27,7 @@ export type ExpiryStatus = 'valid' | 'due' | 'expired'
 export type DueState = 'overdue' | 'due' | 'scheduled'
 export type AccidentStatus = 'open' | 'closed'
 export type MaintenanceType = 'service' | 'repair' | 'tires' | 'other'
+export type PaymentStatus = 'unknown' | 'unpaid' | 'paid'
 
 /** The narrow `t` shape the helpers need — assignable from i18next's `t`. */
 export type Translate = (key: string, options?: Record<string, unknown>) => string
@@ -63,6 +64,19 @@ export function dueTone(state: DueState): VehicleTone {
 
 export function accidentTone(status: AccidentStatus): VehicleTone {
   return status === 'open' ? 'warning' : 'active'
+}
+
+/** `unknown` (pre-migration history, not yet classified) reads as neutral,
+ *  never as an alarm — it is a data gap, not an overdue debt. */
+export function paymentTone(status: PaymentStatus): VehicleTone {
+  switch (status) {
+    case 'paid':
+      return 'active'
+    case 'unpaid':
+      return 'warning'
+    case 'unknown':
+      return 'neutral'
+  }
 }
 
 // ── Language ────────────────────────────────────────────────────────────────
@@ -112,6 +126,100 @@ export function formatAed(value: number, language: string): string {
  *  on-screen paper and the DOCX cannot disagree. Latin digits, Arabic word. */
 export function formatLetterAed(value: number): string {
   return `${value} درهم`
+}
+
+// ── Fine money (fils) ───────────────────────────────────────────────────────
+// Fine amounts are exact integer fils (1/100 AED) so a fractional fine (e.g.
+// AED 349.50) is never rounded away. Every other cost on the module (accident
+// damage, maintenance/renewal cost) stays whole AED via `formatAed`/
+// `formatLetterAed` above — only fines carry fractions. Fine money is always
+// rendered in Latin digits in both languages (isolated from the surrounding
+// Arabic run), matching the signed-off mockup and `core/vehicle_letters.py`.
+
+const FILS_GROUPED_WHOLE_FMT = new Intl.NumberFormat('en-AE', {
+  numberingSystem: 'latn',
+  useGrouping: true,
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 0,
+})
+const FILS_GROUPED_FRAC_FMT = new Intl.NumberFormat('en-AE', {
+  numberingSystem: 'latn',
+  useGrouping: true,
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+})
+const FILS_PLAIN_WHOLE_FMT = new Intl.NumberFormat('en-AE', {
+  numberingSystem: 'latn',
+  useGrouping: false,
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 0,
+})
+const FILS_PLAIN_FRAC_FMT = new Intl.NumberFormat('en-AE', {
+  numberingSystem: 'latn',
+  useGrouping: false,
+  minimumFractionDigits: 2,
+  maximumFractionDigits: 2,
+})
+
+/** Fils → its exact display string: whole amounts print without cents,
+ *  fractional amounts print exactly two digits. Never rounded, never
+ *  truncated — the two Intl formatters only ever render a value already
+ *  split into whole AED and whole cents. */
+export function formatFilsNumber(fils: number, opts: { grouping?: boolean } = {}): string {
+  const grouping = opts.grouping !== false
+  const whole = fils % 100 === 0
+  const value = fils / 100
+  const fmt = grouping
+    ? whole
+      ? FILS_GROUPED_WHOLE_FMT
+      : FILS_GROUPED_FRAC_FMT
+    : whole
+      ? FILS_PLAIN_WHOLE_FMT
+      : FILS_PLAIN_FRAC_FMT
+  return fmt.format(value)
+}
+
+/** A fine amount for on-screen display: the currency word after the amount in
+ *  both languages, mirroring `formatAed` — but exact-fils and Latin-digit. */
+export function formatFilsAed(fils: number, language: string): string {
+  return `${formatFilsNumber(fils)} ${isArabic(language) ? 'د.إ' : 'AED'}`
+}
+
+/** A fine amount exactly as the generated letters print it (`349 درهم` /
+ *  `349.50 درهم`), matching `core/vehicle_letters._format_letter_amount`. */
+export function formatLetterFilsAed(fils: number): string {
+  return `${formatFilsNumber(fils, { grouping: false })} درهم`
+}
+
+/** The fils amount as plain (ungrouped) editable text — what an amount text
+ *  input shows for its current/default value. */
+export function filsToEditableText(fils: number): string {
+  return formatFilsNumber(fils, { grouping: false })
+}
+
+// U+066B (Arabic decimal separator) and U+060C (Arabic comma), either of
+// which an Arabic keyboard may emit for a typed decimal point.
+const ARABIC_DECIMAL_SEPARATORS = /[\u066B\u060C]/g
+
+/**
+ * Strict fine-amount parser: plain digits with zero to two decimal places,
+ * no sign, no grouping, no exponent, in the domain's 1–9,999,999.99 AED
+ * range. `null` for anything else — including zero, a sub-dirham amount, or
+ * excess precision — so the caller marks the field invalid instead of
+ * sending junk. Arabic-Indic/Extended-Arabic digits and the Arabic decimal
+ * separator normalize first, so an amount typed on an Arabic keypad parses
+ * identically to one typed in English. Computed by splitting the
+ * whole/fraction strings — never `parseFloat() * 100`, which is not exact
+ * for money.
+ */
+export function parseAmountToFils(raw: string): number | null {
+  const sanitized = normalizeDigits(raw).replace(ARABIC_DECIMAL_SEPARATORS, '.').trim()
+  const match = /^(\d{1,7})(?:\.(\d{1,2}))?$/.exec(sanitized)
+  if (!match) return null
+  const whole = Number(match[1])
+  if (whole < 1 || whole > 9_999_999) return null
+  const fraction = (match[2] ?? '').padEnd(2, '0')
+  return whole * 100 + Number(fraction)
 }
 
 /** ISO date (or timestamp) → `yyyy-mm-dd`, the mono form every table uses. */
@@ -248,6 +356,12 @@ export const MAINTENANCE_TYPES: readonly MaintenanceType[] = [
 export const IMAGE_ACCEPT = '.png,.jpg,.jpeg,.webp'
 export const DOCUMENT_ACCEPT = '.pdf,.png,.jpg,.jpeg,.webp'
 
+/** A fine receipt — PDF/PNG/JPEG only, no WebP. Narrower than
+ *  `DOCUMENT_ACCEPT`: `vehicle_service._validate_fine_receipt` enforces this
+ *  same set server-side (10 MiB cap), distinct from the generic 25 MiB/WebP
+ *  receipt policy `VehicleMaintenance` still uses. */
+export const FINE_RECEIPT_ACCEPT = '.pdf,.png,.jpg,.jpeg'
+
 // ── Files ───────────────────────────────────────────────────────────────────
 
 export function fileLabel(file: VehicleFileRead, language: string): string {
@@ -333,6 +447,18 @@ const ERROR_MESSAGE_KEYS: Record<string, string> = {
   EVG_PREVIEW_JOB_NOT_FOUND: 'vehicles.evg.jobExpired',
   EVG_BUSY: 'vehicles.evg.busy',
   EVG_UNAVAILABLE: 'vehicles.evg.error',
+  VEHICLE_FINE_VERSION_CONFLICT: 'vehicles.fines.errors.versionConflict',
+  VEHICLE_FINE_ARCHIVED: 'vehicles.fines.errors.archived',
+  VEHICLE_FINE_ALREADY_PAID: 'vehicles.fines.errors.alreadyPaid',
+  VEHICLE_FINE_INVALID_TRANSITION: 'vehicles.fines.errors.invalidTransition',
+  VEHICLE_FINE_RECEIPT_REQUIRES_PAID: 'vehicles.fines.errors.receiptRequiresPaid',
+  VEHICLE_FINE_RECEIPT_ALREADY_ATTACHED: 'vehicles.fines.errors.receiptAlreadyAttached',
+  VEHICLE_FINE_ARCHIVE_STATE_MISMATCH: 'vehicles.fines.errors.archiveStateMismatch',
+  VEHICLE_FINE_RECEIPT_EMPTY: 'vehicles.fines.errors.receiptBadFormat',
+  VEHICLE_FINE_RECEIPT_TOO_LARGE: 'vehicles.fines.errors.receiptTooLarge',
+  VEHICLE_FINE_RECEIPT_BAD_FORMAT: 'vehicles.fines.errors.receiptBadFormat',
+  VEHICLE_FINE_REQUIRED_FIELD: 'vehicles.fines.errors.requiredField',
+  VEHICLE_FINE_NOT_FOUND: 'vehicles.fines.errors.notFound',
 }
 
 export function vehicleErrorMessage(err: unknown, t: Translate): string {

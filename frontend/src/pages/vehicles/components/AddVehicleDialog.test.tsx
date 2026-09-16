@@ -58,7 +58,7 @@ const CREATED_VEHICLE = {
   expiry_status: 'valid',
   days_to_expiry: 364,
   fines_count: 0,
-  fines_amount: 0,
+  fines_amount_fils: 0,
   black_points: 0,
   contract_note_ar: null,
   contract_note_en: null,
@@ -72,6 +72,7 @@ const LICENSE_FILE: VehicleFileRead = {
   original_name: 'licence.jpg',
   media_type: 'image/jpeg',
   url: '/api/vehicles/101/files/501',
+  is_historical: false,
 }
 const PHOTO_ASSET: VehiclePhotoRead = {
   id: 21,

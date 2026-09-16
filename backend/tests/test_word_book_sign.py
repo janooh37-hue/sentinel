@@ -69,20 +69,19 @@ def test_signed_artifact_keeps_word_body(
 ) -> None:
     # PDF conversion is environment-dependent — force the docx fallback path.
     monkeypatch.setattr(document_service, "convert_docx_to_pdf", lambda p: None)
-    rel = document_service.render_signed_pdf(
+    artifact = document_service.render_signed_artifact(
         db_session, version=word_version, signer_signature_path=_sig(tmp_path)
     )
-    from app.config import get_settings
-
-    signed = Path(rel)
-    if not signed.is_absolute():
-        signed = get_settings().data_dir / signed
+    signed = artifact.docx_path
     assert signed.suffix == ".docx"  # conversion stubbed out
     text = docx_to_text(signed)
     assert BODY_LINE in text  # the authored body SURVIVED signing
-    # and the signature image landed (anchored drawing present)
+    # and the signature image landed (a drawing is present — General Book's
+    # keep-together signing block inserts it INLINE, not as a float, so Word
+    # counts its height when deciding whether the signature/name/title group
+    # fits on the page; see docx_engine._stamp_manager_signing_block).
     with zipfile.ZipFile(signed) as z:
-        assert b"<wp:anchor" in z.read("word/document.xml")
+        assert b"<w:drawing" in z.read("word/document.xml")
     signed.unlink()  # keep the shared output dir clean
 
 
@@ -99,7 +98,7 @@ def test_sign_raises_when_authored_docx_missing(
     assert doc is not None and doc.docx_path
     Path(doc.docx_path).unlink()
     with pytest.raises(AppError) as ei:
-        document_service.render_signed_pdf(
+        document_service.render_signed_artifact(
             db_session, version=word_version, signer_signature_path=_sig(tmp_path)
         )
     assert ei.value.code == "SOURCE_DOCX_MISSING"
@@ -118,7 +117,7 @@ def test_sign_raises_when_stamp_fails(
 
     monkeypatch.setattr(docx_engine_mod, "stamp_signature_above_name", lambda *a, **k: False)
     with pytest.raises(AppError) as ei:
-        document_service.render_signed_pdf(
+        document_service.render_signed_artifact(
             db_session, version=word_version, signer_signature_path=_sig(tmp_path)
         )
     assert ei.value.code == "SIGNATURE_STAMP_FAILED"
@@ -182,14 +181,10 @@ def test_rich_versions_still_rerender(
     word_version.fields = {"subject": "موضوع", "body": "نص"}
     db_session.commit()
     monkeypatch.setattr(document_service, "convert_docx_to_pdf", lambda p: None)
-    rel = document_service.render_signed_pdf(
+    artifact = document_service.render_signed_artifact(
         db_session, version=word_version, signer_signature_path=_sig(tmp_path)
     )
-    from app.config import get_settings
-
-    leftover = Path(rel)
-    if not leftover.is_absolute():
-        leftover = get_settings().data_dir / leftover
+    leftover = artifact.docx_path
     text = docx_to_text(leftover)
     assert "موضوع" in text
     assert "نص" in text

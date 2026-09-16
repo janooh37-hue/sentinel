@@ -8,14 +8,16 @@ import re
 import uuid
 from datetime import UTC, date, datetime
 from pathlib import Path
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
-from sqlalchemy import func, inspect, select, text
+from sqlalchemy import func, inspect, select, text, update
+from sqlalchemy.engine import CursorResult
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, object_session, selectinload
 
 from app.api.errors import ConflictError, NotFoundError, ValidationFailedError
 from app.config import get_settings
+from app.core.vehicle_certificates import Profile, optimize_certificate
 from app.db.models import (
     AuditLog,
     Employee,
@@ -33,9 +35,11 @@ from app.schemas.vehicle import (
     LicenseRenewCreate,
     VehicleAccidentCreate,
     VehicleAccidentRead,
+    VehicleCertificateUpdate,
     VehicleCreate,
     VehicleFileRead,
     VehicleFineCreate,
+    VehicleFinePaymentRecord,
     VehicleFineRead,
     VehicleFineUpdate,
     VehicleListItem,
@@ -49,6 +53,8 @@ from app.schemas.vehicle import (
     VehicleUpdate,
 )
 from app.services import settings_service, vehicle_photo_service
+from app.services.workforce_etag import require_if_match, row_etag
+from app.services.workforce_schedule_service import acquire_schedule_write_lock
 
 log = logging.getLogger(__name__)
 
@@ -57,7 +63,9 @@ _ALLOWED_EXTENSIONS = frozenset({".pdf", ".png", ".jpg", ".jpeg", ".webp"})
 _IMAGE_EXTENSIONS = frozenset({".png", ".jpg", ".jpeg", ".webp"})
 _IMAGE_KINDS = frozenset({"photo", "gallery", "accident"})
 _PHOTO_KINDS = frozenset({"photo", "gallery"})
-_FILE_KINDS = frozenset({"photo", "license", "gallery", "accident", "receipt"})
+_FILE_KINDS = frozenset({"photo", "license", "gallery", "accident", "receipt", "certificate"})
+_CERTIFICATE_LABEL_MAX_LENGTH = 128
+_CERTIFICATE_PROCESSING_TIMEOUT = 120
 _ALLOWED_MEDIA_BY_EXTENSION: dict[str, frozenset[str]] = {
     ".pdf": frozenset({"application/pdf"}),
     ".png": frozenset({"image/png"}),
@@ -66,6 +74,17 @@ _ALLOWED_MEDIA_BY_EXTENSION: dict[str, frozenset[str]] = {
     ".webp": frozenset({"image/webp"}),
 }
 _UNSAFE_CHARS = re.compile('[\\\\/:*?"<>|\x00-\x1f\u200b-\u200f\u202a-\u202e\u2066-\u2069\ufeff]')
+
+# Fine receipts use a narrower policy than the generic vehicle-file upload:
+# no WebP, a lower size cap, and a magic-byte sniff so a renamed file cannot
+# masquerade as one of the three accepted formats.
+FINE_RECEIPT_MAX_BYTES = 10 * 1024 * 1024
+_FINE_RECEIPT_SIGNATURES: dict[str, bytes] = {
+    ".pdf": b"%PDF-",
+    ".png": b"\x89PNG\r\n\x1a\n",
+    ".jpg": b"\xff\xd8\xff",
+    ".jpeg": b"\xff\xd8\xff",
+}
 
 
 def _utcnow() -> datetime:
@@ -123,13 +142,37 @@ def _vehicle_file(row: Vehicle, file_id: int | None) -> VehicleFile | None:
     return next((item for item in row.files if item.id == file_id), None)
 
 
-def fine_read(row: VehicleFine, *, vehicle: Vehicle | None = None) -> VehicleFineRead:
+_FINE_RECEIPT_UNSET = object()
+
+
+def _fine_etag(row: VehicleFine) -> str:
+    return row_etag(
+        row,
+        extra={
+            "payment_status": row.payment_status,
+            "receipt_file_id": row.receipt_file_id,
+            "archived_at": row.archived_at,
+        },
+    )
+
+
+def fine_read(
+    row: VehicleFine,
+    *,
+    vehicle: Vehicle | None = None,
+    receipt: VehicleFile | None = _FINE_RECEIPT_UNSET,  # type: ignore[assignment]
+) -> VehicleFineRead:
     owner = vehicle or row.vehicle
     employee = row.employee
+    resolved_receipt = (
+        _vehicle_file(owner, row.receipt_file_id) if receipt is _FINE_RECEIPT_UNSET else receipt
+    )
     return VehicleFineRead.model_validate(row).model_copy(
         update={
             "employee_name_ar": employee.name_ar if employee is not None else None,
             "employee_name_en": employee.name_en if employee is not None else None,
+            "receipt": _file_read(resolved_receipt) if resolved_receipt is not None else None,
+            "version": _fine_etag(row),
             "vehicle_plate_label": plate_label(owner),
             "vehicle_type_ar": owner.type_ar,
             "vehicle_type_en": owner.type_en,
@@ -211,7 +254,7 @@ def to_list_item(
             ),
             "days_to_expiry": (row.license_expiry - current_day).days,
             "fines_count": len(row.fines),
-            "fines_amount": sum(item.amount for item in row.fines),
+            "fines_amount_fils": sum(item.amount_fils for item in row.fines),
             "black_points": sum(item.black_points for item in row.fines),
             **photo_urls,
             "insurance_status": insurance_status,
@@ -295,6 +338,14 @@ def to_read(
                 _file_read(file_row)
                 for file_row in sorted(
                     (item for item in row.files if item.kind == "license"),
+                    key=lambda item: (item.created_at, item.id),
+                    reverse=True,
+                )
+            ],
+            "certificates": [
+                _file_read(file_row)
+                for file_row in sorted(
+                    (item for item in row.files if item.kind == "certificate"),
                     key=lambda item: (item.created_at, item.id),
                     reverse=True,
                 )
@@ -886,7 +937,7 @@ def add_fine(
     *,
     actor: str | None = None,
     created_by_user_id: int | None = None,
-) -> Vehicle:
+) -> VehicleFine:
     row = require_active_vehicle(db, vehicle_id)
     _validate_employee(db, payload.employee_id)
     fine = VehicleFine(
@@ -894,11 +945,12 @@ def add_fine(
         employee_id=payload.employee_id,
         date=payload.date,
         time=payload.time,
-        amount=payload.amount,
+        amount_fils=payload.amount_fils,
         black_points=payload.black_points,
         source="manual",
         location=payload.location,
         description=payload.description,
+        payment_status="unpaid",
         created_by_user_id=created_by_user_id,
     )
     db.add(fine)
@@ -909,9 +961,9 @@ def add_fine(
         "fine.added",
         row.id,
         actor,
-        {"fine_id": fine.id, "amount": fine.amount},
+        {"fine_id": fine.id, "amount_fils": fine.amount_fils},
     )
-    return get_vehicle(db, row.id)
+    return fine
 
 
 def _get_fine(db: Session, vehicle_id: int, fine_id: int) -> VehicleFine:
@@ -934,15 +986,23 @@ def update_fine(
     fine_id: int,
     payload: VehicleFineUpdate,
     *,
+    if_match: str | None,
     actor: str | None = None,
 ) -> Vehicle:
     require_active_vehicle(db, vehicle_id)
     row = _get_fine(db, vehicle_id, fine_id)
+    if row.archived_at is not None:
+        raise ValidationFailedError(
+            "VEHICLE_FINE_ARCHIVED",
+            "Archived fines cannot be edited; restore it first.",
+            fine_id=fine_id,
+        )
+    require_if_match(if_match, _fine_etag(row), code="VEHICLE_FINE_VERSION_CONFLICT")
     data = payload.model_dump(exclude_unset=True)
     cleared_required = next(
         (
             field
-            for field in ("date", "amount", "black_points")
+            for field in ("date", "amount_fils", "black_points")
             if field in data and data[field] is None
         ),
         None,
@@ -955,6 +1015,13 @@ def update_fine(
         )
     if "employee_id" in data:
         _validate_employee(db, data["employee_id"])
+    if "payment_status" in data and row.payment_status not in ("unknown", "unpaid"):
+        raise ConflictError(
+            "VEHICLE_FINE_INVALID_TRANSITION",
+            "Only an unknown or unpaid fine can be classified as unpaid.",
+            fine_id=fine_id,
+            current_status=row.payment_status,
+        )
     for field, value in data.items():
         setattr(row, field, value)
     row.updated_at = _utcnow()
@@ -974,14 +1041,261 @@ def delete_fine(
     vehicle_id: int,
     fine_id: int,
     *,
+    if_match: str | None,
     actor: str | None = None,
 ) -> Vehicle:
     require_active_vehicle(db, vehicle_id)
     row = _get_fine(db, vehicle_id, fine_id)
+    require_if_match(if_match, _fine_etag(row), code="VEHICLE_FINE_VERSION_CONFLICT")
+    receipt = (
+        _owned_file(db, vehicle_id, row.receipt_file_id, kind="receipt")
+        if row.receipt_file_id is not None
+        else None
+    )
+    receipt_path = _resolve_file_path(receipt) if receipt is not None else None
     db.delete(row)
+    if receipt is not None:
+        db.delete(receipt)
     db.commit()
+    if receipt_path is not None:
+        try:
+            receipt_path.unlink(missing_ok=True)
+        except OSError:
+            log.warning(
+                "vehicle fine receipt %s could not be removed from disk",
+                receipt_path,
+                exc_info=True,
+            )
     _audit(db, "fine.deleted", vehicle_id, actor, {"fine_id": fine_id})
     return get_vehicle(db, vehicle_id)
+
+
+def _validate_fine_receipt(*, filename: str, data: bytes, media_type: str) -> None:
+    if not data:
+        raise ValidationFailedError("VEHICLE_FINE_RECEIPT_EMPTY", "Uploaded receipt is empty.")
+    if len(data) > FINE_RECEIPT_MAX_BYTES:
+        raise ValidationFailedError(
+            "VEHICLE_FINE_RECEIPT_TOO_LARGE",
+            f"Receipt exceeds {FINE_RECEIPT_MAX_BYTES // (1024 * 1024)} MiB.",
+            size=len(data),
+        )
+    safe_name = _safe_filename(filename)
+    extension = Path(safe_name).suffix.lower()
+    signature = _FINE_RECEIPT_SIGNATURES.get(extension)
+    normalized_media = media_type.partition(";")[0].strip().lower()
+    allowed_media = _ALLOWED_MEDIA_BY_EXTENSION.get(extension, frozenset())
+    if signature is None or not data.startswith(signature) or normalized_media not in allowed_media:
+        raise ValidationFailedError(
+            "VEHICLE_FINE_RECEIPT_BAD_FORMAT",
+            "Receipts must be a PDF, PNG, or JPEG file.",
+            extension=extension,
+            media_type=media_type,
+        )
+
+
+def record_payment(
+    db: Session,
+    vehicle_id: int,
+    fine_id: int,
+    *,
+    if_match: str | None,
+    filename: str | None,
+    data: bytes | None,
+    media_type: str | None,
+    actor: str | None = None,
+) -> VehicleFine:
+    """Atomically mark an unknown/unpaid fine paid, with an optional receipt."""
+    require_active_vehicle(db, vehicle_id)
+    acquire_schedule_write_lock(db)
+    row = _get_fine(db, vehicle_id, fine_id)
+    if row.archived_at is not None:
+        raise ValidationFailedError(
+            "VEHICLE_FINE_ARCHIVED",
+            "Archived fines cannot be edited; restore it first.",
+            fine_id=fine_id,
+        )
+    require_if_match(if_match, _fine_etag(row), code="VEHICLE_FINE_VERSION_CONFLICT")
+    if row.payment_status == "paid":
+        raise ConflictError(
+            "VEHICLE_FINE_ALREADY_PAID", "This fine is already marked paid.", fine_id=fine_id
+        )
+
+    receipt_file: VehicleFile | None = None
+    destination: Path | None = None
+    if data:
+        _validate_fine_receipt(filename=filename or "", data=data, media_type=media_type or "")
+        receipt_file, destination = _store_file_record(
+            db,
+            vehicle_id,
+            kind="receipt",
+            filename=filename or "receipt",
+            data=data,
+            media_type=media_type or "",
+        )
+    try:
+        row.payment_status = "paid"
+        if receipt_file is not None:
+            row.receipt_file_id = receipt_file.id
+        row.updated_at = _utcnow()
+        db.commit()
+    except Exception:
+        db.rollback()
+        if destination is not None:
+            destination.unlink(missing_ok=True)
+        raise
+    db.refresh(row)
+    _audit(
+        db,
+        "fine.payment.recorded",
+        vehicle_id,
+        actor,
+        {
+            "fine_id": fine_id,
+            "amount_fils": row.amount_fils,
+            "receipt_attached": receipt_file is not None,
+        },
+    )
+    return row
+
+
+def attach_receipt(
+    db: Session,
+    vehicle_id: int,
+    fine_id: int,
+    *,
+    if_match: str | None,
+    filename: str,
+    data: bytes,
+    media_type: str,
+    actor: str | None = None,
+) -> VehicleFine:
+    """Attach a receipt to an already-paid fine that has none yet."""
+    require_active_vehicle(db, vehicle_id)
+    acquire_schedule_write_lock(db)
+    row = _get_fine(db, vehicle_id, fine_id)
+    if row.archived_at is not None:
+        raise ValidationFailedError(
+            "VEHICLE_FINE_ARCHIVED",
+            "Archived fines cannot be edited; restore it first.",
+            fine_id=fine_id,
+        )
+    require_if_match(if_match, _fine_etag(row), code="VEHICLE_FINE_VERSION_CONFLICT")
+    if row.payment_status != "paid":
+        raise ConflictError(
+            "VEHICLE_FINE_RECEIPT_REQUIRES_PAID",
+            "Only a paid fine can receive a receipt.",
+            fine_id=fine_id,
+        )
+    if row.receipt_file_id is not None:
+        raise ConflictError(
+            "VEHICLE_FINE_RECEIPT_ALREADY_ATTACHED",
+            "This fine already has a receipt.",
+            fine_id=fine_id,
+        )
+    _validate_fine_receipt(filename=filename, data=data, media_type=media_type)
+    receipt_file, destination = _store_file_record(
+        db, vehicle_id, kind="receipt", filename=filename, data=data, media_type=media_type
+    )
+    try:
+        row.receipt_file_id = receipt_file.id
+        row.updated_at = _utcnow()
+        db.commit()
+    except Exception:
+        db.rollback()
+        destination.unlink(missing_ok=True)
+        raise
+    db.refresh(row)
+    _audit(
+        db,
+        "fine.receipt.attached",
+        vehicle_id,
+        actor,
+        {"fine_id": fine_id, "file_id": receipt_file.id},
+    )
+    return row
+
+
+def get_files_by_id(db: Session, file_ids: set[int]) -> dict[int, VehicleFile]:
+    """One bounded lookup for the fleet ledger's receipt column."""
+    if not file_ids:
+        return {}
+    rows = db.scalars(select(VehicleFile).where(VehicleFile.id.in_(file_ids))).all()
+    return {row.id: row for row in rows}
+
+
+def _load_fine_batch(
+    db: Session, rows: list[VehicleFinePaymentRecord]
+) -> list[tuple[VehicleFine, str]]:
+    ids = [item.id for item in rows]
+    found = {
+        fine.id: fine
+        for fine in db.scalars(select(VehicleFine).where(VehicleFine.id.in_(ids))).all()
+    }
+    missing = [fine_id for fine_id in ids if fine_id not in found]
+    if missing:
+        raise NotFoundError(
+            "VEHICLE_FINE_NOT_FOUND", "One or more fines were not found.", fine_ids=missing
+        )
+    return [(found[item.id], item.version) for item in rows]
+
+
+def archive_fines(
+    db: Session, rows: list[VehicleFinePaymentRecord], *, actor: str | None = None
+) -> int:
+    """Archive paid, active fines. Validates the whole batch before mutating any row."""
+    acquire_schedule_write_lock(db)
+    fines = _load_fine_batch(db, rows)
+    for vehicle_id in {fine.vehicle_id for fine, _ in fines}:
+        require_active_vehicle(db, vehicle_id)
+    for fine, expected_version in fines:
+        require_if_match(expected_version, _fine_etag(fine), code="VEHICLE_FINE_VERSION_CONFLICT")
+        if fine.payment_status != "paid" or fine.archived_at is not None:
+            raise ConflictError(
+                "VEHICLE_FINE_ARCHIVE_STATE_MISMATCH",
+                "Only a paid, active fine can be archived.",
+                fine_id=fine.id,
+                payment_status=fine.payment_status,
+            )
+    now = _utcnow()
+    by_vehicle: dict[int, list[int]] = {}
+    for fine, _version in fines:
+        fine.archived_at = now
+        fine.updated_at = now
+        by_vehicle.setdefault(fine.vehicle_id, []).append(fine.id)
+    if fines:
+        db.commit()
+    for vehicle_id, ids in by_vehicle.items():
+        _audit(db, "fine.archived", vehicle_id, actor, {"count": len(ids), "fine_ids": ids})
+    return len(fines)
+
+
+def restore_fines(
+    db: Session, rows: list[VehicleFinePaymentRecord], *, actor: str | None = None
+) -> int:
+    """Restore archived fines. Validates the whole batch before mutating any row."""
+    acquire_schedule_write_lock(db)
+    fines = _load_fine_batch(db, rows)
+    for vehicle_id in {fine.vehicle_id for fine, _ in fines}:
+        require_active_vehicle(db, vehicle_id)
+    for fine, expected_version in fines:
+        require_if_match(expected_version, _fine_etag(fine), code="VEHICLE_FINE_VERSION_CONFLICT")
+        if fine.archived_at is None:
+            raise ConflictError(
+                "VEHICLE_FINE_ARCHIVE_STATE_MISMATCH",
+                "Only an archived fine can be restored.",
+                fine_id=fine.id,
+            )
+    now = _utcnow()
+    by_vehicle: dict[int, list[int]] = {}
+    for fine, _version in fines:
+        fine.archived_at = None
+        fine.updated_at = now
+        by_vehicle.setdefault(fine.vehicle_id, []).append(fine.id)
+    if fines:
+        db.commit()
+    for vehicle_id, ids in by_vehicle.items():
+        _audit(db, "fine.restored", vehicle_id, actor, {"count": len(ids), "fine_ids": ids})
+    return len(fines)
 
 
 def create_accident(
@@ -1244,10 +1558,10 @@ def summary(db: Session) -> VehiclesSummary:
     vehicles = list(
         db.execute(select(Vehicle).where(Vehicle.archived_at.is_(None))).scalars().all()
     )
-    fines_count, fines_amount, black_points = db.execute(
+    fines_count, fines_amount_fils, black_points = db.execute(
         select(
             func.count(VehicleFine.id),
-            func.coalesce(func.sum(VehicleFine.amount), 0),
+            func.coalesce(func.sum(VehicleFine.amount_fils), 0),
             func.coalesce(func.sum(VehicleFine.black_points), 0),
         )
         .join(VehicleFine.vehicle)
@@ -1277,7 +1591,7 @@ def summary(db: Session) -> VehiclesSummary:
     return VehiclesSummary(
         vehicles=len(vehicles),
         fines_count=int(fines_count),
-        fines_amount=int(fines_amount),
+        fines_amount_fils=int(fines_amount_fils),
         black_points=int(black_points),
         license_attention=sum(
             expiry_status(row.license_expiry, today=today, notify_days=notify_days) != "valid"
@@ -1304,19 +1618,14 @@ def _safe_filename(filename: str) -> str:
     return name or "vehicle-file"
 
 
-def _store_file_record(
-    db: Session,
-    vehicle_id: int,
-    *,
-    kind: str,
-    filename: str,
-    data: bytes,
-    media_type: str,
-    label_ar: str | None = None,
-    label_en: str | None = None,
-) -> tuple[VehicleFile, Path]:
-    """Write and flush a vehicle file without owning the transaction."""
-    require_active_vehicle(db, vehicle_id)
+def _validate_upload(
+    kind: str, filename: str, data: bytes, media_type: str
+) -> tuple[str, str, str]:
+    """Validate kind/size/extension/media-type; return (safe_name, extension, normalized_media).
+
+    Runs before any decoding — including certificate compression — so a
+    malformed upload never reaches the optimizer.
+    """
     if kind not in _FILE_KINDS:
         raise ValidationFailedError(
             "VEHICLE_FILE_BAD_KIND",
@@ -1354,6 +1663,31 @@ def _store_file_record(
             extension=extension,
             media_type=media_type,
         )
+    return safe_name, extension, normalized_media
+
+
+def _prepare_file_record(
+    db: Session,
+    vehicle_id: int,
+    *,
+    kind: str,
+    filename: str,
+    data: bytes,
+    media_type: str,
+    label_ar: str | None = None,
+    label_en: str | None = None,
+    expiry_date: date | None = None,
+) -> tuple[VehicleFile, Path]:
+    """Validate and write a file to disk, without touching the session.
+
+    Returns a transient (unpersisted) ``VehicleFile`` and the path its bytes
+    were written to. Splitting this out of ``_store_file_record`` lets the
+    certificate replacement flow prepare two files' bytes on disk — the new
+    upload and, when replacing, a recompressed predecessor — before either
+    takes a database write lock (see ``store_file``).
+    """
+    require_active_vehicle(db, vehicle_id)
+    safe_name, _extension, normalized_media = _validate_upload(kind, filename, data, media_type)
 
     data_dir = get_settings().data_dir.resolve()
     destination_dir = data_dir / "vehicle_files" / str(vehicle_id) / kind
@@ -1370,13 +1704,142 @@ def _store_file_record(
             original_name=safe_name,
             media_type=normalized_media,
             size=len(data),
+            expiry_date=expiry_date,
         )
+    except Exception:
+        destination.unlink(missing_ok=True)
+        raise
+    return row, destination
+
+
+def _store_file_record(
+    db: Session,
+    vehicle_id: int,
+    *,
+    kind: str,
+    filename: str,
+    data: bytes,
+    media_type: str,
+    label_ar: str | None = None,
+    label_en: str | None = None,
+    expiry_date: date | None = None,
+) -> tuple[VehicleFile, Path]:
+    """Prepare, add, and flush a vehicle file without owning the transaction."""
+    row, destination = _prepare_file_record(
+        db,
+        vehicle_id,
+        kind=kind,
+        filename=filename,
+        data=data,
+        media_type=media_type,
+        label_ar=label_ar,
+        label_en=label_en,
+        expiry_date=expiry_date,
+    )
+    try:
         db.add(row)
         db.flush()
     except Exception:
         destination.unlink(missing_ok=True)
         raise
     return row, destination
+
+
+def _optimize_certificate_worker(data: bytes, media_type: str, profile: str) -> bytes:
+    """Top-level so ``ProcessPoolExecutor`` can pickle it for submission —
+    matches ``_pdf_executor._convert_in_subprocess``'s convention."""
+    return optimize_certificate(data, media_type, profile=cast("Profile", profile))
+
+
+def _optimize_certificate(data: bytes, media_type: str, *, profile: Profile = "current") -> bytes:
+    """Compress a certificate's bytes in the shared single-worker process pool.
+
+    Native PyMuPDF/Pillow work never runs on the event loop or shares a
+    process with Word COM. A worker ``ValueError`` (see
+    ``app.core.vehicle_certificates``) carries a ``VEHICLE_CERTIFICATE_*``
+    code and is translated to ``ValidationFailedError``; a timeout or any
+    other worker failure becomes ``VEHICLE_CERTIFICATE_PROCESSING_FAILED`` —
+    no file is created and the client can retry explicitly.
+    """
+    from app.services._pdf_executor import get_executor
+
+    future = get_executor().submit(_optimize_certificate_worker, data, media_type, profile)
+    try:
+        return future.result(timeout=_CERTIFICATE_PROCESSING_TIMEOUT)
+    except ValueError as exc:
+        code = exc.args[0] if exc.args else "VEHICLE_CERTIFICATE_INVALID"
+        raise ValidationFailedError(code, str(exc) or code) from exc
+    except Exception as exc:
+        raise ValidationFailedError(
+            "VEHICLE_CERTIFICATE_PROCESSING_FAILED",
+            "The certificate could not be processed. Try uploading it again.",
+        ) from exc
+
+
+def _certificate_expiry_date(expiry_date: date | None, no_expiry: bool) -> date | None:
+    """Require exactly one of a date or the explicit No-expiry choice."""
+    if expiry_date is not None and no_expiry:
+        raise ValidationFailedError(
+            "VEHICLE_CERTIFICATE_EXPIRY_CONFLICT",
+            "Choose an expiry date or No expiry, not both.",
+        )
+    if expiry_date is None and not no_expiry:
+        raise ValidationFailedError(
+            "VEHICLE_CERTIFICATE_EXPIRY_REQUIRED",
+            "Enter an expiry date or select No expiry.",
+        )
+    return expiry_date
+
+
+def _validate_certificate_scope(
+    kind: str,
+    expiry_date: date | None,
+    no_expiry: bool,
+    replaces_file_id: int | None,
+) -> None:
+    """Certificate-only inputs on any other kind are a caller error, not a
+    silently ignored field — omitted defaults leave every other kind's
+    upload behavior unchanged."""
+    if kind == "certificate":
+        return
+    if expiry_date is not None or no_expiry or replaces_file_id is not None:
+        raise ValidationFailedError(
+            "VEHICLE_CERTIFICATE_REQUIRED",
+            "This action is only available for certificate files.",
+            kind=kind,
+        )
+
+
+def _validate_certificate_label(label: str | None) -> str | None:
+    if label is None:
+        return None
+    trimmed = label.strip()
+    if not trimmed:
+        return None
+    if len(trimmed) > _CERTIFICATE_LABEL_MAX_LENGTH:
+        raise ValidationFailedError(
+            "VEHICLE_CERTIFICATE_LABEL_TOO_LONG",
+            f"Document names must be {_CERTIFICATE_LABEL_MAX_LENGTH} characters or fewer.",
+            max_length=_CERTIFICATE_LABEL_MAX_LENGTH,
+        )
+    return trimmed
+
+
+def _certificate_predecessor(db: Session, vehicle_id: int, replaces_file_id: int) -> VehicleFile:
+    row = _owned_file(db, vehicle_id, replaces_file_id)
+    if row.kind != "certificate":
+        raise ValidationFailedError(
+            "VEHICLE_CERTIFICATE_REQUIRED",
+            "This action is only available for certificate files.",
+            file_id=replaces_file_id,
+        )
+    if row.superseded_by_file_id is not None:
+        raise ConflictError(
+            "VEHICLE_CERTIFICATE_REPLACED",
+            "This certificate already has a replacement.",
+            file_id=replaces_file_id,
+        )
+    return row
 
 
 def store_file(
@@ -1389,25 +1852,207 @@ def store_file(
     media_type: str,
     label_ar: str | None = None,
     label_en: str | None = None,
+    expiry_date: date | None = None,
+    no_expiry: bool = False,
+    replaces_file_id: int | None = None,
+    actor: str | None = None,
 ) -> VehicleFile:
+    is_certificate = kind == "certificate"
+    _validate_certificate_scope(kind, expiry_date, no_expiry, replaces_file_id)
+
+    effective_expiry: date | None = None
+    effective_label_ar, effective_label_en = label_ar, label_en
+    if is_certificate:
+        effective_expiry = _certificate_expiry_date(expiry_date, no_expiry)
+        effective_label_ar = _validate_certificate_label(label_ar)
+        effective_label_en = _validate_certificate_label(label_en)
+
+    predecessor: VehicleFile | None = None
+    if is_certificate and replaces_file_id is not None:
+        predecessor = _certificate_predecessor(db, vehicle_id, replaces_file_id)
+
+    processed_data = data
+    if is_certificate:
+        _safe_name, _extension, normalized_media = _validate_upload(
+            kind, filename, data, media_type
+        )
+        processed_data = _optimize_certificate(data, normalized_media, profile="current")
+
     path: Path | None = None
+    historical_path: Path | None = None
+    predecessor_path: Path | None = None
     try:
-        row, path = _store_file_record(
+        row, path = _prepare_file_record(
             db,
             vehicle_id,
             kind=kind,
             filename=filename,
-            data=data,
+            data=processed_data,
             media_type=media_type,
-            label_ar=label_ar,
-            label_en=label_en,
+            label_ar=effective_label_ar,
+            label_en=effective_label_en,
+            expiry_date=effective_expiry,
         )
+
+        historical_candidate: bytes | None = None
+        if predecessor is not None:
+            predecessor_path = _resolve_file_path(predecessor)
+            predecessor_bytes = predecessor_path.read_bytes()
+            candidate = _optimize_certificate(
+                predecessor_bytes, predecessor.media_type, profile="historical"
+            )
+            if len(candidate) < len(predecessor_bytes):
+                historical_candidate = candidate
+
+        db.add(row)
+        db.flush()
+
+        if predecessor is not None:
+            # Recheck the vehicle is still active right before publication —
+            # an archive mid-upload must reject the replacement.
+            require_active_vehicle(db, vehicle_id)
+            update_values: dict[str, Any] = {
+                "is_historical": True,
+                "superseded_by_file_id": row.id,
+            }
+            if historical_candidate is not None:
+                data_dir = get_settings().data_dir.resolve()
+                destination_dir = data_dir / "vehicle_files" / str(vehicle_id) / "certificate"
+                destination_dir.mkdir(parents=True, exist_ok=True)
+                new_path = destination_dir / f"{uuid.uuid4().hex}-{predecessor.original_name}"
+                new_path.write_bytes(historical_candidate)
+                historical_path = new_path
+                update_values["path"] = new_path.relative_to(data_dir).as_posix()
+                update_values["size"] = len(historical_candidate)
+
+            # An UPDATE without RETURNING produces CursorResult, including its rowcount.
+            result = cast(
+                CursorResult[Any],
+                db.execute(
+                    update(VehicleFile)
+                    .where(
+                        VehicleFile.id == predecessor.id,
+                        VehicleFile.vehicle_id == vehicle_id,
+                        VehicleFile.kind == "certificate",
+                        VehicleFile.superseded_by_file_id.is_(None),
+                        VehicleFile.path == predecessor.path,
+                    )
+                    .values(**update_values)
+                ),
+            )
+            if result.rowcount != 1:
+                raise ConflictError(
+                    "VEHICLE_CERTIFICATE_REPLACED",
+                    "This certificate already has a replacement.",
+                    file_id=predecessor.id,
+                )
+            _add_audit(
+                db,
+                "certificate.replaced",
+                vehicle_id,
+                actor,
+                {
+                    "old_file_id": predecessor.id,
+                    "new_file_id": row.id,
+                    "old_size": predecessor.size,
+                    "stored_size": update_values.get("size", predecessor.size),
+                },
+            )
+
         db.commit()
     except Exception:
         db.rollback()
         if path is not None:
             path.unlink(missing_ok=True)
+        if historical_path is not None:
+            historical_path.unlink(missing_ok=True)
         raise
+    db.refresh(row)
+
+    if predecessor is not None and historical_path is not None and predecessor_path is not None:
+        # Only after commit: the superseded pre-compression bytes are no
+        # longer reachable through any row, so the disk copy can go too.
+        try:
+            predecessor_path.unlink(missing_ok=True)
+        except OSError:
+            log.warning(
+                "vehicle certificate %s predecessor could not be removed",
+                predecessor.id,
+                exc_info=True,
+            )
+    return row
+
+
+def update_certificate(
+    db: Session,
+    vehicle_id: int,
+    file_id: int,
+    payload: VehicleCertificateUpdate,
+    *,
+    actor: str | None = None,
+) -> VehicleFile:
+    require_active_vehicle(db, vehicle_id)
+    row = _owned_file(db, vehicle_id, file_id, kind="certificate")
+
+    fields_set = payload.model_fields_set
+    touches_expiry = "expiry_date" in fields_set or "no_expiry" in fields_set
+    touches_history = "is_historical" in fields_set
+    if not touches_expiry and not touches_history:
+        raise ValidationFailedError(
+            "VEHICLE_CERTIFICATE_EMPTY_UPDATE",
+            "Choose an expiry or history change to save.",
+        )
+
+    def _snapshot() -> dict[str, Any]:
+        return {
+            "expiry_date": row.expiry_date.isoformat() if row.expiry_date else None,
+            "is_historical": row.is_historical,
+        }
+
+    before = _snapshot()
+
+    if touches_expiry:
+        new_expiry = _certificate_expiry_date(payload.expiry_date, payload.no_expiry)
+        if new_expiry != row.expiry_date:
+            row.expiry_reminder_sent_for = None
+        row.expiry_date = new_expiry
+
+    if touches_history:
+        if payload.is_historical:
+            row.is_historical = True
+        else:
+            result = cast(
+                CursorResult[Any],
+                db.execute(
+                    update(VehicleFile)
+                    .where(
+                        VehicleFile.id == file_id,
+                        VehicleFile.vehicle_id == vehicle_id,
+                        VehicleFile.kind == "certificate",
+                        VehicleFile.superseded_by_file_id.is_(None),
+                    )
+                    .values(is_historical=False)
+                ),
+            )
+            if result.rowcount != 1:
+                db.rollback()
+                raise ConflictError(
+                    "VEHICLE_CERTIFICATE_HAS_REPLACEMENT",
+                    "This historical certificate has a newer replacement and cannot be made current.",
+                    file_id=file_id,
+                )
+            row.is_historical = False
+
+    after = _snapshot()
+    if before != after:
+        _add_audit(
+            db,
+            "certificate.updated",
+            vehicle_id,
+            actor,
+            {"file_id": file_id, "before": before, "after": after},
+        )
+    db.commit()
     db.refresh(row)
     return row
 
@@ -1445,10 +2090,10 @@ def delete_file(
 ) -> None:
     vehicle = require_active_vehicle(db, vehicle_id)
     row = _owned_file(db, vehicle_id, file_id)
-    if row.kind not in _PHOTO_KINDS:
+    if row.kind not in _PHOTO_KINDS and row.kind != "certificate":
         raise ValidationFailedError(
             "FILE_NOT_DELETABLE",
-            "Only photo and gallery files can be deleted.",
+            "Only photo, gallery, and certificate files can be deleted.",
             file_id=file_id,
             kind=row.kind,
         )
@@ -1489,6 +2134,14 @@ def delete_file(
             "The file is referenced by a vehicle accident.",
             file_id=file_id,
             accident_id=blocking_accident_id,
+        )
+    if row.kind == "certificate":
+        db.execute(
+            update(VehicleFile)
+            .where(
+                VehicleFile.vehicle_id == vehicle_id, VehicleFile.superseded_by_file_id == file_id
+            )
+            .values(superseded_by_file_id=None)
         )
     path = _resolve_file_path(row)
     db.delete(row)
