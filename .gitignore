@@ -143,6 +143,10 @@ backend/scripts/_run_sample_report.bat
 /project vhicels.xlsx
 ~$*.docx
 
+# Personal ID scans at repo root (PII, never committed)
+/UAE ID.docx
+/work ID.docx
+
 # Local agent/tooling state
 .playwright-cli/
 
