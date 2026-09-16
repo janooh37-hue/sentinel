@@ -19,7 +19,6 @@ branch_labels = None
 depends_on = None
 
 
-
 def _decoded_fields(value: object) -> dict[str, object] | None:
     if isinstance(value, dict):
         return value
@@ -60,10 +59,7 @@ def _utc_iso(value: object) -> str | None:
             return None
     else:
         return None
-    if stamp.tzinfo is None:
-        stamp = stamp.replace(tzinfo=UTC)
-    else:
-        stamp = stamp.astimezone(UTC)
+    stamp = stamp.replace(tzinfo=UTC) if stamp.tzinfo is None else stamp.astimezone(UTC)
     return stamp.isoformat()
 
 
@@ -265,8 +261,7 @@ def upgrade() -> None:
             name="ck_book_revision_access_kind",
         ),
         sa.CheckConstraint(
-            "state IN ('approved', 'rejected', 'returned', 'reviewed', "
-            "'changes_requested')",
+            "state IN ('approved', 'rejected', 'returned', 'reviewed', 'changes_requested')",
             name="ck_book_revision_access_state",
         ),
     )

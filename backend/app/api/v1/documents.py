@@ -73,7 +73,11 @@ def _effective_document_service(template_id: str) -> str:
 
 
 def _require_document_record_access(
-    db: Session, user: User, row: Document, *, expected_version_id: int | None = None,
+    db: Session,
+    user: User,
+    row: Document,
+    *,
+    expected_version_id: int | None = None,
 ) -> BookVersion | None:
     """Apply the complete read gate for a stored document; return its exact
     owning ``BookVersion`` (``None`` for a standalone/unlinked document).
@@ -103,13 +107,18 @@ def _require_document_record_access(
             .where(BookVersion.document_id.in_(primary_document_ids))
         ).first()
     if owning is not None:
-        linked_book, owning_version = owning
+        linked_book, owning_version = owning.tuple()
         if expected_version_id is not None and expected_version_id != owning_version.id:
             raise NotFoundError(
-                "DOCUMENT_NOT_FOUND", f"Document {row.id} not found", id=row.id,
+                "DOCUMENT_NOT_FOUND",
+                f"Document {row.id} not found",
+                id=row.id,
             )
         book_service.resolve_book_read_access(
-            db, user, linked_book, version_id=owning_version.id,
+            db,
+            user,
+            linked_book,
+            version_id=owning_version.id,
         )
         return owning_version
     if not perm_service.has_capability(db, user, "documents.generate"):
@@ -257,6 +266,7 @@ class DocumentRead(ORMBase):
     violation_id: int | None = None
     submission_id: str
     role: Literal["primary", "companion"]
+
 
 class MyDocumentActivityRead(BaseModel):
     documents_today: int
@@ -553,9 +563,7 @@ def get_my_document_activity(
     db: Annotated[Session, Depends(get_db)],
     user: Annotated[User, Depends(get_current_user)],
 ) -> MyDocumentActivityRead:
-    return MyDocumentActivityRead(
-        **book_service.count_my_generated_documents(db, user_id=user.id)
-    )
+    return MyDocumentActivityRead(**book_service.count_my_generated_documents(db, user_id=user.id))
 
 
 @documents_router.get("/{document_id}", response_model=DocumentRead)

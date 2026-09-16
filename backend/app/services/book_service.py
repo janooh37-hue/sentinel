@@ -1162,7 +1162,6 @@ def _align_chain_to(
     *,
     actor: User,
     note: str | None,
-    now: datetime,
 ) -> None:
     """Re-point the current version's approval chain at ``target_state``.
 
@@ -1268,7 +1267,7 @@ def override_state(
     version = _current_version(book)
     stored_state = "none" if target_state == VOIDED_STATE else target_state
     if version is not None:
-        _align_chain_to(db, book, version, target_state, actor=actor, note=note, now=now)
+        _align_chain_to(db, book, version, target_state, actor=actor, note=note)
         version.status = stored_state
     book.approval_state = stored_state
     book.voided_at = now if target_state == VOIDED_STATE else None
