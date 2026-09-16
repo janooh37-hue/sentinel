@@ -10,7 +10,7 @@
 
 import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
@@ -29,6 +29,7 @@ import {
   RefreshCw,
   Send,
   ShieldAlert,
+  ShieldCheck,
   Trash2,
   Upload,
   X,
@@ -52,10 +53,18 @@ import { ReviewerList } from '@/components/books/ReviewerList'
 import { ReviewerActions } from '@/components/books/ReviewerActions'
 import { SubmitForApprovalDialog } from '@/components/books/SubmitForApprovalDialog'
 import { RecordStateOverrideDialog } from '@/components/books/RecordStateOverrideDialog'
+import { RevisionAccessPanel } from '@/components/books/RevisionAccessPanel'
 import { BookAnnotationLayer } from '@/components/books/BookAnnotationLayer'
 import { useBookApprovalActions } from '@/components/books/useBookApprovalActions'
 import { hasCommentBearingMark } from '@/components/books/annotation-utils'
 import { cn } from '@/lib/utils'
+import {
+  RECEIVED_STATUSES,
+  SENT_STATUSES,
+  approvalRecordUrl,
+  isApprovalScope,
+} from '@/lib/approvals'
+import type { ApprovalContext, ApprovalKind, ApprovalSort, ApprovalStatus } from '@/lib/approvals'
 
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { BookStatusChips } from '@/components/books/BookStatusChips'
@@ -67,7 +76,7 @@ import { MarkToggle } from './MarkToggle'
 import { RecordDecisionActions } from './RecordDecisionActions'
 import { isIncludedPapersOwner } from './includedPapersState'
 import { HeaderBtn } from './HeaderBtn'
-import { nextAfterDecision, useAwaitingQueue } from './useAwaitingQueue'
+import { useAwaitingQueue } from './useAwaitingQueue'
 import { buildRecordBasketItem } from './recordsBasket'
 import { buildBasketPrefill } from '@/lib/basketEmail'
 import { getRecentRecipientsForForm } from '@/lib/recentRecipients'
@@ -94,6 +103,44 @@ interface Station {
   note?: string | null
   state: StationState
   tone: 'navy' | 'amber' | 'green' | 'red' | 'blue'
+}
+
+
+/** Read the originating approvals-queue context off the URL a queue row (or
+ *  neighbor arrow) built with `approvalRecordUrl` — trusted format, not
+ *  re-authorized here: the worklist queries this backs 403/empty on their own
+ *  if the context turns out unauthorized. Absent/malformed params mean this
+ *  record was opened without queue context (direct link, basket, etc.) —
+ *  QueueNav simply renders nothing then. */
+function parseApprovalContext(params: URLSearchParams): ApprovalContext | null {
+  const tab = params.get('tab')
+  if (!isApprovalScope(tab)) return null
+  const sort: ApprovalSort = params.get('sort') === 'newest' ? 'newest' : 'oldest'
+  const pageRaw = Number.parseInt(params.get('page') ?? '', 10)
+  const page = Number.isInteger(pageRaw) && pageRaw >= 1 ? pageRaw : 1
+  if (tab === 'sent') {
+    const status = params.get('status')
+    return {
+      tab: 'sent',
+      status: (SENT_STATUSES as readonly string[]).includes(status ?? '')
+        ? (status as ApprovalStatus)
+        : 'all',
+      sort,
+      page,
+    }
+  }
+  const kindRaw = params.get('kind')
+  const kind: ApprovalKind = kindRaw === 'review' ? 'review' : 'sign'
+  const status = params.get('status')
+  return {
+    tab: 'received',
+    kind,
+    status: (RECEIVED_STATUSES as readonly string[]).includes(status ?? '')
+      ? (status as ApprovalStatus)
+      : 'pending',
+    sort,
+    page,
+  }
 }
 
 /** Derive the "life of the document" from versions + approval state.
@@ -335,11 +382,21 @@ function DecisionReasonForm({
 export function BookRecordPage(): React.JSX.Element {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const { t, i18n } = useTranslation()
   const isAr = i18n.language.startsWith('ar')
   const isMobile = useIsMobile()
   const bookId = Number(id)
   const onPdfReady = useRecordPrintMode()
+
+  const versionIdParam = (() => {
+    const raw = Number.parseInt(searchParams.get('version_id') ?? '', 10)
+    return Number.isInteger(raw) && raw > 0 ? raw : undefined
+  })()
+  // The originating approvals-queue context (tab/kind/status/sort/page), if
+  // this record was opened from a queue row or a neighbor arrow — drives
+  // QueueNav's scoped prev/next and carries back into "return to queue" links.
+  const approvalContext = useMemo(() => parseApprovalContext(searchParams), [searchParams])
 
   const qc = useQueryClient()
   const { user } = useAuth()
@@ -355,11 +412,13 @@ export function BookRecordPage(): React.JSX.Element {
   const canGenerate = has('documents.generate')
   // Admin-grade: rewrite the record's state outside the approval flow.
   const canOverrideState = has('books.override_state')
+  const canManageRevisionAccess = has('users.manage')
 
   const fileSignedRef = useRef<HTMLInputElement | null>(null)
   const replaceSignedRef = useRef<HTMLInputElement | null>(null)
   const [unfileOpen, setUnfileOpen] = useState(false)
   const [includedPapersOpen, setIncludedPapersOpen] = useState(false)
+  const [revisionAccessOpen, setRevisionAccessOpen] = useState(false)
 
   const [submitOpen, setSubmitOpen] = useState(false)
   const [stateOverrideOpen, setStateOverrideOpen] = useState(false)
@@ -373,8 +432,8 @@ export function BookRecordPage(): React.JSX.Element {
   const [dockHidden, setDockHidden] = useState(false)
 
   const { data: book, isPending, isError, refetch } = useQuery({
-    queryKey: ['books', 'detail', bookId],
-    queryFn: () => api.getBook(bookId),
+    queryKey: ['books', 'detail', bookId, versionIdParam ?? null],
+    queryFn: () => api.getBook(bookId, versionIdParam),
     enabled: Number.isFinite(bookId),
   })
 
@@ -388,8 +447,23 @@ export function BookRecordPage(): React.JSX.Element {
     isPdf: true,
   }
 
-  const versions = book?.versions ?? []
-  const current = versions.length ? versions[versions.length - 1] : undefined
+  const versions = useMemo(() => book?.versions ?? [], [book?.versions])
+  const liveVersion = versions.length ? versions[versions.length - 1] : undefined
+  // The server picks the exact readable/displayed revision — never blindly
+  // the array's last entry, which would silently show the wrong content (or
+  // one a restricted grant doesn't cover) for an explicit historical view.
+  const current =
+    (book?.selected_version_id != null
+      ? versions.find((v) => v.id === book.selected_version_id)
+      : undefined) ?? liveVersion
+  const isFullAccess = book?.access_scope !== 'assigned_revision'
+  const isLiveCurrentVersion =
+    current != null && current.version_no === liveVersion?.version_no
+  // Current-record mutation tools (Word, revise, scan-back, package
+  // management, state override, notifications, …) require full access AND
+  // the live revision — never a retained/assigned-revision grant, and never
+  // an explicit older revision a full-access reader is browsing.
+  const canMutateCurrent = isFullAccess && isLiveCurrentVersion
   // Prefer the generated document; fall back to a v3-imported record's PDF
   // (served from the employee vault) when the book has no generated version.
   // The download URL is identical before and after signing (the backend swaps
@@ -403,6 +477,7 @@ export function BookRecordPage(): React.JSX.Element {
     : (book?.imported_doc?.pdf_url ?? null)
   const canManageIncludedPapers =
     book !== undefined &&
+    canMutateCurrent &&
     current?.document_id != null &&
     isIncludedPapersOwner(book, user?.id)
 
@@ -414,11 +489,11 @@ export function BookRecordPage(): React.JSX.Element {
   // assigned approver is, so an operator handling requests for others can
   // close out the paper flow (print → sign → scan) from the record page.
   const addScan = useAddScan(book?.id ?? null)
-  const showFileSigned = canFileSignedCopy(state, { canEdit, canScan })
+  const showFileSigned = canMutateCurrent && canFileSignedCopy(state, { canEdit, canScan })
   // "Send for approval" (digital route): submit a draft, or re-route a still
   // pending request to a different signing manager. Both routes are offered
   // side by side so the operator picks per request.
-  const showSendForApproval = canSendForApproval(state, { canSubmitBook })
+  const showSendForApproval = canMutateCurrent && canSendForApproval(state, { canSubmitBook })
 
   const stations = useMemo(
     () =>
@@ -431,11 +506,13 @@ export function BookRecordPage(): React.JSX.Element {
   // optional, so the base nested step type is assignable) — the generated nested
   // approval_steps type lacks them until `gen:api` is run.
   const currentSteps: BookApprovalStepRead[] = current?.approval_steps ?? book?.approval_steps ?? []
-  const isAssignee = isApproverAssignee(currentSteps, user?.id)
-  const myReview = myPendingReviewerStep(currentSteps, user?.id)
+  const isAssignee = isLiveCurrentVersion && isApproverAssignee(currentSteps, user?.id)
+  const myReview = isLiveCurrentVersion ? myPendingReviewerStep(currentSteps, user?.id) : null
   const action = footerActionFor(state, {
-    canRevise: canEdit,
-    canSubmitBook,
+    // Every mutation targets the live revision. Historical pending steps are
+    // retained for context but end when a newer revision exists.
+    canRevise: canEdit && canMutateCurrent,
+    canSubmitBook: canSubmitBook && canMutateCurrent,
     canApprove,
     isAssignee,
     isReviewer: myReview != null,
@@ -455,7 +532,9 @@ export function BookRecordPage(): React.JSX.Element {
   }, [isMobile, action, bookId])
 
   // Seen-on-open: fire once when the current user has a step with no seen_at.
-  const myStep = currentSteps.find((s) => s.assignee_user_id === user?.id)
+  const myStep = isLiveCurrentVersion
+    ? currentSteps.find((s) => s.assignee_user_id === user?.id)
+    : undefined
   useEffect(() => {
     if (book && myStep && !myStep.seen_at) {
       api
@@ -480,7 +559,12 @@ export function BookRecordPage(): React.JSX.Element {
   const armed = armedFor === bookId
   const canMark = state === 'pending' && action === 'decide'
   const annMode: 'view' | 'mark' = canMark ? 'mark' : 'view'
-  const queue = useAwaitingQueue(Number.isFinite(bookId) ? bookId : null, canApprove)
+  const queue = useAwaitingQueue(
+    Number.isFinite(bookId) ? bookId : null,
+    current?.id ?? null,
+    approvalContext,
+    approvalContext != null,
+  )
   const { data: annotations = [] } = useQuery({
     queryKey: ['books', 'annotations', bookId, current?.id],
     queryFn: () => api.listBookAnnotations(bookId, current!.id),
@@ -505,27 +589,45 @@ export function BookRecordPage(): React.JSX.Element {
     onError: (err) => toast.error(apiErrorMessage(err)),
   })
 
+  // "Review next waiting record" — populated only after a sign succeeds THIS
+  // session (never on a cold load of an already-approved record).
+  const [nextWaitingResult, setNextWaitingResult] = useState<{
+    bookId: number
+    next: { bookId: number; versionId: number | null; refNumber: string } | null
+  } | null>(null)
+  const nextWaiting =
+    nextWaitingResult?.bookId === bookId ? nextWaitingResult.next : undefined
+
   const { decideMutation, signMutation } = useBookApprovalActions({
     bookId: book?.id,
+    versionId: current?.id,
     onDecided: () => {
       setDecision(null)
       setReason('')
-      // Straight on to the next document awaiting this manager — the whole
-      // point of the arrows is not having to go back to the list.
-      //
-      // `queue.nextId` is a snapshot from the render BEFORE the decision, while
-      // this book was still in the queue — that is exactly why it points at the
-      // right neighbour. Do NOT "improve" this by awaiting the invalidation in
-      // useBookApprovalActions: once the refetch drops this book from the list,
-      // useAwaitingQueue's indexOf returns -1 and nextId goes null, which would
-      // silently send every decision back to /books instead of advancing.
-      navigate(nextAfterDecision(queue.nextId))
+      // Stay on the record after return/reject; the action hook's query
+      // invalidation refreshes the record state in place.
     },
-    // Stay on the record after signing (do NOT navigate away): the refetch flips
-    // the state to approved and the desk reloads the signed PDF, so the signer
-    // sees their signature land on the document — the confirmation managers
-    // expect from "Sign & approve". Reject/return still navigate back (onDecided).
-    onSigned: () => {},
+    // Stay on the record after signing: the refetch flips the state to
+    // approved and reloads the signed PDF so the signer sees it land.
+    onSigned: () => {
+      const justSignedId = book?.id
+      if (justSignedId == null) return
+      void api
+        .listApprovalLog({
+          scope: 'received',
+          kind: 'approver', status: 'pending', sort: 'oldest', limit: 2, offset: 0,
+        })
+        .then((res) => {
+          const row = res.items.find((item) => item.book_id !== justSignedId)
+          setNextWaitingResult({
+            bookId: justSignedId,
+            next: row
+              ? { bookId: row.book_id, versionId: row.version_id ?? null, refNumber: row.ref_number }
+              : null,
+          })
+        })
+        .catch(() => setNextWaitingResult({ bookId: justSignedId, next: null }))
+    },
   })
 
   function handleRevise(): void {
@@ -569,7 +671,7 @@ export function BookRecordPage(): React.JSX.Element {
   }
 
   const busy = decideMutation.isPending || signMutation.isPending
-  const canRevise = Boolean(current?.template_id && current?.has_fields && canGenerate)
+  const canRevise = Boolean(current?.template_id && current?.has_fields && canGenerate && canMutateCurrent)
   const reasonValid = reason.trim().length > 0 || hasCommentBearingMark(annotations)
   const decisionReasonFormProps = {
     reason,
@@ -661,11 +763,21 @@ export function BookRecordPage(): React.JSX.Element {
           total={queue.total}
           onPrev={() => {
             setArmedFor(null)
-            if (queue.prevId != null) navigate(`/books/${queue.prevId}`)
+            if (queue.prevId == null) return
+            navigate(
+              approvalContext
+                ? approvalRecordUrl(queue.prevId, queue.prevVersionId, approvalContext)
+                : `/books/${queue.prevId}`,
+            )
           }}
           onNext={() => {
             setArmedFor(null)
-            if (queue.nextId != null) navigate(`/books/${queue.nextId}`)
+            if (queue.nextId == null) return
+            navigate(
+              approvalContext
+                ? approvalRecordUrl(queue.nextId, queue.nextVersionId, approvalContext)
+                : `/books/${queue.nextId}`,
+            )
           }}
         />
         <div className="min-w-0 flex-1 lg:min-w-[18rem]">
@@ -708,7 +820,7 @@ export function BookRecordPage(): React.JSX.Element {
           )}
         </div>
         <div className="flex w-full flex-wrap items-center gap-2 lg:ms-auto lg:w-auto">
-          {book && <WordSessionActions book={book} isMobile={isMobile} />}
+          {book && canMutateCurrent && <WordSessionActions book={book} isMobile={isMobile} />}
           {action === 'decide' && !isMobile && (
             <>
               <HeaderBtn
@@ -744,9 +856,9 @@ export function BookRecordPage(): React.JSX.Element {
             </>
           )}
 
-          {action === 'review' && book && (
+          {action === 'review' && book && current && (
             <div data-testid="record-reviewer-actions">
-              <ReviewerActions bookId={book.id} onDone={() => navigate('/books')} />
+              <ReviewerActions bookId={book.id} versionId={current.id} />
             </div>
           )}
 
@@ -816,20 +928,31 @@ export function BookRecordPage(): React.JSX.Element {
 
         <div className="flex w-full min-w-0 overflow-x-auto lg:w-auto lg:overflow-visible">
           <div className="mx-auto flex w-max shrink-0 items-center gap-2">
-          {/* Isolated admin zone: state override sits between workflow actions
-              and permanent tools instead of competing with either group. */}
-          {canOverrideState && book && (
-            <>
-              <HeaderBtn
-                icon={<ShieldAlert className="h-3.5 w-3.5" />}
-                label={t('books.stateOverride.trigger')}
-                iconOnly
-                tone="red"
-                testId="state-override-trigger"
-                onClick={() => setStateOverrideOpen(true)}
-              />
-              <span className="h-6 w-px bg-border" aria-hidden="true" />
-            </>
+          {/* Isolated admin zone: state override + revision access sit between
+              workflow actions and permanent tools instead of competing with
+              either group. */}
+          {canOverrideState && canMutateCurrent && book && (
+            <HeaderBtn
+              icon={<ShieldAlert className="h-3.5 w-3.5" />}
+              label={t('books.stateOverride.trigger')}
+              iconOnly
+              tone="red"
+              testId="state-override-trigger"
+              onClick={() => setStateOverrideOpen(true)}
+            />
+          )}
+          {canManageRevisionAccess && book && (
+            <HeaderBtn
+              icon={<ShieldCheck className="h-3.5 w-3.5" />}
+              label={t('books.approval.revisionAccess')}
+              iconOnly
+              tone="plain"
+              testId="revision-access-trigger"
+              onClick={() => setRevisionAccessOpen(true)}
+            />
+          )}
+          {(canOverrideState && canMutateCurrent || canManageRevisionAccess) && book && (
+            <span className="h-6 w-px bg-border" aria-hidden="true" />
           )}
 
           <HeaderBtn
@@ -867,10 +990,10 @@ export function BookRecordPage(): React.JSX.Element {
           {canMark && (
             <MarkToggle armed={armed} onToggle={() => setArmedFor(armed ? null : bookId)} />
           )}
-          {current?.document_id != null && (
+          {canMutateCurrent && current?.document_id != null && (
             <AdjustSignatureAction documentId={current.document_id} iconOnly />
           )}
-          {book && <WordReopenButton book={book} isMobile={isMobile} iconOnly />}
+          {book && canMutateCurrent && <WordReopenButton book={book} isMobile={isMobile} iconOnly />}
 
           {state === 'approved' && current?.signed_pdf_url && current?.document_id != null && (
             <a
@@ -884,7 +1007,7 @@ export function BookRecordPage(): React.JSX.Element {
               <FileText className="h-3.5 w-3.5" aria-hidden="true" />
             </a>
           )}
-          {state === 'approved' && current?.signed_pdf_url && canEdit && (
+          {state === 'approved' && current?.signed_pdf_url && canEdit && canMutateCurrent && (
             <>
               <HeaderBtn
                 icon={<RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />}
@@ -936,6 +1059,32 @@ export function BookRecordPage(): React.JSX.Element {
           e.target.value = ''
         }}
       />
+
+      {/* Post-sign "what's next" — only after a sign succeeds THIS session. */}
+      {state === 'approved' && nextWaiting !== undefined && (
+        <div
+          className="border-b border-hairline bg-success-soft/40 px-5 py-2.5 text-[0.8em]"
+          data-print-hide
+        >
+          {nextWaiting ? (
+            <button
+              type="button"
+              onClick={() =>
+                navigate(
+                  approvalContext
+                    ? approvalRecordUrl(nextWaiting.bookId, nextWaiting.versionId, approvalContext)
+                    : `/books/${nextWaiting.bookId}`,
+                )
+              }
+              className="font-semibold text-success underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              {t('books.approval.reviewNextWaiting')} — <bdi dir="ltr">{nextWaiting.refNumber}</bdi>
+            </button>
+          ) : (
+            <span className="text-muted-foreground">{t('books.approval.noSignaturesWaiting')}</span>
+          )}
+        </div>
+      )}
 
       {/* override banner: approver sees that reviewers requested changes */}
       {action === 'decide' && changesRequestedCount(currentSteps) > 0 && (
@@ -1109,7 +1258,11 @@ export function BookRecordPage(): React.JSX.Element {
             })}
           </ol>
           {/* Reviewer rows — advisory chain, below the approver timeline */}
-          <ReviewerList reviewers={reviewerSteps(currentSteps)} />
+          <ReviewerList
+            reviewers={reviewerSteps(currentSteps)}
+            versionNo={current?.version_no}
+            currentVersionNo={liveVersion?.version_no}
+          />
 
           {/* Notification block — SMS sent for this record */}
           {book?.sms && book.sms.length > 0 && (
@@ -1149,6 +1302,10 @@ export function BookRecordPage(): React.JSX.Element {
 
       {stateOverrideOpen && book && canOverrideState && (
         <RecordStateOverrideDialog book={book} onClose={() => setStateOverrideOpen(false)} />
+      )}
+
+      {revisionAccessOpen && book && canManageRevisionAccess && (
+        <RevisionAccessPanel bookId={book.id} onClose={() => setRevisionAccessOpen(false)} />
       )}
     </div>
   )

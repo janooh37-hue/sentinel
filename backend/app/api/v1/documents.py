@@ -84,38 +84,55 @@ def _effective_document_service(template_id: str) -> str:
     return resolved if resolved in SERVICE_IDS else OTHER_SERVICE_ID
 
 
-def _require_document_record_access(db: Session, user: User, row: Document) -> None:
-    """Apply the complete read gate for a stored document.
+def _require_document_record_access(
+    db: Session,
+    user: User,
+    row: Document,
+    *,
+    expected_version_id: int | None = None,
+) -> BookVersion | None:
+    """Apply the complete read gate for a stored document; return its exact
+    owning ``BookVersion`` (``None`` for a standalone/unlinked document).
 
-    Linked documents inherit their book's row-level policy, including the
-    pending-assignment exception. Only unlinked documents require generation
-    access and their standalone service-type visibility.
+    Linked documents inherit their book's revision-scoped read policy for the
+    EXACT version that owns them, not merely the book in general — a caller
+    authorized only for a different revision must not reach these bytes.
+    Companion documents inherit the primary document's exact ownership.
+    ``expected_version_id``, when given, must match the resolved owning
+    version or the document is treated as not found (a stale cached link
+    pointing at a superseded revision must not silently serve different
+    bytes than the caller expects).
     """
-    linked_book = db.scalar(
-        select(Book)
+    owning = db.execute(
+        select(Book, BookVersion)
         .join(BookVersion, BookVersion.book_id == Book.id)
         .where(BookVersion.document_id == row.id)
-        .order_by(BookVersion.version_no.desc())
-        .limit(1)
-    )
-    if linked_book is not None:
-        book_service.require_book_access(db, user, linked_book)
-        return
-    if linked_book is None and row.role == "companion":
+    ).first()
+    if owning is None and row.role == "companion":
         primary_document_ids = select(Document.id).where(
             Document.submission_id == row.submission_id,
             Document.role == "primary",
         )
-        linked_book = db.scalar(
-            select(Book)
+        owning = db.execute(
+            select(Book, BookVersion)
             .join(BookVersion, BookVersion.book_id == Book.id)
             .where(BookVersion.document_id.in_(primary_document_ids))
-            .order_by(BookVersion.version_no.desc())
-            .limit(1)
+        ).first()
+    if owning is not None:
+        linked_book, owning_version = owning.tuple()
+        if expected_version_id is not None and expected_version_id != owning_version.id:
+            raise NotFoundError(
+                "DOCUMENT_NOT_FOUND",
+                f"Document {row.id} not found",
+                id=row.id,
+            )
+        book_service.resolve_book_read_access(
+            db,
+            user,
+            linked_book,
+            version_id=owning_version.id,
         )
-        if linked_book is not None:
-            book_service.require_book_access(db, user, linked_book)
-            return
+        return owning_version
     if not perm_service.has_capability(db, user, "documents.generate"):
         raise AppError(
             "FORBIDDEN",
@@ -127,6 +144,7 @@ def _require_document_record_access(db: Session, user: User, row: Document) -> N
         user,
         service_id=_effective_document_service(row.template_id),
     )
+    return None
 
 
 def _should_autosend(
@@ -423,14 +441,14 @@ def generate_document(
             )
         revise_book = db.get(Book, payload.revise_of_book_id)
         if revise_book is not None and revise_book.deleted_at is None:
-            book_service.require_book_access(db, user, revise_book)
+            book_service.require_full_book_access(db, user, revise_book)
 
     for source in payload.attachments or ():
         if source.source == "staged" or source.book_id is None:
             continue
         source_book = db.get(Book, source.book_id)
         if source_book is not None and source_book.deleted_at is None:
-            book_service.require_book_access(db, user, source_book)
+            book_service.require_full_book_access(db, user, source_book)
     job_id = submit_job()
     # The task opens its own session (the request session is closed once this
     # response returns). The caller is both the stamping identity and the
@@ -565,6 +583,7 @@ def get_document(
     document_id: int,
     db: Annotated[Session, Depends(get_db)],
     user: Annotated[User, Depends(get_current_user)],
+    version_id: Annotated[int | None, Query(gt=0)] = None,
 ) -> DocumentRead:
     row: Document | None = db.get(Document, document_id)
 
@@ -584,7 +603,7 @@ def get_document(
             id=document_id,
         )
 
-    _require_document_record_access(db, user, row)
+    _require_document_record_access(db, user, row, expected_version_id=version_id)
     return DocumentRead.model_validate(row)
 
 
@@ -615,6 +634,7 @@ def download_document(
     format: Literal["docx", "pdf"] = Query("pdf"),
     original: Annotated[bool, Query()] = False,
     encoding: Annotated[str | None, Query(pattern="^base64$")] = None,
+    version_id: Annotated[int | None, Query(gt=0)] = None,
 ) -> Response:
     """Stream a generated document (PDF or DOCX).
 
@@ -638,10 +658,10 @@ def download_document(
             f"Document {document_id} not found",
             id=document_id,
         )
-    _require_document_record_access(db, user, row)
+    version = _require_document_record_access(db, user, row, expected_version_id=version_id)
 
     artifact = document_service.resolve_document_artifact(
-        db, document_id, format=format, original=original
+        db, document_id, format=format, original=original, version=version
     )
 
     if artifact.companion_paths:
@@ -649,7 +669,7 @@ def download_document(
         if (b64 := maybe_base64(merged, encoding)) is not None:
             return b64
         return _inline_pdf_response(
-            merged, document_service.download_filename_for(row, ".pdf", db=db)
+            merged, document_service.download_filename_for(row, ".pdf", db=db, version=version)
         )
 
     # base64 branch — opaque text/plain body that PDF handlers / download
@@ -657,7 +677,7 @@ def download_document(
     if (b64 := maybe_base64(artifact.path.read_bytes(), encoding)) is not None:
         return b64
 
-    filename = document_service.download_filename_for(row, artifact.ext, db=db)
+    filename = document_service.download_filename_for(row, artifact.ext, db=db, version=version)
     # PDFs are served inline so the preview iframe can render them; the
     # frontend uses <a download> for explicit downloads which overrides
     # disposition client-side. DOCX always downloads. Based on the artifact

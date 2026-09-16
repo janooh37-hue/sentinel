@@ -2459,9 +2459,7 @@ export interface paths {
         };
         /**
          * Get Book By Ref
-         * @description Resolve a book by its ``ref_number`` — backs the ledger book-chip
-         *     deep-link. Declared before ``/{book_id}`` so the literal ``by-ref`` segment
-         *     isn't swallowed by the int path param.
+         * @description Resolve a book by its reference without bypassing revision-scoped access.
          */
         get: operations["get_book_by_ref_api_v1_books_by_ref__ref__get"];
         put?: never;
@@ -2481,10 +2479,7 @@ export interface paths {
         };
         /**
          * List Awaiting
-         * @description Books whose current pending approval step is assigned to the caller.
-         *
-         *     Declared before ``/{book_id}`` so the literal ``awaiting`` segment isn't
-         *     swallowed by the int path param.
+         * @description Return the caller's actionable signing and advisory assignments.
          */
         get: operations["list_awaiting_api_v1_books_awaiting_get"];
         put?: never;
@@ -2532,14 +2527,62 @@ export interface paths {
         };
         /**
          * Get Approval Log
-         * @description The approvals log — ``scope=sent`` (records I submitted, requiring
-         *     ``books.view``) or ``scope=received`` (my pending decisions, plus recent
-         *     verdicts only when I also hold ``books.view``). Paged like GET /books.
+         * @description The approvals worklist. ``scope=received`` (default) is authenticated
+         *     and assignment-scoped — a pending signature or review assignment grants
+         *     access without ``books.view``/``books.approve``; signing/reviewing still
+         *     require their own capability at the action endpoint. ``scope=sent``
+         *     requires ``books.view``. ``status`` defaults to ``pending`` for received
+         *     and ``all`` for sent — the outbox is a full submission history.
          *
          *     Declared before ``/{book_id}`` so the literal ``approval-log`` segment isn't
          *     swallowed by the int path param — same reason as ``/awaiting`` above.
          */
         get: operations["get_approval_log_api_v1_books_approval_log_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/books/approval-summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Approval Summary
+         * @description Counts + oldest row driving the generic Approvals landing rule and Home
+         *     summaries — authenticated, no assignments returns an empty summary.
+         *
+         *     Declared before ``/{book_id}`` so the literal ``approval-summary`` segment
+         *     isn't swallowed by the int path param.
+         */
+        get: operations["get_approval_summary_api_v1_books_approval_summary_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/books/approval-log/{book_id}/neighbors": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Approval Log Neighbors
+         * @description Previous/next in the same filtered/ordered worklist the log page uses —
+         *     for header navigation, without a full client-side page download.
+         */
+        get: operations["get_approval_log_neighbors_api_v1_books_approval_log__book_id__neighbors_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -3005,6 +3048,69 @@ export interface paths {
         get: operations["get_imported_document_api_v1_books__book_id__imported_document_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/books/{book_id}/versions/{version_id}/signed-document": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Signed Document
+         * @description Serve a version's own signed artifact directly, for signed revisions
+         *     that carry no generated ``Document`` row to route through (e.g. a scan
+         *     filed straight onto the version, or after a signed-copy replacement).
+         *     Exact-version read access; 404 when no signed rendition exists.
+         */
+        get: operations["get_signed_document_api_v1_books__book_id__versions__version_id__signed_document_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/books/{book_id}/revision-access": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Revision Access
+         * @description Every retained revision grant on this record, for the revocation panel.
+         */
+        get: operations["list_revision_access_api_v1_books__book_id__revision_access_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/books/{book_id}/revision-access/{access_id}/revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Revoke Revision Access
+         * @description Revoke a user's retained revision access, with a required reason.
+         */
+        post: operations["revoke_revision_access_api_v1_books__book_id__revision_access__access_id__revoke_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -6366,18 +6472,12 @@ export interface components {
         };
         /**
          * ApprovalLogItem
-         * @description One flattened approvals-log row (either scope).
-         *
-         *     Carries exactly what an operator needs to recognise the record and where it
-         *     sits in the chain — ref, subject, category, state, the people involved, the
-         *     two timestamps, the verdict, and the current version's ``document_id`` so
-         *     the client can paint a page-1 thumbnail without fetching the detail payload.
+         * @description One flattened approvals-log row (either scope) — the selected visible
+         *     revision, never a future document paired with an old grant.
          *
          *     Inherits ORMBase so every timestamp serializes with an offset (the
          *     test_schema_utc_serialization guard). The service tags each stamp with its
-         *     real zone before construction — step stamps as UTC, the off-chain
-         *     ``Book.created_at`` fallback as Dubai wall-clock — and aware values pass
-         *     through ORMBase's validator untouched.
+         *     real zone before construction; aware values pass through untouched.
          */
         ApprovalLogItem: {
             /** Book Id */
@@ -6392,11 +6492,13 @@ export interface components {
             category_name_en?: string | null;
             /** Status */
             status: string;
+            /** Record Status */
+            record_status?: string | null;
             /**
              * Priority
              * @default Normal
              */
-            priority: string;
+            priority: string | null;
             /** Submitted By User Id */
             submitted_by_user_id?: number | null;
             /** Submitted By Name */
@@ -6417,12 +6519,29 @@ export interface components {
             verdict?: ("approved" | "rejected" | "returned") | null;
             /** Document Id */
             document_id?: number | null;
-            /** Your Step Kind */
-            your_step_kind?: string | null;
-            /** Your Step State */
-            your_step_state?: string | null;
-            /** Your Step Decided At */
-            your_step_decided_at?: string | null;
+            /** Version Id */
+            version_id?: number | null;
+            /** Version No */
+            version_no?: number | null;
+            /** Assignment Version No */
+            assignment_version_no?: number | null;
+            /** Assigned Signer User Id */
+            assigned_signer_user_id?: number | null;
+            /**
+             * Access Scope
+             * @default full
+             * @enum {string}
+             */
+            access_scope: "full" | "assigned_revision";
+        };
+        /** ApprovalLogNeighborsResponse */
+        ApprovalLogNeighborsResponse: {
+            /** Position */
+            position?: number | null;
+            /** Total */
+            total: number;
+            previous?: components["schemas"]["ApprovalLogItem"] | null;
+            next?: components["schemas"]["ApprovalLogItem"] | null;
         };
         /**
          * ApprovalLogResponse
@@ -6437,6 +6556,30 @@ export interface components {
             limit: number;
             /** Offset */
             offset: number;
+        };
+        /** ApprovalSummaryBucket */
+        ApprovalSummaryBucket: {
+            /** Count */
+            count: number;
+            oldest?: components["schemas"]["ApprovalLogItem"] | null;
+        };
+        /**
+         * ApprovalSummaryResponse
+         * @description Counts + oldest row driving the generic Approvals landing rule and Home
+         *     summaries — the caller's full authorized set, not one page.
+         */
+        ApprovalSummaryResponse: {
+            /** Can View Sent */
+            can_view_sent: boolean;
+            /** Available Received Kinds */
+            available_received_kinds?: ("approver" | "reviewer")[];
+            signature: components["schemas"]["ApprovalSummaryBucket"];
+            review: components["schemas"]["ApprovalSummaryBucket"];
+            sent: components["schemas"]["ApprovalSummaryBucket"];
+            /** Returned Count */
+            returned_count: number;
+            /** Actionable Count */
+            actionable_count: number;
         };
         /** ApproveIn */
         ApproveIn: {
@@ -7289,6 +7432,8 @@ export interface components {
         };
         /** BookDecisionRequest */
         BookDecisionRequest: {
+            /** Version Id */
+            version_id: number;
             /** Note */
             note?: string | null;
         };
@@ -7346,7 +7491,7 @@ export interface components {
             /** Ref Number */
             ref_number: string;
             /** Category Id */
-            category_id: string;
+            category_id: string | null;
             category?: components["schemas"]["BookCategoryRead"] | null;
             /** Employee Id */
             employee_id?: string | null;
@@ -7369,9 +7514,27 @@ export interface components {
             /** Deleted At */
             deleted_at: string | null;
             /** Priority */
-            priority: string;
+            priority: string | null;
             /** Approval State */
             approval_state: string;
+            /**
+             * Access Scope
+             * @default full
+             * @enum {string}
+             */
+            access_scope: "full" | "assigned_revision";
+            /** Selected Version Id */
+            selected_version_id?: number | null;
+            /**
+             * Can Sign
+             * @default false
+             */
+            can_sign: boolean;
+            /**
+             * Can Review
+             * @default false
+             */
+            can_review: boolean;
             /** Classification Code */
             classification_code?: string | null;
             /** Voided At */
@@ -7390,6 +7553,8 @@ export interface components {
             submitted_by_name?: string | null;
             /** Submitted By G */
             submitted_by_g?: string | null;
+            /** Submitted At */
+            submitted_at?: string | null;
             /** Doc Manager User Id */
             doc_manager_user_id?: number | null;
             /** Doc Manager Name */
@@ -7439,18 +7604,51 @@ export interface components {
             search_snippet?: string | null;
             /**
              * Current Template Id
-             * @description Newest version's template_id — lets the list badge Reports.
+             * @description Selected revision's template_id — current unless an older revision was requested.
              */
             readonly current_template_id: string | null;
             /**
              * Service Id
-             * @description Which service produced this record — the Records rail's category.
-             *
-             *     Single source of truth for the rule (app.core.form_kind); the frontend
-             *     reads this instead of parsing the subject. `versions` is empty for
-             *     v3-imported records, which is exactly when the subject fallback applies.
+             * @description Which service produced the selected visible revision.
              */
             readonly service_id: string;
+        };
+        /** BookRevisionAccessRead */
+        BookRevisionAccessRead: {
+            /** Id */
+            id: number;
+            /** Version Id */
+            version_id: number;
+            /** Version No */
+            version_no: number;
+            /** User Id */
+            user_id: number;
+            /** User Name */
+            user_name?: string | null;
+            /** Kind */
+            kind: string;
+            /** State */
+            state: string;
+            /** Note */
+            note: string | null;
+            /** Assigned At */
+            assigned_at: string | null;
+            /**
+             * Decided At
+             * Format: date-time
+             */
+            decided_at: string;
+            /** Revoked At */
+            revoked_at: string | null;
+            /** Revoked By User Id */
+            revoked_by_user_id: number | null;
+            /** Revocation Reason */
+            revocation_reason: string | null;
+        };
+        /** BookSignRequest */
+        BookSignRequest: {
+            /** Version Id */
+            version_id: number;
         };
         /**
          * BookStateOverrideRequest
@@ -7520,6 +7718,8 @@ export interface components {
              * Format: date-time
              */
             created_at: string;
+            /** Submitted At */
+            submitted_at?: string | null;
             /** Created By Name */
             created_by_name?: string | null;
             /** Docx Url */
@@ -7537,6 +7737,8 @@ export interface components {
             signed_source?: ("in_app" | "scan") | null;
             /** Approval Steps */
             approval_steps?: components["schemas"]["BookApprovalStepRead"][];
+            /** Retained Decisions */
+            retained_decisions?: components["schemas"]["RetainedDecisionRead"][];
         };
         /**
          * CanonicalWing
@@ -8329,7 +8531,7 @@ export interface components {
              * Id
              * @enum {string}
              */
-            id: "pending" | "workspace" | "violations" | "drafts" | "ledger" | "on_leave_today" | "upcoming_leave" | "recent_docs" | "email_sync_status" | "waiting_approvals" | "expiring_soon" | "recent_ledger" | "pending_departures" | "workforce_pulse" | "violation_months";
+            id: "pending" | "workspace" | "violations" | "drafts" | "ledger" | "on_leave_today" | "upcoming_leave" | "recent_docs" | "email_sync_status" | "waiting_approvals" | "sent_approvals" | "expiring_soon" | "recent_ledger" | "pending_departures" | "workforce_pulse" | "violation_months";
             /**
              * Visible
              * @default true
@@ -11737,6 +11939,24 @@ export interface components {
             /** Password */
             password: string;
         };
+        /** RetainedDecisionRead */
+        RetainedDecisionRead: {
+            /** Kind */
+            kind: string;
+            /** State */
+            state: string;
+            /** Note */
+            note: string | null;
+            /**
+             * Decided At
+             * Format: date-time
+             */
+            decided_at: string;
+            /** Assignee User Id */
+            assignee_user_id: number;
+            /** Assignee Name */
+            assignee_name?: string | null;
+        };
         /** ReturnIn */
         ReturnIn: {
             /** Expected Version */
@@ -11778,6 +11998,8 @@ export interface components {
         };
         /** ReviewRequest */
         ReviewRequest: {
+            /** Version Id */
+            version_id: number;
             /**
              * Decision
              * @enum {string}
@@ -11790,6 +12012,11 @@ export interface components {
         ReviewersAddRequest: {
             /** User Ids */
             user_ids: number[];
+        };
+        /** RevokeRevisionAccessRequest */
+        RevokeRevisionAccessRequest: {
+            /** Reason */
+            reason: string;
         };
         /** RosterRowRead */
         RosterRowRead: {
@@ -18456,7 +18683,9 @@ export interface operations {
     };
     get_document_api_v1_documents__document_id__get: {
         parameters: {
-            query?: never;
+            query?: {
+                version_id?: number | null;
+            };
             header?: never;
             path: {
                 document_id: number;
@@ -18493,6 +18722,7 @@ export interface operations {
                 format?: "docx" | "pdf";
                 original?: boolean;
                 encoding?: string | null;
+                version_id?: number | null;
             };
             header?: never;
             path: {
@@ -19994,7 +20224,9 @@ export interface operations {
     };
     get_book_by_ref_api_v1_books_by_ref__ref__get: {
         parameters: {
-            query?: never;
+            query?: {
+                version_id?: number | null;
+            };
             header?: never;
             path: {
                 ref: string;
@@ -20093,6 +20325,9 @@ export interface operations {
         parameters: {
             query?: {
                 scope?: "sent" | "received";
+                kind?: ("approver" | "reviewer") | null;
+                status?: string | null;
+                sort?: "oldest" | "newest";
                 limit?: number;
                 offset?: number;
             };
@@ -20111,6 +20346,76 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ApprovalLogResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_approval_summary_api_v1_books_approval_summary_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalSummaryResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_approval_log_neighbors_api_v1_books_approval_log__book_id__neighbors_get: {
+        parameters: {
+            query?: {
+                scope?: "sent" | "received";
+                kind?: ("approver" | "reviewer") | null;
+                status?: string;
+                sort?: "oldest" | "newest";
+                version_id?: number | null;
+            };
+            header?: never;
+            path: {
+                book_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ApprovalLogNeighborsResponse"];
                 };
             };
             /** @description Validation Error */
@@ -20264,6 +20569,7 @@ export interface operations {
         parameters: {
             query?: {
                 include_deleted?: boolean;
+                version_id?: number | null;
             };
             header?: never;
             path: {
@@ -20552,7 +20858,11 @@ export interface operations {
                 gssg_session?: string | null;
             };
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BookSignRequest"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {
@@ -21099,6 +21409,113 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_signed_document_api_v1_books__book_id__versions__version_id__signed_document_get: {
+        parameters: {
+            query?: {
+                encoding?: string | null;
+            };
+            header?: never;
+            path: {
+                book_id: number;
+                version_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_revision_access_api_v1_books__book_id__revision_access_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                book_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BookRevisionAccessRead"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    revoke_revision_access_api_v1_books__book_id__revision_access__access_id__revoke_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                book_id: number;
+                access_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RevokeRevisionAccessRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BookRevisionAccessRead"][];
                 };
             };
             /** @description Validation Error */

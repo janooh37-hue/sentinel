@@ -224,13 +224,16 @@ def relevant_counts(
     Keep it pure (no side effects, no request objects).
     """
     today_iso = datetime.now(UTC).date().isoformat()
-    # Only count pending approval steps when the user actually holds books.approve.
-    # Without the cap the bell row is hidden, so a non-zero count here would be
-    # misleading (SSE/push would fire for an action the user can't take).
-    if perm_service.has_capability(db, user, "books.approve"):
-        approvals = len(book_service.list_awaiting(db, user_id=user.id))
-    else:
-        approvals = 0
+    # A reviewer's pending step is always actionable (late advisory feedback
+    # included); a signer's pending step only counts with signing capability
+    # — without it the bell row is hidden, so a non-zero count would be
+    # misleading (SSE/push firing for an action the user can't take).
+    can_sign = perm_service.has_capability(db, user, "books.approve")
+    approvals = sum(
+        1
+        for book in book_service.list_awaiting(db, user_id=user.id)
+        if book_service.your_step_kind(book, user.id) == "reviewer" or can_sign
+    )
     scans = scan_inbox_service.counts(db, owner_user_id=user.id)["total"]
     emails = ledger_service.unread_email_count(db, owner_user_id=user.id)
     leaves = (

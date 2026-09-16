@@ -6,7 +6,7 @@ from datetime import datetime
 from typing import ClassVar, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, Field, computed_field
+from pydantic import BaseModel, ConfigDict, Field, computed_field
 
 from app.core.form_kind import resolve_service
 from app.schemas._base import ORMBase
@@ -72,6 +72,7 @@ class BookSubmitRequest(BaseModel):
 
 class ReviewRequest(BaseModel):
     # Advisory reviewer verdict — never changes approval_state.
+    version_id: int = Field(gt=0)
     decision: Literal["reviewed", "changes_requested"]
     note: str | None = Field(default=None, max_length=2000)
 
@@ -81,7 +82,12 @@ class ReviewersAddRequest(BaseModel):
 
 
 class BookDecisionRequest(BaseModel):
+    version_id: int = Field(gt=0)
     note: str | None = Field(default=None, max_length=2000)
+
+
+class BookSignRequest(BaseModel):
+    version_id: int = Field(gt=0)
 
 
 class BookStateOverrideRequest(BaseModel):
@@ -90,11 +96,14 @@ class BookStateOverrideRequest(BaseModel):
     a state on every records surface. ``reason`` is required for the negative
     verdicts, mirroring the normal return/reject contract."""
 
-    state: Literal[
-        "none", "pending", "awaiting_scan", "approved", "returned", "rejected", "voided"
-    ]
+    state: Literal["none", "pending", "awaiting_scan", "approved", "returned", "rejected", "voided"]
     reason: str | None = Field(default=None, max_length=2000)
 
+
+class RevokeRevisionAccessRequest(BaseModel):
+    model_config = ConfigDict(str_strip_whitespace=True)
+
+    reason: str = Field(min_length=1, max_length=2000)
 
 
 class BookApprovalStepRead(ORMBase):
@@ -110,6 +119,31 @@ class BookApprovalStepRead(ORMBase):
     assignee_name: str | None = None
 
 
+class RetainedDecisionRead(ORMBase):
+    kind: str
+    state: str
+    note: str | None
+    decided_at: datetime
+    assignee_user_id: int
+    assignee_name: str | None = None
+
+
+class BookRevisionAccessRead(ORMBase):
+    id: int
+    version_id: int
+    version_no: int
+    user_id: int
+    user_name: str | None = None
+    kind: str
+    state: str
+    note: str | None
+    assigned_at: datetime | None
+    decided_at: datetime
+    revoked_at: datetime | None
+    revoked_by_user_id: int | None
+    revocation_reason: str | None
+
+
 class BookVersionRead(ORMBase):
     """One version of a book — for the detail drawer's version history."""
 
@@ -121,6 +155,8 @@ class BookVersionRead(ORMBase):
     document_id: int | None = None
     has_fields: bool = False
     created_at: datetime
+    # Real assignment submission time; never inferred from revision creation.
+    submitted_at: datetime | None = None
     created_by_name: str | None = None
     docx_url: str | None = None
     pdf_url: str | None = None
@@ -131,6 +167,7 @@ class BookVersionRead(ORMBase):
     # "in_app" for sign_book-rendered artifacts, None while unsigned.
     signed_source: Literal["in_app", "scan"] | None = None
     approval_steps: list[BookApprovalStepRead] = Field(default_factory=list)
+    retained_decisions: list[RetainedDecisionRead] = Field(default_factory=list)
 
     # document_service stamps this with datetime.now() — local, not UTC.
     LOCAL_WALLCLOCK_FIELDS: ClassVar[frozenset[str]] = frozenset({"created_at"})
@@ -294,8 +331,8 @@ class IncludedPapersPreviewRead(BaseModel):
 class BookRead(ORMBase):
     id: int
     ref_number: str
-    category_id: str
-    # May be None when the FK target row is missing (legacy/alpha category ids).
+    # Restricted historical projections may lack trustworthy category metadata.
+    category_id: str | None
     category: BookCategoryRead | None = None
     # Subject employee link (G-number) + name snapshot, straight off the Book row.
     # Lets clients resolve the employee record (designation / Arabic name / id)
@@ -311,8 +348,12 @@ class BookRead(ORMBase):
     imported_doc: ImportedDocRead | None = None
     created_at: datetime
     deleted_at: datetime | None
-    priority: str
+    priority: str | None
     approval_state: str
+    access_scope: Literal["full", "assigned_revision"] = "full"
+    selected_version_id: int | None = None
+    can_sign: bool = False
+    can_review: bool = False
     # Government classification code, e.g. "5/1"; None for plain books.
     classification_code: str | None = None
     # Non-None when a manager discarded the draft (ref stays in register).
@@ -321,26 +362,23 @@ class BookRead(ORMBase):
     is_draft: bool = False
     # Active Word-editing session, if any.
     edit_session: BookEditSessionRead | None = None
-    # Per-form signing path (core.form_policy) — derived from the current
-    # version's template_id where versions are enriched; None for legacy
-    # books / unknown templates.
+    # Per-form signing path derived from the selected revision's template.
     signing_path: str | None = None
     submitted_by_user_id: int | None = None
     submitted_by_name: str | None = None
     submitted_by_g: str | None = None
+    # Captured submission instant for the selected revision, when trustworthy.
+    submitted_at: datetime | None = None
     # The doc's named manager resolved to a login account (auto-route target).
     doc_manager_user_id: int | None = None
     doc_manager_name: str | None = None
     # Whether that linked account has a signature on file — drives the submit
     # dialog's "manager has no signature, add one" warning (lenient submit).
     doc_manager_has_signature: bool = False
-    # Word-authored book: the current version's truth is its DOCX, not
-    # re-renderable fields (fields == {}). Computed in _enrich_path_fields so
-    # LIST rows carry it too — the Records pane gates the rich-editor
-    # "Continue Draft" action on it.
+    # Whether the selected revision is Word-authored. Mutation controls still
+    # require full current-record access.
     is_word_book: bool = False
-    # On the /books/awaiting payload only: "approver" | "reviewer" — the caller's
-    # role on this pending record (label "To approve" vs "To review").
+    # Caller responsibility on the selected current pending revision.
     your_step_kind: str | None = None
     approval_steps: list[BookApprovalStepRead] = Field(default_factory=list)
     attachment_paths: list[str] = Field(default_factory=list)
@@ -357,25 +395,30 @@ class BookRead(ORMBase):
     # deliberately absent here so they get tagged UTC.
     LOCAL_WALLCLOCK_FIELDS: ClassVar[frozenset[str]] = frozenset({"created_at"})
 
+    def _selected_version(self) -> BookVersionRead | None:
+        if self.selected_version_id is not None:
+            return next(
+                (version for version in self.versions if version.id == self.selected_version_id),
+                None,
+            )
+        return self.versions[-1] if self.versions else None
+
     @computed_field  # type: ignore[prop-decorator]
     @property
     def current_template_id(self) -> str | None:
-        """Newest version's template_id — lets the list badge Reports."""
-        return self.versions[-1].template_id if self.versions else None
+        """Selected revision's template_id — current unless an older revision was requested."""
+        selected = self._selected_version()
+        return selected.template_id if selected is not None else None
 
     @computed_field  # type: ignore[prop-decorator]
     @property
     def service_id(self) -> str:
-        """Which service produced this record — the Records rail's category.
-
-        Single source of truth for the rule (app.core.form_kind); the frontend
-        reads this instead of parsing the subject. `versions` is empty for
-        v3-imported records, which is exactly when the subject fallback applies.
-        """
+        """Which service produced the selected visible revision."""
+        selected = self._selected_version()
         return resolve_service(
             self.subject,
-            self.versions[-1].template_id if self.versions else None,
-            versioned=bool(self.versions),
+            selected.template_id if selected is not None else None,
+            versioned=selected is not None,
         )
 
     # Outbound notifications sent for this book (WhatsApp + SMS, auto-send + resends).
@@ -427,18 +470,12 @@ class ApproverOptionRead(BaseModel):
 
 
 class ApprovalLogItem(ORMBase):
-    """One flattened approvals-log row (either scope).
-
-    Carries exactly what an operator needs to recognise the record and where it
-    sits in the chain — ref, subject, category, state, the people involved, the
-    two timestamps, the verdict, and the current version's ``document_id`` so
-    the client can paint a page-1 thumbnail without fetching the detail payload.
+    """One flattened approvals-log row (either scope) — the selected visible
+    revision, never a future document paired with an old grant.
 
     Inherits ORMBase so every timestamp serializes with an offset (the
     test_schema_utc_serialization guard). The service tags each stamp with its
-    real zone before construction — step stamps as UTC, the off-chain
-    ``Book.created_at`` fallback as Dubai wall-clock — and aware values pass
-    through ORMBase's validator untouched.
+    real zone before construction; aware values pass through untouched.
     """
 
     book_id: int
@@ -448,28 +485,39 @@ class ApprovalLogItem(ORMBase):
     category_name_en: str | None = None
     # Book.approval_state: none | pending | awaiting_scan | approved | rejected | returned
     status: str
-    priority: str = "Normal"
+    # The selected revision's OWN stored status column — independent of a
+    # pending reviewer step's "pending" override on `status` above. A late
+    # advisory review (reviewer step still pending after the signer already
+    # decided) is the one case these two differ: `status` stays "pending"
+    # (the review is still actionable) while `record_status` carries the
+    # real approved/returned/rejected outcome so the UI can label it.
+    record_status: str | None = None
+    # Null when historical metadata is unavailable for a restricted revision.
+    priority: str | None = "Normal"
     submitted_by_user_id: int | None = None
     submitted_by_name: str | None = None
-    # The doc's named manager resolved to a login account (the usual approver).
     doc_manager_user_id: int | None = None
     doc_manager_name: str | None = None
-    # Current chain, resolved to display names: the signing approver + advisory reviewers.
+    # The assigned signer's display name (never a doc manager/scan filer by default).
     approver_name: str | None = None
     reviewer_names: list[str] = Field(default_factory=list)
-    # When the record entered its current approval chain (oldest step's
-    # created_at; falls back to the row's creation stamp off-chain).
+    # The selected revision's real submission instant, or null — never record
+    # creation time.
     submitted_at: datetime | None = None
     # When the final verdict landed (None while still in flight).
     decided_at: datetime | None = None
     verdict: Literal["approved", "rejected", "returned"] | None = None
-    # Current version's generated document — thumbnail source; None for drafts
-    # and v3-imported records.
+    # Selected revision's generated document — thumbnail source; None for
+    # drafts and v3-imported records.
     document_id: int | None = None
-    # Received-scope relationship info: the caller's own step on this record.
-    your_step_kind: str | None = None
-    your_step_state: str | None = None
-    your_step_decided_at: datetime | None = None
+    # The selected/displayed revision.
+    version_id: int | None = None
+    version_no: int | None = None
+    # The revision the caller's assignment/grant actually belongs to — may
+    # differ from version_no for a restricted historical row.
+    assignment_version_no: int | None = None
+    assigned_signer_user_id: int | None = None
+    access_scope: Literal["full", "assigned_revision"] = "full"
 
 
 class ApprovalLogResponse(BaseModel):
@@ -479,3 +527,28 @@ class ApprovalLogResponse(BaseModel):
     total: int
     limit: int
     offset: int
+
+
+class ApprovalSummaryBucket(BaseModel):
+    count: int
+    oldest: ApprovalLogItem | None = None
+
+
+class ApprovalSummaryResponse(BaseModel):
+    """Counts + oldest row driving the generic Approvals landing rule and Home
+    summaries — the caller's full authorized set, not one page."""
+
+    can_view_sent: bool
+    available_received_kinds: list[Literal["approver", "reviewer"]] = Field(default_factory=list)
+    signature: ApprovalSummaryBucket
+    review: ApprovalSummaryBucket
+    sent: ApprovalSummaryBucket
+    returned_count: int
+    actionable_count: int
+
+
+class ApprovalLogNeighborsResponse(BaseModel):
+    position: int | None = None
+    total: int
+    previous: ApprovalLogItem | None = None
+    next: ApprovalLogItem | None = None

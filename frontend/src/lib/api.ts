@@ -775,9 +775,17 @@ export type IncludedPapersPreviewRead = components['schemas']['IncludedPapersPre
 export type IncludedPapersRequest = components['schemas']['IncludedPapersRequest']
 export type BookFacetsResponse = components['schemas']['BookFacetsResponse']
 export type ServiceFacetRead = components['schemas']['ServiceFacetRead']
-// Approvals log (#31) — GET /books/approval-log?scope=sent|received
+// Approvals worklist (#31, revision-scoped) — GET /books/approval-log,
+// GET /books/approval-summary, GET /books/approval-log/{book_id}/neighbors
 export type ApprovalLogItem = components['schemas']['ApprovalLogItem']
 export type ApprovalLogResponse = components['schemas']['ApprovalLogResponse']
+export type ApprovalSummaryResponse = components['schemas']['ApprovalSummaryResponse']
+export type ApprovalLogNeighborsResponse = components['schemas']['ApprovalLogNeighborsResponse']
+export type ApprovalKindParam = 'approver' | 'reviewer'
+export type ApprovalStatusParam = 'pending' | 'returned' | 'approved' | 'rejected' | 'all'
+export type ApprovalSortParam = 'oldest' | 'newest'
+export type RetainedDecisionRead = components['schemas']['RetainedDecisionRead']
+export type BookRevisionAccessRead = components['schemas']['BookRevisionAccessRead']
 
 // Annotation overlay (Slice 3). Hand-typed mirror of schemas.book.BookAnnotationRead
 // until gen:api folds it into the generated schema.
@@ -1976,7 +1984,8 @@ export const api = {
     limit?: number
     offset?: number
   } = {}) => request<BookListResponse>('GET', `/books${qs({ ...params })}`),
-  getBook: (id: number) => request<BookRead>('GET', `/books/${id}`),
+  getBook: (id: number, versionId?: number) =>
+    request<BookRead>('GET', `/books/${id}${qs({ version_id: versionId })}`),
   /** Resolve a book by its ref_number (e.g. "GS-0005") — backs the ledger
    * book-chip deep-link. 404s when no live book carries the ref. */
   getBookByRef: (ref: string) =>
@@ -2038,16 +2047,41 @@ export const api = {
    *  and the status spine. */
   getBookFacets: () => request<BookFacetsResponse>('GET', '/books/facets'),
 
-  // --- books approval (feat/mobile-and-approval) ---
-  /** GET /books/awaiting — books pending the signed-in user's decision. */
+  // --- books approval worklist (#31, revision-scoped) ---
+  /** GET /books/awaiting — the caller's actionable signing and advisory
+   *  assignments. Authenticated + assignment-scoped, not books.approve-gated. */
   listAwaitingBooks: () => request<BookRead[]>('GET', '/books/awaiting'),
-  /** GET /books/approval-log — the approvals log. `scope=sent` lists records I
-   *  submitted (needs books.view); `scope=received` lists pending assignments
-   *  (needs books.approve) plus recent verdicts when books.view is also held. */
-  listApprovalLog: (
-    scope: 'sent' | 'received',
-    params: { limit?: number; offset?: number } = {},
-  ) => request<ApprovalLogResponse>('GET', `/books/approval-log${qs({ scope, ...params })}`),
+  /** GET /books/approval-log — the approvals worklist. `scope=received`
+   *  (default) is authenticated and assignment-scoped; `scope=sent` needs
+   *  books.view. `status` defaults to `pending` for received and `all` for
+   *  sent server-side — omit it to get that default. */
+  listApprovalLog: (options: {
+    scope: 'sent' | 'received'
+    kind?: ApprovalKindParam
+    status?: ApprovalStatusParam
+    sort?: ApprovalSortParam
+    limit?: number
+    offset?: number
+  }) => request<ApprovalLogResponse>('GET', `/books/approval-log${qs(options)}`),
+  /** GET /books/approval-summary — counts + oldest row driving the generic
+   *  Approvals landing rule and Home summaries. Authenticated; empty for a
+   *  caller with no assignments. */
+  getApprovalSummary: () => request<ApprovalSummaryResponse>('GET', '/books/approval-summary'),
+  /** GET /books/approval-log/{book_id}/neighbors — previous/next row in the
+   *  same filtered/ordered worklist, for header navigation. */
+  approvalLogNeighbors: (
+    bookId: number,
+    params: {
+      scope?: 'sent' | 'received'
+      kind?: ApprovalKindParam
+      status?: ApprovalStatusParam
+      sort?: ApprovalSortParam
+      version_id?: number
+    } = {},
+  ) =>
+    request<ApprovalLogNeighborsResponse>(
+      'GET', `/books/approval-log/${bookId}/neighbors${qs({ ...params })}`,
+    ),
   /** GET /books/awaiting-scan — records stranded at `awaiting_scan` past 24h.
    * `scope='all'` returns everyone's (both scopes need books.edit). */
   listAwaitingScanBooks: (scope: 'mine' | 'all' = 'mine') =>
@@ -2057,18 +2091,42 @@ export const api = {
   /** POST /books/{id}/submit — submit a draft book for approval. */
   submitBook: (id: number, body: BookSubmitRequest) =>
     request<BookRead>('POST', `/books/${id}/submit`, body),
-  /** POST /books/{id}/{action} — decide on a book (reject/return/note). */
-  decideBook: (id: number, action: BookDecideAction, note?: string | null) =>
-    request<BookRead>('POST', `/books/${id}/${action}`, { note: note ?? null }),
+  /** POST /books/{id}/{action} — decide on a book (reject/return/note).
+   *  `versionId` must be the record's current revision; a stale target
+   *  raises REVISION_CHANGED (409). */
+  decideBook: (id: number, versionId: number, action: BookDecideAction, note?: string | null) =>
+    request<BookRead>('POST', `/books/${id}/${action}`, { version_id: versionId, note: note ?? null }),
   /** POST /books/{id}/sign — approval == signing. Only the assigned pending
    * signer (a manager with a signature on file) can sign; embeds their
-   * signature and marks the book approved. Error codes: NO_SIGNATURE,
-   * SIGNATURE_MISSING, NOT_YOUR_STEP. */
-  signBook: (id: number) => request<BookRead>('POST', `/books/${id}/sign`),
+   * signature and marks the book approved. `versionId` must be the record's
+   * current revision; a stale target raises REVISION_CHANGED (409). Error
+   * codes: NO_SIGNATURE, SIGNATURE_MISSING, NOT_YOUR_STEP. */
+  signBook: (id: number, versionId: number) =>
+    request<BookRead>('POST', `/books/${id}/sign`, { version_id: versionId }),
   /** POST /books/{id}/review — submit a reviewer decision (`reviewed` or
-   * `changes_requested`) with an optional note. */
-  reviewBook: (id: number, decision: BookReviewDecision, note?: string | null) =>
-    request<BookRead>('POST', `/books/${id}/review`, { decision, note: note ?? null }),
+   * `changes_requested`) with an optional note. `versionId` must be the
+   * assigned revision; a stale target raises REVISION_CHANGED (409). */
+  reviewBook: (
+    id: number, versionId: number, decision: BookReviewDecision, note?: string | null,
+  ) =>
+    request<BookRead>(
+      'POST', `/books/${id}/review`, { version_id: versionId, decision, note: note ?? null },
+    ),
+  /** GET /books/{id}/revision-access — every retained revision-access grant
+   *  for the record. users.manage. */
+  listRevisionAccess: (bookId: number) =>
+    request<BookRevisionAccessRead[]>('GET', `/books/${bookId}/revision-access`),
+  /** POST /books/{id}/revision-access/{accessId}/revoke — revoke every
+   *  retained role grant that user holds on that revision. users.manage;
+   *  `reason` is required (1–2000 chars, trimmed). Idempotent. */
+  revokeRevisionAccess: (bookId: number, accessId: number, reason: string) =>
+    request<BookRevisionAccessRead[]>(
+      'POST', `/books/${bookId}/revision-access/${accessId}/revoke`, { reason },
+    ),
+  /** GET /books/{id}/versions/{versionId}/signed-document — the exact
+   *  version's signed artifact, for a version with no generated Document. */
+  signedDocumentUrl: (bookId: number, versionId: number) =>
+    `${BASE}/books/${bookId}/versions/${versionId}/signed-document`,
   /** PUT /books/{id}/state — force the record's state, bypassing the approval
    * chain. Needs `books.override_state` (admin by default). `reason` is required
    * for `returned` / `rejected`. Error codes: STATE_UNCHANGED, REASON_REQUIRED. */
@@ -2551,9 +2609,10 @@ export const api = {
   generateDocument: (body: DocumentGenerateRequest) =>
     request<DocumentGenerateResponse>('POST', '/documents/generate', body),
   getJob: (jobId: string) => request<JobStatusResponse>('GET', `/jobs/${jobId}`),
-  getDocument: (docId: number) => request<DocumentRead>('GET', `/documents/${docId}`),
-  documentDownloadUrl: (docId: number, format: 'docx' | 'pdf') =>
-    `${BASE}/documents/${docId}/download?format=${format}`,
+  getDocument: (docId: number, versionId?: number) =>
+    request<DocumentRead>('GET', `/documents/${docId}${qs({ version_id: versionId })}`),
+  documentDownloadUrl: (docId: number, format: 'docx' | 'pdf', versionId?: number) =>
+    `${BASE}/documents/${docId}/download${qs({ format, version_id: versionId })}`,
   /** Park an attachment upload for a later generate call; the returned token
    * is echoed back inside `DocumentGenerateRequest.attachments`
    * (`source: 'staged'`). Forms signing paths & attachments, 2026-06-11. */

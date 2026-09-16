@@ -522,6 +522,12 @@ def finish_word_session(
             "signer_employee_id": session.signer_employee_id,
             "signed": signed,
         }
+
+    # A Word revision of an approved record must become resubmittable.
+    if max_version_no > 0 and not signed and not is_report:
+        book.approval_state = "none"
+        book.submitted_by_user_id = None
+
     published_package: included_papers_service.PublishedPackageResult | None = None
     if pdf_path is not None and pdf_path.is_file():
         from app.services import included_papers_service

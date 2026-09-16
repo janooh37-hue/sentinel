@@ -76,3 +76,5 @@ def test_0079_copies_global_layout_to_every_user_and_is_reversible(tmp_path: Pat
         assert "user_dashboard_layouts" not in inspect(connection).get_table_names()
         columns = {column["name"] for column in inspect(connection).get_columns("app_settings")}
         assert "dashboard_layout" in columns
+
+    engine.dispose()

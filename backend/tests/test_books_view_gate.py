@@ -58,6 +58,7 @@ def api_db(monkeypatch: pytest.MonkeyPatch, tmp_path) -> Session:
         yield db
     finally:
         db.close()
+        eng.dispose()
 
 
 def _client(db: Session, user: User) -> TestClient:

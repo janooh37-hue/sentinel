@@ -14,20 +14,21 @@ import { useMutation, useQueryClient, type UseMutationResult } from '@tanstack/r
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
-import { api, ApiError, apiErrorMessage, type BookDecideAction } from '@/lib/api'
+import { api, ApiError, apiErrorMessage, type BookDecideAction, type BookRead } from '@/lib/api'
 
 interface Params {
   bookId: number | undefined
+  versionId: number | undefined
   onDecided: (act: BookDecideAction) => void
   onSigned: () => void
 }
 
 interface Actions {
-  decideMutation: UseMutationResult<unknown, Error, { act: BookDecideAction; note?: string }>
-  signMutation: UseMutationResult<unknown, Error, void>
+  decideMutation: UseMutationResult<BookRead, unknown, { act: BookDecideAction; note?: string }>
+  signMutation: UseMutationResult<BookRead, unknown, void>
 }
 
-export function useBookApprovalActions({ bookId, onDecided, onSigned }: Params): Actions {
+export function useBookApprovalActions({ bookId, versionId, onDecided, onSigned }: Params): Actions {
   const { t } = useTranslation()
   const qc = useQueryClient()
 
@@ -37,9 +38,22 @@ export function useBookApprovalActions({ bookId, onDecided, onSigned }: Params):
     void qc.invalidateQueries({ queryKey: ['dashboard'] })
   }
 
+  /** A stale write (someone else advanced the record's revision since this
+   *  page loaded) never auto-retries: refetch the real current revision and
+   *  say so, leaving the caller's typed text in place. Every other error
+   *  falls through to the generic message. */
+  function handleMutationError(err: unknown): void {
+    if (err instanceof ApiError && err.code === 'REVISION_CHANGED') {
+      void qc.invalidateQueries({ queryKey: ['books', 'detail', bookId] })
+      toast.error(t('books.approval.revisionChanged'))
+      return
+    }
+    toast.error(apiErrorMessage(err))
+  }
+
   const decideMutation = useMutation({
     mutationFn: ({ act, note }: { act: BookDecideAction; note?: string }) =>
-      api.decideBook(bookId!, act, note),
+      api.decideBook(bookId!, versionId!, act, note),
     onSuccess: (_data, { act }) => {
       invalidateAll()
       const key =
@@ -51,11 +65,11 @@ export function useBookApprovalActions({ bookId, onDecided, onSigned }: Params):
       toast.success(t(key))
       onDecided(act)
     },
-    onError: (err) => toast.error(apiErrorMessage(err)),
+    onError: handleMutationError,
   })
 
   const signMutation = useMutation({
-    mutationFn: () => api.signBook(bookId!),
+    mutationFn: () => api.signBook(bookId!, versionId!),
     onSuccess: () => {
       invalidateAll()
       toast.success(t('books.approval.signed'))
@@ -65,7 +79,7 @@ export function useBookApprovalActions({ bookId, onDecided, onSigned }: Params):
       if (err instanceof ApiError && err.code === 'NO_SIGNATURE') {
         toast.error(t('books.approval.noSignatureHint'))
       } else {
-        toast.error(apiErrorMessage(err))
+        handleMutationError(err)
       }
     },
   })

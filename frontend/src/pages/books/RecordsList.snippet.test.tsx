@@ -78,6 +78,9 @@ function makeBook(overrides: Partial<BookRead> & { search_snippet?: string | nul
     included_papers_revision: 0,
     included_papers_fixed_page_count: 0,
     included_papers_total_page_count: 0,
+    access_scope: 'full',
+    can_sign: false,
+    can_review: false,
     ...overrides,
   }
 }

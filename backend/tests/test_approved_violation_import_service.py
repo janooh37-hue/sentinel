@@ -133,7 +133,7 @@ def test_commit_creates_one_approved_searchable_record_without_violation_row(
         book_service.unfile_signed_copy(db_session, book.id, user=admin_user)
     assert unfile.value.code == "NO_SIGNED_COPY"
     assert (tmp_path / document.pdf_path).is_file()
-    assert book_service.is_document_signed_locked(db_session, document.id) == (
+    assert book_service.is_document_signed_locked(db_session, version) == (
         True,
         document.pdf_path,
     )

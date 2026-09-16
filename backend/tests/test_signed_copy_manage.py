@@ -52,6 +52,7 @@ def api_db(monkeypatch, tmp_path) -> Session:
         yield db
     finally:
         db.close()
+        eng.dispose()
         get_settings.cache_clear()
 
 

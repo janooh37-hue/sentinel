@@ -343,10 +343,8 @@ def _submit_book(db: Session, permit: Permit, *, actor: str | None) -> None:
         reason = "NO_BOOK" if permit.book_id is None else "NO_SUBMITTER"
         _audit(db, "permit.book_submit_failed", permit.id, actor, {"error": reason})
         return
-    # generate_document appends new BookVersion rows by raw FK, which does NOT
-    # refresh an already-loaded Book.versions collection (sessions run
-    # expire_on_commit=False). Expire it so the chain submits against the
-    # CURRENT version, not a stale one.
+    # Sessions run expire_on_commit=False. Refresh the collection defensively so
+    # submission always resolves the just-generated current revision.
     book = db.get(Book, permit.book_id)
     if book is not None:
         db.expire(book, ["versions"])
@@ -382,6 +380,8 @@ def regenerate_permit_book(
     ponytail: re-renders docx->PDF on each roster change (Word COM). Fine for
     infrequent admin edits; switch to regenerate-on-print if throughput matters.
     """
+    from app.services import book_service
+
     # A letter already in the approval loop needs the manager's signature again
     # after any content change — void the stale submission BEFORE regenerating
     # (generate_document refuses to revise a pending/approved book), remember
@@ -391,10 +391,44 @@ def regenerate_permit_book(
         prior = db.get(Book, permit.book_id)
         prior_state = prior.approval_state if prior is not None else None
         if prior is not None and prior_state == "pending":
-            # Withdraw: drop the stale request outright so the letter falls
-            # back to the draft-edit path (in-place re-render, same version).
+            # Withdraw the stale request. Freeze its revision metadata before
+            # clearing the submitter and preserve only genuine completed work.
             cur = prior.versions[-1] if prior.versions else None
             if cur is not None:
+                if cur.approval_context is None:
+                    submitted_at = min(
+                        (
+                            step.created_at
+                            for step in cur.approval_steps
+                            if step.created_at is not None
+                        ),
+                        default=None,
+                    )
+                    if submitted_at is not None:
+                        book_service.capture_approval_context(
+                            db,
+                            prior,
+                            cur,
+                            submitted_by_user_id=prior.submitted_by_user_id,
+                            submitted_at=submitted_at,
+                        )
+                    else:
+                        cur.approval_context = book_service._approval_context(
+                            db,
+                            prior,
+                            cur,
+                            submitted_by_user_id=prior.submitted_by_user_id,
+                            submitted_at=None,
+                        )
+                for step in tuple(cur.approval_steps):
+                    if step.decided_at is not None and step.state in (
+                        "approved",
+                        "rejected",
+                        "returned",
+                        "reviewed",
+                        "changes_requested",
+                    ):
+                        book_service.retain_revision_access(db, cur, step)
                 cur.approval_steps.clear()
                 cur.status = "none"
             prior.approval_state = "none"

@@ -203,7 +203,9 @@ def test_forcing_approved_settles_the_pending_step(api_db: Session):
     assert version is not None
     step = version.approval_steps[0]
     assert step.state == "approved"
-    assert step.decided_at is not None
+    # An override is the admin's act, not the assignee's decision: retained
+    # provenance keys off decided_at, so it must not be fabricated here.
+    assert step.decided_at is None
     assert step.note == "signed on paper"
 
 

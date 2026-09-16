@@ -15,6 +15,10 @@ vi.mock('./useWaitingSignals', () => ({
 vi.mock('@/lib/useCapabilities', () => ({
   useCapabilities: vi.fn(),
 }))
+const mockApprovalSummary = vi.fn()
+vi.mock('@/lib/useApprovalSummary', () => ({
+  useApprovalSummary: () => ({ data: mockApprovalSummary() }),
+}))
 
 const mockUseCapabilities = vi.mocked(useCapabilities)
 
@@ -53,6 +57,7 @@ beforeEach(async () => {
     has: () => true,
     isLoading: false,
   })
+  mockApprovalSummary.mockReturnValue({ can_view_sent: true, available_received_kinds: ['approver'] })
 })
 
 afterEach(() => {
@@ -95,6 +100,7 @@ describe('BottomTabBar', () => {
       has: () => false,
       isLoading: false,
     })
+    mockApprovalSummary.mockReturnValue({ can_view_sent: false, available_received_kinds: [] })
     renderDock()
 
     enterEditMode('Dashboard')
@@ -102,6 +108,19 @@ describe('BottomTabBar', () => {
     expect(within(dialog).queryByRole('button', { name: 'Approvals' })).not.toBeInTheDocument()
     expect(within(dialog).queryByRole('button', { name: 'Scan-back' })).not.toBeInTheDocument()
     expect(within(dialog).queryByRole('button', { name: 'Unread' })).not.toBeInTheDocument()
+  })
+
+  it('offers the approvals signal to a review-only user lacking books.approve', () => {
+    mockUseCapabilities.mockReturnValue({
+      capabilities: new Set(),
+      has: () => false,
+      isLoading: false,
+    })
+    mockApprovalSummary.mockReturnValue({ can_view_sent: false, available_received_kinds: ['reviewer'] })
+    renderDock()
+
+    enterEditMode('Dashboard')
+    expect(within(screen.getByRole('dialog')).getByRole('button', { name: 'Approvals' })).toBeInTheDocument()
   })
 
   it('edits the original persisted slot when denied slots compact the rendered dock', () => {

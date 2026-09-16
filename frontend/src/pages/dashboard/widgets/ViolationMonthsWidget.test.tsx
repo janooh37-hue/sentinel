@@ -20,8 +20,20 @@ vi.mock('@/lib/api', () => ({
     getInmateRegisterAwaitingClose: vi.fn(),
     listAuthUsers: vi.fn().mockResolvedValue([]),
     markAllLedgerRead: vi.fn().mockResolvedValue(undefined),
+    getApprovalSummary: vi.fn().mockResolvedValue({
+      can_view_sent: false,
+      available_received_kinds: [],
+      signature: { count: 0, oldest: null },
+      review: { count: 0, oldest: null },
+      sent: { count: 0, oldest: null },
+      returned_count: 0,
+      actionable_count: 0,
+    }),
   },
   apiErrorMessage: (error: unknown) => String(error),
+}))
+vi.mock('@/lib/authContext', () => ({
+  useAuth: () => ({ user: { id: 1 }, status: 'authed' }),
 }))
 vi.mock('@/lib/useIdentity', () => ({
   useIdentity: () => ({ isAdmin: false }),

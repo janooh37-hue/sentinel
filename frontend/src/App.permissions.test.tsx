@@ -117,10 +117,6 @@ const routes = [
   ['/vehicles/import', ['vehicles.view', 'vehicles.edit'], 'vehicle-import-page'],
 ] as const
 
-const eitherCapabilityRoutes = [
-  ['/books/approvals', 'approvals-page'],
-] as const
-
 beforeEach(() => {
   capabilityState.allowed = new Set()
 })
@@ -197,25 +193,11 @@ describe('App route capability gates', () => {
     },
   )
 
-  it.each(eitherCapabilityRoutes)(
-    'denies %s without books.view or books.approve',
-    async (path) => {
-      window.history.pushState({}, '', path)
-      render(<App />)
-
-      expect(await screen.findByText("You don't have access to this page")).toBeVisible()
-    },
-  )
-
-  it.each(eitherCapabilityRoutes.flatMap(([path, pageText]) => [
-    [path, 'books.view', pageText],
-    [path, 'books.approve', pageText],
-  ] as const))('renders %s with %s', async (path, capability, pageText) => {
-    capabilityState.allowed = new Set([capability])
-    window.history.pushState({}, '', path)
+  it('renders /books/approvals for an authenticated user with no capabilities — plain authenticated, not capability-gated', async () => {
+    window.history.pushState({}, '', '/books/approvals')
     render(<App />)
 
-    expect(await screen.findByText(pageText)).toBeVisible()
+    expect(await screen.findByText('approvals-page')).toBeVisible()
   })
 
   it('renders an assigned-record route for an authenticated user without book capabilities', async () => {
