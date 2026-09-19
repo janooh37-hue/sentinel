@@ -29,6 +29,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.api.errors import AppError
 from app.config import get_settings
 from app.db.models import User
 from app.db.session import SessionLocal
@@ -199,6 +200,24 @@ def _materialize_scheduled_cases(session: Session, *, now: datetime) -> int:
     horizon = _local_day_horizon(now)
     created = 0
     for employee_id in session.scalars(select(WorkCrewMembership.employee_id).distinct()).all():
+        try:
+            # Catches drift left by any past direct edit (a duty-unit change
+            # made before this reconciliation existed, or made through any
+            # other path) without requiring another edit or a manual repair
+            # script. Scoped per employee: a legitimately blocked employee
+            # (recorded evidence, a conflicting future membership, a retired
+            # mapped crew) must not roll back materialization for everyone
+            # else on this tick - they simply keep materializing under their
+            # existing membership until the block clears.
+            workforce_schedule_service.reconcile_duty_crew_membership(
+                session, employee_id=employee_id, effective_at=now
+            )
+        except AppError:
+            log.exception(
+                "scheduler: duty crew reconciliation blocked for employee %s; "
+                "materializing under existing membership",
+                employee_id,
+            )
         cases = attendance_evaluation_service.materialize_scheduled_cases(
             session,
             employee_id=employee_id,
