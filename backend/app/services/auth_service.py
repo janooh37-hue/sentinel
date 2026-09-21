@@ -16,10 +16,12 @@ from __future__ import annotations
 
 import json
 import logging
+import secrets
 from datetime import UTC, datetime, timedelta
 from typing import Any, cast
 
 from sqlalchemy import CursorResult, func, select, update
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.api.errors import AppError, ValidationFailedError
@@ -94,15 +96,7 @@ def register(
     First account → active + admin + fills the admin slot. Otherwise pending.
     Raises ``AppError`` on bad email or a taken address.
     """
-    normalized = _normalize_email(email)
-    if "@" not in normalized or normalized.startswith("@") or normalized.endswith("@"):
-        raise AppError("INVALID_EMAIL", "Enter a valid email address.")
-    if get_by_email(db, normalized) is not None:
-        raise AppError(
-            "EMAIL_TAKEN",
-            "An account with this email already exists.",
-            http_status=409,
-        )
+    normalized = _validate_new_email(db, email)
 
     g = (g_number or "").strip().upper() or None
     employee = db.get(Employee, g) if g else None
@@ -129,6 +123,77 @@ def register(
     return user, is_first
 
 
+def _validate_new_email(db: Session, email: str) -> str:
+    """Normalize and validate a new account's email.
+
+    Raises ``AppError`` on a malformed address or one already on file.
+    Shared by ``register`` (self-service) and ``create_user`` (admin-issued).
+    """
+    normalized = _normalize_email(email)
+    if "@" not in normalized or normalized.startswith("@") or normalized.endswith("@"):
+        raise AppError("INVALID_EMAIL", "Enter a valid email address.")
+    if get_by_email(db, normalized) is not None:
+        raise AppError(
+            "EMAIL_TAKEN",
+            "An account with this email already exists.",
+            http_status=409,
+        )
+    return normalized
+
+
+def create_user(
+    db: Session,
+    *,
+    email: str,
+    employee_id: str | None,
+    role: str,
+    display_name: str | None = None,
+    actor: str | None = None,
+) -> tuple[User, str]:
+    """Admin-issued account. Active immediately, with a generated temporary
+    password the owner must replace before signing in (``start_session``
+    enforces this). Returns ``(user, temporary_password)`` — the plaintext is
+    not retained anywhere; only this one response ever carries it.
+
+    Raises ``AppError`` on bad/taken email, an unknown ``employee_id``, or an
+    invalid role.
+    """
+    _validate_role(role)
+    normalized = _validate_new_email(db, email)
+
+    g = (employee_id or "").strip().upper() or None
+    employee = db.get(Employee, g) if g else None
+    if g is not None and employee is None:
+        raise AppError("EMPLOYEE_NOT_FOUND", f"Employee {g} not found", http_status=404)
+
+    temporary_password = secrets.token_urlsafe(12)
+    user = User(
+        email=normalized,
+        password_hash=security.hash_password(temporary_password),
+        password_change_required=True,
+        employee_id=g,
+        display_name=(display_name or "").strip() or (employee.name_en if employee else None),
+        role=role,
+        status="active",
+    )
+    db.add(user)
+    try:
+        db.flush()
+    except IntegrityError:
+        db.rollback()
+        if get_by_email(db, normalized) is not None:
+            raise AppError(
+                "EMAIL_TAKEN",
+                "An account with this email already exists.",
+                http_status=409,
+            ) from None
+        raise
+    _audit(db, actor, "create_user", user)
+    db.commit()
+    db.refresh(user)
+    return user, temporary_password
+
+
 def approve_user(
     db: Session,
     user_id: int,
@@ -137,17 +202,41 @@ def approve_user(
     employee_id: str | None,
     actor: str | None = None,
 ) -> User:
+    """Approve a pending request, setting role and the admin-confirmed link.
+
+    ``employee_id`` is always applied — ``None`` explicitly clears whatever
+    the requester self-claimed at register time; a value must resolve to an
+    existing employee. Only a currently ``pending`` account can be approved;
+    the transition is a conditional UPDATE so a concurrent approve/reject
+    can't silently clobber one another.
+    """
     user = _require_user(db, user_id)
     _validate_role(role)
-    if employee_id:
-        g = employee_id.strip().upper()
-        if db.get(Employee, g) is None:
-            raise AppError("EMPLOYEE_NOT_FOUND", f"Employee {g} not found", http_status=404)
-        user.employee_id = g
-    user.role = role
-    user.status = "active"
-    user.failed_attempts = 0
-    user.locked_at = None
+    if user.status != "pending":
+        raise AppError(
+            "INVALID_ACCOUNT_STATE",
+            "This account is not in a state that allows this action.",
+            http_status=409,
+        )
+    g = (employee_id or "").strip().upper() or None
+    if g is not None and db.get(Employee, g) is None:
+        raise AppError("EMPLOYEE_NOT_FOUND", f"Employee {g} not found", http_status=404)
+    result = cast(
+        "CursorResult[Any]",
+        db.execute(
+            update(User)
+            .where(User.id == user_id, User.status == "pending")
+            .values(employee_id=g, role=role, status="active", failed_attempts=0, locked_at=None)
+        ),
+    )
+    if not result.rowcount:
+        db.rollback()
+        raise AppError(
+            "INVALID_ACCOUNT_STATE",
+            "This account is not in a state that allows this action.",
+            http_status=409,
+        )
+    db.refresh(user)
     _audit(db, actor, "approve", user)
     db.commit()
     db.refresh(user)
@@ -200,9 +289,31 @@ def link_self(db: Session, user: User, *, employee_id: str | None) -> User:
 def reject_user(
     db: Session, user_id: int, *, reason: str | None = None, actor: str | None = None
 ) -> User:
-    """Decline a request. Status → ``rejected`` (can't sign in; on file for audit)."""
+    """Decline a pending request. Status → ``rejected`` (can't sign in; on
+    file for audit). Only a currently ``pending`` account can be rejected."""
     user = _require_user(db, user_id)
-    user.status = "rejected"
+    if user.status != "pending":
+        raise AppError(
+            "INVALID_ACCOUNT_STATE",
+            "This account is not in a state that allows this action.",
+            http_status=409,
+        )
+    result = cast(
+        "CursorResult[Any]",
+        db.execute(
+            update(User)
+            .where(User.id == user_id, User.status == "pending")
+            .values(status="rejected")
+        ),
+    )
+    if not result.rowcount:
+        db.rollback()
+        raise AppError(
+            "INVALID_ACCOUNT_STATE",
+            "This account is not in a state that allows this action.",
+            http_status=409,
+        )
+    db.refresh(user)
     _audit(db, actor, "reject", user, {"reason": reason})
     db.commit()
     db.refresh(user)
@@ -226,33 +337,55 @@ def set_role(db: Session, user_id: int, role: str, *, actor: str | None = None) 
 
 
 def set_status(db: Session, user_id: int, status: str, *, actor: str | None = None) -> User:
-    if status not in ("active", "locked", "disabled", "pending", "rejected"):
+    """Admin-driven ``disable``/restore (``active``) transition.
+
+    Automatic bad-password lockout (``locked``) is a separate path in
+    ``_register_failed_attempt`` — not reachable through this function.
+    Disable accepts an active or locked account (idempotent if already
+    disabled); restore accepts a locked or disabled account (idempotent if
+    already active). A pending/rejected target is rejected with 409, since
+    neither transition is meaningful before/after the approval lifecycle.
+    """
+    if status not in ("active", "disabled"):
         raise AppError("INVALID_STATUS", f"Unknown status {status!r}")
     user = _require_user(db, user_id)
-    if status != "active" and _is_last_active_admin(db, user):
-        raise AppError(
-            "LAST_ADMIN",
-            "Cannot lock or disable the last active admin. Promote another admin first.",
-            http_status=409,
-        )
-    was_locked = user.status == "locked"
-    user.status = status
-    if status == "active":
-        user.failed_attempts = 0
-        user.locked_at = None
-    elif status == "locked":
-        user.locked_at = _utcnow()
-    action = (
-        "unlock"
-        if (status == "active" and was_locked)
-        else ("lock" if status == "locked" else "set_status")
+    invalid_state = AppError(
+        "INVALID_ACCOUNT_STATE",
+        "This account is not in a state that allows this action.",
+        http_status=409,
     )
-    _audit(db, actor, action, user, {"status": status})
+
+    if status == "disabled":
+        if user.status not in ("active", "locked", "disabled"):
+            raise invalid_state
+        if user.status == "disabled":
+            return user
+        if _is_last_active_admin(db, user):
+            raise AppError(
+                "LAST_ADMIN",
+                "Cannot disable the last active admin. Promote another admin first.",
+                http_status=409,
+            )
+        user.status = "disabled"
+        user.locked_at = None
+        _audit(db, actor, "disable", user)
+        # Same commit as the session revocation below (it commits staged work).
+        revoke_user_sessions(db, user.id)
+        db.refresh(user)
+        return user
+
+    # status == "active": restore from a timed lock or a disable.
+    if user.status not in ("locked", "disabled", "active"):
+        raise invalid_state
+    if user.status == "active":
+        return user
+    action = "reactivate" if user.status == "disabled" else "unlock"
+    user.status = "active"
+    user.failed_attempts = 0
+    user.locked_at = None
+    _audit(db, actor, action, user)
     db.commit()
     db.refresh(user)
-    # A status that blocks sign-in must also kill live sessions.
-    if status in ("locked", "disabled"):
-        revoke_user_sessions(db, user.id)
     return user
 
 
@@ -404,8 +537,10 @@ def authenticate(db: Session, email: str, password: str) -> User:
     if user.status == "locked":
         raise AppError("ACCOUNT_LOCKED", "Account locked. Contact IT to unlock.", http_status=403)
 
+    # last_login_at is set in start_session, not here — a temporary-password
+    # verification (blocked before a session exists) must not count as a
+    # completed login.
     user.failed_attempts = 0
-    user.last_login_at = _utcnow()
     db.commit()
     db.refresh(user)
     return user
@@ -439,7 +574,18 @@ def verify_password_for(db: Session, user: User, password: str) -> None:
 
 
 def start_session(db: Session, user: User, *, user_agent: str | None = None) -> str:
-    """Create a session row and return the raw cookie token."""
+    """Create a session row and return the raw cookie token.
+
+    Raises ``AppError`` if the account still requires a password-setup step
+    (an admin-issued temporary password not yet replaced) — a service
+    invariant enforced here, not merely a frontend condition.
+    """
+    if user.password_change_required:
+        raise AppError(
+            "PASSWORD_CHANGE_REQUIRED",
+            "Choose a new password before signing in.",
+            http_status=403,
+        )
     raw = security.new_session_token()
     db.add(
         AuthSessionModel(
@@ -449,6 +595,7 @@ def start_session(db: Session, user: User, *, user_agent: str | None = None) -> 
             user_agent=(user_agent or "")[:256] or None,
         )
     )
+    user.last_login_at = _utcnow()
     db.commit()
     return raw
 
@@ -465,7 +612,7 @@ def resolve_session(db: Session, raw_token: str) -> User | None:
     if row is None or row.revoked or row.expires_at < _utcnow():
         return None
     user = db.get(User, row.user_id)
-    if user is None or user.status != "active":
+    if user is None or user.status != "active" or user.password_change_required:
         return None
     # Throttle the last_seen_at write so we don't commit on every request.
     now = _utcnow()
@@ -491,6 +638,62 @@ def revoke_user_sessions(db: Session, user_id: int) -> int:
     )
     db.commit()
     return int(result.rowcount or 0)
+
+
+# ─── Password setup ──────────────────────────────────────────────────────────
+
+
+def complete_password_setup(
+    db: Session, *, email: str, temporary_password: str, new_password: str
+) -> None:
+    """Replace an admin-issued temporary password before first sign-in.
+
+    Delegates credential/lockout/account-state checks to ``authenticate`` so
+    that stays the single source of truth for who is allowed in. No session
+    is created here — the frontend performs a normal login afterward.
+    """
+    user = authenticate(db, email, temporary_password)
+    if not user.password_change_required:
+        raise AppError(
+            "PASSWORD_SETUP_NOT_REQUIRED",
+            "Password setup is not required. Sign in normally.",
+            http_status=409,
+        )
+    if security.verify_password(new_password, user.password_hash):
+        raise ValidationFailedError(
+            "PASSWORD_UNCHANGED",
+            "Choose a different password from the temporary password.",
+        )
+    old_hash = user.password_hash
+    new_hash = security.hash_password(new_password)
+    result = cast(
+        "CursorResult[Any]",
+        db.execute(
+            update(User)
+            .where(
+                User.id == user.id,
+                User.password_hash == old_hash,
+                User.status == "active",
+                User.password_change_required.is_(True),
+            )
+            .values(
+                password_hash=new_hash,
+                password_change_required=False,
+                failed_attempts=0,
+                locked_at=None,
+            )
+        ),
+    )
+    if not result.rowcount:
+        db.rollback()
+        raise AppError(
+            "PASSWORD_SETUP_CHANGED",
+            "Account access changed. Sign in again or contact your administrator.",
+            http_status=409,
+        )
+    db.refresh(user)
+    _audit(db, user.display_name or user.email, "password_setup", user)
+    revoke_user_sessions(db, user.id)
 
 
 def revoke_session(db: Session, raw_token: str) -> None:
@@ -562,6 +765,7 @@ def admin_read(db: Session, user: User) -> AdminUserRead:
         last_login_at=user.last_login_at,
         created_at=user.created_at,
         is_default_manager=user.is_default_manager,
+        password_change_required=user.password_change_required,
     )
 
 
@@ -679,8 +883,10 @@ __all__ = [
     "approve_user",
     "audit_permission_change",
     "authenticate",
+    "complete_password_setup",
     "count_active_admins",
     "count_users",
+    "create_user",
     "get_by_email",
     "link_self",
     "list_audit",

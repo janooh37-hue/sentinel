@@ -3,8 +3,9 @@
  *
  * Faithful port of the Claude Design handoff (project/Login.html, hero layout)
  * wired to the real auth API. States: account picker, sign-in form, request
- * access, request-sent, forgot password, locked-out. EN/AR + RTL + light/dark
- * all follow the existing token + i18n machinery.
+ * access, request-sent, forgot password, locked-out, password setup (an
+ * admin-issued temporary password must be replaced before the app opens).
+ * EN/AR + RTL + light/dark all follow the existing token + i18n machinery.
  */
 
 import { useMemo, useState } from 'react'
@@ -30,7 +31,7 @@ import { useAuth } from '@/lib/authContext'
 import { copyToClipboard } from '@/lib/clipboard'
 import './LoginPage.css'
 
-type Screen = 'picker' | 'form' | 'request' | 'requestSent' | 'forgot' | 'locked'
+type Screen = 'picker' | 'form' | 'request' | 'requestSent' | 'forgot' | 'locked' | 'passwordSetup'
 
 interface KnownAccount {
   email: string
@@ -112,14 +113,24 @@ export function LoginPage(): React.JSX.Element {
 
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<FieldError | null>(null)
+  const [info, setInfo] = useState<string | null>(null)
   const [lockedName, setLockedName] = useState('')
   const [copied, setCopied] = useState(false)
+
+  // Password-setup fields (admin-issued temporary password → new password).
+  // The temporary password is held only in memory for this one round trip —
+  // never persisted, never sent anywhere but the setup request itself.
+  const [setupEmail, setSetupEmail] = useState('')
+  const [setupTempPassword, setSetupTempPassword] = useState('')
+  const [newPwd, setNewPwd] = useState('')
+  const [newPwd2, setNewPwd2] = useState('')
 
   function goPicker(): void {
     setPicked(null)
     setEmail('')
     setPassword('')
     setError(null)
+    setInfo(null)
     setScreen(known.length > 0 ? 'picker' : 'form')
   }
 
@@ -128,6 +139,7 @@ export function LoginPage(): React.JSX.Element {
     setEmail(acc.email)
     setPassword('')
     setError(null)
+    setInfo(null)
     setScreen('form')
   }
 
@@ -137,6 +149,7 @@ export function LoginPage(): React.JSX.Element {
     if (!loginEmail || !password) return
     setSubmitting(true)
     setError(null)
+    setInfo(null)
     try {
       const user = await login(loginEmail, password)
       rememberAccount({
@@ -148,6 +161,16 @@ export function LoginPage(): React.JSX.Element {
       // App swaps to the Shell now that status is authed; no further setState.
     } catch (err) {
       if (err instanceof ApiError) {
+        // Checked before ordinary errors: only reachable after valid
+        // credentials, so it must win over a generic invalid-credentials read.
+        if (err.code === 'PASSWORD_CHANGE_REQUIRED') {
+          setSetupEmail(loginEmail)
+          setSetupTempPassword(password)
+          setPassword('')
+          setSubmitting(false)
+          setScreen('passwordSetup')
+          return
+        }
         if (err.code === 'ACCOUNT_LOCKED') {
           setLockedName(picked?.name ?? loginEmail)
           setScreen('locked')
@@ -156,6 +179,8 @@ export function LoginPage(): React.JSX.Element {
         }
         if (err.code === 'ACCOUNT_PENDING') {
           setError({ msg: t('auth.errPending') })
+        } else if (err.code === 'ACCOUNT_DISABLED') {
+          setError({ msg: t('auth.errDisabled') })
         } else if (err.code === 'INVALID_CREDENTIALS') {
           const left = err.details?.attempts_left
           const suffix =
@@ -168,6 +193,121 @@ export function LoginPage(): React.JSX.Element {
         setError({ msg: t('auth.errGeneric') })
       }
       setSubmitting(false)
+    }
+  }
+
+  function cancelSetup(): void {
+    setNewPwd('')
+    setNewPwd2('')
+    setSetupTempPassword('')
+    setError(null)
+    setInfo(null)
+    setEmail(setupEmail)
+    setScreen('form')
+  }
+
+  async function doPasswordSetup(e: React.FormEvent): Promise<void> {
+    e.preventDefault()
+    if (newPwd.length < 8) {
+      setError({ msg: t('auth.passwordTooShort') })
+      return
+    }
+    if (newPwd !== newPwd2) {
+      setError({ msg: t('auth.passwordsMismatch') })
+      return
+    }
+    if (newPwd === setupTempPassword) {
+      setError({ msg: t('auth.passwordSetup.sameAsTemporary') })
+      return
+    }
+    setSubmitting(true)
+    setError(null)
+    try {
+      await api.completePasswordSetup({
+        email: setupEmail,
+        temporary_password: setupTempPassword,
+        new_password: newPwd,
+      })
+    } catch (err) {
+      setSubmitting(false)
+      if (err instanceof ApiError) {
+        if (err.code === 'PASSWORD_UNCHANGED') {
+          setError({ msg: t('auth.passwordSetup.sameAsTemporary') })
+          return
+        }
+        if (err.code === 'RATE_LIMITED' || err.code === 'VALIDATION_ERROR') {
+          // Stays on setup: these are about the request itself, not the
+          // temporary credential's validity.
+          setError({ msg: err.message || t('auth.errGeneric') })
+          return
+        }
+        if (err.code === 'ACCOUNT_LOCKED') {
+          setSetupTempPassword('')
+          setNewPwd('')
+          setNewPwd2('')
+          setLockedName(setupEmail)
+          setScreen('locked')
+          return
+        }
+        // PASSWORD_SETUP_NOT_REQUIRED, PASSWORD_SETUP_CHANGED,
+        // INVALID_CREDENTIALS, ACCOUNT_DISABLED, ACCOUNT_PENDING,
+        // ACCOUNT_REJECTED — the temporary credential no longer opens
+        // anything here; clear it and return to ordinary sign-in.
+        const message =
+          err.code === 'PASSWORD_SETUP_NOT_REQUIRED'
+            ? t('auth.passwordSetup.notRequired')
+            : err.code === 'PASSWORD_SETUP_CHANGED'
+              ? t('auth.passwordSetup.setupChanged')
+              : err.code === 'INVALID_CREDENTIALS'
+                ? t('auth.passwordSetup.credentialsExpired')
+                : err.code === 'ACCOUNT_DISABLED'
+                  ? t('auth.errDisabled')
+                  : err.code === 'ACCOUNT_PENDING'
+                    ? t('auth.errPending')
+                    : err.message || t('auth.errGeneric')
+        setSetupTempPassword('')
+        setNewPwd('')
+        setNewPwd2('')
+        setEmail(setupEmail)
+        setInfo(message)
+        setScreen('form')
+        return
+      }
+      // Indeterminate network outcome — never auto-resend a password-setup
+      // request. The password may already be saved; offer sign-in with it.
+      setSetupTempPassword('')
+      setEmail(setupEmail)
+      setPassword(newPwd)
+      setNewPwd('')
+      setNewPwd2('')
+      setInfo(t('auth.passwordSetup.networkUnknown'))
+      setScreen('form')
+      return
+    }
+
+    // Setup succeeded — no session yet. Perform a normal login so the
+    // completed-login bookkeeping (last_login_at, known-account memory)
+    // happens through the one real path.
+    setSetupTempPassword('')
+    try {
+      const user = await login(setupEmail, newPwd)
+      rememberAccount({
+        email: user.email,
+        name: user.name_en ?? user.email,
+        g: user.employee_id,
+        ts: Date.now(),
+      })
+      setNewPwd('')
+      setNewPwd2('')
+      // App swaps to the Shell now that status is authed; no further setState.
+    } catch {
+      setEmail(setupEmail)
+      setPassword('')
+      setNewPwd('')
+      setNewPwd2('')
+      setInfo(t('auth.passwordSetup.success'))
+      setSubmitting(false)
+      setScreen('form')
     }
   }
 
@@ -263,10 +403,27 @@ export function LoginPage(): React.JSX.Element {
                 setShowPwd={setShowPwd}
                 submitting={submitting}
                 error={error}
+                info={info}
                 onSubmit={doLogin}
                 onSwitch={goPicker}
-                onForgot={() => { setError(null); setScreen('forgot') }}
-                onRequest={() => { setError(null); setScreen('request') }}
+                onForgot={() => { setError(null); setInfo(null); setScreen('forgot') }}
+                onRequest={() => { setError(null); setInfo(null); setScreen('request') }}
+              />
+            )}
+            {screen === 'passwordSetup' && (
+              <PasswordSetupScreen
+                t={t}
+                email={setupEmail}
+                newPwd={newPwd}
+                setNewPwd={setNewPwd}
+                newPwd2={newPwd2}
+                setNewPwd2={setNewPwd2}
+                showPwd={showPwd}
+                setShowPwd={setShowPwd}
+                submitting={submitting}
+                error={error}
+                onSubmit={doPasswordSetup}
+                onCancel={cancelSetup}
               />
             )}
             {screen === 'request' && (
@@ -310,7 +467,7 @@ export function LoginPage(): React.JSX.Element {
 type TFn = ReturnType<typeof useTranslation>['t']
 
 function PasswordField({
-  id, value, onChange, t, show, setShow, error, autoFocus, label,
+  id, value, onChange, t, show, setShow, error, autoFocus, label, autoComplete = 'current-password',
 }: {
   id: string
   value: string
@@ -321,6 +478,7 @@ function PasswordField({
   error?: string | null
   autoFocus?: boolean
   label?: string
+  autoComplete?: 'current-password' | 'new-password'
 }): React.JSX.Element {
   return (
     <div className="field">
@@ -336,7 +494,7 @@ function PasswordField({
           value={value}
           onChange={(e) => onChange(e.target.value)}
           placeholder={t('auth.passwordPlaceholder')}
-          autoComplete="current-password"
+          autoComplete={autoComplete}
           autoFocus={autoFocus}
         />
         <button
@@ -453,6 +611,7 @@ function SignInScreen(props: {
   setShowPwd: (v: boolean) => void
   submitting: boolean
   error: FieldError | null
+  info?: string | null
   onSubmit: (e: React.FormEvent) => void
   onSwitch: () => void
   onForgot: () => void
@@ -472,6 +631,13 @@ function SignInScreen(props: {
         <span className="card__title">{title}</span>
         {!picked && <span className="card__sub">{t('auth.cardSub')}</span>}
       </div>
+
+      {props.info && (
+        <div className="info info--ok">
+          <span className="info__icon"><Check size={18} strokeWidth={1.8} /></span>
+          <span className="info__text">{props.info}</span>
+        </div>
+      )}
 
       {picked ? (
         <div className="user-card">
@@ -534,6 +700,91 @@ function SignInScreen(props: {
         </button>
         <button className="btn btn--link" type="button" onClick={props.onRequest}>
           {t('auth.requestAccess')}
+        </button>
+      </div>
+    </form>
+  )
+}
+
+function PasswordSetupScreen(props: {
+  t: TFn
+  email: string
+  newPwd: string
+  setNewPwd: (v: string) => void
+  newPwd2: string
+  setNewPwd2: (v: string) => void
+  showPwd: boolean
+  setShowPwd: (v: boolean) => void
+  submitting: boolean
+  error: FieldError | null
+  onSubmit: (e: React.FormEvent) => void
+  onCancel: () => void
+}): React.JSX.Element {
+  const { t, error } = props
+  const formError = error?.msg ?? null
+
+  return (
+    <form onSubmit={props.onSubmit}>
+      <div className="card__head">
+        <span className="card__eyebrow">{t('auth.cardEyebrow')}</span>
+        <span className="card__title">{t('auth.passwordSetup.title')}</span>
+        <span className="card__sub">{t('auth.passwordSetup.description')}</span>
+      </div>
+
+      <div className="user-card">
+        <span className="user-card__body">
+          <span className="user-card__name" style={{ fontFamily: 'var(--font-sans)' }}>
+            {props.email}
+          </span>
+        </span>
+      </div>
+
+      <div style={{ height: 18 }} />
+      <PasswordField
+        id="setup-pwd"
+        value={props.newPwd}
+        onChange={props.setNewPwd}
+        t={t}
+        show={props.showPwd}
+        setShow={props.setShowPwd}
+        label={t('auth.passwordSetup.newPassword')}
+        autoComplete="new-password"
+        autoFocus
+      />
+      <div style={{ height: 18 }} />
+      <PasswordField
+        id="setup-pwd2"
+        value={props.newPwd2}
+        onChange={props.setNewPwd2}
+        t={t}
+        show={props.showPwd}
+        setShow={props.setShowPwd}
+        label={t('auth.confirmPassword')}
+        autoComplete="new-password"
+      />
+
+      {formError && (
+        <div className="field__err" style={{ marginTop: 12 }}>
+          <AlertCircle size={13} strokeWidth={1.8} />
+          <span>{formError}</span>
+        </div>
+      )}
+
+      <div style={{ height: 18 }} />
+      <button className="btn btn--primary" type="submit" disabled={props.submitting}>
+        {props.submitting ? (
+          <>
+            <span className="spin" aria-hidden="true" />
+            {t('auth.signingIn')}
+          </>
+        ) : (
+          t('auth.passwordSetup.submit')
+        )}
+      </button>
+
+      <div className="card__foot">
+        <button className="btn btn--link" type="button" onClick={props.onCancel}>
+          {t('common.cancel')}
         </button>
       </div>
     </form>

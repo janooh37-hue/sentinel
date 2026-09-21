@@ -456,6 +456,28 @@ export interface AdminUserRead {
   /** Single-holder flag — this user receives auto-submitted `in_app` forms
    * (forms signing paths, 2026-06-11). Set via `api.setDefaultManager`. */
   is_default_manager: boolean
+  /** True until the account owner replaces an admin-issued temporary
+   * password. Blocks login and Word-editing links until cleared. */
+  password_change_required: boolean
+}
+
+export interface AdminUserCreateRequest {
+  email: string
+  employee_id: string | null
+  display_name?: string | null
+  role: 'operator' | 'manager' | 'admin'
+}
+
+export interface AdminUserCreateResult {
+  user: AdminUserRead
+  /** Shown once — the server does not retain or resend it. */
+  temporary_password: string
+}
+
+export interface CompletePasswordSetupRequest {
+  email: string
+  temporary_password: string
+  new_password: string
 }
 
 export interface AuditEntryRead {
@@ -2531,6 +2553,10 @@ export const api = {
   logout: () => request<void>('POST', '/auth/logout'),
   register: (payload: RegisterRequest) =>
     request<RegisterResult>('POST', '/auth/register', payload),
+  /** Replace an admin-issued temporary password before first sign-in. No
+   * cookie is set — caller performs a normal `login` afterward. */
+  completePasswordSetup: (payload: CompletePasswordSetupRequest) =>
+    request<void>('POST', '/auth/complete-password-setup', payload),
   verifyAuthPassword: (password: string) =>
     request<void>('POST', '/auth/verify-password', { password }),
   updateLockTimer: (idleLockSeconds: number) =>
@@ -2547,7 +2573,11 @@ export const api = {
   linkMyEmployee: (employee_id: string | null) =>
     request<SessionUser>('POST', '/auth/me/link', { employee_id }),
   listAuthUsers: () => request<AdminUserRead[]>('GET', '/auth/users'),
-  approveAuthUser: (id: number, role: string, employee_id?: string | null) =>
+  /** Admin-issued account. Response carries a one-time temporary password —
+   * it is never retained or shown again after this call returns. */
+  createAuthUser: (body: AdminUserCreateRequest) =>
+    request<AdminUserCreateResult>('POST', '/auth/users', body),
+  approveAuthUser: (id: number, role: string, employee_id: string | null) =>
     request<AdminUserRead>('POST', `/auth/users/${id}/approve`, { role, employee_id }),
   rejectAuthUser: (id: number, reason?: string | null) =>
     request<AdminUserRead>('POST', `/auth/users/${id}/reject`, { reason }),
@@ -2555,7 +2585,7 @@ export const api = {
     request<AdminUserRead>('POST', `/auth/users/${id}/reset-password`, { password }),
   setAuthUserRole: (id: number, role: string) =>
     request<AdminUserRead>('PATCH', `/auth/users/${id}/role`, { role }),
-  lockAuthUser: (id: number) => request<AdminUserRead>('POST', `/auth/users/${id}/lock`),
+  disableAuthUser: (id: number) => request<AdminUserRead>('POST', `/auth/users/${id}/disable`),
   unlockAuthUser: (id: number) => request<AdminUserRead>('POST', `/auth/users/${id}/unlock`),
   /** Set/clear the single-holder default-manager flag (forms signing paths,
    * 2026-06-11 §5). Enabling on one user clears any previous holder. */

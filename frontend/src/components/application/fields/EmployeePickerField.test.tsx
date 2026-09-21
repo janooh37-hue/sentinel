@@ -68,17 +68,25 @@ describe('EmployeePickerField (English)', () => {
     expect(screen.getByText('*')).toBeInTheDocument()
   })
 
-  it('sets the field value to the employee id on selection', async () => {
+  it('selects an employee via ArrowDown + Enter and shows it in the field', async () => {
     render(<Host />)
     const combo = screen.getByRole('combobox')
     fireEvent.focus(combo)
-    const option = await screen.findByRole('option')
-    fireEvent.mouseDown(option)
-    // The EmployeePicker fetches the selected employee to display its name.
-    // We verify getEmployee was called with the picked id (i.e. the id was stored).
-    await waitFor(() =>
-      expect(vi.mocked(api.getEmployee)).toHaveBeenCalledWith('G1234'),
+    await screen.findByRole('option')
+    fireEvent.keyDown(combo, { key: 'ArrowDown' })
+    fireEvent.keyDown(combo, { key: 'Enter' })
+    await waitFor(() => expect(combo).toHaveValue('Ali Hassan — G1234'))
+  })
+
+  it('shows a search error, not "no results", when the lookup fails', async () => {
+    vi.mocked(api.listEmployees).mockRejectedValue(new Error('network down'))
+    render(<Host />)
+    const combo = screen.getByRole('combobox')
+    fireEvent.focus(combo)
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Employees could not be searched.',
     )
+    expect(screen.queryByText('No results')).not.toBeInTheDocument()
   })
 })
 
