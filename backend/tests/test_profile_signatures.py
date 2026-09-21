@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session, sessionmaker
 from app.api.deps import get_current_user
 from app.api.errors import ValidationFailedError
 from app.config import get_settings
+from app.core import signature as signature_core
 from app.db import session as session_mod
 from app.db.models import (
     Base,
@@ -96,9 +97,7 @@ def _png(color: tuple[int, int, int, int]) -> bytes:
 
 
 def _profile(employee_id: str, data: bytes) -> Path:
-    path = user_signature_service.employee_signature_path(
-        employee_id, vault_dir=get_settings().vault_dir
-    )
+    path = signature_core.employee_signature_path(get_settings().vault_dir, employee_id)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(data)
     return path

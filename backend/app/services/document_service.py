@@ -917,12 +917,11 @@ def _build_template_data(
 
     manager = resolve_manager(db, explicit_manager_id=manager_id)
     if manager is not None:
-        _mgr_sig = manager_service.signature_path(db, manager)
         manager_record = {
             "name_en": manager.name_en,
             "name_ar": manager.name_ar,
             "title": manager.title,
-            "sig_path": str(_mgr_sig) if _mgr_sig.is_file() else None,
+            "sig_path": manager_service.signature_str(db, manager),
         }
         from app.core import manager_override
 
@@ -1093,9 +1092,9 @@ def _build_template_data(
         data.pop("sig2_path", None)
         data.pop("employee_sig_path", None)
     elif employee is not None and not data.get("sig2_path") and not data.get("employee_sig_path"):
-        saved_sig = signature_core.vault_path(Vault(get_settings().vault_dir), employee.id)
-        if saved_sig.is_file():
-            data["employee_sig_path"] = str(saved_sig)
+        saved_sig = signature_core.employee_signature_str(get_settings().vault_dir, employee.id)
+        if saved_sig is not None:
+            data["employee_sig_path"] = saved_sig
 
     return data
 
@@ -1118,13 +1117,7 @@ def _submitter_sign_path(db: Session, submitter_id: int) -> str | None:
     if sub_row is None:
         return None
     if sub_row.employee_id:
-        try:
-            saved = signature_core.employee_signature_path(
-                get_settings().vault_dir, sub_row.employee_id
-            )
-        except signature_core.SignatureError:
-            return None
-        return str(saved) if saved.is_file() else None
+        return signature_core.employee_signature_str(get_settings().vault_dir, sub_row.employee_id)
     if sub_row.stored_sig_path and Path(sub_row.stored_sig_path).is_file():
         return sub_row.stored_sig_path
     return None
@@ -1376,8 +1369,7 @@ def generate_document(
                 "MANAGER_NOT_FOUND", f"Manager {manager_id} does not exist", id=manager_id
             )
         _gate_manager = resolve_manager(db, explicit_manager_id=manager_id)
-        _gate_sig = manager_service.signature_path(db, _gate_manager) if _gate_manager else None
-        if _gate_sig is None or not _gate_sig.is_file():
+        if _gate_manager is None or manager_service.signature_str(db, _gate_manager) is None:
             raise ValidationFailedError(
                 "MANAGER_SIGNATURE_REQUIRED",
                 "Select a manager with a saved signature or turn off Include manager signature.",

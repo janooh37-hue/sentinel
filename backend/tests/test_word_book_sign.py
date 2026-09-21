@@ -127,12 +127,13 @@ def test_resolve_signature_linked_user_uses_profile(
     db_session: Session, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     from app.config import Settings
+    from app.core import signature as signature_core
     from app.db.models import Employee, User
     from app.services import user_signature_service
 
     settings = Settings(data_dir=tmp_path)
     monkeypatch.setattr(user_signature_service, "get_settings", lambda: settings)
-    profile = user_signature_service.employee_signature_path("G7001", vault_dir=settings.vault_dir)
+    profile = signature_core.employee_signature_path(settings.vault_dir, "G7001")
     profile.parent.mkdir(parents=True)
     from PIL import Image
 

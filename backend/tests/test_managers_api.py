@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-import base64
+import io
 
 import pytest
 from fastapi.testclient import TestClient
+from PIL import Image
 from pydantic import ValidationError
 from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
@@ -126,9 +127,11 @@ def test_create_manager_requires_capability(api_db):
 # Signature routes (Task 4)
 # ---------------------------------------------------------------------------
 
-_PNG_1x1 = base64.b64decode(
-    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
-)
+
+def _png(size: tuple[int, int] = (80, 40)) -> bytes:
+    buf = io.BytesIO()
+    Image.new("RGBA", size, (10, 20, 30, 255)).save(buf, format="PNG")
+    return buf.getvalue()
 
 
 @pytest.fixture()
@@ -141,7 +144,7 @@ def test_manager_signature_roundtrip(admin_client):
 
     up = admin_client.post(
         f"/api/v1/managers/{mid}/signature",
-        files={"file": ("sig.png", _PNG_1x1, "image/png")},
+        files={"file": ("sig.png", _png(), "image/png")},
     )
     assert up.status_code == 201, up.text
     assert admin_client.get("/api/v1/managers").json()  # sanity

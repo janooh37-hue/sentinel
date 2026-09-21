@@ -127,6 +127,16 @@ def employee_signature_path(vault_dir: Path | str, g_number: str) -> Path:
     return path
 
 
+def employee_signature_str(vault_dir: Path | str, g_number: str) -> str | None:
+    """`employee_signature_path` as a string when the file exists, else None —
+    what the DOCX templates need. Never raises on a malformed `g_number`."""
+    try:
+        path = employee_signature_path(vault_dir, g_number)
+    except SignatureError:
+        return None
+    return str(path) if path.is_file() else None
+
+
 def vault_path(vault: Vault, g_number: str) -> Path:
     """Where a signature would be written for `g_number` — no I/O."""
     return employee_signature_path(vault.root, g_number)

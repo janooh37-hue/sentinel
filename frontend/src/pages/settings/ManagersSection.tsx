@@ -10,6 +10,7 @@ import { toast } from 'sonner'
 import { Loader2 } from 'lucide-react'
 
 import { api, apiErrorMessage, type ManagerRead } from '@/lib/api'
+import { invalidateSignatures } from '@/lib/globalRefresh'
 import { SignatureDrawPanel } from '@/components/signature/SignatureDrawPanel'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { SectionCard, OutlineButton, PrimaryButton } from './SettingsPage'
@@ -46,12 +47,7 @@ export function ManagersSection(): React.JSX.Element {
     mutationFn: ({ id, userId }: { id: number; userId: number | null }) =>
       api.linkManagerAccount(id, userId),
     onSuccess: () => {
-      invalidate()
-      void qc.invalidateQueries({ queryKey: ['signatures'] })
-      void qc.invalidateQueries({ queryKey: ['employee-signature'] })
-      void qc.invalidateQueries({ queryKey: ['manager-signature'] })
-      void qc.invalidateQueries({ queryKey: ['books'] })
-      void qc.invalidateQueries({ queryKey: ['auth-me'] })
+      invalidateSignatures(qc)
       toast.success(t('settings.managers.linkedToast'))
     },
     onError: (e: unknown) => toast.error(apiErrorMessage(e)),
@@ -230,27 +226,17 @@ function ManagerSignatureEditor({ managerId }: { managerId: number }): React.JSX
     queryFn: () => api.getManagerSignature(managerId),
     retry: false,
   })
-  const invalidate = () => void qc.invalidateQueries({ queryKey: ['manager-signature', managerId] })
-
   const save = async (dataUrl: string): Promise<void> => {
     try {
       await api.uploadManagerSignature(managerId, await dataUrlToBlob(dataUrl))
-      setReplacing(false); invalidate()
-      void qc.invalidateQueries({ queryKey: ['managers'] })
-      void qc.invalidateQueries({ queryKey: ['signatures'] })
-      void qc.invalidateQueries({ queryKey: ['employee-signature'] })
-      void qc.invalidateQueries({ queryKey: ['auth-me'] })
-      void qc.invalidateQueries({ queryKey: ['books'] })
+      setReplacing(false)
+      invalidateSignatures(qc)
     } catch (e) { toast.error(apiErrorMessage(e)) }
   }
   const remove = async (): Promise<void> => {
     try {
       await api.deleteManagerSignature(managerId)
-      invalidate(); void qc.invalidateQueries({ queryKey: ['managers'] })
-      void qc.invalidateQueries({ queryKey: ['signatures'] })
-      void qc.invalidateQueries({ queryKey: ['employee-signature'] })
-      void qc.invalidateQueries({ queryKey: ['auth-me'] })
-      void qc.invalidateQueries({ queryKey: ['books'] })
+      invalidateSignatures(qc)
     } catch (e) { toast.error(apiErrorMessage(e)) }
   }
 

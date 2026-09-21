@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 from pathlib import Path
 
 from sqlalchemy import select
@@ -80,10 +81,15 @@ def manager_signature_path(manager_id: int) -> Path:
     return path
 
 
-def _linked_user(db: Session, manager: Manager) -> User | None:
+def _profile_path(db: Session, manager: Manager) -> Path | None:
+    """Employee profile signature path when `manager` is linked to a login
+    account carrying an employee record, else None."""
     if manager.user_id is None:
         return None
-    return db.get(User, manager.user_id)
+    linked = db.get(User, manager.user_id)
+    if linked is None or not linked.employee_id:
+        return None
+    return signature_core.employee_signature_path(get_settings().vault_dir, linked.employee_id)
 
 
 def signature_path(db: Session, manager: Manager) -> Path:
@@ -92,48 +98,49 @@ def signature_path(db: Session, manager: Manager) -> Path:
     A manager linked to a login account with an employee profile shares that
     employee's saved signature — even when the file doesn't exist yet, so a
     deleted profile signature never falls back to a stale manager-only image.
-    An unlinked (names-only) manager keeps its own standalone file."""
-    linked_user = _linked_user(db, manager)
-    if linked_user is not None and linked_user.employee_id:
-        return user_signature_service.employee_signature_path(
-            linked_user.employee_id, vault_dir=get_settings().vault_dir
-        )
+    An unlinked (names-only) manager keeps its own file: a legacy `sig_path`
+    written before the canonical layout still wins while it exists, since
+    nothing migrates those rows."""
+    profile = _profile_path(db, manager)
+    if profile is not None:
+        return profile
+    if manager.sig_path and Path(manager.sig_path).is_file():
+        return Path(manager.sig_path)
     return manager_signature_path(manager.id)
 
 
-def has_signature(db: Session, manager: Manager) -> bool:
+def signature_str(db: Session, manager: Manager) -> str | None:
+    """`signature_path` as a string when the file exists, else None — what
+    the DOCX templates and the manager-signature gate both need."""
     try:
-        return signature_path(db, manager).is_file()
+        path = signature_path(db, manager)
     except signature_core.SignatureError:
-        return False
+        return None
+    return str(path) if path.is_file() else None
+
+
+def has_signature(db: Session, manager: Manager) -> bool:
+    return signature_str(db, manager) is not None
 
 
 def save_manager_signature(db: Session, manager_id: int, data: bytes) -> Path:
     """Normalize to PNG and write to the manager's canonical signature path.
 
     A manager linked to an account with an employee profile writes THAT file
-    (and clears any legacy standalone `sig_path`) instead of a second
+    (and drops any legacy standalone `sig_path`) instead of a second
     manager-only image. A standalone manager keeps its own file/`sig_path`.
     """
     mgr = _get_or_404(db, manager_id)
     png = signature_core.normalize_to_png(data)  # raises SignatureError on bad input
-    linked_user = _linked_user(db, mgr)
-    if linked_user is not None and linked_user.employee_id:
-        signature_core.validate(png)
-        path = user_signature_service.employee_signature_path(
-            linked_user.employee_id, vault_dir=get_settings().vault_dir
-        )
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_bytes(png)
-        if mgr.sig_path is not None:
-            manager_signature_path(manager_id).unlink(missing_ok=True)
-            mgr.sig_path = None
-        db.commit()
-        return path
-    path = manager_signature_path(manager_id)
+    signature_core.validate(png)
+    profile = _profile_path(db, mgr)
+    path = profile or manager_signature_path(manager_id)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(png)
-    mgr.sig_path = str(path)
+    if profile is not None:
+        # Profile file is the only copy now — retire the manager-only one.
+        manager_signature_path(manager_id).unlink(missing_ok=True)
+    mgr.sig_path = None if profile is not None else str(path)
     db.commit()
     return path
 
@@ -142,24 +149,11 @@ def delete_manager_signature(db: Session, manager_id: int) -> None:
     """Remove the manager's signature file and null `sig_path`. Idempotent.
 
     A linked manager's delete removes the employee profile file — the SAME
-    file the linked account and employee profile use — plus any legacy
-    standalone pointer. A standalone manager's own file is removed."""
+    file the linked account and employee profile use. Any legacy standalone
+    file goes either way."""
     mgr = _get_or_404(db, manager_id)
-    linked_user = _linked_user(db, mgr)
-    if linked_user is not None and linked_user.employee_id:
-        try:
-            path = user_signature_service.employee_signature_path(
-                linked_user.employee_id, vault_dir=get_settings().vault_dir
-            )
-        except signature_core.SignatureError:
-            path = None
-        if path is not None:
-            path.unlink(missing_ok=True)
-        if mgr.sig_path is not None:
-            manager_signature_path(manager_id).unlink(missing_ok=True)
-            mgr.sig_path = None
-        db.commit()
-        return
+    with contextlib.suppress(signature_core.SignatureError):
+        signature_path(db, mgr).unlink(missing_ok=True)
     manager_signature_path(manager_id).unlink(missing_ok=True)
     mgr.sig_path = None
     db.commit()

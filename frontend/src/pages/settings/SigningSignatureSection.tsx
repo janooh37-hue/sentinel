@@ -1,10 +1,10 @@
 /**
- * SigningSignatureSection — the per-user *signing* signature.
+ * SigningSignatureSection — the person's ONE saved profile signature.
  *
- * Distinct from the email signature and the employee-vault signature: this is
- * the handwritten signature embedded into a book's PDF when the signed-in
- * manager approves/signs it (POST /auth/me/signature). `GET /auth/me` reports
- * whether one is on file via `has_signature`.
+ * Same file everywhere: for a linked account it IS the employee profile
+ * signature (and the linked manager record's), for an unlinked one it is the
+ * account's own file until the account is linked (POST /auth/me/signature).
+ * `GET /auth/me` reports whether one is on file via `has_signature`.
  *
  * Rendered as a TAMM section card on SettingsPage.
  *
@@ -24,6 +24,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { api, apiErrorMessage } from '@/lib/api'
 import type { AppSettingsRead, AppSettingsUpdate } from '@/lib/api'
 import { useAuth } from '@/lib/authContext'
+import { invalidateSignatures } from '@/lib/globalRefresh'
 import { RangeSlider } from '@/components/ui/range-slider'
 import { CapabilityGate } from '@/components/shell/CapabilityGate'
 import {
@@ -284,16 +285,7 @@ export function SigningSignatureSection({
       await api.uploadMySignature(blob)
       await refetch()
       setSigVersion((version) => version + 1)
-      void qc.invalidateQueries({
-        predicate: (q) =>
-          [
-            'signatures',
-            'employee-signature',
-            'manager-signature',
-            'managers',
-            'books',
-          ].includes(String(q.queryKey[0])),
-      })
+      invalidateSignatures(qc)
       toast.success(t('settings.signingSignature.saved'))
       setEditing(false)
     } catch (err) {
@@ -309,16 +301,7 @@ export function SigningSignatureSection({
       await api.deleteMySignature()
       await refetch()
       setSigVersion((version) => version + 1)
-      void qc.invalidateQueries({
-        predicate: (q) =>
-          [
-            'signatures',
-            'employee-signature',
-            'manager-signature',
-            'managers',
-            'books',
-          ].includes(String(q.queryKey[0])),
-      })
+      invalidateSignatures(qc)
       toast.success(t('settings.signingSignature.removed'))
       setEditing(true)
     } catch (err) {

@@ -24,8 +24,4 @@ def _resolve_signer(db: Session, employee_id: str) -> tuple[str, str, str | None
         raise AppError("EMPLOYEE_NOT_FOUND", f"Employee {employee_id} not found", http_status=404)
     name = (emp.name_ar or emp.name_en or "").strip()
     title = (emp.position_ar or emp.position or "").strip()
-    try:
-        emp_sig = signature_core.employee_signature_path(get_settings().vault_dir, employee_id)
-    except signature_core.SignatureError:
-        return name, title, None
-    return name, title, str(emp_sig) if emp_sig.is_file() else None
+    return name, title, signature_core.employee_signature_str(get_settings().vault_dir, employee_id)

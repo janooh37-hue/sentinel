@@ -157,14 +157,13 @@ def create_word_book(
     if manager_id is not None:
         mgr = db.get(Manager, manager_id)
         if mgr is not None:
-            _mgr_sig = manager_service.signature_path(db, mgr)
             manager_override.apply(
                 data,
                 {
                     "name_en": mgr.name_en,
                     "name_ar": mgr.name_ar,
                     "title": mgr.title,
-                    "sig_path": str(_mgr_sig) if _mgr_sig.is_file() else None,
+                    "sig_path": manager_service.signature_str(db, mgr),
                 },
                 embed=False,
                 prefer_arabic=True,
