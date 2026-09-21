@@ -7,8 +7,10 @@ transactionally consistent copy even while the service is writing. The record
 file trees under ``data_dir`` are copied with ``shutil.copytree``.
 
 Pure module: ``create_backup`` / ``prune_backups`` take explicit paths and never
-read global settings, so they unit-test against a temp data dir. The ``__main__``
-entry resolves ``get_settings()`` once and hands the paths in.
+read global settings, so they unit-test against a temp data dir. The CLI prunes
+completed automatic backups before allocating the next copy, then enforces the
+final retention count after success. The ``__main__`` entry resolves
+``get_settings()`` once and hands the paths in.
 
 Run (also via scripts/backup-db.ps1):
     venv/Scripts/python.exe -X utf8 -m app.services.backup_service
@@ -41,6 +43,7 @@ _FILE_SUBDIRS: tuple[str, ...] = (
 )
 
 _BACKUP_PREFIX = "gssg-backup-"
+_DEFAULT_KEEP = 14
 _TIMESTAMP_FMT = "%Y%m%d-%H%M%S"
 
 
@@ -64,7 +67,7 @@ def create_backup(data_dir: Path, dest_dir: Path, *, now: datetime | None = None
     # names match the server operator's local time; prune_backups sorts by name.
     stamp = (now or datetime.now()).strftime(_TIMESTAMP_FMT)
     backup_root = dest_dir / f"{_BACKUP_PREFIX}{stamp}"
-    backup_root.mkdir(parents=True, exist_ok=True)
+    backup_root.mkdir(parents=True, exist_ok=False)
 
     try:
         src_db = data_dir / "gssg.db"
@@ -89,14 +92,20 @@ def create_backup(data_dir: Path, dest_dir: Path, *, now: datetime | None = None
     return backup_root
 
 
-def prune_backups(dest_dir: Path, *, keep: int = 14) -> list[Path]:
-    """Delete all but the ``keep`` newest ``gssg-backup-*`` dirs in ``dest_dir``.
+def prune_backups(dest_dir: Path, *, keep: int = _DEFAULT_KEEP) -> list[Path]:
+    """Delete all but the ``keep`` newest automatic backup dirs.
+
+    The CLI calls this once before a copy with ``keep - 1`` so the new copy has
+    room to become the newest retained recovery point. ``keep=0`` is therefore
+    valid for that pre-copy step, while callers must use a positive final
+    retention count. A backup directory is considered completed once
+    ``create_backup`` returns; failed copies remove their own directory.
 
     Sorts by directory name -- the ``YYYYMMDD-HHMMSS`` stamp is chronological, so
     no mtime reliance. Returns the list of deleted backup roots.
     """
-    if keep <= 0:
-        raise ValueError(f"keep must be positive, got {keep}")
+    if keep < 0:
+        raise ValueError(f"keep must be non-negative, got {keep}")
     if not dest_dir.is_dir():
         return []
 
@@ -113,25 +122,44 @@ def prune_backups(dest_dir: Path, *, keep: int = 14) -> list[Path]:
 
 
 def run_cli(argv: list[str] | None = None) -> int:
-    """CLI: create a backup then prune. Returns a process exit code."""
+    """Prune, create, then prune again. Returns a process exit code."""
     parser = argparse.ArgumentParser(description="Create a consistent GSSG backup, then prune.")
-    parser.add_argument("--data-dir", type=Path, default=None,
-                        help="source data dir (default: GSSG_DATA_DIR / settings)")
-    parser.add_argument("--dest", type=Path, default=None,
-                        help="backup destination (default: <data_dir>/backups/auto)")
-    parser.add_argument("--keep", type=int, default=14, help="daily copies to retain (default 14)")
+    parser.add_argument(
+        "--data-dir",
+        type=Path,
+        default=None,
+        help="source data dir (default: GSSG_DATA_DIR / settings)",
+    )
+    parser.add_argument(
+        "--dest",
+        type=Path,
+        default=None,
+        help="backup destination (default: <data_dir>/backups/auto)",
+    )
+    parser.add_argument(
+        "--keep",
+        type=int,
+        default=_DEFAULT_KEEP,
+        help=f"completed automatic backups to retain (default {_DEFAULT_KEEP})",
+    )
     args = parser.parse_args(argv)
+    if args.keep <= 0:
+        parser.error("--keep must be positive")
 
     if args.data_dir is not None:
         data_dir = args.data_dir
     else:
         from app.config import get_settings  # local import: avoids settings load in unit tests
+
         data_dir = get_settings().data_dir
     dest = args.dest if args.dest is not None else data_dir / "backups" / "auto"
 
     try:
+        # Free one full-copy's worth of space before allocation. The surviving
+        # completed backups remain available if this copy fails.
+        pruned = prune_backups(dest, keep=args.keep - 1)
         root = create_backup(data_dir, dest)
-        pruned = prune_backups(dest, keep=args.keep)
+        pruned.extend(prune_backups(dest, keep=args.keep))
     except Exception as exc:  # top-level CLI guard; log + nonzero exit
         log.exception("backup failed: %s", exc)
         print(f"backup FAILED: {exc}", file=sys.stderr)

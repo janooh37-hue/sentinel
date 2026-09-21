@@ -57,9 +57,12 @@ $MinBuildMB  = 1800
 
 # Pre-migration DB backups copy the whole data dir (can be multi-GB) and are
 # only needed often enough to bound data loss on a failed migration - reuse a
-# recent one instead of burning disk on every update/deploy.
+# recent one instead of burning disk on every update/deploy. Keep two completed
+# copies available while a new one is being allocated; this host's observed
+# headroom supports three final recovery points.
 $BackupDir        = Join-Path $Root 'data\backups\auto'
 $BackupMaxAgeDays = 7
+$BackupKeep       = 3
 
 # -- Small helpers ------------------------------------------------------------
 function Write-Row($label, $value, $color = 'White') {
@@ -546,7 +549,8 @@ function Invoke-Migrate {
         # Back up the DB first: once alembic migrates, rolling back means restoring
         # data, and there is no other automatic copy. The CLI reads data_dir from
         # settings and copies the DB via SQLite's online-backup API (WAL-safe while
-        # the service is running), then prunes old copies. The app package only
+        # the service is running), pre-prunes completed copies to make room, then
+        # enforces the configured final retention count. The app package only
         # resolves with backend\ as the working directory.
         Write-Host '  Backing up the database before migrating ...' -ForegroundColor Cyan
         Push-Location (Join-Path $Root 'backend')
@@ -556,7 +560,7 @@ function Invoke-Migrate {
             $prevEAP = $ErrorActionPreference
             $ErrorActionPreference = 'Continue'
             try {
-                & $venvPy -m app.services.backup_service 2>&1 | ForEach-Object { Write-Host "    $_" }
+                & $venvPy -m app.services.backup_service --keep $BackupKeep 2>&1 | ForEach-Object { Write-Host "    $_" }
             } finally {
                 $ErrorActionPreference = $prevEAP
             }
