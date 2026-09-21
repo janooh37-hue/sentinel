@@ -123,14 +123,20 @@ def test_sign_raises_when_stamp_fails(
     assert ei.value.code == "SIGNATURE_STAMP_FAILED"
 
 
-def test_sign_falls_back_to_submitter_signature(db_session: Session, tmp_path: Path) -> None:
-    from app.db.models import Employee, Submitter, User
-    from app.services.book_service import _resolve_signer_signature
+def test_resolve_signature_linked_user_uses_profile(
+    db_session: Session, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from app.config import Settings
+    from app.db.models import Employee, User
+    from app.services import user_signature_service
 
-    sig = tmp_path / "emp-sig.png"
+    settings = Settings(data_dir=tmp_path)
+    monkeypatch.setattr(user_signature_service, "get_settings", lambda: settings)
+    profile = user_signature_service.employee_signature_path("G7001", vault_dir=settings.vault_dir)
+    profile.parent.mkdir(parents=True)
     from PIL import Image
 
-    Image.new("RGBA", (40, 20), (0, 0, 0, 255)).save(sig)
+    Image.new("RGBA", (80, 40), (0, 0, 200, 255)).save(profile)
 
     db_session.add(Employee(id="G7001", name_en="Signer Emp"))
     db_session.flush()
@@ -143,21 +149,23 @@ def test_sign_falls_back_to_submitter_signature(db_session: Session, tmp_path: P
         signature_path=None,
     )
     db_session.add(user)
-    db_session.add(Submitter(employee_id="G7001", name="Signer Emp", stored_sig_path=str(sig)))
     db_session.commit()
 
-    resolved = _resolve_signer_signature(db_session, user)
-    assert resolved is not None and resolved.name == "emp-sig.png"
+    assert user_signature_service.resolve_signature(user) == profile
 
 
-def test_sign_prefers_own_signature(db_session: Session, tmp_path: Path) -> None:
+def test_resolve_signature_unlinked_user_uses_own_signature_path(
+    db_session: Session, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from app.config import Settings
     from app.db.models import User
-    from app.services.book_service import _resolve_signer_signature
+    from app.services import user_signature_service
 
+    monkeypatch.setattr(user_signature_service, "get_settings", lambda: Settings(data_dir=tmp_path))
     own = tmp_path / "own.png"
     from PIL import Image
 
-    Image.new("RGBA", (40, 20), (0, 0, 0, 255)).save(own)
+    Image.new("RGBA", (80, 40), (0, 0, 0, 255)).save(own)
     user = User(
         email="own@test.ae",
         password_hash="x",
@@ -167,8 +175,8 @@ def test_sign_prefers_own_signature(db_session: Session, tmp_path: Path) -> None
     )
     db_session.add(user)
     db_session.commit()
-    resolved = _resolve_signer_signature(db_session, user)
-    assert resolved is not None and resolved.name == "own.png"
+
+    assert user_signature_service.resolve_signature(user) == own
 
 
 def test_rich_versions_still_rerender(

@@ -128,7 +128,15 @@ export function EmployeeSignatureCard({
         await api.uploadSignature(employeeId, blob)
         toast.success(t('empSig.saved'))
         void qc.invalidateQueries({
-          queryKey: ['employee-signature', employeeId],
+          predicate: (q) =>
+            [
+              'employee-signature',
+              'signatures',
+              'manager-signature',
+              'managers',
+              'auth-me',
+              'books',
+            ].includes(String(q.queryKey[0])),
         })
       } catch (err) {
         toast.error(apiErrorMessage(err))

@@ -216,20 +216,31 @@ def test_resolve_signer_reads_employee_signature_store(db_session, tmp_path, mon
     assert sig == str(emp_sig), "signer signature must resolve from the employee store"
 
 
-def test_finish_report_session_embeds_signature(db_session, tmp_path):
+def test_finish_report_session_embeds_signature(db_session, tmp_path, monkeypatch):
     from datetime import datetime
+    from types import SimpleNamespace
 
-    from app.db.models import BookEditSession, BookVersion, Document, Employee, Submitter
-    from app.services import word_book_service
+    from app.core import signature as signature_core
+    from app.core.vault_manager import Vault
+    from app.db.models import BookEditSession, BookVersion, Document, Employee
+    from app.services import report_service, word_book_service
 
     _seed_gs(db_session)
-    sig = tmp_path / "sig.png"
-    _png(sig)
+    vault_dir = tmp_path / "vault"
+    monkeypatch.setattr(
+        report_service,
+        "get_settings",
+        lambda: SimpleNamespace(vault_dir=vault_dir, data_dir=tmp_path),
+    )
     db_session.add(Employee(id="G1042", name_en="Muhannad", name_ar="مهند", position="Head"))
     db_session.add(Employee(id="G3082", name_en="Operator", name_ar="مشغّل", position="Op"))
-    db_session.add(Submitter(employee_id="G1042", name="مهند", stored_sig_path=str(sig)))
     op = _user(db_session, employee_id="G3082")
     db_session.commit()
+    # Signature lives in the employee's OWN profile store — no Submitter fallback
+    # exists anymore (report_service._resolve_signer reads only the profile).
+    emp_sig = signature_core.vault_path(Vault(vault_dir), "G1042")
+    emp_sig.parent.mkdir(parents=True, exist_ok=True)
+    _png(emp_sig)
 
     info = word_book_service.create_report_word_book(
         db_session,

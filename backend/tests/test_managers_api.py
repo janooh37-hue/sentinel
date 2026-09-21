@@ -77,6 +77,7 @@ def api_db(monkeypatch, tmp_path) -> Session:
         yield db
     finally:
         db.close()
+        eng.dispose()
 
 
 def _user(db: Session, role: str = "admin", email: str = "a@x.ae") -> User:

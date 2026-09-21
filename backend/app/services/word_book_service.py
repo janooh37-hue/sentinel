@@ -33,7 +33,7 @@ from app.core.constants import TEMPLATE_FILES
 from app.core.docx_engine import aztec_corner_for
 from app.db.models import Book, BookCategory, BookEditSession, BookVersion, Document, Manager, User
 from app.db.repos import classified_refs_repo
-from app.services import artifact_service
+from app.services import artifact_service, manager_service
 from app.services._pdf_executor import convert_docx_to_pdf
 from app.services.document_service import GENERAL_BOOK_BODY_SENTINEL
 
@@ -157,13 +157,14 @@ def create_word_book(
     if manager_id is not None:
         mgr = db.get(Manager, manager_id)
         if mgr is not None:
+            _mgr_sig = manager_service.signature_path(db, mgr)
             manager_override.apply(
                 data,
                 {
                     "name_en": mgr.name_en,
                     "name_ar": mgr.name_ar,
                     "title": mgr.title,
-                    "sig_path": mgr.sig_path,
+                    "sig_path": str(_mgr_sig) if _mgr_sig.is_file() else None,
                 },
                 embed=False,
                 prefer_arabic=True,

@@ -195,6 +195,11 @@ export function EmailSection(): React.JSX.Element {
         )
       }
       void qc.invalidateQueries({ queryKey: ['auth-me'] })
+      void qc.invalidateQueries({ queryKey: ['signatures'] })
+      void qc.invalidateQueries({ queryKey: ['employee-signature'] })
+      void qc.invalidateQueries({ queryKey: ['manager-signature'] })
+      void qc.invalidateQueries({ queryKey: ['managers'] })
+      void qc.invalidateQueries({ queryKey: ['books'] })
       setIsChangingLink(false)
       setLinkPickerId(null)
     },

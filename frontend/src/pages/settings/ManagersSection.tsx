@@ -45,7 +45,15 @@ export function ManagersSection(): React.JSX.Element {
   const linkMut = useMutation({
     mutationFn: ({ id, userId }: { id: number; userId: number | null }) =>
       api.linkManagerAccount(id, userId),
-    onSuccess: () => { invalidate(); toast.success(t('settings.managers.linkedToast')) },
+    onSuccess: () => {
+      invalidate()
+      void qc.invalidateQueries({ queryKey: ['signatures'] })
+      void qc.invalidateQueries({ queryKey: ['employee-signature'] })
+      void qc.invalidateQueries({ queryKey: ['manager-signature'] })
+      void qc.invalidateQueries({ queryKey: ['books'] })
+      void qc.invalidateQueries({ queryKey: ['auth-me'] })
+      toast.success(t('settings.managers.linkedToast'))
+    },
     onError: (e: unknown) => toast.error(apiErrorMessage(e)),
   })
 
@@ -229,17 +237,28 @@ function ManagerSignatureEditor({ managerId }: { managerId: number }): React.JSX
       await api.uploadManagerSignature(managerId, await dataUrlToBlob(dataUrl))
       setReplacing(false); invalidate()
       void qc.invalidateQueries({ queryKey: ['managers'] })
+      void qc.invalidateQueries({ queryKey: ['signatures'] })
+      void qc.invalidateQueries({ queryKey: ['employee-signature'] })
+      void qc.invalidateQueries({ queryKey: ['auth-me'] })
+      void qc.invalidateQueries({ queryKey: ['books'] })
     } catch (e) { toast.error(apiErrorMessage(e)) }
   }
   const remove = async (): Promise<void> => {
     try {
       await api.deleteManagerSignature(managerId)
       invalidate(); void qc.invalidateQueries({ queryKey: ['managers'] })
+      void qc.invalidateQueries({ queryKey: ['signatures'] })
+      void qc.invalidateQueries({ queryKey: ['employee-signature'] })
+      void qc.invalidateQueries({ queryKey: ['auth-me'] })
+      void qc.invalidateQueries({ queryKey: ['books'] })
     } catch (e) { toast.error(apiErrorMessage(e)) }
   }
 
   return (
     <div>
+      <p className="mb-2 text-[0.78em] text-muted-foreground">
+        {t('settings.managers.sharedSignatureHint')}
+      </p>
       <p className="mb-1 text-[0.78em] font-medium text-muted-foreground">{t('settings.managers.signature')}</p>
       {data?.dataUrl && !replacing ? (
         <div className="flex items-center gap-3">

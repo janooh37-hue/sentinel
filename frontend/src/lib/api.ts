@@ -429,8 +429,8 @@ export interface SessionUser {
   status: 'pending' | 'active' | 'locked' | 'disabled'
   is_admin: boolean
   is_manager: boolean
-  /** Whether the user has a per-user *signing* signature on file (used when
-   * approving/signing a book). Distinct from the employee-vault signature. */
+  /** Whether the user has their one saved signature on file: the employee
+   * profile signature when linked, or the account signature when unlinked. */
   has_signature: boolean
   idle_lock_seconds: number
   lock_layout: string
