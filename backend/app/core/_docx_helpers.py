@@ -9,10 +9,6 @@ After the move to docxtpl token rendering, only a few helpers survive:
   leave forms so the manager-signature image anchors as a floating "behind
   text" shape on the signature line above the manager name, without growing
   the block. python-docx has no public API for this; we build the OOXML by hand.
-* `fill_image_inline_in_paragraph` — the General Book/Security Permit
-  "keep-together" signing block wants the image counted in the paragraph's
-  natural layout height (a behind-text float has zero height and would let
-  Word split the image from its name/title), so it stays a plain inline run.
 * `float_inline_images_in_cell` — the same behind-text technique for images
   already placed inline via a `{{ token }}` (Material Request).
 * `replace_paragraph_text` — used by the Resignation Letter post-process
@@ -217,30 +213,6 @@ def fill_image_behind_text_in_paragraph(
         return True  # image is embedded (inline); float conversion failed only
 
 
-def fill_image_inline_in_paragraph(
-    paragraph: Any,
-    image_path: Path | str | None,
-    *,
-    width_inches: float = 1.4,
-    dilate_radius_px: int = DEFAULT_SIG_BOLDNESS,
-    signature_role: str | None = None,
-) -> bool:
-    """Place *image_path* as an ordinary INLINE image occupying *paragraph*'s
-    natural layout height — used for the General Book/Security Permit
-    "keep-together" signing block, where Word must count the image's height
-    when deciding whether the whole signature/name/title group fits on the
-    current page (a behind-text float has zero layout height and would let
-    Word split the group across pages). Returns True iff the image embedded.
-    """
-    drawing = _embed_image_run(
-        paragraph, image_path, width_inches=width_inches, dilate_radius_px=dilate_radius_px
-    )
-    if drawing is None:
-        return False
-    _mark_signature_drawing(drawing, signature_role=signature_role)
-    return True
-
-
 def insert_floating_image_in_header(
     header: Any,
     image_bytes: bytes,
@@ -386,7 +358,6 @@ def prevent_row_split(paragraph: Any) -> None:
 
 __all__ = [
     "fill_image_behind_text_in_paragraph",
-    "fill_image_inline_in_paragraph",
     "find_bookmark_index",
     "float_inline_images_in_cell",
     "insert_floating_image_in_header",

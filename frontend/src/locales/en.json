@@ -4571,6 +4571,8 @@
     "saved": "Signature position saved.",
     "conflict": "This document changed since the workspace opened. Reloading the latest copy.",
     "signatureLabel": "Signature — drag or use the arrow keys to move",
+    "previewLoading": "Loading signature preview…",
+    "previewFailed": "Could not load the signature preview. Retry before adjusting its position.",
     "unsavedTitle": "Discard unsaved changes?",
     "unsavedDesc": "You have not saved the new position. Leaving now discards it.",
     "discard": "Discard changes",
