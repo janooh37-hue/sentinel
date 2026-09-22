@@ -429,8 +429,8 @@ export interface SessionUser {
   status: 'pending' | 'active' | 'locked' | 'disabled'
   is_admin: boolean
   is_manager: boolean
-  /** Whether the user has a per-user *signing* signature on file (used when
-   * approving/signing a book). Distinct from the employee-vault signature. */
+  /** Whether the user has their one saved signature on file: the employee
+   * profile signature when linked, or the account signature when unlinked. */
   has_signature: boolean
   idle_lock_seconds: number
   lock_layout: string
@@ -456,6 +456,28 @@ export interface AdminUserRead {
   /** Single-holder flag — this user receives auto-submitted `in_app` forms
    * (forms signing paths, 2026-06-11). Set via `api.setDefaultManager`. */
   is_default_manager: boolean
+  /** True until the account owner replaces an admin-issued temporary
+   * password. Blocks login and Word-editing links until cleared. */
+  password_change_required: boolean
+}
+
+export interface AdminUserCreateRequest {
+  email: string
+  employee_id: string | null
+  display_name?: string | null
+  role: 'operator' | 'manager' | 'admin'
+}
+
+export interface AdminUserCreateResult {
+  user: AdminUserRead
+  /** Shown once — the server does not retain or resend it. */
+  temporary_password: string
+}
+
+export interface CompletePasswordSetupRequest {
+  email: string
+  temporary_password: string
+  new_password: string
 }
 
 export interface AuditEntryRead {
@@ -774,6 +796,7 @@ export type IncludedPapersHistoryRead = components['schemas']['IncludedPapersHis
 export type IncludedPapersPreviewRead = components['schemas']['IncludedPapersPreviewRead']
 export type IncludedPapersRequest = components['schemas']['IncludedPapersRequest']
 export type BookFacetsResponse = components['schemas']['BookFacetsResponse']
+export type ScanBackResult = components['schemas']['ScanBackResult']
 export type ServiceFacetRead = components['schemas']['ServiceFacetRead']
 // Approvals worklist (#31, revision-scoped) — GET /books/approval-log,
 // GET /books/approval-summary, GET /books/approval-log/{book_id}/neighbors
@@ -2185,6 +2208,12 @@ export const api = {
     form.append('as_signed', asSigned ? 'true' : 'false')
     return multipart<BookRead>(`/books/${bookId}/attachments`, form)
   },
+  /** Route a General Book signed scan from its Reference barcode. */
+  scanBack: (file: File) => {
+    const form = new FormData()
+    form.append('file', file)
+    return multipart<ScanBackResult>('/books/scan-back', form)
+  },
   /** DELETE /books/{id}/attachments/{index} — remove a plain attachment (undo a
    * wrongly-uploaded scan). books.edit. */
   deleteBookAttachment: (bookId: number, index: number) =>
@@ -2531,6 +2560,10 @@ export const api = {
   logout: () => request<void>('POST', '/auth/logout'),
   register: (payload: RegisterRequest) =>
     request<RegisterResult>('POST', '/auth/register', payload),
+  /** Replace an admin-issued temporary password before first sign-in. No
+   * cookie is set — caller performs a normal `login` afterward. */
+  completePasswordSetup: (payload: CompletePasswordSetupRequest) =>
+    request<void>('POST', '/auth/complete-password-setup', payload),
   verifyAuthPassword: (password: string) =>
     request<void>('POST', '/auth/verify-password', { password }),
   updateLockTimer: (idleLockSeconds: number) =>
@@ -2547,7 +2580,11 @@ export const api = {
   linkMyEmployee: (employee_id: string | null) =>
     request<SessionUser>('POST', '/auth/me/link', { employee_id }),
   listAuthUsers: () => request<AdminUserRead[]>('GET', '/auth/users'),
-  approveAuthUser: (id: number, role: string, employee_id?: string | null) =>
+  /** Admin-issued account. Response carries a one-time temporary password —
+   * it is never retained or shown again after this call returns. */
+  createAuthUser: (body: AdminUserCreateRequest) =>
+    request<AdminUserCreateResult>('POST', '/auth/users', body),
+  approveAuthUser: (id: number, role: string, employee_id: string | null) =>
     request<AdminUserRead>('POST', `/auth/users/${id}/approve`, { role, employee_id }),
   rejectAuthUser: (id: number, reason?: string | null) =>
     request<AdminUserRead>('POST', `/auth/users/${id}/reject`, { reason }),
@@ -2555,7 +2592,7 @@ export const api = {
     request<AdminUserRead>('POST', `/auth/users/${id}/reset-password`, { password }),
   setAuthUserRole: (id: number, role: string) =>
     request<AdminUserRead>('PATCH', `/auth/users/${id}/role`, { role }),
-  lockAuthUser: (id: number) => request<AdminUserRead>('POST', `/auth/users/${id}/lock`),
+  disableAuthUser: (id: number) => request<AdminUserRead>('POST', `/auth/users/${id}/disable`),
   unlockAuthUser: (id: number) => request<AdminUserRead>('POST', `/auth/users/${id}/unlock`),
   /** Set/clear the single-holder default-manager flag (forms signing paths,
    * 2026-06-11 §5). Enabling on one user clears any previous holder. */

@@ -72,7 +72,7 @@ from app.db.repos.classified_refs_repo import allocate_classified_serial
 from app.db.repos.refs_repo import allocate_ref_with_retry
 from app.schemas.employee import EMPLOYEE_STATUS_ACTIVE, EMPLOYEE_STATUS_RESIGNED
 from app.schemas.linked_document import LinkedDocumentRead
-from app.services import absence_service, artifact_service
+from app.services import absence_service, artifact_service, manager_service
 from app.services._pdf_executor import convert_docx_to_pdf as convert_docx_to_pdf
 
 _build_docx_filename = artifact_service.build_docx_filename
@@ -921,7 +921,7 @@ def _build_template_data(
             "name_en": manager.name_en,
             "name_ar": manager.name_ar,
             "title": manager.title,
-            "sig_path": manager.sig_path,
+            "sig_path": manager_service.signature_str(db, manager),
         }
         from app.core import manager_override
 
@@ -1074,8 +1074,9 @@ def _build_template_data(
         # Look up the employee linked to the submitter for the G-number
         if sub_row.employee_id:
             data["submitter_id"] = sub_row.employee_id
-        if sub_row.stored_sig_path:
-            data["submitter_sig_path"] = sub_row.stored_sig_path
+        sub_sig = _submitter_sign_path(db, submitter_id)
+        if sub_sig is not None:
+            data["submitter_sig_path"] = sub_sig
 
     # ------------------------------------------------------------------
     # 6. (Fields already merged in step 4 above)
@@ -1091,20 +1092,21 @@ def _build_template_data(
         data.pop("sig2_path", None)
         data.pop("employee_sig_path", None)
     elif employee is not None and not data.get("sig2_path") and not data.get("employee_sig_path"):
-        saved_sig = signature_core.vault_path(Vault(get_settings().vault_dir), employee.id)
-        if saved_sig.is_file():
-            data["employee_sig_path"] = str(saved_sig)
+        saved_sig = signature_core.employee_signature_str(get_settings().vault_dir, employee.id)
+        if saved_sig is not None:
+            data["employee_sig_path"] = saved_sig
 
     return data
 
 
 def _submitter_sign_path(db: Session, submitter_id: int) -> str | None:
-    """Resolve a chosen submitter's signature for the employee cell.
+    """Resolve a submitter's ONE signature for template embedding.
 
-    Prefers the saved vault signature of the employee the submitter is linked
-    to; falls back to the submitter's own uploaded signature (``stored_sig_path``)
-    when there is no linked employee or that employee has no saved signature.
-    Returns ``None`` when the submitter has neither — the cell then prints blank.
+    A submitter linked to an employee uses ONLY that employee's saved
+    profile signature — never `stored_sig_path`, even if the profile file is
+    missing. A standalone submitter (no `employee_id`) uses its own uploaded
+    `stored_sig_path`. Returns None when neither applies — the cell then
+    prints blank.
 
     Used by the leave-related forms in ``_SUBMITTER_SIGN_FORMS``: a picked
     submitter signs the employee cell in the applicant's place. The Leave
@@ -1115,9 +1117,7 @@ def _submitter_sign_path(db: Session, submitter_id: int) -> str | None:
     if sub_row is None:
         return None
     if sub_row.employee_id:
-        saved = signature_core.vault_path(Vault(get_settings().vault_dir), sub_row.employee_id)
-        if saved.is_file():
-            return str(saved)
+        return signature_core.employee_signature_str(get_settings().vault_dir, sub_row.employee_id)
     if sub_row.stored_sig_path and Path(sub_row.stored_sig_path).is_file():
         return sub_row.stored_sig_path
     return None
@@ -1323,6 +1323,8 @@ def generate_document(
     vio_type = fields.get("violation_type")
     if isinstance(vio_type, list):
         fields = {**fields, "violation_type": "، ".join(str(v) for v in vio_type)}
+    if commit and template_id == "General Book" and not fields.get("date"):
+        fields = {**fields, "date": datetime.now().strftime("%d-%m-%Y")}
 
     # Paths of files to unlink AFTER a successful commit (B1: defer unlink past commit).
     superseded_files: list[str] = []
@@ -1369,8 +1371,7 @@ def generate_document(
                 "MANAGER_NOT_FOUND", f"Manager {manager_id} does not exist", id=manager_id
             )
         _gate_manager = resolve_manager(db, explicit_manager_id=manager_id)
-        _gate_sig = (_gate_manager.sig_path or "") if _gate_manager is not None else ""
-        if not _gate_sig or not Path(_gate_sig).exists():
+        if _gate_manager is None or manager_service.signature_str(db, _gate_manager) is None:
             raise ValidationFailedError(
                 "MANAGER_SIGNATURE_REQUIRED",
                 "Select a manager with a saved signature or turn off Include manager signature.",
@@ -1605,7 +1606,9 @@ def generate_document(
             and template_id not in CLASSIFIED_BOOK_FORMS
             and template_id not in VEHICLE_LETTER_FORMS,
             aztec_corner=aztec_corner_for(template_id) if commit else None,
-            sync_general_book_footer=template_id in CLASSIFIED_BOOK_FORMS,
+            sync_general_book_footer=(
+                template_id in CLASSIFIED_BOOK_FORMS and template_id != "General Book"
+            ),
         ),
         converter=pdf_converter,
     )
@@ -2464,7 +2467,9 @@ def render_signed_artifact(
             header_reference=template_id not in CLASSIFIED_BOOK_FORMS
             and template_id not in VEHICLE_LETTER_FORMS,
             aztec_corner=aztec_corner_for(template_id),
-            sync_general_book_footer=template_id in CLASSIFIED_BOOK_FORMS,
+            sync_general_book_footer=(
+                template_id in CLASSIFIED_BOOK_FORMS and template_id != "General Book"
+            ),
         ),
         converter=converter or convert_docx_to_pdf,
     )

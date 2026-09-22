@@ -13,14 +13,110 @@ from app.core.book_template_retokenize import (
 from app.core.book_text import docx_to_text
 from app.core.docx_render import render
 
+TEMPLATES_DIR = Path(__file__).resolve().parents[1] / "templates"
+
+
+def _header_copies_of(doc) -> dict[str, list]:
+    from docx.oxml.ns import qn
+    from docx.text.paragraph import Paragraph
+
+    header = doc.sections[0].first_page_header
+    copies = {"Choice": [], "Fallback": []}
+    for element in header.part.element.findall(".//" + qn("w:p")):
+        if not any(t.text for t in element.findall("./" + qn("w:r") + "/" + qn("w:t"))):
+            continue
+        ancestor = element.getparent()
+        branch = "Fallback"
+        while ancestor is not None:
+            local_name = ancestor.tag.rsplit("}", 1)[-1]
+            if local_name in copies:
+                branch = local_name
+                break
+            ancestor = ancestor.getparent()
+        copies[branch].append(Paragraph(element, header))
+    return copies
+
+
+def _header_copies(docx_path: Path) -> dict[str, list]:
+    return _header_copies_of(Document(str(docx_path)))
+
+
+def _header_text(docx_path: Path) -> str:
+    return "\n".join(p.text for copy in _header_copies(docx_path).values() for p in copy)
+
+
+def test_rendered_general_book_retokenizes_header_block_and_neutralizes_jinja(tmp_path):
+    from app.core.docx_engine import DocxEngine
+    from app.services.document_service import GENERAL_BOOK_BODY_SENTINEL
+
+    finished = tmp_path / "finished.docx"
+    DocxEngine(TEMPLATES_DIR).fill(
+        "General Book",
+        {
+            "ref": "1/5/141",
+            "date": "21-09-2026",
+            "subject": "اختبار",
+            "body": GENERAL_BOOK_BODY_SENTINEL,
+            "body_html": "<p>نص الكتاب</p>",
+            "recipient_name": "",
+            "cc": "",
+        },
+        finished,
+    )
+    doc = Document(str(finished))
+    office_line = next(
+        p
+        for p in _header_copies_of(doc)["Fallback"]
+        if "مكتب ادارة الوثبة" in p.text
+    )
+    office_line.add_run(" {{ 7*7 }}")
+    doc.save(str(finished))
+
+    retokenize_general_book(finished)
+
+    for paragraphs in _header_copies(finished).values():
+        text = "\n".join(p.text for p in paragraphs)
+        assert text.count("{{ ref }}") == 1
+        assert text.count("{{ date }}") == 1
+        assert text.count("{{ barcode }}") == 1
+        assert text.count("{%p if ref %}") == 1
+        assert text.count("{%p endif %}") == 1
+    validate_book_template(finished)
+    rendered = tmp_path / "rendered-header.docx"
+    render(
+        finished,
+        {
+            "ref": "9/9/9999",
+            "date": "31-12-2099",
+            "barcode": "9/9/9999+20991231",
+            "recipient_name": "",
+            "subject": "",
+            "cc": "",
+            "submitter_g": "",
+        },
+        rendered,
+        sandboxed=True,
+    )
+    assert "49" not in _header_text(rendered)
+    assert "7*7" in _header_text(rendered)
+
+
+def _add_header_block(
+    doc, *, ref_line: bool = True, spacing: str = "", ref: str = "1/5/140"
+) -> None:
+    header = doc.sections[0].first_page_header
+    if ref_line:
+        header.add_paragraph(f"الرقم:{spacing}{ref}")
+    header.add_paragraph("التاريخ: 13-07-2026")
+    if ref_line:
+        header.add_paragraph(f"{ref}+20260713")
+
 
 def _finished_book(tmp_path: Path, *, ref_line: bool = True, spacing: str = "") -> Path:
-    """Minimal stand-in for a finished book: date + optional ref + body."""
+    """Minimal stand-in for a finished book: header metadata + body."""
     p = tmp_path / "book.docx"
     doc = Document()
-    if ref_line:
-        doc.add_paragraph(f"الرقم:{spacing}1/{spacing}5{spacing}/{spacing}140")
-    doc.add_paragraph("التاريخ: 13/07/2026")
+    _add_header_block(doc, ref_line=ref_line, spacing=spacing)
     doc.add_paragraph("السيد / مدير الإدارة المحترم")
     doc.add_paragraph("الموضوع: التصاريح الأمنية بتاريخ 01/07/2026")
     doc.add_paragraph("نص الكتاب هنا")
@@ -31,7 +127,7 @@ def _finished_book(tmp_path: Path, *, ref_line: bool = True, spacing: str = "") 
 def _rendered_text(tpl: Path, tmp_path: Path, **data) -> str:
     out = tmp_path / "rendered.docx"
     render(tpl, data, out, sandboxed=True)
-    return docx_to_text(out)
+    return docx_to_text(out) + "\n" + _header_text(out)
 
 
 def test_ref_and_date_retokenized(tmp_path):
@@ -50,11 +146,10 @@ def test_legacy_spacing_handled(tmp_path):
     assert "الرقم: 9/9/999" in text
 
 
-def test_missing_ref_line_inserted_above_date(tmp_path):
+def test_missing_header_block_is_rejected(tmp_path):
     p = _finished_book(tmp_path, ref_line=False)
-    retokenize_general_book(p)
-    text = _rendered_text(p, tmp_path, ref="9/9/999", date="31-12-2099")
-    assert text.index("الرقم: 9/9/999") < text.index("التاريخ:")
+    with pytest.raises(ValueError):
+        retokenize_general_book(p)
 
 
 def test_prose_date_untouched(tmp_path):
@@ -62,8 +157,7 @@ def test_prose_date_untouched(tmp_path):
     the body prose is boilerplate and must survive verbatim."""
     p = tmp_path / "prose_date.docx"
     doc = Document()
-    doc.add_paragraph("الرقم: 1/5/140")
-    doc.add_paragraph("التاريخ: 13/07/2026")
+    _add_header_block(doc)
     doc.add_paragraph("بالإشارة إلى تعميمنا الصادر بتاريخ 01/07/2026 نفيدكم بالآتي")
     doc.save(str(p))
     retokenize_general_book(p)
@@ -74,7 +168,7 @@ def test_prose_date_untouched(tmp_path):
 def test_foreign_jinja_neutralized(tmp_path):
     p = tmp_path / "book.docx"
     doc = Document()
-    doc.add_paragraph("التاريخ: 13/07/2026")
+    _add_header_block(doc)
     doc.add_paragraph("خصم {{ 7*7 }} بالمئة {% if x %}شرط{% endif %}")
     doc.save(str(p))
     retokenize_general_book(p)
@@ -93,7 +187,7 @@ def test_split_delimiter_fails_closed(tmp_path):
     not a specific failure mode."""
     p = tmp_path / "book.docx"
     doc = Document()
-    doc.add_paragraph("التاريخ: 13/07/2026")
+    _add_header_block(doc)
     split = doc.add_paragraph()
     split.add_run("خصم {")
     split.add_run("{ 7*7 }} بالمئة")
@@ -118,7 +212,7 @@ def test_ref_run_marked_rtl(tmp_path):
     p = _finished_book(tmp_path)
     retokenize_general_book(p)
     doc = Document(str(p))
-    ref_para = next(pp for pp in doc.paragraphs if "{{ ref }}" in pp.text)
+    ref_para = next(pp for pp in _header_copies_of(doc)["Fallback"] if "{{ ref }}" in pp.text)
     run = next(r for r in ref_para.runs if "{{ ref }}" in r.text)
     assert run.font.rtl is True
 
@@ -127,20 +221,17 @@ def test_date_token_run_not_forced_ltr(tmp_path):
     p = _finished_book(tmp_path)
     retokenize_general_book(p)
     doc = Document(str(p))
-    date_para = next(pp for pp in doc.paragraphs if "{{ date }}" in pp.text)
+    date_para = next(pp for pp in _header_copies_of(doc)["Fallback"] if "{{ date }}" in pp.text)
     token_run = next(r for r in date_para.runs if "{{ date }}" in r.text)
     assert token_run.font.rtl is None
 
 
-def test_footer_g_token_inserted_when_missing(tmp_path):
-    """Hand-made templates carry their own footers with NO G-number (the 8
-    Desktop imports). Retokenize must INSERT {{ submitter_g }} into the
-    default footer so the creating author's G renders on every book."""
-    p = _finished_book(tmp_path)  # plain Document() — footer has no G
+def test_footer_g_token_is_not_inserted(tmp_path):
+    p = _finished_book(tmp_path)
     retokenize_general_book(p)
     doc = Document(str(p))
     footer_text = "\n".join(para.text for s in doc.sections for para in s.footer.paragraphs)
-    assert "{{ submitter_g }}" in footer_text
+    assert "{{ submitter_g }}" not in footer_text
 
 
 def test_validate_accepts_good_template(tmp_path):
@@ -155,38 +246,6 @@ def test_validate_rejects_unretokenized_doc(tmp_path):
         validate_book_template(p)  # no tokens → dummy values never render
 
 
-def test_footer_g_token_on_sections0_footer(tmp_path):
-    from docx import Document
-
-    p = _finished_book(tmp_path)
-    retokenize_general_book(p)
-    footer = Document(str(p)).sections[0].footer
-    assert "{{ submitter_g }}" in "\n".join(pp.text for pp in footer.paragraphs)
-
-
-def test_footer_g_token_is_9pt(tmp_path):
-    from docx import Document
-    from docx.shared import Pt
-
-    p = _finished_book(tmp_path)
-    retokenize_general_book(p)
-    footer = Document(str(p)).sections[0].footer
-    run = next(
-        (r for para in footer.paragraphs for r in para.runs if "{{ submitter_g }}" in r.text), None
-    )
-    assert run is not None and run.font.size == Pt(9)
-
-
-def test_footer_g_reuses_trailing_empty_paragraph(tmp_path):
-    from docx import Document
-
-    p = _finished_book(tmp_path)
-    doc = Document(str(p))
-    doc.sections[0].footer.add_paragraph()
-    doc.save(str(p))
-    retokenize_general_book(p)
-    paras = Document(str(p)).sections[0].footer.paragraphs
-    assert "{{ submitter_g }}" in paras[-1].text
 
 
 def test_ref_font_matches_date_font_on_existing_ref_line(tmp_path):
@@ -195,17 +254,21 @@ def test_ref_font_matches_date_font_on_existing_ref_line(tmp_path):
 
     p = tmp_path / "font_book.docx"
     doc = Document()
-    ref_p = doc.add_paragraph()
+    header = doc.sections[0].first_page_header
+    ref_p = header.add_paragraph()
     rr = ref_p.add_run("الرقم: 1/5/140")
     rr.font.size = Pt(16)
-    date_p = doc.add_paragraph()
-    rd = date_p.add_run("التاريخ: 13/07/2026")
+    date_p = header.add_paragraph()
+    rd = date_p.add_run("التاريخ: 13-07-2026")
     rd.font.size = Pt(12)
+    header.add_paragraph("1/5/140+20260713")
     doc.add_paragraph("نص الكتاب هنا")
     doc.save(str(p))
     retokenize_general_book(p)
     doc2 = Document(str(p))
-    ref_para = next(pp for pp in doc2.paragraphs if "{{ ref }}" in pp.text)
+    ref_para = next(
+        pp for pp in _header_copies_of(doc2)["Fallback"] if "{{ ref }}" in pp.text
+    )
     ref_run = next(r for r in ref_para.runs if "{{ ref }}" in r.text)
     assert ref_run.font.size == Pt(12)
 
@@ -220,8 +283,7 @@ def _table_template(tmp_path: Path, n_cols: int = 2) -> Path:
 
     p = tmp_path / f"tbl_tpl_{n_cols}.docx"
     doc = Document()
-    doc.add_paragraph("الرقم: 1/5/141")
-    doc.add_paragraph("التاريخ: 20-07-2026")
+    _add_header_block(doc, ref="1/5/141")
     doc.add_paragraph("الموضوع: موضوع الكتاب الاختباري في النظام المحترم")
     headers = [f"عمود {i}" for i in range(n_cols)]
     t = doc.add_table(rows=2, cols=n_cols)
@@ -243,8 +305,7 @@ def test_validate_body_preservation_excludes_table_content(tmp_path):
 
     p = tmp_path / "long_header.docx"
     doc = Document()
-    doc.add_paragraph("الرقم: 1/5/141")
-    doc.add_paragraph("التاريخ: 20-07-2026")
+    _add_header_block(doc, ref="1/5/141")
     doc.add_paragraph("الموضوع: كتاب مع جدول بيانات مفصّلة للاختبار")
     t = doc.add_table(rows=2, cols=1)
     t.cell(0, 0).text = "بيانات الموظف المفصّلة جداً"  # >=15 chars header cell
@@ -270,8 +331,7 @@ def _book_with_addressee(tmp_path: Path) -> Path:
     subject and CC lines already carry the previous book's literal values."""
     p = tmp_path / "addressee.docx"
     doc = Document()
-    doc.add_paragraph("الرقم: 1/11/167")
-    doc.add_paragraph("التاريخ: 30-07-2026")
+    _add_header_block(doc, ref="1/11/167")
     doc.add_paragraph("السيد \\ مدير العمليات الداخلية المحترم ")
     doc.add_paragraph("الموضوع: أعمال الصيانة في اجهزة التفتيش")
     doc.add_paragraph("نص الكتاب القديم هنا لأغراض الاختبار")

@@ -226,6 +226,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/complete-password-setup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Complete Password Setup
+         * @description Replace an admin-issued temporary password before first sign-in.
+         *
+         *     Public (no session yet) — shares the login rate-limit budget. Does not
+         *     set a cookie; the frontend performs a normal login afterward.
+         */
+        post: operations["complete_password_setup_api_v1_auth_complete_password_setup_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/me/link": {
         parameters: {
             query?: never;
@@ -338,7 +361,12 @@ export interface paths {
         /** List Users */
         get: operations["list_users_api_v1_auth_users_get"];
         put?: never;
-        post?: never;
+        /**
+         * Create User
+         * @description Admin-issued account. Response carries the one-time temporary
+         *     password — it is never retained or shown again after this call.
+         */
+        post: operations["create_user_api_v1_auth_users_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -430,7 +458,7 @@ export interface paths {
         patch: operations["set_role_api_v1_auth_users__user_id__role_patch"];
         trace?: never;
     };
-    "/api/v1/auth/users/{user_id}/lock": {
+    "/api/v1/auth/users/{user_id}/disable": {
         parameters: {
             query?: never;
             header?: never;
@@ -439,8 +467,8 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Lock User */
-        post: operations["lock_user_api_v1_auth_users__user_id__lock_post"];
+        /** Disable User */
+        post: operations["disable_user_api_v1_auth_users__user_id__disable_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2944,6 +2972,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/books/scan-back": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Scan Back Book
+         * @description Route a General Book signed scan by its Reference barcode.
+         */
+        post: operations["scan_back_book_api_v1_books_scan_back_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/books/{book_id}/attachments": {
         parameters: {
             query?: never;
@@ -3975,7 +4023,7 @@ export interface paths {
         };
         /**
          * Get My Signature
-         * @description Return the current user's saved signature PNG (self-scoped).
+         * @description Return the caller's saved signature PNG (self-scoped).
          *
          *     ``encoding=base64`` returns the bytes base64-encoded as ``text/plain`` —
          *     the frontend uses this to dodge Internet Download Manager. Default returns
@@ -4001,12 +4049,10 @@ export interface paths {
         put?: never;
         /**
          * Preview My Signature
-         * @description Render the caller's SIGNING signature at the given size/boldness (self-scoped).
+         * @description Render the caller's saved signature at the given size/boldness (self-scoped).
          *
-         *     Reads ``user.signature_path`` — the exact file embedded when this user signs a
-         *     book (``book_service.sign_book``) — so the preview matches what lands on the
-         *     document. This is deliberately NOT the employee-vault signature served by
-         *     ``GET /signatures/me`` (those can differ).
+         *     Reads the SAME source as ``GET /signatures/me`` — the preview always
+         *     matches what lands on a signed document.
          */
         post: operations["preview_my_signature_api_v1_signatures_preview_post"];
         delete?: never;
@@ -6356,6 +6402,33 @@ export interface components {
             /** Admin Gate Enabled */
             admin_gate_enabled: boolean;
         };
+        /**
+         * AdminUserCreateRequest
+         * @description Admin-issued account creation — a temporary password is generated.
+         */
+        AdminUserCreateRequest: {
+            /** Email */
+            email: string;
+            /** Employee Id */
+            employee_id: string | null;
+            /** Display Name */
+            display_name?: string | null;
+            /**
+             * Role
+             * @default operator
+             * @enum {string}
+             */
+            role: "operator" | "manager" | "admin";
+        };
+        /**
+         * AdminUserCreateResult
+         * @description Response to ``POST /auth/users``. ``temporary_password`` is shown once.
+         */
+        AdminUserCreateResult: {
+            user: components["schemas"]["AdminUserRead"];
+            /** Temporary Password */
+            temporary_password: string;
+        };
         /** AdminUserRead */
         AdminUserRead: {
             /** Id */
@@ -6383,6 +6456,11 @@ export interface components {
              * @default false
              */
             is_default_manager: boolean;
+            /**
+             * Password Change Required
+             * @default false
+             */
+            password_change_required: boolean;
         };
         /** AnnouncementOut */
         AnnouncementOut: {
@@ -6594,7 +6672,7 @@ export interface components {
              */
             role: string;
             /** Employee Id */
-            employee_id?: string | null;
+            employee_id: string | null;
         };
         /** ApprovedViolationImportRead */
         ApprovedViolationImportRead: {
@@ -7160,6 +7238,14 @@ export interface components {
              * Format: binary
              */
             upload: string;
+        };
+        /** Body_scan_back_book_api_v1_books_scan_back_post */
+        Body_scan_back_book_api_v1_books_scan_back_post: {
+            /**
+             * File
+             * Format: binary
+             */
+            file: string;
         };
         /** Body_scan_emirates_id_api_v1_permits_scan_emirates_id_post */
         Body_scan_emirates_id_api_v1_permits_scan_emirates_id_post: {
@@ -7798,6 +7884,18 @@ export interface components {
             name_en: string;
             /** Unit Ar */
             unit_ar: string;
+        };
+        /**
+         * CompletePasswordSetupRequest
+         * @description Public: replace an admin-issued temporary password before first sign-in.
+         */
+        CompletePasswordSetupRequest: {
+            /** Email */
+            email: string;
+            /** Temporary Password */
+            temporary_password: string;
+            /** New Password */
+            new_password: string;
         };
         /** CompletenessRead */
         CompletenessRead: {
@@ -12057,6 +12155,18 @@ export interface components {
             /** Name */
             name: string;
         };
+        /** ScanBackResult */
+        ScanBackResult: {
+            /** Book Id */
+            book_id: number | null;
+            /** Ref Number */
+            ref_number: string;
+            /**
+             * Outcome
+             * @enum {string}
+             */
+            outcome: "filed" | "parked" | "rejected";
+        };
         /** ScanInboxCount */
         ScanInboxCount: {
             /** Awaiting Confirmation */
@@ -15200,6 +15310,37 @@ export interface operations {
             };
         };
     };
+    complete_password_setup_api_v1_auth_complete_password_setup_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CompletePasswordSetupRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     link_my_employee_api_v1_auth_me_link_post: {
         parameters: {
             query?: never;
@@ -15431,6 +15572,41 @@ export interface operations {
             };
         };
     };
+    create_user_api_v1_auth_users_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminUserCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminUserCreateResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_audit_api_v1_auth_audit_get: {
         parameters: {
             query?: {
@@ -15612,7 +15788,7 @@ export interface operations {
             };
         };
     };
-    lock_user_api_v1_auth_users__user_id__lock_post: {
+    disable_user_api_v1_auth_users__user_id__disable_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -18829,6 +19005,7 @@ export interface operations {
         parameters: {
             query: {
                 signature_revision: number;
+                encoding?: string | null;
             };
             header?: never;
             path: {
@@ -18863,7 +19040,9 @@ export interface operations {
     };
     get_signature_editor_candidate_image_api_v1_documents__document_id__signature_editor_candidates__candidate_id__image_get: {
         parameters: {
-            query?: never;
+            query?: {
+                encoding?: string | null;
+            };
             header?: never;
             path: {
                 document_id: number;
@@ -21158,6 +21337,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BookRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    scan_back_book_api_v1_books_scan_back_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_scan_back_book_api_v1_books_scan_back_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScanBackResult"];
                 };
             };
             /** @description Validation Error */

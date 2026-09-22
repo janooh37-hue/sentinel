@@ -6,10 +6,13 @@ import { ScanInboxCard } from './ScanInboxCard'
 import type { ScanInboxItem } from '../../lib/api'
 import * as apiMod from '../../lib/api'
 
+const localeState = vi.hoisted(() => ({ language: 'en' }))
+
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
-    t: (k: string, o?: Record<string, unknown>) => (o?.dest ? `${k}:${o.dest}` : k),
-    i18n: { language: 'en' },
+    t: (k: string, o?: Record<string, unknown>) =>
+      o?.dest ? `${k}:${o.dest}` : o?.date ? `${k}:${o.date}` : k,
+    i18n: { language: localeState.language },
   }),
 }))
 
@@ -37,6 +40,7 @@ function renderCard(item: ScanInboxItem) {
 
 describe('ScanInboxCard', () => {
   beforeEach(() => {
+    localeState.language = 'en'
     vi.restoreAllMocks()
     vi.spyOn(apiMod.api, 'scanDocumentUrl').mockReturnValue('/x')
   })
@@ -86,5 +90,30 @@ describe('ScanInboxCard', () => {
     expect(screen.queryByRole('button', { name: 'scanInbox.openZoom' })).toBeNull()
     fireEvent.click(screen.getByLabelText('scanInbox.showDetails'))
     expect(screen.getByRole('button', { name: 'scanInbox.openZoom' })).toBeInTheDocument()
+  })
+
+  it('shows the barcode date mismatch as a header hint, not an OCR field', () => {
+    renderCard(base({
+      state: 'awaiting_confirmation',
+      confidence_tier: 'confirm',
+      proposed_route: 'book_attach',
+      proposed_ref: '1/5/141',
+      proposed_book_id: 42,
+      fields: { barcode_date_mismatch: '2026-09-21', name_en: 'Ahmed' },
+    }))
+
+    expect(screen.getByText(/^scanInbox\.barcodeDateMismatch:/)).toBeInTheDocument()
+    expect(screen.queryByText('scanInbox.ocrField.barcode_date_mismatch')).not.toBeInTheDocument()
+    expect(screen.getByText('scanInbox.ocrField.name_en')).toBeInTheDocument()
+  })
+
+  it('strips directional marks from an Arabic-formatted mismatch date', () => {
+    localeState.language = 'ar'
+    renderCard(base({
+      fields: { barcode_date_mismatch: '2026-09-21' },
+    }))
+
+    expect(screen.getByText(/^scanInbox\.barcodeDateMismatch:/).textContent)
+      .not.toMatch(/[\u200e\u200f]/)
   })
 })

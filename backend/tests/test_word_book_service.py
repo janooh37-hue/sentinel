@@ -37,6 +37,17 @@ def _user(db, *, employee_id: str | None = None) -> User:
     return u
 
 
+def _header_text(path: Path) -> str:
+    from docx.oxml.ns import qn
+    from docx.text.paragraph import Paragraph
+
+    header = docx.Document(str(path)).sections[0].first_page_header
+    return "\n".join(
+        Paragraph(element, header).text
+        for element in header.part.element.findall(".//" + qn("w:p"))
+        if any(t.text for t in element.findall("./" + qn("w:r") + "/" + qn("w:t")))
+    )
+
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
@@ -88,10 +99,7 @@ def test_create_classified_book_returns_session_info(db_session, tmp_path, monke
     # body line (الرقم: …) — no English header stamp for General Books.
     working_file = Path(session.working_path)
     assert working_file.exists()
-    from app.core.book_text import docx_to_text
-
-    text = docx_to_text(working_file)
-    assert f"الرقم: {info.ref_number}" in text
+    assert f"الرقم: {info.ref_number}" in _header_text(working_file)
 
 
 def test_create_commit_failure_removes_uncommitted_working_docx(db_session, tmp_path, monkeypatch):
@@ -124,10 +132,8 @@ def test_create_commit_failure_removes_uncommitted_working_docx(db_session, tmp_
     assert not list((settings.data_dir / "editing").rglob("*.docx"))
 
 
-def test_working_docx_gets_body_ref_line(db_session, tmp_path, monkeypatch):
-    """The working docx carries the Arabic body ref line (الرقم: …) — the
-    General Book template renders {{ ref }} as the body line; no English
-    header stamp is written for this form type."""
+def test_working_docx_gets_header_ref_line(db_session, tmp_path, monkeypatch):
+    """The working DOCX carries the Arabic reference in its first-page header."""
     from app.services import word_book_service
 
     _seed_gs(db_session)
@@ -148,13 +154,9 @@ def test_working_docx_gets_body_ref_line(db_session, tmp_path, monkeypatch):
     working_file = Path(
         db_session.query(BookEditSession).filter_by(book_id=info.book_id).one().working_path
     )
-    doc = docx.Document(str(working_file))
-    header_text = "\n".join(p.text for p in doc.sections[0].header.paragraphs)
+    header_text = _header_text(working_file)
     assert "Ref:" not in header_text
-    from app.core.book_text import docx_to_text
-
-    text = docx_to_text(working_file)
-    assert f"الرقم: {info.ref_number}" in text
+    assert f"الرقم: {info.ref_number}" in header_text
 
 
 def test_two_classified_creates_get_sequential_serials(db_session, tmp_path, monkeypatch):
@@ -352,6 +354,53 @@ def test_body_sentinel_never_survives_in_working_docx(db_session, tmp_path, monk
     assert GENERAL_BOOK_BODY_SENTINEL not in full_text
 
 
+def test_general_book_creation_bakes_stable_header_barcode_without_legacy_stamps(
+    db_session, tmp_path, monkeypatch
+):
+    import re
+    import shutil
+    from datetime import datetime
+
+    from docx.oxml.ns import qn
+
+    from app.core.qr import barcode_payload
+    from app.services import artifact_service, document_service, word_book_service
+
+    _seed_gs(db_session)
+    templates = tmp_path / "templates"
+    templates.mkdir()
+    shutil.copy2(document_service._TEMPLATES_DIR / _GENERAL_BOOK, templates / _GENERAL_BOOK)
+    monkeypatch.setattr(word_book_service, "get_settings", lambda: _settings(tmp_path))
+    original = artifact_service.produce_from_template
+    plans = []
+
+    def capture_plan(**kwargs):
+        plans.append(kwargs["stamps"])
+        return original(**kwargs)
+
+    monkeypatch.setattr(artifact_service, "produce_from_template", capture_plan)
+    info = word_book_service.create_word_book(
+        db_session,
+        user=_user(db_session),
+        classification_code="5/1",
+        recipient_id=None,
+        subject="barcode",
+        cc=None,
+        manager_id=None,
+    )
+    session = db_session.query(BookEditSession).filter_by(book_id=info.book_id).one()
+    header = docx.Document(session.working_path).sections[0].first_page_header
+    text = "\n".join(node.text or "" for node in header.part.element.iter(qn("w:t")))
+    date_match = re.search(r"التاريخ:\s*(\d{2}-\d{2}-\d{4})", text)
+    assert date_match is not None
+    display_date = date_match.group(1)
+    expected = barcode_payload(info.ref_number, datetime.strptime(display_date, "%d-%m-%Y").date())
+
+    assert text.count(expected) == 2
+    assert plans[0].aztec_corner is None
+    assert plans[0].sync_general_book_footer is False
+
+
 # ---------------------------------------------------------------------------
 # Utilities
 # ---------------------------------------------------------------------------
@@ -376,7 +425,10 @@ def test_create_from_template_seeds_boilerplate(db_session, admin_user, tmp_path
 
     src = tmp_path / "src.docx"
     d = _docx.Document()
-    d.add_paragraph("التاريخ: 01/01/2026")
+    header = d.sections[0].first_page_header
+    header.add_paragraph("الرقم: 1/5/140")
+    header.add_paragraph("التاريخ: 01-01-2026")
+    header.add_paragraph("1/5/140+20260101")
     d.add_paragraph("نص جاهز من القالب")
     d.save(str(src))
     retokenize_general_book(src)
@@ -396,8 +448,8 @@ def test_create_from_template_seeds_boilerplate(db_session, admin_user, tmp_path
     )
     session = db_session.query(BookEditSession).filter_by(book_id=info.book_id).one()
     text = docx_to_text(Path(session.working_path))
-    assert "نص جاهز من القالب" in text  # boilerplate preserved
-    assert f"الرقم: {info.ref_number}" in text  # fresh ref rendered
+    assert "نص جاهز من القالب" in text
+    assert f"الرقم: {info.ref_number}" in _header_text(Path(session.working_path))
 
 
 def test_create_from_missing_template_409(db_session, admin_user, tmp_path, monkeypatch):

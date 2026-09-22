@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass, field, replace
+from datetime import date, datetime
 from typing import Literal
 
 from sqlalchemy import func, select
@@ -43,6 +44,8 @@ class BookMatchEvidence:
     book_id: int
     ref_number: str
     approval_state: str
+    created_at: datetime
+    paper_date: date | None
     category: str | None = None
     subject: str | None = None
     employee_id: str | None = None
@@ -55,6 +58,7 @@ class ReferenceCandidate:
     normalized: str
     canonical: str
     source: ReferenceSource
+    date: date | None = None
     match_kind: ReferenceMatchKind = "none"
     live_matches: tuple[BookMatchEvidence, ...] = field(default_factory=tuple)
 
@@ -141,11 +145,31 @@ class InboxDecision:
     candidates: tuple[EmployeeCandidateEvidence, ...] = field(default_factory=tuple)
 
 
+def _paper_date(book: Book) -> date | None:
+    version = book.versions[-1] if book.versions else None
+    value = version.fields.get("date") if version is not None and version.fields else None
+    if not isinstance(value, str) or not value.strip():
+        return None
+    try:
+        return datetime.strptime(value, "%d-%m-%Y").date()
+    except ValueError:
+        return None
+
+
+def _barcode_date_mismatch(
+    candidate: ReferenceCandidate, book: BookMatchEvidence
+) -> bool:
+    expected = book.paper_date or book.created_at.date()
+    return candidate.date is not None and candidate.date != expected
+
+
 def _book_evidence(book: Book) -> BookMatchEvidence:
     return BookMatchEvidence(
         book_id=book.id,
         ref_number=book.ref_number,
         approval_state=book.approval_state,
+        created_at=book.created_at,
+        paper_date=_paper_date(book),
         category=book.category.name_en if book.category is not None else None,
         subject=book.subject,
         employee_id=book.employee_id,
@@ -158,16 +182,21 @@ def _exact_reference_candidates(
     *,
     db: Session,
 ) -> tuple[ReferenceCandidate, ...]:
-    observations: list[tuple[str, ReferenceSource]] = [
-        (ref.strip(), "qr") for ref in read.qr_refs if ref.strip()
+    observations: list[tuple[str, ReferenceSource, date | None]] = [
+        (ref.strip(), "qr", None) for ref in read.qr_refs if ref.strip()
     ]
     observations.extend(
-        (observation.observed, observation.source)
+        (code.ref.strip(), "qr", code.date)
+        for code in read.codes
+        if code.source == "code39" and code.ref.strip()
+    )
+    observations.extend(
+        (observation.observed, observation.source, None)
         for observation in reference_observations(read.text)
     )
 
     candidates: list[ReferenceCandidate] = []
-    for observed, source in observations:
+    for observed, source, observed_date in observations:
         normalized = observed.upper()
         books = list(
             db.scalars(
@@ -184,6 +213,7 @@ def _exact_reference_candidates(
                 normalized=normalized,
                 canonical=canonical_ref(normalized),
                 source=source,
+                date=observed_date,
                 match_kind="exact" if live_matches else "none",
                 live_matches=live_matches,
             )
@@ -357,12 +387,18 @@ def classify_text(
                 selected = matching[0]
     if selected is not None:
         selected_book = selected.live_matches[0]
+        confidence = (
+            1.0
+            if selected.match_kind == "exact"
+            and not _barcode_date_mismatch(selected, selected_book)
+            else 0.7
+        )
         return ReturnedFormClassification(
             read=read,
             match=ReturnedFormMatch(
                 candidate=selected,
                 book=selected_book,
-                confidence=1.0 if selected.match_kind == "exact" else 0.7,
+                confidence=confidence,
             ),
             reference_candidates=candidates,
         )
@@ -472,8 +508,11 @@ def project_intake(result: ClassificationResult) -> ReturnedFormOut | ExternalOu
 def project_inbox(result: ClassificationResult) -> InboxDecision:
     if isinstance(result, ReturnedFormClassification):
         match = result.match
+        date_mismatch = _barcode_date_mismatch(match.candidate, match.book)
         auto = (
-            match.candidate.match_kind == "exact" and match.book.approval_state != "awaiting_scan"
+            match.candidate.match_kind == "exact"
+            and match.book.approval_state != "awaiting_scan"
+            and not date_mismatch
         )
         return InboxDecision(
             classification=result,
@@ -482,6 +521,11 @@ def project_inbox(result: ClassificationResult) -> InboxDecision:
             proposed_book_id=match.book.book_id,
             proposed_ref=match.book.ref_number,
             document_type="returned_form",
+            fields=(
+                {"barcode_date_mismatch": match.candidate.date.isoformat()}
+                if date_mismatch and match.candidate.date is not None
+                else {}
+            ),
             confidence=1.0 if auto else 0.7,
         )
     extraction = result.extraction

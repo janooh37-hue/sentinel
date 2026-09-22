@@ -25,14 +25,18 @@ import {
   AlertTriangle,
   BadgeCheck,
   BadgeMinus,
+  Ban,
   Check,
   ChevronDown,
   Clock,
+  Copy,
   Inbox,
   KeyRound,
   Lock,
   Mail,
   MoreVertical,
+  Plus,
+  RotateCcw,
   ShieldCheck,
   SlidersHorizontal,
   UserCog,
@@ -40,10 +44,20 @@ import {
   X,
 } from 'lucide-react'
 
-import { api, ApiError, type AdminUserRead, type AuditEntryRead, apiErrorMessage } from '@/lib/api'
+import {
+  api,
+  ApiError,
+  apiErrorMessage,
+  type AdminUserCreateRequest,
+  type AdminUserCreateResult,
+  type AdminUserRead,
+  type AuditEntryRead,
+} from '@/lib/api'
 import { useAuth } from '@/lib/authContext'
+import { copyToClipboard } from '@/lib/clipboard'
 import { PermissionRequestsTab } from '@/components/access/PermissionRequestsTab'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -53,6 +67,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { EmptyState } from '@/components/ui/empty-state'
 import { Skeleton } from '@/components/ui/skeleton'
+import { EmployeePicker } from '@/pages/application/EmployeePicker'
 
 type Role = 'admin' | 'manager' | 'operator'
 type TabId = 'pending' | 'active' | 'suspended' | 'history' | 'permission-requests'
@@ -141,10 +156,17 @@ function UserAvatar({ u, size = 'md' }: { u: AdminUserRead; size?: 'sm' | 'md' }
 
 function RolePill({ role, status }: { role: Role; status: AdminUserRead['status'] }): React.JSX.Element {
   const { t } = useTranslation()
-  if (status === 'locked' || status === 'disabled') {
+  if (status === 'disabled') {
     return (
       <span className="inline-flex items-center gap-1.5 rounded-full bg-accent-soft px-2.5 py-0.5 text-[0.72em] font-medium text-accent">
-        <Lock className="h-3 w-3" strokeWidth={2} /> {t('access.tabs.suspended')}
+        <Ban className="h-3 w-3" strokeWidth={2} /> {t('access.status.disabled')}
+      </span>
+    )
+  }
+  if (status === 'locked') {
+    return (
+      <span className="inline-flex items-center gap-1.5 rounded-full bg-accent-soft px-2.5 py-0.5 text-[0.72em] font-medium text-accent">
+        <Lock className="h-3 w-3" strokeWidth={2} /> {t('access.status.locked')}
       </span>
     )
   }
@@ -304,14 +326,27 @@ function RequestCard({
 }: {
   req: AdminUserRead
   approving: boolean
-  onApprove: (role: Role) => void
+  onApprove: (role: Role, employeeId: string | null) => void
   onReject: () => void
 }): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const locale = i18n.language
   const [open, setOpen] = useState(false)
   const [role, setRole] = useState<Role>('operator')
+  // The confirmation choice always starts empty — opening the card is not
+  // verification. A real search result or explicit "no link" must be chosen.
+  const [employeeId, setEmployeeId] = useState<string | null>(null)
+  const [noLink, setNoLink] = useState(false)
+  const canApprove = !open || noLink || employeeId !== null
 
+  function selectEmployee(id: string | null): void {
+    setEmployeeId(id)
+    if (id !== null) setNoLink(false)
+  }
+  function toggleNoLink(): void {
+    setNoLink((v) => !v)
+    setEmployeeId(null)
+  }
   return (
     <div
       className={`rounded-2xl border p-4 transition-colors sm:p-5 ${
@@ -398,8 +433,8 @@ function RequestCard({
           </button>
           <button
             type="button"
-            disabled={approving}
-            onClick={() => (open ? onApprove(role) : setOpen(true))}
+            disabled={approving || !canApprove}
+            onClick={() => (open ? onApprove(role, noLink ? null : employeeId) : setOpen(true))}
             className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-full bg-primary px-4 py-1.5 text-[0.82em] font-semibold text-primary-foreground transition-colors hover:bg-primary-hover disabled:opacity-60 md:flex-none"
           >
             {approving ? (
@@ -463,6 +498,21 @@ function RequestCard({
             <span className="text-[0.78em] text-muted-foreground">{t('access.pending.rolePrompt')}</span>
             <RolePicker value={role} onChange={setRole} />
           </div>
+
+          <div className="flex flex-col gap-2">
+            <span className="text-[0.78em] text-muted-foreground">
+              {t('access.pending.confirmEmployeeLabel')}
+            </span>
+            <EmployeePicker
+              selectedId={employeeId}
+              onSelect={selectEmployee}
+              ariaLabel={t('access.pending.confirmEmployeeLabel')}
+            />
+            <label className="flex items-center gap-2 text-[0.85em] text-muted-foreground">
+              <input type="checkbox" checked={noLink} onChange={toggleNoLink} />
+              {t('access.create.noEmployee')}
+            </label>
+          </div>
         </div>
       )}
     </div>
@@ -505,8 +555,9 @@ export function UsersTable({
   onChangeRole,
   onEditPermissions,
   onSetDefaultManager,
-  onLock,
+  onDisable,
   onUnlock,
+  busyUserId,
 }: {
   users: AdminUserRead[]
   emptyMessage: string
@@ -515,8 +566,11 @@ export function UsersTable({
   onChangeRole: (u: AdminUserRead) => void
   onEditPermissions?: (u: AdminUserRead) => void
   onSetDefaultManager: (u: AdminUserRead, enabled: boolean) => void
-  onLock: (u: AdminUserRead) => void
+  onDisable: (u: AdminUserRead) => void
   onUnlock: (u: AdminUserRead) => void
+  /** A row whose disable/restore mutation is currently in flight — its row
+   * action trigger is disabled to prevent a duplicate submit. */
+  busyUserId?: number
 }): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const locale = i18n.language
@@ -546,6 +600,7 @@ export function UsersTable({
           {users.map((u) => {
             const locked = u.status === 'locked' || u.status === 'disabled'
             const isSelf = currentUserId != null && u.id === currentUserId
+            const isBusy = busyUserId === u.id
             const canEditPermissions =
               onEditPermissions != null && u.status === 'active' && u.role !== 'admin'
             return (
@@ -583,6 +638,12 @@ export function UsersTable({
                         {t('access.defaultManager.badge')}
                       </span>
                     )}
+                    {u.status === 'active' && u.password_change_required && (
+                      <span className="inline-flex items-center gap-1.5 rounded-full bg-surface-tinted px-2.5 py-0.5 text-[0.72em] font-medium text-muted-foreground">
+                        <KeyRound className="h-3 w-3" strokeWidth={2} />
+                        {t('access.status.passwordSetup')}
+                      </span>
+                    )}
                   </span>
                 </td>
                 <td className="hidden px-2 py-2.5 font-mono text-[0.8em] text-muted-foreground md:table-cell">
@@ -595,7 +656,8 @@ export function UsersTable({
                   <DropdownMenu>
                     <DropdownMenuTrigger
                       aria-label={t('access.active.rowActions')}
-                      className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground outline-none transition-colors hover:bg-surface-tinted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring data-[state=open]:bg-surface-tinted data-[state=open]:text-foreground"
+                      disabled={isBusy}
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground outline-none transition-colors hover:bg-surface-tinted hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring data-[state=open]:bg-surface-tinted data-[state=open]:text-foreground disabled:opacity-50"
                     >
                       <MoreVertical className="h-4 w-4" strokeWidth={1.8} />
                     </DropdownMenuTrigger>
@@ -626,19 +688,34 @@ export function UsersTable({
                         </DropdownMenuItem>
                       ) : null}
                       <DropdownMenuSeparator />
-                      {locked ? (
+                      {u.status === 'disabled' ? (
                         <DropdownMenuItem onSelect={() => onUnlock(u)}>
-                          <Unlock className="h-3.5 w-3.5" strokeWidth={1.8} />
+                          <RotateCcw className="h-3.5 w-3.5" strokeWidth={1.8} />
                           {t('access.active.reactivate')}
                         </DropdownMenuItem>
+                      ) : u.status === 'locked' ? (
+                        <>
+                          <DropdownMenuItem onSelect={() => onUnlock(u)}>
+                            <Unlock className="h-3.5 w-3.5" strokeWidth={1.8} />
+                            {t('access.active.unlock')}
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            variant="danger"
+                            disabled={isSelf}
+                            onSelect={() => onDisable(u)}
+                          >
+                            <Ban className="h-3.5 w-3.5" strokeWidth={1.8} />
+                            {t('access.active.disable')}
+                          </DropdownMenuItem>
+                        </>
                       ) : (
                         <DropdownMenuItem
                           variant="danger"
                           disabled={isSelf}
-                          onSelect={() => onLock(u)}
+                          onSelect={() => onDisable(u)}
                         >
-                          <Lock className="h-3.5 w-3.5" strokeWidth={1.8} />
-                          {t('access.active.suspend')}
+                          <Ban className="h-3.5 w-3.5" strokeWidth={1.8} />
+                          {t('access.active.disable')}
                         </DropdownMenuItem>
                       )}
                     </DropdownMenuContent>
@@ -772,6 +849,194 @@ function TabButton({
 }
 
 // ---------------------------------------------------------------------------
+// Create account (admin-issued temporary password)
+// ---------------------------------------------------------------------------
+
+function CreateAccountPanel({
+  onCancel,
+  onCreated,
+  onDone,
+}: {
+  onCancel: () => void
+  onCreated: () => void
+  onDone: () => void
+}): React.JSX.Element {
+  const { t } = useTranslation()
+  const [email, setEmail] = useState('')
+  const [displayNameInput, setDisplayNameInput] = useState('')
+  const [role, setRole] = useState<Role>('operator')
+  const [employeeId, setEmployeeId] = useState<string | null>(null)
+  const [noEmployee, setNoEmployee] = useState(false)
+  const [fieldError, setFieldError] = useState<string | null>(null)
+  const [result, setResult] = useState<AdminUserCreateResult | null>(null)
+  const [copied, setCopied] = useState(false)
+  const [copyFailed, setCopyFailed] = useState(false)
+
+  // Clear the disclosed password from memory the moment this panel goes away
+  // (Done, unmount, or a parent-driven close) — it is never retrievable again.
+  useEffect(() => () => setResult(null), [])
+
+  const createMut = useMutation({
+    mutationFn: (body: AdminUserCreateRequest) => api.createAuthUser(body),
+    retry: false,
+    gcTime: 0,
+    onSuccess: (res) => {
+      setResult(res)
+      createMut.reset()
+      onCreated()
+    },
+    onError: (e) => setFieldError(apiErrorMessage(e)),
+  })
+
+  const canSubmit = email.trim().length > 0 && (noEmployee || employeeId !== null)
+
+  function selectEmployee(id: string | null): void {
+    setEmployeeId(id)
+    if (id !== null) setNoEmployee(false)
+  }
+  function toggleNoEmployee(): void {
+    setNoEmployee((v) => !v)
+    setEmployeeId(null)
+  }
+
+  function submit(e: React.FormEvent): void {
+    e.preventDefault()
+    if (!canSubmit || createMut.isPending) return
+    setFieldError(null)
+    createMut.mutate({
+      email: email.trim(),
+      employee_id: noEmployee ? null : employeeId,
+      display_name: displayNameInput.trim() || null,
+      role,
+    })
+  }
+
+  async function copyPassword(): Promise<void> {
+    if (!result) return
+    const ok = await copyToClipboard(result.temporary_password)
+    if (ok) {
+      setCopyFailed(false)
+      setCopied(true)
+      window.setTimeout(() => setCopied(false), 1500)
+    } else {
+      setCopyFailed(true)
+    }
+  }
+
+  if (result) {
+    return (
+      <div className="mb-5 rounded-2xl border border-success/40 bg-success-soft/30 p-4 sm:p-5">
+        <h2 className="text-[1.05em] font-semibold text-foreground">{t('access.create.title')}</h2>
+        <p className="mt-1 text-[0.86em] text-muted-foreground" dir="auto">
+          {result.user.email} · {t(`access.roleName.${result.user.role}`)} ·{' '}
+          {result.user.employee_id ?? t('access.create.noEmployee')}
+        </p>
+        <label className="mt-3 block text-[0.72em] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
+          {t('access.create.temporaryPassword')}
+        </label>
+        <div className="flex gap-2">
+          <input
+            readOnly
+            value={result.temporary_password}
+            onFocus={(e) => e.currentTarget.select()}
+            className="flex-1 rounded-lg border border-border bg-surface px-3 py-2.5 font-mono text-[0.9em] text-foreground"
+          />
+          <GhostBtn onClick={copyPassword}>
+            <span className="inline-flex items-center gap-1.5">
+              <Copy className="h-3.5 w-3.5" strokeWidth={1.8} />
+              {copied ? t('auth.copied') : t('access.create.copyPassword')}
+            </span>
+          </GhostBtn>
+        </div>
+        {copyFailed && (
+          <p className="mt-1 text-[0.78em] text-accent">{t('access.create.copyFailedHint')}</p>
+        )}
+        <p className="mt-2 text-[0.8em] leading-relaxed text-muted-foreground">
+          {t('access.create.handoffHint')}
+        </p>
+        <div className="mt-3 flex justify-end">
+          <button
+            type="button"
+            onClick={onDone}
+            className="rounded-full bg-primary px-4 py-2 text-[0.85em] font-semibold text-primary-foreground transition-colors hover:bg-primary-hover"
+          >
+            {t('common.close')}
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <form onSubmit={submit} className="mb-5 rounded-2xl border border-hairline bg-surface p-4 sm:p-5">
+      <fieldset disabled={createMut.isPending} className="flex flex-col gap-3">
+        <h2 className="text-[1.05em] font-semibold text-foreground">{t('access.create.title')}</h2>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="create-email" className="text-[0.72em] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
+              {t('auth.email')}
+            </label>
+            <input
+              id="create-email"
+              type="email"
+              required
+              dir="auto"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              className="rounded-lg border border-border bg-surface px-3 py-2.5 text-[0.9em] text-foreground transition-colors focus:border-primary focus:outline-none focus:ring-3 focus:ring-primary/15"
+            />
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <label htmlFor="create-name" className="text-[0.72em] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
+              {t('access.create.displayName')}
+            </label>
+            <input
+              id="create-name"
+              type="text"
+              dir="auto"
+              value={displayNameInput}
+              onChange={(e) => setDisplayNameInput(e.target.value)}
+              className="rounded-lg border border-border bg-surface px-3 py-2.5 text-[0.9em] text-foreground transition-colors focus:border-primary focus:outline-none focus:ring-3 focus:ring-primary/15"
+            />
+          </div>
+        </div>
+        <RolePicker value={role} onChange={setRole} />
+        <div className="flex flex-col gap-2">
+          <label htmlFor="create-employee" className="text-[0.72em] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
+            {t('access.create.employeeLabel')}
+          </label>
+          <EmployeePicker
+            selectedId={employeeId}
+            onSelect={selectEmployee}
+            ariaLabel={t('access.create.employeeLabel')}
+          />
+          <label className="flex items-center gap-2 text-[0.85em] text-muted-foreground">
+            <input type="checkbox" checked={noEmployee} onChange={toggleNoEmployee} />
+            {t('access.create.noEmployee')}
+          </label>
+        </div>
+        {fieldError && (
+          <div className="flex items-center gap-1.5 text-[0.82em] text-accent" role="alert">
+            <AlertTriangle className="h-3.5 w-3.5" strokeWidth={1.8} />
+            <span>{fieldError}</span>
+          </div>
+        )}
+        <div className="flex justify-end gap-2">
+          <GhostBtn onClick={onCancel}>{t('common.cancel')}</GhostBtn>
+          <button
+            type="submit"
+            disabled={!canSubmit || createMut.isPending}
+            className="inline-flex items-center gap-1.5 rounded-full bg-primary px-4 py-2 text-[0.85em] font-semibold text-primary-foreground transition-colors hover:bg-primary-hover disabled:opacity-60"
+          >
+            {createMut.isPending ? t('common.saving') : t('access.create.title')}
+          </button>
+        </div>
+      </fieldset>
+    </form>
+  )
+}
+
+// ---------------------------------------------------------------------------
 // Page
 // ---------------------------------------------------------------------------
 
@@ -803,7 +1068,10 @@ export function AccessRequestsPage(): React.JSX.Element {
   const [rejectTarget, setRejectTarget] = useState<AdminUserRead | null>(null)
   const [resetTarget, setResetTarget] = useState<AdminUserRead | null>(null)
   const [roleTarget, setRoleTarget] = useState<AdminUserRead | null>(null)
+  const [disableTarget, setDisableTarget] = useState<AdminUserRead | null>(null)
   const [approvingId, setApprovingId] = useState<number | null>(null)
+  const [busyUserId, setBusyUserId] = useState<number | undefined>(undefined)
+  const [showCreatePanel, setShowCreatePanel] = useState(false)
 
   const usersQuery = useQuery({
     queryKey: ['auth-users'],
@@ -834,7 +1102,8 @@ export function AccessRequestsPage(): React.JSX.Element {
   }
 
   const approveMut = useMutation({
-    mutationFn: ({ id, role }: { id: number; role: Role }) => api.approveAuthUser(id, role),
+    mutationFn: ({ id, role, employeeId }: { id: number; role: Role; employeeId: string | null }) =>
+      api.approveAuthUser(id, role, employeeId),
     onMutate: ({ id }) => setApprovingId(id),
     onSuccess: (u) => {
       toast.success(t('access.toast.approved', { name: displayName(u) }))
@@ -889,21 +1158,25 @@ export function AccessRequestsPage(): React.JSX.Element {
       onError(e)
     },
   })
-  const lockMut = useMutation({
-    mutationFn: (id: number) => api.lockAuthUser(id),
+  const disableMut = useMutation({
+    mutationFn: (id: number) => api.disableAuthUser(id),
+    onMutate: (id) => setBusyUserId(id),
     onSuccess: () => {
-      toast.success(t('access.toast.suspended'))
+      toast.success(t('access.toast.disabled'))
       invalidate()
     },
     onError,
+    onSettled: () => setBusyUserId(undefined),
   })
   const unlockMut = useMutation({
     mutationFn: (id: number) => api.unlockAuthUser(id),
+    onMutate: (id) => setBusyUserId(id),
     onSuccess: () => {
       toast.success(t('access.toast.reactivated'))
       invalidate()
     },
     onError,
+    onSettled: () => setBusyUserId(undefined),
   })
 
   // Defensive: route already admin-gates, but if a non-admin reaches here the
@@ -919,21 +1192,43 @@ export function AccessRequestsPage(): React.JSX.Element {
   return (
     <div className="flex flex-1 flex-col overflow-auto bg-background">
       <div className="mx-auto w-full max-w-[1180px] flex-1 px-4 pb-10 pt-4 md:px-8 md:pt-6">
-        <header className="mb-5">
-          <div className="text-[0.75em] font-medium uppercase tracking-[0.18em] text-muted-foreground">
-            {t('access.eyebrow')}
+        <header className="mb-5 flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <div className="text-[0.75em] font-medium uppercase tracking-[0.18em] text-muted-foreground">
+              {t('access.eyebrow')}
+            </div>
+            <h1 className="mt-1 text-[1.7em] font-bold tracking-tight text-foreground">
+              {t('access.title')}
+            </h1>
+            <p className="mt-1 text-[0.86em] text-muted-foreground">
+              {t('access.meta', {
+                pending: pending.length,
+                active: active.length,
+                suspended: suspended.length,
+              })}
+            </p>
           </div>
-          <h1 className="mt-1 text-[1.7em] font-bold tracking-tight text-foreground">
-            {t('access.title')}
-          </h1>
-          <p className="mt-1 text-[0.86em] text-muted-foreground">
-            {t('access.meta', {
-              pending: pending.length,
-              active: active.length,
-              suspended: suspended.length,
-            })}
-          </p>
+          {!showCreatePanel && (
+            <button
+              type="button"
+              onClick={() => setShowCreatePanel(true)}
+              className="inline-flex items-center gap-1.5 rounded-full bg-primary px-4 py-2 text-[0.85em] font-semibold text-primary-foreground transition-colors hover:bg-primary-hover"
+            >
+              <Plus className="h-4 w-4" strokeWidth={2} /> {t('access.create.title')}
+            </button>
+          )}
         </header>
+
+        {showCreatePanel && (
+          <CreateAccountPanel
+            onCancel={() => setShowCreatePanel(false)}
+            onCreated={invalidate}
+            onDone={() => {
+              setShowCreatePanel(false)
+              setTab('active')
+            }}
+          />
+        )}
 
         <div role="tablist" className="mb-5 flex gap-1 overflow-x-auto border-b border-hairline [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
           <TabButton active={tab === 'pending'} count={pending.length} label={t('access.tabs.pending')} onClick={() => setTab('pending')} />
@@ -968,7 +1263,9 @@ export function AccessRequestsPage(): React.JSX.Element {
                       key={req.id}
                       req={req}
                       approving={approvingId === req.id}
-                      onApprove={(role) => approveMut.mutate({ id: req.id, role })}
+                      onApprove={(role, employeeId) =>
+                        approveMut.mutate({ id: req.id, role, employeeId })
+                      }
                       onReject={() => setRejectTarget(req)}
                     />
                   ))}
@@ -980,11 +1277,12 @@ export function AccessRequestsPage(): React.JSX.Element {
                 users={active}
                 emptyMessage={t('access.active.empty')}
                 currentUserId={user?.id}
+                busyUserId={busyUserId}
                 onReset={setResetTarget}
                 onChangeRole={setRoleTarget}
                 onEditPermissions={(target) => navigate(`/permissions?user=${target.id}`)}
                 onSetDefaultManager={(u, enabled) => defaultManagerMut.mutate({ id: u.id, enabled })}
-                onLock={(u) => lockMut.mutate(u.id)}
+                onDisable={setDisableTarget}
                 onUnlock={(u) => unlockMut.mutate(u.id)}
               />
             )}
@@ -994,10 +1292,11 @@ export function AccessRequestsPage(): React.JSX.Element {
                 users={suspended}
                 emptyMessage={t('access.active.suspendedEmpty')}
                 currentUserId={user?.id}
+                busyUserId={busyUserId}
                 onReset={setResetTarget}
                 onChangeRole={setRoleTarget}
                 onSetDefaultManager={(u, enabled) => defaultManagerMut.mutate({ id: u.id, enabled })}
-                onLock={(u) => lockMut.mutate(u.id)}
+                onDisable={setDisableTarget}
                 onUnlock={(u) => unlockMut.mutate(u.id)}
               />
             )}
@@ -1040,6 +1339,22 @@ export function AccessRequestsPage(): React.JSX.Element {
           pending={roleMut.isPending}
           onCancel={() => setRoleTarget(null)}
           onConfirm={(role) => roleMut.mutate({ id: roleTarget.id, role })}
+        />
+      )}
+      {disableTarget && (
+        <ConfirmDialog
+          open
+          onOpenChange={(o) => {
+            if (!o) setDisableTarget(null)
+          }}
+          title={t('access.disable.title')}
+          description={t('access.disable.body', { name: displayName(disableTarget) })}
+          confirmLabel={t('access.active.disable')}
+          destructive
+          onConfirm={() => {
+            disableMut.mutate(disableTarget.id)
+            setDisableTarget(null)
+          }}
         />
       )}
     </div>
@@ -1116,7 +1431,9 @@ function ResetModalView({
   return (
     <Modal title={t('access.resetModal.title')} onClose={onCancel}>
       <p className="text-[0.9em] leading-relaxed text-muted-foreground">
-        {t('access.resetModal.body', { name: displayName(target) })}
+        {target.password_change_required
+          ? t('access.resetModal.bodySetupPending', { name: displayName(target) })
+          : t('access.resetModal.body', { name: displayName(target) })}
       </p>
       <label className="mt-1 text-[0.72em] font-semibold uppercase tracking-[0.06em] text-muted-foreground">
         {t('access.resetModal.label')}

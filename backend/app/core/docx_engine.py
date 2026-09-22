@@ -41,16 +41,16 @@ import re
 from collections.abc import Callable, Mapping, Sequence
 from datetime import datetime
 from pathlib import Path
-from typing import Any, ClassVar
+from typing import Any, ClassVar, cast
 
 from docx import Document
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.opc.exceptions import PackageNotFoundError
 from docx.shared import Pt, RGBColor
 
+from app.core import qr
 from app.core._docx_helpers import (
     fill_image_behind_text_in_paragraph,
-    fill_image_inline_in_paragraph,
     find_bookmark_index,
     float_inline_images_in_cell,
     prevent_row_split,
@@ -83,7 +83,6 @@ _TODAY_FMT = "%d/%m/%Y"
 # header, which is why the code is written there (see stamp_aztec_code).
 _AZTEC_TOP_RIGHT: frozenset[str] = frozenset(
     {
-        "General Book",
         "Security Permit",
         "Warning Form",
         "Administrative Leave Form",
@@ -95,9 +94,10 @@ _AZTEC_TOP_RIGHT: frozenset[str] = frozenset(
 )
 
 
-def aztec_corner_for(template_id: str) -> str:
-    """Page-1 corner for the Aztec ref code: ``top-right`` for the letterhead
-    forms (logo owns the top-left), ``top-left`` for everyone else."""
+def aztec_corner_for(template_id: str) -> str | None:
+    """Page-1 corner for the Aztec ref code, except General Book's template code."""
+    if template_id == "General Book":
+        return None
     return "top-right" if template_id in _AZTEC_TOP_RIGHT else "top-left"
 
 
@@ -319,6 +319,10 @@ def _adapt_general_book(data: dict[str, Any]) -> dict[str, Any]:
     # General Book overrides the date format and discards the default the common
     # adapter applied.
     out["date"] = data.get("date") or datetime.now().strftime("%d-%m-%Y")
+    ref = str(out.get("ref") or "").strip()
+    out["barcode"] = (
+        qr.barcode_payload(ref, datetime.strptime(out["date"], "%d-%m-%Y").date()) if ref else ""
+    )
     out.setdefault("subject", "")
     out.setdefault("body", "")
     # Preserve raw body HTML (when the service layer threaded it through) for
@@ -346,10 +350,8 @@ def _adapt_general_book(data: dict[str, Any]) -> dict[str, Any]:
     # never has to render a blank signature line.
     if not (out.get("manager_name") or "").strip():
         out["manager_name"] = DEFAULT_MANAGER_NAME
-    # Submitter G-number for the footer (template token: {{ submitter_g }}).
-    # document_service injects this from the authenticated caller; default to
-    # "" so the Jinja {% if %} guard can hide the line cleanly when missing.
-    out.setdefault("submitter_g", "")
+    # General Book no longer prints the submitter's G-number in its footer.
+    out["submitter_g"] = ""
     # recipient_id → recipient_name is resolved upstream on the REQUEST session
     # (document_service, before engine.fill) — see that module's canonical path.
     # We must NOT open a second SessionLocal() here: the generation path holds a
@@ -578,8 +580,8 @@ def _stamp_manager_signing_block(
 
     1. Bookmark first: resolve ``GSSG_ManagerSignature`` (left by
        ``docx_render.render`` around the template's manager-signature slot)
-       and insert the image INLINE there — not floated — so Word counts its
-       height when keeping the signature/name/title group together.
+       and float the image behind text there — not inline — so it never
+       grows the paragraph's layout height (the pre-feature placement).
     2. A validated name-then-title closing block (exhaustive across body AND
        table paragraphs): exactly one candidate is used; more than one
        raises ``SignatureAnchorAmbiguousError`` rather than guessing.
@@ -596,7 +598,7 @@ def _stamp_manager_signing_block(
     def _stamp_at(
         anchor: Any, name_paragraph: Any | None, title_paragraph: Any | None, *, in_table: bool
     ) -> bool:
-        placed = fill_image_inline_in_paragraph(
+        placed = fill_image_behind_text_in_paragraph(
             anchor,
             sig_path,
             width_inches=width_inches,
@@ -703,7 +705,7 @@ def stamp_signature_above_name(
 
     ``keep_manager_block_together`` (General Book / Security Permit signing)
     replaces the whole search above with ``_stamp_manager_signing_block``:
-    bookmark-first, inline (not floated) insertion, and a validated
+    bookmark-first, behind-text floated insertion, and a validated
     name-then-title closing-block fallback that raises
     ``SignatureAnchorAmbiguousError`` on real ambiguity instead of guessing.
     Report never sets this flag, so its "التوقيع" label path is untouched.
@@ -1024,30 +1026,47 @@ def _apply_manager_signing_block_keep_together(doc: Any) -> None:
 
 
 def _format_general_book_ref_line(doc: Any) -> None:
-    """Keep the template's ref styling while making its value explicitly LTR."""
+    """Format both rendered first-page-header textbox copies with an LTR ref."""
     from copy import deepcopy
+
+    from docx.enum.section import WD_HEADER_FOOTER
+    from docx.oxml.ns import qn
+    from docx.text.paragraph import Paragraph
 
     from app.core.arabic_rtl import stamp_paragraph, stamp_run
 
-    for paragraph in doc.paragraphs:
-        match = re.match(r"^\s*الرقم\s*[:：]\s*(.+?)\s*$", paragraph.text or "")  # noqa: RUF001
-        if not match:
+    seen_parts: set[int] = set()
+    for section in doc.sections:
+        reference = section._sectPr.get_headerReference(WD_HEADER_FOOTER.FIRST_PAGE)
+        if reference is None:
             continue
+        part = doc.part.rels[reference.rId].target_part
+        if id(part) in seen_parts:
+            continue
+        seen_parts.add(id(part))
+        for element in part.element.findall(".//" + qn("w:p")):
+            if not any(
+                text.text for text in element.findall("./" + qn("w:r") + "/" + qn("w:t"))
+            ):
+                continue
+            paragraph = Paragraph(element, cast(Any, part))
+            match = re.match(r"^\s*الرقم\s*[:：]\s*(.+?)\s*$", paragraph.text or "")  # noqa: RUF001
+            if not match:
+                continue
 
-        source = next((run for run in paragraph.runs if run.text), None)
-        source_rpr = deepcopy(source._element.rPr) if source is not None else None
-        family = (source.font.name if source is not None else None) or _CALIBRI
-        for run in list(paragraph.runs):
-            run._element.getparent().remove(run._element)
-        stamp_paragraph(paragraph)
-        label = paragraph.add_run("الرقم: ")
-        value = paragraph.add_run(match.group(1))
-        for run in (label, value):
-            if source_rpr is not None:
-                run._element.insert(0, deepcopy(source_rpr))
-        stamp_run(label, family)
-        value.font.rtl = False
-        break
+            source = next((run for run in paragraph.runs if run.text), None)
+            source_rpr = deepcopy(source._element.rPr) if source is not None else None
+            family = (source.font.name if source is not None else None) or _CALIBRI
+            for run in list(paragraph.runs):
+                run._element.getparent().remove(run._element)
+            stamp_paragraph(paragraph)
+            label = paragraph.add_run("الرقم: ")
+            value = paragraph.add_run(match.group(1))
+            for run in (label, value):
+                if source_rpr is not None:
+                    run._element.insert(0, deepcopy(source_rpr))
+            stamp_run(label, family)
+            value.font.rtl = False
 
 
 def _find_general_book_body_anchor(doc: Any) -> Any | None:

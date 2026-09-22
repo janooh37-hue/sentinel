@@ -1,6 +1,7 @@
 from pathlib import Path
 
 from docx import Document
+from docx.document import Document as DocumentType
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml.ns import nsdecls, qn
 from docx.oxml.parser import parse_xml
@@ -10,11 +11,17 @@ from app.core.book_template_retokenize import retokenize_general_book
 from app.core.book_text import docx_to_text
 
 
+def _add_header_block(doc: DocumentType) -> None:
+    header = doc.sections[0].first_page_header
+    header.add_paragraph("الرقم: 1/5/141")
+    header.add_paragraph("التاريخ: 20-07-2026")
+    header.add_paragraph("1/5/141+20260720")
+
+
 def _book_with_table(tmp_path: Path, headers: list[str], data_rows: list[list[str]]) -> Path:
     p = tmp_path / "book_tbl.docx"
     doc = Document()
-    doc.add_paragraph("الرقم: 1/5/141")
-    doc.add_paragraph("التاريخ: 20-07-2026")
+    _add_header_block(doc)
     doc.add_paragraph("الموضوع: قائمة الموظفين في الإدارة المحترمة")
     doc.add_paragraph("تفاصيل القائمة:")
     t = doc.add_table(rows=1 + len(data_rows), cols=len(headers))
@@ -82,8 +89,7 @@ def test_loop_row_keeps_data_row_styling_not_headers(tmp_path: Path) -> None:
 def test_retokenize_plain_book_no_table_tokens(tmp_path: Path) -> None:
     p = tmp_path / "plain.docx"
     doc = Document()
-    doc.add_paragraph("الرقم: 1/5/141")
-    doc.add_paragraph("التاريخ: 20-07-2026")
+    _add_header_block(doc)
     doc.add_paragraph("السيد / مدير الإدارة المحترم")
     doc.add_paragraph("الموضوع: موضوع الكتاب في نص طويل نسبياً هنا")
     doc.add_paragraph("نص الكتاب هنا")
@@ -91,14 +97,14 @@ def test_retokenize_plain_book_no_table_tokens(tmp_path: Path) -> None:
     retokenize_general_book(p)
     text = docx_to_text(p)
     assert "{%tr" not in text
-    assert "{{ ref }}" in text
+    header = Document(str(p)).sections[0].first_page_header
+    assert "{{ ref }}" in "\n".join(node.text or "" for node in header.part.element.iter(qn("w:t")))
 
 
 def test_retokenize_two_table_book_no_tokens(tmp_path: Path) -> None:
     p = tmp_path / "two.docx"
     doc = Document()
-    doc.add_paragraph("الرقم: 1/5/141")
-    doc.add_paragraph("التاريخ: 20-07-2026")
+    _add_header_block(doc)
     doc.add_paragraph("الموضوع: كتاب عادي بجدولين بيانيين للاختبار")
     doc.add_paragraph("نص الكتاب")
     for _ in range(2):

@@ -7,11 +7,12 @@
  * gets no query; their stranded records surface under Everyone for an admin.
  */
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
-import { api, type BookRead } from '@/lib/api'
+import { api, ApiError, type BookRead } from '@/lib/api'
 import { useCapabilities } from '@/lib/useCapabilities'
 
 export type AgeGroup = 'overMonth' | 'weeks' | 'recent'
@@ -85,13 +86,11 @@ export function useFileSignedCopy(): {
   const qc = useQueryClient()
   const [busy, setBusy] = useState(false)
 
-  // as_signed=true is the scan-back flip: the backend approves the record.
-  // Same call `useAddScan.fileSignedCopy` makes — no OCR ref matching, because
-  // the operator picked this record deliberately and OCR cannot be trusted to
-  // re-read a stamped ref off a gov-form scan (GS-0333 -> "65-3"). It also
-  // mirrors that hook's error handling: the failure is toasted once (here, via
-  // onError) and never rethrown, so `file()` always resolves — every
-  // fire-and-forget `void onFile(...)` call site (row, dock, gate) stays safe.
+  // as_signed=true is the scan-back flip: the backend validates any readable
+  // Reference barcode against the selected record, then approves it. The
+  // failure is toasted once (here, via onError) and never rethrown, so `file()`
+  // always resolves — every fire-and-forget `void onFile(...)` call site (row,
+  // dock, gate) stays safe.
   const mutation = useMutation({
     // `ref` is unused by the call itself — it rides along so onSuccess can name
     // the record in the toast without a second lookup.
@@ -102,9 +101,8 @@ export function useFileSignedCopy(): {
       void qc.invalidateQueries({ queryKey: ['notifications', 'counts'] })
       toast.success(t('scanBack.filed', { ref: vars.ref }))
     },
-    // Localized, not `apiErrorMessage(err)` — that can surface a raw English
-    // backend string to an Arabic-locale user (project's #1 recurring defect).
-    onError: () => toast.error(t('scanBack.uploadError')),
+    onError: (e: unknown) =>
+      toast.error(e instanceof ApiError ? e.message : t('scanBack.uploadError')),
   })
 
   return {
@@ -121,5 +119,41 @@ export function useFileSignedCopy(): {
         setBusy(false)
       }
     },
+  }
+}
+
+export function useScanBackUpload(): {
+  upload: (file: File) => void
+  busy: boolean
+} {
+  const { t } = useTranslation()
+  const navigate = useNavigate()
+  const qc = useQueryClient()
+  const mutation = useMutation({
+    mutationFn: (file: File) => api.scanBack(file),
+    onSuccess: (result) => {
+      if (result.outcome === 'filed') {
+        void qc.invalidateQueries({ queryKey: ['books'] })
+        void qc.invalidateQueries({ queryKey: ['notifications', 'counts'] })
+        toast.success(t('scanBack.autoFiled', { ref: result.ref_number }))
+      } else if (result.outcome === 'parked') {
+        void qc.invalidateQueries({ queryKey: ['scan-inbox'] })
+        toast.info(t('scanBack.parked', { ref: result.ref_number }), {
+          action: {
+            label: t('scanBack.viewInbox'),
+            onClick: () => navigate('/scan-inbox'),
+          },
+        })
+      } else {
+        toast.error(t('scanBack.rejected', { ref: result.ref_number }))
+      }
+    },
+    onError: (e: unknown) =>
+      toast.error(e instanceof ApiError ? e.message : t('scanBack.uploadError')),
+  })
+
+  return {
+    upload: (file) => mutation.mutate(file),
+    busy: mutation.isPending,
   }
 }

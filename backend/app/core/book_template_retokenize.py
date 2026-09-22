@@ -1,7 +1,7 @@
 """Turn a finished General Book docx into a library boilerplate template.
 
 The per-book fields are (re)injected as tokens -- ``{{ ref }}``, ``{{ date }}``,
-``{{ submitter_g }}``, ``{{ recipient_name }}``, ``{{ subject }}``, ``{{ cc }}``
+``{{ barcode }}``, ``{{ recipient_name }}``, ``{{ subject }}``, and ``{{ cc }}``
 -- so a template is a reusable shell, not a snapshot frozen to the addressee and
 subject of the book it was saved from. ALL pre-existing Jinja delimiters in the document
 are neutralized (a zero-width space inside each delimiter) so operator-typed
@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Any
 
 from docx import Document
+from docx.oxml.ns import qn
 from docx.text.paragraph import Paragraph
 
 from app.core.book_table import normalize_data_table
@@ -27,25 +28,19 @@ from app.core.docx_render import render
 
 _ZWSP = "​"  # zero-width space — invisible, breaks Jinja delimiters
 _JINJA_DELIM = re.compile(r"\{\{|\}\}|\{%|%\}|\{#|#\}")
-# The Aztec stamp's anchor carries this fixed relativeHeight (see
-# _docx_helpers.insert_floating_image_in_header) — the letterhead images do
-# not, so this selector can never remove the letterhead.
-_AZTEC_RELATIVE_HEIGHT = "251670000"
-_WP_NS = "http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"
 
 _REF_LABEL = re.compile(r"^\s*الرقم\s*[:：]")  # noqa: RUF001 — full-width colon is a legitimate Arabic-text variant
 _DATE_LABEL = re.compile(r"^\s*التاريخ\s*[:：]")  # noqa: RUF001 — full-width colon is a legitimate Arabic-text variant
+_BARCODE_VALUE = re.compile(r"^[A-Z0-9/-]+\+\d{8}$")
 _SUBJECT_LABEL = re.compile(r"^\s*الموضوع\s*[:：]")  # noqa: RUF001 — full-width colon is a legitimate Arabic-text variant
 # The paper's addressee line: «السيد \ {name} المحترم» (the separator is a
 # backslash on the current template, a slash on the older hand-typed books).
 _ADDRESSEE = re.compile(r"^\s*السيد\s*([\\/])")
-_G_NUMBER = re.compile(r"\bG[-\s]?\d{1,6}\b")
 
 _DUMMY = {
     "ref": "9/9/9999",
     "date": "31-12-2099",
-    "submitter_g": "G-9999",
-    # Truthy so the {%p if %} guards render — asserted only via the body check.
+    "barcode": "9/9/9999+20991231",
     "recipient_name": "DUMMY_RECIPIENT",
     "subject": "DUMMY_SUBJECT",
     "cc": "DUMMY_CC",
@@ -62,25 +57,10 @@ def _neutralize_wt(text: str) -> str:
 
 
 def _neutralize_part_runs(container: Any) -> None:
-    """Walk all paragraphs (and table cells recursively) in *container*,
-    neutralizing Jinja delimiters at the w:t element level so cross-run
-    delimiters are also caught.
-
-    python-docx `para.runs` groups consecutive w:r elements but may miss
-    delimiters split across run boundaries. Walking w:t directly covers both
-    cases: each w:t text node is replaced atomically.
-    """
-    for para in container.paragraphs:
-        # Fast path: skip paragraphs without any delimiter characters
-        if "{{" not in para.text and "{%" not in para.text and "{#" not in para.text:
-            continue
-        for wt in para._p.iter(_W_T):
-            if wt.text and _JINJA_DELIM.search(wt.text):
-                wt.text = _neutralize_wt(wt.text)
-    for table in getattr(container, "tables", []):
-        for row in table.rows:
-            for cell in row.cells:
-                _neutralize_part_runs(cell)
+    """Neutralize Jinja delimiters in all XML text, including textbox paragraphs."""
+    for wt in container._element.iter(_W_T):
+        if wt.text and _JINJA_DELIM.search(wt.text):
+            wt.text = _neutralize_wt(wt.text)
 
 
 def _clear_runs(para: Paragraph) -> None:
@@ -115,44 +95,52 @@ def _guard_para(para: Paragraph, directive: str, *, after: bool) -> None:
     guard.add_run(directive)
 
 
-def _write_ref_block(anchor: Paragraph, *, replace: bool, style_src: Any | None = None) -> None:
-    """Write {%p if ref %} / الرقم: {{ ref }} / {%p endif %} at *anchor*.
+def _header_copies(doc: Any) -> list[list[Paragraph]]:
+    """Own-text paragraphs grouped by DrawingML/VML copy in first-page headers."""
+    copies: list[list[Paragraph]] = []
+    seen_parts: set[int] = set()
+    for section in doc.sections:
+        header = section.first_page_header
+        if id(header.part) in seen_parts:
+            continue
+        seen_parts.add(id(header.part))
+        grouped: dict[tuple[int, str], list[Paragraph]] = {}
+        for element in header.part.element.findall(".//" + qn("w:p")):
+            if not any(
+                text.text for text in element.findall("./" + qn("w:r") + "/" + qn("w:t"))
+            ):
+                continue
+            ancestor = element.getparent()
+            branch = "Header"
+            while ancestor is not None:
+                local_name = ancestor.tag.rsplit("}", 1)[-1]
+                if local_name in ("Choice", "Fallback"):
+                    branch = local_name
+                    break
+                ancestor = ancestor.getparent()
+            grouped.setdefault((id(header.part), branch), []).append(Paragraph(element, header))
+        copies.extend(grouped.values())
+    return copies
 
-    replace=True: anchor IS the old الرقم paragraph (reuse it for the label
-    line, keeping its formatting). replace=False: insert all three before
-    anchor (the التاريخ paragraph).
 
-    style_src overrides the run-style source; default is anchor itself."""
-    src = _first_run_style(style_src if style_src is not None else anchor)
-
-    def styled(run: Any) -> Any:
+def _write_header_block(
+    ref_para: Paragraph, date_para: Paragraph, barcode_para: Paragraph
+) -> None:
+    """Restore the guarded ref/date/barcode token block in one header copy."""
+    src = _first_run_style(date_para)
+    _clear_runs(ref_para)
+    label = ref_para.add_run("الرقم: ")
+    ref_run = ref_para.add_run("{{ ref }}")
+    for run in (label, ref_run):
         if src is not None:
             run.font.name = src.font.name
             run.font.size = src.font.size
             run.font.bold = src.font.bold
-        return run
-
-    if replace:
-        label_para = anchor
-    else:
-        new_p = copy.deepcopy(anchor._p)
-        anchor._p.addprevious(new_p)
-        label_para = Paragraph(new_p, anchor._parent)
-
-    _guard_para(label_para, "{%p if ref %}", after=False)
-
-    _clear_runs(label_para)
-    styled(label_para.add_run("الرقم: "))
-    # <w:rtl/> on the ref run — the EXACT encoding of the hand-typed legacy
-    # books (verified by XML dump: their digit runs are RTL-marked). Word
-    # then orders the segments right-to-left so the bumping serial reads
-    # LAST on the line. Both no-mark and a forced <w:rtl w:val="0"/> made
-    # Word lay the value as one LTR unit with the serial landing right next
-    # to الرقم: (operator-reported twice).
-    ref_run = styled(label_para.add_run("{{ ref }}"))
     ref_run.font.rtl = True
-
-    _guard_para(label_para, "{%p endif %}", after=True)
+    _retokenize_labeled_line(date_para, "التاريخ: ", "{{ date }}")
+    _retokenize_labeled_line(barcode_para, "{{ barcode }}")
+    _guard_para(ref_para, "{%p if ref %}", after=False)
+    _guard_para(barcode_para, "{%p endif %}", after=True)
 
 
 def _retokenize_labeled_line(para: Paragraph, *parts: str) -> None:
@@ -170,46 +158,13 @@ def _retokenize_labeled_line(para: Paragraph, *parts: str) -> None:
 
 
 def _strip_header_artifacts(doc: Any) -> None:
-    """Remove the old Aztec anchor (by its unique relativeHeight) and any
-    legacy English 'Ref:' stamp text from both header parts."""
+    """Remove legacy English reference text from General Book headers."""
     for section in doc.sections:
         for hdr in (section.header, section.first_page_header):
             for para in hdr.paragraphs:
-                for anchor in para._p.findall(f".//{{{_WP_NS}}}anchor"):
-                    if anchor.get("relativeHeight") == _AZTEC_RELATIVE_HEIGHT:
-                        drawing = anchor.getparent()
-                        drawing.getparent().remove(drawing)
                 if para.text.strip().startswith("Ref:"):
                     _clear_runs(para)
 
-
-def _retokenize_footers(doc: Any, submitter_g: str | None) -> None:
-    """Both footers (footer2 is a synced copy of footer3): the baked G-number
-    becomes {{ submitter_g }} so a new author's G renders at create. Hand-made
-    templates (the Desktop imports) carry their own footers with NO G at all —
-    then the token is INSERTED into the default footer so the author's G still
-    renders on every book (9pt, matching the canonical footer's size)."""
-    replaced = False
-    for section in doc.sections:
-        for footer in (section.footer, section.first_page_footer, section.even_page_footer):
-            for para in footer.paragraphs:
-                for run in para.runs:
-                    if submitter_g and submitter_g in run.text:
-                        run.text = run.text.replace(submitter_g, "{{ submitter_g }}")
-                        replaced = True
-                    elif _G_NUMBER.search(run.text):
-                        run.text = _G_NUMBER.sub("{{ submitter_g }}", run.text, count=1)
-                        replaced = True
-    if not replaced:
-        from docx.shared import Pt
-
-        footer = doc.sections[0].footer
-        if footer.paragraphs and not footer.paragraphs[-1].text.strip():
-            para = footer.paragraphs[-1]
-        else:
-            para = footer.add_paragraph()
-        run = para.add_run("{{ submitter_g }}")
-        run.font.size = Pt(9)
 
 
 def retokenize_general_book(docx_path: Path, *, submitter_g: str | None = None) -> None:
@@ -234,16 +189,27 @@ def retokenize_general_book(docx_path: Path, *, submitter_g: str | None = None) 
     # clean table; strips ZWSP-broken directive rows on re-run for idempotency).
     normalize_data_table(doc)
 
-    # 2/3. Ref + date lines (first labeled body paragraph each; prose ignored).
-    date_para = next((p for p in doc.paragraphs if _DATE_LABEL.match(p.text)), None)
-    if date_para is None:
-        raise ValueError("لا يحتوي المستند على سطر التاريخ — لا يمكن حفظه كقالب")
-    ref_para = next((p for p in doc.paragraphs if _REF_LABEL.match(p.text)), None)
-    if ref_para is not None:
-        _write_ref_block(ref_para, replace=True, style_src=date_para)
-    else:
-        _write_ref_block(date_para, replace=False)
-    _retokenize_labeled_line(date_para, "التاريخ: ", "{{ date }}")
+    # 2/3. Restore the ref/date/barcode token block in every header copy.
+    copies = _header_copies(doc)
+    blocks = 0
+    for paragraphs in copies:
+        date_para = next((p for p in paragraphs if _DATE_LABEL.match(p.text)), None)
+        ref_para = next((p for p in paragraphs if _REF_LABEL.match(p.text)), None)
+        barcode_para = next(
+            (
+                p
+                for p in paragraphs
+                if _BARCODE_VALUE.fullmatch(p.text.strip())
+                or p.text.replace(_ZWSP, "").strip() == "{{ barcode }}"
+            ),
+            None,
+        )
+        if date_para is None or ref_para is None or barcode_para is None:
+            continue
+        _write_header_block(ref_para, date_para, barcode_para)
+        blocks += 1
+    if blocks == 0:
+        raise ValueError("لا يحتوي المستند على كتلة الرقم والتاريخ والباركود — لا يمكن حفظه كقالب")
 
     # 3b. Addressee / subject / CC — the source book's literal values would
     # otherwise be frozen into every book made from this template (the form's
@@ -271,10 +237,8 @@ def retokenize_general_book(docx_path: Path, *, submitter_g: str | None = None) 
         _retokenize_labeled_line(cc_para, "نسخة إلى: ", "{{ cc }}")
         _guard_para(cc_para, "{%p endif %}", after=True)
 
-    # 4. Footer G-number → token (both footers).
-    _retokenize_footers(doc, submitter_g)
 
-    # 5. Old Aztec + English header stamp out.
+    # 5. Legacy English header stamp out.
     _strip_header_artifacts(doc)
 
     doc.save(str(docx_path))
@@ -288,6 +252,10 @@ def _body_text_no_tables(docx_path: Path) -> str:
     is removed during normalize_data_table and would cause false positives).
     """
     return "\n".join(p.text for p in Document(str(docx_path)).paragraphs if p.text)
+
+
+def _header_text(docx_path: Path) -> str:
+    return "\n".join(p.text for copy in _header_copies(Document(str(docx_path))) for p in copy)
 
 
 def validate_book_template(docx_path: Path) -> None:
@@ -311,6 +279,7 @@ def validate_book_template(docx_path: Path) -> None:
         dummy["table_rows"] = [row]
 
     source_text = _body_text_no_tables(docx_path)
+    expected_header_copies = _header_text(docx_path).count("{{ barcode }}")
     with tempfile.TemporaryDirectory() as td:
         out = Path(td) / "check.docx"
         try:
@@ -318,10 +287,18 @@ def validate_book_template(docx_path: Path) -> None:
         except Exception as exc:  # sandbox/strict/syntax — reason stays generic
             raise ValueError("تعذر التحقق من القالب — فشل عرض تجريبي") from exc
         text = docx_to_text(out)
-    # submitter_g is deliberately NOT asserted — it is optional-inject (books
-    # without a footer G-number are valid templates).
-    if text.count(_DUMMY["ref"]) != 1 or text.count(_DUMMY["date"]) != 1:
-        raise ValueError("سطر الرقم أو التاريخ لم يُستبدل بشكل صحيح")
+        header_values = [
+            p.text.strip() for copy in _header_copies(Document(str(out))) for p in copy
+        ]
+    expected_values = {
+        "ref": f"الرقم: {_DUMMY['ref']}",
+        "date": f"التاريخ: {_DUMMY['date']}",
+        "barcode": _DUMMY["barcode"],
+    }
+    if expected_header_copies == 0 or any(
+        header_values.count(value) != expected_header_copies for value in expected_values.values()
+    ):
+        raise ValueError("كتلة الرقم أو التاريخ أو الباركود لم تُستبدل بشكل صحيح")
     # Body preserved: every substantial source line (minus token lines)
     # must survive the render. Uses paragraph-only text to exclude table cells
     # (which are transformed/removed by normalize_data_table).
