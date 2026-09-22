@@ -733,8 +733,8 @@ def render_session_preview(
         )
         snapshot_mtime = working.stat().st_mtime
         src_copy = working.parent / "preview-src.docx"
-        shutil.copy2(working, src_copy)
         try:
+            shutil.copy2(working, src_copy)
             pdf = (converter or convert_docx_to_pdf)(src_copy)
         except Exception:
             pdf = None

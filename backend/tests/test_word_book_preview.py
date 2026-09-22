@@ -303,6 +303,38 @@ def test_preview_unavailable_when_conversion_fails(
     assert ei.value.code == "PREVIEW_UNAVAILABLE"
 
 
+def test_preview_locked_working_file_falls_back_to_last_good_pdf(
+    db_session: Session,
+    active_session: tuple[Book, Path],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A concurrent Word/DAV lock on the working file during the copy step
+    (WinError 32) must degrade like a failed conversion, not propagate as an
+    unhandled 500 - this is the actual bug: the copy2 preceding the convert
+    call used to sit outside the try/except that guards it."""
+    import os
+    import shutil
+
+    book, working = active_session
+    preview = _pdf(working.parent / "preview-src.pdf")
+    original = preview.read_bytes()
+    old = working.stat().st_mtime - 10
+    os.utime(preview, (old, old))
+
+    def locked_copy2(src: Path, dst: Path) -> None:
+        raise PermissionError(
+            "[WinError 32] The process cannot access the file because it is "
+            "being used by another process"
+        )
+
+    monkeypatch.setattr(shutil, "copy2", locked_copy2)
+
+    result = word_book_service.render_session_preview(db_session, book_id=book.id)
+
+    assert result == preview
+    assert preview.read_bytes() == original
+
+
 def test_preview_failed_refresh_preserves_last_complete_pdf(
     db_session: Session,
     active_session: tuple[Book, Path],
