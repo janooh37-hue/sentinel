@@ -74,9 +74,7 @@ def validate(png_bytes: bytes) -> SignatureMeta:
     if not png_bytes:
         raise SignatureError("Signature bytes are empty")
     if len(png_bytes) > MAX_BYTES:
-        raise SignatureError(
-            f"Signature too large: {len(png_bytes)} bytes (max {MAX_BYTES})"
-        )
+        raise SignatureError(f"Signature too large: {len(png_bytes)} bytes (max {MAX_BYTES})")
     if not png_bytes.startswith(_PNG_MAGIC):
         raise SignatureError("Not a PNG file (magic byte mismatch)")
 
@@ -94,13 +92,11 @@ def validate(png_bytes: bytes) -> SignatureMeta:
 
     if width < MIN_WIDTH or height < MIN_HEIGHT:
         raise SignatureError(
-            f"Signature too small: {width}x{height} "
-            f"(min {MIN_WIDTH}x{MIN_HEIGHT})"
+            f"Signature too small: {width}x{height} (min {MIN_WIDTH}x{MIN_HEIGHT})"
         )
     if width > MAX_WIDTH or height > MAX_HEIGHT:
         raise SignatureError(
-            f"Signature too large: {width}x{height} "
-            f"(max {MAX_WIDTH}x{MAX_HEIGHT})"
+            f"Signature too large: {width}x{height} (max {MAX_WIDTH}x{MAX_HEIGHT})"
         )
 
     return SignatureMeta(
@@ -112,9 +108,38 @@ def validate(png_bytes: bytes) -> SignatureMeta:
     )
 
 
+def employee_signature_path(vault_dir: Path | str, g_number: str) -> Path:
+    """Canonical signature path for `g_number` under `vault_dir` — no I/O.
+
+    Equivalent to ``vault_path(Vault(vault_dir), g_number)`` without
+    constructing a `Vault` (whose constructor creates the vault root dir as a
+    side effect). Enforces vault containment: raises `SignatureError` if
+    `g_number` is empty or normalizes outside `vault_dir`.
+    """
+    root = Path(vault_dir).resolve()
+    try:
+        g = Vault.normalize_g_number(g_number)
+    except ValueError as e:
+        raise SignatureError(str(e)) from e
+    path = (root / g / "documents" / SIGNATURE_FILENAME).resolve()
+    if root not in path.parents:
+        raise SignatureError(f"signature path escapes vault root: {g_number!r}")
+    return path
+
+
+def employee_signature_str(vault_dir: Path | str, g_number: str) -> str | None:
+    """`employee_signature_path` as a string when the file exists, else None —
+    what the DOCX templates need. Never raises on a malformed `g_number`."""
+    try:
+        path = employee_signature_path(vault_dir, g_number)
+    except SignatureError:
+        return None
+    return str(path) if path.is_file() else None
+
+
 def vault_path(vault: Vault, g_number: str) -> Path:
     """Where a signature would be written for `g_number` — no I/O."""
-    return vault.emp_root(g_number) / "documents" / SIGNATURE_FILENAME
+    return employee_signature_path(vault.root, g_number)
 
 
 def normalize_to_png(data: bytes) -> bytes:
@@ -133,8 +158,7 @@ def normalize_to_png(data: bytes) -> bytes:
         raise SignatureError(f"Not a PNG or JPEG image: {e}") from e
     if img_format != "JPEG":
         raise SignatureError(
-            f"Unsupported image format: {img_format or 'unknown'} "
-            "(PNG or JPEG required)"
+            f"Unsupported image format: {img_format or 'unknown'} (PNG or JPEG required)"
         )
     with Image.open(io.BytesIO(data)) as img:
         buf = io.BytesIO()

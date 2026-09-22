@@ -10,6 +10,7 @@ import { toast } from 'sonner'
 import { Loader2 } from 'lucide-react'
 
 import { api, apiErrorMessage, type ManagerRead } from '@/lib/api'
+import { invalidateSignatures } from '@/lib/globalRefresh'
 import { SignatureDrawPanel } from '@/components/signature/SignatureDrawPanel'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { SectionCard, OutlineButton, PrimaryButton } from './SettingsPage'
@@ -45,7 +46,10 @@ export function ManagersSection(): React.JSX.Element {
   const linkMut = useMutation({
     mutationFn: ({ id, userId }: { id: number; userId: number | null }) =>
       api.linkManagerAccount(id, userId),
-    onSuccess: () => { invalidate(); toast.success(t('settings.managers.linkedToast')) },
+    onSuccess: () => {
+      invalidateSignatures(qc)
+      toast.success(t('settings.managers.linkedToast'))
+    },
     onError: (e: unknown) => toast.error(apiErrorMessage(e)),
   })
 
@@ -222,24 +226,25 @@ function ManagerSignatureEditor({ managerId }: { managerId: number }): React.JSX
     queryFn: () => api.getManagerSignature(managerId),
     retry: false,
   })
-  const invalidate = () => void qc.invalidateQueries({ queryKey: ['manager-signature', managerId] })
-
   const save = async (dataUrl: string): Promise<void> => {
     try {
       await api.uploadManagerSignature(managerId, await dataUrlToBlob(dataUrl))
-      setReplacing(false); invalidate()
-      void qc.invalidateQueries({ queryKey: ['managers'] })
+      setReplacing(false)
+      invalidateSignatures(qc)
     } catch (e) { toast.error(apiErrorMessage(e)) }
   }
   const remove = async (): Promise<void> => {
     try {
       await api.deleteManagerSignature(managerId)
-      invalidate(); void qc.invalidateQueries({ queryKey: ['managers'] })
+      invalidateSignatures(qc)
     } catch (e) { toast.error(apiErrorMessage(e)) }
   }
 
   return (
     <div>
+      <p className="mb-2 text-[0.78em] text-muted-foreground">
+        {t('settings.managers.sharedSignatureHint')}
+      </p>
       <p className="mb-1 text-[0.78em] font-medium text-muted-foreground">{t('settings.managers.signature')}</p>
       {data?.dataUrl && !replacing ? (
         <div className="flex items-center gap-3">

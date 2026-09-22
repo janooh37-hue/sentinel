@@ -524,11 +524,10 @@ def _signature_path_for(employee_id: str) -> Path:
     primary-key lookup, but nothing constrains seeded ids from carrying path
     separators — never dereference a path that escapes the vault root.
     """
-    vault_root = get_settings().vault_dir.resolve()
-    path = signature_core.vault_path(Vault(get_settings().vault_dir), employee_id).resolve()
-    if vault_root not in path.parents:
-        raise HTTPException(status_code=400, detail="invalid signature path")
-    return path
+    try:
+        return signature_core.employee_signature_path(get_settings().vault_dir, employee_id)
+    except signature_core.SignatureError as exc:
+        raise HTTPException(status_code=400, detail="invalid signature path") from exc
 
 
 @router.post(

@@ -737,7 +737,12 @@ def test_revision_changed_during_signing_does_not_publish_decision(api_db, monke
 
     from app.api.errors import AppError
     from app.db.models import BookRevisionAccess
-    from app.services import artifact_service, book_service, document_service
+    from app.services import (
+        artifact_service,
+        book_service,
+        document_service,
+        user_signature_service,
+    )
 
     signer = _user(api_db, "racing-signer@x.ae", "manager")
     book = _submitted_book(
@@ -750,7 +755,7 @@ def test_revision_changed_during_signing_does_not_publish_decision(api_db, monke
     first = book.versions[0]
     signature = tmp_path / "signature.png"
     signature.write_bytes(b"synthetic signature locator")
-    monkeypatch.setattr(book_service, "_resolve_signer_signature", lambda *_: signature)
+    monkeypatch.setattr(user_signature_service, "resolve_signature", lambda *_: signature)
 
     def render_while_revision_changes(*_args, **_kwargs):
         book.versions.append(BookVersion(book_id=book.id, version_no=2, status="none"))

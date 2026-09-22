@@ -23,12 +23,13 @@ from sqlalchemy import CursorResult, func, select, update
 from sqlalchemy.orm import Session
 
 from app.api.errors import AppError, ValidationFailedError
+from app.config import get_settings
 from app.core import security
 from app.core.roles import ADMIN_ROLE, MANAGER_ROLE, OPERATOR_ROLE
 from app.db.models import AuditLog, Employee, User
 from app.db.models import AuthSession as AuthSessionModel
 from app.schemas.auth import AdminUserRead, AuditEntryRead, SessionUser
-from app.services import identity_service, perm_service
+from app.services import identity_service, perm_service, user_signature_service
 
 log = logging.getLogger(__name__)
 
@@ -139,6 +140,7 @@ def approve_user(
 ) -> User:
     user = _require_user(db, user_id)
     _validate_role(role)
+    g: str | None = None
     if employee_id:
         g = employee_id.strip().upper()
         if db.get(Employee, g) is None:
@@ -149,6 +151,9 @@ def approve_user(
     user.failed_attempts = 0
     user.locked_at = None
     _audit(db, actor, "approve", user)
+    if g is not None:
+        db.flush()
+        user_signature_service.consolidate_or_raise(db, g, data_dir=get_settings().data_dir)
     db.commit()
     db.refresh(user)
     return user
@@ -187,6 +192,9 @@ def link_self(db: Session, user: User, *, employee_id: str | None) -> User:
         if employee is not None:
             user.display_name = employee.name_en
     _audit(db, user.display_name or user.email, "link_self", user)
+    if target is not None:
+        db.flush()
+        user_signature_service.consolidate_or_raise(db, target, data_dir=get_settings().data_dir)
     db.commit()
     db.refresh(user)
 
@@ -269,7 +277,7 @@ def set_default_manager(
     if enabled:
         if (
             user.status != "active"
-            or not user.signature_path
+            or user_signature_service.resolve_signature(user) is None
             or not perm_service.has_capability(db, user, "books.approve")
         ):
             raise ValidationFailedError(
@@ -524,7 +532,7 @@ def to_session_user(db: Session, user: User) -> SessionUser:
         status=user.status,
         is_admin=user.role == ADMIN_ROLE,
         is_manager=user.role in (ADMIN_ROLE, MANAGER_ROLE),
-        has_signature=bool(user.signature_path),
+        has_signature=user_signature_service.resolve_signature(user) is not None,
         idle_lock_seconds=user.idle_lock_seconds,
         lock_layout=user.lock_layout,
     )
