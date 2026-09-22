@@ -104,13 +104,18 @@ def install_handlers(app: FastAPI) -> None:
         # Pydantic v2 error dicts can contain ``ctx`` values that are raw
         # exception instances (e.g. our ValueError from ``model_validator``).
         # ``jsonable_encoder`` coerces those to strings so the response stays
-        # JSON-serialisable.
+        # JSON-serialisable. ``input`` is dropped: a malformed body can carry
+        # a password (e.g. a bad complete-password-setup payload) and this
+        # envelope must not echo it back.
+        errors = jsonable_encoder(exc.errors())
+        for error in errors:
+            error.pop("input", None)
         return JSONResponse(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             content=_envelope(
                 "VALIDATION_ERROR",
                 "Request payload failed validation",
-                errors=jsonable_encoder(exc.errors()),
+                errors=errors,
             ),
         )
 

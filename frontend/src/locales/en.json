@@ -54,6 +54,19 @@
     "passwordsMismatch": "Passwords don't match.",
     "passwordTooShort": "Password must be at least 8 characters.",
     "emailRequired": "Email is required.",
+    "errDisabled": "This account is disabled. Contact your administrator.",
+    "passwordSetup": {
+      "title": "Choose your password",
+      "description": "Replace your temporary password before using the app.",
+      "newPassword": "New password",
+      "submit": "Save password and sign in",
+      "sameAsTemporary": "Choose a different password from the temporary one.",
+      "success": "Password saved. Sign in with your new password.",
+      "setupChanged": "Account access changed. Sign in again or contact your administrator.",
+      "notRequired": "Password setup is not required. Sign in normally.",
+      "credentialsExpired": "This temporary password is no longer valid. Sign in again or contact your administrator.",
+      "networkUnknown": "The password may have been saved. Try signing in with your new password."
+    },
     "smallPrint": "By signing in you agree to GSSG's acceptable use policy.",
     "signOut": "Sign out",
     "langToggle": "العربية"
@@ -3319,7 +3332,12 @@
     },
     "employeePicker": {
       "placeholder": "Pick an employee…",
-      "search": "Search employees…"
+      "search": "Search employees…",
+      "loading": "Searching employees…",
+      "error": "Employees could not be searched.",
+      "clearSelection": "Clear selection",
+      "selectedLoadError": "Couldn't load this employee's name.",
+      "defaultAriaLabel": "Employee"
     },
     "tabs": {
       "fields": "Fields",
@@ -4122,8 +4140,18 @@
     "tabs": {
       "pending": "Pending",
       "active": "Active users",
-      "suspended": "Suspended",
+      "suspended": "Blocked accounts",
       "history": "History"
+    },
+    "create": {
+      "title": "Create account",
+      "noEmployee": "No employee link",
+      "employeeLabel": "Link to employee",
+      "displayName": "Display name (optional)",
+      "temporaryPassword": "Temporary password",
+      "copyPassword": "Copy temporary password",
+      "copyFailedHint": "Couldn't copy automatically — select the field and copy manually.",
+      "handoffHint": "Share this privately. The employee must replace it before using the app. It cannot be retrieved after closing this panel."
     },
     "permReq": {
       "tab": "Permission requests",
@@ -4151,6 +4179,7 @@
       "notLinked": "Not linked to an employee",
       "unverifiedLink": "Self-claimed — verify before approving",
       "rolePrompt": "Approve as",
+      "confirmEmployeeLabel": "Confirm employee link",
       "approve": "Approve",
       "approving": "Approving…",
       "reject": "Reject",
@@ -4174,12 +4203,22 @@
       "reset": "Reset password",
       "changeRole": "Change role",
       "editPermissions": "Edit permissions",
-      "suspend": "Suspend",
-      "reactivate": "Reactivate",
+      "disable": "Disable account",
+      "unlock": "Unlock account",
+      "reactivate": "Reactivate account",
       "never": "Never",
       "rowActions": "Row actions",
       "empty": "No active users.",
-      "suspendedEmpty": "No suspended users."
+      "suspendedEmpty": "No blocked accounts."
+    },
+    "status": {
+      "disabled": "Disabled",
+      "locked": "Temporarily locked",
+      "passwordSetup": "Awaiting password setup"
+    },
+    "disable": {
+      "title": "Disable this account?",
+      "body": "{{name}} will be signed out and cannot sign in or use Word editing links until you reactivate the account. Their records will be kept."
     },
     "defaultManager": {
       "badge": "Default manager",
@@ -4199,7 +4238,11 @@
         "reset_password": "Password reset",
         "lock": "Suspended",
         "unlock": "Reactivated",
-        "set_status": "Status changed"
+        "set_status": "Status changed",
+        "create_user": "Account created",
+        "disable": "Disabled",
+        "reactivate": "Restored",
+        "password_setup": "Password set up"
       }
     },
     "reject": {
@@ -4212,7 +4255,8 @@
     },
     "resetModal": {
       "title": "Reset password",
-      "body": "Set a temporary password for {{name}}. They can change it after signing in.",
+      "body": "Set a temporary password for {{name}}. Share it with them directly.",
+      "bodySetupPending": "{{name}}'s password is still temporary. They must replace it before they can sign in.",
       "label": "New password",
       "placeholder": "At least 8 characters",
       "generate": "Generate",
@@ -4229,7 +4273,7 @@
       "rejected": "Request rejected",
       "roleChanged": "Role updated",
       "passwordReset": "Password reset",
-      "suspended": "User suspended",
+      "disabled": "Account disabled",
       "reactivated": "User reactivated"
     },
     "bell": {

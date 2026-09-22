@@ -226,6 +226,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/complete-password-setup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Complete Password Setup
+         * @description Replace an admin-issued temporary password before first sign-in.
+         *
+         *     Public (no session yet) — shares the login rate-limit budget. Does not
+         *     set a cookie; the frontend performs a normal login afterward.
+         */
+        post: operations["complete_password_setup_api_v1_auth_complete_password_setup_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/me/link": {
         parameters: {
             query?: never;
@@ -338,7 +361,12 @@ export interface paths {
         /** List Users */
         get: operations["list_users_api_v1_auth_users_get"];
         put?: never;
-        post?: never;
+        /**
+         * Create User
+         * @description Admin-issued account. Response carries the one-time temporary
+         *     password — it is never retained or shown again after this call.
+         */
+        post: operations["create_user_api_v1_auth_users_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -430,7 +458,7 @@ export interface paths {
         patch: operations["set_role_api_v1_auth_users__user_id__role_patch"];
         trace?: never;
     };
-    "/api/v1/auth/users/{user_id}/lock": {
+    "/api/v1/auth/users/{user_id}/disable": {
         parameters: {
             query?: never;
             header?: never;
@@ -439,8 +467,8 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Lock User */
-        post: operations["lock_user_api_v1_auth_users__user_id__lock_post"];
+        /** Disable User */
+        post: operations["disable_user_api_v1_auth_users__user_id__disable_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -6354,6 +6382,33 @@ export interface components {
             /** Admin Gate Enabled */
             admin_gate_enabled: boolean;
         };
+        /**
+         * AdminUserCreateRequest
+         * @description Admin-issued account creation — a temporary password is generated.
+         */
+        AdminUserCreateRequest: {
+            /** Email */
+            email: string;
+            /** Employee Id */
+            employee_id: string | null;
+            /** Display Name */
+            display_name?: string | null;
+            /**
+             * Role
+             * @default operator
+             * @enum {string}
+             */
+            role: "operator" | "manager" | "admin";
+        };
+        /**
+         * AdminUserCreateResult
+         * @description Response to ``POST /auth/users``. ``temporary_password`` is shown once.
+         */
+        AdminUserCreateResult: {
+            user: components["schemas"]["AdminUserRead"];
+            /** Temporary Password */
+            temporary_password: string;
+        };
         /** AdminUserRead */
         AdminUserRead: {
             /** Id */
@@ -6381,6 +6436,11 @@ export interface components {
              * @default false
              */
             is_default_manager: boolean;
+            /**
+             * Password Change Required
+             * @default false
+             */
+            password_change_required: boolean;
         };
         /** AnnouncementOut */
         AnnouncementOut: {
@@ -6592,7 +6652,7 @@ export interface components {
              */
             role: string;
             /** Employee Id */
-            employee_id?: string | null;
+            employee_id: string | null;
         };
         /** ApprovedViolationImportRead */
         ApprovedViolationImportRead: {
@@ -7796,6 +7856,18 @@ export interface components {
             name_en: string;
             /** Unit Ar */
             unit_ar: string;
+        };
+        /**
+         * CompletePasswordSetupRequest
+         * @description Public: replace an admin-issued temporary password before first sign-in.
+         */
+        CompletePasswordSetupRequest: {
+            /** Email */
+            email: string;
+            /** Temporary Password */
+            temporary_password: string;
+            /** New Password */
+            new_password: string;
         };
         /** CompletenessRead */
         CompletenessRead: {
@@ -15198,6 +15270,37 @@ export interface operations {
             };
         };
     };
+    complete_password_setup_api_v1_auth_complete_password_setup_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CompletePasswordSetupRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     link_my_employee_api_v1_auth_me_link_post: {
         parameters: {
             query?: never;
@@ -15429,6 +15532,41 @@ export interface operations {
             };
         };
     };
+    create_user_api_v1_auth_users_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminUserCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminUserCreateResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_audit_api_v1_auth_audit_get: {
         parameters: {
             query?: {
@@ -15610,7 +15748,7 @@ export interface operations {
             };
         };
     };
-    lock_user_api_v1_auth_users__user_id__lock_post: {
+    disable_user_api_v1_auth_users__user_id__disable_post: {
         parameters: {
             query?: never;
             header?: never;
