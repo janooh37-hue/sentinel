@@ -5,7 +5,7 @@ from __future__ import annotations
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.api.errors import ConflictError, NotFoundError
+from app.api.errors import ConflictError, NotFoundError, ValidationFailedError
 from app.db.models import Employee, Submitter
 from app.schemas.submitter import SubmitterCreate
 
@@ -17,7 +17,7 @@ def list_submitters(db: Session) -> list[Submitter]:
 
 
 def create_submitter(db: Session, payload: SubmitterCreate) -> Submitter:
-    """Create a submitter, validating employee FK and uniqueness."""
+    """Create a submitter, validating employee FK, uniqueness, and signature."""
     if payload.employee_id is not None:
         emp = db.get(Employee, payload.employee_id)
         if emp is None:
@@ -32,6 +32,11 @@ def create_submitter(db: Session, payload: SubmitterCreate) -> Submitter:
             raise ConflictError(
                 "SUBMITTER_EXISTS",
                 f"A submitter for employee '{payload.employee_id}' already exists",
+            )
+        if payload.stored_sig_path:
+            raise ValidationFailedError(
+                "SIGNATURE_MANAGED_IN_PROFILE",
+                "Manage the signature on the employee profile.",
             )
     row = Submitter(
         employee_id=payload.employee_id,

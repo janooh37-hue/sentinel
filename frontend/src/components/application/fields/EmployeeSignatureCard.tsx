@@ -32,6 +32,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { SignatureDrawPanel } from '@/components/signature/SignatureDrawPanel'
 import { api, type SubmitterRead, apiErrorMessage } from '@/lib/api'
+import { invalidateSignatures } from '@/lib/globalRefresh'
 
 export interface EmployeeSignatureCardProps {
   /** RHF field carrying a drawn/uploaded PNG data URL (`employee_sig_path`). */
@@ -127,9 +128,7 @@ export function EmployeeSignatureCard({
         const blob = await (await fetch(dataUrl)).blob()
         await api.uploadSignature(employeeId, blob)
         toast.success(t('empSig.saved'))
-        void qc.invalidateQueries({
-          queryKey: ['employee-signature', employeeId],
-        })
+        invalidateSignatures(qc)
       } catch (err) {
         toast.error(apiErrorMessage(err))
       }

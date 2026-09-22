@@ -22,12 +22,12 @@
  * like `BookRecordPage`'s desk.
  */
 
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { ArrowLeft, Loader2, History as HistoryIcon, Check } from 'lucide-react'
+import { AlertCircle, ArrowLeft, Loader2, History as HistoryIcon, Check } from 'lucide-react'
 
 import {
   api,
@@ -109,6 +109,20 @@ export function SignaturePlacementPage(): React.JSX.Element {
     )
   }
 
+  // Same "adjust state during render" pattern as draftKey above: a fresh
+  // selection/revision must read as unready immediately, never for one
+  // extra frame with the previous signature's stale ready=true.
+  const previewKey = selected
+    ? `${documentId}:${selected.id}:${description?.signature_revision ?? 0}`
+    : null
+  const [previewReady, setPreviewReady] = useState(false)
+  const [lastPreviewKey, setLastPreviewKey] = useState<string | null>(null)
+  if (previewKey !== lastPreviewKey) {
+    setLastPreviewKey(previewKey)
+    setPreviewReady(false)
+  }
+  const handlePreviewReadyChange = useCallback((ready: boolean) => setPreviewReady(ready), [])
+
   const dirty =
     !!draft &&
     !!selected &&
@@ -134,6 +148,7 @@ export function SignaturePlacementPage(): React.JSX.Element {
   const moveMutation = useMutation({
     mutationFn: () => {
       if (!description || !selected || !draft) throw new Error('nothing to save')
+      if (!previewReady) throw new Error('signature preview is not ready yet')
       return api.moveSignature(documentId, selected.id, {
         signature_revision: description.signature_revision,
         package_revision: description.package_revision,
@@ -224,12 +239,15 @@ export function SignaturePlacementPage(): React.JSX.Element {
         <div className="w-full max-w-[640px]">
           {placementMode && selected && draft ? (
             <PlacementCanvas
+              key={previewKey}
               documentId={documentId}
               description={description}
               selected={selected}
               draft={draft}
               onDraftChange={setDraft}
               canAdjust={description.can_adjust}
+              saving={moveMutation.isPending}
+              onReadyChange={handlePreviewReadyChange}
             />
           ) : (
             <DocPdfCanvas pdfUrl={api.documentDownloadUrl(documentId, 'pdf')} />
@@ -267,9 +285,12 @@ export function SignaturePlacementPage(): React.JSX.Element {
             draft={draft}
             dirty={dirty}
             saving={moveMutation.isPending}
+            previewReady={previewReady}
             onDraftChange={setDraft}
             onReset={resetToDefault}
-            onSave={() => moveMutation.mutate()}
+            onSave={() => {
+              if (previewReady) moveMutation.mutate()
+            }}
             onCancel={goBack}
             canReset={
               selected.default_page != null && selected.default_x != null && selected.default_y != null
@@ -372,6 +393,8 @@ function PlacementCanvas({
   draft,
   onDraftChange,
   canAdjust,
+  saving,
+  onReadyChange,
 }: {
   documentId: number
   description: SignatureEditorRead
@@ -379,12 +402,29 @@ function PlacementCanvas({
   draft: Draft
   onDraftChange: (draft: Draft) => void
   canAdjust: boolean
+  saving: boolean
+  onReadyChange: (ready: boolean) => void
 }): React.JSX.Element {
   const { t } = useTranslation()
   const rootRef = useRef<HTMLDivElement>(null)
   const dragRef = useRef<DragState | null>(null)
   const pagesRef = useRef<PageBox[]>([])
   const [imageUrl, setImageUrl] = useState<string | null>(null)
+  const [imageState, setImageState] = useState<'loading' | 'ready' | 'error'>('loading')
+  const [pdfReady, setPdfReady] = useState(false)
+  const [retryToken, setRetryToken] = useState(0)
+
+  // Same render-time key-reset pattern as the page's draftKey: a manual
+  // Retry (retryToken bump) must read as 'loading' immediately, not for one
+  // extra frame with the previous 'error' state — so this resets during
+  // render rather than as a synchronous setState at the top of the effect.
+  const requestKey = `${documentId}:${selected.id}:${description.signature_revision}:${retryToken}`
+  const [lastRequestKey, setLastRequestKey] = useState(requestKey)
+  if (requestKey !== lastRequestKey) {
+    setLastRequestKey(requestKey)
+    setImageState('loading')
+    setImageUrl(null)
+  }
 
   useEffect(() => {
     let cancelled = false
@@ -397,13 +437,27 @@ function PlacementCanvas({
         setImageUrl(objectUrl)
       })
       .catch(() => {
-        if (!cancelled) setImageUrl(null)
+        if (!cancelled) setImageState('error')
       })
     return () => {
       cancelled = true
       if (objectUrl) URL.revokeObjectURL(objectUrl)
     }
-  }, [documentId, selected.id, description.signature_revision])
+  }, [documentId, selected.id, description.signature_revision, retryToken])
+
+  // Mirror DocPdfCanvas's own onReady-ref pattern: report readiness through a
+  // ref so the effect doesn't need `onReadyChange` (a fresh closure every
+  // parent render) in its dependency array.
+  const onReadyChangeRef = useRef(onReadyChange)
+  useEffect(() => {
+    onReadyChangeRef.current = onReadyChange
+  }, [onReadyChange])
+  const previewReady = pdfReady && imageState === 'ready'
+  useEffect(() => {
+    onReadyChangeRef.current(previewReady)
+  }, [previewReady])
+
+  const interactive = canAdjust && previewReady && !saving
 
   const backgroundUrl = api.signatureEditorBackgroundUrl(
     documentId,
@@ -419,7 +473,7 @@ function PlacementCanvas({
   }
 
   function onPointerDown(e: React.PointerEvent<HTMLDivElement>): void {
-    if (!canAdjust) return
+    if (!interactive) return
     const imgRect = e.currentTarget.getBoundingClientRect()
     dragRef.current = {
       startDraft: draft,
@@ -452,7 +506,7 @@ function PlacementCanvas({
   }
 
   function onKeyDown(e: React.KeyboardEvent<HTMLDivElement>): void {
-    if (!canAdjust) return
+    if (!interactive) return
     const page = description.pages.find((p) => p.page === draft.page)
     if (!page) return
     const stepPt = e.shiftKey ? 10 : 1
@@ -472,51 +526,92 @@ function PlacementCanvas({
   }
 
   return (
-    <DocPdfCanvas
-      pdfUrl={backgroundUrl}
-      renderOverlay={(pages) => {
-        pagesRef.current = pages
-        const box = pages.find((p) => p.page === draft.page)
-        const pageInfo = description.pages.find((p) => p.page === draft.page)
-        if (!box || !pageInfo || selected.width_pt == null || selected.height_pt == null) return null
-        const rect = placeSignature(
-          box,
-          draft.x,
-          draft.y,
-          selected.width_pt,
-          selected.height_pt,
-          pageInfo.width_pt,
-          pageInfo.height_pt,
-        )
-        return (
-          <div ref={rootRef} className="pointer-events-none absolute inset-0">
-            <div
-              role="img"
-              aria-label={t('signaturePlacement.signatureLabel')}
-              tabIndex={canAdjust ? 0 : -1}
-              onPointerDown={onPointerDown}
-              onPointerMove={onPointerMove}
-              onPointerUp={onPointerUp}
-              onKeyDown={onKeyDown}
-              className={cn(
-                'pointer-events-auto absolute touch-none rounded-sm outline-offset-2',
-                canAdjust && 'cursor-grab focus-visible:outline focus-visible:outline-2 focus-visible:outline-ring active:cursor-grabbing',
-              )}
-              style={{ left: rect.left, top: rect.top, width: rect.width, height: rect.height }}
-            >
-              {imageUrl && (
-                <img
-                  src={imageUrl}
-                  alt=""
-                  draggable={false}
-                  className="h-full w-full select-none object-contain"
-                />
-              )}
+    <div className="relative">
+      <DocPdfCanvas
+        pdfUrl={backgroundUrl}
+        onReady={() => setPdfReady(true)}
+        renderOverlay={(pages) => {
+          pagesRef.current = pages
+          const box = pages.find((p) => p.page === draft.page)
+          const pageInfo = description.pages.find((p) => p.page === draft.page)
+          if (!box || !pageInfo || selected.width_pt == null || selected.height_pt == null) return null
+          const rect = placeSignature(
+            box,
+            draft.x,
+            draft.y,
+            selected.width_pt,
+            selected.height_pt,
+            pageInfo.width_pt,
+            pageInfo.height_pt,
+          )
+          return (
+            <div ref={rootRef} className="pointer-events-none absolute inset-0">
+              <div
+                role="img"
+                aria-label={t('signaturePlacement.signatureLabel')}
+                tabIndex={interactive ? 0 : -1}
+                onPointerDown={onPointerDown}
+                onPointerMove={onPointerMove}
+                onPointerUp={onPointerUp}
+                onKeyDown={onKeyDown}
+                className={cn(
+                  'pointer-events-auto absolute touch-none rounded-sm',
+                  previewReady && 'ring-2 ring-primary/70',
+                  interactive &&
+                    'cursor-grab focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring active:cursor-grabbing',
+                )}
+                style={{ left: rect.left, top: rect.top, width: rect.width, height: rect.height }}
+              >
+                {imageUrl && imageState !== 'error' && (
+                  <img
+                    src={imageUrl}
+                    alt=""
+                    draggable={false}
+                    className="h-full w-full select-none object-contain"
+                    onLoad={(e) => {
+                      const img = e.currentTarget
+                      setImageState(img.naturalWidth > 0 && img.naturalHeight > 0 ? 'ready' : 'error')
+                    }}
+                    onError={() => setImageState('error')}
+                  />
+                )}
+              </div>
             </div>
+          )
+        }}
+      />
+      {pdfReady && imageState === 'loading' && (
+        <div className="pointer-events-none absolute inset-x-0 bottom-2 flex justify-center">
+          <span
+            role="status"
+            className="pointer-events-auto flex items-center gap-1.5 rounded-full bg-background/90 px-3 py-1 text-xs font-medium text-muted-foreground shadow"
+          >
+            <Loader2 className="h-3 w-3 animate-spin" />
+            {t('signaturePlacement.previewLoading')}
+          </span>
+        </div>
+      )}
+      {pdfReady && imageState === 'error' && (
+        <div className="pointer-events-none absolute inset-x-0 bottom-2 flex justify-center px-4">
+          <div
+            role="alert"
+            className="pointer-events-auto flex items-center gap-2 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive shadow"
+          >
+            <AlertCircle className="h-3.5 w-3.5 shrink-0" />
+            <span>{t('signaturePlacement.previewFailed')}</span>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="h-6 shrink-0 px-2 text-xs"
+              onClick={() => setRetryToken((n) => n + 1)}
+            >
+              {t('common.retry')}
+            </Button>
           </div>
-        )
-      }}
-    />
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -526,6 +621,7 @@ function PlacementControls({
   draft,
   dirty,
   saving,
+  previewReady,
   onDraftChange,
   onReset,
   onSave,
@@ -537,6 +633,7 @@ function PlacementControls({
   draft: Draft
   dirty: boolean
   saving: boolean
+  previewReady: boolean
   onDraftChange: (draft: Draft) => void
   onReset: () => void
   onSave: () => void
@@ -566,6 +663,7 @@ function PlacementControls({
           <Select
             value={String(draft.page)}
             onValueChange={(v) => onDraftChange({ ...draft, page: Number(v) })}
+            disabled={!previewReady || saving}
           >
             <SelectTrigger>
               <SelectValue />
@@ -587,6 +685,7 @@ function PlacementControls({
             step="0.5"
             dir="ltr"
             value={leftMm.toFixed(1)}
+            disabled={!previewReady || saving}
             onChange={(e) => setLeftMm(Number(e.target.value))}
           />
         </label>
@@ -598,19 +697,32 @@ function PlacementControls({
             step="0.5"
             dir="ltr"
             value={topMm.toFixed(1)}
+            disabled={!previewReady || saving}
             onChange={(e) => setTopMm(Number(e.target.value))}
           />
         </label>
       </div>
 
       <div className="mt-4 flex flex-wrap gap-2">
-        <Button type="button" variant="outline" size="sm" disabled={!canReset} onClick={onReset}>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={!canReset || !previewReady || saving}
+          onClick={onReset}
+        >
           {t('signaturePlacement.reset')}
         </Button>
         <Button type="button" variant="ghost" size="sm" onClick={onCancel}>
           {t('common.cancel')}
         </Button>
-        <Button type="button" size="sm" disabled={!dirty || saving} onClick={onSave} className="ms-auto">
+        <Button
+          type="button"
+          size="sm"
+          disabled={!dirty || saving || !previewReady}
+          onClick={onSave}
+          className="ms-auto"
+        >
           {saving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : t('signaturePlacement.save')}
         </Button>
       </div>

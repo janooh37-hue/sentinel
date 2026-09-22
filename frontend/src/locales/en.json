@@ -1909,7 +1909,7 @@
       "approve": "Approve",
       "signApprove": "Sign & approve",
       "signed": "Book signed & approved",
-      "noSignatureHint": "Add your signing signature in Settings before approving.",
+      "noSignatureHint": "Add your profile signature in Settings or on your employee profile before approving.",
       "signingManager": "Signing manager",
       "selectApprover": "Select a signing manager…",
       "singleSignerHint": "One manager signs and approves this book.",
@@ -1964,8 +1964,8 @@
       "noApproversSelfHint": "You can sign — upload your signature in Settings.",
       "goToSettings": "Open Settings → Signing",
       "changeManager": "Change",
-      "managerNoSignature": "This manager has no signature on file yet — they'll need to add one in Settings → Signing before they can sign.",
-      "managerNoSignatureLink": "Settings → Signing",
+      "managerNoSignature": "This manager has no shared profile signature yet. Add it on the employee profile before signing, or",
+      "managerNoSignatureLink": "open Settings → Signing.",
       "managerNotLinked": "No manager is linked to this document. Please select a signing manager.",
       "reviewers": "Reviewers",
       "reviewersHint": "Reviewers can comment and request changes before approval."
@@ -2752,6 +2752,7 @@
       "nameAr": "Name (Arabic)",
       "jobTitle": "Title",
       "signature": "Signature",
+      "sharedSignatureHint": "Linked managers share their login account's profile signature; replacing or removing a shared signature here changes it everywhere.",
       "hasSignature": "Signature on file",
       "noSignature": "No signature",
       "removeSignature": "Remove signature",
@@ -2820,15 +2821,16 @@
       "placeholder": "Type your signature here…"
     },
     "signingSignature": {
-      "title": "Signing signature",
-      "description": "Embedded in a book's PDF when you approve and sign it. Separate from the email signature and the employee-vault signature.",
+      "title": "Profile signature",
+      "description": "Used on your employee profile, linked manager record, and book approvals.",
+      "unlinkedDescription": "Saved on your account. It will move to your employee profile automatically once your account is linked.",
       "onFile": "Signature on file",
       "save": "Save signature",
-      "saved": "Signing signature saved",
+      "saved": "Profile signature saved",
       "clear": "Clear",
       "replace": "Replace",
       "remove": "Remove",
-      "removed": "Signing signature removed"
+      "removed": "Profile signature removed"
     },
     "sigAppearance": {
       "title": "Signature appearance",
@@ -4615,6 +4617,8 @@
     "saved": "Signature position saved.",
     "conflict": "This document changed since the workspace opened. Reloading the latest copy.",
     "signatureLabel": "Signature — drag or use the arrow keys to move",
+    "previewLoading": "Loading signature preview…",
+    "previewFailed": "Could not load the signature preview. Retry before adjusting its position.",
     "unsavedTitle": "Discard unsaved changes?",
     "unsavedDesc": "You have not saved the new position. Leaving now discards it.",
     "discard": "Discard changes",

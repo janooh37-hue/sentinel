@@ -32,7 +32,7 @@ router = APIRouter(prefix="/managers", tags=["managers"])
 def _read(db: Session, row: Manager) -> ManagerRead:
     item = ManagerRead.model_validate(row)
     item.user_name = manager_service.manager_user_name(db, row)
-    item.has_signature = manager_service.has_signature(row)
+    item.has_signature = manager_service.has_signature(db, row)
     return item
 
 
@@ -86,8 +86,8 @@ def get_manager_signature(
     _user: Annotated[User, Depends(require_capability("settings.edit"))],
     encoding: Annotated[str | None, Query(pattern="^base64$")] = None,
 ) -> Response:
-    manager_service._get_or_404(db, manager_id)
-    path = manager_service.manager_signature_path(manager_id)
+    mgr = manager_service._get_or_404(db, manager_id)
+    path = manager_service.signature_path(db, mgr)
     if not path.is_file():
         raise NotFoundError("SIGNATURE_NOT_FOUND", "No signature on file.", manager_id=manager_id)
     updated = datetime.fromtimestamp(path.stat().st_mtime, tz=UTC).isoformat()

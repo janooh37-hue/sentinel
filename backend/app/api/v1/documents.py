@@ -821,6 +821,7 @@ def get_signature_editor_image(
     db: Annotated[Session, Depends(get_db)],
     user: Annotated[User, Depends(get_current_user)],
     signature_revision: Annotated[int, Query(ge=0)],
+    encoding: Annotated[str | None, Query(pattern="^base64$")] = None,
 ) -> Response:
     row = _document_or_404(db, document_id)
     _require_document_record_access(db, user, row)
@@ -837,6 +838,10 @@ def get_signature_editor_image(
     from app.core.signature_layout import extract_signature_image_bytes
 
     image_bytes = extract_signature_image_bytes(tracked_docx, signature_id)
+    if (
+        b64 := maybe_base64(image_bytes, encoding, extra_headers={"Cache-Control": "no-store"})
+    ) is not None:
+        return b64
     return Response(
         content=image_bytes, media_type="image/png", headers={"Cache-Control": "no-store"}
     )
@@ -848,6 +853,7 @@ def get_signature_editor_candidate_image(
     candidate_id: str,
     db: Annotated[Session, Depends(get_db)],
     user: Annotated[User, Depends(get_current_user)],
+    encoding: Annotated[str | None, Query(pattern="^base64$")] = None,
 ) -> Response:
     row = _document_or_404(db, document_id)
     _require_document_record_access(db, user, row)
@@ -858,6 +864,10 @@ def get_signature_editor_candidate_image(
     from app.core.signature_layout import extract_candidate_image_bytes
 
     image_bytes = extract_candidate_image_bytes(legacy_docx, candidate.docpr_name)
+    if (
+        b64 := maybe_base64(image_bytes, encoding, extra_headers={"Cache-Control": "no-store"})
+    ) is not None:
+        return b64
     return Response(
         content=image_bytes, media_type="image/png", headers={"Cache-Control": "no-store"}
     )

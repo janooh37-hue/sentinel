@@ -45,7 +45,6 @@ from app.db.models import (
     Employee,
     Manager,
     OutboundMessage,
-    Submitter,
     User,
 )
 from app.db.repos.refs_repo import allocate_ref_with_retry
@@ -60,7 +59,7 @@ from app.schemas.book import (
     ImportedDocRead,
 )
 from app.services import notify_format as nf
-from app.services import perm_service
+from app.services import perm_service, user_signature_service
 
 log = logging.getLogger(__name__)
 
@@ -1294,33 +1293,6 @@ def override_state(
     return book
 
 
-def _resolve_signer_signature(db: Session, signer: User) -> Path | None:
-    """The signer's ONE signature: their uploaded approval signature, else the
-    stored signature of their linked employee (G number) from the Submitter
-    registry — people should not need a second signature just for approvals."""
-    candidates: list[str] = []
-    if signer.signature_path:
-        candidates.append(signer.signature_path)
-    if signer.employee_id:
-        # .first(), not one_or_none: submitters.employee_id uniqueness is only
-        # app-side — a legacy duplicate row must not 500 the whole sign/detail
-        # path with MultipleResultsFound.
-        sub = (
-            db.execute(select(Submitter).where(Submitter.employee_id == signer.employee_id))
-            .scalars()
-            .first()
-        )
-        if sub is not None and sub.stored_sig_path:
-            candidates.append(sub.stored_sig_path)
-    for raw in candidates:
-        p = Path(raw)
-        if not p.is_absolute():
-            p = get_settings().data_dir / p
-        if p.is_file():
-            return p
-    return None
-
-
 def sign_book(db: Session, book_id: int, *, user_id: int, version_id: int) -> Book:
     """Approve by signing: verify the caller is the pending signer, embed their
     signature into the current version's document, store the signed PDF, mark
@@ -1343,15 +1315,14 @@ def sign_book(db: Session, book_id: int, *, user_id: int, version_id: int) -> Bo
     signer = db.get(User, user_id)
     if signer is None:
         raise ValidationFailedError("NO_SIGNATURE", "لا يوجد توقيع محفوظ لحسابك")
-    abs_sig = _resolve_signer_signature(db, signer)
+    abs_sig = user_signature_service.resolve_signature(signer)
     if abs_sig is None:
         # Arabic — this message reaches the operator's toast verbatim
         # (apiErrorMessage shows the backend text; same convention as the
         # template-library errors in book_template_service).
         raise ValidationFailedError(
             "NO_SIGNATURE",
-            "لا يوجد توقيع محفوظ — ارفع توقيعك من الإعدادات، أو خزّن توقيع "
-            "الموظف (برقم G) في سجل مقدمي الطلبات.",
+            "لا يوجد توقيع محفوظ — أضف توقيع الملف الشخصي من الإعدادات أو من ملف الموظف.",
         )
 
     version = _current_version(book)
@@ -2410,10 +2381,10 @@ def resolve_doc_manager_user(db: Session, book: Book) -> tuple[int | None, str |
     if mgr is None or mgr.user_id is None:
         return None, None, False
     user = db.get(User, mgr.user_id)
-    # Same resolution as sign-time (_resolve_signer_signature): the uploaded
-    # approval signature OR the linked employee's stored Submitter signature —
-    # else the dialog warns about a signature the signer actually has.
-    has_sig = user is not None and _resolve_signer_signature(db, user) is not None
+    # Same resolution as sign-time: the linked employee's profile signature,
+    # or the unlinked account's own signature — else the dialog warns about a
+    # signature the signer actually has.
+    has_sig = user is not None and user_signature_service.resolve_signature(user) is not None
     return mgr.user_id, resolve_user_name_by_id(db, mgr.user_id), has_sig
 
 

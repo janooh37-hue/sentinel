@@ -4003,7 +4003,7 @@ export interface paths {
         };
         /**
          * Get My Signature
-         * @description Return the current user's saved signature PNG (self-scoped).
+         * @description Return the caller's saved signature PNG (self-scoped).
          *
          *     ``encoding=base64`` returns the bytes base64-encoded as ``text/plain`` —
          *     the frontend uses this to dodge Internet Download Manager. Default returns
@@ -4029,12 +4029,10 @@ export interface paths {
         put?: never;
         /**
          * Preview My Signature
-         * @description Render the caller's SIGNING signature at the given size/boldness (self-scoped).
+         * @description Render the caller's saved signature at the given size/boldness (self-scoped).
          *
-         *     Reads ``user.signature_path`` — the exact file embedded when this user signs a
-         *     book (``book_service.sign_book``) — so the preview matches what lands on the
-         *     document. This is deliberately NOT the employee-vault signature served by
-         *     ``GET /signatures/me`` (those can differ).
+         *     Reads the SAME source as ``GET /signatures/me`` — the preview always
+         *     matches what lands on a signed document.
          */
         post: operations["preview_my_signature_api_v1_signatures_preview_post"];
         delete?: never;
@@ -18967,6 +18965,7 @@ export interface operations {
         parameters: {
             query: {
                 signature_revision: number;
+                encoding?: string | null;
             };
             header?: never;
             path: {
@@ -19001,7 +19000,9 @@ export interface operations {
     };
     get_signature_editor_candidate_image_api_v1_documents__document_id__signature_editor_candidates__candidate_id__image_get: {
         parameters: {
-            query?: never;
+            query?: {
+                encoding?: string | null;
+            };
             header?: never;
             path: {
                 document_id: number;
