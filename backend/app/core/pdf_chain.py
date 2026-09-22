@@ -1,17 +1,18 @@
 """DOCX → PDF conversion chain ported from `convert_docx_to_pdf`
 (v3.5.4 line 821).
 
-Preserves v3's three-method fallback in order, with the same reproducibility
-quirks the v3 ``CLAUDE.md`` calls out:
+Preserves v3's method fallback, with one v3 quirk deliberately dropped:
+v3 tried docx2pdf first, but docx2pdf's late-bound `win32com.client.Dispatch`
+attaches to any already-running Word instance with no `Visible`/
+`DisplayAlerts` guards — strictly riskier than, and made redundant by,
+method 1 below. The chain now starts at the safely-guarded method:
 
-  1. **docx2pdf** — wraps Word via the simplest interface, but stalls under
-     `.pyw` because `sys.stdout`/`stderr` are `None` and its tqdm progress
-     bar crashes. We patch in `_NullStream` for the duration of the call.
-     Harmless in server context (streams exist) but kept for parity.
-  2. **win32com `DispatchEx`** — fresh, isolated Word instance. Using
+  1. **win32com `DispatchEx`** — fresh, isolated Word instance. Using
      `Dispatch` instead would attach to a zombie Word from a prior failure
-     and corrupt the next conversion.
-  3. **PowerShell COM** — last-ditch shell-out with a 30-second timeout and
+     and corrupt the next conversion. `AutomationSecurity` is forced to
+     disable macros and `Documents.Open` suppresses conversion/encoding
+     prompts so no modal can block the isolated worker.
+  2. **PowerShell COM** — last-ditch shell-out with a 30-second timeout and
      ``CREATE_NO_WINDOW`` so no console flashes onto the desktop.
 
 Public contract (per `plans/01-core-port.md`):
@@ -73,28 +74,14 @@ class ConversionResult:
         return self.path is not None
 
 
-class _NullStream:
-    """Silent stand-in for `sys.stdout` / `sys.stderr`. Mirrors v3 line 835."""
-
-    def write(self, *_args: object, **_kwargs: object) -> int:
-        return 0
-
-    def flush(self, *_args: object, **_kwargs: object) -> None:
-        return None
-
-    def isatty(self) -> bool:
-        return False
-
-
 class PdfChain:
     """DOCX → PDF converter with the v3.5.4 three-method fallback."""
 
     # Methods are bound at instance level so tests can monkey-patch each one
-    # independently. The order is fixed: docx2pdf → win32com → PowerShell.
+    # independently. The order is fixed: win32com → PowerShell.
 
     def __init__(self) -> None:
         self._methods: tuple[tuple[str, Callable[[Path, Path], None]], ...] = (
-            ("docx2pdf", self._via_docx2pdf),
             ("win32com", self._via_win32com),
             ("powershell", self._via_powershell),
         )
@@ -153,27 +140,7 @@ class PdfChain:
         return ConversionResult(path=None, method=None, errors=errors)
 
     # ------------------------------------------------------------------
-    # Method 1 — docx2pdf
-    # ------------------------------------------------------------------
-
-    def _via_docx2pdf(self, src: Path, dst: Path) -> None:
-        try:
-            import docx2pdf
-        except ImportError as e:
-            raise _MethodUnavailable(f"docx2pdf not installed: {e}") from e
-
-        old_out, old_err = sys.stdout, sys.stderr
-        try:
-            if sys.stdout is None:
-                sys.stdout = _NullStream()
-            if sys.stderr is None:
-                sys.stderr = _NullStream()
-            docx2pdf.convert(str(src), str(dst))
-        finally:
-            sys.stdout, sys.stderr = old_out, old_err
-
-    # ------------------------------------------------------------------
-    # Method 2 — win32com DispatchEx
+    # Method 1 — win32com DispatchEx
     # ------------------------------------------------------------------
 
     def _via_win32com(self, src: Path, dst: Path) -> None:
@@ -192,14 +159,23 @@ class PdfChain:
             word = win32com.client.DispatchEx("Word.Application")
             word.Visible = False
             word.DisplayAlerts = False
-            doc = word.Documents.Open(str(src), ReadOnly=False)
+            # msoAutomationSecurityForceDisable — disable macros outright so
+            # no VBA/AutoOpen prompt can block this isolated worker.
+            word.AutomationSecurity = 3
+            doc = word.Documents.Open(
+                str(src),
+                ReadOnly=True,
+                AddToRecentFiles=False,
+                ConfirmConversions=False,
+                NoEncodingDialog=True,
+            )
             doc.SaveAs2(str(dst), FileFormat=_WD_FORMAT_PDF)
             doc.Close(False)
             doc = None
             word.Quit()
             word = None
         finally:
-            # Best-effort cleanup so Method 3 doesn't inherit a locked file.
+            # Best-effort cleanup so Method 2 doesn't inherit a locked file.
             if doc is not None:
                 try:
                     doc.Close(False)
@@ -212,7 +188,7 @@ class PdfChain:
                     log.debug("word.Quit cleanup raised", exc_info=True)
 
     # ------------------------------------------------------------------
-    # Method 3 — PowerShell COM
+    # Method 2 — PowerShell COM
     # ------------------------------------------------------------------
 
     def _via_powershell(self, src: Path, dst: Path) -> None:
@@ -222,7 +198,10 @@ class PdfChain:
             f"$word = New-Object -ComObject Word.Application; "
             f"$word.Visible = $false; "
             f"$word.DisplayAlerts = 0; "
-            f'$doc = $word.Documents.Open("{src}"); '
+            f"$word.AutomationSecurity = 3; "
+            f'$doc = $word.Documents.Open("{src}", $false, $true, $false, '
+            f"$null, $null, $null, $null, $null, $null, $null, $false, "
+            f"$null, $null, $true); "
             f'$doc.SaveAs([ref]"{dst}", [ref]{_WD_FORMAT_PDF}); '
             f"$doc.Close([ref]$false); "
             f"$word.Quit()"

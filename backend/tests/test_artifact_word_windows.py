@@ -736,3 +736,54 @@ def test_initial_approval_signature_word_smoke(
         json.dumps(summary, ensure_ascii=False, indent=2, sort_keys=True),
         encoding="utf-8",
     )
+
+
+def test_pdf_executor_reaps_wedged_worker_on_timeout(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A conversion that times out must kill the wedged worker's process
+    tree (so an orphaned WINWORD child doesn't survive it) and rebuild the
+    singleton pool — otherwise the one worker slot stays wedged forever and
+    every later conversion, for every document, times out too. This is a
+    pure mock: no real Word/subprocess involved, runs on any platform."""
+    from concurrent.futures import Future
+
+    from app.services import _pdf_executor
+
+    monkeypatch.delenv("GSSG_INLINE_PDF", raising=False)
+    monkeypatch.setattr(_pdf_executor, "_executor", None)
+    monkeypatch.setattr(_pdf_executor.sys, "platform", "win32")
+
+    killed: list[list[str]] = []
+    monkeypatch.setattr(
+        _pdf_executor.subprocess, "run", lambda cmd, **kwargs: killed.append(cmd)
+    )
+
+    class _FakeExecutor:
+        def __init__(self, pid: int) -> None:
+            self._processes = {pid: object()}
+            self.shutdown_calls: list[tuple[bool, bool]] = []
+
+        def submit(self, fn: object, *args: object, **kwargs: object) -> Future[object]:
+            fut: Future[object] = Future()
+            fut.set_exception(TimeoutError())
+            return fut
+
+        def shutdown(self, *, wait: bool, cancel_futures: bool) -> None:
+            self.shutdown_calls.append((wait, cancel_futures))
+
+    pools = [_FakeExecutor(4242), _FakeExecutor(9999)]
+    built = iter(pools)
+    monkeypatch.setattr(_pdf_executor, "ProcessPoolExecutor", lambda max_workers: next(built))
+
+    with pytest.raises(TimeoutError):
+        _pdf_executor.convert_docx_to_pdf(Path("dummy.docx"))
+
+    # the wedged worker's process tree was killed via taskkill (so an
+    # orphaned WINWORD child dies with it, not just the Python worker)
+    assert killed == [["taskkill", "/T", "/F", "/PID", "4242"]]
+    assert pools[0].shutdown_calls == [(False, True)]
+    assert _pdf_executor._executor is None  # singleton dropped, not left wedged
+
+    # the next call builds a fresh pool instead of reusing the wedged one
+    second = _pdf_executor.get_executor()
+    assert second is pools[1]
+    assert second is not pools[0]

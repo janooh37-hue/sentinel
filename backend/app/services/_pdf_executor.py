@@ -13,13 +13,20 @@ fragile) and for CI environments without Word installed.
 
 from __future__ import annotations
 
+import logging
 import os
-from concurrent.futures import ProcessPoolExecutor
+import subprocess
+import sys
+from concurrent.futures import Future, ProcessPoolExecutor
+from concurrent.futures import TimeoutError as FutureTimeoutError
+from concurrent.futures.process import BrokenProcessPool
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from app.core.signature_layout import SignatureLayout
+
+log = logging.getLogger(__name__)
 
 _executor: ProcessPoolExecutor | None = None
 
@@ -29,6 +36,36 @@ def get_executor() -> ProcessPoolExecutor:
     if _executor is None:
         _executor = ProcessPoolExecutor(max_workers=1)
     return _executor
+
+
+def _reap_wedged_pool(executor: ProcessPoolExecutor) -> None:
+    """A worker timed out or the pool broke outright — kill its process
+    tree (so an orphaned WINWORD child doesn't outlive it) and drop the
+    module singleton so the next call builds a fresh pool. Without this the
+    single worker slot stays wedged forever and every later conversion, for
+    every document, times out too (host-wide outage)."""
+    global _executor
+    if _executor is executor:
+        _executor = None
+    for pid, proc in list(executor._processes.items()):
+        log.warning("Reaping wedged PDF worker pid=%s", pid)
+        try:
+            if sys.platform == "win32":
+                subprocess.run(["taskkill", "/T", "/F", "/PID", str(pid)], check=False, capture_output=True)
+            else:
+                proc.kill()
+        except Exception:
+            log.exception("Failed to kill wedged PDF worker pid=%s", pid)
+    executor.shutdown(wait=False, cancel_futures=True)
+
+
+def _await_result[T](executor: ProcessPoolExecutor, fut: Future[T], timeout: float) -> T:
+    """Wait for *fut*, reaping the pool if it times out or breaks outright."""
+    try:
+        return fut.result(timeout=timeout)
+    except (FutureTimeoutError, BrokenProcessPool):
+        _reap_wedged_pool(executor)
+        raise
 
 
 def _convert_in_subprocess(docx_path_str: str) -> str | None:
@@ -54,8 +91,9 @@ def convert_docx_to_pdf(docx_path: Path) -> Path | None:
         result = PdfChain().convert_or_none(docx_path)
         return result.path
 
-    fut = get_executor().submit(_convert_in_subprocess, str(docx_path))
-    raw = fut.result(timeout=120)
+    executor = get_executor()
+    fut = executor.submit(_convert_in_subprocess, str(docx_path))
+    raw = _await_result(executor, fut, timeout=120)
     return Path(raw) if raw else None
 
 
@@ -80,8 +118,9 @@ def measure_signature_position(docx_path: Path) -> SignatureLayout:
     Word instances never race."""
     if os.environ.get("GSSG_INLINE_PDF") == "1":
         return _measure_in_subprocess(str(docx_path))
-    fut = get_executor().submit(_measure_in_subprocess, str(docx_path))
-    return fut.result(timeout=180)
+    executor = get_executor()
+    fut = executor.submit(_measure_in_subprocess, str(docx_path))
+    return _await_result(executor, fut, timeout=180)
 
 
 def _move_in_subprocess(
@@ -171,7 +210,8 @@ def move_signature_position(
             before_pdf_str=str(before_pdf),
         )
     else:
-        fut = get_executor().submit(
+        executor = get_executor()
+        fut = executor.submit(
             _move_in_subprocess,
             str(source),
             str(destination),
@@ -182,7 +222,7 @@ def move_signature_position(
             layout=layout,
             before_pdf_str=str(before_pdf),
         )
-        after_layout, after_pdf_str = fut.result(timeout=240)
+        after_layout, after_pdf_str = _await_result(executor, fut, timeout=240)
     return after_layout, Path(after_pdf_str)
 
 
@@ -207,5 +247,6 @@ def render_signature_free_background(docx_path: Path, *, signature_id: str) -> P
     lives in a fresh temporary directory the CALLER owns and must clean up."""
     if os.environ.get("GSSG_INLINE_PDF") == "1":
         return Path(_background_in_subprocess(str(docx_path), signature_id))
-    fut = get_executor().submit(_background_in_subprocess, str(docx_path), signature_id)
-    return Path(fut.result(timeout=180))
+    executor = get_executor()
+    fut = executor.submit(_background_in_subprocess, str(docx_path), signature_id)
+    return Path(_await_result(executor, fut, timeout=180))
