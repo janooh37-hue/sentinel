@@ -71,6 +71,10 @@ export function AdjustSignatureAction({
           }
         : null,
     )
+    // Unmounting (queue navigation to a record without adjust eligibility)
+    // must clear the lifted trigger, or the Tools menu keeps showing — and
+    // can navigate to — the previous record's document.
+    return () => onTriggerChange?.(null)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [eligible, label, documentId, onTriggerChange])
 

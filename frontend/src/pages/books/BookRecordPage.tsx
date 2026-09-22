@@ -563,6 +563,7 @@ export function BookRecordPage(): React.JSX.Element {
   const desktopSignRef = useRef<HTMLButtonElement>(null)
   const mobileInlineSignRef = useRef<HTMLButtonElement>(null)
   const mobileDockSignRef = useRef<HTMLButtonElement>(null)
+  const lastSignTriggerRef = useRef<HTMLButtonElement | null>(null)
   const [signConfirm, setSignConfirm] = useState<{
     bookId: number
     versionId: number
@@ -854,6 +855,12 @@ export function BookRecordPage(): React.JSX.Element {
   // re-check in `confirmSign`).
   function requestSignConfirm(triggerRef: React.RefObject<HTMLButtonElement | null>): void {
     if (!book || !current || busy) return
+    // Copy the element (not the ref object) outside render: `onOpenChange`
+    // clears `signConfirm` synchronously on close, but Radix reads
+    // `returnFocusRef` right after in the same close — a ref sourced from
+    // already-null state would be undefined by then, so focus would fall
+    // back to <body>. This ref is stable and never read during render.
+    lastSignTriggerRef.current = triggerRef.current
     setSignConfirm({
       bookId: book.id,
       versionId: current.id,
@@ -1313,7 +1320,7 @@ export function BookRecordPage(): React.JSX.Element {
         }
         confirmLabel={t('books.approval.signApprove')}
         onConfirm={confirmSign}
-        returnFocusRef={signConfirm?.triggerRef}
+        returnFocusRef={lastSignTriggerRef}
       />
 
       {/* Post-sign "what's next" — only after a sign succeeds THIS session. */}

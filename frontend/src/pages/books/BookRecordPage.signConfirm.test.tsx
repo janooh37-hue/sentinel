@@ -145,6 +145,23 @@ describe('BookRecordPage — unified sign confirmation', () => {
     expect(api.signBook).not.toHaveBeenCalled()
   })
 
+  it('focus returns to the invoking Sign & approve button after Cancel', async () => {
+    // Regression: `returnFocusRef` must read a ref that survives the same
+    // synchronous `onOpenChange` callback that clears confirmation state —
+    // a ref sourced from that state would already be null by the time
+    // Radix resolves where to return focus.
+    vi.mocked(api.getBook).mockResolvedValue(pendingFixture() as never)
+    renderRecord(makeQc())
+
+    const trigger = await screen.findByRole('button', { name: 'Sign & approve' })
+    await userEvent.click(trigger)
+    await screen.findByText('Sign & approve this record?')
+
+    await userEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    await waitFor(() => expect(screen.queryByText('Sign & approve this record?')).not.toBeInTheDocument())
+    await waitFor(() => expect(document.activeElement).toBe(trigger))
+  })
+
   it('Confirm makes exactly one sign request for the captured record/version', async () => {
     vi.mocked(api.getBook).mockResolvedValue(pendingFixture() as never)
     vi.mocked(api.signBook).mockResolvedValue(pendingFixture({ approval_state: 'approved' }) as never)

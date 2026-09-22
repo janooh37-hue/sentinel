@@ -170,6 +170,10 @@ export function WordReopenButton({
         ? { label, icon: <FilePenLine className="h-3.5 w-3.5" aria-hidden="true" />, disabled, onClick: () => reopenMutation.mutate() }
         : null,
     )
+    // Unmounting (e.g. queue navigation to a record where this component no
+    // longer renders) must clear the lifted trigger too, or the Tools menu
+    // keeps showing — and can act on — the previous record's action.
+    return () => onTriggerChange?.(null)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [eligible, label, disabled, onTriggerChange])
 
