@@ -103,7 +103,7 @@ class BookStateOverrideRequest(BaseModel):
 class ScanBackResult(BaseModel):
     book_id: int | None
     ref_number: str
-    outcome: Literal["filed", "parked", "rejected"]
+    outcome: Literal["filed", "parked"]
 
 
 class RevokeRevisionAccessRequest(BaseModel):

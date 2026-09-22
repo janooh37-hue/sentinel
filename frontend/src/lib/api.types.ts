@@ -12095,7 +12095,7 @@ export interface components {
              * Outcome
              * @enum {string}
              */
-            outcome: "filed" | "parked" | "rejected";
+            outcome: "filed" | "parked";
         };
         /** ScanInboxCount */
         ScanInboxCount: {

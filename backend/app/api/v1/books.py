@@ -1558,11 +1558,7 @@ async def scan_back_book(
     """Route a General Book signed scan by its Reference barcode."""
     data = await file.read()
     classification = scan_triage_service.classify(data, db=db, employees=[])
-    codes = [
-        code
-        for code in classification.read.codes
-        if code.source == "code39"
-    ]
+    codes = [code for code in classification.read.codes if code.source == "code39"]
     if not codes:
         raise ValidationFailedError(
             "BOOK_BARCODE_UNREADABLE",

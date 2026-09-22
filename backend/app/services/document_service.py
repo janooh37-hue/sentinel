@@ -48,7 +48,7 @@ from app.core.constants import (
     VEHICLE_LETTER_FORMS,
 )
 from app.core.dateutils import excel_date_to_datetime
-from app.core.docx_engine import aztec_corner_for
+from app.core.docx_engine import aztec_corner_for, syncs_general_book_footer
 from app.core.docx_render import _arabic_clock, _arabic_weekday
 from app.core.html_text import html_to_text
 from app.core.vault_manager import Vault
@@ -1607,9 +1607,7 @@ def generate_document(
             and template_id not in CLASSIFIED_BOOK_FORMS
             and template_id not in VEHICLE_LETTER_FORMS,
             aztec_corner=aztec_corner_for(template_id) if commit else None,
-            sync_general_book_footer=(
-                template_id in CLASSIFIED_BOOK_FORMS and template_id != "General Book"
-            ),
+            sync_general_book_footer=syncs_general_book_footer(template_id),
         ),
         converter=pdf_converter,
     )
@@ -2468,9 +2466,7 @@ def render_signed_artifact(
             header_reference=template_id not in CLASSIFIED_BOOK_FORMS
             and template_id not in VEHICLE_LETTER_FORMS,
             aztec_corner=aztec_corner_for(template_id),
-            sync_general_book_footer=(
-                template_id in CLASSIFIED_BOOK_FORMS and template_id != "General Book"
-            ),
+            sync_general_book_footer=syncs_general_book_footer(template_id),
         ),
         converter=converter or convert_docx_to_pdf,
     )
