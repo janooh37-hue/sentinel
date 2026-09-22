@@ -165,7 +165,8 @@ pnpm --version
 6. Place Caddy at `C:\Tools\caddy\caddy.exe` and verify `caddy version`.
 7. Place cloudflared at `C:\Tools\cloudflared\cloudflared.exe` and verify `cloudflared --version`.
 8. Install Tesseract at `C:\Program Files\Tesseract-OCR\tesseract.exe`. Install and verify `ara`, `eng`, and `osd`; reuse the Arabic language-pack command from `docs/superpowers/ocr-server-setup.md`.
-9. Enable WSL2 and Virtual Machine Platform, then reboot before importing the WAHA distribution.
+9. Install the General Book paper's fonts with `powershell -ExecutionPolicy Bypass -File .\scripts\install-fonts.ps1 -CommercialFontsDir <path-to-commercial-fonts>` from an elevated PowerShell, where `<path-to-commercial-fonts>` holds the licensed Cronos Pro (Regular/Bold) and Univers Next Arabic (Regular/Bold) font files staged separately (they are not in the repository). The script also installs the repository's committed OFL barcode font and verifies all family names resolve via GDI+. Without this step, Word substitutes fonts in General Book PDFs and the header barcode does not render at its designed size.
+10. Enable WSL2 and Virtual Machine Platform, then reboot before importing the WAHA distribution.
 
 Where an installer path differs, require passing the explicit path to the repository PowerShell installer rather than editing scripts casually.
 

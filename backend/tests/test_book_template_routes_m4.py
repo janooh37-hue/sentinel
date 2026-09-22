@@ -95,11 +95,18 @@ def _plain_client(api_db, monkeypatch, tmp_path):
 # ---------------------------------------------------------------------------
 
 
+def _add_header_block(doc: Document) -> None:
+    header = doc.sections[0].first_page_header
+    header.add_paragraph("الرقم: 1/5/141")
+    header.add_paragraph("التاريخ: 20-07-2026")
+    header.add_paragraph("1/5/141+20260720")
+
+
+
 def _plain_docx(path: Path) -> None:
     """Retokenized General Book docx with no table."""
     doc = Document()
-    doc.add_paragraph("الرقم: 1/5/141")
-    doc.add_paragraph("التاريخ: 20-07-2026")
+    _add_header_block(doc)
     doc.add_paragraph("الموضوع: خطاب نصّي بدون جدول")
     doc.add_paragraph("نص")
     doc.save(str(path))
@@ -109,8 +116,7 @@ def _plain_docx(path: Path) -> None:
 def _table_docx(path: Path, headers: list[str]) -> None:
     """Retokenized General Book docx with a table."""
     doc = Document()
-    doc.add_paragraph("الرقم: 1/5/141")
-    doc.add_paragraph("التاريخ: 20-07-2026")
+    _add_header_block(doc)
     doc.add_paragraph("الموضوع: كتاب جدول بيانات للاختبار")
     t = doc.add_table(rows=2, cols=len(headers))
     for i, h in enumerate(headers):

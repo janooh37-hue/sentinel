@@ -13,6 +13,7 @@ import hashlib
 import logging
 from datetime import UTC, datetime
 from pathlib import Path
+from uuid import uuid4
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -133,7 +134,7 @@ def _process_one(db: Session, item: ScanInbox, *, reader: DocumentReader) -> Non
         db.commit()
         return
     read = classification.read
-    if read.text_source == "unavailable" and not read.qr_refs:
+    if read.text_source == "unavailable" and not read.qr_refs and not read.codes:
         if item.attempts >= MAX_OCR_ATTEMPTS:
             item.state = "error"
             item.error_detail = "OCR unavailable"
@@ -153,7 +154,9 @@ def _process_one(db: Session, item: ScanInbox, *, reader: DocumentReader) -> Non
     ]
     item.raw_text = read.text
     item.confidence = decision.confidence
-    item.qr_refs = list(read.qr_refs)
+    item.qr_refs = list(
+        dict.fromkeys((*read.qr_refs, *(code.ref for code in read.codes)))
+    )
     item.proposed_route = decision.proposed_route
     item.proposed_book_id = decision.proposed_book_id
     item.proposed_ref = decision.proposed_ref
@@ -177,6 +180,53 @@ def _process_one(db: Session, item: ScanInbox, *, reader: DocumentReader) -> Non
     else:
         item.state = "unrouted"
     db.commit()
+
+
+def park_scan_back(
+    db: Session,
+    *,
+    filename: str,
+    data: bytes,
+    user: User,
+    classification: scan_triage_service.ClassificationResult,
+    ref_number: str,
+) -> ScanInbox:
+    """Persist a decoded scan-back upload for operator confirmation."""
+    decision = scan_triage_service.project_inbox(classification)
+    safe_name = Path(filename).name or "scan"
+    suffix = Path(safe_name).suffix.lower() or (
+        ".pdf" if data.startswith(b"%PDF") else ".bin"
+    )
+    root = get_settings().data_dir.resolve()
+    directory = root / "scan_inbox"
+    directory.mkdir(parents=True, exist_ok=True)
+    path = directory / f"{uuid4().hex}{suffix}"
+    path.write_bytes(data)
+    row = ScanInbox(
+        source="scan_back",
+        owner_user_id=user.id,
+        file_path=path.relative_to(root).as_posix(),
+        filename=safe_name,
+        content_hash=hashlib.sha256(data).hexdigest(),
+        state="awaiting_confirmation",
+        document_type="returned_form",
+        fields=decision.fields,
+        raw_text=classification.read.text,
+        confidence=0.7,
+        qr_refs=list(dict.fromkeys((*classification.read.qr_refs, ref_number))),
+        proposed_route=decision.proposed_route,
+        proposed_book_id=decision.proposed_book_id,
+        proposed_ref=decision.proposed_ref or ref_number,
+        confidence_tier="confirm",
+        model_version=_MODEL_VERSION,
+    )
+    db.add(row)
+    try:
+        db.commit()
+    except Exception:
+        path.unlink(missing_ok=True)
+        raise
+    return row
 
 
 # ─────────────────────────────── file actions ──────────────────────────────────
@@ -421,6 +471,7 @@ __all__ = [
     "enqueue_email_attachment",
     "get_item",
     "list_items",
+    "park_scan_back",
     "route_item",
     "undo",
 ]

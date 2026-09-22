@@ -4014,6 +4014,12 @@
     "viewAll_one": "View all {{count}}",
     "viewAll_other": "View all {{count}}",
     "drop": "Drop the scan here, or click to browse",
+    "autoDropTitle": "Don't know which record?",
+    "autoDropHint": "Drop a General Book scan here. Its barcode will route it.",
+    "autoFiled": "Filed — barcode matched {{ref}}",
+    "parked": "{{ref}} needs review in the Scan Inbox",
+    "rejected": "Could not route {{ref}}",
+    "viewInbox": "Open Scan Inbox",
     "filed": "Filed — {{ref}} is closed",
     "uploadError": "Could not file that scan",
     "scope": {
@@ -4075,6 +4081,7 @@
       "auto": "High confidence",
       "confirm": "Please verify"
     },
+    "barcodeDateMismatch": "Barcode date: {{date}} — please verify",
     "bestGuesses": "Best guesses",
     "openInFile": "Open in file",
     "reMatch": "Wrong? Re-match",

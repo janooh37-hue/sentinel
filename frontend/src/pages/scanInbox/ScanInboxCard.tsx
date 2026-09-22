@@ -12,7 +12,7 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
-import { ChevronDown, ChevronUp, ExternalLink } from 'lucide-react'
+import { ChevronDown, ChevronUp, ExternalLink, TriangleAlert } from 'lucide-react'
 
 import { api, ApiError } from '@/lib/api'
 import type { ScanInboxItem } from '@/lib/api'
@@ -21,6 +21,14 @@ import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { ScanMatchDialog } from './ScanMatchDialog'
 import { ScanPreview } from './ScanPreview'
+
+function formatIsoDate(iso: string, locale: string): string {
+  const date = new Date(`${iso}T00:00:00`)
+  if (Number.isNaN(date.getTime())) return iso
+  return new Intl.DateTimeFormat(locale, { dateStyle: 'medium' })
+    .format(date)
+    .replace(/[\u200e\u200f]/g, '')
+}
 
 export function ScanInboxCard({ item }: { item: ScanInboxItem }): React.JSX.Element {
   const { t, i18n } = useTranslation()
@@ -88,7 +96,12 @@ export function ScanInboxCard({ item }: { item: ScanInboxItem }): React.JSX.Elem
     item.confidence_tier !== 'manual' &&
     (item.proposed_route === 'book_attach' || item.proposed_route === 'employee_doc')
 
-  const fieldEntries = Object.entries(item.fields ?? {}).filter(([, v]) => v)
+  const barcodeDateMismatch = item.fields?.barcode_date_mismatch
+  const mismatchDate = barcodeDateMismatch
+    ? formatIsoDate(barcodeDateMismatch, i18n.language)
+    : null
+  const fieldEntries = Object.entries(item.fields ?? {})
+    .filter(([key, value]) => key !== 'barcode_date_mismatch' && value)
 
   const url = api.scanDocumentUrl(item.id)
 
@@ -105,15 +118,28 @@ export function ScanInboxCard({ item }: { item: ScanInboxItem }): React.JSX.Elem
             </div>
           )}
           <p className="mt-2 text-[0.95em] text-foreground" dir="auto">{headline}</p>
-          {(item.confidence_tier === 'auto' || item.confidence_tier === 'confirm') && (
-            <span className={cn(
-              'mt-1.5 inline-block rounded-full px-2 py-0.5 text-[0.7em] font-medium',
-              item.confidence_tier === 'auto'
-                ? 'bg-primary-soft text-primary'
-                : 'bg-surface-tinted text-muted-foreground',
-            )}>
-              {t(`scanInbox.confidence.${item.confidence_tier}`)}
-            </span>
+          {((item.confidence_tier === 'auto' || item.confidence_tier === 'confirm') || mismatchDate) && (
+            <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+              {(item.confidence_tier === 'auto' || item.confidence_tier === 'confirm') && (
+                <span className={cn(
+                  'inline-block rounded-full px-2 py-0.5 text-[0.7em] font-medium',
+                  item.confidence_tier === 'auto'
+                    ? 'bg-primary-soft text-primary'
+                    : 'bg-surface-tinted text-muted-foreground',
+                )}>
+                  {t(`scanInbox.confidence.${item.confidence_tier}`)}
+                </span>
+              )}
+              {mismatchDate && (
+                <span
+                  dir="auto"
+                  className="inline-flex items-center gap-1 rounded-full bg-warning-soft px-2 py-0.5 text-[0.7em] font-medium text-warning"
+                >
+                  <TriangleAlert className="h-3 w-3 shrink-0" aria-hidden />
+                  {t('scanInbox.barcodeDateMismatch', { date: mismatchDate })}
+                </span>
+              )}
+            </div>
           )}
         </div>
         <button

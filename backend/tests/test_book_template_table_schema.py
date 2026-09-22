@@ -13,11 +13,18 @@ def _patch_templates_dir(monkeypatch, tmp_path):
     monkeypatch.setattr(svc, "templates_dir", lambda: tmp_path)
 
 
+def _add_header_block(doc):
+    header = doc.sections[0].first_page_header
+    header.add_paragraph("الرقم: 1/5/141")
+    header.add_paragraph("التاريخ: 20-07-2026")
+    header.add_paragraph("1/5/141+20260720")
+
+
+
 def _plain(path):
     """Retokenized General Book docx with NO table."""
     doc = Document()
-    doc.add_paragraph("الرقم: 1/5/141")
-    doc.add_paragraph("التاريخ: 20-07-2026")
+    _add_header_block(doc)
     doc.add_paragraph("الموضوع: خطاب نصّي بدون جدول للاختبار")
     doc.add_paragraph("نص")
     doc.save(str(path))
@@ -27,8 +34,7 @@ def _plain(path):
 def _table(path, headers):
     """Retokenized General Book docx WITH a table (headers normalized to loop)."""
     doc = Document()
-    doc.add_paragraph("الرقم: 1/5/141")
-    doc.add_paragraph("التاريخ: 20-07-2026")
+    _add_header_block(doc)
     doc.add_paragraph("الموضوع: كتاب جدول بيانات للاختبار المحترم")
     t = doc.add_table(rows=2, cols=len(headers))
     for i, h in enumerate(headers):

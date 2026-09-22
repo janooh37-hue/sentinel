@@ -2,17 +2,20 @@ from __future__ import annotations
 
 import hashlib
 import importlib
+import io
 import json
 import math
 import os
 import subprocess
 import unicodedata
+from datetime import date
 from pathlib import Path
 
 import pymupdf
 import pytest
 
 from app.core.extraction import ocr
+from app.core.qr import Decoded
 from app.services.document_reader import DocumentRead, OcrPageEvidence, read_document
 
 
@@ -60,8 +63,60 @@ def test_real_aztec_fixture_survives_ocr_unavailable(monkeypatch: pytest.MonkeyP
 
     monkeypatch.setattr(ocr, "extract_text", unavailable)
     assert read_document((FIXTURE_DIR / "returned-form-qr.png").read_bytes()) == DocumentRead(
-        text="", text_source="unavailable", qr_refs=("GS-0042",), unavailable_reason=reason
+        text="",
+        text_source="unavailable",
+        qr_refs=("GS-0042",),
+        codes=(Decoded("GS-0042", None, "aztec"),),
+        unavailable_reason=reason,
     )
+
+
+def test_read_document_carries_general_book_reference_barcode(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+
+    import zxingcpp
+    from PIL import Image
+
+    barcode = zxingcpp.create_barcode(
+        "1/5/141+20260921", zxingcpp.BarcodeFormat.Code39
+    ).to_image(scale=4)
+    buffer = io.BytesIO()
+    Image.fromarray(barcode).save(buffer, format="PNG")
+    monkeypatch.setattr(ocr, "extract_text", lambda _image: ocr.OcrResult("", 0.0))
+
+    result = read_document(buffer.getvalue())
+
+    assert result.codes == (Decoded("1/5/141", date(2026, 9, 21), "code39"),)
+
+
+def test_barcode_pdf_uses_300_dpi_decode_pass() -> None:
+
+    import zxingcpp
+    from PIL import Image
+
+    barcode = Image.fromarray(
+        zxingcpp.create_barcode(
+            "1/5/141+20260921", zxingcpp.BarcodeFormat.Code39
+        ).to_image()
+    )
+    buffer = io.BytesIO()
+    barcode.save(buffer, format="PNG")
+    with pymupdf.open() as pdf:
+        page = pdf.new_page(width=595, height=842)
+        page.insert_image(pymupdf.Rect(40, 40, 340, 100), stream=buffer.getvalue())
+        raw = pdf.tobytes()
+
+    at_200 = [
+        code
+        for image in ocr.pdf_to_images(raw, dpi=200)
+        for code in __import__("app.core.qr", fromlist=["decode_codes"]).decode_codes(image)
+    ]
+
+    assert at_200 == []
+    assert ocr.decode_codes_from_bytes(raw) == [
+        Decoded("1/5/141", date(2026, 9, 21), "code39")
+    ]
 
 
 def test_blank_ocr_success_retains_page_evidence(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -329,6 +384,7 @@ def test_pdf_ocr_failure_discards_partial_text_and_closes_pages(
         text="",
         text_source="unavailable",
         qr_refs=("GS-0042",),
+        codes=(Decoded("GS-0042", None, "aztec"),),
         unavailable_reason="synthetic page two unavailable",
     )
     assert len(images) == 2

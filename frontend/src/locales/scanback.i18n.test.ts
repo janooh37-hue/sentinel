@@ -14,6 +14,8 @@ const KEYS = [
   'scanBack.sort.oldest', 'scanBack.sort.newest',
   'scanBack.group.overMonth', 'scanBack.group.weeks', 'scanBack.group.recent',
   'scanBack.drop', 'scanBack.filed', 'scanBack.uploadError',
+  'scanBack.autoDropTitle', 'scanBack.autoDropHint', 'scanBack.autoFiled',
+  'scanBack.parked', 'scanBack.rejected', 'scanBack.viewInbox',
   'scanBack.gate.blurb', 'scanBack.gate.upload', 'scanBack.gate.later', 'scanBack.gate.close',
   'scanBack.dock.header', 'scanBack.dock.expand', 'scanBack.dock.collapse',
 ]

@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from app.api.errors import NotFoundError, ValidationFailedError
 from app.config import get_settings
 from app.core.extraction import ocr
+from app.core.qr import Decoded
 from app.db.models import Book, BookCategory, BookVersion, Employee, ScanInbox, User, VaultFile
 from app.services import scan_inbox_service
 from app.services.document_reader import DocumentRead
@@ -863,6 +864,44 @@ def test_drain_qr_only_files_once_when_ocr_is_unavailable(
     assert book.attachment_paths == [f"book_attachments/{book.id}/returned-form-qr.png"]
     assert (isolated_data_dir / book.attachment_paths[0]).read_bytes() == raw
     assert source.read_bytes() == raw
+
+
+def test_drain_reference_barcode_survives_unavailable_ocr(
+    db_session: Session,
+    isolated_data_dir: Path,
+) -> None:
+    book = _approved_book(db_session)
+    source = isolated_data_dir / "reference-barcode.png"
+    raw = b"synthetic barcode scan"
+    source.write_bytes(raw)
+    item = scan_inbox_service.enqueue_email_attachment(
+        db_session,
+        ledger_entry_id=None,
+        owner_user_id=None,
+        rel_path=source.name,
+        filename=source.name,
+        data=raw,
+        is_inline=False,
+    )
+    assert item is not None
+    db_session.commit()
+
+    def reader(data: bytes) -> DocumentRead:
+        assert data == raw
+        return DocumentRead(
+            text="",
+            text_source="unavailable",
+            codes=(Decoded("GS-0042", book.created_at.date(), "code39"),),
+            unavailable_reason="synthetic OCR unavailable",
+        )
+
+    assert scan_inbox_service.drain_pending(db_session, reader=reader) == 1
+    db_session.rollback()
+    stored = scan_inbox_service.get_item(db_session, item.id, user=None)
+    assert stored.state == "auto_filed"
+    assert stored.attempts == 1
+    assert stored.proposed_book_id == book.id
+    assert stored.qr_refs == ["GS-0042"]
 
 
 def test_drain_ambiguous_exact_books_stays_manual_without_artifacts(

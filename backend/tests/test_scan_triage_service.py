@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import date, datetime
 from pathlib import Path
 
 import pytest
@@ -9,7 +10,8 @@ from sqlalchemy.orm import Session
 from app.core.extraction import ocr
 from app.core.extraction.form_ref import candidate_refs, stamped_tokens
 from app.core.extraction.types import DocType, ExtractedField, Extraction
-from app.db.models import Book, BookCategory, Employee
+from app.core.qr import Decoded
+from app.db.models import Book, BookCategory, BookVersion, Employee
 from app.services.document_reader import DocumentRead
 from app.services.scan_triage_service import (
     BookMatchEvidence,
@@ -66,6 +68,8 @@ def test_exact_stamped_reference_produces_both_compatibility_projections(
         book_id=book.id,
         ref_number="GS-0042",
         approval_state="approved",
+        created_at=book.created_at,
+        paper_date=None,
         category="General Records",
         subject="Synthetic returned form",
         employee_id=None,
@@ -503,6 +507,135 @@ def test_unique_qr_precedes_conflicting_ocr_and_keeps_reference_evidence(
         ("ocr_stamped", "GS-0043"),
     ]
     assert result.ambiguities == ()
+    assert project_inbox(result).tier == "auto"
+
+
+def test_matching_reference_barcode_date_auto_routes(db_session: Session) -> None:
+    book = Book(
+        category=BookCategory(id="GS", name_en="Records", prefix="GS"),
+        ref_number="1/5/141",
+        approval_state="approved",
+        created_at=datetime(2026, 9, 20),
+    )
+    book.versions.append(
+        BookVersion(
+            version_no=1,
+            template_id="General Book",
+            fields={"date": "21-09-2026"},
+        )
+    )
+    db_session.add(book)
+    db_session.flush()
+
+    result = classify_text(
+        DocumentRead(
+            "",
+            "ocr",
+            codes=(Decoded("1/5/141", date(2026, 9, 21), "code39"),),
+        ),
+        db=db_session,
+        employees=[],
+    )
+
+    assert isinstance(result, ReturnedFormClassification)
+    assert result.match.confidence == 1.0
+    decision = project_inbox(result)
+    assert decision.tier == "auto"
+    assert decision.confidence == 1.0
+    assert "barcode_date_mismatch" not in decision.fields
+
+
+def test_mismatched_reference_barcode_date_requires_confirmation(
+    db_session: Session,
+) -> None:
+    book = Book(
+        category=BookCategory(id="GS", name_en="Records", prefix="GS"),
+        ref_number="1/5/141",
+        approval_state="approved",
+        created_at=datetime(2026, 9, 20),
+    )
+    book.versions.append(
+        BookVersion(
+            version_no=1,
+            template_id="General Book",
+            fields={"date": "21-09-2026"},
+        )
+    )
+    db_session.add(book)
+    db_session.flush()
+
+    result = classify_text(
+        DocumentRead(
+            "",
+            "ocr",
+            codes=(Decoded("1/5/141", date(2026, 9, 22), "code39"),),
+        ),
+        db=db_session,
+        employees=[],
+    )
+
+    assert isinstance(result, ReturnedFormClassification)
+    assert result.match.confidence == 0.7
+    decision = project_inbox(result)
+    assert decision.tier == "confirm"
+    assert decision.confidence == 0.7
+    assert decision.fields["barcode_date_mismatch"] == "2026-09-22"
+
+
+def test_reference_barcode_date_falls_back_to_record_creation(
+    db_session: Session,
+) -> None:
+    book = Book(
+        category=BookCategory(id="GS", name_en="Records", prefix="GS"),
+        ref_number="1/5/141",
+        approval_state="approved",
+        created_at=datetime(2026, 9, 21, 15, 30),
+    )
+    book.versions.append(
+        BookVersion(version_no=1, template_id="General Book", fields={})
+    )
+    db_session.add(book)
+    db_session.flush()
+
+    result = classify_text(
+        DocumentRead(
+            "",
+            "ocr",
+            codes=(Decoded("1/5/141", date(2026, 9, 21), "code39"),),
+        ),
+        db=db_session,
+        employees=[],
+    )
+
+    assert isinstance(result, ReturnedFormClassification)
+    assert project_inbox(result).tier == "auto"
+
+
+def test_aztec_reference_without_date_keeps_existing_auto_route(
+    db_session: Session,
+) -> None:
+    book = Book(
+        category=BookCategory(id="GS", name_en="Records", prefix="GS"),
+        ref_number="GS-0042",
+        approval_state="approved",
+        created_at=datetime(2026, 9, 21),
+    )
+    db_session.add(book)
+    db_session.flush()
+
+    result = classify_text(
+        DocumentRead(
+            "",
+            "ocr",
+            codes=(Decoded("GS-0042", None, "aztec"),),
+            qr_refs=("GS-0042",),
+        ),
+        db=db_session,
+        employees=[],
+    )
+
+    assert isinstance(result, ReturnedFormClassification)
+    assert result.match.confidence == 1.0
     assert project_inbox(result).tier == "auto"
 
 

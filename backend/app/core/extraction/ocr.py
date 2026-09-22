@@ -11,6 +11,8 @@ from dataclasses import dataclass
 
 from PIL import Image, UnidentifiedImageError
 
+from app.core import qr
+
 _LANGS = "ara+eng"
 _PSM = "--psm 4"  # single column of variable-size blocks — suits ID cards, letters, gov certs
 _MIN_WIDTH = (
@@ -233,6 +235,30 @@ def qr_refs_from_bytes(raw: bytes) -> list[str]:
     except Exception:
         return refs
     return refs
+
+
+def decode_codes_from_bytes(raw: bytes) -> list[qr.Decoded]:
+    """Decoded GSSG codes from an upload; PDFs use a dedicated 300 dpi pass."""
+    codes: list[qr.Decoded] = []
+    seen: set[qr.Decoded] = set()
+    try:
+        with ExitStack() as stack:
+            images = (
+                stack.enter_context(closing(pdf_to_images(raw, dpi=300)))
+                if raw.startswith(b"%PDF")
+                else iter((load_image(raw),))
+            )
+            for image in images:
+                try:
+                    for code in qr.decode_codes(image):
+                        if code not in seen:
+                            seen.add(code)
+                            codes.append(code)
+                finally:
+                    image.close()
+    except Exception:
+        return codes
+    return codes
 
 
 def load_image(data: bytes) -> Image.Image:

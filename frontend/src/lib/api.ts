@@ -774,6 +774,7 @@ export type IncludedPapersHistoryRead = components['schemas']['IncludedPapersHis
 export type IncludedPapersPreviewRead = components['schemas']['IncludedPapersPreviewRead']
 export type IncludedPapersRequest = components['schemas']['IncludedPapersRequest']
 export type BookFacetsResponse = components['schemas']['BookFacetsResponse']
+export type ScanBackResult = components['schemas']['ScanBackResult']
 export type ServiceFacetRead = components['schemas']['ServiceFacetRead']
 // Approvals worklist (#31, revision-scoped) — GET /books/approval-log,
 // GET /books/approval-summary, GET /books/approval-log/{book_id}/neighbors
@@ -2184,6 +2185,12 @@ export const api = {
     form.append('file', file)
     form.append('as_signed', asSigned ? 'true' : 'false')
     return multipart<BookRead>(`/books/${bookId}/attachments`, form)
+  },
+  /** Route a General Book signed scan from its Reference barcode. */
+  scanBack: (file: File) => {
+    const form = new FormData()
+    form.append('file', file)
+    return multipart<ScanBackResult>('/books/scan-back', form)
   },
   /** DELETE /books/{id}/attachments/{index} — remove a plain attachment (undo a
    * wrongly-uploaded scan). books.edit. */

@@ -14,8 +14,8 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Printer } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
-import { ScanBackRow } from './ScanBackRow'
-import { ageDays, ageGroup, useFileSignedCopy, useScanBack, type AgeGroup } from './useScanBack'
+import { ScanBackRow, ScanBackUploadZone } from './ScanBackRow'
+import { ageDays, ageGroup, useFileSignedCopy, useScanBack, useScanBackUpload, type AgeGroup } from './useScanBack'
 
 const GROUPS: readonly AgeGroup[] = ['overMonth', 'weeks', 'recent']
 
@@ -26,6 +26,7 @@ export function ScanBackPage(): React.JSX.Element {
   const [newestFirst, setNewestFirst] = useState(false)
   const { books, isLoading } = useScanBack(scope)
   const { file, busy } = useFileSignedCopy()
+  const { upload, busy: autoBusy } = useScanBackUpload()
 
   const sorted = [...books].sort((a, b) =>
     newestFirst
@@ -81,6 +82,8 @@ export function ScanBackPage(): React.JSX.Element {
       </header>
 
       <div className="mx-auto w-full max-w-4xl flex-1 overflow-auto px-6 py-4">
+        {has('books.edit') && <ScanBackUploadZone onFile={upload} busy={autoBusy} />}
+        <div className="mt-4">
         {isLoading ? (
           <div className="flex flex-col gap-2">
             {Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-16 rounded-xl" />)}
@@ -103,6 +106,7 @@ export function ScanBackPage(): React.JSX.Element {
             )
           })
         )}
+        </div>
       </div>
     </div>
   )
