@@ -1,0 +1,328 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Record page — polish proposal (before / after)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#f5f4f1;--surface:#fff;--raised:#fafaf6;--tint:#f0eee8;--primary:#0d2845;--primary-hover:#1d3a5e;--primary-soft:#e8edf3;--accent:#c8102e;--accent-soft:#fbe5e8;--success:#047857;--success-soft:#d6f0e4;--warning:#92400e;--warning-soft:#fbedd8;--info:#1d4ed8;--info-soft:#e0e8f8;--text:#1c1f24;--muted:#5a6068;--faint:#8b9098;--border:#e6e4dd;--hair:#efece5;--sans:Inter,sans-serif;--mono:"IBM Plex Mono",monospace;--ease:cubic-bezier(.16,1,.3,1)}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--text);font:14px/1.5 var(--sans);margin:0;padding:40px 24px 120px}
+h1.page-title{font-size:22px;font-weight:800;margin:0 0 6px}
+p.page-sub{color:var(--muted);margin:0 0 36px;max-width:780px}
+.wrap{max-width:1080px;margin:0 auto}
+.pair{display:grid;grid-template-columns:1fr 1fr;gap:22px;margin-bottom:56px}
+@media (max-width:920px){.pair{grid-template-columns:1fr}}
+.col h2{font-size:12px;text-transform:uppercase;letter-spacing:.06em;font-weight:700;margin:0 0 10px;display:flex;align-items:center;gap:8px}
+.col.before h2{color:var(--faint)}
+.col.after h2{color:var(--success)}
+.tag{font-size:10px;font-weight:700;padding:2px 8px;border-radius:99px;letter-spacing:.03em}
+.tag.before{background:var(--tint);color:var(--faint)}
+.tag.after{background:var(--success-soft);color:var(--success)}
+.frame{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:16px;box-shadow:0 1px 2px rgba(20,20,10,.04)}
+.note{margin-top:10px;font-size:12.5px;color:var(--muted);line-height:1.5}
+.note b{color:var(--text)}
+.sev{display:inline-block;font-family:var(--mono);font-size:10px;font-weight:700;padding:1px 6px;border-radius:6px;margin-right:6px}
+.sev.p0{background:var(--accent-soft);color:var(--accent)}
+.sev.p1{background:var(--warning-soft);color:var(--warning)}
+.sev.p2{background:var(--info-soft);color:var(--info)}
+
+/* --- mini record-header mock (shared bones) --- */
+.rec-hdr{display:flex;align-items:flex-start;gap:10px;padding-bottom:12px;border-bottom:1px solid var(--hair);margin-bottom:14px;flex-wrap:wrap}
+.back-btn{width:30px;height:30px;border-radius:10px;border:1px solid var(--border);background:var(--surface);display:flex;align-items:center;justify-content:center;color:var(--muted);flex-shrink:0}
+.hdr-main{flex:1;min-width:0}
+.ref{font-family:var(--mono);font-size:10.5px;color:var(--faint);letter-spacing:.02em}
+.title{font-size:15px;font-weight:700;margin:2px 0 3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.title.wrap2{white-space:normal;overflow:visible;text-overflow:clip;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.meta{font-size:11.5px;color:var(--muted)}
+.pill{display:inline-flex;align-items:center;gap:5px;font-size:10.5px;font-weight:700;padding:3px 9px;border-radius:99px;background:var(--tint);color:var(--faint)}
+.pill .dot{width:5px;height:5px;border-radius:99px;background:var(--faint)}
+
+.icon-row{display:flex;gap:5px;flex-wrap:wrap}
+.ibtn{width:30px;height:30px;border-radius:9px;border:1px solid var(--border);background:var(--surface);display:flex;align-items:center;justify-content:center;color:var(--text);font-size:13px}
+.ibtn svg{width:14px;height:14px}
+.divider{width:1px;align-self:stretch;background:var(--border);margin:0 2px}
+
+.overflow-menu{position:relative}
+.overflow-pop{position:absolute;top:36px;right:0;background:var(--surface);border:1px solid var(--border);border-radius:12px;box-shadow:0 8px 24px rgba(20,20,10,.12);padding:6px;width:190px;font-size:12.5px}
+.overflow-pop .item{display:flex;align-items:center;gap:9px;padding:8px 10px;border-radius:8px;color:var(--text)}
+.overflow-pop .item:hover{background:var(--tint)}
+.overflow-pop .item svg{width:14px;height:14px;color:var(--muted)}
+
+/* labelled primary actions (after) */
+.actions-after{display:flex;gap:8px;flex-wrap:wrap}
+.abtn{display:flex;align-items:center;gap:6px;height:32px;padding:0 12px;border-radius:9px;font-size:12.5px;font-weight:600;border:1px solid transparent}
+.abtn svg{width:14px;height:14px}
+.abtn.green{background:var(--success);color:#fff}
+.abtn.amber{background:var(--warning-soft);color:var(--warning);border-color:#f0dcb8}
+.abtn.red-ghost{background:var(--surface);color:var(--accent);border-color:var(--accent-soft)}
+.abtn.ghost{background:var(--surface);color:var(--text);border-color:var(--border)}
+
+/* desk / empty state */
+.desk{border-radius:14px;padding:36px 20px;text-align:center}
+.desk.before{background:var(--tint);color:var(--faint);min-height:180px;display:flex;align-items:center;justify-content:center;font-size:13px}
+.desk.after{background:linear-gradient(180deg,var(--raised),var(--tint));border:1px dashed var(--border);min-height:180px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px}
+.desk.after .ic{width:36px;height:36px;border-radius:99px;background:var(--primary-soft);color:var(--primary);display:flex;align-items:center;justify-content:center}
+.desk.after .ic svg{width:18px;height:18px}
+.desk.after .t{font-size:13px;font-weight:600;color:var(--text)}
+.desk.after .s{font-size:11.5px;color:var(--muted);max-width:280px}
+.desk.after .cta{margin-top:4px;height:30px;padding:0 14px;border-radius:9px;background:var(--primary);color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;gap:6px}
+.desk.after .cta svg{width:12px;height:12px}
+
+/* timeline stations */
+.tl{display:flex;flex-direction:column;gap:0;font-size:12px}
+.tl .st{display:flex;gap:9px;padding:9px 0;position:relative}
+.tl .st:not(:last-child)::before{content:"";position:absolute;left:11px;top:30px;bottom:-9px;width:1.5px;background:var(--border)}
+.tl .ic{width:23px;height:23px;border-radius:99px;background:var(--tint);color:var(--faint);display:flex;align-items:center;justify-content:center;flex-shrink:0;z-index:1}
+.tl .ic svg{width:11px;height:11px}
+.tl .ic.done{background:var(--success-soft);color:var(--success)}
+.tl .ic.live{background:var(--primary-soft);color:var(--primary)}
+.tl .lbl{font-weight:600}
+.tl .mt{color:var(--faint);font-size:11px}
+
+.callout{background:var(--info-soft);border:1px solid #c9d8f5;border-radius:12px;padding:12px 14px;font-size:12.5px;color:#1d3d7a;margin-top:6px;display:flex;gap:9px}
+.callout svg{width:15px;height:15px;flex-shrink:0;margin-top:1px}
+
+.section-title{font-size:16px;font-weight:800;margin:0 0 4px;display:flex;align-items:center;gap:8px}
+.section-title .n{width:22px;height:22px;border-radius:99px;background:var(--primary);color:#fff;font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.section-sub{color:var(--muted);font-size:12.5px;margin:0 0 16px}
+
+.confirm-mock{position:relative}
+.confirm-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:16px;box-shadow:0 12px 32px rgba(20,20,10,.14);width:280px;position:absolute;top:8px;left:50%;transform:translateX(-50%)}
+.confirm-card .t{font-weight:700;font-size:13px;margin-bottom:4px}
+.confirm-card .s{font-size:11.5px;color:var(--muted);margin-bottom:12px}
+.confirm-card .doc-chip{background:var(--tint);border-radius:9px;padding:8px 10px;font-size:11px;margin-bottom:12px}
+.confirm-card .doc-chip .r{font-family:var(--mono);color:var(--faint)}
+.confirm-card .row{display:flex;gap:8px;justify-content:flex-end}
+.confirm-card button{height:28px;padding:0 12px;border-radius:8px;font-size:11.5px;font-weight:600;border:1px solid var(--border);background:var(--surface)}
+.confirm-card button.primary{background:var(--success);color:#fff;border-color:transparent}
+
+.footer-note{max-width:1080px;margin:0 auto;padding-top:20px;border-top:1px solid var(--border);font-size:12.5px;color:var(--muted)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1 class="page-title">Record page — polish proposal</h1>
+  <p class="page-sub">Impeccable critique of <code>frontend/src/pages/books/BookRecordPage.tsx</code>, dual-assessment (design review + detector/a11y evidence), rendered as before/after mocks using this project's own DESIGN.md tokens. Nothing here is live code — for your review before implementation.</p>
+
+  <div class="section-title"><span class="n">1</span>Sign &amp; Approve gets a confirmation step</div>
+  <p class="section-sub"><span class="sev p0">P0</span>Today: one click on an icon, no confirm, permanently signs the document. Delete/unfile-signed already uses a confirm dialog — signing itself, the highest-consequence action on the page, currently has less friction than deleting.</p>
+  <div class="pair">
+    <div class="col before">
+      <h2><span class="tag before">BEFORE</span>current</h2>
+      <div class="frame">
+        <div class="icon-row" style="justify-content:flex-end">
+          <div class="ibtn" style="background:var(--success);color:#fff;border-color:transparent" title="Sign &amp; Approve">✎</div>
+          <div class="ibtn" style="color:var(--warning)" title="Return">↩</div>
+          <div class="ibtn" style="color:var(--accent)" title="Reject">✕</div>
+        </div>
+        <div class="note">Click → <b>mutation fires immediately.</b> No dialog, no preview of what's being signed.</div>
+      </div>
+    </div>
+    <div class="col after">
+      <h2><span class="tag after">AFTER</span>proposed</h2>
+      <div class="frame confirm-mock" style="min-height:170px">
+        <div class="icon-row" style="justify-content:flex-end;opacity:.4">
+          <div class="ibtn" style="background:var(--success);color:#fff;border-color:transparent">✎</div>
+          <div class="ibtn" style="color:var(--warning)">↩</div>
+          <div class="ibtn" style="color:var(--accent)">✕</div>
+        </div>
+        <div class="confirm-card">
+          <div class="t">Sign &amp; approve this record?</div>
+          <div class="s">This applies your signature and cannot be undone from here.</div>
+          <div class="doc-chip"><span class="r">1-0001</span> · v1 · Request for annual leave approval — security team roster</div>
+          <div class="row"><button>Cancel</button><button class="primary">Sign &amp; approve</button></div>
+        </div>
+      </div>
+      <div class="note">Reuses the existing <b>ConfirmDialog</b> component already used for unfile-signed-copy — no new component, same pattern, just applied to the one action that was missing it.</div>
+    </div>
+  </div>
+
+  <div class="section-title"><span class="n">2</span>Header actions: primary vs. tools, labelled</div>
+  <p class="section-sub"><span class="sev p1">P1</span>Today: up to 8-10 icon-only buttons share one row — Recognition heuristic fails, working-memory ceiling (≤4) blown. A11y check found labels are already correct (aria-label/title on every button) — this is a grouping/hierarchy problem, not a labeling bug.</p>
+  <div class="pair">
+    <div class="col before">
+      <h2><span class="tag before">BEFORE</span>current</h2>
+      <div class="frame">
+        <div class="rec-hdr" style="border:none;margin:0;padding:0">
+          <div class="hdr-main">
+            <div class="ref">1-0001</div>
+            <div class="title">Request for annual leave approval — security team roster</div>
+          </div>
+          <div class="icon-row">
+            <div class="ibtn">📤</div><div class="ibtn">🛡</div><div class="ibtn">🖶</div><div class="ibtn">✉</div>
+            <div class="ibtn">📑</div><div class="ibtn">✎</div><div class="ibtn">✒</div><div class="ibtn">↻</div>
+          </div>
+        </div>
+        <div class="note">8 unlabeled-looking icons, equal visual weight, one undifferentiated strip. No grouping, no text, no primary/secondary distinction.</div>
+      </div>
+    </div>
+    <div class="col after">
+      <h2><span class="tag after">AFTER</span>proposed</h2>
+      <div class="frame">
+        <div class="rec-hdr" style="border:none;margin:0;padding:0">
+          <div class="hdr-main">
+            <div class="ref">1-0001</div>
+            <div class="title">Request for annual leave approval — security team roster</div>
+          </div>
+          <div class="actions-after">
+            <div class="abtn ghost">✎ Return</div>
+            <div class="abtn red-ghost">✕ Reject</div>
+            <div class="abtn green">✓ Sign &amp; approve</div>
+            <div class="overflow-menu">
+              <div class="ibtn" style="width:32px;height:32px">⋯</div>
+            </div>
+          </div>
+        </div>
+        <div class="overflow-pop" style="position:static;margin-top:10px;width:auto;box-shadow:none;border-style:dashed">
+          <div class="item">🖶 Print</div>
+          <div class="item">✉ Email via Outlook</div>
+          <div class="item">📑 Included papers</div>
+          <div class="item">🛡 Override state</div>
+          <div class="item">↻ Reopen in Word</div>
+        </div>
+        <div class="note">3-4 state-driven decisions get <b>text labels</b>, always visible. Everything else — print, email, override, reopen — collapses into one <b>"More"</b> menu. Same actions, same components (<code>HeaderBtn</code>), just grouped by frequency/consequence instead of alphabetized-by-icon.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section-title"><span class="n">3</span>Timeline vocabulary: stop reusing "Submitted"</div>
+  <p class="section-sub"><span class="sev p1">P1</span>"Submitted · v1" (version created) sits directly above a station literally reading "Not submitted" (not sent for approval) — same word, two different real-world meanings, one screen.</p>
+  <div class="pair">
+    <div class="col before">
+      <h2><span class="tag before">BEFORE</span>current</h2>
+      <div class="frame">
+        <div class="tl">
+          <div class="st"><div class="ic done">✓</div><div><div class="lbl">Submitted</div><div class="mt">— · v1 · 2026-09-21</div></div></div>
+          <div class="st"><div class="ic live">✎</div><div><div class="lbl">Not submitted</div><div class="mt">draft</div></div></div>
+        </div>
+        <div class="note">Reads as contradictory on first pass: was it submitted or not?</div>
+      </div>
+    </div>
+    <div class="col after">
+      <h2><span class="tag after">AFTER</span>proposed</h2>
+      <div class="frame">
+        <div class="tl">
+          <div class="st"><div class="ic done">✓</div><div><div class="lbl">Drafted</div><div class="mt">— · v1 · 2026-09-21</div></div></div>
+          <div class="st"><div class="ic live">✎</div><div><div class="lbl">Awaiting submission</div><div class="mt">not yet sent for approval</div></div></div>
+        </div>
+        <div class="note">"Submitted" is now reserved for the one meaning used everywhere else (the header's "Send for approval" action). One string change in <code>buildTimeline()</code> + its i18n key — no logic change.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section-title"><span class="n">4</span>Empty document state gets a next step</div>
+  <p class="section-sub"><span class="sev p2">P2</span>The moment a first-time user needs guidance most currently offers the least visual signal on the page. The imported-doc-no-preview state already has a CTA pattern — this just extends it to the plain no-document case.</p>
+  <div class="pair">
+    <div class="col before">
+      <h2><span class="tag before">BEFORE</span>current</h2>
+      <div class="frame">
+        <div class="desk before">No document on this record.</div>
+      </div>
+    </div>
+    <div class="col after">
+      <h2><span class="tag after">AFTER</span>proposed</h2>
+      <div class="frame">
+        <div class="desk after">
+          <div class="ic">📄</div>
+          <div class="t">No document yet</div>
+          <div class="s">This record is a draft. Generate or attach a document, then send it for approval.</div>
+          <div class="cta">→ Send for approval</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section-title"><span class="n">5</span>Mobile: progress isn't removed, it moves</div>
+  <p class="section-sub"><span class="sev p2">P2</span>Confirmed by the a11y pass: the timeline is <code>hidden md:block</code> — literally invisible below the md breakpoint, no alternate path. Title also truncates hard at 390px with no way to read it.</p>
+  <div class="pair">
+    <div class="col before">
+      <h2><span class="tag before">BEFORE</span>current (390px)</h2>
+      <div class="frame" style="max-width:280px">
+        <div class="hdr-main" style="margin-bottom:10px">
+          <div class="ref">1-0001</div>
+          <div class="title">Request for annual leave approval — se…</div>
+          <span class="pill"><span class="dot"></span>DRAFT</span>
+        </div>
+        <div class="desk before" style="min-height:110px;font-size:12px">No document on this record.</div>
+        <div class="note">Timeline: <b>gone</b>. No tab, no drawer — status is simply unreachable on phone.</div>
+      </div>
+    </div>
+    <div class="col after">
+      <h2><span class="tag after">AFTER</span>proposed (390px)</h2>
+      <div class="frame" style="max-width:280px">
+        <div class="hdr-main" style="margin-bottom:8px">
+          <div class="ref">1-0001</div>
+          <div class="title wrap2">Request for annual leave approval — security team roster</div>
+          <span class="pill"><span class="dot"></span>DRAFT</span>
+        </div>
+        <div class="callout" style="margin-top:8px">
+          <span>📋</span>
+          <div><b>Status: Awaiting submission.</b> Drafted 2026-09-21 · v1. Tap to view full timeline.</div>
+        </div>
+        <div class="desk before" style="min-height:70px;font-size:12px;margin-top:8px">No document on this record.</div>
+      </div>
+      <div class="note">Title wraps to 2 lines instead of hiding text. Timeline becomes a single-line collapsible status strip above the desk — same information, reachable with one tap, no sidebar needed on a narrow screen.</div>
+    </div>
+  </div>
+
+  <div class="section-title"><span class="n">6</span>Header actions — option B: split bar + Tools dropdown</div>
+  <p class="section-sub">Same P1 as section 2, heavier fix. Instead of re-grouping <code>HeaderBtn</code> icons into one overflow, permanently split the row into two rows: a primary decision bar (always visible, text+icon) and a separate "Tools" button that opens a proper dropdown menu (Radix <code>DropdownMenu</code> — already a project dependency, used elsewhere) instead of a plain popover.</p>
+  <div class="pair">
+    <div class="col before">
+      <h2><span class="tag before">OPTION A</span>from section 2 (recap)</h2>
+      <div class="frame">
+        <div class="rec-hdr" style="border:none;margin:0;padding:0">
+          <div class="hdr-main">
+            <div class="ref">1-0001</div>
+            <div class="title">Request for annual leave approval — security team roster</div>
+          </div>
+          <div class="actions-after">
+            <div class="abtn ghost">✎ Return</div>
+            <div class="abtn red-ghost">✕ Reject</div>
+            <div class="abtn green">✓ Sign &amp; approve</div>
+            <div class="ibtn" style="width:32px;height:32px">⋯</div>
+          </div>
+        </div>
+        <div class="note">One row. Overflow is a lightweight popover. <b>Smallest diff</b> — re-groups existing <code>HeaderBtn</code>s, no new component.</div>
+      </div>
+    </div>
+    <div class="col after">
+      <h2><span class="tag after">OPTION B</span>split bar + dropdown</h2>
+      <div class="frame">
+        <div class="hdr-main" style="margin-bottom:10px">
+          <div class="ref">1-0001</div>
+          <div class="title">Request for annual leave approval — security team roster</div>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 10px;background:var(--primary-soft);border-radius:10px;margin-bottom:8px">
+          <div class="actions-after">
+            <div class="abtn ghost" style="background:var(--surface)">✎ Return</div>
+            <div class="abtn red-ghost">✕ Reject</div>
+            <div class="abtn green">✓ Sign &amp; approve</div>
+          </div>
+          <span style="font-size:10.5px;color:var(--faint);font-weight:700;letter-spacing:.03em">DECISION</span>
+        </div>
+        <div class="overflow-menu" style="display:flex;justify-content:flex-end">
+          <div class="abtn ghost">🧰 Tools <span style="font-size:9px">▾</span></div>
+          <div class="overflow-pop">
+            <div class="item">🖶 Print</div>
+            <div class="item">✉ Email via Outlook</div>
+            <div class="item">📑 Included papers</div>
+            <div style="height:1px;background:var(--hair);margin:4px 2px"></div>
+            <div class="item">🛡 Override state</div>
+            <div class="item">↻ Reopen in Word</div>
+          </div>
+        </div>
+        <div class="note">Two visually distinct zones: a tinted <b>"decision" bar</b> that always stays put (matches the pattern the mobile decision dock already uses), and a real dropdown menu for tools. <b>New:</b> one wrapper div + a <code>DropdownMenu</code> instance (already imported elsewhere, e.g. account menu) — more structure, more scalable if the tools list grows, but it's new UI surface, not a re-group.</div>
+      </div>
+    </div>
+  </div>
+  <p class="section-sub" style="margin-top:-8px"><b>Recommendation stands with A</b> — B solves a "what if there are 15 tools someday" problem nobody has yet. Revisit B only if the Tools list actually grows past what one popover can hold.</p>
+
+  <div class="footer-note">
+    Mock only — built from this project's own <code>DESIGN.md</code> tokens (navy <code>--primary</code>, IBM Plex Mono refs, existing radii/pill scale), no new colors or components introduced. Icon-only <code>HeaderBtn</code>, <code>ConfirmDialog</code>, and the timeline's own i18n keys are reused as-is; nothing here requires a new dependency or design-system addition. Option B's dropdown reuses Radix <code>DropdownMenu</code>, already a project dependency.
+  </div>
+</div>
+</body>
+</html>

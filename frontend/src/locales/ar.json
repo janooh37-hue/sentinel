@@ -2135,7 +2135,9 @@
       "managerNoSignatureLink": "افتح الإعدادات ← التوقيع.",
       "managerNotLinked": "لا يوجد مدير مرتبط بهذا المستند. يرجى اختيار مدير للتوقيع.",
       "reviewers": "المراجعون",
-      "reviewersHint": "يمكن للمراجعين التعليق وطلب التعديلات قبل الاعتماد."
+      "reviewersHint": "يمكن للمراجعين التعليق وطلب التعديلات قبل الاعتماد.",
+      "signConfirmTitle": "توقيع هذا السجل والموافقة عليه؟",
+      "signConfirmBody": "سيؤدي هذا إلى تطبيق توقيعك على {{ref}} · الإصدار {{version}} · {{subject}}."
     },
     "annotations": {
       "pin": "دبوس",
@@ -2195,7 +2197,11 @@
       "downloadImported": "تنزيل الأصل ({{format}})",
       "progress": "التقدّم",
       "notification": "إشعار",
-      "stationSubmitted": "تم التقديم",
+      "tools": "أدوات",
+      "toolsDocument": "المستند",
+      "toolsEditing": "التحرير",
+      "toolsAdmin": "الإدارة",
+      "stationCreated": "أُنشئ الإصدار الأول",
       "stationRevised": "تم التعديل",
       "stationReturned": "أُعيد",
       "stationRejected": "مرفوض",
