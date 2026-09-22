@@ -37,7 +37,7 @@ from app.api.errors import ValidationFailedError
 from app.db.models import Employee, User
 from app.db.workforce_models import DutyAssignmentEvent
 from app.schemas.duty import DutyTransferMove, DutyTransferResult
-from app.services import document_service
+from app.services import document_service, workforce_schedule_service
 
 _UNSPECIFIED = "غير محدد"
 _SUBJECT = "النقل"
@@ -234,6 +234,9 @@ def transfer(
             )
             emp.duty_unit = to_unit
             emp.duty_post = to_post
+            workforce_schedule_service.reconcile_duty_crew_membership(
+                db, employee_id=emp.id, effective_at=effective_at, current_user=current_user
+            )
         db.commit()
         return DutyTransferResult(moved=[emp.id for emp, _, _ in rows])
 
@@ -257,6 +260,9 @@ def transfer(
         _enqueue_assignment_reevaluation(db, employee_id=emp.id, effective_at=effective_at)
         emp.duty_unit = to_unit
         emp.duty_post = to_post
+        workforce_schedule_service.reconcile_duty_crew_membership(
+            db, employee_id=emp.id, effective_at=effective_at, current_user=current_user
+        )
 
     fields: dict[str, Any] = {"subject": _SUBJECT, "body": body_html}
     if recipient_id is not None:

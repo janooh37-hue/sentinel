@@ -14,7 +14,7 @@ is small (272 employees in live data) and the React side already wants a
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import UTC, date, datetime
 from typing import Any, Final
 
 from sqlalchemy import and_, func, or_, select
@@ -30,6 +30,7 @@ from app.schemas.employee import (
     EmployeeUpdate,
     validate_status_end_date,
 )
+from app.services import workforce_schedule_service
 
 LIST_MAX_LIMIT = 500
 LIST_DEFAULT_LIMIT = 100
@@ -182,6 +183,15 @@ def update_employee(db: Session, employee_id: str, payload: EmployeeUpdate) -> E
 
     for k, v in data.items():
         setattr(row, k, v)
+    if "duty_unit" in data:
+        # A raw duty-unit edit changes only this row; the crew that actually
+        # generates shifts is `WorkCrewMembership`, which never moved on its
+        # own. This keeps shift generation and duty hierarchy pointed at the
+        # same place instead of drifting apart (idempotent - a no-op when the
+        # employee is unmapped, unenrolled, or already on the right crew).
+        workforce_schedule_service.reconcile_duty_crew_membership(
+            db, employee_id=row.id, effective_at=datetime.now(UTC)
+        )
     db.commit()
     db.refresh(row)
     return row

@@ -19,11 +19,13 @@ from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from PIL import Image, ImageDraw
 from sqlalchemy import select
+from sqlalchemy.orm import Session
 from starlette.requests import Request
 
 from app.config import get_settings
 from app.core.book_text import docx_to_text
 from app.db.models import (
+    Book,
     BookCategory,
     BookEditSession,
     BookVersion,
@@ -570,5 +572,167 @@ def test_signature_placement_word_smoke(monkeypatch: pytest.MonkeyPatch) -> None
             indent=2,
             sort_keys=True,
         ),
+        encoding="utf-8",
+    )
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="requires Microsoft Word on Windows")
+def test_initial_approval_signature_word_smoke(
+    db_session: Session, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Physical-placement acceptance gate for the signature-placement-repair
+    plan §2 restoration: General Book/Security Permit's Word-authored
+    approval (``docx_engine._stamp_manager_signing_block``) must FLOAT the
+    manager signature in the SAME physical position the pre-feature/
+    historical primitive — ``stamp_signature_above_name(...,
+    keep_manager_block_together=False)`` — would have put it, not inline
+    (the regression this restores). Uses an isolated in-memory DB and
+    synthetic users/managers, never the production DB or the module's
+    persistent ``SessionLocal`` pattern. Covers a short document and a
+    page-boundary-length one."""
+    if os.environ.get("GSSG_RUN_WORD_ARTIFACT_SMOKE") != "1":
+        pytest.skip("set GSSG_RUN_WORD_ARTIFACT_SMOKE=1 for the isolated Word gate")
+    evidence_dir = Path(os.environ["GSSG_WORD_EVIDENCE_DIR"]).resolve(strict=True)
+    monkeypatch.setenv("GSSG_DATA_DIR", str(tmp_path))
+    get_settings.cache_clear()
+    monkeypatch.setenv("GSSG_INLINE_PDF", "1")
+
+    from app.core._docx_helpers import wrap_paragraph_in_bookmark
+    from app.core.constants import DEFAULT_MANAGER_NAME, DEFAULT_MANAGER_TITLE
+    from app.core.docx_engine import stamp_signature_above_name
+    from app.core.signature_layout import inspect_signature_drawings
+    from app.services import _pdf_executor
+
+    signature = tmp_path / "sig.png"
+    image = Image.new("RGBA", (300, 100), (255, 255, 255, 0))
+    draw = ImageDraw.Draw(image)
+    draw.line([(20, 75), (80, 20), (145, 75), (220, 25), (280, 65)], fill="black", width=6)
+    image.save(signature)
+
+    BODY_LINE = "نرجو الموافقة على أعمال الصيانة العاجلة"
+
+    def _make_source(path: Path, *, page_boundary: bool, with_bookmark: bool) -> None:
+        d = DocxFile()
+        n_body = 45 if page_boundary else 1
+        for _ in range(n_body):
+            d.add_paragraph(BODY_LINE)
+        sig_gap = d.add_paragraph("")
+        d.add_paragraph(DEFAULT_MANAGER_NAME)
+        d.add_paragraph(DEFAULT_MANAGER_TITLE)
+        if with_bookmark:
+            wrap_paragraph_in_bookmark(sig_gap, "GSSG_ManagerSignature")
+        d.save(str(path))
+
+    summary: dict[str, object] = {}
+    for label, page_boundary, with_bookmark in [
+        ("short-fallback", False, False),
+        ("short-bookmark", False, True),
+        ("boundary-fallback", True, False),
+    ]:
+        actual_src = tmp_path / f"{label}-actual.docx"
+        reference_src = tmp_path / f"{label}-reference.docx"
+        _make_source(actual_src, page_boundary=page_boundary, with_bookmark=with_bookmark)
+        _make_source(reference_src, page_boundary=page_boundary, with_bookmark=False)
+
+        if db_session.get(BookCategory, "GS") is None:
+            db_session.add(BookCategory(id="GS", prefix="GS"))
+            db_session.flush()
+        book = Book(category_id="GS", ref_number=f"9/9/{label}", subject="word smoke")
+        db_session.add(book)
+        db_session.flush()
+        doc_row = Document(
+            template_id="General Book",
+            ref_number=book.ref_number,
+            docx_path=str(actual_src),
+            submission_id=f"word-smoke-{label}",
+            role="primary",
+        )
+        db_session.add(doc_row)
+        db_session.flush()
+        version = BookVersion(
+            book_id=book.id,
+            version_no=1,
+            trigger="initial",
+            status="none",
+            template_id="General Book",
+            fields={},
+            document_id=doc_row.id,
+        )
+        db_session.add(version)
+        db_session.commit()
+
+        artifact = document_service.render_signed_artifact(
+            db_session,
+            version=version,
+            signer_signature_path=str(signature),
+            converter=_real_dispatch_ex_converter,
+        )
+        actual_docx = artifact.docx_path
+        assert artifact.conversion.status == "success"
+        actual_pdf = artifact.conversion.pdf_path
+        assert actual_pdf is not None
+
+        assert stamp_signature_above_name(
+            reference_src,
+            str(signature),
+            [DEFAULT_MANAGER_NAME],
+            size_mm=32.0,
+            boldness=1,
+            keep_manager_block_together=False,
+        )
+        reference_pdf = _real_dispatch_ex_converter(reference_src)
+        assert reference_pdf is not None
+
+        with fitz.open(actual_pdf) as ap, fitz.open(reference_pdf) as rp:
+            assert ap.page_count == rp.page_count  # no new page pushed by insertion
+
+        actual_drawings = [d for d in inspect_signature_drawings(actual_docx) if d.role == "manager"]
+        assert len(actual_drawings) == 1  # one marked manager signature, one slot
+        reference_drawings = [
+            d for d in inspect_signature_drawings(reference_src) if d.role == "manager"
+        ]
+        assert len(reference_drawings) == 1
+
+        actual_layout = _pdf_executor.measure_signature_position(actual_docx)
+        reference_layout = _pdf_executor.measure_signature_position(reference_src)
+        actual_geo = actual_layout.drawings[actual_drawings[0].signature_id]
+        reference_geo = reference_layout.drawings[reference_drawings[0].signature_id]
+
+        assert actual_geo.page == reference_geo.page
+        page_a = next(p for p in actual_layout.pages if p.page == actual_geo.page)
+        page_r = next(p for p in reference_layout.pages if p.page == reference_geo.page)
+        x_delta = abs(actual_geo.x * page_a.width_pt - reference_geo.x * page_r.width_pt)
+        y_delta = abs(actual_geo.y * page_a.height_pt - reference_geo.y * page_r.height_pt)
+        assert x_delta <= 1.0
+        assert y_delta <= 1.0
+        assert actual_geo.width_pt == pytest.approx(reference_geo.width_pt, abs=1.0)
+        assert actual_geo.height_pt == pytest.approx(reference_geo.height_pt, abs=1.0)
+
+        # Surrounding body text lands at the same physical position too —
+        # proof the insertion caused no reflow (the inline-image regression).
+        with fitz.open(actual_pdf) as ap, fitz.open(reference_pdf) as rp:
+            a_page = ap[actual_geo.page - 1]
+            r_page = rp[reference_geo.page - 1]
+            for needle in (DEFAULT_MANAGER_NAME, DEFAULT_MANAGER_TITLE):
+                a_rects = a_page.search_for(needle)
+                r_rects = r_page.search_for(needle)
+                assert a_rects and r_rects
+                assert abs(a_rects[0].x0 - r_rects[0].x0) <= 1.0
+                assert abs(a_rects[0].y0 - r_rects[0].y0) <= 1.0
+
+        summary[label] = {
+            "page_boundary": page_boundary,
+            "with_bookmark": with_bookmark,
+            "page": actual_geo.page,
+            "actual": {"x": actual_geo.x, "y": actual_geo.y},
+            "reference": {"x": reference_geo.x, "y": reference_geo.y},
+            "x_delta_pt": x_delta,
+            "y_delta_pt": y_delta,
+        }
+        shutil.copy2(actual_pdf, evidence_dir / f"initial-approval-{label}-actual.pdf")
+        shutil.copy2(reference_pdf, evidence_dir / f"initial-approval-{label}-reference.pdf")
+
+    (evidence_dir / "initial-approval-signature-smoke.json").write_text(
+        json.dumps(summary, ensure_ascii=False, indent=2, sort_keys=True),
         encoding="utf-8",
     )

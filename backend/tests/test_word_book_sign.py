@@ -1,5 +1,6 @@
 """Signing a Word-authored General Book must keep the authored body."""
 
+import re
 import zipfile
 from pathlib import Path
 
@@ -76,12 +77,14 @@ def test_signed_artifact_keeps_word_body(
     assert signed.suffix == ".docx"  # conversion stubbed out
     text = docx_to_text(signed)
     assert BODY_LINE in text  # the authored body SURVIVED signing
-    # and the signature image landed (a drawing is present — General Book's
-    # keep-together signing block inserts it INLINE, not as a float, so Word
-    # counts its height when deciding whether the signature/name/title group
-    # fits on the page; see docx_engine._stamp_manager_signing_block).
+    # and the signature image landed as a behind-text FLOAT (not inline) —
+    # General Book's keep-together signing block floats it so the image
+    # never grows the paragraph's layout height and displaces the authored
+    # body/name/title; see docx_engine._stamp_manager_signing_block.
     with zipfile.ZipFile(signed) as z:
-        assert b"<w:drawing" in z.read("word/document.xml")
+        xml = z.read("word/document.xml").decode("utf-8")
+    assert "<w:drawing" in xml
+    assert "<wp:anchor" in xml  # floated, not "<wp:inline"
     signed.unlink()  # keep the shared output dir clean
 
 
@@ -189,3 +192,91 @@ def test_rich_versions_still_rerender(
     assert "موضوع" in text
     assert "نص" in text
     leftover.unlink(missing_ok=True)
+
+
+def _manager_drawing_kind(docx_path: Path) -> str | None:
+    """'anchor' (floated) or 'inline' for the drawing carrying the
+    ``gssg-signature:v1:manager:`` identity marker, or None if absent."""
+    with zipfile.ZipFile(docx_path) as z:
+        xml = z.read("word/document.xml").decode("utf-8")
+    match = re.search(r"gssg-signature:v1:manager:[0-9a-f]{32}", xml)
+    if match is None:
+        return None
+    head = xml[: match.start()]
+    anchor_idx = head.rfind("<wp:anchor")
+    inline_idx = head.rfind("<wp:inline")
+    if anchor_idx > inline_idx:
+        return "anchor"
+    if inline_idx > anchor_idx:
+        return "inline"
+    return None
+
+
+@pytest.mark.parametrize("template_id", ["General Book", "Security Permit"])
+@pytest.mark.parametrize("with_bookmark", [False, True], ids=["fallback-scan", "bookmark"])
+def test_authored_manager_signature_floats_in_keep_together_templates(
+    db_session: Session,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    template_id: str,
+    with_bookmark: bool,
+) -> None:
+    """General Book / Security Permit's "keep manager block together" path
+    must FLOAT the manager signature behind text (the pre-feature/restored
+    placement), not insert it inline — an inline image participates in
+    paragraph layout and visibly displaces the authored body/name/title,
+    which is the regression this restores. Covers both the bookmark-first
+    anchor (``GSSG_ManagerSignature``) and the name+title fallback scan.
+    """
+    from app.core._docx_helpers import wrap_paragraph_in_bookmark
+    from app.core.constants import DEFAULT_MANAGER_NAME, DEFAULT_MANAGER_TITLE
+
+    monkeypatch.setattr(document_service, "convert_docx_to_pdf", lambda p: None)
+
+    docx_path = tmp_path / f"{template_id.replace(' ', '_')}-{with_bookmark}.docx"
+    d = DocxFile()
+    d.add_paragraph(BODY_LINE)
+    sig_gap = d.add_paragraph("")
+    d.add_paragraph(DEFAULT_MANAGER_NAME)
+    d.add_paragraph(DEFAULT_MANAGER_TITLE)
+    if with_bookmark:
+        wrap_paragraph_in_bookmark(sig_gap, "GSSG_ManagerSignature")
+    d.save(str(docx_path))
+
+    if db_session.get(BookCategory, "GS") is None:
+        db_session.add(BookCategory(id="GS", prefix="GS"))
+        db_session.flush()
+    book = Book(category_id="GS", ref_number="1/11/9", subject="اختبار التوقيع")
+    db_session.add(book)
+    db_session.flush()
+    doc = Document(
+        template_id=template_id,
+        ref_number=book.ref_number,
+        docx_path=str(docx_path),
+        submission_id=f"t-sign-{template_id}-{with_bookmark}",
+        role="primary",
+    )
+    db_session.add(doc)
+    db_session.flush()
+    version = BookVersion(
+        book_id=book.id,
+        version_no=1,
+        trigger="initial",
+        status="none",
+        template_id=template_id,
+        fields={},
+        document_id=doc.id,
+    )
+    db_session.add(version)
+    db_session.commit()
+
+    artifact = document_service.render_signed_artifact(
+        db_session, version=version, signer_signature_path=_sig(tmp_path)
+    )
+    signed = artifact.docx_path
+    text = docx_to_text(signed)
+    assert BODY_LINE in text  # authored body survives
+    assert DEFAULT_MANAGER_NAME in text
+    assert DEFAULT_MANAGER_TITLE in text
+    assert _manager_drawing_kind(signed) == "anchor"  # floated, not inline
+    signed.unlink()

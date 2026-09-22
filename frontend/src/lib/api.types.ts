@@ -18869,6 +18869,7 @@ export interface operations {
         parameters: {
             query: {
                 signature_revision: number;
+                encoding?: string | null;
             };
             header?: never;
             path: {
@@ -18903,7 +18904,9 @@ export interface operations {
     };
     get_signature_editor_candidate_image_api_v1_documents__document_id__signature_editor_candidates__candidate_id__image_get: {
         parameters: {
-            query?: never;
+            query?: {
+                encoding?: string | null;
+            };
             header?: never;
             path: {
                 document_id: number;

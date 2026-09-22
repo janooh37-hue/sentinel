@@ -24,6 +24,7 @@ from app.db.workforce_models import (
     AttendanceEvaluation,
     AttendanceProviderPerson,
     AttendancePunch,
+    DutyAssignmentEvent,
     UserWorkforceScope,
     WorkAttendancePolicy,
     WorkCrew,
@@ -33,15 +34,21 @@ from app.db.workforce_models import (
     WorkShiftDefinition,
     WorkShiftOccurrence,
 )
+from app.schemas.employee import EmployeeUpdate
 from app.schemas.workforce import WorkforceConfiguration
 from app.services import (
     attendance_evaluation_service,
     attendance_sync_service,
+    employee_service,
     scheduler_service,
     settings_service,
     workforce_dashboard_service,
+    workforce_read_service,
+    workforce_schedule_service,
     workforce_scope_service,
 )
+from app.services.workforce_access_service import organization_scope
+from tests.factories.attendance import build_attendance_day, local
 from tests.fakes.attendance_provider import DeterministicAttendanceProvider, person, punch
 
 # A fixed Dubai morning shift: 08:00-16:00 local == 04:00-12:00 UTC.
@@ -657,3 +664,269 @@ def test_a_shift_that_has_not_started_is_on_the_register_without_a_verdict(seede
     assert evaluation is not None
     assert evaluation.presence_state == "scheduled"
     assert evaluation.reason_code == "SCHEDULED_BEFORE_ABSENCE_BOUNDARY"
+
+
+def test_office_to_company_move_replaces_future_attendance_only(db_session):
+    """G3019: an Office->Company duty-unit edit must follow the crew, not just the label.
+
+    A raw ``duty_unit`` edit through ``update_employee`` used to change only the
+    ``Employee`` row: ``WorkCrewMembership`` kept the person on the Office
+    rotation forever, so the scheduler kept minting Office shifts, while any
+    case that WAS regenerated picked up the new (Company) hierarchy from the
+    employee row - Office shift, Company label, on the same case. An
+    already-started shift is a historical fact; only shifts from the next
+    configured Dubai boundary onward may move.
+    """
+    fixture = build_attendance_day(
+        db_session,
+        operational_date=date(2026, 8, 17),
+        unit="الدوام الرسمي",
+        posts=(("البوابة الرئيسية", 2),),
+    )
+    actor = fixture.admin
+    target, office_control = fixture.employees
+    trusted_scope = organization_scope()
+
+    crew_2 = db_session.scalar(select(WorkCrew).where(WorkCrew.code == "crew_2"))
+    assert crew_2 is not None
+
+    # A stale baseline pointing at Office - the pre-fix bug also let this kind
+    # of duty event outrank any later crew-driven hierarchy.
+    db_session.add(
+        DutyAssignmentEvent(
+            employee_id=target.id,
+            event_type="baseline",
+            to_department=target.department,
+            to_unit=target.duty_unit,
+            to_post=target.duty_post,
+            effective_at=datetime(2026, 8, 1, 0, 0),
+            reason="baseline",
+        )
+    )
+    db_session.flush()
+    _configure(db_session, actor=actor, evaluation_start_at=datetime(2026, 8, 1, 0, 0))
+    db_session.commit()
+
+    company_control = Employee(
+        id="G-9100",
+        name_en="Company Control",
+        name_ar="ضابط السرية",
+        status="Active",
+        department="الأمن",
+        duty_unit="السرية الثانية",
+        duty_post="البوابة الرئيسية",
+    )
+    db_session.add(company_control)
+    db_session.flush()
+    workforce_schedule_service.create_crew_membership(
+        db_session,
+        scope=trusted_scope,
+        if_match=workforce_schedule_service.crew_membership_collection_etag(
+            list(
+                db_session.scalars(
+                    select(WorkCrewMembership).where(WorkCrewMembership.crew_id == crew_2.id)
+                )
+            )
+        ),
+        employee_id=company_control.id,
+        crew_id=crew_2.id,
+        effective_from=local(date(2026, 8, 1), time(5, 0)),
+        actor_user_id=actor.id,
+    )
+
+    # Occurrences for both crews across the whole test window; crew_2's own
+    # schedule only starts at its 18 Aug anchor.
+    workforce_schedule_service.generate_occurrences(
+        db_session,
+        scope=trusted_scope,
+        crew_id=fixture.crew_id,
+        starts_at=local(date(2026, 8, 14), time(0, 0)),
+        ends_at=local(date(2026, 8, 20), time(0, 0)),
+    )
+    workforce_schedule_service.generate_occurrences(
+        db_session,
+        scope=trusted_scope,
+        crew_id=crew_2.id,
+        starts_at=local(date(2026, 8, 14), time(0, 0)),
+        ends_at=local(date(2026, 8, 20), time(0, 0)),
+    )
+    db_session.flush()
+
+    # The target's 18 Aug Office projection, materialized and evaluated as a
+    # prediction BEFORE the move - the exact stale row a fixed source must not
+    # leave behind.
+    attendance_evaluation_service.materialize_scheduled_cases(
+        db_session,
+        employee_id=target.id,
+        horizon=local(date(2026, 8, 18), time(23, 59)),
+        evaluation_start_at=datetime(2026, 8, 1, 0, 0),
+    )
+    db_session.flush()
+    future_office_case = db_session.scalar(
+        select(AttendanceCase).where(
+            AttendanceCase.employee_id == target.id,
+            AttendanceCase.operational_date == date(2026, 8, 18),
+        )
+    )
+    assert future_office_case is not None
+    future_office_case_id = future_office_case.id
+    attendance_evaluation_service.evaluate_case(
+        db_session,
+        future_office_case_id,
+        evaluated_at=local(date(2026, 8, 17), time(10, 0)),
+        evaluation_start_at=datetime(2026, 8, 1, 0, 0),
+    )
+    db_session.commit()
+
+    started_case = db_session.scalar(
+        select(AttendanceCase).where(
+            AttendanceCase.employee_id == target.id,
+            AttendanceCase.operational_date == date(2026, 8, 17),
+        )
+    )
+    assert started_case is not None
+    started_case_id = started_case.id
+    started_snapshot = (
+        started_case.crew_code_snapshot,
+        started_case.duty_unit_snapshot,
+        started_case.scheduled_start_at,
+    )
+    started_evaluations_before = [
+        (row.revision, row.presence_state, row.reason_code)
+        for row in db_session.scalars(
+            select(AttendanceEvaluation)
+            .where(AttendanceEvaluation.attendance_case_id == started_case_id)
+            .order_by(AttendanceEvaluation.revision)
+        )
+    ]
+    assert started_evaluations_before  # the started shift already has a verdict
+
+    # Freeze the clock to 17 Aug 10:00 Dubai - mid-morning, well inside the
+    # started Office shift. The next configured boundary is 13:00.
+    frozen_instant = local(date(2026, 8, 17), time(10, 0))
+
+    class _FrozenDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return frozen_instant if tz is None else frozen_instant.astimezone(tz)
+
+    monkeypatch = pytest.MonkeyPatch()
+    try:
+        monkeypatch.setattr(employee_service, "datetime", _FrozenDateTime, raising=False)
+        monkeypatch.setattr(
+            workforce_schedule_service,
+            "_now",
+            lambda: frozen_instant.astimezone(UTC).replace(tzinfo=None),
+            raising=False,
+        )
+        employee_service.update_employee(
+            db_session,
+            target.id,
+            EmployeeUpdate(duty_unit="السرية الثانية", duty_post="البوابة الرئيسية"),
+        )
+    finally:
+        monkeypatch.undo()
+
+    # A shift that had already started is untouched by the move.
+    unchanged = db_session.get(AttendanceCase, started_case_id)
+    assert unchanged is not None
+    assert (
+        unchanged.crew_code_snapshot,
+        unchanged.duty_unit_snapshot,
+        unchanged.scheduled_start_at,
+    ) == started_snapshot
+    started_evaluations_after = [
+        (row.revision, row.presence_state, row.reason_code)
+        for row in db_session.scalars(
+            select(AttendanceEvaluation)
+            .where(AttendanceEvaluation.attendance_case_id == started_case_id)
+            .order_by(AttendanceEvaluation.revision)
+        )
+    ]
+    assert started_evaluations_after == started_evaluations_before
+
+    # The stale future Office projection must not survive the move.
+    assert db_session.get(AttendanceCase, future_office_case_id) is None
+
+    def _rows_for(employee_id: str, day: date) -> list[dict]:
+        return [
+            row
+            for row in workforce_read_service.list_attendance_day(
+                db_session, scope=trusted_scope, operational_date=day
+            )
+            if row["employee_id"] == employee_id
+        ]
+
+    created_first = scheduler_service._materialize_scheduled_cases(
+        db_session, now=local(date(2026, 8, 18), time(23, 59))
+    )
+    db_session.commit()
+    assert created_first > 0
+
+    target_aug18 = _rows_for(target.id, date(2026, 8, 18))
+    assert [(r["crew_code"], r["shift_code"]) for r in target_aug18] == [("crew_2", "noon")]
+    assert target_aug18[0]["duty_unit"] == "السرية الثانية"
+    assert target_aug18[0]["duty_post"] == "البوابة الرئيسية"
+
+    office_control_aug18 = _rows_for(office_control.id, date(2026, 8, 18))
+    assert [(r["crew_code"], r["shift_code"]) for r in office_control_aug18] == [
+        ("office", "office_day")
+    ]
+
+    company_control_aug18 = _rows_for(company_control.id, date(2026, 8, 18))
+    assert [(r["crew_code"], r["shift_code"]) for r in company_control_aug18] == [
+        ("crew_2", "noon")
+    ]
+
+    created_second = scheduler_service._materialize_scheduled_cases(
+        db_session, now=local(date(2026, 8, 19), time(23, 59))
+    )
+    db_session.commit()
+    assert created_second > 0
+
+    target_aug19 = _rows_for(target.id, date(2026, 8, 19))
+    assert sorted((r["crew_code"], r["shift_code"]) for r in target_aug19) == [
+        ("crew_2", "morning"),
+        ("crew_2", "night"),
+    ]
+    for row in target_aug19:
+        assert row["duty_unit"] == "السرية الثانية"
+        assert row["duty_post"] == "البوابة الرئيسية"
+
+    office_control_aug19 = _rows_for(office_control.id, date(2026, 8, 19))
+    assert [(r["crew_code"], r["shift_code"]) for r in office_control_aug19] == [
+        ("office", "office_day")
+    ]
+
+    company_control_aug19 = _rows_for(company_control.id, date(2026, 8, 19))
+    assert sorted((r["crew_code"], r["shift_code"]) for r in company_control_aug19) == [
+        ("crew_2", "morning"),
+        ("crew_2", "night"),
+    ]
+
+    target_case_ids_before = sorted(
+        c.id
+        for c in db_session.scalars(
+            select(AttendanceCase).where(AttendanceCase.employee_id == target.id)
+        )
+    )
+
+    # A second run at the same instant must not duplicate memberships or cases.
+    created_repeat = scheduler_service._materialize_scheduled_cases(
+        db_session, now=local(date(2026, 8, 19), time(23, 59))
+    )
+    db_session.commit()
+    assert created_repeat == 0
+    target_case_ids_after = sorted(
+        c.id
+        for c in db_session.scalars(
+            select(AttendanceCase).where(AttendanceCase.employee_id == target.id)
+        )
+    )
+    assert target_case_ids_after == target_case_ids_before
+    target_memberships = list(
+        db_session.scalars(
+            select(WorkCrewMembership).where(WorkCrewMembership.employee_id == target.id)
+        )
+    )
+    assert len(target_memberships) == 2

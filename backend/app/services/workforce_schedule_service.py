@@ -20,10 +20,15 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import or_, select, text
 from sqlalchemy.orm import Session
 
-from app.api.errors import AppError, NotFoundError, ValidationFailedError
+from app.api.errors import AppError, ConflictError, NotFoundError, ValidationFailedError
 from app.db.models import AuditLog, Employee, User
 from app.db.workforce_models import (
+    AttendanceAdjustment,
     AttendanceCase,
+    AttendanceEvaluation,
+    AttendanceEvaluationPunchSource,
+    AttendancePunchAssignment,
+    DutyAssignmentEvent,
     WorkCrew,
     WorkCrewMembership,
     WorkCrewSchedule,
@@ -37,6 +42,7 @@ from app.db.workforce_models import (
 from app.services.workforce_access_service import (
     allows_hierarchy,
     employee_in_scope,
+    organization_scope,
     require_organization,
 )
 from app.services.workforce_etag import etag_for, require_if_match, row_etag
@@ -829,6 +835,273 @@ def end_crew_membership(
     return membership
 
 
+_DUTY_RECONCILIATION_CONFLICT_CODE = "WORKFORCE_DUTY_RECONCILIATION_CONFLICT"
+_DUTY_RECONCILIATION_CONFLICT_MESSAGE = (
+    "Duty location conflicts with recorded attendance or scheduled memberships."
+)
+
+
+def _next_shift_boundary_after(
+    db: Session, after: datetime, timezone: str = "Asia/Dubai"
+) -> datetime | None:
+    """First configured Dubai shift boundary strictly after ``after``.
+
+    ``after`` and the return value are both UTC-naive. A shift starting
+    exactly at ``after`` has already started and is never returned - the
+    caller's whole point is to preserve it.  ``None`` means no shift is
+    configured at all, so no boundary can be invented.
+    """
+    boundaries = _shift_boundary_times(db)
+    if not boundaries:
+        return None
+    zone = ZoneInfo(timezone)
+    local = _utc_aware(after).astimezone(zone)
+    later_today = sorted(t for t in boundaries if t > local.time())
+    if later_today:
+        boundary_local = datetime.combine(local.date(), later_today[0], tzinfo=zone)
+    else:
+        boundary_local = datetime.combine(
+            local.date() + timedelta(days=1), min(boundaries), tzinfo=zone
+        )
+    return _utc_naive(boundary_local)
+
+
+def reconcile_duty_crew_membership(
+    db: Session,
+    *,
+    employee_id: str,
+    effective_at: datetime,
+    current_user: User | None = None,
+) -> None:
+    """Move an already-enrolled employee's crew membership to match their duty unit.
+
+    A duty-unit edit (through ``employee_service.update_employee`` or
+    ``duty_service.transfer``) changes ``Employee.duty_unit``/``duty_post`` but
+    never touched ``WorkCrewMembership`` on its own, so shift generation kept
+    following the OLD crew (wrong shifts) while the duty hierarchy on those
+    cases followed the NEW unit (wrong Company/Office mix). This closes that
+    gap at its source: the scheduler, the employee PATCH route, and the duty
+    transfer service all call this after staging the unit change.
+
+    Scope is strictly this site's seeded mapping
+    (``workforce_seed_service.DUTY_UNIT_TO_CREW``): a blank/unmapped duty
+    unit, an employee with no currently effective membership, or a membership
+    in a crew outside the mapping (a hand-managed custom rotation) is left
+    untouched - this synchronizes existing enrollment, it does not enroll
+    unscheduled staff or redefine custom scheduling.
+
+    An already-started shift is a historical fact: the move takes effect at
+    the first configured Dubai shift boundary strictly after ``effective_at``,
+    never earlier. Recorded attendance evidence (adjustments, punch
+    allocations, or evaluations built from punches) on a future case, and a
+    conflicting future membership already scheduled for this employee, both
+    block the move with ``ConflictError`` instead of being silently
+    overwritten; the caller's transaction rolls back and nothing is lost.
+    """
+    from app.services.workforce_seed_service import DUTY_UNIT_TO_CREW
+
+    employee = db.get(Employee, employee_id)
+    if employee is None or employee.status.lower() != "active":
+        return
+    unit = (employee.duty_unit or "").strip()
+    if not unit:
+        return
+    dest_code = DUTY_UNIT_TO_CREW.get(unit)
+    if dest_code is None:
+        return
+
+    effective_at_n = _utc_naive(effective_at)
+
+    def _current_membership() -> WorkCrewMembership | None:
+        return db.scalar(
+            select(WorkCrewMembership).where(
+                WorkCrewMembership.employee_id == employee_id,
+                WorkCrewMembership.effective_from <= effective_at_n,
+                or_(
+                    WorkCrewMembership.effective_to.is_(None),
+                    WorkCrewMembership.effective_to > effective_at_n,
+                ),
+            )
+        )
+
+    current = _current_membership()
+    if current is None:
+        return
+    current_crew = db.get(WorkCrew, current.crew_id)
+    if current_crew is None or current_crew.code not in DUTY_UNIT_TO_CREW.values():
+        return
+
+    acquire_schedule_write_lock(db)
+    # Recheck under the write lock: a concurrent writer may have already
+    # reconciled or ended this membership since the read above.
+    current = _current_membership()
+    if current is None:
+        return
+    current_crew = db.get(WorkCrew, current.crew_id)
+    if current_crew is None or current_crew.code not in DUTY_UNIT_TO_CREW.values():
+        return
+
+    dest_crew = db.scalar(select(WorkCrew).where(WorkCrew.code == dest_code))
+    if dest_crew is None:
+        raise NotFoundError("WORKFORCE_CREW_NOT_FOUND", "Crew was not found.")
+    if not dest_crew.active:
+        raise ValidationFailedError("WORKFORCE_CREW_INACTIVE", "Crew is retired.")
+    if dest_crew.id == current.crew_id:
+        return
+
+    boundary = _next_shift_boundary_after(db, effective_at_n)
+    if boundary is None:
+        return
+
+    original_effective_to = current.effective_to
+    if original_effective_to is not None:
+        successor = db.scalar(
+            select(WorkCrewMembership)
+            .where(
+                WorkCrewMembership.employee_id == employee_id,
+                WorkCrewMembership.id != current.id,
+                WorkCrewMembership.effective_from > current.effective_from,
+            )
+            .order_by(WorkCrewMembership.effective_from)
+        )
+        if successor is not None:
+            if successor.effective_from == boundary and successor.crew_id == dest_crew.id:
+                return
+            raise ConflictError(
+                _DUTY_RECONCILIATION_CONFLICT_CODE, _DUTY_RECONCILIATION_CONFLICT_MESSAGE
+            )
+        if original_effective_to <= boundary:
+            # An already-bounded schedule that ends at/before the new
+            # boundary is an intentional gap - fill it in, don't extend it.
+            return
+
+    old_crew_code = current_crew.code
+    case_query = select(AttendanceCase).where(
+        AttendanceCase.employee_id == employee_id,
+        AttendanceCase.crew_code_snapshot == old_crew_code,
+        AttendanceCase.shift_occurrence_id.is_not(None),
+        AttendanceCase.scheduled_start_at >= boundary,
+        AttendanceCase.scheduled_start_at > effective_at_n,
+    )
+    if original_effective_to is not None:
+        case_query = case_query.where(AttendanceCase.scheduled_start_at < original_effective_to)
+    candidate_cases = list(db.scalars(case_query))
+    case_ids = [case.id for case in candidate_cases]
+    if case_ids:
+        has_adjustment = db.scalar(
+            select(AttendanceAdjustment.id)
+            .where(AttendanceAdjustment.attendance_case_id.in_(case_ids))
+            .limit(1)
+        )
+        has_assignment = db.scalar(
+            select(AttendancePunchAssignment.punch_id)
+            .where(AttendancePunchAssignment.attendance_case_id.in_(case_ids))
+            .limit(1)
+        )
+        evaluation_ids = list(
+            db.scalars(
+                select(AttendanceEvaluation.id).where(
+                    AttendanceEvaluation.attendance_case_id.in_(case_ids)
+                )
+            )
+        )
+        has_punch_source = (
+            db.scalar(
+                select(AttendanceEvaluationPunchSource.evaluation_id)
+                .where(AttendanceEvaluationPunchSource.evaluation_id.in_(evaluation_ids))
+                .limit(1)
+            )
+            if evaluation_ids
+            else None
+        )
+        if has_adjustment is not None or has_assignment is not None or has_punch_source is not None:
+            raise ConflictError(
+                _DUTY_RECONCILIATION_CONFLICT_CODE, _DUTY_RECONCILIATION_CONFLICT_MESSAGE
+            )
+
+    scope = organization_scope()
+    end_crew_membership(
+        db,
+        scope=scope,
+        crew_id=current.crew_id,
+        membership_id=current.id,
+        if_match=row_etag(current),
+        effective_to=boundary,
+        end_reason="Duty location changed",
+        current_user=current_user,
+    )
+    db.flush()
+    new_membership = create_crew_membership(
+        db,
+        scope=scope,
+        if_match=crew_membership_collection_etag(
+            _visible_crew_memberships(db, crew_id=dest_crew.id, scope=scope)
+        ),
+        employee_id=employee_id,
+        crew_id=dest_crew.id,
+        effective_from=boundary,
+        effective_to=original_effective_to,
+        current_user=current_user,
+    )
+    db.flush()
+
+    if case_ids:
+        assignments = db.scalars(
+            select(AttendancePunchAssignment).where(
+                AttendancePunchAssignment.attendance_case_id.in_(case_ids)
+            )
+        ).all()
+        adjustments = db.scalars(
+            select(AttendanceAdjustment).where(
+                AttendanceAdjustment.attendance_case_id.in_(case_ids)
+            )
+        ).all()
+        evaluations = db.scalars(
+            select(AttendanceEvaluation).where(
+                AttendanceEvaluation.attendance_case_id.in_(case_ids)
+            )
+        ).all()
+        for row in [*assignments, *adjustments, *evaluations]:
+            db.delete(row)
+        for case in candidate_cases:
+            db.delete(case)
+        db.flush()
+
+    department = (employee.department or "").strip() or None
+    to_post = (employee.duty_post or "").strip() or None
+    latest_event = db.scalar(
+        select(DutyAssignmentEvent)
+        .where(
+            DutyAssignmentEvent.employee_id == employee_id,
+            DutyAssignmentEvent.effective_at <= boundary,
+        )
+        .order_by(DutyAssignmentEvent.effective_at.desc(), DutyAssignmentEvent.id.desc())
+    )
+    matches = (
+        latest_event is not None
+        and latest_event.to_department == department
+        and latest_event.to_unit == unit
+        and latest_event.to_post == to_post
+    )
+    if not matches:
+        db.add(
+            DutyAssignmentEvent(
+                employee_id=employee_id,
+                event_type="manual_change",
+                from_department=None,
+                from_unit=None,
+                from_post=None,
+                to_department=department,
+                to_unit=unit,
+                to_post=to_post,
+                effective_at=boundary,
+                actor_user_id=new_membership.created_by_user_id,
+                reason="Workforce duty location reconciliation",
+            )
+        )
+        db.flush()
+
+
 def create_shift_override(
     db: Session,
     *,
@@ -1272,6 +1545,7 @@ __all__ = [
     "crew_schedule_collection_etag",
     "end_crew_membership",
     "generate_occurrences",
+    "reconcile_duty_crew_membership",
     "replace_crew_schedule",
     "resolve_assignment",
 ]

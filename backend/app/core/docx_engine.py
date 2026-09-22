@@ -51,7 +51,6 @@ from docx.shared import Pt, RGBColor
 from app.core import qr
 from app.core._docx_helpers import (
     fill_image_behind_text_in_paragraph,
-    fill_image_inline_in_paragraph,
     find_bookmark_index,
     float_inline_images_in_cell,
     prevent_row_split,
@@ -581,8 +580,8 @@ def _stamp_manager_signing_block(
 
     1. Bookmark first: resolve ``GSSG_ManagerSignature`` (left by
        ``docx_render.render`` around the template's manager-signature slot)
-       and insert the image INLINE there — not floated — so Word counts its
-       height when keeping the signature/name/title group together.
+       and float the image behind text there — not inline — so it never
+       grows the paragraph's layout height (the pre-feature placement).
     2. A validated name-then-title closing block (exhaustive across body AND
        table paragraphs): exactly one candidate is used; more than one
        raises ``SignatureAnchorAmbiguousError`` rather than guessing.
@@ -599,7 +598,7 @@ def _stamp_manager_signing_block(
     def _stamp_at(
         anchor: Any, name_paragraph: Any | None, title_paragraph: Any | None, *, in_table: bool
     ) -> bool:
-        placed = fill_image_inline_in_paragraph(
+        placed = fill_image_behind_text_in_paragraph(
             anchor,
             sig_path,
             width_inches=width_inches,
@@ -706,7 +705,7 @@ def stamp_signature_above_name(
 
     ``keep_manager_block_together`` (General Book / Security Permit signing)
     replaces the whole search above with ``_stamp_manager_signing_block``:
-    bookmark-first, inline (not floated) insertion, and a validated
+    bookmark-first, behind-text floated insertion, and a validated
     name-then-title closing-block fallback that raises
     ``SignatureAnchorAmbiguousError`` on real ambiguity instead of guessing.
     Report never sets this flag, so its "التوقيع" label path is untouched.
