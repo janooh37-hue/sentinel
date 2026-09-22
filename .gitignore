@@ -174,4 +174,9 @@ mockups/plan/
 # Internal planning scratch + host-specific ops runbook (real hostnames/paths -
 # not needed by repo consumers; kept on disk, never tracked).
 /GSSG_MANAGER_PLAN.md
+
+# Commercial font files for the General Book paper (Cronos Pro, Univers Next
+# Arabic) — licensed, not OFL; installed system-wide by scripts/install-fonts.ps1
+# but never committed. Only backend/templates/fonts/ (OFL) is tracked.
+/tmp-fonts/
 /SERVER-MIGRATION.md

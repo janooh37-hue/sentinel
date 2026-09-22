@@ -14,6 +14,7 @@ vi.mock('./useScanBack', async (orig) => ({
   ...(await orig<Record<string, unknown>>()),
   useScanBack: () => ({ ...state, isLoading: false, enabled: true }),
   useFileSignedCopy: () => ({ file: vi.fn(), busy: false }),
+  useScanBackUpload: () => ({ upload: vi.fn(), busy: false }),
 }))
 vi.mock('@/lib/authContext', () => ({ useAuth: () => ({ user: { id: 42 }, status: 'authed' }) }))
 
@@ -36,6 +37,7 @@ describe('ScanBackDock', () => {
     expect(screen.queryByText('GS-0410')).not.toBeInTheDocument()
     await userEvent.click(screen.getByRole('button', { name: /to scan back/i }))
     expect(screen.getByText('GS-0410')).toBeInTheDocument()
+    expect(screen.getByText("Don't know which record?")).toBeInTheDocument()
   })
 
   it('remembers the expanded state', async () => {

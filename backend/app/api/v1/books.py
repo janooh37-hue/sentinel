@@ -30,7 +30,7 @@ from sqlalchemy.orm import Session
 
 from app.api._responses import maybe_base64
 from app.api.deps import get_current_user, require_capability
-from app.api.errors import AppError
+from app.api.errors import AppError, ValidationFailedError
 from app.core import form_policy
 from app.core.classifications import CLASSIFICATIONS
 from app.core.form_kind import OTHER_SERVICE_ID
@@ -77,6 +77,7 @@ from app.schemas.book import (
     ReviewRequest,
     RevokeRevisionAccessRequest,
     SaveAsTemplateRequest,
+    ScanBackResult,
     ServiceFacetRead,
     WordBookCreate,
     WordSessionRead,
@@ -89,6 +90,8 @@ from app.services import (
     book_template_service,
     included_papers_service,
     perm_service,
+    scan_inbox_service,
+    scan_triage_service,
     word_book_service,
 )
 from app.services.book_service import LIST_DEFAULT_LIMIT, LIST_MAX_LIMIT
@@ -1544,6 +1547,69 @@ def remove_reviewer(
 # ---------------------------------------------------------------------------
 # Attachments
 # ---------------------------------------------------------------------------
+
+
+@router.post("/scan-back", response_model=ScanBackResult)
+async def scan_back_book(
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(require_capability("books.edit"))],
+    file: Annotated[UploadFile, File()],
+) -> ScanBackResult:
+    """Route a General Book signed scan by its Reference barcode."""
+    data = await file.read()
+    classification = scan_triage_service.classify(data, db=db, employees=[])
+    codes = [
+        code
+        for code in classification.read.codes
+        if code.source == "code39"
+    ]
+    if not codes:
+        raise ValidationFailedError(
+            "BOOK_BARCODE_UNREADABLE",
+            "تعذر قراءة الباركود المرجعي للكتاب العام",
+        )
+    decoded = codes[0]
+    if isinstance(classification, scan_triage_service.ReturnedFormClassification):
+        match = classification.match
+        if match.book.approval_state != "awaiting_scan":
+            raise ValidationFailedError(
+                "BOOK_NOT_AWAITING_SCAN",
+                "هذا السجل غير جاهز لاستلام النسخة الموقعة",
+            )
+        if match.confidence == 1.0:
+            row = book_service.add_attachment(
+                db,
+                match.book.book_id,
+                file.filename or "scan",
+                data,
+                user=user,
+                as_signed=True,
+            )
+            return ScanBackResult(
+                book_id=row.id,
+                ref_number=row.ref_number,
+                outcome="filed",
+            )
+    scan_inbox_service.park_scan_back(
+        db,
+        filename=file.filename or "scan",
+        data=data,
+        user=user,
+        classification=classification,
+        ref_number=decoded.ref,
+    )
+    return ScanBackResult(
+        book_id=(
+            classification.match.book.book_id
+            if isinstance(
+                classification,
+                scan_triage_service.ReturnedFormClassification,
+            )
+            else None
+        ),
+        ref_number=decoded.ref,
+        outcome="parked",
+    )
 
 
 @router.post("/{book_id}/attachments", response_model=BookRead)

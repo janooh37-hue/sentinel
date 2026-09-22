@@ -56,6 +56,19 @@ def _write_minimal_docx(path: Path) -> None:
     doc.save(str(path))
 
 
+def _header_text(path: Path) -> str:
+    from docx import Document
+    from docx.oxml.ns import qn
+    from docx.text.paragraph import Paragraph
+
+    header = Document(str(path)).sections[0].first_page_header
+    return "\n".join(
+        Paragraph(element, header).text
+        for element in header.part.element.findall(".//" + qn("w:p"))
+        if any(t.text for t in element.findall("./" + qn("w:r") + "/" + qn("w:t")))
+    )
+
+
 def _build_table_template(library_dir: Path, name: str, columns: list[str]) -> Path:
     """Build a tokenized table template file in *library_dir*.
 
@@ -71,7 +84,10 @@ def _build_table_template(library_dir: Path, name: str, columns: list[str]) -> P
 
     src = library_dir / f"_src_{name}"
     doc = _docx.Document()
-    doc.add_paragraph("التاريخ: 01/01/2026")
+    header = doc.sections[0].first_page_header
+    header.add_paragraph("الرقم: 1/5/140")
+    header.add_paragraph("التاريخ: 01-01-2026")
+    header.add_paragraph("1/5/140+20260101")
     # table with header row + one data row
     tbl = doc.add_table(rows=2, cols=len(columns))
     for i, col_name in enumerate(columns):
@@ -138,7 +154,6 @@ def test_two_table_rows_render(db_session, tmp_path, monkeypatch):
 
 def test_no_table_rows_plain_template_no_error(db_session, tmp_path, monkeypatch):
     """Omitting table_rows (None) on a plain template works without error."""
-    from app.core.book_text import docx_to_text
     from app.services import word_book_service
 
     _seed_gs(db_session)
@@ -159,8 +174,7 @@ def test_no_table_rows_plain_template_no_error(db_session, tmp_path, monkeypatch
     )
 
     session = db_session.query(BookEditSession).filter_by(book_id=info.book_id).one()
-    text = docx_to_text(Path(session.working_path))
-    assert f"الرقم: {info.ref_number}" in text
+    assert f"الرقم: {info.ref_number}" in _header_text(Path(session.working_path))
 
 
 def test_non_str_values_coerced(db_session, tmp_path, monkeypatch):

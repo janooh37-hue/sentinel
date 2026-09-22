@@ -2972,6 +2972,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/books/scan-back": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Scan Back Book
+         * @description Route a General Book signed scan by its Reference barcode.
+         */
+        post: operations["scan_back_book_api_v1_books_scan_back_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/books/{book_id}/attachments": {
         parameters: {
             query?: never;
@@ -7218,6 +7238,14 @@ export interface components {
              * Format: binary
              */
             upload: string;
+        };
+        /** Body_scan_back_book_api_v1_books_scan_back_post */
+        Body_scan_back_book_api_v1_books_scan_back_post: {
+            /**
+             * File
+             * Format: binary
+             */
+            file: string;
         };
         /** Body_scan_emirates_id_api_v1_permits_scan_emirates_id_post */
         Body_scan_emirates_id_api_v1_permits_scan_emirates_id_post: {
@@ -12126,6 +12154,18 @@ export interface components {
         SaveAsTemplateRequest: {
             /** Name */
             name: string;
+        };
+        /** ScanBackResult */
+        ScanBackResult: {
+            /** Book Id */
+            book_id: number | null;
+            /** Ref Number */
+            ref_number: string;
+            /**
+             * Outcome
+             * @enum {string}
+             */
+            outcome: "filed" | "parked" | "rejected";
         };
         /** ScanInboxCount */
         ScanInboxCount: {
@@ -21297,6 +21337,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BookRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    scan_back_book_api_v1_books_scan_back_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": components["schemas"]["Body_scan_back_book_api_v1_books_scan_back_post"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScanBackResult"];
                 };
             };
             /** @description Validation Error */

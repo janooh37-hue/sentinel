@@ -22,6 +22,22 @@ The official DOCX output for a Record and its available PDF rendition, whether
 produced from structured form data or finalized from a Word-authored DOCX.
 _Avoid_: Template output, when the source is a Word-authored document
 
+**Reference barcode**:
+The Code 39 symbol printed on a General Book's first page carrying its reference
+and paper date, rendered from the template's barcode font rather than stamped on.
+_Avoid_: QR, Aztec, code stamp
+
+**Paper date**:
+The date printed on a General Book at first commit, fixed for the life of the
+Record so later renditions and the Reference barcode repeat it.
+_Avoid_: Render date, signing date, created date
+
+**Scan-back match**:
+The linking of an inbound scan to its source Record by decoding its Reference
+barcode; a matching reference with a different Paper date is weak evidence that
+needs a person's confirmation.
+_Avoid_: OCR match, auto-file, ref lookup
+
 **Revision**:
 One committed version of a Record's generated artifact, ordered within that
 Record and carrying its own review or signing state.

@@ -14,7 +14,10 @@ which 2-D code we stamp.
 from __future__ import annotations
 
 import io
-from typing import TYPE_CHECKING, Any
+import re
+from dataclasses import dataclass
+from datetime import date
+from typing import TYPE_CHECKING, Any, Literal
 
 from aztec_code_generator import AztecCode
 
@@ -26,13 +29,65 @@ if TYPE_CHECKING:
 _zxingcpp: Any = None
 _AVAILABLE = False
 try:
-    import zxingcpp as _zxingcpp  # type: ignore[no-redef]
+    import zxingcpp as _zxingcpp
 
     _AVAILABLE = True
 except Exception:  # pragma: no cover - import-time host guard
     pass
 
 _PREFIX = "GSSG:"
+_BARCODE_RE = re.compile(r"^([A-Z0-9/-]+)\+(\d{8})$")
+
+
+@dataclass(frozen=True, slots=True)
+class Decoded:
+    ref: str
+    date: date | None
+    source: Literal["aztec", "code39"]
+
+
+def barcode_payload(ref: str, paper_date: date) -> str:
+    return f"{ref.upper()}+{paper_date:%Y%m%d}"
+
+
+def parse_barcode(text: str) -> tuple[str, date] | None:
+    match = _BARCODE_RE.fullmatch(text)
+    if match is None:
+        return None
+    try:
+        paper_date = date.fromisoformat(
+            f"{match.group(2)[:4]}-{match.group(2)[4:6]}-{match.group(2)[6:]}"
+        )
+    except ValueError:
+        return None
+    return match.group(1), paper_date
+
+
+def decode_codes(image: Any) -> list[Decoded]:
+    """Decode GSSG Aztec/QR symbols and General Book Code 39 symbols."""
+    if not _AVAILABLE:
+        return []
+    try:
+        results = _zxingcpp.read_barcodes(image)
+    except Exception:
+        return []
+    decoded: list[Decoded] = []
+    seen: set[Decoded] = set()
+    for result in results:
+        text = (getattr(result, "text", "") or "").strip()
+        item: Decoded | None = None
+        if getattr(result, "format", None) == _zxingcpp.BarcodeFormat.Code39:
+            parsed = parse_barcode(text)
+            if parsed is not None:
+                item = Decoded(*parsed, "code39")
+        elif text.startswith(_PREFIX):
+            ref = text[len(_PREFIX) :].strip().upper()
+            if ref:
+                item = Decoded(ref, None, "aztec")
+        if item is not None and item not in seen:
+            seen.add(item)
+            decoded.append(item)
+    return decoded
 
 
 def payload_for(ref: str) -> str:
@@ -85,4 +140,13 @@ def decode_qr_refs(image: Image) -> list[str]:
     return refs
 
 
-__all__ = ["decode_qr_refs", "make_aztec_png", "payload_for", "qr_decode_available"]
+__all__ = [
+    "Decoded",
+    "barcode_payload",
+    "decode_codes",
+    "decode_qr_refs",
+    "make_aztec_png",
+    "parse_barcode",
+    "payload_for",
+    "qr_decode_available",
+]

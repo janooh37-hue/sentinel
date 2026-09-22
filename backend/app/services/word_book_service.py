@@ -170,10 +170,9 @@ def create_word_book(
             )
 
     # ------------------------------------------------------------------
-    # 5. Render working docx + the same post-render pipeline the rich-editor
-    # path runs (document_service steps 8b/9): footer2 ← footer3 sync, then
-    # header ref stamp + Aztec code — so the paper is identical no matter
-    # where the body was written.
+    # 5. Render the working docx. General Book's reference and Code 39 symbol
+    # are template content, so this path applies no legacy footer sync or Aztec
+    # stamp.
     # ------------------------------------------------------------------
     try:
         artifact = artifact_service.produce_from_template(
@@ -184,7 +183,6 @@ def create_word_book(
             stamps=artifact_service.StampPlan(
                 reference=ref,
                 aztec_corner=aztec_corner_for(_TEMPLATE_ID),
-                sync_general_book_footer=True,
             ),
             convert_pdf=False,
             collision="exact",

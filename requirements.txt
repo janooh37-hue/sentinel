@@ -23,6 +23,8 @@ PyMuPDF>=1.28.2,<2.0  # floor: Document.rewrite_images used by vehicle certifica
 pytesseract>=0.3.13,<0.4
 rapidfuzz>=3.9,<4.0
 mrz>=0.6.2,<1.0  # passport MRZ (TD3) parser for OCR passport extraction
+zxing-cpp>=3.0.0  # General Book Code 39 header barcode + Aztec decode (core/qr.py)
+aztec-code-generator>=0.12  # was an undeclared transitive dep; pin fixes drift
 
 # DOCX -> PDF conversion (Word COM). The PdfChain tries docx2pdf, then
 # win32com (pywin32), then a PowerShell-COM shell-out. Without these two

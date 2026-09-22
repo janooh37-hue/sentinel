@@ -90,3 +90,61 @@ def test_find_duplicate_skips_soft_deleted(db_session):
         status="Approved",
     )
     assert _find_duplicate_leave(db_session, probe) is None
+
+
+def test_general_book_persists_paper_date_and_reuses_it_when_signing(
+    db_session, tmp_path, monkeypatch
+):
+    from docx import Document as WordDocument
+    from docx.oxml.ns import qn
+    from PIL import Image
+
+    from app.config import Settings
+    from app.core.qr import barcode_payload
+    from app.db.models import BookCategory, BookVersion
+    from app.services import artifact_service, document_service
+
+    db_session.add(BookCategory(id="GS", prefix="GS"))
+    db_session.commit()
+    settings = Settings(data_dir=tmp_path / "data", templates_dir=document_service._TEMPLATES_DIR)
+    monkeypatch.setattr(document_service, "get_settings", lambda: settings)
+    monkeypatch.setattr(artifact_service, "get_settings", lambda: settings)
+    original = artifact_service.produce_from_template
+    plans = []
+
+    def capture_plan(**kwargs):
+        plans.append(kwargs["stamps"])
+        return original(**kwargs)
+
+    monkeypatch.setattr(artifact_service, "produce_from_template", capture_plan)
+    result = document_service.generate_document(
+        db_session,
+        employee_id=None,
+        template_id="General Book",
+        fields={"subject": "paper date", "body": "<p>body</p>"},
+        classification_code="5/1",
+        converter=lambda _path: None,
+    )
+    version = db_session.query(BookVersion).filter_by(book_id=result.book_id).one()
+    paper_date = datetime.strptime(version.fields["date"], "%d-%m-%Y").date()
+    expected = barcode_payload(result.ref_number, paper_date)
+
+    signature = tmp_path / "signature.png"
+    Image.new("RGBA", (100, 40), (0, 0, 0, 0)).save(signature)
+    signed = document_service.render_signed_artifact(
+        db_session,
+        version=version,
+        signer_signature_path=str(signature),
+        output_dir=tmp_path / "signed",
+        converter=lambda _path: None,
+    )
+
+    def header_text(path):
+        header = WordDocument(path).sections[0].first_page_header
+        return "\n".join(node.text or "" for node in header.part.element.iter(qn("w:t")))
+
+    assert header_text(result.documents[0].docx_path).count(expected) == 2
+    assert header_text(signed.docx_path).count(expected) == 2
+    assert version.fields["date"] == paper_date.strftime("%d-%m-%Y")
+    assert all(plan.aztec_corner is None for plan in plans)
+    assert all(plan.sync_general_book_footer is False for plan in plans)

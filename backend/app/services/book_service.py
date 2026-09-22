@@ -2604,9 +2604,27 @@ def add_attachment(
             allowed=sorted(ALLOWED_DOC_EXTS),
         )
 
+    version = _current_version(book)
+    if version is not None and version.template_id == "General Book":
+        from app.core.extraction.ocr import decode_codes_from_bytes
+
+        barcodes = [
+            code for code in decode_codes_from_bytes(data) if code.source == "code39"
+        ]
+        if any(code.ref.casefold() != book.ref_number.casefold() for code in barcodes):
+            raise ValidationFailedError(
+                "BOOK_BARCODE_REF_MISMATCH",
+                "الرقم المرجعي في الباركود لا يطابق السجل المحدد",
+            )
+        if barcodes and book.approval_state != "awaiting_scan":
+            raise ValidationFailedError(
+                "BOOK_NOT_AWAITING_SCAN",
+                "هذا السجل غير جاهز لاستلام النسخة الموقعة",
+            )
+
+
     # Decide the branch BEFORE writing: the flip changes the file's on-disk name
     # and (for image scans) its format.
-    version = _current_version(book)
     # awaiting_scan flips on ANY attach (the scan IS the signature for scan-path
     # forms). Draft (none) / Pending get the flip only on an explicit as_signed —
     # the user answered "yes, this is the signed copy" in the UI.

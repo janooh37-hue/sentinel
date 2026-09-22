@@ -1,10 +1,11 @@
-import { describe, it, expect, vi } from 'vitest'
-import { renderHook, waitFor } from '@testing-library/react'
+import { beforeEach, describe, it, expect, vi } from 'vitest'
+import { act, renderHook, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createElement, type ReactNode } from 'react'
+import { MemoryRouter } from 'react-router-dom'
 import { toast } from 'sonner'
 
-import { ageDays, ageGroup, useFileSignedCopy, useScanBack } from './useScanBack'
+import { ageDays, ageGroup, useFileSignedCopy, useScanBack, useScanBackUpload } from './useScanBack'
 import * as apiMod from '@/lib/api'
 
 
@@ -16,12 +17,18 @@ vi.mock('@/lib/useCapabilities', () => ({
   }),
 }))
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (k: string) => k }) }))
-vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
+vi.mock('sonner', () => ({ toast: { success: vi.fn(), info: vi.fn(), error: vi.fn() } }))
 
 function wrapperFor(qc: QueryClient) {
   return ({ children }: { children: ReactNode }) =>
-    createElement(QueryClientProvider, { client: qc }, children)
+    createElement(
+      MemoryRouter,
+      null,
+      createElement(QueryClientProvider, { client: qc }, children),
+    )
 }
+
+beforeEach(() => vi.clearAllMocks())
 
 // Real wire shape: `Book.created_at` is stored naive LOCAL (Asia/Dubai) but is
 // serialized with an explicit `+04:00` offset by `ORMBase._tag_timezone`
@@ -94,15 +101,57 @@ describe('useFileSignedCopy', () => {
     expect(toast.success).not.toHaveBeenCalled()
   })
 
-  it('toasts the localized message, not the raw backend error string', async () => {
-    // Arabic-leak guard: a raw `apiErrorMessage(err)` would surface this
-    // English string straight to an Arabic-locale user.
+  it('surfaces a structured backend error message', async () => {
     const qc = new QueryClient()
     vi.spyOn(apiMod.api, 'addBookAttachment').mockRejectedValue(
-      new Error('Internal Server Error: something exploded'),
+      new apiMod.ApiError(422, 'BOOK_BARCODE_REF_MISMATCH', 'Reference barcode does not match'),
     )
     const { result } = renderHook(() => useFileSignedCopy(), { wrapper: wrapperFor(qc) })
     await result.current.file(1, 'GS-0410', new File([], 'x.pdf'))
+    expect(toast.error).toHaveBeenCalledWith('Reference barcode does not match')
+  })
+
+  it('uses the localized fallback for an unstructured error', async () => {
+    const qc = new QueryClient()
+    vi.spyOn(apiMod.api, 'addBookAttachment').mockRejectedValue(new Error('boom'))
+    const { result } = renderHook(() => useFileSignedCopy(), { wrapper: wrapperFor(qc) })
+    await result.current.file(1, 'GS-0410', new File([], 'x.pdf'))
     expect(toast.error).toHaveBeenCalledWith('scanBack.uploadError')
+  })
+})
+
+describe('useScanBackUpload', () => {
+  it('files a barcode match and refreshes books and notification counts', async () => {
+    const qc = new QueryClient()
+    const invalidate = vi.spyOn(qc, 'invalidateQueries')
+    vi.spyOn(apiMod.api, 'scanBack').mockResolvedValue({
+      book_id: 1,
+      ref_number: '1/5/141',
+      outcome: 'filed',
+    })
+    const { result } = renderHook(() => useScanBackUpload(), { wrapper: wrapperFor(qc) })
+
+    act(() => result.current.upload(new File([], 'x.pdf')))
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith('scanBack.autoFiled'))
+
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['books'] })
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['notifications', 'counts'] })
+  })
+
+  it('parks an uncertain scan in the inbox with an informational toast', async () => {
+    const qc = new QueryClient()
+    const invalidate = vi.spyOn(qc, 'invalidateQueries')
+    vi.spyOn(apiMod.api, 'scanBack').mockResolvedValue({
+      book_id: 1,
+      ref_number: '1/5/141',
+      outcome: 'parked',
+    })
+    const { result } = renderHook(() => useScanBackUpload(), { wrapper: wrapperFor(qc) })
+
+    act(() => result.current.upload(new File([], 'x.pdf')))
+    await waitFor(() => expect(toast.info).toHaveBeenCalled())
+
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['scan-inbox'] })
+    expect(toast.error).not.toHaveBeenCalled()
   })
 })

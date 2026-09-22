@@ -100,6 +100,12 @@ class BookStateOverrideRequest(BaseModel):
     reason: str | None = Field(default=None, max_length=2000)
 
 
+class ScanBackResult(BaseModel):
+    book_id: int | None
+    ref_number: str
+    outcome: Literal["filed", "parked", "rejected"]
+
+
 class RevokeRevisionAccessRequest(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True)
 

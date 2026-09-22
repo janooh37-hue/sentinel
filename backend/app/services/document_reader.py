@@ -5,6 +5,7 @@ from dataclasses import dataclass, field
 from typing import Literal, Protocol
 
 from app.core.extraction import ocr
+from app.core.qr import Decoded
 
 TextSource = Literal["pdf_text", "ocr", "unavailable"]
 
@@ -22,6 +23,7 @@ class DocumentRead:
     text: str
     text_source: TextSource
     qr_refs: tuple[str, ...] = field(default_factory=tuple)
+    codes: tuple[Decoded, ...] = field(default_factory=tuple)
     ocr_pages: tuple[OcrPageEvidence, ...] = field(default_factory=tuple)
     unavailable_reason: str | None = None
 
@@ -33,6 +35,7 @@ class DocumentReader(Protocol):
 def read_document(raw: bytes) -> DocumentRead:
     with ocr.OCR_GATE:
         qr_refs = tuple(ocr.qr_refs_from_bytes(raw))
+        codes = tuple(ocr.decode_codes_from_bytes(raw))
         if raw.startswith(b"%PDF"):
             layer = ocr.pdf_text_layer(raw)
             if sum(char.isalnum() for char in layer) >= 16:
@@ -40,6 +43,7 @@ def read_document(raw: bytes) -> DocumentRead:
                     text=layer,
                     text_source="pdf_text",
                     qr_refs=qr_refs,
+                    codes=codes,
                 )
         pages: list[OcrPageEvidence] = []
         try:
@@ -60,12 +64,14 @@ def read_document(raw: bytes) -> DocumentRead:
                 text="",
                 text_source="unavailable",
                 qr_refs=qr_refs,
+                codes=codes,
                 unavailable_reason=str(exc),
             )
         return DocumentRead(
             text="\n".join(page.text for page in pages),
             text_source="ocr",
             qr_refs=qr_refs,
+            codes=codes,
             ocr_pages=tuple(pages),
         )
 

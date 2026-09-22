@@ -16,7 +16,8 @@ import type { BookRead } from '@/lib/api'
 import { useAuth } from '@/lib/authContext'
 import { cn } from '@/lib/utils'
 import { ScanBackThumb } from './ScanBackThumb'
-import { ageDays, dockDismissKeyFor, today, useFileSignedCopy, useScanBack } from './useScanBack'
+import { ScanBackUploadZone } from './ScanBackRow'
+import { ageDays, dockDismissKeyFor, today, useFileSignedCopy, useScanBack, useScanBackUpload } from './useScanBack'
 
 const OPEN_KEY = 'scanback-dock-open'
 const MAX_ROWS = 6
@@ -82,6 +83,7 @@ export function ScanBackDock(): React.JSX.Element | null {
   const { user } = useAuth()
   const { books, count } = useScanBack()
   const { file, busy } = useFileSignedCopy()
+  const { upload, busy: autoBusy } = useScanBackUpload()
   const [open, setOpen] = useState(() => localStorage.getItem(OPEN_KEY) === '1')
   const dismissKey = dockDismissKeyFor(user?.id ?? 'anon')
   const [dismissed, setDismissed] = useState(() => localStorage.getItem(dismissKey) === today())
@@ -135,7 +137,10 @@ export function ScanBackDock(): React.JSX.Element | null {
               {t('scanBack.viewAll', { count })}
             </button>
           </div>
-          <div className="max-h-[22rem] overflow-auto">
+          <ScanBackUploadZone onFile={upload} busy={autoBusy} compact />
+          {/* The barcode target adds ~7rem above the rows; 15rem keeps the
+              expanded dock inside its previous ~22rem mobile height budget. */}
+          <div className="max-h-[15rem] overflow-auto">
             {books.slice(0, MAX_ROWS).map((b) => (
               <DockRow key={b.id} book={b} onFile={file} busy={busy} />
             ))}

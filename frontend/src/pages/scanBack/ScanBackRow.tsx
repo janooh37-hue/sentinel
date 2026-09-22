@@ -8,6 +8,59 @@ import { cn } from '@/lib/utils'
 import { ScanBackThumb } from './ScanBackThumb'
 import { ageDays } from './useScanBack'
 
+export function ScanBackUploadZone({
+  onFile, busy, compact = false,
+}: {
+  onFile: (file: File) => void
+  busy: boolean
+  compact?: boolean
+}): React.JSX.Element {
+  const { t } = useTranslation()
+  const inputRef = useRef<HTMLInputElement>(null)
+  const [over, setOver] = useState(false)
+  const take = (file: File | undefined): void => {
+    if (file && !busy) onFile(file)
+  }
+
+  return (
+    <section className={cn(
+      'rounded-xl border border-info/30 bg-info-soft p-4',
+      compact && 'rounded-none border-x-0 border-t-0 p-3',
+    )}>
+      <p className={cn('font-semibold text-foreground', compact ? 'text-[0.76em]' : 'text-[0.86em]')}>
+        {t('scanBack.autoDropTitle')}
+      </p>
+      <p className={cn('mt-0.5 text-muted-foreground', compact ? 'text-[0.7em]' : 'text-[0.76em]')}>
+        {t('scanBack.autoDropHint')}
+      </p>
+      <button
+        type="button"
+        disabled={busy}
+        onClick={() => inputRef.current?.click()}
+        onDragOver={(e) => { e.preventDefault(); setOver(true) }}
+        onDragLeave={() => setOver(false)}
+        onDrop={(e) => { e.preventDefault(); setOver(false); take(e.dataTransfer.files[0]) }}
+        className={cn(
+          'mt-3 flex w-full items-center justify-center gap-2 rounded-lg border border-dashed border-border-strong bg-surface-raised px-3 py-2.5 text-[0.74em] text-muted-foreground transition-colors',
+          'hover:border-info hover:bg-info-soft hover:text-info focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-40',
+          over && 'border-info bg-info-soft text-info',
+          compact && 'mt-2 py-2 text-[0.71em]',
+        )}
+      >
+        <Upload className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
+        {t('scanBack.drop')}
+      </button>
+      <input
+        ref={inputRef}
+        type="file"
+        accept=".pdf,.png,.jpg,.jpeg,.tif,.tiff,.webp"
+        className="hidden"
+        onChange={(e) => { take(e.target.files?.[0]); e.target.value = '' }}
+      />
+    </section>
+  )
+}
+
 export function ScanBackRow({
   book, onFile, busy,
 }: {

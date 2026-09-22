@@ -1323,6 +1323,8 @@ def generate_document(
     vio_type = fields.get("violation_type")
     if isinstance(vio_type, list):
         fields = {**fields, "violation_type": "، ".join(str(v) for v in vio_type)}
+    if commit and template_id == "General Book" and not fields.get("date"):
+        fields = {**fields, "date": datetime.now().strftime("%d-%m-%Y")}
 
     # Paths of files to unlink AFTER a successful commit (B1: defer unlink past commit).
     superseded_files: list[str] = []
@@ -1604,7 +1606,9 @@ def generate_document(
             and template_id not in CLASSIFIED_BOOK_FORMS
             and template_id not in VEHICLE_LETTER_FORMS,
             aztec_corner=aztec_corner_for(template_id) if commit else None,
-            sync_general_book_footer=template_id in CLASSIFIED_BOOK_FORMS,
+            sync_general_book_footer=(
+                template_id in CLASSIFIED_BOOK_FORMS and template_id != "General Book"
+            ),
         ),
         converter=pdf_converter,
     )
@@ -2463,7 +2467,9 @@ def render_signed_artifact(
             header_reference=template_id not in CLASSIFIED_BOOK_FORMS
             and template_id not in VEHICLE_LETTER_FORMS,
             aztec_corner=aztec_corner_for(template_id),
-            sync_general_book_footer=template_id in CLASSIFIED_BOOK_FORMS,
+            sync_general_book_footer=(
+                template_id in CLASSIFIED_BOOK_FORMS and template_id != "General Book"
+            ),
         ),
         converter=converter or convert_docx_to_pdf,
     )
