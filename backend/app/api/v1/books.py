@@ -80,6 +80,7 @@ from app.schemas.book import (
     ScanBackResult,
     ServiceFacetRead,
     WordBookCreate,
+    WordSaveStatusRead,
     WordSessionRead,
     WordTemplateRead,
     WordTemplateTableRead,
@@ -296,6 +297,26 @@ def finish_word_session(
     _require_full_book(db, user, book_id)
     row = word_book_service.finish_word_session(db, user=user, book_id=book_id)
     return _build_book_response(db, row, user)
+
+
+@router.get("/{book_id}/word-sessions/status", response_model=WordSaveStatusRead)
+def word_session_status(
+    book_id: int,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(require_capability("books.edit"))],
+) -> WordSaveStatusRead:
+    """Small poll for Word saves; avoid rebuilding the full Record every second."""
+    _require_full_book(db, user, book_id)
+    session = (
+        db.query(BookEditSession.last_put_at)
+        .filter_by(book_id=book_id, state="active")
+        .one_or_none()
+    )
+    if session is None:
+        raise AppError(
+            "NO_ACTIVE_SESSION", "No active editing session for this book", http_status=409
+        )
+    return WordSaveStatusRead(last_put_at=session.last_put_at)
 
 
 @router.get("/{book_id}/word-sessions/preview")

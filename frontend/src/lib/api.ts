@@ -2030,6 +2030,8 @@ export const api = {
   /** POST /books/{id}/word-sessions/finish — commit the Word-edited draft. */
   finishWordSession: (bookId: number) =>
     request<BookRead>('POST', `/books/${bookId}/word-sessions/finish`),
+  getWordSaveStatus: (bookId: number) =>
+    request<components['schemas']['WordSaveStatusRead']>('GET', `/books/${bookId}/word-sessions/status`),
   /** DELETE /books/{id}/word-sessions — discard the Word draft (no commit). */
   discardWordSession: (bookId: number) =>
     request<BookRead>('DELETE', `/books/${bookId}/word-sessions`),

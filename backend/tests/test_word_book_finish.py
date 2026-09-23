@@ -5,6 +5,7 @@ RED first — run before implementing the functions.
 
 from __future__ import annotations
 
+import os
 import secrets
 from pathlib import Path
 
@@ -447,6 +448,44 @@ def test_finish_accepts_public_pdf_converter(db_session, tmp_path, monkeypatch):
     document = db_session.get(Document, result.versions[-1].document_id)
     assert document is not None
     assert document.pdf_path is not None
+
+
+@pytest.mark.parametrize("stale", [False, True])
+def test_finish_only_reuses_current_live_preview(db_session, tmp_path, monkeypatch, stale):
+    """Publish a preview only when it matches the DOCX Word last saved."""
+    from datetime import UTC, datetime
+
+    from app.services import word_book_service
+
+    monkeypatch.setattr(word_book_service, "get_settings", lambda: _settings(tmp_path))
+    user = _user(db_session)
+    book, session = _make_book_with_session(db_session, user, tmp_path)
+    session.last_put_at = datetime.now(UTC).replace(tzinfo=None)
+    db_session.commit()
+    working = Path(session.working_path)
+    preview = _pdf(working.parent / "preview-src.pdf")
+    os.utime(preview, (working.stat().st_mtime, working.stat().st_mtime))
+    if stale:
+        later = working.stat().st_mtime + 10
+        os.utime(working, (later, later))
+
+    calls: list[Path] = []
+
+    def unavailable(path: Path) -> None:
+        calls.append(path)
+        return None
+
+    result = word_book_service.finish_word_session(
+        db_session, user=user, book_id=book.id, converter=unavailable
+    )
+    document = db_session.get(Document, result.versions[-1].document_id)
+    assert document is not None
+    if stale:
+        assert calls and document.pdf_path is None
+    else:
+        assert not calls and document.pdf_path is not None
+        with fitz.open(_settings(tmp_path).data_dir / document.pdf_path) as pdf:
+            assert pdf.page_count == 1
 
 
 def test_discard_draft_voids_book(db_session, tmp_path, monkeypatch):

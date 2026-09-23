@@ -3,7 +3,7 @@ import { expect, test as base } from '@playwright/test'
 
 const FIXED_NOW = new Date('2026-09-12T08:00:00.000Z')
 const IDLE_ADVANCE_MS = 35_000
-const POLL_ADVANCE_MS = 5_100
+const POLL_ADVANCE_MS = 1_100
 const FIXTURE_PASSWORD = 'fixture-lock-pass'
 const CLASSIFICATION_CODE = '15/1'
 const DESKTOP = { width: 1_280, height: 900 }
@@ -173,6 +173,7 @@ class SyntheticApi {
   readonly reopenedBookIds: number[] = []
   verifyRequests = 0
   getBookRequests = 0
+  saveStatusRequests = 0
 
   private readonly books = new Map<number, SyntheticBook>()
   private nextBookId = 101
@@ -492,6 +493,22 @@ class SyntheticApi {
       await this.fulfillJson(route, { approvals: 0, leaves: 0, scans: 0, emails: 0 })
       return
     }
+    if (method === 'GET' && path === '/books/approval-summary') {
+      await this.fulfillJson(route, {
+        can_view_sent: false,
+        available_received_kinds: [],
+        signature: { count: 0, oldest: null },
+        review: { count: 0, oldest: null },
+        sent: { count: 0, oldest: null },
+        returned_count: 0,
+        actionable_count: 0,
+      })
+      return
+    }
+    if (method === 'GET' && path === '/inmate-violations/statistics/awaiting-close') {
+      await this.fulfillJson(route, { months: [] })
+      return
+    }
     if (method === 'GET' && path === '/notifications/stream') {
       await route.fulfill({
         status: 200,
@@ -618,6 +635,15 @@ class SyntheticApi {
         total: records.length,
         limit: Number(url.searchParams.get('limit') ?? 500),
         offset: 0,
+      })
+      return
+    }
+
+    const statusMatch = path.match(/^\/books\/(\d+)\/word-sessions\/status$/)
+    if (method === 'GET' && statusMatch) {
+      this.saveStatusRequests += 1
+      await this.fulfillJson(route, {
+        last_put_at: this.requiredBook(Number(statusMatch[1])).edit_session?.last_put_at ?? null,
       })
       return
     }
@@ -952,13 +978,14 @@ test('save while locked and repeated console-layout cycles keep one session and 
     viewport: WIDE_DESKTOP,
   })
   const book = await createHandoff(page, backend, locale, 'Save while locked')
-  const firstPollCount = backend.getBookRequests
+  const firstPollCount = backend.saveStatusRequests
 
   await idleLock(page, locale, 'console')
   await expectLockUsable(page)
   backend.markSaved(book.id)
   await page.clock.fastForward(POLL_ADVANCE_MS)
-  await expect.poll(() => backend.getBookRequests).toBeGreaterThan(firstPollCount)
+  await expect.poll(() => backend.saveStatusRequests).toBeGreaterThan(firstPollCount)
+  expect(backend.getBookRequests).toBeLessThan(backend.saveStatusRequests)
   await unlockWithKeyboard(page, locale)
 
   const handoff = await expectHandoff(page, locale, book.ref_number)

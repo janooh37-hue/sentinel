@@ -229,6 +229,10 @@ class BookEditSessionRead(ORMBase):
     created_at: datetime
 
 
+class WordSaveStatusRead(BaseModel):
+    last_put_at: datetime | None
+
+
 class ClassificationRead(BaseModel):
     code: str
     tab: int

@@ -86,18 +86,23 @@ export function WordHandoffDialog({ session, open, onClose }: Props): React.JSX.
     setPresentedSessionToken(null)
   }
 
-  // Poll the book while dialog is open to detect the first Word save.
-  // Stops once Finish succeeded — the finished view is static.
+  // Keep the Record details fetch for the header, but poll only a tiny save
+  // timestamp. Rebuilding a full Record every second makes Word feel sluggish.
   const polling = open && session != null && finishedBook == null
   const bookQuery = useQuery({
     queryKey: ['books', session?.book_id],
     queryFn: () => api.getBook(session!.book_id),
     enabled: polling,
-    refetchInterval: polling ? 5000 : false,
     staleTime: 0,
   })
+  const saveStatusQuery = useQuery({
+    queryKey: ['word-save-status', session?.token],
+    queryFn: () => api.getWordSaveStatus(session!.book_id),
+    enabled: polling,
+    refetchInterval: polling ? 1000 : false,
+  })
 
-  const lastPutAt = bookQuery.data?.edit_session?.last_put_at ?? null
+  const lastPutAt = saveStatusQuery.data?.last_put_at ?? null
   const hasSave = lastPutAt != null
 
   const finishMutation = useMutation({
