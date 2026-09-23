@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Check, FilePenLine, Trash2 } from 'lucide-react'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
@@ -16,8 +16,29 @@ interface WordActionProps {
   isMobile?: boolean
 }
 
+/** Trigger data for a menu-hosted rendering of `WordReopenButton` (record
+ *  page Tools dropdown) — see the `onTriggerChange` doc below. */
+export interface WordReopenTrigger {
+  label: string
+  icon: React.ReactNode
+  disabled: boolean
+  onClick: () => void
+}
+
 interface WordReopenButtonProps extends WordActionProps {
   iconOnly?: boolean
+  /** Suppress the default standalone `<button>` — used when a caller renders
+   *  the trigger itself (e.g. inside a dropdown menu item) via `onTriggerChange`.
+   *  The mutation, session state, and `WordHandoffDialog` stay owned and mounted
+   *  here regardless — only the visible trigger markup moves. */
+  hideTrigger?: boolean
+  /** Called with the current trigger affordance (or null when not applicable)
+   *  on every change. Lets a caller (e.g. a Tools dropdown) render its own
+   *  menu-item markup for this action while `WordReopenButton` keeps owning
+   *  the mutation and `WordHandoffDialog` — mounted independently of whatever
+   *  container the caller puts the rendered trigger in, so closing a dropdown
+   *  never discards a pending reopen or an already-open handoff dialog. */
+  onTriggerChange?: (trigger: WordReopenTrigger | null) => void
 }
 
 export function WordSessionActions({
@@ -108,6 +129,8 @@ export function WordReopenButton({
   book,
   isMobile,
   iconOnly,
+  hideTrigger,
+  onTriggerChange,
 }: WordReopenButtonProps): React.JSX.Element | null {
   const { t } = useTranslation()
   const qc = useQueryClient()
@@ -133,21 +156,39 @@ export function WordReopenButton({
 
   const hasActiveSession = book.edit_session?.state === 'active'
   const isFinished = (book.versions?.length ?? 0) > 0 && !hasActiveSession
+  const eligible = isFinished && !book.voided_at
+  const label = t('books.word.editNewVersion')
+  const title = isMobile ? t('books.word.needsPc') : label
+  const disabled = isMobile === true || reopenMutation.isPending
+
+  // Reactive trigger payload for a caller hosting this action elsewhere (the
+  // Tools dropdown): recomputed on every render, so — unlike a ref snapshot —
+  // it never goes stale between the owner's renders.
+  useEffect(() => {
+    onTriggerChange?.(
+      eligible
+        ? { label, icon: <FilePenLine className="h-3.5 w-3.5" aria-hidden="true" />, disabled, onClick: () => reopenMutation.mutate() }
+        : null,
+    )
+    // Unmounting (e.g. queue navigation to a record where this component no
+    // longer renders) must clear the lifted trigger too, or the Tools menu
+    // keeps showing — and can act on — the previous record's action.
+    return () => onTriggerChange?.(null)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [eligible, label, disabled, onTriggerChange])
+
   // Reopen flips `book.edit_session` active via the `invalidate()` refetch,
   // often before the user sees the dialog (always when a lock defers it):
   // keep the retained session mounted instead of reading that as "nothing to show".
   if (book.voided_at || (!isFinished && reopenSession == null)) return null
 
-  const label = t('books.word.editNewVersion')
-  const title = isMobile ? t('books.word.needsPc') : label
-
   return (
     <>
-      {isFinished && (
+      {isFinished && !hideTrigger && (
         <div className="flex flex-col gap-1">
           <button
             type="button"
-            disabled={isMobile || reopenMutation.isPending}
+            disabled={disabled}
             onClick={() => reopenMutation.mutate()}
             aria-label={iconOnly ? label : undefined}
             title={iconOnly ? title : undefined}

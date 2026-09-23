@@ -281,6 +281,25 @@ describe('Word action components', () => {
     expect(screen.queryByRole('dialog')).toBeNull()
   })
 
+  it('(l) clears a lifted onTriggerChange trigger when eligibility is lost (queue navigation)', () => {
+    // Regression: the Tools-dropdown trigger must not survive a record swap
+    // that makes this action ineligible, or a stale menu item can act on
+    // the wrong record. The effect must clean up on unmount/re-eval, not
+    // just push a new value while eligible.
+    const onTriggerChange = vi.fn()
+    const view = render(
+      createElement(WordReopenButton, { book: FINISHED_BOOK, hideTrigger: true, onTriggerChange }),
+      { wrapper: wrapper(makeQc()) },
+    )
+    expect(onTriggerChange).toHaveBeenLastCalledWith(expect.objectContaining({ label: expect.any(String) }))
+
+    // Navigate to a record where this action is not eligible (no versions).
+    view.rerender(
+      createElement(WordReopenButton, { book: { ...BASE_BOOK, id: 2, versions: [] }, hideTrigger: true, onTriggerChange }),
+    )
+    expect(onTriggerChange).toHaveBeenLastCalledWith(null)
+  })
+
   it('(h) on mobile, editNewVersion button is disabled with needsPc hint', () => {
     render(
       createElement(WordReopenButton, { book: FINISHED_BOOK, isMobile: true }),

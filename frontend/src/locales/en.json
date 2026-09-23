@@ -1968,7 +1968,9 @@
       "managerNoSignatureLink": "open Settings → Signing.",
       "managerNotLinked": "No manager is linked to this document. Please select a signing manager.",
       "reviewers": "Reviewers",
-      "reviewersHint": "Reviewers can comment and request changes before approval."
+      "reviewersHint": "Reviewers can comment and request changes before approval.",
+      "signConfirmTitle": "Sign & approve this record?",
+      "signConfirmBody": "This applies your signature to {{ref}} · v{{version}} · {{subject}}."
     },
     "annotations": {
       "pin": "Pin",
@@ -2028,7 +2030,11 @@
       "downloadImported": "Download original ({{format}})",
       "progress": "Progress",
       "notification": "Notification",
-      "stationSubmitted": "Submitted",
+      "tools": "Tools",
+      "toolsDocument": "Document",
+      "toolsEditing": "Editing",
+      "toolsAdmin": "Administration",
+      "stationCreated": "First version created",
       "stationRevised": "Revised",
       "stationReturned": "Returned",
       "stationRejected": "Rejected",

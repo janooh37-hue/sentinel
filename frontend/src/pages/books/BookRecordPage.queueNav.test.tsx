@@ -199,10 +199,11 @@ describe('BookRecordPage — Email via Outlook', () => {
     vi.mocked(api.getBook).mockResolvedValue(recordFixture() as never)
     renderRecord()
 
-    // The header paints before the book query resolves, so the action exists
-    // (disabled) from the first frame. Wait for eligibility, not for the node.
-    const action = await screen.findByRole('button', { name: 'Email via Outlook' })
-    await waitFor(() => expect(action).toBeEnabled())
+    // The action lives in the Tools dropdown; the trigger only paints once the
+    // book query resolves. Open it, then wait for eligibility, not the node.
+    await userEvent.click(await screen.findByRole('button', { name: 'Tools' }))
+    const action = await screen.findByRole('menuitem', { name: 'Email via Outlook' })
+    await waitFor(() => expect(action).not.toHaveAttribute('aria-disabled', 'true'))
     await userEvent.click(action)
 
     const state = JSON.parse(
@@ -239,6 +240,10 @@ describe('BookRecordPage — Email via Outlook', () => {
   it('disables the action for a record with no papers to attach', async () => {
     vi.mocked(api.getBook).mockResolvedValue(recordFixture({ versions: [] }) as never)
     renderRecord()
-    expect(await screen.findByRole('button', { name: 'Email via Outlook' })).toBeDisabled()
+    await userEvent.click(await screen.findByRole('button', { name: 'Tools' }))
+    expect(await screen.findByRole('menuitem', { name: 'Email via Outlook' })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    )
   })
 })
