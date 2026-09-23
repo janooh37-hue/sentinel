@@ -570,7 +570,6 @@ export function BookRecordPage(): React.JSX.Element {
     ref: string
     subject: string
     versionNo: number
-    triggerRef: React.RefObject<HTMLButtonElement | null>
   } | null>(null)
 
   const { data: book, isPending, isError, refetch } = useQuery({
@@ -632,6 +631,10 @@ export function BookRecordPage(): React.JSX.Element {
   // close out the paper flow (print → sign → scan) from the record page.
   const addScan = useAddScan(book?.id ?? null)
   const showFileSigned = canMutateCurrent && canFileSignedCopy(state, { canEdit, canScan })
+  // Approved + signed paper on file + edit rights: gates Replace / Unfile and
+  // the Tools-menu sections that hold them.
+  const canManageSignedPaper =
+    state === 'approved' && Boolean(current?.signed_pdf_url) && canEdit && canMutateCurrent
   // "Send for approval" (digital route): submit a draft, or re-route a still
   // pending request to a different signing manager. Both routes are offered
   // side by side so the operator picks per request.
@@ -867,7 +870,6 @@ export function BookRecordPage(): React.JSX.Element {
       ref: book.ref_number,
       subject: book.subject ?? '',
       versionNo: current.version_no,
-      triggerRef,
     })
   }
 
@@ -1154,7 +1156,9 @@ export function BookRecordPage(): React.JSX.Element {
                   tone="plain"
                 />
               </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
+              {/* Portaled outside the print-hidden header: without the marker the
+                  still-open menu lands on the sheet when Print runs from it. */}
+              <DropdownMenuContent align="end" data-print-hide>
                 <div className="px-2.5 pb-1 pt-1.5 text-[0.62em] font-bold uppercase tracking-[0.1em] text-muted-foreground">
                   {t('books.record.toolsDocument')}
                 </div>
@@ -1205,7 +1209,7 @@ export function BookRecordPage(): React.JSX.Element {
 
                 {(wordReopenTrigger != null ||
                   adjustSigTrigger != null ||
-                  (state === 'approved' && current?.signed_pdf_url != null && canEdit && canMutateCurrent)) && (
+                  canManageSignedPaper) && (
                   <>
                     <DropdownMenuSeparator />
                     <div className="px-2.5 pb-1 pt-1.5 text-[0.62em] font-bold uppercase tracking-[0.1em] text-muted-foreground">
@@ -1226,7 +1230,7 @@ export function BookRecordPage(): React.JSX.Element {
                         {adjustSigTrigger.label}
                       </DropdownMenuItem>
                     )}
-                    {state === 'approved' && current?.signed_pdf_url && canEdit && canMutateCurrent && (
+                    {canManageSignedPaper && (
                       <DropdownMenuItem onSelect={() => replaceSignedRef.current?.click()}>
                         <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
                         {t('books.pane.replacePaper')}
@@ -1237,7 +1241,7 @@ export function BookRecordPage(): React.JSX.Element {
 
                 {((canOverrideState && canMutateCurrent) ||
                   canManageRevisionAccess ||
-                  (state === 'approved' && current?.signed_pdf_url != null && canEdit && canMutateCurrent)) && (
+                  canManageSignedPaper) && (
                   <>
                     <DropdownMenuSeparator />
                     <div className="px-2.5 pb-1 pt-1.5 text-[0.62em] font-bold uppercase tracking-[0.1em] text-muted-foreground">
@@ -1261,7 +1265,7 @@ export function BookRecordPage(): React.JSX.Element {
                         {t('books.approval.revisionAccess')}
                       </DropdownMenuItem>
                     )}
-                    {state === 'approved' && current?.signed_pdf_url && canEdit && canMutateCurrent && (
+                    {canManageSignedPaper && (
                       <DropdownMenuItem variant="danger" onSelect={() => setUnfileOpen(true)}>
                         <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
                         {t('books.pane.unfileSignedBtn')}
@@ -1394,7 +1398,7 @@ export function BookRecordPage(): React.JSX.Element {
                     )}
                     <span className="min-w-0 truncate">
                       {summary?.label}
-                      {summary?.meta ? ` — ${summary.meta}` : ''}
+                      {summary?.meta ? ` — ${bidi(summary.meta)}` : ''}
                     </span>
                   </span>
                 )
