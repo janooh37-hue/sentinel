@@ -9,7 +9,7 @@ from docx import Document as DocxFile
 from sqlalchemy.orm import Session
 
 from app.api.errors import AppError
-from app.db.models import Book, BookCategory, BookEditSession
+from app.db.models import Book, BookCategory, BookEditSession, User
 from app.services import word_book_service
 
 
@@ -33,9 +33,12 @@ def active_session(db_session: Session, tmp_path: Path) -> tuple[Book, Path]:
     d = DocxFile()
     d.add_paragraph("معاينة حية")
     d.save(str(working))
+    user = User(email="preview@test.ae", password_hash="x", role="admin", status="active")
+    db_session.add(user)
+    db_session.flush()
     sess = BookEditSession(
         book_id=book.id,
-        user_id=1,
+        user_id=user.id,
         token="tok-preview",
         working_path=str(working),
         state="active",
@@ -134,7 +137,7 @@ def test_preview_route_supports_base64(
 
     from app.api.deps import get_current_user
     from app.db import session as session_mod
-    from app.db.models import Base, User
+    from app.db.models import Base, User, UserPermission
     from app.db.session import attach_sqlite_pragmas, get_db
     from app.main import create_app
     from app.services import perm_service
@@ -160,7 +163,9 @@ def test_preview_route_supports_base64(
     try:
         perm_service.seed_role_defaults(db)
         db.add(BookCategory(id="GS", prefix="GS"))
-        book = Book(category_id="GS", ref_number="1/11/8", subject="معاينة")
+        book = Book(
+            category_id="GS", ref_number="1/11/8", subject="معاينة", classification_code="GS"
+        )
         db.add(book)
         db.flush()
         working = tmp_path / "editing" / f"book-{book.id}" / "1-11-8.docx"
@@ -178,6 +183,10 @@ def test_preview_route_supports_base64(
         )
         user = User(email="mgr@x.ae", password_hash="x", role="admin", status="active")
         db.add(user)
+        db.flush()
+        db.add(
+            UserPermission(user_id=user.id, capability="books.servicerecords.other", effect="deny")
+        )
         db.commit()
 
         def fake_convert(src: Path) -> Path:
@@ -197,6 +206,7 @@ def test_preview_route_supports_base64(
         assert base64.b64decode(res.text).startswith(b"%PDF")
     finally:
         db.close()
+        eng.dispose()
         get_settings.cache_clear()
 
 
@@ -288,6 +298,7 @@ def test_list_rows_carry_is_word_book(
         assert by_ref["1/11/22"]["is_word_book"] is False
     finally:
         db.close()
+        eng.dispose()
         get_settings.cache_clear()
 
 

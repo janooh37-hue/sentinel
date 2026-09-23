@@ -11,7 +11,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.db import session as session_mod
-from app.db.models import Base, Book, BookCategory, BookEditSession, Employee, User
+from app.db.models import Base, Book, BookCategory, BookEditSession, Employee, User, UserPermission
 from app.db.session import attach_sqlite_pragmas
 from app.services import perm_service
 
@@ -152,6 +152,10 @@ def test_create_word_session_dispatches_report(db_session):
     u = User(email="op2@test.ae", password_hash="x", role="admin", status="active")
     db_session.add(u)
     db_session.add(Employee(id="G1042", name_en="Muhannad", name_ar="مهند", position="Head"))
+    db_session.flush()
+    db_session.add(
+        UserPermission(user_id=u.id, capability="books.servicerecords.other", effect="deny")
+    )
     db_session.commit()
     db_session.refresh(u)
 
@@ -171,6 +175,9 @@ def test_create_word_session_dispatches_report(db_session):
     )
     assert r.status_code == 201, r.text
     assert r.json()["ref_number"].startswith("REPORT-")
+    detail = client.get(f"/api/v1/books/{r.json()['book_id']}")
+    assert detail.status_code == 200, detail.text
+    assert detail.json()["service_id"] == "Report"
 
 
 def _png(path: Path) -> None:

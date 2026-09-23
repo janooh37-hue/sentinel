@@ -32,6 +32,7 @@ from app.core.form_kind import (
     resolve_service,
     service_template_ids,
     subject_prefixes,
+    word_draft_service,
 )
 from app.db.models import (
     AuditLog,
@@ -39,6 +40,7 @@ from app.db.models import (
     BookAnnotation,
     BookApprovalStep,
     BookCategory,
+    BookEditSession,
     BookRevisionAccess,
     BookVersion,
     Document,
@@ -173,15 +175,30 @@ def _fts_query_books(db: Session, q: str) -> dict[int, str]:
         return {}
 
 
+def _active_word_draft_clause() -> ColumnElement[bool]:
+    return and_(
+        Book.category_id == "GS",
+        Book.id.not_in(select(BookVersion.book_id)),
+        or_(Book.ref_number.like("REPORT-%"), Book.classification_code.is_not(None)),
+        exists(
+            select(BookEditSession.id).where(
+                BookEditSession.book_id == Book.id, BookEditSession.state == "active"
+            )
+        ),
+    )
+
+
 def service_clause(service_id: str) -> ColumnElement[bool]:
     """SQL for "this book belongs to `service_id`".
 
     Mirrors `form_kind.resolve_service`, generated from the same prefix table:
     a book belongs to a service if its NEWEST version carries that
     `template_id`, or — being version-less — its subject starts with one of
-    the service's names. `OTHER_SERVICE_ID` is the literal negation of every
-    named clause, so the buckets are provably complementary: no book can land
-    in two or in none. Any `service_id` that is neither `OTHER_SERVICE_ID` nor
+    the service's names. Active Word drafts instead use their ref/classification
+    marker so an empty subject does not place them in Other. `OTHER_SERVICE_ID`
+    is the literal negation of every named clause, so the buckets are
+    complementary: no book can land in two or in none.
+    Any `service_id` that is neither `OTHER_SERVICE_ID` nor
     a member of `SERVICE_IDS` matches nothing — `resolve_service` never
     returns such a value, so the SQL must not invent a match for it either.
 
@@ -217,11 +234,23 @@ def service_clause(service_id: str) -> ColumnElement[bool]:
         newest_template_id.is_not(None),
         newest_template_id.in_(service_template_ids(service_id)),
     )
+    word_draft = _active_word_draft_clause()
+    draft_match: ColumnElement[bool] = false()
+    if service_id == "Report":
+        draft_match = and_(word_draft, Book.ref_number.like("REPORT-%"))
+    elif service_id == "General Book":
+        draft_match = and_(
+            word_draft,
+            not_(Book.ref_number.like("REPORT-%")),
+            Book.classification_code.is_not(None),
+        )
     prefixes = subject_prefixes(service_id)
     return or_(
         is_newest_version_of,
+        draft_match,
         and_(
             Book.id.not_in(select(BookVersion.book_id)),
+            not_(word_draft),
             Book.subject.is_not(None),
             or_(*[Book.subject.ilike(f"{p}%") for p in prefixes]),
         ),
@@ -314,11 +343,23 @@ def assert_record_type_visible(db: Session, user: User, row: Book) -> None:
     """Raise the stable 403 when ``row`` belongs to a denied record type."""
     denied_services, denied_categories = perm_service.denied_record_types(db, user)
     newest = max(row.versions, key=lambda version: version.version_no, default=None)
-    service_id = resolve_service(
-        row.subject,
-        newest.template_id if newest is not None else None,
-        versioned=newest is not None,
+    draft_service = (
+        word_draft_service(row.category_id, row.ref_number, row.classification_code)
+        if newest is None
+        else None
     )
+    if draft_service is not None and db.scalar(
+        select(BookEditSession.id)
+        .where(BookEditSession.book_id == row.id, BookEditSession.state == "active")
+        .limit(1)
+    ):
+        service_id = draft_service
+    else:
+        service_id = resolve_service(
+            row.subject,
+            newest.template_id if newest is not None else None,
+            versioned=newest is not None,
+        )
     if row.category_id in denied_categories or service_id in denied_services:
         raise AppError(
             "RECORD_TYPE_FORBIDDEN",
@@ -448,7 +489,7 @@ def service_facets(
     distinguishes "no version at all" from "has a version whose template is
     NULL" — the two resolve differently.
 
-    # ponytail: one full scan with two correlated subqueries per row — 629 rows
+    # ponytail: one full scan with three correlated subqueries per row — 629 rows
     # today, and book_versions.book_id is indexed. If books pass ~50k,
     # denormalise service_id onto `books`.
     """
@@ -465,9 +506,17 @@ def service_facets(
         .where(BookVersion.book_id == Book.id)
         .scalar_subquery()
     )
-    stmt = select(Book.subject, Book.approval_state, newest_template_id, n_versions).where(
-        Book.deleted_at.is_(None)
-    )
+    active_word_draft = _active_word_draft_clause()
+    stmt = select(
+        Book.subject,
+        Book.approval_state,
+        newest_template_id,
+        n_versions,
+        Book.category_id,
+        Book.ref_number,
+        Book.classification_code,
+        active_word_draft,
+    ).where(Book.deleted_at.is_(None))
     if user is not None:
         visibility = user_visibility_clause(db, user)
         if visibility is not None:
@@ -475,8 +524,21 @@ def service_facets(
 
     all_states: Counter[str] = Counter()
     per_service: dict[str, Counter[str]] = {}
-    for subject, approval_state, template_id, n_versions in db.execute(stmt):
-        service_id = resolve_service(subject, template_id, versioned=n_versions > 0)
+    for (
+        subject,
+        approval_state,
+        template_id,
+        n_versions,
+        category_id,
+        ref_number,
+        classification_code,
+        active_draft,
+    ) in db.execute(stmt):
+        service_id = (
+            word_draft_service(category_id, ref_number, classification_code)
+            if active_draft
+            else None
+        ) or resolve_service(subject, template_id, versioned=n_versions > 0)
         state = approval_state or "none"
         all_states[state] += 1
         per_service.setdefault(service_id, Counter())[state] += 1

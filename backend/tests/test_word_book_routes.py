@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.api.deps import get_current_user
 from app.db import session as session_mod
-from app.db.models import Base, Book, BookCategory, BookVersion, Document, User
+from app.db.models import Base, Book, BookCategory, BookVersion, Document, User, UserPermission
 from app.db.session import attach_sqlite_pragmas, get_db
 from app.main import create_app
 from app.services import perm_service
@@ -42,6 +42,7 @@ def api_db(monkeypatch, tmp_path) -> Session:
     perm_service.seed_role_defaults(db)
     yield db
     db.close()
+    eng.dispose()
 
 
 def _make_user(db: Session, role: str = "operator", email: str | None = None) -> User:
@@ -232,6 +233,38 @@ def test_book_read_draft_fields(api_db, monkeypatch, tmp_path):
     assert detail["edit_session"] is not None
     assert detail["edit_session"]["user_id"] == user.id
     assert detail["edit_session"]["state"] == "active"
+
+
+def test_word_draft_save_visible_without_other_records_access(api_db, monkeypatch, tmp_path):
+    _seed_gs(api_db)
+    user = _make_user(api_db, role="manager")
+    api_db.add(
+        UserPermission(user_id=user.id, capability="books.servicerecords.other", effect="deny")
+    )
+    api_db.commit()
+    client = _client(api_db, user, monkeypatch, tmp_path)
+    created = client.post(
+        "/api/v1/books/word-sessions",
+        json={"classification_code": "5/1", "subject": "Disposable draft"},
+    )
+    assert created.status_code == 201, created.text
+    session = created.json()
+    saved = client.put(
+        f"/dav/{session['token']}/{session['filename']}",
+        content=b"PK-saved",
+    )
+    assert saved.status_code == 204
+
+    detail = client.get(f"/api/v1/books/{session['book_id']}")
+    assert detail.status_code == 200, detail.text
+    assert detail.json()["edit_session"]["last_put_at"] is not None
+    assert detail.json()["service_id"] == "General Book"
+    listed = client.get("/api/v1/books", params={"service_id": "General Book"})
+    assert listed.status_code == 200
+    assert session["book_id"] in [book["id"] for book in listed.json()["items"]]
+    facets = client.get("/api/v1/books/facets")
+    assert facets.status_code == 200
+    assert [(s["id"], s["count"]) for s in facets.json()["services"]] == [("General Book", 1)]
 
 
 def test_book_version_omits_pdf_url_when_document_has_no_pdf(api_db, monkeypatch, tmp_path):
