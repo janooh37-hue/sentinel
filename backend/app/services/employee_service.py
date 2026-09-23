@@ -17,6 +17,8 @@ from __future__ import annotations
 from datetime import UTC, date, datetime
 from typing import Any, Final
 
+from rapidfuzz import fuzz
+from rapidfuzz import utils as fuzz_utils
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session
 
@@ -31,6 +33,7 @@ from app.schemas.employee import (
     validate_status_end_date,
 )
 from app.services import workforce_schedule_service
+from app.services.extraction_service import _MATCH_THRESHOLD
 
 LIST_MAX_LIMIT = 500
 LIST_DEFAULT_LIMIT = 100
@@ -59,24 +62,34 @@ def list_employees(
     stmt = select(Employee)
     count_stmt = select(func.count()).select_from(Employee)
 
+    non_q_clauses: list[Any] = []
+
     if q:
         needle = f"%{q.strip()}%"
         clause = or_(
             Employee.id.ilike(needle),
             Employee.name_en.ilike(needle),
             Employee.name_ar.ilike(needle),
+            Employee.uae_id_no.ilike(needle),
+            Employee.passport_no.ilike(needle),
         )
         stmt = stmt.where(clause)
         count_stmt = count_stmt.where(clause)
     if status:
-        stmt = stmt.where(Employee.status == status)
-        count_stmt = count_stmt.where(Employee.status == status)
+        clause = Employee.status == status
+        stmt = stmt.where(clause)
+        count_stmt = count_stmt.where(clause)
+        non_q_clauses.append(clause)
     if department:
-        stmt = stmt.where(Employee.department == department)
-        count_stmt = count_stmt.where(Employee.department == department)
+        clause = Employee.department == department
+        stmt = stmt.where(clause)
+        count_stmt = count_stmt.where(clause)
+        non_q_clauses.append(clause)
     if duty_unit:
-        stmt = stmt.where(Employee.duty_unit == duty_unit)
-        count_stmt = count_stmt.where(Employee.duty_unit == duty_unit)
+        clause = Employee.duty_unit == duty_unit
+        stmt = stmt.where(clause)
+        count_stmt = count_stmt.where(clause)
+        non_q_clauses.append(clause)
     if pending:
         # Scheduled departure: still Active, but headed somewhere on end_date.
         clause = and_(
@@ -86,6 +99,7 @@ def list_employees(
         )
         stmt = stmt.where(clause)
         count_stmt = count_stmt.where(clause)
+        non_q_clauses.append(clause)
 
     # Soonest departure first when listing pending; otherwise by name.
     order = Employee.end_date if pending else Employee.name_en
@@ -93,6 +107,32 @@ def list_employees(
 
     rows = list(db.execute(stmt).scalars().all())
     total = int(db.execute(count_stmt).scalar_one())
+
+    stripped = q.strip() if q else ""
+    if q and total == 0 and stripped and not stripped.isdigit():
+        # ponytail: full-table scan below — fine at current employee-table size
+        # (hundreds); add an indexed/trigram search if the roster grows into
+        # the thousands.
+        fuzzy_stmt = select(Employee).where(*non_q_clauses)
+        candidates = list(db.execute(fuzzy_stmt).scalars().all())
+
+        matches: list[tuple[Employee, float]] = []
+        for emp in candidates:
+            best = 0.0
+            for name in (emp.name_en, emp.name_ar):
+                if not name:
+                    continue
+                s = fuzz.token_sort_ratio(stripped, name, processor=fuzz_utils.default_process)
+                if s > best:
+                    best = s
+            if best >= _MATCH_THRESHOLD:
+                matches.append((emp, best))
+
+        matches.sort(key=lambda t: (-t[1], t[0].name_en))
+
+        total = len(matches)
+        rows = [emp for emp, _score in matches[offset : offset + limit]]
+
     return rows, total
 
 
