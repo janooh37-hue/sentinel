@@ -107,6 +107,32 @@ def test_admin_creates_account_with_one_time_temporary_password(api_db: Session)
     assert me.json()["email"] == admin.email
 
 
+def test_admin_reset_completes_password_setup_for_never_logged_in_user(api_db: Session):
+    admin = _seed_user(api_db, password="AdminPW-1!", role="admin")
+    admin_client = _client(api_db)
+    _login(admin_client, admin.email, "AdminPW-1!")
+
+    created = admin_client.post(
+        f"{API}/users",
+        json={"email": "ready@test.ae", "employee_id": None, "role": "operator"},
+    )
+    assert created.status_code == 201
+    user = created.json()["user"]
+    assert user["password_change_required"] is True
+    assert user["last_login_at"] is None
+
+    new_password = "ReadyPW-1!"
+    reset = admin_client.post(
+        f"{API}/users/{user['id']}/reset-password", json={"password": new_password}
+    )
+    login = _login(_client(api_db), user["email"], new_password)
+
+    assert login.status_code == 200
+    assert login.json()["email"] == user["email"]
+    assert reset.status_code == 200
+    assert reset.json()["password_change_required"] is False
+
+
 def test_operator_cannot_create_or_disable_accounts(api_db: Session):
     admin = _seed_user(api_db, password="AdminPW-1!", role="admin")
     operator = _seed_user(api_db, password="OperatorPW-1!", role="operator")
