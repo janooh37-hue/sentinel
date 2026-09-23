@@ -16,6 +16,7 @@ from app.api.deps import get_current_user
 from app.api.errors import AppError
 from app.core import permissions
 from app.core.form_kind import OTHER_SERVICE_ID, SERVICE_IDS
+from app.core.roles import INMATE_REPORTER_ROLE
 from app.db.models import (
     Book,
     BookApprovalStep,
@@ -225,7 +226,15 @@ def test_dynamic_capabilities_are_implicit_defaults_and_never_seeded(
     assert perm_service.denied_record_types(db_session, admin) == (set(), set())
     assert expected_dynamic.isdisjoint(permissions.ALL_CAPABILITIES)
 
-    seeded = set(db_session.scalars(select(RolePermission.capability)).all())
+    # inmate_reporter is the one deliberate exception: its fixed-scope
+    # ceiling (core.permissions.INMATE_REPORTER_CAPS) seeds these same
+    # capability STRINGS as literal static role_permissions rows for that
+    # role only — see perm_service._role_and_dynamic_caps.
+    seeded = set(
+        db_session.scalars(
+            select(RolePermission.capability).where(RolePermission.role != INMATE_REPORTER_ROLE)
+        ).all()
+    )
     assert expected_dynamic.isdisjoint(seeded)
 
     denied_cap = "books.servicerecords.General Book"
@@ -368,7 +377,11 @@ def test_auth_catalog_and_user_defaults_include_dynamic_capabilities(
         f"{permissions.SERVICE_RECORDS_CAP_PREFIX}{service_id}": {
             "id": f"{permissions.SERVICE_RECORDS_CAP_PREFIX}{service_id}",
             "domain": "books",
-            "default_roles": ["operator", "manager", "admin"],
+            "default_roles": (
+                ["operator", "manager", "admin", "inmate_reporter"]
+                if service_id == "Inmate Conduct Violations"
+                else ["operator", "manager", "admin"]
+            ),
         }
         for service_id in (*SERVICE_IDS, OTHER_SERVICE_ID)
     }

@@ -8,6 +8,8 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from app.api.deps import require_capability
+from app.api.errors import AppError
+from app.core.roles import ADMIN_ROLE
 from app.db.models import User
 from app.db.session import get_db
 from app.schemas.settings import AppSettingsRead, AppSettingsUpdate
@@ -25,6 +27,12 @@ def read_settings(db: Annotated[Session, Depends(get_db)]) -> AppSettingsRead:
 def patch_settings(
     payload: AppSettingsUpdate,
     db: Annotated[Session, Depends(get_db)],
-    _user: Annotated[User, Depends(require_capability("settings.edit"))],
+    user: Annotated[User, Depends(require_capability("settings.edit"))],
 ) -> AppSettingsRead:
+    if "inmate_reporter_manager_user_id" in payload.model_fields_set and user.role != ADMIN_ROLE:
+        raise AppError(
+            "FORBIDDEN",
+            "Only an admin can change the inmate report approval manager.",
+            http_status=403,
+        )
     return settings_service.update_settings(db, payload)

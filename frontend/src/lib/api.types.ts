@@ -458,6 +458,30 @@ export interface paths {
         patch: operations["set_role_api_v1_auth_users__user_id__role_patch"];
         trace?: never;
     };
+    "/api/v1/auth/users/{user_id}/link": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Set User Link
+         * @description Admin-set/clear a target account's employee link (G number).
+         *
+         *     Distinct from ``POST /auth/me/link`` (self-service, blocked entirely for
+         *     ``inmate_reporter``): this is how an admin binds/rebinds that role's fixed
+         *     G number, or repairs any account's link after review.
+         */
+        patch: operations["set_user_link_api_v1_auth_users__user_id__link_patch"];
+        trace?: never;
+    };
     "/api/v1/auth/users/{user_id}/disable": {
         parameters: {
             query?: never;
@@ -2731,9 +2755,10 @@ export interface paths {
          *     ApplicationPage revise-mode prefill. Deliberately not on ``BookRead`` (the
          *     detail payload only exposes ``has_fields``).
          *
-         *     Requires ``books.edit`` (not ``books.view``) because this backs the
-         *     revise/edit write-path: the caller fetches these fields in order to submit
-         *     a revised generation, which is a managed write operation.
+         *     Every other role still needs ``books.edit`` (not ``books.view``) — this
+         *     backs the revise/edit write-path, a managed write operation.
+         *     ``inmate_reporter`` never holds ``books.edit``; it gets only its own
+         *     editable current version through ``require_inmate_report_write_access``.
          */
         get: operations["get_version_fields_api_v1_books__book_id__versions__version_id__fields_get"];
         put?: never;
@@ -6418,7 +6443,7 @@ export interface components {
              * @default operator
              * @enum {string}
              */
-            role: "operator" | "manager" | "admin";
+            role: "operator" | "manager" | "admin" | "inmate_reporter";
         };
         /**
          * AdminUserCreateResult
@@ -6513,6 +6538,8 @@ export interface components {
             signature_size_mm: number;
             /** Signature Boldness */
             signature_boldness: number;
+            /** Inmate Reporter Manager User Id */
+            inmate_reporter_manager_user_id: number | null;
         };
         /**
          * AppSettingsUpdate
@@ -6547,6 +6574,8 @@ export interface components {
             signature_size_mm?: number | null;
             /** Signature Boldness */
             signature_boldness?: number | null;
+            /** Inmate Reporter Manager User Id */
+            inmate_reporter_manager_user_id?: number | null;
         };
         /**
          * ApprovalLogItem
@@ -15765,6 +15794,43 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["SetRoleRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminUserRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_user_link_api_v1_auth_users__user_id__link_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LinkSelfRequest"];
             };
         };
         responses: {

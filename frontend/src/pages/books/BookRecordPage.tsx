@@ -37,13 +37,21 @@ import {
   X,
 } from 'lucide-react'
 
-import { api, type BookApprovalStepRead, type BookVersionRead, type NotifyMessageRead, apiErrorMessage } from '@/lib/api'
+import {
+  api,
+  ApiError,
+  apiErrorMessage,
+  type BookApprovalStepRead,
+  type BookVersionRead,
+  type NotifyMessageRead,
+} from '@/lib/api'
 import { useAuth } from '@/lib/authContext'
 import { useCapabilities } from '@/lib/useCapabilities'
 import {
   canFileSignedCopy,
   canSendForApproval,
   footerActionFor,
+  inmateReporterActionFor,
 } from '@/components/books/book-detail-drawer-utils'
 import {
   changesRequestedCount,
@@ -516,6 +524,9 @@ export function BookRecordPage(): React.JSX.Element {
 
   const qc = useQueryClient()
   const { user } = useAuth()
+  const isInmateReporter = user?.role === 'inmate_reporter'
+  const effectiveVersionId = isInmateReporter ? undefined : versionIdParam
+  const effectiveApprovalContext = isInmateReporter ? null : approvalContext
   const { has } = useCapabilities()
   const canApprove = has('books.approve')
   const canEdit = has('books.edit')
@@ -573,9 +584,34 @@ export function BookRecordPage(): React.JSX.Element {
   } | null>(null)
 
   const { data: book, isPending, isError, refetch } = useQuery({
-    queryKey: ['books', 'detail', bookId, versionIdParam ?? null],
-    queryFn: () => api.getBook(bookId, versionIdParam),
+    queryKey: ['books', 'detail', bookId, effectiveVersionId ?? null],
+    queryFn: () => api.getBook(bookId, effectiveVersionId),
     enabled: Number.isFinite(bookId),
+  })
+  const reporterSubmitMutation = useMutation({
+    mutationFn: () =>
+      api.submitBook(bookId, {
+        priority: 'Normal',
+        approver_user_id: null,
+        reviewer_user_ids: [],
+      }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['books'] })
+      void qc.invalidateQueries({ queryKey: ['dashboard'] })
+      toast.success(t('books.approval.submitted'))
+    },
+    onError: (err) => {
+      if (err instanceof ApiError && err.code === 'INMATE_REPORT_INCOMPLETE') {
+        toast.error(apiErrorMessage(err), {
+          action: {
+            label: t('books.pane.continueDraft'),
+            onClick: handleRevise,
+          },
+        })
+      } else {
+        toast.error(apiErrorMessage(err))
+      }
+    },
   })
 
   const manage = useManagePaper(book?.id ?? null)
@@ -617,6 +653,7 @@ export function BookRecordPage(): React.JSX.Element {
       }`
     : (book?.imported_doc?.pdf_url ?? null)
   const canManageIncludedPapers =
+    !isInmateReporter &&
     book !== undefined &&
     canMutateCurrent &&
     current?.document_id != null &&
@@ -630,7 +667,10 @@ export function BookRecordPage(): React.JSX.Element {
   // assigned approver is, so an operator handling requests for others can
   // close out the paper flow (print → sign → scan) from the record page.
   const addScan = useAddScan(book?.id ?? null)
-  const showFileSigned = canMutateCurrent && canFileSignedCopy(state, { canEdit, canScan })
+  const showFileSigned =
+    !isInmateReporter &&
+    canMutateCurrent &&
+    canFileSignedCopy(state, { canEdit, canScan })
   // Approved + signed paper on file + edit rights: gates Replace / Unfile and
   // the Tools-menu sections that hold them.
   const canManageSignedPaper =
@@ -638,7 +678,12 @@ export function BookRecordPage(): React.JSX.Element {
   // "Send for approval" (digital route): submit a draft, or re-route a still
   // pending request to a different signing manager. Both routes are offered
   // side by side so the operator picks per request.
-  const showSendForApproval = canMutateCurrent && canSendForApproval(state, { canSubmitBook })
+  const reporterAction = book ? inmateReporterActionFor(book, user?.id) : 'read-only'
+  const showSendForApproval =
+    canMutateCurrent &&
+    (isInmateReporter
+      ? reporterAction === 'edit-submit'
+      : canSendForApproval(state, { canSubmitBook }))
 
   const stations = useMemo(
     () =>
@@ -653,15 +698,19 @@ export function BookRecordPage(): React.JSX.Element {
   const currentSteps: BookApprovalStepRead[] = current?.approval_steps ?? book?.approval_steps ?? []
   const isAssignee = isLiveCurrentVersion && isApproverAssignee(currentSteps, user?.id)
   const myReview = isLiveCurrentVersion ? myPendingReviewerStep(currentSteps, user?.id) : null
-  const action = footerActionFor(state, {
-    // Every mutation targets the live revision. Historical pending steps are
-    // retained for context but end when a newer revision exists.
-    canRevise: canEdit && canMutateCurrent,
-    canSubmitBook: canSubmitBook && canMutateCurrent,
-    canApprove,
-    isAssignee,
-    isReviewer: myReview != null,
-  })
+  const action = isInmateReporter
+    ? reporterAction === 'correct-resubmit'
+      ? 'revise'
+      : 'none'
+    : footerActionFor(state, {
+        // Every mutation targets the live revision. Historical pending steps are
+        // retained for context but end when a newer revision exists.
+        canRevise: canEdit && canMutateCurrent,
+        canSubmitBook: canSubmitBook && canMutateCurrent,
+        canApprove,
+        isAssignee,
+        isReviewer: myReview != null,
+      })
 
   useEffect(() => {
     if (isMobile && action === 'decide' && decisionPanelRef.current) {
@@ -681,7 +730,7 @@ export function BookRecordPage(): React.JSX.Element {
     ? currentSteps.find((s) => s.assignee_user_id === user?.id)
     : undefined
   useEffect(() => {
-    if (book && myStep && !myStep.seen_at) {
+    if (!isInmateReporter && book && myStep && !myStep.seen_at) {
       api
         .markBookSeen(book.id)
         .then(() => void qc.invalidateQueries({ queryKey: ['books', 'detail', book.id] }))
@@ -707,8 +756,8 @@ export function BookRecordPage(): React.JSX.Element {
   const queue = useAwaitingQueue(
     Number.isFinite(bookId) ? bookId : null,
     current?.id ?? null,
-    approvalContext,
-    approvalContext != null,
+    effectiveApprovalContext,
+    effectiveApprovalContext != null,
   )
   const { data: annotations = [] } = useQuery({
     queryKey: ['books', 'annotations', bookId, current?.id],
@@ -816,7 +865,13 @@ export function BookRecordPage(): React.JSX.Element {
   }
 
   const busy = decideMutation.isPending || signMutation.isPending
-  const canRevise = Boolean(current?.template_id && current?.has_fields && canGenerate && canMutateCurrent)
+  const canRevise = Boolean(
+    current?.template_id &&
+      current?.has_fields &&
+      canGenerate &&
+      canMutateCurrent &&
+      (!isInmateReporter || reporterAction === 'correct-resubmit'),
+  )
   const reasonValid = reason.trim().length > 0 || hasCommentBearingMark(annotations)
   const decisionReasonFormProps = {
     reason,
@@ -948,28 +1003,30 @@ export function BookRecordPage(): React.JSX.Element {
         >
           <ArrowLeft className="h-4 w-4 rtl:-scale-x-100" strokeWidth={2.2} />
         </button>
-        <QueueNav
-          position={queue.position}
-          total={queue.total}
-          onPrev={() => {
-            setArmedFor(null)
-            if (queue.prevId == null) return
-            navigate(
-              approvalContext
-                ? approvalRecordUrl(queue.prevId, queue.prevVersionId, approvalContext)
-                : `/books/${queue.prevId}`,
-            )
-          }}
-          onNext={() => {
-            setArmedFor(null)
-            if (queue.nextId == null) return
-            navigate(
-              approvalContext
-                ? approvalRecordUrl(queue.nextId, queue.nextVersionId, approvalContext)
-                : `/books/${queue.nextId}`,
-            )
-          }}
-        />
+        {!isInmateReporter && (
+          <QueueNav
+            position={queue.position}
+            total={queue.total}
+            onPrev={() => {
+              setArmedFor(null)
+              if (queue.prevId == null) return
+              navigate(
+                effectiveApprovalContext
+                  ? approvalRecordUrl(queue.prevId, queue.prevVersionId, effectiveApprovalContext)
+                  : `/books/${queue.prevId}`,
+              )
+            }}
+            onNext={() => {
+              setArmedFor(null)
+              if (queue.nextId == null) return
+              navigate(
+                effectiveApprovalContext
+                  ? approvalRecordUrl(queue.nextId, queue.nextVersionId, effectiveApprovalContext)
+                  : `/books/${queue.nextId}`,
+              )
+            }}
+          />
+        )}
         <div className="min-w-0 flex-1 lg:min-w-[18rem]">
           <div className="font-mono text-[0.72em] font-semibold tracking-wide text-primary">
             {book?.ref_number ?? '—'}
@@ -1016,7 +1073,7 @@ export function BookRecordPage(): React.JSX.Element {
             below, but the components owning their mutation/dialog/eligibility
             query are mounted here unconditionally — independent of the
             dropdown's open/closed state (see the components' own docs). */}
-        {book && canMutateCurrent && (
+        {!isInmateReporter && book && canMutateCurrent && (
           <WordReopenButton
             book={book}
             isMobile={isMobile}
@@ -1024,7 +1081,7 @@ export function BookRecordPage(): React.JSX.Element {
             onTriggerChange={setWordReopenTrigger}
           />
         )}
-        {canMutateCurrent && current?.document_id != null && (
+        {!isInmateReporter && canMutateCurrent && current?.document_id != null && (
           <AdjustSignatureAction
             documentId={current.document_id}
             hideTrigger
@@ -1068,7 +1125,9 @@ export function BookRecordPage(): React.JSX.Element {
           showSendForApproval ||
           showFileSigned) && (
           <div className="flex w-full flex-wrap items-center gap-2 rounded-xl bg-primary-soft/60 px-3 py-2.5">
-            {book && canMutateCurrent && <WordSessionActions book={book} isMobile={isMobile} />}
+            {!isInmateReporter && book && canMutateCurrent && (
+              <WordSessionActions book={book} isMobile={isMobile} />
+            )}
             {action === 'decide' && !isMobile && (
               <>
                 <HeaderBtn
@@ -1123,7 +1182,10 @@ export function BookRecordPage(): React.JSX.Element {
                 icon={<Send className="h-3.5 w-3.5" />}
                 label={t('books.approval.submitForApproval')}
                 tone="navy-solid"
-                onClick={() => setSubmitOpen(true)}
+                onClick={() => {
+                  if (isInmateReporter) reporterSubmitMutation.mutate()
+                  else setSubmitOpen(true)
+                }}
               />
             )}
 
@@ -1169,17 +1231,19 @@ export function BookRecordPage(): React.JSX.Element {
                 {/* Hand this record to Outlook. Same one-item basket prefill the
                     tray builds, so subject/body/reference PDF and the book link
                     are identical whether you email one record or a whole basket. */}
-                <DropdownMenuItem
-                  disabled={!recordHasPapers || emailingRecord}
-                  onSelect={() => void handleEmailViaOutlook()}
-                >
-                  {emailingRecord ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
-                  ) : (
-                    <Mail className="h-3.5 w-3.5" aria-hidden="true" />
-                  )}
-                  {t('books.record.emailViaOutlook')}
-                </DropdownMenuItem>
+                {!isInmateReporter && (
+                  <DropdownMenuItem
+                    disabled={!recordHasPapers || emailingRecord}
+                    onSelect={() => void handleEmailViaOutlook()}
+                  >
+                    {emailingRecord ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+                    ) : (
+                      <Mail className="h-3.5 w-3.5" aria-hidden="true" />
+                    )}
+                    {t('books.record.emailViaOutlook')}
+                  </DropdownMenuItem>
+                )}
                 {canManageIncludedPapers && (
                   <DropdownMenuItem onSelect={() => setIncludedPapersOpen(true)}>
                     <FileStack className="h-3.5 w-3.5" aria-hidden="true" />
@@ -1194,22 +1258,26 @@ export function BookRecordPage(): React.JSX.Element {
                     </a>
                   </DropdownMenuItem>
                 )}
-                {state === 'approved' && current?.signed_pdf_url && current?.document_id != null && (
-                  <DropdownMenuItem asChild>
-                    <a
-                      href={`/api/v1/documents/${current.document_id}/download?format=pdf&original=true`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      <FileText className="h-3.5 w-3.5" aria-hidden="true" />
-                      {t('books.record.viewOriginal')}
-                    </a>
-                  </DropdownMenuItem>
-                )}
+                {!isInmateReporter &&
+                  state === 'approved' &&
+                  current?.signed_pdf_url &&
+                  current?.document_id != null && (
+                    <DropdownMenuItem asChild>
+                      <a
+                        href={`/api/v1/documents/${current.document_id}/download?format=pdf&original=true`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        <FileText className="h-3.5 w-3.5" aria-hidden="true" />
+                        {t('books.record.viewOriginal')}
+                      </a>
+                    </DropdownMenuItem>
+                  )}
 
-                {(wordReopenTrigger != null ||
-                  adjustSigTrigger != null ||
-                  canManageSignedPaper) && (
+                {!isInmateReporter &&
+                  (wordReopenTrigger != null ||
+                    adjustSigTrigger != null ||
+                    canManageSignedPaper) && (
                   <>
                     <DropdownMenuSeparator />
                     <div className="px-2.5 pb-1 pt-1.5 text-[0.62em] font-bold uppercase tracking-[0.1em] text-muted-foreground">
@@ -1239,9 +1307,10 @@ export function BookRecordPage(): React.JSX.Element {
                   </>
                 )}
 
-                {((canOverrideState && canMutateCurrent) ||
-                  canManageRevisionAccess ||
-                  canManageSignedPaper) && (
+                {!isInmateReporter &&
+                  ((canOverrideState && canMutateCurrent) ||
+                    canManageRevisionAccess ||
+                    canManageSignedPaper) && (
                   <>
                     <DropdownMenuSeparator />
                     <div className="px-2.5 pb-1 pt-1.5 text-[0.62em] font-bold uppercase tracking-[0.1em] text-muted-foreground">
@@ -1338,8 +1407,12 @@ export function BookRecordPage(): React.JSX.Element {
               type="button"
               onClick={() =>
                 navigate(
-                  approvalContext
-                    ? approvalRecordUrl(nextWaiting.bookId, nextWaiting.versionId, approvalContext)
+                  effectiveApprovalContext
+                    ? approvalRecordUrl(
+                        nextWaiting.bookId,
+                        nextWaiting.versionId,
+                        effectiveApprovalContext,
+                      )
                     : `/books/${nextWaiting.bookId}`,
                 )
               }
@@ -1470,7 +1543,7 @@ export function BookRecordPage(): React.JSX.Element {
               <div className="flex h-full min-h-[400px] items-center justify-center text-[0.85em] text-muted-foreground">
                 <Loader2 className="h-6 w-6 animate-spin" />
               </div>
-            ) : book?.imported_doc ? (
+            ) : !isInmateReporter && book?.imported_doc ? (
               // Imported record whose vault file isn't a PDF (e.g. .docx) — no
               // inline preview, so offer the original for download.
               <div className="flex h-full min-h-[400px] flex-col items-center justify-center gap-3 text-center text-[0.85em] text-muted-foreground">
@@ -1589,7 +1662,7 @@ export function BookRecordPage(): React.JSX.Element {
           document.body,
         )}
 
-      {submitOpen && book && (
+      {!isInmateReporter && submitOpen && book && (
         <SubmitForApprovalDialog bookId={book.id} onClose={() => setSubmitOpen(false)} />
       )}
 

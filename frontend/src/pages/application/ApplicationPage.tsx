@@ -24,7 +24,7 @@
  * The RHF useForm instance is reset whenever the selected template changes.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -38,8 +38,11 @@ import { GeneratedSaveActions } from './GeneratedSaveActions'
 import { savedGenerationFromJob, type SavedGeneration } from './savedGeneration'
 import { ApprovedViolationUpload } from './ApprovedViolationUpload'
 import { StatisticsTab } from './statistics/StatisticsTab'
+import { InmateReporterApplication } from './InmateReporterApplication'
 import { SavedRecordActions, type NotificationChoice } from '@/components/books/SavedRecordActions'
 import { api, apiErrorMessage } from '@/lib/api'
+import * as authContext from '@/lib/authContext'
+import type { AuthContextValue } from '@/lib/authContext'
 import type {
   ApprovedViolationImportRead,
   DocumentGenerateRequest,
@@ -90,6 +93,11 @@ import {
 } from './resignationDate'
 import { WordHandoffDialog } from '@/pages/books/WordHandoffDialog'
 
+const optionalAuthContext =
+  'AuthContext' in authContext
+    ? authContext.AuthContext
+    : createContext<AuthContextValue | null>(null)
+
 type TabValue = 'fields' | 'preview'
 type InmateEntryMode = 'create' | 'upload' | 'stats'
 
@@ -125,6 +133,13 @@ function formWidthClass(fields: readonly TemplateField[] | undefined): string {
 }
 
 export function ApplicationPage(): React.JSX.Element {
+  const auth = useContext(optionalAuthContext)
+  return auth?.user?.role === 'inmate_reporter'
+    ? <InmateReporterApplication user={auth.user} />
+    : <StandardApplicationPage />
+}
+
+function StandardApplicationPage(): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const isAr = i18n.language.startsWith('ar')
   const { has, isLoading: capabilitiesLoading } = useCapabilities()

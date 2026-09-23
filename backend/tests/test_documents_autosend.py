@@ -71,7 +71,7 @@ def test_run_generation_notification_choice_and_book_id(
         lambda db, book_id, *, sent_by: dispatched.append(book_id),
     )
 
-    job_id = docs_api.submit_job()
+    job_id = docs_api.submit_job(owner_user_id=1)
     request = docs_api.DocumentGenerateRequest(
         template_id=template_id,
         commit=True,

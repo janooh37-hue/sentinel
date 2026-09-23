@@ -1,8 +1,10 @@
+import { useContext } from 'react'
 import { Menu } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import { AccountMenu } from '@/components/shell/AccountMenu'
 import { NavBellPopover } from '@/components/shell/NavBellPopover'
+import { AuthContext } from '@/lib/authContext'
 import { useCapabilities } from '@/lib/useCapabilities'
 
 interface MobileTopBarProps {
@@ -19,6 +21,8 @@ export function MobileTopBar({
   onSignOut,
 }: MobileTopBarProps): React.JSX.Element {
   const { t } = useTranslation()
+  const user = useContext(AuthContext)?.user ?? null
+  const isInmateReporter = user?.role === 'inmate_reporter'
   const { has } = useCapabilities()
   return (
     <header className="flex items-center gap-3 border-b border-white/10 bg-primary px-4 pb-2 pt-[calc(var(--safe-top)+0.5rem)] text-primary-foreground [&_button:hover]:bg-white/10 md:hidden">
@@ -37,10 +41,10 @@ export function MobileTopBar({
       />
       <span className="text-[1.05em] font-bold tracking-tight text-primary-foreground">GSSG</span>
       <div className="ms-auto flex items-center gap-1.5">
-        <NavBellPopover />
+        {!isInmateReporter ? <NavBellPopover /> : null}
         <AccountMenu
           onLock={onLock}
-          onOpenSettings={has('settings.view') ? onOpenSettings : undefined}
+          onOpenSettings={!isInmateReporter && has('settings.view') ? onOpenSettings : undefined}
           onSignOut={onSignOut}
         />
       </div>

@@ -64,6 +64,7 @@ _DEFAULTS: dict[str, object] = {
     "settings.signature_size_mm": 45,
     "settings.signature_boldness": 1,
     "settings.vehicles_notify_days": 30,
+    "settings.inmate_reporter_manager_user_id": None,
 }
 
 # ---------------------------------------------------------------------------
@@ -173,6 +174,9 @@ def get_settings(db: Session) -> AppSettingsRead:
         "signature_boldness": _get(
             db, "settings.signature_boldness", _DEFAULTS["settings.signature_boldness"]
         ),
+        "inmate_reporter_manager_user_id": _get(
+            db, "settings.inmate_reporter_manager_user_id", None
+        ),
     }
     # Legacy rows can hold font_scale below the schema floor of 16 (the
     # 0015 enum→int remap / manual edits). Clamp on read so GET /settings
@@ -228,6 +232,7 @@ def update_settings(db: Session, payload: AppSettingsUpdate) -> AppSettingsRead:
         "sentry_opt_in": "settings.sentry_opt_in",
         "sms_autosend_enabled": "settings.sms_autosend_enabled",
         "email_signature": "settings.email_signature",
+        "inmate_reporter_manager_user_id": "settings.inmate_reporter_manager_user_id",
     }
     # Use model_fields_set to distinguish "explicitly set to null" from "not provided"
     for field, key in mapping.items():

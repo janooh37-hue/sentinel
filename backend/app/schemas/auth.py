@@ -99,7 +99,7 @@ class AdminUserCreateRequest(BaseModel):
     email: str = Field(min_length=3, max_length=256)
     employee_id: str | None = Field(max_length=16)
     display_name: str | None = Field(default=None, max_length=256)
-    role: Literal["operator", "manager", "admin"] = "operator"
+    role: Literal["operator", "manager", "admin", "inmate_reporter"] = "operator"
 
 
 class AdminUserCreateResult(BaseModel):

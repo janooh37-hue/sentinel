@@ -32,10 +32,12 @@ export function StatusSpine({
   counts,
   active,
   onChange,
+  showAwaitingScan = true,
 }: {
   counts: Record<SpineState, number>
   active: SpineState
   onChange: (s: SpineState) => void
+  showAwaitingScan?: boolean
 }): React.JSX.Element {
   const { t } = useTranslation()
   return (
@@ -45,6 +47,7 @@ export function StatusSpine({
       className="mb-3 flex overflow-hidden rounded-2xl border border-hairline bg-surface"
     >
       {SEGMENTS.map(({ state, dotClass }) => {
+        if (!showAwaitingScan && state === 'awaiting_scan') return null
         const isActive = active === state
         return (
           <button

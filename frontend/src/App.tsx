@@ -160,10 +160,17 @@ function Shell(): React.JSX.Element {
   const location = useLocation()
   const isMobile = useIsMobile()
   const [drawerOpen, setDrawerOpen] = useState(false)
+  const isInmateReporter = user?.role === 'inmate_reporter'
+  const normalizedPath = location.pathname.replace(/\/+$/, '') || '/'
+  const inmateReporterRouteAllowed =
+    normalizedPath === '/' ||
+    normalizedPath === '/application' ||
+    normalizedPath === '/books' ||
+    /^\/books\/\d+$/.test(normalizedPath)
 
   // Phase 4 LAN — SSE notification stream. Enabled only when the session is
   // resolved so it doesn't open a connection that 401s immediately.
-  useNotificationStream(status === 'authed')
+  useNotificationStream(status === 'authed' && !isInmateReporter)
 
   // Web Push deep-link: the service worker postMessages the target path when a
   // notification is clicked; route client-side (React Router) so an already-open
@@ -232,7 +239,10 @@ function Shell(): React.JSX.Element {
                 shared fade-up so every page gets a consistent enter motion
                 (reduced-motion guarded in index.css). */}
             <main id="main-content" tabIndex={-1} key={location.pathname} className="anim-fade-up flex flex-1 overflow-hidden pb-[calc(5rem+var(--safe-bottom))] md:pb-0">
-            <Routes>
+            {isInmateReporter && !inmateReporterRouteAllowed ? (
+              <Navigate to="/" replace />
+            ) : (
+              <Routes>
               <Route path="/" element={<DashboardRoute />} />
               <Route
                 path="/employees"
@@ -513,14 +523,19 @@ function Shell(): React.JSX.Element {
                 }
               />
               <Route path="*" element={<Navigate to="/" replace />} />
-            </Routes>
+              </Routes>
+            )}
             </main>
           </Suspense>
         </div>
         {isMobile && <BottomTabBar />}
       </div>
-      <ScanBackDock />
-      <ScanBackGate />
+      {!isInmateReporter ? (
+        <>
+          <ScanBackDock />
+          <ScanBackGate />
+        </>
+      ) : null}
       {/* Wrapped so print can hide it: sonner renders an empty <section> in
           normal flow here, and a trailing in-flow box after a named-@page
           element (the permits register) costs a blank sheet. */}

@@ -23,7 +23,7 @@ import { ArrowDownLeft, ArrowUpRight, BookOpen, ChevronRight, Send, Stamp, Trash
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
-import { api, apiErrorMessage } from '@/lib/api'
+import { api, ApiError, apiErrorMessage } from '@/lib/api'
 import type { BookRead } from '@/lib/api'
 import { addToBasket } from '@/lib/emailBasket'
 import { buildRecordBasketItem } from './recordsBasket'
@@ -38,6 +38,7 @@ import { BookStatusChips } from '@/components/books/BookStatusChips'
 import { WordSessionActions } from '@/components/books/BookWordActions'
 import { useIsMobile } from '@/lib/useIsMobile'
 import { useCapabilities } from '@/lib/useCapabilities'
+import { useAuth } from '@/lib/authContext'
 import { cn } from '@/lib/utils'
 import { PullToRefresh } from '@/components/refresh/PullToRefresh'
 import { RefreshButton } from '@/components/refresh/RefreshButton'
@@ -49,6 +50,7 @@ import { bookHeaderText, railItemsFrom, spineCountsFrom, useServiceLabel } from 
 import { RecordsList } from './RecordsList'
 import { RecordPane } from './RecordPane'
 import { ScanBackEntry } from '@/pages/scanBack/ScanBackEntry'
+import { inmateReporterActionFor } from '@/components/books/book-detail-drawer-utils'
 
 const DEFAULT_FILTERS = DEFAULT_BOOKS_FILTERS
 
@@ -61,6 +63,8 @@ export function BooksPage(): React.JSX.Element {
   const isAr = i18n.language.startsWith('ar')
   const qc = useQueryClient()
   const { has } = useCapabilities()
+  const { user } = useAuth()
+  const isInmateReporter = user?.role === 'inmate_reporter'
   const canDelete = has('books.delete')
   const canSubmit = has('books.submit')
   const navigate = useNavigate()
@@ -77,6 +81,38 @@ export function BooksPage(): React.JSX.Element {
   }
   const [submitBookId, setSubmitBookId] = useState<number | null>(null)
   const [previewBookId, setPreviewBookId] = useState<number | null>(null)
+  const reporterSubmitMutation = useMutation({
+    mutationFn: (bookId: number) =>
+      api.submitBook(bookId, {
+        priority: 'Normal',
+        approver_user_id: null,
+        reviewer_user_ids: [],
+      }),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: ['books'] })
+      void qc.invalidateQueries({ queryKey: ['dashboard'] })
+      toast.success(t('books.approval.submitted'))
+    },
+    onError: (err, bookId) => {
+      if (err instanceof ApiError && err.code === 'INMATE_REPORT_INCOMPLETE') {
+        toast.error(apiErrorMessage(err), {
+          action: {
+            label: t('books.pane.continueDraft'),
+            onClick: () =>
+              navigate('/application?form=Inmate%20Conduct%20Violations', {
+                state: { reviseBookId: bookId },
+              }),
+          },
+        })
+      } else {
+        toast.error(apiErrorMessage(err))
+      }
+    },
+  })
+  const submitBook = (bookId: number): void => {
+    if (isInmateReporter) reporterSubmitMutation.mutate(bookId)
+    else setSubmitBookId(bookId)
+  }
 
   // ── Desktop pane state ──────────────────────────────────────────────────────
   const [spineState, setSpineState] = useState<SpineState>('all')
@@ -422,17 +458,19 @@ export function BooksPage(): React.JSX.Element {
             </div>
             <div className="flex shrink-0 items-center gap-2">
               <RefreshButton />
-              <button
-                type="button"
-                onClick={() => navigate('/books/approvals')}
-                className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-hairline bg-surface-tinted px-4 py-2 text-[0.85em] font-semibold text-foreground transition-colors hover:border-primary hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
-              >
-                <Stamp className="h-3.5 w-3.5" strokeWidth={2} />
-                {t('books.approvals.title')}
-              </button>
+              {!isInmateReporter && (
+                <button
+                  type="button"
+                  onClick={() => navigate('/books/approvals')}
+                  className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-hairline bg-surface-tinted px-4 py-2 text-[0.85em] font-semibold text-foreground transition-colors hover:border-primary hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                >
+                  <Stamp className="h-3.5 w-3.5" strokeWidth={2} />
+                  {t('books.approvals.title')}
+                </button>
+              )}
             </div>
           </header>
-          <ScanBackEntry />
+          {!isInmateReporter && <ScanBackEntry />}
           {facetsQuery.isError ? (
             // A failed facets fetch must never render as an honest "0" — the spine's
             // whole reason to exist is to be a number the operator can trust. Show a
@@ -448,21 +486,34 @@ export function BooksPage(): React.JSX.Element {
               </button>
             </div>
           ) : (
-            <StatusSpine counts={spineCounts} active={spineState} onChange={setSpineState} />
+            <StatusSpine
+              counts={spineCounts}
+              active={spineState}
+              onChange={setSpineState}
+              showAwaitingScan={!isInmateReporter}
+            />
           )}
-          <div className="grid min-h-0 flex-1 grid-cols-[15rem_minmax(0,1fr)_clamp(360px,36%,480px)] gap-3">
-            {facetsQuery.isError ? (
-              <div className="rounded-2xl border border-hairline bg-surface py-8">
-                <EmptyState
-                  icon={BookOpen}
-                  message={t('common.loadError')}
-                  actionLabel={t('common.retry')}
-                  onAction={() => void facetsQuery.refetch()}
-                />
-              </div>
-            ) : (
-              <FormRail items={railItems} active={railService} onChange={setRailService} />
+          <div
+            className={cn(
+              'grid min-h-0 flex-1 gap-3',
+              isInmateReporter
+                ? 'grid-cols-[minmax(0,1fr)_clamp(360px,36%,480px)]'
+                : 'grid-cols-[15rem_minmax(0,1fr)_clamp(360px,36%,480px)]',
             )}
+          >
+            {!isInmateReporter &&
+              (facetsQuery.isError ? (
+                <div className="rounded-2xl border border-hairline bg-surface py-8">
+                  <EmptyState
+                    icon={BookOpen}
+                    message={t('common.loadError')}
+                    actionLabel={t('common.retry')}
+                    onAction={() => void facetsQuery.refetch()}
+                  />
+                </div>
+              ) : (
+                <FormRail items={railItems} active={railService} onChange={setRailService} />
+              ))}
             <section className="flex min-h-0 flex-col overflow-hidden rounded-2xl border border-hairline bg-surface">
               <div className="flex shrink-0 items-center gap-2 border-b border-hairline p-2.5">
                 <Input
@@ -542,7 +593,7 @@ export function BooksPage(): React.JSX.Element {
                                 {draft.subject ?? '—'}
                               </span>
                               <BookStatusChips book={draft} noClassification />
-                              <WordSessionActions book={draft} />
+                              {!isInmateReporter && <WordSessionActions book={draft} />}
                             </div>
                           ))}
                           {draftBooks.length > 3 && (
@@ -558,7 +609,7 @@ export function BooksPage(): React.JSX.Element {
                       </details>
                     </div>
                   )}
-                  {selectedForBasket.size > 0 && (
+                  {!isInmateReporter && selectedForBasket.size > 0 && (
                     <div className="flex shrink-0 items-center gap-3 border-b border-hairline bg-surface-raised px-3.5 py-2">
                       <span className="text-xs text-muted-foreground">
                         {t('basket.tray.count', { count: selectedForBasket.size })}
@@ -588,8 +639,8 @@ export function BooksPage(): React.JSX.Element {
                     selectedId={selectedId}
                     highlightedId={highlightedId}
                     onSelect={setSelectedId}
-                    selected={selectedForBasket}
-                    onToggleSelect={handleToggleSelect}
+                    selected={isInmateReporter ? undefined : selectedForBasket}
+                    onToggleSelect={isInmateReporter ? undefined : handleToggleSelect}
                   />
                 </>
               )}
@@ -598,7 +649,7 @@ export function BooksPage(): React.JSX.Element {
               book={selectedBook}
               onOpenRecord={(id) => navigate(`/books/${id}`)}
               onContinueDraft={(id) => setPreviewBookId(id)}
-              onSubmit={(id) => setSubmitBookId(id)}
+              onSubmit={submitBook}
               onSelectBook={(id) => setSelectedId(id)}
               onAddToEmail={handleAddOneToEmail}
             />
@@ -622,30 +673,59 @@ export function BooksPage(): React.JSX.Element {
               </div>
               <div className="flex shrink-0 items-center gap-2">
                 <RefreshButton />
-                <button
-                  type="button"
-                  onClick={() => navigate('/books/approvals')}
-                  className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-hairline bg-surface-tinted px-4 py-2 text-[0.85em] font-semibold text-foreground transition-colors hover:border-primary hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
-                >
-                  <Stamp className="h-3.5 w-3.5" strokeWidth={2} />
-                  {t('books.approvals.title')}
-                </button>
+                {!isInmateReporter && (
+                  <button
+                    type="button"
+                    onClick={() => navigate('/books/approvals')}
+                    className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-hairline bg-surface-tinted px-4 py-2 text-[0.85em] font-semibold text-foreground transition-colors hover:border-primary hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                  >
+                    <Stamp className="h-3.5 w-3.5" strokeWidth={2} />
+                    {t('books.approvals.title')}
+                  </button>
+                )}
               </div>
             </div>
           </header>
 
-          <div className="px-6">
-            <ScanBackEntry />
-          </div>
+          {!isInmateReporter && (
+            <div className="px-6">
+              <ScanBackEntry />
+            </div>
+          )}
 
-          {/* Filter bar — TAMM surface pill */}
           <div className="px-6 pb-2">
-            <BooksFilterBar
-              filters={filters}
-              categories={categories}
-              services={facetsQuery.data?.services ?? []}
-              onChange={setFilters}
-            />
+            {isInmateReporter ? (
+              <div className="flex flex-wrap items-center gap-2 rounded-2xl bg-surface px-3 py-2">
+                <Input
+                  value={filters.q}
+                  onChange={(e) => setFilters({ ...filters, q: e.target.value })}
+                  placeholder={t('books.pane.searchPlaceholder')}
+                  className="h-8 min-w-0 flex-1 rounded-full border-hairline bg-surface-raised text-[0.82em]"
+                />
+                <select
+                  value={filters.status}
+                  onChange={(e) =>
+                    setFilters({ ...filters, status: e.target.value as BooksFilters['status'] })
+                  }
+                  aria-label={t('books.filters.status')}
+                  className="h-8 rounded-full border border-hairline bg-surface-tinted px-3 text-[0.78em] text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <option value="all">{t('books.filters.statusAll')}</option>
+                  <option value="none">{t('books.approval.stateDraft')}</option>
+                  <option value="pending">{t('books.approval.statePending')}</option>
+                  <option value="approved">{t('books.approval.stateApproved')}</option>
+                  <option value="returned">{t('books.approval.stateReturned')}</option>
+                  <option value="rejected">{t('books.approval.stateRejected')}</option>
+                </select>
+              </div>
+            ) : (
+              <BooksFilterBar
+                filters={filters}
+                categories={categories}
+                services={facetsQuery.data?.services ?? []}
+                onChange={setFilters}
+              />
+            )}
           </div>
 
           {/* Card list */}
@@ -681,9 +761,13 @@ export function BooksPage(): React.JSX.Element {
                     key={row.id}
                     row={row}
                     isAr={isAr}
-                    canSubmit={canSubmit}
+                    canSubmit={
+                      isInmateReporter
+                        ? inmateReporterActionFor(row, user?.id) === 'edit-submit'
+                        : canSubmit
+                    }
                     highlighted={row.id === highlightedId}
-                    onSubmit={() => setSubmitBookId(row.id)}
+                    onSubmit={() => submitBook(row.id)}
                     onOpen={() => openBook(row)}
                     t={t}
                   />
@@ -696,7 +780,7 @@ export function BooksPage(): React.JSX.Element {
         </>
       )}
 
-      {submitBookId !== null && (
+      {!isInmateReporter && submitBookId !== null && (
         <SubmitForApprovalDialog
           bookId={submitBookId}
           onClose={() => setSubmitBookId(null)}
@@ -706,18 +790,23 @@ export function BooksPage(): React.JSX.Element {
       <BookPreview
         bookId={previewBookId}
         onClose={() => setPreviewBookId(null)}
-        onSubmitForApproval={(id) => { setPreviewBookId(null); setSubmitBookId(id) }}
+        onSubmitForApproval={(id) => {
+          setPreviewBookId(null)
+          submitBook(id)
+        }}
       />
 
-      <ConfirmDialog
-        open={confirmDeleteOpen}
-        onOpenChange={setConfirmDeleteOpen}
-        title={t('books.bulk.deleteTitle', { count: selectedForBasket.size })}
-        description={t('books.bulk.deleteBody')}
-        confirmLabel={t('books.bulk.delete')}
-        onConfirm={() => deleteMutation.mutate([...selectedForBasket])}
-        destructive
-      />
+      {!isInmateReporter && (
+        <ConfirmDialog
+          open={confirmDeleteOpen}
+          onOpenChange={setConfirmDeleteOpen}
+          title={t('books.bulk.deleteTitle', { count: selectedForBasket.size })}
+          description={t('books.bulk.deleteBody')}
+          confirmLabel={t('books.bulk.delete')}
+          onConfirm={() => deleteMutation.mutate([...selectedForBasket])}
+          destructive
+        />
+      )}
     </div>
   )
 }

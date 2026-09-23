@@ -17,9 +17,10 @@ from app.core.permissions import (
     SERVICE_RECORDS_CAP_PREFIX,
     Capability,
 )
+from app.core.roles import INMATE_REPORTER_ROLE
 from app.db.models import BookCategory
 
-_ROLE_ORDER: Final[tuple[str, ...]] = ("operator", "manager", "admin")
+_ROLE_ORDER: Final[tuple[str, ...]] = ("operator", "manager", "admin", "inmate_reporter")
 _SERVICE_IDS: Final[tuple[str, ...]] = (*SERVICE_IDS, OTHER_SERVICE_ID)
 
 
@@ -72,11 +73,26 @@ def _service_names(service_id: str) -> tuple[str, str | None]:
     return label_en, label_ar
 
 
+def _dynamic_default_roles(capability_id: str) -> tuple[str, ...]:
+    """operator/manager/admin implicitly get every dynamic (service/category)
+    capability by default — perm_service's all-roles union grant, unrelated
+    to ``ROLE_DEFAULTS`` content for those three. ``inmate_reporter`` is NOT
+    part of that implicit union (its dynamic caps are narrowed to its fixed
+    ceiling — see ``perm_service._role_and_dynamic_caps``); it only appears
+    here for the couple ids its ceiling actually names."""
+    roles: tuple[str, ...] = ("operator", "manager", "admin")
+    if capability_id in ROLE_DEFAULTS.get(INMATE_REPORTER_ROLE, frozenset()):
+        roles = (*roles, INMATE_REPORTER_ROLE)
+    return roles
+
+
 def _service_entries(service_id: str) -> tuple[CapabilityCatalogEntry, ...]:
     label_en, label_ar = _service_names(service_id)
+    service_cap = f"{SERVICE_CAP_PREFIX}{service_id}"
+    records_cap = f"{SERVICE_RECORDS_CAP_PREFIX}{service_id}"
     return (
         CapabilityCatalogEntry(
-            id=f"{SERVICE_CAP_PREFIX}{service_id}",
+            id=service_cap,
             domain="services",
             label_en=label_en,
             label_ar=label_ar,
@@ -84,10 +100,10 @@ def _service_entries(service_id: str) -> tuple[CapabilityCatalogEntry, ...]:
             description_ar=f"إنشاء سجلات {label_ar}." if label_ar else None,
             sensitive=False,
             requestable=True,
-            default_roles=_ROLE_ORDER,
+            default_roles=_dynamic_default_roles(service_cap),
         ),
         CapabilityCatalogEntry(
-            id=f"{SERVICE_RECORDS_CAP_PREFIX}{service_id}",
+            id=records_cap,
             domain="books",
             label_en=f"Records: {label_en}",
             label_ar=f"السجلات: {label_ar}" if label_ar else None,
@@ -95,7 +111,7 @@ def _service_entries(service_id: str) -> tuple[CapabilityCatalogEntry, ...]:
             description_ar=f"عرض سجلات {label_ar}." if label_ar else None,
             sensitive=False,
             requestable=True,
-            default_roles=_ROLE_ORDER,
+            default_roles=_dynamic_default_roles(records_cap),
         ),
     )
 
@@ -113,7 +129,7 @@ def _category_entry(category: BookCategory) -> CapabilityCatalogEntry:
         description_ar=f"عرض السجلات ضمن {label_ar}." if label_ar else None,
         sensitive=False,
         requestable=True,
-        default_roles=_ROLE_ORDER,
+        default_roles=_dynamic_default_roles(capability_id),
     )
 
 

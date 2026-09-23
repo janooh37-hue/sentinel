@@ -72,3 +72,16 @@ export function canFileSignedCopy(
 export function canSendForApproval(state: string, caps: { canSubmitBook: boolean }): boolean {
   return caps.canSubmitBook && (state === 'none' || state === 'pending')
 }
+
+export type InmateReporterAction = 'edit-submit' | 'correct-resubmit' | 'read-only'
+
+/** The restricted reporter's complete state/ownership action matrix. */
+export function inmateReporterActionFor(
+  book: { approval_state: string; original_creator_user_id?: number | null },
+  userId: number | undefined,
+): InmateReporterAction {
+  const ownsReport = userId !== undefined && book.original_creator_user_id === userId
+  if (ownsReport && book.approval_state === 'none') return 'edit-submit'
+  if (ownsReport && book.approval_state === 'returned') return 'correct-resubmit'
+  return 'read-only'
+}

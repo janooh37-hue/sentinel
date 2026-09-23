@@ -27,7 +27,7 @@ from sqlalchemy.orm import Session
 from app.api.errors import AppError, ValidationFailedError
 from app.config import get_settings
 from app.core import security
-from app.core.roles import ADMIN_ROLE, MANAGER_ROLE, OPERATOR_ROLE
+from app.core.roles import ADMIN_ROLE, INMATE_REPORTER_ROLE, MANAGER_ROLE, OPERATOR_ROLE
 from app.db.models import AuditLog, Employee, User
 from app.db.models import AuthSession as AuthSessionModel
 from app.schemas.auth import AdminUserRead, AuditEntryRead, SessionUser
@@ -43,7 +43,7 @@ LOCKOUT_MINUTES = 15
 SESSION_TTL = timedelta(days=7)
 # Refresh ``last_seen_at`` at most this often to avoid a commit on every request.
 SESSION_TOUCH_INTERVAL = timedelta(seconds=60)
-_VALID_ROLES = (OPERATOR_ROLE, MANAGER_ROLE, ADMIN_ROLE)
+_VALID_ROLES = (OPERATOR_ROLE, MANAGER_ROLE, ADMIN_ROLE, INMATE_REPORTER_ROLE)
 
 
 def _utcnow() -> datetime:
@@ -269,6 +269,12 @@ def link_self(db: Session, user: User, *, employee_id: str | None) -> User:
     hop identities once linked. Raises ``AppError`` on a forbidden change or an
     unknown employee.
     """
+    if user.role == INMATE_REPORTER_ROLE:
+        raise AppError(
+            "INMATE_REPORTER_IDENTITY_LOCKED",
+            "This role's employee link is set by an administrator only.",
+            http_status=403,
+        )
     is_admin = user.role == ADMIN_ROLE
     target = (employee_id or "").strip().upper() or None
 
@@ -300,6 +306,42 @@ def link_self(db: Session, user: User, *, employee_id: str | None) -> User:
     if target is not None and is_admin:
         identity_service.promote_to_admin_if_vacant(db, target)
 
+    return user
+
+
+def set_user_employee_link(
+    db: Session, user_id: int, *, employee_id: str | None, actor: str | None = None
+) -> User:
+    """Admin-only: set/clear a target account's ``employee_id`` (G number).
+
+    Distinct from ``link_self`` — that path is self-service for every role
+    except ``inmate_reporter``, which is locked to admin assignment via this
+    function (``PATCH /auth/users/{user_id}/link``). Clearing the link
+    (``employee_id=None``) intentionally blocks future writes for that role
+    until an admin relinks it.
+    """
+    user = _require_user(db, user_id)
+    target = (employee_id or "").strip().upper() or None
+    if target is not None and db.get(Employee, target) is None:
+        raise AppError("EMPLOYEE_NOT_FOUND", f"Employee {target} not found", http_status=404)
+    old = user.employee_id
+    user.employee_id = target
+    if target is not None and not user.display_name:
+        employee = db.get(Employee, target)
+        if employee is not None:
+            user.display_name = employee.name_en
+    _audit(
+        db,
+        actor,
+        "set_employee_link",
+        user,
+        extra={"old_employee_id": old, "new_employee_id": target},
+    )
+    if target is not None:
+        db.flush()
+        user_signature_service.consolidate_or_raise(db, target, data_dir=get_settings().data_dir)
+    db.commit()
+    db.refresh(user)
     return user
 
 
@@ -917,6 +959,7 @@ __all__ = [
     "revoke_user_sessions",
     "set_role",
     "set_status",
+    "set_user_employee_link",
     "start_session",
     "to_session_user",
     "verify_password_for",

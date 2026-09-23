@@ -18,6 +18,7 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
 import { api, type MigrationResult, type MigrationStatus } from '@/lib/api'
+import { useAuth } from '@/lib/authContext'
 import { Button } from '@/components/ui/button'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { cn } from '@/lib/utils'
@@ -377,12 +378,19 @@ interface MigrationGateProps {
 
 export function MigrationGate({ children }: MigrationGateProps): React.JSX.Element {
   const [dismissed, setDismissed] = useState(false)
+  const { user, status: authStatus } = useAuth()
 
   const statusQuery = useQuery<MigrationStatus>({
     queryKey: ['migration-status'],
     queryFn: () => api.getMigrationStatus(),
     // Don't retry on error — a missing/slow server shouldn't block the UI.
     retry: false,
+    // First-launch v3 import is an admin action; inmate_reporter's route
+    // allowlist blocks GET /system/migration-status outright. Wait for auth
+    // to resolve first — firing while `user` is still loading would race
+    // ahead of the role check below (`enabled` recomputes too late to cancel
+    // an already-inflight request).
+    enabled: authStatus === 'authed' && user?.role !== 'inmate_reporter',
   })
 
   const skipped = (() => {

@@ -61,6 +61,7 @@ class JobDocumentItem:
 @dataclass
 class _Job:
     job_id: str
+    owner_user_id: int
     status: JobStatus = "queued"
     book_id: int | None = None
     # P04-J: list of generated document items (primary + companions).
@@ -73,11 +74,11 @@ class _Job:
     error_message: str | None = None
 
 
-def submit_job() -> str:
-    """Create a new queued job and return its job_id."""
+def submit_job(*, owner_user_id: int) -> str:
+    """Create a new queued job owned by ``owner_user_id`` and return its id."""
     job_id = str(uuid.uuid4())
     with _lock:
-        _jobs[job_id] = _Job(job_id=job_id)
+        _jobs[job_id] = _Job(job_id=job_id, owner_user_id=owner_user_id)
         _prune_locked()
     return job_id
 

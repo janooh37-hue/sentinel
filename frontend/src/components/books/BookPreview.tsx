@@ -20,6 +20,8 @@ import { toast } from 'sonner'
 
 import { api } from '@/lib/api'
 import { useCapabilities } from '@/lib/useCapabilities'
+import { useAuth } from '@/lib/authContext'
+import { inmateReporterActionFor } from './book-detail-drawer-utils'
 import { cn } from '@/lib/utils'
 
 const DocPdfCanvas = lazy(() => import('@/pages/application/DocPdfCanvas'))
@@ -34,6 +36,8 @@ export function BookPreview({ bookId, onClose, onSubmitForApproval }: Props): Re
   const { t, i18n } = useTranslation()
   const isAr = i18n.language.startsWith('ar')
   const { has } = useCapabilities()
+  const { user } = useAuth()
+  const isInmateReporter = user?.role === 'inmate_reporter'
   const canEdit = has('books.edit')
   // Submit-for-approval is its own authority (atomic `books.submit`), separate
   // from edit/discard: the draft preview's primary action keys off this alone.
@@ -62,6 +66,10 @@ export function BookPreview({ bookId, onClose, onSubmitForApproval }: Props): Re
 
   const versions = book?.versions ?? []
   const current = versions.length > 0 ? versions[versions.length - 1] : undefined
+  const reporterAction = book ? inmateReporterActionFor(book, user?.id) : 'read-only'
+  const canDiscard = !isInmateReporter && canEdit
+  const canContinue = isInmateReporter ? reporterAction === 'edit-submit' : canEdit
+  const canSubmitCurrent = isInmateReporter ? reporterAction === 'edit-submit' : canSubmitBook
   const pdfUrl = current?.document_id
     ? `/api/v1/documents/${current.document_id}/download?format=pdf`
     : null
@@ -179,16 +187,16 @@ export function BookPreview({ bookId, onClose, onSubmitForApproval }: Props): Re
                       {t('books.preview.openPdf')}
                     </a>
                   )}
-                  {(canEdit || canSubmitBook) && (
+                  {(canDiscard || canContinue || canSubmitCurrent) && (
                     <div className="ms-auto flex items-center gap-2.5">
-                      {canEdit && (
+                      {canDiscard && (
                         <button type="button" onClick={() => setConfirming({ bookId, value: true })}
                           className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-hairline px-3 text-[0.82em] font-medium text-muted-foreground transition-colors hover:border-destructive hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
                           <Trash2 className="h-3.5 w-3.5" strokeWidth={1.8} aria-hidden />
                           {t('books.preview.discard')}
                         </button>
                       )}
-                      {canEdit && (
+                      {canContinue && (
                         <button type="button"
                           disabled={!current?.has_fields}
                           title={!current?.has_fields ? t('books.preview.editUnavailable') : undefined}
@@ -202,7 +210,7 @@ export function BookPreview({ bookId, onClose, onSubmitForApproval }: Props): Re
                           {t('books.preview.editContinue')}
                         </button>
                       )}
-                      {canSubmitBook && (
+                      {canSubmitCurrent && (
                         <button type="button" onClick={() => onSubmitForApproval(book.id)}
                           className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-primary px-4 text-[0.82em] font-semibold text-primary-foreground transition-colors hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
                           <Send className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />

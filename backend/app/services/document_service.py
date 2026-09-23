@@ -29,7 +29,7 @@ from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Literal
+from typing import TYPE_CHECKING, Any, Final, Literal
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import InstrumentedAttribute, Session
@@ -51,6 +51,9 @@ from app.core.dateutils import excel_date_to_datetime
 from app.core.docx_engine import aztec_corner_for
 from app.core.docx_render import _arabic_clock, _arabic_weekday
 from app.core.html_text import html_to_text
+from app.core.inmate_wings import normalize_wing
+from app.core.nationalities import resolve_nationality
+from app.core.roles import INMATE_REPORTER_ROLE
 from app.core.vault_manager import Vault
 from app.db.models import (
     AuditLog,
@@ -129,6 +132,186 @@ _INMATE_ACTION_LABELS: tuple[tuple[str, str], ...] = (
     ("action_written", "تم كتابة مخالفة مسلكية في حق النزلاء"),
     ("action_transferred", "تم نقل النزيل إلى قسم B وتقييده"),
 )
+
+# ---------------------------------------------------------------------------
+# inmate_reporter draft/submit field validation (spec: role §5) — the only
+# fields this role may write; everything else (manager_id, hand_sign_manager,
+# signature paths, ...) is rejected before it reaches here.
+# ---------------------------------------------------------------------------
+
+_INMATE_REPORT_FIELD_KEYS: Final[frozenset[str]] = frozenset(
+    {
+        "report_date",
+        "report_time",
+        "inmates",
+        "violation_details",
+        "action_notified",
+        "action_written",
+        "action_transferred",
+        "action_other",
+    }
+)
+_INMATE_REPORT_INMATE_ROW_KEYS: Final[frozenset[str]] = frozenset(
+    {"name", "nationality", "wing", "uid", "holding_no"}
+)
+
+
+def validate_inmate_report_fields(fields: dict[str, Any], *, complete: bool) -> dict[str, Any]:
+    """Normalize + validate an ``inmate_reporter``'s editable fields.
+
+    Draft (``complete=False``): missing/blank fields and partial inmate rows
+    are fine; a *provided* value must still be well-typed/parseable — a
+    malformed date/time/row/action raises ``422 INMATE_REPORT_INVALID``
+    immediately (single offending ``field`` path).
+
+    Complete (``complete=True``, checked at submit): additionally requires
+    date, time, >=1 inmate with a nonblank name and a recognized selectable
+    nationality, and nonblank narrative text after ``html_to_text``. Every
+    missing/invalid path is collected and raised together as one
+    ``422 INMATE_REPORT_INCOMPLETE`` (``fields`` — a list), not fail-fast.
+
+    Returns the normalized fields dict — nationality is stored as the
+    resolved ``label_ar`` (matching the picker), wing as its canonical code,
+    blank draft cells stay blank rather than becoming a claimed complete row.
+    """
+    if not isinstance(fields, dict):
+        raise ValidationFailedError("INMATE_REPORT_INVALID", "fields must be an object")
+    extra = set(fields) - _INMATE_REPORT_FIELD_KEYS
+    if extra:
+        raise ValidationFailedError(
+            "INMATE_REPORT_INVALID",
+            "Unknown or forbidden field.",
+            field=sorted(extra)[0],
+        )
+
+    def _str(value: Any, path: str, *, max_length: int | None = None) -> str:
+        if value is not None and not isinstance(value, str):
+            raise ValidationFailedError(
+                "INMATE_REPORT_INVALID", f"{path} must be a string", field=path
+            )
+        text = (value or "").strip()
+        if max_length is not None and len(text) > max_length:
+            raise ValidationFailedError("INMATE_REPORT_INVALID", f"{path} is too long", field=path)
+        return text
+
+    def _bool(value: Any, path: str) -> bool:
+        if value is not None and not isinstance(value, bool):
+            raise ValidationFailedError(
+                "INMATE_REPORT_INVALID", f"{path} must be a boolean", field=path
+            )
+        return bool(value)
+
+    out: dict[str, Any] = {}
+    missing: list[str] = []
+
+    date_str = _str(fields.get("report_date"), "report_date")
+    if date_str:
+        try:
+            datetime.strptime(date_str, "%Y-%m-%d")
+        except ValueError as exc:
+            raise ValidationFailedError(
+                "INMATE_REPORT_INVALID",
+                "report_date must be an ISO date (YYYY-MM-DD)",
+                field="report_date",
+            ) from exc
+    elif complete:
+        missing.append("report_date")
+    out["report_date"] = date_str
+
+    time_str = _str(fields.get("report_time"), "report_time")
+    if time_str:
+        try:
+            datetime.strptime(time_str, "%H:%M")
+        except ValueError as exc:
+            raise ValidationFailedError(
+                "INMATE_REPORT_INVALID", "report_time must be HH:MM", field="report_time"
+            ) from exc
+    elif complete:
+        missing.append("report_time")
+    out["report_time"] = time_str
+
+    raw_inmates = fields.get("inmates")
+    if raw_inmates is None:
+        raw_inmates = []
+    if not isinstance(raw_inmates, list):
+        raise ValidationFailedError(
+            "INMATE_REPORT_INVALID", "inmates must be a list", field="inmates"
+        )
+    rows: list[dict[str, Any]] = []
+    for idx, raw_row in enumerate(raw_inmates):
+        prefix = f"inmates[{idx}]"
+        if not isinstance(raw_row, dict):
+            raise ValidationFailedError(
+                "INMATE_REPORT_INVALID", "each inmate row must be an object", field=prefix
+            )
+        row_extra = set(raw_row) - _INMATE_REPORT_INMATE_ROW_KEYS
+        if row_extra:
+            raise ValidationFailedError(
+                "INMATE_REPORT_INVALID",
+                "Unknown or forbidden field.",
+                field=f"{prefix}.{sorted(row_extra)[0]}",
+            )
+        name = _str(raw_row.get("name"), f"{prefix}.name", max_length=160)
+        uid = _str(raw_row.get("uid"), f"{prefix}.uid", max_length=64)
+        holding_no = _str(raw_row.get("holding_no"), f"{prefix}.holding_no", max_length=32)
+        nat_raw = _str(raw_row.get("nationality"), f"{prefix}.nationality", max_length=64)
+        nationality = ""
+        if nat_raw:
+            resolved = resolve_nationality(nat_raw)
+            if resolved is not None and resolved.selectable:
+                nationality = resolved.label_ar
+            elif complete:
+                missing.append(f"{prefix}.nationality")
+        elif complete:
+            missing.append(f"{prefix}.nationality")
+        raw_wing = raw_row.get("wing")
+        if raw_wing is not None and not isinstance(raw_wing, str):
+            raise ValidationFailedError(
+                "INMATE_REPORT_INVALID", "wing must be a string", field=f"{prefix}.wing"
+            )
+        try:
+            wing = normalize_wing(raw_wing) or ""
+        except ValueError as exc:
+            raise ValidationFailedError(
+                "INMATE_REPORT_INVALID", str(exc), field=f"{prefix}.wing"
+            ) from exc
+        if complete and not name:
+            missing.append(f"{prefix}.name")
+        rows.append(
+            {
+                "name": name,
+                "nationality": nationality,
+                "wing": wing,
+                "uid": uid,
+                "holding_no": holding_no,
+            }
+        )
+    if complete and not rows:
+        missing.append("inmates")
+    out["inmates"] = rows
+
+    raw_details = fields.get("violation_details")
+    if raw_details is not None and not isinstance(raw_details, str):
+        raise ValidationFailedError(
+            "INMATE_REPORT_INVALID", "violation_details must be a string", field="violation_details"
+        )
+    details = raw_details or ""
+    if complete and not html_to_text(details).strip():
+        missing.append("violation_details")
+    out["violation_details"] = details
+
+    for key in ("action_notified", "action_written", "action_transferred"):
+        out[key] = _bool(fields.get(key), key)
+    out["action_other"] = _str(fields.get("action_other"), "action_other")
+
+    if missing:
+        raise ValidationFailedError(
+            "INMATE_REPORT_INCOMPLETE",
+            "Complete the required fields before sending.",
+            fields=missing,
+        )
+    return out
+
 
 # Forms that create a Leave row in the DB
 _LEAVE_FORM_IDS: frozenset[str] = frozenset(
@@ -915,7 +1098,18 @@ def _build_template_data(
             id=manager_id,
         )
 
-    manager = resolve_manager(db, explicit_manager_id=manager_id)
+    # inmate_reporter never resolves a manager at save time (drafts keep a
+    # blank manager slot; the manager is assigned only at submit) — even
+    # explicit_manager_id=None would otherwise fall through to the legacy
+    # linked-mailbox/default-manager chain.
+    is_inmate_reporter_generator = (
+        current_user is not None and current_user.role == INMATE_REPORTER_ROLE
+    )
+    manager = (
+        None
+        if is_inmate_reporter_generator
+        else resolve_manager(db, explicit_manager_id=manager_id)
+    )
     if manager is not None:
         manager_record = {
             "name_en": manager.name_en,
@@ -961,7 +1155,15 @@ def _build_template_data(
         or template_id in VEHICLE_LETTER_FORMS
         or template_id == "Inmate Conduct Violations"
     ):
-        data["submitter_g"] = (current_user.employee_id or "") if current_user is not None else ""
+        if current_user is not None:
+            data["submitter_g"] = current_user.employee_id or ""
+        elif template_id == "Inmate Conduct Violations":
+            # render_signed_artifact always re-renders with current_user=None;
+            # restore the reporter's G number persisted on the version at save
+            # time instead of blanking the signed copy's footer.
+            data["submitter_g"] = str(fields.get("submitter_g", "") or "")
+        else:
+            data["submitter_g"] = ""
 
     # ------------------------------------------------------------------
     # 4b-2. Inmate Conduct Violations — the "بيانات مقدم التقرير" row names the
@@ -1316,6 +1518,8 @@ def generate_document(
     then completes that leave.
     """
     embed_signature = dict(embed_signature or {})
+    _raw_manager_embed_requested = embed_signature.get("manager") is True
+    _raw_employee_embed_requested = embed_signature.get("employee") is True
     pdf_converter = converter or convert_docx_to_pdf
 
     # Warning Form sends ``violation_type`` as a list of strings; join it once
@@ -1358,6 +1562,77 @@ def generate_document(
         # unrouted just because it didn't think to send embed_signature).
         # An explicit {"manager": False} from the caller is left untouched.
         embed_signature["manager"] = True
+
+    # ------------------------------------------------------------------
+    # 1a-inmate_reporter. Fixed-scope role: exact template, unattached,
+    # committed-only (no preview), no manager/submitter/attachment/leave/
+    # classification picks, no requested signature embed — every slot is
+    # forced off regardless of the per-field default just applied above.
+    # Editable fields are validated/normalized as a DRAFT (never complete —
+    # completeness is checked once, at submit, against the saved version).
+    # ------------------------------------------------------------------
+    is_inmate_reporter = current_user is not None and current_user.role == INMATE_REPORTER_ROLE
+    if is_inmate_reporter:
+        assert current_user is not None  # implied by is_inmate_reporter
+        if template_id != "Inmate Conduct Violations":
+            raise AppError(
+                "INMATE_REPORTER_INPUT_FORBIDDEN",
+                "This role can only file Inmate Conduct Violations reports.",
+                http_status=403,
+            )
+        if employee_id is not None:
+            raise AppError(
+                "INMATE_REPORTER_INPUT_FORBIDDEN",
+                "This role cannot attach a report to an employee file.",
+                http_status=403,
+            )
+        if not commit:
+            raise ValidationFailedError(
+                "INMATE_REPORTER_PREVIEW_UNSUPPORTED",
+                "Preview is not available for this role; save the draft instead.",
+            )
+        if (
+            manager_id is not None
+            or submitter_id is not None
+            or attachments
+            or return_for_leave_id is not None
+            or classification_code is not None
+        ):
+            raise AppError(
+                "INMATE_REPORTER_INPUT_FORBIDDEN",
+                "This field is not available to this role.",
+                http_status=403,
+            )
+        if _raw_manager_embed_requested or _raw_employee_embed_requested:
+            raise AppError(
+                "INMATE_REPORTER_INPUT_FORBIDDEN",
+                "This role cannot embed a signature; the manager signs through approval.",
+                http_status=403,
+            )
+        embed_signature["manager"] = False
+        embed_signature["employee"] = False
+        if current_user.employee_id is None:
+            raise AppError(
+                "INMATE_REPORTER_EMPLOYEE_REQUIRED",
+                "Your account has no linked employee record yet.",
+                http_status=409,
+            )
+        raw_reporter_id = str(fields.get("reporter_id", "") or "").strip().upper()
+        if raw_reporter_id and raw_reporter_id != current_user.employee_id:
+            raise AppError(
+                "INMATE_REPORTER_INPUT_FORBIDDEN",
+                "reporter_id must match your own linked employee record.",
+                http_status=403,
+            )
+        if "submitter_g" in fields:
+            raise AppError(
+                "INMATE_REPORTER_INPUT_FORBIDDEN",
+                "submitter_g is assigned automatically.",
+                http_status=403,
+            )
+        fields = validate_inmate_report_fields(fields, complete=False)
+        fields["reporter_id"] = current_user.employee_id
+        fields["submitter_g"] = current_user.employee_id
 
     # Duty Resumption checkbox contract (approval-signature-placement plan
     # §4): a REQUESTED manager signature that cannot be embedded must stop
@@ -1415,14 +1690,19 @@ def generate_document(
         if record_access_user is not None:
             from app.services import book_service, perm_service
 
-            if not perm_service.has_capability(db, record_access_user, "books.edit"):
-                raise AppError(
-                    "FORBIDDEN",
-                    "Missing capability: books.edit",
-                    http_status=403,
-                    details={"capability": "books.edit"},
+            if record_access_user.role == INMATE_REPORTER_ROLE:
+                book_service.require_inmate_report_write_access(
+                    db, record_access_user, revise_book, action="revise"
                 )
-            book_service.require_full_book_access(db, record_access_user, revise_book)
+            else:
+                if not perm_service.has_capability(db, record_access_user, "books.edit"):
+                    raise AppError(
+                        "FORBIDDEN",
+                        "Missing capability: books.edit",
+                        http_status=403,
+                        details={"capability": "books.edit"},
+                    )
+                book_service.require_full_book_access(db, record_access_user, revise_book)
         if revise_book.approval_state not in (
             "returned",
             "rejected",
@@ -1658,9 +1938,14 @@ def generate_document(
     )
     db.add(doc_row)
     db.flush()  # get doc_row.id without committing
-    _purge_superseded_drafts(
-        db, employee_id=employee_id, template_id=template_id, keep_doc_id=doc_row.id
-    )
+    if not is_inmate_reporter:
+        # Restricted-role generation is always commit=True with
+        # employee_id=None: this template-wide, employee_id=None purge would
+        # otherwise delete another account's un-committed preview of the same
+        # form — never this role's own artifacts (it never leaves a DRAFT row).
+        _purge_superseded_drafts(
+            db, employee_id=employee_id, template_id=template_id, keep_doc_id=doc_row.id
+        )
 
     # ------------------------------------------------------------------
     # 11b. Create Book row so the generated document appears in Records.
@@ -1822,7 +2107,18 @@ def generate_document(
     # and so does an ``in_app`` book when no default manager is set (the
     # Submit dialog takes over, preselecting the default).
     # ------------------------------------------------------------------
-    if commit and _logged_book is not None and _state_version is not None:
+    if commit and _logged_book is not None and _state_version is not None and is_inmate_reporter:
+        # Fixed-scope role: no approval steps, no signature, no default-
+        # manager resolution — Book/version stay "none" (their creation
+        # default). Manager identity is assigned only at submit time.
+        _logged_book.doc_manager_id = None
+        db.flush()
+    if (
+        commit
+        and _logged_book is not None
+        and _state_version is not None
+        and not is_inmate_reporter
+    ):
         _doc_mgr = resolve_manager(db, explicit_manager_id=manager_id)
         _logged_book.doc_manager_id = _doc_mgr.id if _doc_mgr is not None else None
         if signing_path == "auto" and embed_mgr:
