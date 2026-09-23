@@ -10,6 +10,8 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 
+export const INMATE_REPORTER_ALLOWED_DESTINATIONS = ['/', '/application', '/books'] as const
+
 export interface NavItem {
   to: string
   key: string

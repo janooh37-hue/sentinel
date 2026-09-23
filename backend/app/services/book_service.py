@@ -644,6 +644,24 @@ def require_inmate_report_write_access(
     return version
 
 
+def require_revise_access(db: Session, user: User, book: Book | None) -> BookVersion | None:
+    """Require revise authority; ``None`` skips only the non-reporter book check."""
+    if user.role == INMATE_REPORTER_ROLE:
+        if book is None:
+            raise NotFoundError("BOOK_NOT_FOUND", "Record not found")
+        return require_inmate_report_write_access(db, user, book, action="revise")
+    if not perm_service.has_capability(db, user, "books.edit"):
+        raise AppError(
+            "FORBIDDEN",
+            "Missing capability: books.edit",
+            http_status=403,
+            details={"capability": "books.edit"},
+        )
+    if book is not None:
+        require_full_book_access(db, user, book)
+    return None
+
+
 class ServiceCount(NamedTuple):
     """One rail entry's numbers. `states` maps approval_state → count."""
 
@@ -3385,8 +3403,7 @@ __all__ = [
     "remove_reviewer",
     "replace_attachment",
     "replace_signed_copy",
-    "require_inmate_report_write_access",
-    "require_record_type_access",
+    "require_revise_access",
     "resolve_attachment_path",
     "resolve_doc_manager_user",
     "resolve_inmate_report_manager",

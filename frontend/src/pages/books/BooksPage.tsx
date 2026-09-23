@@ -23,7 +23,7 @@ import { ArrowDownLeft, ArrowUpRight, BookOpen, ChevronRight, Send, Stamp, Trash
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
-import { api, ApiError, apiErrorMessage } from '@/lib/api'
+import { api, apiErrorMessage } from '@/lib/api'
 import type { BookRead } from '@/lib/api'
 import { addToBasket } from '@/lib/emailBasket'
 import { buildRecordBasketItem } from './recordsBasket'
@@ -51,6 +51,8 @@ import { RecordsList } from './RecordsList'
 import { RecordPane } from './RecordPane'
 import { ScanBackEntry } from '@/pages/scanBack/ScanBackEntry'
 import { inmateReporterActionFor } from '@/components/books/book-detail-drawer-utils'
+import { ApiError } from '@/lib/api'
+import { useInmateReportSubmit } from '@/components/books/useInmateReportSubmit'
 
 const DEFAULT_FILTERS = DEFAULT_BOOKS_FILTERS
 
@@ -81,21 +83,11 @@ export function BooksPage(): React.JSX.Element {
   }
   const [submitBookId, setSubmitBookId] = useState<number | null>(null)
   const [previewBookId, setPreviewBookId] = useState<number | null>(null)
-  const reporterSubmitMutation = useMutation({
-    mutationFn: (bookId: number) =>
-      api.submitBook(bookId, {
-        priority: 'Normal',
-        approver_user_id: null,
-        reviewer_user_ids: [],
-      }),
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ['books'] })
-      void qc.invalidateQueries({ queryKey: ['dashboard'] })
-      toast.success(t('books.approval.submitted'))
-    },
-    onError: (err, bookId) => {
+  const reporterSubmitMutation = useInmateReportSubmit({
+    onSuccess: () => toast.success(t('books.approval.submitted')),
+    onError: (err, message, bookId) => {
       if (err instanceof ApiError && err.code === 'INMATE_REPORT_INCOMPLETE') {
-        toast.error(apiErrorMessage(err), {
+        toast.error(message, {
           action: {
             label: t('books.pane.continueDraft'),
             onClick: () =>
@@ -105,7 +97,7 @@ export function BooksPage(): React.JSX.Element {
           },
         })
       } else {
-        toast.error(apiErrorMessage(err))
+        toast.error(message)
       }
     },
   })

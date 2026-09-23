@@ -66,6 +66,7 @@ import { RecordStateOverrideDialog } from '@/components/books/RecordStateOverrid
 import { RevisionAccessPanel } from '@/components/books/RevisionAccessPanel'
 import { BookAnnotationLayer } from '@/components/books/BookAnnotationLayer'
 import { useBookApprovalActions } from '@/components/books/useBookApprovalActions'
+import { useInmateReportSubmit } from '@/components/books/useInmateReportSubmit'
 import { hasCommentBearingMark } from '@/components/books/annotation-utils'
 import { bidi } from '@/lib/bidi'
 import { cn } from '@/lib/utils'
@@ -588,28 +589,18 @@ export function BookRecordPage(): React.JSX.Element {
     queryFn: () => api.getBook(bookId, effectiveVersionId),
     enabled: Number.isFinite(bookId),
   })
-  const reporterSubmitMutation = useMutation({
-    mutationFn: () =>
-      api.submitBook(bookId, {
-        priority: 'Normal',
-        approver_user_id: null,
-        reviewer_user_ids: [],
-      }),
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ['books'] })
-      void qc.invalidateQueries({ queryKey: ['dashboard'] })
-      toast.success(t('books.approval.submitted'))
-    },
-    onError: (err) => {
+  const reporterSubmitMutation = useInmateReportSubmit({
+    onSuccess: () => toast.success(t('books.approval.submitted')),
+    onError: (err, message) => {
       if (err instanceof ApiError && err.code === 'INMATE_REPORT_INCOMPLETE') {
-        toast.error(apiErrorMessage(err), {
+        toast.error(message, {
           action: {
             label: t('books.pane.continueDraft'),
             onClick: handleRevise,
           },
         })
       } else {
-        toast.error(apiErrorMessage(err))
+        toast.error(message)
       }
     },
   })
@@ -1183,7 +1174,7 @@ export function BookRecordPage(): React.JSX.Element {
                 label={t('books.approval.submitForApproval')}
                 tone="navy-solid"
                 onClick={() => {
-                  if (isInmateReporter) reporterSubmitMutation.mutate()
+                  if (isInmateReporter) reporterSubmitMutation.mutate(bookId)
                   else setSubmitOpen(true)
                 }}
               />

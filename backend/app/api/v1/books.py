@@ -1249,20 +1249,11 @@ def get_version_fields(
     editable current version through ``require_inmate_report_write_access``.
     """
     row = book_service.get_book_detail(db, book_id)
-    if user.role == INMATE_REPORTER_ROLE:
-        current = book_service.require_inmate_report_write_access(db, user, row, action="revise")
-        if current.id != version_id:
-            raise AppError("FORBIDDEN", "You do not have access to this revision.", http_status=403)
-    else:
-        if not perm_service.has_capability(db, user, "books.edit"):
-            raise AppError(
-                "FORBIDDEN",
-                "Missing capability: books.edit",
-                http_status=403,
-                details={"capability": "books.edit"},
-            )
-        book_service.require_full_book_access(db, user, row)
+    current = book_service.require_revise_access(db, user, row)
+    if current is None:
         book_service.resolve_book_read_access(db, user, row, version_id=version_id)
+    elif current.id != version_id:
+        raise AppError("FORBIDDEN", "You do not have access to this revision.", http_status=403)
     version = next(item for item in row.versions if item.id == version_id)
     return {"fields": version.fields or {}}
 

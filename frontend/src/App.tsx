@@ -22,6 +22,7 @@ import { AppLockContext } from '@/lib/appLockContext'
 import { useIsMobile } from '@/lib/useIsMobile'
 import { DEFAULT_IDLE_LOCK_SECONDS, useLockState } from '@/lib/useLockState'
 import { type Page, PAGE_PATHS, buildPagePath } from '@/lib/pageNav'
+import { INMATE_REPORTER_ALLOWED_DESTINATIONS } from '@/components/shell/navItems'
 import {
   loadAccessRequestsPage,
   loadApplicationPage,
@@ -163,9 +164,7 @@ function Shell(): React.JSX.Element {
   const isInmateReporter = user?.role === 'inmate_reporter'
   const normalizedPath = location.pathname.replace(/\/+$/, '') || '/'
   const inmateReporterRouteAllowed =
-    normalizedPath === '/' ||
-    normalizedPath === '/application' ||
-    normalizedPath === '/books' ||
+    INMATE_REPORTER_ALLOWED_DESTINATIONS.includes(normalizedPath as typeof INMATE_REPORTER_ALLOWED_DESTINATIONS[number]) ||
     /^\/books\/\d+$/.test(normalizedPath)
 
   // Phase 4 LAN — SSE notification stream. Enabled only when the session is

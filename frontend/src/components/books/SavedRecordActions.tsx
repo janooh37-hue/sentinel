@@ -1,14 +1,15 @@
 import { useContext, useState } from 'react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { ExternalLink, Printer, Send } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { SubmitForApprovalDialog } from './SubmitForApprovalDialog'
-import { api, ApiError, apiErrorMessage } from '@/lib/api'
+import { api, ApiError } from '@/lib/api'
 import { bidi } from '@/lib/bidi'
 import { canSendForApproval, inmateReporterActionFor } from './book-detail-drawer-utils'
+import { useInmateReportSubmit } from './useInmateReportSubmit'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { useIsMobile } from '@/lib/useIsMobile'
 import { cn } from '@/lib/utils'
@@ -37,7 +38,6 @@ export function SavedRecordActions({
   const user = useContext(AuthContext)?.user ?? null
   const isInmateReporter = user?.role === 'inmate_reporter'
   const isMobile = useIsMobile()
-  const qc = useQueryClient()
   const [approvalOpen, setApprovalOpen] = useState(false)
   const bookQuery = useQuery({
     queryKey: ['books', 'detail', bookId],
@@ -55,21 +55,11 @@ export function SavedRecordActions({
   const canSubmit = isInmateReporter
     ? reporterAction === 'edit-submit'
     : state === 'none' && canSendForApproval(state, { canSubmitBook: has('books.submit') })
-  const reporterSubmitMutation = useMutation({
-    mutationFn: () =>
-      api.submitBook(bookId, {
-        priority: 'Normal',
-        approver_user_id: null,
-        reviewer_user_ids: [],
-      }),
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ['books'] })
-      void qc.invalidateQueries({ queryKey: ['dashboard'] })
-      toast.success(t('books.approval.submitted'))
-    },
-    onError: (err) => {
+  const reporterSubmitMutation = useInmateReportSubmit({
+    onSuccess: () => toast.success(t('books.approval.submitted')),
+    onError: (err, message) => {
       if (err instanceof ApiError && err.code === 'INMATE_REPORT_INCOMPLETE') {
-        toast.error(apiErrorMessage(err), {
+        toast.error(message, {
           action: {
             label: t('books.pane.continueDraft'),
             onClick: () =>
@@ -79,7 +69,7 @@ export function SavedRecordActions({
           },
         })
       } else {
-        toast.error(apiErrorMessage(err))
+        toast.error(message)
       }
     },
   })
@@ -108,7 +98,7 @@ export function SavedRecordActions({
     <button
       type="button"
       onClick={() => {
-        if (isInmateReporter) reporterSubmitMutation.mutate()
+        if (isInmateReporter) reporterSubmitMutation.mutate(bookId)
         else setApprovalOpen(true)
       }}
       className={cn(

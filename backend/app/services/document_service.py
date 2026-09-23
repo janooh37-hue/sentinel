@@ -1688,21 +1688,9 @@ def generate_document(
                 id=revise_of_book_id,
             )
         if record_access_user is not None:
-            from app.services import book_service, perm_service
+            from app.services import book_service
 
-            if record_access_user.role == INMATE_REPORTER_ROLE:
-                book_service.require_inmate_report_write_access(
-                    db, record_access_user, revise_book, action="revise"
-                )
-            else:
-                if not perm_service.has_capability(db, record_access_user, "books.edit"):
-                    raise AppError(
-                        "FORBIDDEN",
-                        "Missing capability: books.edit",
-                        http_status=403,
-                        details={"capability": "books.edit"},
-                    )
-                book_service.require_full_book_access(db, record_access_user, revise_book)
+            book_service.require_revise_access(db, record_access_user, revise_book)
         if revise_book.approval_state not in (
             "returned",
             "rejected",

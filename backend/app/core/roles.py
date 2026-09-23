@@ -18,7 +18,7 @@ MANAGER_ROLE: Final[str] = "manager"
 OPERATOR_ROLE: Final[str] = "operator"
 # Stored-only role (never derived): an administrator explicitly assigns it.
 # Scoped to filing/tracking Inmate Conduct Violations reports under a fixed,
-# admin-bound G number — see core.permissions._INMATE_REPORTER_CAPS.
+# admin-bound G number — see core.permissions.INMATE_REPORTER_CAPS.
 INMATE_REPORTER_ROLE: Final[str] = "inmate_reporter"
 
 # Substrings that mark an employee as a manager. Casefold comparison.

@@ -8,31 +8,22 @@
  *   - Chrome controls: AaSlider, LanguageToggle, ThemeToggle
  */
 
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Settings, ShieldCheck, X } from 'lucide-react'
-import { useContext, useEffect, useState } from 'react'
+import { useContext } from 'react'
 import { useTranslation } from 'react-i18next'
 import { NavLink } from 'react-router-dom'
 
 import { Sheet, SheetClose, SheetContent, SheetTitle } from '@/components/ui/sheet'
-import { api } from '@/lib/api'
-import type { Theme } from '@/lib/api'
 import { AuthContext } from '@/lib/authContext'
 import { useCapabilities } from '@/lib/useCapabilities'
-import {
-  getStoredFontScale,
-  getStoredTheme,
-  migrateLegacyFontScale,
-  persistFontScale,
-  persistTheme,
-} from '@/lib/theme'
 import { prefetchRouteForPath } from '@/lib/prefetchRoute'
 
 import { AaSlider } from './AaSlider'
 import { LanguageToggle } from './LanguageToggle'
-import { NAV_ITEMS } from './navItems'
+import { INMATE_REPORTER_ALLOWED_DESTINATIONS, NAV_ITEMS } from './navItems'
 import { isNavEntryAllowed } from './navCustomization'
 import { ThemeToggle } from './ThemeToggle'
+import { useChromePrefs } from './useChromePrefs'
 
 interface NavDrawerProps {
   open: boolean
@@ -41,43 +32,13 @@ interface NavDrawerProps {
 
 export function NavDrawer({ open, onOpenChange }: NavDrawerProps): React.JSX.Element {
   const { t } = useTranslation()
-  const qc = useQueryClient()
   const user = useContext(AuthContext)?.user ?? null
   const { has } = useCapabilities()
   const isInmateReporter = user?.role === 'inmate_reporter'
-  const [localFontScale, setLocalFontScale] = useState(
-    () => getStoredFontScale() ?? migrateLegacyFontScale(undefined),
-  )
-  const [localTheme, setLocalTheme] = useState<Theme>(() => getStoredTheme() ?? 'light')
-
-  const { data: settings } = useQuery({
-    queryKey: ['settings'],
-    queryFn: api.getSettings,
-    enabled: !isInmateReporter,
-  })
-  const update = useMutation({
-    mutationFn: api.updateSettings,
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ['settings'] })
-    },
-  })
-
-  const fontScale = isInmateReporter
-    ? localFontScale
-    : migrateLegacyFontScale(settings?.font_scale)
-  const theme = isInmateReporter ? localTheme : (settings?.theme ?? 'light') as Theme
+  const { fontScale, theme, setFontScale, setTheme } = useChromePrefs(isInmateReporter)
   const navItems = isInmateReporter
-    ? NAV_ITEMS.filter(({ to }) => to === '/' || to === '/application' || to === '/books')
+    ? NAV_ITEMS.filter(({ to }) => INMATE_REPORTER_ALLOWED_DESTINATIONS.includes(to as typeof INMATE_REPORTER_ALLOWED_DESTINATIONS[number]))
     : NAV_ITEMS
-
-  useEffect(() => {
-    if (!isInmateReporter && settings?.theme) persistTheme(settings.theme as Theme)
-  }, [isInmateReporter, settings?.theme])
-  useEffect(() => {
-    if (!isInmateReporter && typeof settings?.font_scale === 'number') {
-      persistFontScale(settings.font_scale)
-    }
-  }, [isInmateReporter, settings?.font_scale])
 
   const close = (): void => onOpenChange(false)
 
@@ -174,24 +135,10 @@ export function NavDrawer({ open, onOpenChange }: NavDrawerProps): React.JSX.Ele
 
         {/* Chrome controls at the bottom */}
         <div className="mt-auto flex flex-col gap-4 border-t border-border px-4 py-4">
-          <AaSlider
-            value={fontScale}
-            onChange={(v) => {
-              persistFontScale(v)
-              if (isInmateReporter) setLocalFontScale(v)
-              else update.mutate({ font_scale: v })
-            }}
-          />
+          <AaSlider value={fontScale} onChange={setFontScale} />
           <div className="flex items-center gap-3">
             <LanguageToggle />
-            <ThemeToggle
-              value={theme}
-              onChange={(v) => {
-                persistTheme(v)
-                if (isInmateReporter) setLocalTheme(v)
-                else update.mutate({ theme: v })
-              }}
-            />
+            <ThemeToggle value={theme} onChange={setTheme} />
           </div>
         </div>
       </SheetContent>

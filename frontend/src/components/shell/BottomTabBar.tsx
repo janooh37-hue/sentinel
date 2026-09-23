@@ -25,6 +25,7 @@ import {
 } from './navCustomization'
 import { useWaitingSignals } from './useWaitingSignals'
 import { useApprovalSummary } from '@/lib/useApprovalSummary'
+import { INMATE_REPORTER_ALLOWED_DESTINATIONS } from './navItems'
 
 interface DockSlotVisualProps {
   Icon: LucideIcon
@@ -123,11 +124,15 @@ export function BottomTabBar(): React.JSX.Element {
 
 function InmateReporterBottomTabBar(): React.JSX.Element {
   const { t } = useTranslation()
-  const entries = [
-    { to: '/', labelKey: 'nav.dashboard', Icon: LayoutDashboard },
-    { to: '/application', labelKey: 'nav.inmateReport', Icon: FilePlus2 },
-    { to: '/books', labelKey: 'nav.records', Icon: BookText },
-  ] as const
+  const entryByDestination = {
+    '/': { labelKey: 'nav.dashboard', Icon: LayoutDashboard },
+    '/application': { labelKey: 'nav.inmateReport', Icon: FilePlus2 },
+    '/books': { labelKey: 'nav.records', Icon: BookText },
+  }
+  const entries = INMATE_REPORTER_ALLOWED_DESTINATIONS.map((to) => ({
+    to,
+    ...entryByDestination[to],
+  }))
 
   return (
     <nav

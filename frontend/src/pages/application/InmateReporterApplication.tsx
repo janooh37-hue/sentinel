@@ -1,15 +1,15 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
-import { Download, ExternalLink, Loader2, Send } from 'lucide-react'
+import { ExternalLink, Loader2, Send } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { TemplateForm } from '@/components/application/TemplateForm'
 import type { TemplateDetailResponse, TemplateField } from '@/components/application/types'
 import { Button } from '@/components/ui/button'
-import { api, ApiError, apiErrorMessage } from '@/lib/api'
+import { api, ApiError } from '@/lib/api'
 import type {
   DocumentGenerateRequest,
   JobStatusResponse,
@@ -18,7 +18,8 @@ import type {
 import { nowHM, todayIso } from './resignationDate'
 import { savedGenerationFromJob, type SavedGeneration } from './savedGeneration'
 
-const DocPdfCanvas = lazy(() => import('./DocPdfCanvas'))
+import { useInmateReportSubmit, inmateReportSubmitErrorMessage } from '@/components/books/useInmateReportSubmit'
+import { JobStatus } from './JobStatus'
 const TEMPLATE_ID = 'Inmate Conduct Violations'
 const TEMPLATE_SLUG = 'inmate_conduct_violations'
 const EDITABLE_FIELDS: Record<string, true> = {
@@ -151,8 +152,8 @@ export function InmateReporterApplication({ user }: { user: SessionUser }): Reac
   }, [form, initialBookId, revisionFieldsQuery.data, schema])
 
   const handleSubmitError = useCallback((error: unknown) => {
+    const message = inmateReportSubmitErrorMessage(error, t)
     if (!(error instanceof ApiError)) {
-      const message = apiErrorMessage(error)
       setSubmissionIssue({ kind: 'other', message })
       toast.error(message)
       return
@@ -164,41 +165,27 @@ export function InmateReporterApplication({ user }: { user: SessionUser }): Reac
       setSubmissionIssue({ kind: 'incomplete', fields })
       setLastSaved(null)
       setActiveTab('fields')
-      toast.error(t('application.inmateReporter.incomplete'))
-      return
-    }
-    if (error.code === 'INMATE_REPORTER_MANAGER_UNAVAILABLE') {
+    } else if (error.code === 'INMATE_REPORTER_MANAGER_UNAVAILABLE') {
       setSubmissionIssue({ kind: 'manager' })
-      toast.error(t('application.inmateReporter.managerUnavailable'))
-      return
-    }
-    if (
+    } else if (
       error.code === 'INMATE_REPORTER_STATE_LOCKED' ||
       error.code === 'INMATE_REPORTER_NOT_OWNER' ||
       error.code === 'INMATE_REPORTER_IDENTITY_CHANGED'
     ) {
       setSubmissionIssue({ kind: 'stale' })
-      toast.error(t('application.inmateReporter.stale'))
-      return
+    } else {
+      setSubmissionIssue({ kind: 'other', message })
     }
-    setSubmissionIssue({ kind: 'other', message: apiErrorMessage(error) })
-    toast.error(apiErrorMessage(error))
+    toast.error(message)
   }, [t])
 
-  const submitMutation = useMutation({
-    mutationFn: (bookId: number) =>
-      api.submitBook(bookId, {
-        priority: 'Normal',
-        approver_user_id: null,
-        reviewer_user_ids: [],
-      }),
+  const submitMutation = useInmateReportSubmit({
     onSuccess: () => {
       setSubmitted(true)
       setSubmissionIssue(null)
       toast.success(t('application.inmateReporter.sent'))
-      void qc.invalidateQueries({ queryKey: ['books'] })
     },
-    onError: handleSubmitError,
+    onError: (error) => handleSubmitError(error),
   })
 
   const buildPayload = useCallback((values: Record<string, unknown>): DocumentGenerateRequest => ({
@@ -356,7 +343,7 @@ export function InmateReporterApplication({ user }: { user: SessionUser }): Reac
 
           {activeTab === 'preview' && activeJobId && (
             <div className="space-y-4">
-              <RestrictedJobStatus key={activeJobId} jobId={activeJobId} onDone={handleJobDone} />
+              <JobStatus key={activeJobId} jobId={activeJobId} onDone={handleJobDone} />
               {lastSaved && (
                 <div className="rounded-xl border border-hairline bg-surface-tinted p-4">
                   <p className="font-semibold text-foreground">
@@ -464,78 +451,3 @@ function SubmissionIssuePanel({
   )
 }
 
-function RestrictedJobStatus({
-  jobId,
-  onDone,
-}: {
-  jobId: string
-  onDone: (job: JobStatusResponse) => void
-}): React.JSX.Element {
-  const { t } = useTranslation()
-  const [job, setJob] = useState<JobStatusResponse | null>(null)
-  const [pollError, setPollError] = useState<string | null>(null)
-  const onDoneRef = useRef(onDone)
-  useEffect(() => { onDoneRef.current = onDone }, [onDone])
-
-  useEffect(() => {
-    let cancelled = false
-    let timer: ReturnType<typeof setTimeout> | undefined
-    const poll = async (): Promise<void> => {
-      try {
-        const next = await api.getJob(jobId)
-        if (cancelled) return
-        setJob(next)
-        setPollError(null)
-        if (next.status === 'done' || next.status === 'failed') onDoneRef.current(next)
-        else timer = setTimeout(() => { void poll() }, 750)
-      } catch (error) {
-        if (cancelled) return
-        setPollError(apiErrorMessage(error))
-        timer = setTimeout(() => { void poll() }, 2_000)
-      }
-    }
-    void poll()
-    return () => {
-      cancelled = true
-      clearTimeout(timer)
-    }
-  }, [jobId])
-
-  if (!job || job.status === 'queued' || job.status === 'running') {
-    return (
-      <div className="flex min-h-52 flex-col items-center justify-center gap-3 text-muted-foreground">
-        <Loader2 className="h-6 w-6 animate-spin" aria-hidden />
-        <p>{t(`application.jobStatus.${job?.status ?? 'queued'}`)}</p>
-        {pollError && <p className="text-xs text-destructive">{pollError}</p>}
-      </div>
-    )
-  }
-  if (job.status === 'failed') {
-    return (
-      <div role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-4 text-center text-sm text-destructive">
-        <p>{job.error_message || t('application.jobStatus.failed')}</p>
-        {job.error_code && <p className="mt-1 font-mono text-xs">{job.error_code}</p>}
-      </div>
-    )
-  }
-
-  const document = job.documents?.find((item) => item.role === 'primary')
-  if (!document?.pdf_url) {
-    return (
-      <div className="flex min-h-52 items-center justify-center rounded-lg border border-hairline bg-surface-tinted text-sm text-muted-foreground">
-        {t('application.pdfUnavailableNoDocx')}
-      </div>
-    )
-  }
-  return (
-    <div>
-      <Suspense fallback={<div className="flex min-h-52 items-center justify-center"><Loader2 className="h-6 w-6 animate-spin" /></div>}>
-        <DocPdfCanvas pdfUrl={document.pdf_url} />
-      </Suspense>
-      <a href={document.pdf_url} download className="mt-2 inline-flex min-h-10 items-center gap-2 rounded-lg border border-hairline px-3 text-sm font-medium text-foreground hover:bg-surface-tinted">
-        <Download className="h-4 w-4" aria-hidden />
-        {t('application.downloadPdf')}
-      </a>
-    </div>
-  )
-}

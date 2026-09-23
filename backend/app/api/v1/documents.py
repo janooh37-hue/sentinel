@@ -450,26 +450,10 @@ def generate_document(
         service_id=effective_service,
     )
     if payload.revise_of_book_id is not None:
-        if user.role == INMATE_REPORTER_ROLE:
-            revise_book = db.get(Book, payload.revise_of_book_id)
-            if revise_book is None:
-                raise NotFoundError(
-                    "BOOK_NOT_FOUND",
-                    f"Book {payload.revise_of_book_id} does not exist",
-                    id=payload.revise_of_book_id,
-                )
-            book_service.require_inmate_report_write_access(db, user, revise_book, action="revise")
-        else:
-            if not perm_service.has_capability(db, user, "books.edit"):
-                raise AppError(
-                    "FORBIDDEN",
-                    "Missing capability: books.edit",
-                    http_status=status.HTTP_403_FORBIDDEN,
-                    details={"capability": "books.edit"},
-                )
-            revise_book = db.get(Book, payload.revise_of_book_id)
-            if revise_book is not None and revise_book.deleted_at is None:
-                book_service.require_full_book_access(db, user, revise_book)
+        revise_book = db.get(Book, payload.revise_of_book_id)
+        if revise_book is not None and revise_book.deleted_at is not None:
+            revise_book = None
+        book_service.require_revise_access(db, user, revise_book)
 
     for source in payload.attachments or ():
         if source.source == "staged" or source.book_id is None:

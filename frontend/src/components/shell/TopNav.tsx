@@ -9,35 +9,26 @@
  * the rest of the app react to the cache invalidation.
  */
 
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Settings } from 'lucide-react'
-import { useContext, useEffect, useState } from 'react'
+import { useContext } from 'react'
 import { useTranslation } from 'react-i18next'
 import { NavLink } from 'react-router-dom'
 
 import { AccountMenu } from '@/components/shell/AccountMenu'
-import { api } from '@/lib/api'
-import type { Theme } from '@/lib/api'
+import { IntakeLauncher } from '@/components/intake/IntakeLauncher'
 import { AuthContext } from '@/lib/authContext'
 import { useCapabilities } from '@/lib/useCapabilities'
-import {
-  getStoredFontScale,
-  getStoredTheme,
-  migrateLegacyFontScale,
-  persistFontScale,
-  persistTheme,
-} from '@/lib/theme'
 import { prefetchRouteForPath } from '@/lib/prefetchRoute'
 
 import { AaSlider } from './AaSlider'
-import { IntakeLauncher } from '@/components/intake/IntakeLauncher'
-import { LanguageToggle } from './LanguageToggle'
 import { EmailBasketTray } from './EmailBasketTray'
 import { GatewayIndicator } from './GatewayIndicator'
+import { LanguageToggle } from './LanguageToggle'
 import { NavBellPopover } from './NavBellPopover'
-import { NAV_ITEMS } from './navItems'
+import { INMATE_REPORTER_ALLOWED_DESTINATIONS, NAV_ITEMS } from './navItems'
 import { isNavEntryAllowed } from './navCustomization'
 import { ThemeToggle } from './ThemeToggle'
+import { useChromePrefs } from './useChromePrefs'
 
 interface TopNavProps {
   onLock: () => void
@@ -47,46 +38,13 @@ interface TopNavProps {
 
 export function TopNav({ onLock, onOpenSettings, onSignOut }: TopNavProps): React.JSX.Element {
   const { t } = useTranslation()
-  const qc = useQueryClient()
   const user = useContext(AuthContext)?.user ?? null
   const { has } = useCapabilities()
   const isInmateReporter = user?.role === 'inmate_reporter'
-  const [localFontScale, setLocalFontScale] = useState(
-    () => getStoredFontScale() ?? migrateLegacyFontScale(undefined),
-  )
-  const [localTheme, setLocalTheme] = useState<Theme>(() => getStoredTheme() ?? 'light')
-  const { data: settings } = useQuery({
-    queryKey: ['settings'],
-    queryFn: api.getSettings,
-    enabled: !isInmateReporter,
-  })
-  const update = useMutation({
-    mutationFn: api.updateSettings,
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ['settings'] })
-    },
-  })
-
-  const fontScale = isInmateReporter
-    ? localFontScale
-    : migrateLegacyFontScale(settings?.font_scale)
-  const theme = isInmateReporter ? localTheme : (settings?.theme ?? 'light') as Theme
+  const { fontScale, theme, setFontScale, setTheme } = useChromePrefs(isInmateReporter)
   const navItems = isInmateReporter
-    ? NAV_ITEMS.filter(({ to }) => to === '/' || to === '/application' || to === '/books')
+    ? NAV_ITEMS.filter(({ to }) => INMATE_REPORTER_ALLOWED_DESTINATIONS.includes(to as typeof INMATE_REPORTER_ALLOWED_DESTINATIONS[number]))
     : NAV_ITEMS
-
-  // Keep the document attributes in sync with server-side settings on every
-  // mount, so navigating to a fresh route doesn't lose the theme/font-scale
-  // applied by the operator on a previous page. `persistTheme` also writes to
-  // localStorage so the no-flash bootstrap in main.tsx sees the latest value.
-  useEffect(() => {
-    if (!isInmateReporter && settings?.theme) persistTheme(settings.theme as Theme)
-  }, [isInmateReporter, settings?.theme])
-  useEffect(() => {
-    if (!isInmateReporter && typeof settings?.font_scale === 'number') {
-      persistFontScale(settings.font_scale)
-    }
-  }, [isInmateReporter, settings?.font_scale])
 
   return (
     <header
@@ -147,21 +105,10 @@ export function TopNav({ onLock, onOpenSettings, onSignOut }: TopNavProps): Reac
       <div className="topnav-utilities ms-auto flex shrink-0 items-center gap-3.5">
         <AaSlider
           value={fontScale}
-          onChange={(v) => {
-            persistFontScale(v)
-            if (isInmateReporter) setLocalFontScale(v)
-            else update.mutate({ font_scale: v })
-          }}
+          onChange={setFontScale}
         />
         <LanguageToggle />
-        <ThemeToggle
-          value={theme}
-          onChange={(v) => {
-            persistTheme(v)
-            if (isInmateReporter) setLocalTheme(v)
-            else update.mutate({ theme: v })
-          }}
-        />
+        <ThemeToggle value={theme} onChange={setTheme} />
         {!isInmateReporter ? (
           <>
             <IntakeLauncher />
