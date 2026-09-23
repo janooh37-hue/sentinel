@@ -26,12 +26,8 @@ mrz>=0.6.2,<1.0  # passport MRZ (TD3) parser for OCR passport extraction
 zxing-cpp>=3.0.0  # General Book Code 39 header barcode + Aztec decode (core/qr.py)
 aztec-code-generator>=0.12  # was an undeclared transitive dep; pin fixes drift
 
-# DOCX -> PDF conversion (Word COM). The PdfChain tries docx2pdf, then
-# win32com (pywin32), then a PowerShell-COM shell-out. Without these two
-# packages installed ONLY the slow PowerShell fallback works — every preview
-# then shells out to Word (~6s/doc) instead of converting in-process. Both are
-# Windows-only (the host requires Microsoft Word for any of the methods).
-docx2pdf>=0.1.8; sys_platform == "win32"
+# DOCX -> PDF conversion drives Microsoft Word through COM (app/core/word_pdf.py).
+# Windows-only; the host requires Microsoft Word.
 pywin32>=306; sys_platform == "win32"
 
 # Dev / quality
