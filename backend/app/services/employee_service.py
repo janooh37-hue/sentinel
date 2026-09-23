@@ -15,10 +15,8 @@ is small (272 employees in live data) and the React side already wants a
 from __future__ import annotations
 
 from datetime import UTC, date, datetime
-from typing import Any, Final
+from typing import Any, Final, cast
 
-from rapidfuzz import fuzz
-from rapidfuzz import utils as fuzz_utils
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session
 
@@ -33,7 +31,7 @@ from app.schemas.employee import (
     validate_status_end_date,
 )
 from app.services import workforce_schedule_service
-from app.services.extraction_service import _MATCH_THRESHOLD
+from app.services.extraction_service import _MATCH_THRESHOLD, _name_scores
 
 LIST_MAX_LIMIT = 500
 LIST_DEFAULT_LIMIT = 100
@@ -52,20 +50,26 @@ def list_employees(
 ) -> tuple[list[Employee], int]:
     """Filtered + paginated list. Returns ``(rows, total_count)``.
 
+    ``q`` also matches ``uae_id_no``/``passport_no``. When the exact/ILIKE pass
+    returns zero rows and ``q`` isn't pure digits, falls back to rapidfuzz
+    name matching (``token_sort_ratio`` >= ``extraction_service._MATCH_THRESHOLD``),
+    ordered by score then name (or by ``end_date`` when ``pending=True``, to
+    match the exact-match ordering below).
+
     ``pending=True`` narrows to scheduled departures — Active employees with a
     ``pending_status`` and an ``end_date`` — ordered soonest-first, which is what
     the dashboard's Pending Departures widget reads.
     """
     limit = max(1, min(limit, LIST_MAX_LIMIT))
     offset = max(0, offset)
-
+    stripped = q.strip() if q else ""
     stmt = select(Employee)
     count_stmt = select(func.count()).select_from(Employee)
 
     non_q_clauses: list[Any] = []
 
     if q:
-        needle = f"%{q.strip()}%"
+        needle = f"%{stripped}%"
         clause = or_(
             Employee.id.ilike(needle),
             Employee.name_en.ilike(needle),
@@ -108,27 +112,22 @@ def list_employees(
     rows = list(db.execute(stmt).scalars().all())
     total = int(db.execute(count_stmt).scalar_one())
 
-    stripped = q.strip() if q else ""
-    if q and total == 0 and stripped and not stripped.isdigit():
+    if stripped and total == 0 and not stripped.isdigit():
         # ponytail: full-table scan below — fine at current employee-table size
         # (hundreds); add an indexed/trigram search if the roster grows into
         # the thousands.
         fuzzy_stmt = select(Employee).where(*non_q_clauses)
         candidates = list(db.execute(fuzzy_stmt).scalars().all())
 
-        matches: list[tuple[Employee, float]] = []
-        for emp in candidates:
-            best = 0.0
-            for name in (emp.name_en, emp.name_ar):
-                if not name:
-                    continue
-                s = fuzz.token_sort_ratio(stripped, name, processor=fuzz_utils.default_process)
-                if s > best:
-                    best = s
-            if best >= _MATCH_THRESHOLD:
-                matches.append((emp, best))
-
-        matches.sort(key=lambda t: (-t[1], t[0].name_en))
+        matches: list[tuple[Employee, float]] = [
+            (cast(Employee, emp), score)
+            for emp, score in _name_scores(stripped, candidates)
+            if score >= _MATCH_THRESHOLD
+        ]
+        if pending:
+            matches.sort(key=lambda t: (t[0].end_date, t[0].name_en))
+        else:
+            matches.sort(key=lambda t: (-t[1], t[0].name_en))
 
         total = len(matches)
         rows = [emp for emp, _score in matches[offset : offset + limit]]

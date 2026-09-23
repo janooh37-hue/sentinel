@@ -4,7 +4,18 @@ from app.db.models import Employee, Vehicle, VehicleSite
 from app.services import employee_service, vehicle_service
 
 
-def _make(db, id_, name_en, *, name_ar=None, uae_id_no=None, passport_no=None, status="Active"):
+def _make(
+    db,
+    id_,
+    name_en,
+    *,
+    name_ar=None,
+    uae_id_no=None,
+    passport_no=None,
+    status="Active",
+    pending_status=None,
+    end_date=None,
+):
     emp = Employee(
         id=id_,
         name_en=name_en,
@@ -12,6 +23,8 @@ def _make(db, id_, name_en, *, name_ar=None, uae_id_no=None, passport_no=None, s
         uae_id_no=uae_id_no,
         passport_no=passport_no,
         status=status,
+        pending_status=pending_status,
+        end_date=end_date,
     )
     db.add(emp)
     return emp
@@ -74,11 +87,37 @@ def test_fuzzy_fallback_preserves_pagination(db_session):
     assert len(rows) == 1
 
 
+def test_fuzzy_fallback_pending_orders_by_departure_date(db_session):
+    """The exact-match path orders pending=True results by end_date (soonest
+    first); the fuzzy fallback must match that ordering, not its own score
+    order."""
+    _make(
+        db_session,
+        "G1012",
+        "Ahmed Al Somesun",
+        status="Active",
+        pending_status="Resigned",
+        end_date=date(2026, 6, 1),
+    )
+    _make(
+        db_session,
+        "G1013",
+        "Ahmed Al Zomeson",
+        status="Active",
+        pending_status="Resigned",
+        end_date=date(2026, 1, 1),
+    )
+    db_session.commit()
+
+    rows, total = employee_service.list_employees(db_session, q="Ahmed Al Somesen", pending=True)
+
+    assert total == 2
+    assert [r.id for r in rows] == ["G1013", "G1012"]
+
+
 def test_vehicle_search_never_returns_an_employee(db_session):
     """Regression pin: no cross-domain leak — an employee's name must never
-    surface a vehicle result. Nothing about vehicle search changes here, but
-    this is the exact failure mode the plan's domain-scoping rule guards
-    against, so it's pinned as a test."""
+    surface a vehicle result. Nothing about vehicle search changes here."""
     _make(db_session, "G1011", "Mohammed Al Farsi")
     site = VehicleSite(name_ar="موقع", name_en="Site", active=True)
     db_session.add(site)
