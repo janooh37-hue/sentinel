@@ -1761,11 +1761,16 @@ def _optimize_certificate(data: bytes, media_type: str, *, profile: Profile = "c
     other worker failure becomes ``VEHICLE_CERTIFICATE_PROCESSING_FAILED`` —
     no file is created and the client can retry explicitly.
     """
-    from app.services._pdf_executor import get_executor
+    from app.services._pdf_executor import run_in_worker
 
-    future = get_executor().submit(_optimize_certificate_worker, data, media_type, profile)
     try:
-        return future.result(timeout=_CERTIFICATE_PROCESSING_TIMEOUT)
+        return run_in_worker(
+            _optimize_certificate_worker,
+            data,
+            media_type,
+            profile,
+            timeout=_CERTIFICATE_PROCESSING_TIMEOUT,
+        )
     except ValueError as exc:
         code = exc.args[0] if exc.args else "VEHICLE_CERTIFICATE_INVALID"
         raise ValidationFailedError(code, str(exc) or code) from exc

@@ -44,7 +44,7 @@ _WP_NS = "http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing
 EMU_PER_POINT = 12700
 
 # Probe geometry/matching tuning. Empirically proven against real Word
-# (docx2pdf/win32com SaveAs2 → PyMuPDF get_image_info + pixel sampling):
+# (Word COM SaveAs2 → PyMuPDF get_image_info + pixel sampling):
 # a 1pt probe is below Word's PDF-export anti-aliasing noise floor and
 # reads back as a blurred, unmatchable color; 6pt survives reliably. A
 # render-resolution pixmap sample (72 dpi) is too coarse for a probe this
