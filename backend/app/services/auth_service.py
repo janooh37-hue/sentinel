@@ -485,6 +485,7 @@ def reset_password(
 ) -> User:
     user = _require_user(db, user_id)
     user.password_hash = security.hash_password(new_password)
+    user.password_change_required = False
     user.failed_attempts = 0
     user.locked_at = None
     if user.status == "locked":
