@@ -84,6 +84,11 @@ class TemplateField(BaseModel):
     options: list[str] | None = None
     default: str | None = None
     group: str | None = None
+    # items_table only: configurable grid columns + row capacity. Absent for
+    # the legacy Material Request/Acknowledgment fixed-shape tables and every
+    # non-table field.
+    columns: list[dict[str, str]] | None = None
+    max_rows: int | None = None
 
 
 class TemplateDetailResponse(BaseModel):

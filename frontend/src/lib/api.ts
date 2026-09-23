@@ -1970,6 +1970,8 @@ export const api = {
       options?: string[] | null
       default?: string | null
       group?: string | null
+      columns?: { key: string; label_en: string; label_ar: string }[] | null
+      max_rows?: number | null
     }>
   }> => {
     const raw = await request<{
@@ -1979,7 +1981,7 @@ export const api = {
       // signing_path too — the top-level one is the contract).
       signing_path: SigningPath
       attachment_slots: AttachmentSlotRead[]
-      fields: Array<{ key: string; label_en: string; label_ar: string; type: string; required: boolean; options?: string[] | null; default?: string | null; group?: string | null }>
+      fields: Array<{ key: string; label_en: string; label_ar: string; type: string; required: boolean; options?: string[] | null; default?: string | null; group?: string | null; columns?: { key: string; label_en: string; label_ar: string }[] | null; max_rows?: number | null }>
     }>('GET', `/templates/${encodeURIComponent(templateId)}/fields`)
     return {
       meta: raw.meta,

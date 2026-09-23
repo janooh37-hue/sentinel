@@ -12756,6 +12756,12 @@ export interface components {
             default?: string | null;
             /** Group */
             group?: string | null;
+            /** Columns */
+            columns?: {
+                [key: string]: string;
+            }[] | null;
+            /** Max Rows */
+            max_rows?: number | null;
         };
         /** TemplateListResponse */
         TemplateListResponse: {

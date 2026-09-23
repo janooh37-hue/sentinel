@@ -12,6 +12,7 @@ from app.core.form_kind import OTHER_SERVICE_ID, SERVICE_IDS
 from app.core.permissions import (
     CAPABILITIES,
     CATEGORY_CAP_PREFIX,
+    OPT_IN_SERVICE_IDS,
     ROLE_DEFAULTS,
     SERVICE_CAP_PREFIX,
     SERVICE_RECORDS_CAP_PREFIX,
@@ -74,6 +75,10 @@ def _service_names(service_id: str) -> tuple[str, str | None]:
 
 def _service_entries(service_id: str) -> tuple[CapabilityCatalogEntry, ...]:
     label_en, label_ar = _service_names(service_id)
+    # 2026-09-21 HR intake additions stay opt-in (see permissions.OPT_IN_
+    # SERVICE_IDS) — every role but admin starts denied, so their catalog
+    # metadata must not claim operator/manager get them by default.
+    default_roles = ("admin",) if service_id in OPT_IN_SERVICE_IDS else _ROLE_ORDER
     return (
         CapabilityCatalogEntry(
             id=f"{SERVICE_CAP_PREFIX}{service_id}",
@@ -84,7 +89,7 @@ def _service_entries(service_id: str) -> tuple[CapabilityCatalogEntry, ...]:
             description_ar=f"إنشاء سجلات {label_ar}." if label_ar else None,
             sensitive=False,
             requestable=True,
-            default_roles=_ROLE_ORDER,
+            default_roles=default_roles,
         ),
         CapabilityCatalogEntry(
             id=f"{SERVICE_RECORDS_CAP_PREFIX}{service_id}",
@@ -95,7 +100,7 @@ def _service_entries(service_id: str) -> tuple[CapabilityCatalogEntry, ...]:
             description_ar=f"عرض سجلات {label_ar}." if label_ar else None,
             sensitive=False,
             requestable=True,
-            default_roles=_ROLE_ORDER,
+            default_roles=default_roles,
         ),
     )
 

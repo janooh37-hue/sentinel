@@ -67,8 +67,9 @@ def test_catalog_composes_bilingual_dynamic_entries_in_stable_order(db_session):
             f"books.servicerecords.{service_id}",
         )
     ]
-    assert [entry.id for entry in dynamic[:42]] == expected_pair_ids
-    assert [entry.id for entry in dynamic[42:]] == [
+    n_service_pairs = len(expected_pair_ids)
+    assert [entry.id for entry in dynamic[:n_service_pairs]] == expected_pair_ids
+    assert [entry.id for entry in dynamic[n_service_pairs:]] == [
         "books.category.A",
         "books.category.Z",
     ]
@@ -95,12 +96,18 @@ def test_catalog_composes_bilingual_dynamic_entries_in_stable_order(db_session):
     assert unnamed.description_en == "View records in books.category.Z."
     assert unnamed.description_ar is None
 
-    assert all(
-        entry.default_roles == ("operator", "manager", "admin")
-        and entry.requestable
-        and not entry.sensitive
-        for entry in dynamic
-    )
+    # 2026-09-21 HR intake additions stay opt-in (permissions.OPT_IN_SERVICE_
+    # IDS) — every other dynamic entry (legacy services + categories) still
+    # defaults to every role.
+    for entry in dynamic:
+        assert entry.requestable and not entry.sensitive
+        service_id = entry.id.removeprefix(permissions.SERVICE_CAP_PREFIX).removeprefix(
+            permissions.SERVICE_RECORDS_CAP_PREFIX
+        )
+        if service_id in permissions.OPT_IN_SERVICE_IDS:
+            assert entry.default_roles == ("admin",), entry.id
+        else:
+            assert entry.default_roles == ("operator", "manager", "admin"), entry.id
     assert capability_catalog_service.get_catalog_entry(db_session, passport.id) == passport
     assert capability_catalog_service.get_catalog_entry(db_session, category.id) == category
     assert capability_catalog_service.get_catalog_entry(db_session, "missing.cap") is None

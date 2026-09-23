@@ -1,12 +1,20 @@
 /**
- * ItemsTableField — editable items table for Material Request + Acknowledgment.
+ * ItemsTableField — editable items table for Material Request + Acknowledgment,
+ * and any template that supplies a `columns` config (a configurable grid).
  *
  * Backend `item(i, field)` helper looks up `data["items"][i][field]`. Material
  * Request templates read `sno/code/description/unit/qty/remarks`; Acknowledgment
  * reads `sno/description/unit/quantity`. We emit both `qty` and `quantity` so
- * either template renders correctly.
+ * either template renders correctly. That fixed shape is the DEFAULT when the
+ * field carries no `columns` config.
  *
- * Output shape: `[{sno, code, description, unit, qty, quantity, remarks}]`.
+ * When `columns` is present (see `TemplateField.columns`), the table renders
+ * exactly those bilingual columns instead — the DOCX's fixed-capacity table
+ * rows must match `columns` 1:1 by key, and `maxRows` caps how many rows the
+ * operator can add (matching the DOCX's fixed row count).
+ *
+ * Output shape (legacy): `[{sno, code, description, unit, qty, quantity, remarks}]`.
+ * Output shape (configured): `[{sno, <column.key>: string, …}]`.
  */
 
 import { useFieldArray, useFormContext } from 'react-hook-form'
@@ -15,7 +23,7 @@ import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import type { FieldProps } from '../types'
+import type { FieldProps, TemplateField } from '../types'
 
 interface Row {
   sno?: string
@@ -25,6 +33,7 @@ interface Row {
   qty?: string
   quantity?: string
   remarks?: string
+  [key: string]: string | undefined
 }
 
 const blankRow = (n: number): Row => ({
@@ -37,12 +46,19 @@ const blankRow = (n: number): Row => ({
   remarks: '',
 })
 
+interface ItemsTableFieldProps extends FieldProps {
+  columns?: TemplateField['columns']
+  maxRows?: number
+}
+
 export function ItemsTableField({
   name,
   label_en,
   label_ar,
   required,
-}: FieldProps): React.JSX.Element {
+  columns,
+  maxRows,
+}: ItemsTableFieldProps): React.JSX.Element {
   const { i18n, t } = useTranslation()
   const isAr = i18n.language.startsWith('ar')
   const label = isAr ? label_ar : label_en
@@ -57,6 +73,7 @@ export function ItemsTableField({
 
   const { fields, append, remove } = useFieldArray({ control, name })
   const error = (errors[name] as { message?: string } | undefined)?.message
+  const atCap = typeof maxRows === 'number' && fields.length >= maxRows
 
   const onQtyChange = (idx: number, val: string) => {
     setValue(`${name}.${idx}.qty`, val, { shouldDirty: true })
@@ -74,6 +91,7 @@ export function ItemsTableField({
           type="button"
           size="xs"
           variant="secondary"
+          disabled={atCap}
           onClick={() => append(blankRow(fields.length + 1))}
         >
           {t('application.itemsTable.addRow', { defaultValue: '+ Add row' })}
@@ -84,18 +102,28 @@ export function ItemsTableField({
           <thead>
             <tr className="border-b border-hairline text-xs font-semibold uppercase tracking-[0.04em] text-muted-foreground [&_th]:text-start">
               <th scope="col" className="w-12">#</th>
-              <th scope="col" className="w-28">{t('application.itemsTable.code', { defaultValue: 'Code' })}</th>
-              <th scope="col">{t('application.itemsTable.description', { defaultValue: 'Description' })}</th>
-              <th scope="col" className="w-24">{t('application.itemsTable.unit', { defaultValue: 'Unit' })}</th>
-              <th scope="col" className="w-20">{t('application.itemsTable.qty', { defaultValue: 'Qty' })}</th>
-              <th scope="col">{t('application.itemsTable.remarks', { defaultValue: 'Remarks' })}</th>
+              {columns ? (
+                columns.map((col) => (
+                  <th scope="col" key={col.key}>
+                    {isAr ? col.label_ar : col.label_en}
+                  </th>
+                ))
+              ) : (
+                <>
+                  <th scope="col" className="w-28">{t('application.itemsTable.code', { defaultValue: 'Code' })}</th>
+                  <th scope="col">{t('application.itemsTable.description', { defaultValue: 'Description' })}</th>
+                  <th scope="col" className="w-24">{t('application.itemsTable.unit', { defaultValue: 'Unit' })}</th>
+                  <th scope="col" className="w-20">{t('application.itemsTable.qty', { defaultValue: 'Qty' })}</th>
+                  <th scope="col">{t('application.itemsTable.remarks', { defaultValue: 'Remarks' })}</th>
+                </>
+              )}
               <th scope="col" className="w-10" />
             </tr>
           </thead>
           <tbody>
             {fields.length === 0 && (
               <tr>
-                <td colSpan={7} className="py-4 text-center text-muted-foreground">
+                <td colSpan={(columns?.length ?? 5) + 2} className="py-4 text-center text-muted-foreground">
                   {t('application.itemsTable.empty', { defaultValue: 'No items — add a row to begin.' })}
                 </td>
               </tr>
@@ -109,31 +137,41 @@ export function ItemsTableField({
                     className="h-8 px-2"
                   />
                 </td>
-                <td>
-                  <Input {...register(`${name}.${idx}.code`)} className="h-8 px-2" />
-                </td>
-                <td>
-                  <Input {...register(`${name}.${idx}.description`)} className="h-8 px-2" />
-                </td>
-                <td>
-                  <Input {...register(`${name}.${idx}.unit`)} className="h-8 px-2" />
-                </td>
-                <td>
-                  <Input
-                    type="text"
-                    inputMode="numeric"
-                    defaultValue={
-                      (getValues(`${name}.${idx}.qty`) as string | undefined) ??
-                      (getValues(`${name}.${idx}.quantity`) as string | undefined) ??
-                      ''
-                    }
-                    onChange={(e) => onQtyChange(idx, e.target.value)}
-                    className="h-8 px-2"
-                  />
-                </td>
-                <td>
-                  <Input {...register(`${name}.${idx}.remarks`)} className="h-8 px-2" />
-                </td>
+                {columns ? (
+                  columns.map((col) => (
+                    <td key={col.key}>
+                      <Input {...register(`${name}.${idx}.${col.key}`)} className="h-8 px-2" />
+                    </td>
+                  ))
+                ) : (
+                  <>
+                    <td>
+                      <Input {...register(`${name}.${idx}.code`)} className="h-8 px-2" />
+                    </td>
+                    <td>
+                      <Input {...register(`${name}.${idx}.description`)} className="h-8 px-2" />
+                    </td>
+                    <td>
+                      <Input {...register(`${name}.${idx}.unit`)} className="h-8 px-2" />
+                    </td>
+                    <td>
+                      <Input
+                        type="text"
+                        inputMode="numeric"
+                        defaultValue={
+                          (getValues(`${name}.${idx}.qty`) as string | undefined) ??
+                          (getValues(`${name}.${idx}.quantity`) as string | undefined) ??
+                          ''
+                        }
+                        onChange={(e) => onQtyChange(idx, e.target.value)}
+                        className="h-8 px-2"
+                      />
+                    </td>
+                    <td>
+                      <Input {...register(`${name}.${idx}.remarks`)} className="h-8 px-2" />
+                    </td>
+                  </>
+                )}
                 <td>
                   <button
                     type="button"

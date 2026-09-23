@@ -44,6 +44,11 @@ export interface TemplateField {
   options?: string[]
   default?: string
   group?: string
+  /** items_table only: configurable grid columns (falls back to the legacy
+   * Material Request/Acknowledgment fixed shape when absent). */
+  columns?: { key: string; label_en: string; label_ar: string }[]
+  /** items_table only: fixed row capacity backing the DOCX's `item(i, …)` cells. */
+  max_rows?: number
 }
 
 export interface TemplateDetailResponse {
