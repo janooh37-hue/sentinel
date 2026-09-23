@@ -125,6 +125,13 @@ function bookWith(last_put_at: string | null): BookRead {
   } as BookRead
 }
 
+function mockBookWith(lastPutAt: string | null) {
+  const getBook = vi.spyOn(apiMod.api, 'getBook')
+  getBook.mockResolvedValue(bookWith(lastPutAt))
+  vi.spyOn(apiMod.api, 'getWordSaveStatus').mockResolvedValue({ last_put_at: lastPutAt })
+  return getBook
+}
+
 function makeWrapper(qc: QueryClient) {
   return ({ children }: { children: ReactNode }) =>
     createElement(QueryClientProvider, { client: qc }, children)
@@ -137,12 +144,13 @@ beforeEach(() => {
     isLoading: false,
     has: () => true,
   })
+  vi.spyOn(apiMod.api, 'getWordSaveStatus').mockResolvedValue({ last_put_at: null })
 })
 
 describe('WordHandoffDialog', () => {
   it('renders the ref inside bdi[dir=ltr] and Arabic eyebrow', () => {
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-    vi.spyOn(apiMod.api, 'getBook').mockResolvedValue(bookWith(null))
+    mockBookWith(null)
 
     render(
       createElement(WordHandoffDialog, {
@@ -165,7 +173,7 @@ describe('WordHandoffDialog', () => {
 
   it('Finish button DISABLED with hint when last_put_at is null', async () => {
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-    vi.spyOn(apiMod.api, 'getBook').mockResolvedValue(bookWith(null))
+    mockBookWith(null)
 
     render(
       createElement(WordHandoffDialog, {
@@ -188,7 +196,7 @@ describe('WordHandoffDialog', () => {
 
   it('Finish button ENABLED when last_put_at is set', async () => {
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-    vi.spyOn(apiMod.api, 'getBook').mockResolvedValue(bookWith('2026-07-17T10:05:00Z'))
+    mockBookWith('2026-07-17T10:05:00Z')
 
     render(
       createElement(WordHandoffDialog, {
@@ -208,7 +216,7 @@ describe('WordHandoffDialog', () => {
   it('Discard fires discardWordSession on confirm', async () => {
     const user = userEvent.setup()
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-    vi.spyOn(apiMod.api, 'getBook').mockResolvedValue(bookWith(null))
+    mockBookWith(null)
     const discardSpy = vi.spyOn(apiMod.api, 'discardWordSession').mockResolvedValue({} as BookRead)
     const onClose = vi.fn()
 
@@ -235,7 +243,7 @@ describe('WordHandoffDialog', () => {
   it('Finish shows the finished version PDF (same viewer as generate preview)', async () => {
     const user = userEvent.setup()
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-    vi.spyOn(apiMod.api, 'getBook').mockResolvedValue(bookWith('2026-07-17T10:05:00Z'))
+    mockBookWith('2026-07-17T10:05:00Z')
     const finished = {
       ...bookWith(null),
       versions: [
@@ -290,7 +298,7 @@ describe('WordHandoffDialog', () => {
 
   it('Open in Word is a real anchor with the ms-word url (no auto-navigation)', async () => {
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-    vi.spyOn(apiMod.api, 'getBook').mockResolvedValue(bookWith(null))
+    mockBookWith(null)
 
     render(
       createElement(WordHandoffDialog, {
@@ -310,7 +318,7 @@ describe('WordHandoffDialog', () => {
 
   it('shows a positive saved state once a Word save exists', async () => {
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-    vi.spyOn(apiMod.api, 'getBook').mockResolvedValue(bookWith('2026-07-17T10:05:00Z'))
+    mockBookWith('2026-07-17T10:05:00Z')
 
     render(
       createElement(WordHandoffDialog, {
@@ -325,9 +333,31 @@ describe('WordHandoffDialog', () => {
     expect(screen.queryByText('لم يصل أي حفظ من Word بعد')).toBeNull()
   })
 
+  it('detects a Word save within two seconds without refetching the full Record', async () => {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const getBook = mockBookWith(null)
+    vi.spyOn(apiMod.api, 'getWordSaveStatus')
+      .mockResolvedValueOnce({ last_put_at: null })
+      .mockResolvedValue({ last_put_at: '2026-07-17T10:05:00Z' })
+
+    render(
+      createElement(WordHandoffDialog, {
+        session: FAKE_SESSION,
+        open: true,
+        onClose: vi.fn(),
+      }),
+      { wrapper: makeWrapper(qc) },
+    )
+
+    await waitFor(() => expect(screen.getByText(/تم الحفظ من Word ✓/)).toBeTruthy(), {
+      timeout: 1900,
+    })
+    expect(getBook).toHaveBeenCalledTimes(1)
+  })
+
   it('shows the live preview canvas once a Word save exists', async () => {
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-    vi.spyOn(apiMod.api, 'getBook').mockResolvedValue(bookWith('2026-07-17T10:05:00Z'))
+    mockBookWith('2026-07-17T10:05:00Z')
 
     render(
       createElement(WordHandoffDialog, {
@@ -346,7 +376,7 @@ describe('WordHandoffDialog', () => {
   it('finished Report view uses the signed PDF URL and rev marker', async () => {
     const user = userEvent.setup()
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-    vi.spyOn(apiMod.api, 'getBook').mockResolvedValue(bookWith('2026-07-17T10:05:00Z'))
+    mockBookWith('2026-07-17T10:05:00Z')
     const finished = {
       ...bookWith(null),
       versions: [
@@ -390,7 +420,7 @@ describe('WordHandoffDialog', () => {
   it('finished view offers Save as template', async () => {
     const user = userEvent.setup()
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-    vi.spyOn(apiMod.api, 'getBook').mockResolvedValue(bookWith('2026-07-17T10:05:00Z'))
+    mockBookWith('2026-07-17T10:05:00Z')
     const finished = {
       ...bookWith(null),
       versions: [
@@ -440,7 +470,7 @@ describe('WordHandoffDialog', () => {
       isLoading: false,
       has: () => false,
     })
-    vi.spyOn(apiMod.api, 'getBook').mockResolvedValue(bookWith('2026-07-17T10:05:00Z'))
+    mockBookWith('2026-07-17T10:05:00Z')
     const finished = {
       ...bookWith(null),
       versions: [
@@ -479,7 +509,7 @@ describe('WordHandoffDialog', () => {
   it('Finish with no PDF yet shows the pending hint instead of the canvas', async () => {
     const user = userEvent.setup()
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-    vi.spyOn(apiMod.api, 'getBook').mockResolvedValue(bookWith('2026-07-17T10:05:00Z'))
+    mockBookWith('2026-07-17T10:05:00Z')
     const finished = {
       ...bookWith(null),
       versions: [
@@ -516,7 +546,7 @@ describe('WordHandoffDialog', () => {
 
   it('defers a locked session while polling, then presents and focuses it on unlock', async () => {
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-    const getBook = vi.spyOn(apiMod.api, 'getBook').mockResolvedValue(bookWith(null))
+    const getBook = mockBookWith(null)
     const onClose = vi.fn()
     const view = render(
       createElement(
@@ -586,7 +616,7 @@ describe('WordHandoffDialog', () => {
   it('keeps an already-presented handoff and nested confirmation mounted while locked', async () => {
     const user = userEvent.setup()
     const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-    vi.spyOn(apiMod.api, 'getBook').mockResolvedValue(bookWith(null))
+    mockBookWith(null)
     const view = render(
       createElement(
         QueryClientProvider,

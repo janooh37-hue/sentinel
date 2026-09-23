@@ -249,11 +249,17 @@ def test_word_draft_save_visible_without_other_records_access(api_db, monkeypatc
     )
     assert created.status_code == 201, created.text
     session = created.json()
+    status_url = f"/api/v1/books/{session['book_id']}/word-sessions/status"
+    assert client.get(status_url).json() == {"last_put_at": None}
     saved = client.put(
         f"/dav/{session['token']}/{session['filename']}",
         content=b"PK-saved",
     )
     assert saved.status_code == 204
+    status = client.get(status_url)
+    assert status.status_code == 200
+    assert status.json()["last_put_at"] is not None
+    assert set(status.json()) == {"last_put_at"}
 
     detail = client.get(f"/api/v1/books/{session['book_id']}")
     assert detail.status_code == 200, detail.text

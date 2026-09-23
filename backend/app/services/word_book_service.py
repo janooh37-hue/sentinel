@@ -415,10 +415,24 @@ def finish_word_session(
         dest = out_dir / (Path(filename).stem + f"_{suffix}.docx")
 
     src = Path(session.working_path)
+
+    def convert_or_reuse_preview(target: Path) -> Path | None:
+        preview = src.parent / "preview-src.pdf"
+        with _preview_lock:
+            if (
+                preview.is_file()
+                and preview.stat().st_mtime >= target.stat().st_mtime
+                and _is_complete_preview(preview)
+            ):
+                pdf = target.with_suffix(".pdf")
+                shutil.copy2(preview, pdf)
+                return pdf
+        return (converter or convert_docx_to_pdf)(target)
+
     artifact = artifact_service.produce_from_docx(
         source_path=src,
         destination=dest,
-        converter=converter or convert_docx_to_pdf,
+        converter=convert_or_reuse_preview,
     )
     dest = artifact.docx_path
 

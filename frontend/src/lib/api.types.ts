@@ -2390,6 +2390,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/books/{book_id}/word-sessions/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Word Session Status
+         * @description Small poll for Word saves; avoid rebuilding the full Record every second.
+         */
+        get: operations["word_session_status_api_v1_books__book_id__word_sessions_status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/books/{book_id}/word-sessions/preview": {
         parameters: {
             query?: never;
@@ -14416,6 +14436,11 @@ export interface components {
             /** Date */
             date?: string | null;
         };
+        /** WordSaveStatusRead */
+        WordSaveStatusRead: {
+            /** Last Put At */
+            last_put_at: string | null;
+        };
         /** WordSessionRead */
         WordSessionRead: {
             /** Book Id */
@@ -20173,6 +20198,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BookRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    word_session_status_api_v1_books__book_id__word_sessions_status_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                book_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WordSaveStatusRead"];
                 };
             };
             /** @description Validation Error */
