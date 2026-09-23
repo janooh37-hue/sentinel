@@ -930,6 +930,8 @@ def reconcile_duty_crew_membership(
     current_crew = db.get(WorkCrew, current.crew_id)
     if current_crew is None or current_crew.code not in DUTY_UNIT_TO_CREW.values():
         return
+    if current_crew.code == dest_code:
+        return
 
     acquire_schedule_write_lock(db)
     # Recheck under the write lock: a concurrent writer may have already
