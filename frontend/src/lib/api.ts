@@ -425,7 +425,7 @@ export interface SessionUser {
   position: string | null
   department: string | null
   photo_url: string | null
-  role: 'operator' | 'manager' | 'admin'
+  role: 'operator' | 'manager' | 'admin' | 'inmate_reporter'
   status: 'pending' | 'active' | 'locked' | 'disabled'
   is_admin: boolean
   is_manager: boolean
@@ -448,7 +448,7 @@ export interface AdminUserRead {
   employee_id: string | null
   display_name: string | null
   name_en: string | null
-  role: 'operator' | 'manager' | 'admin'
+  role: 'operator' | 'manager' | 'admin' | 'inmate_reporter'
   status: 'pending' | 'active' | 'locked' | 'disabled' | 'rejected'
   failed_attempts: number
   last_login_at: string | null
@@ -465,7 +465,7 @@ export interface AdminUserCreateRequest {
   email: string
   employee_id: string | null
   display_name?: string | null
-  role: 'operator' | 'manager' | 'admin'
+  role: 'operator' | 'manager' | 'admin' | 'inmate_reporter'
 }
 
 export interface AdminUserCreateResult {
@@ -512,7 +512,7 @@ export interface CapabilityRead {
   description_ar: string | null
   sensitive: boolean
   requestable: boolean
-  default_roles: Array<'operator' | 'manager' | 'admin'>
+  default_roles: Array<'operator' | 'manager' | 'admin' | 'inmate_reporter'>
 }
 
 // Permission requests (Task 10 — employee permission-request UI).
@@ -530,7 +530,7 @@ export interface PermissionRequestRead {
 
 export interface UserPermissionRead {
   user_id: number
-  role: 'operator' | 'manager' | 'admin'
+  role: 'operator' | 'manager' | 'admin' | 'inmate_reporter'
   is_admin: boolean
   effective: string[]
   role_defaults: string[]
@@ -2594,6 +2594,11 @@ export const api = {
     request<AdminUserRead>('POST', `/auth/users/${id}/reset-password`, { password }),
   setAuthUserRole: (id: number, role: string) =>
     request<AdminUserRead>('PATCH', `/auth/users/${id}/role`, { role }),
+  /** Admin-set/clear a target account's employee link (G number) — how an
+   * admin binds/rebinds inmate_reporter's fixed G number, or repairs any
+   * account's link. Distinct from `linkMyEmployee` (self-service). */
+  setAuthUserLink: (id: number, employee_id: string | null) =>
+    request<AdminUserRead>('PATCH', `/auth/users/${id}/link`, { employee_id }),
   disableAuthUser: (id: number) => request<AdminUserRead>('POST', `/auth/users/${id}/disable`),
   unlockAuthUser: (id: number) => request<AdminUserRead>('POST', `/auth/users/${id}/unlock`),
   /** Set/clear the single-holder default-manager flag (forms signing paths,

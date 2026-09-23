@@ -69,10 +69,10 @@ import { EmptyState } from '@/components/ui/empty-state'
 import { Skeleton } from '@/components/ui/skeleton'
 import { EmployeePicker } from '@/pages/application/EmployeePicker'
 
-type Role = 'admin' | 'manager' | 'operator'
+type Role = 'admin' | 'manager' | 'operator' | 'inmate_reporter'
 type TabId = 'pending' | 'active' | 'suspended' | 'history' | 'permission-requests'
 
-const ROLE_ORDER: Role[] = ['admin', 'manager', 'operator']
+const ROLE_ORDER: Role[] = ['admin', 'manager', 'operator', 'inmate_reporter']
 
 // ---------------------------------------------------------------------------
 // Small helpers
@@ -186,7 +186,7 @@ function RolePill({ role, status }: { role: Role; status: AdminUserRead['status'
   }
   return (
     <span className="inline-flex items-center gap-1.5 rounded-full bg-surface-tinted px-2.5 py-0.5 text-[0.72em] font-medium text-muted-foreground">
-      <span className="h-1.5 w-1.5 rounded-full bg-border-strong" /> {t('access.roleName.operator')}
+      <span className="h-1.5 w-1.5 rounded-full bg-border-strong" /> {t(`access.roleName.${role}`)}
     </span>
   )
 }
@@ -200,7 +200,7 @@ function RolePicker({
 }): React.JSX.Element {
   const { t } = useTranslation()
   return (
-    <div role="radiogroup" className="grid gap-2 sm:grid-cols-3">
+    <div role="radiogroup" className="grid gap-2 sm:grid-cols-2">
       {ROLE_ORDER.map((r) => {
         const active = value === r
         return (
@@ -553,6 +553,7 @@ export function UsersTable({
   currentUserId,
   onReset,
   onChangeRole,
+  onLinkEmployee,
   onEditPermissions,
   onSetDefaultManager,
   onDisable,
@@ -564,6 +565,7 @@ export function UsersTable({
   currentUserId: number | undefined
   onReset: (u: AdminUserRead) => void
   onChangeRole: (u: AdminUserRead) => void
+  onLinkEmployee?: (u: AdminUserRead) => void
   onEditPermissions?: (u: AdminUserRead) => void
   onSetDefaultManager: (u: AdminUserRead, enabled: boolean) => void
   onDisable: (u: AdminUserRead) => void
@@ -670,6 +672,12 @@ export function UsersTable({
                         <UserCog className="h-3.5 w-3.5" strokeWidth={1.8} />
                         {t('access.active.changeRole')}
                       </DropdownMenuItem>
+                      {onLinkEmployee ? (
+                        <DropdownMenuItem onSelect={() => onLinkEmployee(u)}>
+                          <UserCog className="h-3.5 w-3.5" strokeWidth={1.8} />
+                          {t('access.active.linkEmployee')}
+                        </DropdownMenuItem>
+                      ) : null}
                       {canEditPermissions ? (
                         <DropdownMenuItem onSelect={() => onEditPermissions?.(u)}>
                           <SlidersHorizontal className="h-3.5 w-3.5" strokeWidth={1.8} />
@@ -1068,6 +1076,7 @@ export function AccessRequestsPage(): React.JSX.Element {
   const [rejectTarget, setRejectTarget] = useState<AdminUserRead | null>(null)
   const [resetTarget, setResetTarget] = useState<AdminUserRead | null>(null)
   const [roleTarget, setRoleTarget] = useState<AdminUserRead | null>(null)
+  const [linkTarget, setLinkTarget] = useState<AdminUserRead | null>(null)
   const [disableTarget, setDisableTarget] = useState<AdminUserRead | null>(null)
   const [approvingId, setApprovingId] = useState<number | null>(null)
   const [busyUserId, setBusyUserId] = useState<number | undefined>(undefined)
@@ -1138,6 +1147,15 @@ export function AccessRequestsPage(): React.JSX.Element {
       setRoleTarget(null)
       invalidate()
       void qc.invalidateQueries({ queryKey: ['user-permissions', variables.id] })
+    },
+    onError,
+  })
+  const linkMut = useMutation({
+    mutationFn: ({ id, employeeId }: { id: number; employeeId: string | null }) =>
+      api.setAuthUserLink(id, employeeId),
+    onSuccess: () => {
+      setLinkTarget(null)
+      invalidate()
     },
     onError,
   })
@@ -1280,6 +1298,7 @@ export function AccessRequestsPage(): React.JSX.Element {
                 busyUserId={busyUserId}
                 onReset={setResetTarget}
                 onChangeRole={setRoleTarget}
+                onLinkEmployee={setLinkTarget}
                 onEditPermissions={(target) => navigate(`/permissions?user=${target.id}`)}
                 onSetDefaultManager={(u, enabled) => defaultManagerMut.mutate({ id: u.id, enabled })}
                 onDisable={setDisableTarget}
@@ -1339,6 +1358,14 @@ export function AccessRequestsPage(): React.JSX.Element {
           pending={roleMut.isPending}
           onCancel={() => setRoleTarget(null)}
           onConfirm={(role) => roleMut.mutate({ id: roleTarget.id, role })}
+        />
+      )}
+      {linkTarget && (
+        <LinkEmployeeModalView
+          target={linkTarget}
+          pending={linkMut.isPending}
+          onCancel={() => setLinkTarget(null)}
+          onConfirm={(employeeId) => linkMut.mutate({ id: linkTarget.id, employeeId })}
         />
       )}
       {disableTarget && (
@@ -1488,6 +1515,41 @@ function RoleModalView({
           className="inline-flex items-center gap-1.5 rounded-full bg-primary px-4 py-2 text-[0.85em] font-semibold text-primary-foreground transition-colors hover:bg-primary-hover disabled:opacity-60"
         >
           {t('access.roleModal.confirm')}
+        </button>
+      </div>
+    </Modal>
+  )
+}
+
+function LinkEmployeeModalView({
+  target,
+  pending,
+  onCancel,
+  onConfirm,
+}: {
+  target: AdminUserRead
+  pending: boolean
+  onCancel: () => void
+  onConfirm: (employeeId: string | null) => void
+}): React.JSX.Element {
+  const { t } = useTranslation()
+  const [employeeId, setEmployeeId] = useState<string | null>(target.employee_id)
+  return (
+    <Modal title={t('access.active.linkEmployee')} onClose={onCancel}>
+      <EmployeePicker
+        selectedId={employeeId}
+        onSelect={setEmployeeId}
+        ariaLabel={t('access.active.linkEmployee')}
+      />
+      <div className="mt-2 flex justify-end gap-2">
+        <GhostBtn onClick={onCancel}>{t('access.roleModal.cancel')}</GhostBtn>
+        <button
+          type="button"
+          disabled={pending}
+          onClick={() => onConfirm(employeeId)}
+          className="inline-flex items-center gap-1.5 rounded-full bg-primary px-4 py-2 text-[0.85em] font-semibold text-primary-foreground transition-colors hover:bg-primary-hover disabled:opacity-60"
+        >
+          {t('access.active.linkEmployee')}
         </button>
       </div>
     </Modal>

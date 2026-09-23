@@ -23,6 +23,7 @@ import { ArrowRight, CalendarClock, ClipboardCheck, Flag, Inbox, Paperclip, Prin
 import { toast } from 'sonner'
 
 import { api, apiErrorMessage } from '@/lib/api'
+import { useAuth } from '@/lib/authContext'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { useApprovalSummary } from '@/lib/useApprovalSummary'
 import { approvalQueueUrl, defaultApprovalContext } from '@/lib/approvals'
@@ -70,7 +71,13 @@ function shortDateLabel(iso: string): string {
   }
 }
 
-export function NavBellPopover(): React.JSX.Element {
+export function NavBellPopover(): React.JSX.Element | null {
+  const { user } = useAuth()
+  if (user?.role === 'inmate_reporter') return null
+  return <DefaultNavBellPopover />
+}
+
+function DefaultNavBellPopover(): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const navigate = useNavigate()
   const qc = useQueryClient()

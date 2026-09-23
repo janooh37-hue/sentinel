@@ -8,10 +8,6 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from alembic import op
-import sqlalchemy as sa
-
-
 revision: str = '0080_merge_dashboard_idle_lock'
 down_revision: str | Sequence[str] | None = ('0079_user_dashboard_layouts', '0079_user_idle_lock')
 branch_labels: str | Sequence[str] | None = None

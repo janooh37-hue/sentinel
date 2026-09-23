@@ -91,16 +91,19 @@ export function AccountMenu({
   const navigate = useNavigate()
   const queryClient = useQueryClient()
 
+  const { user } = useAuth()
+  // inmate_reporter's route allowlist blocks GET /email/account outright —
+  // this role has no mailbox/email surface at all (§8 restricted shell).
   const accountQuery = useQuery({
     queryKey: ['email-account'],
     queryFn: () => api.getEmailAccount(),
+    enabled: user?.role !== 'inmate_reporter',
     staleTime: 60_000,
   })
 
   const { identity, isAdmin } = useIdentity()
   // The signed-in account (email/role) is authoritative for "who is this" —
   // distinct from the shared mailbox below (`account`), which is install-wide.
-  const { user } = useAuth()
   const lockTimerMutation = useMutation({
     mutationFn: (seconds: LockTimerSeconds) => api.updateLockTimer(seconds),
     // A `/auth/me` refetch already in flight (staleTime 5 min + refetch on

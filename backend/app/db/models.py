@@ -1573,7 +1573,10 @@ class User(Base):
     lock_layout: Mapped[str] = mapped_column(
         String(16), nullable=False, default="band", server_default="band"
     )
-    # operator | manager | admin — stored (admin-assigned), authoritative for auth.
+    # operator | manager | admin | inmate_reporter — stored (admin-assigned),
+    # authoritative for auth. inmate_reporter is a fixed-scope role (see
+    # core.permissions.INMATE_REPORTER_CAPS) bound to one admin-linked G
+    # number; it never self-links (auth_service.link_self blocks it).
     role: Mapped[str] = mapped_column(
         String(16), nullable=False, default="operator", server_default="operator"
     )

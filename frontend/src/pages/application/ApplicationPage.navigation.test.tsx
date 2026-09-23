@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 
 import type * as ApiModule from '@/lib/api'
+import type * as AuthContextModule from '@/lib/authContext'
 import { NavBellPopover } from '@/components/shell/NavBellPopover'
 import { api } from '@/lib/api'
 import i18n from '@/lib/i18n'
@@ -38,7 +39,8 @@ vi.mock('@/lib/api', async (original) => {
     },
   }
 })
-vi.mock('@/lib/authContext', () => ({
+vi.mock('@/lib/authContext', async (importOriginal) => ({
+  ...(await importOriginal<typeof AuthContextModule>()),
   useAuth: () => ({ user: { id: 1 }, status: 'authed' }),
 }))
 vi.mock('@/lib/useCapabilities', () => ({ useCapabilities: () => ({

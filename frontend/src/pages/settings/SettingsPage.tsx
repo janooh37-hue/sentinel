@@ -141,6 +141,8 @@ function AccountSection(): React.JSX.Element {
         return t('settings.account.roleAdmin')
       case 'manager':
         return t('settings.account.roleManager')
+      case 'inmate_reporter':
+        return t('access.roleName.inmate_reporter')
       default:
         return t('settings.account.roleOperator')
     }
@@ -246,6 +248,30 @@ function DefaultsSection({
   onUpdate: (u: AppSettingsUpdate) => void
 }): React.JSX.Element {
   const { t } = useTranslation()
+  const { user } = useAuth()
+  const isAdmin = user?.role === 'admin'
+  const { data: approvers } = useQuery({
+    queryKey: ['books', 'approvers'],
+    queryFn: () => api.listApprovers(),
+    enabled: isAdmin,
+  })
+  const { data: managers } = useQuery({
+    queryKey: ['managers'],
+    queryFn: () => api.listManagers(),
+    enabled: isAdmin,
+  })
+  const managerCounts = new Map<number, number>()
+  for (const manager of managers ?? []) {
+    if (manager.active && manager.user_id != null) {
+      managerCounts.set(manager.user_id, (managerCounts.get(manager.user_id) ?? 0) + 1)
+    }
+  }
+  const eligibleApprovers = (approvers ?? []).filter(
+    (approver) => managerCounts.get(approver.id) === 1,
+  )
+  const inmateReporterManagerUserId = (
+    settings as AppSettingsRead & { inmate_reporter_manager_user_id: number | null }
+  ).inmate_reporter_manager_user_id
 
   const stampOptions: { value: string; label: string }[] = [
     { value: 'header', label: t('settings.defaults.stampHeader') },
@@ -279,6 +305,36 @@ function DefaultsSection({
             </SelectContent>
           </Select>
         </div>
+        {isAdmin ? (
+          <div className="flex flex-col gap-1.5">
+            <label className="text-[0.72em] font-semibold uppercase tracking-[0.1em] text-muted-foreground rtl:tracking-normal">
+              {t('settings.defaults.inmateReportApprovalManager')}
+            </label>
+            <Select
+              value={inmateReporterManagerUserId == null ? 'none' : String(inmateReporterManagerUserId)}
+              onValueChange={(value) =>
+                onUpdate({
+                  inmate_reporter_manager_user_id: value === 'none' ? null : Number(value),
+                } as AppSettingsUpdate)
+              }
+            >
+              <SelectTrigger
+                aria-label={t('settings.defaults.inmateReportApprovalManager')}
+                className="max-w-md"
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">—</SelectItem>
+                {eligibleApprovers.map((approver) => (
+                  <SelectItem key={approver.id} value={String(approver.id)}>
+                    {approver.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        ) : null}
       </div>
     </SectionCard>
   )

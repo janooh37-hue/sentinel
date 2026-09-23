@@ -10,8 +10,8 @@ from sqlalchemy.orm import Session, sessionmaker
 from app.api.deps import get_current_user
 from app.db import session as session_mod
 from app.db.models import Base, Book, BookCategory, Document, Employee, User, UserPermission
-from app.db.workforce_models import DutyAssignmentEvent
 from app.db.session import attach_sqlite_pragmas, get_db
+from app.db.workforce_models import DutyAssignmentEvent
 from app.main import create_app
 from app.services import perm_service
 

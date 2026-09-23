@@ -13,6 +13,7 @@ POST  /auth/users                        (create; returns a one-time temporary p
 POST  /auth/users/{id}/approve
 POST  /auth/users/{id}/reset-password
 PATCH /auth/users/{id}/role
+PATCH /auth/users/{id}/link
 POST  /auth/users/{id}/disable | /unlock
 POST  /auth/users/{id}/default-manager
 """
@@ -349,6 +350,25 @@ def set_role(
     db: Annotated[Session, Depends(get_db)],
 ) -> AdminUserRead:
     user = auth_service.set_role(db, user_id, body.role, actor=_actor(admin))
+    return auth_service.admin_read(db, user)
+
+
+@router.patch("/users/{user_id}/link", response_model=AdminUserRead)
+def set_user_link(
+    user_id: int,
+    body: LinkSelfRequest,
+    admin: Annotated[User, Depends(require_admin)],
+    db: Annotated[Session, Depends(get_db)],
+) -> AdminUserRead:
+    """Admin-set/clear a target account's employee link (G number).
+
+    Distinct from ``POST /auth/me/link`` (self-service, blocked entirely for
+    ``inmate_reporter``): this is how an admin binds/rebinds that role's fixed
+    G number, or repairs any account's link after review.
+    """
+    user = auth_service.set_user_employee_link(
+        db, user_id, employee_id=body.employee_id, actor=_actor(admin)
+    )
     return auth_service.admin_read(db, user)
 
 

@@ -84,6 +84,7 @@
     "ledger": "Ledger",
     "leaves": "Leaves",
     "services": "Services",
+    "inmateReport": "New inmate-violation report",
     "records": "Records",
     "permits": "Permits",
     "settings": "Settings",
@@ -2726,7 +2727,8 @@
       "stampHeader": "Header Text",
       "stampBoldTopRight": "Bold Top-Right",
       "stampWatermark": "Watermark",
-      "defaultManager": "Default manager"
+      "defaultManager": "Default manager",
+      "inmateReportApprovalManager": "Inmate report approval manager"
     },
     "submitters": {
       "title": "Submitters",
@@ -3141,6 +3143,27 @@
     "searchServices": "Search services…",
     "noServicesMatch": "No forms match your search.",
     "nsCategory": "Record",
+    "inmateReporter": {
+      "title": "Inmate Conduct Violations",
+      "description": "Save an unfinished report, then send it to the configured approval manager.",
+      "reportedBy": "Reported by",
+      "notLinked": "No employee record linked",
+      "unlinked": "Ask an administrator to link your employee record",
+      "saveHint": "Partial reports can be saved and completed later.",
+      "saveDraft": "Save draft",
+      "saving": "Saving draft…",
+      "sendToManager": "Send to manager",
+      "sending": "Sending…",
+      "correctReport": "Correct report",
+      "saved": "Draft saved · {{ref}}",
+      "sent": "Report sent to the approval manager",
+      "continueEditing": "Continue editing",
+      "incomplete": "Complete these fields before sending:",
+      "managerUnavailable": "No approval manager is available. Ask an administrator to configure one. Your draft is still saved.",
+      "stale": "This report or your linked employee record changed. Reload before continuing.",
+      "reload": "Reload",
+      "loadError": "The report could not be loaded. Reload and try again."
+    },
     "code": {
       "has": "Carries a scannable ref code",
       "none": "No ref code"
@@ -3355,6 +3378,7 @@
     "downloadPdf": "Download PDF",
     "downloadDocx": "Download DOCX",
     "pdfUnavailable": "PDF not available; download DOCX instead",
+    "pdfUnavailableNoDocx": "PDF not available for this report",
     "noDocuments": "No documents generated",
     "prevDoc": "Previous document",
     "nextDoc": "Next document",
@@ -3425,6 +3449,30 @@
   "dashboard": {
     "title": "Dashboard",
     "subtitle": "Today at a glance",
+    "inmateReporter": {
+      "eyebrow": "Inmate conduct violations",
+      "title": "Report workspace",
+      "subtitle": "Create, follow up, and print inmate conduct violation reports.",
+      "newReport": "New report",
+      "records": "Records",
+      "yourReports": "Your reports",
+      "yourReportsHint": "Continue drafts and review reports returned or rejected by the manager.",
+      "viewAll": "View all records",
+      "draft": "Drafts",
+      "returned": "Returned",
+      "rejected": "Rejected",
+      "pending": "Pending approval",
+      "pendingHint": "Reports currently with the approval manager.",
+      "pendingEmpty": "No reports are pending approval.",
+      "approved": "Approved",
+      "approvedHint": "Reports ready to read or print.",
+      "approvedEmpty": "No approved reports yet.",
+      "untitled": "Inmate conduct violation report",
+      "loadError": "Reports couldn't be loaded.",
+      "previous": "Previous",
+      "next": "Next",
+      "pageRange": "{{from}}–{{to}} of {{total}}"
+    },
     "welcomeBack": "Welcome back, {{name}}",
     "welcomeBackGuest": "Welcome back",
     "greeting": {
@@ -4204,7 +4252,9 @@
         "manager": "Manager",
         "managerHint": "Manage HR, ledger and books",
         "operator": "Operator",
-        "operatorHint": "Standard day-to-day access"
+        "operatorHint": "Standard day-to-day access",
+        "inmate_reporter": "Inmate violation reporter",
+        "inmate_reporterHint": "Create and track inmate violation reports"
       }
     },
     "active": {
@@ -4216,6 +4266,7 @@
       "reset": "Reset password",
       "changeRole": "Change role",
       "editPermissions": "Edit permissions",
+      "linkEmployee": "Link employee",
       "disable": "Disable account",
       "unlock": "Unlock account",
       "reactivate": "Reactivate account",
@@ -4305,7 +4356,8 @@
     "roleName": {
       "admin": "Admin",
       "manager": "Manager",
-      "operator": "Operator"
+      "operator": "Operator",
+      "inmate_reporter": "Inmate violation reporter"
     },
     "permissions": {
       "loadError": "Couldn't load permissions.",

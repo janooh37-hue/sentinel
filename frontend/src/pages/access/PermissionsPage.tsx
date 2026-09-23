@@ -21,6 +21,7 @@ import { EmptyState } from '@/components/ui/empty-state'
 import { Skeleton } from '@/components/ui/skeleton'
 import {
   api,
+  apiErrorMessage,
   type AdminUserRead,
   type BookCategoryRead,
   type PermissionEffect,
@@ -807,9 +808,13 @@ export function PermissionsPage(): React.JSX.Element {
       }
       return { previous, queryKey }
     },
-    onError: (_error, _variables, context) => {
+    onError: (error, _variables, context) => {
       if (context?.previous) queryClient.setQueryData(context.queryKey, context.previous)
-      toast.error(t('access.permissions.saveError'))
+      toast.error(
+        typeof error === 'object' && error !== null && 'code' in error
+          ? apiErrorMessage(error)
+          : t('access.permissions.saveError'),
+      )
     },
     onSuccess: (data, variables) => {
       queryClient.setQueryData(['user-permissions', variables.userId], data)
@@ -839,9 +844,13 @@ export function PermissionsPage(): React.JSX.Element {
       }
       return { previous, queryKey }
     },
-    onError: (_error, _variables, context) => {
+    onError: (error, _variables, context) => {
       if (context?.previous) queryClient.setQueryData(context.queryKey, context.previous)
-      toast.error(t('access.permissions.saveError'))
+      toast.error(
+        typeof error === 'object' && error !== null && 'code' in error
+          ? apiErrorMessage(error)
+          : t('access.permissions.saveError'),
+      )
     },
     onSuccess: (data, variables) => {
       queryClient.setQueryData(['user-permissions', variables.userId], data)
