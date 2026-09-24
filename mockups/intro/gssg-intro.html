@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GSSG — Global Security Services Group</title>
+<style>
+  :root { --grey: #6b6c6e; --red: #c4121f; }
+  html, body { height: 100%; margin: 0; }
+  body {
+    display: grid; place-items: center; overflow: hidden; cursor: pointer;
+    background: radial-gradient(ellipse at 50% 45%, #fff 0%, #f4f4f2 55%, #e6e6e3 100%);
+  }
+  /* ambient layer: drifting precision grid + breathing halo */
+  .grid {
+    position: fixed; inset: -48px; pointer-events: none; opacity: 0;
+    background-image: linear-gradient(#00000009 1px, transparent 1px), linear-gradient(90deg, #00000009 1px, transparent 1px);
+    background-size: 48px 48px;
+    mask-image: radial-gradient(ellipse at center, #000 0%, transparent 65%);
+    animation: drift 30s linear infinite;
+  }
+  .halo {
+    position: fixed; inset: 0; pointer-events: none; opacity: 0;
+    background: radial-gradient(ellipse 45% 30% at 50% 48%, #c4121f0d, transparent 70%);
+  }
+  .halo.on { animation: breathe 6s ease-in-out infinite alternate; }
+  @keyframes drift { to { transform: translate(48px, 48px); } }
+  @keyframes breathe { from { opacity: .55; } to { opacity: 1; } }
+  svg { position: relative; width: min(86vw, 1200px); height: auto; overflow: visible; }
+  .hint {
+    position: fixed; inset-block-end: 24px; inset-inline: 0; text-align: center; opacity: 0;
+    font: 500 11px/1 "Segoe UI", sans-serif; letter-spacing: .24em; text-transform: uppercase; color: #9b9b9b;
+  }
+  #tagG { font: 600 76px Optima, Candara, "Segoe UI", sans-serif; fill: var(--grey); }
+</style>
+</head>
+<body>
+<div class="grid"></div>
+<div class="halo"></div>
+
+<svg viewBox="20 40 1530 420" role="img" aria-label="GSSG — Global Security Services Group">
+  <defs>
+    <path id="swoosh" d="M55,170 C90,128 180,88 330,85 L1525,85 L1460,155 L270,155 C180,156 110,161 55,170 Z"/>
+    <path id="g" d="M57,195 L148,179 C128,198 126,232 150,250 C168,262 190,268 212,268 L302,268 L302,245 L205,245 L268,187 L385,187 L385,328 L212,328 C150,328 95,310 70,275 C52,250 50,220 57,195 Z"/>
+    <path id="sTop" d="M407,187 L655,187 C710,187 757,210 768,252 L690,262 C682,250 668,246 650,246 L470,246 C435,244 410,218 407,187 Z"/>
+    <path id="sBot" d="M460,272 L700,272 L768,262 C762,300 720,328 655,328 L407,328 Z"/>
+
+    <clipPath id="wipeClip"><polygon id="wipe"/></clipPath>
+    <clipPath id="markClip">
+      <use href="#swoosh"/>
+      <use href="#g"/><use href="#g" x="1083"/>
+      <use href="#sTop"/><use href="#sBot"/>
+      <use href="#sTop" x="363"/><use href="#sBot" x="363"/>
+    </clipPath>
+
+    <linearGradient id="sheenGrad" x1="0" x2="1">
+      <stop offset="0" stop-color="#fff" stop-opacity="0"/>
+      <stop offset=".5" stop-color="#fff" stop-opacity=".65"/>
+      <stop offset="1" stop-color="#fff" stop-opacity="0"/>
+    </linearGradient>
+    <radialGradient id="flashGrad">
+      <stop offset="0" stop-color="#fff"/>
+      <stop offset=".35" stop-color="#ff5a64" stop-opacity=".8"/>
+      <stop offset="1" stop-color="#c4121f" stop-opacity="0"/>
+    </radialGradient>
+
+    <filter id="glow" x="-200%" y="-200%" width="500%" height="500%">
+      <feGaussianBlur stdDeviation="5" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="shadow" x="-10%" y="-20%" width="120%" height="160%">
+      <feDropShadow id="shadowFx" dx="0" dy="8" stdDeviation="10" flood-color="#000" flood-opacity="0"/>
+    </filter>
+  </defs>
+
+  <g id="mark" style="transform-box: fill-box; transform-origin: center">
+    <!-- swoosh: fill poured behind two laser heads -->
+    <use href="#swoosh" fill="var(--red)" clip-path="url(#wipeClip)"/>
+    <path id="traceTop" d="M1525,85 L330,85 C180,88 90,128 55,170" pathLength="1"/>
+    <path id="traceBot" d="M1525,85 L1460,155 L270,155 C180,156 110,161 55,170" pathLength="1"/>
+
+    <!-- letters: six shards that converge and lock -->
+    <g id="letters" filter="url(#shadow)" fill="var(--grey)">
+      <g class="piece" data-from="-230" data-delay="0"><use href="#g"/></g>
+      <g class="piece" data-from="-190" data-delay="70"><use href="#sTop"/></g>
+      <g class="piece" data-from="190" data-delay="130"><use href="#sBot"/></g>
+      <g class="piece" data-from="-190" data-delay="130"><use href="#sTop" x="363"/></g>
+      <g class="piece" data-from="190" data-delay="70"><use href="#sBot" x="363"/></g>
+      <g class="piece" data-from="230" data-delay="0"><use href="#g" x="1083"/></g>
+    </g>
+
+    <circle id="headTop" r="4" fill="#ff2a36" filter="url(#glow)"/>
+    <circle id="headBot" r="4" fill="#ff2a36" filter="url(#glow)"/>
+    <circle id="flash" cx="55" cy="170" r="60" fill="url(#flashGrad)"/>
+    <g clip-path="url(#markClip)"><rect id="sheen" y="40" width="160" height="420" fill="url(#sheenGrad)" transform="skewX(-24)"/></g>
+  </g>
+
+  <g id="tagG">
+    <text id="tagline" x="88" y="414" textLength="1380" lengthAdjust="spacing">GLOBAL SECURITY SERVICES GROUP</text>
+  </g>
+</svg>
+
+<div class="hint">Click to replay</div>
+
+<script>
+const NS = 'http://www.w3.org/2000/svg';
+const $ = (s) => document.querySelector(s);
+const clamp = (v) => Math.min(1, Math.max(0, v));
+const prog = (t, start, dur) => clamp((t - start) / dur);
+const ease = {
+  outQuart: (x) => 1 - (1 - x) ** 4,
+  outCubic: (x) => 1 - (1 - x) ** 3,
+  outExpo: (x) => (x >= 1 ? 1 : (1 - 2 ** (-10 * x)) / (1 - 2 ** -10)),
+  inOutSine: (x) => -(Math.cos(Math.PI * x) - 1) / 2,
+};
+
+// timeline (ms)
+const T = { trace: 100, traceDur: 950, pieces: 720, pieceDur: 900, lock: 1720, sheen: 1850, tag: 1900, hint: 3400 };
+const END = 3800;
+
+const traces = [$('#traceTop'), $('#traceBot')];
+const heads = [$('#headTop'), $('#headBot')];
+for (const p of traces) Object.assign(p.style, { fill: 'none', stroke: 'var(--red)', strokeWidth: 2, strokeDasharray: 1 });
+const traceLen = traces.map((p) => p.getTotalLength());
+
+// each shard gets its own horizontal motion-blur filter
+const pieces = [...document.querySelectorAll('.piece')].map((n, i) => {
+  const f = document.createElementNS(NS, 'filter');
+  Object.entries({ id: 'mb' + i, x: '-40%', y: '-10%', width: '180%', height: '120%' }).forEach(([k, v]) => f.setAttribute(k, v));
+  const blur = document.createElementNS(NS, 'feGaussianBlur');
+  f.appendChild(blur);
+  $('defs').appendChild(f);
+  return { n, blur, from: +n.dataset.from, delay: +n.dataset.delay, id: 'mb' + i };
+});
+
+let chars = [];
+const splitTagline = () => {
+  const tl = $('#tagline');
+  const str = tl.textContent;
+  for (let i = 0; i < str.length; i++) {
+    if (str[i] === ' ') continue;
+    const p = tl.getStartPositionOfChar(i);
+    const c = document.createElementNS(NS, 'text');
+    c.setAttribute('y', p.y);
+    c.textContent = str[i];
+    tl.parentNode.appendChild(c);
+    chars.push({ n: c, x: p.x });
+  }
+  tl.remove();
+};
+
+function render(t) {
+  // ambient
+  $('.grid').style.opacity = ease.outCubic(prog(t, 0, 1200));
+  $('.halo').classList.toggle('on', t > 1200);
+  if (t <= 1200) $('.halo').style.opacity = ease.outCubic(prog(t, 300, 900)) * 0.55;
+  else $('.halo').style.removeProperty('opacity');
+
+  // 1. two laser heads cut the swoosh outline, converging on its tip
+  const tp = ease.outQuart(prog(t, T.trace, T.traceDur));
+  const traceFade = 1 - prog(t, T.trace + T.traceDur, 450);
+  traces.forEach((p, i) => {
+    p.style.strokeDashoffset = 1 - tp;
+    p.style.opacity = traceFade;
+    const pt = p.getPointAtLength(traceLen[i] * tp);
+    heads[i].setAttribute('cx', pt.x);
+    heads[i].setAttribute('cy', pt.y);
+    heads[i].style.opacity = t < T.trace ? 0 : 1 - prog(t, T.trace + T.traceDur - 250, 200);
+  });
+
+  // 2. red fill pours in behind the heads, slanted to match the swoosh's cut end
+  const wp = ease.outCubic(prog(t, T.trace + 160, T.traceDur));
+  const x = 1545 - wp * 1600;
+  $('#wipe').setAttribute('points', `${x + 75},70 1600,70 1600,180 ${x},180`);
+
+  // tip flash where the heads meet
+  const fp = prog(t, T.trace + T.traceDur - 330, 450);
+  $('#flash').style.opacity = fp > 0 ? Math.sin(Math.PI * fp) * 0.9 : 0;
+  $('#flash').setAttribute('r', 20 + ease.outCubic(fp) * 70);
+
+  // 3. shards slide in from both sides with motion blur and lock together
+  for (const p of pieces) {
+    const lp = prog(t, T.pieces + p.delay, T.pieceDur);
+    const e = ease.outExpo(lp);
+    p.n.setAttribute('transform', `translate(${p.from * (1 - e)} 0)`);
+    p.n.style.opacity = ease.outCubic(clamp(lp * 3));
+    const b = 26 * (1 - e);
+    p.blur.setAttribute('stdDeviation', `${b} 0`);
+    if (b > 0.15) p.n.setAttribute('filter', `url(#${p.id})`);
+    else p.n.removeAttribute('filter');
+  }
+
+  // lock: a small settle "thump" through the whole mark, shadow lands just after
+  const kp = prog(t, T.lock, 380);
+  const thump = kp < 0.2 ? ease.outCubic(kp / 0.2) : 1 - ease.outCubic((kp - 0.2) / 0.8);
+  $('#mark').style.transform = `scale(${1 - 0.008 * thump})`;
+  $('#shadowFx').setAttribute('flood-opacity', 0.16 * ease.outCubic(prog(t, T.lock - 100, 700)));
+
+  // 4. sheen sweeps across the finished mark
+  $('#sheen').setAttribute('x', -260 + ease.inOutSine(prog(t, T.sheen, 1000)) * 1900);
+
+  // 5. tagline tracks in: letters rise and draw toward their final spacing
+  const cx = 778;
+  chars.forEach((c, i) => {
+    const cp = prog(t, T.tag + i * 14, 750);
+    const e = ease.outCubic(cp);
+    c.n.setAttribute('x', c.x + (c.x - cx) * 0.07 * (1 - e));
+    c.n.setAttribute('transform', `translate(0 ${18 * (1 - e)})`);
+    c.n.style.opacity = e;
+  });
+
+  $('.hint').style.opacity = ease.outCubic(prog(t, T.hint, 600));
+}
+
+let start = 0;
+const loop = (now) => {
+  const t = now - start;
+  render(t);
+  if (t < END) requestAnimationFrame(loop);
+};
+const play = () => { start = performance.now(); requestAnimationFrame(loop); };
+
+document.fonts.ready.then(() => {
+  splitTagline();
+  const still = new URLSearchParams(location.search).get('t');
+  if (still !== null) { $('.hint').hidden = true; render(+still); }
+  else if (matchMedia('(prefers-reduced-motion: reduce)').matches) render(END);
+  else play();
+});
+addEventListener('click', play);
+addEventListener('keydown', (e) => { if (e.key === ' ' || e.key === 'r') play(); });
+</script>
+</body>
+</html>
