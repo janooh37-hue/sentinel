@@ -29,7 +29,7 @@ from typing import Any
 
 log = logging.getLogger(__name__)
 
-_WD_FORMAT_PDF = 17
+_WD_EXPORT_FORMAT_PDF = 17
 _MSO_AUTOMATION_SECURITY_FORCE_DISABLE = 3
 
 # (Word.Application, process handle or None) — see module docstring.
@@ -56,7 +56,7 @@ def convert(docx_path: Path) -> Path | None:
             Visible=False,
         )
         try:
-            doc.SaveAs2(str(dst), FileFormat=_WD_FORMAT_PDF)
+            doc.ExportAsFixedFormat(str(dst), ExportFormat=_WD_EXPORT_FORMAT_PDF)
         finally:
             doc.Close(False)
     except Exception:
