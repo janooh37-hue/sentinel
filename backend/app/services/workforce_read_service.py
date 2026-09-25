@@ -1,15 +1,17 @@
 """Scoped person-level workforce reads and non-secret integration projections."""
+
 from __future__ import annotations
 
 import json
+from bisect import bisect_left, bisect_right
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from math import floor
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import func, or_, select
-from sqlalchemy.orm import Session
+from sqlalchemy import and_, func, or_, select
+from sqlalchemy.orm import Session, aliased
 
 from app.api.errors import NotFoundError, ValidationFailedError
 from app.db.models import AuditLog, Employee
@@ -32,12 +34,12 @@ from app.db.workforce_models import (
     WorkRotationPattern,
     WorkRotationStep,
     WorkShiftDefinition,
+    WorkShiftOccurrence,
     WorkShiftOverride,
     WorkStaffingRequirement,
 )
 from app.services import (
     attendance_correction_service,
-    attendance_policy,
     attendance_profile_service,
     workforce_admin_service,
     workforce_schedule_service,
@@ -65,7 +67,6 @@ def _latest_evaluations(db: Session, case_ids: list[int]) -> dict[int, Attendanc
     return latest
 
 
-
 def _case_allowed(case: AttendanceCase, scope: WorkforceScope) -> bool:
     return scope_allows(
         scope,
@@ -80,8 +81,18 @@ def _employee_row(db: Session, employee_id: str) -> Employee | None:
     return db.get(Employee, employee_id)
 
 
-def _person_fields(db: Session, case: AttendanceCase) -> dict[str, Any]:
-    employee = _employee_row(db, case.employee_id)
+def _employees_for_cases(db: Session, cases: list[AttendanceCase]) -> dict[str, Employee]:
+    employee_ids = {case.employee_id for case in cases}
+    if not employee_ids:
+        return {}
+    return {
+        employee.id: employee
+        for employee in db.scalars(select(Employee).where(Employee.id.in_(employee_ids)))
+    }
+
+
+def _person_fields(case: AttendanceCase, employees: dict[str, Employee]) -> dict[str, Any]:
+    employee = employees.get(case.employee_id)
     return {
         "employee_id": case.employee_id,
         "name_en": employee.name_en if employee else "",
@@ -106,6 +117,7 @@ def list_roster(db: Session, *, scope: WorkforceScope, operational_date: date) -
     adjustments = attendance_correction_service.active_corrections(
         db, [case.id for case in cases]
     )
+    employees = _employees_for_cases(db, cases)
     result: list[dict[str, Any]] = []
     for case in cases:
         effective = _effective_evaluation_values(
@@ -113,7 +125,7 @@ def list_roster(db: Session, *, scope: WorkforceScope, operational_date: date) -
         )
         result.append(
             {
-                **_person_fields(db, case),
+                **_person_fields(case, employees),
                 "presence_state": effective["presence_state"] if effective else None,
                 "reason_code": effective["reason_code"] if effective else None,
             }
@@ -137,6 +149,7 @@ def list_exceptions(
     adjustments = attendance_correction_service.active_corrections(
         db, [case.id for case in cases]
     )
+    employees = _employees_for_cases(db, cases)
     result: list[dict[str, Any]] = []
     for case in cases:
         effective = _effective_evaluation_values(
@@ -158,7 +171,7 @@ def list_exceptions(
             continue
         result.append(
             {
-                **_person_fields(db, case),
+                **_person_fields(case, employees),
                 "case_id": case.id,
                 "presence_state": effective["presence_state"],
                 "reason_code": effective["reason_code"],
@@ -203,88 +216,255 @@ def _verified_people(db: Session, employee_ids: set[str]) -> dict[str, Attendanc
     return {row.employee_id: row for row in rows if row.employee_id is not None}
 
 
-def _punch_window(
-    db: Session, case: AttendanceCase, policy: Any
-) -> tuple[datetime, datetime]:
-    """The instants inside which a punch counts as evidence for this case.
+def _policies_for_cases(
+    db: Session, cases: list[AttendanceCase]
+) -> dict[int, WorkAttendancePolicy | None]:
+    if not cases:
+        return {}
 
-    Delegated so the register cannot drift from the evaluator: both widen the
-    policy window by the same learned habit, under the same caps.
-    """
-    profile = attendance_profile_service.profile_for(
-        db, employee_id=case.employee_id, shift_code=case.shift_code_snapshot
+    occurrence_ids = {
+        case.shift_occurrence_id for case in cases if case.shift_occurrence_id is not None
+    }
+    occurrence_shift_ids: dict[int, int] = (
+        {
+            occurrence_id: shift_definition_id
+            for occurrence_id, shift_definition_id in db.execute(
+                select(
+                    WorkShiftOccurrence.id,
+                    WorkShiftOccurrence.shift_definition_id,
+                ).where(WorkShiftOccurrence.id.in_(occurrence_ids))
+            )
+        }
+        if occurrence_ids
+        else {}
     )
-    return attendance_profile_service.evidence_window(
-        db, case=case, policy=policy, profile=profile
-    )
-
-
-def _judgment_due_at(case: AttendanceCase, policy: Any) -> datetime | None:
-    """The instant this case stops being a running duty and becomes a verdict.
-
-    Published rather than recomputed by the client: the evaluator withholds its
-    judgment until the case's own match window closes, and a register that flagged
-    a person earlier than that would contradict the presence state beside it.
-    """
-    if policy is None:
-        return None
-    return case.scheduled_end_at + timedelta(minutes=policy.match_after_minutes)
-
-
-def _absence_due_at(case: AttendanceCase, policy: Any) -> datetime | None:
-    """The instant a no-show becomes an absence: twice the grace, by policy.
-
-    Published beside ``judgment_due_at`` because the two boundaries answer
-    different questions and fall at different times. Arrival is settled early -
-    the site calls a person absent once the absence boundary passes with no punch
-    - while pairing a lone punch has to wait for the duty to be over. A client
-    that had only the later boundary would show a rest-of-the-shift blank where
-    the evaluator already says "absent".
-    """
-    if policy is None:
-        return None
-    return case.scheduled_start_at + timedelta(minutes=policy.absence_after_minutes)
-
-
-def _punch_bounds(
-    db: Session, *, case: AttendanceCase, person: AttendanceProviderPerson | None, policy: Any
-) -> tuple[datetime | None, datetime | None, int]:
-    """First punch, last punch and count for one case.
-
-    Deliberately NOT a join on ``attendance_punch_assignments``. That table only
-    ever receives directional punches — ``attendance_punch_service.select_punch_case``
-    returns ``None`` unless ``punch.direction`` is ``"in"`` or ``"out"`` — and this
-    provider reports ``punch_state 255``/"unknown" for every event, so the table is
-    permanently empty here and a register built on it would show no times at all.
-    The evidence rule is the evaluator's own
-    (``attendance_evaluation_service._matching_punches``): the employee's active
-    verified provider person, inside the case's policy match window, skipping any
-    punch already owned by a different case.
-    """
-    if person is None or policy is None:
-        return (None, None, 0)
-    window_start, window_end = _punch_window(db, case, policy)
-    first_at, last_at, count = db.execute(
-        select(
-            func.min(AttendancePunch.occurred_at),
-            func.max(AttendancePunch.occurred_at),
-            func.count(AttendancePunch.id),
+    case_shift_ids = {
+        case.id: (
+            occurrence_shift_ids.get(case.shift_occurrence_id)
+            if case.shift_occurrence_id is not None
+            else None
         )
+        for case in cases
+    }
+    earliest_date = min(case.operational_date for case in cases)
+    latest_date = max(case.operational_date for case in cases)
+    shift_ids = {
+        shift_definition_id
+        for shift_definition_id in case_shift_ids.values()
+        if shift_definition_id is not None
+    }
+    query = select(WorkAttendancePolicy).where(
+        WorkAttendancePolicy.approved_at.is_not(None),
+        WorkAttendancePolicy.effective_from <= latest_date,
+        or_(
+            WorkAttendancePolicy.effective_to.is_(None),
+            WorkAttendancePolicy.effective_to > earliest_date,
+        ),
+    )
+    if shift_ids:
+        query = query.where(
+            or_(
+                WorkAttendancePolicy.shift_definition_id.is_(None),
+                WorkAttendancePolicy.shift_definition_id.in_(shift_ids),
+            )
+        )
+    else:
+        query = query.where(WorkAttendancePolicy.shift_definition_id.is_(None))
+    policies = list(
+        db.scalars(
+            query.order_by(
+                WorkAttendancePolicy.shift_definition_id.is_not(None).desc(),
+                WorkAttendancePolicy.effective_from.desc(),
+                WorkAttendancePolicy.id.desc(),
+            )
+        )
+    )
+
+    resolved: dict[int, WorkAttendancePolicy | None] = {}
+    for case in cases:
+        shift_definition_id = case_shift_ids[case.id]
+        resolved[case.id] = next(
+            (
+                policy
+                for policy in policies
+                if policy.effective_from <= case.operational_date
+                and (policy.effective_to is None or policy.effective_to > case.operational_date)
+                and (
+                    policy.shift_definition_id is None
+                    or policy.shift_definition_id == shift_definition_id
+                )
+            ),
+            None,
+        )
+    return resolved
+
+
+def _profiles_for_cases(
+    db: Session, cases: list[AttendanceCase]
+) -> dict[tuple[str, str], AttendancePunchProfile]:
+    keys = {
+        (case.employee_id, case.shift_code_snapshot) for case in cases if case.shift_code_snapshot
+    }
+    if not keys:
+        return {}
+    employee_ids = {employee_id for employee_id, _shift_code in keys}
+    shift_codes = {shift_code for _employee_id, shift_code in keys}
+    return {
+        (profile.employee_id, profile.shift_code): profile
+        for profile in db.scalars(
+            select(AttendancePunchProfile).where(
+                AttendancePunchProfile.employee_id.in_(employee_ids),
+                AttendancePunchProfile.shift_code.in_(shift_codes),
+                AttendancePunchProfile.sample_days >= attendance_profile_service.MIN_SAMPLE_DAYS,
+            )
+        )
+        if (profile.employee_id, profile.shift_code) in keys
+    }
+
+
+def _previous_case_ends(db: Session, cases: list[AttendanceCase]) -> dict[int, datetime | None]:
+    if not cases:
+        return {}
+    current_case = aliased(AttendanceCase)
+    previous_case = aliased(AttendanceCase)
+    return {
+        case_id: previous_end
+        for case_id, previous_end in db.execute(
+            select(current_case.id, func.max(previous_case.scheduled_end_at))
+            .select_from(current_case)
+            .outerjoin(
+                previous_case,
+                and_(
+                    previous_case.employee_id == current_case.employee_id,
+                    previous_case.id != current_case.id,
+                    previous_case.scheduled_end_at <= current_case.scheduled_start_at,
+                ),
+            )
+            .where(current_case.id.in_([case.id for case in cases]))
+            .group_by(current_case.id)
+        )
+    }
+
+
+def _punch_window(
+    case: AttendanceCase,
+    policy: WorkAttendancePolicy,
+    *,
+    profile: AttendancePunchProfile | None,
+    previous_case_end: datetime | None,
+) -> tuple[datetime, datetime]:
+    """The evaluator's evidence window using already-prefetched habit data."""
+    return attendance_profile_service._evidence_window(
+        case=case,
+        policy=policy,
+        profile=profile,
+        previous_case_end=previous_case_end,
+    )
+
+
+def _punch_windows(
+    db: Session,
+    *,
+    cases: list[AttendanceCase],
+    people: dict[str, AttendanceProviderPerson],
+    policies: dict[int, WorkAttendancePolicy | None],
+    profiles: dict[tuple[str, str], AttendancePunchProfile] | None = None,
+) -> dict[int, tuple[datetime, datetime]]:
+    eligible: list[tuple[AttendanceCase, WorkAttendancePolicy]] = []
+    for case in cases:
+        policy = policies.get(case.id)
+        if people.get(case.employee_id) is not None and policy is not None:
+            eligible.append((case, policy))
+    if profiles is None:
+        profiles = _profiles_for_cases(db, [case for case, _policy in eligible])
+    profiled_cases = [
+        case
+        for case, _policy in eligible
+        if profiles.get((case.employee_id, case.shift_code_snapshot)) is not None
+    ]
+    previous_case_ends = _previous_case_ends(db, profiled_cases)
+    return {
+        case.id: _punch_window(
+            case,
+            policy,
+            profile=profiles.get((case.employee_id, case.shift_code_snapshot)),
+            previous_case_end=previous_case_ends.get(case.id),
+        )
+        for case, policy in eligible
+    }
+
+
+def _punch_rows_for_cases(
+    db: Session,
+    *,
+    cases: list[AttendanceCase],
+    people: dict[str, AttendanceProviderPerson],
+    windows: dict[int, tuple[datetime, datetime]],
+) -> dict[int, list[tuple[AttendancePunch, int | None]]]:
+    active_cases = [case for case in cases if case.id in windows and case.employee_id in people]
+    if not active_cases:
+        return {}
+    provider_person_ids = {people[case.employee_id].id for case in active_cases}
+    window_start = min(windows[case.id][0] for case in active_cases)
+    window_end = max(windows[case.id][1] for case in active_cases)
+    punches_by_person: dict[int, list[tuple[AttendancePunch, int | None]]] = {}
+    punch_times_by_person: dict[int, list[datetime]] = {}
+    for punch, assignment_case_id in db.execute(
+        select(AttendancePunch, AttendancePunchAssignment.attendance_case_id)
         .outerjoin(
             AttendancePunchAssignment,
             AttendancePunchAssignment.punch_id == AttendancePunch.id,
         )
         .where(
-            AttendancePunch.provider_person_id == person.id,
+            AttendancePunch.provider_person_id.in_(provider_person_ids),
             AttendancePunch.occurred_at >= window_start,
             AttendancePunch.occurred_at <= window_end,
-            or_(
-                AttendancePunchAssignment.punch_id.is_(None),
-                AttendancePunchAssignment.attendance_case_id == case.id,
-            ),
         )
-    ).one()
+        .order_by(AttendancePunch.occurred_at, AttendancePunch.id)
+    ):
+        punches_by_person.setdefault(punch.provider_person_id, []).append(
+            (punch, assignment_case_id)
+        )
+        punch_times_by_person.setdefault(punch.provider_person_id, []).append(punch.occurred_at)
+
+    result: dict[int, list[tuple[AttendancePunch, int | None]]] = {}
+    for case in active_cases:
+        person_id = people[case.employee_id].id
+        punches = punches_by_person.get(person_id, [])
+        punch_times = punch_times_by_person.get(person_id, [])
+        start, end = windows[case.id]
+        result[case.id] = punches[bisect_left(punch_times, start) : bisect_right(punch_times, end)]
+    return result
+
+
+def _punch_bounds(
+    case: AttendanceCase,
+    rows: list[tuple[AttendancePunch, int | None]],
+) -> tuple[datetime | None, datetime | None, int]:
+    """First punch, last punch and count under the evaluator's assignment rule."""
+    first_at: datetime | None = None
+    last_at: datetime | None = None
+    count = 0
+    for punch, assignment_case_id in rows:
+        if assignment_case_id is not None and assignment_case_id != case.id:
+            continue
+        if first_at is None:
+            first_at = punch.occurred_at
+        last_at = punch.occurred_at
+        count += 1
     return (first_at, last_at, count)
+
+
+def _judgment_due_at(case: AttendanceCase, policy: WorkAttendancePolicy | None) -> datetime | None:
+    if policy is None:
+        return None
+    return case.scheduled_end_at + timedelta(minutes=policy.match_after_minutes)
+
+
+def _absence_due_at(case: AttendanceCase, policy: WorkAttendancePolicy | None) -> datetime | None:
+    if policy is None:
+        return None
+    return case.scheduled_start_at + timedelta(minutes=policy.absence_after_minutes)
 
 
 def _late_minutes(case: AttendanceCase, first_punch_at: datetime | None) -> int | None:
@@ -329,6 +509,10 @@ def list_attendance_day(
         db, [case.id for case in cases]
     )
     people = _verified_people(db, {case.employee_id for case in cases})
+    employees = _employees_for_cases(db, cases)
+    policies = _policies_for_cases(db, cases)
+    windows = _punch_windows(db, cases=cases, people=people, policies=policies)
+    punch_rows = _punch_rows_for_cases(db, cases=cases, people=people, windows=windows)
 
     result: list[dict[str, Any]] = []
     for case in cases:
@@ -336,13 +520,11 @@ def list_attendance_day(
         effective = _effective_evaluation_values(
             latest.get(case.id), adjustment
         )
-        policy = attendance_policy.policy_for_case(db, case)
-        first_at, last_at, count = _punch_bounds(
-            db, case=case, person=people.get(case.employee_id), policy=policy
-        )
+        policy = policies.get(case.id)
+        first_at, last_at, count = _punch_bounds(case, punch_rows.get(case.id, []))
         result.append(
             {
-                **_person_fields(db, case),
+                **_person_fields(case, employees),
                 "case_id": case.id,
                 "presence_state": effective["presence_state"] if effective else None,
                 "reason_code": effective["reason_code"] if effective else None,
@@ -405,6 +587,32 @@ def employee_attendance_range(
         db, [case.id for case in cases]
     )
     person = _verified_people(db, {employee_id}).get(employee_id)
+    policies = _policies_for_cases(db, cases)
+    profile_rows = list(
+        db.scalars(
+            select(AttendancePunchProfile)
+            .where(AttendancePunchProfile.employee_id == employee_id)
+            .order_by(AttendancePunchProfile.sample_days.desc())
+        )
+    )
+    profiles = {
+        (profile.employee_id, profile.shift_code): profile
+        for profile in profile_rows
+        if profile.shift_code and profile.sample_days >= attendance_profile_service.MIN_SAMPLE_DAYS
+    }
+    windows = _punch_windows(
+        db,
+        cases=cases,
+        people={employee_id: person} if person is not None else {},
+        policies=policies,
+        profiles=profiles,
+    )
+    punch_rows = _punch_rows_for_cases(
+        db,
+        cases=cases,
+        people={employee_id: person} if person is not None else {},
+        windows=windows,
+    )
 
     days: list[dict[str, Any]] = []
     for case in cases:
@@ -412,23 +620,13 @@ def employee_attendance_range(
         effective = _effective_evaluation_values(
             latest.get(case.id), adjustment
         )
-        policy = attendance_policy.policy_for_case(db, case)
-        first_at, _last_at, count = _punch_bounds(db, case=case, person=person, policy=policy)
-        punches: list[dict[str, Any]] = []
-        if person is not None and policy is not None:
-            window_start, window_end = _punch_window(db, case, policy)
-            punches = [
-                {"occurred_at": punch.occurred_at, "device_name": punch.device_name}
-                for punch in db.scalars(
-                    select(AttendancePunch)
-                    .where(
-                        AttendancePunch.provider_person_id == person.id,
-                        AttendancePunch.occurred_at >= window_start,
-                        AttendancePunch.occurred_at <= window_end,
-                    )
-                    .order_by(AttendancePunch.occurred_at, AttendancePunch.id)
-                )
-            ]
+        policy = policies.get(case.id)
+        case_punch_rows = punch_rows.get(case.id, [])
+        first_at, _last_at, count = _punch_bounds(case, case_punch_rows)
+        punches = [
+            {"occurred_at": punch.occurred_at, "device_name": punch.device_name}
+            for punch, _assignment_case_id in case_punch_rows
+        ]
         days.append(
             {
                 "operational_date": case.operational_date,
@@ -457,11 +655,7 @@ def employee_attendance_range(
             "departure_typical_offset": profile.departure_typical_offset,
             "suggested_shift_code": profile.suggested_shift_code,
         }
-        for profile in db.scalars(
-            select(AttendancePunchProfile)
-            .where(AttendancePunchProfile.employee_id == employee_id)
-            .order_by(AttendancePunchProfile.sample_days.desc())
-        )
+        for profile in profile_rows
     ]
     return {
         "employee_id": employee_id,
