@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import logging
 import sys
+import time
 import uuid
 from pathlib import Path
 from typing import Any
@@ -35,6 +36,17 @@ _MSO_AUTOMATION_SECURITY_FORCE_DISABLE = 3
 # (Word.Application, process handle or None) — see module docstring.
 _warm: tuple[Any, Any] | None = None
 _job: Any = None
+# Per-conversion phase timings since the last ``take_timings`` — the worker
+# drains them after each operation and hands them back to the API process,
+# which owns the log file.
+_timings: list[dict[str, Any]] = []
+
+
+def take_timings() -> list[dict[str, Any]]:
+    """Return and clear the timings of conversions since the last call."""
+    global _timings
+    taken, _timings = _timings, []
+    return taken
 
 
 def convert(docx_path: Path) -> Path | None:
@@ -46,8 +58,16 @@ def convert(docx_path: Path) -> Path | None:
         log.warning("PDF conversion needs Microsoft Word on Windows")
         return None
     dst = src.with_suffix(".pdf")
+    timing: dict[str, Any] = {"bytes": src.stat().st_size, "ok": False}
+    _timings.append(timing)
     try:
-        doc = _word().Documents.Open(
+        t0 = time.perf_counter()
+        before = _warm
+        word = _word()
+        t1 = time.perf_counter()
+        timing["cold"] = before is None or before[0] is not word
+        timing["word_ms"] = round((t1 - t0) * 1000, 1)
+        doc = word.Documents.Open(
             str(src),
             ReadOnly=True,
             AddToRecentFiles=False,
@@ -55,15 +75,21 @@ def convert(docx_path: Path) -> Path | None:
             NoEncodingDialog=True,
             Visible=False,
         )
+        t2 = time.perf_counter()
+        timing["open_ms"] = round((t2 - t1) * 1000, 1)
         try:
             doc.ExportAsFixedFormat(str(dst), ExportFormat=_WD_EXPORT_FORMAT_PDF)
+            timing["export_ms"] = round((time.perf_counter() - t2) * 1000, 1)
         finally:
+            t3 = time.perf_counter()
             doc.Close(False)
+            timing["close_ms"] = round((time.perf_counter() - t3) * 1000, 1)
     except Exception:
         log.exception("Word PDF conversion failed for %s", src)
         _discard()  # unknown state: the next call starts a fresh Word
         return None
     if dst.is_file() and dst.stat().st_size > 0:
+        timing["ok"] = True
         return dst
     log.warning("Word produced no PDF for %s", src)
     return None

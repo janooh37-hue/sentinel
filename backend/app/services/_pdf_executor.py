@@ -23,12 +23,13 @@ import os
 import subprocess
 import sys
 import threading
+import time
 from collections.abc import Callable
 from concurrent.futures import ProcessPoolExecutor
 from concurrent.futures import TimeoutError as FutureTimeoutError
 from concurrent.futures.process import BrokenProcessPool
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, cast
 
 from app.core import word_pdf
 
@@ -74,22 +75,55 @@ def _reap_wedged_pool(executor: ProcessPoolExecutor) -> None:
     executor.shutdown(wait=False, cancel_futures=True)
 
 
+def _timed(
+    fn: Callable[..., Any], *args: object, **kwargs: object
+) -> tuple[Any, float, float, list[dict[str, Any]]]:
+    """Worker side of ``run_in_worker``: run ``fn`` and report when it started
+    and finished (wall clock, comparable across processes) plus the Word
+    conversions it made. The worker has no log handlers; the caller logs."""
+    word_pdf.take_timings()  # drop leftovers from untimed calls (idle quit)
+    started = time.time()
+    result = fn(*args, **kwargs)
+    return result, started, time.time(), word_pdf.take_timings()
+
+
 def run_in_worker[T](fn: Callable[..., T], *args: object, timeout: float, **kwargs: object) -> T:
     """Run ``fn`` in the Word worker (or inline under GSSG_INLINE_PDF=1)."""
+    submitted = time.time()
     if os.environ.get("GSSG_INLINE_PDF") == "1":
         try:
-            return fn(*args, **kwargs)
+            timed = _timed(fn, *args, **kwargs)
         finally:
             word_pdf.quit_word()
-    executor = get_executor()
-    fut = executor.submit(fn, *args, **kwargs)
-    try:
-        result = fut.result(timeout=timeout)
-    except (FutureTimeoutError, BrokenProcessPool):
-        _reap_wedged_pool(executor)
-        raise
-    _restart_idle_timer(executor)
-    return result
+    else:
+        executor = get_executor()
+        fut = executor.submit(_timed, fn, *args, **kwargs)
+        try:
+            timed = fut.result(timeout=timeout)
+        except (FutureTimeoutError, BrokenProcessPool):
+            log.warning(
+                "pdf_worker_timeout",
+                extra={
+                    "op": fn.__name__,
+                    "timeout_s": timeout,
+                    "waited_ms": round((time.time() - submitted) * 1000, 1),
+                },
+            )
+            _reap_wedged_pool(executor)
+            raise
+        _restart_idle_timer(executor)
+    result, started, finished, conversions = timed
+    log.info(
+        "pdf_worker_op",
+        extra={
+            "op": fn.__name__,
+            "queue_ms": round((started - submitted) * 1000, 1),
+            "run_ms": round((finished - started) * 1000, 1),
+            "total_ms": round((time.time() - submitted) * 1000, 1),
+            "conversions": conversions,
+        },
+    )
+    return cast("T", result)
 
 
 def _restart_idle_timer(executor: ProcessPoolExecutor) -> None:
