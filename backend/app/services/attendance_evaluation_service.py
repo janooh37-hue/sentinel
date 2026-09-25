@@ -529,46 +529,84 @@ def materialize_scheduled_cases(
         return []
     horizon_db = _as_db_utc(horizon)
     cutoff = _as_db_utc(evaluation_start_at) if evaluation_start_at is not None else None
+    occurrence_query = select(WorkShiftOccurrence).where(
+        WorkShiftOccurrence.starts_at <= horizon_db
+    )
+    if cutoff is not None:
+        occurrence_query = occurrence_query.where(WorkShiftOccurrence.starts_at >= cutoff)
     occurrences = db.scalars(
-        select(WorkShiftOccurrence)
-        .where(WorkShiftOccurrence.starts_at <= horizon_db)
-        .order_by(WorkShiftOccurrence.starts_at, WorkShiftOccurrence.id)
+        occurrence_query.order_by(WorkShiftOccurrence.starts_at, WorkShiftOccurrence.id)
     ).all()
+    if not occurrences:
+        return []
+
+    first_start = occurrences[0].starts_at
+    last_start = occurrences[-1].starts_at
+    existing_keys: set[tuple[str, datetime]] = set(
+        db.execute(
+            select(AttendanceCase.employee_id, AttendanceCase.scheduled_start_at).where(
+                AttendanceCase.employee_id == employee_id,
+                AttendanceCase.scheduled_start_at >= first_start,
+                AttendanceCase.scheduled_start_at <= last_start,
+            )
+        )
+        .tuples()
+        .all()
+    )
+    memberships_by_crew: dict[int, list[WorkCrewMembership]] = {}
+    for membership in db.scalars(
+        select(WorkCrewMembership).where(
+            WorkCrewMembership.employee_id == employee_id,
+            WorkCrewMembership.effective_from <= last_start,
+            or_(
+                WorkCrewMembership.effective_to.is_(None),
+                WorkCrewMembership.effective_to > first_start,
+            ),
+        )
+    ):
+        memberships_by_crew.setdefault(membership.crew_id, []).append(membership)
+
+    crew_ids = {occurrence.crew_id for occurrence in occurrences}
+    crews = {
+        crew.id: crew for crew in db.scalars(select(WorkCrew).where(WorkCrew.id.in_(crew_ids)))
+    }
+    shift_ids = {occurrence.shift_definition_id for occurrence in occurrences}
+    shifts = {
+        shift.id: shift
+        for shift in db.scalars(
+            select(WorkShiftDefinition).where(WorkShiftDefinition.id.in_(shift_ids))
+        )
+    }
+    duty_events = db.scalars(
+        select(DutyAssignmentEvent)
+        .where(
+            DutyAssignmentEvent.employee_id == employee_id,
+            DutyAssignmentEvent.effective_at <= last_start,
+        )
+        .order_by(DutyAssignmentEvent.effective_at, DutyAssignmentEvent.id)
+    ).all()
+    duty_event_index = 0
+    duty_event = None
     created: list[AttendanceCase] = []
     for occurrence in occurrences:
-        if cutoff is not None and occurrence.starts_at < cutoff:
+        case_key = (employee_id, occurrence.starts_at)
+        if case_key in existing_keys:
             continue
-        existing = db.scalar(
-            select(AttendanceCase).where(
-                AttendanceCase.employee_id == employee_id,
-                AttendanceCase.scheduled_start_at == occurrence.starts_at,
-            )
-        )
-        if existing is not None:
+        memberships = memberships_by_crew.get(occurrence.crew_id, ())
+        if not any(
+            membership.effective_from <= occurrence.starts_at
+            and (membership.effective_to is None or membership.effective_to > occurrence.starts_at)
+            for membership in memberships
+        ):
             continue
-        membership = db.scalar(
-            select(WorkCrewMembership).where(
-                WorkCrewMembership.employee_id == employee_id,
-                WorkCrewMembership.crew_id == occurrence.crew_id,
-                WorkCrewMembership.effective_from <= occurrence.starts_at,
-                or_(
-                    WorkCrewMembership.effective_to.is_(None),
-                    WorkCrewMembership.effective_to > occurrence.starts_at,
-                ),
-            )
-        )
-        if membership is None:
-            continue
-        crew = db.get(WorkCrew, occurrence.crew_id)
-        shift = db.get(WorkShiftDefinition, occurrence.shift_definition_id)
-        duty_event = db.scalar(
-            select(DutyAssignmentEvent)
-            .where(
-                DutyAssignmentEvent.employee_id == employee_id,
-                DutyAssignmentEvent.effective_at <= occurrence.starts_at,
-            )
-            .order_by(DutyAssignmentEvent.effective_at.desc(), DutyAssignmentEvent.id.desc())
-        )
+        crew = crews.get(occurrence.crew_id)
+        shift = shifts.get(occurrence.shift_definition_id)
+        while (
+            duty_event_index < len(duty_events)
+            and duty_events[duty_event_index].effective_at <= occurrence.starts_at
+        ):
+            duty_event = duty_events[duty_event_index]
+            duty_event_index += 1
         case = AttendanceCase(
             employee_id=employee_id,
             shift_occurrence_id=occurrence.id,
@@ -580,14 +618,19 @@ def materialize_scheduled_cases(
             department_snapshot=(
                 duty_event.to_department if duty_event is not None else employee.department
             ),
-            duty_unit_snapshot=(duty_event.to_unit if duty_event is not None else employee.duty_unit),
-            duty_post_snapshot=(duty_event.to_post if duty_event is not None else employee.duty_post),
+            duty_unit_snapshot=(
+                duty_event.to_unit if duty_event is not None else employee.duty_unit
+            ),
+            duty_post_snapshot=(
+                duty_event.to_post if duty_event is not None else employee.duty_post
+            ),
             scheduled_start_at=occurrence.starts_at,
             scheduled_end_at=occurrence.ends_at,
             operational_date=occurrence.operational_date,
             organization_snapshot_state="reconstructed" if duty_event is not None else "captured",
         )
         db.add(case)
+        existing_keys.add(case_key)
         created.append(case)
     if created:
         db.flush()
