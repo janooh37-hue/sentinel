@@ -230,6 +230,55 @@ def test_invalidate_revision_resets_to_zero_keeps_history_row(
     assert version.signature_revision == 0
 
 
+def test_measurement_cache_key_and_forced_refresh(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    first = tmp_path / "first.docx"
+    duplicate = tmp_path / "duplicate.docx"
+    first.write_bytes(b"same-docx")
+    duplicate.write_bytes(b"same-docx")
+    version = ["16.0"]
+    conversions = 0
+
+    def _fake_measure(
+        docx_path: Path, *, converter: object, source_sha256: str | None = None
+    ) -> SignatureLayout:
+        del docx_path, converter
+        nonlocal conversions
+        conversions += 1
+        assert source_sha256 is not None
+        return _fake_layout(page=1, x=0.2, y=0.3, sha=source_sha256, signature_id="sig")
+
+    monkeypatch.setattr("app.services._pdf_executor.word_pdf.word_version", lambda: version[0])
+    monkeypatch.setattr(
+        "app.services._pdf_executor.word_pdf.convert",
+        lambda _path: pytest.fail("unexpected conversion"),
+    )
+    monkeypatch.setattr("app.core.signature_layout.measure_signature_layout", _fake_measure)
+    _pdf_executor._measurement_cache.clear()
+    try:
+        assert _pdf_executor._measure_in_subprocess(str(first)).source_sha256
+        assert _pdf_executor._measure_in_subprocess(str(duplicate)).source_sha256
+        assert conversions == 1
+
+        _pdf_executor._measure_in_subprocess(str(first), force=True)
+        assert conversions == 2
+
+        version[0] = "16.1"
+        _pdf_executor._measure_in_subprocess(str(first))
+        assert conversions == 3
+
+        monkeypatch.setattr("app.core.signature_layout.SIGNATURE_LAYOUT_SCHEMA_VERSION", 2)
+        _pdf_executor._measure_in_subprocess(str(first))
+        assert conversions == 4
+
+        duplicate.write_bytes(b"different-docx")
+        _pdf_executor._measure_in_subprocess(str(duplicate))
+        assert conversions == 5
+    finally:
+        _pdf_executor._measurement_cache.clear()
+
+
 # ---------------------------------------------------------------------------
 # move_signature — authorization, CAS, and the publish transaction
 # ---------------------------------------------------------------------------

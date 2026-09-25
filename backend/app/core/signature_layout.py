@@ -62,6 +62,9 @@ _MAX_ANCHOR_CANDIDATES = 64
 _PROBE_GRID_BASE = 16
 _PROBE_GRID_STEP = 32
 
+
+# Bump when the measurement algorithm or serialized layout meaning changes.
+SIGNATURE_LAYOUT_SCHEMA_VERSION = 1
 SignatureRole = Literal["manager", "employee", "submitter"]
 
 _MARKER_PREFIX = "GSSG_SIG_"
@@ -380,7 +383,10 @@ def _find_probe(
 
 
 def measure_signature_layout(
-    docx_path: Path, *, converter: Callable[[Path], Path | None]
+    docx_path: Path,
+    *,
+    converter: Callable[[Path], Path | None],
+    source_sha256: str | None = None,
 ) -> SignatureLayout:
     """Measure every marked signature's physical page/position in
     *docx_path*, plus a bounded set of verified-safe destination anchor
@@ -412,7 +418,9 @@ def measure_signature_layout(
     if not drawings:
         raise SignatureSourceUnavailableError(f"{docx_path} has no marked signature drawing")
 
-    source_sha256 = hashlib.sha256(docx_path.read_bytes()).hexdigest()
+    if source_sha256 is None:
+        with docx_path.open("rb") as source:
+            source_sha256 = hashlib.file_digest(source, "sha256").hexdigest()
     doc = Document(str(docx_path))
     part = doc.part
 
