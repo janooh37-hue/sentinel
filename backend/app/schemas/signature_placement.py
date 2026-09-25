@@ -55,6 +55,19 @@ class SignatureIdentifyRequest(BaseModel):
     candidate_id: str = Field(min_length=1, max_length=128)
 
 
+class SignatureReassignRequest(BaseModel):
+    """``PUT /documents/{document_id}/signatures/{signature_id}/identity`` —
+    admin-only: replace the signer whose image occupies this signature slot
+    with a different employee's saved signature, at the same position."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    signature_revision: int = Field(ge=0)
+    package_revision: int = Field(ge=0)
+    source_sha256: str = Field(pattern=_SHA256_HEX)
+    employee_id: str = Field(min_length=1, max_length=16)
+
+
 class SignaturePageRead(BaseModel):
     page: int
     width_pt: float
@@ -100,7 +113,7 @@ class SignatureEditorRead(BaseModel):
 
 class SignatureHistoryItemRead(ORMBase):
     revision: int
-    action: Literal["initial", "identify", "move"]
+    action: Literal["initial", "identify", "move", "reassign"]
     signature_id: str | None
     before_geometry: dict[str, float] | None
     after_geometry: dict[str, float] | None

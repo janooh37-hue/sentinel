@@ -54,6 +54,7 @@ from app.schemas.signature_placement import (
     SignatureIdentifyRequest,
     SignaturePageRead,
     SignaturePositionRequest,
+    SignatureReassignRequest,
     SignatureRead,
 )
 from app.services import (
@@ -982,6 +983,35 @@ def put_signature_position(
         page=payload.page,
         x=payload.x,
         y=payload.y,
+    )
+    return _editor_read(description)
+
+
+@documents_router.put(
+    "/{document_id}/signatures/{signature_id}/identity", response_model=SignatureEditorRead
+)
+def put_signature_identity(
+    document_id: int,
+    signature_id: str,
+    payload: SignatureReassignRequest,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(get_current_user)],
+) -> SignatureEditorRead:
+    """Admin-only: swap this signature slot's image for a different
+    employee's saved signature — the signature-position tool's employee
+    picker (never available to a non-admin; ``reassign_signature`` itself
+    also enforces this)."""
+    row = _document_or_404(db, document_id)
+    _require_document_record_access(db, user, row)
+    description = signature_placement_service.reassign_signature(
+        db,
+        document_id,
+        user=user,
+        signature_id=signature_id,
+        signature_revision=payload.signature_revision,
+        package_revision=payload.package_revision,
+        source_sha256=payload.source_sha256,
+        employee_id=payload.employee_id,
     )
     return _editor_read(description)
 

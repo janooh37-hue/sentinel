@@ -854,7 +854,8 @@ def extract_signature_image_bytes(docx_path: Path, signature_id: str) -> bytes:
 def extract_candidate_image_bytes(docx_path: Path, docpr_name: str) -> bytes:
     """Return the raw embedded image bytes for an UNMARKED legacy candidate
     drawing identified by its ``wp:docPr/@name`` — same scope as
-    `extract_signature_image_bytes`."""
+    `extract_signature_image_bytes`.
+    """
     from docx import Document
     from docx.oxml.ns import qn
 
@@ -875,3 +876,38 @@ def extract_candidate_image_bytes(docx_path: Path, docpr_name: str) -> bytes:
         raise SignatureIdentityError(f"candidate drawing {docpr_name!r} image relationship missing")
     blob = part.rels[rel_id].target_part.blob
     return bytes(blob)
+
+
+def replace_signature_image(
+    source: Path, destination: Path, *, signature_id: str, image_bytes: bytes
+) -> None:
+    """Swap *signature_id*'s embedded image for *image_bytes*, in place —
+    position/size/anchor/identity marker are untouched (admin signature
+    reassignment: a different employee's signature at the SAME spot the
+    original occupied). *source* is never modified; *image_bytes* is run
+    through the same ink pipeline every other embed uses.
+
+    Raises `SignatureIdentityError` when *signature_id* is absent.
+    """
+    from docx import Document
+    from docx.oxml.ns import qn
+
+    from app.core.signature_render import prepare_signature
+
+    doc = Document(str(source))
+    part = doc.part
+    docpr = next(
+        (c for c in doc.element.body.iter(qn("wp:docPr")) if c.get("name") == marker_name(signature_id)),
+        None,
+    )
+    if docpr is None:
+        raise SignatureIdentityError(f"{signature_id!r} not found in {source}")
+    container = docpr.getparent()
+    blip = container.find(f".//{{{_A_NS}}}blip") if container is not None else None
+    if blip is None:
+        raise SignatureIdentityError(f"{signature_id!r} has no image reference in {source}")
+    new_rel_id, _image = part.get_or_add_image(io.BytesIO(prepare_signature(image_bytes)))
+    blip.set(f"{{{_R_NS}}}embed", new_rel_id)
+
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    doc.save(str(destination))

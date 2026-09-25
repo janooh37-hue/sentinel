@@ -4692,12 +4692,18 @@
     "identifyConfirmTitle": "Confirm this signature?",
     "identifyConfirmDesc": "This marks the selected image as the manager/approver signature. It changes no pixels — positioning becomes available afterward.",
     "identified": "Signature identified.",
+    "reassign": "Assign a different signer",
+    "reassignHint": "Admin only: replace this signature slot's image with another employee's saved signature, at the same position.",
+    "reassignConfirmTitle": "Reassign this signature?",
+    "reassignConfirmDesc": "This replaces the image with the selected employee's saved signature. Position and size stay the same.",
+    "reassigned": "Signature reassigned.",
     "candidateSize": "{{w}}×{{h}} mm",
     "history": "Placement history",
     "historyAction": {
       "initial": "Signed",
       "identify": "Signature identified",
-      "move": "Position corrected"
+      "move": "Position corrected",
+      "reassign": "Signer reassigned"
     },
     "historyPages": "page {{from}} → {{to}}",
     "role": {
