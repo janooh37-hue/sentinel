@@ -837,7 +837,7 @@ def _run_pending_departure_flip() -> None:
 
 
 def _disabled_in_environment() -> bool:
-    """Skip the scheduler in tests or when disabled in environment / .env."""
+    """Tests trigger lifespan via TestClient; dev .env can disable jobs too."""
     return "pytest" in sys.modules or get_settings().disable_scheduler
 
 

@@ -29,10 +29,12 @@ One feature worktree at a time uses the shared, throwaway `C:\Users\GSSG\gssg-de
    ```
 
    This allowlist excludes keys, logs, backups, and cache even if present in the source. Verify `gssg.db` and the expected file folders under `$devData` before starting. Keep the source backup until validation is complete.
+   Keep the folder list in sync with `backend/app/services/backup_service.py`'s `_FILE_SUBDIRS`; a missing record tree makes a snapshot incomplete.
 
 ## Start a worktree
 
 1. In the feature worktree, copy `.env.dev.example` to `.env`. Verify that `GSSG_DATA_DIR` points to the shared dev directory, `GSSG_DISABLE_SCHEDULER=1`, and there are **no** sender or BioTime environment variables inherited from the shell. Never copy secrets from production. Install Python dependencies into the worktree's `venv` and `pnpm -C frontend install` if needed.
+   To test a scheduled feature briefly, set `GSSG_DISABLE_SCHEDULER=0` in the dev `.env`, restart uvicorn, then restore `1` and restart immediately afterward. Never enable senders or copy keys for this test.
 2. Run `venv\Scripts\python.exe -m alembic upgrade head` in the worktree, then note the revision (`venv\Scripts\python.exe -m alembic current`). If switching back to a branch with an older revision, restore the snapshot again; do not downgrade production-shaped data to switch branches.
 3. Start uvicorn on loopback: `venv\Scripts\python.exe -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8765 --app-dir backend`. In a second worktree terminal set `$env:__VITE_ADDITIONAL_SERVER_ALLOWED_HOSTS = 'gssglt.<your-tailnet>.ts.net'` (use the exact DNS name from `tailscale status --json`; omit the trailing dot), then run `pnpm -C frontend dev --host 127.0.0.1`. Check `http://127.0.0.1:8765/api/v1/system/health` returns HTTP 200 and `status: ok`. The Vite frontend is at `http://127.0.0.1:5173`; its `/api` requests proxy to 8765. Stop any other worktree's dev processes before switching.
 4. For a production-like UI check use `.\scripts\mng.ps1 build` in the worktree, then stop Vite and serve the built app via `venv\Scripts\python.exe backend\serve.py` on loopback instead.
