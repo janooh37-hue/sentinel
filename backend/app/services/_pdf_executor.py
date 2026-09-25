@@ -18,12 +18,14 @@ without Word.
 from __future__ import annotations
 
 import contextlib
+import hashlib
 import logging
 import os
 import subprocess
 import sys
 import threading
 import time
+from collections import OrderedDict
 from collections.abc import Callable
 from concurrent.futures import ProcessPoolExecutor
 from concurrent.futures import TimeoutError as FutureTimeoutError
@@ -43,6 +45,9 @@ IDLE_QUIT_SECONDS = 120.0
 _executor: ProcessPoolExecutor | None = None
 _idle_timer: threading.Timer | None = None
 _lock = threading.Lock()
+
+_MEASUREMENT_CACHE_MAX = 32
+_measurement_cache: OrderedDict[tuple[str, str, int], SignatureLayout] = OrderedDict()
 
 
 def get_executor() -> ProcessPoolExecutor:
@@ -155,14 +160,35 @@ def convert_docx_to_pdf(docx_path: Path) -> Path | None:
     return Path(raw) if raw else None
 
 
-def _measure_in_subprocess(docx_path_str: str) -> SignatureLayout:
-    """Converts via ``word_pdf`` directly — never resubmits to this same
-    executor from inside the worker (approval-signature-placement plan §6.1)."""
+def _measure_in_subprocess(docx_path_str: str, *, force: bool = False) -> SignatureLayout:
+    """Measure once per byte-identical DOCX and Word/layout version.
+
+    ``force`` keeps the post-move safety measurement mandatory while still
+    refreshing the cached layout for a later editor open.
+    """
     from app.core import signature_layout
 
-    return signature_layout.measure_signature_layout(
-        Path(docx_path_str), converter=word_pdf.convert
+    docx_path = Path(docx_path_str)
+    with docx_path.open("rb") as source:
+        source_sha256 = hashlib.file_digest(source, "sha256").hexdigest()
+    key = (
+        source_sha256,
+        word_pdf.word_version(),
+        signature_layout.SIGNATURE_LAYOUT_SCHEMA_VERSION,
     )
+    if not force:
+        cached = _measurement_cache.get(key)
+        if cached is not None:
+            _measurement_cache.move_to_end(key)
+            return cached
+
+    layout = signature_layout.measure_signature_layout(
+        docx_path, converter=word_pdf.convert, source_sha256=source_sha256
+    )
+    _measurement_cache[key] = layout
+    if len(_measurement_cache) > _MEASUREMENT_CACHE_MAX:
+        _measurement_cache.popitem(last=False)
+    return layout
 
 
 def measure_signature_position(docx_path: Path) -> SignatureLayout:
@@ -207,9 +233,7 @@ def _move_in_subprocess(
         raise signature_layout.SignatureRenderFailedError(
             f"Word conversion failed while publishing {destination}"
         )
-    after_layout = signature_layout.measure_signature_layout(
-        destination, converter=word_pdf.convert
-    )
+    after_layout = _measure_in_subprocess(str(destination), force=True)
     signature_layout.validate_move(
         before_docx=source,
         after_docx=destination,

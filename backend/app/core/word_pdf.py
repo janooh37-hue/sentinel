@@ -49,6 +49,11 @@ def take_timings() -> list[dict[str, Any]]:
     return taken
 
 
+def word_version() -> str:
+    """Return the version string from the Word instance used for conversion."""
+    return str(_word().Version)
+
+
 def convert(docx_path: Path) -> Path | None:
     """Write ``docx_path`` as a sibling ``.pdf``; ``None`` if Word fails."""
     src = docx_path.resolve()
