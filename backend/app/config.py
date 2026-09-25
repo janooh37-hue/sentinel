@@ -67,6 +67,7 @@ class Settings(BaseSettings):
     # cookie carries the Secure flag. Leave False for plain LAN-HTTP dev.
     # Set via env: GSSG_SECURE_COOKIES=1
     secure_cookies: bool = False
+    disable_scheduler: bool = False  # also loaded from worktree .env
 
     # --- SMS via on-site Android SIM gateway (SMS Gate, local mode) -----------
     # All GSSG_SMS_* env vars. Disabled by default so the "Send SMS" button is

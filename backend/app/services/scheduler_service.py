@@ -16,7 +16,6 @@ Settings takes effect on the next tick without a process restart.
 from __future__ import annotations
 
 import logging
-import os
 import sys
 from datetime import UTC, date, datetime, time, timedelta
 from threading import Lock
@@ -838,15 +837,8 @@ def _run_pending_departure_flip() -> None:
 
 
 def _disabled_in_environment() -> bool:
-    """Skip startup under pytest or when explicitly disabled via env var.
-
-    Tests reuse ``create_app()`` via ``TestClient(app)``, which triggers the
-    FastAPI lifespan. Without this guard each test run would spin up a real
-    scheduler thread that hammers IMAP and pollutes test logs.
-    """
-    if "pytest" in sys.modules:
-        return True
-    return os.environ.get("GSSG_DISABLE_SCHEDULER") == "1"
+    """Skip the scheduler in tests or when disabled in environment / .env."""
+    return "pytest" in sys.modules or get_settings().disable_scheduler
 
 
 def start() -> None:
