@@ -57,7 +57,7 @@ from app.api.v1 import timesheet as timesheet_v1
 from app.api.v1 import vehicles as vehicles_v1
 from app.config import get_settings
 from app.logging import configure_logging
-from app.services import scheduler_service, vehicle_evg_jobs
+from app.services import _certificate_executor, scheduler_service, vehicle_evg_jobs
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 
@@ -168,7 +168,10 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
         try:
             scheduler_service.shutdown()
         finally:
-            vehicle_evg_jobs.shutdown()
+            try:
+                vehicle_evg_jobs.shutdown()
+            finally:
+                _certificate_executor.shutdown()
 
 
 def create_app() -> FastAPI:

@@ -17,7 +17,7 @@ from sqlalchemy.orm import Session, object_session, selectinload
 
 from app.api.errors import ConflictError, NotFoundError, ValidationFailedError
 from app.config import get_settings
-from app.core.vehicle_certificates import Profile, optimize_certificate
+from app.core.vehicle_certificates import Profile
 from app.db.models import (
     AuditLog,
     Employee,
@@ -1745,27 +1745,19 @@ def _store_file_record(
     return row, destination
 
 
-def _optimize_certificate_worker(data: bytes, media_type: str, profile: str) -> bytes:
-    """Top-level so ``ProcessPoolExecutor`` can pickle it for submission —
-    matches ``_pdf_executor._convert_in_subprocess``'s convention."""
-    return optimize_certificate(data, media_type, profile=cast("Profile", profile))
-
-
 def _optimize_certificate(data: bytes, media_type: str, *, profile: Profile = "current") -> bytes:
-    """Compress a certificate's bytes in the shared single-worker process pool.
+    """Compress certificate bytes outside the Word COM process.
 
-    Native PyMuPDF/Pillow work never runs on the event loop or shares a
-    process with Word COM. A worker ``ValueError`` (see
-    ``app.core.vehicle_certificates``) carries a ``VEHICLE_CERTIFICATE_*``
-    code and is translated to ``ValidationFailedError``; a timeout or any
-    other worker failure becomes ``VEHICLE_CERTIFICATE_PROCESSING_FAILED`` —
-    no file is created and the client can retry explicitly.
+    A worker ``ValueError`` (see ``app.core.vehicle_certificates``) carries a
+    ``VEHICLE_CERTIFICATE_*`` code and is translated to
+    ``ValidationFailedError``; a timeout or any other worker failure becomes
+    ``VEHICLE_CERTIFICATE_PROCESSING_FAILED`` — no file is created and the
+    client can retry explicitly.
     """
-    from app.services._pdf_executor import run_in_worker
+    from app.services import _certificate_executor
 
     try:
-        return run_in_worker(
-            _optimize_certificate_worker,
+        return _certificate_executor.optimize(
             data,
             media_type,
             profile,
