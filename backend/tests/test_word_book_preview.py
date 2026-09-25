@@ -9,7 +9,7 @@ from docx import Document as DocxFile
 from sqlalchemy.orm import Session
 
 from app.api.errors import AppError
-from app.db.models import Book, BookCategory, BookEditSession
+from app.db.models import Book, BookCategory, BookEditSession, User
 from app.services import word_book_service
 
 
@@ -33,9 +33,12 @@ def active_session(db_session: Session, tmp_path: Path) -> tuple[Book, Path]:
     d = DocxFile()
     d.add_paragraph("معاينة حية")
     d.save(str(working))
+    user = User(email="preview@test.ae", password_hash="x", role="admin", status="active")
+    db_session.add(user)
+    db_session.flush()
     sess = BookEditSession(
         book_id=book.id,
-        user_id=1,
+        user_id=user.id,
         token="tok-preview",
         working_path=str(working),
         state="active",
@@ -134,7 +137,7 @@ def test_preview_route_supports_base64(
 
     from app.api.deps import get_current_user
     from app.db import session as session_mod
-    from app.db.models import Base, User
+    from app.db.models import Base, User, UserPermission
     from app.db.session import attach_sqlite_pragmas, get_db
     from app.main import create_app
     from app.services import perm_service
@@ -160,7 +163,9 @@ def test_preview_route_supports_base64(
     try:
         perm_service.seed_role_defaults(db)
         db.add(BookCategory(id="GS", prefix="GS"))
-        book = Book(category_id="GS", ref_number="1/11/8", subject="معاينة")
+        book = Book(
+            category_id="GS", ref_number="1/11/8", subject="معاينة", classification_code="GS"
+        )
         db.add(book)
         db.flush()
         working = tmp_path / "editing" / f"book-{book.id}" / "1-11-8.docx"
@@ -178,6 +183,10 @@ def test_preview_route_supports_base64(
         )
         user = User(email="mgr@x.ae", password_hash="x", role="admin", status="active")
         db.add(user)
+        db.flush()
+        db.add(
+            UserPermission(user_id=user.id, capability="books.servicerecords.other", effect="deny")
+        )
         db.commit()
 
         def fake_convert(src: Path) -> Path:
@@ -197,6 +206,7 @@ def test_preview_route_supports_base64(
         assert base64.b64decode(res.text).startswith(b"%PDF")
     finally:
         db.close()
+        eng.dispose()
         get_settings.cache_clear()
 
 
@@ -288,6 +298,7 @@ def test_list_rows_carry_is_word_book(
         assert by_ref["1/11/22"]["is_word_book"] is False
     finally:
         db.close()
+        eng.dispose()
         get_settings.cache_clear()
 
 
@@ -301,6 +312,38 @@ def test_preview_unavailable_when_conversion_fails(
     with pytest.raises(AppError) as ei:
         word_book_service.render_session_preview(db_session, book_id=book.id)
     assert ei.value.code == "PREVIEW_UNAVAILABLE"
+
+
+def test_preview_locked_working_file_falls_back_to_last_good_pdf(
+    db_session: Session,
+    active_session: tuple[Book, Path],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A concurrent Word/DAV lock on the working file during the copy step
+    (WinError 32) must degrade like a failed conversion, not propagate as an
+    unhandled 500 - this is the actual bug: the copy2 preceding the convert
+    call used to sit outside the try/except that guards it."""
+    import os
+    import shutil
+
+    book, working = active_session
+    preview = _pdf(working.parent / "preview-src.pdf")
+    original = preview.read_bytes()
+    old = working.stat().st_mtime - 10
+    os.utime(preview, (old, old))
+
+    def locked_copy2(src: Path, dst: Path) -> None:
+        raise PermissionError(
+            "[WinError 32] The process cannot access the file because it is "
+            "being used by another process"
+        )
+
+    monkeypatch.setattr(shutil, "copy2", locked_copy2)
+
+    result = word_book_service.render_session_preview(db_session, book_id=book.id)
+
+    assert result == preview
+    assert preview.read_bytes() == original
 
 
 def test_preview_failed_refresh_preserves_last_complete_pdf(

@@ -33,7 +33,7 @@ from app.core.constants import TEMPLATE_FILES
 from app.core.docx_engine import aztec_corner_for
 from app.db.models import Book, BookCategory, BookEditSession, BookVersion, Document, Manager, User
 from app.db.repos import classified_refs_repo
-from app.services import artifact_service
+from app.services import artifact_service, manager_service
 from app.services._pdf_executor import convert_docx_to_pdf
 from app.services.document_service import GENERAL_BOOK_BODY_SENTINEL
 
@@ -163,7 +163,7 @@ def create_word_book(
                     "name_en": mgr.name_en,
                     "name_ar": mgr.name_ar,
                     "title": mgr.title,
-                    "sig_path": mgr.sig_path,
+                    "sig_path": manager_service.signature_str(db, mgr),
                 },
                 embed=False,
                 prefer_arabic=True,
@@ -415,10 +415,24 @@ def finish_word_session(
         dest = out_dir / (Path(filename).stem + f"_{suffix}.docx")
 
     src = Path(session.working_path)
+
+    def convert_or_reuse_preview(target: Path) -> Path | None:
+        preview = src.parent / "preview-src.pdf"
+        with _preview_lock:
+            if (
+                preview.is_file()
+                and preview.stat().st_mtime >= target.stat().st_mtime
+                and _is_complete_preview(preview)
+            ):
+                pdf = target.with_suffix(".pdf")
+                shutil.copy2(preview, pdf)
+                return pdf
+        return (converter or convert_docx_to_pdf)(target)
+
     artifact = artifact_service.produce_from_docx(
         source_path=src,
         destination=dest,
-        converter=converter or convert_docx_to_pdf,
+        converter=convert_or_reuse_preview,
     )
     dest = artifact.docx_path
 
@@ -733,8 +747,8 @@ def render_session_preview(
         )
         snapshot_mtime = working.stat().st_mtime
         src_copy = working.parent / "preview-src.docx"
-        shutil.copy2(working, src_copy)
         try:
+            shutil.copy2(working, src_copy)
             pdf = (converter or convert_docx_to_pdf)(src_copy)
         except Exception:
             pdf = None

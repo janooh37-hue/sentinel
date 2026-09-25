@@ -24,8 +24,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api._responses import maybe_base64
-from app.api.deps import require_capability
-from app.api.errors import NotFoundError, ValidationFailedError
+from app.api.deps import get_current_user, require_capability
+from app.api.errors import AppError, NotFoundError, ValidationFailedError
 from app.config import get_settings
 from app.core import signature as signature_core
 from app.core.employee_completeness import TRACKED_FIELDS, missing_fields
@@ -61,6 +61,7 @@ from app.services import (
     employee_service,
     leave_service,
     passport_ocr_service,
+    perm_service,
     photo_service,
     vault_service,
     violation_service,
@@ -524,11 +525,10 @@ def _signature_path_for(employee_id: str) -> Path:
     primary-key lookup, but nothing constrains seeded ids from carrying path
     separators — never dereference a path that escapes the vault root.
     """
-    vault_root = get_settings().vault_dir.resolve()
-    path = signature_core.vault_path(Vault(get_settings().vault_dir), employee_id).resolve()
-    if vault_root not in path.parents:
-        raise HTTPException(status_code=400, detail="invalid signature path")
-    return path
+    try:
+        return signature_core.employee_signature_path(get_settings().vault_dir, employee_id)
+    except signature_core.SignatureError as exc:
+        raise HTTPException(status_code=400, detail="invalid signature path") from exc
 
 
 @router.post(
@@ -631,13 +631,22 @@ def delete_employee_photo(
 def get_employee_photo(
     employee_id: str,
     db: Annotated[Session, Depends(get_db)],
-    _user: Annotated[User, Depends(require_capability("employees.view"))],
+    user: Annotated[User, Depends(get_current_user)],
 ) -> FileResponse:
     """Stream the first vault photo for the employee.
 
     Used by the AccountMenu + LockOverlay to render the linked user's photo
     without needing to know the filename. Cached privately for 60 seconds.
     """
+    if user.employee_id != employee_id and not perm_service.has_capability(
+        db, user, "employees.view"
+    ):
+        raise AppError(
+            "FORBIDDEN",
+            "Missing capability: employees.view",
+            http_status=403,
+            details={"capability": "employees.view"},
+        )
     row = db.execute(
         select(VaultFile)
         .where(VaultFile.employee_id == employee_id, VaultFile.kind == "photo")

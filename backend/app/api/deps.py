@@ -11,17 +11,52 @@ from __future__ import annotations
 from collections.abc import Callable
 from typing import Annotated
 
-from fastapi import Cookie, Depends
+from fastapi import Cookie, Depends, Request
 from sqlalchemy.orm import Session
 
 from app.api.errors import AppError
 from app.config import Settings, get_settings
-from app.core.roles import ADMIN_ROLE
+from app.core.roles import ADMIN_ROLE, INMATE_REPORTER_ROLE
 from app.db.models import User
 from app.db.session import get_db
 from app.services import auth_service, perm_service
 
 COOKIE_NAME = "gssg_session"
+
+#: The complete authenticated-route surface for ``inmate_reporter`` — a fixed
+#: allowlist, not a capability policy: capability filtering alone does not
+#: close self-signature, dashboard summary, manager lists, permission
+#: requests, monthly statistics, notification, attachment, Word, review, or
+#: admin APIs. (method, registered route TEMPLATE path) — never a prefix
+#: test, so a new route is closed by default. Public login/logout/password-
+#: setup routes don't depend on ``get_current_user`` and are unaffected.
+_INMATE_REPORTER_ALLOWED_ROUTES: frozenset[tuple[str, str]] = frozenset(
+    {
+        ("GET", "/api/v1/auth/me"),
+        ("POST", "/api/v1/auth/verify-password"),
+        ("PATCH", "/api/v1/auth/me/lock-timer"),
+        ("PATCH", "/api/v1/auth/me/lock-layout"),
+        ("GET", "/api/v1/auth/me/capabilities"),
+        ("GET", "/api/v1/identity/me"),
+        ("GET", "/api/v1/employees/{employee_id}/photo"),
+        ("GET", "/api/v1/templates"),
+        ("GET", "/api/v1/templates/{template_id}/fields"),
+        ("GET", "/api/v1/inmate-violations/nationalities"),
+        ("GET", "/api/v1/book-categories"),
+        ("GET", "/api/v1/books"),
+        ("GET", "/api/v1/books/facets"),
+        ("GET", "/api/v1/books/by-ref/{ref}"),
+        ("GET", "/api/v1/books/{book_id}"),
+        ("GET", "/api/v1/books/{book_id}/versions/{version_id}/fields"),
+        ("GET", "/api/v1/books/{book_id}/versions/{version_id}/annotations"),
+        ("GET", "/api/v1/books/{book_id}/versions/{version_id}/signed-document"),
+        ("GET", "/api/v1/books/{book_id}/imported-document"),
+        ("POST", "/api/v1/books/{book_id}/submit"),
+        ("POST", "/api/v1/documents/generate"),
+        ("GET", "/api/v1/jobs/{job_id}"),
+        ("GET", "/api/v1/documents/{document_id}/download"),
+    }
+)
 
 
 def settings_dep() -> Settings:
@@ -38,10 +73,21 @@ def get_optional_user(
 
 
 def get_current_user(
+    request: Request,
     user: Annotated[User | None, Depends(get_optional_user)],
 ) -> User:
     if user is None:
         raise AppError("NOT_AUTHENTICATED", "Not signed in.", http_status=401)
+    if user.role == INMATE_REPORTER_ROLE:
+        route = request.scope.get("route")
+        path = getattr(route, "path", None)
+        # Missing route metadata fails closed — never fall through to "allow".
+        if path is None or (request.method, path) not in _INMATE_REPORTER_ALLOWED_ROUTES:
+            raise AppError(
+                "INMATE_REPORTER_ROUTE_FORBIDDEN",
+                "This role cannot use this endpoint.",
+                http_status=403,
+            )
     return user
 
 

@@ -32,6 +32,7 @@ from app.services import (
     document_service,
     push_service,
     staging_service,
+    user_signature_service,
 )
 
 log = logging.getLogger(__name__)
@@ -392,7 +393,7 @@ def _reconstruct_signed_base(
     temp_dir: Path,
 ) -> bytes:
     signer = db.get(User, version.signed_by_user_id) if version.signed_by_user_id else None
-    signature = book_service._resolve_signer_signature(db, signer) if signer is not None else None
+    signature = user_signature_service.resolve_signature(signer) if signer is not None else None
     if signer is None or signature is None:
         raise ValidationFailedError(
             "INCLUDED_PAPERS_SIGNER_UNAVAILABLE",

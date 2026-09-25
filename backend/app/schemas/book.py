@@ -8,7 +8,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, computed_field
 
-from app.core.form_kind import resolve_service
+from app.core.form_kind import resolve_service, word_draft_service
 from app.schemas._base import ORMBase
 from app.schemas.notify import NotifyMessageRead
 
@@ -229,6 +229,10 @@ class BookEditSessionRead(ORMBase):
     created_at: datetime
 
 
+class WordSaveStatusRead(BaseModel):
+    last_put_at: datetime | None
+
+
 class ClassificationRead(BaseModel):
     code: str
     tab: int
@@ -421,6 +425,12 @@ class BookRead(ORMBase):
     def service_id(self) -> str:
         """Which service produced the selected visible revision."""
         selected = self._selected_version()
+        if selected is None and self.edit_session is not None:
+            draft_service = word_draft_service(
+                self.category_id, self.ref_number, self.classification_code
+            )
+            if draft_service is not None:
+                return draft_service
         return resolve_service(
             self.subject,
             selected.template_id if selected is not None else None,

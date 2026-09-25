@@ -109,3 +109,16 @@ def resolve_service(subject: str | None, template_id: str | None, *, versioned: 
         if s.startswith(prefix):
             return service_id
     return OTHER_SERVICE_ID
+
+
+def word_draft_service(
+    category_id: str | None, ref_number: str, classification_code: str | None
+) -> str | None:
+    """Classify an active, version-less Word draft without guessing from its subject."""
+    if category_id != "GS":
+        return None
+    if ref_number.startswith("REPORT-"):
+        return "Report"
+    if classification_code is not None:
+        return "General Book"
+    return None

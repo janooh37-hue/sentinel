@@ -1,17 +1,20 @@
 """Multi-user authentication endpoints.
 
-POST /auth/register          → request access (or bootstrap the first admin)
-POST /auth/login             → verify + set the gssg_session cookie
-POST /auth/logout            → revoke session + clear cookie
-GET  /auth/me                → the signed-in user (401 if not signed in)
-POST /auth/verify-password   → re-auth for the lock screen
+POST /auth/register                  → request access (or bootstrap the first admin)
+POST /auth/login                      → verify + set the gssg_session cookie
+POST /auth/logout                     → revoke session + clear cookie
+GET  /auth/me                         → the signed-in user (401 if not signed in)
+POST /auth/verify-password            → re-auth for the lock screen
+POST /auth/complete-password-setup    → replace an admin-issued temporary password
 
 Admin (require_admin):
 GET   /auth/users
+POST  /auth/users                        (create; returns a one-time temporary password)
 POST  /auth/users/{id}/approve
 POST  /auth/users/{id}/reset-password
 PATCH /auth/users/{id}/role
-POST  /auth/users/{id}/lock | /unlock
+PATCH /auth/users/{id}/link
+POST  /auth/users/{id}/disable | /unlock
 POST  /auth/users/{id}/default-manager
 """
 
@@ -28,10 +31,13 @@ from app.core import ratelimit
 from app.db.models import User
 from app.db.session import get_db
 from app.schemas.auth import (
+    AdminUserCreateRequest,
+    AdminUserCreateResult,
     AdminUserRead,
     ApproveRequest,
     AuditEntryRead,
     CapabilityRead,
+    CompletePasswordSetupRequest,
     DefaultManagerRequest,
     LinkSelfRequest,
     LockLayoutRequest,
@@ -162,6 +168,29 @@ def verify_password(
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
+@router.post("/complete-password-setup", status_code=status.HTTP_204_NO_CONTENT)
+def complete_password_setup(
+    payload: CompletePasswordSetupRequest,
+    request: Request,
+    response: Response,
+    db: Annotated[Session, Depends(get_db)],
+) -> Response:
+    """Replace an admin-issued temporary password before first sign-in.
+
+    Public (no session yet) — shares the login rate-limit budget. Does not
+    set a cookie; the frontend performs a normal login afterward.
+    """
+    ratelimit.enforce(ratelimit.login_limiter, request)
+    auth_service.complete_password_setup(
+        db,
+        email=payload.email,
+        temporary_password=payload.temporary_password,
+        new_password=payload.new_password,
+    )
+    response.headers["Cache-Control"] = "no-store"
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
 @router.post("/me/link", response_model=SessionUser)
 def link_my_employee(
     body: LinkSelfRequest,
@@ -242,6 +271,33 @@ def list_users(
     return auth_service.list_users(db)
 
 
+@router.post(
+    "/users",
+    response_model=AdminUserCreateResult,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_user(
+    body: AdminUserCreateRequest,
+    admin: Annotated[User, Depends(require_admin)],
+    db: Annotated[Session, Depends(get_db)],
+    response: Response,
+) -> AdminUserCreateResult:
+    """Admin-issued account. Response carries the one-time temporary
+    password — it is never retained or shown again after this call."""
+    user, temporary_password = auth_service.create_user(
+        db,
+        email=body.email,
+        employee_id=body.employee_id,
+        role=body.role,
+        display_name=body.display_name,
+        actor=_actor(admin),
+    )
+    response.headers["Cache-Control"] = "no-store"
+    return AdminUserCreateResult(
+        user=auth_service.admin_read(db, user), temporary_password=temporary_password
+    )
+
+
 @router.get("/audit", response_model=list[AuditEntryRead])
 def list_audit(
     _admin: Annotated[User, Depends(require_admin)],
@@ -297,13 +353,32 @@ def set_role(
     return auth_service.admin_read(db, user)
 
 
-@router.post("/users/{user_id}/lock", response_model=AdminUserRead)
-def lock_user(
+@router.patch("/users/{user_id}/link", response_model=AdminUserRead)
+def set_user_link(
+    user_id: int,
+    body: LinkSelfRequest,
+    admin: Annotated[User, Depends(require_admin)],
+    db: Annotated[Session, Depends(get_db)],
+) -> AdminUserRead:
+    """Admin-set/clear a target account's employee link (G number).
+
+    Distinct from ``POST /auth/me/link`` (self-service, blocked entirely for
+    ``inmate_reporter``): this is how an admin binds/rebinds that role's fixed
+    G number, or repairs any account's link after review.
+    """
+    user = auth_service.set_user_employee_link(
+        db, user_id, employee_id=body.employee_id, actor=_actor(admin)
+    )
+    return auth_service.admin_read(db, user)
+
+
+@router.post("/users/{user_id}/disable", response_model=AdminUserRead)
+def disable_user(
     user_id: int,
     admin: Annotated[User, Depends(require_admin)],
     db: Annotated[Session, Depends(get_db)],
 ) -> AdminUserRead:
-    user = auth_service.set_status(db, user_id, "locked", actor=_actor(admin))
+    user = auth_service.set_status(db, user_id, "disabled", actor=_actor(admin))
     return auth_service.admin_read(db, user)
 
 

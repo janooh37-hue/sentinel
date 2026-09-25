@@ -8,24 +8,22 @@
  *   - Chrome controls: AaSlider, LanguageToggle, ThemeToggle
  */
 
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Settings, ShieldCheck, X } from 'lucide-react'
-import { useEffect } from 'react'
+import { useContext } from 'react'
 import { useTranslation } from 'react-i18next'
 import { NavLink } from 'react-router-dom'
 
 import { Sheet, SheetClose, SheetContent, SheetTitle } from '@/components/ui/sheet'
-import { api } from '@/lib/api'
-import type { Theme } from '@/lib/api'
+import { AuthContext } from '@/lib/authContext'
 import { useCapabilities } from '@/lib/useCapabilities'
-import { migrateLegacyFontScale, persistFontScale, persistTheme } from '@/lib/theme'
 import { prefetchRouteForPath } from '@/lib/prefetchRoute'
 
 import { AaSlider } from './AaSlider'
 import { LanguageToggle } from './LanguageToggle'
-import { NAV_ITEMS } from './navItems'
+import { INMATE_REPORTER_ALLOWED_DESTINATIONS, NAV_ITEMS } from './navItems'
 import { isNavEntryAllowed } from './navCustomization'
 import { ThemeToggle } from './ThemeToggle'
+import { useChromePrefs } from './useChromePrefs'
 
 interface NavDrawerProps {
   open: boolean
@@ -34,29 +32,13 @@ interface NavDrawerProps {
 
 export function NavDrawer({ open, onOpenChange }: NavDrawerProps): React.JSX.Element {
   const { t } = useTranslation()
-  const qc = useQueryClient()
+  const user = useContext(AuthContext)?.user ?? null
   const { has } = useCapabilities()
-
-  const { data: settings } = useQuery({
-    queryKey: ['settings'],
-    queryFn: api.getSettings,
-  })
-  const update = useMutation({
-    mutationFn: api.updateSettings,
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ['settings'] })
-    },
-  })
-
-  const fontScale = migrateLegacyFontScale(settings?.font_scale)
-  const theme = (settings?.theme ?? 'light') as Theme
-
-  useEffect(() => {
-    if (settings?.theme) persistTheme(settings.theme as Theme)
-  }, [settings?.theme])
-  useEffect(() => {
-    if (typeof settings?.font_scale === 'number') persistFontScale(settings.font_scale)
-  }, [settings?.font_scale])
+  const isInmateReporter = user?.role === 'inmate_reporter'
+  const { fontScale, theme, setFontScale, setTheme } = useChromePrefs(isInmateReporter)
+  const navItems = isInmateReporter
+    ? NAV_ITEMS.filter(({ to }) => INMATE_REPORTER_ALLOWED_DESTINATIONS.includes(to as typeof INMATE_REPORTER_ALLOWED_DESTINATIONS[number]))
+    : NAV_ITEMS
 
   const close = (): void => onOpenChange(false)
 
@@ -84,86 +66,79 @@ export function NavDrawer({ open, onOpenChange }: NavDrawerProps): React.JSX.Ele
 
         {/* Primary nav */}
         <nav className="flex flex-col gap-0.5 px-3 py-3">
-          {NAV_ITEMS.filter((item) => isNavEntryAllowed(item, has)).map(({ to, key, Icon }) => (
-            <NavLink
-              key={to}
-              to={to}
-              end={to === '/'}
-              onClick={close}
-              onPointerEnter={() => prefetchRouteForPath(to)}
-              onFocus={() => prefetchRouteForPath(to)}
-              className={({ isActive }) =>
-                `flex items-center gap-3 rounded-lg px-3 py-2.5 text-[0.95em] font-medium transition-colors ${
-                  isActive
-                    ? 'bg-primary/10 text-primary'
-                    : 'text-foreground hover:bg-surface-tinted hover:text-primary'
-                }`
-              }
-            >
-              <Icon className="h-4.5 w-4.5 shrink-0" strokeWidth={1.8} aria-hidden />
-              {t(key)}
-            </NavLink>
-          ))}
+          {navItems.filter((item) => isNavEntryAllowed(item, has)).map(({ to, key, Icon }) => {
+            const labelKey = isInmateReporter && to === '/application' ? 'nav.inmateReport' : key
+            return (
+              <NavLink
+                key={to}
+                to={to}
+                end={to === '/'}
+                onClick={close}
+                onPointerEnter={() => prefetchRouteForPath(to)}
+                onFocus={() => prefetchRouteForPath(to)}
+                className={({ isActive }) =>
+                  `flex items-center gap-3 rounded-lg px-3 py-2.5 text-[0.95em] font-medium transition-colors ${
+                    isActive
+                      ? 'bg-primary/10 text-primary'
+                      : 'text-foreground hover:bg-surface-tinted hover:text-primary'
+                  }`
+                }
+              >
+                <Icon className="h-4.5 w-4.5 shrink-0" strokeWidth={1.8} aria-hidden />
+                {t(labelKey)}
+              </NavLink>
+            )
+          })}
         </nav>
 
         {/* Secondary links */}
-        <div className="flex flex-col gap-0.5 border-t border-border px-3 py-3">
-          {has('settings.view') && (
-            <NavLink
-              to="/settings"
-              onClick={close}
-              onPointerEnter={() => prefetchRouteForPath('/settings')}
-              onFocus={() => prefetchRouteForPath('/settings')}
-              className={({ isActive }) =>
-                `flex items-center gap-3 rounded-lg px-3 py-2.5 text-[0.95em] font-medium transition-colors ${
-                  isActive
-                    ? 'bg-primary/10 text-primary'
-                    : 'text-foreground hover:bg-surface-tinted hover:text-primary'
-                }`
-              }
-            >
-              <Settings className="h-4.5 w-4.5 shrink-0" strokeWidth={1.8} aria-hidden />
-              {t('nav.settings')}
-            </NavLink>
-          )}
-          {has('users.manage') && (
-            <NavLink
-              to="/access-requests"
-              onClick={close}
-              onPointerEnter={() => prefetchRouteForPath('/access-requests')}
-              onFocus={() => prefetchRouteForPath('/access-requests')}
-              className={({ isActive }) =>
-                `flex items-center gap-3 rounded-lg px-3 py-2.5 text-[0.95em] font-medium transition-colors ${
-                  isActive
-                    ? 'bg-primary/10 text-primary'
-                    : 'text-foreground hover:bg-surface-tinted hover:text-primary'
-                }`
-              }
-            >
-              <ShieldCheck className="h-4.5 w-4.5 shrink-0" strokeWidth={1.8} aria-hidden />
-              {t('access.title')}
-            </NavLink>
-          )}
-        </div>
+        {!isInmateReporter ? (
+          <div className="flex flex-col gap-0.5 border-t border-border px-3 py-3">
+            {has('settings.view') && (
+              <NavLink
+                to="/settings"
+                onClick={close}
+                onPointerEnter={() => prefetchRouteForPath('/settings')}
+                onFocus={() => prefetchRouteForPath('/settings')}
+                className={({ isActive }) =>
+                  `flex items-center gap-3 rounded-lg px-3 py-2.5 text-[0.95em] font-medium transition-colors ${
+                    isActive
+                      ? 'bg-primary/10 text-primary'
+                      : 'text-foreground hover:bg-surface-tinted hover:text-primary'
+                  }`
+                }
+              >
+                <Settings className="h-4.5 w-4.5 shrink-0" strokeWidth={1.8} aria-hidden />
+                {t('nav.settings')}
+              </NavLink>
+            )}
+            {has('users.manage') && (
+              <NavLink
+                to="/access-requests"
+                onClick={close}
+                onPointerEnter={() => prefetchRouteForPath('/access-requests')}
+                onFocus={() => prefetchRouteForPath('/access-requests')}
+                className={({ isActive }) =>
+                  `flex items-center gap-3 rounded-lg px-3 py-2.5 text-[0.95em] font-medium transition-colors ${
+                    isActive
+                      ? 'bg-primary/10 text-primary'
+                      : 'text-foreground hover:bg-surface-tinted hover:text-primary'
+                  }`
+                }
+              >
+                <ShieldCheck className="h-4.5 w-4.5 shrink-0" strokeWidth={1.8} aria-hidden />
+                {t('access.title')}
+              </NavLink>
+            )}
+          </div>
+        ) : null}
 
         {/* Chrome controls at the bottom */}
         <div className="mt-auto flex flex-col gap-4 border-t border-border px-4 py-4">
-          <AaSlider
-            value={fontScale}
-            onChange={(v) => {
-              persistFontScale(v)
-              update.mutate({ font_scale: v })
-            }}
-          />
+          <AaSlider value={fontScale} onChange={setFontScale} />
           <div className="flex items-center gap-3">
             <LanguageToggle />
-            <ThemeToggle
-              value={theme}
-              onChange={(v) => {
-                persistTheme(v)
-                update.mutate({ theme: v })
-              }}
-            />
+            <ThemeToggle value={theme} onChange={setTheme} />
           </div>
         </div>
       </SheetContent>

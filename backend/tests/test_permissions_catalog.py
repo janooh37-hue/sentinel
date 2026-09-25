@@ -31,11 +31,32 @@ def test_static_catalog_has_complete_bilingual_request_policy_metadata():
 
 
 def test_static_role_default_counts_are_preserved():
-    assert {role: len(caps) for role, caps in ROLE_DEFAULTS.items()} == {
+    assert {
+        role: len(caps) for role, caps in ROLE_DEFAULTS.items() if role != "inmate_reporter"
+    } == {
         "operator": 18,
         "manager": 42,
         "admin": 58,
     }
+
+
+def test_inmate_reporter_preset_is_exactly_its_fixed_ceiling():
+    """Security contract, not a magic count: inmate_reporter's preset must be
+    exactly this scope — no ledger/employees/leaves/etc, no
+    books.edit/approve/delete, only the one service+category it's bound to."""
+    assert (
+        ROLE_DEFAULTS["inmate_reporter"]
+        == permissions.INMATE_REPORTER_CAPS
+        == {
+            "app.access",
+            "documents.generate",
+            "books.view",
+            "books.submit",
+            "books.service.Inmate Conduct Violations",
+            "books.servicerecords.Inmate Conduct Violations",
+            "books.category.NAT",
+        }
+    )
 
 
 def test_catalog_composes_bilingual_dynamic_entries_in_stable_order(db_session):
@@ -95,12 +116,19 @@ def test_catalog_composes_bilingual_dynamic_entries_in_stable_order(db_session):
     assert unnamed.description_en == "View records in books.category.Z."
     assert unnamed.description_ar is None
 
-    assert all(
-        entry.default_roles == ("operator", "manager", "admin")
-        and entry.requestable
-        and not entry.sensitive
-        for entry in dynamic
-    )
+    inmate_dynamic_ids = {
+        "books.service.Inmate Conduct Violations",
+        "books.servicerecords.Inmate Conduct Violations",
+    }
+    for entry in dynamic:
+        assert entry.requestable
+        assert not entry.sensitive
+        expected_roles = (
+            ("operator", "manager", "admin", "inmate_reporter")
+            if entry.id in inmate_dynamic_ids
+            else ("operator", "manager", "admin")
+        )
+        assert entry.default_roles == expected_roles, entry.id
     assert capability_catalog_service.get_catalog_entry(db_session, passport.id) == passport
     assert capability_catalog_service.get_catalog_entry(db_session, category.id) == category
     assert capability_catalog_service.get_catalog_entry(db_session, "missing.cap") is None

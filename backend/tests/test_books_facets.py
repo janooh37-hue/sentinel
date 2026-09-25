@@ -101,6 +101,7 @@ def api(monkeypatch: pytest.MonkeyPatch, tmp_path) -> Iterator[TestClient]:
     with TestClient(app) as client:
         yield client
     db.close()
+    eng.dispose()
 
 
 def test_counts_are_per_service(db_session: Session) -> None:

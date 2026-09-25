@@ -1,7 +1,11 @@
 """WebDAV router for Word editing sessions.
 
-Mounted at /dav/{token}/{filename:path} WITHOUT the auth_gate — the unguessable
-token in the URL is the sole auth mechanism; Word's HTTP stack sends no cookies.
+Mounted at /dav/{token}/{filename:path} WITHOUT the auth_gate — Word's HTTP
+stack sends no cookies, so the unguessable token in the URL plus the owning
+account's live authentication state (active, setup-complete) are the auth
+mechanism; see ``word_session_repo.get_active_session_by_token``. A token
+whose owner is disabled, pending, rejected, or still awaiting a password-setup
+step resolves to no session, same as an unknown/expired token.
 
 The :path converter lets filename be empty ("") so that collection requests
 /dav/{token}/ (trailing slash, no filename) are handled here too.  Word sends

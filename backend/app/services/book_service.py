@@ -32,20 +32,22 @@ from app.core.form_kind import (
     resolve_service,
     service_template_ids,
     subject_prefixes,
+    word_draft_service,
 )
+from app.core.roles import INMATE_REPORTER_ROLE
 from app.db.models import (
     AuditLog,
     Book,
     BookAnnotation,
     BookApprovalStep,
     BookCategory,
+    BookEditSession,
     BookRevisionAccess,
     BookVersion,
     Document,
     Employee,
     Manager,
     OutboundMessage,
-    Submitter,
     User,
 )
 from app.db.repos.refs_repo import allocate_ref_with_retry
@@ -60,7 +62,7 @@ from app.schemas.book import (
     ImportedDocRead,
 )
 from app.services import notify_format as nf
-from app.services import perm_service
+from app.services import perm_service, user_signature_service
 
 log = logging.getLogger(__name__)
 
@@ -174,15 +176,30 @@ def _fts_query_books(db: Session, q: str) -> dict[int, str]:
         return {}
 
 
+def _active_word_draft_clause() -> ColumnElement[bool]:
+    return and_(
+        Book.category_id == "GS",
+        Book.id.not_in(select(BookVersion.book_id)),
+        or_(Book.ref_number.like("REPORT-%"), Book.classification_code.is_not(None)),
+        exists(
+            select(BookEditSession.id).where(
+                BookEditSession.book_id == Book.id, BookEditSession.state == "active"
+            )
+        ),
+    )
+
+
 def service_clause(service_id: str) -> ColumnElement[bool]:
     """SQL for "this book belongs to `service_id`".
 
     Mirrors `form_kind.resolve_service`, generated from the same prefix table:
     a book belongs to a service if its NEWEST version carries that
     `template_id`, or — being version-less — its subject starts with one of
-    the service's names. `OTHER_SERVICE_ID` is the literal negation of every
-    named clause, so the buckets are provably complementary: no book can land
-    in two or in none. Any `service_id` that is neither `OTHER_SERVICE_ID` nor
+    the service's names. Active Word drafts instead use their ref/classification
+    marker so an empty subject does not place them in Other. `OTHER_SERVICE_ID`
+    is the literal negation of every named clause, so the buckets are
+    complementary: no book can land in two or in none.
+    Any `service_id` that is neither `OTHER_SERVICE_ID` nor
     a member of `SERVICE_IDS` matches nothing — `resolve_service` never
     returns such a value, so the SQL must not invent a match for it either.
 
@@ -218,15 +235,79 @@ def service_clause(service_id: str) -> ColumnElement[bool]:
         newest_template_id.is_not(None),
         newest_template_id.in_(service_template_ids(service_id)),
     )
+    word_draft = _active_word_draft_clause()
+    draft_match: ColumnElement[bool] = false()
+    if service_id == "Report":
+        draft_match = and_(word_draft, Book.ref_number.like("REPORT-%"))
+    elif service_id == "General Book":
+        draft_match = and_(
+            word_draft,
+            not_(Book.ref_number.like("REPORT-%")),
+            Book.classification_code.is_not(None),
+        )
     prefixes = subject_prefixes(service_id)
     return or_(
         is_newest_version_of,
+        draft_match,
         and_(
             Book.id.not_in(select(BookVersion.book_id)),
+            not_(word_draft),
             Book.subject.is_not(None),
             or_(*[Book.subject.ilike(f"{p}%") for p in prefixes]),
         ),
     )
+
+
+#: States an inmate_reporter's own draft/returned/rejected report stays
+#: readable in — "awaiting_scan" is a real approval_state on other paths but
+#: never reachable by this role's forms, so it (and anything else) is hidden.
+_INMATE_REPORTER_OWNER_ONLY_STATES: Final[tuple[str, ...]] = ("none", "returned", "rejected")
+_INMATE_REPORTER_SHARED_STATES: Final[tuple[str, ...]] = ("pending", "approved")
+
+
+def _inmate_reporter_original_creator_subquery() -> Any:
+    """Correlated scalar subquery mirroring
+    ``included_papers_service.original_creator_user_id`` in SQL: the lowest
+    ``version_no``'s ``created_by_user_id`` for the correlated ``Book``."""
+    return (
+        select(BookVersion.created_by_user_id)
+        .where(BookVersion.book_id == Book.id)
+        .order_by(BookVersion.version_no.asc())
+        .limit(1)
+        .scalar_subquery()
+    )
+
+
+def _inmate_reporter_visibility_clause(user: User) -> ColumnElement[bool]:
+    """SQL: the reporter-role read boundary (spec table) — nondeleted/nonvoided,
+    shared while pending/approved, owner-only while none/returned/rejected,
+    hidden otherwise (awaiting_scan, or any book with no version at all)."""
+    return and_(
+        Book.deleted_at.is_(None),
+        Book.voided_at.is_(None),
+        or_(
+            Book.approval_state.in_(_INMATE_REPORTER_SHARED_STATES),
+            and_(
+                Book.approval_state.in_(_INMATE_REPORTER_OWNER_ONLY_STATES),
+                _inmate_reporter_original_creator_subquery() == user.id,
+            ),
+        ),
+    )
+
+
+def _inmate_reporter_book_visible(book: Book, user_id: int) -> bool:
+    """Python-side mirror of ``_inmate_reporter_visibility_clause`` for an
+    already-loaded ``Book`` (``resolve_book_read_access`` / write-access
+    guards operate on ORM objects, not a fresh query)."""
+    if book.deleted_at is not None or book.voided_at is not None:
+        return False
+    if book.approval_state in _INMATE_REPORTER_SHARED_STATES:
+        return True
+    if book.approval_state in _INMATE_REPORTER_OWNER_ONLY_STATES:
+        from app.services import included_papers_service
+
+        return included_papers_service.original_creator_user_id(book) == user_id
+    return False
 
 
 def user_visibility_clause(db: Session, user: User) -> ColumnElement[bool] | None:
@@ -239,6 +320,8 @@ def user_visibility_clause(db: Session, user: User) -> ColumnElement[bool] | Non
         clauses.append(
             not_(or_(*[service_clause(service_id) for service_id in sorted(denied_services)]))
         )
+    if user.role == INMATE_REPORTER_ROLE:
+        clauses.append(_inmate_reporter_visibility_clause(user))
     return and_(*clauses) if clauses else None
 
 
@@ -283,6 +366,26 @@ def document_visibility_clause(db: Session, user: User) -> ColumnElement[bool] |
             .correlate(Document)
         )
         clauses.append(not_(linked_to_denied_category))
+    if user.role == INMATE_REPORTER_ROLE:
+        current_version_id = (
+            select(BookVersion.id)
+            .where(BookVersion.book_id == Book.id)
+            .order_by(BookVersion.version_no.desc())
+            .limit(1)
+            .scalar_subquery()
+        )
+        linked_current_visible = exists(
+            select(BookVersion.id)
+            .select_from(BookVersion)
+            .join(Book, Book.id == BookVersion.book_id)
+            .where(
+                BookVersion.document_id == Document.id,
+                BookVersion.id == current_version_id,
+                _inmate_reporter_visibility_clause(user),
+            )
+            .correlate(Document)
+        )
+        clauses.append(linked_current_visible)
     return and_(*clauses) if clauses else None
 
 
@@ -315,11 +418,23 @@ def assert_record_type_visible(db: Session, user: User, row: Book) -> None:
     """Raise the stable 403 when ``row`` belongs to a denied record type."""
     denied_services, denied_categories = perm_service.denied_record_types(db, user)
     newest = max(row.versions, key=lambda version: version.version_no, default=None)
-    service_id = resolve_service(
-        row.subject,
-        newest.template_id if newest is not None else None,
-        versioned=newest is not None,
+    draft_service = (
+        word_draft_service(row.category_id, row.ref_number, row.classification_code)
+        if newest is None
+        else None
     )
+    if draft_service is not None and db.scalar(
+        select(BookEditSession.id)
+        .where(BookEditSession.book_id == row.id, BookEditSession.state == "active")
+        .limit(1)
+    ):
+        service_id = draft_service
+    else:
+        service_id = resolve_service(
+            row.subject,
+            newest.template_id if newest is not None else None,
+            versioned=newest is not None,
+        )
     if row.category_id in denied_categories or service_id in denied_services:
         raise AppError(
             "RECORD_TYPE_FORBIDDEN",
@@ -348,6 +463,21 @@ def resolve_book_read_access(
     ids = frozenset(version.id for version in versions)
     if version_id is not None and version_id not in ids:
         raise NotFoundError("VERSION_NOT_FOUND", "Revision not found")
+    if user.role == INMATE_REPORTER_ROLE:
+        # Fixed-scope reporter: never full books.view semantics — current
+        # version only, gated by the state/ownership matrix, never a
+        # historical revision even when the current report is shared.
+        if not _inmate_reporter_book_visible(book, user.id):
+            raise NotFoundError("BOOK_NOT_FOUND", "Record not found")
+        current_id = versions[-1].id if versions else None
+        if version_id is not None and version_id != current_id:
+            raise AppError(
+                "FORBIDDEN",
+                "You do not have access to this revision.",
+                http_status=403,
+            )
+        allowed_ids = frozenset({current_id}) if current_id is not None else frozenset()
+        return BookReadAccess(True, allowed_ids, current_id)
     has_view = perm_service.has_capability(db, user, "books.view")
     full = has_view
     record_type_error: AppError | None = None
@@ -421,6 +551,115 @@ def require_full_book_access(db: Session, user: User, row: Book) -> None:
             details={"capability": "books.view"},
         )
     assert_record_type_visible(db, user, row)
+    if user.role == INMATE_REPORTER_ROLE and not _inmate_reporter_book_visible(row, user.id):
+        raise AppError(
+            "FORBIDDEN",
+            "You do not have access to this revision.",
+            http_status=403,
+        )
+
+
+def resolve_inmate_report_manager(db: Session) -> tuple[User, Manager]:
+    """The one User + linked Manager pair ``inmate_reporter`` submissions
+    route to (``settings.inmate_reporter_manager_user_id``, admin-only —
+    Settings → Documents). Requires an active, linked User with
+    ``books.approve`` mapped to exactly one active ``Manager`` row. Never
+    falls back to ``is_default_manager`` or ``settings.default_manager_id`` —
+    independent of the legacy manager-resolution chain. An eligible manager
+    with no saved signature is fine; ordinary sign-time already blocks that.
+    """
+    from app.services import settings_service
+
+    unavailable = AppError(
+        "INMATE_REPORTER_MANAGER_UNAVAILABLE",
+        "No inmate report approval manager is configured. Ask an "
+        "administrator to set one in Settings.",
+        http_status=409,
+    )
+    manager_user_id = settings_service.get_settings(db).inmate_reporter_manager_user_id
+    if manager_user_id is None:
+        raise unavailable
+    user = db.get(User, manager_user_id)
+    if user is None or user.status != "active":
+        raise unavailable
+    if not perm_service.has_capability(db, user, "books.approve"):
+        raise unavailable
+    if user.employee_id is not None and db.get(Employee, user.employee_id) is None:
+        raise unavailable
+    managers = list(
+        db.scalars(select(Manager).where(Manager.user_id == user.id, Manager.active.is_(True)))
+    )
+    if len(managers) != 1:
+        raise unavailable
+    return user, managers[0]
+
+
+def require_inmate_report_write_access(
+    db: Session, user: User, book: Book, *, action: Literal["revise", "submit"]
+) -> BookVersion:
+    """Gate an ``inmate_reporter`` write: revise-into-a-new-draft/resubmit, or
+    submit. Requires a linked actor, an actual current Inmate Conduct
+    Violations version, original-author match, and a state that permits
+    ``action`` — ``revise`` accepts ``none``/``returned``, ``submit`` only
+    ``none``. Returns the current version (the caller's revise/submit
+    target).
+    """
+    from app.services import included_papers_service
+
+    if user.employee_id is None:
+        raise AppError(
+            "INMATE_REPORTER_EMPLOYEE_REQUIRED",
+            "Your account has no linked employee record yet.",
+            http_status=409,
+        )
+    if book.deleted_at is not None or book.voided_at is not None:
+        raise NotFoundError("BOOK_NOT_FOUND", "Record not found")
+    version = _current_version(book)
+    if version is None or version.template_id != "Inmate Conduct Violations":
+        raise AppError(
+            "INMATE_REPORTER_NOT_OWNER",
+            "This record is not an inmate violation report.",
+            http_status=403,
+        )
+    if included_papers_service.original_creator_user_id(book) != user.id:
+        raise AppError(
+            "INMATE_REPORTER_NOT_OWNER",
+            "You are not the author of this record.",
+            http_status=403,
+        )
+    allowed_states = ("none", "returned") if action == "revise" else ("none",)
+    if book.approval_state not in allowed_states:
+        raise AppError(
+            "INMATE_REPORTER_STATE_LOCKED",
+            "This record can no longer be edited.",
+            http_status=409,
+        )
+    stored_reporter_g = str((version.fields or {}).get("reporter_id") or "").strip().upper()
+    if stored_reporter_g and stored_reporter_g != user.employee_id:
+        raise AppError(
+            "INMATE_REPORTER_IDENTITY_CHANGED",
+            "Your linked employee record changed since this draft was created.",
+            http_status=409,
+        )
+    return version
+
+
+def require_revise_access(db: Session, user: User, book: Book | None) -> BookVersion | None:
+    """Require revise authority; ``None`` skips only the non-reporter book check."""
+    if user.role == INMATE_REPORTER_ROLE:
+        if book is None:
+            raise NotFoundError("BOOK_NOT_FOUND", "Record not found")
+        return require_inmate_report_write_access(db, user, book, action="revise")
+    if not perm_service.has_capability(db, user, "books.edit"):
+        raise AppError(
+            "FORBIDDEN",
+            "Missing capability: books.edit",
+            http_status=403,
+            details={"capability": "books.edit"},
+        )
+    if book is not None:
+        require_full_book_access(db, user, book)
+    return None
 
 
 class ServiceCount(NamedTuple):
@@ -449,7 +688,7 @@ def service_facets(
     distinguishes "no version at all" from "has a version whose template is
     NULL" — the two resolve differently.
 
-    # ponytail: one full scan with two correlated subqueries per row — 629 rows
+    # ponytail: one full scan with three correlated subqueries per row — 629 rows
     # today, and book_versions.book_id is indexed. If books pass ~50k,
     # denormalise service_id onto `books`.
     """
@@ -466,9 +705,17 @@ def service_facets(
         .where(BookVersion.book_id == Book.id)
         .scalar_subquery()
     )
-    stmt = select(Book.subject, Book.approval_state, newest_template_id, n_versions).where(
-        Book.deleted_at.is_(None)
-    )
+    active_word_draft = _active_word_draft_clause()
+    stmt = select(
+        Book.subject,
+        Book.approval_state,
+        newest_template_id,
+        n_versions,
+        Book.category_id,
+        Book.ref_number,
+        Book.classification_code,
+        active_word_draft,
+    ).where(Book.deleted_at.is_(None))
     if user is not None:
         visibility = user_visibility_clause(db, user)
         if visibility is not None:
@@ -476,8 +723,21 @@ def service_facets(
 
     all_states: Counter[str] = Counter()
     per_service: dict[str, Counter[str]] = {}
-    for subject, approval_state, template_id, n_versions in db.execute(stmt):
-        service_id = resolve_service(subject, template_id, versioned=n_versions > 0)
+    for (
+        subject,
+        approval_state,
+        template_id,
+        n_versions,
+        category_id,
+        ref_number,
+        classification_code,
+        active_draft,
+    ) in db.execute(stmt):
+        service_id = (
+            word_draft_service(category_id, ref_number, classification_code)
+            if active_draft
+            else None
+        ) or resolve_service(subject, template_id, versioned=n_versions > 0)
         state = approval_state or "none"
         all_states[state] += 1
         per_service.setdefault(service_id, Counter())[state] += 1
@@ -943,6 +1203,31 @@ def submit_for_approval(
             "This version is already signed/approved; it can't be re-submitted for approval.",
         )
 
+    if (caller := db.get(User, submitted_by_user_id)) is not None and (
+        caller.role == INMATE_REPORTER_ROLE
+    ):
+        # Deriving the caller from submitted_by_user_id (not trusting the
+        # request payload) means a direct service call can't bypass routing
+        # either — the endpoint always passes the original null/empty payload.
+        if priority != "Normal" or approver_user_id is not None or reviewer_user_ids:
+            raise AppError(
+                "INMATE_REPORTER_INPUT_FORBIDDEN",
+                "This role cannot choose an approver, reviewers, or priority.",
+                http_status=403,
+            )
+        require_inmate_report_write_access(db, caller, book, action="submit")
+        from app.services import document_service
+
+        editable_fields = {
+            k: v
+            for k, v in (version.fields or {}).items()
+            if k not in ("reporter_id", "submitter_g")
+        }
+        document_service.validate_inmate_report_fields(editable_fields, complete=True)
+        manager_user, manager_row = resolve_inmate_report_manager(db)
+        book.doc_manager_id = manager_row.id
+        approver_user_id = manager_user.id
+
     # Resolve the approver: explicit arg wins, else the doc's linked manager.
     resolved_id = approver_user_id
     if resolved_id is None and book.doc_manager_id is not None:
@@ -1294,33 +1579,6 @@ def override_state(
     return book
 
 
-def _resolve_signer_signature(db: Session, signer: User) -> Path | None:
-    """The signer's ONE signature: their uploaded approval signature, else the
-    stored signature of their linked employee (G number) from the Submitter
-    registry — people should not need a second signature just for approvals."""
-    candidates: list[str] = []
-    if signer.signature_path:
-        candidates.append(signer.signature_path)
-    if signer.employee_id:
-        # .first(), not one_or_none: submitters.employee_id uniqueness is only
-        # app-side — a legacy duplicate row must not 500 the whole sign/detail
-        # path with MultipleResultsFound.
-        sub = (
-            db.execute(select(Submitter).where(Submitter.employee_id == signer.employee_id))
-            .scalars()
-            .first()
-        )
-        if sub is not None and sub.stored_sig_path:
-            candidates.append(sub.stored_sig_path)
-    for raw in candidates:
-        p = Path(raw)
-        if not p.is_absolute():
-            p = get_settings().data_dir / p
-        if p.is_file():
-            return p
-    return None
-
-
 def sign_book(db: Session, book_id: int, *, user_id: int, version_id: int) -> Book:
     """Approve by signing: verify the caller is the pending signer, embed their
     signature into the current version's document, store the signed PDF, mark
@@ -1343,15 +1601,14 @@ def sign_book(db: Session, book_id: int, *, user_id: int, version_id: int) -> Bo
     signer = db.get(User, user_id)
     if signer is None:
         raise ValidationFailedError("NO_SIGNATURE", "لا يوجد توقيع محفوظ لحسابك")
-    abs_sig = _resolve_signer_signature(db, signer)
+    abs_sig = user_signature_service.resolve_signature(signer)
     if abs_sig is None:
         # Arabic — this message reaches the operator's toast verbatim
         # (apiErrorMessage shows the backend text; same convention as the
         # template-library errors in book_template_service).
         raise ValidationFailedError(
             "NO_SIGNATURE",
-            "لا يوجد توقيع محفوظ — ارفع توقيعك من الإعدادات، أو خزّن توقيع "
-            "الموظف (برقم G) في سجل مقدمي الطلبات.",
+            "لا يوجد توقيع محفوظ — أضف توقيع الملف الشخصي من الإعدادات أو من ملف الموظف.",
         )
 
     version = _current_version(book)
@@ -2410,10 +2667,10 @@ def resolve_doc_manager_user(db: Session, book: Book) -> tuple[int | None, str |
     if mgr is None or mgr.user_id is None:
         return None, None, False
     user = db.get(User, mgr.user_id)
-    # Same resolution as sign-time (_resolve_signer_signature): the uploaded
-    # approval signature OR the linked employee's stored Submitter signature —
-    # else the dialog warns about a signature the signer actually has.
-    has_sig = user is not None and _resolve_signer_signature(db, user) is not None
+    # Same resolution as sign-time: the linked employee's profile signature,
+    # or the unlinked account's own signature — else the dialog warns about a
+    # signature the signer actually has.
+    has_sig = user is not None and user_signature_service.resolve_signature(user) is not None
     return mgr.user_id, resolve_user_name_by_id(db, mgr.user_id), has_sig
 
 
@@ -2637,9 +2894,7 @@ def add_attachment(
     if version is not None and version.template_id == "General Book":
         from app.core.extraction.ocr import decode_codes_from_bytes
 
-        barcodes = [
-            code for code in decode_codes_from_bytes(data) if code.source == "code39"
-        ]
+        barcodes = [code for code in decode_codes_from_bytes(data) if code.source == "code39"]
         if any(code.ref.casefold() != book.ref_number.casefold() for code in barcodes):
             raise ValidationFailedError(
                 "BOOK_BARCODE_REF_MISMATCH",
@@ -2650,7 +2905,6 @@ def add_attachment(
                 "BOOK_NOT_AWAITING_SCAN",
                 "هذا السجل غير جاهز لاستلام النسخة الموقعة",
             )
-
 
     # Decide the branch BEFORE writing: the flip changes the file's on-disk name
     # and (for image scans) its format.
@@ -3149,9 +3403,10 @@ __all__ = [
     "remove_reviewer",
     "replace_attachment",
     "replace_signed_copy",
-    "require_record_type_access",
+    "require_revise_access",
     "resolve_attachment_path",
     "resolve_doc_manager_user",
+    "resolve_inmate_report_manager",
     "resolve_user_name_by_id",
     "revoke_revision_access",
     "service_clause",

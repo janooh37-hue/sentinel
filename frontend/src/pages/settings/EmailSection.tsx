@@ -28,6 +28,7 @@ import { api, apiErrorMessage } from '@/lib/api'
 import type { EmailAccountRead, EmailAccountUpsert } from '@/lib/api'
 import { useIdentity } from '@/lib/useIdentity'
 import { useAuth } from '@/lib/authContext'
+import { invalidateSignatures } from '@/lib/globalRefresh'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { EmployeePicker } from '@/pages/application/EmployeePicker'
 import { SignatureSection } from './SignatureSection'
@@ -194,7 +195,7 @@ export function EmailSection(): React.JSX.Element {
           }),
         )
       }
-      void qc.invalidateQueries({ queryKey: ['auth-me'] })
+      invalidateSignatures(qc)
       setIsChangingLink(false)
       setLinkPickerId(null)
     },

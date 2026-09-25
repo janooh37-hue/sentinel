@@ -34,7 +34,7 @@ def client(api_db) -> TestClient:
 
 
 def _done_job(*, superseded: list[date]) -> str:
-    job_id = job_registry.submit_job()
+    job_id = job_registry.submit_job(owner_user_id=1)
     job_registry.set_done(
         job_id,
         book_id=1,

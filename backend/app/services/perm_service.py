@@ -23,19 +23,38 @@ from app.core.permissions import (
     ALL_CAPABILITIES,
     CAPABILITY_IDS,
     CATEGORY_CAP_PREFIX,
+    INMATE_REPORTER_CAPS,
     ROLE_DEFAULTS,
     SENSITIVE_CAPABILITY_IDS,
+    SERVICE_CAP_PREFIX,
     SERVICE_CAPABILITY_IDS,
     SERVICE_RECORDS_CAP_PREFIX,
     SERVICE_RECORDS_CAPABILITY_IDS,
     default_caps_for_role,
 )
-from app.core.roles import ADMIN_ROLE
+from app.core.roles import ADMIN_ROLE, INMATE_REPORTER_ROLE
 from app.db.models import BookCategory, RolePermission, User, UserPermission
 
 
 def _role_and_dynamic_caps(db: Session, role: str) -> tuple[set[str], set[str]]:
-    """Load role defaults and category defaults together in one query."""
+    """Load role defaults and category defaults together in one query.
+
+    ``inmate_reporter`` is a fixed, narrow-scope role: it must NOT receive the
+    implicit all-service/all-category union every other role gets (that union
+    is what makes ``books.category.*``/``books.service.*`` "dynamic" —
+    granted by default, deny-only). It gets only the two dynamic ids its
+    ceiling names; every other service/category is denied by omission.
+    """
+    if role == INMATE_REPORTER_ROLE:
+        role_caps = set(
+            db.scalars(select(RolePermission.capability).where(RolePermission.role == role))
+        ) or set(default_caps_for_role(role))
+        dynamic_caps = {
+            cap
+            for cap in INMATE_REPORTER_CAPS
+            if cap.startswith(SERVICE_CAP_PREFIX) or cap.startswith(SERVICE_RECORDS_CAP_PREFIX)
+        }
+        return role_caps, dynamic_caps
     tagged_caps = union_all(
         select(
             RolePermission.capability.label("capability"),
@@ -46,7 +65,7 @@ def _role_and_dynamic_caps(db: Session, role: str) -> tuple[set[str], set[str]]:
             literal(True).label("is_dynamic"),
         ),
     )
-    role_caps: set[str] = set()
+    role_caps = set[str]()
     dynamic_caps = set(SERVICE_CAPABILITY_IDS) | set(SERVICE_RECORDS_CAPABILITY_IDS)
     for capability, is_dynamic in db.execute(tagged_caps):
         if is_dynamic:
@@ -61,7 +80,12 @@ def _role_and_dynamic_caps(db: Session, role: str) -> tuple[set[str], set[str]]:
 def role_default_caps_with_dynamic(db: Session, role: str) -> set[str]:
     """Role defaults plus implicit service/category capabilities."""
     role_caps, dynamic_caps = _role_and_dynamic_caps(db, role)
-    return role_caps | dynamic_caps
+    caps = role_caps | dynamic_caps
+    if role == INMATE_REPORTER_ROLE:
+        # Hard ceiling: a stale/edited role_permissions row can never widen
+        # this role beyond its fixed scope.
+        caps &= INMATE_REPORTER_CAPS
+    return caps
 
 
 def category_capability_ids(db: Session) -> set[str]:
@@ -115,6 +139,11 @@ def effective_caps(db: Session, user: User) -> set[str]:
                 caps.add(ov.capability)
             elif ov.effect == "deny":
                 caps.discard(ov.capability)
+        if user.role == INMATE_REPORTER_ROLE:
+            # Hard ceiling: a grant override (or a stale/edited role_permissions
+            # default) can never widen this role past its fixed scope. A deny
+            # override still narrows it — it was already applied above.
+            caps &= INMATE_REPORTER_CAPS
 
     user._effective_caps_cache = frozenset(caps)
     return caps
@@ -199,6 +228,25 @@ def _validate_override_item(
     return dynamic_caps
 
 
+def _reject_inmate_reporter_scope_widening(
+    target: User | None, capability: str, effect: str | None
+) -> None:
+    """403 a grant override that would push ``inmate_reporter`` past its fixed
+    ceiling. Changing to a broader role remains a separate admin action; this
+    only blocks widening the override matrix underneath the same role."""
+    if (
+        target is not None
+        and target.role == INMATE_REPORTER_ROLE
+        and effect == "grant"
+        and capability not in INMATE_REPORTER_CAPS
+    ):
+        raise AppError(
+            "INMATE_REPORTER_SCOPE_FIXED",
+            f"{capability!r} is outside the inmate reporter role's fixed scope.",
+            http_status=403,
+        )
+
+
 def set_user_override(
     db: Session,
     user_id: int,
@@ -223,6 +271,7 @@ def set_user_override(
       a capability they're managing.
     """
     dynamic_caps = _validate_override_item(db, capability, effect)
+    _reject_inmate_reporter_scope_widening(db.get(User, user_id), capability, effect)
     if actor is not None and actor.id == user_id:
         raise AppError(
             "FORBIDDEN_OVERRIDE",
@@ -281,6 +330,7 @@ def set_user_overrides(
         collapsed[capability] = (effect, expires_at)
     items = [(cap, eff, exp) for cap, (eff, exp) in collapsed.items()]
     dynamic_caps = dynamic_capability_ids(db)
+    target = db.get(User, user_id)
     existing_by_capability: dict[str, UserPermission | None] = {}
     for capability, effect, expires_at in items:
         _validate_override_item(
@@ -289,6 +339,7 @@ def set_user_overrides(
             effect,
             dynamic_caps=dynamic_caps,
         )
+        _reject_inmate_reporter_scope_widening(target, capability, effect)
         existing = db.get(UserPermission, (user_id, capability))
         _validate_temporary_dynamic_grant(
             capability,

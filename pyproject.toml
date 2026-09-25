@@ -15,8 +15,7 @@ dependencies = [
     "aztec-code-generator>=0.12",
     "zxing-cpp>=3.0.0",
     "pywebpush>=2.0.0",
-    # DOCX -> PDF (Word COM); Windows-only. See requirements.txt for the rationale.
-    "docx2pdf>=0.1.8; sys_platform == 'win32'",
+    # DOCX -> PDF (Word COM); Windows-only.
     "pywin32>=306; sys_platform == 'win32'",
     "tzdata>=2024.1; sys_platform == 'win32'",
 ]
@@ -62,9 +61,13 @@ plugins = ["pydantic.mypy"]
 module = [
     "webview",
     "webview.*",
-    "docx2pdf",
     "win32com",
     "win32com.*",
+    "win32api",
+    "win32con",
+    "win32gui",
+    "win32job",
+    "win32process",
     "docxtpl",
     "openpyxl",
     "openpyxl.*",

@@ -409,8 +409,7 @@ class BookRevisionAccess(Base):
             name="ck_book_revision_access_kind",
         ),
         CheckConstraint(
-            "state IN ('approved', 'rejected', 'returned', 'reviewed', "
-            "'changes_requested')",
+            "state IN ('approved', 'rejected', 'returned', 'reviewed', 'changes_requested')",
             name="ck_book_revision_access_state",
         ),
     )
@@ -1551,6 +1550,11 @@ class User(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     email: Mapped[str] = mapped_column(String(256), nullable=False)  # stored lowercased
     password_hash: Mapped[str] = mapped_column(String(128), nullable=False)
+    # True until the account owner replaces an admin-issued temporary
+    # password (migration 0093). Blocks session creation and DAV access.
+    password_change_required: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
     employee_id: Mapped[str | None] = mapped_column(
         ForeignKey("employees.id", ondelete="SET NULL"), nullable=True
     )
@@ -1569,7 +1573,10 @@ class User(Base):
     lock_layout: Mapped[str] = mapped_column(
         String(16), nullable=False, default="band", server_default="band"
     )
-    # operator | manager | admin — stored (admin-assigned), authoritative for auth.
+    # operator | manager | admin | inmate_reporter — stored (admin-assigned),
+    # authoritative for auth. inmate_reporter is a fixed-scope role (see
+    # core.permissions.INMATE_REPORTER_CAPS) bound to one admin-linked G
+    # number; it never self-links (auth_service.link_self blocks it).
     role: Mapped[str] = mapped_column(
         String(16), nullable=False, default="operator", server_default="operator"
     )

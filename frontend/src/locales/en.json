@@ -54,6 +54,19 @@
     "passwordsMismatch": "Passwords don't match.",
     "passwordTooShort": "Password must be at least 8 characters.",
     "emailRequired": "Email is required.",
+    "errDisabled": "This account is disabled. Contact your administrator.",
+    "passwordSetup": {
+      "title": "Choose your password",
+      "description": "Replace your temporary password before using the app.",
+      "newPassword": "New password",
+      "submit": "Save password and sign in",
+      "sameAsTemporary": "Choose a different password from the temporary one.",
+      "success": "Password saved. Sign in with your new password.",
+      "setupChanged": "Account access changed. Sign in again or contact your administrator.",
+      "notRequired": "Password setup is not required. Sign in normally.",
+      "credentialsExpired": "This temporary password is no longer valid. Sign in again or contact your administrator.",
+      "networkUnknown": "The password may have been saved. Try signing in with your new password."
+    },
     "smallPrint": "By signing in you agree to GSSG's acceptable use policy.",
     "signOut": "Sign out",
     "langToggle": "العربية"
@@ -71,6 +84,7 @@
     "ledger": "Ledger",
     "leaves": "Leaves",
     "services": "Services",
+    "inmateReport": "New inmate-violation report",
     "records": "Records",
     "permits": "Permits",
     "settings": "Settings",
@@ -1896,7 +1910,7 @@
       "approve": "Approve",
       "signApprove": "Sign & approve",
       "signed": "Book signed & approved",
-      "noSignatureHint": "Add your signing signature in Settings before approving.",
+      "noSignatureHint": "Add your profile signature in Settings or on your employee profile before approving.",
       "signingManager": "Signing manager",
       "selectApprover": "Select a signing manager…",
       "singleSignerHint": "One manager signs and approves this book.",
@@ -1951,11 +1965,13 @@
       "noApproversSelfHint": "You can sign — upload your signature in Settings.",
       "goToSettings": "Open Settings → Signing",
       "changeManager": "Change",
-      "managerNoSignature": "This manager has no signature on file yet — they'll need to add one in Settings → Signing before they can sign.",
-      "managerNoSignatureLink": "Settings → Signing",
+      "managerNoSignature": "This manager has no shared profile signature yet. Add it on the employee profile before signing, or",
+      "managerNoSignatureLink": "open Settings → Signing.",
       "managerNotLinked": "No manager is linked to this document. Please select a signing manager.",
       "reviewers": "Reviewers",
-      "reviewersHint": "Reviewers can comment and request changes before approval."
+      "reviewersHint": "Reviewers can comment and request changes before approval.",
+      "signConfirmTitle": "Sign & approve this record?",
+      "signConfirmBody": "This applies your signature to {{ref}} · v{{version}} · {{subject}}."
     },
     "annotations": {
       "pin": "Pin",
@@ -2015,7 +2031,11 @@
       "downloadImported": "Download original ({{format}})",
       "progress": "Progress",
       "notification": "Notification",
-      "stationSubmitted": "Submitted",
+      "tools": "Tools",
+      "toolsDocument": "Document",
+      "toolsEditing": "Editing",
+      "toolsAdmin": "Administration",
+      "stationCreated": "First version created",
       "stationRevised": "Revised",
       "stationReturned": "Returned",
       "stationRejected": "Rejected",
@@ -2707,7 +2727,8 @@
       "stampHeader": "Header Text",
       "stampBoldTopRight": "Bold Top-Right",
       "stampWatermark": "Watermark",
-      "defaultManager": "Default manager"
+      "defaultManager": "Default manager",
+      "inmateReportApprovalManager": "Inmate report approval manager"
     },
     "submitters": {
       "title": "Submitters",
@@ -2739,6 +2760,7 @@
       "nameAr": "Name (Arabic)",
       "jobTitle": "Title",
       "signature": "Signature",
+      "sharedSignatureHint": "Linked managers share their login account's profile signature; replacing or removing a shared signature here changes it everywhere.",
       "hasSignature": "Signature on file",
       "noSignature": "No signature",
       "removeSignature": "Remove signature",
@@ -2807,15 +2829,16 @@
       "placeholder": "Type your signature here…"
     },
     "signingSignature": {
-      "title": "Signing signature",
-      "description": "Embedded in a book's PDF when you approve and sign it. Separate from the email signature and the employee-vault signature.",
+      "title": "Profile signature",
+      "description": "Used on your employee profile, linked manager record, and book approvals.",
+      "unlinkedDescription": "Saved on your account. It will move to your employee profile automatically once your account is linked.",
       "onFile": "Signature on file",
       "save": "Save signature",
-      "saved": "Signing signature saved",
+      "saved": "Profile signature saved",
       "clear": "Clear",
       "replace": "Replace",
       "remove": "Remove",
-      "removed": "Signing signature removed"
+      "removed": "Profile signature removed"
     },
     "sigAppearance": {
       "title": "Signature appearance",
@@ -3120,6 +3143,27 @@
     "searchServices": "Search services…",
     "noServicesMatch": "No forms match your search.",
     "nsCategory": "Record",
+    "inmateReporter": {
+      "title": "Inmate Conduct Violations",
+      "description": "Save an unfinished report, then send it to the configured approval manager.",
+      "reportedBy": "Reported by",
+      "notLinked": "No employee record linked",
+      "unlinked": "Ask an administrator to link your employee record",
+      "saveHint": "Partial reports can be saved and completed later.",
+      "saveDraft": "Save draft",
+      "saving": "Saving draft…",
+      "sendToManager": "Send to manager",
+      "sending": "Sending…",
+      "correctReport": "Correct report",
+      "saved": "Draft saved · {{ref}}",
+      "sent": "Report sent to the approval manager",
+      "continueEditing": "Continue editing",
+      "incomplete": "Complete these fields before sending:",
+      "managerUnavailable": "No approval manager is available. Ask an administrator to configure one. Your draft is still saved.",
+      "stale": "This report or your linked employee record changed. Reload before continuing.",
+      "reload": "Reload",
+      "loadError": "The report could not be loaded. Reload and try again."
+    },
     "code": {
       "has": "Carries a scannable ref code",
       "none": "No ref code"
@@ -3317,7 +3361,12 @@
     },
     "employeePicker": {
       "placeholder": "Pick an employee…",
-      "search": "Search employees…"
+      "search": "Search employees…",
+      "loading": "Searching employees…",
+      "error": "Employees could not be searched.",
+      "clearSelection": "Clear selection",
+      "selectedLoadError": "Couldn't load this employee's name.",
+      "defaultAriaLabel": "Employee"
     },
     "tabs": {
       "fields": "Fields",
@@ -3329,6 +3378,7 @@
     "downloadPdf": "Download PDF",
     "downloadDocx": "Download DOCX",
     "pdfUnavailable": "PDF not available; download DOCX instead",
+    "pdfUnavailableNoDocx": "PDF not available for this report",
     "noDocuments": "No documents generated",
     "prevDoc": "Previous document",
     "nextDoc": "Next document",
@@ -3399,6 +3449,30 @@
   "dashboard": {
     "title": "Dashboard",
     "subtitle": "Today at a glance",
+    "inmateReporter": {
+      "eyebrow": "Inmate conduct violations",
+      "title": "Report workspace",
+      "subtitle": "Create, follow up, and print inmate conduct violation reports.",
+      "newReport": "New report",
+      "records": "Records",
+      "yourReports": "Your reports",
+      "yourReportsHint": "Continue drafts and review reports returned or rejected by the manager.",
+      "viewAll": "View all records",
+      "draft": "Drafts",
+      "returned": "Returned",
+      "rejected": "Rejected",
+      "pending": "Pending approval",
+      "pendingHint": "Reports currently with the approval manager.",
+      "pendingEmpty": "No reports are pending approval.",
+      "approved": "Approved",
+      "approvedHint": "Reports ready to read or print.",
+      "approvedEmpty": "No approved reports yet.",
+      "untitled": "Inmate conduct violation report",
+      "loadError": "Reports couldn't be loaded.",
+      "previous": "Previous",
+      "next": "Next",
+      "pageRange": "{{from}}–{{to}} of {{total}}"
+    },
     "welcomeBack": "Welcome back, {{name}}",
     "welcomeBackGuest": "Welcome back",
     "greeting": {
@@ -4126,8 +4200,18 @@
     "tabs": {
       "pending": "Pending",
       "active": "Active users",
-      "suspended": "Suspended",
+      "suspended": "Blocked accounts",
       "history": "History"
+    },
+    "create": {
+      "title": "Create account",
+      "noEmployee": "No employee link",
+      "employeeLabel": "Link to employee",
+      "displayName": "Display name (optional)",
+      "temporaryPassword": "Temporary password",
+      "copyPassword": "Copy temporary password",
+      "copyFailedHint": "Couldn't copy automatically — select the field and copy manually.",
+      "handoffHint": "Share this privately. The employee must replace it before using the app. It cannot be retrieved after closing this panel."
     },
     "permReq": {
       "tab": "Permission requests",
@@ -4155,6 +4239,7 @@
       "notLinked": "Not linked to an employee",
       "unverifiedLink": "Self-claimed — verify before approving",
       "rolePrompt": "Approve as",
+      "confirmEmployeeLabel": "Confirm employee link",
       "approve": "Approve",
       "approving": "Approving…",
       "reject": "Reject",
@@ -4166,7 +4251,9 @@
         "manager": "Manager",
         "managerHint": "Manage HR, ledger and books",
         "operator": "Operator",
-        "operatorHint": "Standard day-to-day access"
+        "operatorHint": "Standard day-to-day access",
+        "inmate_reporter": "Inmate violation reporter",
+        "inmate_reporterHint": "Create and track inmate violation reports"
       }
     },
     "active": {
@@ -4178,12 +4265,23 @@
       "reset": "Reset password",
       "changeRole": "Change role",
       "editPermissions": "Edit permissions",
-      "suspend": "Suspend",
-      "reactivate": "Reactivate",
+      "linkEmployee": "Link employee",
+      "disable": "Disable account",
+      "unlock": "Unlock account",
+      "reactivate": "Reactivate account",
       "never": "Never",
       "rowActions": "Row actions",
       "empty": "No active users.",
-      "suspendedEmpty": "No suspended users."
+      "suspendedEmpty": "No blocked accounts."
+    },
+    "status": {
+      "disabled": "Disabled",
+      "locked": "Temporarily locked",
+      "passwordSetup": "Awaiting password setup"
+    },
+    "disable": {
+      "title": "Disable this account?",
+      "body": "{{name}} will be signed out and cannot sign in or use Word editing links until you reactivate the account. Their records will be kept."
     },
     "defaultManager": {
       "badge": "Default manager",
@@ -4203,7 +4301,11 @@
         "reset_password": "Password reset",
         "lock": "Suspended",
         "unlock": "Reactivated",
-        "set_status": "Status changed"
+        "set_status": "Status changed",
+        "create_user": "Account created",
+        "disable": "Disabled",
+        "reactivate": "Restored",
+        "password_setup": "Password set up"
       }
     },
     "reject": {
@@ -4216,7 +4318,8 @@
     },
     "resetModal": {
       "title": "Reset password",
-      "body": "Set a temporary password for {{name}}. They can change it after signing in.",
+      "body": "Set a temporary password for {{name}}. Share it with them directly.",
+      "bodySetupPending": "{{name}}'s password is still temporary. They must replace it before they can sign in.",
       "label": "New password",
       "placeholder": "At least 8 characters",
       "generate": "Generate",
@@ -4233,7 +4336,7 @@
       "rejected": "Request rejected",
       "roleChanged": "Role updated",
       "passwordReset": "Password reset",
-      "suspended": "User suspended",
+      "disabled": "Account disabled",
       "reactivated": "User reactivated"
     },
     "bell": {
@@ -4252,7 +4355,8 @@
     "roleName": {
       "admin": "Admin",
       "manager": "Manager",
-      "operator": "Operator"
+      "operator": "Operator",
+      "inmate_reporter": "Inmate violation reporter"
     },
     "permissions": {
       "loadError": "Couldn't load permissions.",

@@ -62,6 +62,7 @@ const operator: AdminUserRead = {
   last_login_at: null,
   created_at: null,
   is_default_manager: false,
+  password_change_required: false,
 }
 
 const admin: AdminUserRead = {

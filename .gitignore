@@ -155,6 +155,7 @@ backend/scripts/_run_sample_report.bat
 
 # Local Herdr agent-pipeline tooling (personal automation, not shared repo source)
 .herdr/
+.herdr-*.txt
 
 # design mockup screenshots and reference images (large binaries, local only)
 mockups/shots/

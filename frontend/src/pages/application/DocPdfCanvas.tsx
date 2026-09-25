@@ -206,10 +206,12 @@ function DocPdfCanvasRenderer({
           <AlertCircle className="h-6 w-6" />
           <span className="text-sm">
             {errorKind === 'missing'
-              ? t('application.pdfNotGenerated', {
-                  defaultValue:
-                    "No PDF was generated for this document — download the DOCX instead.",
-                })
+              ? docxUrl
+                ? t('application.pdfNotGenerated', {
+                    defaultValue:
+                      'No PDF was generated for this document — download the DOCX instead.',
+                  })
+                : t('application.pdfUnavailableNoDocx')
               : t('ledger.attachments.renderFailed', {
                   defaultValue: "Couldn't render this file",
                 })}

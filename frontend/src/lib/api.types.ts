@@ -226,6 +226,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/complete-password-setup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Complete Password Setup
+         * @description Replace an admin-issued temporary password before first sign-in.
+         *
+         *     Public (no session yet) — shares the login rate-limit budget. Does not
+         *     set a cookie; the frontend performs a normal login afterward.
+         */
+        post: operations["complete_password_setup_api_v1_auth_complete_password_setup_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/me/link": {
         parameters: {
             query?: never;
@@ -338,7 +361,12 @@ export interface paths {
         /** List Users */
         get: operations["list_users_api_v1_auth_users_get"];
         put?: never;
-        post?: never;
+        /**
+         * Create User
+         * @description Admin-issued account. Response carries the one-time temporary
+         *     password — it is never retained or shown again after this call.
+         */
+        post: operations["create_user_api_v1_auth_users_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -430,7 +458,7 @@ export interface paths {
         patch: operations["set_role_api_v1_auth_users__user_id__role_patch"];
         trace?: never;
     };
-    "/api/v1/auth/users/{user_id}/lock": {
+    "/api/v1/auth/users/{user_id}/link": {
         parameters: {
             query?: never;
             header?: never;
@@ -439,8 +467,32 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Lock User */
-        post: operations["lock_user_api_v1_auth_users__user_id__lock_post"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Set User Link
+         * @description Admin-set/clear a target account's employee link (G number).
+         *
+         *     Distinct from ``POST /auth/me/link`` (self-service, blocked entirely for
+         *     ``inmate_reporter``): this is how an admin binds/rebinds that role's fixed
+         *     G number, or repairs any account's link after review.
+         */
+        patch: operations["set_user_link_api_v1_auth_users__user_id__link_patch"];
+        trace?: never;
+    };
+    "/api/v1/auth/users/{user_id}/disable": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Disable User */
+        post: operations["disable_user_api_v1_auth_users__user_id__disable_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2362,6 +2414,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/books/{book_id}/word-sessions/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Word Session Status
+         * @description Small poll for Word saves; avoid rebuilding the full Record every second.
+         */
+        get: operations["word_session_status_api_v1_books__book_id__word_sessions_status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/books/{book_id}/word-sessions/preview": {
         parameters: {
             query?: never;
@@ -2703,9 +2775,10 @@ export interface paths {
          *     ApplicationPage revise-mode prefill. Deliberately not on ``BookRead`` (the
          *     detail payload only exposes ``has_fields``).
          *
-         *     Requires ``books.edit`` (not ``books.view``) because this backs the
-         *     revise/edit write-path: the caller fetches these fields in order to submit
-         *     a revised generation, which is a managed write operation.
+         *     Every other role still needs ``books.edit`` (not ``books.view``) — this
+         *     backs the revise/edit write-path, a managed write operation.
+         *     ``inmate_reporter`` never holds ``books.edit``; it gets only its own
+         *     editable current version through ``require_inmate_report_write_access``.
          */
         get: operations["get_version_fields_api_v1_books__book_id__versions__version_id__fields_get"];
         put?: never;
@@ -3995,7 +4068,7 @@ export interface paths {
         };
         /**
          * Get My Signature
-         * @description Return the current user's saved signature PNG (self-scoped).
+         * @description Return the caller's saved signature PNG (self-scoped).
          *
          *     ``encoding=base64`` returns the bytes base64-encoded as ``text/plain`` —
          *     the frontend uses this to dodge Internet Download Manager. Default returns
@@ -4021,12 +4094,10 @@ export interface paths {
         put?: never;
         /**
          * Preview My Signature
-         * @description Render the caller's SIGNING signature at the given size/boldness (self-scoped).
+         * @description Render the caller's saved signature at the given size/boldness (self-scoped).
          *
-         *     Reads ``user.signature_path`` — the exact file embedded when this user signs a
-         *     book (``book_service.sign_book``) — so the preview matches what lands on the
-         *     document. This is deliberately NOT the employee-vault signature served by
-         *     ``GET /signatures/me`` (those can differ).
+         *     Reads the SAME source as ``GET /signatures/me`` — the preview always
+         *     matches what lands on a signed document.
          */
         post: operations["preview_my_signature_api_v1_signatures_preview_post"];
         delete?: never;
@@ -6376,6 +6447,33 @@ export interface components {
             /** Admin Gate Enabled */
             admin_gate_enabled: boolean;
         };
+        /**
+         * AdminUserCreateRequest
+         * @description Admin-issued account creation — a temporary password is generated.
+         */
+        AdminUserCreateRequest: {
+            /** Email */
+            email: string;
+            /** Employee Id */
+            employee_id: string | null;
+            /** Display Name */
+            display_name?: string | null;
+            /**
+             * Role
+             * @default operator
+             * @enum {string}
+             */
+            role: "operator" | "manager" | "admin" | "inmate_reporter";
+        };
+        /**
+         * AdminUserCreateResult
+         * @description Response to ``POST /auth/users``. ``temporary_password`` is shown once.
+         */
+        AdminUserCreateResult: {
+            user: components["schemas"]["AdminUserRead"];
+            /** Temporary Password */
+            temporary_password: string;
+        };
         /** AdminUserRead */
         AdminUserRead: {
             /** Id */
@@ -6403,6 +6501,11 @@ export interface components {
              * @default false
              */
             is_default_manager: boolean;
+            /**
+             * Password Change Required
+             * @default false
+             */
+            password_change_required: boolean;
         };
         /** AnnouncementOut */
         AnnouncementOut: {
@@ -6455,6 +6558,8 @@ export interface components {
             signature_size_mm: number;
             /** Signature Boldness */
             signature_boldness: number;
+            /** Inmate Reporter Manager User Id */
+            inmate_reporter_manager_user_id: number | null;
         };
         /**
          * AppSettingsUpdate
@@ -6489,6 +6594,8 @@ export interface components {
             signature_size_mm?: number | null;
             /** Signature Boldness */
             signature_boldness?: number | null;
+            /** Inmate Reporter Manager User Id */
+            inmate_reporter_manager_user_id?: number | null;
         };
         /**
          * ApprovalLogItem
@@ -6614,7 +6721,7 @@ export interface components {
              */
             role: string;
             /** Employee Id */
-            employee_id?: string | null;
+            employee_id: string | null;
         };
         /** ApprovedViolationImportRead */
         ApprovedViolationImportRead: {
@@ -7826,6 +7933,18 @@ export interface components {
             name_en: string;
             /** Unit Ar */
             unit_ar: string;
+        };
+        /**
+         * CompletePasswordSetupRequest
+         * @description Public: replace an admin-issued temporary password before first sign-in.
+         */
+        CompletePasswordSetupRequest: {
+            /** Email */
+            email: string;
+            /** Temporary Password */
+            temporary_password: string;
+            /** New Password */
+            new_password: string;
         };
         /** CompletenessRead */
         CompletenessRead: {
@@ -14346,6 +14465,11 @@ export interface components {
             /** Date */
             date?: string | null;
         };
+        /** WordSaveStatusRead */
+        WordSaveStatusRead: {
+            /** Last Put At */
+            last_put_at: string | null;
+        };
         /** WordSessionRead */
         WordSessionRead: {
             /** Book Id */
@@ -15240,6 +15364,37 @@ export interface operations {
             };
         };
     };
+    complete_password_setup_api_v1_auth_complete_password_setup_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CompletePasswordSetupRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     link_my_employee_api_v1_auth_me_link_post: {
         parameters: {
             query?: never;
@@ -15471,6 +15626,41 @@ export interface operations {
             };
         };
     };
+    create_user_api_v1_auth_users_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AdminUserCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminUserCreateResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_audit_api_v1_auth_audit_get: {
         parameters: {
             query?: {
@@ -15652,7 +15842,44 @@ export interface operations {
             };
         };
     };
-    lock_user_api_v1_auth_users__user_id__lock_post: {
+    set_user_link_api_v1_auth_users__user_id__link_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LinkSelfRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AdminUserRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    disable_user_api_v1_auth_users__user_id__disable_post: {
         parameters: {
             query?: never;
             header?: never;
@@ -20037,6 +20264,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BookRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    word_session_status_api_v1_books__book_id__word_sessions_status_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                book_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WordSaveStatusRead"];
                 };
             };
             /** @description Validation Error */

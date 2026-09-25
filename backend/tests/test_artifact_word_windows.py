@@ -45,11 +45,11 @@ def _sha256(path: Path) -> str:
 
 
 def _real_dispatch_ex_converter(source: Path) -> Path | None:
-    """Delegate to the repository's actual fresh-DispatchEx production method."""
-    from app.core.pdf_chain import PdfChain
+    """Delegate to the repository's actual production Word converter."""
+    from app.core import word_pdf
 
-    destination = source.with_suffix(".pdf")
-    PdfChain()._via_win32com(source.resolve(), destination.resolve())
+    destination = word_pdf.convert(source)
+    assert destination is not None
     _CONVERSION_SOURCES.append(str(source.resolve()))
     return destination
 
@@ -402,8 +402,8 @@ def test_phase6_windows_word_artifact_smoke() -> None:
     (evidence_dir / "word-smoke.json").write_text(
         json.dumps(
             {
-                "converter_adapter": "PdfChain._via_win32com",
-                "converter_claim": "fresh DispatchEx only",
+                "converter_adapter": "word_pdf.convert",
+                "converter_claim": "production DispatchEx Word, warm per process",
                 "default_chain_verified": False,
                 "process_pool_verified": False,
                 "word_pids": word_pids,
@@ -736,3 +736,80 @@ def test_initial_approval_signature_word_smoke(
         json.dumps(summary, ensure_ascii=False, indent=2, sort_keys=True),
         encoding="utf-8",
     )
+
+
+def test_pdf_executor_reaps_wedged_worker_on_timeout(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A conversion that times out must kill the wedged worker (its Word dies
+    with the worker's job, see test_word_dies_with_its_worker) and rebuild the
+    singleton pool — otherwise the one worker slot stays wedged forever and
+    every later conversion, for every document, times out too. This is a
+    pure mock: no real Word/subprocess involved, runs on any platform."""
+    from concurrent.futures import Future
+
+    from app.services import _pdf_executor
+
+    monkeypatch.delenv("GSSG_INLINE_PDF", raising=False)
+    monkeypatch.setattr(_pdf_executor, "_executor", None)
+    monkeypatch.setattr(_pdf_executor.sys, "platform", "win32")
+
+    killed: list[list[str]] = []
+    monkeypatch.setattr(
+        _pdf_executor.subprocess, "run", lambda cmd, **kwargs: killed.append(cmd)
+    )
+
+    class _FakeExecutor:
+        def __init__(self, pid: int) -> None:
+            self._processes = {pid: object()}
+            self.shutdown_calls: list[tuple[bool, bool]] = []
+
+        def submit(self, fn: object, *args: object, **kwargs: object) -> Future[object]:
+            fut: Future[object] = Future()
+            fut.set_exception(TimeoutError())
+            return fut
+
+        def shutdown(self, *, wait: bool, cancel_futures: bool) -> None:
+            self.shutdown_calls.append((wait, cancel_futures))
+
+    pools = [_FakeExecutor(4242), _FakeExecutor(9999)]
+    built = iter(pools)
+    monkeypatch.setattr(_pdf_executor, "ProcessPoolExecutor", lambda max_workers: next(built))
+
+    with pytest.raises(TimeoutError):
+        _pdf_executor.convert_docx_to_pdf(Path("dummy.docx"))
+
+    # the wedged worker was killed via taskkill
+    assert killed == [["taskkill", "/T", "/F", "/PID", "4242"]]
+    assert pools[0].shutdown_calls == [(False, True)]
+    assert _pdf_executor._executor is None  # singleton dropped, not left wedged
+
+    # the next call builds a fresh pool instead of reusing the wedged one
+    second = _pdf_executor.get_executor()
+    assert second is pools[1]
+    assert second is not pools[0]
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="requires Microsoft Word on Windows")
+def test_word_dies_with_its_worker(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """DCOM starts WINWORD.EXE under svchost, so killing the worker process
+    (the executor's timeout path) only kills Word because ``word_pdf`` binds
+    it to the worker's kill-on-close job. Closing that job — exactly what a
+    killed worker's exit does — must take the warm Word down with it; before
+    the fix a reaped worker left a hidden Word running forever."""
+    if os.environ.get("GSSG_RUN_WORD_ARTIFACT_SMOKE") != "1":
+        pytest.skip("set GSSG_RUN_WORD_ARTIFACT_SMOKE=1 for the isolated Word gate")
+    import win32event
+
+    from app.core import word_pdf
+
+    monkeypatch.setattr(word_pdf, "_warm", None)
+    monkeypatch.setattr(word_pdf, "_job", None)
+    src = tmp_path / "book.docx"
+    shutil.copy2(Path(__file__).parents[1] / "templates" / "GSSG-GS_300-003_General_Book.docx", src)
+
+    assert word_pdf.convert(src) is not None
+    assert word_pdf._warm is not None
+    _word, word_process = word_pdf._warm
+    assert word_process is not None, "Word was not bound to the worker job"
+
+    word_pdf._job.Close()
+    assert win32event.WaitForSingleObject(word_process, 15_000) == win32event.WAIT_OBJECT_0

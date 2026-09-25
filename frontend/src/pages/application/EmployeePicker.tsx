@@ -6,6 +6,13 @@
  *
  * Visual vocabulary is TAMM (spec §6.8): 10px×14px input padding, 10px
  * radius, hairline border, primary-soft focus ring.
+ *
+ * Keyboard: ArrowDown/ArrowUp move a visually-highlighted option (tracked via
+ * `aria-activedescendant`, not real DOM focus — focus stays in the input).
+ * Enter selects the highlighted option and blocks form submission while the
+ * popup is open. Escape closes without changing the selection. Pointer and
+ * keyboard selection both funnel through `selectRow` so behavior stays
+ * identical either way.
  */
 
 import { useEffect, useId, useRef, useState } from 'react'
@@ -22,14 +29,23 @@ import { cn } from '@/lib/utils'
 interface EmployeePickerProps {
   selectedId: string | null
   onSelect: (id: string | null) => void
+  /** Accessible name for the combobox input. Defaults to a translated
+   * generic label — pass one when a field needs a more specific name
+   * (e.g. "Link to employee" vs. just "Employee"). */
+  ariaLabel?: string
 }
 
-export function EmployeePicker({ selectedId, onSelect }: EmployeePickerProps): React.JSX.Element {
+export function EmployeePicker({
+  selectedId,
+  onSelect,
+  ariaLabel,
+}: EmployeePickerProps): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const listboxId = useId()
 
   const [query, setQuery] = useState('')
   const [open, setOpen] = useState(false)
+  const [activeIndex, setActiveIndex] = useState(-1)
   const blurTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // Clear any pending blur-close timeout on unmount (avoid setState-after-unmount).
@@ -37,14 +53,19 @@ export function EmployeePicker({ selectedId, onSelect }: EmployeePickerProps): R
     if (blurTimer.current) clearTimeout(blurTimer.current)
   }, [])
 
-  const { data, isLoading } = useQuery({
+  const {
+    data,
+    isLoading,
+    isError,
+    refetch,
+  } = useQuery({
     queryKey: ['employees-picker', query],
     queryFn: () => api.listEmployees({ q: query.trim() || undefined, limit: 50 }),
     enabled: open,
     staleTime: 15_000,
   })
 
-  const { data: selectedData } = useQuery({
+  const { data: selectedData, isError: selectedError } = useQuery({
     queryKey: ['employee', selectedId],
     queryFn: () => api.getEmployee(selectedId!),
     enabled: !!selectedId,
@@ -57,9 +78,57 @@ export function EmployeePicker({ selectedId, onSelect }: EmployeePickerProps): R
     return pickEmployeeName(item, i18n.language)
   }
 
-  const selectedLabel = selectedData
-    ? `${pickEmployeeName(selectedData, i18n.language)} — ${selectedData.id}`
-    : ''
+
+  function selectRow(id: string | null): void {
+    onSelect(id)
+    setOpen(false)
+    setQuery('')
+    setActiveIndex(-1)
+  }
+
+  function onKeyDown(e: React.KeyboardEvent<HTMLInputElement>): void {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      if (!open) {
+        setOpen(true)
+        return
+      }
+      if (rows.length > 0) {
+        setActiveIndex((i) => (i + 1) % rows.length)
+      }
+      return
+    }
+    if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      if (open && rows.length > 0) {
+        setActiveIndex((i) => (i <= 0 ? rows.length - 1 : i - 1))
+      }
+      return
+    }
+    if (e.key === 'Enter') {
+      if (!open) return
+      // Block accidental form submission while the popup is open, whether
+      // or not an option is currently highlighted.
+      e.preventDefault()
+      if (activeIndex >= 0 && activeIndex < rows.length) {
+        selectRow(rows[activeIndex]!.id)
+      }
+      return
+    }
+    if (e.key === 'Escape') {
+      if (open) {
+        e.preventDefault()
+        setOpen(false)
+        setActiveIndex(-1)
+      }
+    }
+  }
+
+  const selectedLabel = selectedError
+    ? `${selectedId} — ${t('application.employeePicker.selectedLoadError')}`
+    : selectedData
+      ? `${pickEmployeeName(selectedData, i18n.language)} — ${selectedData.id}`
+      : ''
 
   return (
     <div className="relative">
@@ -71,28 +140,35 @@ export function EmployeePicker({ selectedId, onSelect }: EmployeePickerProps): R
           aria-expanded={open}
           aria-controls={open ? listboxId : undefined}
           aria-autocomplete="list"
+          aria-activedescendant={
+            open && activeIndex >= 0 ? `${listboxId}-opt-${activeIndex}` : undefined
+          }
+          aria-label={ariaLabel ?? t('application.employeePicker.defaultAriaLabel')}
           autoComplete="off"
+          dir="auto"
           placeholder={t('application.employeePicker.placeholder')}
           value={open ? query : selectedLabel}
           onFocus={() => {
             setOpen(true)
             setQuery('')
+            setActiveIndex(-1)
           }}
           onBlur={() => {
             blurTimer.current = setTimeout(() => setOpen(false), 150)
           }}
-          onChange={(e) => setQuery(e.target.value)}
+          onChange={(e) => {
+            setQuery(e.target.value)
+            setActiveIndex(-1)
+          }}
+          onKeyDown={onKeyDown}
           className="flex-1 bg-transparent text-[0.86em] text-foreground placeholder:text-muted-foreground focus:outline-none"
         />
         {selectedId && !open && (
           <button
             type="button"
-            onClick={() => {
-              onSelect(null)
-              setQuery('')
-            }}
+            onClick={() => selectRow(null)}
             className="text-[0.86em] text-muted-foreground hover:text-foreground"
-            aria-label="Clear selection"
+            aria-label={t('application.employeePicker.clearSelection')}
           >
             ×
           </button>
@@ -114,25 +190,40 @@ export function EmployeePicker({ selectedId, onSelect }: EmployeePickerProps): R
                 </div>
               ))}
             </div>
+          ) : isError ? (
+            <div className="flex items-center justify-between gap-2 px-3 py-2 text-[0.86em] text-destructive" role="alert">
+              <span>{t('application.employeePicker.error')}</span>
+              <button
+                type="button"
+                onMouseDown={(e) => e.preventDefault()}
+                onClick={() => void refetch()}
+                className="shrink-0 font-medium underline"
+              >
+                {t('common.retry')}
+              </button>
+            </div>
           ) : rows.length === 0 ? (
             <div className="px-3 py-2 text-[0.86em] text-muted-foreground">
               {t('common.noResults')}
             </div>
           ) : (
-            rows.map((row) => (
-              <button
+            rows.map((row, index) => (
+              <div
                 key={row.id}
-                type="button"
+                id={`${listboxId}-opt-${index}`}
                 role="option"
+                tabIndex={-1}
                 aria-selected={row.id === selectedId}
+                dir="auto"
                 className={cn(
-                  'flex w-full flex-col px-3 py-2 text-start text-[0.86em] hover:bg-surface-tinted',
+                  'flex w-full cursor-pointer flex-col px-3 py-2 text-start text-[0.86em] hover:bg-surface-tinted',
                   row.id === selectedId && 'bg-primary-soft text-primary',
+                  index === activeIndex && 'bg-surface-tinted',
                 )}
-                onMouseDown={() => {
-                  onSelect(row.id)
-                  setOpen(false)
-                  setQuery('')
+                onMouseEnter={() => setActiveIndex(index)}
+                onMouseDown={(e) => {
+                  e.preventDefault()
+                  selectRow(row.id)
                 }}
               >
                 <span className="font-medium">{displayName(row)}</span>
@@ -140,7 +231,7 @@ export function EmployeePicker({ selectedId, onSelect }: EmployeePickerProps): R
                   {row.id}
                   {row.department ? ` · ${row.department}` : ''}
                 </span>
-              </button>
+              </div>
             ))
           )}
         </div>

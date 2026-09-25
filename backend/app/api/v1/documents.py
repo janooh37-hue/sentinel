@@ -42,7 +42,7 @@ from app.api.errors import AppError, NotFoundError
 from app.config import get_settings
 from app.core.form_kind import OTHER_SERVICE_ID, SERVICE_ALIASES, SERVICE_IDS
 from app.core.pdf_merge import merge_pdfs_to_bytes
-from app.core.roles import ADMIN_ROLE
+from app.core.roles import ADMIN_ROLE, INMATE_REPORTER_ROLE
 from app.db.models import Book, BookVersion, Document, User
 from app.db.session import SessionLocal, get_db
 from app.schemas._base import ORMBase
@@ -133,6 +133,14 @@ def _require_document_record_access(
             version_id=owning_version.id,
         )
         return owning_version
+    if user.role == INMATE_REPORTER_ROLE:
+        # Never an orphan/standalone (unsaved-preview) document — this role's
+        # generations are always committed and linked to a Book/BookVersion.
+        raise AppError(
+            "FORBIDDEN",
+            "You don't have permission to access this document",
+            http_status=status.HTTP_403_FORBIDDEN,
+        )
     if not perm_service.has_capability(db, user, "documents.generate"):
         raise AppError(
             "FORBIDDEN",
@@ -344,6 +352,10 @@ def _run_generation(
     set_running(job_id)
     db = SessionLocal()
     try:
+        # Reload in THIS session — the caller's User instance came from the
+        # now-closed request session; re-fetch so a role/link change made
+        # while this job sat queued is respected, not a stale detached read.
+        actor = db.get(User, current_user.id) if current_user is not None else None
         result = document_service.generate_document(
             db,
             employee_id=request.employee_id,
@@ -353,19 +365,25 @@ def _run_generation(
             submitter_id=request.submitter_id,
             embed_signature=request.embed_signature,
             commit=request.commit,
-            current_user=current_user,
-            record_access_user=current_user,
+            current_user=actor,
+            record_access_user=actor,
             revise_of_book_id=request.revise_of_book_id,
             attachments=request.attachments,
             classification_code=request.classification_code,
         )
         # Best-effort automatic employee SMS for generated service forms.
         # Must never break generation — the document is already committed.
+        # inmate_reporter's private saves never autosend regardless of the
+        # request flag (server-enforced, not just a UI default).
         if _should_autosend(
             commit=request.commit,
             revise_of_book_id=request.revise_of_book_id,
             book_id=result.book_id,
-            notify_employee=request.notify_employee,
+            notify_employee=(
+                False
+                if actor is not None and actor.role == INMATE_REPORTER_ROLE
+                else request.notify_employee
+            ),
         ):
             try:
                 notify_dispatch.auto_send_for_book(db, result.book_id, sent_by=None)  # type: ignore[arg-type]
@@ -432,16 +450,10 @@ def generate_document(
         service_id=effective_service,
     )
     if payload.revise_of_book_id is not None:
-        if not perm_service.has_capability(db, user, "books.edit"):
-            raise AppError(
-                "FORBIDDEN",
-                "Missing capability: books.edit",
-                http_status=status.HTTP_403_FORBIDDEN,
-                details={"capability": "books.edit"},
-            )
         revise_book = db.get(Book, payload.revise_of_book_id)
-        if revise_book is not None and revise_book.deleted_at is None:
-            book_service.require_full_book_access(db, user, revise_book)
+        if revise_book is not None and revise_book.deleted_at is not None:
+            revise_book = None
+        book_service.require_revise_access(db, user, revise_book)
 
     for source in payload.attachments or ():
         if source.source == "staged" or source.book_id is None:
@@ -449,7 +461,7 @@ def generate_document(
         source_book = db.get(Book, source.book_id)
         if source_book is not None and source_book.deleted_at is None:
             book_service.require_full_book_access(db, user, source_book)
-    job_id = submit_job()
+    job_id = submit_job(owner_user_id=user.id)
     # The task opens its own session (the request session is closed once this
     # response returns). The caller is both the stamping identity and the
     # interactive record-access authorization identity.
@@ -540,10 +552,10 @@ def commit_approved_violation(
 @jobs_router.get("/{job_id}", response_model=JobStatusResponse)
 def get_job_status(
     job_id: str,
-    _user: Annotated[User, Depends(require_capability("documents.generate"))],
+    user: Annotated[User, Depends(require_capability("documents.generate"))],
 ) -> JobStatusResponse:
     job = get_job(job_id)
-    if job is None:
+    if job is None or (user.role == INMATE_REPORTER_ROLE and job.owner_user_id != user.id):
         raise NotFoundError("JOB_NOT_FOUND", f"Job {job_id!r} not found", job_id=job_id)
     pydantic_docs: list[JobDocumentItem] | None = None
     if job.documents:
@@ -553,7 +565,7 @@ def get_job_status(
                 template_id=d.template_id,
                 role=d.role,
                 ref_number=d.ref_number,
-                docx_url=d.docx_url,
+                docx_url=("" if user.role == INMATE_REPORTER_ROLE else d.docx_url),
                 pdf_url=d.pdf_url,
             )
             for d in job.documents
@@ -658,12 +670,27 @@ def download_document(
             f"Document {document_id} not found",
             id=document_id,
         )
+    if user.role == INMATE_REPORTER_ROLE and (format != "pdf" or original):
+        raise AppError(
+            "FORBIDDEN",
+            "This role can only download the current PDF.",
+            http_status=status.HTTP_403_FORBIDDEN,
+        )
     version = _require_document_record_access(db, user, row, expected_version_id=version_id)
 
     artifact = document_service.resolve_document_artifact(
         db, document_id, format=format, original=original, version=version
     )
-
+    if user.role == INMATE_REPORTER_ROLE and artifact.ext != ".pdf":
+        # The signed-lock resolver falls back to the retained DOCX when PDF
+        # conversion failed at sign time (existing behavior other roles rely
+        # on) — this role must never receive Word bytes, so treat that
+        # exactly like "no PDF exists" rather than silently downgrading.
+        raise NotFoundError(
+            "PDF_NOT_AVAILABLE",
+            f"No PDF rendition exists for document {document_id}",
+            id=document_id,
+        )
     if artifact.companion_paths:
         merged = merge_pdfs_to_bytes(artifact.path, list(artifact.companion_paths))
         if (b64 := maybe_base64(merged, encoding)) is not None:

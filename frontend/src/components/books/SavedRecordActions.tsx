@@ -1,16 +1,19 @@
-import { useState } from 'react'
+import { useContext, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { ExternalLink, Printer, Send } from 'lucide-react'
+import { toast } from 'sonner'
 
 import { SubmitForApprovalDialog } from './SubmitForApprovalDialog'
-import { api } from '@/lib/api'
+import { api, ApiError } from '@/lib/api'
 import { bidi } from '@/lib/bidi'
-import { canSendForApproval } from './book-detail-drawer-utils'
+import { canSendForApproval, inmateReporterActionFor } from './book-detail-drawer-utils'
+import { useInmateReportSubmit } from './useInmateReportSubmit'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { useIsMobile } from '@/lib/useIsMobile'
 import { cn } from '@/lib/utils'
+import { AuthContext } from '@/lib/authContext'
 
 export type NotificationChoice = 'enabled' | 'skipped'
 
@@ -32,6 +35,8 @@ export function SavedRecordActions({
   const { t } = useTranslation()
   const navigate = useNavigate()
   const { has } = useCapabilities()
+  const user = useContext(AuthContext)?.user ?? null
+  const isInmateReporter = user?.role === 'inmate_reporter'
   const isMobile = useIsMobile()
   const [approvalOpen, setApprovalOpen] = useState(false)
   const bookQuery = useQuery({
@@ -44,7 +49,30 @@ export function SavedRecordActions({
   const printable = Boolean(
     current?.signed_pdf_url || current?.pdf_url || bookQuery.data?.imported_doc?.pdf_url,
   )
-  const canSubmit = state === 'none' && canSendForApproval(state, { canSubmitBook: has('books.submit') })
+  const reporterAction = bookQuery.data
+    ? inmateReporterActionFor(bookQuery.data, user?.id)
+    : 'read-only'
+  const canSubmit = isInmateReporter
+    ? reporterAction === 'edit-submit'
+    : state === 'none' && canSendForApproval(state, { canSubmitBook: has('books.submit') })
+  const reporterSubmitMutation = useInmateReportSubmit({
+    onSuccess: () => toast.success(t('books.approval.submitted')),
+    onError: (err, message) => {
+      if (err instanceof ApiError && err.code === 'INMATE_REPORT_INCOMPLETE') {
+        toast.error(message, {
+          action: {
+            label: t('books.pane.continueDraft'),
+            onClick: () =>
+              navigate('/application?form=Inmate%20Conduct%20Violations', {
+                state: { reviseBookId: bookId },
+              }),
+          },
+        })
+      } else {
+        toast.error(message)
+      }
+    },
+  })
   const print = () => {
     const opened = window.open(`/books/${bookId}?print=1`, '_blank')
     if (opened) opened.opener = null
@@ -69,7 +97,10 @@ export function SavedRecordActions({
   const approvalAction = canSubmit ? (
     <button
       type="button"
-      onClick={() => setApprovalOpen(true)}
+      onClick={() => {
+        if (isInmateReporter) reporterSubmitMutation.mutate(bookId)
+        else setApprovalOpen(true)
+      }}
       className={cn(
         'inline-flex min-h-10 items-center gap-2 rounded-lg bg-primary px-3 text-sm font-semibold text-primary-foreground transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
         isMobile && 'col-span-2 w-full justify-center',
@@ -120,7 +151,9 @@ export function SavedRecordActions({
       </div>
 
       {bookQuery.data !== undefined && !printable && (
-        <p className="mt-3 text-sm text-muted-foreground">{t('books.completion.printUnavailable')}</p>
+        <p className="mt-3 text-sm text-muted-foreground">
+          {isInmateReporter ? t('application.pdfUnavailableNoDocx') : t('books.completion.printUnavailable')}
+        </p>
       )}
 
       <div className={isMobile ? 'mt-4 grid grid-cols-2 gap-2' : 'mt-4 flex flex-wrap gap-2'}>
@@ -139,7 +172,9 @@ export function SavedRecordActions({
         )}
       </div>
 
-      {approvalOpen && <SubmitForApprovalDialog bookId={bookId} onClose={() => setApprovalOpen(false)} />}
+      {!isInmateReporter && approvalOpen && (
+        <SubmitForApprovalDialog bookId={bookId} onClose={() => setApprovalOpen(false)} />
+      )}
     </section>
   )
 }

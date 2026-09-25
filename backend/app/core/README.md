@@ -268,29 +268,20 @@ signature block.
 
 ---
 
-### `pdf_chain`
+### `word_pdf`
 
 ```python
-PdfChain()
-    .convert(docx_path, pdf_path=None) -> Path           # raises PdfConversionError
-    .convert_or_none(docx_path, pdf_path=None) -> ConversionResult
-
-# Module-level convenience:
-pdf_chain.convert(docx_path, pdf_path=None) -> Path
-pdf_chain.convert_or_none(docx_path, pdf_path=None) -> ConversionResult
+word_pdf.convert(docx_path) -> Path | None   # sibling .pdf; None if Word fails
+word_pdf.quit_word() -> None                 # release the warm Word
 ```
 
-Three-method fallback in fixed order:
-
-1. **docx2pdf** — patched with `_NullStream` for `.pyw` (legacy) and
-   server contexts where stdout/stderr may be `None`.
-2. **win32com `DispatchEx`** — fresh isolated Word; `Dispatch` would
-   attach to a zombie left by a prior failure.
-3. **PowerShell COM** — last-ditch shell-out, 30s timeout,
-   `CREATE_NO_WINDOW`.
-
-`PdfConversionError.errors` carries the per-method error trail when
-every method fails.
+Microsoft Word COM is the only engine (Arabic/English fidelity with the
+Word-authored templates). One hidden `DispatchEx` Word stays warm per
+process (~0.5 s per conversion instead of a 2-5 s cold start) and is bound
+to a kill-on-close Job Object, so killing the process kills its Word too
+(DCOM starts Word under svchost, outside the caller's process tree).
+Callers go through `app.services._pdf_executor`, which runs it in one
+worker process, kills that worker on timeout, and quits Word when idle.
 
 ---
 

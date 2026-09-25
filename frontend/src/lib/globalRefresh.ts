@@ -15,6 +15,24 @@ export async function refreshAll(
   if (remaining > 0) await new Promise((r) => setTimeout(r, remaining))
 }
 
+/** Every cache key that can surface a person's one saved signature — profile,
+ *  linked manager record, session `has_signature`, and book approval gates.
+ *  A replace/remove/relink anywhere has to refresh all of them. */
+const SIGNATURE_QUERY_KEYS: Record<string, true> = {
+  'signatures': true,
+  'employee-signature': true,
+  'manager-signature': true,
+  'managers': true,
+  'auth-me': true,
+  'books': true,
+}
+
+export function invalidateSignatures(qc: QueryClient): void {
+  void qc.invalidateQueries({
+    predicate: (q) => SIGNATURE_QUERY_KEYS[String(q.queryKey[0])] === true,
+  })
+}
+
 // NOTE (Milestone A): scaffolding only — nothing calls `setEditing` yet, so
 // `isAnyEditing()` is always false and the heartbeat's "pause while editing"
 // guard is currently inert. Editable forms hold drafts in react-hook-form

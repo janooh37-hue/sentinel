@@ -31,6 +31,9 @@ class AppSettingsRead(BaseModel):
     # Global signature appearance (key-value; no migration). Boldness 0..3.
     signature_size_mm: int
     signature_boldness: int
+    # Admin-only. The one User (books.approve, linked Manager) inmate_reporter
+    # submissions route to. Null = unconfigured (drafts save; sending blocks).
+    inmate_reporter_manager_user_id: int | None
 
 
 class AppSettingsUpdate(BaseModel):
@@ -52,3 +55,4 @@ class AppSettingsUpdate(BaseModel):
     email_signature: str | None = None
     signature_size_mm: int | None = None
     signature_boldness: int | None = None
+    inmate_reporter_manager_user_id: int | None = Field(default=None, gt=0)

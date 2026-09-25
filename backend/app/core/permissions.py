@@ -15,7 +15,7 @@ from dataclasses import dataclass
 from typing import Final
 
 from app.core.form_kind import OTHER_SERVICE_ID, SERVICE_IDS
-from app.core.roles import ADMIN_ROLE, MANAGER_ROLE, OPERATOR_ROLE
+from app.core.roles import ADMIN_ROLE, INMATE_REPORTER_ROLE, MANAGER_ROLE, OPERATOR_ROLE
 
 SERVICE_CAP_PREFIX: Final[str] = "books.service."
 SERVICE_RECORDS_CAP_PREFIX: Final[str] = "books.servicerecords."
@@ -595,10 +595,27 @@ _MANAGER_CAPS: Final[frozenset[str]] = (_OPERATOR_CAPS | _MANAGER_EXTRA) - froze
     {"workforce.self.view"}
 )
 
+# Inmate reporter: a fixed, narrow ceiling — files/tracks Inmate Conduct
+# Violations reports only. No other service/category, no ledger/employees/
+# leaves/etc, no books.edit/approve/delete. perm_service enforces this as a
+# hard ceiling (grants and stale DB role_permissions rows can never widen it;
+# see perm_service._role_and_dynamic_caps / effective_caps).
+INMATE_REPORTER_CAPS: Final[frozenset[str]] = frozenset(
+    {
+        "app.access",
+        "documents.generate",
+        "books.view",
+        "books.submit",
+        f"{SERVICE_CAP_PREFIX}Inmate Conduct Violations",
+        f"{SERVICE_RECORDS_CAP_PREFIX}Inmate Conduct Violations",
+        f"{CATEGORY_CAP_PREFIX}NAT",
+    }
+)
 ROLE_DEFAULTS: Final[dict[str, frozenset[str]]] = {
     OPERATOR_ROLE: _OPERATOR_CAPS,
     MANAGER_ROLE: _MANAGER_CAPS,
     ADMIN_ROLE: ALL_CAPABILITIES,
+    INMATE_REPORTER_ROLE: INMATE_REPORTER_CAPS,
 }
 
 
@@ -612,6 +629,7 @@ __all__ = [
     "CAPABILITIES",
     "CAPABILITY_IDS",
     "CATEGORY_CAP_PREFIX",
+    "INMATE_REPORTER_CAPS",
     "ROLE_DEFAULTS",
     "SENSITIVE_CAPABILITY_IDS",
     "SERVICE_CAPABILITY_IDS",

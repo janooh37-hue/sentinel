@@ -1,10 +1,10 @@
 /**
- * SigningSignatureSection — the per-user *signing* signature.
+ * SigningSignatureSection — the person's ONE saved profile signature.
  *
- * Distinct from the email signature and the employee-vault signature: this is
- * the handwritten signature embedded into a book's PDF when the signed-in
- * manager approves/signs it (POST /auth/me/signature). `GET /auth/me` reports
- * whether one is on file via `has_signature`.
+ * Same file everywhere: for a linked account it IS the employee profile
+ * signature (and the linked manager record's), for an unlinked one it is the
+ * account's own file until the account is linked (POST /auth/me/signature).
+ * `GET /auth/me` reports whether one is on file via `has_signature`.
  *
  * Rendered as a TAMM section card on SettingsPage.
  *
@@ -19,10 +19,12 @@ import SignatureCanvas from 'react-signature-canvas'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { Loader2, FileSignature } from 'lucide-react'
+import { useQueryClient } from '@tanstack/react-query'
 
 import { api, apiErrorMessage } from '@/lib/api'
 import type { AppSettingsRead, AppSettingsUpdate } from '@/lib/api'
 import { useAuth } from '@/lib/authContext'
+import { invalidateSignatures } from '@/lib/globalRefresh'
 import { RangeSlider } from '@/components/ui/range-slider'
 import { CapabilityGate } from '@/components/shell/CapabilityGate'
 import {
@@ -43,9 +45,14 @@ import {
 interface AppearanceBlockProps {
   settings: AppSettingsRead
   onUpdate: (u: AppSettingsUpdate) => void
+  refreshKey: number
 }
 
-function AppearanceBlock({ settings, onUpdate }: AppearanceBlockProps): React.JSX.Element {
+function AppearanceBlock({
+  settings,
+  onUpdate,
+  refreshKey,
+}: AppearanceBlockProps): React.JSX.Element {
   const { t } = useTranslation()
 
   // Local slider state — initialised from settings so sliders respond
@@ -131,7 +138,7 @@ function AppearanceBlock({ settings, onUpdate }: AppearanceBlockProps): React.JS
     return () => {
       if (previewTimer.current !== null) clearTimeout(previewTimer.current)
     }
-  }, [sizeMm, boldness, schedulePreview])
+  }, [sizeMm, boldness, refreshKey, schedulePreview])
 
   return (
     <div className="mt-6 border-t border-hairline pt-6">
@@ -240,12 +247,14 @@ export function SigningSignatureSection({
 }): React.JSX.Element {
   const { t } = useTranslation()
   const { user, refetch } = useAuth()
+  const qc = useQueryClient()
   const hasSignature = user?.has_signature ?? false
 
   const wrapRef = useRef<HTMLDivElement>(null)
   const padRef = useRef<SignatureCanvas | null>(null)
   const [width, setWidth] = useState(0)
   const [busy, setBusy] = useState(false)
+  const [sigVersion, setSigVersion] = useState(0)
   // Show the drawing pad immediately when there's no signature; otherwise the
   // operator opts in to replacing the existing one.
   const [editing, setEditing] = useState(!hasSignature)
@@ -275,6 +284,8 @@ export function SigningSignatureSection({
       const blob = await (await fetch(dataUrl)).blob()
       await api.uploadMySignature(blob)
       await refetch()
+      setSigVersion((version) => version + 1)
+      invalidateSignatures(qc)
       toast.success(t('settings.signingSignature.saved'))
       setEditing(false)
     } catch (err) {
@@ -282,13 +293,15 @@ export function SigningSignatureSection({
     } finally {
       setBusy(false)
     }
-  }, [refetch, t])
+  }, [qc, refetch, t])
 
   const remove = useCallback(async () => {
     setBusy(true)
     try {
       await api.deleteMySignature()
       await refetch()
+      setSigVersion((version) => version + 1)
+      invalidateSignatures(qc)
       toast.success(t('settings.signingSignature.removed'))
       setEditing(true)
     } catch (err) {
@@ -296,7 +309,7 @@ export function SigningSignatureSection({
     } finally {
       setBusy(false)
     }
-  }, [refetch, t])
+  }, [qc, refetch, t])
 
   return (
     <section className="rounded-2xl bg-surface p-4 sm:p-6">
@@ -308,7 +321,11 @@ export function SigningSignatureSection({
               {t('settings.signingSignature.title')}
             </h3>
             <p className="mt-1 text-[0.86em] text-muted-foreground">
-              {t('settings.signingSignature.description')}
+              {t(
+                user?.employee_id
+                  ? 'settings.signingSignature.description'
+                  : 'settings.signingSignature.unlinkedDescription',
+              )}
             </p>
           </div>
         </div>
@@ -388,7 +405,11 @@ export function SigningSignatureSection({
       {/* Appearance block — only rendered when settings are available */}
       <CapabilityGate cap="settings.edit">
         {settings && onUpdate && (
-          <AppearanceBlock settings={settings} onUpdate={onUpdate} />
+          <AppearanceBlock
+            settings={settings}
+            onUpdate={onUpdate}
+            refreshKey={sigVersion}
+          />
         )}
       </CapabilityGate>
     </section>

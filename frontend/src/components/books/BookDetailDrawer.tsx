@@ -31,7 +31,7 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { useManagePaper } from '@/pages/books/useManagePaper'
 import type { Paper } from '@/pages/books/recordPapers'
 
-import { footerActionFor } from './book-detail-drawer-utils'
+import { footerActionFor, inmateReporterActionFor } from './book-detail-drawer-utils'
 import { useBookApprovalActions } from './useBookApprovalActions'
 import {
   approverStep,
@@ -210,6 +210,7 @@ export function BookDetailDrawer({ bookId, onClose, onSubmitForApproval }: Props
   const navigate = useNavigate()
   const { has } = useCapabilities()
   const { user } = useAuth()
+  const isInmateReporter = user?.role === 'inmate_reporter'
   const canApprove = has('books.approve')
   const canEdit = has('books.edit')
   // Submit-for-approval is its own authority (atomic `books.submit`), separate
@@ -258,19 +259,26 @@ export function BookDetailDrawer({ bookId, onClose, onSubmitForApproval }: Props
   const myReview = myPendingReviewerStep(currentSteps, user?.id)
   const currentStepIndex = currentSteps.findIndex((s) => s.state !== 'approved')
 
-  const action = footerActionFor(book?.approval_state ?? 'none', {
-    canRevise: canEdit,
-    canSubmitBook,
-    canApprove,
-    isAssignee,
-    isReviewer: myReview != null,
-  })
+  const reporterAction = book ? inmateReporterActionFor(book, user?.id) : 'read-only'
+  const action = isInmateReporter
+    ? reporterAction === 'edit-submit'
+      ? 'submit'
+      : reporterAction === 'correct-resubmit'
+        ? 'revise'
+        : 'none'
+    : footerActionFor(book?.approval_state ?? 'none', {
+        canRevise: canEdit,
+        canSubmitBook,
+        canApprove,
+        isAssignee,
+        isReviewer: myReview != null,
+      })
 
   // Seen-on-open: when the loaded book has a step assigned to the current user
   // with no seen_at, fire one POST /books/{id}/seen then invalidate.
   const myStep = currentSteps.find((s) => s.assignee_user_id === user?.id)
   useEffect(() => {
-    if (book && myStep && !myStep.seen_at) {
+    if (!isInmateReporter && book && myStep && !myStep.seen_at) {
       api
         .markBookSeen(book.id)
         .then(() => void qc.invalidateQueries({ queryKey: ['books', 'detail', book.id] }))
@@ -411,7 +419,7 @@ export function BookDetailDrawer({ bookId, onClose, onSubmitForApproval }: Props
                 )}
 
                 {/* version history (newest first) */}
-                {versions.length > 0 && (
+                {!isInmateReporter && versions.length > 0 && (
                   <div className="mb-4">
                     <h3 className="mb-2.5 text-[0.72em] font-semibold uppercase tracking-wider text-muted-foreground">
                       {t('books.versions.title')}
@@ -442,14 +450,16 @@ export function BookDetailDrawer({ bookId, onClose, onSubmitForApproval }: Props
                 )}
 
                 {/* reviewer rows */}
-                <ReviewerList
-                  reviewers={reviewerSteps(currentSteps)}
-                  versionNo={current?.version_no}
-                  currentVersionNo={current?.version_no}
-                />
+                {!isInmateReporter && (
+                  <ReviewerList
+                    reviewers={reviewerSteps(currentSteps)}
+                    versionNo={current?.version_no}
+                    currentVersionNo={current?.version_no}
+                  />
+                )}
 
                 {/* executed copies (copied from BookApprovalSheet) */}
-                {book && book.attachment_paths && book.attachment_paths.length > 0 && (
+                {!isInmateReporter && book && book.attachment_paths && book.attachment_paths.length > 0 && (
                   <div className="mb-4">
                     <h3 className="mb-2.5 text-[0.72em] font-semibold uppercase tracking-wider text-muted-foreground">
                       {t('books.executedCopy.title')}

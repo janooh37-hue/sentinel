@@ -86,6 +86,7 @@ import { useIdentity } from '@/lib/useIdentity'
 import { cn } from '@/lib/utils'
 import { PullToRefresh } from '@/components/refresh/PullToRefresh'
 import { RefreshButton } from '@/components/refresh/RefreshButton'
+import { InmateReporterDashboard } from './InmateReporterDashboard'
 
 export type DashboardPage =
   | 'employees'
@@ -152,7 +153,13 @@ function joinNames(names: string[], isAr: boolean): string {
   return names.slice(0, -1).join(sep) + and + names[names.length - 1]
 }
 
-export function DashboardPage({ onNavigate }: DashboardPageProps): React.JSX.Element {
+export function DashboardPage(props: DashboardPageProps): React.JSX.Element {
+  const { user } = useAuth()
+  if (user?.role === 'inmate_reporter') return <InmateReporterDashboard />
+  return <GenericDashboardPage {...props} />
+}
+
+function GenericDashboardPage({ onNavigate }: DashboardPageProps): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const isAr = i18n.language.startsWith('ar')
   const { has } = useCapabilities()

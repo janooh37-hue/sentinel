@@ -41,7 +41,11 @@ import { useFocusTrap } from '@/lib/useFocusTrap'
 import { bidi } from '@/lib/bidi'
 import { cn } from '@/lib/utils'
 
-import { canFileSignedCopy, canSendForApproval } from '@/components/books/book-detail-drawer-utils'
+import {
+  canFileSignedCopy,
+  canSendForApproval,
+  inmateReporterActionFor,
+} from '@/components/books/book-detail-drawer-utils'
 
 import { BookStatusChips } from '@/components/books/BookStatusChips'
 import { ServiceArtwork } from '@/components/ui/service-artwork'
@@ -91,15 +95,35 @@ export function RecordPane({
   const [deleteTarget, setDeleteTarget] = useState<Paper | null>(null)
   const [replaceTarget, setReplaceTarget] = useState<Paper | null>(null)
   const { user } = useAuth()
+  const isInmateReporter = user?.role === 'inmate_reporter'
   const [includedPapersOpen, setIncludedPapersOpen] = useState(false)
   const includedBookId = book?.id ?? null
   const includedDetail = useQuery({
     queryKey: ['books', 'detail', includedBookId],
     queryFn: () => api.getBook(includedBookId!),
-    enabled: includedPapersOpen && includedBookId !== null,
+    enabled: !isInmateReporter && includedPapersOpen && includedBookId !== null,
   })
 
-  const papers = useMemo(() => (book ? papersOf(book) : []), [book])
+  const papers = useMemo(() => {
+    if (!book) return []
+    const all = papersOf(book)
+    if (!isInmateReporter) return all
+    const hasSignedPaper = all.some((paper) => paper.kind === 'signed')
+    return all
+      .filter(
+        (paper) =>
+          paper.kind !== 'scan' && !(hasSignedPaper && paper.kind === 'generated'),
+      )
+      .map((paper) =>
+        paper.kind === 'generated'
+          ? {
+              ...paper,
+              url: paper.url.replace('&original=true', ''),
+              downloadUrl: paper.downloadUrl.replace('&original=true', ''),
+            }
+          : paper,
+      )
+  }, [book, isInmateReporter])
 
   // A scan-back approval opens on its signed paper (the operator's question is
   // "what came back signed?", not the generated original).
@@ -159,23 +183,31 @@ export function RecordPane({
   // Same gate as the record page (BookRecordPage): an admin files the
   // physically-signed scan back for a request out for signature (pending) or
   // at the printer (awaiting_scan). Shared helper keeps both surfaces aligned.
-  const showFileSigned = canFileSignedCopy(state, { canEdit, canScan: canScanCap })
+  const reporterAction = inmateReporterActionFor(book, user?.id)
+  const showFileSigned =
+    !isInmateReporter && canFileSignedCopy(state, { canEdit, canScan: canScanCap })
   // Send for approval (digital route): submit a draft or re-route a pending
   // request — offered next to Scan signed copy so both routes are available.
-  const showSendForApproval = canSendForApproval(state, { canSubmitBook })
+  const showSendForApproval = isInmateReporter
+    ? reporterAction === 'edit-submit'
+    : canSendForApproval(state, { canSubmitBook })
   const canManageIncludedPapers =
-    book.current_template_id != null && isIncludedPapersOwner(book, user?.id)
+    !isInmateReporter &&
+    book.current_template_id != null &&
+    isIncludedPapersOwner(book, user?.id)
   const includedDocumentId = includedDetail.data
     ? currentBookDocId(includedDetail.data)
     : undefined
   const hasWordReopen =
+    !isInmateReporter &&
     !book.voided_at &&
     (book.versions?.length ?? 0) > 0 &&
     book.edit_session?.state !== 'active'
-  const hasPaneUtilities = hasWordReopen || canManageIncludedPapers || papers.length > 0
+  const hasPaneUtilities =
+    hasWordReopen || canManageIncludedPapers || (!isInmateReporter && papers.length > 0)
 
   const workflowActions = [
-    state === 'none' && !isWordBook
+    (isInmateReporter ? reporterAction === 'edit-submit' : state === 'none' && !isWordBook)
       ? {
           key: 'continue',
           label: t('books.pane.continueDraft'),
@@ -195,7 +227,7 @@ export function RecordPane({
           onClick: () => onSubmit(book.id),
         }
       : null,
-    state === 'returned'
+    (isInmateReporter ? reporterAction === 'correct-resubmit' : state === 'returned')
       ? {
           key: 'revise',
           label: t('books.pane.revise'),
@@ -215,7 +247,7 @@ export function RecordPane({
           onClick: null,
         }
       : null,
-    state !== 'none'
+    (isInmateReporter || state !== 'none')
       ? {
           key: 'open',
           label: t('books.pane.openRecord'),
@@ -231,7 +263,7 @@ export function RecordPane({
     ...workflowActions.filter((action) => !action.primary),
   ]
 
-  const addScanSlot = canScan ? (
+  const addScanSlot = !isInmateReporter && canScan ? (
     <button
       type="button"
       title={t('books.pane.addScanHint')}
@@ -297,9 +329,9 @@ export function RecordPane({
           baseWidth={400}
           onOpenFull={() => setFullOpen(true)}
           addScanSlot={addScanSlot}
-          onDeletePaper={canEdit ? setDeleteTarget : undefined}
+          onDeletePaper={!isInmateReporter && canEdit ? setDeleteTarget : undefined}
           onReplacePaper={
-            canEdit
+            !isInmateReporter && canEdit
               ? (p) => {
                   setReplaceTarget(p)
                   replaceRef.current?.click()
@@ -317,7 +349,7 @@ export function RecordPane({
       </Suspense>
 
       <div className="flex shrink-0 flex-wrap items-center gap-2 border-t border-hairline px-3.5 py-2.5">
-        <WordSessionActions book={book} />
+        {!isInmateReporter && <WordSessionActions book={book} />}
         {orderedWorkflowActions.map((action) => (
           <PaneBtn
             key={action.key}
@@ -341,7 +373,7 @@ export function RecordPane({
             <span className="h-5 w-px self-center bg-border" aria-hidden="true" />
           </>
         ) : null}
-        <WordReopenButton book={book} iconOnly />
+        {!isInmateReporter && <WordReopenButton book={book} iconOnly />}
         {canManageIncludedPapers && (
           <PaneBtn
             iconOnly
@@ -356,7 +388,7 @@ export function RecordPane({
             )}
           </PaneBtn>
         )}
-        {papers.length > 0 && (
+        {!isInmateReporter && papers.length > 0 && (
           <PaneBtn iconOnly label={t('basket.add')} onClick={() => onAddToEmail(book)}>
             <Mail className="h-3.5 w-3.5" aria-hidden />
           </PaneBtn>
@@ -507,9 +539,9 @@ export function RecordPane({
                   baseWidth={620}
                   isOverlay
                   onClose={() => setFullOpen(false)}
-                  onDeletePaper={canEdit ? setDeleteTarget : undefined}
+                  onDeletePaper={!isInmateReporter && canEdit ? setDeleteTarget : undefined}
                   onReplacePaper={
-                    canEdit
+                    !isInmateReporter && canEdit
                       ? (p) => {
                           setReplaceTarget(p)
                           replaceRef.current?.click()

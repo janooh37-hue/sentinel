@@ -1,22 +1,20 @@
 """Saved-signature endpoints — GET /signatures/me, POST /signatures/preview.
 
-Returns the signed-in user's own signature PNG (stored at
-``<vault>/<G>/documents/signature.png`` by ``core.signature.save``). Self-scoped
-— any authenticated user may read their own, no admin gate.
+Both read the caller's ONE saved signature
+(``user_signature_service.resolve_signature``): the linked employee's profile
+file for a linked account, or the account's own file for an unlinked one.
 
 Mirrors the IDM workaround in ``documents.py``: when ``?encoding=base64`` is
 supplied the bytes are base64-encoded and returned as ``text/plain`` with
 ``X-Content-Type-Options: nosniff`` so Internet Download Manager doesn't sniff
 the PNG and hijack the response.
 
-Returns 404 when the caller has no linked employee, or has one but never saved
-a signature.
+Returns 404 when the caller has no saved signature.
 """
 
 from __future__ import annotations
 
 import base64
-from pathlib import Path
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, Query
@@ -26,11 +24,9 @@ from pydantic import BaseModel
 from app.api._responses import maybe_base64
 from app.api.deps import get_current_user
 from app.api.errors import NotFoundError
-from app.config import get_settings
-from app.core import signature as sig_core
 from app.core.signature_render import clamp_boldness, clamp_size, prepare_signature
-from app.core.vault_manager import Vault
 from app.db.models import User
+from app.services import user_signature_service
 
 router = APIRouter(prefix="/signatures", tags=["signatures"])
 
@@ -51,26 +47,18 @@ def get_my_signature(
     current_user: Annotated[User, Depends(get_current_user)],
     encoding: Annotated[str | None, Query(pattern="^base64$")] = None,
 ) -> Response:
-    """Return the current user's saved signature PNG (self-scoped).
+    """Return the caller's saved signature PNG (self-scoped).
 
     ``encoding=base64`` returns the bytes base64-encoded as ``text/plain`` —
     the frontend uses this to dodge Internet Download Manager. Default returns
     raw ``image/png`` inline.
     """
-    if not current_user.employee_id:
+    path = user_signature_service.resolve_signature(current_user)
+    if path is None:
         raise NotFoundError(
             "SIGNATURE_NOT_FOUND",
             "No signature on file for this user.",
         )
-
-    vault = Vault(get_settings().vault_dir)
-    path = sig_core.vault_path(vault, current_user.employee_id)
-    if not path.is_file():
-        raise NotFoundError(
-            "SIGNATURE_NOT_FOUND",
-            "No signature on file for this user.",
-        )
-
     data = path.read_bytes()
     if (b64 := maybe_base64(data, encoding)) is not None:
         return b64
@@ -82,21 +70,14 @@ def preview_my_signature(
     body: SignaturePreviewRequest,
     current_user: Annotated[User, Depends(get_current_user)],
 ) -> SignaturePreviewResponse:
-    """Render the caller's SIGNING signature at the given size/boldness (self-scoped).
+    """Render the caller's saved signature at the given size/boldness (self-scoped).
 
-    Reads ``user.signature_path`` — the exact file embedded when this user signs a
-    book (``book_service.sign_book``) — so the preview matches what lands on the
-    document. This is deliberately NOT the employee-vault signature served by
-    ``GET /signatures/me`` (those can differ).
+    Reads the SAME source as ``GET /signatures/me`` — the preview always
+    matches what lands on a signed document.
     """
-    if not current_user.signature_path:
+    path = user_signature_service.resolve_signature(current_user)
+    if path is None:
         raise NotFoundError("SIGNATURE_NOT_FOUND", "No signature on file for this user.")
-    path = Path(current_user.signature_path)
-    if not path.is_absolute():
-        path = get_settings().data_dir / path
-    if not path.is_file():
-        raise NotFoundError("SIGNATURE_NOT_FOUND", "No signature on file for this user.")
-
     size_mm = clamp_size(body.size_mm)
     boldness = clamp_boldness(body.boldness)
     png = prepare_signature(path.read_bytes(), dilate_radius_px=boldness)

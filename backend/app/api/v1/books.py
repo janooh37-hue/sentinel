@@ -34,6 +34,7 @@ from app.api.errors import AppError, ValidationFailedError
 from app.core import form_policy
 from app.core.classifications import CLASSIFICATIONS
 from app.core.form_kind import OTHER_SERVICE_ID
+from app.core.roles import INMATE_REPORTER_ROLE
 from app.db.models import (
     Book,
     BookEditSession,
@@ -80,6 +81,7 @@ from app.schemas.book import (
     ScanBackResult,
     ServiceFacetRead,
     WordBookCreate,
+    WordSaveStatusRead,
     WordSessionRead,
     WordTemplateRead,
     WordTemplateTableRead,
@@ -296,6 +298,26 @@ def finish_word_session(
     _require_full_book(db, user, book_id)
     row = word_book_service.finish_word_session(db, user=user, book_id=book_id)
     return _build_book_response(db, row, user)
+
+
+@router.get("/{book_id}/word-sessions/status", response_model=WordSaveStatusRead)
+def word_session_status(
+    book_id: int,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(require_capability("books.edit"))],
+) -> WordSaveStatusRead:
+    """Small poll for Word saves; avoid rebuilding the full Record every second."""
+    _require_full_book(db, user, book_id)
+    session = (
+        db.query(BookEditSession.last_put_at)
+        .filter_by(book_id=book_id, state="active")
+        .one_or_none()
+    )
+    if session is None:
+        raise AppError(
+            "NO_ACTIVE_SESSION", "No active editing session for this book", http_status=409
+        )
+    return WordSaveStatusRead(last_put_at=session.last_put_at)
 
 
 @router.get("/{book_id}/word-sessions/preview")
@@ -1044,6 +1066,23 @@ def _build_scoped_book_response(
     )
 
 
+def _project_inmate_reporter_book(item: BookRead, allowed_version_ids: frozenset[int]) -> BookRead:
+    """Fixed-scope projection for ``inmate_reporter``: current version only
+    (never a colleague's/own historical revision), no sign/review/Word/edit-
+    session affordances — this role writes only through its own form's
+    save/send actions, never the generic Records edit surface. PDF/signed-PDF
+    URLs are kept (print/PDF access); DOCX is not."""
+    item.can_sign = False
+    item.can_review = False
+    item.your_step_kind = None
+    item.edit_session = None
+    if item.versions:
+        item.versions = [v for v in item.versions if v.id in allowed_version_ids]
+        for v in item.versions:
+            v.docx_url = None
+    return item
+
+
 def _build_book_response(
     db: Session,
     row: Book,
@@ -1080,6 +1119,8 @@ def _build_book_response(
         item.can_sign = can_sign
         item.can_review = can_review
         item.your_step_kind = your_step_kind
+        if user.role == INMATE_REPORTER_ROLE:
+            item = _project_inmate_reporter_book(item, access.allowed_version_ids)
         return item
 
     if selected is None:
@@ -1217,19 +1258,23 @@ def get_version_fields(
     book_id: int,
     version_id: int,
     db: Annotated[Session, Depends(get_db)],
-    user: Annotated[User, Depends(require_capability("books.edit"))],
+    user: Annotated[User, Depends(get_current_user)],
 ) -> dict[str, object]:
     """Return the raw stored ``fields`` blob for one book version — backs the
     ApplicationPage revise-mode prefill. Deliberately not on ``BookRead`` (the
     detail payload only exposes ``has_fields``).
 
-    Requires ``books.edit`` (not ``books.view``) because this backs the
-    revise/edit write-path: the caller fetches these fields in order to submit
-    a revised generation, which is a managed write operation.
+    Every other role still needs ``books.edit`` (not ``books.view``) — this
+    backs the revise/edit write-path, a managed write operation.
+    ``inmate_reporter`` never holds ``books.edit``; it gets only its own
+    editable current version through ``require_inmate_report_write_access``.
     """
     row = book_service.get_book_detail(db, book_id)
-    book_service.require_full_book_access(db, user, row)
-    book_service.resolve_book_read_access(db, user, row, version_id=version_id)
+    current = book_service.require_revise_access(db, user, row)
+    if current is None:
+        book_service.resolve_book_read_access(db, user, row, version_id=version_id)
+    elif current.id != version_id:
+        raise AppError("FORBIDDEN", "You do not have access to this revision.", http_status=403)
     version = next(item for item in row.versions if item.id == version_id)
     return {"fields": version.fields or {}}
 
@@ -1736,6 +1781,8 @@ def get_imported_document(
     stored file (e.g. the .docx when no PDF rendition exists).
     """
     book = _require_full_book(db, user, book_id)
+    if user.role == INMATE_REPORTER_ROLE and format != "pdf":
+        raise AppError("FORBIDDEN", "This role can only view the PDF copy.", http_status=403)
     abs_path = book_service.resolve_imported_file(book, prefer=format)
     if abs_path is None:
         raise HTTPException(status_code=404, detail="imported document not available")
@@ -1761,7 +1808,10 @@ def get_signed_document(
     row = book_service.get_book_detail(db, book_id)
     book_service.resolve_book_read_access(db, user, row, version_id=version_id)
     version = next(v for v in row.versions if v.id == version_id)
-    if not version.signed_pdf_path:
+    if not version.signed_pdf_path or not version.signed_pdf_path.lower().endswith(".pdf"):
+        # `signed_pdf_path` (despite its name) can hold a retained DOCX path
+        # when PDF conversion failed at sign time — never serve those bytes
+        # mislabeled as application/pdf; this route only ever promises a PDF.
         raise HTTPException(status_code=404, detail="no signed rendition available")
     abs_path = book_service.resolve_attachment_path(version.signed_pdf_path)
     if abs_path is None:

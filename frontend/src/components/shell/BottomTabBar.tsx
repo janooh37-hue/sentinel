@@ -1,11 +1,12 @@
-import { useCallback, useRef, useState } from 'react'
+import { useCallback, useContext, useRef, useState } from 'react'
 import * as RadixDialog from '@radix-ui/react-dialog'
-import { Grip, Minus, Pencil } from 'lucide-react'
+import { BookText, FilePlus2, Grip, LayoutDashboard, Minus, Pencil } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { NavLink, useNavigate } from 'react-router-dom'
 
 import { cn } from '@/lib/utils'
+import { AuthContext } from '@/lib/authContext'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { prefetchRouteForPath } from '@/lib/prefetchRoute'
 
@@ -24,6 +25,7 @@ import {
 } from './navCustomization'
 import { useWaitingSignals } from './useWaitingSignals'
 import { useApprovalSummary } from '@/lib/useApprovalSummary'
+import { INMATE_REPORTER_ALLOWED_DESTINATIONS } from './navItems'
 
 interface DockSlotVisualProps {
   Icon: LucideIcon
@@ -114,6 +116,49 @@ function EntryPicker({ entry, label, count, placed, onSelect }: EntryPickerProps
 }
 
 export function BottomTabBar(): React.JSX.Element {
+  const user = useContext(AuthContext)?.user ?? null
+  return user?.role === 'inmate_reporter'
+    ? <InmateReporterBottomTabBar />
+    : <CustomizableBottomTabBar />
+}
+
+function InmateReporterBottomTabBar(): React.JSX.Element {
+  const { t } = useTranslation()
+  const entryByDestination = {
+    '/': { labelKey: 'nav.dashboard', Icon: LayoutDashboard },
+    '/application': { labelKey: 'nav.inmateReport', Icon: FilePlus2 },
+    '/books': { labelKey: 'nav.records', Icon: BookText },
+  }
+  const entries = INMATE_REPORTER_ALLOWED_DESTINATIONS.map((to) => ({
+    to,
+    ...entryByDestination[to],
+  }))
+
+  return (
+    <nav
+      aria-label={t('nav.menu')}
+      className="fixed start-3 end-3 bottom-[calc(0.625rem+var(--safe-bottom))] z-40 flex h-[68px] rounded-[26px] border border-border/70 bg-surface/80 px-1.5 [box-shadow:0_10px_30px_rgba(13,40,69,.16)] backdrop-blur-xl md:hidden"
+    >
+      {entries.map(({ to, labelKey, Icon }) => (
+        <NavLink
+          key={to}
+          to={to}
+          end={to === '/'}
+          aria-label={t(labelKey)}
+          onPointerEnter={() => prefetchRouteForPath(to)}
+          onFocus={() => prefetchRouteForPath(to)}
+          className="flex min-w-0 flex-1 flex-col items-center gap-0.5 px-1 py-1 text-foreground [-webkit-touch-callout:none] select-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
+        >
+          {({ isActive }) => (
+            <DockSlotVisual Icon={Icon} label={t(labelKey)} count={0} active={isActive} />
+          )}
+        </NavLink>
+      ))}
+    </nav>
+  )
+}
+
+function CustomizableBottomTabBar(): React.JSX.Element {
   const { t } = useTranslation()
   const { has } = useCapabilities()
   const navigate = useNavigate()

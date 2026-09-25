@@ -185,7 +185,9 @@ def _local_day_horizon(now: datetime) -> datetime:
     return local_end.astimezone(UTC)
 
 
-def _materialize_scheduled_cases(session: Session, *, now: datetime) -> int:
+def _materialize_scheduled_cases(
+    session: Session, *, now: datetime, commit_each: bool = False
+) -> int:
     """Create every case scheduled for the site's current local day, then evaluate.
 
     Occurrences alone leave the register empty: the case is what carries one
@@ -232,6 +234,8 @@ def _materialize_scheduled_cases(session: Session, *, now: datetime) -> int:
                 evaluation_start_at=configuration.evaluation_start_at,
             )
         created += len(cases)
+        if commit_each:
+            session.commit()
     return created
 
 
@@ -243,8 +247,9 @@ def _run_workforce_occurrence_generation() -> None:
     session = SessionLocal()
     try:
         crew_ids = session.scalars(select(WorkCrewSchedule.crew_id).distinct()).all()
-        generated = sum(
-            len(
+        generated = 0
+        for crew_id in crew_ids:
+            generated += len(
                 workforce_schedule_service.generate_occurrences(
                     session,
                     scope=organization_scope(),
@@ -253,12 +258,10 @@ def _run_workforce_occurrence_generation() -> None:
                     ends_at=ends_at,
                 )
             )
-            for crew_id in crew_ids
-        )
-        # Cases are materialized in the same run, after the occurrences they
-        # depend on exist, so the two can never be one interval out of step.
-        materialized = _materialize_scheduled_cases(session, now=now)
-        session.commit()
+            session.commit()
+        # Cases follow the occurrences in this run; each employee's case and
+        # evaluation remain atomic without holding SQLite's writer for the run.
+        materialized = _materialize_scheduled_cases(session, now=now, commit_each=True)
         if generated or materialized:
             log.info(
                 "scheduler: generated %d workforce shift occurrence(s), materialized %d case(s)",

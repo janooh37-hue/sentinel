@@ -90,11 +90,36 @@ class AdminUserRead(ORMBase):
     last_login_at: datetime | None = None
     created_at: datetime | None = None
     is_default_manager: bool = False
+    password_change_required: bool = False
+
+
+class AdminUserCreateRequest(BaseModel):
+    """Admin-issued account creation — a temporary password is generated."""
+
+    email: str = Field(min_length=3, max_length=256)
+    employee_id: str | None = Field(max_length=16)
+    display_name: str | None = Field(default=None, max_length=256)
+    role: Literal["operator", "manager", "admin", "inmate_reporter"] = "operator"
+
+
+class AdminUserCreateResult(BaseModel):
+    """Response to ``POST /auth/users``. ``temporary_password`` is shown once."""
+
+    user: AdminUserRead
+    temporary_password: str
+
+
+class CompletePasswordSetupRequest(BaseModel):
+    """Public: replace an admin-issued temporary password before first sign-in."""
+
+    email: str = Field(min_length=3, max_length=256)
+    temporary_password: str = Field(min_length=1, max_length=128)
+    new_password: str = Field(min_length=8, max_length=128)
 
 
 class ApproveRequest(BaseModel):
     role: str = "operator"
-    employee_id: str | None = Field(default=None, max_length=16)
+    employee_id: str | None = Field(max_length=16)
 
 
 class SetRoleRequest(BaseModel):
