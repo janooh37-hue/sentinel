@@ -27,3 +27,7 @@ it, and the other forms keep the Aztec until their papers are redesigned.
   and `zxing-cpp` must be installed in the runtime venv or nothing decodes.
 - The paper date must be persisted at first commit; a re-render at signing may
   not move it, or the barcode would disagree with the paper.
+- The redesigned paper carries no submitter G-number, so `_adapt_general_book`
+  blanks `submitter_g` outright (not just skipping the page-1 → pages-2+ footer
+  sync) and `retokenize_general_book` drops the token from saved templates. The
+  other forms still print it.

@@ -136,7 +136,7 @@ export function useScanBackUpload(): {
         void qc.invalidateQueries({ queryKey: ['books'] })
         void qc.invalidateQueries({ queryKey: ['notifications', 'counts'] })
         toast.success(t('scanBack.autoFiled', { ref: result.ref_number }))
-      } else if (result.outcome === 'parked') {
+      } else {
         void qc.invalidateQueries({ queryKey: ['scan-inbox'] })
         toast.info(t('scanBack.parked', { ref: result.ref_number }), {
           action: {
@@ -144,8 +144,6 @@ export function useScanBackUpload(): {
             onClick: () => navigate('/scan-inbox'),
           },
         })
-      } else {
-        toast.error(t('scanBack.rejected', { ref: result.ref_number }))
       }
     },
     onError: (e: unknown) =>

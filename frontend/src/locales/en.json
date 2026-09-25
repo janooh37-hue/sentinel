@@ -4092,7 +4092,6 @@
     "autoDropHint": "Drop a General Book scan here. Its barcode will route it.",
     "autoFiled": "Filed — barcode matched {{ref}}",
     "parked": "{{ref}} needs review in the Scan Inbox",
-    "rejected": "Could not route {{ref}}",
     "viewInbox": "Open Scan Inbox",
     "filed": "Filed — {{ref}} is closed",
     "uploadError": "Could not file that scan",

@@ -58,6 +58,7 @@ from app.core._docx_helpers import (
 )
 from app.core.constants import (
     ARABIC_WEEKDAYS,
+    CLASSIFIED_BOOK_FORMS,
     DEFAULT_MANAGER_NAME,
     DEFAULT_MANAGER_TITLE,
     PROJECT_LOCATION,
@@ -99,6 +100,15 @@ def aztec_corner_for(template_id: str) -> str | None:
     if template_id == "General Book":
         return None
     return "top-right" if template_id in _AZTEC_TOP_RIGHT else "top-left"
+
+
+def syncs_general_book_footer(template_id: str) -> bool:
+    """Whether page 1's footer should be copied onto pages 2+.
+
+    Only the classified book forms carry the letterhead footer worth repeating,
+    and General Book is excluded: its redesigned paper drops the footer's
+    G-number entirely (see ``_adapt_general_book``)."""
+    return template_id in CLASSIFIED_BOOK_FORMS and template_id != "General Book"
 
 
 # Forms that cannot carry a scannable page-1 code. Report is a no-ref document
@@ -1045,9 +1055,7 @@ def _format_general_book_ref_line(doc: Any) -> None:
             continue
         seen_parts.add(id(part))
         for element in part.element.findall(".//" + qn("w:p")):
-            if not any(
-                text.text for text in element.findall("./" + qn("w:r") + "/" + qn("w:t"))
-            ):
+            if not any(text.text for text in element.findall("./" + qn("w:r") + "/" + qn("w:t"))):
                 continue
             paragraph = Paragraph(element, cast(Any, part))
             match = re.match(r"^\s*الرقم\s*[:：]\s*(.+?)\s*$", paragraph.text or "")  # noqa: RUF001
