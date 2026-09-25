@@ -16,13 +16,13 @@ from typing import Any
 
 from fastapi import status
 from pydantic import ValidationError
-from sqlalchemy import select
+from sqlalchemy import and_, or_, select
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session, selectinload
 
 from app.api.errors import AppError
 from app.config import get_settings
-from app.core.vehicle_photos import process_photo
+from app.core.vehicle_photos import photo_content_hash
 from app.core.vehicle_xlsx import (
     MAX_COMPRESSED_BYTES,
     ParsedVehicleWorkbook,
@@ -843,6 +843,7 @@ def preview(
     stage = _stage_path(token, owner=owner)
     inspection = _json(stage / "inspection.json")
     draft_rows, excluded_images = _validate_request_shape(inspection, payload)
+    assigned_image_ids = {image_id for row in payload.rows for image_id in row.image_ids}
     sections = {str(section["id"]) for section in inspection.get("sections", [])}
     if not set(payload.site_mappings).issubset(sections):
         raise VehicleImportError(
@@ -862,7 +863,26 @@ def preview(
         normalization_errors[row_id] = field_errors
     duplicate_rows = _duplicates(normalized_by_row)
 
-    vehicles = list(db.scalars(_vehicle_stmt()).unique().all())
+    plate_numbers_by_code: dict[str | None, set[str]] = {}
+    for values in normalized_by_row.values():
+        code = values.get("plate_code")
+        number = values.get("plate_number")
+        if isinstance(number, str):
+            plate_numbers_by_code.setdefault(code if isinstance(code, str) else None, set()).add(
+                number
+            )
+    vehicle_filters = [
+        and_(
+            Vehicle.plate_code.is_(None) if code is None else Vehicle.plate_code == code,
+            Vehicle.plate_number.in_(sorted(numbers)),
+        )
+        for code, numbers in plate_numbers_by_code.items()
+    ]
+    vehicles = (
+        list(db.scalars(_vehicle_stmt().where(or_(*vehicle_filters))).unique().all())
+        if vehicle_filters
+        else []
+    )
     vehicles_by_plate = {(row.plate_code, row.plate_number): row for row in vehicles}
     site_ids = set(payload.site_mappings.values())
     sites = {
@@ -931,9 +951,9 @@ def preview(
                 continue
             selected = dict(image)
             if role == "photo":
-                selected["photo_content_hash"] = process_photo(
+                selected["photo_content_hash"] = photo_content_hash(
                     _staged_image_path(stage, image).read_bytes()
-                ).content_hash
+                )
             selected_images.append((selected, str(role)))
         if missing_roles:
             errors.extend(
@@ -1025,9 +1045,8 @@ def preview(
         errors.extend(choice_errors)
         changes.extend(pointer_changes)
 
-        assigned_ids = {image_id for row in payload.rows for image_id in row.image_ids}
         for image_id, image in image_by_id.items():
-            if image_id in assigned_ids or image_id in excluded_images:
+            if image_id in assigned_image_ids or image_id in excluded_images:
                 continue
             if image.get("row_id") == row_id:
                 errors.append(
@@ -1108,7 +1127,7 @@ def preview(
     unresolved = [
         image_id
         for image_id, image in image_by_id.items()
-        if image_id not in {value for row in payload.rows for value in row.image_ids}
+        if image_id not in assigned_image_ids
         and image_id not in excluded_images
         and image.get("row_id") is None
     ]
