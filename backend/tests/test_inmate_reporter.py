@@ -26,7 +26,7 @@ from app.api.deps import get_optional_user
 from app.config import Settings
 from app.core.roles import ADMIN_ROLE, INMATE_REPORTER_ROLE, MANAGER_ROLE, OPERATOR_ROLE
 from app.db import session as session_mod
-from app.db.models import Base, Book, BookCategory, Employee, Manager, User
+from app.db.models import Base, Book, BookCategory, Employee, Manager, User, VaultFile
 from app.db.session import attach_sqlite_pragmas, get_db
 from app.main import create_app
 from app.schemas.settings import AppSettingsUpdate
@@ -778,6 +778,29 @@ def test_route_allowlist_permits_the_named_surface(api_db: Session) -> None:
     assert client.get("/api/v1/book-categories").status_code == 200
     assert client.get("/api/v1/books").status_code == 200
     assert client.get("/api/v1/inmate-violations/nationalities").status_code == 200
+
+
+def test_reporter_can_read_own_photo_but_not_other_employees(
+    api_db: Session, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    from app.api.v1 import employees
+
+    own = _employee(api_db, "G-REPORTER", "Reporter")
+    other = _employee(api_db, "G-OTHER", "Other")
+    reporter = _user(api_db, email="reporter@x.ae", role=INMATE_REPORTER_ROLE, employee_id=own.id)
+    settings = Settings(data_dir=tmp_path / "data")
+    monkeypatch.setattr(employees, "get_settings", lambda: settings)
+    settings.vault_dir.mkdir(parents=True)
+    (settings.vault_dir / "reporter.png").write_bytes(b"photo")
+    api_db.add(
+        VaultFile(employee_id=own.id, kind="photo", filename="reporter.png", path="reporter.png")
+    )
+    api_db.commit()
+
+    client = _client(api_db, reporter)
+    photo_url = client.get("/api/v1/identity/me").json()["photo_url"]
+    assert client.get(photo_url).content == b"photo"
+    assert client.get(f"/api/v1/employees/{other.id}/photo").status_code == 403
 
 
 def test_route_allowlist_does_not_affect_other_roles(api_db: Session) -> None:

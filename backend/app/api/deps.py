@@ -38,6 +38,7 @@ _INMATE_REPORTER_ALLOWED_ROUTES: frozenset[tuple[str, str]] = frozenset(
         ("PATCH", "/api/v1/auth/me/lock-layout"),
         ("GET", "/api/v1/auth/me/capabilities"),
         ("GET", "/api/v1/identity/me"),
+        ("GET", "/api/v1/employees/{employee_id}/photo"),
         ("GET", "/api/v1/templates"),
         ("GET", "/api/v1/templates/{template_id}/fields"),
         ("GET", "/api/v1/inmate-violations/nationalities"),
