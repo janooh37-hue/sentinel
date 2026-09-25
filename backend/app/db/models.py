@@ -41,7 +41,7 @@ from sqlalchemy import (
     func,
     text,
 )
-from sqlalchemy.orm import Mapped, foreign, mapped_column, relationship
+from sqlalchemy.orm import Mapped, foreign, mapped_column, query_expression, relationship
 
 from app.db.base import Base
 
@@ -640,6 +640,9 @@ class Vehicle(Base):
     expiry_reminder_sent_for: Mapped[date | None] = mapped_column(Date, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_utcnow)
     updated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    _list_fines_count: Mapped[int | None] = query_expression()
+    _list_fines_amount_fils: Mapped[int | None] = query_expression()
+    _list_black_points: Mapped[int | None] = query_expression()
 
     site: Mapped[VehicleSite] = relationship(back_populates="vehicles")
     photo_asset: Mapped[VehiclePhotoAsset | None] = relationship(
