@@ -9,7 +9,7 @@
  * the rest of the app react to the cache invalidation.
  */
 
-import { Settings } from 'lucide-react'
+import { Bug, Settings } from 'lucide-react'
 import { useContext } from 'react'
 import { useTranslation } from 'react-i18next'
 import { NavLink } from 'react-router-dom'
@@ -116,6 +116,20 @@ export function TopNav({ onLock, onOpenSettings, onSignOut }: TopNavProps): Reac
             <GatewayIndicator />
             <NavBellPopover />
           </>
+        ) : null}
+        {!isInmateReporter && has('system.admin') ? (
+          <NavLink
+            to="/debug"
+            aria-label={t('debug.title')}
+            title={t('debug.title')}
+            onPointerEnter={() => prefetchRouteForPath('/debug')}
+            onFocus={() => prefetchRouteForPath('/debug')}
+            className={({ isActive }) =>
+              `rounded-lg p-2 transition-colors hover:bg-surface-tinted hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 ${isActive ? 'text-primary' : 'text-foreground'}`
+            }
+          >
+            <Bug className="h-[1.15em] w-[1.15em]" strokeWidth={1.8} aria-hidden />
+          </NavLink>
         ) : null}
         {!isInmateReporter && has('settings.view') ? (
           <button
