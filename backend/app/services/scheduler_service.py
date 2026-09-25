@@ -23,6 +23,7 @@ from threading import Lock
 from typing import Final
 from zoneinfo import ZoneInfo
 
+from apscheduler.events import EVENT_JOB_ERROR, EVENT_JOB_EXECUTED, JobExecutionEvent
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
@@ -849,6 +850,24 @@ def _disabled_in_environment() -> bool:
     return os.environ.get("GSSG_DISABLE_SCHEDULER") == "1"
 
 
+def _log_job_timing(event: JobExecutionEvent) -> None:
+    """One ``scheduler_job_timing`` line per job run (performance plan, Phase 0).
+
+    Measured from the scheduled fire time, so it includes the (normally
+    millisecond) dispatch delay. APScheduler dispatches its "submitted" event
+    after the job may already have finished, so that is not a usable start."""
+    log.info(
+        "scheduler_job_timing",
+        extra={
+            "job": event.job_id,
+            "ok": event.exception is None,
+            "run_ms": round(
+                (datetime.now(UTC) - event.scheduled_run_time).total_seconds() * 1000, 1
+            ),
+        },
+    )
+
+
 def start() -> None:
     """Boot the scheduler. Idempotent — calling twice is a no-op."""
     global _scheduler
@@ -863,6 +882,7 @@ def start() -> None:
             timezone="UTC",
             job_defaults={"coalesce": True, "max_instances": 1, "misfire_grace_time": 60},
         )
+        _scheduler.add_listener(_log_job_timing, EVENT_JOB_EXECUTED | EVENT_JOB_ERROR)
         _scheduler.start()
         log.info("scheduler started")
     reschedule_email_sync()

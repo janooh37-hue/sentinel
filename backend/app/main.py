@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -142,6 +143,48 @@ class BodySizeLimitMiddleware:
         await send({"type": "http.response.body", "body": body})
 
 
+class RequestTimingMiddleware:
+    """Log one ``request_timing`` line per ``/api/`` request.
+
+    ``handler_ms`` runs to the response headers (the endpoint's work);
+    ``total_ms`` runs to the last body byte (includes streaming). The path is
+    the route template, never the raw URL, so ids and tokens stay out of logs.
+    """
+
+    def __init__(self, app: object) -> None:
+        self.app = app
+
+    async def __call__(self, scope, receive, send):  # type: ignore[no-untyped-def]
+        if scope["type"] != "http" or not scope["path"].startswith("/api/"):
+            await self.app(scope, receive, send)  # type: ignore[operator]
+            return
+        start = time.perf_counter()
+        status = 500
+        handler_ms: float | None = None
+
+        async def _send(message):  # type: ignore[no-untyped-def]
+            nonlocal status, handler_ms
+            if message["type"] == "http.response.start":
+                status = message["status"]
+                handler_ms = round((time.perf_counter() - start) * 1000, 1)
+            await send(message)
+
+        try:
+            await self.app(scope, receive, _send)  # type: ignore[operator]
+        finally:
+            route = scope.get("route")
+            log.info(
+                "request_timing",
+                extra={
+                    "method": scope["method"],
+                    "route": getattr(route, "path", "unmatched"),
+                    "status": status,
+                    "handler_ms": handler_ms,
+                    "total_ms": round((time.perf_counter() - start) * 1000, 1),
+                },
+            )
+
+
 @asynccontextmanager
 async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
     """Boot the scheduler on startup; drain it and the EVG worker on exit."""
@@ -190,9 +233,11 @@ def create_app() -> FastAPI:
     # Cap request bodies before they are buffered into RAM (API-01).
     app.add_middleware(BodySizeLimitMiddleware, max_bytes=MAX_BODY_BYTES)
     # Compress JSON/list payloads above 1 KB for clients that ask for it.
-    # Outermost middleware so it wraps error responses too. Clients that omit
+    # Wraps the app's error responses too. Clients that omit
     # ``Accept-Encoding: gzip`` (Word's DAV stack) get identity bytes.
     app.add_middleware(GZipMiddleware, minimum_size=1024)
+    # Outermost: per-request timings for the performance plan (Phase 0).
+    app.add_middleware(RequestTimingMiddleware)
 
     # Baseline authentication: every data router requires a valid session.
     # Public surfaces (login/register/me/logout + the system probes the launcher
