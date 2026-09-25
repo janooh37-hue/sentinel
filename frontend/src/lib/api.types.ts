@@ -1975,6 +1975,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/documents/{document_id}/signatures/{signature_id}/identity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Put Signature Identity
+         * @description Admin-only: swap this signature slot's image for a different
+         *     employee's saved signature — the signature-position tool's employee
+         *     picker (never available to a non-admin; ``reassign_signature`` itself
+         *     also enforces this).
+         */
+        put: operations["put_signature_identity_api_v1_documents__document_id__signatures__signature_id__identity_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/documents/{document_id}/signature-history": {
         parameters: {
             query?: never;
@@ -12518,7 +12541,7 @@ export interface components {
              * Action
              * @enum {string}
              */
-            action: "initial" | "identify" | "move";
+            action: "initial" | "identify" | "move" | "reassign";
             /** Signature Id */
             signature_id: string | null;
             /** Before Geometry */
@@ -12630,6 +12653,22 @@ export interface components {
             default_y?: number | null;
             /** Image Url */
             image_url: string;
+        };
+        /**
+         * SignatureReassignRequest
+         * @description ``PUT /documents/{document_id}/signatures/{signature_id}/identity`` —
+         *     admin-only: replace the signer whose image occupies this signature slot
+         *     with a different employee's saved signature, at the same position.
+         */
+        SignatureReassignRequest: {
+            /** Signature Revision */
+            signature_revision: number;
+            /** Package Revision */
+            package_revision: number;
+            /** Source Sha256 */
+            source_sha256: string;
+            /** Employee Id */
+            employee_id: string;
         };
         /**
          * SmartFolderCreate
@@ -19254,6 +19293,44 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["SignaturePositionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignatureEditorRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    put_signature_identity_api_v1_documents__document_id__signatures__signature_id__identity_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                document_id: number;
+                signature_id: string;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SignatureReassignRequest"];
             };
         };
         responses: {

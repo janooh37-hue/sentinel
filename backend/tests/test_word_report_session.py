@@ -285,6 +285,62 @@ def test_finish_report_session_embeds_signature(db_session, tmp_path, monkeypatc
     )
 
 
+def test_reopen_report_session_carries_signer_forward(db_session, tmp_path, monkeypatch):
+    """Bug: editing/revising a signed Report used to drop the signature with
+    no way to re-add it, because reopen_word_session never carried the
+    report's signer forward onto the new session. finish_word_session then
+    saw signer_employee_id=None and silently skipped re-signing."""
+    from datetime import datetime
+    from types import SimpleNamespace
+
+    from app.core import signature as signature_core
+    from app.core.vault_manager import Vault
+    from app.db.models import BookVersion, Employee
+    from app.services import report_service, word_book_service
+
+    _seed_gs(db_session)
+    vault_dir = tmp_path / "vault"
+    monkeypatch.setattr(
+        report_service, "get_settings", lambda: SimpleNamespace(vault_dir=vault_dir, data_dir=tmp_path)
+    )
+    db_session.add(Employee(id="G1042", name_en="Muhannad", name_ar="مهند", position="Head"))
+    db_session.add(Employee(id="G3082", name_en="Operator", name_ar="مشغّل", position="Op"))
+    op = _user(db_session, employee_id="G3082")
+    db_session.commit()
+    emp_sig = signature_core.vault_path(Vault(vault_dir), "G1042")
+    emp_sig.parent.mkdir(parents=True, exist_ok=True)
+    _png(emp_sig)
+
+    info = word_book_service.create_report_word_book(
+        db_session,
+        user=op,
+        signer_employee_id="G1042",
+        recipient_id=None,
+        subject="تقرير",
+        date="2026-07-23",
+        sign=True,
+    )
+    sess = db_session.query(BookEditSession).filter_by(book_id=info.book_id, state="active").one()
+    sess.last_put_at = datetime.now()
+    db_session.commit()
+    book = word_book_service.finish_word_session(db_session, user=op, book_id=info.book_id)
+    ver = db_session.query(BookVersion).filter_by(book_id=book.id).one()
+    assert ver.manager_sig_embedded is True  # signed the first time
+
+    # Reopen to "edit" (or make a new version) — this is the buggy path.
+    reopened = word_book_service.reopen_word_session(db_session, user=op, book_id=book.id)
+    new_sess = db_session.query(BookEditSession).filter_by(token=reopened.token).one()
+    assert new_sess.signer_employee_id == "G1042", "signer must carry forward on reopen"
+    assert new_sess.sign_on_finish is True, "must re-sign on finish, not drop the signature"
+
+    # And finishing that reopened session actually re-embeds the signature.
+    new_sess.last_put_at = datetime.now()
+    db_session.commit()
+    book2 = word_book_service.finish_word_session(db_session, user=op, book_id=book.id)
+    ver2 = db_session.query(BookVersion).filter_by(book_id=book2.id).order_by(BookVersion.id.desc()).first()
+    assert ver2.manager_sig_embedded is True, "signature was dropped on the reopened/re-edited version"
+
+
 def test_report_display_date():
     from datetime import datetime
 

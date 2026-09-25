@@ -265,6 +265,76 @@ def _background_in_subprocess(docx_path_str: str, signature_id: str) -> str:
     return str(pdf_path)
 
 
+def _reassign_in_subprocess(
+    source_str: str,
+    destination_str: str,
+    *,
+    signature_id: str,
+    image_bytes: bytes,
+    layout: SignatureLayout,
+    before_pdf_str: str,
+) -> tuple[SignatureLayout, str]:
+    """Swaps the signature image, converts, remeasures, and validates that
+    NOTHING but the target signature's image changed — same one-worker unit
+    as `_move_in_subprocess`, but the target's position is expected to stay
+    put (only the image changes)."""
+    from app.core import signature_layout
+
+    source = Path(source_str)
+    destination = Path(destination_str)
+    signature_layout.replace_signature_image(
+        source, destination, signature_id=signature_id, image_bytes=image_bytes
+    )
+    after_pdf = word_pdf.convert(destination)
+    if after_pdf is None:
+        raise signature_layout.SignatureRenderFailedError(
+            f"Word conversion failed while publishing {destination}"
+        )
+    after_layout = signature_layout.measure_signature_layout(
+        destination, converter=word_pdf.convert
+    )
+    before_geometry = layout.drawings[signature_id]
+    signature_layout.validate_move(
+        before_docx=source,
+        after_docx=destination,
+        before_pdf=Path(before_pdf_str),
+        after_pdf=after_pdf,
+        signature_id=signature_id,
+        requested_page=before_geometry.page,
+        requested_x=before_geometry.x,
+        requested_y=before_geometry.y,
+        layout_after=after_layout,
+    )
+    return after_layout, str(after_pdf)
+
+
+def reassign_signature_image(
+    source: Path,
+    destination: Path,
+    *,
+    signature_id: str,
+    image_bytes: bytes,
+    layout: SignatureLayout,
+    before_pdf: Path,
+) -> tuple[SignatureLayout, Path]:
+    """Swap, convert, remeasure, and validate *signature_id*'s image in one
+    worker unit — see `signature_layout.replace_signature_image`/
+    `validate_move`. Returns `(after_layout, after_pdf_path)`. Raises the
+    `signature_layout` error taxonomy on any failure; *destination* is left
+    on disk for the caller to clean up on a raised error."""
+    after_layout, after_pdf_str = run_in_worker(
+        _reassign_in_subprocess,
+        str(source),
+        str(destination),
+        signature_id=signature_id,
+        image_bytes=image_bytes,
+        layout=layout,
+        before_pdf_str=str(before_pdf),
+        timeout=240,
+    )
+    return after_layout, Path(after_pdf_str)
+
+
 def render_signature_free_background(docx_path: Path, *, signature_id: str) -> Path:
     """Render *docx_path* with *signature_id*'s image hidden behind a
     same-extent transparent placeholder — see

@@ -49,6 +49,8 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { cn } from '@/lib/utils'
+import { useIdentity } from '@/lib/useIdentity'
+import { EmployeePicker } from '@/pages/application/EmployeePicker'
 import DocPdfCanvas, { type PageBox } from '@/pages/application/DocPdfCanvas'
 import {
   dragToPosition,
@@ -72,6 +74,7 @@ export function SignaturePlacementPage(): React.JSX.Element {
   const isAr = i18n.language.startsWith('ar')
   const qc = useQueryClient()
 
+  const { isAdmin } = useIdentity()
   const editorQuery = useQuery({
     queryKey: ['signature-editor', documentId, 'measured'],
     queryFn: () => api.getSignatureEditor(documentId, true),
@@ -208,6 +211,34 @@ export function SignaturePlacementPage(): React.JSX.Element {
     setDraft({ page: selected.default_page, x: selected.default_x, y: selected.default_y })
   }
 
+  const reassignMutation = useMutation({
+    mutationFn: (employeeId: string) => {
+      if (!description || !selected) throw new Error('nothing to reassign')
+      return api.reassignSignature(documentId, selected.id, {
+        signature_revision: description.signature_revision,
+        package_revision: description.package_revision,
+        source_sha256: description.source_sha256 ?? '',
+        employee_id: employeeId,
+      })
+    },
+    onSuccess: (updated: SignatureEditorRead) => {
+      qc.setQueryData(['signature-editor', documentId, 'measured'], updated)
+      void qc.invalidateQueries({ queryKey: ['signature-editor', documentId] })
+      void qc.invalidateQueries({ queryKey: ['signature-history', documentId] })
+      void qc.invalidateQueries({ queryKey: ['books'] })
+      void qc.invalidateQueries({ queryKey: ['documents', documentId] })
+      toast.success(t('signaturePlacement.reassigned'))
+    },
+    onError: (err) => {
+      if (err instanceof ApiError && err.code === 'SIGNATURE_REVISION_CONFLICT') {
+        toast.error(t('signaturePlacement.conflict'))
+        void editorQuery.refetch()
+      } else {
+        toast.error(apiErrorMessage(err))
+      }
+    },
+  })
+
   if (!Number.isFinite(documentId)) {
     return <PlacementShell isAr={isAr} onBack={() => navigate(-1)} title={t('signaturePlacement.title')} body={
       <ErrorState message={t('errors.generic')} />
@@ -295,6 +326,13 @@ export function SignaturePlacementPage(): React.JSX.Element {
             canReset={
               selected.default_page != null && selected.default_x != null && selected.default_y != null
             }
+          />
+        )}
+
+        {placementMode && selected && isAdmin && (
+          <ReassignPanel
+            busy={reassignMutation.isPending}
+            onReassign={(employeeId) => reassignMutation.mutate(employeeId)}
           />
         )}
 
@@ -781,6 +819,53 @@ function IdentifyPanel({
         onConfirm={() => {
           if (pending) onIdentify(pending)
           setPending(null)
+        }}
+      />
+    </div>
+  )
+}
+
+function ReassignPanel({
+  busy,
+  onReassign,
+}: {
+  busy: boolean
+  onReassign: (employeeId: string) => void
+}): React.JSX.Element {
+  const { t } = useTranslation()
+  const [employeeId, setEmployeeId] = useState<string | null>(null)
+  const [confirmOpen, setConfirmOpen] = useState(false)
+
+  return (
+    <div className="rounded-xl border border-hairline bg-surface p-4">
+      <h2 className="mb-1 text-sm font-bold text-foreground">{t('signaturePlacement.reassign')}</h2>
+      <p className="mb-3 text-[0.76em] text-muted-foreground">{t('signaturePlacement.reassignHint')}</p>
+      <EmployeePicker
+        selectedId={employeeId}
+        onSelect={setEmployeeId}
+        ariaLabel={t('signaturePlacement.reassign')}
+      />
+      <Button
+        type="button"
+        variant="commit"
+        size="commit"
+        disabled={!employeeId || busy}
+        onClick={() => setConfirmOpen(true)}
+        className="mt-3 w-full"
+      >
+        {busy && <Loader2 className="h-4 w-4 animate-spin" aria-hidden />}
+        {t('signaturePlacement.reassign')}
+      </Button>
+      <ConfirmDialog
+        open={confirmOpen}
+        onOpenChange={setConfirmOpen}
+        title={t('signaturePlacement.reassignConfirmTitle')}
+        description={t('signaturePlacement.reassignConfirmDesc')}
+        confirmLabel={t('signaturePlacement.reassign')}
+        onConfirm={() => {
+          if (employeeId) onReassign(employeeId)
+          setConfirmOpen(false)
+          setEmployeeId(null)
         }}
       />
     </div>

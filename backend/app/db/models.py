@@ -487,7 +487,7 @@ class SignatureArtifactRevision(Base):
     manifest: Mapped[list[dict[str, object]]] = mapped_column(
         JSON, nullable=False, default=list, server_default="[]"
     )
-    # initial | identify | move
+    # initial | identify | move | reassign
     action: Mapped[str] = mapped_column(String(16), nullable=False)
     signature_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     before_geometry: Mapped[dict[str, object] | None] = mapped_column(JSON, nullable=True)

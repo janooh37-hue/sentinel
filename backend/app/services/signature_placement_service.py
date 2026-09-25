@@ -43,6 +43,7 @@ SOURCE_KIND_APPROVAL = "approval"
 ACTION_INITIAL = "initial"
 ACTION_IDENTIFY = "identify"
 ACTION_MOVE = "move"
+ACTION_REASSIGN = "reassign"
 
 
 def _sha256_file(path: Path) -> str:
@@ -879,6 +880,204 @@ def move_signature(
                 f'{{"version_id": {version.id}, "signature_id": "{signature_id}", '
                 f'"actor_user_id": {user.id}, "revision": {next_revision}, '
                 f'"before_page": {before_geometry.page}, "after_page": {page}}}'
+            ),
+        )
+    )
+    db.commit()
+    return describe_editor(db, document_id, user=user)
+
+
+def reassign_signature(
+    db: Session,
+    document_id: int,
+    *,
+    user: User,
+    signature_id: str,
+    signature_revision: int,
+    package_revision: int,
+    source_sha256: str,
+    employee_id: str,
+) -> EditorDescription:
+    """Administrator-only: replace *signature_id*'s embedded image with
+    *employee_id*'s saved profile signature, at its EXISTING position — the
+    signature-position tool's "choose a different employee" control. Mirrors
+    ``move_signature``'s transaction shape (measure/swap/validate outside the
+    write lock, then a CAS-gated publish) with the image, not the geometry,
+    as the corrected value.
+    """
+    from app.core import signature as signature_core
+    from app.db.models import Employee
+    from app.services import _pdf_executor, included_papers_service
+
+    if user.role != ADMIN_ROLE:
+        raise AppError(
+            "FORBIDDEN", "Only an administrator may reassign a signature", http_status=403
+        )
+    version, book, document = _resolve_version_book_document(db, document_id)
+    if not _is_latest_version(book, version):
+        raise ValidationFailedError(
+            "SIGNATURE_LAYOUT_UNSUPPORTED", "Only the latest version can be corrected"
+        )
+    active = _active_revision(db, version)
+    if active is None:
+        raise NotFoundError(
+            "SIGNATURE_SOURCE_UNAVAILABLE", "No tracked signature artifact for this record"
+        )
+    if version.signature_revision != signature_revision:
+        raise ConflictError("SIGNATURE_REVISION_CONFLICT", "The record changed; reload and retry")
+    if book.included_papers_revision != package_revision:
+        raise ConflictError("SIGNATURE_REVISION_CONFLICT", "The record changed; reload and retry")
+
+    employee = db.get(Employee, employee_id)
+    if employee is None:
+        raise NotFoundError("EMPLOYEE_NOT_FOUND", f"Employee {employee_id} not found")
+    settings = get_settings()
+    sig_path = signature_core.employee_signature_str(settings.vault_dir, employee_id)
+    if sig_path is None:
+        raise ValidationFailedError(
+            "NO_SIGNATURE", "That employee has no saved signature on their profile"
+        )
+    image_bytes = Path(sig_path).read_bytes()
+
+    tracked_docx = settings.data_dir / active.docx_path
+    if not tracked_docx.is_file():
+        raise ValidationFailedError(
+            "SIGNATURE_SOURCE_UNAVAILABLE", "The tracked signature source is unavailable"
+        )
+    actual_sha = _sha256_file(tracked_docx)
+    if actual_sha != source_sha256:
+        raise ConflictError(
+            "SIGNATURE_REVISION_CONFLICT", "The document changed since the workspace was opened"
+        )
+
+    before_pdf = settings.data_dir / active.primary_pdf_path if active.primary_pdf_path else None
+    if before_pdf is None or not before_pdf.is_file():
+        before_pdf = _pdf_executor.convert_docx_to_pdf(tracked_docx)
+    if before_pdf is None:
+        raise signature_layout.SignatureRenderFailedError(
+            f"No readable prior rendition for {tracked_docx}"
+        )
+
+    layout = _pdf_executor.measure_signature_position(tracked_docx)
+    if signature_id not in layout.drawings:
+        raise ValidationFailedError(
+            "SIGNATURE_IDENTITY_INVALID", "That signature was not found in the tracked source"
+        )
+    before_geometry = layout.drawings[signature_id]
+
+    next_revision = active.revision + 1
+    dest_dir = _retained_dir(version.id, next_revision)
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    destination_docx = dest_dir / tracked_docx.name
+    try:
+        after_layout, after_pdf = _pdf_executor.reassign_signature_image(
+            tracked_docx,
+            destination_docx,
+            signature_id=signature_id,
+            image_bytes=image_bytes,
+            layout=layout,
+            before_pdf=before_pdf,
+        )
+    except Exception:
+        shutil.rmtree(dest_dir, ignore_errors=True)
+        raise
+
+    sig_update = cast(
+        CursorResult[Any],
+        db.execute(
+            update(BookVersion)
+            .where(
+                BookVersion.id == version.id,
+                BookVersion.signature_revision == signature_revision,
+            )
+            .values(signature_revision=next_revision)
+            .execution_options(synchronize_session=False)
+        ),
+    )
+    if sig_update.rowcount != 1:
+        shutil.rmtree(dest_dir, ignore_errors=True)
+        db.rollback()
+        raise ConflictError("SIGNATURE_REVISION_CONFLICT", "Another correction was just published")
+    pkg_update = cast(
+        CursorResult[Any],
+        db.execute(
+            update(Book)
+            .where(Book.id == book.id, Book.included_papers_revision == package_revision)
+            .values(included_papers_revision=package_revision + 1)
+            .execution_options(synchronize_session=False)
+        ),
+    )
+    if pkg_update.rowcount != 1:
+        shutil.rmtree(dest_dir, ignore_errors=True)
+        db.rollback()
+        raise ConflictError(
+            "SIGNATURE_REVISION_CONFLICT", "Included papers changed; reload and retry"
+        )
+    set_committed_value(version, "signature_revision", next_revision)
+    set_committed_value(book, "included_papers_revision", package_revision + 1)
+
+    try:
+        if active.source_kind == SOURCE_KIND_APPROVAL:
+            published_rel = included_papers_service.publish_signed_package(
+                db, book, version, after_pdf, physical_scan=False, advance_revision=False
+            )
+            published_abs: Path | None = settings.data_dir / published_rel
+        else:
+            result = included_papers_service.publish_generated_package(
+                db, book, version, document, after_pdf, invalidate_revision=False
+            )
+            published_abs = (
+                settings.data_dir / result.published_path if result.published_path else None
+            )
+    except Exception:
+        db.rollback()
+        shutil.rmtree(dest_dir, ignore_errors=True)
+        raise
+
+    retained_pdf = dest_dir / after_pdf.name
+    if after_pdf.resolve() != retained_pdf.resolve():
+        shutil.copy2(after_pdf, retained_pdf)
+    row = SignatureArtifactRevision(
+        version_id=version.id,
+        revision=next_revision,
+        source_kind=active.source_kind,
+        # The new signer is now the recorded account, so a later correction
+        # by that employee's own linked user (if any) still routes through
+        # the ordinary `can_correct` check rather than staying admin-only.
+        signer_user_id=(
+            db.execute(select(User.id).where(User.employee_id == employee_id)).scalar_one_or_none()
+        ),
+        docx_path=_rel(destination_docx),
+        primary_pdf_path=_rel(retained_pdf),
+        published_pdf_path=_rel(published_abs) if published_abs is not None else None,
+        previous_published_pdf_path=active.published_pdf_path,
+        docx_sha256=_sha256_file(destination_docx),
+        manifest=[],
+        action=ACTION_REASSIGN,
+        signature_id=signature_id,
+        before_geometry={
+            "page": before_geometry.page,
+            "x": before_geometry.x,
+            "y": before_geometry.y,
+        },
+        after_geometry={
+            "page": before_geometry.page,
+            "x": before_geometry.x,
+            "y": before_geometry.y,
+        },
+        actor_user_id=user.id,
+    )
+    db.add(row)
+    db.add(
+        AuditLog(
+            actor=user.employee_id,
+            action="signature.reassigned",
+            entity_type="document",
+            entity_id=str(document_id),
+            payload=(
+                f'{{"version_id": {version.id}, "signature_id": "{signature_id}", '
+                f'"actor_user_id": {user.id}, "revision": {next_revision}, '
+                f'"employee_id": "{employee_id}"}}'
             ),
         )
     )

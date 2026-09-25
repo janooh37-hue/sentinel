@@ -181,3 +181,6 @@ mockups/plan/
 # but never committed. Only backend/templates/fonts/ (OFL) is tracked.
 /tmp-fonts/
 /SERVER-MIGRATION.md
+
+# Local agent scratch skills dir (not part of the repo, untracked cruft)
+/.hermes/
