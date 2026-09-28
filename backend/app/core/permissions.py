@@ -27,6 +27,55 @@ SERVICE_RECORDS_CAPABILITY_IDS: Final[frozenset[str]] = frozenset(
     f"{SERVICE_RECORDS_CAP_PREFIX}{service_id}" for service_id in (*SERVICE_IDS, OTHER_SERVICE_ID)
 )
 
+#: 2026-09-21 HR intake additions — 19 forms built from a PDF-only export
+#: (no native Word originals yet, no branding/visual review). Their
+#: ``books.service.*``/``books.servicerecords.*`` capabilities stay
+#: RECOGNIZED (an admin can grant them; SERVICE_CAPABILITY_IDS/
+#: SERVICE_RECORDS_CAPABILITY_IDS above still include them, so
+#: perm_service.dynamic_capability_ids/denied_record_types treat them
+#: normally) but are deliberately excluded from the auto-granted set below —
+#: every non-admin starts denied for both creation and record visibility
+#: until an admin opts them in. Remove an id here once its template is
+#: reviewed and should join the default-granted set.
+OPT_IN_SERVICE_IDS: Final[frozenset[str]] = frozenset(
+    {
+        "Manpower Requisition Form",
+        "Employment Application Form",
+        "Interview Assessment Form",
+        "Employment Offer Letter",
+        "Employee Performance Appraisal Form",
+        "Employee Job Description",
+        "Interview Scores Form",
+        "Staff Attendance Form",
+        "Leave Encashment Form",
+        "Loan Request Form",
+        "Employee Information Form",
+        "Employee Exit Form",
+        "Employee Exit Form – Project or Contract",  # noqa: RUF001
+        "Salary Advance Request Form",
+        "Breach of Discipline Form",
+        "Promotion and Salary Increment Request Form",
+        "Allowance Request Form",
+        "Employee Overtime Form",
+        "Expense Claim Form",
+    }
+)
+
+#: Auto-granted subset of SERVICE_CAPABILITY_IDS/SERVICE_RECORDS_CAPABILITY_IDS
+#: — every service EXCEPT the opt-in additions above. This is what
+#: ``perm_service._role_and_dynamic_caps`` folds into every role's implicit
+#: caps; the full (recognized) sets stay in SERVICE_CAPABILITY_IDS/
+#: SERVICE_RECORDS_CAPABILITY_IDS for validation and deny-computation.
+_AUTO_GRANTED_SERVICE_IDS: Final[tuple[str, ...]] = tuple(
+    s for s in (*SERVICE_IDS, OTHER_SERVICE_ID) if s not in OPT_IN_SERVICE_IDS
+)
+AUTO_GRANTED_SERVICE_CAPABILITY_IDS: Final[frozenset[str]] = frozenset(
+    f"{SERVICE_CAP_PREFIX}{service_id}" for service_id in _AUTO_GRANTED_SERVICE_IDS
+)
+AUTO_GRANTED_SERVICE_RECORDS_CAPABILITY_IDS: Final[frozenset[str]] = frozenset(
+    f"{SERVICE_RECORDS_CAP_PREFIX}{service_id}" for service_id in _AUTO_GRANTED_SERVICE_IDS
+)
+
 
 @dataclass(frozen=True, slots=True)
 class Capability:
@@ -626,10 +675,13 @@ def default_caps_for_role(role: str) -> frozenset[str]:
 
 __all__ = [
     "ALL_CAPABILITIES",
+    "AUTO_GRANTED_SERVICE_CAPABILITY_IDS",
+    "AUTO_GRANTED_SERVICE_RECORDS_CAPABILITY_IDS",
     "CAPABILITIES",
     "CAPABILITY_IDS",
     "CATEGORY_CAP_PREFIX",
     "INMATE_REPORTER_CAPS",
+    "OPT_IN_SERVICE_IDS",
     "ROLE_DEFAULTS",
     "SENSITIVE_CAPABILITY_IDS",
     "SERVICE_CAPABILITY_IDS",

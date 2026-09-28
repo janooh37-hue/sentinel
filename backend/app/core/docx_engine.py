@@ -1187,6 +1187,33 @@ _FORM_REGISTRY: dict[str, dict[str, Any]] = {
     "Inmate Conduct Violations": {"adapter": _adapt_common, "post_process": None},
     "Vehicle Fines": {"adapter": _adapt_common, "post_process": None},
     "Vehicle Accident Report": {"adapter": _adapt_common, "post_process": None},
+    # --- 2026-09-21 HR intake additions — plain scalar/table tokens, no
+    # legacy v3 key renames needed, so the common adapter covers all 19.
+    "Manpower Requisition Form": {"adapter": _adapt_common, "post_process": None},
+    "Employment Application Form": {"adapter": _adapt_common, "post_process": None},
+    "Interview Assessment Form": {"adapter": _adapt_common, "post_process": None},
+    "Employment Offer Letter": {"adapter": _adapt_common, "post_process": None},
+    "Employee Performance Appraisal Form": {"adapter": _adapt_common, "post_process": None},
+    "Employee Job Description": {"adapter": _adapt_common, "post_process": None},
+    "Interview Scores Form": {"adapter": _adapt_common, "post_process": None},
+    "Staff Attendance Form": {"adapter": _adapt_common, "post_process": None},
+    "Leave Encashment Form": {"adapter": _adapt_common, "post_process": None},
+    "Loan Request Form": {"adapter": _adapt_common, "post_process": None},
+    "Employee Information Form": {"adapter": _adapt_common, "post_process": None},
+    "Employee Exit Form": {"adapter": _adapt_common, "post_process": None},
+    "Employee Exit Form – Project or Contract": {  # noqa: RUF001
+        "adapter": _adapt_common,
+        "post_process": None,
+    },
+    "Salary Advance Request Form": {"adapter": _adapt_common, "post_process": None},
+    "Breach of Discipline Form": {"adapter": _adapt_common, "post_process": None},
+    "Promotion and Salary Increment Request Form": {
+        "adapter": _adapt_common,
+        "post_process": None,
+    },
+    "Allowance Request Form": {"adapter": _adapt_common, "post_process": None},
+    "Employee Overtime Form": {"adapter": _adapt_common, "post_process": None},
+    "Expense Claim Form": {"adapter": _adapt_common, "post_process": None},
 }
 
 

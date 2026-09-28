@@ -220,8 +220,17 @@ def test_dynamic_capabilities_are_implicit_defaults_and_never_seeded(
     category_cap = f"books.category.{category.id}"
     expected_dynamic = service_caps | service_record_caps | {category_cap}
 
+    # 2026-09-21 HR intake additions (permissions.OPT_IN_SERVICE_IDS) are
+    # RECOGNIZED dynamic capabilities but not part of a non-admin's implicit
+    # default — they must be explicitly granted per user.
+    opt_in_caps = {f"books.service.{sid}" for sid in permissions.OPT_IN_SERVICE_IDS} | {
+        f"books.servicerecords.{sid}" for sid in permissions.OPT_IN_SERVICE_IDS
+    }
+    auto_granted_dynamic = expected_dynamic - opt_in_caps
+
     assert perm_service.dynamic_capability_ids(db_session) == expected_dynamic
-    assert expected_dynamic <= perm_service.effective_caps(db_session, operator)
+    assert auto_granted_dynamic <= perm_service.effective_caps(db_session, operator)
+    assert opt_in_caps.isdisjoint(perm_service.effective_caps(db_session, operator))
     assert expected_dynamic <= perm_service.effective_caps(db_session, admin)
     assert perm_service.denied_record_types(db_session, admin) == (set(), set())
     assert expected_dynamic.isdisjoint(permissions.ALL_CAPABILITIES)
@@ -241,7 +250,9 @@ def test_dynamic_capabilities_are_implicit_defaults_and_never_seeded(
     perm_service.set_user_override(db_session, operator.id, denied_cap, "deny", actor=admin)
     assert denied_cap not in perm_service.effective_caps(db_session, operator)
     denied_services, denied_categories = perm_service.denied_record_types(db_session, operator)
-    assert denied_services == {"General Book"}
+    # The 19 opt-in additions are denied by default (no override needed) on
+    # top of the one explicit deny above.
+    assert denied_services == {"General Book"} | permissions.OPT_IN_SERVICE_IDS
     assert denied_categories == set()
 
 
@@ -380,6 +391,8 @@ def test_auth_catalog_and_user_defaults_include_dynamic_capabilities(
             "default_roles": (
                 ["operator", "manager", "admin", "inmate_reporter"]
                 if service_id == "Inmate Conduct Violations"
+                else ["admin"]
+                if service_id in permissions.OPT_IN_SERVICE_IDS
                 else ["operator", "manager", "admin"]
             ),
         }

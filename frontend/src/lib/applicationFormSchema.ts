@@ -136,15 +136,21 @@ function buildShape(fields: TemplateField[], t: TFunction): Record<string, AnyZo
         break
 
       case 'items_table': {
-        const row = z.object({
-          sno: z.string().optional(),
-          code: z.string().optional(),
-          description: z.string().optional(),
-          unit: z.string().optional(),
-          qty: z.string().optional(),
-          quantity: z.string().optional(),
-          remarks: z.string().optional(),
-        })
+        // Configurable grid (field.columns present): permissive string-keyed
+        // row, keys come from the field's own column config, not a fixed
+        // legacy shape. Legacy Material Request / Acknowledgment forms carry
+        // no `columns` and keep their original fixed row shape.
+        const row = field.columns
+          ? z.record(z.string(), z.string().optional())
+          : z.object({
+              sno: z.string().optional(),
+              code: z.string().optional(),
+              description: z.string().optional(),
+              unit: z.string().optional(),
+              qty: z.string().optional(),
+              quantity: z.string().optional(),
+              remarks: z.string().optional(),
+            })
         shape[id] = required
           ? z.array(row).min(1, { message: t('application.validation.required') })
           : z.array(row).optional()

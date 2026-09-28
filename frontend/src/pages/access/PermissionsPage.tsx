@@ -920,6 +920,13 @@ export function PermissionsPage(): React.JSX.Element {
 
   // One atomic write per choice: creation first, records second, so a partial
   // failure can never leave the person with records they cannot reach.
+  //
+  // "Clear the override" (effect: null) only reproduces the intended state
+  // for a LEGACY service, whose default is granted. A 2026-09-21 opt-in
+  // service (catalog default_roles === ["admin"] — see
+  // capability_catalog_service._service_entries) defaults to DENIED, so
+  // "Full"/"Records only" must write an explicit grant there instead, or
+  // clearing the override would silently leave the form denied.
   const selectServiceState = (
     item: BlueprintItem,
     next: ServiceAccessState,
@@ -928,13 +935,20 @@ export function PermissionsPage(): React.JSX.Element {
     setCaptionItem(item)
     if (!permissions || !selectedUser || !item.capability) return
     flashBeam(event.currentTarget, item.kind)
+    const recordsCapability = `books.servicerecords.${item.id}`
+    const isOptIn =
+      (capabilityCatalog.byId.get(item.capability)?.default_roles.length ?? 0) === 1
     serviceTriMutation.mutate({
       userId: selectedUser.id,
       items: [
-        { capability: item.capability, effect: next === 'full' ? null : 'deny' },
         {
-          capability: `books.servicerecords.${item.id}`,
-          effect: next === 'hidden' ? 'deny' : null,
+          capability: item.capability,
+          effect: next === 'full' ? (isOptIn ? 'grant' : null) : 'deny',
+        },
+        {
+          capability: recordsCapability,
+          effect:
+            next === 'hidden' ? 'deny' : isOptIn ? 'grant' : null,
         },
       ],
     })

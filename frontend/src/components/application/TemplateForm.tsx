@@ -258,7 +258,14 @@ function renderField(
       return <ClearanceTableField key={field.id} {...common} />
 
     case 'items_table':
-      return <ItemsTableField key={field.id} {...common} />
+      return (
+        <ItemsTableField
+          key={field.id}
+          {...common}
+          columns={field.columns}
+          maxRows={field.max_rows}
+        />
+      )
 
     case 'employees_table':
       return <EmployeesTableField key={field.id} {...common} />
