@@ -13,9 +13,8 @@
 import { useEffect, useRef, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import * as pdfjsLib from 'pdfjs-dist'
-import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 
-import { base64ToBytes, toBase64Url } from '@/lib/pdf'
+import { base64ToBytes, pdfWorkerUrl, toBase64Url } from '@/lib/pdf'
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl
 

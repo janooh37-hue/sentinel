@@ -82,6 +82,8 @@ class _ImmutableStaticFiles(StaticFiles):
         response = await super().get_response(path, scope)
         if response.status_code == 200:
             response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+            if path.endswith(".mjs"):
+                response.headers["Content-Type"] = "application/javascript"
         return response
 
 

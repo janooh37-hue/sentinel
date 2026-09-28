@@ -3,6 +3,11 @@
  * Extracted from PdfViewer / DocPdfCanvas / RecordPaperViewer, which each had a
  * byte-identical copy. Pairs with the backend `maybe_base64` download shim. */
 
+import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
+
+// Bust immutable browser caches that stored the worker with the old text/plain MIME.
+export const pdfWorkerUrl = `${workerUrl}?mime=javascript`
+
 /** Append `encoding=base64` to a download URL so the backend returns the bytes
  * as text/plain (so Internet Download Manager / the browser PDF handler can't
  * hijack the download); pdf.js decodes them client-side via `base64ToBytes`. */
