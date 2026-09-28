@@ -2988,6 +2988,14 @@ export interface DebugOverview {
   files: Record<string, DebugFile>
   crash_reports: { count: number; latest: string | null }
   scheduler: { running: boolean; disabled_by_env: boolean; jobs: { id: string; name: string; next_run: string | null }[] }
+  machine: DebugMachine
+}
+export interface DebugMachine {
+  cpu_percent: number | null; cpu_count: number | null
+  ram_total_bytes: number | null; ram_available_bytes: number | null
+  boot_uptime_seconds: number | null
+  net_received_bytes: number | null; net_sent_bytes: number | null
+  services: Record<string, string>
 }
 export type DebugLogEntry = { ts: string | null; level: string; logger: string; msg: string; exc?: string } & Record<string, unknown>
 export type DebugLogSource = 'app' | 'stdout' | 'stderr'

@@ -35,6 +35,7 @@ import {
   type DebugIssue,
   type DebugLogEntry,
   type DebugLogSource,
+  type DebugMachine,
 } from '@/lib/api'
 import { copyToClipboard } from '@/lib/clipboard'
 
@@ -223,11 +224,110 @@ function DiagnosisPanel({ ai }: { ai: Ai }): React.JSX.Element | null {
   )
 }
 
+// ── Server machine panel ─────────────────────────────────────────────────────
+interface Sample { at: number; cpu: number | null; ram: number | null; rx: number | null; tx: number | null }
+
+function Sparkline({ values, label }: { values: (number | null)[]; label: string }): React.JSX.Element {
+  const pts = values
+    .map((v, i) => (v == null ? null : `${(i / Math.max(1, values.length - 1)) * 100},${30 - (Math.min(100, v) / 100) * 30}`))
+    .filter(Boolean)
+    .join(' ')
+  return (
+    <svg viewBox="0 0 100 30" preserveAspectRatio="none" className="h-8 w-full text-primary" role="img" aria-label={label}>
+      <polyline points={pts} fill="none" stroke="currentColor" strokeWidth="1.5" vectorEffect="non-scaling-stroke" />
+    </svg>
+  )
+}
+
+function Meter({ label, pct, detail, history }: { label: string; pct: number | null; detail: string; history: (number | null)[] }): React.JSX.Element {
+  const tone = pct == null ? 'bg-faint' : pct >= 95 ? 'bg-destructive' : pct >= 85 ? 'bg-caution' : 'bg-success'
+  return (
+    <div className="rounded-lg border border-hairline p-3">
+      <div className="flex items-baseline justify-between gap-2">
+        <span className="font-semibold">{label}</span>
+        <span className="font-mono text-[1.1em] font-bold" dir="ltr">{pct == null ? '—' : `${pct.toFixed(0)}%`}</span>
+      </div>
+      <div
+        className="mt-2 h-2 overflow-hidden rounded-full bg-surface-tinted"
+        role="meter"
+        aria-label={label}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={pct ?? undefined}
+      >
+        <div className={`h-full ${tone} transition-[width]`} style={{ inlineSize: `${pct ?? 0}%` }} />
+      </div>
+      <p className={`mt-1.5 text-muted-foreground ${mono}`} dir="ltr">{detail}</p>
+      <Sparkline values={history} label={label} />
+    </div>
+  )
+}
+
+function MachinePanel({ machine, history }: { machine: DebugMachine; history: Sample[] }): React.JSX.Element {
+  const { t } = useTranslation()
+  const ramPct = machine.ram_total_bytes && machine.ram_available_bytes != null
+    ? (1 - machine.ram_available_bytes / machine.ram_total_bytes) * 100
+    : null
+  const [prev, last] = history.slice(-2)
+  const secs = prev && last ? (last.at - prev.at) / 1000 : 0
+  const rate = (a: number | null | undefined, b: number | null | undefined): string =>
+    secs > 0 && a != null && b != null && b >= a ? `${fmtBytes((b - a) / secs)}/s` : '…'
+  return (
+    <section className="rounded-xl border border-border bg-surface p-4">
+      <h2 className="mb-3 font-semibold">{t('debug.machine.title')}</h2>
+      <div className="grid gap-3 md:grid-cols-2">
+        <Meter
+          label={t('debug.machine.cpu')}
+          pct={machine.cpu_percent}
+          detail={`${machine.cpu_count ?? '?'} cores`}
+          history={history.map((s) => s.cpu)}
+        />
+        <Meter
+          label={t('debug.machine.ram')}
+          pct={ramPct}
+          detail={`${fmtBytes(machine.ram_available_bytes)} free / ${fmtBytes(machine.ram_total_bytes)}`}
+          history={history.map((s) => s.ram)}
+        />
+      </div>
+      <dl className={`mt-3 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 ${mono}`} dir="ltr">
+        <dt className="text-muted-foreground">{t('debug.machine.uptime')}</dt>
+        <dd>{machine.boot_uptime_seconds != null ? fmtDuration(machine.boot_uptime_seconds) : '—'}</dd>
+        <dt className="text-muted-foreground">{t('debug.machine.network')}</dt>
+        <dd>
+          ↓ {rate(prev?.rx, last?.rx)} · ↑ {rate(prev?.tx, last?.tx)}
+          <span className="text-muted-foreground"> ({fmtBytes(machine.net_received_bytes)} ↓ / {fmtBytes(machine.net_sent_bytes)} ↑ {t('debug.machine.sinceBoot')})</span>
+        </dd>
+      </dl>
+      <h3 className="mb-2 mt-4 font-semibold">{t('debug.machine.services')}</h3>
+      <ul className="flex flex-wrap gap-2">
+        {Object.entries(machine.services).map(([name, state]) => {
+          const cls = state === 'RUNNING' ? 'bg-success-soft text-success' : state === 'not installed' || state === 'n/a' ? 'bg-surface-tinted text-muted-foreground' : 'bg-destructive/10 text-destructive'
+          return (
+            <li key={name} className={`rounded-full px-3 py-1 text-[0.85em] font-medium ${cls}`} dir="ltr">
+              {name}: {state}
+            </li>
+          )
+        })}
+      </ul>
+    </section>
+  )
+}
+
 // ── Health tab ───────────────────────────────────────────────────────────────
 function HealthTab({ ai }: { ai: Ai }): React.JSX.Element {
   const { t } = useTranslation()
   const [note, setNote] = useState('')
-  const q = useQuery({ queryKey: ['debug', 'overview'], queryFn: debugApi.overview, refetchInterval: 15_000 })
+  const q = useQuery({ queryKey: ['debug', 'overview'], queryFn: debugApi.overview, refetchInterval: 5_000 })
+  const [history, setHistory] = useState<Sample[]>([])
+  const [seenAt, setSeenAt] = useState(0)
+  const m = q.data?.machine
+  if (m && q.dataUpdatedAt !== seenAt) {
+    // Append one sample per fetch (React's "adjust state while rendering" pattern).
+    // ponytail: history lives in the open tab only (last ~5 min); persist server-side if trends across days matter.
+    const ram = m.ram_total_bytes && m.ram_available_bytes != null ? (1 - m.ram_available_bytes / m.ram_total_bytes) * 100 : null
+    setSeenAt(q.dataUpdatedAt)
+    setHistory((h) => [...h, { at: q.dataUpdatedAt, cpu: m.cpu_percent, ram, rx: m.net_received_bytes, tx: m.net_sent_bytes }].slice(-60))
+  }
   if (q.isLoading) return <Loader2 className="m-8 h-6 w-6 animate-spin text-muted-foreground" aria-label={t('debug.loading')} />
   if (q.error || !q.data) return <p className="p-4 text-destructive">{apiErrorMessage(q.error)}</p>
   const { checks, stats, files, scheduler, crash_reports } = q.data
@@ -279,6 +379,8 @@ function HealthTab({ ai }: { ai: Ai }): React.JSX.Element {
         />
         <AiButtons ai={ai} body={{ issue_id: null, note }} />
       </section>
+
+      <MachinePanel machine={q.data.machine} history={history} />
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
         {checks.map((c) => {
