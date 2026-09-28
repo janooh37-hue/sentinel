@@ -326,6 +326,36 @@ def _previous_case_end(db: Session, *, case: AttendanceCase) -> datetime | None:
     )
 
 
+def _evidence_window(
+    *,
+    case: AttendanceCase,
+    policy: WorkAttendancePolicy,
+    profile: AttendancePunchProfile | None,
+    previous_case_end: datetime | None,
+) -> tuple[datetime, datetime]:
+    start = case.scheduled_start_at - timedelta(minutes=policy.match_before_minutes)
+    end = case.scheduled_end_at + timedelta(minutes=policy.match_after_minutes)
+    if profile is None:
+        return (start, end)
+
+    learned_start = case.scheduled_start_at + timedelta(
+        minutes=profile.arrival_early_offset - WIDEN_MARGIN_MINUTES
+    )
+    floor = case.scheduled_start_at - timedelta(minutes=MAX_WIDEN_MINUTES)
+    if previous_case_end is not None and previous_case_end > floor:
+        floor = previous_case_end
+    start = min(start, max(learned_start, floor))
+
+    if profile.departure_late_offset is not None:
+        learned_end = case.scheduled_end_at + timedelta(
+            minutes=profile.departure_late_offset + WIDEN_MARGIN_MINUTES
+        )
+        end = max(
+            end, min(learned_end, case.scheduled_end_at + timedelta(minutes=MAX_WIDEN_MINUTES))
+        )
+    return (start, end)
+
+
 def evidence_window(
     db: Session,
     *,
@@ -338,28 +368,13 @@ def evidence_window(
     The policy window, widened to cover this person's own habitual arrival and
     departure, bounded by the approved cap and by their previous duty.
     """
-    start = case.scheduled_start_at - timedelta(minutes=policy.match_before_minutes)
-    end = case.scheduled_end_at + timedelta(minutes=policy.match_after_minutes)
-    if profile is None:
-        return (start, end)
-
-    learned_start = case.scheduled_start_at + timedelta(
-        minutes=profile.arrival_early_offset - WIDEN_MARGIN_MINUTES
+    previous_case_end = _previous_case_end(db, case=case) if profile is not None else None
+    return _evidence_window(
+        case=case,
+        policy=policy,
+        profile=profile,
+        previous_case_end=previous_case_end,
     )
-    floor = case.scheduled_start_at - timedelta(minutes=MAX_WIDEN_MINUTES)
-    previous_end = _previous_case_end(db, case=case)
-    if previous_end is not None and previous_end > floor:
-        floor = previous_end
-    start = min(start, max(learned_start, floor))
-
-    if profile.departure_late_offset is not None:
-        learned_end = case.scheduled_end_at + timedelta(
-            minutes=profile.departure_late_offset + WIDEN_MARGIN_MINUTES
-        )
-        end = max(
-            end, min(learned_end, case.scheduled_end_at + timedelta(minutes=MAX_WIDEN_MINUTES))
-        )
-    return (start, end)
 
 
 def infer_direction(

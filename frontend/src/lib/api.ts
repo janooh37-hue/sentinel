@@ -340,6 +340,7 @@ export type LegacyCandidateRead = components['schemas']['LegacyCandidateRead']
 export type SignatureEditorRead = components['schemas']['SignatureEditorRead']
 export type SignaturePositionRequest = components['schemas']['SignaturePositionRequest']
 export type SignatureIdentifyRequest = components['schemas']['SignatureIdentifyRequest']
+export type SignatureReassignRequest = components['schemas']['SignatureReassignRequest']
 export type SignatureHistoryItemRead = components['schemas']['SignatureHistoryItemRead']
 export type SignatureHistoryRead = components['schemas']['SignatureHistoryRead']
 
@@ -2730,6 +2731,12 @@ export const api = {
     request<SignatureEditorRead>(
       'PUT',
       `/documents/${documentId}/signatures/${encodeURIComponent(signatureId)}/position`,
+      body,
+    ),
+  reassignSignature: (documentId: number, signatureId: string, body: SignatureReassignRequest) =>
+    request<SignatureEditorRead>(
+      'PUT',
+      `/documents/${documentId}/signatures/${encodeURIComponent(signatureId)}/identity`,
       body,
     ),
   getSignatureHistory: (documentId: number) =>

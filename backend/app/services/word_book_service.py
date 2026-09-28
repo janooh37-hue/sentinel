@@ -599,6 +599,15 @@ def reopen_word_session(db: Session, *, user: User, book_id: int) -> WordSession
     """Copy the latest version's docx into a fresh working file and open an active session.
 
     For finished books (at least one BookVersion) only.
+
+    Report-only: carries the report's signer + sign choice forward from the
+    latest version's stored ``fields`` (set by a prior ``finish_word_session``)
+    onto the fresh session — otherwise a re-edited Report's session has no
+    signer at all and ``finish_word_session`` silently skips re-signing,
+    dropping the signature with no way to re-add it (2026-09 report bug).
+    Defaults to re-signing (``sign_on_finish=True``) when the prior version
+    carries no recorded choice, matching a first-time Report's default.
+
     Raises AppError:
     - BOOK_NOT_FOUND (404)
     - SESSION_ACTIVE (409) if an active session already exists.
@@ -650,6 +659,13 @@ def reopen_word_session(db: Session, *, user: User, book_id: int) -> WordSession
     )
     output_path = reopened_artifact.docx_path
 
+    signer_employee_id: str | None = None
+    sign_on_finish: bool | None = None
+    if book.ref_number.startswith("REPORT-"):
+        fields = latest_version.fields or {}
+        signer_employee_id = fields.get("signer_employee_id") or None
+        sign_on_finish = True if signer_employee_id else None
+
     token = secrets.token_urlsafe(32)
     session = BookEditSession(
         book_id=book_id,
@@ -657,6 +673,8 @@ def reopen_word_session(db: Session, *, user: User, book_id: int) -> WordSession
         token=token,
         working_path=str(output_path),
         state="active",
+        signer_employee_id=signer_employee_id,
+        sign_on_finish=sign_on_finish,
     )
     db.add(session)
     try:

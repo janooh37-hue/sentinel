@@ -106,9 +106,7 @@ def _header_copies(doc: Any) -> list[list[Paragraph]]:
         seen_parts.add(id(header.part))
         grouped: dict[tuple[int, str], list[Paragraph]] = {}
         for element in header.part.element.findall(".//" + qn("w:p")):
-            if not any(
-                text.text for text in element.findall("./" + qn("w:r") + "/" + qn("w:t"))
-            ):
+            if not any(text.text for text in element.findall("./" + qn("w:r") + "/" + qn("w:t"))):
                 continue
             ancestor = element.getparent()
             branch = "Header"
@@ -123,9 +121,7 @@ def _header_copies(doc: Any) -> list[list[Paragraph]]:
     return copies
 
 
-def _write_header_block(
-    ref_para: Paragraph, date_para: Paragraph, barcode_para: Paragraph
-) -> None:
+def _write_header_block(ref_para: Paragraph, date_para: Paragraph, barcode_para: Paragraph) -> None:
     """Restore the guarded ref/date/barcode token block in one header copy."""
     src = _first_run_style(date_para)
     _clear_runs(ref_para)
@@ -164,7 +160,6 @@ def _strip_header_artifacts(doc: Any) -> None:
             for para in hdr.paragraphs:
                 if para.text.strip().startswith("Ref:"):
                     _clear_runs(para)
-
 
 
 def retokenize_general_book(docx_path: Path, *, submitter_g: str | None = None) -> None:
@@ -236,7 +231,6 @@ def retokenize_general_book(docx_path: Path, *, submitter_g: str | None = None) 
         _guard_para(cc_para, "{%p if cc %}", after=False)
         _retokenize_labeled_line(cc_para, "نسخة إلى: ", "{{ cc }}")
         _guard_para(cc_para, "{%p endif %}", after=True)
-
 
     # 5. Legacy English header stamp out.
     _strip_header_artifacts(doc)

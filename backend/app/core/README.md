@@ -273,6 +273,7 @@ signature block.
 ```python
 word_pdf.convert(docx_path) -> Path | None   # sibling .pdf; None if Word fails
 word_pdf.quit_word() -> None                 # release the warm Word
+word_pdf.take_timings() -> list[dict]       # drain per-conversion phase timings
 ```
 
 Microsoft Word COM is the only engine (Arabic/English fidelity with the
@@ -282,6 +283,8 @@ to a kill-on-close Job Object, so killing the process kills its Word too
 (DCOM starts Word under svchost, outside the caller's process tree).
 Callers go through `app.services._pdf_executor`, which runs it in one
 worker process, kills that worker on timeout, and quits Word when idle.
+Each worker operation logs one `pdf_worker_op` line (queue wait, run time,
+and per-conversion cold/open/export/close milliseconds).
 
 ---
 
