@@ -16,10 +16,10 @@ corrupt, or unsafely large images are rejected outright rather than silently
 degraded. The optimizer only ever returns a *smaller* candidate — when it
 cannot safely produce one, it returns the original bytes unchanged.
 
-This module is pure (bytes in, bytes out) so it can be submitted to
-``app.services._pdf_executor``'s single-worker process pool: native
-PyMuPDF/Pillow work never blocks the event loop or shares a process with
-Word COM. Validation failures are raised as plain ``ValueError``s carrying one
+This module is pure (bytes in, bytes out) so it can run in
+``app.services._certificate_executor``'s dedicated single-worker process pool:
+native PyMuPDF/Pillow work never blocks the event loop or queues behind Word COM.
+Validation failures are raised as plain ``ValueError``s carrying one
 of the ``VEHICLE_CERTIFICATE_*`` codes below so they survive pickling across
 the Windows process boundary; ``vehicle_service`` translates them back to
 ``ValidationFailedError``.

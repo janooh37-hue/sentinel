@@ -18,17 +18,20 @@ without Word.
 from __future__ import annotations
 
 import contextlib
+import hashlib
 import logging
 import os
 import subprocess
 import sys
 import threading
+import time
+from collections import OrderedDict
 from collections.abc import Callable
 from concurrent.futures import ProcessPoolExecutor
 from concurrent.futures import TimeoutError as FutureTimeoutError
 from concurrent.futures.process import BrokenProcessPool
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, cast
 
 from app.core import word_pdf
 
@@ -42,6 +45,9 @@ IDLE_QUIT_SECONDS = 120.0
 _executor: ProcessPoolExecutor | None = None
 _idle_timer: threading.Timer | None = None
 _lock = threading.Lock()
+
+_MEASUREMENT_CACHE_MAX = 32
+_measurement_cache: OrderedDict[tuple[str, str, int], SignatureLayout] = OrderedDict()
 
 
 def get_executor() -> ProcessPoolExecutor:
@@ -74,22 +80,55 @@ def _reap_wedged_pool(executor: ProcessPoolExecutor) -> None:
     executor.shutdown(wait=False, cancel_futures=True)
 
 
+def _timed(
+    fn: Callable[..., Any], *args: object, **kwargs: object
+) -> tuple[Any, float, float, list[dict[str, Any]]]:
+    """Worker side of ``run_in_worker``: run ``fn`` and report when it started
+    and finished (wall clock, comparable across processes) plus the Word
+    conversions it made. The worker has no log handlers; the caller logs."""
+    word_pdf.take_timings()  # drop leftovers from untimed calls (idle quit)
+    started = time.time()
+    result = fn(*args, **kwargs)
+    return result, started, time.time(), word_pdf.take_timings()
+
+
 def run_in_worker[T](fn: Callable[..., T], *args: object, timeout: float, **kwargs: object) -> T:
     """Run ``fn`` in the Word worker (or inline under GSSG_INLINE_PDF=1)."""
+    submitted = time.time()
     if os.environ.get("GSSG_INLINE_PDF") == "1":
         try:
-            return fn(*args, **kwargs)
+            timed = _timed(fn, *args, **kwargs)
         finally:
             word_pdf.quit_word()
-    executor = get_executor()
-    fut = executor.submit(fn, *args, **kwargs)
-    try:
-        result = fut.result(timeout=timeout)
-    except (FutureTimeoutError, BrokenProcessPool):
-        _reap_wedged_pool(executor)
-        raise
-    _restart_idle_timer(executor)
-    return result
+    else:
+        executor = get_executor()
+        fut = executor.submit(_timed, fn, *args, **kwargs)
+        try:
+            timed = fut.result(timeout=timeout)
+        except (FutureTimeoutError, BrokenProcessPool):
+            log.warning(
+                "pdf_worker_timeout",
+                extra={
+                    "op": fn.__name__,
+                    "timeout_s": timeout,
+                    "waited_ms": round((time.time() - submitted) * 1000, 1),
+                },
+            )
+            _reap_wedged_pool(executor)
+            raise
+        _restart_idle_timer(executor)
+    result, started, finished, conversions = timed
+    log.info(
+        "pdf_worker_op",
+        extra={
+            "op": fn.__name__,
+            "queue_ms": round((started - submitted) * 1000, 1),
+            "run_ms": round((finished - started) * 1000, 1),
+            "total_ms": round((time.time() - submitted) * 1000, 1),
+            "conversions": conversions,
+        },
+    )
+    return cast("T", result)
 
 
 def _restart_idle_timer(executor: ProcessPoolExecutor) -> None:
@@ -121,14 +160,35 @@ def convert_docx_to_pdf(docx_path: Path) -> Path | None:
     return Path(raw) if raw else None
 
 
-def _measure_in_subprocess(docx_path_str: str) -> SignatureLayout:
-    """Converts via ``word_pdf`` directly — never resubmits to this same
-    executor from inside the worker (approval-signature-placement plan §6.1)."""
+def _measure_in_subprocess(docx_path_str: str, *, force: bool = False) -> SignatureLayout:
+    """Measure once per byte-identical DOCX and Word/layout version.
+
+    ``force`` keeps the post-move safety measurement mandatory while still
+    refreshing the cached layout for a later editor open.
+    """
     from app.core import signature_layout
 
-    return signature_layout.measure_signature_layout(
-        Path(docx_path_str), converter=word_pdf.convert
+    docx_path = Path(docx_path_str)
+    with docx_path.open("rb") as source:
+        source_sha256 = hashlib.file_digest(source, "sha256").hexdigest()
+    key = (
+        source_sha256,
+        word_pdf.word_version(),
+        signature_layout.SIGNATURE_LAYOUT_SCHEMA_VERSION,
     )
+    if not force:
+        cached = _measurement_cache.get(key)
+        if cached is not None:
+            _measurement_cache.move_to_end(key)
+            return cached
+
+    layout = signature_layout.measure_signature_layout(
+        docx_path, converter=word_pdf.convert, source_sha256=source_sha256
+    )
+    _measurement_cache[key] = layout
+    if len(_measurement_cache) > _MEASUREMENT_CACHE_MAX:
+        _measurement_cache.popitem(last=False)
+    return layout
 
 
 def measure_signature_position(docx_path: Path) -> SignatureLayout:
@@ -173,9 +233,7 @@ def _move_in_subprocess(
         raise signature_layout.SignatureRenderFailedError(
             f"Word conversion failed while publishing {destination}"
         )
-    after_layout = signature_layout.measure_signature_layout(
-        destination, converter=word_pdf.convert
-    )
+    after_layout = _measure_in_subprocess(str(destination), force=True)
     signature_layout.validate_move(
         before_docx=source,
         after_docx=destination,
@@ -229,6 +287,76 @@ def _background_in_subprocess(docx_path_str: str, signature_id: str) -> str:
         Path(docx_path_str), signature_id=signature_id, converter=word_pdf.convert
     )
     return str(pdf_path)
+
+
+def _reassign_in_subprocess(
+    source_str: str,
+    destination_str: str,
+    *,
+    signature_id: str,
+    image_bytes: bytes,
+    layout: SignatureLayout,
+    before_pdf_str: str,
+) -> tuple[SignatureLayout, str]:
+    """Swaps the signature image, converts, remeasures, and validates that
+    NOTHING but the target signature's image changed — same one-worker unit
+    as `_move_in_subprocess`, but the target's position is expected to stay
+    put (only the image changes)."""
+    from app.core import signature_layout
+
+    source = Path(source_str)
+    destination = Path(destination_str)
+    signature_layout.replace_signature_image(
+        source, destination, signature_id=signature_id, image_bytes=image_bytes
+    )
+    after_pdf = word_pdf.convert(destination)
+    if after_pdf is None:
+        raise signature_layout.SignatureRenderFailedError(
+            f"Word conversion failed while publishing {destination}"
+        )
+    after_layout = signature_layout.measure_signature_layout(
+        destination, converter=word_pdf.convert
+    )
+    before_geometry = layout.drawings[signature_id]
+    signature_layout.validate_move(
+        before_docx=source,
+        after_docx=destination,
+        before_pdf=Path(before_pdf_str),
+        after_pdf=after_pdf,
+        signature_id=signature_id,
+        requested_page=before_geometry.page,
+        requested_x=before_geometry.x,
+        requested_y=before_geometry.y,
+        layout_after=after_layout,
+    )
+    return after_layout, str(after_pdf)
+
+
+def reassign_signature_image(
+    source: Path,
+    destination: Path,
+    *,
+    signature_id: str,
+    image_bytes: bytes,
+    layout: SignatureLayout,
+    before_pdf: Path,
+) -> tuple[SignatureLayout, Path]:
+    """Swap, convert, remeasure, and validate *signature_id*'s image in one
+    worker unit — see `signature_layout.replace_signature_image`/
+    `validate_move`. Returns `(after_layout, after_pdf_path)`. Raises the
+    `signature_layout` error taxonomy on any failure; *destination* is left
+    on disk for the caller to clean up on a raised error."""
+    after_layout, after_pdf_str = run_in_worker(
+        _reassign_in_subprocess,
+        str(source),
+        str(destination),
+        signature_id=signature_id,
+        image_bytes=image_bytes,
+        layout=layout,
+        before_pdf_str=str(before_pdf),
+        timeout=240,
+    )
+    return after_layout, Path(after_pdf_str)
 
 
 def render_signature_free_background(docx_path: Path, *, signature_id: str) -> Path:

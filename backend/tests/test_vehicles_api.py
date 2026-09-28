@@ -1119,6 +1119,34 @@ def test_list_search_matches_make_model_and_colour(admin_client: TestClient) -> 
     assert missing.json() == []
 
 
+def test_list_reports_grouped_fine_totals(admin_client: TestClient) -> None:
+    vehicle = _create_vehicle(admin_client)
+    _add_fine(admin_client, int(vehicle["id"]))
+    second = admin_client.post(
+        f"/api/v1/vehicles/{vehicle['id']}/fines",
+        json={
+            "employee_id": None,
+            "date": "2026-08-21",
+            "time": None,
+            "amount_fils": 12500,
+            "black_points": 2,
+            "location": None,
+            "description": None,
+        },
+    )
+    assert second.status_code == 201, second.text
+
+    response = admin_client.get("/api/v1/vehicles")
+
+    assert response.status_code == 200, response.text
+    listed = next(row for row in response.json() if row["id"] == vehicle["id"])
+    assert (
+        listed["fines_count"],
+        listed["fines_amount_fils"],
+        listed["black_points"],
+    ) == (2, 72500, 6)
+
+
 def test_blank_optional_text_becomes_null(admin_client: TestClient) -> None:
     blank_fields = (
         "vin",
