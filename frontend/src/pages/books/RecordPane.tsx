@@ -184,12 +184,14 @@ export function RecordPane({
   // physically-signed scan back for a request out for signature (pending) or
   // at the printer (awaiting_scan). Shared helper keeps both surfaces aligned.
   const reporterAction = inmateReporterActionFor(book, user?.id)
+  const isInmateReport =
+    isInmateReporter &&
+    book.ref_number.startsWith('REPORT-') &&
+    reporterAction !== 'read-only'
   const showFileSigned =
     !isInmateReporter && canFileSignedCopy(state, { canEdit, canScan: canScanCap })
-  // Send for approval (digital route): submit a draft or re-route a pending
-  // request — offered next to Scan signed copy so both routes are available.
   const showSendForApproval = isInmateReporter
-    ? reporterAction === 'edit-submit'
+    ? isInmateReport && state === 'none' && book.edit_session?.state !== 'active'
     : canSendForApproval(state, { canSubmitBook })
   const canManageIncludedPapers =
     !isInmateReporter &&
@@ -199,15 +201,15 @@ export function RecordPane({
     ? currentBookDocId(includedDetail.data)
     : undefined
   const hasWordReopen =
-    !isInmateReporter &&
+    (!isInmateReporter || isInmateReport) &&
     !book.voided_at &&
-    (book.versions?.length ?? 0) > 0 &&
+    ((book.versions?.length ?? 0) > 0 || book.is_word_book) &&
     book.edit_session?.state !== 'active'
   const hasPaneUtilities =
     hasWordReopen || canManageIncludedPapers || (!isInmateReporter && papers.length > 0)
 
   const workflowActions = [
-    (isInmateReporter ? reporterAction === 'edit-submit' : state === 'none' && !isWordBook)
+    (!isInmateReport && (isInmateReporter ? reporterAction === 'edit-submit' : state === 'none' && !isWordBook))
       ? {
           key: 'continue',
           label: t('books.pane.continueDraft'),
@@ -227,7 +229,7 @@ export function RecordPane({
           onClick: () => onSubmit(book.id),
         }
       : null,
-    (isInmateReporter ? reporterAction === 'correct-resubmit' : state === 'returned')
+    (!isInmateReport && (isInmateReporter ? reporterAction === 'correct-resubmit' : state === 'returned'))
       ? {
           key: 'revise',
           label: t('books.pane.revise'),
@@ -347,9 +349,13 @@ export function RecordPane({
           }
         />
       </Suspense>
-
       <div className="flex shrink-0 flex-wrap items-center gap-2 border-t border-hairline px-3.5 py-2.5">
-        {!isInmateReporter && <WordSessionActions book={book} />}
+        {(!isInmateReporter || isInmateReport) && (
+          <WordSessionActions
+            book={book}
+            onFinished={isInmateReport ? () => onSubmit(book.id) : undefined}
+          />
+        )}
         {orderedWorkflowActions.map((action) => (
           <PaneBtn
             key={action.key}
@@ -373,7 +379,13 @@ export function RecordPane({
             <span className="h-5 w-px self-center bg-border" aria-hidden="true" />
           </>
         ) : null}
-        {!isInmateReporter && <WordReopenButton book={book} iconOnly />}
+        {(!isInmateReporter || isInmateReport) && (
+          <WordReopenButton
+            book={book}
+            iconOnly
+            onFinished={isInmateReport ? () => onSubmit(book.id) : undefined}
+          />
+        )}
         {canManageIncludedPapers && (
           <PaneBtn
             iconOnly
