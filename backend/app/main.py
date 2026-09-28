@@ -25,6 +25,7 @@ from app.api.v1 import auth as auth_v1
 from app.api.v1 import books as books_v1
 from app.api.v1 import correspondence as correspondence_v1
 from app.api.v1 import dashboard as dashboard_v1
+from app.api.v1 import debug as debug_v1
 from app.api.v1 import digests as digests_v1
 from app.api.v1 import documents as documents_v1
 from app.api.v1 import duty as duty_v1
@@ -239,6 +240,8 @@ def create_app() -> FastAPI:
     # Wraps the app's error responses too. Clients that omit
     # ``Accept-Encoding: gzip`` (Word's DAV stack) get identity bytes.
     app.add_middleware(GZipMiddleware, minimum_size=1024)
+    # Ring buffer of recent /api request timings for the admin debug console.
+    app.middleware("http")(debug_v1.record_request)
     # Outermost: per-request timings for the performance plan (Phase 0).
     app.add_middleware(RequestTimingMiddleware)
 
@@ -297,6 +300,7 @@ def create_app() -> FastAPI:
     app.include_router(permissions_v1.router, prefix="/api/v1", dependencies=auth_gate)
     app.include_router(permits_v1.router, prefix="/api/v1", dependencies=auth_gate)
     app.include_router(vehicles_v1.router, prefix="/api/v1", dependencies=auth_gate)
+    app.include_router(debug_v1.router, prefix="/api/v1", dependencies=auth_gate)
     # Workforce depends on the optional attendance persistence surface.  Import
     # it only while constructing the application so routine module imports
     # (including migration tooling) do not eagerly initialize that surface.

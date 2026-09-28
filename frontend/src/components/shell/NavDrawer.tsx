@@ -8,7 +8,7 @@
  *   - Chrome controls: AaSlider, LanguageToggle, ThemeToggle
  */
 
-import { Settings, ShieldCheck, X } from 'lucide-react'
+import { Bug, Settings, ShieldCheck, X } from 'lucide-react'
 import { useContext } from 'react'
 import { useTranslation } from 'react-i18next'
 import { NavLink } from 'react-router-dom'
@@ -128,6 +128,24 @@ export function NavDrawer({ open, onOpenChange }: NavDrawerProps): React.JSX.Ele
               >
                 <ShieldCheck className="h-4.5 w-4.5 shrink-0" strokeWidth={1.8} aria-hidden />
                 {t('access.title')}
+              </NavLink>
+            )}
+            {has('system.admin') && (
+              <NavLink
+                to="/debug"
+                onClick={close}
+                onPointerEnter={() => prefetchRouteForPath('/debug')}
+                onFocus={() => prefetchRouteForPath('/debug')}
+                className={({ isActive }) =>
+                  `flex items-center gap-3 rounded-lg px-3 py-2.5 text-[0.95em] font-medium transition-colors ${
+                    isActive
+                      ? 'bg-primary/10 text-primary'
+                      : 'text-foreground hover:bg-surface-tinted hover:text-primary'
+                  }`
+                }
+              >
+                <Bug className="h-4.5 w-4.5 shrink-0" strokeWidth={1.8} aria-hidden />
+                {t('debug.title')}
               </NavLink>
             )}
           </div>

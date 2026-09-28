@@ -5476,5 +5476,77 @@
       "unresolved": "The filed nationality does not match the list — pick the correct value.",
       "clear": "Clear the selection"
     }
+  },
+  "debug": {
+    "title": "Debug console",
+    "subtitle": "Live server health, hidden errors and logs — with AI help to explain and fix them.",
+    "loading": "Loading…",
+    "loadFailed": "Could not load",
+    "refresh": "Refresh",
+    "copy": "Copy",
+    "copied": "Copied",
+    "close": "Close",
+    "missing": "missing",
+    "checks": {
+      "db": "Database",
+      "migrations": "Database schema",
+      "scheduler": "Background jobs",
+      "word": "Microsoft Word (PDF export)",
+      "disk": "Disk space",
+      "errors": "Logged errors",
+      "requests": "API requests"
+    },
+    "tabs": {
+      "health": "Health",
+      "issues": "Issues",
+      "logs": "Logs",
+      "requests": "Requests"
+    },
+    "health": {
+      "allGood": "Everything looks healthy",
+      "attention_one": "{{count}} check needs attention",
+      "attention_other": "{{count}} checks need attention",
+      "autoRefresh": "Refreshes every 15 seconds.",
+      "stats": "Server stats",
+      "files": "Files",
+      "jobs": "Background jobs",
+      "stopped": "stopped"
+    },
+    "issues": {
+      "explain": "Warnings and errors from the server and users' browsers, grouped so repeats count once. Most of these never show up on screen — that is why they matter.",
+      "none": "No warnings or errors in the recent logs.",
+      "first": "First seen",
+      "last": "last",
+      "copyRaw": "Copy raw"
+    },
+    "logs": {
+      "source": "Log source",
+      "level": "Minimum level",
+      "app": "App log",
+      "search": "Search logs…",
+      "live": "Live",
+      "paused": "Paused",
+      "copyVisible": "Copy visible",
+      "empty": "No matching lines."
+    },
+    "requests": {
+      "onlyBad": "Only errors and slow",
+      "explain": "The last 500 API calls since the server started. Red status = the server failed; red time = slower than 3 seconds."
+    },
+    "ai": {
+      "ask": "Diagnose with AI",
+      "copy": "Copy for AI",
+      "thinking": "AI is thinking… (up to 10 min)",
+      "copied": "Prompt copied — paste it into Claude or ChatGPT",
+      "failed": "AI diagnosis failed",
+      "noEngine": "No logged-in claude or codex CLI on the server. Use “Copy for AI” and paste into any AI chat.",
+      "askHint": "Runs {{engine}} on the server, read-only",
+      "engineReady": "Ready: {{engines}} (logged in as {{user}}). Read-only — it can look at the code but not change it.",
+      "wholeApp": "Ask AI about the whole app",
+      "running": "Running on the server. You can switch tabs; the answer appears here when ready.",
+      "engine": "AI engine",
+      "notePlaceholder": "Optional: describe what you noticed (e.g. “PDF export slow since yesterday”)",
+      "result": "AI diagnosis ({{engine}}, {{seconds}} s)"
+    }
   }
 }

@@ -2977,3 +2977,44 @@ export function getNotifyStatus(
 export function refreshNotifyDelivery(notifyId: number): Promise<NotifyMessageRead> {
   return request<NotifyMessageRead>('POST', `/notify/${notifyId}/refresh-delivery`)
 }
+
+// ── Debug console (system.admin) ─────────────────────────────────────────────
+export type DebugStatus = 'ok' | 'warn' | 'fail'
+export interface DebugCheck { id: string; label: string; status: DebugStatus; detail: string; hint: string }
+export interface DebugFile { path: string; exists: boolean; size_bytes: number; modified: string | null }
+export interface DebugOverview {
+  checks: DebugCheck[]
+  stats: Record<string, string | number | boolean | null>
+  files: Record<string, DebugFile>
+  crash_reports: { count: number; latest: string | null }
+  scheduler: { running: boolean; disabled_by_env: boolean; jobs: { id: string; name: string; next_run: string | null }[] }
+}
+export type DebugLogEntry = { ts: string | null; level: string; logger: string; msg: string; exc?: string } & Record<string, unknown>
+export type DebugLogSource = 'app' | 'stdout' | 'stderr'
+export interface DebugIssue {
+  id: string; source: string; level: string; logger: string; title: string
+  count: number; first_seen: string | null; last_seen: string | null; sample: DebugLogEntry
+}
+export interface DebugRequest { ts: string; method: string; path: string; status: number; ms: number }
+export interface DebugDiagnosis {
+  id: string; engine: string; issue_id: string | null; status: 'running' | 'done' | 'failed'; at: string
+  output?: string; error?: string; seconds?: number
+}
+export interface DebugAskBody { issue_id?: string | null; note?: string; engine?: 'claude' | 'codex' | null }
+
+export const debugApi = {
+  overview: () => request<DebugOverview>('GET', '/debug/overview'),
+  issues: () => request<DebugIssue[]>('GET', '/debug/issues'),
+  requests: () => request<DebugRequest[]>('GET', '/debug/requests'),
+  logs: (p: { source: DebugLogSource; level: string; q: string; limit: number }) =>
+    request<{ source: string; path: string; size_bytes: number; entries: DebugLogEntry[] }>(
+      'GET',
+      `/debug/logs?${new URLSearchParams({ ...p, limit: String(p.limit) }).toString()}`,
+    ),
+  ai: () => request<{ engines: ('claude' | 'codex')[]; runs_as: string | null }>('GET', '/debug/ai'),
+  prompt: (body: DebugAskBody) => request<{ prompt: string }>('POST', '/debug/prompt', body),
+  diagnose: (body: DebugAskBody) => request<DebugDiagnosis>('POST', '/debug/diagnose', body),
+  diagnosis: (id: string) => request<DebugDiagnosis>('GET', `/debug/diagnose/${id}`),
+  clientError: (body: { message: string; stack?: string; url?: string; kind?: string }) =>
+    request<void>('POST', '/debug/client-error', body),
+}
