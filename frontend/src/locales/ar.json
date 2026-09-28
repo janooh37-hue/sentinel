@@ -5880,6 +5880,11 @@
     "close": "إغلاق",
     "missing": "غير موجود",
     "checks": {
+      "cpu": "المعالج",
+      "ram": "الذاكرة (RAM)",
+      "svc_gssgmanager": "خدمة: GSSGManager",
+      "svc_caddy": "خدمة: Caddy",
+      "svc_cloudflared": "خدمة: Cloudflared (النفق)",
       "db": "قاعدة البيانات",
       "migrations": "مخطط قاعدة البيانات",
       "scheduler": "المهام الخلفية",
@@ -5887,6 +5892,15 @@
       "disk": "مساحة القرص",
       "errors": "الأخطاء المسجّلة",
       "requests": "طلبات الواجهة البرمجية"
+    },
+    "machine": {
+      "title": "الخادم",
+      "cpu": "المعالج",
+      "ram": "الذاكرة (RAM)",
+      "uptime": "مدة تشغيل الجهاز",
+      "network": "الشبكة",
+      "sinceBoot": "منذ التشغيل",
+      "services": "خدمات Windows"
     },
     "tabs": {
       "health": "الصحة",
@@ -5902,7 +5916,7 @@
       "attention_few": "{{count}} فحوصات تحتاج انتباهًا",
       "attention_many": "{{count}} فحصًا يحتاج انتباهًا",
       "attention_other": "{{count}} فحوصات تحتاج انتباهًا",
-      "autoRefresh": "يتحدّث كل 15 ثانية.",
+      "autoRefresh": "يتحدّث كل 5 ثوانٍ.",
       "stats": "إحصاءات الخادم",
       "files": "الملفات",
       "jobs": "المهام الخلفية",

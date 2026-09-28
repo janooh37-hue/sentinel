@@ -5488,6 +5488,11 @@
     "close": "Close",
     "missing": "missing",
     "checks": {
+      "cpu": "CPU",
+      "ram": "Memory (RAM)",
+      "svc_gssgmanager": "Service: GSSGManager",
+      "svc_caddy": "Service: Caddy",
+      "svc_cloudflared": "Service: Cloudflared (tunnel)",
       "db": "Database",
       "migrations": "Database schema",
       "scheduler": "Background jobs",
@@ -5495,6 +5500,15 @@
       "disk": "Disk space",
       "errors": "Logged errors",
       "requests": "API requests"
+    },
+    "machine": {
+      "title": "Server",
+      "cpu": "CPU",
+      "ram": "Memory (RAM)",
+      "uptime": "Machine on for",
+      "network": "Network",
+      "sinceBoot": "since boot",
+      "services": "Windows services"
     },
     "tabs": {
       "health": "Health",
@@ -5506,7 +5520,7 @@
       "allGood": "Everything looks healthy",
       "attention_one": "{{count}} check needs attention",
       "attention_other": "{{count}} checks need attention",
-      "autoRefresh": "Refreshes every 15 seconds.",
+      "autoRefresh": "Refreshes every 5 seconds.",
       "stats": "Server stats",
       "files": "Files",
       "jobs": "Background jobs",

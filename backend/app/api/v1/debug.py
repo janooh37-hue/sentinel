@@ -332,6 +332,127 @@ def _word() -> tuple[str, str]:
         return "fail", "Word.Application is not registered on this machine"
 
 
+# ── Machine metrics (stdlib only; Windows via ctypes) ──────────────────────
+_SERVICES = ("GSSGManager", "Caddy", "Cloudflared")
+
+
+def _cpu_percent(interval: float = 0.25) -> float | None:
+    if sys.platform != "win32":
+        try:
+            return round(os.getloadavg()[0] / (os.cpu_count() or 1) * 100, 1)
+        except OSError:
+            return None
+    import ctypes
+    from ctypes import wintypes
+
+    def times() -> tuple[int, int, int]:
+        idle, kernel, user = wintypes.FILETIME(), wintypes.FILETIME(), wintypes.FILETIME()
+        ctypes.windll.kernel32.GetSystemTimes(
+            ctypes.byref(idle), ctypes.byref(kernel), ctypes.byref(user)
+        )
+
+        def as_int(ft: wintypes.FILETIME) -> int:
+            return (int(ft.dwHighDateTime) << 32) | int(ft.dwLowDateTime)
+
+        return as_int(idle), as_int(kernel), as_int(user)
+
+    i1, k1, u1 = times()
+    time.sleep(interval)
+    i2, k2, u2 = times()
+    total = (k2 - k1) + (u2 - u1)  # kernel time includes idle
+    return round((1 - (i2 - i1) / total) * 100, 1) if total else None
+
+
+def _memory() -> tuple[int, int] | None:
+    """(total, available) bytes of physical RAM."""
+    if sys.platform != "win32":
+        try:
+            info = dict(
+                line.split(":", 1) for line in Path("/proc/meminfo").read_text().splitlines()
+            )
+
+            def kb(k: str) -> int:
+                return int(info[k].split()[0]) * 1024
+
+            return kb("MemTotal"), kb("MemAvailable")
+        except (OSError, KeyError, ValueError):
+            return None
+    import ctypes
+    from ctypes import wintypes
+
+    class _MS(ctypes.Structure):
+        _fields_ = [
+            ("dwLength", wintypes.DWORD),
+            ("dwMemoryLoad", wintypes.DWORD),
+            ("ullTotalPhys", ctypes.c_ulonglong),
+            ("ullAvailPhys", ctypes.c_ulonglong),
+            ("ullTotalPageFile", ctypes.c_ulonglong),
+            ("ullAvailPageFile", ctypes.c_ulonglong),
+            ("ullTotalVirtual", ctypes.c_ulonglong),
+            ("ullAvailVirtual", ctypes.c_ulonglong),
+            ("ullAvailExtendedVirtual", ctypes.c_ulonglong),
+        ]
+
+    ms = _MS()
+    ms.dwLength = ctypes.sizeof(ms)
+    if not ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(ms)):
+        return None
+    return int(ms.ullTotalPhys), int(ms.ullAvailPhys)
+
+
+def _boot_uptime() -> int | None:
+    if sys.platform == "win32":
+        import ctypes
+
+        ctypes.windll.kernel32.GetTickCount64.restype = ctypes.c_ulonglong
+        return int(ctypes.windll.kernel32.GetTickCount64() // 1000)
+    try:
+        return int(float(Path("/proc/uptime").read_text().split()[0]))
+    except (OSError, ValueError):
+        return None
+
+
+def _run(*args: str) -> str:
+    try:
+        return subprocess.run(args, capture_output=True, text=True, timeout=5, check=False).stdout
+    except (OSError, subprocess.SubprocessError):
+        return ""
+
+
+def _network() -> tuple[int, int] | None:
+    """Cumulative (received, sent) bytes on all interfaces since boot."""
+    if sys.platform != "win32":
+        return None
+    for line in _run("netstat", "-e").splitlines():
+        parts = line.split()
+        if parts[:1] == ["Bytes"] and len(parts) == 3:
+            return int(parts[1]), int(parts[2])
+    return None
+
+
+def _service_state(name: str) -> str:
+    """RUNNING / STOPPED / ... or 'not installed'."""
+    if sys.platform != "win32":
+        return "n/a"
+    m = re.search(r"STATE\s+:\s+\d+\s+(\w+)", _run("sc.exe", "query", name))
+    return m.group(1) if m else "not installed"
+
+
+def _machine() -> dict[str, Any]:
+    mem = _memory()
+    net = _network()
+    return {
+        "cpu_percent": _cpu_percent(),
+        "cpu_count": os.cpu_count(),
+        "ram_total_bytes": mem[0] if mem else None,
+        "ram_available_bytes": mem[1] if mem else None,
+        "boot_uptime_seconds": _boot_uptime(),
+        "net_received_bytes": net[0] if net else None,
+        "net_sent_bytes": net[1] if net else None,
+        "services": {name: _service_state(name) for name in _SERVICES},
+    }
+
+
 def _file_info(path: Path) -> dict[str, Any]:
     if not path.is_file():
         return {"path": str(path), "exists": False, "size_bytes": 0, "modified": None}
@@ -429,10 +550,57 @@ def overview(_user: Admin, db: Annotated[Session, Depends(get_db)]) -> dict[str,
             "disk",
             "Disk space",
             "ok" if free_pct > 10 else ("warn" if free_pct > 3 else "fail"),
-            f"{usage.free / 1e9:.1f} GB free of {usage.total / 1e9:.1f} GB ({free_pct:.0f}%)",
+            f"{usage.free / 1024**3:.1f} GB free of {usage.total / 1024**3:.1f} GB ({free_pct:.0f}%)",
             "" if free_pct > 10 else "Low disk: backups, uploads and logs may start failing.",
         )
     )
+
+    # Machine
+    machine = _machine()
+    cpu = machine["cpu_percent"]
+    if cpu is not None:
+        checks.append(
+            _check(
+                "cpu",
+                "CPU",
+                "ok" if cpu < 85 else "warn",
+                f"{cpu:.0f}% busy across {machine['cpu_count']} cores",
+                "" if cpu < 85 else "The server is very busy; pages and PDFs will feel slow.",
+            )
+        )
+    if machine["ram_total_bytes"]:
+        used_pct = (1 - machine["ram_available_bytes"] / machine["ram_total_bytes"]) * 100
+        checks.append(
+            _check(
+                "ram",
+                "Memory (RAM)",
+                "ok" if used_pct < 85 else ("warn" if used_pct < 95 else "fail"),
+                f"{used_pct:.0f}% used, {machine['ram_available_bytes'] / 1024**3:.1f} GB free of "
+                f"{machine['ram_total_bytes'] / 1024**3:.1f} GB",
+                ""
+                if used_pct < 85
+                else "Memory is nearly full; Word and the app may crash or stall.",
+            )
+        )
+    for name, state in machine["services"].items():
+        if state == "n/a":
+            continue
+        ok = state == "RUNNING"
+        checks.append(
+            _check(
+                f"svc_{name.lower()}",
+                f"Service: {name}",
+                "ok" if ok else ("warn" if state == "not installed" else "fail"),
+                state,
+                ""
+                if ok
+                else (
+                    "Not installed on this machine (normal on the dev laptop)."
+                    if state == "not installed"
+                    else f"The {name} Windows service is not running."
+                ),
+            )
+        )
 
     # Recent errors
     grouped = _issues()
@@ -497,6 +665,7 @@ def overview(_user: Admin, db: Annotated[Session, Depends(get_db)]) -> dict[str,
         },
         "crash_reports": {"count": len(crashes), "latest": crashes[-1].stem if crashes else None},
         "scheduler": sched,
+        "machine": machine,
     }
 
 
