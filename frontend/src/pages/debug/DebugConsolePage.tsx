@@ -565,30 +565,32 @@ export function DebugConsolePage(): React.JSX.Element {
   const errCount = (issues.data ?? []).filter((i) => i.level === 'ERROR' || i.level === 'CRITICAL').length
 
   return (
-    <div className="mx-auto flex max-w-7xl flex-col gap-4 p-4 md:p-6">
-      <header className="flex items-center gap-3">
-        <Activity className="h-6 w-6 text-primary" aria-hidden />
-        <div>
-          <h1 className="text-[1.4em] font-bold">{t('debug.title')}</h1>
-          <p className="text-[0.9em] text-muted-foreground">{t('debug.subtitle')}</p>
-        </div>
-      </header>
-      <DiagnosisPanel ai={ai} />
-      <Tabs value={tab} onValueChange={setTab}>
-        <TabsList>
-          <TabsTrigger value="health">{t('debug.tabs.health')}</TabsTrigger>
-          <TabsTrigger value="issues">
-            {t('debug.tabs.issues')}
-            {errCount ? <span className="ms-1.5 rounded-full bg-destructive px-1.5 text-[0.75em] text-destructive-foreground">{errCount}</span> : null}
-          </TabsTrigger>
-          <TabsTrigger value="logs">{t('debug.tabs.logs')}</TabsTrigger>
-          <TabsTrigger value="requests">{t('debug.tabs.requests')}</TabsTrigger>
-        </TabsList>
-        <TabsContent value="health" className="pt-4"><HealthTab ai={ai} /></TabsContent>
-        <TabsContent value="issues" className="pt-4"><IssuesTab ai={ai} /></TabsContent>
-        <TabsContent value="logs" className="pt-4"><LogsTab /></TabsContent>
-        <TabsContent value="requests" className="pt-4"><RequestsTab /></TabsContent>
-      </Tabs>
+    <div className="min-h-0 flex-1 overflow-y-auto">
+      <div className="mx-auto flex w-full max-w-7xl flex-col gap-4 p-4 md:p-6">
+        <header className="flex items-center gap-3">
+          <Activity className="h-6 w-6 text-primary" aria-hidden />
+          <div>
+            <h1 className="text-[1.4em] font-bold">{t('debug.title')}</h1>
+            <p className="text-[0.9em] text-muted-foreground">{t('debug.subtitle')}</p>
+          </div>
+        </header>
+        <DiagnosisPanel ai={ai} />
+        <Tabs value={tab} onValueChange={setTab}>
+          <TabsList>
+            <TabsTrigger value="health">{t('debug.tabs.health')}</TabsTrigger>
+            <TabsTrigger value="issues">
+              {t('debug.tabs.issues')}
+              {errCount ? <span className="ms-1.5 rounded-full bg-destructive px-1.5 text-[0.75em] text-destructive-foreground">{errCount}</span> : null}
+            </TabsTrigger>
+            <TabsTrigger value="logs">{t('debug.tabs.logs')}</TabsTrigger>
+            <TabsTrigger value="requests">{t('debug.tabs.requests')}</TabsTrigger>
+          </TabsList>
+          <TabsContent value="health" className="pt-4"><HealthTab ai={ai} /></TabsContent>
+          <TabsContent value="issues" className="pt-4"><IssuesTab ai={ai} /></TabsContent>
+          <TabsContent value="logs" className="pt-4"><LogsTab /></TabsContent>
+          <TabsContent value="requests" className="pt-4"><RequestsTab /></TabsContent>
+        </Tabs>
+      </div>
     </div>
   )
 }

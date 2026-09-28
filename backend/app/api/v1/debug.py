@@ -429,7 +429,7 @@ def overview(_user: Admin, db: Annotated[Session, Depends(get_db)]) -> dict[str,
             "disk",
             "Disk space",
             "ok" if free_pct > 10 else ("warn" if free_pct > 3 else "fail"),
-            f"{usage.free / 1e9:.1f} GB free of {usage.total / 1e9:.1f} GB ({free_pct:.0f}%)",
+            f"{usage.free / 1024**3:.1f} GB free of {usage.total / 1024**3:.1f} GB ({free_pct:.0f}%)",
             "" if free_pct > 10 else "Low disk: backups, uploads and logs may start failing.",
         )
     )
