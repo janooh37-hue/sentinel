@@ -84,9 +84,6 @@ _TODAY_FMT = "%d/%m/%Y"
 _AZTEC_TOP_RIGHT: frozenset[str] = frozenset(
     {
         "Security Permit",
-        "Resignation Letter",
-        "Resignation Declaration",
-        "Leave Undertaking",
         "Warning Form",
         "Administrative Leave Form",
         "Leave Permit Form",
@@ -95,12 +92,17 @@ _AZTEC_TOP_RIGHT: frozenset[str] = frozenset(
         "Vehicle Accident Report",
     }
 )
+_AZTEC_BOTTOM_RIGHT: frozenset[str] = frozenset(
+    {"Resignation Letter", "Resignation Declaration", "Leave Undertaking"}
+)
 
 
 def aztec_corner_for(template_id: str) -> str | None:
     """Page-1 corner for the Aztec ref code, except General Book's template code."""
     if template_id == "General Book":
         return None
+    if template_id in _AZTEC_BOTTOM_RIGHT:
+        return "bottom-right"
     return "top-right" if template_id in _AZTEC_TOP_RIGHT else "top-left"
 
 

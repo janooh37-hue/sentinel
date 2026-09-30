@@ -211,3 +211,8 @@ def test_general_book_does_not_render_submitter_g_number(tmp_path):
 def test_general_book_is_the_only_top_right_form_without_aztec() -> None:
     assert aztec_corner_for("General Book") is None
     assert aztec_corner_for("Security Permit") == "top-right"
+
+
+def test_letter_forms_use_footer_corner_for_aztec() -> None:
+    for template_id in ("Resignation Letter", "Resignation Declaration", "Leave Undertaking"):
+        assert aztec_corner_for(template_id) == "bottom-right"

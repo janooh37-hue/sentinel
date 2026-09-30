@@ -1927,8 +1927,6 @@ def generate_document(
             and template_id not in CLASSIFIED_BOOK_FORMS
             and template_id not in VEHICLE_LETTER_FORMS,
             aztec_corner=aztec_corner_for(template_id) if commit else None,
-            aztec_size_cm=1.0 if template_id == "Leave Undertaking" else 1.1,
-            aztec_margin_cm=0.05 if template_id == "Leave Undertaking" else 0.3,
             sync_general_book_footer=(
                 template_id in CLASSIFIED_BOOK_FORMS and template_id != "General Book"
             ),
@@ -2454,12 +2452,6 @@ def generate_document(
                     header_reference=commit and _classification is None,
                     aztec_corner=(
                         aztec_corner_for(companion_template_id) if commit else None
-                    ),
-                    aztec_size_cm=(
-                        1.0 if companion_template_id == "Leave Undertaking" else 1.1
-                    ),
-                    aztec_margin_cm=(
-                        0.05 if companion_template_id == "Leave Undertaking" else 0.3
                     ),
                 ),
                 converter=pdf_converter,
