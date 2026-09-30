@@ -3,6 +3,7 @@ date when ``ref`` is provided, and omits it (three guard paragraphs collapse)
 when it is not. Asserts the ARABIC string per the i18n lesson."""
 
 from pathlib import Path
+import pytest
 
 from app.core.docx_engine import DocxEngine, aztec_corner_for
 from app.services.document_service import GENERAL_BOOK_BODY_SENTINEL
@@ -53,27 +54,63 @@ def test_ref_line_and_barcode_render_in_both_header_copies(tmp_path):
         text = "\n".join(p.text for p in paragraphs)
         assert "الرقم: 1/5/141" in text
         assert "التاريخ: 21-09-2026" in text
-        assert "1/5/141+20260921" in text
+        assert "GSSG*21/09/2026*1/5/141*" in text
         assert text.index("الرقم:") < text.index("التاريخ:")
 
 
 def test_ref_line_absent_without_ref(tmp_path):
     out = tmp_path / "out.docx"
-    DocxEngine(TEMPLATES_DIR).fill("General Book", dict(_BASE_DATA), out)
+    DocxEngine(TEMPLATES_DIR).fill(
+        "General Book", {**_BASE_DATA, "date": "2026-09-30"}, out
+    )
     text = _header_text(out)
-    assert "الرقم" not in text
-    assert "+20" not in text
+    assert "الرقم:  " in text
+    assert "GSSG*30/09/2026**" in text
 
 
 def test_ref_run_marked_ltr_in_both_header_copies(tmp_path):
     """The dynamic reference stays in stored order in an explicit LTR run."""
     out = tmp_path / "out.docx"
-    DocxEngine(TEMPLATES_DIR).fill("General Book", {**_BASE_DATA, "ref": "1/5/141"}, out)
+    DocxEngine(TEMPLATES_DIR).fill(
+        "General Book",
+        {**_BASE_DATA, "ref": "1/5/141", "date": "2026-09-30"},
+        out,
+    )
     for paragraphs in _header_copies(out).values():
         ref_para = next(p for p in paragraphs if "1/5/141" in p.text)
         ref_runs = [r for r in ref_para.runs if r.text.startswith("1/")]
         assert ref_runs, "ref value must be in its own run"
         assert all(r.font.rtl is False for r in ref_runs)
+@pytest.mark.parametrize(
+    "template_id",
+    ("General Book", "Resignation Declaration", "Resignation Letter", "Leave Undertaking"),
+)
+def test_letterhead_barcode_formula_for_every_template(template_id, tmp_path):
+    from docx import Document
+    from docx.oxml.ns import qn
+
+    expected = "GSSG*30/09/2026*1/12/351*"
+    out = tmp_path / f"{template_id}.docx"
+    DocxEngine(TEMPLATES_DIR).fill(
+        template_id,
+        {**_BASE_DATA, "date": "30-09-2026", "ref": "1/12/351"},
+        out,
+    )
+    doc = Document(str(out))
+    texts = []
+    seen = set()
+    for section in doc.sections:
+        for reference in section._sectPr.headerReference_lst:
+            part = doc.part.rels[reference.get(qn("r:id"))].target_part
+            if id(part) in seen:
+                continue
+            seen.add(id(part))
+            for run in part.element.findall(".//" + qn("w:r")):
+                fonts = run.find("./" + qn("w:rPr") + "/" + qn("w:rFonts"))
+                if fonts is not None and fonts.get(qn("w:ascii")) == "Libre Barcode 39":
+                    texts.append("".join(t.text or "" for t in run.findall("./" + qn("w:t"))))
+    assert texts and set(texts) == {expected}
+
 
 
 
@@ -188,8 +225,9 @@ def test_word_book_has_header_ref_barcode_and_no_header_stamp(
     session = db_session.query(BookEditSession).filter_by(book_id=info.book_id).one()
     text = _header_text(session.working_path)
     assert f"الرقم: {info.ref_number}" in text
-    assert f"{info.ref_number}+" in text
-    assert "Ref:" not in text
+    import re
+
+    assert re.search(rf"GSSG\*\d{{2}}/\d{{2}}/\d{{4}}\*{re.escape(info.ref_number)}\*", text)
 
 def test_general_book_does_not_render_submitter_g_number(tmp_path):
     from docx import Document

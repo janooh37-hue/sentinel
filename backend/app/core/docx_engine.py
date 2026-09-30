@@ -326,11 +326,15 @@ def _adapt_general_book(data: dict[str, Any]) -> dict[str, Any]:
     out = _adapt_common(data)
     # General Book overrides the date format and discards the default the common
     # adapter applied.
-    out["date"] = data.get("date") or datetime.now().strftime("%d-%m-%Y")
+    raw_date = data.get("date") or datetime.now().strftime("%d-%m-%Y")
+    parsed_date = excel_date_to_datetime(raw_date)
+    if parsed_date is None and isinstance(raw_date, str):
+        with contextlib.suppress(ValueError):
+            parsed_date = datetime.strptime(raw_date.strip(), "%d-%m-%Y")
+    parsed_date = parsed_date or datetime.now()
+    out["date"] = parsed_date.strftime("%d-%m-%Y")
     ref = str(out.get("ref") or "").strip()
-    out["barcode"] = (
-        qr.barcode_payload(ref, datetime.strptime(out["date"], "%d-%m-%Y").date()) if ref else ""
-    )
+    out["barcode"] = qr.barcode_payload(ref, parsed_date.date()) if ref else ""
     out.setdefault("subject", "")
     out.setdefault("body", "")
     # Preserve raw body HTML (when the service layer threaded it through) for
@@ -380,6 +384,7 @@ def _pp_resignation_letter(doc: Any, ctx: dict[str, Any]) -> None:
     the body cell and replace the first one with the reason, clearing the
     rest. We do this unconditionally so reasons of any length render in
     the same place (just below "نظراً للأسباب التالية:").
+    _format_letterhead_barcode(doc, ctx)
     """
     _format_general_book_ref_line(doc)
     reason = (ctx.get("reason") or "").strip()
@@ -998,6 +1003,7 @@ def _pp_general_book(doc: Any, ctx: dict[str, Any]) -> None:
     from app.core.arabic_rtl import html_to_docx
 
     # CC right-alignment fix runs first — independent of the body.
+    _format_letterhead_barcode(doc, ctx)
     _pp_general_book_cc(doc, ctx)
     _format_general_book_ref_line(doc)
 
@@ -1032,6 +1038,32 @@ def _apply_manager_signing_block_keep_together(doc: Any) -> None:
     name_paragraph = paras[idx + 1] if idx + 1 < len(paras) else None
     title_paragraph = paras[idx + 2] if idx + 2 < len(paras) else None
     _keep_manager_signing_block_together(doc, signature_paragraph, name_paragraph, title_paragraph)
+
+def _format_letterhead_barcode(doc: Any, ctx: dict[str, Any]) -> None:
+    """Replace Libre Barcode 39 runs in every header part with GSSG/date/ref."""
+    from docx.oxml.ns import qn
+    from docx.text.paragraph import Paragraph
+
+    raw_date = ctx.get("date") or ctx.get("today")
+    parsed = excel_date_to_datetime(raw_date)
+    if parsed is None and isinstance(raw_date, str):
+        with contextlib.suppress(ValueError):
+            parsed = datetime.strptime(raw_date.strip(), "%d-%m-%Y")
+    paper_date = parsed or datetime.now()
+    payload = f"GSSG*{paper_date:%d/%m/%Y}*{str(ctx.get('ref') or '').strip()}*"
+    seen_parts: set[int] = set()
+    for section in doc.sections:
+        for reference in section._sectPr.headerReference_lst:
+            part = doc.part.rels[reference.get(qn("r:id"))].target_part
+            if id(part) in seen_parts:
+                continue
+            seen_parts.add(id(part))
+            for element in part.element.findall(".//" + qn("w:p")):
+                paragraph = Paragraph(element, cast(Any, part))
+                for run in paragraph.runs:
+                    if run.font.name == "Libre Barcode 39":
+                        run.text = payload
+
 
 
 def _format_general_book_ref_line(doc: Any) -> None:
@@ -1141,8 +1173,9 @@ def _postprocess_general_book_footer(docx_path: str | Path) -> None:
 # --- Form registry --------------------------------------------------------
 
 
-def _pp_header_reference(doc: Any, _ctx: dict[str, Any]) -> None:
-    """Keep the copied Arabic header reference value left-to-right."""
+def _pp_header_reference(doc: Any, ctx: dict[str, Any]) -> None:
+    """Keep the copied Arabic reference and barcode runs in stored order."""
+    _format_letterhead_barcode(doc, ctx)
     _format_general_book_ref_line(doc)
 
 
