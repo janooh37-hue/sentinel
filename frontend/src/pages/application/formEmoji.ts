@@ -28,12 +28,50 @@ const DEFAULT_EMOJI = '📄'
 export const EXTRA_TEMPLATE_EMOJI: Record<string, string> = {
   'Vehicle Fines': '🚗',
   'Vehicle Accident Report': '🚧',
+  'Manpower Requisition Form': '👥',
+  'Employment Application Form': '📝',
+  'Interview Assessment Form': '💬',
+  'Employment Offer Letter': '🤝',
+  'Employee Performance Appraisal Form': '⭐',
+  'Employee Job Description': '💼',
+  'Interview Scores Form': '💯',
+  'Staff Attendance Form': '🕘',
+  'Leave Encashment Form': '🏖️',
+  'Loan Request Form': '🏦',
+  'Employee Information Form': '🪪',
+  'Employee Exit Form': '🚪',
+  'Employee Exit Form – Project or Contract': '📜',
+  'Salary Advance Request Form': '💵',
+  'Breach of Discipline Form': '⚖️',
+  'Promotion and Salary Increment Request Form': '📈',
+  'Allowance Request Form': '🪙',
+  'Employee Overtime Form': '🌙',
+  'Expense Claim Form': '🧾',
 }
 
-/** Calibrated artwork for feature-minted templates that are not dashboard quick actions. */
+/** Calibrated artwork for templates that are not dashboard quick actions. */
 export const EXTRA_TEMPLATE_ARTWORK: Record<string, ServiceArtworkId> = {
   'Vehicle Fines': 'vehicle-fines',
   'Vehicle Accident Report': 'vehicle-accident',
+  'Manpower Requisition Form': 'manpower-requisition',
+  'Employment Application Form': 'employment-application',
+  'Interview Assessment Form': 'interview-assessment',
+  'Employment Offer Letter': 'employment-offer',
+  'Employee Performance Appraisal Form': 'performance-appraisal',
+  'Employee Job Description': 'job-description',
+  'Interview Scores Form': 'interview-scores',
+  'Staff Attendance Form': 'staff-attendance',
+  'Leave Encashment Form': 'leave-encashment',
+  'Loan Request Form': 'loan-request',
+  'Employee Information Form': 'employee-information',
+  'Employee Exit Form': 'employee-exit',
+  'Employee Exit Form – Project or Contract': 'employee-exit-contract',
+  'Salary Advance Request Form': 'salary-advance',
+  'Breach of Discipline Form': 'breach-of-discipline',
+  'Promotion and Salary Increment Request Form': 'promotion-increment',
+  'Allowance Request Form': 'allowance-request',
+  'Employee Overtime Form': 'employee-overtime',
+  'Expense Claim Form': 'expense-claim',
 }
 
 /**
