@@ -123,6 +123,56 @@ def _require_full_book(db: Session, user: User, book_id: int) -> Book:
     return row
 
 
+def _inmate_report_word_access(db: Session, user: User, book_id: int) -> Book:
+    """Authorize Word actions on this reporter's own Report only."""
+    row = book_service.get_book(db, book_id)
+    if user.employee_id is None:
+        raise AppError(
+            "INMATE_REPORTER_EMPLOYEE_REQUIRED",
+            "Your account has no linked employee record yet.",
+            http_status=409,
+        )
+    if row.voided_at is not None:
+        raise AppError(
+            "INMATE_REPORTER_STATE_LOCKED",
+            "This report can no longer be edited.",
+            http_status=409,
+        )
+    if row.category_id != "GS" or not row.ref_number.startswith("REPORT-"):
+        raise AppError("INMATE_REPORTER_NOT_OWNER", "This is not a Report.", http_status=403)
+    if row.approval_state not in ("none", "returned"):
+        raise AppError(
+            "INMATE_REPORTER_STATE_LOCKED",
+            "This report can no longer be edited.",
+            http_status=409,
+        )
+    from app.services import included_papers_service
+
+    creator_id = (
+        included_papers_service.original_creator_user_id(row)
+        if row.versions
+        else row.submitted_by_user_id
+    )
+    session = db.query(BookEditSession).filter_by(book_id=book_id, state="active").one_or_none()
+    if creator_id != user.id or (session is not None and session.user_id != user.id):
+        raise AppError(
+            "INMATE_REPORTER_NOT_OWNER", "You are not the author of this report.", http_status=403
+        )
+    if row.versions:
+        book_service.require_inmate_report_write_access(db, user, row, action="revise")
+    return row
+
+
+def _require_word_capability(db: Session, user: User, capability: str) -> None:
+    if not perm_service.has_capability(db, user, capability):
+        raise AppError(
+            "FORBIDDEN",
+            f"Missing capability: {capability}",
+            http_status=403,
+            details={"capability": capability},
+        )
+
+
 def _signed_source_of(v: BookVersion) -> Literal["in_app", "scan"] | None:
     """Classify by the preserved base; packaged scan outputs live elsewhere."""
     if not v.signed_pdf_path:
@@ -246,35 +296,81 @@ def delete_word_template(
 def create_word_session(
     payload: WordBookCreate,
     db: Annotated[Session, Depends(get_db)],
-    user: Annotated[User, Depends(require_capability("books.create"))],
-    _viewer: Annotated[User, Depends(require_capability("books.view"))],
+    user: Annotated[User, Depends(get_current_user)],
 ) -> WordSessionRead:
-    """Create a General Book, or a no-ref Report when a signer is given, with a
-    Word-editable working docx."""
-    service_id = "Report" if payload.signer_employee_id is not None else "General Book"
-    _require_record_type_access(db, user, category_id="GS", service_id=service_id)
-    if payload.signer_employee_id is not None:
+    """Create a General Book or a Word-authored Report."""
+    if user.role == INMATE_REPORTER_ROLE:
+        if user.employee_id is None:
+            raise AppError(
+                "INMATE_REPORTER_EMPLOYEE_REQUIRED",
+                "Your account has no linked employee record yet.",
+                http_status=409,
+            )
+        if payload.signer_employee_id not in (None, user.employee_id):
+            raise AppError(
+                "INMATE_REPORTER_IDENTITY_MISMATCH",
+                "The signer must be the employee linked to your account.",
+                http_status=403,
+            )
+        if (
+            payload.recipient_id is not None
+            or payload.classification_code not in (None, "")
+            or payload.cc
+            or payload.manager_id is not None
+            or payload.template_name not in (None, "")
+            or payload.table_rows
+        ):
+            raise AppError(
+                "INMATE_REPORTER_INPUT_FORBIDDEN",
+                "This role can create only an unaddressed Report.",
+                http_status=422,
+            )
+        from app.services import report_service
+
+        _name, _title, signature = report_service._resolve_signer(db, user.employee_id)
+        if signature is None:
+            raise AppError(
+                "SIGNATURE_REQUIRED",
+                "Save your signature before creating a Report.",
+                http_status=409,
+            )
+        _require_record_type_access(db, user, category_id="GS", service_id="Report")
         info = word_book_service.create_report_word_book(
             db,
             user=user,
-            signer_employee_id=payload.signer_employee_id,
-            recipient_id=payload.recipient_id,
+            signer_employee_id=user.employee_id,
+            recipient_id=None,
             subject=payload.subject,
             date=payload.date,
-            sign=payload.sign,
+            sign=True,
         )
     else:
-        info = word_book_service.create_word_book(
-            db,
-            user=user,
-            classification_code=payload.classification_code,
-            recipient_id=payload.recipient_id,
-            subject=payload.subject,
-            cc=payload.cc,
-            manager_id=payload.manager_id,
-            template_name=payload.template_name,
-            table_rows=payload.table_rows,
-        )
+        _require_word_capability(db, user, "books.create")
+        _require_word_capability(db, user, "books.view")
+        service_id = "Report" if payload.signer_employee_id is not None else "General Book"
+        _require_record_type_access(db, user, category_id="GS", service_id=service_id)
+        if payload.signer_employee_id is not None:
+            info = word_book_service.create_report_word_book(
+                db,
+                user=user,
+                signer_employee_id=payload.signer_employee_id,
+                recipient_id=payload.recipient_id,
+                subject=payload.subject,
+                date=payload.date,
+                sign=payload.sign,
+            )
+        else:
+            info = word_book_service.create_word_book(
+                db,
+                user=user,
+                classification_code=payload.classification_code,
+                recipient_id=payload.recipient_id,
+                subject=payload.subject,
+                cc=payload.cc,
+                manager_id=payload.manager_id,
+                template_name=payload.template_name,
+                table_rows=payload.table_rows,
+            )
     return WordSessionRead(
         book_id=info.book_id,
         ref_number=info.ref_number,
@@ -292,10 +388,14 @@ def create_word_session(
 def finish_word_session(
     book_id: int,
     db: Annotated[Session, Depends(get_db)],
-    user: Annotated[User, Depends(require_capability("books.edit"))],
+    user: Annotated[User, Depends(get_current_user)],
 ) -> BookRead:
-    """Finish the active Word editing session: move docx, create BookVersion + Document, optional PDF."""
-    _require_full_book(db, user, book_id)
+    """Finish the active Word editing session."""
+    if user.role == INMATE_REPORTER_ROLE:
+        _inmate_report_word_access(db, user, book_id)
+    else:
+        _require_word_capability(db, user, "books.edit")
+        _require_full_book(db, user, book_id)
     row = word_book_service.finish_word_session(db, user=user, book_id=book_id)
     return _build_book_response(db, row, user)
 
@@ -304,10 +404,14 @@ def finish_word_session(
 def word_session_status(
     book_id: int,
     db: Annotated[Session, Depends(get_db)],
-    user: Annotated[User, Depends(require_capability("books.edit"))],
+    user: Annotated[User, Depends(get_current_user)],
 ) -> WordSaveStatusRead:
     """Small poll for Word saves; avoid rebuilding the full Record every second."""
-    _require_full_book(db, user, book_id)
+    if user.role == INMATE_REPORTER_ROLE:
+        _inmate_report_word_access(db, user, book_id)
+    else:
+        _require_word_capability(db, user, "books.edit")
+        _require_full_book(db, user, book_id)
     session = (
         db.query(BookEditSession.last_put_at)
         .filter_by(book_id=book_id, state="active")
@@ -324,16 +428,15 @@ def word_session_status(
 def word_session_preview(
     book_id: int,
     db: Annotated[Session, Depends(get_db)],
-    user: Annotated[User, Depends(require_capability("books.edit"))],
+    user: Annotated[User, Depends(get_current_user)],
     encoding: Annotated[str | None, Query(pattern="^base64$")] = None,
 ) -> Response:
-    """PDF preview of the active Word session's working docx (regenerates on change).
-
-    ``encoding=base64`` mirrors the documents download endpoint — the in-app
-    pdf.js canvas fetches base64 text so download accelerators can't hijack
-    the PDF byte stream.
-    """
-    _require_full_book(db, user, book_id)
+    """PDF preview of the active Word session."""
+    if user.role == INMATE_REPORTER_ROLE:
+        _inmate_report_word_access(db, user, book_id)
+    else:
+        _require_word_capability(db, user, "books.edit")
+        _require_full_book(db, user, book_id)
     pdf = word_book_service.render_session_preview(db, book_id=book_id)
     if (b64 := maybe_base64(pdf.read_bytes(), encoding)) is not None:
         return b64
@@ -352,11 +455,14 @@ def word_session_preview(
 def reopen_word_session(
     book_id: int,
     db: Annotated[Session, Depends(get_db)],
-    user: Annotated[User, Depends(require_capability("books.edit"))],
+    user: Annotated[User, Depends(get_current_user)],
 ) -> WordSessionRead:
-    """Re-open a finished book for Word editing — copies the latest version's docx
-    into a fresh working file and returns a new session token + word_url."""
-    _require_full_book(db, user, book_id)
+    """Re-open a finished book for Word editing."""
+    if user.role == INMATE_REPORTER_ROLE:
+        _inmate_report_word_access(db, user, book_id)
+    else:
+        _require_word_capability(db, user, "books.edit")
+        _require_full_book(db, user, book_id)
     info = word_book_service.reopen_word_session(db, user=user, book_id=book_id)
     return WordSessionRead(
         book_id=info.book_id,
@@ -375,10 +481,14 @@ def reopen_word_session(
 def discard_word_session(
     book_id: int,
     db: Annotated[Session, Depends(get_db)],
-    user: Annotated[User, Depends(require_capability("books.edit"))],
+    user: Annotated[User, Depends(get_current_user)],
 ) -> BookRead:
-    """Discard the active Word editing session; void the book if it has no committed versions."""
-    _require_full_book(db, user, book_id)
+    """Discard the active Word editing session."""
+    if user.role == INMATE_REPORTER_ROLE:
+        _inmate_report_word_access(db, user, book_id)
+    else:
+        _require_word_capability(db, user, "books.edit")
+        _require_full_book(db, user, book_id)
     row = word_book_service.discard_word_session(db, user=user, book_id=book_id)
     return _build_book_response(db, row, user)
 
@@ -1067,15 +1177,16 @@ def _build_scoped_book_response(
 
 
 def _project_inmate_reporter_book(item: BookRead, allowed_version_ids: frozenset[int]) -> BookRead:
-    """Fixed-scope projection for ``inmate_reporter``: current version only
-    (never a colleague's/own historical revision), no sign/review/Word/edit-
-    session affordances — this role writes only through its own form's
-    save/send actions, never the generic Records edit surface. PDF/signed-PDF
-    URLs are kept (print/PDF access); DOCX is not."""
+    """Limit reporter projections to current revisions and self-service actions."""
     item.can_sign = False
     item.can_review = False
     item.your_step_kind = None
-    item.edit_session = None
+    if not (
+        item.ref_number.startswith("REPORT-")
+        and item.category_id == "GS"
+        and item.approval_state in ("none", "returned")
+    ):
+        item.edit_session = None
     if item.versions:
         item.versions = [v for v in item.versions if v.id in allowed_version_ids]
         for v in item.versions:

@@ -595,11 +595,8 @@ _MANAGER_CAPS: Final[frozenset[str]] = (_OPERATOR_CAPS | _MANAGER_EXTRA) - froze
     {"workforce.self.view"}
 )
 
-# Inmate reporter: a fixed, narrow ceiling — files/tracks Inmate Conduct
-# Violations reports only. No other service/category, no ledger/employees/
-# leaves/etc, no books.edit/approve/delete. perm_service enforces this as a
-# hard ceiling (grants and stale DB role_permissions rows can never widen it;
-# see perm_service._role_and_dynamic_caps / effective_caps).
+# Inmate reporter may write two narrowly-scoped services via their own forms.
+# No generic books.create/books.edit capability is granted.
 INMATE_REPORTER_CAPS: Final[frozenset[str]] = frozenset(
     {
         "app.access",
@@ -609,6 +606,9 @@ INMATE_REPORTER_CAPS: Final[frozenset[str]] = frozenset(
         f"{SERVICE_CAP_PREFIX}Inmate Conduct Violations",
         f"{SERVICE_RECORDS_CAP_PREFIX}Inmate Conduct Violations",
         f"{CATEGORY_CAP_PREFIX}NAT",
+        f"{SERVICE_CAP_PREFIX}Report",
+        f"{SERVICE_RECORDS_CAP_PREFIX}Report",
+        f"{CATEGORY_CAP_PREFIX}GS",
     }
 )
 ROLE_DEFAULTS: Final[dict[str, frozenset[str]]] = {

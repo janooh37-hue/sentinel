@@ -670,11 +670,17 @@ export function BookRecordPage(): React.JSX.Element {
   // pending request to a different signing manager. Both routes are offered
   // side by side so the operator picks per request.
   const reporterAction = book ? inmateReporterActionFor(book, user?.id) : 'read-only'
+  const isInmateReport =
+    isInmateReporter &&
+    book?.ref_number.startsWith('REPORT-') === true &&
+    reporterAction !== 'read-only'
   const showSendForApproval =
     canMutateCurrent &&
-    (isInmateReporter
-      ? reporterAction === 'edit-submit'
-      : canSendForApproval(state, { canSubmitBook }))
+    (isInmateReport
+      ? state === 'none' && book?.edit_session?.state !== 'active'
+      : isInmateReporter
+        ? reporterAction === 'edit-submit'
+        : canSendForApproval(state, { canSubmitBook }))
 
   const stations = useMemo(
     () =>
@@ -690,7 +696,7 @@ export function BookRecordPage(): React.JSX.Element {
   const isAssignee = isLiveCurrentVersion && isApproverAssignee(currentSteps, user?.id)
   const myReview = isLiveCurrentVersion ? myPendingReviewerStep(currentSteps, user?.id) : null
   const action = isInmateReporter
-    ? reporterAction === 'correct-resubmit'
+    ? reporterAction === 'correct-resubmit' && !isInmateReport
       ? 'revise'
       : 'none'
     : footerActionFor(state, {
@@ -1064,12 +1070,13 @@ export function BookRecordPage(): React.JSX.Element {
             below, but the components owning their mutation/dialog/eligibility
             query are mounted here unconditionally — independent of the
             dropdown's open/closed state (see the components' own docs). */}
-        {!isInmateReporter && book && canMutateCurrent && (
+        {(!isInmateReporter || isInmateReport) && book && canMutateCurrent && (
           <WordReopenButton
             book={book}
             isMobile={isMobile}
             hideTrigger
             onTriggerChange={setWordReopenTrigger}
+            onFinished={isInmateReport ? () => reporterSubmitMutation.mutate(book.id) : undefined}
           />
         )}
         {!isInmateReporter && canMutateCurrent && current?.document_id != null && (
@@ -1116,8 +1123,12 @@ export function BookRecordPage(): React.JSX.Element {
           showSendForApproval ||
           showFileSigned) && (
           <div className="flex w-full flex-wrap items-center gap-2 rounded-xl bg-primary-soft/60 px-3 py-2.5">
-            {!isInmateReporter && book && canMutateCurrent && (
-              <WordSessionActions book={book} isMobile={isMobile} />
+            {(!isInmateReporter || isInmateReport) && book && canMutateCurrent && (
+              <WordSessionActions
+                book={book}
+                isMobile={isMobile}
+                onFinished={isInmateReport ? () => reporterSubmitMutation.mutate(book.id) : undefined}
+              />
             )}
             {action === 'decide' && !isMobile && (
               <>

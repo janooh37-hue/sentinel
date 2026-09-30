@@ -48,9 +48,9 @@ interface Props {
   session: WordSessionRead | null
   open: boolean
   onClose: () => void
+  onFinished?: (book: BookRead) => void
 }
-
-export function WordHandoffDialog({ session, open, onClose }: Props): React.JSX.Element | null {
+export function WordHandoffDialog({ session, open, onClose, onFinished }: Props): React.JSX.Element | null {
   const { t, i18n } = useTranslation()
   const isAr = i18n.language.startsWith('ar')
   const { has } = useCapabilities()
@@ -112,6 +112,7 @@ export function WordHandoffDialog({ session, open, onClose }: Props): React.JSX.
       toast.success(t('books.word.finished', { ref: bidi(session?.ref_number ?? '') }))
       // Keep the dialog open showing the finished PDF instead of closing.
       setFinishedBook(book)
+      onFinished?.(book)
     },
     onError: (err) => {
       toast.error(apiErrorMessage(err))
