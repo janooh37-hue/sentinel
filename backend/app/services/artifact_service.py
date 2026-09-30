@@ -93,6 +93,8 @@ class StampPlan:
     reference: str | None = None
     header_reference: bool = False
     aztec_corner: str | None = None
+    aztec_size_cm: float = 1.1
+    aztec_margin_cm: float = 0.3
     sync_general_book_footer: bool = False
     signature: SignatureStamp | None = None
 
@@ -198,7 +200,13 @@ def _apply_stamps(target: Path, stamps: StampPlan) -> None:
         raise ArtifactStampError("reference")
     if stamps.aztec_corner is not None and (
         stamps.reference is None
-        or not DocxEngine.stamp_aztec_code(target, stamps.reference, corner=stamps.aztec_corner)
+        or not DocxEngine.stamp_aztec_code(
+            target,
+            stamps.reference,
+            corner=stamps.aztec_corner,
+            size_cm=stamps.aztec_size_cm,
+            margin_cm=stamps.aztec_margin_cm,
+        )
     ):
         raise ArtifactStampError("aztec")
     if stamps.signature is not None:
