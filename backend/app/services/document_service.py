@@ -1818,13 +1818,12 @@ def generate_document(
             )
     else:
         leave_type = str(fields.get("leave_type") or "")
+        is_leave_form = template_id in {"Leave Application Form", "Leave Undertaking"}
         if template_id in {"Resignation Letter", "Resignation Declaration"}:
             code = "12/1"
-        elif template_id == "Leave Application Form" and leave_type.startswith("Annual"):
+        elif is_leave_form and leave_type.startswith("Annual"):
             code = "3/1"
-        elif template_id == "Leave Undertaking" and leave_type.startswith("Annual"):
-            code = "3/1"
-        elif template_id == "Leave Undertaking" and leave_type.startswith("Sick"):
+        elif is_leave_form and leave_type.startswith("Sick"):
             code = "4/1"
         else:
             code = None
