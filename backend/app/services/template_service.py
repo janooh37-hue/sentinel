@@ -62,6 +62,7 @@ class TemplateField(BaseModel):
         "select",
         "manager_picker",
         "submitter_picker",
+        "interviewer_picker",
         "employee_picker",
         "arabic_rich",
         "arabic_rich_full",

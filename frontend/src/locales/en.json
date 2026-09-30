@@ -3304,7 +3304,8 @@
       "unit": "Unit",
       "qty": "Qty",
       "remarks": "Remarks",
-      "empty": "No items — add a row to begin."
+      "empty": "No items — add a row to begin.",
+      "maxRows": "Up to {{max}} rows."
     },
     "clearance": {
       "department": "Department",

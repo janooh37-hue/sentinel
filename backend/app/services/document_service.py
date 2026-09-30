@@ -88,6 +88,9 @@ if TYPE_CHECKING:
     from app.api.v1.documents import GenerateAttachmentSpec
 
 log = logging.getLogger(__name__)
+_INTERVIEWER_FORMS: Final[frozenset[str]] = frozenset(
+    {"Employee Exit Form", "Employee Exit Form – Project or Contract"}  # noqa: RUF001
+)
 
 # ---------------------------------------------------------------------------
 # Category map — mirrors v3 _stamp_and_record (gssg_manager.pyw line 7778)
@@ -1087,6 +1090,31 @@ def _build_template_data(
     # doesn't emit literal <p>/<span> markup into the DOCX.
     data.update(_flatten_rich_fields(template_id, fields))
 
+    # The exit forms use an independent interviewer selection. The UI sends
+    # picker IDs as strings; resolve to a Submitter without affecting the
+    # employee's separate submitter selection above.
+    if template_id in _INTERVIEWER_FORMS:
+        raw_interviewer_id = fields.get("interviewer_id")
+        data.pop("interviewer_name", None)
+        data.pop("interviewer_sig_path", None)
+        if raw_interviewer_id not in (None, ""):
+            try:
+                interviewer_id = int(str(raw_interviewer_id))
+            except (TypeError, ValueError):
+                interviewer_id = None
+            interviewer = db.get(Submitter, interviewer_id) if interviewer_id is not None else None
+            if interviewer is None:
+                raise NotFoundError(
+                    "INTERVIEWER_NOT_FOUND",
+                    f"Submitter {raw_interviewer_id} does not exist",
+                    id=raw_interviewer_id,
+                )
+            data["interviewer_name"] = interviewer.name
+            if embed_signature.get("interviewer"):
+                interviewer_sig = _submitter_sign_path(db, interviewer.id)
+                if interviewer_sig is not None:
+                    data["interviewer_sig_path"] = interviewer_sig
+
     # Explicit manager_id is validated; absence falls through to identity-aware
     # resolver (linked employee → default_manager_id). resolve_manager may
     # still return None (e.g. unconfigured), in which case the hand-sign /
@@ -1545,6 +1573,17 @@ def generate_document(
 
     fields_meta = load_fields_meta()
     form_meta = fields_meta.get(template_id, {})
+    for field_meta in form_meta.get("fields", []):
+        if field_meta.get("type") != "items_table" or not field_meta.get("max_rows"):
+            continue
+        items = fields.get(field_meta["key"])
+        if isinstance(items, list) and len(items) > field_meta["max_rows"]:
+            raise ValidationFailedError(
+                "TOO_MANY_ITEMS",
+                f"{template_id} allows at most {field_meta['max_rows']} rows",
+                field=field_meta["key"],
+            )
+
 
     # Forms with an explicit manager-signature checkbox honor the operator's
     # choice; all other forms keep their server-enforced signing policy.

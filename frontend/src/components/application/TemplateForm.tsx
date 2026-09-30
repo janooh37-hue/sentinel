@@ -177,6 +177,7 @@ function renderField(
       return <ManagerPickerField key={field.id} {...common} />
 
     case 'submitter_picker':
+    case 'interviewer_picker':
       return <SubmitterPickerField key={field.id} {...common} />
 
     case 'recipient_picker':

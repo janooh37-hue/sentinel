@@ -10,6 +10,7 @@ import fitz
 import pytest
 from sqlalchemy.orm import Session
 
+from app.api.errors import ValidationFailedError
 from app.config import Settings, get_settings
 from app.core.permissions import SERVICE_CAP_PREFIX, SERVICE_RECORDS_CAP_PREFIX
 from app.db.models import BookCategory, Document, Employee, User
@@ -113,6 +114,20 @@ def test_generate_new_grid_opt_in_form_end_to_end(
     assert document is not None
     assert document.base_pdf_path is not None
     assert _pdf_texts(settings.data_dir / document.base_pdf_path) == ["RENDERED"]
+
+def test_expense_claim_rejects_rows_that_cannot_print(
+    generation_env: tuple[Session, Settings, User],
+) -> None:
+    db, _, creator = generation_env
+    with pytest.raises(ValidationFailedError) as exc:
+        document_service.generate_document(
+            db,
+            employee_id="G-2001",
+            template_id="Expense Claim Form",
+            fields={"items": [{"particulars": str(i)} for i in range(3)]},
+            current_user=creator,
+        )
+    assert exc.value.code == "TOO_MANY_ITEMS"
 
 
 def test_opt_in_service_denied_by_default_then_grantable(db_session: Session) -> None:

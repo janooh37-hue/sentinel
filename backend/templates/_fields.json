@@ -2567,7 +2567,7 @@
             "label_ar": "المبلغ"
           }
         ],
-        "max_rows": 8
+        "max_rows": 2
       },
       {
         "key": "submitter_id",
@@ -2704,17 +2704,17 @@
         "required": false
       },
       {
-        "key": "manager_id",
-        "type": "manager_picker",
-        "label_en": "Line Manager",
-        "label_ar": "المدير المباشر",
+        "key": "interviewer_id",
+        "type": "interviewer_picker",
+        "label_en": "Interviewer",
+        "label_ar": "القائم بالمقابلة",
         "required": false
       },
       {
-        "key": "hand_sign_manager",
+        "key": "hand_sign_interviewer",
         "type": "hand_sign_checkbox",
-        "label_en": "Embed manager's saved signature",
-        "label_ar": "تضمين توقيع المدير المحفوظ",
+        "label_en": "Embed interviewer's saved signature",
+        "label_ar": "تضمين توقيع القائم بالمقابلة المحفوظ",
         "required": false
       },
       {
@@ -2811,17 +2811,17 @@
         "required": false
       },
       {
-        "key": "manager_id",
-        "type": "manager_picker",
-        "label_en": "Line Manager",
-        "label_ar": "المدير المباشر",
+        "key": "interviewer_id",
+        "type": "interviewer_picker",
+        "label_en": "Interviewer",
+        "label_ar": "القائم بالمقابلة",
         "required": false
       },
       {
-        "key": "hand_sign_manager",
+        "key": "hand_sign_interviewer",
         "type": "hand_sign_checkbox",
-        "label_en": "Embed manager's saved signature",
-        "label_ar": "تضمين توقيع المدير المحفوظ",
+        "label_en": "Embed interviewer's saved signature",
+        "label_ar": "تضمين توقيع القائم بالمقابلة المحفوظ",
         "required": false
       },
       {
@@ -2864,6 +2864,11 @@
             "key": "applicant",
             "label_en": "Applicant",
             "label_ar": "المتقدم"
+          },
+          {
+            "key": "position",
+            "label_en": "Position",
+            "label_ar": "الوظيفة"
           },
           {
             "key": "interviewer",
@@ -2997,7 +3002,7 @@
             "label_ar": "وقت الانصراف"
           }
         ],
-        "max_rows": 12
+        "max_rows": 36
       }
     ]
   },
@@ -3042,7 +3047,7 @@
             "label_ar": "المبلغ"
           }
         ],
-        "max_rows": 8
+        "max_rows": 6
       },
       {
         "key": "manager_id",

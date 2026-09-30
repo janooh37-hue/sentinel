@@ -11,7 +11,7 @@
  *   checkbox / hand_sign → z.boolean()
  *   number               → z.number() (finite; NaN rejected)
  *   manager_picker       → z.number() if required, else .nullable().optional()
- *   submitter_picker     → z.string().optional()
+ *   submitter/interviewer_picker → z.string().optional()
  *   signature / arabic_rich → z.string().optional()
  */
 
@@ -110,6 +110,7 @@ function buildShape(fields: TemplateField[], t: TFunction): Record<string, AnyZo
         break
 
       case 'submitter_picker':
+      case 'interviewer_picker':
         shape[id] = emptyToUndefined(z.string())
         break
 
@@ -151,9 +152,14 @@ function buildShape(fields: TemplateField[], t: TFunction): Record<string, AnyZo
               quantity: z.string().optional(),
               remarks: z.string().optional(),
             })
+        const rows = field.max_rows
+          ? z.array(row).max(field.max_rows, {
+              message: t('application.itemsTable.maxRows', { max: field.max_rows }),
+            })
+          : z.array(row)
         shape[id] = required
-          ? z.array(row).min(1, { message: t('application.validation.required') })
-          : z.array(row).optional()
+          ? rows.min(1, { message: t('application.validation.required') })
+          : rows.optional()
         break
       }
 

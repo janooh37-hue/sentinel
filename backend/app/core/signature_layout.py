@@ -76,6 +76,7 @@ ROLE_BY_SIG_KEY: dict[str, SignatureRole] = {
     "manager_sig_path": "manager",
     "employee_sig_path": "employee",
     "submitter_sig_path": "submitter",
+    "interviewer_sig_path": "submitter",
 }
 
 
