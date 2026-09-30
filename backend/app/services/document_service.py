@@ -1798,10 +1798,9 @@ def generate_document(
     # counter is untouched, so concurrent previews don't burn ref numbers.
     # ------------------------------------------------------------------
     cat_code = record_category_for_template(template_id)
-    # Classified-paper refs come exclusively from the classified register
-    # (1/{tab}/GSSG/{serial}) — the legacy GS-#### counter is retired for these
-    # forms regardless of authoring surface (rich editor OR Word). Validate the
-    # classification up-front so a bad code fails before any file is written.
+    # Classified-paper refs come exclusively from the classified register.
+    # Validate a classification up-front so a bad code fails before any file
+    # is written.
     _classification = None
     if template_id in CLASSIFIED_BOOK_FORMS:
         if classification_code is not None:
@@ -1817,6 +1816,20 @@ def generate_document(
                 f"{template_id} requires a classification (التبويب) — every book "
                 "takes its ref from the classified register",
             )
+    else:
+        leave_type = str(fields.get("leave_type") or "")
+        if template_id in {"Resignation Letter", "Resignation Declaration"}:
+            code = "12/1"
+        elif template_id == "Leave Application Form" and leave_type.startswith("Annual"):
+            code = "3/1"
+        elif template_id == "Leave Undertaking" and leave_type.startswith("Annual"):
+            code = "3/1"
+        elif template_id == "Leave Undertaking" and leave_type.startswith("Sick"):
+            code = "4/1"
+        else:
+            code = None
+        if code is not None:
+            _classification = get_classification(code)
     if commit and revise_book is not None:
         # Revise reuses the existing book's ref — no allocation.
         raw_ref = revise_book.ref_number
@@ -1850,10 +1863,10 @@ def generate_document(
         current_user=current_user,
     )
 
-    # Classified and vehicle letterhead papers render the ref in the Arabic
-    # body line (الرقم: …) — commit-only, so previews stay serial-free. This
-    # replaces the English header stamp for these forms.
-    if commit and (template_id in CLASSIFIED_BOOK_FORMS or template_id in VEHICLE_LETTER_FORMS):
+    # Classified and vehicle papers carry their shared ref in template data.
+    if commit and (
+        _classification is not None or template_id in VEHICLE_LETTER_FORMS
+    ):
         data["ref"] = raw_ref
 
     # Truthful embed flag: ``sig1_path`` survives _build_template_data only
@@ -1910,6 +1923,7 @@ def generate_document(
         stamps=artifact_service.StampPlan(
             reference=raw_ref if commit else None,
             header_reference=commit
+            and _classification is None
             and template_id not in CLASSIFIED_BOOK_FORMS
             and template_id not in VEHICLE_LETTER_FORMS,
             aztec_corner=aztec_corner_for(template_id) if commit else None,
@@ -2435,8 +2449,10 @@ def generate_document(
                 destination=out_dir / comp_filename,
                 stamps=artifact_service.StampPlan(
                     reference=raw_ref if commit else None,
-                    header_reference=commit,
-                    aztec_corner=aztec_corner_for(companion_template_id) if commit else None,
+                    header_reference=commit and _classification is None,
+                    aztec_corner=(
+                        aztec_corner_for(companion_template_id) if commit else None
+                    ),
                 ),
                 converter=pdf_converter,
             )

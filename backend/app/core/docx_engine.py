@@ -84,6 +84,9 @@ _TODAY_FMT = "%d/%m/%Y"
 _AZTEC_TOP_RIGHT: frozenset[str] = frozenset(
     {
         "Security Permit",
+        "Resignation Letter",
+        "Resignation Declaration",
+        "Leave Undertaking",
         "Warning Form",
         "Administrative Leave Form",
         "Leave Permit Form",
@@ -180,6 +183,7 @@ def _adapt_resignation_letter(data: dict[str, Any]) -> dict[str, Any]:
     out["month"] = dt.strftime("%m")
     out["year"] = dt.strftime("%Y")
     out["reason"] = (out.get("purpose_plain") or out.get("reason") or "").strip()
+    out["submitter_g"] = ""
     return out
 
 
@@ -187,6 +191,7 @@ def _adapt_leave_undertaking(data: dict[str, Any]) -> dict[str, Any]:
     """Bottom block carries today's date only if a submitter is picked."""
     out = _adapt_common(data)
     out["submitter_date"] = out.get("today", "") if out.get("submitter_name") else ""
+    out["submitter_g"] = ""
     return out
 
 
@@ -239,6 +244,7 @@ def _adapt_resignation_declaration(data: dict[str, Any]) -> dict[str, Any]:
     out["today"] = today_str
     dt = excel_date_to_datetime(today_str) or datetime.now()
     out["weekday_ar"] = ARABIC_WEEKDAYS[dt.weekday()]
+    out["submitter_g"] = ""
     return out
 
 
@@ -373,6 +379,7 @@ def _pp_resignation_letter(doc: Any, ctx: dict[str, Any]) -> None:
     rest. We do this unconditionally so reasons of any length render in
     the same place (just below "نظراً للأسباب التالية:").
     """
+    _format_general_book_ref_line(doc)
     reason = (ctx.get("reason") or "").strip()
     if not reason:
         return
@@ -1132,6 +1139,11 @@ def _postprocess_general_book_footer(docx_path: str | Path) -> None:
 # --- Form registry --------------------------------------------------------
 
 
+def _pp_header_reference(doc: Any, _ctx: dict[str, Any]) -> None:
+    """Keep the copied Arabic header reference value left-to-right."""
+    _format_general_book_ref_line(doc)
+
+
 _FORM_REGISTRY: dict[str, dict[str, Any]] = {
     "Acknowledgment Form": {"adapter": _adapt_common, "post_process": None},
     "Salary Transfer Request": {"adapter": _adapt_common, "post_process": None},
@@ -1141,13 +1153,16 @@ _FORM_REGISTRY: dict[str, dict[str, Any]] = {
     "HR Request Form": {"adapter": _adapt_common, "post_process": None},
     "Resignation Declaration": {
         "adapter": _adapt_resignation_declaration,
-        "post_process": None,
+        "post_process": _pp_header_reference,
     },
     "Resignation Letter": {
         "adapter": _adapt_resignation_letter,
         "post_process": _pp_resignation_letter,
     },
-    "Leave Undertaking": {"adapter": _adapt_leave_undertaking, "post_process": None},
+    "Leave Undertaking": {
+        "adapter": _adapt_leave_undertaking,
+        "post_process": _pp_header_reference,
+    },
     "Material Request Form": {
         "adapter": _adapt_material_request,
         "post_process": _pp_material_request,
