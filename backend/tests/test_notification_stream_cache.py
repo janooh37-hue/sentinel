@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import time
 from pathlib import Path
 
 import anyio
@@ -61,4 +62,24 @@ def test_tabs_of_one_user_share_one_counts_computation(
     assert first == second
     assert first.startswith("event: counts\ndata: ")
     assert computed == [user_id]
+    engine.dispose()
+
+
+def test_counts_poll_refreshes_what_sibling_streams_see(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """After a mutation the client re-polls /counts; a sibling tab's stream must
+    not then emit the older cached value (spurious 'needs approval' alert)."""
+    engine = create_engine(f"sqlite:///{tmp_path / 'poll.db'}")
+    Base.metadata.create_all(engine)
+    factory: sessionmaker[Session] = sessionmaker(bind=engine, future=True)
+    with factory() as db:
+        user = make_user(db, role="admin", email="poll@test.ae")
+        fresh = notification_service.relevant_counts(db, user)
+        stale = fresh.model_copy(update={"approvals": fresh.approvals + 1})
+        # A sibling stream cached an older value moments ago (entry still live).
+        monkeypatch.setattr(notifications, "_counts_cache", {user.id: (time.monotonic(), stale)})
+
+        assert notifications.get_counts(db, user) == fresh
+        assert notifications._shared_counts(factory, user.id) == fresh
     engine.dispose()

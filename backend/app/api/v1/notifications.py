@@ -81,7 +81,11 @@ def get_counts(
     This is the JSON safety-poll fallback consumed by the frontend when the
     EventSource connection is unavailable or not yet open.
     """
-    return notification_service.relevant_counts(db, user)
+    counts = notification_service.relevant_counts(db, user)
+    # Write through: the client re-polls after its own mutations, so sibling
+    # tabs' streams must not keep emitting the older cached value.
+    _counts_cache[user.id] = (time.monotonic(), counts)
+    return counts
 
 
 def _frame(counts: NotificationCounts) -> str:
