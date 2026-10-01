@@ -40,6 +40,7 @@ import { shouldShowNotifyToggle } from './notifyToggle'
 import { GeneratedSaveActions } from './GeneratedSaveActions'
 import { savedGenerationFromJob, type SavedGeneration } from './savedGeneration'
 import { ApprovedViolationUpload } from './ApprovedViolationUpload'
+import { InmateViolationGroupPicker } from './InmateViolationGroupPicker'
 import { StatisticsTab } from './statistics/StatisticsTab'
 import { InmateReporterApplication } from './InmateReporterApplication'
 import { SavedRecordActions, type NotificationChoice } from '@/components/books/SavedRecordActions'
@@ -1115,6 +1116,7 @@ function StandardApplicationPage(): React.JSX.Element {
                 )}
               </div>
             )}
+            {isInmateService && has('messages.broadcast') && <InmateViolationGroupPicker />}
 
             {isInmateService && inmateEntryMode === 'upload' && (
               <section className="rounded-2xl bg-surface px-4 py-6 sm:px-7">

@@ -684,6 +684,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/announcements/inmate-violation-group": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Inmate Violation Group
+         * @description The group approved Inmate Conduct Violations are posted to (None = off).
+         */
+        get: operations["get_inmate_violation_group_api_v1_announcements_inmate_violation_group_get"];
+        /**
+         * Put Inmate Violation Group
+         * @description Pick (or clear, with ``group_id: null``) the target group.
+         */
+        put: operations["put_inmate_violation_group_api_v1_announcements_inmate_violation_group_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/announcements/send": {
         parameters: {
             query?: never;
@@ -10224,6 +10248,18 @@ export interface components {
             /** Items */
             items: components["schemas"]["IncludedPaperProposal"][];
         };
+        /** InmateViolationGroupIn */
+        InmateViolationGroupIn: {
+            /** Group Id */
+            group_id?: string | null;
+        };
+        /**
+         * InmateViolationGroupOut
+         * @description WhatsApp group that receives approved Inmate Conduct Violations; None = off.
+         */
+        InmateViolationGroupOut: {
+            group: components["schemas"]["GroupOut"] | null;
+        };
         /** IntegrationStatusRead */
         IntegrationStatusRead: {
             /** Enabled */
@@ -16259,6 +16295,72 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["GatewayUnlinkOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_inmate_violation_group_api_v1_announcements_inmate_violation_group_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InmateViolationGroupOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    put_inmate_violation_group_api_v1_announcements_inmate_violation_group_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InmateViolationGroupIn"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InmateViolationGroupOut"];
                 };
             };
             /** @description Validation Error */

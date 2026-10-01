@@ -3219,6 +3219,16 @@
       "label": "Others",
       "placeholder": "Describe the violation…"
     },
+    "violationWhatsApp": {
+      "label": "WhatsApp group for approved violations",
+      "hint": "Each approved violation's signed PDF is posted to this group.",
+      "notConnected": "WhatsApp isn't connected, so approved violations aren't posted. Ask an administrator to connect it.",
+      "groupsLoadError": "Couldn't load the WhatsApp groups. Try again later.",
+      "off": "Off — don't post",
+      "saved": "Approved violations will be posted to {{name}}.",
+      "turnedOff": "Approved violations won't be posted to WhatsApp.",
+      "saveFailed": "Couldn't save the WhatsApp group."
+    },
     "approvedViolation": {
       "createForm": "Create form",
       "uploadApproved": "Upload approved copy",

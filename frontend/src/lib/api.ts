@@ -874,6 +874,7 @@ export type AnnouncementOut = components['schemas']['AnnouncementOut']
 export type GatewayStatusOut = components['schemas']['GatewayStatusOut']
 export type GatewayQrOut = components['schemas']['GatewayQrOut']
 export type GatewayUnlinkOut = components['schemas']['GatewayUnlinkOut']
+export type InmateViolationGroupOut = components['schemas']['InmateViolationGroupOut']
 
 // Phase 2a — OpenWA digest API (Task 10/11)
 export type DigestPreview = components['schemas']['DigestPreview']
@@ -1944,6 +1945,12 @@ export const api = {
   unlinkGateway: () => request<GatewayUnlinkOut>('POST', '/announcements/unlink'),
   listGroups: () => request<GroupOut[]>('GET', '/announcements/groups'),
   sendAnnouncement: (form: FormData) => multipart<AnnouncementOut>('/announcements/send', form),
+  getInmateViolationGroup: () =>
+    request<InmateViolationGroupOut>('GET', '/announcements/inmate-violation-group'),
+  setInmateViolationGroup: (groupId: string | null) =>
+    request<InmateViolationGroupOut>('PUT', '/announcements/inmate-violation-group', {
+      group_id: groupId,
+    }),
 
   // --- leave digests (Phase 2a OpenWA — Task 10/11) ---
   previewLeaveDigest: (dutyUnit: string) =>
