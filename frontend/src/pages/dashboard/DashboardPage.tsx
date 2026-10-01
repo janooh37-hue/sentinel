@@ -323,14 +323,7 @@ function GenericDashboardPage({ onNavigate }: DashboardPageProps): React.JSX.Ele
             footnote={t('dashboard.pending.footnote', {
               count: summary?.totals.forms_this_month ?? 0,
             })}
-            onClick={() => {
-              try {
-                localStorage.setItem('gssg.books.filter', 'recent')
-              } catch {
-                /* ignore */
-              }
-              onNavigate('books')
-            }}
+            onClick={() => onNavigate('books')}
             isLoading={summaryQuery.isPending}
           />
         )

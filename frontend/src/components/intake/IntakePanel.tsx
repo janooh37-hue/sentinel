@@ -349,7 +349,7 @@ function ExternalCard({ result, file, onDismiss }: ExternalCardProps): React.JSX
       if (matched && id) {
         navigate(`/employees/${id}`, { state: { injectedExtraction: injection } })
       } else {
-        navigate('/employees', { state: { injectedExtraction: injection, openCreate: true } })
+        navigate('/employees?create=1', { state: { injectedExtraction: injection } })
       }
     } else if (route_kind === 'salary_transfer') {
       const q = matched && id ? `?employee_id=${id}` : ''

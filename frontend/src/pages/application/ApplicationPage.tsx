@@ -989,7 +989,7 @@ function StandardApplicationPage(): React.JSX.Element {
                       category={t('application.nsCategory')}
                       emoji="🎖️"
                       artwork="national-service"
-                      onSelect={() => navigate('/leaves?ns=new')}
+                      onSelect={() => navigate('/leaves?action=ns-new')}
                     />
                   )}
                   {dlMatchesQuery && (

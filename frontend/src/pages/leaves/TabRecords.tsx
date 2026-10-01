@@ -14,6 +14,9 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { useSearchParams } from 'react-router-dom'
+import { useCapabilities } from '@/lib/useCapabilities'
+import { useUrlOverlay } from '@/lib/urlState'
+import { useIsMobile } from '@/lib/useIsMobile'
 import { useTranslation } from 'react-i18next'
 import { CalendarDays, X } from 'lucide-react'
 
@@ -599,66 +602,60 @@ function LeaveDetailDrawer({
 }
 
 // ─── TabRecords ──────────────────────────────────────────────────────────────
-
 export function TabRecords(): React.JSX.Element {
   const { t } = useTranslation()
   const qc = useQueryClient()
-  // In-memory so leaving the page resets filters/search (no stale state on return).
-  const [filters, setFilters] = useState<Filters>(DEFAULT_FILTERS)
-  const [selectedId, setSelectedId] = useState<number | null>(null)
-  // Desktop deep-link token — consumed by LeavesReport (expand + center the
-  // row), then handed back through `onOpenConsumed`.
-  const [desktopOpenId, setDesktopOpenId] = useState<number | null>(null)
-  const handleOpenConsumed = useCallback(() => setDesktopOpenId(null), [])
-
-  // National Service create dialog — opened when ?ns=new arrives in the URL
-  // (from the Services gallery tile). The param is stripped immediately so
-  // refresh / back-nav don't re-open the dialog.
-  const [nsDialogOpen, setNsDialogOpen] = useState(false)
-
-  // Deep-link: when `?open=<leave_id>` is in the URL (e.g. coming from the
-  // dashboard "On leave today" row), open that leave — desktop report
-  // expansion at ≥768px, mobile detail drawer below — and strip the param so
-  // refresh / back-nav land cleanly. Viewport is evaluated once, at the time
-  // the param is consumed (no reactive listener; a deep-link arrives with a
-  // settled viewport). Mirrors the URL-param-hydration pattern from
-  // ApplicationPage.
   const [searchParams, setSearchParams] = useSearchParams()
-  useEffect(() => {
-    const nsParam = searchParams.get('ns')
-    if (nsParam === 'new') {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- URL-param hydration
-      setNsDialogOpen(true)
-      setSearchParams(
-        (prev) => {
-          const next = new URLSearchParams(prev)
-          next.delete('ns')
-          return next
-        },
-        { replace: true },
-      )
-      return
-    }
-    const openParam = searchParams.get('open')
-    if (!openParam) return
-    const parsed = Number.parseInt(openParam, 10)
-    if (Number.isFinite(parsed)) {
-      if (window.matchMedia('(min-width: 768px)').matches) {
-        setDesktopOpenId(parsed)
-      } else {
-        setSelectedId(parsed)
+  const { has, isLoading: capabilitiesLoading } = useCapabilities()
+  const { value: detailValue, open: openDetail, close: closeDetail } = useUrlOverlay('open')
+  const { value: actionValue, close: closeAction } = useUrlOverlay('action')
+  const filters: Filters = {
+    employeeId: searchParams.get('employee'),
+    statuses: (searchParams.get('status') ?? '')
+      .split(',')
+      .filter((status): status is LeaveStatus =>
+        ALL_STATUSES.includes(status as LeaveStatus),
+      ),
+    leaveType: searchParams.get('kind') ?? '',
+    fromDate: searchParams.get('from') ?? '',
+    toDate: searchParams.get('to') ?? '',
+    q: searchParams.get('q') ?? '',
+  }
+  const setFilters = useCallback((next: Filters) => {
+    setSearchParams((prev) => {
+      const params = new URLSearchParams(prev)
+      const values: Record<string, string> = {
+        employee: next.employeeId ?? '',
+        status: next.statuses.join(','),
+        kind: next.leaveType,
+        from: next.fromDate,
+        to: next.toDate,
+        q: next.q,
       }
+      for (const [key, value] of Object.entries(values)) {
+        if (value) params.set(key, value)
+        else params.delete(key)
+      }
+      return params
+    }, { replace: true })
+  }, [setSearchParams])
+  const selectedId = detailValue === null ? null : Number(detailValue)
+  const desktopOpenId = selectedId !== null && Number.isSafeInteger(selectedId) && selectedId > 0
+    ? selectedId
+    : null
+  const handleOpenConsumed = useCallback(() => {}, [])
+  // `open` expands the row in the desktop report and opens the detail sheet on mobile.
+  const isMobile = useIsMobile()
+
+  useEffect(() => {
+    if (detailValue !== null && desktopOpenId === null) closeDetail()
+  }, [closeDetail, detailValue, desktopOpenId])
+
+  useEffect(() => {
+    if (actionValue === 'ns-new' && !capabilitiesLoading && !has('leaves.create')) {
+      closeAction()
     }
-    setSearchParams(
-      (prev) => {
-        const next = new URLSearchParams(prev)
-        next.delete('open')
-        return next
-      },
-      { replace: true },
-    )
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchParams])
+  }, [actionValue, capabilitiesLoading, closeAction, has])
 
   // Build query params. Text search (`q`) is resolved server-side now — see
   // leave_service.list_leaves. The `q` key isn't yet in the generated
@@ -715,7 +712,7 @@ export function TabRecords(): React.JSX.Element {
     <div className="flex h-full flex-col gap-2 overflow-hidden px-4 pb-6 pt-3 md:gap-3 md:px-6 md:pt-4">
       {/* Desktop — the Annual Report view (own fetch + loading/empty states) */}
       <div className="max-md:hidden h-full overflow-auto">
-        <LeavesReport openId={desktopOpenId} onOpenConsumed={handleOpenConsumed} />
+        <LeavesReport openId={isMobile ? null : desktopOpenId} onOpenConsumed={handleOpenConsumed} />
       </div>
 
       {/* Mobile filter row — sticky search + Filters bottom-sheet trigger */}
@@ -761,15 +758,15 @@ export function TabRecords(): React.JSX.Element {
           </div>
         ) : (
           <div className="h-full">
-            <MobileLeaveList rows={rows} onRowClick={(id) => setSelectedId(id)} />
+            <MobileLeaveList rows={rows} onRowClick={(id) => openDetail(String(id))} />
           </div>
         )}
       </div>
 
-      {selectedId !== null && (
+      {isMobile && desktopOpenId !== null && (
         <LeaveDetailDrawer
-          leaveId={selectedId}
-          onClose={() => setSelectedId(null)}
+          leaveId={desktopOpenId}
+          onClose={closeDetail}
           onMutated={() => {
             void qc.invalidateQueries({ queryKey: ['leaves-list'] })
           }}
@@ -777,13 +774,15 @@ export function TabRecords(): React.JSX.Element {
       )}
 
       <NationalServiceDialog
-        open={nsDialogOpen}
-        onClose={() => setNsDialogOpen(false)}
+        open={actionValue === 'ns-new' && !capabilitiesLoading && has('leaves.create')}
+        onClose={closeAction}
         onCreated={(id) => {
-          setNsDialogOpen(false)
-          // The ?open= effect fires on the next render and deep-opens the record
-          // (desktop expand or mobile drawer depending on viewport).
-          setSearchParams((prev) => { const next = new URLSearchParams(prev); next.set('open', String(id)); return next }, { replace: true })
+          setSearchParams((prev) => {
+            const next = new URLSearchParams(prev)
+            next.delete('action')
+            next.set('open', String(id))
+            return next
+          }, { replace: true, state: null })
         }}
       />
     </div>

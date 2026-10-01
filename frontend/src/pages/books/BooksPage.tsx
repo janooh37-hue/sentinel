@@ -17,8 +17,8 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useNavigate, useSearchParams } from 'react-router-dom'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ArrowDownLeft, ArrowUpRight, BookOpen, ChevronRight, Send, Stamp, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
@@ -54,6 +54,7 @@ import { inmateReporterActionFor } from '@/components/books/book-detail-drawer-u
 import { ApiError } from '@/lib/api'
 import { useInmateReportSubmit } from '@/components/books/useInmateReportSubmit'
 import { serviceHref } from '@/lib/quickActions'
+import { useSearchParam } from '@/lib/urlState'
 
 const DEFAULT_FILTERS = DEFAULT_BOOKS_FILTERS
 
@@ -74,13 +75,38 @@ export function BooksPage(): React.JSX.Element {
   const isMobile = useIsMobile()
   const isDesktop = !isMobile
 
-  // ── Mobile filter state (in-memory so leaving the page resets it) ──────────
+  // Additional mobile-only filters stay local; shared filters are URL-backed.
   const [rawFilters, setRawFilters] = useState<BooksFilters>(DEFAULT_FILTERS)
-  // Merge stored value over defaults so newly-added fields are never undefined
-  // even when a user's persisted object predates the field being added.
-  const filters = useMemo(() => normalizeFilters(rawFilters), [rawFilters])
+  const [searchParams, setSearchParams] = useSearchParams()
+  const [statusParam, setStatusParam] = useSearchParam('status', { fallback: 'all' })
+  const [serviceParam, setServiceParam] = useSearchParam('service', { fallback: 'all' })
+  const [searchParam, setSearchParam] = useSearchParam('q')
+  const [draftsParam, setDraftsParam] = useSearchParam('drafts')
+  const [openParam, setOpenParam] = useSearchParam('open')
+  const status = (statusParam === 'draft' ? 'none' : statusParam) as BooksFilters['status']
+  const filters = useMemo(
+    () => normalizeFilters({
+      ...rawFilters,
+      status,
+      serviceId: serviceParam,
+      q: searchParam,
+      drafts: draftsParam === '1',
+    }),
+    [rawFilters, status, serviceParam, searchParam, draftsParam],
+  )
   const setFilters = (next: BooksFilters | ((prev: BooksFilters) => BooksFilters)): void => {
-    setRawFilters(typeof next === 'function' ? (prev) => next(normalizeFilters(prev)) : next)
+    const value = typeof next === 'function' ? next(filters) : next
+    setRawFilters(value)
+    const params = new URLSearchParams(searchParams)
+    const update = (key: string, value: string, fallback: string): void => {
+      if (value === fallback) params.delete(key)
+      else params.set(key, value)
+    }
+    update('status', value.status, 'all')
+    update('service', value.serviceId, 'all')
+    update('q', value.q, '')
+    update('drafts', value.drafts ? '1' : '', '')
+    setSearchParams(params, { replace: true })
   }
   const [submitBookId, setSubmitBookId] = useState<number | null>(null)
   const [previewBookId, setPreviewBookId] = useState<number | null>(null)
@@ -105,19 +131,22 @@ export function BooksPage(): React.JSX.Element {
     else setSubmitBookId(bookId)
   }
 
-  // ── Desktop pane state ──────────────────────────────────────────────────────
-  const [spineState, setSpineState] = useState<SpineState>('all')
-  const [railService, setRailService] = useState<string>('all')
-  const [search, setSearch] = useState('')
-  const [showDrafts, setShowDrafts] = useState(false)
-  const [selectedId, setSelectedId] = useState<number | null>(null)
+  // ── Desktop pane state (filters and master-detail selection live in URL) ───
+  const spineState = status
+  const setSpineState = (value: SpineState): void => setStatusParam(value)
+  const railService = serviceParam
+  const setRailService = (value: string): void => setServiceParam(value)
+  const search = searchParam
+  const showDrafts = draftsParam === '1'
+  const setShowDrafts = (value: boolean | ((prev: boolean) => boolean)): void => {
+    const next = typeof value === 'function' ? value(showDrafts) : value
+    setDraftsParam(next ? '1' : null)
+  }
+  const selectedId = Number.parseInt(openParam, 10) || null
+  const setSelectedId = (value: number): void => setOpenParam(String(value))
   // Multi-select for "Add to email" bulk action (book ids).
   const [selectedForBasket, setSelectedForBasket] = useState<Set<number>>(new Set())
-  // Deep-link target waiting for data to load before resolving (desktop only).
-  // Once listQuery.isSuccess the effect below either selects+highlights the row
-  // or falls back to the full-screen record page (id not in the 500-row window).
-  const [pendingOpenId, setPendingOpenId] = useState<number | null>(null)
-
+  const [highlightedId, setHighlightedId] = useState<number | null>(null)
   // Rail + spine numbers over EVERY record — the 500-row page window is why
   // these used to disagree with the page's own total.
   const facetsQuery = useQuery({
@@ -148,13 +177,14 @@ export function BooksPage(): React.JSX.Element {
   // ── Debounced server search (desktop, >= 2 chars) ───────────────────────────
   // Mirror BooksFilterBar's 300 ms debounce. When active, desktopRows comes
   // from the server query (which carries search_snippet) instead of allRows.
-  const [debouncedSearch, setDebouncedSearch] = useState('')
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const [debouncedSearch, setDebouncedSearch] = useState(search)
   const handleSearchChange = useCallback((val: string) => {
-    setSearch(val)
-    if (debounceRef.current) clearTimeout(debounceRef.current)
-    debounceRef.current = setTimeout(() => setDebouncedSearch(val), 300)
-  }, [])
+    setSearchParam(val || null)
+  }, [setSearchParam])
+  useEffect(() => {
+    const handle = window.setTimeout(() => setDebouncedSearch(search), 300)
+    return () => window.clearTimeout(handle)
+  }, [search])
   const serverSearchActive = debouncedSearch.trim().length >= 2
   const searchQuery = useQuery({
     queryKey: ['books', 'search', debouncedSearch],
@@ -170,68 +200,25 @@ export function BooksPage(): React.JSX.Element {
   })
   const categories = categoriesQuery.data ?? []
 
-  // Deep-link: `?open=<id>` from the dashboard arrives here when the operator
-  // clicks a recent document row. The ledger book-chip uses a localStorage
-  // handoff (`gssg.books.openId`) instead — the smart-link resolves a ref to a
-  // book id, stashes it, then navigates here. On desktop the target row is
-  // selected (RecordPane shows it) + briefly highlighted; on mobile we open the
-  // full-screen record page. `?status=` pre-filters (spine on desktop, filter
-  // bar on mobile).
-  const [searchParams, setSearchParams] = useSearchParams()
-  const [highlightedId, setHighlightedId] = useState<number | null>(null)
-  // One-shot URL → state sync (the params are consumed + deleted), so setState
-  // here is the point of the effect, not a cascading-render hazard.
-  /* eslint-disable react-hooks/set-state-in-effect */
+  // A `?open=<id>` the page was loaded with (deep link, refresh): on desktop
+  // flash + scroll to the row once; on mobile, or when the row is outside the
+  // fetched window, open the full record page in place of this entry. Later
+  // in-page selections only update `open`, so they never re-trigger this.
+  const deepLinkOpenRef = useRef<number | null>(Number.parseInt(openParam, 10) || null)
   useEffect(() => {
-    const statusParam = searchParams.get('status')
-    if (statusParam) {
-      const mapped = statusParam === 'draft' ? 'none' : statusParam
-      const allowed = ['all', 'none', 'pending', 'approved', 'returned', 'rejected']
-      if (allowed.includes(mapped)) {
-        setSpineState(mapped as SpineState)
-        setFilters((f) => ({ ...f, status: mapped as BooksFilters['status'] }))
-      }
-      setSearchParams((prev) => { const n = new URLSearchParams(prev); n.delete('status'); return n }, { replace: true })
+    const target = deepLinkOpenRef.current
+    if (target === null) return
+    if (isDesktop && !listQuery.isSuccess) return
+    deepLinkOpenRef.current = null
+    if (!isDesktop || !allRows.some((row) => row.id === target)) {
+      navigate(`/books/${target}`, { replace: true })
+      return
     }
-
-    let target: number | null = null
-    const openParam = searchParams.get('open')
-    if (openParam) {
-      const parsed = Number.parseInt(openParam, 10)
-      if (Number.isFinite(parsed)) target = parsed
-      setSearchParams(
-        (prev) => {
-          const next = new URLSearchParams(prev)
-          next.delete('open')
-          return next
-        },
-        { replace: true },
-      )
-    }
-    if (target === null) {
-      try {
-        const pending = window.localStorage.getItem('gssg.books.openId')
-        if (pending) {
-          window.localStorage.removeItem('gssg.books.openId')
-          const parsed = Number.parseInt(pending, 10)
-          if (Number.isFinite(parsed)) target = parsed
-        }
-      } catch {
-        // ignore storage failures (private mode, quota)
-      }
-    }
-    if (target !== null) {
-      if (!isDesktop) {
-        navigate(`/books/${target}`)
-      } else {
-        // Defer resolution until data is loaded — the pending-id effect below
-        // either selects+highlights (row found) or falls back to /books/:id.
-        setPendingOpenId(target)
-      }
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchParams])
-  /* eslint-enable react-hooks/set-state-in-effect */
+    setHighlightedId(target)
+    window.setTimeout(() => {
+      document.querySelector(`[data-id="${target}"]`)?.scrollIntoView({ block: 'center' })
+    }, 100)
+  }, [isDesktop, listQuery.isSuccess, allRows, navigate])
   // Auto-clear the highlight after a brief flash so re-navigating to the same
   // row again still produces a visible cue.
   useEffect(() => {
@@ -240,28 +227,8 @@ export function BooksPage(): React.JSX.Element {
     return () => window.clearTimeout(handle)
   }, [highlightedId])
 
-  // Resolve a pending deep-link once data has loaded. If the target id is in
-  // the fetched window select + highlight it; otherwise fall back to the
-  // full-screen record page (deleted record, or beyond the 500-row cap).
-  /* eslint-disable react-hooks/set-state-in-effect */
-  useEffect(() => {
-    if (pendingOpenId === null || !listQuery.isSuccess) return
-    const found = allRows.some((r) => r.id === pendingOpenId)
-    if (found) {
-      setSelectedId(pendingOpenId)
-      setHighlightedId(pendingOpenId)
-      window.setTimeout(() => {
-        document.querySelector(`[data-id="${pendingOpenId}"]`)?.scrollIntoView({ block: 'center' })
-      }, 100)
-    } else {
-      navigate(`/books/${pendingOpenId}`)
-    }
-    setPendingOpenId(null)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pendingOpenId, listQuery.isSuccess])
-  /* eslint-enable react-hooks/set-state-in-effect */
-
   // ── Mobile: client-side filtering with the old server-side predicates ──────
+
   // Predicate lives in booksFiltersUtils.ts (single source of truth, unit-tested
   // directly) so this ordering can't drift out of sync with the desktop paths again.
   const mobileRows: BookRead[] = useMemo(
@@ -429,10 +396,11 @@ export function BooksPage(): React.JSX.Element {
   // but the redundant setState still wastes a render cycle on every mobile paint.
   if (
     isDesktop &&
+    !openParam &&
     desktopRows.length > 0 &&
     (selectedId === null || !desktopRows.some((r) => r.id === selectedId))
   ) {
-    setSelectedId(desktopRows[0].id)
+    setOpenParam(String(desktopRows[0].id))
   }
 
   return (

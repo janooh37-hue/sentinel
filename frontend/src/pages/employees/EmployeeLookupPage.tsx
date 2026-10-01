@@ -5,11 +5,8 @@
  *   • EmployeeSearchHero (navy band) with LookupHeroCards as children
  *   • Recent activity, followed by the inline EmployeeForm card when creating.
  *
- * Cross-page handoffs (both ported verbatim from the old EmployeesPage):
- *   • Smart-link: Ledger stashes a G-number at `gssg.employees.openId` → on
- *     mount we consume it and replace-navigate to the detail page.
- *   • Intake: IntakePanel navigates here with state { openCreate, injectedExtraction }
- *     → we open the create form pre-filled; history state is cleared on mount.
+ * Intake handoff: the create form is addressed by `?create=1`; its extraction
+ * payload stays in history state because it is not shareable.
  */
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -30,6 +27,7 @@ import { ApiError, api, apiErrorMessage } from '@/lib/api'
 import type { EmployeeCreate } from '@/lib/api'
 import type { ExtractionResponse } from '@/lib/extraction'
 import { useShortcutAction } from '@/lib/useKeyboardShortcuts'
+import { useUrlOverlay } from '@/lib/urlState'
 
 export function EmployeeLookupPage(): React.JSX.Element {
   const { t } = useTranslation()
@@ -37,16 +35,12 @@ export function EmployeeLookupPage(): React.JSX.Element {
   const location = useLocation()
   const qc = useQueryClient()
 
-  // Intake injection: when navigated here with { openCreate, injectedExtraction }
-  // (from IntakePanel for an unmatched document), open the create form with
-  // the extraction pre-loaded. Initialise state lazily from location.state so
-  // we avoid calling setState inside an effect. The history state is cleared
-  // on mount so a refresh doesn't re-open the create form.
-  const intakeState = (location.state as {
-    openCreate?: boolean
+  // Intake keeps its large extraction payload in history state, not the URL.
+  const intakeState = location.state as {
     injectedExtraction?: ExtractionResponse
-  } | null)
-  const [creating, setCreating] = useState(() => !!intakeState?.openCreate)
+  } | null
+  const overlay = useUrlOverlay('create')
+  const creating = overlay.value === '1'
   const [createError, setCreateError] = useState<string | null>(null)
   const [createInjection, setCreateInjection] = useState<
     ExtractionResponse | undefined
@@ -65,26 +59,6 @@ export function EmployeeLookupPage(): React.JSX.Element {
       ?.focus({ preventScroll: true })
   }, [creating])
 
-  // Clear history state once on mount so refresh doesn't re-trigger.
-  useEffect(() => {
-    if (intakeState?.openCreate) {
-      navigate(location.pathname, { replace: true, state: {} })
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
-  // Smart-link handoff from Ledger: consume on mount and redirect to detail.
-  useEffect(() => {
-    try {
-      const pending = window.localStorage.getItem('gssg.employees.openId')
-      if (pending) {
-        window.localStorage.removeItem('gssg.employees.openId')
-        navigate(`/employees/${encodeURIComponent(pending)}`, { replace: true })
-      }
-    } catch {
-      // ignore storage failures (private mode, quota)
-    }
-  }, [navigate])
 
   // Cheap shared cache with Dashboard — exposes today's on-leave set so we
   // can both filter and tint status pills without a new endpoint.
@@ -105,7 +79,7 @@ export function EmployeeLookupPage(): React.JSX.Element {
     mutationFn: (payload: EmployeeCreate) => api.createEmployee(payload),
     onSuccess: (row) => {
       void qc.invalidateQueries({ queryKey: ['employees'] })
-      setCreating(false)
+      overlay.close()
       setCreateError(null)
       setCreateInjection(undefined)
       toast.success(t('employees.toast.created'))
@@ -119,7 +93,7 @@ export function EmployeeLookupPage(): React.JSX.Element {
 
   useShortcutAction(
     'newItem',
-    useCallback(() => setCreating(true), []),
+    useCallback(() => overlay.open('1'), [overlay.open]),
   )
 
   const submitCreate = async (values: EmployeeFormOutput): Promise<void> => {
@@ -132,9 +106,9 @@ export function EmployeeLookupPage(): React.JSX.Element {
   )
 
   const handleCreate = useCallback(() => {
-    setCreating(true)
+    overlay.open('1')
     setCreateError(null)
-  }, [])
+  }, [overlay.open])
 
   return (
     <div className="flex flex-1 flex-col overflow-auto bg-background">
@@ -176,7 +150,7 @@ export function EmployeeLookupPage(): React.JSX.Element {
               initialExtraction={createInjection}
               onSubmit={submitCreate}
               onCancel={() => {
-                setCreating(false)
+                overlay.close()
                 setCreateError(null)
                 setCreateInjection(undefined)
               }}
