@@ -274,8 +274,7 @@
   },
   "notFound": {
     "title": "Page not found",
-    "body": "This link may be old or mistyped, or the record was removed.",
-    "home": "Home"
+    "body": "This link may be old or mistyped, or the record was removed."
   },
   "editor": {
     "loadFailed": "Rich text editor could not load — using a plain text box.",

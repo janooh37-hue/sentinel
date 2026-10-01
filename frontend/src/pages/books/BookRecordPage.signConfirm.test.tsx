@@ -351,7 +351,7 @@ describe('BookRecordPage — missing record', () => {
     vi.mocked(api.getBook).mockRejectedValue(new ApiError(404, 'BOOK_NOT_FOUND', 'Book not found'))
     renderOverlayRecord('/books/99999999')
 
-    expect(await screen.findByRole('link', { name: i18n.t('notFound.home') })).toHaveAttribute('href', '/')
+    expect(await screen.findByRole('link', { name: i18n.t('nav.dashboard') })).toHaveAttribute('href', '/')
     expect(screen.getByRole('heading', { level: 1, name: i18n.t('notFound.title') })).toBeVisible()
     expect(screen.getByTestId('location')).toHaveTextContent(/^\/books\/99999999$/)
   })
