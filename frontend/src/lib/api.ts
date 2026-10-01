@@ -238,6 +238,7 @@ export type LeaveListItem = components['schemas']['LeaveListItem'] & {
   employee_name_ar?: string | null
 }
 export type LeaveListResponse = components['schemas']['LeaveListResponse']
+export type LeaveAwaitingReturnCount = components['schemas']['LeaveAwaitingReturnCount']
 export type LeaveCreate = components['schemas']['LeaveCreate']
 // notify_employee is server-defaulted (True) and openapi-typescript emits it as
 // required; make it optional for the client so status/date-only callers needn't
@@ -1439,6 +1440,8 @@ export const api = {
     limit?: number
     offset?: number
   } = {}) => request<LeaveListResponse>('GET', `/leaves${qs({ ...params })}`),
+  getLeaveAwaitingReturnCount: () =>
+    request<LeaveAwaitingReturnCount>('GET', '/leaves/awaiting-return/count'),
   getLeave: (id: number) => request<LeaveRead>('GET', `/leaves/${id}`),
   updateLeave: (id: number, body: LeaveUpdate) =>
     request<LeaveRead>('PATCH', `/leaves/${id}`, body),

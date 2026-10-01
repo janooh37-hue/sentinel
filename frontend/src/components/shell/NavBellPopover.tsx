@@ -99,8 +99,7 @@ function DefaultNavBellPopover(): React.JSX.Element {
     queryKey: ['ledger', 'unread-recent'],
     queryFn: () => api.getLedgerUnreadRecent(5),
     enabled: canViewLedger,
-    // Phase 4: SSE stream drives live invalidation; this is a safety-poll fallback.
-    refetchInterval: 120_000,
+    // Freshness comes from useNotificationStream's `emails` count diff.
     staleTime: 15_000,
   })
 
@@ -110,7 +109,7 @@ function DefaultNavBellPopover(): React.JSX.Element {
     queryFn: () => api.listAuthUsers(),
     enabled: isAdmin,
     staleTime: 30_000,
-    refetchInterval: 60_000,
+    refetchInterval: 5 * 60_000, // not covered by the SSE counts
   })
   const pendingRequests = isAdmin
     ? (pendingQuery.data ?? []).filter((u) => u.status === 'pending').length
@@ -126,7 +125,7 @@ function DefaultNavBellPopover(): React.JSX.Element {
     queryFn: api.getExpirySummary,
     enabled: canViewExpiry,
     staleTime: 60_000,
-    refetchInterval: 60_000,
+    refetchInterval: 15 * 60_000, // expiry moves daily
   })
   const expiryUrgent = canViewExpiry ? (expiryQuery.data?.urgent ?? 0) : 0
 

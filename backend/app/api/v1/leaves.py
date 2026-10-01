@@ -2,6 +2,7 @@
 
 Routes:
   GET    /leaves                        — paginated list with filters
+  GET    /leaves/awaiting-return/count  — bell badge: leaves awaiting a return form
   GET    /leaves/{leave_id}             — detail
   PATCH  /leaves/{leave_id}             — update status / notes
   POST   /leaves/{leave_id}/amend       — post-approval end-date amendment (Annual)
@@ -27,6 +28,7 @@ from app.db.models import Leave, User
 from app.db.session import get_db
 from app.schemas.leave import (
     LeaveAmend,
+    LeaveAwaitingReturnCount,
     LeaveCreate,
     LeaveListItem,
     LeaveListResponse,
@@ -95,6 +97,14 @@ def list_leaves(
         limit=limit,
         offset=offset,
     )
+
+
+@router.get("/awaiting-return/count", response_model=LeaveAwaitingReturnCount)
+def awaiting_return_count(
+    db: Annotated[Session, Depends(get_db)],
+    _user: Annotated[User, Depends(require_capability("leaves.view"))],
+) -> LeaveAwaitingReturnCount:
+    return LeaveAwaitingReturnCount(count=leave_service.awaiting_return_count(db))
 
 
 @router.post("", response_model=LeaveRead, status_code=status.HTTP_201_CREATED)

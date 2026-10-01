@@ -1130,6 +1130,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/leaves/awaiting-return/count": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Awaiting Return Count */
+        get: operations["awaiting_return_count_api_v1_leaves_awaiting_return_count_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/leaves/{leave_id}": {
         parameters: {
             query?: never;
@@ -4353,8 +4370,8 @@ export interface paths {
          * @description Per-user SSE stream of notification counts.
          *
          *     Emits an initial event immediately, then polls every POLL_SECONDS and
-         *     emits only when the counts change. Sends a ``: heartbeat`` comment every
-         *     HEARTBEAT_SECONDS to keep the connection alive.
+         *     emits only when the counts change. Sends a ``: heartbeat`` comment after
+         *     HEARTBEAT_SECONDS without a change to keep the connection alive.
          *
          *     ``max_events`` bounds the generator — after that many count-events it
          *     returns. Pass ``?max_events=1`` in tests to get a finite response without
@@ -4372,8 +4389,8 @@ export interface paths {
          *     QueuePool (5 + 10 overflow) the 16th concurrent viewer exhausted the pool
          *     and unrelated requests, login included, began failing with 500s. The
          *     injected session is therefore closed immediately once its engine has been
-         *     captured, and every tick — including the first — opens its own session from
-         *     that same engine, so test-fixture engine overrides still apply.
+         *     captured, and every counts computation opens its own session from that
+         *     same engine, so test-fixture engine overrides still apply.
          */
         get: operations["stream_api_v1_notifications_stream_get"];
         put?: never;
@@ -10280,6 +10297,11 @@ export interface components {
             end_date: string;
             /** Reason */
             reason: string;
+        };
+        /** LeaveAwaitingReturnCount */
+        LeaveAwaitingReturnCount: {
+            /** Count */
+            count: number;
         };
         /** LeaveBalanceRead */
         LeaveBalanceRead: {
@@ -17483,6 +17505,37 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["LeaveRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    awaiting_return_count_api_v1_leaves_awaiting_return_count_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LeaveAwaitingReturnCount"];
                 };
             };
             /** @description Validation Error */

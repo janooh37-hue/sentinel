@@ -12,7 +12,7 @@ from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.responses import Response
-from starlette.types import Scope
+from starlette.types import Receive, Scope, Send
 
 from app import __version__
 from app.api import dav
@@ -85,6 +85,23 @@ class _ImmutableStaticFiles(StaticFiles):
             if path.endswith(".mjs"):
                 response.headers["Content-Type"] = "application/javascript"
         return response
+
+
+class _GZipExceptEventStream(GZipMiddleware):
+    """GZip that leaves Server-Sent Events alone.
+
+    Starlette 0.41 writes streamed chunks into a ``GzipFile`` without flushing,
+    so a gzipped SSE stream delivers nothing past the gzip header until it ends.
+    Starlette 0.46 skips ``text/event-stream`` itself; drop this on upgrade.
+    """
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] == "http":
+            for name, value in scope["headers"]:
+                if name == b"accept" and b"text/event-stream" in value:
+                    await self.app(scope, receive, send)
+                    return
+        await super().__call__(scope, receive, send)
 
 
 class BodySizeLimitMiddleware:
@@ -193,8 +210,9 @@ def create_app() -> FastAPI:
     app.add_middleware(BodySizeLimitMiddleware, max_bytes=MAX_BODY_BYTES)
     # Compress JSON/list payloads above 1 KB for clients that ask for it.
     # Outermost middleware so it wraps error responses too. Clients that omit
-    # ``Accept-Encoding: gzip`` (Word's DAV stack) get identity bytes.
-    app.add_middleware(GZipMiddleware, minimum_size=1024)
+    # ``Accept-Encoding: gzip`` (Word's DAV stack) get identity bytes. Level 6:
+    # same size as 9 on the entry bundle (measured), less event-loop CPU.
+    app.add_middleware(_GZipExceptEventStream, minimum_size=1024, compresslevel=6)
 
     # Baseline authentication: every data router requires a valid session.
     # Public surfaces (login/register/me/logout + the system probes the launcher

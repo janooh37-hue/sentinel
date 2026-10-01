@@ -39,7 +39,6 @@ vi.mock('@/lib/useLockState', () => ({
   useLockState: () => ({ locked: false, lock: vi.fn(), unlock: vi.fn() }),
 }))
 vi.mock('@/hooks/useNotificationStream', () => ({ useNotificationStream: vi.fn() }))
-vi.mock('@/hooks/useRefreshHeartbeat', () => ({ useRefreshHeartbeat: vi.fn() }))
 vi.mock('@/hooks/useRefreshHotkeys', () => ({ useRefreshHotkeys: vi.fn() }))
 vi.mock('@/components/shell/BottomTabBar', () => ({ BottomTabBar: () => null }))
 vi.mock('@/components/shell/LockOverlay', () => ({ LockOverlay: () => null }))

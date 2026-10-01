@@ -59,7 +59,6 @@ import {
 } from '@/lib/routeLoaders'
 import { useNotificationStream } from '@/hooks/useNotificationStream'
 import { TopProgressBar } from './components/refresh/TopProgressBar'
-import { useRefreshHeartbeat } from './hooks/useRefreshHeartbeat'
 import { useRefreshHotkeys } from './hooks/useRefreshHotkeys'
 import { ScanBackDock } from './pages/scanBack/ScanBackDock'
 import { ScanBackGate } from './pages/scanBack/ScanBackGate'
@@ -111,9 +110,9 @@ const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       retry: 1,
-      refetchOnWindowFocus: true,   // return-to-app => silently fresh
-      refetchOnReconnect: 'always', // after a gap, age unknown => refetch
-      staleTime: 15_000,            // gate focus-refetch storms
+      refetchOnWindowFocus: true,   // return-to-app => silently fresh (if stale)
+      refetchOnReconnect: true,     // after a gap, refetch only what is stale
+      staleTime: 60_000,            // SSE + mutations keep data fresh; gates focus/remount refetches
       gcTime: 5 * 60_000,
     },
   },
@@ -128,7 +127,6 @@ function PageSuspenseFallback(): React.JSX.Element {
 }
 
 function RefreshShellHost() {
-  useRefreshHeartbeat()
   useRefreshHotkeys()
   return null
 }

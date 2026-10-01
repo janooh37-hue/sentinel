@@ -119,6 +119,10 @@ class LeaveListResponse(BaseModel):
     offset: int
 
 
+class LeaveAwaitingReturnCount(BaseModel):
+    count: int
+
+
 class LeaveBalanceRead(BaseModel):
     employee_id: str
     as_of: date

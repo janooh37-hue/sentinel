@@ -3,7 +3,7 @@
 
 Future upgrade (NOT built): replace the stream's poll-and-diff with explicit
 asyncio event hooks fired from book_service/scan_inbox_service/email_service so
-the stream wakes in ≈0ms instead of on the next ~2.5s tick. Worth it only at
+the stream wakes in ≈0ms instead of on the next ~10s tick. Worth it only at
 larger scale; for a handful of users the diff loop is correct + trivial.
 """
 
@@ -11,17 +11,17 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core import leave_lifecycle
-from app.db.models import User
+from app.db.models import Leave, User
 from app.schemas.notifications import NotificationCounts
 from app.services import (
     book_service,
     inmate_statistics_service,
-    leave_service,
     ledger_service,
     perm_service,
     scan_inbox_service,
@@ -175,23 +175,23 @@ def actionable_items(db: Session, user: User) -> list[ActionableItem]:
     return items
 
 
-_LEAVE_PAGE = 500  # == leaves LIST_MAX_LIMIT in api/v1/leaves.py
-
-
 def _leaves_needing_action(db: Session, today_iso: str) -> int:
-    total_seen = 0
-    offset = 0
-    need = 0
-    while True:
-        rows, total = leave_service.list_leaves(db, limit=_LEAVE_PAGE, offset=offset)
-        for r in rows:
-            if leave_lifecycle.needs_action(r.leave_type, r.status, str(r.end_date), today_iso):
-                need += 1
-        total_seen += len(rows)
-        if not rows or total_seen >= total:
-            break
-        offset = total_seen
-    return need
+    """Count live leaves where ``leave_lifecycle.needs_action`` holds.
+
+    needs_action reads the end date only as "overdue or not", so rows are
+    counted per (type, status, overdue) and one end date judges each group.
+    """
+    overdue = Leave.end_date < date.fromisoformat(today_iso)
+    groups = db.execute(
+        select(Leave.leave_type, Leave.status, func.min(Leave.end_date), func.count())
+        .where(Leave.deleted_at.is_(None))
+        .group_by(Leave.leave_type, Leave.status, overdue)
+    ).all()
+    return sum(
+        n
+        for leave_type, status, end_date, n in groups
+        if leave_lifecycle.needs_action(leave_type, status, str(end_date), today_iso)
+    )
 
 
 def leaves_needing_action(db: Session) -> int:
@@ -229,11 +229,7 @@ def relevant_counts(
     # — without it the bell row is hidden, so a non-zero count would be
     # misleading (SSE/push firing for an action the user can't take).
     can_sign = perm_service.has_capability(db, user, "books.approve")
-    approvals = sum(
-        1
-        for book in book_service.list_awaiting(db, user_id=user.id)
-        if book_service.your_step_kind(book, user.id) == "reviewer" or can_sign
-    )
+    approvals = book_service.awaiting_count(db, user_id=user.id, reviewer_only=not can_sign)
     scans = scan_inbox_service.counts(db, owner_user_id=user.id)["total"]
     emails = ledger_service.unread_email_count(db, owner_user_id=user.id)
     leaves = (
