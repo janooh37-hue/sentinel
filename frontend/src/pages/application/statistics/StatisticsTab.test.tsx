@@ -2,7 +2,7 @@ import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { I18nextProvider } from 'react-i18next'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, useLocation } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { InmateRegisterEntry, InmateRegisterMonth } from '@/lib/api'
@@ -117,14 +117,20 @@ function month(entries: InmateRegisterEntry[], closed = false): InmateRegisterMo
   })
 }
 
+function LocationProbe(): React.JSX.Element {
+  const location = useLocation()
+  return <output data-testid="location">{location.search}</output>
+}
+
 function renderTab(language = 'en') {
   void i18n.changeLanguage(language)
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
     <QueryClientProvider client={client}>
       <I18nextProvider i18n={i18n}>
-        <MemoryRouter initialEntries={['/application?stats_month=2026-08']}>
+        <MemoryRouter initialEntries={['/services/inmate_conduct_violations?mode=stats&stats_month=2026-08']}>
           <StatisticsTab />
+          <LocationProbe />
         </MemoryRouter>
       </I18nextProvider>
     </QueryClientProvider>,
@@ -136,6 +142,15 @@ beforeEach(() => {
 })
 
 describe('StatisticsTab', () => {
+  it('keeps the shown month in the URL so a refresh reopens it', async () => {
+    currentMonth = month([])
+    renderTab()
+
+    await userEvent.click(screen.getByRole('button', { name: i18n.t('inmateStats.month.next') }))
+
+    expect(screen.getByTestId('location')).toHaveTextContent('stats_month=2026-09')
+  })
+
   it('keeps four summary tiles and places pending inside the month total', () => {
     currentMonth = month([entry('pending', 'pending')])
     currentMonth.wing_summary = {

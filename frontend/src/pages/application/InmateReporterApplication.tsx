@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
+import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { ExternalLink, Loader2, Send } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -91,11 +91,13 @@ export function InmateReporterApplication({ user }: { user: SessionUser }): Reac
   const isAr = i18n.language.startsWith('ar')
   const location = useLocation()
   const navigate = useNavigate()
-  const [searchParams, setSearchParams] = useSearchParams()
+  const { slug } = useParams<{ slug?: string }>()
+  const [searchParams] = useSearchParams()
   const qc = useQueryClient()
-  const [initialBookId] = useState(
-    () => ((location.state as { reviseBookId?: number } | null)?.reviseBookId ?? null),
-  )
+  const [initialBookId] = useState(() => {
+    const revise = searchParams.get('revise') ?? ''
+    return /^\d+$/.test(revise) ? Number(revise) : null
+  })
   const [editingBookId, setEditingBookId] = useState<number | null>(initialBookId)
   const [activeTab, setActiveTab] = useState<'fields' | 'preview'>('fields')
   const [activeJobId, setActiveJobId] = useState<string | null>(null)
@@ -107,14 +109,12 @@ export function InmateReporterApplication({ user }: { user: SessionUser }): Reac
   const newFormSeededRef = useRef(false)
   const form = useForm<Record<string, unknown>>({ defaultValues: {} })
 
+  // The reporter has exactly one service; keep its URL canonical.
   useEffect(() => {
-    if (
-      searchParams.get('form') === TEMPLATE_SLUG &&
-      !searchParams.has('mode') &&
-      !searchParams.has('employee_id')
-    ) return
-    setSearchParams({ form: TEMPLATE_SLUG }, { replace: true })
-  }, [searchParams, setSearchParams])
+    const search = initialBookId === null ? '' : `?revise=${initialBookId}`
+    if (slug === TEMPLATE_SLUG && location.search === search) return
+    navigate({ pathname: `/services/${TEMPLATE_SLUG}`, search }, { replace: true })
+  }, [initialBookId, location.search, navigate, slug])
 
   const schemaQuery = useQuery({
     queryKey: ['template-fields', TEMPLATE_ID],

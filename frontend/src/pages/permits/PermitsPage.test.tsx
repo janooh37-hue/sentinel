@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
+import { MemoryRouter, useLocation, useNavigate } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 import i18n from '@/lib/i18n'
 
@@ -20,6 +21,13 @@ vi.mock('@/lib/api', async (importOriginal) => {
     ...mod,
     api: {
       ...mod.api,
+      getPermit: vi.fn().mockImplementation(async (id: number) => ({
+        id, permit_no: `PMT-${String(id).padStart(4, '0')}`, company: 'Acme Contracting',
+        zones: ['green'], access_areas: null, start_date: '2026-07-01',
+        validity: { value: 1, unit: 'month' }, end_date: '2026-07-30', status: 'active',
+        created_at: '2026-07-01T00:00:00', derived_status: 'active', duration_days: 30,
+        days_remaining: 9, people_count: 0, vehicle_count: 0, people: [], vehicles: [],
+      })),
       permitsSummary: vi.fn().mockResolvedValue({
         active: 3, expiring: 1, expired: 0, revoked: 0,
         people_active: 7, people_green: 5, people_red: 4, people_work_residence: 2,
@@ -83,12 +91,26 @@ vi.mock('@/lib/api', async (importOriginal) => {
   }
 })
 
-function renderPage() {
+function renderPage(initialEntries = ['/permits']) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
     <QueryClientProvider client={qc}>
-      <PermitsPage />
+      <MemoryRouter initialEntries={initialEntries}>
+        <PermitsPage />
+        <NavigationProbe />
+      </MemoryRouter>
     </QueryClientProvider>,
+  )
+}
+
+function NavigationProbe(): React.JSX.Element {
+  const location = useLocation()
+  const navigate = useNavigate()
+  return (
+    <>
+      <output data-testid="location">{location.pathname + location.search}</output>
+      <button data-testid="back" type="button" onClick={() => navigate(-1)}>Back</button>
+    </>
   )
 }
 
@@ -189,6 +211,25 @@ describe('PermitsPage', () => {
     } finally {
       await i18n.changeLanguage('en')
     }
+  })
+  it('opens a directly linked permit and Close stays on the permits list', async () => {
+    renderPage(['/permits?open=1'])
+    expect(await screen.findByRole('dialog')).toBeInTheDocument()
+    expect(await screen.findByText('Acme Contracting')).toBeInTheDocument()
+    await screen.getByRole('button', { name: /close/i }).click()
+    await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent(/^\/permits$/))
+  })
+
+  it('Back closes an in-app permit detail and preserves list filters', async () => {
+    renderPage(['/permits', '/permits?state=active&zone=green&q=acme'])
+    await screen.findByText('Acme Contracting')
+    await screen.getAllByRole('button', { name: /^view$/i })[0].click()
+    expect(await screen.findByRole('dialog')).toBeInTheDocument()
+    await screen.getByTestId('back').click()
+    await waitFor(() =>
+      expect(screen.getByTestId('location')).toHaveTextContent('/permits?state=active&zone=green&q=acme'),
+    )
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
   })
 })
 

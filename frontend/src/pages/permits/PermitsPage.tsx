@@ -34,6 +34,7 @@ import { useDebouncedValue } from '@/lib/useDebouncedValue'
 import { PermitFormDialog } from './PermitFormDialog'
 import { PermitDetailDialog } from './PermitDetailDialog'
 import { PermitAccessBadge } from './PermitAccessBadge'
+import { useSearchParam, useUrlOverlay } from '@/lib/urlState'
 import { fmtDate, statusTone } from './permitUtils'
 
 const STATE_OPTIONS = ['', 'valid', 'active', 'expiring', 'expired', 'revoked'] as const
@@ -52,16 +53,16 @@ const fmtLongDate = (iso: string, language: string): string =>
 
 export function PermitsPage(): React.JSX.Element {
   const { t } = useTranslation()
-  const { has } = useCapabilities()
+  const { has, isLoading: capabilitiesLoading } = useCapabilities()
   const canCreate = has('permits.create')
 
-  const [state, setState] = useState<string>('')
-  const [zone, setZone] = useState<string>('')
-  const [q, setQ] = useState('')
+  const [state, setState] = useSearchParam('state')
+  const [zone, setZone] = useSearchParam('zone')
+  const [q, setQ] = useSearchParam('q')
+  const detailOverlay = useUrlOverlay('open')
+  const actionOverlay = useUrlOverlay('action')
 
-  const [formOpen, setFormOpen] = useState(false)
   const [editing, setEditing] = useState<PermitRead | null>(null)
-  const [detailId, setDetailId] = useState<number | null>(null)
   const [selected, setSelected] = useState<Set<number>>(new Set())
   const [printing, setPrinting] = useState(false)
 
@@ -77,6 +78,13 @@ export function PermitsPage(): React.JSX.Element {
     [state, zone, debouncedQ],
   )
   const filtersActive = Boolean(state || zone || q)
+  const detailId = detailOverlay.value === null ? null : Number(detailOverlay.value)
+  const formOpen = actionOverlay.value === 'new' || editing !== null
+
+  useEffect(() => {
+    if (capabilitiesLoading || actionOverlay.value !== 'new' || canCreate) return
+    actionOverlay.close()
+  }, [actionOverlay, actionOverlay.value, canCreate, capabilitiesLoading])
 
   const summaryQuery = useQuery({
     queryKey: ['permits-summary'],
@@ -137,7 +145,7 @@ export function PermitsPage(): React.JSX.Element {
 
   const openNew = (): void => {
     setEditing(null)
-    setFormOpen(true)
+    actionOverlay.open('new')
   }
 
   const tiles: { key: string; label: string; value: number; tone: string }[] = summary
@@ -186,14 +194,14 @@ export function PermitsPage(): React.JSX.Element {
 
         {/* Toolbar */}
         <div className="mb-3 flex flex-wrap items-center gap-2">
-          <select className={selectCls} value={state} onChange={(e) => setState(e.target.value)} aria-label={t('permits.filters.state')}>
+          <select className={selectCls} value={state} onChange={(e) => setState(e.target.value || null)} aria-label={t('permits.filters.state')}>
             {STATE_OPTIONS.map((s) => (
               <option key={s || 'all'} value={s}>
                 {s === '' ? t('permits.filters.all') : s === 'valid' ? t('permits.filters.valid') : t(`permits.status.${s}`)}
               </option>
             ))}
           </select>
-          <select className={selectCls} value={zone} onChange={(e) => setZone(e.target.value)} aria-label={t('permits.filters.zone')}>
+          <select className={selectCls} value={zone} onChange={(e) => setZone(e.target.value || null)} aria-label={t('permits.filters.zone')}>
             {ZONE_OPTIONS.map((z) => (
               <option key={z || 'all'} value={z}>
                 {z === '' ? t('permits.filters.all') : t(`permits.zone.${z}`)}
@@ -205,7 +213,7 @@ export function PermitsPage(): React.JSX.Element {
             placeholder={t('permits.filters.search')}
             value={q}
             dir="auto"
-            onChange={(e) => setQ(e.target.value)}
+            onChange={(e) => setQ(e.target.value || null)}
           />
 
           <div className="flex items-center gap-2 ms-auto">
@@ -282,7 +290,7 @@ export function PermitsPage(): React.JSX.Element {
                     row={row}
                     selected={selected.has(row.id)}
                     onToggle={() => toggleOne(row.id)}
-                    onOpen={() => setDetailId(row.id)}
+                    onOpen={() => detailOverlay.open(String(row.id))}
                   />
                 ))}
               </TableBody>
@@ -301,21 +309,23 @@ export function PermitsPage(): React.JSX.Element {
       <PermitFormDialog
         open={formOpen}
         permit={editing}
-        onOpenChange={setFormOpen}
+        onOpenChange={(open) => {
+          if (open) return
+          setEditing(null)
+          if (actionOverlay.value === 'new') actionOverlay.close()
+        }}
         onSaved={(p) => {
           // After editing from the detail dialog, keep the detail open on it.
-          if (editing) setDetailId(p.id)
+          if (editing && String(p.id) !== detailOverlay.value) detailOverlay.open(String(p.id))
         }}
       />
-      {detailId !== null && (
+      {detailId !== null && Number.isFinite(detailId) && (
         <PermitDetailDialog
           permitId={detailId}
-          open={detailId !== null}
-          onOpenChange={(o) => !o && setDetailId(null)}
-          onEdit={(p) => {
-            setEditing(p)
-            setFormOpen(true)
-          }}
+          open
+          onOpenChange={(open) => !open && detailOverlay.close()}
+          onNotFound={() => detailOverlay.close()}
+          onEdit={(p) => setEditing(p)}
         />
       )}
     </div>

@@ -44,7 +44,7 @@ const ROUTE_LOADERS: ReadonlyArray<readonly [string, () => Promise<unknown>]> = 
   ['/employees/timesheet', loadTimesheetPage],
   ['/employees/', loadEmployeeDetailPage],
   // /employees itself is eagerly bundled (EmployeeLookupPage) — no prefetch.
-  ['/application', loadApplicationPage],
+  ['/services', loadApplicationPage],
   ['/books/approvals', loadApprovalsPage],
   ['/books/', loadBookRecordPage],
   ['/books', loadBooksPage],

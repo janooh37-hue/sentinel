@@ -6,7 +6,7 @@
  *   - `GET /api/v1/ledger/unread-recent?limit=5` returns `{ items, total_unread }`.
  *   - The trigger button keeps the existing numeric badge (driven by
  *     `total_unread` here so the count and the preview can't drift).
- *   - Each row navigates to `/ledger?open=ID` and closes the popover so the
+ *   - Each row navigates to `/ledger?mail=ID` and closes the popover so the
  *     destination page can auto-open the entry in its detail drawer.
  *   - The "Mark all read" affordance uses the existing POST endpoint and
  *     invalidates both the unread-count and unread-recent queries.
@@ -505,7 +505,7 @@ function DefaultNavBellPopover(): React.JSX.Element {
                       type="button"
                       onClick={() => {
                         setOpen(false)
-                        navigate(`/ledger?open=${item.id}`)
+                        navigate(`/ledger?mail=${item.id}`)
                       }}
                       className="flex w-full items-start gap-3 px-4 py-3 text-start transition-colors hover:bg-surface-tinted focus-visible:bg-surface-tinted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
                     >

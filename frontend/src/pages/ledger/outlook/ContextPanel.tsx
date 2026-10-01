@@ -46,7 +46,7 @@ import { ContextPersonCard } from './ContextPersonCard'
 import { useContextSource } from './useContextSource'
 
 /** Coarse page targets the shell's `onNavigate` seam understands. */
-type NavPage = 'employees' | 'application'
+type NavPage = 'employees' | 'services'
 
 const COLLAPSE_KEY = 'ledger.cx.collapsed'
 

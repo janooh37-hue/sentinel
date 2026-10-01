@@ -14,6 +14,7 @@ import { ErrorBoundary } from '@/components/ui/error-boundary'
 import { ShortcutsHelpDialog } from '@/components/ui/shortcuts-help'
 import { EmployeeLookupPage } from '@/pages/employees/EmployeeLookupPage'
 import { LoginPage } from '@/pages/auth/LoginPage'
+import { NotFoundPage } from '@/pages/NotFoundPage'
 import { MigrationGate } from '@/pages/system/MigrationWizard'
 import { KeyboardShortcutsProvider } from '@/lib/keyboardShortcuts'
 import { AuthProvider } from '@/lib/AuthProvider'
@@ -22,6 +23,7 @@ import { AppLockContext } from '@/lib/appLockContext'
 import { useIsMobile } from '@/lib/useIsMobile'
 import { DEFAULT_IDLE_LOCK_SECONDS, useLockState } from '@/lib/useLockState'
 import { type Page, PAGE_PATHS, buildPagePath } from '@/lib/pageNav'
+import { serviceHref } from '@/lib/quickActions'
 import { INMATE_REPORTER_ALLOWED_DESTINATIONS } from '@/components/shell/navItems'
 import {
   loadAccessRequestsPage,
@@ -150,6 +152,17 @@ function LedgerRoute(): React.JSX.Element {
   return <LedgerPage onNavigate={navigatePage} />
 }
 
+/** `/application?form=x&…` links already went out by SMS/push/bookmark. */
+function LegacyApplicationRedirect(): React.JSX.Element {
+  const params = new URLSearchParams(useLocation().search)
+  const form = params.get('form')
+  params.delete('form')
+  const search = params.toString()
+  return (
+    <Navigate replace to={{ pathname: form ? serviceHref(form) : '/services', search: search ? `?${search}` : '' }} />
+  )
+}
+
 function Shell(): React.JSX.Element {
   const { t } = useTranslation()
   const { status, logout, user } = useAuth()
@@ -163,7 +176,9 @@ function Shell(): React.JSX.Element {
   const normalizedPath = location.pathname.replace(/\/+$/, '') || '/'
   const inmateReporterRouteAllowed =
     INMATE_REPORTER_ALLOWED_DESTINATIONS.includes(normalizedPath as typeof INMATE_REPORTER_ALLOWED_DESTINATIONS[number]) ||
-    /^\/books\/\d+$/.test(normalizedPath)
+    /^\/books\/\d+$/.test(normalizedPath) ||
+    normalizedPath === serviceHref('inmate_conduct_violations') ||
+    normalizedPath === '/application'
 
   // Phase 4 LAN — SSE notification stream. Enabled only when the session is
   // resolved so it doesn't open a connection that 401s immediately.
@@ -234,8 +249,9 @@ function Shell(): React.JSX.Element {
           <Suspense fallback={<PageSuspenseFallback />}>
             {/* Route-keyed entrance: remounting on pathname change replays the
                 shared fade-up so every page gets a consistent enter motion
-                (reduced-motion guarded in index.css). */}
-            <main id="main-content" tabIndex={-1} key={location.pathname} className="anim-fade-up flex flex-1 overflow-hidden pb-[calc(5rem+var(--safe-bottom))] md:pb-0">
+                (reduced-motion guarded in index.css). /services/* shares one key
+                so the catalog stays mounted under its forms. */}
+            <main id="main-content" tabIndex={-1} key={normalizedPath.startsWith('/services/') ? '/services' : location.pathname} className="anim-fade-up flex flex-1 overflow-hidden pb-[calc(5rem+var(--safe-bottom))] md:pb-0">
             {isInmateReporter && !inmateReporterRouteAllowed ? (
               <Navigate to="/" replace />
             ) : (
@@ -285,8 +301,10 @@ function Shell(): React.JSX.Element {
                   </RequireCapability>
                 }
               />
+              {/* One URL per service; the catalog and its forms share one
+                  mounted page (see the <main> key above). */}
               <Route
-                path="/application"
+                path="/services/:slug?"
                 element={
                   <RequireCapability cap="documents.generate">
                     <RequireCapability cap="books.view">
@@ -295,6 +313,7 @@ function Shell(): React.JSX.Element {
                   </RequireCapability>
                 }
               />
+              <Route path="/application" element={<LegacyApplicationRedirect />} />
               <Route
                 path="/books"
                 element={
@@ -519,7 +538,7 @@ function Shell(): React.JSX.Element {
                   </RequireCapability>
                 }
               />
-              <Route path="*" element={<Navigate to="/" replace />} />
+              <Route path="*" element={<NotFoundPage />} />
               </Routes>
             )}
             </main>

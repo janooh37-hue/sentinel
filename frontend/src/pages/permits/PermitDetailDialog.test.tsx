@@ -63,7 +63,7 @@ function renderDetail(permitOverrides: object = {}) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
     <QueryClientProvider client={qc}>
-      <PermitDetailDialog permitId={99} open onOpenChange={vi.fn()} onEdit={vi.fn()} />
+      <PermitDetailDialog permitId={99} open onOpenChange={vi.fn()} onEdit={vi.fn()} onNotFound={vi.fn()} />
     </QueryClientProvider>,
   )
 }

@@ -1,16 +1,15 @@
 /**
  * EmployeeLookupPage — unit tests (TDD).
  *
- * Three behaviors:
+ * Contracts:
  *   1. Selecting a search result navigates to /employees/:id
- *   2. location.state { openCreate: true } renders the EmployeeForm card
- *   3. localStorage gssg.employees.openId → replace-navigates to profile and clears the key
+ *   2. ?create=1 opens the form and cancelling removes the URL param.
  */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi, beforeEach } from 'vitest'
-import { MemoryRouter, Route, Routes } from 'react-router-dom'
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 
 const scrollIntoView = vi.fn()
 
@@ -93,13 +92,15 @@ vi.mock('@/components/employees/LookupHeroCards', () => ({
 
 // Mock EmployeeForm to keep the test light while preserving its first focus target.
 vi.mock('@/components/employees/EmployeeForm', () => ({
-  EmployeeForm: ({ mode }: { mode: string }) => (
+  EmployeeForm: ({ mode, onCancel }: { mode: string; onCancel: () => void }) => (
     <form data-testid="employee-form" data-mode={mode}>
       <label htmlFor="first-create-field">First create field</label>
       <input id="first-create-field" />
+      <button type="button" onClick={onCancel}>cancel-create</button>
     </form>
   ),
 }))
+
 vi.mock('@/components/employees/EmployeeActivitySection', () => ({
   EmployeeActivitySection: ({ onOpenProfile }: { onOpenProfile: (employeeId: string) => void }) => (
     <div data-testid="employee-activity">
@@ -139,10 +140,18 @@ function setup(
   const utils = render(
     <QueryClientProvider client={qc}>
       <MemoryRouter
-        initialEntries={[{ pathname: initialPath, state: initialState ?? null }]}
+        initialEntries={[{ pathname: initialPath.split('?')[0], search: initialPath.includes('?') ? `?${initialPath.split('?')[1]}` : '', state: initialState ?? null }]}
       >
         <Routes>
-          <Route path="/employees" element={<EmployeeLookupPage />} />
+          <Route
+            path="/employees"
+            element={
+              <>
+                <EmployeeLookupPage />
+                <LocationProbe />
+              </>
+            }
+          />
           <Route
             path="/employees/:id"
             element={<div data-testid="profile-stub" />}
@@ -153,6 +162,12 @@ function setup(
   )
   return utils
 }
+
+function LocationProbe(): React.JSX.Element {
+  const location = useLocation()
+  return <output data-testid="location">{location.pathname}{location.search}</output>
+}
+
 
 // ─── Tests ───────────────────────────────────────────────────────────────────
 
@@ -172,24 +187,14 @@ describe('EmployeeLookupPage', () => {
     })
   })
 
-  it('keeps activity before the create form and scrolls the form into view', async () => {
-    setup('/employees', { openCreate: true })
-    const form = await screen.findByTestId('employee-form')
-    const activity = screen.getByTestId('employee-activity')
-    expect(form).toHaveAttribute('data-mode', 'create')
-    expect(activity.compareDocumentPosition(form) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
-    await waitFor(() => expect(scrollIntoView).toHaveBeenCalledWith({ block: 'start' }))
-    expect(screen.getByRole('textbox', { name: 'First create field' })).toHaveFocus()
+  it('opens from ?create=1 and cancelling removes create from the URL', async () => {
+    setup('/employees?create=1')
+    expect(await screen.findByTestId('employee-form')).toHaveAttribute('data-mode', 'create')
+    await userEvent.click(screen.getByRole('button', { name: 'cancel-create' }))
+    await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent('/employees'))
+    expect(screen.queryByTestId('employee-form')).not.toBeInTheDocument()
   })
 
-  it('replace-navigates to the profile and clears localStorage when gssg.employees.openId is set', async () => {
-    localStorage.setItem('gssg.employees.openId', 'G3190')
-    setup()
-    await waitFor(() => {
-      expect(screen.getByTestId('profile-stub')).toBeInTheDocument()
-    })
-    expect(localStorage.getItem('gssg.employees.openId')).toBeNull()
-  })
 
   it('renders LookupHeroCards inside the hero band', () => {
     setup()

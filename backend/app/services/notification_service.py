@@ -46,7 +46,7 @@ _TAG_RE = re.compile(r"<[^>]+>")
 _WS_RE = re.compile(r"\s+")
 _ADDR_RE = re.compile(r"\s*<[^>]*>\s*$")
 
-MONTHLY_TASKS_URL = "/application?form=inmate_conduct_violations&mode=stats"
+MONTHLY_TASKS_URL = "/services/inmate_conduct_violations?mode=stats"
 
 
 def _monthly_items(db: Session, user: User) -> list[ActionableItem]:
@@ -146,7 +146,7 @@ def actionable_items(db: Session, user: User) -> list[ActionableItem]:
             ActionableItem(
                 "email",
                 f"email:{e.id}",
-                "/ledger",
+                f"/ledger?mail={e.id}",
                 f"#{e.id}",
                 subject=e.subject,
                 requester=_sender_name(e.counterparty),

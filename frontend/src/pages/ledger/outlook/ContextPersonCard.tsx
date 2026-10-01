@@ -31,7 +31,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { activityEmoji, expiryAlert, leaveBalanceLabel } from './contextResolve'
 
 /** Coarse page targets the shell's `onNavigate` seam understands. */
-type NavPage = 'employees' | 'application'
+type NavPage = 'employees' | 'services'
 
 interface Props {
   employeeId: string
@@ -258,7 +258,7 @@ function PersonDetail({
       {/* Quick actions (3-up) */}
       <div className="mt-3 flex gap-2">
         <QuickAction testid="cx-qa-record" emoji={<UserRound className="h-4 w-4" aria-hidden />} label={t('ledger.outlook.quick.record')} onClick={() => onNavigate?.('employees', emp.id)} />
-        <QuickAction testid="cx-qa-generate" emoji={<FilePlus className="h-4 w-4" aria-hidden />} label={t('ledger.outlook.quick.generate')} onClick={() => onNavigate?.('application')} />
+        <QuickAction testid="cx-qa-generate" emoji={<FilePlus className="h-4 w-4" aria-hidden />} label={t('ledger.outlook.quick.generate')} onClick={() => onNavigate?.('services')} />
         <QuickAction testid="cx-qa-email" emoji={<Mail className="h-4 w-4" aria-hidden />} label={t('ledger.outlook.quick.email')} onClick={() => onEmail?.(emp.id)} />
       </div>
 

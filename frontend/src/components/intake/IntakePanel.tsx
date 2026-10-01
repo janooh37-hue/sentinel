@@ -27,6 +27,7 @@ import type { ExtractionResponse } from '@/lib/extraction'
 import { pickEmployeeName } from '@/lib/employeeName'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader } from '@/components/ui/card'
+import { serviceHref } from '@/lib/quickActions'
 
 // ─── types ────────────────────────────────────────────────────────────────────
 
@@ -348,15 +349,15 @@ function ExternalCard({ result, file, onDismiss }: ExternalCardProps): React.JSX
       if (matched && id) {
         navigate(`/employees/${id}`, { state: { injectedExtraction: injection } })
       } else {
-        navigate('/employees', { state: { injectedExtraction: injection, openCreate: true } })
+        navigate('/employees?create=1', { state: { injectedExtraction: injection } })
       }
     } else if (route_kind === 'salary_transfer') {
-      const q = matched && id ? `&employee_id=${id}` : ''
-      navigate(`/application?form=${result.route_form_slug ?? 'salary_transfer_request'}${q}`, {
+      const q = matched && id ? `?employee_id=${id}` : ''
+      navigate(`${serviceHref(result.route_form_slug ?? 'salary_transfer_request')}${q}`, {
         state: { injectedExtraction: injection },
       })
     } else if (route_kind === 'leave') {
-      const q = matched && id ? `&employee_id=${id}` : ''
+      const q = matched && id ? `?employee_id=${id}` : ''
       let injectedAttachment:
         | { slotKey: string; staged: StagedAttachmentRead }
         | undefined
@@ -367,7 +368,7 @@ function ExternalCard({ result, file, onDismiss }: ExternalCardProps): React.JSX
         // Non-fatal: fall back to manual attach on the form.
       }
       navigate(
-        `/application?form=${result.route_form_slug ?? 'leave_application'}${q}`,
+        `${serviceHref(result.route_form_slug ?? 'leave_application')}${q}`,
         { state: { injectedExtraction: injection, injectedAttachment } },
       )
     }
@@ -442,7 +443,7 @@ function ExternalCard({ result, file, onDismiss }: ExternalCardProps): React.JSX
                   type="button"
                   variant="outline"
                   size="sm"
-                  onClick={() => navigate('/application')}
+                  onClick={() => navigate('/services')}
                 >
                   {t('intake.external.openForm')}
                 </Button>

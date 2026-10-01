@@ -42,6 +42,7 @@ import {
 } from './reviewers'
 import { ReviewerList } from './ReviewerList'
 import { ReviewerActions } from './ReviewerActions'
+import { serviceHref } from '@/lib/quickActions'
 
 interface Props {
   bookId: number | null
@@ -313,9 +314,7 @@ export function BookDetailDrawer({ bookId, onClose, onSubmitForApproval }: Props
 
   function handleRevise(): void {
     if (!book || !current?.template_id) return
-    navigate(`/application?form=${encodeURIComponent(current.template_id)}`, {
-      state: { reviseBookId: book.id },
-    })
+    navigate(`${serviceHref(current.template_id)}?revise=${book.id}`)
     onClose()
   }
 

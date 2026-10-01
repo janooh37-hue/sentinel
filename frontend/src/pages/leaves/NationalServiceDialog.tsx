@@ -1,7 +1,7 @@
 /**
  * NationalServiceDialog — manual National Service record creation (the one
  * kind with no DOCX form). Opened from the Services gallery tile via
- * /leaves?ns=new. End date defaults to a 2-week service (start + 13 days,
+ * /leaves?action=ns-new. End date defaults to a 2-week service (start + 13 days,
  * inclusive); extend/delay live on the record afterwards.
  */
 

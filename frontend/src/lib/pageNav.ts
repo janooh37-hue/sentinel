@@ -9,7 +9,7 @@
 export type Page =
   | 'dashboard'
   | 'employees'
-  | 'application'
+  | 'services'
   | 'books'
   | 'leaves'
   | 'ledger'
@@ -18,7 +18,7 @@ export type Page =
 export const PAGE_PATHS: Record<Page, string> = {
   dashboard: '/',
   employees: '/employees',
-  application: '/application',
+  services: '/services',
   books: '/books',
   leaves: '/leaves',
   ledger: '/ledger',

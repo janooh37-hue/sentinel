@@ -72,7 +72,7 @@ export const SIGNAL_ENTRIES: readonly DockEntry[] = [
 export const DEFAULT_SLOT_IDS: readonly string[] = [
   'sec:/',
   'sec:/employees',
-  'sec:/application',
+  'sec:/services',
   'sec:/books',
 ]
 
@@ -111,9 +111,10 @@ function normalizeSlotIds(ids: readonly unknown[]): string[] {
   if (ids.length < DEFAULT_SLOT_IDS.length) return [...DEFAULT_SLOT_IDS]
   const trimmed = ids.slice(0, DEFAULT_SLOT_IDS.length)
 
-  const normalized = trimmed.map((id, index) =>
-    typeof id === 'string' && entryById(id) ? id : DEFAULT_SLOT_IDS[index],
-  )
+  // Services moved from /application to /services; keep a customised dock slot.
+  const normalized = trimmed
+    .map((id) => (id === 'sec:/application' ? 'sec:/services' : id))
+    .map((id, index) => (typeof id === 'string' && entryById(id) ? id : DEFAULT_SLOT_IDS[index]))
 
   return new Set(normalized).size === DEFAULT_SLOT_IDS.length ? normalized : [...DEFAULT_SLOT_IDS]
 }

@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen } from '@testing-library/react'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 
@@ -69,12 +69,14 @@ const templates = {
   ],
 }
 
-function renderPage(entry = '/application') {
+function renderPage(entry = '/services') {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
     <QueryClientProvider client={client}>
       <MemoryRouter initialEntries={[entry]}>
-        <ApplicationPage />
+        <Routes>
+          <Route path="/services/:slug?" element={<ApplicationPage />} />
+        </Routes>
       </MemoryRouter>
     </QueryClientProvider>,
   )
@@ -127,7 +129,7 @@ describe('ApplicationPage service permissions', () => {
     ['service access', ['documents.generate', 'books.view']],
   ])('does not show or deep-link a service missing %s', async (_missing, allowed) => {
     capabilityState.allowed = new Set(allowed)
-    renderPage('/application?form=General%20Book')
+    renderPage('/services/general_book')
 
     expect(await screen.findByText('Demo companion')).toBeVisible()
     expect(screen.queryByText('General Book')).not.toBeInTheDocument()

@@ -17,7 +17,7 @@ from starlette.types import Receive, Scope, Send
 from app import __version__
 from app.api import dav
 from app.api.deps import get_current_user
-from app.api.errors import install_handlers
+from app.api.errors import NotFoundError, install_handlers
 from app.api.v1 import absences as absences_v1
 from app.api.v1 import announcements as announcements_v1
 from app.api.v1 import auth as auth_v1
@@ -304,6 +304,9 @@ def create_app() -> FastAPI:
         @app.get("/{full_path:path}", include_in_schema=False)
         def spa_fallback(full_path: str) -> FileResponse:
             # Any non-API GET falls back to index.html so React Router works.
+            # An unmatched API path is a real 404, not the SPA shell.
+            if full_path == "api" or full_path.startswith("api/"):
+                raise NotFoundError("ROUTE_NOT_FOUND", f"No API route for /{full_path}")
             # Resolve and contain: an absolute ("C:/...") or "../" path must
             # never escape the build folder (arbitrary file read).
             candidate = (STATIC_DIR / full_path).resolve()

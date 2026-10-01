@@ -25,7 +25,7 @@
  * viewer is never shown a control the API would refuse.
  */
 
-import { useCallback, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   Car,
@@ -77,6 +77,8 @@ import { isolateBidi } from '@/lib/useCapabilityCatalog'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { useIsMobile } from '@/lib/useIsMobile'
 import { cn } from '@/lib/utils'
+import { useUrlOverlay } from '@/lib/urlState'
+import { NotFoundPage } from '@/pages/NotFoundPage'
 
 import {
   DOCUMENT_ACCEPT,
@@ -148,24 +150,20 @@ export function VehicleDetailPage(): React.JSX.Element {
   const lang = i18n.language
   const isAr = isArabic(lang)
   const queryClient = useQueryClient()
-  const { has } = useCapabilities()
+  const { has, isLoading: capabilityLoading } = useCapabilities()
   const canEdit = has('vehicles.edit')
   const canDelete = has('vehicles.delete')
   const isMobile = useIsMobile()
+  const actionOverlay = useUrlOverlay('action', ['fine', 'mode'])
+  const action = actionOverlay.value
+  const linkedFineId = searchParams.get('fine')
+  const paymentMode: FinePaymentMode = searchParams.get('mode') === 'receipt' ? 'receipt' : 'payment'
 
-  const [renewOpen, setRenewOpen] = useState(false)
-  const [fineTarget, setFineTarget] = useState<FineTarget | null>(null)
-  const [accidentOpen, setAccidentOpen] = useState(false)
-  const [maintenanceOpen, setMaintenanceOpen] = useState(false)
-  const [photoPickerOpen, setPhotoPickerOpen] = useState(false)
   const [fineToDelete, setFineToDelete] = useState<VehicleFineRead | null>(null)
   const [recordToDelete, setRecordToDelete] = useState<VehicleMaintenanceRead | null>(null)
   const [photoToDelete, setPhotoToDelete] = useState<VehicleFileRead | null>(null)
   const [archiveConfirmOpen, setArchiveConfirmOpen] = useState(false)
   const [restoreConfirmOpen, setRestoreConfirmOpen] = useState(false)
-  const [paymentTarget, setPaymentTarget] = useState<
-    { fine: VehicleFineRead; mode: FinePaymentMode } | null
-  >(null)
   const [fineArchiveTarget, setFineArchiveTarget] = useState<VehicleFineRead | null>(null)
   const [showArchivedFines, setShowArchivedFines] = useState(false)
 
@@ -350,6 +348,38 @@ export function VehicleDetailPage(): React.JSX.Element {
   const canDeleteMutate = canDelete && !archived
   const fines = vehicle?.fines ?? []
   const renewals = vehicle?.renewals ?? []
+  const actionFine = linkedFineId == null
+    ? null
+    : fines.find((fine) => String(fine.id) === linkedFineId) ?? null
+  const fineTarget: FineTarget | null =
+    action === 'fine'
+      ? actionFine
+        ? { mode: 'edit', fine: actionFine }
+        : { mode: 'add' }
+      : null
+  const paymentTarget =
+    action === 'payment' && actionFine ? { fine: actionFine, mode: paymentMode } : null
+
+  useEffect(() => {
+    if (capabilityLoading || vehicleQuery.isLoading || !action) return
+    const validAction = ['renew', 'fine', 'accident', 'maintenance', 'photos', 'payment'].includes(action)
+    if (
+      !validAction ||
+      !canMutate ||
+      (action === 'payment' && !actionFine) ||
+      (action === 'fine' && linkedFineId != null && !actionFine)
+    ) {
+      actionOverlay.close()
+    }
+  }, [
+    action,
+    actionFine,
+    actionOverlay.close,
+    canMutate,
+    capabilityLoading,
+    linkedFineId,
+    vehicleQuery.isLoading,
+  ])
   const accidents = vehicle?.accidents ?? []
   const maintenance = vehicle?.maintenance ?? []
   const photos = vehicle?.photos ?? []
@@ -438,7 +468,7 @@ export function VehicleDetailPage(): React.JSX.Element {
                   // Primary only while the license actually needs attention —
                   // on a valid license Renew is a background action.
                   variant={vehicle.expiry_status === 'valid' ? 'secondary' : 'default'}
-                  onClick={() => setRenewOpen(true)}
+                  onClick={() => actionOverlay.open('renew')}
                 >
                   {t('vehicles.renew')}
                 </Button>
@@ -446,7 +476,7 @@ export function VehicleDetailPage(): React.JSX.Element {
                   type="button"
                   size="sm"
                   variant="secondary"
-                  onClick={() => setFineTarget({ mode: 'add' })}
+                  onClick={() => actionOverlay.open('fine')}
                 >
                   {t('vehicles.addFine')}
                 </Button>
@@ -495,9 +525,7 @@ export function VehicleDetailPage(): React.JSX.Element {
 
       <div className="flex-1 overflow-y-auto px-4 pb-24 md:px-6">
         {notFound ? (
-          <div className="rounded-xl border border-border bg-surface">
-            <EmptyState icon={Car} message={t('vehicles.noVehicles')} />
-          </div>
+          <NotFoundPage />
         ) : vehicleQuery.isError ? (
           <div className="rounded-xl border border-border bg-surface">
             <EmptyState
@@ -527,7 +555,7 @@ export function VehicleDetailPage(): React.JSX.Element {
               plate={plate ?? ''}
               siteLabel={siteLabel}
               canEdit={canMutate}
-              onEditPhoto={() => setPhotoPickerOpen(true)}
+              onEditPhoto={() => actionOverlay.open('photos')}
             />
 
             <div
@@ -557,10 +585,14 @@ export function VehicleDetailPage(): React.JSX.Element {
                   busy={deleteFine.isPending || restoreFine.isPending}
                   showArchived={showArchivedFines}
                   onToggleShowArchived={() => setShowArchivedFines((value) => !value)}
-                  onEdit={(fine) => setFineTarget({ mode: 'edit', fine })}
+                  onEdit={(fine) => actionOverlay.open('fine', { fine: String(fine.id) })}
                   onDelete={setFineToDelete}
-                  onRecordPayment={(fine) => setPaymentTarget({ fine, mode: 'payment' })}
-                  onAttachReceipt={(fine) => setPaymentTarget({ fine, mode: 'receipt' })}
+                  onRecordPayment={(fine) =>
+                    actionOverlay.open('payment', { fine: String(fine.id) })
+                  }
+                  onAttachReceipt={(fine) =>
+                    actionOverlay.open('payment', { fine: String(fine.id), mode: 'receipt' })
+                  }
                   onMarkUnpaid={(fine) =>
                     markFineUnpaid.mutate({ vehicleId: fine.vehicle_id, fineId: fine.id, version: fine.version })
                   }
@@ -576,7 +608,7 @@ export function VehicleDetailPage(): React.JSX.Element {
                   renewals={renewals}
                   canEdit={canMutate}
                   replacingLicense={replaceLicenseFile.isPending}
-                  onRenew={() => setRenewOpen(true)}
+                  onRenew={() => actionOverlay.open('renew')}
                   onReplaceLicense={(file) =>
                     replaceLicenseFile.mutate({ vehicleId: vehicle.id, file })
                   }
@@ -587,7 +619,7 @@ export function VehicleDetailPage(): React.JSX.Element {
                   accidents={accidents}
                   canEdit={canMutate}
                   readOnly={archived}
-                  onAdd={() => setAccidentOpen(true)}
+                  onAdd={() => actionOverlay.open('accident')}
                 />
               )}
               {tab === 'maintenance' && (
@@ -597,7 +629,7 @@ export function VehicleDetailPage(): React.JSX.Element {
                   canDelete={canDeleteMutate}
                   isMobile={isMobile}
                   busy={deleteMaintenance.isPending}
-                  onAdd={() => setMaintenanceOpen(true)}
+                  onAdd={() => actionOverlay.open('maintenance')}
                   onDelete={setRecordToDelete}
                 />
               )}
@@ -632,17 +664,15 @@ export function VehicleDetailPage(): React.JSX.Element {
         )}
       </div>
 
-      {/* Dialogs. Each owns its mutation, toast and invalidation; this page owns
-          only whether it is open, and remounts it per target so the form never
-          opens with the previous row's values. */}
+      {/* URL-backed non-destructive forms; destructive confirmations stay local. */}
       {vehicle && canMutate && (
         <>
-          {renewOpen && (
+          {action === 'renew' && (
             <RenewLicenseDialog
               open
               vehicle={vehicle}
               onOpenChange={(open) => {
-                if (!open) setRenewOpen(false)
+                if (!open) actionOverlay.close()
               }}
             />
           )}
@@ -653,25 +683,25 @@ export function VehicleDetailPage(): React.JSX.Element {
               vehicle={vehicle}
               fine={fineTarget.mode === 'edit' ? fineTarget.fine : null}
               onOpenChange={(open) => {
-                if (!open) setFineTarget(null)
+                if (!open) actionOverlay.close()
               }}
             />
           )}
-          {accidentOpen && (
+          {action === 'accident' && (
             <AccidentDialog
               open
               vehicle={vehicle}
               onOpenChange={(open) => {
-                if (!open) setAccidentOpen(false)
+                if (!open) actionOverlay.close()
               }}
             />
           )}
-          {maintenanceOpen && (
+          {action === 'maintenance' && (
             <MaintenanceDialog
               open
               vehicle={vehicle}
               onOpenChange={(open) => {
-                if (!open) setMaintenanceOpen(false)
+                if (!open) actionOverlay.close()
               }}
             />
           )}
@@ -685,7 +715,7 @@ export function VehicleDetailPage(): React.JSX.Element {
           fine={paymentTarget.fine}
           mode={paymentTarget.mode}
           onOpenChange={(open) => {
-            if (!open) setPaymentTarget(null)
+            if (!open) actionOverlay.close()
           }}
         />
       )}
@@ -770,8 +800,10 @@ export function VehicleDetailPage(): React.JSX.Element {
       )}
       {vehicle && canMutate && (
         <VehiclePhotoPicker
-          open={photoPickerOpen}
-          onOpenChange={setPhotoPickerOpen}
+          open={action === 'photos'}
+          onOpenChange={(open) => {
+            if (!open) actionOverlay.close()
+          }}
           currentAssetId={vehicle.photo_asset_id ?? null}
           currentPreviewUrl={vehicle.photo_url}
           onSave={(asset) =>

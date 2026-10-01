@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter, useLocation } from 'react-router-dom'
+import { MemoryRouter, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 
@@ -67,7 +67,28 @@ vi.mock('./ApprovedViolationUpload', () => ({ ApprovedViolationUpload: () => <di
 
 function LocationProbe(): React.JSX.Element {
   const location = useLocation()
-  return <output data-testid="location">{location.pathname}{location.search}</output>
+  const navigate = useNavigate()
+  return (
+    <>
+      <output data-testid="location">{location.pathname}{location.search}</output>
+      <button type="button" onClick={() => navigate(-1)}>browser back</button>
+    </>
+  )
+}
+
+function renderServices(entry: string): void {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  render(
+    <QueryClientProvider client={client}>
+      <MemoryRouter initialEntries={[entry]}>
+        <NavBellPopover />
+        <Routes>
+          <Route path="/services/:slug?" element={<ApplicationPage />} />
+        </Routes>
+        <LocationProbe />
+      </MemoryRouter>
+    </QueryClientProvider>,
+  )
 }
 
 beforeEach(() => {
@@ -90,16 +111,7 @@ beforeEach(() => {
 describe('ApplicationPage same-path monthly navigation', () => {
   it('rehydrates statistics when the bell navigates from another form', async () => {
     const user = userEvent.setup()
-    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-    render(
-      <QueryClientProvider client={client}>
-        <MemoryRouter initialEntries={['/application?form=demo']}>
-          <NavBellPopover />
-          <ApplicationPage />
-          <LocationProbe />
-        </MemoryRouter>
-      </QueryClientProvider>,
-    )
+    renderServices('/services/demo')
 
     expect(await screen.findByTestId('template-form')).toBeVisible()
     await user.click(await screen.findByRole('button', { name: 'Notifications, 1 unread' }))
@@ -110,5 +122,26 @@ describe('ApplicationPage same-path monthly navigation', () => {
     expect(screen.getByRole('button', { name: i18n.t('inmateStats.views.register') })).toHaveAttribute('aria-pressed', 'true')
     expect(screen.getByTestId('template-form')).not.toBeVisible()
     expect(screen.getByTestId('location')).toHaveTextContent(inmateRegisterHref(2026, 8))
+  })
+})
+
+describe('ApplicationPage service URLs', () => {
+  it('opens the form for a service URL loaded directly', async () => {
+    renderServices('/services/demo')
+
+    expect(await screen.findByTestId('template-form')).toBeVisible()
+  })
+
+  it('returns to the filtered catalog on Back after picking a service', async () => {
+    const user = userEvent.setup()
+    renderServices('/services?q=dem')
+    await user.click(await screen.findByRole('button', { name: /Demo/ }))
+    expect(await screen.findByTestId('template-form')).toBeVisible()
+    expect(screen.getByTestId('location')).toHaveTextContent(/^\/services\/demo$/)
+
+    await user.click(screen.getByRole('button', { name: 'browser back' }))
+
+    expect(await screen.findByRole('searchbox', { name: i18n.t('application.searchServices') })).toHaveValue('dem')
+    expect(screen.queryByTestId('template-form')).not.toBeInTheDocument()
   })
 })

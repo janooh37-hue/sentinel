@@ -10,8 +10,7 @@
  * active trigger getting a navy underline + primary text.
  */
 
-import { useEffect, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useSearchParam } from '@/lib/urlState'
 import { useTranslation } from 'react-i18next'
 
 import { cn } from '@/lib/utils'
@@ -25,21 +24,7 @@ const ORDER: Tab[] = ['records', 'balance']
 
 export function LeavesPage(): React.JSX.Element {
   const { t } = useTranslation()
-  const [tab, setTab] = useState<Tab>('records')
-
-  // If `?open=<id>` is present in the URL, force the Records tab so the
-  // detail drawer in `TabRecords` can pick the param up. We don't strip
-  // the param here — TabRecords owns the consumption (it needs to read
-  // the id, open the drawer, and only then remove it from the URL).
-  const [searchParams] = useSearchParams()
-  const hasOpenParam =
-    searchParams.get('open') !== null || searchParams.get('ns') !== null
-  useEffect(() => {
-    if (hasOpenParam) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setTab('records')
-    }
-  }, [hasOpenParam])
+  const [tab, setTab] = useSearchParam('tab', { fallback: 'records' })
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden bg-background">

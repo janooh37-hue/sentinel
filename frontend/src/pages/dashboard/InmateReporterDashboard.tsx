@@ -146,7 +146,7 @@ export function InmateReporterDashboard(): React.JSX.Element {
           </p>
           <div className="mt-6 flex flex-wrap gap-3">
             <Link
-              to="/application"
+              to="/services"
               className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-surface px-4 py-2.5 text-sm font-semibold text-primary shadow-sm transition-transform hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white motion-reduce:transform-none"
             >
               <FilePlus2 className="h-4 w-4" aria-hidden />

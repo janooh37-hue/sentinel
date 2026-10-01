@@ -337,7 +337,7 @@ for (const row of MATRIX) {
           fullPage: true,
         })
 
-        await operator.page.goto('/application')
+        await operator.page.goto('/services')
         await assertDocumentLocale(operator.page, 'ar')
         const deniedWordTemplates = operator.page.waitForResponse(
           (response) => new URL(response.url()).pathname === '/api/v1/books/word-templates',

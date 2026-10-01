@@ -101,7 +101,7 @@ export function ActivityTab({
         return
       }
       case 'ledger':
-        navigate(`/ledger?open=${item.ref_id}`)
+        navigate(`/ledger?mail=${item.ref_id}`)
         return
       case 'absence':
         onOpenTab('absences')
