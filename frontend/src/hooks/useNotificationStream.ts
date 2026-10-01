@@ -30,7 +30,7 @@ type Key = keyof NotificationCounts
 /** The cached queries each count stands for; only these refetch when it changes. */
 const QUERIES_BY_COUNT: Record<Key, readonly (readonly string[])[]> = {
   approvals: [['books', 'approval-summary'], ['books', 'awaiting']],
-  leaves: [['leaves-list', 'report-all']],
+  leaves: [['leaves-list', 'awaiting-return-count']],
   scans: [['scan-inbox', 'count']],
   emails: [['ledger', 'unread-recent'], ['ledger-unread-count']],
   monthly_reviews: [['inmate-register', 'awaiting-close']],
