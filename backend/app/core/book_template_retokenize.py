@@ -31,7 +31,9 @@ _JINJA_DELIM = re.compile(r"\{\{|\}\}|\{%|%\}|\{#|#\}")
 
 _REF_LABEL = re.compile(r"^\s*الرقم\s*[:：]")  # noqa: RUF001 — full-width colon is a legitimate Arabic-text variant
 _DATE_LABEL = re.compile(r"^\s*التاريخ\s*[:：]")  # noqa: RUF001 — full-width colon is a legitimate Arabic-text variant
-_BARCODE_VALUE = re.compile(r"^[A-Z0-9/-]+\+\d{8}$")
+# Legacy ``REF+YYYYMMDD`` or current ``*GSSG+DD/MM/YYYY+REF*`` (qr.barcode_payload).
+_BARCODE_VALUE = re.compile(r"^(?:[A-Z0-9/-]+\+\d{8}|\*GSSG\+\d{2}/\d{2}/\d{4}\+[A-Z0-9/-]+\*)$")
+_BARCODE_FONT = "Libre Barcode 39"  # the run docx_engine._format_letterhead_barcode rewrites
 _SUBJECT_LABEL = re.compile(r"^\s*الموضوع\s*[:：]")  # noqa: RUF001 — full-width colon is a legitimate Arabic-text variant
 # The paper's addressee line: «السيد \ {name} المحترم» (the separator is a
 # backslash on the current template, a slash on the older hand-typed books).
@@ -199,7 +201,8 @@ def retokenize_general_book(docx_path: Path, *, submitter_g: str | None = None) 
             (
                 p
                 for p in paragraphs
-                if _BARCODE_VALUE.fullmatch(p.text.strip())
+                if any(r.font.name == _BARCODE_FONT for r in p.runs)
+                or _BARCODE_VALUE.fullmatch(p.text.strip())
                 or p.text.replace(_ZWSP, "").strip() == "{{ barcode }}"
             ),
             None,

@@ -388,3 +388,40 @@ def test_addressee_retokenize_idempotent(tmp_path):
     t1 = docx_to_text(p)
     retokenize_general_book(p)
     assert docx_to_text(p) == t1
+
+
+def test_produced_general_book_with_gssg_barcode_saves_as_template(tmp_path, monkeypatch):
+    """Regression: the letterhead barcode is now ``*GSSG+DD/MM/YYYY+REF*``; a
+    freshly produced General Book must still retokenize into a valid template."""
+    from app.config import get_settings
+    from app.services import artifact_service
+    from app.services.document_service import GENERAL_BOOK_BODY_SENTINEL
+
+    monkeypatch.setenv("GSSG_DATA_DIR", str(tmp_path))
+    get_settings.cache_clear()
+    ref = "1/12/GSSG/250"
+    art = artifact_service.produce_from_template(
+        template_id="General Book",
+        data={
+            "ref": ref,
+            "subject": "اختبار",
+            "body": GENERAL_BOOK_BODY_SENTINEL,
+            "body_html": "",
+            "recipient_name": "مدير",
+            "cc": [],
+            "submitter_g": "G3082",
+        },
+        destination=tmp_path / "book.docx",
+        stamps=artifact_service.StampPlan(reference=ref, aztec_corner=None),
+        convert_pdf=False,
+        collision="exact",
+    )
+    assert any(
+        p.text.startswith("*GSSG+") for c in _header_copies(art.docx_path).values() for p in c
+    )
+
+    retokenize_general_book(art.docx_path)
+    validate_book_template(art.docx_path)
+
+    for paragraphs in _header_copies(art.docx_path).values():
+        assert any(p.text.strip() == "{{ barcode }}" for p in paragraphs)
