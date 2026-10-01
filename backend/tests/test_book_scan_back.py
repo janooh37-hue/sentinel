@@ -22,9 +22,10 @@ from app.services import book_service
 
 
 def _barcode_pdf(ref: str, paper_date: str = "20260921") -> bytes:
+    date_text = datetime.strptime(paper_date, "%Y%m%d").strftime("%d/%m/%Y")
     barcode = Image.fromarray(
         zxingcpp.create_barcode(
-            f"{ref}+{paper_date}", zxingcpp.BarcodeFormat.Code39
+            f"GSSG+{date_text}+{ref}", zxingcpp.BarcodeFormat.Code39
         ).to_image(scale=4)
     )
     image = io.BytesIO()

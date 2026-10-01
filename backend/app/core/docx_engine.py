@@ -1050,7 +1050,9 @@ def _format_letterhead_barcode(doc: Any, ctx: dict[str, Any]) -> None:
         with contextlib.suppress(ValueError):
             parsed = datetime.strptime(raw_date.strip(), "%d-%m-%Y")
     paper_date = parsed or datetime.now()
-    payload = f"GSSG*{paper_date:%d/%m/%Y}*{str(ctx.get('ref') or '').strip()}*"
+    payload = qr.barcode_payload(
+        str(ctx.get("ref") or "").strip(), paper_date.date()
+    )
     seen_parts: set[int] = set()
     for section in doc.sections:
         for reference in section._sectPr.headerReference_lst:
@@ -1061,6 +1063,7 @@ def _format_letterhead_barcode(doc: Any, ctx: dict[str, Any]) -> None:
             for element in part.element.findall(".//" + qn("w:p")):
                 paragraph = Paragraph(element, cast(Any, part))
                 for run in paragraph.runs:
+                        run.font.rtl = False
                     if run.font.name == "Libre Barcode 39":
                         run.text = payload
 

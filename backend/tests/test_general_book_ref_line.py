@@ -54,7 +54,7 @@ def test_ref_line_and_barcode_render_in_both_header_copies(tmp_path):
         text = "\n".join(p.text for p in paragraphs)
         assert "الرقم: 1/5/141" in text
         assert "التاريخ: 21-09-2026" in text
-        assert "GSSG*21/09/2026*1/5/141*" in text
+        assert "*GSSG+21/09/2026+1/5/141*" in text
         assert text.index("الرقم:") < text.index("التاريخ:")
 
 
@@ -65,7 +65,7 @@ def test_ref_line_absent_without_ref(tmp_path):
     )
     text = _header_text(out)
     assert "الرقم:  " in text
-    assert "GSSG*30/09/2026**" in text
+    assert "*GSSG+30/09/2026+*" in text
 
 
 def test_ref_run_marked_ltr_in_both_header_copies(tmp_path):
@@ -89,7 +89,7 @@ def test_letterhead_barcode_formula_for_every_template(template_id, tmp_path):
     from docx import Document
     from docx.oxml.ns import qn
 
-    expected = "GSSG*30/09/2026*1/12/351*"
+    expected = "*GSSG+30/09/2026+1/12/351*"
     out = tmp_path / f"{template_id}.docx"
     DocxEngine(TEMPLATES_DIR).fill(
         template_id,
@@ -227,7 +227,10 @@ def test_word_book_has_header_ref_barcode_and_no_header_stamp(
     assert f"الرقم: {info.ref_number}" in text
     import re
 
-    assert re.search(rf"GSSG\*\d{{2}}/\d{{2}}/\d{{4}}\*{re.escape(info.ref_number)}\*", text)
+    assert re.search(
+        rf"\*GSSG\+\d{{2}}/\d{{2}}/\d{{4}}\+{re.escape(info.ref_number)}\*",
+        text,
+    )
 
 def test_general_book_does_not_render_submitter_g_number(tmp_path):
     from docx import Document
