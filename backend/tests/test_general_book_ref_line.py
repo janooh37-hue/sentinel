@@ -3,6 +3,7 @@ date when ``ref`` is provided, and omits it (three guard paragraphs collapse)
 when it is not. Asserts the ARABIC string per the i18n lesson."""
 
 from pathlib import Path
+
 import pytest
 
 from app.core.docx_engine import DocxEngine, aztec_corner_for
@@ -18,6 +19,7 @@ _BASE_DATA = {
     "cc": [],
     "submitter_g": "G-1234",
 }
+
 
 def _header_copies(docx_path):
     from docx import Document
@@ -60,9 +62,7 @@ def test_ref_line_and_barcode_render_in_both_header_copies(tmp_path):
 
 def test_ref_line_absent_without_ref(tmp_path):
     out = tmp_path / "out.docx"
-    DocxEngine(TEMPLATES_DIR).fill(
-        "General Book", {**_BASE_DATA, "date": "2026-09-30"}, out
-    )
+    DocxEngine(TEMPLATES_DIR).fill("General Book", {**_BASE_DATA, "date": "2026-09-30"}, out)
     text = _header_text(out)
     assert "الرقم:  " in text
     assert "*GSSG+30/09/2026+*" in text
@@ -81,6 +81,8 @@ def test_ref_run_marked_ltr_in_both_header_copies(tmp_path):
         ref_runs = [r for r in ref_para.runs if r.text.startswith("1/")]
         assert ref_runs, "ref value must be in its own run"
         assert all(r.font.rtl is False for r in ref_runs)
+
+
 @pytest.mark.parametrize(
     "template_id",
     ("General Book", "Resignation Declaration", "Resignation Letter", "Leave Undertaking"),
@@ -110,9 +112,6 @@ def test_letterhead_barcode_formula_for_every_template(template_id, tmp_path):
                 if fonts is not None and fonts.get(qn("w:ascii")) == "Libre Barcode 39":
                     texts.append("".join(t.text or "" for t in run.findall("./" + qn("w:t"))))
     assert texts and set(texts) == {expected}
-
-
-
 
 
 def test_ref_renders_ltr_segment_order_directly_after_label(tmp_path):
@@ -147,6 +146,7 @@ def test_ref_line_preserves_canonical_template_size_with_rtl_label(tmp_path):
         assert date_size is not None and date_size.pt == 10
         assert all(r.font.size == date_size for r in runs)
         assert all(not r.font.italic for r in runs)
+
 
 def test_library_template_preserves_header_ref_run_format(tmp_path):
     from docx import Document
@@ -185,8 +185,7 @@ def test_word_template_keeps_intro_without_large_blank_gap(tmp_path):
 
     subject_idx = next(i for i, text in enumerate(paragraphs) if text.startswith("الموضوع:"))
     intro_idx = paragraphs.index(
-        "يطيب لنا أن نتقدم لكم بأطيب التحيات والتقدير، "
-        "ننوه على الموضوع أعلاه انه"
+        "يطيب لنا أن نتقدم لكم بأطيب التحيات والتقدير، ننوه على الموضوع أعلاه انه"
     )
     closing_idx = paragraphs.index("للتفضل بالعلم وإجراءاتكم")
 
@@ -232,6 +231,7 @@ def test_word_book_has_header_ref_barcode_and_no_header_stamp(
         text,
     )
 
+
 def test_general_book_does_not_render_submitter_g_number(tmp_path):
     from docx import Document
     from docx.oxml.ns import qn
@@ -246,7 +246,6 @@ def test_general_book_does_not_render_submitter_g_number(tmp_path):
     footer = Document(str(out)).sections[0].footer
     footer_text = "\n".join(node.text or "" for node in footer.part.element.iter(qn("w:t")))
     assert "G-1234" not in footer_text
-
 
 
 def test_general_book_is_the_only_top_right_form_without_aztec() -> None:

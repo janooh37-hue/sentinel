@@ -299,6 +299,7 @@ def test_report_display_date():
 
 def test_create_report_word_book_renders_display_date(db_session):
     from docx import Document as Docx
+    from docx.oxml.ns import qn
 
     from app.services import word_book_service
 
@@ -318,6 +319,7 @@ def test_create_report_word_book_renders_display_date(db_session):
         sign=False,
     )
     sess = db_session.query(BookEditSession).filter_by(book_id=info.book_id).one()
-    text = "\n".join(p.text for p in Docx(sess.working_path).paragraphs)
+    header = Docx(sess.working_path).sections[0].first_page_header
+    text = "".join(t.text or "" for t in header._element.iter(qn("w:t")))
     assert "التاريخ: 23/07/2026" in text
     assert "2026-07-23" not in text

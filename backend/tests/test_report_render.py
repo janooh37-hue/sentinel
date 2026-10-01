@@ -1,9 +1,12 @@
 # backend/tests/test_report_render.py
+import re
+import zipfile
 from pathlib import Path
 
 from docx import Document
+from docx.oxml.ns import qn
 
-from app.core.docx_engine import DocxEngine
+from app.core.docx_engine import DocxEngine, _postprocess_general_book_footer
 from app.services.document_service import GENERAL_BOOK_BODY_SENTINEL
 
 TEMPLATE = Path("backend/templates/GSSG-GS_300-004_Report.docx")
@@ -18,50 +21,77 @@ ADVERSARIAL_BODY = """
 <p style="text-align:center;">— نهاية / End —</p>
 """
 
-
-def test_report_template_tokens_and_no_ref():
-    assert TEMPLATE.exists(), "run scripts/build_report_template.py first"
-    doc = Document(str(TEMPLATE))
-    text = "\n".join(p.text for p in doc.paragraphs)
-    # ref line is gone entirely
-    assert "{{ ref }}" not in text
-    assert "الرقم" not in text
-    # body + author tokens present, ordered name→sig
-    assert "{{ body }}" in text
-    assert "{{ date }}" in text
-    assert "{{ recipient_name }}" in text
-    assert "الموضوع" in text
-    assert "{{ manager_name }}" in text
-    assert "{{ manager_title }}" in text
-    assert "{{ manager_sig }}" in text
-    # closing formula present (exact labels/layout asserted in test_report_template_layout.py)
-    assert "وتفضلوا بقبول فائق الاحترام والتقدير" in text
-    # name paragraph appears before the signature paragraph
-    names = [p.text for p in doc.paragraphs]
-    i_name = next(i for i, t in enumerate(names) if "{{ manager_name }}" in t)
-    i_sig = next(i for i, t in enumerate(names) if "{{ manager_sig }}" in t)
-    assert i_name < i_sig
+DATA = {
+    "date": "23-07-2026",
+    "subject": "اختبار",
+    "recipient_name": "مدير المركز",
+    "body": GENERAL_BOOK_BODY_SENTINEL,
+    "body_html": "",
+    "manager_name": "مهند أل علي",
+    "manager_title": "مسؤول وحدة الإرساليات",
+    "cc": "",
+    "submitter_g": "G-2001",
+}
 
 
-def test_report_render_end_to_end(tmp_path):
-    data = {
-        "date": "23-07-2026",
-        "subject": "اختبار",
-        "recipient_name": "مدير المركز",
-        "body": GENERAL_BOOK_BODY_SENTINEL,
-        "body_html": ADVERSARIAL_BODY,
-        "manager_name": "مهند أل علي",
-        "manager_title": "مسؤول وحدة الإرساليات",
-        "cc": "",
-        "submitter_g": "G-2001",
-    }
+def _all_text(part) -> str:
+    """Every w:t in a story, text boxes and table cells included."""
+    return "".join(t.text or "" for t in part._element.iter(qn("w:t")))
+
+
+def _fill(tmp_path, **overrides) -> Path:
     out = tmp_path / "report.docx"
-    DocxEngine(TEMPLATE.parent).fill("Report", data, out)
-    from docx import Document as _D
+    DocxEngine(TEMPLATE.parent).fill("Report", {**DATA, **overrides}, out)
+    return out
 
-    doc = _D(str(out))
+
+def test_word_flow_render_fills_every_field(tmp_path):
+    """The Word-authoring create path (empty body_html) leaves no token behind."""
+    doc = Document(str(_fill(tmp_path)))
+    section = doc.sections[0]
+    body = "\n".join(p.text for p in doc.paragraphs)
+    everything = body + _all_text(section.first_page_header) + _all_text(section.first_page_footer)
+    assert "{{" not in everything and "{%" not in everything
+    assert GENERAL_BOOK_BODY_SENTINEL not in body
+    assert "الرقم" not in everything  # no-ref paper
+    assert "23/07/2026" in _all_text(section.first_page_header)
+    for value in ("مدير المركز", "اختبار", "مهند أل علي", "مسؤول وحدة الإرساليات"):
+        assert value in body
+    assert "G-2001" in _all_text(section.first_page_footer)
+
+
+def test_word_flow_keeps_the_opening_line(tmp_path):
+    """Clearing the empty body sentinel must not wipe template text sharing its paragraph."""
+    doc = Document(str(_fill(tmp_path)))
+    opening = next(p for p in doc.paragraphs if "يطيب لنا" in p.text)
+    assert GENERAL_BOOK_BODY_SENTINEL not in opening.text
+
+
+def test_signature_label_keeps_a_slot_below_it():
+    """Finish floats the signature (and the date under it) on the paragraph
+    after «التوقيع:»; without it they land on the label itself."""
+    paras = Document(str(TEMPLATE)).paragraphs
+    i_sig = next(i for i, p in enumerate(paras) if "manager_sig" in p.text)
+    assert i_sig + 1 < len(paras)
+    assert not paras[i_sig + 1].text.strip()
+
+
+def test_footer_sync_carries_footer_relationships(tmp_path):
+    """Pages 2+ reuse the page-1 footer; its images/links must resolve there too."""
+    out = _fill(tmp_path)
+    _postprocess_general_book_footer(out)
+    with zipfile.ZipFile(out) as z:
+        footer2 = z.read("word/footer2.xml").decode()
+        rels = z.read("word/_rels/footer2.xml.rels").decode()
+    used = set(re.findall(r'r:(?:embed|id|link)="(\w+)"', footer2))
+    defined = set(re.findall(r'Id="(\w+)"', rels))
+    assert used
+    assert used <= defined
+
+
+def test_report_render_html_body_end_to_end(tmp_path):
+    doc = Document(str(_fill(tmp_path, body_html=ADVERSARIAL_BODY)))
     text = "\n".join(p.text for p in doc.paragraphs)
-    assert GENERAL_BOOK_BODY_SENTINEL not in text  # sentinel replaced
-    assert "الرقم" not in text
-    assert "نهاية" in text  # page-2 content present
+    assert GENERAL_BOOK_BODY_SENTINEL not in text
+    assert "نهاية" in text
     assert any("الوصف" in c.text for t in doc.tables for r in t.rows for c in r.cells)

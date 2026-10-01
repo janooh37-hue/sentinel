@@ -58,6 +58,7 @@ from app.core._docx_helpers import (
 )
 from app.core.constants import (
     ARABIC_WEEKDAYS,
+    CLASSIFIED_BOOK_FORMS,
     DEFAULT_MANAGER_NAME,
     DEFAULT_MANAGER_TITLE,
     PROJECT_LOCATION,
@@ -104,6 +105,18 @@ def aztec_corner_for(template_id: str) -> str | None:
     if template_id in _AZTEC_BOTTOM_RIGHT:
         return "bottom-right"
     return "top-right" if template_id in _AZTEC_TOP_RIGHT else "top-left"
+
+
+def syncs_general_book_footer(template_id: str) -> bool:
+    """Whether page 1's footer (letterhead + submitter G-number) should be copied
+    onto pages 2+.
+
+    The classified book forms and the Inmate Conduct Violations report carry it.
+    General Book is excluded: its redesigned paper drops the footer's G-number
+    entirely (see ``_adapt_general_book``)."""
+    if template_id == "Inmate Conduct Violations":
+        return True
+    return template_id in CLASSIFIED_BOOK_FORMS and template_id != "General Book"
 
 
 # Forms that cannot carry a scannable page-1 code. Report is a no-ref document
@@ -373,6 +386,15 @@ def _adapt_general_book(data: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
+def _adapt_report(data: dict[str, Any]) -> dict[str, Any]:
+    """General Book adapter, except the Report prints DD/MM/YYYY (like its reference
+    letter) and its footer prints the submitter's G-number."""
+    out = _adapt_general_book(data)
+    out["date"] = out["date"].replace("-", "/")
+    out["submitter_g"] = str(data.get("submitter_g") or "")
+    return out
+
+
 # --- Post-process hooks ---------------------------------------------------
 
 
@@ -384,8 +406,8 @@ def _pp_resignation_letter(doc: Any, ctx: dict[str, Any]) -> None:
     the body cell and replace the first one with the reason, clearing the
     rest. We do this unconditionally so reasons of any length render in
     the same place (just below "نظراً للأسباب التالية:").
-    _format_letterhead_barcode(doc, ctx)
     """
+    _format_letterhead_barcode(doc, ctx)
     _format_general_book_ref_line(doc)
     reason = (ctx.get("reason") or "").strip()
     if not reason:
@@ -1003,8 +1025,8 @@ def _pp_general_book(doc: Any, ctx: dict[str, Any]) -> None:
     from app.core.arabic_rtl import html_to_docx
 
     # CC right-alignment fix runs first — independent of the body.
-    _format_letterhead_barcode(doc, ctx)
     _pp_general_book_cc(doc, ctx)
+    _format_letterhead_barcode(doc, ctx)
     _format_general_book_ref_line(doc)
 
     anchor = _find_general_book_body_anchor(doc)
@@ -1013,9 +1035,13 @@ def _pp_general_book(doc: Any, ctx: dict[str, Any]) -> None:
     else:
         body_html = ctx.get("body_html", "") or ""
         if not body_html.strip():
-            # No body content — just clear the sentinel so it never shows.
-            for run in list(anchor.runs):
-                run.text = ""
+            # No body content — strip just the sentinel so it never shows, keeping
+            # any template text sharing the anchor (the Report's opening line).
+            from app.services.document_service import GENERAL_BOOK_BODY_SENTINEL
+
+            for run in anchor.runs:
+                if GENERAL_BOOK_BODY_SENTINEL in run.text:
+                    run.text = run.text.replace(GENERAL_BOOK_BODY_SENTINEL, "")
         else:
             html_to_docx(body_html, anchor, default_family=_CALIBRI, default_size=12.0)
 
@@ -1038,6 +1064,7 @@ def _apply_manager_signing_block_keep_together(doc: Any) -> None:
     name_paragraph = paras[idx + 1] if idx + 1 < len(paras) else None
     title_paragraph = paras[idx + 2] if idx + 2 < len(paras) else None
     _keep_manager_signing_block_together(doc, signature_paragraph, name_paragraph, title_paragraph)
+
 
 def _format_letterhead_barcode(doc: Any, ctx: dict[str, Any]) -> None:
     """Replace Libre Barcode 39 runs in every header part with GSSG/date/ref."""
@@ -1063,14 +1090,14 @@ def _format_letterhead_barcode(doc: Any, ctx: dict[str, Any]) -> None:
             for element in part.element.findall(".//" + qn("w:p")):
                 paragraph = Paragraph(element, cast(Any, part))
                 for run in paragraph.runs:
-                        run.font.rtl = False
                     if run.font.name == "Libre Barcode 39":
+                        run.font.rtl = False
                         run.text = payload
-
 
 
 def _format_general_book_ref_line(doc: Any) -> None:
     """Format both rendered first-page-header textbox copies with an LTR ref."""
+
     from copy import deepcopy
 
     from docx.enum.section import WD_HEADER_FOOTER
@@ -1138,7 +1165,9 @@ def _postprocess_general_book_footer(docx_path: str | Path) -> None:
     the same footer on every page. We replace footer2's whole XML body with
     footer3's content — both share the Office XML ``<w:ftr>`` schema, and
     ``document.xml.rels`` still points at ``footer2.xml`` (the file name is
-    unchanged; only its contents are now footer3's).
+    unchanged; only its contents are now footer3's). footer3's relationships
+    (logo images, hyperlinks) travel with it — without them footer2 would
+    reference rIds its own rels don't define and Word rejects the file.
 
     The zipfile module can't replace entries in place, so we copy through a
     sibling temp file and atomically replace. No-op (logged) if either footer
@@ -1159,12 +1188,18 @@ def _postprocess_general_book_footer(docx_path: str | Path) -> None:
                 )
                 return
             footer3 = zin.read("word/footer3.xml")
+            rels2, rels3 = "word/_rels/footer2.xml.rels", "word/_rels/footer3.xml.rels"
+            footer3_rels = zin.read(rels3) if rels3 in names else None
             with zipfile.ZipFile(tmp, "w", zipfile.ZIP_DEFLATED) as zout:
                 for name in names:
                     data = zin.read(name)
                     if name == "word/footer2.xml":
                         data = footer3
+                    elif name == rels2 and footer3_rels is not None:
+                        data = footer3_rels
                     zout.writestr(name, data)
+                if footer3_rels is not None and rels2 not in names:
+                    zout.writestr(rels2, footer3_rels)
         shutil.move(str(tmp), str(p))
     except (OSError, zipfile.BadZipFile) as exc:
         log.warning("General Book footer post-process failed for %s: %s", p, exc)
@@ -1234,9 +1269,9 @@ _FORM_REGISTRY: dict[str, dict[str, Any]] = {
         "adapter": _adapt_common,
         "post_process": _pp_passport_release_list,
     },
-    # Report: no-classification, no-ref General Book paper; reuses same adapter
-    # and post-process as General Book (body + footer pipeline).
-    "Report": {"adapter": _adapt_general_book, "post_process": _pp_general_book},
+    # Report: no-classification, no-ref General Book paper; reuses the General
+    # Book body + footer pipeline but keeps the submitter G-number in its footer.
+    "Report": {"adapter": _adapt_report, "post_process": _pp_general_book},
     "Inmate Conduct Violations": {"adapter": _adapt_common, "post_process": None},
     "Vehicle Fines": {"adapter": _adapt_common, "post_process": None},
     "Vehicle Accident Report": {"adapter": _adapt_common, "post_process": None},
