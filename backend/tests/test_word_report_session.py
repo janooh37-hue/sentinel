@@ -240,9 +240,10 @@ def test_finish_report_session_embeds_signature(db_session, tmp_path, monkeypatc
         lambda: SimpleNamespace(vault_dir=vault_dir, data_dir=tmp_path),
     )
     db_session.add(Employee(id="G1042", name_en="Muhannad", name_ar="مهند", position="Head"))
-    db_session.add(Employee(id="G3082", name_en="Operator", name_ar="مشغّل", position="Op"))
-    op = _user(db_session, employee_id="G3082")
-    db_session.commit()
+    from app.core.roles import INMATE_REPORTER_ROLE
+
+    op = _user(db_session, employee_id="G1042")
+    op.role = INMATE_REPORTER_ROLE
     # Signature lives in the employee's OWN profile store — no Submitter fallback
     # exists anymore (report_service._resolve_signer reads only the profile).
     emp_sig = signature_core.vault_path(Vault(vault_dir), "G1042")
@@ -264,6 +265,7 @@ def test_finish_report_session_embeds_signature(db_session, tmp_path, monkeypatc
     db_session.commit()
 
     book = word_book_service.finish_word_session(db_session, user=op, book_id=info.book_id)
+    assert book.approval_state == "none"
     ver = db_session.query(BookVersion).filter_by(book_id=book.id).one()
     assert ver.template_id == "Report"
     assert ver.manager_sig_embedded is True
@@ -283,6 +285,123 @@ def test_finish_report_session_embeds_signature(db_session, tmp_path, monkeypatc
         True,
         ver.signed_pdf_path,
     )
+
+
+def test_inmate_report_finish_rechecks_saved_signature(db_session, monkeypatch):
+    from datetime import datetime
+
+    from app.core.roles import INMATE_REPORTER_ROLE
+    from app.db.models import Employee
+    from app.services import report_service, word_book_service
+
+    _seed_gs(db_session)
+    db_session.add(Employee(id="G1042", name_en="Reporter", name_ar="Reporter"))
+    reporter = _user(db_session, employee_id="G1042")
+    reporter.role = INMATE_REPORTER_ROLE
+    db_session.commit()
+    monkeypatch.setattr(report_service, "_resolve_signer", lambda _db, _emp: ("Reporter", "", None))
+    info = word_book_service.create_report_word_book(
+        db_session,
+        user=reporter,
+        signer_employee_id="G1042",
+        recipient_id=None,
+        subject="Report",
+        date=None,
+        sign=True,
+    )
+    session = (
+        db_session.query(BookEditSession).filter_by(book_id=info.book_id, state="active").one()
+    )
+    session.last_put_at = datetime.now()
+    db_session.commit()
+
+    with pytest.raises(Exception) as exc:
+        word_book_service.finish_word_session(db_session, user=reporter, book_id=info.book_id)
+    assert getattr(exc.value, "code", None) == "SIGNATURE_REQUIRED"
+
+
+def test_returned_report_reopens_finishes_and_can_be_resubmitted(db_session, tmp_path, monkeypatch):
+    from datetime import datetime
+    from types import SimpleNamespace
+
+    from app.core import signature as signature_core
+    from app.core.roles import INMATE_REPORTER_ROLE
+    from app.core.vault_manager import Vault
+    from app.db.models import BookVersion, Employee, Manager
+    from app.schemas.settings import AppSettingsUpdate
+    from app.services import book_service, report_service, settings_service, word_book_service
+
+    _seed_gs(db_session)
+    vault_dir = tmp_path / "vault"
+    monkeypatch.setattr(
+        report_service,
+        "get_settings",
+        lambda: SimpleNamespace(vault_dir=vault_dir, data_dir=tmp_path),
+    )
+    db_session.add(Employee(id="G1042", name_en="Muhannad", name_ar="مهند", position="Head"))
+    reporter = _user(db_session, employee_id="G1042")
+    reporter.role = INMATE_REPORTER_ROLE
+    db_session.commit()
+    emp_sig = signature_core.vault_path(Vault(vault_dir), "G1042")
+    emp_sig.parent.mkdir(parents=True, exist_ok=True)
+    _png(emp_sig)
+
+    info = word_book_service.create_report_word_book(
+        db_session,
+        user=reporter,
+        signer_employee_id="G1042",
+        recipient_id=None,
+        subject="تقرير",
+        date="2026-07-23",
+        sign=True,
+    )
+    session = (
+        db_session.query(BookEditSession).filter_by(book_id=info.book_id, state="active").one()
+    )
+    session.last_put_at = datetime.now()
+    db_session.commit()
+    book = word_book_service.finish_word_session(db_session, user=reporter, book_id=info.book_id)
+    first_version = db_session.query(BookVersion).filter_by(book_id=book.id).one()
+    assert first_version.manager_sig_embedded is True
+
+    # A manager returns the report; its original author can revise it in Word.
+    book.approval_state = "returned"
+    first_version.status = "returned"
+    db_session.commit()
+    reopened = word_book_service.reopen_word_session(db_session, user=reporter, book_id=book.id)
+    new_session = db_session.query(BookEditSession).filter_by(token=reopened.token).one()
+    assert new_session.signer_employee_id == "G1042"
+    assert new_session.sign_on_finish is True
+    new_session.last_put_at = datetime.now()
+    db_session.commit()
+    book = word_book_service.finish_word_session(db_session, user=reporter, book_id=book.id)
+    latest = max(book.versions, key=lambda version: version.version_no)
+    assert latest.manager_sig_embedded is True
+    assert latest.fields["signed"] is True
+    assert book.approval_state == "none"
+
+    manager_user = User(
+        email="report-manager@test.ae", password_hash="x", role="manager", status="active"
+    )
+    db_session.add(manager_user)
+    db_session.flush()
+    manager = Manager(name_en="Report manager", active=True, user_id=manager_user.id)
+    db_session.add(manager)
+    db_session.commit()
+    settings_service.update_settings(
+        db_session, AppSettingsUpdate(inmate_reporter_manager_user_id=manager_user.id)
+    )
+    submitted = book_service.submit_for_approval(
+        db_session,
+        book.id,
+        priority="Normal",
+        approver_user_id=None,
+        reviewer_user_ids=[],
+        submitted_by_user_id=reporter.id,
+    )
+    assert submitted.approval_state == "pending"
+    assert submitted.doc_manager_id == manager.id
+    assert submitted.versions[-1].approval_steps[0].assignee_user_id == manager_user.id
 
 
 def test_report_display_date():

@@ -35,6 +35,7 @@ import {
   loadDashboardPage,
   loadDutyLocationsPage,
   loadEmployeeDetailPage,
+  loadDebugConsolePage,
   loadEmployeesOrgTreePage,
   loadExpiryPage,
   loadPermissionsPage,
@@ -60,6 +61,7 @@ import {
   loadTimesheetPage,
 } from '@/lib/routeLoaders'
 import { useNotificationStream } from '@/hooks/useNotificationStream'
+import { useReportClientErrors } from '@/lib/reportClientErrors'
 import { TopProgressBar } from './components/refresh/TopProgressBar'
 import { useRefreshHotkeys } from './hooks/useRefreshHotkeys'
 import { ScanBackDock } from './pages/scanBack/ScanBackDock'
@@ -100,6 +102,7 @@ const EmployeeDetailPage = lazy(loadEmployeeDetailPage)
 const TimesheetPage = lazy(loadTimesheetPage)
 const AccessRequestsPage = lazy(loadAccessRequestsPage)
 const PermissionsPage = lazy(loadPermissionsPage)
+const DebugConsolePage = lazy(loadDebugConsolePage)
 const ExpiryPage = lazy(loadExpiryPage)
 const IntakePage = lazy(loadIntakePage)
 const DutyLocationsPage = lazy(loadDutyLocationsPage)
@@ -183,6 +186,7 @@ function Shell(): React.JSX.Element {
   // Phase 4 LAN — SSE notification stream. Enabled only when the session is
   // resolved so it doesn't open a connection that 401s immediately.
   useNotificationStream(status === 'authed' && !isInmateReporter)
+  useReportClientErrors(status === 'authed' && !isInmateReporter)
 
   // Web Push deep-link: the service worker postMessages the target path when a
   // notification is clicked; route client-side (React Router) so an already-open
@@ -479,6 +483,14 @@ function Shell(): React.JSX.Element {
                 element={
                   <RequireCapability cap="settings.view">
                     <SettingsPage />
+                  </RequireCapability>
+                }
+              />
+              <Route
+                path="/debug"
+                element={
+                  <RequireCapability cap="system.admin">
+                    <DebugConsolePage />
                   </RequireCapability>
                 }
               />

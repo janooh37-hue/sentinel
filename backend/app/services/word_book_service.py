@@ -31,6 +31,7 @@ from app.core.classifications import (
 )
 from app.core.constants import TEMPLATE_FILES
 from app.core.docx_engine import aztec_corner_for
+from app.core.roles import INMATE_REPORTER_ROLE
 from app.db.models import Book, BookCategory, BookEditSession, BookVersion, Document, Manager, User
 from app.db.repos import classified_refs_repo
 from app.services import artifact_service, manager_service
@@ -265,7 +266,7 @@ def create_report_word_book(
         ref_number=f"__pending_{uuid.uuid4().hex}__",
         subject=subject,
         classification_code=None,
-        approval_state="approved",
+        approval_state="none" if user.role == INMATE_REPORTER_ROLE else "approved",
         submitted_by_user_id=user.id,
         created_at=now,
     )
@@ -388,11 +389,33 @@ def finish_word_session(
 
     if session.last_put_at is None:
         raise AppError("NO_SAVES_YET", "Nothing saved from Word yet", http_status=409)
+    is_report = book.ref_number.startswith("REPORT-")
+    if user.role == INMATE_REPORTER_ROLE and is_report:
+        if user.employee_id is None:
+            raise AppError(
+                "INMATE_REPORTER_EMPLOYEE_REQUIRED",
+                "Your account has no linked employee record yet.",
+                http_status=409,
+            )
+        if session.signer_employee_id != user.employee_id or not session.sign_on_finish:
+            raise AppError(
+                "INMATE_REPORTER_IDENTITY_MISMATCH",
+                "The Report signer must be the employee linked to your account.",
+                http_status=403,
+            )
+        from app.services import report_service
+
+        _name, _title, signature = report_service._resolve_signer(db, user.employee_id)
+        if signature is None:
+            raise AppError(
+                "SIGNATURE_REQUIRED",
+                "Save your signature before finishing a Report.",
+                http_status=409,
+            )
 
     # ------------------------------------------------------------------
     # 1. Move working docx → stable output dir
     # ------------------------------------------------------------------
-    is_report = book.ref_number.startswith("REPORT-")
     # A Word round-trip keeps the paper the book was minted on: a permit letter
     # reopened in Word must not come back relabelled a General Book. Only a
     # first finish has no prior version, and then the ref prefix decides.
@@ -492,6 +515,16 @@ def finish_word_session(
 
         if session.sign_on_finish and session.signer_employee_id:
             _n, _t, sig = report_service._resolve_signer(db, session.signer_employee_id)
+            if (
+                sig is None
+                and user.role == INMATE_REPORTER_ROLE
+                and session.signer_employee_id == user.employee_id
+            ):
+                raise AppError(
+                    "SIGNATURE_REQUIRED",
+                    "Save your signature before finishing a Report.",
+                    http_status=409,
+                )
             if sig is not None:
                 db.flush()  # version needs a document_id for render_signed_artifact
                 # fields MUST stay {} here → routes render_signed_artifact to
@@ -534,6 +567,8 @@ def finish_word_session(
             "signer_employee_id": session.signer_employee_id,
             "signed": signed,
         }
+    if user.role == INMATE_REPORTER_ROLE and is_report:
+        book.approval_state = "none"
 
     # A Word revision of an approved record must become resubmittable.
     if max_version_no > 0 and not signed and not is_report:
@@ -599,6 +634,15 @@ def reopen_word_session(db: Session, *, user: User, book_id: int) -> WordSession
     """Copy the latest version's docx into a fresh working file and open an active session.
 
     For finished books (at least one BookVersion) only.
+
+    Report-only: carries the report's signer + sign choice forward from the
+    latest version's stored ``fields`` (set by a prior ``finish_word_session``)
+    onto the fresh session — otherwise a re-edited Report's session has no
+    signer at all and ``finish_word_session`` silently skips re-signing,
+    dropping the signature with no way to re-add it (2026-09 report bug).
+    Defaults to re-signing (``sign_on_finish=True``) when the prior version
+    carries no recorded choice, matching a first-time Report's default.
+
     Raises AppError:
     - BOOK_NOT_FOUND (404)
     - SESSION_ACTIVE (409) if an active session already exists.
@@ -650,6 +694,13 @@ def reopen_word_session(db: Session, *, user: User, book_id: int) -> WordSession
     )
     output_path = reopened_artifact.docx_path
 
+    signer_employee_id: str | None = None
+    sign_on_finish: bool | None = None
+    if book.ref_number.startswith("REPORT-"):
+        fields = latest_version.fields or {}
+        signer_employee_id = fields.get("signer_employee_id") or None
+        sign_on_finish = True if signer_employee_id else None
+
     token = secrets.token_urlsafe(32)
     session = BookEditSession(
         book_id=book_id,
@@ -657,6 +708,8 @@ def reopen_word_session(db: Session, *, user: User, book_id: int) -> WordSession
         token=token,
         working_path=str(output_path),
         state="active",
+        signer_employee_id=signer_employee_id,
+        sign_on_finish=sign_on_finish,
     )
     db.add(session)
     try:

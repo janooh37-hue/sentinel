@@ -2016,6 +2016,29 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/documents/{document_id}/signatures/{signature_id}/identity": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Put Signature Identity
+         * @description Admin-only: swap this signature slot's image for a different
+         *     employee's saved signature — the signature-position tool's employee
+         *     picker (never available to a non-admin; ``reassign_signature`` itself
+         *     also enforces this).
+         */
+        put: operations["put_signature_identity_api_v1_documents__document_id__signatures__signature_id__identity_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/documents/{document_id}/signature-history": {
         parameters: {
             query?: never;
@@ -2425,8 +2448,7 @@ export interface paths {
         put?: never;
         /**
          * Create Word Session
-         * @description Create a General Book, or a no-ref Report when a signer is given, with a
-         *     Word-editable working docx.
+         * @description Create a General Book or a Word-authored Report.
          */
         post: operations["create_word_session_api_v1_books_word_sessions_post"];
         delete?: never;
@@ -2446,7 +2468,7 @@ export interface paths {
         put?: never;
         /**
          * Finish Word Session
-         * @description Finish the active Word editing session: move docx, create BookVersion + Document, optional PDF.
+         * @description Finish the active Word editing session.
          */
         post: operations["finish_word_session_api_v1_books__book_id__word_sessions_finish_post"];
         delete?: never;
@@ -2484,11 +2506,7 @@ export interface paths {
         };
         /**
          * Word Session Preview
-         * @description PDF preview of the active Word session's working docx (regenerates on change).
-         *
-         *     ``encoding=base64`` mirrors the documents download endpoint — the in-app
-         *     pdf.js canvas fetches base64 text so download accelerators can't hijack
-         *     the PDF byte stream.
+         * @description PDF preview of the active Word session.
          */
         get: operations["word_session_preview_api_v1_books__book_id__word_sessions_preview_get"];
         put?: never;
@@ -2510,13 +2528,12 @@ export interface paths {
         put?: never;
         /**
          * Reopen Word Session
-         * @description Re-open a finished book for Word editing — copies the latest version's docx
-         *     into a fresh working file and returns a new session token + word_url.
+         * @description Re-open a finished book for Word editing.
          */
         post: operations["reopen_word_session_api_v1_books__book_id__word_sessions_post"];
         /**
          * Discard Word Session
-         * @description Discard the active Word editing session; void the book if it has no committed versions.
+         * @description Discard the active Word editing session.
          */
         delete: operations["discard_word_session_api_v1_books__book_id__word_sessions_delete"];
         options?: never;
@@ -5542,6 +5559,164 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/debug/logs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Logs */
+        get: operations["logs_api_v1_debug_logs_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/debug/issues": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Issues */
+        get: operations["issues_api_v1_debug_issues_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/debug/overview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Overview */
+        get: operations["overview_api_v1_debug_overview_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/debug/requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Recent Requests */
+        get: operations["recent_requests_api_v1_debug_requests_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/debug/client-error": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Client Error */
+        post: operations["client_error_api_v1_debug_client_error_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/debug/ai": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Ai Engines */
+        get: operations["ai_engines_api_v1_debug_ai_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/debug/prompt": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Prompt */
+        post: operations["prompt_api_v1_debug_prompt_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/debug/diagnose": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Diagnose
+         * @description Start an AI run in the background; poll ``GET /debug/diagnose/{id}``.
+         *
+         *     Runs take minutes, longer than the Cloudflare proxy's 100 s request limit.
+         */
+        post: operations["diagnose_api_v1_debug_diagnose_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/debug/diagnose/{job_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Diagnose Status */
+        get: operations["diagnose_status_api_v1_debug_diagnose__job_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/workforce/dashboard/snapshot": {
         parameters: {
             query?: never;
@@ -7975,6 +8150,26 @@ export interface components {
             /** Unit Ar */
             unit_ar: string;
         };
+        /** ClientError */
+        ClientError: {
+            /** Message */
+            message: string;
+            /**
+             * Stack
+             * @default
+             */
+            stack: string;
+            /**
+             * Url
+             * @default
+             */
+            url: string;
+            /**
+             * Kind
+             * @default error
+             */
+            kind: string;
+        };
         /**
          * CompletePasswordSetupRequest
          * @description Public: replace an admin-issued temporary password before first sign-in.
@@ -8750,6 +8945,18 @@ export interface components {
         DefaultManagerRequest: {
             /** Enabled */
             enabled: boolean;
+        };
+        /** DiagnoseRequest */
+        DiagnoseRequest: {
+            /** Issue Id */
+            issue_id?: string | null;
+            /**
+             * Note
+             * @default
+             */
+            note: string;
+            /** Engine */
+            engine?: ("claude" | "codex") | null;
         };
         /** DigestPreview */
         DigestPreview: {
@@ -12272,7 +12479,7 @@ export interface components {
              * Outcome
              * @enum {string}
              */
-            outcome: "filed" | "parked" | "rejected";
+            outcome: "filed" | "parked";
         };
         /** ScanInboxCount */
         ScanInboxCount: {
@@ -12576,7 +12783,7 @@ export interface components {
              * Action
              * @enum {string}
              */
-            action: "initial" | "identify" | "move";
+            action: "initial" | "identify" | "move" | "reassign";
             /** Signature Id */
             signature_id: string | null;
             /** Before Geometry */
@@ -12688,6 +12895,22 @@ export interface components {
             default_y?: number | null;
             /** Image Url */
             image_url: string;
+        };
+        /**
+         * SignatureReassignRequest
+         * @description ``PUT /documents/{document_id}/signatures/{signature_id}/identity`` —
+         *     admin-only: replace the signer whose image occupies this signature slot
+         *     with a different employee's saved signature, at the same position.
+         */
+        SignatureReassignRequest: {
+            /** Signature Revision */
+            signature_revision: number;
+            /** Package Revision */
+            package_revision: number;
+            /** Source Sha256 */
+            source_sha256: string;
+            /** Employee Id */
+            employee_id: string;
         };
         /**
          * SmartFolderCreate
@@ -19415,6 +19638,44 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["SignaturePositionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SignatureEditorRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    put_signature_identity_api_v1_documents__document_id__signatures__signature_id__identity_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                document_id: number;
+                signature_id: string;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SignatureReassignRequest"];
             };
         };
         responses: {
@@ -27634,6 +27895,318 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    logs_api_v1_debug_logs_get: {
+        parameters: {
+            query?: {
+                source?: "app" | "stdout" | "stderr";
+                level?: "DEBUG" | "INFO" | "WARNING" | "ERROR";
+                q?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    issues_api_v1_debug_issues_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    }[];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    overview_api_v1_debug_overview_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    recent_requests_api_v1_debug_requests_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    }[];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    client_error_api_v1_debug_client_error_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ClientError"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    ai_engines_api_v1_debug_ai_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    prompt_api_v1_debug_prompt_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DiagnoseRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: string;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    diagnose_api_v1_debug_diagnose_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DiagnoseRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    diagnose_status_api_v1_debug_diagnose__job_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                job_id: string;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
             };
             /** @description Validation Error */
             422: {

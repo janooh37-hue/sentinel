@@ -1077,9 +1077,7 @@ def _format_letterhead_barcode(doc: Any, ctx: dict[str, Any]) -> None:
         with contextlib.suppress(ValueError):
             parsed = datetime.strptime(raw_date.strip(), "%d-%m-%Y")
     paper_date = parsed or datetime.now()
-    payload = qr.barcode_payload(
-        str(ctx.get("ref") or "").strip(), paper_date.date()
-    )
+    payload = qr.barcode_payload(str(ctx.get("ref") or "").strip(), paper_date.date())
     seen_parts: set[int] = set()
     for section in doc.sections:
         for reference in section._sectPr.headerReference_lst:
@@ -1116,9 +1114,7 @@ def _format_general_book_ref_line(doc: Any) -> None:
             continue
         seen_parts.add(id(part))
         for element in part.element.findall(".//" + qn("w:p")):
-            if not any(
-                text.text for text in element.findall("./" + qn("w:r") + "/" + qn("w:t"))
-            ):
+            if not any(text.text for text in element.findall("./" + qn("w:r") + "/" + qn("w:t"))):
                 continue
             paragraph = Paragraph(element, cast(Any, part))
             match = re.match(r"^\s*الرقم\s*[:：]\s*(.+?)\s*$", paragraph.text or "")  # noqa: RUF001

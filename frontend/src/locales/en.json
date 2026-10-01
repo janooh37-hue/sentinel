@@ -84,7 +84,7 @@
     "ledger": "Ledger",
     "leaves": "Leaves",
     "services": "Services",
-    "inmateReport": "New inmate-violation report",
+    "inmateReport": "New report",
     "records": "Records",
     "permits": "Permits",
     "settings": "Settings",
@@ -3150,6 +3150,16 @@
     "inmateReporter": {
       "title": "Inmate Conduct Violations",
       "description": "Save an unfinished report, then send it to the configured approval manager.",
+      "servicesTitle": "Choose a service",
+      "servicesDescription": "Choose the report type you need.",
+      "reportTitle": "Report",
+      "reportDescription": "Create a report in Word and send it to the configured approval manager.",
+      "reportSubject": "Subject",
+      "reportDate": "Date",
+      "backToServices": "Back to services",
+      "continueToWord": "Continue to Word",
+      "creatingReport": "Preparing report…",
+      "signatureRequired": "Save your signature to continue.",
       "reportedBy": "Reported by",
       "notLinked": "No employee record linked",
       "unlinked": "Ask an administrator to link your employee record",
@@ -4107,7 +4117,6 @@
     "autoDropHint": "Drop a General Book scan here. Its barcode will route it.",
     "autoFiled": "Filed — barcode matched {{ref}}",
     "parked": "{{ref}} needs review in the Scan Inbox",
-    "rejected": "Could not route {{ref}}",
     "viewInbox": "Open Scan Inbox",
     "filed": "Filed — {{ref}} is closed",
     "uploadError": "Could not file that scan",
@@ -4707,12 +4716,18 @@
     "identifyConfirmTitle": "Confirm this signature?",
     "identifyConfirmDesc": "This marks the selected image as the manager/approver signature. It changes no pixels — positioning becomes available afterward.",
     "identified": "Signature identified.",
+    "reassign": "Assign a different signer",
+    "reassignHint": "Admin only: replace this signature slot's image with another employee's saved signature, at the same position.",
+    "reassignConfirmTitle": "Reassign this signature?",
+    "reassignConfirmDesc": "This replaces the image with the selected employee's saved signature. Position and size stay the same.",
+    "reassigned": "Signature reassigned.",
     "candidateSize": "{{w}}×{{h}} mm",
     "history": "Placement history",
     "historyAction": {
       "initial": "Signed",
       "identify": "Signature identified",
-      "move": "Position corrected"
+      "move": "Position corrected",
+      "reassign": "Signer reassigned"
     },
     "historyPages": "page {{from}} → {{to}}",
     "role": {
@@ -5485,6 +5500,92 @@
       "loadError": "The nationality list could not be loaded.",
       "unresolved": "The filed nationality does not match the list — pick the correct value.",
       "clear": "Clear the selection"
+    }
+  },
+  "debug": {
+    "title": "Debug console",
+    "subtitle": "Live server health, hidden errors and logs — with AI help to explain and fix them.",
+    "loading": "Loading…",
+    "loadFailed": "Could not load",
+    "refresh": "Refresh",
+    "copy": "Copy",
+    "copied": "Copied",
+    "close": "Close",
+    "missing": "missing",
+    "checks": {
+      "cpu": "CPU",
+      "ram": "Memory (RAM)",
+      "svc_gssgmanager": "Service: GSSGManager",
+      "svc_caddy": "Service: Caddy",
+      "svc_cloudflared": "Service: Cloudflared (tunnel)",
+      "db": "Database",
+      "migrations": "Database schema",
+      "scheduler": "Background jobs",
+      "word": "Microsoft Word (PDF export)",
+      "disk": "Disk space",
+      "errors": "Logged errors",
+      "requests": "API requests"
+    },
+    "machine": {
+      "title": "Server",
+      "cpu": "CPU",
+      "ram": "Memory (RAM)",
+      "uptime": "Machine on for",
+      "network": "Network",
+      "sinceBoot": "since boot",
+      "services": "Windows services"
+    },
+    "tabs": {
+      "health": "Health",
+      "issues": "Issues",
+      "logs": "Logs",
+      "requests": "Requests"
+    },
+    "health": {
+      "allGood": "Everything looks healthy",
+      "attention_one": "{{count}} check needs attention",
+      "attention_other": "{{count}} checks need attention",
+      "autoRefresh": "Refreshes every 5 seconds.",
+      "stats": "Server stats",
+      "files": "Files",
+      "jobs": "Background jobs",
+      "stopped": "stopped"
+    },
+    "issues": {
+      "explain": "Warnings and errors from the server and users' browsers, grouped so repeats count once. Most of these never show up on screen — that is why they matter.",
+      "none": "No warnings or errors in the recent logs.",
+      "first": "First seen",
+      "last": "last",
+      "copyRaw": "Copy raw"
+    },
+    "logs": {
+      "source": "Log source",
+      "level": "Minimum level",
+      "app": "App log",
+      "search": "Search logs…",
+      "live": "Live",
+      "paused": "Paused",
+      "copyVisible": "Copy visible",
+      "empty": "No matching lines."
+    },
+    "requests": {
+      "onlyBad": "Only errors and slow",
+      "explain": "The last 500 API calls since the server started. Red status = the server failed; red time = slower than 3 seconds."
+    },
+    "ai": {
+      "ask": "Diagnose with AI",
+      "copy": "Copy for AI",
+      "thinking": "AI is thinking… (up to 10 min)",
+      "copied": "Prompt copied — paste it into Claude or ChatGPT",
+      "failed": "AI diagnosis failed",
+      "noEngine": "No logged-in claude or codex CLI on the server. Use “Copy for AI” and paste into any AI chat.",
+      "askHint": "Runs {{engine}} on the server, read-only",
+      "engineReady": "Ready: {{engines}} (logged in as {{user}}). Read-only — it can look at the code but not change it.",
+      "wholeApp": "Ask AI about the whole app",
+      "running": "Running on the server. You can switch tabs; the answer appears here when ready.",
+      "engine": "AI engine",
+      "notePlaceholder": "Optional: describe what you noticed (e.g. “PDF export slow since yesterday”)",
+      "result": "AI diagnosis ({{engine}}, {{seconds}} s)"
     }
   }
 }

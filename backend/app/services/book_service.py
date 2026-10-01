@@ -279,28 +279,52 @@ def _inmate_reporter_original_creator_subquery() -> Any:
 
 
 def _inmate_reporter_visibility_clause(user: User) -> ColumnElement[bool]:
-    """SQL: the reporter-role read boundary (spec table) — nondeleted/nonvoided,
-    shared while pending/approved, owner-only while none/returned/rejected,
-    hidden otherwise (awaiting_scan, or any book with no version at all)."""
+    """SQL: Report books are private; violation visibility retains its old rules."""
+    report_clause = and_(Book.category_id == "GS", Book.ref_number.like("REPORT-%"))
+    report_owner = or_(
+        _inmate_reporter_original_creator_subquery() == user.id,
+        Book.submitted_by_user_id == user.id,
+    )
     return and_(
         Book.deleted_at.is_(None),
         Book.voided_at.is_(None),
         or_(
-            Book.approval_state.in_(_INMATE_REPORTER_SHARED_STATES),
             and_(
-                Book.approval_state.in_(_INMATE_REPORTER_OWNER_ONLY_STATES),
-                _inmate_reporter_original_creator_subquery() == user.id,
+                report_clause,
+                Book.approval_state.in_(
+                    (*_INMATE_REPORTER_OWNER_ONLY_STATES, *_INMATE_REPORTER_SHARED_STATES)
+                ),
+                report_owner,
+            ),
+            and_(
+                not_(report_clause),
+                or_(
+                    Book.approval_state.in_(_INMATE_REPORTER_SHARED_STATES),
+                    and_(
+                        Book.approval_state.in_(_INMATE_REPORTER_OWNER_ONLY_STATES),
+                        _inmate_reporter_original_creator_subquery() == user.id,
+                    ),
+                ),
             ),
         ),
     )
 
 
 def _inmate_reporter_book_visible(book: Book, user_id: int) -> bool:
-    """Python-side mirror of ``_inmate_reporter_visibility_clause`` for an
-    already-loaded ``Book`` (``resolve_book_read_access`` / write-access
-    guards operate on ORM objects, not a fresh query)."""
+    """Python-side mirror of ``_inmate_reporter_visibility_clause``."""
     if book.deleted_at is not None or book.voided_at is not None:
         return False
+    is_report = book.category_id == "GS" and book.ref_number.startswith("REPORT-")
+    if is_report:
+        if book.approval_state not in (
+            *_INMATE_REPORTER_OWNER_ONLY_STATES,
+            *_INMATE_REPORTER_SHARED_STATES,
+        ):
+            return False
+        from app.services import included_papers_service
+
+        creator_id = included_papers_service.original_creator_user_id(book)
+        return (creator_id if creator_id is not None else book.submitted_by_user_id) == user_id
     if book.approval_state in _INMATE_REPORTER_SHARED_STATES:
         return True
     if book.approval_state in _INMATE_REPORTER_OWNER_ONLY_STATES:
@@ -597,13 +621,7 @@ def resolve_inmate_report_manager(db: Session) -> tuple[User, Manager]:
 def require_inmate_report_write_access(
     db: Session, user: User, book: Book, *, action: Literal["revise", "submit"]
 ) -> BookVersion:
-    """Gate an ``inmate_reporter`` write: revise-into-a-new-draft/resubmit, or
-    submit. Requires a linked actor, an actual current Inmate Conduct
-    Violations version, original-author match, and a state that permits
-    ``action`` — ``revise`` accepts ``none``/``returned``, ``submit`` only
-    ``none``. Returns the current version (the caller's revise/submit
-    target).
-    """
+    """Gate the reporter's own Inmate Violations or Word-authored Report."""
     from app.services import included_papers_service
 
     if user.employee_id is None:
@@ -615,10 +633,20 @@ def require_inmate_report_write_access(
     if book.deleted_at is not None or book.voided_at is not None:
         raise NotFoundError("BOOK_NOT_FOUND", "Record not found")
     version = _current_version(book)
-    if version is None or version.template_id != "Inmate Conduct Violations":
+    is_report = (
+        book.category_id == "GS"
+        and book.ref_number.startswith("REPORT-")
+        and (version is None or version.template_id == "Report")
+    )
+    is_violation = (
+        version is not None
+        and version.template_id == "Inmate Conduct Violations"
+        and not book.ref_number.startswith("REPORT-")
+    )
+    if not is_report and not is_violation:
         raise AppError(
             "INMATE_REPORTER_NOT_OWNER",
-            "This record is not an inmate violation report.",
+            "This record is not an inmate report.",
             http_status=403,
         )
     if included_papers_service.original_creator_user_id(book) != user.id:
@@ -634,13 +662,30 @@ def require_inmate_report_write_access(
             "This record can no longer be edited.",
             http_status=409,
         )
-    stored_reporter_g = str((version.fields or {}).get("reporter_id") or "").strip().upper()
-    if stored_reporter_g and stored_reporter_g != user.employee_id:
+    if version is None:
         raise AppError(
-            "INMATE_REPORTER_IDENTITY_CHANGED",
-            "Your linked employee record changed since this draft was created.",
-            http_status=409,
+            "INMATE_REPORTER_NOT_OWNER", "This report has no finished version.", http_status=403
         )
+    if is_violation:
+        stored_reporter_g = str((version.fields or {}).get("reporter_id") or "").strip().upper()
+        if stored_reporter_g and stored_reporter_g != user.employee_id:
+            raise AppError(
+                "INMATE_REPORTER_IDENTITY_CHANGED",
+                "Your linked employee record changed since this draft was created.",
+                http_status=409,
+            )
+    else:
+        signer_employee_id = (version.fields or {}).get("signer_employee_id")
+        if signer_employee_id != user.employee_id:
+            raise AppError(
+                "INMATE_REPORTER_IDENTITY_CHANGED",
+                "Your linked employee record changed since this Report was created.",
+                http_status=409,
+            )
+        if action == "submit" and (
+            not (version.fields or {}).get("signed") or version.status != "approved"
+        ):
+            raise AppError("SIGNATURE_REQUIRED", "A signed Report is required.", http_status=409)
     return version
 
 
@@ -1186,29 +1231,33 @@ def submit_for_approval(
     version = _current_version(book)
     if version is None:
         raise ValidationFailedError("NO_VERSION", "Book has no version to submit")
+    caller = db.get(User, submitted_by_user_id)
+    inmate_report = bool(
+        caller is not None
+        and caller.role == INMATE_REPORTER_ROLE
+        and book.category_id == "GS"
+        and book.ref_number.startswith("REPORT-")
+        and version.template_id == "Report"
+    )
     if version.status == "awaiting_scan":
         raise ValidationFailedError(
             "AWAITING_SCAN",
             "This form awaits its signed scanned copy; file the scan instead of "
             "submitting for approval.",
         )
-    if version.manager_sig_embedded:
+    if version.manager_sig_embedded and not inmate_report:
         raise ValidationFailedError(
             "SIGNATURE_ALREADY_PRESENT",
             "This form already carries the manager signature; it can't be sent for approval.",
         )
-    if version.status == "approved" or version.signed_pdf_path:
+    if (version.status == "approved" or version.signed_pdf_path) and not inmate_report:
         raise ValidationFailedError(
             "ALREADY_SIGNED",
             "This version is already signed/approved; it can't be re-submitted for approval.",
         )
 
-    if (caller := db.get(User, submitted_by_user_id)) is not None and (
-        caller.role == INMATE_REPORTER_ROLE
-    ):
-        # Deriving the caller from submitted_by_user_id (not trusting the
-        # request payload) means a direct service call can't bypass routing
-        # either — the endpoint always passes the original null/empty payload.
+    if caller is not None and caller.role == INMATE_REPORTER_ROLE:
+        # Derive the caller from submitted_by_user_id; never trust request routing.
         if priority != "Normal" or approver_user_id is not None or reviewer_user_ids:
             raise AppError(
                 "INMATE_REPORTER_INPUT_FORBIDDEN",
@@ -1216,14 +1265,15 @@ def submit_for_approval(
                 http_status=403,
             )
         require_inmate_report_write_access(db, caller, book, action="submit")
-        from app.services import document_service
+        if not inmate_report:
+            from app.services import document_service
 
-        editable_fields = {
-            k: v
-            for k, v in (version.fields or {}).items()
-            if k not in ("reporter_id", "submitter_g")
-        }
-        document_service.validate_inmate_report_fields(editable_fields, complete=True)
+            editable_fields = {
+                k: v
+                for k, v in (version.fields or {}).items()
+                if k not in ("reporter_id", "submitter_g")
+            }
+            document_service.validate_inmate_report_fields(editable_fields, complete=True)
         manager_user, manager_row = resolve_inmate_report_manager(db)
         book.doc_manager_id = manager_row.id
         approver_user_id = manager_user.id

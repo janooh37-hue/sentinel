@@ -14,6 +14,7 @@ import { WordHandoffDialog } from '@/pages/books/WordHandoffDialog'
 interface WordActionProps {
   book: BookRead
   isMobile?: boolean
+  onFinished?: (book: BookRead) => void
 }
 
 /** Trigger data for a menu-hosted rendering of `WordReopenButton` (record
@@ -40,10 +41,10 @@ interface WordReopenButtonProps extends WordActionProps {
    *  never discards a pending reopen or an already-open handoff dialog. */
   onTriggerChange?: (trigger: WordReopenTrigger | null) => void
 }
-
 export function WordSessionActions({
   book,
   isMobile,
+  onFinished,
 }: WordActionProps): React.JSX.Element | null {
   const { t } = useTranslation()
   const qc = useQueryClient()
@@ -52,9 +53,10 @@ export function WordSessionActions({
 
   const finishMutation = useMutation({
     mutationFn: () => api.finishWordSession(book.id),
-    onSuccess: () => {
+    onSuccess: (finishedBook) => {
       invalidate()
       toast.success(t('books.word.finished', { ref: bidi(book.ref_number) }))
+      onFinished?.(finishedBook)
     },
     onError: (err) => toast.error(apiErrorMessage(err)),
   })
@@ -131,6 +133,7 @@ export function WordReopenButton({
   iconOnly,
   hideTrigger,
   onTriggerChange,
+  onFinished,
 }: WordReopenButtonProps): React.JSX.Element | null {
   const { t } = useTranslation()
   const qc = useQueryClient()
@@ -153,9 +156,8 @@ export function WordReopenButton({
     },
     onError: (err) => toast.error(apiErrorMessage(err)),
   })
-
   const hasActiveSession = book.edit_session?.state === 'active'
-  const isFinished = (book.versions?.length ?? 0) > 0 && !hasActiveSession
+  const isFinished = ((book.versions?.length ?? 0) > 0 || book.is_word_book) && !hasActiveSession
   const eligible = isFinished && !book.voided_at
   const label = t('books.word.editNewVersion')
   const title = isMobile ? t('books.word.needsPc') : label
@@ -215,6 +217,7 @@ export function WordReopenButton({
           setReopenSession(null)
           invalidate()
         }}
+        onFinished={onFinished}
       />
     </>
   )

@@ -6,6 +6,7 @@
 
 import {
   loadAccessRequestsPage,
+  loadDebugConsolePage,
   loadApplicationPage,
   loadApprovalsPage,
   loadAttendancePage,
@@ -66,6 +67,7 @@ const ROUTE_LOADERS: ReadonlyArray<readonly [string, () => Promise<unknown>]> = 
   ['/intake', loadIntakePage],
   ['/scan-inbox', loadScanInboxPage],
   ['/access-requests', loadAccessRequestsPage],
+  ['/debug', loadDebugConsolePage],
   ['/messages/broadcast', loadSendToGroupPage],
 ]
 
