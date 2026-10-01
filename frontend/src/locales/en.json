@@ -272,6 +272,11 @@
   "a11y": {
     "skipToContent": "Skip to main content"
   },
+  "notFound": {
+    "title": "Page not found",
+    "body": "This link may be old or mistyped, or the record was removed.",
+    "home": "Home"
+  },
   "editor": {
     "loadFailed": "Rich text editor could not load — using a plain text box.",
     "template": {

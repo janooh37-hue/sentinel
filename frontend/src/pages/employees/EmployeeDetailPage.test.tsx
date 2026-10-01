@@ -38,6 +38,9 @@ vi.mock('react-i18next', () => ({
 }))
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
 vi.mock('@/lib/api', () => ({
+  ApiError: class ApiError extends Error {
+    status = 0
+  },
   api: {
     getEmployeeDetail: vi.fn(),
     updateEmployee: vi.fn(),

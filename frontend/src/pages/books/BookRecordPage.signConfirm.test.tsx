@@ -16,7 +16,7 @@ import i18n from 'i18next'
 import ar from '@/locales/ar.json'
 import type * as ApiModule from '@/lib/api'
 import type * as AuthContextModule from '@/lib/authContext'
-import { api } from '@/lib/api'
+import { api, ApiError } from '@/lib/api'
 import { BookRecordPage } from './BookRecordPage'
 
 const mockHas = vi.fn<(cap: string) => boolean>(() => false)
@@ -343,5 +343,16 @@ describe('BookRecordPage — URL-backed actions', () => {
 
     await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent(/^\/books\/5$/))
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+})
+
+describe('BookRecordPage — missing record', () => {
+  it('shows Not found in place for a record the API reports missing', async () => {
+    vi.mocked(api.getBook).mockRejectedValue(new ApiError(404, 'BOOK_NOT_FOUND', 'Book not found'))
+    renderOverlayRecord('/books/99999999')
+
+    expect(await screen.findByRole('link', { name: i18n.t('notFound.home') })).toHaveAttribute('href', '/')
+    expect(screen.getByRole('heading', { level: 1, name: i18n.t('notFound.title') })).toBeVisible()
+    expect(screen.getByTestId('location')).toHaveTextContent(/^\/books\/99999999$/)
   })
 })

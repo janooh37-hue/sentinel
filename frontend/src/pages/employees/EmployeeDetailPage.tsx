@@ -21,7 +21,8 @@ import { useUrlOverlay } from '@/lib/urlState'
 import {
   DocumentViewerDialog,
 } from '@/components/ui/document-viewer-dialog'
-import { api } from '@/lib/api'
+import { ApiError, api } from '@/lib/api'
+import { NotFoundPage } from '@/pages/NotFoundPage'
 import type { EmployeeFormOutput } from '@/components/employees/schema'
 import type { ExtractionResponse } from '@/lib/extraction'
 import { EmployeeForm } from '@/components/employees/EmployeeForm'
@@ -172,7 +173,7 @@ export function EmployeeDetailPage(): React.JSX.Element {
     },
   })
 
-  const { data, isLoading, isError } = useQuery({
+  const { data, isLoading, isError, error } = useQuery({
     queryKey: ['employee-detail', id],
     queryFn: () => api.getEmployeeDetail(id!),
     enabled: !!id,
@@ -223,6 +224,7 @@ export function EmployeeDetailPage(): React.JSX.Element {
       </div>
     )
   }
+  if (error instanceof ApiError && error.status === 404) return <NotFoundPage />
   if (isError || !data) {
     return (
       <div className="mx-auto max-w-[1180px] px-4 py-6 text-accent md:px-8">

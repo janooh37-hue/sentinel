@@ -245,3 +245,15 @@ describe('App legacy links', () => {
     expect(window.location.search).toBe(search)
   })
 })
+
+describe('App unknown paths', () => {
+  it('shows Not found at the requested URL instead of the dashboard', async () => {
+    window.history.pushState({}, '', '/nope')
+    render(<App />)
+
+    expect(await screen.findByRole('heading', { level: 1 })).toBeVisible()
+    expect(screen.getByRole('link', { name: /home/i })).toHaveAttribute('href', '/')
+    expect(screen.queryByText('dashboard-page')).not.toBeInTheDocument()
+    expect(window.location.pathname).toBe('/nope')
+  })
+})

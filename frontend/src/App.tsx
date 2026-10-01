@@ -14,6 +14,7 @@ import { ErrorBoundary } from '@/components/ui/error-boundary'
 import { ShortcutsHelpDialog } from '@/components/ui/shortcuts-help'
 import { EmployeeLookupPage } from '@/pages/employees/EmployeeLookupPage'
 import { LoginPage } from '@/pages/auth/LoginPage'
+import { NotFoundPage } from '@/pages/NotFoundPage'
 import { MigrationGate } from '@/pages/system/MigrationWizard'
 import { KeyboardShortcutsProvider } from '@/lib/keyboardShortcuts'
 import { AuthProvider } from '@/lib/AuthProvider'
@@ -539,7 +540,7 @@ function Shell(): React.JSX.Element {
                   </RequireCapability>
                 }
               />
-              <Route path="*" element={<Navigate to="/" replace />} />
+              <Route path="*" element={<NotFoundPage />} />
               </Routes>
             )}
             </main>

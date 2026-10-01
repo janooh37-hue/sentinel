@@ -78,6 +78,7 @@ import { useCapabilities } from '@/lib/useCapabilities'
 import { useIsMobile } from '@/lib/useIsMobile'
 import { cn } from '@/lib/utils'
 import { useUrlOverlay } from '@/lib/urlState'
+import { NotFoundPage } from '@/pages/NotFoundPage'
 
 import {
   DOCUMENT_ACCEPT,
@@ -524,9 +525,7 @@ export function VehicleDetailPage(): React.JSX.Element {
 
       <div className="flex-1 overflow-y-auto px-4 pb-24 md:px-6">
         {notFound ? (
-          <div className="rounded-xl border border-border bg-surface">
-            <EmptyState icon={Car} message={t('vehicles.noVehicles')} />
-          </div>
+          <NotFoundPage />
         ) : vehicleQuery.isError ? (
           <div className="rounded-xl border border-border bg-surface">
             <EmptyState

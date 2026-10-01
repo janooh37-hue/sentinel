@@ -71,6 +71,7 @@ import { hasCommentBearingMark } from '@/components/books/annotation-utils'
 import { bidi } from '@/lib/bidi'
 import { cn } from '@/lib/utils'
 import { useUrlOverlay } from '@/lib/urlState'
+import { NotFoundPage } from '@/pages/NotFoundPage'
 import {
   RECEIVED_STATUSES,
   SENT_STATUSES,
@@ -581,7 +582,7 @@ export function BookRecordPage(): React.JSX.Element {
     versionNo: number
   } | null>(null)
 
-  const { data: book, isPending, isError, refetch } = useQuery({
+  const { data: book, isPending, isError, error, refetch } = useQuery({
     queryKey: ['books', 'detail', bookId, effectiveVersionId ?? null],
     queryFn: () => api.getBook(bookId, effectiveVersionId),
     enabled: Number.isFinite(bookId),
@@ -971,6 +972,10 @@ export function BookRecordPage(): React.JSX.Element {
       action === 'decide' &&
       !busy
     if (stillEligible) signMutation.mutate()
+  }
+
+  if (!Number.isFinite(bookId) || (error instanceof ApiError && error.status === 404)) {
+    return <NotFoundPage />
   }
 
   if (isError) {

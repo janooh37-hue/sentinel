@@ -66,3 +66,12 @@ def test_spa_fallback_never_serves_files_outside_static(monkeypatch, tmp_path):
         r = client.get(url)
         assert "leak" not in r.text, url
         assert r.headers["Content-Type"].startswith("text/html"), url
+
+
+def test_unknown_api_path_is_json_404_not_the_spa(monkeypatch, tmp_path):
+    client = _client(monkeypatch, tmp_path)
+    r = client.get("/api/v1/nope")
+    assert r.status_code == 404
+    assert r.headers["Content-Type"].startswith("application/json")
+    # Client-side routes still get the SPA shell.
+    assert client.get("/books/5").headers["Content-Type"].startswith("text/html")
