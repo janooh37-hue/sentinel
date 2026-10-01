@@ -1886,6 +1886,48 @@ def list_awaiting(db: Session, *, user_id: int) -> list[Book]:
     return out
 
 
+def awaiting_count(db: Session, *, user_id: int, reviewer_only: bool) -> int:
+    """COUNT twin of ``list_awaiting`` for badges: live books whose current
+    version has a pending step assigned to ``user_id``.
+
+    ``reviewer_only`` keeps books where ``your_step_kind`` is 'reviewer' — a
+    pending reviewer step and no pending approver step (approver wins).
+    """
+    # Per version: does this user hold a pending approver / reviewer step?
+    # Mirrors `(s.kind or "approver") == "approver"` in your_step_kind.
+    is_approver = func.coalesce(func.nullif(BookApprovalStep.kind, ""), "approver") == "approver"
+    mine = (
+        select(
+            BookApprovalStep.version_id,
+            func.max(is_approver.cast(Integer)).label("approver"),
+            func.max((BookApprovalStep.kind == "reviewer").cast(Integer)).label("reviewer"),
+        )
+        .where(
+            BookApprovalStep.assignee_user_id == user_id,
+            BookApprovalStep.state == "pending",
+        )
+        .group_by(BookApprovalStep.version_id)
+        .subquery()
+    )
+    newer = aliased(BookVersion)
+    is_current = ~exists().where(
+        newer.book_id == BookVersion.book_id, newer.version_no > BookVersion.version_no
+    )
+    counted = (
+        and_(mine.c.reviewer == 1, mine.c.approver == 0)
+        if reviewer_only
+        else or_(mine.c.approver == 1, mine.c.reviewer == 1)
+    )
+    stmt = (
+        select(func.count())
+        .select_from(mine)
+        .join(BookVersion, BookVersion.id == mine.c.version_id)
+        .join(Book, Book.id == BookVersion.book_id)
+        .where(Book.deleted_at.is_(None), is_current, counted)
+    )
+    return db.execute(stmt).scalar_one()
+
+
 # Hours a record may sit at `awaiting_scan` before it starts nagging its owner.
 # Normal turnaround is same-day, so 24h means "genuinely forgotten", not "in
 # transit". Raise this if papers legitimately sit with a manager overnight.

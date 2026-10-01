@@ -2,27 +2,29 @@
 
 The stream holds a connection per authed user, emits an initial counts event
 immediately, then polls every POLL_SECONDS and emits only when the counts
-change. A heartbeat comment is emitted every HEARTBEAT_SECONDS to keep the
-connection alive through proxy idle timeouts.
+change. A heartbeat comment is emitted roughly every HEARTBEAT_SECONDS (on the
+next tick) to keep the connection alive through proxy idle timeouts.
+
+Counts are cached per user for POLL_SECONDS, so a user's open tabs share one
+computation per tick instead of each paying for it.
 
 Per-tick DB sessions: we do NOT hold the injected ``db`` session open across
-the whole stream — a long-lived session would pin a SQLite connection. Only
-the initial event reuses the injected session; subsequent ticks open a
-short-lived session and close it in a ``finally`` block.
+the whole stream — a long-lived session would pin a SQLite connection. Every
+computation opens a short-lived session and closes it in a ``finally`` block.
 
 The ``Cache-Control: no-cache`` and ``X-Accel-Buffering: no`` headers defeat
 proxy/CDN buffering so events flush immediately — relevant once Phase 5 puts
 Caddy in front of this server.
 
-Disconnect detection: the generator checks ``await request.is_disconnected()``
-before the sleep so it exits cleanly when the client closes without needing
-anyio task cancellation (which doesn't propagate from the httpx sync
-TestClient's stream context-manager close).
+Disconnect detection: in production Starlette cancels the generator when the
+client disconnects. The httpx sync TestClient doesn't propagate that
+cancellation, so each tick also checks ``request.is_disconnected()`` once.
 """
 
 from __future__ import annotations
 
-from collections.abc import AsyncIterator
+import time
+from collections.abc import AsyncIterator, Callable
 from typing import Annotated
 
 import anyio
@@ -39,8 +41,34 @@ from app.services import notification_service
 
 router = APIRouter(prefix="/notifications", tags=["notifications"])
 
-POLL_SECONDS = 2.5
+POLL_SECONDS = 10.0
 HEARTBEAT_SECONDS = 15.0
+
+# ponytail: per-process cache, fine for the single uvicorn worker; move it to a
+# shared store if the app ever runs several workers.
+_counts_cache: dict[int, tuple[float, NotificationCounts]] = {}
+
+
+def _shared_counts(open_session: Callable[[], Session], user_id: int) -> NotificationCounts | None:
+    """This user's counts, computed at most once per POLL_SECONDS across tabs.
+
+    ``None`` when the user row is gone. Runs in a worker thread; two tabs racing
+    past an expired entry both compute, which is harmless.
+    """
+    now = time.monotonic()
+    hit = _counts_cache.get(user_id)
+    if hit is not None and now - hit[0] < POLL_SECONDS:
+        return hit[1]
+    session = open_session()
+    try:
+        user = session.get(User, user_id)
+        if user is None:
+            return None
+        counts = notification_service.relevant_counts(session, user)
+    finally:
+        session.close()
+    _counts_cache[user_id] = (now, counts)
+    return counts
 
 
 @router.get("/counts", response_model=NotificationCounts)
@@ -70,8 +98,8 @@ async def stream(
     """Per-user SSE stream of notification counts.
 
     Emits an initial event immediately, then polls every POLL_SECONDS and
-    emits only when the counts change. Sends a ``: heartbeat`` comment every
-    HEARTBEAT_SECONDS to keep the connection alive.
+    emits only when the counts change. Sends a ``: heartbeat`` comment after
+    HEARTBEAT_SECONDS without a change to keep the connection alive.
 
     ``max_events`` bounds the generator — after that many count-events it
     returns. Pass ``?max_events=1`` in tests to get a finite response without
@@ -89,8 +117,8 @@ async def stream(
     QueuePool (5 + 10 overflow) the 16th concurrent viewer exhausted the pool
     and unrelated requests, login included, began failing with 500s. The
     injected session is therefore closed immediately once its engine has been
-    captured, and every tick — including the first — opens its own session from
-    that same engine, so test-fixture engine overrides still apply.
+    captured, and every counts computation opens its own session from that
+    same engine, so test-fixture engine overrides still apply.
     """
     user_id = user.id
     # Capture the engine from the injected session so that test overrides
@@ -113,15 +141,9 @@ async def stream(
     db.close()
 
     async def gen() -> AsyncIterator[str]:
-        # Initial event, from a session of this stream's own.
-        def _initial() -> NotificationCounts:
-            session = _tick_session()
-            try:
-                return notification_service.relevant_counts(session, user)
-            finally:
-                session.close()
-
-        last = await anyio.to_thread.run_sync(_initial)
+        last = await anyio.to_thread.run_sync(_shared_counts, _tick_session, user_id)
+        if last is None:
+            return  # user row inaccessible — exit the stream cleanly
         yield _frame(last)
         emitted = 1
         if max_events is not None and emitted >= max_events:
@@ -129,29 +151,10 @@ async def stream(
         since_emit = 0.0
 
         while True:
-            # Sleep in short slices so we can detect client disconnect
-            # promptly. anyio task cancellation doesn't propagate from
-            # the httpx sync TestClient's stream context-manager close,
-            # so we must poll is_disconnected() periodically instead.
-            _SLICE = 0.05  # 50ms slices → disconnect detected within 50ms
-            slept = 0.0
-            while slept < POLL_SECONDS:
-                await anyio.sleep(_SLICE)
-                slept += _SLICE
-                if await request.is_disconnected():
-                    return
-
-            def _recompute() -> NotificationCounts | None:
-                s = _tick_session()
-                try:
-                    u = s.get(User, user_id)
-                    if u is None:
-                        return None  # user row inaccessible — signal caller to exit
-                    return notification_service.relevant_counts(s, u)
-                finally:
-                    s.close()
-
-            current = await anyio.to_thread.run_sync(_recompute)
+            await anyio.sleep(POLL_SECONDS)
+            if await request.is_disconnected():
+                return
+            current = await anyio.to_thread.run_sync(_shared_counts, _tick_session, user_id)
             if current is None:
                 return  # user row inaccessible — exit the stream cleanly
             if current != last:
