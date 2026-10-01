@@ -1,10 +1,11 @@
 /**
  * useNotificationStream — shell-level SSE consumer. Mounted ONCE in App's Shell.
  *
- * Opens EventSource('/api/v1/notifications/stream'); on each `counts` event it
- * invalidates the react-query keys behind the bell's signals and fires a
- * browser Notification for any count that ROSE since the last frame. A
- * low-frequency safety poll keeps the bell fresh if the stream disconnects.
+ * Opens EventSource('/api/v1/notifications/stream') and writes each `counts`
+ * frame into the ['notifications','counts'] cache. Whenever those counts
+ * change — from the stream or the 5-minute safety poll — only the queries
+ * behind the changed counts are refetched, and a browser Notification fires
+ * for any count that ROSE. The first counts seen are a baseline.
  *
  * Only active when `enabled` is true — pass `status === 'authed'` from Shell
  * to avoid opening the stream before the session resolves.
@@ -21,9 +22,20 @@ import { api, type NotificationCounts } from '@/lib/api'
 import { subscribeToPush } from '@/lib/push'
 
 const STREAM_URL = '/api/v1/notifications/stream'
-const SAFETY_POLL_MS = 120_000 // fallback only; stream is the live path
+const COUNTS_KEY = ['notifications', 'counts'] as const
+const SAFETY_POLL_MS = 5 * 60_000 // fallback only; stream is the live path
 
 type Key = keyof NotificationCounts
+
+/** The cached queries each count stands for; only these refetch when it changes. */
+const QUERIES_BY_COUNT: Record<Key, readonly (readonly string[])[]> = {
+  approvals: [['books', 'approval-summary'], ['books', 'awaiting']],
+  leaves: [['leaves-list', 'report-all']],
+  scans: [['scan-inbox', 'count']],
+  emails: [['ledger', 'unread-recent'], ['ledger-unread-count']],
+  monthly_reviews: [['inmate-register', 'awaiting-close']],
+  monthly_approvals: [['inmate-register', 'awaiting-close']],
+}
 
 export function useNotificationStream(enabled = true): void {
   const qc = useQueryClient()
@@ -58,85 +70,72 @@ export function useNotificationStream(enabled = true): void {
   }, [enabled])
 
   // Safety poll — low frequency; stream does the real-time work.
-  useQuery({
-    queryKey: ['notifications', 'counts'],
+  const { data: counts } = useQuery({
+    queryKey: COUNTS_KEY,
     queryFn: () => api.getNotificationCounts(),
     refetchInterval: SAFETY_POLL_MS,
     staleTime: SAFETY_POLL_MS,
     enabled,
   })
 
+  // Diff every new counts value (stream frame or poll) against the last one.
+  useEffect(() => {
+    if (!enabled) {
+      // Next enable starts from a fresh baseline: no stale Notification.
+      prevRef.current = null
+      return
+    }
+    if (!counts) return
+    const prev = prevRef.current
+    prevRef.current = counts
+    if (prev === null) return
+
+    const changed = (Object.keys(QUERIES_BY_COUNT) as Key[]).filter((k) => counts[k] !== prev[k])
+    const queryKeys = new Map(
+      changed.flatMap((k) => QUERIES_BY_COUNT[k]).map((key) => [key.join('\u0000'), key]),
+    )
+    queryKeys.forEach((queryKey) => void qc.invalidateQueries({ queryKey }))
+
+    if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return
+    const titles: Record<Key, string> = {
+      approvals: t('nav.bell.notify.approval', {
+        defaultValue: 'A document needs your approval',
+      }),
+      leaves: t('nav.bell.notify.leave', {
+        defaultValue: 'A leave request needs action',
+      }),
+      scans: t('nav.bell.notify.scan', {
+        defaultValue: 'A scan was attached to a record',
+      }),
+      emails: t('nav.bell.notify.email', {
+        defaultValue: 'New email in your inbox',
+      }),
+      monthly_reviews: t('nav.bell.notify.monthlyReview'),
+      monthly_approvals: t('nav.bell.notify.monthlyApproval'),
+    }
+    changed.forEach((k) => {
+      if (counts[k] <= prev[k]) return
+      try {
+        new Notification(titles[k], { tag: `gssg-${k}` })
+      } catch {
+        // Ignore — Notification constructor can throw in restricted contexts.
+      }
+    })
+  }, [counts, enabled, qc, t])
+
   useEffect(() => {
     if (!enabled) return
 
-    // Reset the baseline whenever (re)enabled so the first frame of a new
-    // stream is always treated as the baseline — prevents a stale prevRef
-    // from firing a Notification if a count rose during the disabled window.
-    prevRef.current = null
-
     let es: EventSource | null = null
-
-    const invalidate = (): void => {
-      void qc.invalidateQueries({ queryKey: ['books', 'awaiting'] })
-      void qc.invalidateQueries({ queryKey: ['books', 'approval-summary'] })
-      void qc.invalidateQueries({ queryKey: ['books', 'awaiting-scan'] })
-      void qc.invalidateQueries({ queryKey: ['leaves-list', 'report-all'] })
-      void qc.invalidateQueries({ queryKey: ['scan-inbox', 'count'] })
-      void qc.invalidateQueries({ queryKey: ['ledger', 'unread-recent'] })
-      void qc.invalidateQueries({ queryKey: ['ledger'] })
-      void qc.invalidateQueries({ queryKey: ['ledger-unread-count'] })
-      void qc.invalidateQueries({ queryKey: ['ledger-log'] })
-      void qc.invalidateQueries({ queryKey: ['notifications', 'counts'] })
-      void qc.invalidateQueries({ queryKey: ['inmate-register', 'awaiting-close'] })
-    }
-
-    const notifyFor = (next: NotificationCounts): void => {
-      const prev = prevRef.current
-      if (prev === null) {
-        // Baseline frame — never fire a Notification on first event.
-        prevRef.current = next
-        return
-      }
-      const titles: Record<Key, string> = {
-        approvals: t('nav.bell.notify.approval', {
-          defaultValue: 'A document needs your approval',
-        }),
-        leaves: t('nav.bell.notify.leave', {
-          defaultValue: 'A leave request needs action',
-        }),
-        scans: t('nav.bell.notify.scan', {
-          defaultValue: 'A scan was attached to a record',
-        }),
-        emails: t('nav.bell.notify.email', {
-          defaultValue: 'New email in your inbox',
-        }),
-        monthly_reviews: t('nav.bell.notify.monthlyReview'),
-        monthly_approvals: t('nav.bell.notify.monthlyApproval'),
-      }
-      ;(Object.keys(titles) as Key[]).forEach((k) => {
-        if (
-          next[k] > prev[k] &&
-          typeof Notification !== 'undefined' &&
-          Notification.permission === 'granted'
-        ) {
-          try {
-            new Notification(titles[k], { tag: `gssg-${k}` })
-          } catch {
-            // Ignore — Notification constructor can throw in restricted contexts.
-          }
-        }
-      })
-      prevRef.current = next
-    }
-
     try {
       // same-origin → session cookie carried automatically
       es = new EventSource(STREAM_URL)
       es.addEventListener('counts', (e: MessageEvent) => {
         try {
           const next = JSON.parse(e.data as string) as NotificationCounts
-          invalidate()
-          notifyFor(next)
+          // Structural sharing keeps the old reference for an identical
+          // frame, so the diff effect above only runs on a real change.
+          qc.setQueryData(COUNTS_KEY, next)
         } catch {
           // Malformed SSE frame — ignore and wait for the next.
         }
@@ -150,5 +149,5 @@ export function useNotificationStream(enabled = true): void {
     return () => {
       es?.close()
     }
-  }, [enabled, qc, t])
+  }, [enabled, qc])
 }

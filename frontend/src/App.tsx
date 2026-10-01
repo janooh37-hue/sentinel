@@ -59,7 +59,6 @@ import {
 } from '@/lib/routeLoaders'
 import { useNotificationStream } from '@/hooks/useNotificationStream'
 import { TopProgressBar } from './components/refresh/TopProgressBar'
-import { useRefreshHeartbeat } from './hooks/useRefreshHeartbeat'
 import { useRefreshHotkeys } from './hooks/useRefreshHotkeys'
 import { ScanBackDock } from './pages/scanBack/ScanBackDock'
 import { ScanBackGate } from './pages/scanBack/ScanBackGate'
@@ -128,7 +127,6 @@ function PageSuspenseFallback(): React.JSX.Element {
 }
 
 function RefreshShellHost() {
-  useRefreshHeartbeat()
   useRefreshHotkeys()
   return null
 }

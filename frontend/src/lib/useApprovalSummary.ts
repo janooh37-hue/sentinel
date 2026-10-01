@@ -17,6 +17,5 @@ export function useApprovalSummary() {
     queryFn: api.getApprovalSummary,
     enabled: status === 'authed',
     staleTime: 30_000,
-    refetchInterval: 60_000,
   })
 }
