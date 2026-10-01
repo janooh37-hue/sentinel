@@ -56,3 +56,13 @@ def test_service_worker_revalidates(monkeypatch, tmp_path):
     r = _client(monkeypatch, tmp_path).get("/sw.js")
     assert r.status_code == 200
     assert r.headers["Cache-Control"] == "no-cache"
+
+
+def test_spa_fallback_never_serves_files_outside_static(monkeypatch, tmp_path):
+    secret = tmp_path / "secret.env"
+    secret.write_text("TOKEN=leak")
+    client = _client(monkeypatch, tmp_path)
+    for url in ("/%2e%2e/secret.env", "/" + secret.as_posix()):
+        r = client.get(url)
+        assert "leak" not in r.text, url
+        assert r.headers["Content-Type"].startswith("text/html"), url

@@ -286,8 +286,10 @@ def create_app() -> FastAPI:
         @app.get("/{full_path:path}", include_in_schema=False)
         def spa_fallback(full_path: str) -> FileResponse:
             # Any non-API GET falls back to index.html so React Router works.
-            candidate = STATIC_DIR / full_path
-            if candidate.is_file():
+            # Resolve and contain: an absolute ("C:/...") or "../" path must
+            # never escape the build folder (arbitrary file read).
+            candidate = (STATIC_DIR / full_path).resolve()
+            if candidate.is_relative_to(STATIC_DIR.resolve()) and candidate.is_file():
                 headers = _NO_CACHE if candidate.name in _ALWAYS_REVALIDATE else None
                 return FileResponse(candidate, headers=headers)
             return _index()
