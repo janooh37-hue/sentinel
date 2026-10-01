@@ -61,8 +61,8 @@ from app.schemas.book import (
     BookUpdate,
     ImportedDocRead,
 )
+from app.services import inmate_violation_whatsapp, perm_service, user_signature_service
 from app.services import notify_format as nf
-from app.services import perm_service, user_signature_service
 
 log = logging.getLogger(__name__)
 
@@ -1703,6 +1703,7 @@ def sign_book(db: Session, book_id: int, *, user_id: int, version_id: int) -> Bo
         )
     except Exception:
         log.warning("correspondence auto-log failed on sign for book %s", book.id, exc_info=True)
+    inmate_violation_whatsapp.queue_send(db, version)
     db.commit()
     db.refresh(book)
     return book
@@ -3028,6 +3029,7 @@ def add_attachment(
                     retain_revision_access(db, version, step)
         version.status = "approved"
         book.approval_state = "approved"
+        inmate_violation_whatsapp.queue_send(db, version)
         # The flip is a signing, so it files like one in the Correspondence Log.
         try:
             from app.services import correspondence_service

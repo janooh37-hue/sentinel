@@ -46,3 +46,13 @@ class GatewayQrOut(BaseModel):
 
 class GatewayUnlinkOut(BaseModel):
     ok: bool
+
+
+class InmateViolationGroupOut(BaseModel):
+    """WhatsApp group that receives approved Inmate Conduct Violations; None = off."""
+
+    group: GroupOut | None
+
+
+class InmateViolationGroupIn(BaseModel):
+    group_id: str | None = Field(default=None, min_length=1, max_length=64)

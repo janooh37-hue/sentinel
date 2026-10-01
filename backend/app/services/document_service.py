@@ -75,7 +75,12 @@ from app.db.repos.classified_refs_repo import allocate_classified_serial
 from app.db.repos.refs_repo import allocate_ref_with_retry
 from app.schemas.employee import EMPLOYEE_STATUS_ACTIVE, EMPLOYEE_STATUS_RESIGNED
 from app.schemas.linked_document import LinkedDocumentRead
-from app.services import absence_service, artifact_service, manager_service
+from app.services import (
+    absence_service,
+    artifact_service,
+    inmate_violation_whatsapp,
+    manager_service,
+)
 from app.services._pdf_executor import convert_docx_to_pdf as convert_docx_to_pdf
 
 _build_docx_filename = artifact_service.build_docx_filename
@@ -2162,6 +2167,7 @@ def generate_document(
         if signing_path == "auto" and embed_mgr:
             _logged_book.approval_state = "approved"
             _state_version.status = "approved"
+            inmate_violation_whatsapp.queue_send(db, _state_version)
             # WF-02 (by-design auto path): the manager's signature is embedded
             # at generation with no per-document sign action. Leave a trail of
             # consent-by-policy — attribute the embed to the generating user AND

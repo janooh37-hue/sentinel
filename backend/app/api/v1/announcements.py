@@ -19,8 +19,15 @@ from app.schemas.announcement import (
     GatewayUnlinkOut,
     GroupOut,
     GroupSendOut,
+    InmateViolationGroupIn,
+    InmateViolationGroupOut,
 )
-from app.services import announce_service, notify_dispatch, openwa_client
+from app.services import (
+    announce_service,
+    inmate_violation_whatsapp,
+    notify_dispatch,
+    openwa_client,
+)
 
 router = APIRouter(prefix="/announcements", tags=["announcements"])
 
@@ -71,6 +78,35 @@ def gateway_unlink(
     finally:
         openwa_client.reset_status_cache()
     return GatewayUnlinkOut(ok=ok)
+
+
+@router.get("/inmate-violation-group", response_model=InmateViolationGroupOut)
+def get_inmate_violation_group(
+    db: Annotated[Session, Depends(get_db)],
+    _user: Annotated[User, Depends(require_capability("messages.broadcast"))],
+) -> InmateViolationGroupOut:
+    """The group approved Inmate Conduct Violations are posted to (None = off)."""
+    group = inmate_violation_whatsapp.get_group(db)
+    return InmateViolationGroupOut(group=GroupOut(id=group[0], name=group[1]) if group else None)
+
+
+@router.put("/inmate-violation-group", response_model=InmateViolationGroupOut)
+def put_inmate_violation_group(
+    payload: InmateViolationGroupIn,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(require_capability("messages.broadcast"))],
+) -> InmateViolationGroupOut:
+    """Pick (or clear, with ``group_id: null``) the target group."""
+    group: tuple[str, str] | None = None
+    if payload.group_id is not None:
+        match = next(
+            (g for g in announce_service.groups_available(db) if g.id == payload.group_id), None
+        )
+        if match is None:
+            raise HTTPException(status_code=422, detail="no matching group found")
+        group = (match.id, match.name)
+    inmate_violation_whatsapp.set_group(db, group, actor=user.display_name or user.email)
+    return InmateViolationGroupOut(group=GroupOut(id=group[0], name=group[1]) if group else None)
 
 
 @router.post("/send", response_model=AnnouncementOut)

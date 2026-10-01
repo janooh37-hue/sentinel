@@ -20,7 +20,7 @@ from sqlalchemy.orm import Session
 from app.config import get_settings
 from app.core.pdf_merge import merge_pdfs_to_bytes
 from app.core.phone import normalize_phone
-from app.db.models import Employee, GroupAnnouncement, GroupAnnouncementSend
+from app.db.models import Book, BookVersion, Employee, GroupAnnouncement, GroupAnnouncementSend
 from app.services import book_service, document_service, notify_dispatch, openwa_client
 
 
@@ -57,18 +57,23 @@ def resolve_book_pdf(db: Session, book_id: int) -> tuple[str, bytes]:
 
     if not book.versions:
         raise BookPdfError(f"Book {book_id} has no versions")
+    return resolve_version_pdf(db, book, book.versions[-1])
 
-    current_version = book.versions[-1]
-    document_id = current_version.document_id
+
+def resolve_version_pdf(db: Session, book: Book, version: BookVersion) -> tuple[str, bytes]:
+    """``(filename, pdf_bytes)`` currently served for *version* of *book*."""
+    document_id = version.document_id
     if document_id is None:
-        raise BookPdfError(f"Book {book_id} current version has no generated document")
+        raise BookPdfError(f"Book {book.id} version {version.id} has no generated document")
 
     try:
-        artifact = document_service.resolve_document_artifact(db, document_id, format="pdf")
+        artifact = document_service.resolve_document_artifact(
+            db, document_id, format="pdf", version=version
+        )
     except Exception as exc:
-        raise BookPdfError(f"Book {book_id} document {document_id}: {exc}") from exc
+        raise BookPdfError(f"Book {book.id} document {document_id}: {exc}") from exc
 
-    filename = f"{book.ref_number or book_id}.pdf"
+    filename = f"{book.ref_number or book.id}.pdf"
     if artifact.companion_paths:
         return filename, merge_pdfs_to_bytes(artifact.path, list(artifact.companion_paths))
     return filename, artifact.path.read_bytes()
