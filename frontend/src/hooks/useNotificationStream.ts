@@ -14,11 +14,12 @@
  * shell-level and event-driven instead of polled.
  */
 
-import { useEffect, useRef } from 'react'
+import { useContext, useEffect, useRef } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 
 import { api, type NotificationCounts } from '@/lib/api'
+import { AuthContext } from '@/lib/authContext'
 import { subscribeToPush } from '@/lib/push'
 
 const STREAM_URL = '/api/v1/notifications/stream'
@@ -41,33 +42,31 @@ export function useNotificationStream(enabled = true): void {
   const qc = useQueryClient()
   const { t } = useTranslation()
   const prevRef = useRef<NotificationCounts | null>(null)
+  const userId = useContext(AuthContext)?.user?.id
 
   // One-time permission request (never re-prompt on 'denied').
-  // After the browser grants permission, also register a Web Push subscription
-  // so the backend can send push notifications when the tab is closed.
-  // Only active under HTTPS (window.isSecureContext) — subscribeToPush is a
-  // no-op otherwise. Errors are logged and never propagated.
+  // After the browser grants permission, also make sure this device's Web Push
+  // subscription is registered to the signed-in user, so the backend can push
+  // when the tab is closed. subscribeToPush only hits the network when the
+  // user, locale or endpoint changed. Only active under HTTPS
+  // (window.isSecureContext). Errors are logged and never propagated.
   useEffect(() => {
-    if (!enabled) return
+    if (!enabled || userId === undefined) return
     if (typeof Notification === 'undefined') return
     const swAvailable = 'serviceWorker' in navigator && navigator.serviceWorker != null
+    const subscribe = (): void => {
+      void subscribeToPush(userId).catch((err: unknown) => {
+        console.warn('[push] subscribe failed:', err)
+      })
+    }
     if (Notification.permission !== 'default') {
-      // Already decided — if already granted, try to subscribe (idempotent).
-      if (Notification.permission === 'granted' && window.isSecureContext && swAvailable) {
-        void subscribeToPush().catch((err: unknown) => {
-          console.warn('[push] subscribe failed:', err)
-        })
-      }
+      if (Notification.permission === 'granted' && window.isSecureContext && swAvailable) subscribe()
       return
     }
     void Notification.requestPermission().then((perm) => {
-      if (perm === 'granted' && window.isSecureContext && swAvailable) {
-        void subscribeToPush().catch((err: unknown) => {
-          console.warn('[push] subscribe failed:', err)
-        })
-      }
+      if (perm === 'granted' && window.isSecureContext && swAvailable) subscribe()
     })
-  }, [enabled])
+  }, [enabled, userId])
 
   // Safety poll — low frequency; stream does the real-time work.
   const { data: counts } = useQuery({

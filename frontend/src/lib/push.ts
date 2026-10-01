@@ -54,27 +54,51 @@ function urlBase64ToUint8Array(base64: string): ArrayBuffer {
   return arr.buffer as ArrayBuffer
 }
 
+// What the server last stored for this device. The POST also claims the
+// endpoint for whoever is signed in and refreshes its locale, so any of the
+// three changing means it must be repeated.
+const SYNCED_KEY = 'gssg.push.synced'
+
 /**
- * Request notification permission, subscribe to Web Push, and POST the
- * subscription to the backend. Returns the subscription or null on denial /
- * unavailability.
+ * Ensure this device has a Web Push subscription registered for `userId`.
+ * Reuses the browser's existing subscription; only a missing one prompts for
+ * permission and fetches the VAPID key, and the backend POST happens only when
+ * the user, locale or endpoint changed. Returns the subscription or null on
+ * denial / unavailability.
  */
-export async function subscribeToPush(): Promise<PushSubscription | null> {
+export async function subscribeToPush(userId: number): Promise<PushSubscription | null> {
   const reg = await registerServiceWorker()
   if (!reg) return null
-  const perm = await Notification.requestPermission()
-  if (perm !== 'granted') return null
-  const { public_key } = await api.getVapidPublicKey()
-  const sub = await reg.pushManager.subscribe({
-    userVisibleOnly: true,
-    applicationServerKey: urlBase64ToUint8Array(public_key),
-  })
+  let sub = await reg.pushManager.getSubscription()
+  if (!sub) {
+    const perm = await Notification.requestPermission()
+    if (perm !== 'granted') return null
+    const { public_key } = await api.getVapidPublicKey()
+    sub = await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(public_key),
+    })
+  }
+  const locale = currentLocale()
+  const synced = `${userId}|${locale}|${sub.endpoint}`
+  let stored: string | null = null
+  try {
+    stored = window.localStorage.getItem(SYNCED_KEY)
+  } catch {
+    /* private mode — re-POST, as before */
+  }
+  if (stored === synced) return sub
   const json = sub.toJSON()
   await api.subscribePush({
     endpoint: sub.endpoint,
     keys: { p256dh: json.keys!.p256dh, auth: json.keys!.auth },
-    locale: currentLocale(),
+    locale,
   })
+  try {
+    window.localStorage.setItem(SYNCED_KEY, synced)
+  } catch {
+    /* private mode — next load re-POSTs */
+  }
   return sub
 }
 
