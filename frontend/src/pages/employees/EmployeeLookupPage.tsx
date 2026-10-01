@@ -79,11 +79,12 @@ export function EmployeeLookupPage(): React.JSX.Element {
     mutationFn: (payload: EmployeeCreate) => api.createEmployee(payload),
     onSuccess: (row) => {
       void qc.invalidateQueries({ queryKey: ['employees'] })
-      overlay.close()
       setCreateError(null)
       setCreateInjection(undefined)
       toast.success(t('employees.toast.created'))
-      navigate(`/employees/${encodeURIComponent(row.id)}`)
+      // Replace the `?create=1` entry: close() would queue an async Back that
+      // can land after this navigation. Back from the record returns to the list.
+      navigate(`/employees/${encodeURIComponent(row.id)}`, { replace: true })
     },
     onError: (err) => {
       setCreateError(humanError(err))
