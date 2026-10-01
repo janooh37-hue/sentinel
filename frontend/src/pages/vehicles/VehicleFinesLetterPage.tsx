@@ -35,11 +35,11 @@
  * button the API would refuse.
  */
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Car, ChevronLeft, ChevronRight, FileText, Loader2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import { Link, useNavigate, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 
 import { RefreshButton } from '@/components/refresh/RefreshButton'
@@ -66,6 +66,7 @@ import {
   plateLabel,
   vehicleErrorMessage,
 } from './vehicleUtils'
+import { useSearchParam } from '@/lib/urlState'
 import { PaperNote, PaperPlateBox, PaperSheet, PaperTable } from './components/PaperSheet'
 import { PlateChip } from './components/PlateChip'
 import { VehicleFormAlert } from './components/VehicleDialogShell'
@@ -105,7 +106,9 @@ function FinesLetterWizard(): React.JSX.Element {
   const queryClient = useQueryClient()
   const navigate = useNavigate()
 
-  const [step, setStep] = useState<1 | 2>(1)
+  const [stepValue, setStep] = useSearchParam('step', { fallback: '1', push: true })
+  const [searchParams, setSearchParams] = useSearchParams()
+  const step: 1 | 2 = stepValue === '2' ? 2 : 1
   const [hideNames, setHideNames] = useState(false)
   /** Ids the operator has unticked; every other fine is in the letter. */
   const [excluded, setExcluded] = useState<ReadonlySet<number>>(() => new Set())
@@ -120,6 +123,14 @@ function FinesLetterWizard(): React.JSX.Element {
   const vehicle = vehicleQuery.data
   const fines = useMemo(() => vehicle?.fines ?? [], [vehicle?.fines])
   const plate = vehicle ? vehicle.plate_label || plateLabel(vehicle) : null
+  useEffect(() => {
+    if (vehicleQuery.isLoading || stepValue === '1') return
+    if (stepValue !== '2' || fines.length === 0) {
+      const params = new URLSearchParams(searchParams)
+      params.delete('step')
+      setSearchParams(params, { replace: true })
+    }
+  }, [fines.length, searchParams, setSearchParams, stepValue, vehicleQuery.isLoading])
 
   /** Every fine in the letter's order — the checklist reads the same way the
    *  document will. */
@@ -279,7 +290,7 @@ function FinesLetterWizard(): React.JSX.Element {
                   type="button"
                   variant="secondary"
                   disabled={generate.isPending}
-                  onClick={() => setStep(1)}
+                  onClick={() => setStep('1')}
                 >
                   {t('vehicles.previous')}
                 </Button>
@@ -298,7 +309,7 @@ function FinesLetterWizard(): React.JSX.Element {
                   </span>
                 )}
                 {step === 1 ? (
-                  <Button type="button" disabled={!hasSelection} onClick={() => setStep(2)}>
+                  <Button type="button" disabled={!hasSelection} onClick={() => setStep('2')}>
                     <FileText className="h-3.5 w-3.5" aria-hidden />
                     {t('vehicles.previewDocument')}
                   </Button>

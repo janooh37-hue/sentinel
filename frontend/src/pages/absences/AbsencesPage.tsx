@@ -34,6 +34,7 @@ import type { AbsenceRegisterRowRead } from '@/lib/api'
 import { copyTable } from '@/lib/copyTable'
 import { computeEndDate, todayIso } from '@/lib/leaveDateMath'
 import { useCapabilities } from '@/lib/useCapabilities'
+import { useSearchParam, useUrlOverlay } from '@/lib/urlState'
 import { Button } from '@/components/ui/button'
 import { ServiceArtwork } from '@/components/ui/service-artwork'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
@@ -57,19 +58,18 @@ export function AbsencesPage(): React.JSX.Element {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const qc = useQueryClient()
-  const { has } = useCapabilities()
+  const { has, isLoading: capabilitiesLoading } = useCapabilities()
   const canEdit = has('leaves.edit')
 
   const [employeeId, setEmployeeId] = useState<string | null>(
     () => searchParams.get('employee_id'),
   )
-  const [start, setStart] = useState(todayIso)
-  const [end, setEnd] = useState(todayIso)
+  const [start, setStart] = useSearchParam('from', { fallback: todayIso() })
+  const [end, setEnd] = useSearchParam('to', { fallback: todayIso() })
+  const [search, setSearch] = useSearchParam('q')
+  const overlay = useUrlOverlay('action', ['open'])
   const [note, setNote] = useState('')
-  const [search, setSearch] = useState('')
   const [selected, setSelected] = useState<Set<string>>(() => new Set())
-  const [editing, setEditing] = useState<AbsenceRegisterRowRead | null>(null)
-  const [emailOpen, setEmailOpen] = useState(false)
   const [deleting, setDeleting] = useState<AbsenceRegisterRowRead | null>(null)
 
   // Register tables want compact dates; the weekday makes cells too wide.
@@ -178,6 +178,10 @@ export function AbsencesPage(): React.JSX.Element {
   const canSubmit =
     !!employeeId && !!start && !!end && start <= end && canEdit && !createMutation.isPending
   const rows = registerQuery.data?.rows ?? []
+  const editKey = searchParams.get('open')
+  const editing = rows.find((row) => rowKey(row) === editKey) ?? null
+  const emailOpen = overlay.value === 'email'
+  const canEmail = has('ledger.send') && has('ledger.view')
   const normalizedSearch = search.trim().toLowerCase()
   const filteredRows = normalizedSearch
     ? rows.filter(
@@ -188,6 +192,14 @@ export function AbsencesPage(): React.JSX.Element {
       )
     : rows
   const selectedRows = filteredRows.filter((row) => selected.has(rowKey(row)))
+  useEffect(() => {
+    if (capabilitiesLoading) return
+    if (overlay.value === 'edit' && (!canEdit || (registerQuery.isSuccess && !editing))) {
+      overlay.close()
+    } else if (emailOpen && (!canEmail || selectedRows.length === 0)) {
+      overlay.close()
+    }
+  }, [canEdit, canEmail, capabilitiesLoading, editing, emailOpen, overlay, registerQuery.isSuccess, selectedRows.length])
   const allFilteredSelected =
     filteredRows.length > 0 && filteredRows.every((row) => selected.has(rowKey(row)))
   const today = todayIso()
@@ -247,7 +259,7 @@ export function AbsencesPage(): React.JSX.Element {
                         id="absence-start"
                         type="date"
                         value={start}
-                        onChange={(e) => setStart(e.target.value)}
+                        onChange={(e) => setStart(e.target.value || null)}
                         className="h-9 rounded-md border border-input bg-surface px-3 font-mono text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                       />
                     </div>
@@ -258,7 +270,7 @@ export function AbsencesPage(): React.JSX.Element {
                         type="date"
                         value={end}
                         min={start}
-                        onChange={(e) => setEnd(e.target.value)}
+                        onChange={(e) => setEnd(e.target.value || null)}
                         className="h-9 rounded-md border border-input bg-surface px-3 font-mono text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                       />
                     </div>
@@ -301,7 +313,7 @@ export function AbsencesPage(): React.JSX.Element {
                 <input
                   type="search"
                   value={search}
-                  onChange={(event) => setSearch(event.target.value)}
+                  onChange={(event) => setSearch(event.target.value || null)}
                   aria-label={t('absences.list.search')}
                   placeholder={t('absences.list.search')}
                   className="h-9 min-w-0 flex-1 rounded-md border border-input bg-surface px-3 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:w-64 sm:flex-none"
@@ -335,7 +347,7 @@ export function AbsencesPage(): React.JSX.Element {
                     type="button"
                     variant="default"
                     className="h-8 gap-1.5 px-3 text-[0.82em]"
-                    onClick={() => setEmailOpen(true)}
+                    onClick={() => overlay.open('email')}
                   >
                     <Mail className="h-4 w-4" strokeWidth={1.8} aria-hidden />
                     {t('absences.email.button', { count: selectedRows.length })}
@@ -466,7 +478,7 @@ export function AbsencesPage(): React.JSX.Element {
                               <div className="inline-flex items-center justify-end gap-1">
                                 <button
                                   type="button"
-                                  onClick={() => setEditing(row)}
+                                  onClick={() => overlay.open('edit', { open: rowKey(row) })}
                                   aria-label={t('absences.actions.edit')}
                                   className="rounded-md p-1.5 text-muted-foreground transition-colors hover:bg-surface-tinted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                                 >
@@ -521,14 +533,20 @@ export function AbsencesPage(): React.JSX.Element {
       </div>
 
       <EditAbsenceDialog
-        open={editing !== null}
+        open={overlay.value === 'edit' && editing !== null}
         row={editing}
         onOpenChange={(open) => {
-          if (!open) setEditing(null)
+          if (!open) overlay.close()
         }}
         onSaved={invalidateAbsences}
       />
-      <AbsenceEmailDialog open={emailOpen} rows={selectedRows} onOpenChange={setEmailOpen} />
+      <AbsenceEmailDialog
+        open={emailOpen}
+        rows={selectedRows}
+        onOpenChange={(open) => {
+          if (!open) overlay.close()
+        }}
+      />
 
       <ConfirmDialog
         open={deleting !== null}

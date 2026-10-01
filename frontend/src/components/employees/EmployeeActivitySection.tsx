@@ -47,7 +47,7 @@ function activityHref(item: EmployeeActivityItemRead): string {
     case 'violation':
       return `/employees/${encodeURIComponent(item.employee_id)}?tab=violations&open=${item.source_id}`
     case 'ledger':
-      return `/ledger?open=${item.source_id}`
+      return `/ledger?mail=${item.source_id}`
     case 'duty_location':
       return `/employees/${encodeURIComponent(item.employee_id)}?tab=activity`
   }

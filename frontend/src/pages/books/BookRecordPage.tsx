@@ -70,6 +70,7 @@ import { useInmateReportSubmit } from '@/components/books/useInmateReportSubmit'
 import { hasCommentBearingMark } from '@/components/books/annotation-utils'
 import { bidi } from '@/lib/bidi'
 import { cn } from '@/lib/utils'
+import { useUrlOverlay } from '@/lib/urlState'
 import {
   RECEIVED_STATUSES,
   SENT_STATUSES,
@@ -529,7 +530,7 @@ export function BookRecordPage(): React.JSX.Element {
   const isInmateReporter = user?.role === 'inmate_reporter'
   const effectiveVersionId = isInmateReporter ? undefined : versionIdParam
   const effectiveApprovalContext = isInmateReporter ? null : approvalContext
-  const { has } = useCapabilities()
+  const { has, isLoading: capabilitiesLoading } = useCapabilities()
   const canApprove = has('books.approve')
   const canEdit = has('books.edit')
   const canSubmitBook = has('books.submit')
@@ -542,17 +543,12 @@ export function BookRecordPage(): React.JSX.Element {
   // Admin-grade: rewrite the record's state outside the approval flow.
   const canOverrideState = has('books.override_state')
   const canManageRevisionAccess = has('users.manage')
+  const overlay = useUrlOverlay('action', ['decision'])
 
   const fileSignedRef = useRef<HTMLInputElement | null>(null)
   const replaceSignedRef = useRef<HTMLInputElement | null>(null)
   const [unfileOpen, setUnfileOpen] = useState(false)
-  const [includedPapersOpen, setIncludedPapersOpen] = useState(false)
-  const [revisionAccessOpen, setRevisionAccessOpen] = useState(false)
-
-  const [submitOpen, setSubmitOpen] = useState(false)
-  const [stateOverrideOpen, setStateOverrideOpen] = useState(false)
   // Inline reason panel for return/reject (backend requires a non-empty reason).
-  const [decision, setDecision] = useState<'return' | 'reject' | null>(null)
   const [reason, setReason] = useState('')
   const decisionPanelRef = useRef<HTMLDivElement | null>(null)
   const decisionReasonRef = useRef<HTMLTextAreaElement | null>(null)
@@ -704,6 +700,41 @@ export function BookRecordPage(): React.JSX.Element {
         isReviewer: myReview != null,
       })
 
+  const decision =
+    overlay.value === 'decision'
+      ? searchParams.get('decision') === 'reject'
+        ? 'reject'
+        : 'return'
+      : null
+
+  useEffect(() => {
+    const value = overlay.value
+    if (isPending || capabilitiesLoading || !book || !value) return
+    const allowed =
+      (value === 'submit' && !isInmateReporter && showSendForApproval) ||
+      (value === 'papers' && canManageIncludedPapers) ||
+      (value === 'revision-access' && !isInmateReporter && canManageRevisionAccess) ||
+      (value === 'override' &&
+        !isInmateReporter &&
+        canOverrideState &&
+        canMutateCurrent) ||
+      (value === 'decision' && action === 'decide')
+    if (!allowed) overlay.close()
+  }, [
+    action,
+    book,
+    canManageIncludedPapers,
+    canManageRevisionAccess,
+    canMutateCurrent,
+    canOverrideState,
+    capabilitiesLoading,
+    isInmateReporter,
+    isPending,
+    overlay.value,
+    overlay.close,
+    showSendForApproval,
+  ])
+
   useEffect(() => {
     if (isMobile && action === 'decide' && decisionPanelRef.current) {
       const observer = new IntersectionObserver(
@@ -788,7 +819,7 @@ export function BookRecordPage(): React.JSX.Element {
     bookId: book?.id,
     versionId: current?.id,
     onDecided: () => {
-      setDecision(null)
+      overlay.close()
       setReason('')
       // Stay on the record after return/reject; the action hook's query
       // invalidation refreshes the record state in place.
@@ -870,7 +901,7 @@ export function BookRecordPage(): React.JSX.Element {
     inputRef: decisionReasonRef,
     onReasonChange: setReason,
     onCancel: (act: 'return' | 'reject') => {
-      setDecision(null)
+      overlay.close()
       setReason('')
       if (isMobile) {
         requestAnimationFrame(() => {
@@ -886,7 +917,7 @@ export function BookRecordPage(): React.JSX.Element {
 
   function openMobileDecision(nextDecision: 'return' | 'reject'): void {
     setReason('')
-    setDecision(nextDecision)
+    overlay.open('decision', { decision: nextDecision })
     requestAnimationFrame(() => {
       decisionPanelRef.current?.scrollIntoView({
         behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
@@ -1135,7 +1166,7 @@ export function BookRecordPage(): React.JSX.Element {
                   disabled={busy}
                   onClick={() => {
                     setReason('')
-                    setDecision('return')
+                    overlay.open('decision', { decision: 'return' })
                   }}
                 />
                 <HeaderBtn
@@ -1145,7 +1176,7 @@ export function BookRecordPage(): React.JSX.Element {
                   disabled={busy}
                   onClick={() => {
                     setReason('')
-                    setDecision('reject')
+                    overlay.open('decision', { decision: 'reject' })
                   }}
                 />
               </>
@@ -1174,7 +1205,7 @@ export function BookRecordPage(): React.JSX.Element {
                 tone="navy-solid"
                 onClick={() => {
                   if (isInmateReporter) reporterSubmitMutation.mutate(bookId)
-                  else setSubmitOpen(true)
+                  else overlay.open('submit')
                 }}
               />
             )}
@@ -1235,7 +1266,7 @@ export function BookRecordPage(): React.JSX.Element {
                   </DropdownMenuItem>
                 )}
                 {canManageIncludedPapers && (
-                  <DropdownMenuItem onSelect={() => setIncludedPapersOpen(true)}>
+                  <DropdownMenuItem onSelect={() => overlay.open('papers')}>
                     <FileStack className="h-3.5 w-3.5" aria-hidden="true" />
                     {t('books.includedPapers.addToPdf', { defaultValue: 'Add to PDF' })}
                   </DropdownMenuItem>
@@ -1309,7 +1340,7 @@ export function BookRecordPage(): React.JSX.Element {
                     {canOverrideState && canMutateCurrent && (
                       <DropdownMenuItem
                         data-testid="state-override-trigger"
-                        onSelect={() => setStateOverrideOpen(true)}
+                        onSelect={() => overlay.open('override')}
                       >
                         <ShieldAlert className="h-3.5 w-3.5" aria-hidden="true" />
                         {t('books.stateOverride.trigger')}
@@ -1318,7 +1349,7 @@ export function BookRecordPage(): React.JSX.Element {
                     {canManageRevisionAccess && (
                       <DropdownMenuItem
                         data-testid="revision-access-trigger"
-                        onSelect={() => setRevisionAccessOpen(true)}
+                        onSelect={() => overlay.open('revision-access')}
                       >
                         <ShieldCheck className="h-3.5 w-3.5" aria-hidden="true" />
                         {t('books.approval.revisionAccess')}
@@ -1340,8 +1371,8 @@ export function BookRecordPage(): React.JSX.Element {
 
       {book && pdfUrl && canManageIncludedPapers && (
         <IncludedPapersDialog
-          open={includedPapersOpen}
-          onOpenChange={setIncludedPapersOpen}
+          open={overlay.value === 'papers' && !capabilitiesLoading}
+          onOpenChange={(open) => { if (!open) overlay.close() }}
           book={book}
           currentPdfUrl={pdfUrl}
         />
@@ -1590,14 +1621,8 @@ export function BookRecordPage(): React.JSX.Element {
                 signButtonRef={mobileInlineSignRef}
                 busy={busy}
                 onSign={() => requestSignConfirm(mobileInlineSignRef)}
-                onReturn={() => {
-                  setReason('')
-                  setDecision('return')
-                }}
-                onReject={() => {
-                  setReason('')
-                  setDecision('reject')
-                }}
+                onReturn={() => openMobileDecision('return')}
+                onReject={() => openMobileDecision('reject')}
               />
               {decision !== null && (
                 <div className="mt-3 rounded-xl border border-hairline bg-surface p-3.5">
@@ -1652,16 +1677,16 @@ export function BookRecordPage(): React.JSX.Element {
           document.body,
         )}
 
-      {!isInmateReporter && submitOpen && book && (
-        <SubmitForApprovalDialog bookId={book.id} onClose={() => setSubmitOpen(false)} />
+      {!isInmateReporter && overlay.value === 'submit' && book && showSendForApproval && !isPending && !capabilitiesLoading && (
+        <SubmitForApprovalDialog bookId={book.id} onClose={overlay.close} />
       )}
 
-      {stateOverrideOpen && book && canOverrideState && (
-        <RecordStateOverrideDialog book={book} onClose={() => setStateOverrideOpen(false)} />
+      {!isInmateReporter && overlay.value === 'override' && book && canOverrideState && canMutateCurrent && !isPending && !capabilitiesLoading && (
+        <RecordStateOverrideDialog book={book} onClose={overlay.close} />
       )}
 
-      {revisionAccessOpen && book && canManageRevisionAccess && (
-        <RevisionAccessPanel bookId={book.id} onClose={() => setRevisionAccessOpen(false)} />
+      {!isInmateReporter && overlay.value === 'revision-access' && book && canManageRevisionAccess && !isPending && !capabilitiesLoading && (
+        <RevisionAccessPanel bookId={book.id} onClose={overlay.close} />
       )}
     </div>
   )

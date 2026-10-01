@@ -146,7 +146,7 @@ def actionable_items(db: Session, user: User) -> list[ActionableItem]:
             ActionableItem(
                 "email",
                 f"email:{e.id}",
-                "/ledger",
+                f"/ledger?mail={e.id}",
                 f"#{e.id}",
                 subject=e.subject,
                 requester=_sender_name(e.counterparty),

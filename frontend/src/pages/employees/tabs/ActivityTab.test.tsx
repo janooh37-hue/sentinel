@@ -168,7 +168,7 @@ describe('ActivityTab', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Ledger entry' }))
 
-    expect(screen.getByTestId('location')).toHaveTextContent('/ledger?open=44')
+    expect(screen.getByTestId('location')).toHaveTextContent('/ledger?mail=44')
   })
 
   it('opens the absences tab for an absence activity', () => {

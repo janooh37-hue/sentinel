@@ -134,7 +134,7 @@ describe('EmployeeActivitySection', () => {
     expect(screen.getByRole('link', { name: /open document/i })).toHaveAttribute('href', '/books?open=71')
     expect(screen.getByRole('link', { name: /open leave/i })).toHaveAttribute('href', '/leaves?open=22')
     expect(screen.getByRole('link', { name: /open violation/i })).toHaveAttribute('href', '/employees/G300?tab=violations&open=33')
-    expect(screen.getByRole('link', { name: /open correspondence/i })).toHaveAttribute('href', '/ledger?open=44')
+    expect(screen.getByRole('link', { name: /open correspondence/i })).toHaveAttribute('href', '/ledger?mail=44')
   })
 
   it('filters and links duty location history to the employee Activity tab', async () => {

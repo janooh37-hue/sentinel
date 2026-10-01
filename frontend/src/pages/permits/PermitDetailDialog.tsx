@@ -7,13 +7,13 @@
  * inline panels (not nested modals) to keep the Radix dialog stack shallow;
  * delete uses the AlertDialog-based ConfirmDialog.
  */
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Trash2, UserPlus, FileText, Upload, Car, ScanLine, Printer, Send } from 'lucide-react'
 import { toast } from 'sonner'
 
-import { api, apiErrorMessage, type PermitRead, type PermitValidityPeriod } from '@/lib/api'
+import { api, apiErrorMessage, ApiError, type PermitRead, type PermitValidityPeriod } from '@/lib/api'
 import { PermitDocumentVersions } from './PermitDocumentVersions'
 import { RowDocButton } from './RowDocButton'
 import {
@@ -56,9 +56,10 @@ interface Props {
   open: boolean
   onOpenChange: (open: boolean) => void
   onEdit: (permit: PermitRead) => void
+  onNotFound: () => void
 }
 
-export function PermitDetailDialog({ permitId, open, onOpenChange, onEdit }: Props): React.JSX.Element {
+export function PermitDetailDialog({ permitId, open, onOpenChange, onEdit, onNotFound }: Props): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const qc = useQueryClient()
   const { has } = useCapabilities()
@@ -72,6 +73,12 @@ export function PermitDetailDialog({ permitId, open, onOpenChange, onEdit }: Pro
     enabled: open,
   })
   const permit = query.data
+  useEffect(() => {
+    const missing =
+      (query.isSuccess && !query.data) ||
+      (query.error instanceof ApiError && query.error.status === 404)
+    if (missing) onNotFound()
+  }, [onNotFound, query.data, query.error, query.isSuccess])
 
   const [renewOpen, setRenewOpen] = useState(false)
   const [revokeOpen, setRevokeOpen] = useState(false)

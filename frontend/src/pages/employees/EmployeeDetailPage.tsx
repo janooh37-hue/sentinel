@@ -16,9 +16,10 @@ import { useTranslation } from 'react-i18next'
 import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { toast } from 'sonner'
 
+import { useCapabilities } from '@/lib/useCapabilities'
+import { useUrlOverlay } from '@/lib/urlState'
 import {
   DocumentViewerDialog,
-  type DocViewerItem,
 } from '@/components/ui/document-viewer-dialog'
 import { api } from '@/lib/api'
 import type { EmployeeFormOutput } from '@/components/employees/schema'
@@ -68,6 +69,10 @@ export function EmployeeDetailPage(): React.JSX.Element {
   const location = useLocation()
   const [searchParams, setSearchParams] = useSearchParams()
   const { i18n, t } = useTranslation()
+  const { has, isLoading: capabilitiesLoading } = useCapabilities()
+  const action = searchParams.get('action')
+  const editOverlay = useUrlOverlay('action')
+  const docOverlay = useUrlOverlay('doc')
   const tab = tabFromSearch(searchParams)
   const rawOpenId = searchParams.get('open')
   const parsedOpenId = rawOpenId && /^\d+$/.test(rawOpenId) ? Number(rawOpenId) : null
@@ -83,7 +88,7 @@ export function EmployeeDetailPage(): React.JSX.Element {
         else next.set('tab', nextTab)
         next.delete('open')
         return next
-      })
+      }, { replace: true })
     },
     [setSearchParams],
   )
@@ -106,21 +111,12 @@ export function EmployeeDetailPage(): React.JSX.Element {
     },
     [setSearchParams],
   )
-  const [preview, setPreview] = useState<{
-    items: DocViewerItem[]
-    index: number
-  } | null>(null)
-  const openDocPreview = useCallback((docs: PreviewDoc[], index = 0) => {
-    if (docs.length === 0) return
-    setPreview({
-      items: docs.map(generatedDocViewerItem),
-      index,
-    })
-  }, [])
-  const [editing, setEditing] = useState(false)
-  const [statusOpen, setStatusOpen] = useState(false)
   // Gaps-card → ProfileTab handoff: which field to open an inline editor for.
   const [fixField, setFixField] = useState<string | null>(null)
+  const [localPreview, setLocalPreview] = useState<{
+    docs: PreviewDoc[]
+    index: number
+  } | null>(null)
   const handleFixHandled = useCallback(() => setFixField(null), [])
   const qc = useQueryClient()
   const keydownListenerRef = useRef<((e: KeyboardEvent) => void) | null>(null)
@@ -168,7 +164,7 @@ export function EmployeeDetailPage(): React.JSX.Element {
       void qc.invalidateQueries({ queryKey: ['employee-detail', id] })
       void qc.invalidateQueries({ queryKey: ['employees'] })
       setInitialExtraction(undefined)
-      setEditing(false)
+      editOverlay.close()
       toast.success(t('employees.toast.updated'))
     },
     onError: (err) => {
@@ -181,6 +177,37 @@ export function EmployeeDetailPage(): React.JSX.Element {
     queryFn: () => api.getEmployeeDetail(id!),
     enabled: !!id,
   })
+  const editing = action === 'edit' && has('employees.edit')
+  const statusOpen = action === 'status' && has('employees.edit')
+  const recentPreviewDocs: PreviewDoc[] = data?.recent_documents.map((doc) => ({
+    id: doc.id,
+    name: doc.ref_number || doc.template_id,
+  })) ?? []
+  const linkedDocIndex = recentPreviewDocs.findIndex((doc) => String(doc.id) === docOverlay.value)
+  const preview = localPreview ?? (
+    linkedDocIndex >= 0 ? { docs: recentPreviewDocs, index: linkedDocIndex } : null
+  )
+
+  const openDocPreview = useCallback((docs: PreviewDoc[], index = 0) => {
+    const doc = docs[index]
+    if (!doc) return
+    setLocalPreview({ docs, index })
+    // Only documents resolvable from the record get a shareable `?doc=`.
+    if (data?.recent_documents.some((item) => item.id === doc.id)) docOverlay.open(String(doc.id))
+  }, [data?.recent_documents, docOverlay.open])
+
+  useEffect(() => {
+    if (!data || capabilitiesLoading) return
+    if (action === 'edit' || action === 'status') {
+      if (!has('employees.edit')) editOverlay.close()
+    } else if (action) {
+      editOverlay.close()
+    }
+  }, [action, capabilitiesLoading, data, editOverlay.close, has])
+
+  useEffect(() => {
+    if (data && docOverlay.value && linkedDocIndex < 0) docOverlay.close()
+  }, [data, docOverlay.close, docOverlay.value, linkedDocIndex])
 
   // Record this profile in recents (for the lookup-page "recently opened" card).
   useEffect(() => {
@@ -270,7 +297,7 @@ export function EmployeeDetailPage(): React.JSX.Element {
                 await editMutation.mutateAsync(values)
               }}
               onCancel={() => {
-                setEditing(false)
+                editOverlay.close()
                 setInitialExtraction(undefined)
               }}
               submitting={editMutation.isPending}
@@ -286,7 +313,7 @@ export function EmployeeDetailPage(): React.JSX.Element {
           <div className="flex flex-col gap-4 md:sticky md:top-5">
             <EmployeeIdCard
               employee={data.employee}
-              onEdit={() => setEditing(true)}
+              onEdit={() => editOverlay.open('edit')}
               onAddLeave={() =>
                 navigate(
                   `/services/leave_application?employee_id=${encodeURIComponent(data.employee.id)}`,
@@ -298,7 +325,7 @@ export function EmployeeDetailPage(): React.JSX.Element {
               onTimesheet={(span) =>
                 void employeeSheet.download({ employeeId: data.employee.id, ...span })
               }
-              onChangeStatus={editing || initialExtraction ? undefined : () => setStatusOpen(true)}
+              onChangeStatus={editing || initialExtraction ? undefined : () => editOverlay.open('status')}
             />
             <EmployeeGapsCard
               missing={data.missing_fields}
@@ -311,7 +338,7 @@ export function EmployeeDetailPage(): React.JSX.Element {
                   setFixField(field)
                 } else {
                   // «أكمل البيانات الآن» — bulk path keeps the full edit form.
-                  setEditing(true)
+                  editOverlay.open('edit')
                 }
               }}
             />
@@ -393,13 +420,20 @@ export function EmployeeDetailPage(): React.JSX.Element {
       </div>
 
       {statusOpen && (
-        <StatusDialog open employee={data.employee} onOpenChange={setStatusOpen} />
+        <StatusDialog
+          open
+          employee={data.employee}
+          onOpenChange={(open) => { if (!open) editOverlay.close() }}
+        />
       )}
       {preview ? (
         <DocumentViewerDialog
-          items={preview.items}
+          items={preview.docs.map(generatedDocViewerItem)}
           startIndex={preview.index}
-          onClose={() => setPreview(null)}
+          onClose={() => {
+            if (docOverlay.value) docOverlay.close()
+            setLocalPreview(null)
+          }}
         />
       ) : null}
     </div>
