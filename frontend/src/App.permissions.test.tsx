@@ -59,6 +59,7 @@ vi.mock('@/lib/routeLoaders', () => ({
   loadApplicationPage: () => Promise.resolve({ default: () => <div>application-page</div> }),
   loadApprovalsPage: () => Promise.resolve({ default: () => <div>approvals-page</div> }),
   loadAttendancePage: () => Promise.resolve({ default: () => <div>attendance-page</div> }),
+  loadDebugConsolePage: () => Promise.resolve({ default: () => <div>debug-console-page</div> }),
   loadBookRecordPage: () => Promise.resolve({ default: () => <div>book-record-page</div> }),
   loadBooksPage: () => Promise.resolve({ default: () => <div>books-page</div> }),
   loadDashboardPage: () => Promise.resolve({ default: () => <div>dashboard-page</div> }),
