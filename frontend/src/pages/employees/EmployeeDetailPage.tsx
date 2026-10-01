@@ -289,11 +289,11 @@ export function EmployeeDetailPage(): React.JSX.Element {
               onEdit={() => setEditing(true)}
               onAddLeave={() =>
                 navigate(
-                  `/application?form=leave_application&employee_id=${encodeURIComponent(data.employee.id)}`,
+                  `/services/leave_application?employee_id=${encodeURIComponent(data.employee.id)}`,
                 )
               }
               onGenerate={() =>
-                navigate(`/application?employee_id=${encodeURIComponent(data.employee.id)}`)
+                navigate(`/services?employee_id=${encodeURIComponent(data.employee.id)}`)
               }
               onTimesheet={(span) =>
                 void employeeSheet.download({ employeeId: data.employee.id, ...span })

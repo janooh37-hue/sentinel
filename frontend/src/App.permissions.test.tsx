@@ -96,7 +96,8 @@ import App from './App'
 const routes = [
   ['/employees', ['employees.view'], 'employees-page'],
   ['/employees/G-1', ['employees.view'], 'employee-detail-page'],
-  ['/application', ['documents.generate', 'books.view'], 'application-page'],
+  ['/services', ['documents.generate', 'books.view'], 'application-page'],
+  ['/services/general_book', ['documents.generate', 'books.view'], 'application-page'],
   ['/books', ['books.view'], 'books-page'],
   ['/scan-back', ['books.view', 'books.edit'], 'scanback-page'],
   ['/leaves', ['leaves.view'], 'leaves-page'],
@@ -158,10 +159,10 @@ describe('App route capability gates', () => {
   })
 
   it.each(['documents.generate', 'books.view'])(
-    'denies /application when %s is the only granted capability',
+    'denies /services when %s is the only granted capability',
     async (capability) => {
       capabilityState.allowed = new Set([capability])
-      window.history.pushState({}, '', '/application')
+      window.history.pushState({}, '', '/services')
       render(<App />)
 
       expect(await screen.findByText("You don't have access to this page")).toBeVisible()
@@ -223,5 +224,24 @@ describe('App route capability gates', () => {
 
     expect(await screen.findByText("You don't have access to this page")).toBeVisible()
     expect(screen.queryByText('books-page')).not.toBeInTheDocument()
+  })
+})
+
+describe('App legacy links', () => {
+  it.each([
+    ['/application', '/services', ''],
+    [
+      '/application?form=Inmate%20Conduct%20Violations&mode=stats&stats_month=2026-08',
+      '/services/inmate_conduct_violations',
+      '?mode=stats&stats_month=2026-08',
+    ],
+  ] as const)('sends the delivered link %s to its service URL', async (legacy, pathname, search) => {
+    capabilityState.allowed = new Set(['documents.generate', 'books.view'])
+    window.history.pushState({}, '', legacy)
+    render(<App />)
+
+    expect(await screen.findByText('application-page')).toBeVisible()
+    expect(window.location.pathname).toBe(pathname)
+    expect(window.location.search).toBe(search)
   })
 })

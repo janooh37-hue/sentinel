@@ -23,6 +23,7 @@ import { useCapabilities } from '@/lib/useCapabilities'
 import { useAuth } from '@/lib/authContext'
 import { inmateReporterActionFor } from './book-detail-drawer-utils'
 import { cn } from '@/lib/utils'
+import { serviceHref } from '@/lib/quickActions'
 
 const DocPdfCanvas = lazy(() => import('@/pages/application/DocPdfCanvas'))
 
@@ -203,7 +204,7 @@ export function BookPreview({ bookId, onClose, onSubmitForApproval }: Props): Re
                           onClick={() => {
                             if (!current?.template_id) return
                             onClose()
-                            navigate(`/application?form=${encodeURIComponent(current.template_id)}`, { state: { reviseBookId: book.id } })
+                            navigate(`${serviceHref(current.template_id)}?revise=${book.id}`)
                           }}
                           className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-hairline px-3 text-[0.82em] font-medium text-foreground transition-colors hover:bg-surface-tinted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-40">
                           <PencilLine className="h-3.5 w-3.5" strokeWidth={1.8} aria-hidden />

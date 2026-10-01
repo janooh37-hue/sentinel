@@ -53,6 +53,7 @@ import { ScanBackEntry } from '@/pages/scanBack/ScanBackEntry'
 import { inmateReporterActionFor } from '@/components/books/book-detail-drawer-utils'
 import { ApiError } from '@/lib/api'
 import { useInmateReportSubmit } from '@/components/books/useInmateReportSubmit'
+import { serviceHref } from '@/lib/quickActions'
 
 const DEFAULT_FILTERS = DEFAULT_BOOKS_FILTERS
 
@@ -91,9 +92,7 @@ export function BooksPage(): React.JSX.Element {
           action: {
             label: t('books.pane.continueDraft'),
             onClick: () =>
-              navigate('/application?form=Inmate%20Conduct%20Violations', {
-                state: { reviseBookId: bookId },
-              }),
+              navigate(`${serviceHref('Inmate Conduct Violations')}?revise=${bookId}`),
           },
         })
       } else {

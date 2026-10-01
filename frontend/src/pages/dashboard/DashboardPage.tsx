@@ -90,7 +90,7 @@ import { InmateReporterDashboard } from './InmateReporterDashboard'
 
 export type DashboardPage =
   | 'employees'
-  | 'application'
+  | 'services'
   | 'books'
   | 'leaves'
   | 'ledger'
@@ -624,7 +624,7 @@ function GenericDashboardPage({ onNavigate }: DashboardPageProps): React.JSX.Ele
             Drives order + visibility from `layout.quick_actions`. Capped at
             MAX_VISIBLE_QUICK_ACTIONS (8) — fills up to two 4-col rows.
             Each tile's emoji + href + slug come from QUICK_ACTION_META; every
-            one deep-links via `navigate('/application?form=...')` which
+            one deep-links via `navigate('/services/<slug>')` which
             ApplicationPage hydrates into a pre-selected template. Empty state
             surfaces a hint pointing operators at the edit dialog. */}
         {visibleQuickActions.length === 0 ? (

@@ -76,7 +76,7 @@ export function TopNav({ onLock, onOpenSettings, onSignOut }: TopNavProps): Reac
         className="topnav-destinations ms-5 flex min-w-0 gap-1 text-[0.95em]"
       >
         {navItems.filter((item) => isNavEntryAllowed(item, has)).map(({ to, key, Icon }) => {
-          const labelKey = isInmateReporter && to === '/application' ? 'nav.inmateReport' : key
+          const labelKey = isInmateReporter && to === '/services' ? 'nav.inmateReport' : key
           return (
             <NavLink
               key={to}

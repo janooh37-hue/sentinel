@@ -106,9 +106,9 @@ describe('ViolationMonthsWidget', () => {
     expect(screen.getByText('اعتماد وإغلاق · 4 سطر')).toBeInTheDocument()
     expect(screen.getByText('إرسال للمراجعة · 7 سطر')).toBeInTheDocument()
     expect(screen.getAllByRole('link').map((link) => link.getAttribute('href'))).toEqual([
-      '/application?form=inmate_conduct_violations&mode=stats&stats_month=2026-07',
-      '/application?form=inmate_conduct_violations&mode=stats&stats_month=2026-08',
-      '/application?form=inmate_conduct_violations&mode=stats&stats_month=2026-08',
+      '/services/inmate_conduct_violations?mode=stats&stats_month=2026-07',
+      '/services/inmate_conduct_violations?mode=stats&stats_month=2026-08',
+      '/services/inmate_conduct_violations?mode=stats&stats_month=2026-08',
     ])
   })
 
@@ -130,12 +130,12 @@ describe('ViolationMonthsWidget', () => {
 
     expect(await screen.findByText('More months awaiting close: 2')).toBeInTheDocument()
     expect(screen.getAllByRole('link').map((link) => link.getAttribute('href'))).toEqual([
-      '/application?form=inmate_conduct_violations&mode=stats&stats_month=2026-01',
-      '/application?form=inmate_conduct_violations&mode=stats&stats_month=2026-02',
-      '/application?form=inmate_conduct_violations&mode=stats&stats_month=2026-03',
-      '/application?form=inmate_conduct_violations&mode=stats&stats_month=2026-04',
-      '/application?form=inmate_conduct_violations&mode=stats&stats_month=2026-05',
-      '/application?form=inmate_conduct_violations&mode=stats&stats_month=2026-07',
+      '/services/inmate_conduct_violations?mode=stats&stats_month=2026-01',
+      '/services/inmate_conduct_violations?mode=stats&stats_month=2026-02',
+      '/services/inmate_conduct_violations?mode=stats&stats_month=2026-03',
+      '/services/inmate_conduct_violations?mode=stats&stats_month=2026-04',
+      '/services/inmate_conduct_violations?mode=stats&stats_month=2026-05',
+      '/services/inmate_conduct_violations?mode=stats&stats_month=2026-07',
     ])
   })
 
@@ -162,7 +162,7 @@ describe('ViolationMonthsWidget', () => {
       }),
     )
     expect(screen.getByTestId('location')).toHaveTextContent(
-      '/application?form=inmate_conduct_violations&mode=stats&stats_month=2026-08',
+      '/services/inmate_conduct_violations?mode=stats&stats_month=2026-08',
     )
   })
 

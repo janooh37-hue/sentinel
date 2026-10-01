@@ -10,7 +10,7 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 
-export const INMATE_REPORTER_ALLOWED_DESTINATIONS = ['/', '/application', '/books'] as const
+export const INMATE_REPORTER_ALLOWED_DESTINATIONS = ['/', '/services', '/books'] as const
 
 export interface NavItem {
   to: string
@@ -26,7 +26,7 @@ export const NAV_ITEMS: readonly NavItem[] = [
   { to: '/vehicles', key: 'nav.vehicles', Icon: Car, cap: 'vehicles.view' },
   { to: '/ledger', key: 'nav.ledger', Icon: Mail, cap: 'ledger.view' },
   { to: '/leaves', key: 'nav.leaves', Icon: CalendarDays, cap: 'leaves.view' },
-  { to: '/application', key: 'nav.services', Icon: FileText, cap: 'documents.generate' },
+  { to: '/services', key: 'nav.services', Icon: FileText, cap: 'documents.generate' },
   { to: '/books', key: 'nav.records', Icon: BookText, cap: 'books.view' },
   // Scan-back is deliberately NOT here: it lives inside Records (its entry
   // point is ScanBackEntry in the Records header), not in the top nav.

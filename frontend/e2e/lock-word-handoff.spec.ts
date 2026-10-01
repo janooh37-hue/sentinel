@@ -756,7 +756,7 @@ async function prepareApp(
     window.sessionStorage.clear()
     window.localStorage.setItem('gssg.lang', language)
   }, locale)
-  await page.goto(options.path ?? '/application?form=general_book')
+  await page.goto(options.path ?? '/services/general_book')
   await expect(page.locator('html')).toHaveAttribute('lang', new RegExp(`^${locale}`))
   await expect(page.locator('html')).toHaveAttribute('dir', locale === 'ar' ? 'rtl' : 'ltr')
   await expect(page.locator('#main-content')).toBeVisible()

@@ -14,7 +14,7 @@ const expectedPrimaryCaps: Record<string, string | undefined> = {
   '/vehicles': 'vehicles.view',
   '/ledger': 'ledger.view',
   '/leaves': 'leaves.view',
-  '/application': 'documents.generate',
+  '/services': 'documents.generate',
   '/books': 'books.view',
   '/permits': 'permits.view',
 }

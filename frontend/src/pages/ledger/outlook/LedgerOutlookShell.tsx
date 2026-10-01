@@ -69,7 +69,7 @@ type NavigatePage =
   | 'employees'
   | 'books'
   | 'settings'
-  | 'application'
+  | 'services'
   | 'leaves'
   | 'dashboard'
   | 'ledger'
@@ -385,7 +385,7 @@ export function LedgerOutlookShell({ onNavigate }: LedgerOutlookShellProps = {})
 
   // Context-panel "Open record" → the specific employee; "Generate" stays coarse.
   const handleContextNavigate = useCallback(
-    (page: 'employees' | 'application', id?: string) => onNavigate?.(page, id),
+    (page: 'employees' | 'services', id?: string) => onNavigate?.(page, id),
     [onNavigate],
   )
   const handleContextEmail = useCallback(

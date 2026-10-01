@@ -394,7 +394,7 @@ async function gotoExport(page: Page, options: { lang?: 'en' | 'ar' } = {}): Pro
     window.localStorage.clear()
     window.localStorage.setItem('gssg.lang', value)
   }, lang)
-  await page.goto('/application?form=inmate_conduct_violations&mode=stats&stats_month=2026-09')
+  await page.goto('/services/inmate_conduct_violations?mode=stats&stats_month=2026-09')
   await expect(page.locator('#main-content')).toBeVisible()
   const exportTab = page.getByRole('button', { name: lang === 'ar' ? 'التصدير' : 'Export', exact: true })
   await expect(exportTab).toBeVisible()

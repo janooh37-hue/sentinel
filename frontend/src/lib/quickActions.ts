@@ -5,8 +5,8 @@
  * Each entry maps a {@link QuickActionId} to:
  *   - `emoji`  : the tile glyph rendered by `<ServiceTile>`
  *   - `href`   : navigation target. Every tile deep-links to
- *                `/application?form=<slug>` so the picker pre-selects on
- *                mount (see ApplicationPage's `?form=` hydration via
+ *                `/services/<slug>` so the form opens directly (see
+ *                ApplicationPage's `:slug` resolution via
  *                `resolveTemplateIdFromSlug`). Section shortcuts are gone —
  *                the top nav already owns wayfinding, and a tile that only
  *                browsed a list looked identical to one that opened a form.
@@ -31,7 +31,7 @@ export interface QuickActionMeta {
   emoji: string
   /** Calibrated artwork required for every dashboard service tile. */
   artwork: ServiceArtworkId
-  /** Router path or `?form=`-deep-linked URL. */
+  /** Service URL (`/services/<slug>`). */
   href: string
   /** Every tile opens a fresh form. */
   intent: 'new'
@@ -58,143 +58,143 @@ export function slugifyQuickActionId(id: string): string {
 }
 
 /**
- * Build the `?form=...` URL for a form-template id.
+ * The canonical URL of one service form: `/services/<slug>`.
  *
- * Emits the **slug** (not the raw id) because ApplicationPage hydrates `?form=`
- * via `resolveTemplateIdFromSlug`, which compares against `slugifyTemplate`d
- * ids — feeding it the raw spaced id (e.g. "Acknowledgment Form") never
- * matched and silently fell back to the gallery. The slug rules here mirror
- * `formEmoji.slugifyTemplate` exactly so the URL ↔ resolver stay in lockstep.
+ * Accepts a template id ("Acknowledgment Form") or a slug and emits the
+ * **slug**, because ApplicationPage resolves `:slug` via
+ * `resolveTemplateIdFromSlug`, which compares `slugifyTemplate`d ids. The slug
+ * rules here mirror `formEmoji.slugifyTemplate` exactly so the URL ↔ resolver
+ * stay in lockstep.
  */
-function formHref(templateId: string): string {
-  return `/application?form=${encodeURIComponent(slugifyQuickActionId(templateId))}`
+export function serviceHref(templateIdOrSlug: string): string {
+  return `/services/${encodeURIComponent(slugifyQuickActionId(templateIdOrSlug))}`
 }
 
 export const QUICK_ACTION_META: Record<QuickActionId, QuickActionMeta> = {
-  // ── Service forms (deep-link to /application?form=<slug>) ────────────
+  // ── Service forms (deep-link to /services/<slug>) ────────────
   'Acknowledgment Form': {
     emoji: '✍️',
     artwork: 'acknowledgment',
-    href: formHref('Acknowledgment Form'),
+    href: serviceHref('Acknowledgment Form'),
     intent: 'new',
     slug: slugifyQuickActionId('Acknowledgment Form'),
   },
   'Salary Transfer Request': {
     emoji: '💰',
     artwork: 'salary-transfer',
-    href: formHref('Salary Transfer Request'),
+    href: serviceHref('Salary Transfer Request'),
     intent: 'new',
     slug: slugifyQuickActionId('Salary Transfer Request'),
   },
   'Salary Deduction Form': {
     emoji: '💸',
     artwork: 'salary-deduction',
-    href: formHref('Salary Deduction Form'),
+    href: serviceHref('Salary Deduction Form'),
     intent: 'new',
     slug: slugifyQuickActionId('Salary Deduction Form'),
   },
   'Violation Form': {
     emoji: '🚨',
     artwork: 'violation',
-    href: formHref('Violation Form'),
+    href: serviceHref('Violation Form'),
     intent: 'new',
     slug: slugifyQuickActionId('Violation Form'),
   },
   'Employee Clearance Form': {
     emoji: '✅',
     artwork: 'employee-clearance',
-    href: formHref('Employee Clearance Form'),
+    href: serviceHref('Employee Clearance Form'),
     intent: 'new',
     slug: slugifyQuickActionId('Employee Clearance Form'),
   },
   'Leave Application Form': {
     emoji: '📅',
     artwork: 'leave-application',
-    href: formHref('Leave Application Form'),
+    href: serviceHref('Leave Application Form'),
     intent: 'new',
     slug: slugifyQuickActionId('Leave Application Form'),
   },
   'Passport Release Form': {
     emoji: '📤',
     artwork: 'passport-release',
-    href: formHref('Passport Release Form'),
+    href: serviceHref('Passport Release Form'),
     intent: 'new',
     slug: slugifyQuickActionId('Passport Release Form'),
   },
   'Duty Resumption Form': {
     emoji: '🔁',
     artwork: 'duty-resumption',
-    href: formHref('Duty Resumption Form'),
+    href: serviceHref('Duty Resumption Form'),
     intent: 'new',
     slug: slugifyQuickActionId('Duty Resumption Form'),
   },
   'Material Request Form': {
     emoji: '📦',
     artwork: 'material-request',
-    href: formHref('Material Request Form'),
+    href: serviceHref('Material Request Form'),
     intent: 'new',
     slug: slugifyQuickActionId('Material Request Form'),
   },
   'General Book': {
     emoji: '📓',
     artwork: 'general-book',
-    href: formHref('General Book'),
+    href: serviceHref('General Book'),
     intent: 'new',
     slug: slugifyQuickActionId('General Book'),
   },
   'HR Request Form': {
     emoji: '🧑‍💼',
     artwork: 'hr-request',
-    href: formHref('HR Request Form'),
+    href: serviceHref('HR Request Form'),
     intent: 'new',
     slug: slugifyQuickActionId('HR Request Form'),
   },
   'Resignation Letter': {
     emoji: '✉️',
     artwork: 'resignation-letter',
-    href: formHref('Resignation Letter'),
+    href: serviceHref('Resignation Letter'),
     intent: 'new',
     slug: slugifyQuickActionId('Resignation Letter'),
   },
   'Leave Permit Form': {
     emoji: '🎫',
     artwork: 'leave-permit',
-    href: formHref('Leave Permit Form'),
+    href: serviceHref('Leave Permit Form'),
     intent: 'new',
     slug: slugifyQuickActionId('Leave Permit Form'),
   },
   'Administrative Leave Form': {
     emoji: '🗂️',
     artwork: 'administrative-leave',
-    href: formHref('Administrative Leave Form'),
+    href: serviceHref('Administrative Leave Form'),
     intent: 'new',
     slug: slugifyQuickActionId('Administrative Leave Form'),
   },
   'Warning Form': {
     emoji: '⚠️',
     artwork: 'warning',
-    href: formHref('Warning Form'),
+    href: serviceHref('Warning Form'),
     intent: 'new',
     slug: slugifyQuickActionId('Warning Form'),
   },
   'Passport Release List': {
     emoji: '🛂',
     artwork: 'passport-release-list',
-    href: formHref('Passport Release List'),
+    href: serviceHref('Passport Release List'),
     intent: 'new',
     slug: slugifyQuickActionId('Passport Release List'),
   },
   Report: {
     emoji: '📊',
     artwork: 'report',
-    href: formHref('Report'),
+    href: serviceHref('Report'),
     intent: 'new',
     slug: slugifyQuickActionId('Report'),
   },
   'Inmate Conduct Violations': {
     emoji: '⛓️',
     artwork: 'inmate-conduct',
-    href: formHref('Inmate Conduct Violations'),
+    href: serviceHref('Inmate Conduct Violations'),
     intent: 'new',
     slug: slugifyQuickActionId('Inmate Conduct Violations'),
   },

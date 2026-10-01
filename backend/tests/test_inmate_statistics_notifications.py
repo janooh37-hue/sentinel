@@ -27,7 +27,7 @@ def test_assignment_moves_from_selected_reviewer_to_selected_manager(api_db, peo
     assert (item.kind, item.ref, item.url) == (
         "monthly_review",
         "inmate-month:2026-08:review",
-        "/application?form=inmate_conduct_violations&mode=stats&stats_month=2026-08",
+        "/services/inmate_conduct_violations?mode=stats&stats_month=2026-08",
     )
     assert notifications.relevant_counts(api_db, people[1]).monthly_reviews == 1
     assert monthly(people[3], api_db) == []

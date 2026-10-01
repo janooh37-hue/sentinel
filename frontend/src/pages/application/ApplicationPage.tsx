@@ -7,7 +7,7 @@
  *   - set   → Form detail: a `‹ Services` back button + the picked form's
  *             emoji and title, then the existing field/preview flow.
  *
- * Picking a tile (or arriving via `?form=`) animates the form panel in with a
+ * Picking a tile (or arriving at `/services/<slug>`) animates the form panel in with a
  * 420ms out-expo expand; the back button returns to the gallery with the same
  * motion. Both honour `prefers-reduced-motion`.
  *
@@ -17,9 +17,12 @@
  *   - activeTab: 'fields' | 'preview'
  *   - activeJobId → mounts <JobStatus>, switches to preview tab on generate
  *
- * Deep-link query params:
- *   - ?form=<slug> pre-selects a template (opens straight into form detail)
- *   - ?employee_id=<G-id> pre-selects an employee
+ * URL (the source of truth for which service is open):
+ *   - /services            → gallery; ?q= is the search box
+ *   - /services/<slug>     → that service's form (push, so Back returns to the gallery)
+ *   - ?employee_id=<G-id>  pre-selects an employee
+ *   - ?revise=<bookId>     revise mode (regenerates a new version of that book)
+ *   - ?mode=stats&stats_month=YYYY-MM → inmate violations monthly register
  *
  * The RHF useForm instance is reset whenever the selected template changes.
  */
@@ -29,7 +32,7 @@ import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
+import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { ChevronLeft, ChevronRight, Eye, Mail, Pencil, QrCode, RotateCcw, Search, ArrowRight, ArrowLeft } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -84,6 +87,8 @@ import {
   emojiForTemplate,
   resolveTemplateIdFromSlug,
 } from './formEmoji'
+import { useSearchParam } from '@/lib/urlState'
+import { serviceHref } from '@/lib/quickActions'
 import {
   nowHM,
   restoreThenSeedResignationDate,
@@ -165,25 +170,22 @@ function StandardApplicationPage(): React.JSX.Element {
     return s?.injectedAttachment
   })
 
-  // Revise mode — the BookDetailDrawer's "Revise & regenerate" navigates here
-  // with `{ reviseBookId }` in router state. Captured once on mount; we prefill
-  // the originating form and thread `revise_of_book_id` into the committed save
-  // so it regenerates a NEW version under the same ref.
-  const [reviseBookId, setReviseBookId] = useState<number | null>(() => {
-    const s = location.state as { reviseBookId?: number } | null
-    return s?.reviseBookId ?? null
-  })
+  // Revise mode — "Revise & regenerate" links to `/services/<slug>?revise=<id>`.
+  // We prefill the originating form and thread `revise_of_book_id` into the
+  // committed save so it regenerates a NEW version under the same ref. The API
+  // authorizes the book; the URL only selects it.
+  const [reviseParam, setReviseParam] = useSearchParam('revise')
+  const reviseBookId = /^\d+$/.test(reviseParam) ? Number(reviseParam) : null
   useEffect(() => {
-    if (pendingInjection || reviseBookId !== null || pendingAttachment) {
+    if (pendingInjection || pendingAttachment) {
       navigate(location.pathname + location.search, { replace: true, state: {} })
     }
     // Run once on mount only.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Query params — pre-seed the picker(s) on first mount.
-  const [searchParams, setSearchParams] = useSearchParams()
-  const formFromUrl = searchParams.get('form')
+  const { slug } = useParams<{ slug?: string }>()
+  const [searchParams] = useSearchParams()
   const employeeIdFromUrl = searchParams.get('employee_id')
 
   // Page state
@@ -199,7 +201,7 @@ function StandardApplicationPage(): React.JSX.Element {
   const [previewJobStatus, setPreviewJobStatus] =
     useState<JobStatusResponse['status'] | null>(null)
   const [submitError, setSubmitError] = useState<string | null>(null)
-  const [query, setQuery] = useState('')
+  const [query, setQuery] = useSearchParam('q')
   // General Book: classification code selected by the picker. Required for
   // every ref-allocating submit (both body modes); null only while unpicked.
   const [classificationCode, setClassificationCode] = useState<string | null>(null)
@@ -226,7 +228,7 @@ function StandardApplicationPage(): React.JSX.Element {
     (SavedGeneration & { notification?: NotificationChoice }) | null
   >(null)
   const requestedStatsMode =
-    formFromUrl === 'inmate_conduct_violations' && searchParams.get('mode') === 'stats'
+    slug === 'inmate_conduct_violations' && searchParams.get('mode') === 'stats'
   const hydratedStatsNavigationRef = useRef<string | null>(null)
   const [inmateEntryMode, setInmateEntryMode] = useState<InmateEntryMode>('create')
   const [approvedImport, setApprovedImport] = useState<ApprovedViolationImportRead | null>(null)
@@ -262,30 +264,6 @@ function StandardApplicationPage(): React.JSX.Element {
       ),
     [allTemplates, has],
   )
-
-  // Once the template list is fetched, hydrate ?form= → selectedTemplate.
-  // Run-once: clear ?form= after consuming to avoid re-firing on internal
-  // changes.  This is the canonical URL-param-hydration pattern: we can't
-  // seed `useState` because the templates query is asynchronous.
-  useEffect(() => {
-    // Monthly-register URLs remain canonical and are consumed per navigation below.
-    if (requestedStatsMode) return
-    if (!formFromUrl || templates.length === 0 || selectedTemplate) return
-    const id = resolveTemplateIdFromSlug(formFromUrl, templates)
-    if (id) {
-      setSelectedTemplate(id)
-    }
-    // Drop ?form= from the URL but keep ?employee_id= for downstream re-mounts.
-    setSearchParams(
-      (prev) => {
-        const next = new URLSearchParams(prev)
-        next.delete('form')
-        return next
-      },
-      { replace: true },
-    )
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [formFromUrl, templates.length, requestedStatsMode])
 
   // Employee data for basket item — dedupes with EmployeeHeader's query.
   const employeeQuery = useQuery({
@@ -383,19 +361,11 @@ function StandardApplicationPage(): React.JSX.Element {
     queryFn: () => api.getBook(reviseBookId!),
     enabled: reviseBookId !== null,
   })
-  // Two-stage to avoid a race: this effect FETCHES the snapshot into state and
-  // selects the template; the schema-gated effect below applies `form.reset` only
-  // once the fields are actually registered. Resetting here (the instant the
-  // fetch resolves) silently drops values for not-yet-mounted fields when the
-  // fields-fetch beats the schema query — the same reason the localStorage
-  // restore waits for `schemaReady`.
-  // Select the originating template once the book loads (schemaQuery keys off it).
-  useEffect(() => {
-    const versions = reviseBookQuery.data?.versions ?? []
-    const latest = versions[versions.length - 1]
-    if (latest?.template_id) setSelectedTemplate(latest.template_id)
-  }, [reviseBookQuery.data])
-
+  // Two-stage to avoid a race: the snapshot is fetched here; the schema-gated
+  // effect below applies `form.reset` only once the fields are actually
+  // registered. Resetting the instant the fetch resolves silently drops values
+  // for not-yet-mounted fields when the fields-fetch beats the schema query —
+  // the same reason the localStorage restore waits for `schemaReady`.
   // Fetch the version snapshot via a query rather than a manual fetch: under
   // React StrictMode the effect double-invokes in dev, and a manual fetch +
   // `active` cancellation silently drops the result (cleanup flips `active`
@@ -679,10 +649,10 @@ function StandardApplicationPage(): React.JSX.Element {
         // is back to approval_state="none", so threading revise_of_book_id on a
         // SECOND save would hit the BOOK_NOT_REVISABLE guard. Clear it now (only
         // for committed saves, not previews) so subsequent saves behave normally.
-        if (saved) setReviseBookId(null)
+        if (saved) setReviseParam(null)
       }
     },
-    [qc, selectedTemplate, t, i18n.language],
+    [qc, selectedTemplate, t, i18n.language, setReviseParam],
   )
 
   const handleSelectTemplate = useCallback((id: string) => {
@@ -857,8 +827,8 @@ function StandardApplicationPage(): React.JSX.Element {
     setSelectedEmployee(id)
   }, [])
 
-  // Clear the picked form and return to the gallery. Shared by the back
-  // button and the Ctrl+N "new form" shortcut so the two paths can't drift.
+  // Clear the picked form back to the gallery state. Applied when the URL
+  // leaves a service (back button, Ctrl+N, browser Back).
   const resetToGallery = useCallback(() => {
     if (approvedImportBusy) return
     form.reset({})
@@ -882,8 +852,42 @@ function StandardApplicationPage(): React.JSX.Element {
     setPendingWordSession(null)
   }, [approvedImportBusy, form])
 
+  // The URL owns which service is open: every navigation (tile, Back, bell,
+  // direct load) lands here. The monthly register is selected by its own effect.
+  useEffect(() => {
+    if (requestedStatsMode || capabilitiesLoading || templates.length === 0) return
+    const id = slug ? resolveTemplateIdFromSlug(slug, templates) : null
+    if (slug && !id) {
+      navigate('/services', { replace: true })
+      return
+    }
+    if (id === selectedTemplate) return
+    if (id) handleSelectTemplate(id)
+    else resetToGallery()
+  }, [
+    requestedStatsMode,
+    capabilitiesLoading,
+    templates,
+    slug,
+    selectedTemplate,
+    handleSelectTemplate,
+    resetToGallery,
+    navigate,
+  ])
+
+  const openService = useCallback(
+    (id: string) => {
+      const search = employeeIdFromUrl ? `?employee_id=${encodeURIComponent(employeeIdFromUrl)}` : ''
+      navigate({ pathname: serviceHref(id), search })
+    },
+    [employeeIdFromUrl, navigate],
+  )
+  const openGallery = useCallback(() => {
+    if (!approvedImportBusy) navigate('/services')
+  }, [approvedImportBusy, navigate])
+
   // Ctrl+N — clear and pick again from the gallery.
-  useShortcutAction('newItem', resetToGallery)
+  useShortcutAction('newItem', openGallery)
 
   const previewTabLabel = t('application.tabs.preview')
   const selectedTemplateName = selectedMeta
@@ -1017,7 +1021,7 @@ function StandardApplicationPage(): React.JSX.Element {
                       artwork={artworkForTemplate(tpl.id)}
                       basketCount={basketCounts[tpl.id] ?? 0}
                       hasCode={tpl.has_code}
-                      onSelect={() => handleSelectTemplate(tpl.id)}
+                      onSelect={() => openService(tpl.id)}
                     />
                   ))}
                 </div>
@@ -1030,7 +1034,7 @@ function StandardApplicationPage(): React.JSX.Element {
             <header className="mb-5">
               <button
                 type="button"
-                onClick={resetToGallery}
+                onClick={openGallery}
                 disabled={approvedImportBusy}
                 className="mb-2.5 inline-flex items-center gap-1.5 text-[0.86em] font-medium text-primary transition-colors hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
               >

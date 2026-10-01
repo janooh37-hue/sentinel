@@ -115,6 +115,7 @@ import { useAddScan } from './useAddScan'
 import { useManagePaper } from './useManagePaper'
 import type { Paper } from './recordPapers'
 import { useRecordPrintMode } from './useRecordPrintMode'
+import { serviceHref } from '@/lib/quickActions'
 
 const DocPdfCanvas = lazy(() => import('@/pages/application/DocPdfCanvas'))
 
@@ -817,9 +818,7 @@ export function BookRecordPage(): React.JSX.Element {
 
   function handleRevise(): void {
     if (!book || !current?.template_id) return
-    navigate(`/application?form=${encodeURIComponent(current.template_id)}`, {
-      state: { reviseBookId: book.id },
-    })
+    navigate(`${serviceHref(current.template_id)}?revise=${book.id}`)
   }
 
   // "Email via Outlook" — the record's own handoff entry point. It builds the

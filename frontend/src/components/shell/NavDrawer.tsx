@@ -67,7 +67,7 @@ export function NavDrawer({ open, onOpenChange }: NavDrawerProps): React.JSX.Ele
         {/* Primary nav */}
         <nav className="flex flex-col gap-0.5 px-3 py-3">
           {navItems.filter((item) => isNavEntryAllowed(item, has)).map(({ to, key, Icon }) => {
-            const labelKey = isInmateReporter && to === '/application' ? 'nav.inmateReport' : key
+            const labelKey = isInmateReporter && to === '/services' ? 'nav.inmateReport' : key
             return (
               <NavLink
                 key={to}

@@ -199,7 +199,7 @@ export function AbsencesPage(): React.JSX.Element {
           <header className="mb-5">
             <button
               type="button"
-              onClick={() => navigate('/application')}
+              onClick={() => navigate('/services')}
               className="mb-2.5 inline-flex items-center gap-1.5 text-[0.86em] font-medium text-primary transition-colors hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
             >
               {isAr ? (
