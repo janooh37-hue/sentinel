@@ -122,7 +122,7 @@ export function InmateReporterDashboard(): React.JSX.Element {
   const { t } = useTranslation()
   const facetsQuery = useQuery({
     queryKey: ['books', 'facets'],
-    queryFn: api.getBookFacets,
+    queryFn: () => api.getBookFacets(),
   })
   const states = facetsQuery.data?.states ?? {}
   const recordLinks = [
