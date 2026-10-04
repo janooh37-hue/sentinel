@@ -1,4 +1,4 @@
-import { lazy, Suspense, useRef, useState } from 'react'
+import { lazy, Suspense, useId, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   ChevronDown,
@@ -14,6 +14,7 @@ import {
   RefreshCw,
   Save,
   Trash2,
+  X,
 } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -149,6 +150,18 @@ function IncludedPapersWorkspace({
     }
   }
 
+  // A control that cannot act says why, in text (visible on touch, where a tooltip cannot show).
+  const reasonId = useId()
+  const noChangesReason = t('books.reason.noChanges', { defaultValue: 'No changes to review.' })
+  const reviewReason = editor.dirty ? null : noChangesReason
+  const saveReason = !editor.dirty
+    ? noChangesReason
+    : !editor.canSave && !editor.busy
+      ? t('books.includedPapers.reviewHint', {
+          defaultValue: 'Review the PDF to see your changes before saving.',
+        })
+      : null
+  const blockedReason = reviewReason ?? saveReason
 
   return (
     <DialogContent
@@ -163,7 +176,7 @@ function IncludedPapersWorkspace({
       }}
       className="h-[100dvh] max-h-none max-w-none rounded-none border-0 sm:h-[min(90vh,860px)] sm:max-h-[calc(100vh-2rem)] sm:w-[min(96vw,1440px)] sm:rounded-2xl sm:border"
     >
-      <DialogHeader className="relative min-h-[72px] flex-row items-center gap-3 border-b border-hairline px-4 py-3 pe-12 sm:px-5">
+      <DialogHeader className="relative min-h-[72px] flex-row items-center gap-3 border-b border-hairline px-4 py-3 sm:px-5">
         <span className="grid h-10 w-10 shrink-0 place-items-center rounded-xl border border-primary/15 bg-primary-soft text-primary">
           <FileStack className="h-5 w-5" strokeWidth={1.7} aria-hidden />
         </span>
@@ -195,6 +208,14 @@ function IncludedPapersWorkspace({
             })}
           </span>
         </span>
+        <button
+          type="button"
+          onClick={close}
+          aria-label={t('common.close', { defaultValue: 'Close' })}
+          className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-surface-tinted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none sm:h-9 sm:w-9"
+        >
+          <X className="h-4 w-4" aria-hidden />
+        </button>
       </DialogHeader>
 
       <div className="grid grid-cols-2 border-b border-hairline bg-surface px-3 py-2 md:hidden">
@@ -205,7 +226,7 @@ function IncludedPapersWorkspace({
             onClick={() => setMobileTab(tab)}
             aria-pressed={mobileTab === tab}
             className={cn(
-              'rounded-lg px-3 py-2 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+              'min-h-11 rounded-lg px-3 py-2 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none',
               mobileTab === tab
                 ? 'bg-primary-soft text-primary'
                 : 'text-muted-foreground hover:text-foreground',
@@ -243,11 +264,19 @@ function IncludedPapersWorkspace({
               })}
             </span>
           </div>
-          <div className="relative min-h-0 flex-1 p-2 sm:p-3">
+          {editor.dirty && !preview && (
+            <p
+              role="status"
+              className="mx-3 mt-3 rounded-lg border border-warning/30 bg-warning-soft px-3 py-2 text-center text-xs font-medium text-warning sm:mx-3"
+            >
+              {t('books.paper.outOfDate', { defaultValue: 'Preview is out of date — Review PDF' })}
+            </p>
+          )}
+          <div className="relative min-h-0 flex-1 overflow-auto p-2 sm:p-3">
             <Suspense
               fallback={
                 <div className="grid h-full place-items-center text-muted-foreground">
-                  <Loader2 className="h-5 w-5 animate-spin" aria-hidden />
+                  <Loader2 className="h-5 w-5 animate-spin motion-reduce:animate-none" aria-hidden />
                 </div>
               }
             >
@@ -260,13 +289,6 @@ function IncludedPapersWorkspace({
                 <DocPdfCanvas pdfUrl={currentPdfUrl} />
               )}
             </Suspense>
-            {!preview && editor.state.items.some((paper) => paper.staged_token) && (
-              <div className="pointer-events-none absolute inset-x-5 bottom-5 rounded-lg border border-primary/20 bg-surface/95 px-3 py-2 text-center text-xs text-foreground shadow-sm">
-                {t('books.includedPapers.reviewHint', {
-                  defaultValue: 'Review the PDF to see your changes before saving.',
-                })}
-              </div>
-            )}
           </div>
         </section>
 
@@ -507,8 +529,14 @@ function IncludedPapersWorkspace({
             )}
           </div>
 
-          <footer className="shrink-0 border-t border-hairline bg-surface px-4 py-3 sm:px-5">
-            <div className="mb-3 flex items-center justify-between text-xs">
+          {/* the sticky footer lives below the grid, so it is reachable from both tabs */}
+        </section>
+      </div>
+
+      <footer className="shrink-0 border-t border-hairline bg-surface px-4 pb-[max(0.75rem,var(--safe-bottom))] pt-3 sm:px-5">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+          <div className="min-w-0 flex-1 basis-48 text-xs">
+            <div className="flex items-center gap-2">
               <span className="text-muted-foreground">
                 {t('books.includedPapers.finalPdf', { defaultValue: 'Final combined PDF' })}
               </span>
@@ -519,43 +547,54 @@ function IncludedPapersWorkspace({
                 })}
               </strong>
             </div>
-            <div className="grid grid-cols-[auto_1fr_1fr] gap-2">
-              <Button
-                type="button"
-                variant="ghost"
-                className="hover:!bg-surface-tinted"
-                onClick={close}
-                disabled={editor.busy}
-              >
-                {t('common.cancel', { defaultValue: 'Cancel' })}
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                className="hover:!bg-surface-tinted"
-                onClick={() => void review()}
-                disabled={editor.busy || !editor.dirty}
-              >
-                {editor.busy ? (
-                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-                ) : (
-                  <RefreshCw className="h-4 w-4" strokeWidth={1.8} aria-hidden />
-                )}
-                {t('books.includedPapers.review', { defaultValue: 'Review PDF' })}
-              </Button>
-              <Button
-                type="button"
-                variant="commit"
-                onClick={() => void save()}
-                disabled={!editor.canSave}
-              >
-                <Save className="h-4 w-4" strokeWidth={1.8} aria-hidden />
-                {t('books.includedPapers.save', { defaultValue: 'Save combined PDF' })}
-              </Button>
-            </div>
-          </footer>
-        </section>
-      </div>
+            {blockedReason && (
+              <p id={reasonId} className="mt-0.5 text-[0.9em] text-muted-foreground">
+                {blockedReason}
+              </p>
+            )}
+          </div>
+          <div className="flex gap-2 max-sm:w-full max-sm:[&>*]:flex-1">
+            <Button
+              type="button"
+              variant="ghost"
+              className="min-h-11 hover:!bg-surface-tinted sm:min-h-0"
+              onClick={close}
+              disabled={editor.busy}
+            >
+              {t('common.cancel', { defaultValue: 'Cancel' })}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="min-h-11 hover:!bg-surface-tinted aria-disabled:cursor-not-allowed aria-disabled:opacity-50 sm:min-h-0"
+              onClick={reviewReason ? undefined : () => void review()}
+              disabled={editor.busy}
+              aria-disabled={reviewReason ? true : undefined}
+              aria-describedby={reviewReason ? reasonId : undefined}
+            >
+              {editor.busy ? (
+                <Loader2 className="h-4 w-4 animate-spin motion-reduce:animate-none" aria-hidden />
+              ) : (
+                <RefreshCw className="h-4 w-4" strokeWidth={1.8} aria-hidden />
+              )}
+              {t('books.includedPapers.review', { defaultValue: 'Review PDF' })}
+            </Button>
+            <Button
+              type="button"
+              variant="commit"
+              className="min-h-11 aria-disabled:cursor-not-allowed aria-disabled:opacity-50 sm:min-h-0"
+              onClick={saveReason ? undefined : () => void save()}
+              disabled={editor.busy}
+              aria-disabled={saveReason ? true : undefined}
+              aria-describedby={saveReason ? reasonId : undefined}
+            >
+              <Save className="h-4 w-4" strokeWidth={1.8} aria-hidden />
+              {t('books.includedPapers.save', { defaultValue: 'Save combined PDF' })}
+            </Button>
+          </div>
+        </div>
+      </footer>
+
       <ConfirmDialog
         open={discardOpen}
         onOpenChange={setDiscardOpen}
@@ -649,7 +688,7 @@ function PaperOrderRow({
           {t('books.includedPapers.signedFixed', { defaultValue: 'Fixed in signed PDF' })}
         </span>
       ) : (
-        <span className="flex shrink-0 items-center opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100">
+        <span className="flex shrink-0 items-center opacity-100 transition-opacity motion-reduce:transition-none [@media(hover:hover)]:sm:opacity-0 [@media(hover:hover)]:sm:group-focus-within:opacity-100 [@media(hover:hover)]:sm:group-hover:opacity-100">
           <button
             type="button"
             onClick={() => onMove(-1)}
@@ -658,7 +697,7 @@ function PaperOrderRow({
               name: paper.original_name,
               defaultValue: 'Move {{name}} up',
             })}
-            className="rounded-md p-1.5 text-muted-foreground hover:bg-surface-tinted hover:text-foreground disabled:opacity-30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="inline-flex h-10 w-10 items-center justify-center rounded-md text-muted-foreground hover:bg-surface-tinted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-30"
           >
             <ChevronUp className="h-3.5 w-3.5" aria-hidden />
           </button>
@@ -670,7 +709,7 @@ function PaperOrderRow({
               name: paper.original_name,
               defaultValue: 'Move {{name}} down',
             })}
-            className="rounded-md p-1.5 text-muted-foreground hover:bg-surface-tinted hover:text-foreground disabled:opacity-30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="inline-flex h-10 w-10 items-center justify-center rounded-md text-muted-foreground hover:bg-surface-tinted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-30"
           >
             <ChevronDown className="h-3.5 w-3.5" aria-hidden />
           </button>
@@ -682,7 +721,7 @@ function PaperOrderRow({
               name: paper.original_name,
               defaultValue: 'Replace {{name}}',
             })}
-            className="rounded-md p-1.5 text-muted-foreground hover:bg-surface-tinted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="inline-flex h-10 w-10 items-center justify-center rounded-md text-muted-foreground hover:bg-surface-tinted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             <RefreshCw className="h-3.5 w-3.5" strokeWidth={1.8} aria-hidden />
           </button>
@@ -694,7 +733,7 @@ function PaperOrderRow({
               name: paper.original_name,
               defaultValue: 'Remove {{name}}',
             })}
-            className="rounded-md p-1.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="inline-flex h-10 w-10 items-center justify-center rounded-md text-muted-foreground hover:bg-destructive/10 hover:text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             <Trash2 className="h-3.5 w-3.5" strokeWidth={1.8} aria-hidden />
           </button>

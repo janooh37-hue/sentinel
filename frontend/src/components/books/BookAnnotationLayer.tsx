@@ -11,12 +11,15 @@
  * survive reflow/DPR; RTL only affects chrome here, never the coordinates.
  */
 
-import { useEffect, useLayoutEffect, useRef, useState } from 'react'
+import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
-import { Check, Highlighter, MapPin, Trash2 } from 'lucide-react'
+import { Check, ChevronLeft, ChevronRight, Highlighter, MapPin, MessageSquare, Trash2 } from 'lucide-react'
+import { toast } from 'sonner'
 
+import { Hint } from '@/components/ui/hint'
 import { cn } from '@/lib/utils'
+import { useDeferredDelete } from '@/lib/useDeferredDelete'
 import { useIsMobile } from '@/lib/useIsMobile'
 import { useKeyboardInset } from '@/lib/useKeyboardInset'
 import {
@@ -34,6 +37,8 @@ interface DraftMark {
   geometry: Record<string, number>
 }
 
+/** A pointer that travels this far between down and up is a scroll / pinch, not a pin. */
+const PIN_SLOP_PX = 8
 export function BookAnnotationLayer({
   pages,
   annotations,
@@ -44,6 +49,10 @@ export function BookAnnotationLayer({
   onCreate,
   onDelete,
   onDisarm,
+  tool: toolProp,
+  onToolChange,
+  openId: openIdProp,
+  onOpenIdChange,
 }: {
   pages: PageBox[]
   annotations: BookAnnotation[]
@@ -59,9 +68,17 @@ export function BookAnnotationLayer({
     geometry: Record<string, number>
     comment: string
   }) => void
+  /** Called once the 6 s undo window has elapsed (or on unmount). */
   onDelete?: (id: number) => void
   /** Fired after a mark is saved or cancelled — one arm yields one mark. */
   onDisarm?: () => void
+  /** Controlled tool. When `onToolChange` is given the host renders the tools
+   *  itself (the desk toolbar, via `MarkTools`) and no floating toolbar shows. */
+  tool?: AnnotationKind
+  onToolChange?: (tool: AnnotationKind) => void
+  /** Controlled open comment card (the toolbar's mark stepper drives it). */
+  openId?: number | null
+  onOpenIdChange?: (id: number | null) => void
 }): React.JSX.Element {
   const { t } = useTranslation()
 
@@ -72,8 +89,33 @@ export function BookAnnotationLayer({
   const live = mode === 'mark' && armed
   const isPhone = useIsMobile()
   const keyboardInset = useKeyboardInset()
-  const [tool, setTool] = useState<AnnotationKind>('pin')
-  const [openId, setOpenId] = useState<number | null>(null)
+  const [toolState, setToolState] = useState<AnnotationKind>('pin')
+  const tool = toolProp ?? toolState
+  const noteReasonId = useId()
+  const setTool = onToolChange ?? setToolState
+  const [openIdState, setOpenIdState] = useState<number | null>(null)
+  const openId = openIdProp !== undefined ? openIdProp : openIdState
+  const setOpenId = onOpenIdChange ?? setOpenIdState
+  const pinRef = useRef<{ page: number; x: number; y: number; clientX: number; clientY: number } | null>(null)
+
+  // Undo-able delete: the mark hides at once, the request fires after 6 s unless undone.
+  const { pendingIds, scheduleDelete } = useDeferredDelete<{ id: number }>({
+    onCommit: (p) => onDelete?.(p.id),
+    notify: ({ onUndo }) => {
+      toast(t('common.deletedToast'), {
+        duration: 6000,
+        action: { label: t('common.undo'), onClick: onUndo },
+      })
+    },
+  })
+
+  // A stepper-driven card may sit off-screen: bring its badge into view.
+  useEffect(() => {
+    if (openId == null) return
+    rootRef.current
+      ?.querySelector<HTMLElement>(`[data-mark-id="${openId}"]`)
+      ?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' })
+  }, [openId])
   const [draft, setDraft] = useState<DraftMark | null>(null)
   const [draftText, setDraftText] = useState('')
   const dragRef = useRef<{ page: number; x0: number; y0: number } | null>(null)
@@ -110,8 +152,8 @@ export function BookAnnotationLayer({
     if (!box) return
     const p = normalizePoint(box, cx, cy)
     if (tool === 'pin') {
-      setDraft({ page: box.page, kind: 'pin', geometry: { x: p.x, y: p.y } })
-      setDraftText('')
+      // Placed on pointerup: a touch that drifts (scroll / pinch) must not drop a pin.
+      pinRef.current = { page: box.page, x: p.x, y: p.y, clientX: e.clientX, clientY: e.clientY }
     } else {
       dragRef.current = { page: box.page, x0: p.x, y0: p.y }
       ;(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId)
@@ -121,6 +163,10 @@ export function BookAnnotationLayer({
   }
 
   function onPointerMove(e: React.PointerEvent): void {
+    const pin = pinRef.current
+    if (pin && Math.hypot(e.clientX - pin.clientX, e.clientY - pin.clientY) >= PIN_SLOP_PX) {
+      pinRef.current = null
+    }
     const d = dragRef.current
     if (!d || tool !== 'highlight') return
     const box = pages.find((p) => p.page === d.page)
@@ -140,12 +186,25 @@ export function BookAnnotationLayer({
   }
 
   function onPointerUp(e: React.PointerEvent): void {
+    const pin = pinRef.current
+    if (pin) {
+      pinRef.current = null
+      if (Math.hypot(e.clientX - pin.clientX, e.clientY - pin.clientY) < PIN_SLOP_PX) {
+        setDraft({ page: pin.page, kind: 'pin', geometry: { x: pin.x, y: pin.y } })
+        setDraftText('')
+      }
+      return
+    }
     if (!dragRef.current) return
     ;(e.currentTarget as HTMLElement).releasePointerCapture?.(e.pointerId)
     dragRef.current = null
     setDraft((d) =>
       d && d.kind === 'highlight' && (d.geometry.w < 0.01 || d.geometry.h < 0.01) ? null : d,
     )
+  }
+
+  function onPointerCancel(): void {
+    pinRef.current = null
   }
 
   /** Close the composer. Blur FIRST: iOS keeps the keyboard raised when a
@@ -164,7 +223,7 @@ export function BookAnnotationLayer({
     closeDraft()
   }
 
-  const numbered = annotations.map((a, i) => ({ a, n: i + 1 }))
+  const numbered = annotations.map((a, i) => ({ a, n: i + 1 })).filter(({ a }) => !pendingIds.has(a.id))
 
   return (
     <div
@@ -174,31 +233,17 @@ export function BookAnnotationLayer({
       onPointerDown={live ? onPointerDown : undefined}
       onPointerMove={live ? onPointerMove : undefined}
       onPointerUp={live ? onPointerUp : undefined}
+      onPointerCancel={live ? onPointerCancel : undefined}
       // Only the highlight DRAG conflicts with the browser's own gestures, and
       // the browser commits to scroll-vs-gesture on pointerdown — so this keys
       // off the selected tool, not off a live drag (too late by then). Pin is
       // the default, so arming alone never costs the manager pinch-zoom.
       style={{ touchAction: live && tool === 'highlight' ? 'none' : undefined }}
     >
-      {/* toolbar (mark mode) */}
-      {live && (
+      {/* floating toolbar (mark mode) — only when the host does not render the tools itself */}
+      {live && !onToolChange && (
         <div className="pointer-events-auto absolute left-1/2 top-2 z-30 flex -translate-x-1/2 items-center gap-1 rounded-full border border-hairline bg-surface/95 px-2 py-1 shadow-lg backdrop-blur">
-          <ToolBtn
-            active={tool === 'pin'}
-            onClick={() => setTool('pin')}
-            icon={<MapPin className="h-3.5 w-3.5" />}
-            label={t('books.annotations.pin')}
-          />
-          <ToolBtn
-            active={tool === 'highlight'}
-            onClick={() => setTool('highlight')}
-            icon={<Highlighter className="h-3.5 w-3.5" />}
-            label={t('books.annotations.highlight')}
-          />
-          <span className="mx-1 h-4 w-px bg-hairline" />
-          <span className="pe-1 text-[0.64em] font-medium text-muted-foreground">
-            {t('books.annotations.hint')}
-          </span>
+          <MarkTools tool={tool} onToolChange={setTool} />
         </div>
       )}
 
@@ -208,7 +253,8 @@ export function BookAnnotationLayer({
         if (!box) return null
         const r = placeMark(box, a.geometry, a.kind)
         const open = openId === a.id
-        const canDelete = live && a.author_user_id === currentUserId && onDelete != null
+        // Optimistic marks (id <= 0) have no server row yet: nothing to delete.
+        const canDelete = live && a.author_user_id === currentUserId && onDelete != null && a.id > 0
         return (
           <div key={a.id}>
             {a.kind === 'highlight' && (
@@ -227,8 +273,9 @@ export function BookAnnotationLayer({
             <button
               type="button"
               data-anno-ui
+              data-mark-id={a.id}
               onClick={() => setOpenId(open ? null : a.id)}
-              className="pointer-events-auto absolute z-20 flex h-6 w-6 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-2 border-surface bg-warning text-[0.7em] font-bold text-warning-foreground shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="pointer-events-auto absolute z-20 flex h-6 w-6 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-2 border-surface bg-warning text-[0.7em] font-bold text-warning-foreground shadow-md before:absolute before:-inset-3 before:content-[''] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               style={{ left: r.left, top: r.top }}
               aria-label={t('books.annotations.markN', { n })}
             >
@@ -253,13 +300,13 @@ export function BookAnnotationLayer({
                     <button
                       type="button"
                       onClick={() => {
-                        onDelete?.(a.id)
+                        scheduleDelete({ id: a.id })
                         setOpenId(null)
                       }}
-                      className="ms-auto text-muted-foreground transition-colors hover:text-accent"
+                      className="ms-auto rounded-md p-1 text-muted-foreground transition-colors hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none max-md:p-3"
                       aria-label={t('books.annotations.delete')}
                     >
-                      <Trash2 className="h-3.5 w-3.5" />
+                      <Trash2 className="h-3.5 w-3.5" aria-hidden />
                     </button>
                   )}
                 </div>
@@ -315,6 +362,14 @@ export function BookAnnotationLayer({
                   rows={2}
                   value={draftText}
                   onChange={(e) => setDraftText(e.target.value)}
+                  onKeyDown={(e) => {
+                    // Esc closes the composer locally; the page-level Esc (back / focus) must not also fire.
+                    if (e.key === 'Escape') {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      closeDraft()
+                    }
+                  }}
                   placeholder={t('books.annotations.composerPlaceholder')}
                   className="w-full rounded-md border border-hairline bg-background px-2 py-1.5 text-[0.74em] text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/30"
                 />
@@ -322,19 +377,39 @@ export function BookAnnotationLayer({
                   <button
                     type="button"
                     onClick={closeDraft}
-                    className="rounded-md px-2 py-1 text-[0.7em] font-medium text-muted-foreground transition-colors hover:bg-surface-tinted"
+                    className="rounded-md px-2 py-1 text-[0.7em] font-medium text-muted-foreground transition-colors hover:bg-surface-tinted motion-reduce:transition-none max-md:min-h-11 max-md:px-3"
                   >
                     {t('books.annotations.cancel')}
                   </button>
-                  <button
-                    type="button"
-                    disabled={!draftText.trim() || busy}
-                    onClick={saveDraft}
-                    className="inline-flex items-center gap-1 rounded-md bg-warning px-2.5 py-1 text-[0.7em] font-semibold text-warning-foreground transition-colors hover:bg-warning/90 disabled:opacity-50"
-                  >
-                    <Check className="h-3 w-3" strokeWidth={2.6} /> {t('books.annotations.save')}
-                  </button>
+                  {(() => {
+                    const empty = !draftText.trim()
+                    const save = (
+                      <button
+                        type="button"
+                        disabled={busy}
+                        aria-disabled={empty || undefined}
+                        aria-describedby={empty ? noteReasonId : undefined}
+                        onClick={empty ? undefined : saveDraft}
+                        className={cn(
+                          'inline-flex items-center gap-1 rounded-md bg-warning px-2.5 py-1 text-[0.7em] font-semibold text-warning-foreground transition-colors hover:bg-warning/90 disabled:opacity-50 motion-reduce:transition-none max-md:min-h-11 max-md:px-3',
+                          empty && 'opacity-50',
+                        )}
+                      >
+                        <Check className="h-3 w-3" strokeWidth={2.6} aria-hidden /> {t('books.annotations.save')}
+                      </button>
+                    )
+                    return empty && !isPhone ? <Hint label={t('books.reason.noteEmpty')}>{save}</Hint> : save
+                  })()}
                 </div>
+                {!draftText.trim() && (
+                  // The reason is always in the DOM for assistive tech; visible on touch, where a tooltip cannot show.
+                  <p
+                    id={noteReasonId}
+                    className={cn('mt-1.5 text-end text-[0.64em] text-muted-foreground', !isPhone && 'sr-only')}
+                  >
+                    {t('books.reason.noteEmpty')}
+                  </p>
+                )}
               </MarkPopover>
             </>
           )
@@ -455,16 +530,100 @@ function ToolBtn({
   onClick?: () => void
 }): React.JSX.Element {
   return (
-    <button
-      type="button"
-      title={label}
-      onClick={onClick}
-      className={cn(
-        'flex h-7 w-7 items-center justify-center rounded-full transition-colors',
-        active ? 'bg-warning/15 text-warning' : 'text-muted-foreground hover:bg-surface-tinted',
-      )}
-    >
-      {icon}
-    </button>
+    <Hint label={label}>
+      <button
+        type="button"
+        aria-label={label}
+        aria-pressed={active}
+        onClick={onClick}
+        className={cn(
+          'flex h-8 w-8 items-center justify-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none max-md:h-11 max-md:w-11',
+          active ? 'bg-warning/15 text-warning' : 'text-muted-foreground hover:bg-surface-tinted',
+        )}
+      >
+        {icon}
+      </button>
+    </Hint>
+  )
+}
+
+/**
+ * The Pin / Highlight tools plus their one-line hint. Rendered by the desk
+ * toolbar while marking is armed (and by the layer's own floating toolbar when
+ * the host does not take over).
+ */
+export function MarkTools({
+  tool,
+  onToolChange,
+}: {
+  tool: AnnotationKind
+  onToolChange: (tool: AnnotationKind) => void
+}): React.JSX.Element {
+  const { t } = useTranslation()
+  return (
+    <div role="group" aria-label={t('books.annotations.mark')} className="flex items-center gap-1">
+      <ToolBtn
+        active={tool === 'pin'}
+        onClick={() => onToolChange('pin')}
+        icon={<MapPin className="h-3.5 w-3.5" aria-hidden />}
+        label={t('books.annotations.pin')}
+      />
+      <ToolBtn
+        active={tool === 'highlight'}
+        onClick={() => onToolChange('highlight')}
+        icon={<Highlighter className="h-3.5 w-3.5" aria-hidden />}
+        label={t('books.annotations.highlight')}
+      />
+      <span className="mx-1 h-4 w-px bg-hairline" aria-hidden />
+      <span className="pe-1 text-[0.75em] font-medium text-muted-foreground max-md:hidden">
+        {t('books.annotations.hint')}
+      </span>
+    </div>
+  )
+}
+
+/**
+ * "{{count}} marks from {{name}}" with previous / next stepping. The current
+ * mark's card opens (`openId`) and its badge scrolls into view.
+ */
+export function MarksStepper({
+  annotations,
+  openId,
+  onOpenIdChange,
+}: {
+  annotations: BookAnnotation[]
+  openId: number | null
+  onOpenIdChange: (id: number | null) => void
+}): React.JSX.Element | null {
+  const { t } = useTranslation()
+  if (annotations.length === 0) return null
+  const index = annotations.findIndex((a) => a.id === openId)
+  const step = (dir: 1 | -1): void => {
+    const next = index === -1 ? (dir === 1 ? 0 : annotations.length - 1) : (index + dir + annotations.length) % annotations.length
+    onOpenIdChange(annotations[next].id)
+  }
+  // Isolate the name so an Arabic name inside an English sentence (and vice versa) keeps its order.
+  const name = `\u2068${annotations[0].author_name ?? '—'}\u2069`
+  return (
+    <span className="inline-flex items-center gap-1 rounded-full bg-accent-soft py-0.5 ps-3 pe-0.5 text-[0.75em] font-semibold text-accent">
+      <MessageSquare className="h-3.5 w-3.5" aria-hidden />
+      <span role="status">{t('books.paper.marksFrom', { count: annotations.length, name })}</span>
+      <button
+        type="button"
+        aria-label={t('common.previous')}
+        onClick={() => step(-1)}
+        className="grid h-8 w-8 place-items-center rounded-full hover:bg-accent/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring max-md:h-11 max-md:w-11"
+      >
+        <ChevronLeft className="h-3.5 w-3.5 rtl:rotate-180" aria-hidden />
+      </button>
+      <button
+        type="button"
+        aria-label={t('common.next')}
+        onClick={() => step(1)}
+        className="grid h-8 w-8 place-items-center rounded-full hover:bg-accent/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring max-md:h-11 max-md:w-11"
+      >
+        <ChevronRight className="h-3.5 w-3.5 rtl:rotate-180" aria-hidden />
+      </button>
+    </span>
   )
 }

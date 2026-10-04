@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { createElement, type ReactNode } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -155,11 +155,15 @@ describe('IncludedPapersDialog', () => {
     expect(onOpenChange).not.toHaveBeenCalled()
     await user.click(screen.getByRole('button', { name: 'common.cancel' }))
     expect(screen.queryByText('Discard unsaved changes?')).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Save combined PDF' })).toBeDisabled()
+    // Changed but not reviewed: Save stays focusable and says why (aria-disabled, not `disabled`).
+    const saveBlocked = screen.getByRole('button', { name: 'Save combined PDF' })
+    expect(saveBlocked).toHaveAttribute('aria-disabled', 'true')
+    expect(saveBlocked).toHaveAccessibleDescription('Review the PDF to see your changes before saving.')
+    expect(screen.getByText('Preview is out of date — Review PDF')).toBeVisible()
 
     await user.click(screen.getByRole('button', { name: 'Review PDF' }))
     await waitFor(() => expect(screen.getByTestId('pdf-preview')).toHaveTextContent('preview PDF'))
-    expect(screen.getByRole('button', { name: 'Save combined PDF' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Save combined PDF' })).not.toHaveAttribute('aria-disabled')
 
     await user.click(screen.getByRole('button', { name: 'Save combined PDF' }))
     expect(saveSpy).toHaveBeenCalledWith(9, {
@@ -170,5 +174,38 @@ describe('IncludedPapersDialog', () => {
       ],
     })
     expect(onOpenChange).toHaveBeenCalledWith(false)
+  })
+
+  it('keeps Review and Save reachable from the Preview tab, with a reason while nothing changed', async () => {
+    const user = userEvent.setup()
+    const previewSpy = vi.spyOn(api, 'previewIncludedPapers')
+    const saveSpy = vi.spyOn(api, 'saveIncludedPapers')
+    render(
+      <IncludedPapersDialog
+        open
+        onOpenChange={vi.fn()}
+        book={book}
+        currentPdfUrl="/api/v1/documents/4/download?format=pdf"
+      />,
+      { wrapper },
+    )
+
+    // The footer is not inside the PDF-order panel, so switching to the Preview tab cannot hide it.
+    const orderPanel = screen.getByRole('region', { name: 'PDF order' })
+    expect(within(orderPanel).queryByRole('button', { name: 'Save combined PDF' })).not.toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Preview' }))
+    const save = screen.getByRole('button', { name: 'Save combined PDF' })
+    const review = screen.getByRole('button', { name: 'Review PDF' })
+
+    expect(review).toHaveAttribute('aria-disabled', 'true')
+    expect(save).toHaveAttribute('aria-disabled', 'true')
+    expect(review).toHaveAccessibleDescription('No changes to review.')
+    expect(save).toHaveAccessibleDescription('No changes to review.')
+    await user.click(review)
+    await user.click(save)
+    expect(previewSpy).not.toHaveBeenCalled()
+    expect(saveSpy).not.toHaveBeenCalled()
+    expect(screen.queryByText('Preview is out of date — Review PDF')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Close' })).toBeInTheDocument()
   })
 })

@@ -434,7 +434,7 @@ export function WordHandoffDialog({ session, open, onClose, onFinished }: Props)
         onOpenChange={setDiscardOpen}
         title={t('books.word.discard')}
         description={t('books.word.discardConfirm')}
-        confirmLabel={t('common.confirm')}
+        confirmLabel={t('books.word.discardConfirmLabel', { defaultValue: 'Discard draft' })}
         onConfirm={() => discardMutation.mutate()}
         destructive
       />

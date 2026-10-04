@@ -94,4 +94,81 @@ describe('RecordPaperViewer', () => {
     resize(400)
     expect(screen.getByRole('img', { name: 'scan-0.png' })).toBeInTheDocument()
   })
+
+  it('hides the strip for a single paper unless there is something to add', () => {
+    const { unmount } = render(
+      <RecordPaperViewer papers={[scan(0)]} selectedKey="scan-0" onSelectKey={() => undefined} mode="pane" />,
+    )
+    resize(500)
+    expect(screen.queryByRole('button', { pressed: true })).not.toBeInTheDocument()
+    unmount()
+
+    render(
+      <RecordPaperViewer
+        papers={[scan(0)]}
+        selectedKey="scan-0"
+        onSelectKey={() => undefined}
+        mode="pane"
+        addScanSlot={<button type="button">Add scan</button>}
+      />,
+    )
+    resize(500)
+    expect(screen.getByRole('button', { pressed: true })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Add scan' })).toBeInTheDocument()
+  })
+
+  it('names scans "Scan N" in the strip, with the filename as their hint', () => {
+    render(
+      <RecordPaperViewer
+        papers={[scan(0), scan(3)]}
+        selectedKey="scan-0"
+        onSelectKey={() => undefined}
+        mode="pane"
+      />,
+    )
+    resize(500)
+    expect(screen.getByRole('button', { name: 'Scan 1' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Scan 2' })).toBeInTheDocument()
+  })
+
+  it('the overlay toolbar carries the paper switcher', async () => {
+    const onSelectKey = vi.fn()
+    render(
+      <RecordPaperViewer papers={[scan(0), scan(3)]} selectedKey="scan-0" onSelectKey={onSelectKey} mode="overlay" />,
+    )
+    resize(500)
+    await userEvent.click(screen.getByRole('button', { name: 'Scan 2' }))
+    expect(onSelectKey).toHaveBeenCalledWith('scan-3')
+  })
+
+  it('collapses Replace / Delete into a ⋯ menu on a narrow viewer', () => {
+    const { unmount } = render(
+      <RecordPaperViewer
+        papers={[scan(0)]}
+        selectedKey="scan-0"
+        onSelectKey={() => undefined}
+        mode="pane"
+        onDeletePaper={() => undefined}
+        onReplacePaper={() => undefined}
+      />,
+    )
+    resize(600)
+    expect(screen.getByRole('button', { name: 'Delete this document' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'More' })).not.toBeInTheDocument()
+    unmount()
+
+    render(
+      <RecordPaperViewer
+        papers={[scan(0)]}
+        selectedKey="scan-0"
+        onSelectKey={() => undefined}
+        mode="pane"
+        onDeletePaper={() => undefined}
+        onReplacePaper={() => undefined}
+      />,
+    )
+    resize(380)
+    expect(screen.queryByRole('button', { name: 'Delete this document' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'More' })).toBeInTheDocument()
+  })
 })

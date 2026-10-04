@@ -4,9 +4,9 @@
  * so the two surfaces can never drift apart.
  */
 
-import { useMemo } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Check, ChevronDown, AlertTriangle, Clock } from 'lucide-react'
+import { Check, ChevronDown, AlertTriangle, Clock, PanelRightClose, PanelRightOpen, X } from 'lucide-react'
 import type { SealTone } from '../bookStateLabel'
 import { reviewerSteps } from '@/components/books/reviewers'
 import { ReviewerList } from '@/components/books/ReviewerList'
@@ -15,7 +15,9 @@ import { bidi } from '@/lib/bidi'
 import { smsDeliveryTone } from '@/lib/smsDelivery'
 import { cn } from '@/lib/utils'
 import type { BookRead } from '@/lib/api'
+import { Hint } from '@/components/ui/hint'
 import type { RecordView } from './recordActions'
+import { RAIL_BREAKPOINT, useRecordChrome } from './RecordChrome'
 
 export type StationState = 'done' | 'live' | 'future'
 export interface Station {
@@ -217,11 +219,12 @@ export interface RecordRailProps {
  *  reusing the exact same `RecordTimelineContent` the desktop rail renders. */
 export function RecordPhoneProgress({ book, view }: RecordRailProps): React.JSX.Element {
   const { stations, currentSteps, current, liveVersion } = view
+  const { focus } = useRecordChrome()
   return (
     <>
-    {book && (
+    {book && !focus && (
       <div className="border-b border-hairline bg-surface px-4 py-3 md:hidden" data-print-hide>
-        <details className="group">
+        <details className="group max-h-[40dvh] overflow-auto">
           <summary className="flex cursor-pointer list-none items-center justify-between gap-2 [&::-webkit-details-marker]:hidden">
             {(() => {
               const summary = currentSummaryStation(stations)
@@ -263,24 +266,151 @@ export function RecordPhoneProgress({ book, view }: RecordRailProps): React.JSX.
   )
 }
 
+/** True from `minWidth` px up; follows window resizes (the chrome's rail switch). */
+function useMinWidth(minWidth: number): boolean {
+  const [wide, setWide] = useState(() => window.innerWidth >= minWidth)
+  useEffect(() => {
+    const onResize = (): void => setWide(window.innerWidth >= minWidth)
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [minWidth])
+  return wide
+}
+
 /** Vertical progress timeline — physically pinned to the right in both
- *  languages (the page body is `direction:ltr`); `hidden md:block` makes it
- *  inert and unfocusable below `md`, where RecordPhoneProgress is its sole
- *  complement. */
-export function RecordRail({ book, view }: RecordRailProps): React.JSX.Element {
+ *  languages (the page body is `direction:ltr`). From `xl` (1280) it is a
+ *  15rem docked column with Hide; below that, or once hidden, a 52px dot strip
+ *  whose toggle opens a 280px overlay from the physical right. Focus mode hides
+ *  it entirely. Below `md` it is inert and unfocusable: RecordPhoneProgress is
+ *  its sole complement there. */
+export function RecordRail({ book, view }: RecordRailProps): React.JSX.Element | null {
+  const { t } = useTranslation()
   const { isAr, stations, currentSteps, current, liveVersion } = view
+  const { rail, toggleRail, railDrawerOpen, closeRailDrawer, focus } = useRecordChrome()
+  const docked = useMinWidth(RAIL_BREAKPOINT)
+  const overlayRef = useRef<HTMLElement | null>(null)
+
+  // Click outside the overlay (but not on its toggle) dismisses it; Esc is the page's resolver.
+  const overlayOpen = railDrawerOpen && !docked
+  useEffect(() => {
+    if (!overlayOpen) return
+    overlayRef.current?.querySelector<HTMLElement>('[data-rail-close]')?.focus()
+    const onPointerDown = (e: PointerEvent): void => {
+      const target = e.target as Node
+      if (overlayRef.current?.contains(target)) return
+      if ((target as Element).closest?.('[data-rail-toggle]')) return
+      closeRailDrawer()
+    }
+    document.addEventListener('pointerdown', onPointerDown)
+    return () => document.removeEventListener('pointerdown', onPointerDown)
+  }, [overlayOpen, closeRailDrawer])
+
+  if (focus) return null
+  const dir = isAr ? 'rtl' : 'ltr'
+  const summary = currentSummaryStation(stations)
+  const timeline = (
+    <RecordTimelineContent
+      stations={stations}
+      currentSteps={currentSteps}
+      currentVersionNo={current?.version_no}
+      liveVersionNo={liveVersion?.version_no}
+      sms={book?.sms}
+    />
+  )
+  const heading = (
+    <b className="text-[0.6875rem] font-bold uppercase tracking-[0.07em] text-faint">{t('books.record.progress')}</b>
+  )
+
+  if (docked && rail === 'open') {
+    return (
+      <aside
+        dir={dir}
+        data-record-rail="open"
+        className="hidden w-[15rem] shrink-0 overflow-auto bg-surface px-[18px] py-4 transition-[width] motion-reduce:transition-none md:block"
+      >
+        <div className="mb-2.5 flex items-center justify-between gap-2">
+          {heading}
+          <Hint label={t('books.record.hideProgress')} side="bottom">
+            <button
+              type="button"
+              data-rail-toggle
+              aria-label={t('books.record.hideProgress')}
+              aria-expanded="true"
+              onClick={toggleRail}
+              className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-surface-tinted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none"
+            >
+              <PanelRightClose className="h-4 w-4" aria-hidden />
+            </button>
+          </Hint>
+        </div>
+        {timeline}
+      </aside>
+    )
+  }
+
   return (
     <aside
-      dir={isAr ? 'rtl' : 'ltr'}
-      className="hidden w-[236px] shrink-0 overflow-auto border-s border-hairline bg-surface px-5 py-6 md:block"
+      dir={dir}
+      data-record-rail="strip"
+      className="relative hidden w-[52px] shrink-0 bg-surface transition-[width] motion-reduce:transition-none md:block"
     >
-      <RecordTimelineContent
-        stations={stations}
-        currentSteps={currentSteps}
-        currentVersionNo={current?.version_no}
-        liveVersionNo={liveVersion?.version_no}
-        sms={book?.sms}
-      />
+      <Hint label={t('books.record.showProgress')} side="start">
+        <button
+          type="button"
+          data-rail-toggle
+          aria-label={t('books.record.showProgress')}
+          aria-expanded={overlayOpen}
+          onClick={toggleRail}
+          className="flex h-full w-full flex-col items-center gap-2.5 py-2.5 transition-colors hover:bg-surface-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring motion-reduce:transition-none"
+        >
+          <PanelRightOpen className="h-4 w-4 text-muted-foreground" aria-hidden />
+          <span className="text-[0.6875rem] font-bold uppercase tracking-[0.08em] text-faint [writing-mode:vertical-rl]">
+            {t('books.record.progress')}
+          </span>
+          <span className="flex flex-col items-center gap-2" aria-hidden>
+            {stations.map((s) => (
+              <i
+                key={s.key}
+                className={cn(
+                  'block h-2.5 w-2.5 rounded-full',
+                  s.state === 'live' && 'ring-4 ring-primary-soft',
+                  s.state === 'future' && 'opacity-40',
+                )}
+                style={{ background: TONE[s.tone].fg }}
+              />
+            ))}
+          </span>
+          {/* The dots carry state by colour: the words are here. */}
+          <span className="sr-only">
+            {summary?.label}
+            {summary?.meta ? ` — ${bidi(summary.meta)}` : ''}
+          </span>
+        </button>
+      </Hint>
+
+      {overlayOpen && (
+        <section
+          ref={overlayRef}
+          dir={dir}
+          data-record-rail="overlay"
+          aria-label={t('books.record.progress')}
+          className="absolute inset-y-0 right-0 z-20 w-[280px] overflow-auto bg-surface px-[18px] py-4 shadow-[-12px_0_32px_rgba(20,20,10,0.16)] animate-in fade-in-0 slide-in-from-right-8 duration-200 motion-reduce:animate-none"
+        >
+          <div className="mb-2.5 flex items-center justify-between gap-2">
+            {heading}
+            <button
+              type="button"
+              data-rail-close
+              aria-label={t('common.close')}
+              onClick={closeRailDrawer}
+              className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-surface-tinted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none"
+            >
+              <X className="h-4 w-4" aria-hidden />
+            </button>
+          </div>
+          {timeline}
+        </section>
+      )}
     </aside>
   )
 }
