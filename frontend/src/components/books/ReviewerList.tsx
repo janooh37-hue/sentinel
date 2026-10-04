@@ -3,7 +3,7 @@
  *
  * Renders each reviewer's name, their current state chip (Awaiting review /
  * Reviewed / Changes requested), a "Seen · date" / "Not seen yet" line, and
- * any note they left. Used in BookDetailDrawer and BookRecordPage.
+ * any note they left. Used in the record page's progress rail.
  */
 import type { BookApprovalStepRead } from '@/lib/api'
 import { reviewerDescriptor } from '@/pages/books/bookStateLabel'

@@ -1,13 +1,11 @@
 /**
  * BookPreview — light, centered modal for a NO-CHAIN (draft) book.
  *
- * Unlike BookDetailDrawer (the side-panel/bottom-sheet with the version history
- * and approval timeline), this surface shows just the current document plus a
- * single primary action — "Submit for signature". It is the desktop open target
- * for draft rows (`approval_state === 'none'`); chain rows route to the full
- * record page instead, and mobile keeps the drawer.
- *
- * Props mirror BookDetailDrawer's shape so BooksPage can swap them freely.
+ * Unlike the full record page (version history and approval timeline), this
+ * surface shows just the current document plus a single primary action —
+ * "Submit for signature". It is the open target for draft rows
+ * (`approval_state === 'none'`); chain rows route to the full record page
+ * instead.
  */
 
 import { Suspense, lazy, useState } from 'react'

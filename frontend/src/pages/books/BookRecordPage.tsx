@@ -4,36 +4,29 @@
  * Full-page route (`/books/:id`): the document large on a "desk" (left), a
  * vertical progress timeline pinned to the PHYSICAL right (both LTR + RTL), a
  * header with submitter identity + Print + state-driven actions. Reuses
- * DocPdfCanvas (multi-page, IDM-safe). Action logic mirrors BookDetailDrawer
- * (sign / decide-with-reason / revise / submit + query invalidation).
+ * DocPdfCanvas (multi-page, IDM-safe). Owns the action logic
+ * (sign / decide-with-reason / revise / submit + query invalidation) and hands
+ * it to the record/ pieces (header, desk, rail, dock) via `RecordActions`.
  */
 
-import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react'
-import { createPortal } from 'react-dom'
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
 import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import {
-  AlertTriangle,
-  ArrowLeft,
   Check,
-  ChevronDown,
-  Clock,
   CornerUpLeft,
-  FileText,
-  FileStack,
-  Loader2,
-  Mail,
   PenLine,
   Printer,
-  RefreshCw,
   Send,
-  ShieldAlert,
-  ShieldCheck,
-  Trash2,
   Upload,
-  Wrench,
   X,
 } from 'lucide-react'
 
@@ -43,69 +36,29 @@ import {
   apiErrorMessage,
   type BookApprovalStepRead,
   type BookVersionRead,
-  type NotifyMessageRead,
 } from '@/lib/api'
 import { useAuth } from '@/lib/authContext'
 import { useCapabilities } from '@/lib/useCapabilities'
-import {
-  canFileSignedCopy,
-  canSendForApproval,
-  footerActionFor,
-  inmateReporterActionFor,
-} from '@/components/books/book-detail-drawer-utils'
-import {
-  changesRequestedCount,
-  isApproverAssignee,
-  myPendingReviewerStep,
-  reviewerSteps,
-} from '@/components/books/reviewers'
-import { ReviewerList } from '@/components/books/ReviewerList'
-import { ReviewerActions } from '@/components/books/ReviewerActions'
+import { canFileSignedCopy, canSendForApproval, footerActionFor, inmateReporterActionFor } from '@/components/books/book-detail-drawer-utils'
+import { changesRequestedCount, isApproverAssignee, myPendingReviewerStep } from '@/components/books/reviewers'
 import { SubmitForApprovalDialog } from '@/components/books/SubmitForApprovalDialog'
 import { RecordStateOverrideDialog } from '@/components/books/RecordStateOverrideDialog'
 import { RevisionAccessPanel } from '@/components/books/RevisionAccessPanel'
-import { BookAnnotationLayer } from '@/components/books/BookAnnotationLayer'
 import { useBookApprovalActions } from '@/components/books/useBookApprovalActions'
 import { useInmateReportSubmit } from '@/components/books/useInmateReportSubmit'
 import { hasCommentBearingMark } from '@/components/books/annotation-utils'
 import { bidi } from '@/lib/bidi'
-import { cn } from '@/lib/utils'
 import { useUrlOverlay } from '@/lib/urlState'
 import { NotFoundPage } from '@/pages/NotFoundPage'
-import {
-  RECEIVED_STATUSES,
-  SENT_STATUSES,
-  approvalRecordUrl,
-  isApprovalScope,
-} from '@/lib/approvals'
+import { RECEIVED_STATUSES, SENT_STATUSES, approvalRecordUrl, isApprovalScope } from '@/lib/approvals'
 import type { ApprovalContext, ApprovalKind, ApprovalSort, ApprovalStatus } from '@/lib/approvals'
 
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
-import { BookStatusChips } from '@/components/books/BookStatusChips'
-import {
-  WordReopenButton,
-  WordSessionActions,
-  type WordReopenTrigger,
-} from '@/components/books/BookWordActions'
-import {
-  AdjustSignatureAction,
-  type AdjustSignatureTrigger,
-} from '@/components/signature/AdjustSignatureAction'
+import type { WordReopenTrigger } from '@/components/books/BookWordActions'
+import type { AdjustSignatureTrigger } from '@/components/signature/AdjustSignatureAction'
 import { IncludedPapersDialog } from './IncludedPapersDialog'
-import { Hint } from '@/components/ui/hint'
-import { QueueNav } from './QueueNav'
 import { RecordChromeProvider } from './record/RecordChrome'
-import { MarkToggle } from './MarkToggle'
-import { RecordDecisionActions } from './RecordDecisionActions'
 import { isIncludedPapersOwner } from './includedPapersState'
-import { HeaderBtn } from './HeaderBtn'
 import { describeListFrom, useRecordNavContext } from './useRecordNavContext'
 import { buildRecordBasketItem } from './recordsBasket'
 import { buildBasketPrefill } from '@/lib/basketEmail'
@@ -113,28 +66,20 @@ import { getRecentRecipientsForForm } from '@/lib/recentRecipients'
 import { basketKey } from '@/lib/emailBasket'
 
 import { useIsMobile } from '@/lib/useIsMobile'
-import { smsDeliveryTone } from '@/lib/smsDelivery'
-import { sealDescriptor, signedSourceOf, type SealTone } from './bookStateLabel'
+import { signedSourceOf } from './bookStateLabel'
 import { useAddScan } from './useAddScan'
 import { useManagePaper } from './useManagePaper'
 import { paperUrl, type Paper } from './recordPapers'
 import { useRecordPrintMode } from './useRecordPrintMode'
 import { serviceHref } from '@/lib/quickActions'
-
-const DocPdfCanvas = lazy(() => import('@/pages/application/DocPdfCanvas'))
+import { RecordHeader } from './record/RecordHeader'
+import { RecordDesk, DecisionReasonForm } from './record/RecordDesk'
+import { RecordDock } from './record/RecordDock'
+import { RecordPhoneProgress, RecordRail, type Station } from './record/RecordRail'
+import type { RecordActions, RecordCaps, RecordView } from './record/recordActions'
 
 type TFn = (key: string, opts?: Record<string, unknown>) => string
 
-type StationState = 'done' | 'live' | 'future'
-interface Station {
-  key: string
-  icon: React.ReactNode
-  label: string
-  meta: string
-  note?: string | null
-  state: StationState
-  tone: 'navy' | 'amber' | 'green' | 'red' | 'blue'
-}
 
 
 /** Read the originating approvals-queue context off the URL a queue row (or
@@ -298,216 +243,7 @@ function buildTimeline(
   return out
 }
 
-const TONE: Record<Station['tone'], { bg: string; fg: string }> = {
-  navy: { bg: 'var(--primary-soft)', fg: 'var(--primary)' },
-  amber: { bg: 'var(--warning-soft)', fg: 'var(--warning)' },
-  green: { bg: 'var(--success-soft)', fg: 'var(--success)' },
-  red: { bg: 'var(--accent-soft)', fg: 'var(--accent)' },
-  blue: { bg: 'var(--info-soft)', fg: 'var(--info)' },
-}
 
-// sealDescriptor tone → this page's Station tone vocabulary.
-const SEAL_TO_STATION_TONE: Record<SealTone, Station['tone']> = {
-  neutral: 'navy',
-  warning: 'amber',
-  success: 'green',
-  accent: 'red',
-  info: 'blue',
-}
-
-/** The station that best summarizes "where this record is right now" — for
- *  `pending`/`awaiting_scan` the array's last entry is a `future` placeholder
- *  (e.g. "Signed" ahead of the still-live "Awaiting signature"), so summarizing
- *  from the raw last entry would show the wrong step. Prefer the live station;
- *  fall back to the latest completed one for a terminal state with no live
- *  station (`returned`/`rejected`) — never blindly the last array entry. */
-function currentSummaryStation(stations: Station[]): Station | undefined {
-  return (
-    stations.find((s) => s.state === 'live') ??
-    [...stations].reverse().find((s) => s.state === 'done')
-  )
-}
-
-/** Shared render of the progress timeline + reviewer list + SMS notifications —
- *  used by both the desktop sidebar and the mobile expandable status section so
- *  the two surfaces can never drift apart. */
-function RecordTimelineContent({
-  stations,
-  currentSteps,
-  currentVersionNo,
-  liveVersionNo,
-  sms,
-}: {
-  stations: Station[]
-  currentSteps: BookApprovalStepRead[]
-  currentVersionNo?: number
-  liveVersionNo?: number
-  sms?: NotifyMessageRead[] | null
-}): React.JSX.Element {
-  const { t } = useTranslation()
-  return (
-    <>
-      <h2 className="mb-5 text-[0.66em] font-bold uppercase tracking-[0.12em] text-muted-foreground">
-        {t('books.record.progress')}
-      </h2>
-      <ol>
-        {stations.map((s, i) => {
-          const last = i === stations.length - 1
-          const tone = TONE[s.tone]
-          return (
-            <li
-              key={s.key}
-              aria-current={s.state === 'live' ? 'step' : undefined}
-              className="flex gap-3"
-              style={{ opacity: s.state === 'done' ? 0.5 : s.state === 'future' ? 0.42 : 1 }}
-            >
-              <div className="flex flex-col items-center">
-                <span
-                  className={cn(
-                    'flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-full border-[3px] border-surface',
-                    s.state === 'live' && 'rec-live-node',
-                  )}
-                  style={
-                    s.state === 'future'
-                      ? { background: 'var(--surface)', color: 'var(--text-faint)', borderStyle: 'dashed', borderColor: 'var(--hairline)' }
-                      : { background: tone.bg, color: tone.fg }
-                  }
-                  aria-hidden
-                >
-                  {s.icon}
-                </span>
-                {!last && (
-                  <span
-                    className={cn('my-1 w-0.5 flex-1', s.state === 'live' ? 'rec-live-rail' : '')}
-                    style={s.state === 'live' ? undefined : { background: 'var(--hairline)', minHeight: 22 }}
-                  />
-                )}
-              </div>
-              <div className="pb-5">
-                <div className="text-[0.82em] font-bold" style={{ color: s.state === 'live' ? tone.fg : undefined }}>
-                  {s.label}
-                </div>
-                <div className="mt-0.5 text-[0.7em] text-muted-foreground">{s.meta}</div>
-                {s.note && (
-                  <div
-                    className="mt-1.5 rounded-md px-2 py-1 text-[0.7em]"
-                    style={{ background: tone.bg, color: tone.fg }}
-                  >
-                    “{s.note}”
-                  </div>
-                )}
-              </div>
-            </li>
-          )
-        })}
-      </ol>
-      {/* Reviewer rows — advisory chain, below the approver timeline */}
-      <ReviewerList
-        reviewers={reviewerSteps(currentSteps)}
-        versionNo={currentVersionNo}
-        currentVersionNo={liveVersionNo}
-      />
-
-      {/* Notification block — SMS sent for this record */}
-      {sms && sms.length > 0 && <NotificationBlock messages={sms} />}
-    </>
-  )
-}
-
-function StatePill({
-  state,
-  signingPath,
-  signedSource,
-}: {
-  state: string
-  signingPath?: string | null
-  signedSource?: string | null
-}): React.JSX.Element {
-  const { t } = useTranslation()
-  const d = sealDescriptor(state, { signingPath, signedSource })
-  const c = TONE[SEAL_TO_STATION_TONE[d.tone]]
-  return (
-    <span
-      className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[0.72em] font-bold uppercase tracking-[0.04em]"
-      style={{ background: c.bg, color: c.fg }}
-    >
-      <span className="h-1.5 w-1.5 rounded-full" style={{ background: c.fg }} />
-      {t(d.labelKey)}
-    </span>
-  )
-}
-
-interface DecisionReasonFormProps {
-  act: 'return' | 'reject'
-  reason: string
-  reasonValid: boolean
-  busy: boolean
-  inputRef: React.RefObject<HTMLTextAreaElement | null>
-  onReasonChange: (reason: string) => void
-  onCancel: (act: 'return' | 'reject') => void
-  onConfirm: (act: 'return' | 'reject') => void
-}
-
-function DecisionReasonForm({
-  act,
-  reason,
-  reasonValid,
-  busy,
-  inputRef,
-  onReasonChange,
-  onCancel,
-  onConfirm,
-}: DecisionReasonFormProps): React.JSX.Element {
-  const { t } = useTranslation()
-  return (
-    <>
-      <label
-        htmlFor="rec-reason"
-        className="mb-1.5 block text-[0.78em] font-semibold text-foreground"
-      >
-        {act === 'return'
-          ? t('books.approval.return')
-          : t('books.approval.reject')}{' '}
-        · {t('books.approval.reasonLabel')}
-      </label>
-      <textarea
-        ref={inputRef}
-        id="rec-reason"
-        rows={2}
-        value={reason}
-        onChange={(e) => onReasonChange(e.target.value)}
-        placeholder={t('books.approval.reasonPlaceholder')}
-        dir="auto"
-        className="w-full rounded-lg border border-hairline bg-background px-3 py-2 text-[0.88em] text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/30"
-      />
-      <div className="mt-2 flex items-center justify-end gap-2.5">
-        {!reasonValid && (
-          <span className="me-auto text-[0.74em] text-muted-foreground">
-            {t('books.approval.reasonOrMark')}
-          </span>
-        )}
-        <button
-          type="button"
-          onClick={() => onCancel(act)}
-          className="rounded-lg border border-hairline px-3 py-1.5 text-[0.8em] font-medium text-muted-foreground transition-colors hover:bg-surface-tinted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          {t('books.approval.cancelDecision')}
-        </button>
-        <button
-          type="button"
-          disabled={!reasonValid || busy}
-          onClick={() => onConfirm(act)}
-          className={cn(
-            'rounded-lg border border-transparent px-4 py-1.5 text-[0.8em] font-semibold text-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50',
-            act === 'return' ? 'bg-warning hover:bg-warning/90' : 'bg-accent hover:bg-accent/90',
-          )}
-        >
-          {act === 'return' ? t('books.approval.return') : t('books.approval.reject')}
-        </button>
-      </div>
-    </>
-  )
-}
 
 /** The page owns the record chrome (rail / focus / full-screen) so the header and
  *  the desk read one state. */
@@ -517,6 +253,15 @@ export function BookRecordPage(): React.JSX.Element {
       <BookRecordPageBody />
     </RecordChromeProvider>
   )
+}
+
+// Synthetic "signed" paper so the shared manage hook can route replace/unfile.
+const SIGNED_PAPER: Paper = {
+  kind: 'signed',
+  url: '',
+  downloadUrl: '',
+  filename: '',
+  isPdf: true,
 }
 
 function BookRecordPageBody(): React.JSX.Element {
@@ -616,14 +361,6 @@ function BookRecordPageBody(): React.JSX.Element {
   })
 
   const manage = useManagePaper(book?.id ?? null)
-  // Synthetic "signed" paper so the shared manage hook can route replace/unfile.
-  const signedPaper: Paper = {
-    kind: 'signed',
-    url: '',
-    downloadUrl: '',
-    filename: '',
-    isPdf: true,
-  }
 
   const versions = useMemo(() => book?.versions ?? [], [book?.versions])
   const liveVersion = versions.length ? versions[versions.length - 1] : undefined
@@ -696,7 +433,7 @@ function BookRecordPageBody(): React.JSX.Element {
     [book, versions, submitter, t, signedSource],
   )
 
-  // Mirror BookDetailDrawer's assignee/footer derivation (with reviewer support).
+  // Assignee/footer derivation (with reviewer support).
   // Annotate as the api.ts alias (extra fields kind/seen_at/assignee_name are
   // optional, so the base nested step type is assignable) — the generated nested
   // approval_steps type lacks them until `gen:api` is run.
@@ -872,10 +609,10 @@ function BookRecordPageBody(): React.JSX.Element {
     },
   })
 
-  function handleRevise(): void {
+  const handleRevise = useCallback((): void => {
     if (!book || !current?.template_id) return
     navigate(`${serviceHref(current.template_id)}?revise=${book.id}`)
-  }
+  }, [book, current?.template_id, navigate])
 
   // "Email via Outlook" — the record's own handoff entry point. It builds the
   // SAME one-item basket prefill the tray builds (subject/body templates,
@@ -885,7 +622,7 @@ function BookRecordPageBody(): React.JSX.Element {
   const recordHasPapers = current?.document_id != null
   const [emailingRecord, setEmailingRecord] = useState(false)
 
-  async function handleEmailViaOutlook(): Promise<void> {
+  const handleEmailViaOutlook = useCallback(async (): Promise<void> => {
     if (!book || !recordHasPapers || emailingRecord) return
     setEmailingRecord(true)
     try {
@@ -908,7 +645,7 @@ function BookRecordPageBody(): React.JSX.Element {
     } finally {
       setEmailingRecord(false)
     }
-  }
+  }, [book, recordHasPapers, emailingRecord, navigate, t])
 
   const busy = decideMutation.isPending || signMutation.isPending
   const canRevise = Boolean(
@@ -940,7 +677,7 @@ function BookRecordPageBody(): React.JSX.Element {
       decideMutation.mutate({ act, note: reason.trim() }),
   }
 
-  function openMobileDecision(nextDecision: 'return' | 'reject'): void {
+  const openMobileDecision = useCallback((nextDecision: 'return' | 'reject'): void => {
     setReason('')
     overlay.open('decision', { decision: nextDecision })
     requestAnimationFrame(() => {
@@ -950,14 +687,14 @@ function BookRecordPageBody(): React.JSX.Element {
       })
       decisionReasonRef.current?.focus({ preventScroll: true })
     })
-  }
+  }, [overlay.open])
 
   // Every page sign control (desktop header, mobile inline panel, mobile
   // dock) requests through here instead of calling `signMutation.mutate()`
   // directly — captures the record/version the confirmation is FOR, so a
   // stale confirm can't fire (see the render-time correction below and the
   // re-check in `confirmSign`).
-  function requestSignConfirm(triggerRef: React.RefObject<HTMLButtonElement | null>): void {
+  const requestSignConfirm = useCallback((triggerRef: React.RefObject<HTMLButtonElement | null>): void => {
     if (!book || !current || busy) return
     // Copy the element (not the ref object) outside render: `onOpenChange`
     // clears `signConfirm` synchronously on close, but Radix reads
@@ -972,7 +709,7 @@ function BookRecordPageBody(): React.JSX.Element {
       subject: book.subject ?? '',
       versionNo: current.version_no,
     })
-  }
+  }, [book, current, busy])
 
   // Discard (never re-fire) the confirmation the instant the captured
   // record/version stops being the one on screen, or decide eligibility is
@@ -997,6 +734,126 @@ function BookRecordPageBody(): React.JSX.Element {
       !busy
     if (stillEligible) signMutation.mutate()
   }
+
+  const caps: RecordCaps = useMemo(
+    () => ({
+      has,
+      canEdit,
+      canMutateCurrent,
+      isInmateReporter,
+      isInmateReport,
+      canOverrideState,
+      canManageRevisionAccess,
+      canManageIncludedPapers,
+      canManageSignedPaper,
+      canRevise,
+      canMark,
+      showSendForApproval,
+      showFileSigned,
+    }),
+    [
+      has,
+      canEdit,
+      canMutateCurrent,
+      isInmateReporter,
+      isInmateReport,
+      canOverrideState,
+      canManageRevisionAccess,
+      canManageIncludedPapers,
+      canManageSignedPaper,
+      canRevise,
+      canMark,
+      showSendForApproval,
+      showFileSigned,
+    ],
+  )
+
+  const view: RecordView = {
+    bookId,
+    isMobile,
+    isAr,
+    isPending,
+    state,
+    action,
+    decision,
+    busy,
+    submitter,
+    signedSource,
+    current,
+    liveVersion,
+    currentSteps,
+    stations,
+    pdfUrl,
+    userId: user?.id,
+    backLabel,
+    queue,
+    armed,
+    annotatable,
+    annMode,
+    annotations,
+    markBusy: createMark.isPending || deleteMark.isPending,
+    dockHidden,
+    recordHasPapers,
+    emailingRecord,
+    scanBusy: addScan.busy,
+    wordReopenTrigger,
+    adjustSigTrigger,
+    decisionReasonFormProps,
+  }
+
+  // Built once per dependency change and handed to every record piece.
+  const fileSignedCopy = addScan.fileSignedCopy
+  const replacePaper = manage.replacePaper
+  const reporterSubmit = reporterSubmitMutation.mutate
+  const createMarkMutate = createMark.mutate
+  const deleteMarkMutate = deleteMark.mutate
+  const openOverlay = overlay.open
+  const actions: RecordActions = useMemo(
+    () => ({
+      back,
+      step,
+      setArmedFor,
+      setReason,
+      openOverlay,
+      handleRevise,
+      requestSignConfirm,
+      openMobileDecision,
+      submitReport: reporterSubmit,
+      emailViaOutlook: handleEmailViaOutlook,
+      setUnfileOpen,
+      fileSignedCopy: (file, ref) => fileSignedCopy(file, ref).then(() => void refetch()),
+      replaceSignedPaper: (file) => replacePaper(SIGNED_PAPER, file),
+      setWordReopenTrigger,
+      setAdjustSigTrigger,
+      createMark: createMarkMutate,
+      deleteMark: deleteMarkMutate,
+      onPdfReady,
+      fileSignedRef,
+      replaceSignedRef,
+      desktopSignRef,
+      mobileInlineSignRef,
+      mobileDockSignRef,
+      decisionPanelRef,
+      panelReturnButtonRef,
+      panelRejectButtonRef,
+    }),
+    [
+      back,
+      step,
+      openOverlay,
+      handleRevise,
+      requestSignConfirm,
+      openMobileDecision,
+      reporterSubmit,
+      handleEmailViaOutlook,
+      fileSignedCopy,
+      refetch,
+      replacePaper,
+      createMarkMutate,
+      deleteMarkMutate,
+      onPdfReady,
+    ],
+  )
 
   if (!Number.isFinite(bookId) || (error instanceof ApiError && error.status === 404)) {
     return <NotFoundPage />
@@ -1037,365 +894,7 @@ function BookRecordPageBody(): React.JSX.Element {
         @media (prefers-reduced-motion:reduce){.rec-live-node,.rec-live-rail{animation:none}}
       `}</style>
 
-      {/* header — three rows at phone width, one row from lg.
-          `basis-full` on the chips and the action cluster is what forces the
-          split: without it they ride on row 1 and squeeze the identity block
-          (which is `flex-1`, so it shrinks to a sliver) until a long Latin name
-          in an RTL layout wraps into a five-line column. The `lg:min-w`
-          floor keeps that from happening on desktop too, where a crowded action
-          cluster used to eat the same space — it wraps instead. */}
-      <header className="flex flex-wrap items-center gap-x-3.5 gap-y-2.5 border-b border-hairline bg-gradient-to-b from-surface to-surface-tinted/40 px-4 py-3 sm:px-5 sm:py-3.5">
-        <Hint label={backLabel}>
-          <button
-            type="button"
-            onClick={back}
-            aria-label={backLabel}
-            className="flex h-9 w-9 items-center justify-center rounded-lg border border-hairline bg-surface text-primary transition-colors hover:bg-surface-tinted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            <ArrowLeft className="h-4 w-4 rtl:-scale-x-100" strokeWidth={2.2} />
-          </button>
-        </Hint>
-        {!isInmateReporter && (
-          <QueueNav
-            position={queue.position}
-            total={queue.total}
-            onPrev={() => {
-              setArmedFor(null)
-              if (queue.prevId == null) return
-              step(queue.prevId, queue.prevVersionId)
-            }}
-            onNext={() => {
-              setArmedFor(null)
-              if (queue.nextId == null) return
-              step(queue.nextId, queue.nextVersionId)
-            }}
-          />
-        )}
-        <div className="min-w-0 flex-1 lg:min-w-[18rem]">
-          <div className="font-mono text-[0.72em] font-semibold tracking-wide text-primary">
-            {book?.ref_number ?? '—'}
-          </div>
-          {/* Wraps freely below `lg` so the complete subject is readable on
-              phone/tablet; the one-row desktop header keeps the single-line
-              truncate it always had. */}
-          <h1 className="text-[1.05em] font-bold tracking-tight text-foreground lg:truncate">
-            {book?.subject ?? (isPending ? t('books.record.loading') : t('books.record.untitled'))}
-          </h1>
-          {/* One line, and the G number wins the space fight: the label and the
-              G stay whole (`shrink-0`) while the name — the only unbounded part,
-              and long in practice ("SAEED ASHED SANAD KHALFAN ALYAHYAEE") —
-              truncates. Truncating the whole line instead would drop the G,
-              which is the identifier people actually search on.
-              The name is its own `dir="ltr"` bdi so the ellipsis lands at the
-              END of the Latin run ("SAEED ASHED SANAD…"); left to inherit RTL,
-              the browser clips the run's head instead and it reads as gibberish. */}
-          <div
-            className="mt-0.5 flex items-baseline gap-1 text-[0.72em] text-muted-foreground"
-            title={submitter}
-          >
-            <span className="shrink-0">{t('books.record.submittedBy')}</span>
-            <bdi dir="ltr" className="min-w-0 truncate font-semibold text-foreground">
-              {submitter}
-            </bdi>
-            {book?.submitted_by_g && (
-              <span className="shrink-0 font-mono text-primary">
-                · <bdi dir="ltr">{book.submitted_by_g}</bdi>
-              </span>
-            )}
-          </div>
-        </div>
-        <div className="flex basis-full flex-wrap items-center gap-1.5 lg:ms-1 lg:basis-auto">
-          {book && (
-            <StatePill state={state} signingPath={book.signing_path} signedSource={signedSource} />
-          )}
-          {/* Classification / draft / editing / voided chips */}
-          {book && (
-            <BookStatusChips book={book} />
-          )}
-        </div>
-        {/* Reopen-in-Word and adjust-signature render as Tools menu items
-            below, but the components owning their mutation/dialog/eligibility
-            query are mounted here unconditionally — independent of the
-            dropdown's open/closed state (see the components' own docs). */}
-        {(!isInmateReporter || isInmateReport) && book && canMutateCurrent && (
-          <WordReopenButton
-            book={book}
-            isMobile={isMobile}
-            hideTrigger
-            onTriggerChange={setWordReopenTrigger}
-            onFinished={isInmateReport ? () => reporterSubmitMutation.mutate(book.id) : undefined}
-          />
-        )}
-        {!isInmateReporter && canMutateCurrent && current?.document_id != null && (
-          <AdjustSignatureAction
-            documentId={current.document_id}
-            hideTrigger
-            onTriggerChange={setAdjustSigTrigger}
-          />
-        )}
-        <input
-          ref={fileSignedRef}
-          type="file"
-          accept="application/pdf,image/*"
-          className="hidden"
-          onChange={(e) => {
-            const f = e.target.files?.[0]
-            if (f && book) {
-              void addScan.fileSignedCopy(f, book.ref_number).then(() => void refetch())
-            }
-            e.target.value = ''
-          }}
-        />
-        <input
-          ref={replaceSignedRef}
-          type="file"
-          accept="application/pdf,image/*"
-          className="hidden"
-          onChange={(e) => {
-            const f = e.target.files?.[0]
-            if (f) void manage.replacePaper(signedPaper, f)
-            e.target.value = ''
-          }}
-        />
-
-        {/* Persistent workflow bar: the current record's next step(s), always
-            labelled — never icon-only. Same content set on mobile (minus the
-            decide triple, which the dock + inline reason panel below already
-            own) so revise/submit/scan-signed/Word-session stay reachable with
-            readable labels on phone, not just desktop. */}
-        {(Boolean(book && canMutateCurrent && book.edit_session?.state === 'active') ||
-          (action === 'decide' && !isMobile) ||
-          (action === 'review' && book && current) ||
-          action === 'revise' ||
-          showSendForApproval ||
-          showFileSigned) && (
-          <div className="flex w-full flex-wrap items-center gap-2 rounded-xl bg-primary-soft/60 px-3 py-2.5">
-            {(!isInmateReporter || isInmateReport) && book && canMutateCurrent && (
-              <WordSessionActions
-                book={book}
-                isMobile={isMobile}
-                onFinished={isInmateReport ? () => reporterSubmitMutation.mutate(book.id) : undefined}
-              />
-            )}
-            {action === 'decide' && !isMobile && (
-              <>
-                <HeaderBtn
-                  ref={desktopSignRef}
-                  icon={<PenLine className="h-3.5 w-3.5" />}
-                  label={t('books.approval.signApprove')}
-                  tone="green-solid"
-                  disabled={busy}
-                  onClick={() => requestSignConfirm(desktopSignRef)}
-                />
-                <HeaderBtn
-                  icon={<CornerUpLeft className="h-3.5 w-3.5" />}
-                  label={t('books.approval.return')}
-                  tone="amber"
-                  disabled={busy}
-                  onClick={() => {
-                    setReason('')
-                    overlay.open('decision', { decision: 'return' })
-                  }}
-                />
-                <HeaderBtn
-                  icon={<X className="h-3.5 w-3.5" strokeWidth={2.4} />}
-                  label={t('books.approval.reject')}
-                  tone="red"
-                  disabled={busy}
-                  onClick={() => {
-                    setReason('')
-                    overlay.open('decision', { decision: 'reject' })
-                  }}
-                />
-              </>
-            )}
-
-            {action === 'review' && book && current && (
-              <div data-testid="record-reviewer-actions">
-                <ReviewerActions bookId={book.id} versionId={current.id} />
-              </div>
-            )}
-
-            {action === 'revise' && (
-              <HeaderBtn
-                icon={<CornerUpLeft className="h-3.5 w-3.5 -scale-x-100" />}
-                label={t('books.versions.revise')}
-                tone="navy-solid"
-                disabled={!canRevise}
-                onClick={handleRevise}
-              />
-            )}
-
-            {showSendForApproval && (
-              <HeaderBtn
-                icon={<Send className="h-3.5 w-3.5" />}
-                label={t('books.approval.submitForApproval')}
-                tone="navy-solid"
-                onClick={() => {
-                  if (isInmateReporter) reporterSubmitMutation.mutate(bookId)
-                  else overlay.open('submit')
-                }}
-              />
-            )}
-
-            {showFileSigned && (
-              <HeaderBtn
-                icon={<Upload className="h-3.5 w-3.5" />}
-                label={t('books.pane.scanSignedCopy')}
-                tone="plain"
-                disabled={addScan.busy}
-                onClick={() => fileSignedRef.current?.click()}
-              />
-            )}
-          </div>
-        )}
-
-        {/* Viewer/workflow utility row: the annotation-mode toggle stays a
-            standalone, always-visible control (its armed state must never
-            hide inside a closed menu) next to the Tools dropdown, which holds
-            every other tool grouped by purpose. */}
-        <div className="flex w-full items-center justify-end gap-1.5 lg:ms-auto lg:w-auto">
-          {canMark && (
-            <MarkToggle armed={armed} onToggle={() => setArmedFor(armed ? null : bookId)} />
-          )}
-          {book && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <HeaderBtn
-                  icon={<Wrench className="h-3.5 w-3.5" aria-hidden="true" />}
-                  label={t('books.record.tools')}
-                  tone="plain"
-                />
-              </DropdownMenuTrigger>
-              {/* Portaled outside the print-hidden header: without the marker the
-                  still-open menu lands on the sheet when Print runs from it. */}
-              <DropdownMenuContent align="end" data-print-hide>
-                <div className="px-2.5 pb-1 pt-1.5 text-[0.62em] font-bold uppercase tracking-[0.1em] text-muted-foreground">
-                  {t('books.record.toolsDocument')}
-                </div>
-                <DropdownMenuItem onSelect={() => window.print()}>
-                  <Printer className="h-3.5 w-3.5" aria-hidden="true" />
-                  {t('books.record.print')}
-                </DropdownMenuItem>
-                {/* Hand this record to Outlook. Same one-item basket prefill the
-                    tray builds, so subject/body/reference PDF and the book link
-                    are identical whether you email one record or a whole basket. */}
-                {!isInmateReporter && (
-                  <DropdownMenuItem
-                    disabled={!recordHasPapers || emailingRecord}
-                    onSelect={() => void handleEmailViaOutlook()}
-                  >
-                    {emailingRecord ? (
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
-                    ) : (
-                      <Mail className="h-3.5 w-3.5" aria-hidden="true" />
-                    )}
-                    {t('books.record.emailViaOutlook')}
-                  </DropdownMenuItem>
-                )}
-                {canManageIncludedPapers && (
-                  <DropdownMenuItem onSelect={() => overlay.open('papers')}>
-                    <FileStack className="h-3.5 w-3.5" aria-hidden="true" />
-                    {t('books.includedPapers.addToPdf')}
-                  </DropdownMenuItem>
-                )}
-                {state === 'approved' && current?.signed_pdf_url && (
-                  <DropdownMenuItem asChild>
-                    <a href={current.signed_pdf_url} target="_blank" rel="noopener noreferrer">
-                      <Check className="h-3.5 w-3.5" strokeWidth={2.6} aria-hidden="true" />
-                      {t('books.record.downloadSigned')}
-                    </a>
-                  </DropdownMenuItem>
-                )}
-                {!isInmateReporter &&
-                  state === 'approved' &&
-                  current?.signed_pdf_url &&
-                  current?.document_id != null && (
-                    <DropdownMenuItem asChild>
-                      <a
-                        href={paperUrl({ documentId: current.document_id, original: true })}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                      >
-                        <FileText className="h-3.5 w-3.5" aria-hidden="true" />
-                        {t('books.record.viewOriginal')}
-                      </a>
-                    </DropdownMenuItem>
-                  )}
-
-                {!isInmateReporter &&
-                  (wordReopenTrigger != null ||
-                    adjustSigTrigger != null ||
-                    canManageSignedPaper) && (
-                  <>
-                    <DropdownMenuSeparator />
-                    <div className="px-2.5 pb-1 pt-1.5 text-[0.62em] font-bold uppercase tracking-[0.1em] text-muted-foreground">
-                      {t('books.record.toolsEditing')}
-                    </div>
-                    {wordReopenTrigger && (
-                      <DropdownMenuItem
-                        disabled={wordReopenTrigger.disabled}
-                        onSelect={() => wordReopenTrigger.onClick()}
-                      >
-                        {wordReopenTrigger.icon}
-                        {wordReopenTrigger.label}
-                      </DropdownMenuItem>
-                    )}
-                    {adjustSigTrigger && (
-                      <DropdownMenuItem onSelect={() => adjustSigTrigger.onClick()}>
-                        {adjustSigTrigger.icon}
-                        {adjustSigTrigger.label}
-                      </DropdownMenuItem>
-                    )}
-                    {canManageSignedPaper && (
-                      <DropdownMenuItem onSelect={() => replaceSignedRef.current?.click()}>
-                        <RefreshCw className="h-3.5 w-3.5" aria-hidden="true" />
-                        {t('books.pane.replacePaper')}
-                      </DropdownMenuItem>
-                    )}
-                  </>
-                )}
-
-                {!isInmateReporter &&
-                  ((canOverrideState && canMutateCurrent) ||
-                    canManageRevisionAccess ||
-                    canManageSignedPaper) && (
-                  <>
-                    <DropdownMenuSeparator />
-                    <div className="px-2.5 pb-1 pt-1.5 text-[0.62em] font-bold uppercase tracking-[0.1em] text-muted-foreground">
-                      {t('books.record.toolsAdmin')}
-                    </div>
-                    {canOverrideState && canMutateCurrent && (
-                      <DropdownMenuItem
-                        data-testid="state-override-trigger"
-                        onSelect={() => overlay.open('override')}
-                      >
-                        <ShieldAlert className="h-3.5 w-3.5" aria-hidden="true" />
-                        {t('books.stateOverride.trigger')}
-                      </DropdownMenuItem>
-                    )}
-                    {canManageRevisionAccess && (
-                      <DropdownMenuItem
-                        data-testid="revision-access-trigger"
-                        onSelect={() => overlay.open('revision-access')}
-                      >
-                        <ShieldCheck className="h-3.5 w-3.5" aria-hidden="true" />
-                        {t('books.approval.revisionAccess')}
-                      </DropdownMenuItem>
-                    )}
-                    {canManageSignedPaper && (
-                      <DropdownMenuItem variant="danger" onSelect={() => setUnfileOpen(true)}>
-                        <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
-                        {t('books.pane.unfileSignedBtn')}
-                      </DropdownMenuItem>
-                    )}
-                  </>
-                )}
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
-        </div>
-      </header>
+      <RecordHeader book={book} caps={caps} view={view} actions={actions} />
 
       {book && pdfUrl && canManageIncludedPapers && (
         <IncludedPapersDialog
@@ -1414,7 +913,7 @@ function BookRecordPageBody(): React.JSX.Element {
         confirmLabel={t('books.pane.unfileSignedConfirm')}
         onConfirm={() => {
           setUnfileOpen(false)
-          void manage.deletePaper(signedPaper)
+          void manage.deletePaper(SIGNED_PAPER)
         }}
       />
 
@@ -1493,55 +992,7 @@ function BookRecordPageBody(): React.JSX.Element {
         </div>
       )}
 
-      {/* Mobile status disclosure — the desktop progress rail is `hidden
-          md:block` (physically inert below `md`, never focusable there); this
-          is its complement, `md:hidden`, so exactly one of the two surfaces is
-          ever in the accessibility tree. Native `<details>` gives free
-          expand/collapse semantics (no extra state) with a one-line summary —
-          the live station, or the latest completed one when there is no live
-          station (see `currentSummaryStation`) — and the full timeline plus
-          reviewer/notification content on expand, reusing the exact same
-          `RecordTimelineContent` the desktop sidebar renders. */}
-      {book && (
-        <div className="border-b border-hairline bg-surface px-4 py-3 md:hidden" data-print-hide>
-          <details className="group">
-            <summary className="flex cursor-pointer list-none items-center justify-between gap-2 [&::-webkit-details-marker]:hidden">
-              {(() => {
-                const summary = currentSummaryStation(stations)
-                const tone = summary ? TONE[summary.tone] : undefined
-                return (
-                  <span className="flex min-w-0 items-center gap-2 text-[0.82em] font-semibold text-foreground">
-                    {tone && (
-                      <span
-                        className="h-2 w-2 shrink-0 rounded-full"
-                        style={{ background: tone.fg }}
-                        aria-hidden
-                      />
-                    )}
-                    <span className="min-w-0 truncate">
-                      {summary?.label}
-                      {summary?.meta ? ` — ${bidi(summary.meta)}` : ''}
-                    </span>
-                  </span>
-                )
-              })()}
-              <ChevronDown
-                className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180 motion-reduce:transition-none"
-                aria-hidden
-              />
-            </summary>
-            <div className="mt-3">
-              <RecordTimelineContent
-                stations={stations}
-                currentSteps={currentSteps}
-                currentVersionNo={current?.version_no}
-                liveVersionNo={liveVersion?.version_no}
-                sms={book.sms}
-              />
-            </div>
-          </details>
-        </div>
-      )}
+      <RecordPhoneProgress book={book} view={view} />
 
       {/* body: desk + vertical timeline.
           `direction:ltr` pins the layout physically (desk left, Progress right) so
@@ -1550,160 +1001,12 @@ function BookRecordPageBody(): React.JSX.Element {
           reads per language (the aside re-asserts dir below). */}
       <div className="flex min-h-0 flex-1" style={{ direction: 'ltr' }}>
         {/* desk */}
-        <div
-          className="flex flex-1 justify-center overflow-auto px-6 py-7 max-md:flex-col max-md:items-center max-md:justify-start max-md:pb-4"
-          style={{
-            background:
-              'radial-gradient(150% 100% at 40% -10%, var(--surface) 0%, var(--surface-tinted) 70%, var(--bg) 100%)',
-          }}
-        >
-          <div className="print-paper relative w-full max-w-[640px]">
-            {pdfUrl ? (
-              <Suspense fallback={<DeskLoading />}>
-                <DocPdfCanvas
-                  pdfUrl={pdfUrl}
-                  docxUrl={current?.docx_url ?? undefined}
-                  onReady={onPdfReady}
-                  renderOverlay={
-                    annotatable
-                      ? (pages) => (
-                          // Annotation pins are screen-only review marks — hidden
-                          // on the printed copy (display:contents keeps placement
-                          // math anchored to the canvas wrapper on screen).
-                          <div data-print-hide style={{ display: 'contents' }}>
-                            <BookAnnotationLayer
-                              pages={pages}
-                              annotations={annotations}
-                              mode={annMode}
-                              armed={armed}
-                              currentUserId={user?.id}
-                              busy={createMark.isPending || deleteMark.isPending}
-                              onCreate={(m) => createMark.mutate(m)}
-                              onDelete={(id) => deleteMark.mutate(id)}
-                              onDisarm={() => setArmedFor(null)}
-                            />
-                          </div>
-                        )
-                      : undefined
-                  }
-                />
-              </Suspense>
-            ) : isPending ? (
-              <div className="flex h-full min-h-[400px] items-center justify-center text-[0.85em] text-muted-foreground">
-                <Loader2 className="h-6 w-6 animate-spin" />
-              </div>
-            ) : !isInmateReporter && book?.imported_doc ? (
-              // Imported record whose vault file isn't a PDF (e.g. .docx) — no
-              // inline preview, so offer the original for download.
-              <div className="flex h-full min-h-[400px] flex-col items-center justify-center gap-3 text-center text-[0.85em] text-muted-foreground">
-                <span className="max-w-[40ch]">{t('books.record.importedNoPreview')}</span>
-                <a
-                  href={book.imported_doc.download_url}
-                  download={book.imported_doc.filename}
-                  className="inline-flex items-center gap-1.5 rounded-full bg-primary px-3.5 py-1.5 text-[0.95em] font-semibold text-primary-foreground hover:bg-primary-hover"
-                >
-                  {t('books.record.downloadImported', {
-                    format: book.imported_doc.format.toUpperCase(),
-                  })}
-                </a>
-              </div>
-            ) : book?.edit_session?.state === 'active' ? (
-              // The body is still being written in Word — there is genuinely no
-              // document yet, but that's expected, not an error; the Word-session
-              // controls (Finish editing / Discard) are already visible above.
-              <div className="flex h-full min-h-[400px] items-center justify-center text-[0.85em] text-muted-foreground">
-                {t('books.word.bodyInWord')}
-              </div>
-            ) : action === 'revise' && canRevise ? (
-              // A returned/rejected record whose document isn't on file (or was
-              // removed) — the one real recovery already available from this
-              // page is the same Revise action the workflow bar offers.
-              <div className="flex h-full min-h-[400px] flex-col items-center justify-center gap-3 text-center text-[0.85em] text-muted-foreground">
-                <span className="max-w-[36ch]">{t('books.record.noDocument')}</span>
-                <button
-                  type="button"
-                  onClick={handleRevise}
-                  className="inline-flex items-center gap-1.5 rounded-full bg-primary px-3.5 py-1.5 text-[0.95em] font-semibold text-primary-foreground hover:bg-primary-hover"
-                >
-                  {t('books.versions.revise')}
-                </button>
-              </div>
-            ) : (
-              // Nothing produced this document and no action on this page would
-              // fix that — submitting doesn't create one, so no CTA is offered.
-              <div className="flex h-full min-h-[400px] items-center justify-center text-[0.85em] text-muted-foreground">
-                {t('books.record.noDocument')}
-              </div>
-            )}
-          </div>
-          {isMobile && action === 'decide' && (
-            <div
-              ref={decisionPanelRef}
-              dir={isAr ? 'rtl' : 'ltr'}
-              data-print-hide
-              className="mt-5 w-full max-w-[640px] md:hidden"
-            >
-              <RecordDecisionActions
-                returnButtonRef={panelReturnButtonRef}
-                rejectButtonRef={panelRejectButtonRef}
-                signButtonRef={mobileInlineSignRef}
-                busy={busy}
-                onSign={() => requestSignConfirm(mobileInlineSignRef)}
-                onReturn={() => openMobileDecision('return')}
-                onReject={() => openMobileDecision('reject')}
-              />
-              {decision !== null && (
-                <div className="mt-3 rounded-xl border border-hairline bg-surface p-3.5">
-                  <DecisionReasonForm {...decisionReasonFormProps} act={decision} />
-                </div>
-              )}
-            </div>
-          )}
-        </div>
+        <RecordDesk book={book} caps={caps} view={view} actions={actions} />
 
-        {/* vertical progress timeline — physically pinned to the right in both
-            languages (see the outer `direction:ltr`); `hidden md:block` makes
-            it inert and unfocusable below `md`, where the details/summary
-            block above is its sole complement. */}
-        <aside
-          dir={isAr ? 'rtl' : 'ltr'}
-          className="hidden w-[236px] shrink-0 overflow-auto border-s border-hairline bg-surface px-5 py-6 md:block"
-        >
-          <RecordTimelineContent
-            stations={stations}
-            currentSteps={currentSteps}
-            currentVersionNo={current?.version_no}
-            liveVersionNo={liveVersion?.version_no}
-            sms={book?.sms}
-          />
-        </aside>
+        <RecordRail book={book} view={view} />
       </div>
 
-      {isMobile &&
-        action === 'decide' &&
-        createPortal(
-          <div
-            dir={isAr ? 'rtl' : 'ltr'}
-            data-print-hide
-            aria-hidden={dockHidden ? true : undefined}
-            inert={dockHidden}
-            className={cn(
-              'fixed inset-x-0 bottom-[calc(5.5rem+var(--safe-bottom))] z-40 border-t border-hairline bg-surface/95 px-3 pt-2 backdrop-blur md:hidden',
-              'pb-[max(0.5rem,var(--safe-bottom))]',
-              'transition-opacity motion-reduce:transition-none',
-              dockHidden && 'pointer-events-none opacity-0',
-            )}
-          >
-            <RecordDecisionActions
-              signButtonRef={mobileDockSignRef}
-              busy={busy}
-              onSign={() => requestSignConfirm(mobileDockSignRef)}
-              onReturn={() => openMobileDecision('return')}
-              onReject={() => openMobileDecision('reject')}
-            />
-          </div>,
-          document.body,
-        )}
+      <RecordDock book={book} caps={caps} view={view} actions={actions} />
 
       {!isInmateReporter && overlay.value === 'submit' && book && showSendForApproval && !isPending && !capabilitiesLoading && (
         <SubmitForApprovalDialog bookId={book.id} onClose={overlay.close} />
@@ -1720,70 +1023,5 @@ function BookRecordPageBody(): React.JSX.Element {
   )
 }
 
-function DeskLoading(): React.JSX.Element {
-  return (
-    <div className="flex h-full min-h-[400px] items-center justify-center text-muted-foreground">
-      <Loader2 className="h-6 w-6 animate-spin" />
-    </div>
-  )
-}
-
-function NotificationBlock({ messages }: { messages: NotifyMessageRead[] }): React.JSX.Element {
-  const { t, i18n } = useTranslation()
-  const fmt = useMemo(
-    () => new Intl.DateTimeFormat(i18n.language, { dateStyle: 'medium', timeStyle: 'short' }),
-    [i18n.language],
-  )
-  return (
-    <div className="mt-6">
-      <h2 className="mb-3 text-[0.66em] font-bold uppercase tracking-[0.12em] text-muted-foreground">
-        {t('books.record.notification')}
-      </h2>
-      <div className="flex flex-col gap-2">
-        {messages.map((m) => {
-          const tone = smsDeliveryTone(m)
-          const badge = {
-            delivered: {
-              cls: 'bg-success-soft text-success',
-              icon: <Check className="h-3 w-3" />,
-              label: t('employee.messages.delivered'),
-            },
-            failed: {
-              cls: 'bg-destructive/10 text-destructive',
-              icon: <AlertTriangle className="h-3 w-3" />,
-              label: t('employee.messages.failed'),
-            },
-            pending: {
-              cls: 'bg-warning/10 text-warning',
-              icon: <Clock className="h-3 w-3" />,
-              label: t('employee.messages.pending'),
-            },
-          }[tone]
-          return (
-            <div key={m.id} className="rounded-lg border border-hairline bg-surface p-2.5 text-[0.78em]">
-              <div className="mb-1 flex flex-wrap items-center gap-1.5">
-                <span className={`inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 font-semibold ${badge.cls}`}>
-                  {badge.icon}
-                  {badge.label}
-                </span>
-                <span className="ms-auto font-mono text-muted-foreground">
-                  {fmt.format(new Date(m.created_at))}
-                </span>
-              </div>
-              {m.body && (
-                <div className="whitespace-pre-wrap text-foreground" dir="auto">
-                  {m.body}
-                </div>
-              )}
-              {tone === 'failed' && m.error && (
-                <div className="mt-1 text-destructive" dir="ltr">{m.error}</div>
-              )}
-            </div>
-          )
-        })}
-      </div>
-    </div>
-  )
-}
 
 export default BookRecordPage

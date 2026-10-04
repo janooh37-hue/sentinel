@@ -24,8 +24,7 @@ import type { ApprovalLogItem, ApprovalSummaryResponse } from '@/lib/api'
 import { BooksAwaitingWidget } from './BooksAwaitingWidget'
 import { WaitingApprovalsCard } from './WaitingApprovalsCard'
 
-// BookDetailDrawer reads the session user for step ownership; useApprovalSummary
-// reads it for the query key/enabled gate.
+// useApprovalSummary reads the session user for the query key/enabled gate.
 vi.mock('@/lib/authContext', () => ({
   useAuth: () => ({ user: { id: 42 }, status: 'authed' }),
 }))

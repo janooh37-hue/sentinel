@@ -107,7 +107,7 @@ export function ScanBackDock(): React.JSX.Element | null {
       data-print-hide
       className={cn(
         // `end-4` is the logical utility (inset-inline-end) — it flips in RTL.
-        // Never `right-4`. Precedent: BookDetailDrawer.tsx:340, IdentityDocCard.tsx:97.
+        // Never `right-4`. Precedent: IdentityDocCard.tsx:97.
         'fixed z-30 flex flex-col items-end gap-2 end-4',
         // sonner's Toaster (App.tsx, position="bottom-right") sits at the same
         // corner in LTR and paints over anything under it (z-index 999999999 —
