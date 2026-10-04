@@ -115,7 +115,7 @@ import { smsDeliveryTone } from '@/lib/smsDelivery'
 import { sealDescriptor, signedSourceOf, type SealTone } from './bookStateLabel'
 import { useAddScan } from './useAddScan'
 import { useManagePaper } from './useManagePaper'
-import type { Paper } from './recordPapers'
+import { paperUrl, type Paper } from './recordPapers'
 import { useRecordPrintMode } from './useRecordPrintMode'
 import { serviceHref } from '@/lib/quickActions'
 
@@ -637,9 +637,7 @@ export function BookRecordPage(): React.JSX.Element {
   // when a signed PDF exists — without it the canvas keeps showing the cached
   // unsigned bytes and the just-applied manager signature never appears on screen.
   const pdfUrl = current?.document_id
-    ? `/api/v1/documents/${current.document_id}/download?format=pdf${
-        current.signed_pdf_url ? '&rev=signed' : ''
-      }`
+    ? paperUrl({ documentId: current.document_id, signed: !!current.signed_pdf_url })
     : (book?.imported_doc?.pdf_url ?? null)
   const canManageIncludedPapers =
     !isInmateReporter &&
@@ -1301,7 +1299,7 @@ export function BookRecordPage(): React.JSX.Element {
                   current?.document_id != null && (
                     <DropdownMenuItem asChild>
                       <a
-                        href={`/api/v1/documents/${current.document_id}/download?format=pdf&original=true`}
+                        href={paperUrl({ documentId: current.document_id, original: true })}
                         target="_blank"
                         rel="noopener noreferrer"
                       >

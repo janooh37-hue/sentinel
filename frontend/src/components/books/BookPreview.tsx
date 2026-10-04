@@ -22,6 +22,7 @@ import { useCapabilities } from '@/lib/useCapabilities'
 import { useAuth } from '@/lib/authContext'
 import { inmateReporterActionFor } from './book-detail-drawer-utils'
 import { deleteBlockReason } from '@/pages/books/recordDelete'
+import { paperUrl } from '@/pages/books/recordPapers'
 import { useRecordDelete } from '@/pages/books/RecordDeleteProvider'
 import { cn } from '@/lib/utils'
 import { serviceHref } from '@/lib/quickActions'
@@ -69,7 +70,7 @@ export function BookPreview({ bookId, onClose, onSubmitForApproval }: Props): Re
   const canContinue = isInmateReporter ? reporterAction === 'edit-submit' : canEdit
   const canSubmitCurrent = isInmateReporter ? reporterAction === 'edit-submit' : canSubmitBook
   const pdfUrl = current?.document_id
-    ? `/api/v1/documents/${current.document_id}/download?format=pdf`
+    ? paperUrl({ documentId: current.document_id })
     : null
 
   return (

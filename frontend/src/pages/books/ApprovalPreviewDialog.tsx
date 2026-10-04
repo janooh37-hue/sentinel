@@ -1,17 +1,17 @@
-import { lazy, Suspense } from 'react'
+import { lazy, Suspense, useMemo, useState } from 'react'
 import type { RefObject } from 'react'
 import { useNavigate } from 'react-router-dom'
 import * as Dialog from '@radix-ui/react-dialog'
 import { useTranslation } from 'react-i18next'
 import { Loader2, X } from 'lucide-react'
 
-import { api } from '@/lib/api'
 import type { ApprovalLogItem } from '@/lib/api'
 import { approvalRecordUrl } from '@/lib/approvals'
 import type { ApprovalContext } from '@/lib/approvals'
+import { useAuth } from '@/lib/authContext'
 import { cn } from '@/lib/utils'
 
-import type { Paper } from './recordPapers'
+import { approvalItemPapers, paperKey, type PaperKey } from './recordPapers'
 
 const RecordPaperViewer = lazy(() => import('@/pages/books/RecordPaperViewer'))
 
@@ -59,24 +59,26 @@ export function StatusChip({ item }: { item: ApprovalLogItem }): React.JSX.Eleme
 export function ApprovalPreviewDialog({ item, triggerRef, onClose, context }: Props): React.JSX.Element {
   const { t } = useTranslation()
   const navigate = useNavigate()
-  const signed = item?.status === 'approved' && item.version_id != null
-  const pdfUrl = item
-    ? signed
-      ? api.signedDocumentUrl(item.book_id, item.version_id!)
-      : item.document_id != null
-        ? api.documentDownloadUrl(item.document_id, 'pdf', item.version_id ?? undefined)
+  const { user } = useAuth()
+  const inmateReporter = user?.role === 'inmate_reporter'
+  const papers = useMemo(
+    () => (item ? approvalItemPapers(item, { inmateReporter }) : []),
+    [item, inmateReporter],
+  )
+  // Open on the first paper (signed when approved); an explicit pick is kept by key.
+  const [pickedKey, setPickedKey] = useState<PaperKey | null>(null)
+  const [prevItemKey, setPrevItemKey] = useState(item ? `${item.book_id}:${item.version_id}` : null)
+  const itemKey = item ? `${item.book_id}:${item.version_id}` : null
+  if (prevItemKey !== itemKey) {
+    setPrevItemKey(itemKey)
+    setPickedKey(null)
+  }
+  const selectedKey =
+    pickedKey !== null && papers.some((p) => paperKey(p) === pickedKey)
+      ? pickedKey
+      : papers[0]
+        ? paperKey(papers[0])
         : null
-    : null
-  const papers: Paper[] =
-    item && pdfUrl
-      ? [{
-          kind: signed ? 'signed' : 'generated',
-          url: pdfUrl,
-          downloadUrl: pdfUrl,
-          filename: `${item.ref_number}${signed ? '-signed' : ''}.pdf`,
-          isPdf: true,
-        }]
-      : []
 
   return (
     <Dialog.Root open={item !== null} onOpenChange={(open) => !open && onClose()}>
@@ -130,7 +132,7 @@ export function ApprovalPreviewDialog({ item, triggerRef, onClose, context }: Pr
 
               <div className="h-[70dvh] min-h-0 flex-1 overflow-hidden bg-[rgba(10,14,24,0.78)] px-5 py-5">
                 <div className="relative mx-auto h-full w-full max-w-[760px]">
-                  {pdfUrl ? (
+                  {papers.length > 0 ? (
                     <Suspense
                       fallback={
                         <div className="flex min-h-[300px] items-center justify-center text-muted-foreground">
@@ -140,10 +142,9 @@ export function ApprovalPreviewDialog({ item, triggerRef, onClose, context }: Pr
                     >
                       <RecordPaperViewer
                         papers={papers}
-                        paperIndex={0}
-                        onPaperIndexChange={() => undefined}
-                        baseWidth={620}
-                        isOverlay
+                        selectedKey={selectedKey}
+                        onSelectKey={setPickedKey}
+                        mode="dialog"
                       />
                     </Suspense>
                   ) : (

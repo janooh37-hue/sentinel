@@ -6,14 +6,16 @@
  *   frame (caps-gated by the parent via addScanSlot).
  * - PDF bytes fetched as ?encoding=base64 text (IDM bypass — DocPdfCanvas
  *   pattern); images load as plain <img>.
- * - Zoom 60–240% re-renders pdf.js pages at baseWidth×zoom so the scroll
- *   container overflows naturally; grab-to-pan via pointer capture.
- * - Full preview = the parent renders this same component with isOverlay +
- *   a larger baseWidth inside a fixed overlay.
+ * - Fit = the viewer's own container width minus padding (ResizeObserver);
+ *   zoom 60–240% re-renders pdf.js pages at fit×zoom so the scroll container
+ *   overflows naturally; grab-to-pan via pointer capture.
+ * - `mode` picks the chrome: 'pane' (strip + light toolbar), 'overlay'
+ *   (full preview, dark toolbar) or 'dialog' (approvals preview, dark toolbar;
+ *   the strip appears only when there is more than one paper).
  *
  * Lazy-loaded by the page (default export) so pdf.js ships in its own chunk.
  */
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Download, Loader2, Maximize2, Minus, Plus, RefreshCw, Trash2, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import * as pdfjsLib from 'pdfjs-dist'
@@ -21,9 +23,14 @@ import * as pdfjsLib from 'pdfjs-dist'
 import { base64ToBytes, pdfWorkerUrl, toBase64Url } from '@/lib/pdf'
 import { cn } from '@/lib/utils'
 
-import type { Paper } from './recordPapers'
+import { paperKey, type Paper, type PaperKey } from './recordPapers'
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl
+
+/** Horizontal padding (px) around the page inside the scroll container (`p-4` × 2). */
+const PAPER_PADDING = 32
+
+export type RecordPaperViewerMode = 'pane' | 'overlay' | 'dialog'
 
 /** Renders one paper (PDF pages stacked, or an image) at `width` px. */
 function PaperCanvas({ paper, width }: { paper: Paper; width: number }): React.JSX.Element {
@@ -101,10 +108,9 @@ function PaperCanvas({ paper, width }: { paper: Paper; width: number }): React.J
 
 export function RecordPaperViewer({
   papers,
-  paperIndex,
-  onPaperIndexChange,
-  baseWidth,
-  isOverlay = false,
+  selectedKey,
+  onSelectKey,
+  mode,
   onOpenFull,
   onClose,
   addScanSlot,
@@ -113,11 +119,10 @@ export function RecordPaperViewer({
   onReplacePaper,
 }: {
   papers: Paper[]
-  paperIndex: number
-  onPaperIndexChange: (i: number) => void
-  /** page width in px at 100% zoom */
-  baseWidth: number
-  isOverlay?: boolean
+  /** key of the selected paper; falls back to the first paper when absent */
+  selectedKey: PaperKey | null
+  onSelectKey: (key: PaperKey) => void
+  mode: RecordPaperViewerMode
   onOpenFull?: () => void
   onClose?: () => void
   /** parent-provided "＋ Add scan" strip frame (caps-gated) */
@@ -130,19 +135,39 @@ export function RecordPaperViewer({
   onReplacePaper?: (paper: Paper) => void
 }): React.JSX.Element {
   const { t } = useTranslation()
+  const isOverlay = mode !== 'pane'
   const [zoom, setZoom] = useState(1)
   const canvasRef = useRef<HTMLDivElement | null>(null)
+  const [containerWidth, setContainerWidth] = useState(0)
   const panState = useRef<{ x: number; y: number; active: boolean }>({ x: 0, y: 0, active: false })
   const [canPan, setCanPan] = useState(false)
   const [grabbing, setGrabbing] = useState(false)
 
-  const paper = papers[paperIndex] as Paper | undefined
-  const paperKey = paper?.url
-  const [prevPaperKey, setPrevPaperKey] = useState(paperKey)
-  if (prevPaperKey !== paperKey) {
-    setPrevPaperKey(paperKey)
+  const paper = papers.find((p) => paperKey(p) === selectedKey) ?? papers[0]
+  const activeKey = paper ? paperKey(paper) : null
+  const [prevActiveKey, setPrevActiveKey] = useState(activeKey)
+  if (prevActiveKey !== activeKey) {
+    setPrevActiveKey(activeKey)
     setZoom(1)
   }
+
+  // Fit width = this container's own width minus padding.
+  useLayoutEffect(() => {
+    const el = canvasRef.current
+    if (!el) return
+    setContainerWidth(Math.round(el.clientWidth))
+    if (typeof ResizeObserver === 'undefined') return
+    const ro = new ResizeObserver((entries) => {
+      const w = entries[0]?.contentRect.width ?? el.clientWidth
+      setContainerWidth(Math.round(w))
+    })
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+  const fitWidth = Math.max(0, containerWidth - PAPER_PADDING)
+  const showStrip =
+    (mode === 'pane' && (papers.length > 0 || !!addScanSlot)) ||
+    (mode === 'dialog' && papers.length > 1)
 
   const minZoom = isOverlay ? 0.5 : 0.6
   const maxZoom = isOverlay ? 3 : 2.4
@@ -157,7 +182,7 @@ export function RecordPaperViewer({
     measureOverflow()
     const id = window.setTimeout(measureOverflow, 450) // after pdf render settles
     return () => window.clearTimeout(id)
-  }, [zoom, paperIndex, papers, measureOverflow])
+  }, [zoom, activeKey, papers, containerWidth, measureOverflow])
 
   const onPointerDown = (e: React.PointerEvent<HTMLDivElement>): void => {
     const cv = canvasRef.current
@@ -190,20 +215,20 @@ export function RecordPaperViewer({
 
   return (
     <div className={cn('flex min-h-0 flex-1 flex-col', isOverlay && 'h-full')}>
-      {!isOverlay && (papers.length > 0 || addScanSlot) && (
+      {showStrip && (
         <div className="flex shrink-0 gap-2 overflow-x-auto border-b border-hairline bg-surface-raised px-3 py-2.5">
-          {papers.map((p, i) => (
+          {papers.map((p) => (
             <button
-              key={`${p.kind}-${p.url}`}
+              key={paperKey(p)}
               type="button"
-              aria-pressed={i === paperIndex}
-              onClick={() => onPaperIndexChange(i)}
+              aria-pressed={paperKey(p) === activeKey}
+              onClick={() => onSelectKey(paperKey(p))}
               className="flex w-14 shrink-0 flex-col items-center gap-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               <span
                 className={cn(
                   'grid aspect-[210/297] w-full place-items-center overflow-hidden rounded-[3px] border-2 bg-surface font-mono text-[0.56em] text-faint transition-colors',
-                  i === paperIndex ? 'border-primary' : 'border-border',
+                  paperKey(p) === activeKey ? 'border-primary' : 'border-border',
                 )}
               >
                 {p.isPdf ? 'PDF' : 'IMG'}
@@ -211,7 +236,7 @@ export function RecordPaperViewer({
               <span
                 className={cn(
                   'w-full truncate text-center text-[0.56em] leading-tight',
-                  i === paperIndex ? 'font-bold text-primary' : 'text-muted-foreground',
+                  paperKey(p) === activeKey ? 'font-bold text-primary' : 'text-muted-foreground',
                 )}
               >
                 {kindLabel(p)}
@@ -322,7 +347,13 @@ export function RecordPaperViewer({
         )}
       >
         <div className="m-auto shrink-0 p-4">
-          {paper ? <PaperCanvas paper={paper} width={Math.round(baseWidth * zoom)} /> : (emptySlot ?? null)}
+          {paper ? (
+            fitWidth > 0 ? (
+              <PaperCanvas paper={paper} width={Math.round(fitWidth * zoom)} />
+            ) : null
+          ) : (
+            (emptySlot ?? null)
+          )}
         </div>
       </div>
     </div>

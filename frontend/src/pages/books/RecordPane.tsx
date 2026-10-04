@@ -56,7 +56,7 @@ import { signedSourceOf } from './bookStateLabel'
 import { IncludedPapersDialog } from './IncludedPapersDialog'
 import { isIncludedPapersOwner } from './includedPapersState'
 import { subjectEmployeePart } from './formKind'
-import { papersOf, type Paper } from './recordPapers'
+import { defaultPaperKey, paperKey, papersOf, type Paper, type PaperKey } from './recordPapers'
 import { serviceArtwork, serviceGlyph, useServiceLabel } from './serviceLabels'
 import { StateSeal } from './StateSeal'
 import { useAddScan } from './useAddScan'
@@ -106,36 +106,18 @@ export function RecordPane({
     enabled: !isInmateReporter && includedPapersOpen && includedBookId !== null,
   })
 
-  const papers = useMemo(() => {
-    if (!book) return []
-    const all = papersOf(book)
-    if (!isInmateReporter) return all
-    const hasSignedPaper = all.some((paper) => paper.kind === 'signed')
-    return all
-      .filter(
-        (paper) =>
-          paper.kind !== 'scan' && !(hasSignedPaper && paper.kind === 'generated'),
-      )
-      .map((paper) =>
-        paper.kind === 'generated'
-          ? {
-              ...paper,
-              url: paper.url.replace('&original=true', ''),
-              downloadUrl: paper.downloadUrl.replace('&original=true', ''),
-            }
-          : paper,
-      )
-  }, [book, isInmateReporter])
+  const papers = useMemo(
+    () => (book ? papersOf(book, { inmateReporter: isInmateReporter }) : []),
+    [book, isInmateReporter],
+  )
 
-  // A scan-back approval opens on its signed paper (the operator's question is
-  // "what came back signed?", not the generated original).
-  const initialPaperIndex = useMemo(() => {
-    if (!book || book.approval_state !== 'approved' || signedSourceOf(book) !== 'scan') return 0
-    const signedIdx = papers.findIndex((p) => p.kind === 'signed')
-    return signedIdx >= 0 ? signedIdx : 0
-  }, [book, papers])
-
-  const [paperIndex, setPaperIndex] = useState(initialPaperIndex)
+  // The record's default paper (signed once filed, else the first non-signed);
+  // an explicit pick is kept by key and falls back to the default if it vanishes.
+  const defaultKey = book ? defaultPaperKey(book, papers) : null
+  const [pickedKey, setPickedKey] = useState<PaperKey | null>(null)
+  const selectedKey =
+    pickedKey !== null && papers.some((p) => paperKey(p) === pickedKey) ? pickedKey : defaultKey
+  const selectedPaper = papers.find((p) => paperKey(p) === selectedKey)
   const [fullOpen, setFullOpen] = useState(false)
   const [draftScan, setDraftScan] = useState<File | null>(null)
   // The full-preview overlay is a hand-rolled portal (not Radix Dialog), so it
@@ -148,7 +130,7 @@ export function RecordPane({
   const [prevBookKey, setPrevBookKey] = useState(bookKey)
   if (prevBookKey !== bookKey) {
     setPrevBookKey(bookKey)
-    setPaperIndex(initialPaperIndex)
+    setPickedKey(null)
     setFullOpen(false)
     setIncludedPapersOpen(false)
   }
@@ -328,9 +310,9 @@ export function RecordPane({
       >
         <RecordPaperViewer
           papers={papers}
-          paperIndex={paperIndex}
-          onPaperIndexChange={setPaperIndex}
-          baseWidth={400}
+          selectedKey={selectedKey}
+          onSelectKey={setPickedKey}
+          mode="pane"
           onOpenFull={() => setFullOpen(true)}
           addScanSlot={addScanSlot}
           onDeletePaper={!isInmateReporter && canEdit ? setDeleteTarget : undefined}
@@ -532,7 +514,7 @@ export function RecordPane({
         </AlertDialogContent>
       </AlertDialog>
 
-      {fullOpen && papers[paperIndex]
+      {fullOpen && selectedPaper
         ? createPortal(
             <div
               ref={overlayRef}
@@ -548,10 +530,9 @@ export function RecordPane({
               <Suspense fallback={null}>
                 <RecordPaperViewer
                   papers={papers}
-                  paperIndex={paperIndex}
-                  onPaperIndexChange={setPaperIndex}
-                  baseWidth={620}
-                  isOverlay
+                  selectedKey={selectedKey}
+                  onSelectKey={setPickedKey}
+                  mode="overlay"
                   onClose={() => setFullOpen(false)}
                   onDeletePaper={!isInmateReporter && canEdit ? setDeleteTarget : undefined}
                   onReplacePaper={

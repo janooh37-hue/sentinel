@@ -2050,7 +2050,8 @@
       "awaitingScan": "Printed for signature — scan the signed copy back.",
       "approved": "Signed by {{name}} · {{date}}",
       "returned": "Returned by {{name}}:",
-      "rejected": "Rejected by {{name}}:"
+      "rejected": "Rejected by {{name}}:",
+      "voided": "Voided — kept for the record only."
     },
     "paper": {
       "signed": "Signed copy",

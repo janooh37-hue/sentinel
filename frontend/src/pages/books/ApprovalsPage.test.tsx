@@ -18,7 +18,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import i18n from '@/lib/i18n'
 import type { ApprovalLogItem, ApprovalSummaryResponse } from '@/lib/api'
-import type { Paper } from './recordPapers'
+import { paperKey, type Paper } from './recordPapers'
 import { ApprovalsPage } from './ApprovalsPage'
 
 vi.mock('@/lib/authContext', () => ({
@@ -28,20 +28,23 @@ vi.mock('@/lib/authContext', () => ({
 vi.mock('@/pages/books/RecordPaperViewer', () => ({
   default: ({
     papers,
-    paperIndex,
-    isOverlay,
+    selectedKey,
+    mode,
   }: {
     papers: Paper[]
-    paperIndex: number
-    isOverlay?: boolean
-  }) => (
-    <div
-      data-testid="record-paper-viewer"
-      data-paper-kind={papers[paperIndex]?.kind}
-      data-paper-url={papers[paperIndex]?.url}
-      data-overlay={isOverlay ? 'true' : 'false'}
-    />
-  ),
+    selectedKey: string | null
+    mode: string
+  }) => {
+    const selected = papers.find((p) => paperKey(p) === selectedKey) ?? papers[0]
+    return (
+      <div
+        data-testid="record-paper-viewer"
+        data-paper-kind={selected?.kind}
+        data-paper-url={selected?.url}
+        data-mode={mode}
+      />
+    )
+  },
 }))
 
 vi.mock('@/pages/scanInbox/ScanPdfCanvas', () => ({
@@ -406,7 +409,7 @@ describe('ApprovalsPage rows', () => {
       '/api/v1/documents/7/download?format=pdf&version_id=1',
     )
     expect(screen.getByTestId('record-paper-viewer')).toHaveAttribute('data-paper-kind', 'generated')
-    expect(screen.getByTestId('record-paper-viewer')).toHaveAttribute('data-overlay', 'true')
+    expect(screen.getByTestId('record-paper-viewer')).toHaveAttribute('data-mode', 'dialog')
     expect(screen.getByTestId('location')).toHaveTextContent('/books/approvals')
 
     await userEvent.click(screen.getByRole('button', { name: /open full record/i }))

@@ -2217,7 +2217,8 @@
       "awaitingScan": "مطبوع للتوقيع — امسح النسخة الموقّعة وأرفقها.",
       "approved": "وقّعه {{name}} · {{date}}",
       "returned": "أعاده {{name}}:",
-      "rejected": "رفضه {{name}}:"
+      "rejected": "رفضه {{name}}:",
+      "voided": "ملغى — محفوظ للسجل فقط."
     },
     "paper": {
       "signed": "النسخة الموقّعة",
