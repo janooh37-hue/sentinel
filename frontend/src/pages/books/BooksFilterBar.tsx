@@ -17,17 +17,7 @@ import { cn } from '@/lib/utils'
 import { serviceArtwork, serviceGlyph, useServiceLabel } from './serviceLabels'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { hasServiceRecordsCap } from '@/lib/dashboardLayout'
-
-export interface BooksFilters {
-  categoryIds: string[]
-  direction: 'all' | 'incoming' | 'outgoing'
-  status: 'all' | 'none' | 'pending' | 'approved' | 'returned' | 'rejected'
-  fromDate: string
-  toDate: string
-  q: string
-  drafts?: boolean
-  serviceId: string
-}
+import { DEFAULT_BOOKS_FILTERS, hasActiveFilters, type BooksFilters } from './booksFiltersUtils'
 
 interface BooksFilterBarProps {
   filters: BooksFilters
@@ -60,15 +50,7 @@ export function BooksFilterBar({
   const [svcOpen, setSvcOpen] = useState(false)
   const svcRootRef = useRef<HTMLDivElement>(null)
 
-  const isAnyFilterActive =
-    filters.categoryIds.length > 0 ||
-    filters.direction !== 'all' ||
-    filters.status !== 'all' ||
-    filters.fromDate !== '' ||
-    filters.toDate !== '' ||
-    filters.q !== '' ||
-    !!filters.drafts ||
-    selectedServiceId !== 'all'
+  const isAnyFilterActive = hasActiveFilters({ ...filters, serviceId: selectedServiceId })
 
   useEffect(() => {
     if (selectedServiceAllowed) {
@@ -81,7 +63,7 @@ export function BooksFilterBar({
   }, [filters.serviceId, selectedServiceAllowed])
 
   const clear = (): void => {
-    onChange({ categoryIds: [], direction: 'all', status: 'all', fromDate: '', toDate: '', q: '', drafts: false, serviceId: 'all' })
+    onChange({ ...DEFAULT_BOOKS_FILTERS })
   }
 
   const toggleCategory = (id: string): void => {

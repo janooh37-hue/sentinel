@@ -8,7 +8,8 @@ import userEvent from '@testing-library/user-event'
 
 const capabilityState = vi.hoisted(() => ({ allowed: new Set<string>() }))
 
-import { BooksFilterBar, type BooksFilters } from './BooksFilterBar'
+import { BooksFilterBar } from './BooksFilterBar'
+import { DEFAULT_BOOKS_FILTERS, type BooksFilters } from './booksFiltersUtils'
 import type { ServiceFacetRead } from '@/lib/api'
 
 // Arabic throughout: an EN-only assertion cannot catch an AR leak here.
@@ -48,16 +49,7 @@ const SERVICES: ServiceFacetRead[] = [
   { id: 'other', count: 1, states: { none: 1 } },
 ]
 
-const BASE: BooksFilters = {
-  categoryIds: [],
-  direction: 'all',
-  status: 'all',
-  fromDate: '',
-  toDate: '',
-  q: '',
-  drafts: false,
-  serviceId: 'all',
-}
+const BASE: BooksFilters = DEFAULT_BOOKS_FILTERS
 
 function setup(filters: Partial<BooksFilters> = {}) {
   const onChange = vi.fn()

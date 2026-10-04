@@ -99,12 +99,14 @@ import {
   type AdjustSignatureTrigger,
 } from '@/components/signature/AdjustSignatureAction'
 import { IncludedPapersDialog } from './IncludedPapersDialog'
+import { Hint } from '@/components/ui/hint'
 import { QueueNav } from './QueueNav'
+import { RecordChromeProvider } from './record/RecordChrome'
 import { MarkToggle } from './MarkToggle'
 import { RecordDecisionActions } from './RecordDecisionActions'
 import { isIncludedPapersOwner } from './includedPapersState'
 import { HeaderBtn } from './HeaderBtn'
-import { useAwaitingQueue } from './useAwaitingQueue'
+import { describeListFrom, useRecordNavContext } from './useRecordNavContext'
 import { buildRecordBasketItem } from './recordsBasket'
 import { buildBasketPrefill } from '@/lib/basketEmail'
 import { getRecentRecipientsForForm } from '@/lib/recentRecipients'
@@ -507,7 +509,17 @@ function DecisionReasonForm({
   )
 }
 
+/** The page owns the record chrome (rail / focus / full-screen) so the header and
+ *  the desk read one state. */
 export function BookRecordPage(): React.JSX.Element {
+  return (
+    <RecordChromeProvider>
+      <BookRecordPageBody />
+    </RecordChromeProvider>
+  )
+}
+
+function BookRecordPageBody(): React.JSX.Element {
   const { id } = useParams<{ id: string }>()
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
@@ -781,12 +793,20 @@ export function BookRecordPage(): React.JSX.Element {
   const armed = armedFor === bookId
   const canMark = state === 'pending' && action === 'decide'
   const annMode: 'view' | 'mark' = canMark ? 'mark' : 'view'
-  const queue = useAwaitingQueue(
-    Number.isFinite(bookId) ? bookId : null,
-    current?.id ?? null,
-    effectiveApprovalContext,
-    effectiveApprovalContext != null,
-  )
+  const {
+    back,
+    step,
+    queue,
+    from: backFrom,
+  } = useRecordNavContext({
+    bookId: Number.isFinite(bookId) ? bookId : null,
+    versionId: current?.id ?? null,
+    approvalContext: effectiveApprovalContext,
+  })
+  const backFilter = describeListFrom(backFrom, t)
+  const backLabel = backFilter
+    ? t('books.record.backFrom', { filter: backFilter })
+    : t('books.record.back')
   const { data: annotations = [] } = useQuery({
     queryKey: ['books', 'annotations', bookId, current?.id],
     queryFn: () => api.listBookAnnotations(bookId, current!.id),
@@ -997,7 +1017,7 @@ export function BookRecordPage(): React.JSX.Element {
           </button>
           <button
             type="button"
-            onClick={() => navigate('/books')}
+            onClick={back}
             className="inline-flex items-center gap-1.5 rounded-full border border-hairline bg-surface px-4 py-2 text-[0.85em] font-medium text-foreground transition-colors hover:bg-surface-tinted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             {t('books.record.back')}
@@ -1025,14 +1045,16 @@ export function BookRecordPage(): React.JSX.Element {
           floor keeps that from happening on desktop too, where a crowded action
           cluster used to eat the same space — it wraps instead. */}
       <header className="flex flex-wrap items-center gap-x-3.5 gap-y-2.5 border-b border-hairline bg-gradient-to-b from-surface to-surface-tinted/40 px-4 py-3 sm:px-5 sm:py-3.5">
-        <button
-          type="button"
-          onClick={() => navigate('/books')}
-          aria-label={t('books.record.back')}
-          className="flex h-9 w-9 items-center justify-center rounded-lg border border-hairline bg-surface text-primary transition-colors hover:bg-surface-tinted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        >
-          <ArrowLeft className="h-4 w-4 rtl:-scale-x-100" strokeWidth={2.2} />
-        </button>
+        <Hint label={backLabel}>
+          <button
+            type="button"
+            onClick={back}
+            aria-label={backLabel}
+            className="flex h-9 w-9 items-center justify-center rounded-lg border border-hairline bg-surface text-primary transition-colors hover:bg-surface-tinted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          >
+            <ArrowLeft className="h-4 w-4 rtl:-scale-x-100" strokeWidth={2.2} />
+          </button>
+        </Hint>
         {!isInmateReporter && (
           <QueueNav
             position={queue.position}
@@ -1040,20 +1062,12 @@ export function BookRecordPage(): React.JSX.Element {
             onPrev={() => {
               setArmedFor(null)
               if (queue.prevId == null) return
-              navigate(
-                effectiveApprovalContext
-                  ? approvalRecordUrl(queue.prevId, queue.prevVersionId, effectiveApprovalContext)
-                  : `/books/${queue.prevId}`,
-              )
+              step(queue.prevId, queue.prevVersionId)
             }}
             onNext={() => {
               setArmedFor(null)
               if (queue.nextId == null) return
-              navigate(
-                effectiveApprovalContext
-                  ? approvalRecordUrl(queue.nextId, queue.nextVersionId, effectiveApprovalContext)
-                  : `/books/${queue.nextId}`,
-              )
+              step(queue.nextId, queue.nextVersionId)
             }}
           />
         )}

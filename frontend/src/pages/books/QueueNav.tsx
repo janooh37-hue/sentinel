@@ -35,7 +35,7 @@ export function QueueNav({
         data-testid="queue-prev"
         onClick={onPrev}
         disabled={position <= 1}
-        aria-label={t('books.record.prevAwaiting')}
+        aria-label={t('books.record.prevRecord')}
         className={btn}
       >
         <ChevronLeft className="h-4 w-4 rtl:-scale-x-100" strokeWidth={2.2} />
@@ -51,7 +51,7 @@ export function QueueNav({
         data-testid="queue-next"
         onClick={onNext}
         disabled={position >= total}
-        aria-label={t('books.record.nextAwaiting')}
+        aria-label={t('books.record.nextRecord')}
         className={btn}
       >
         <ChevronRight className="h-4 w-4 rtl:-scale-x-100" strokeWidth={2.2} />

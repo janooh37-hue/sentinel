@@ -1,5 +1,17 @@
 import type { BookRead } from '@/lib/api'
-import type { BooksFilters } from './BooksFilterBar'
+
+export interface BooksFilters {
+  categoryIds: string[]
+  direction: 'all' | 'incoming' | 'outgoing'
+  status: 'all' | 'none' | 'pending' | 'approved' | 'returned' | 'rejected'
+  fromDate: string
+  toDate: string
+  q: string
+  drafts?: boolean
+  serviceId: string
+  /** "Created by me": `created_by_user_id = me`, server-side (`created_by_me`). */
+  mine: boolean
+}
 
 export const DEFAULT_BOOKS_FILTERS: BooksFilters = {
   categoryIds: [],
@@ -10,6 +22,30 @@ export const DEFAULT_BOOKS_FILTERS: BooksFilters = {
   q: '',
   drafts: false,
   serviceId: 'all',
+  mine: false,
+}
+
+/**
+ * The one "is any filter narrowing this list" predicate (BooksFilterBar's
+ * Clear button, BooksPage's empty-state wording). `q` and `drafts` override the
+ * values on `filters` for callers that hold them separately (desktop keeps the
+ * live search box and the drafts toggle outside the filters object).
+ */
+export function hasActiveFilters(
+  filters: BooksFilters,
+  { q = filters.q, drafts = !!filters.drafts }: { q?: string; drafts?: boolean } = {},
+): boolean {
+  return (
+    filters.categoryIds.length > 0 ||
+    filters.serviceId !== 'all' ||
+    filters.direction !== 'all' ||
+    filters.status !== 'all' ||
+    filters.fromDate !== '' ||
+    filters.toDate !== '' ||
+    filters.mine ||
+    q.trim() !== '' ||
+    drafts
+  )
 }
 
 /**

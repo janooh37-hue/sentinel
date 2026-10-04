@@ -31,7 +31,7 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { EmptyState } from '@/components/ui/empty-state'
 import { Input } from '@/components/ui/input'
 import { SkeletonRow } from '@/components/ui/skeleton'
-import { BooksFilterBar, type BooksFilters } from './BooksFilterBar'
+import { BooksFilterBar } from './BooksFilterBar'
 import { SubmitForApprovalDialog } from '@/components/books/SubmitForApprovalDialog'
 import { BookPreview } from '@/components/books/BookPreview'
 import { BookStatusChips } from '@/components/books/BookStatusChips'
@@ -42,7 +42,14 @@ import { useAuth } from '@/lib/authContext'
 import { cn } from '@/lib/utils'
 import { PullToRefresh } from '@/components/refresh/PullToRefresh'
 import { RefreshButton } from '@/components/refresh/RefreshButton'
-import { DEFAULT_BOOKS_FILTERS, matchesBookFilters, matchesDesktopSearchRow, normalizeFilters } from './booksFiltersUtils'
+import {
+  hasActiveFilters,
+  matchesBookFilters,
+  matchesDesktopSearchRow,
+  normalizeFilters,
+  type BooksFilters,
+} from './booksFiltersUtils'
+import { booksFacetsKey, useMyRecordsCount } from './useMyRecordsCount'
 import { sealDescriptor, signedSourceOf } from './bookStateLabel'
 import { StatusSpine, type SpineState } from './StatusSpine'
 import { FormRail, type RailItem } from './FormRail'
@@ -55,8 +62,6 @@ import { ApiError } from '@/lib/api'
 import { useInmateReportSubmit } from '@/components/books/useInmateReportSubmit'
 import { serviceHref } from '@/lib/quickActions'
 import { useSearchParam } from '@/lib/urlState'
-
-const DEFAULT_FILTERS = DEFAULT_BOOKS_FILTERS
 
 function formatDate(iso: string): string {
   return iso.slice(0, 10)
@@ -75,28 +80,39 @@ export function BooksPage(): React.JSX.Element {
   const isMobile = useIsMobile()
   const isDesktop = !isMobile
 
-  // Additional mobile-only filters stay local; shared filters are URL-backed.
-  const [rawFilters, setRawFilters] = useState<BooksFilters>(DEFAULT_FILTERS)
+  // Every filter is URL-backed (replace), so they survive a remount, a reload
+  // and a Back from a record.
   const [searchParams, setSearchParams] = useSearchParams()
   const [statusParam, setStatusParam] = useSearchParam('status', { fallback: 'all' })
   const [serviceParam, setServiceParam] = useSearchParam('service', { fallback: 'all' })
   const [searchParam, setSearchParam] = useSearchParam('q')
   const [draftsParam, setDraftsParam] = useSearchParam('drafts')
+  const [categoriesParam] = useSearchParam('categories')
+  const [directionParam] = useSearchParam('direction', { fallback: 'all' })
+  const [fromParam] = useSearchParam('from')
+  const [toParam] = useSearchParam('to')
+  const [mineParam] = useSearchParam('mine')
   const [openParam, setOpenParam] = useSearchParam('open')
   const status = (statusParam === 'draft' ? 'none' : statusParam) as BooksFilters['status']
+  // "Created by me" is hidden for inmate reporters, so the param is ignored.
+  const mine = mineParam === '1' && !isInmateReporter
   const filters = useMemo(
     () => normalizeFilters({
-      ...rawFilters,
+      categoryIds: categoriesParam ? categoriesParam.split(',').filter(Boolean) : [],
+      direction:
+        directionParam === 'incoming' || directionParam === 'outgoing' ? directionParam : 'all',
+      fromDate: fromParam,
+      toDate: toParam,
       status,
       serviceId: serviceParam,
       q: searchParam,
       drafts: draftsParam === '1',
+      mine,
     }),
-    [rawFilters, status, serviceParam, searchParam, draftsParam],
+    [categoriesParam, directionParam, fromParam, toParam, status, serviceParam, searchParam, draftsParam, mine],
   )
   const setFilters = (next: BooksFilters | ((prev: BooksFilters) => BooksFilters)): void => {
     const value = typeof next === 'function' ? next(filters) : next
-    setRawFilters(value)
     const params = new URLSearchParams(searchParams)
     const update = (key: string, value: string, fallback: string): void => {
       if (value === fallback) params.delete(key)
@@ -106,6 +122,11 @@ export function BooksPage(): React.JSX.Element {
     update('service', value.serviceId, 'all')
     update('q', value.q, '')
     update('drafts', value.drafts ? '1' : '', '')
+    update('categories', value.categoryIds.join(','), '')
+    update('direction', value.direction, 'all')
+    update('from', value.fromDate, '')
+    update('to', value.toDate, '')
+    update('mine', value.mine ? '1' : '', '')
     setSearchParams(params, { replace: true })
   }
   const [submitBookId, setSubmitBookId] = useState<number | null>(null)
@@ -149,10 +170,13 @@ export function BooksPage(): React.JSX.Element {
   const [highlightedId, setHighlightedId] = useState<number | null>(null)
   // Rail + spine numbers over EVERY record — the 500-row page window is why
   // these used to disagree with the page's own total.
+  // Page facets follow the "Created by me" toggle; the badge count below is a
+  // separate always-on query (same key as this one while the toggle is on).
   const facetsQuery = useQuery({
-    queryKey: ['books', 'facets'],
-    queryFn: () => api.getBookFacets(),
+    queryKey: booksFacetsKey(mine),
+    queryFn: () => api.getBookFacets(mine ? { created_by_me: true } : {}),
   })
+  useMyRecordsCount({ enabled: !isInmateReporter })
 
   // ── Data: one server-scoped fetch; both branches filter client-side ────────
   // `railService` (the desktop rail's own selection) is a desktop-only concept
@@ -166,11 +190,13 @@ export function BooksPage(): React.JSX.Element {
   // table (e.g. Leave Application Form: 276 true vs 230 visible).
   const railScope = isDesktop ? railService : filters.serviceId
   const listQuery = useQuery({
-    queryKey: ['books', 'all', railScope],
+    queryKey: ['books', 'all', railScope, mine],
     queryFn: () =>
-      api.listBooks(
-        railScope === 'all' ? { limit: 500 } : { service_id: railScope, limit: 500 },
-      ),
+      api.listBooks({
+        limit: 500,
+        ...(railScope === 'all' ? {} : { service_id: railScope }),
+        ...(mine ? { created_by_me: true } : {}),
+      }),
   })
   const allRows: BookRead[] = useMemo(() => listQuery.data?.items ?? [], [listQuery.data])
 
@@ -187,8 +213,9 @@ export function BooksPage(): React.JSX.Element {
   }, [search])
   const serverSearchActive = debouncedSearch.trim().length >= 2
   const searchQuery = useQuery({
-    queryKey: ['books', 'search', debouncedSearch],
-    queryFn: () => api.listBooks({ q: debouncedSearch, limit: 500 }),
+    queryKey: ['books', 'search', debouncedSearch, mine],
+    queryFn: () =>
+      api.listBooks({ q: debouncedSearch, limit: 500, ...(mine ? { created_by_me: true } : {}) }),
     enabled: serverSearchActive,
     staleTime: 30_000,
   })
@@ -244,15 +271,7 @@ export function BooksPage(): React.JSX.Element {
     [navigate],
   )
 
-  const hasFilters =
-    filters.categoryIds.length > 0 ||
-    filters.serviceId !== 'all' ||
-    filters.direction !== 'all' ||
-    filters.status !== 'all' ||
-    !!filters.fromDate ||
-    !!filters.toDate ||
-    !!filters.q.trim() ||
-    !!filters.drafts
+  const hasFilters = hasActiveFilters(filters)
 
   // Header-line counts. Sourced from facets (global), not listQuery (now
   // service-scoped) — this must agree with the rail's "All" count.

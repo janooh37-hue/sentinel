@@ -121,8 +121,8 @@ describe('QueueNav (Arabic)', () => {
 
   it('labels and counter are Arabic, not English', () => {
     render(<QueueNav position={2} total={3} onPrev={vi.fn()} onNext={vi.fn()} />)
-    expect(screen.getByLabelText('السجل السابق بانتظار الاعتماد')).toBeInTheDocument()
-    expect(screen.getByLabelText('السجل التالي بانتظار الاعتماد')).toBeInTheDocument()
+    expect(screen.getByLabelText('السجل السابق')).toBeInTheDocument()
+    expect(screen.getByLabelText('السجل التالي')).toBeInTheDocument()
     expect(screen.getByTestId('queue-position')).toHaveTextContent('2 من 3')
   })
 })

@@ -9,7 +9,12 @@
 import { describe, it, expect } from 'vitest'
 
 import type { BookRead } from '@/lib/api'
-import { DEFAULT_BOOKS_FILTERS, matchesBookFilters, matchesDesktopSearchRow } from './booksFiltersUtils'
+import {
+  DEFAULT_BOOKS_FILTERS,
+  hasActiveFilters,
+  matchesBookFilters,
+  matchesDesktopSearchRow,
+} from './booksFiltersUtils'
 
 function makeBook(overrides: Partial<BookRead>): BookRead {
   return {
@@ -92,5 +97,36 @@ describe('matchesDesktopSearchRow (desktop, active server search)', () => {
     const scope = { railService: 'all', showDrafts: true, spineState: 'all' }
     const otherDraft = makeBook({ service_id: 'Leave', is_draft: true })
     expect(matchesDesktopSearchRow(otherDraft, scope)).toBe(true)
+  })
+})
+
+describe('hasActiveFilters', () => {
+  it('is false for the defaults', () => {
+    expect(hasActiveFilters(DEFAULT_BOOKS_FILTERS)).toBe(false)
+    expect(DEFAULT_BOOKS_FILTERS.mine).toBe(false)
+  })
+
+  it.each([
+    ['mine', { mine: true }],
+    ['categories', { categoryIds: ['GS'] }],
+    ['service', { serviceId: 'Report' }],
+    ['direction', { direction: 'incoming' as const }],
+    ['status', { status: 'pending' as const }],
+    ['from date', { fromDate: '2026-01-01' }],
+    ['to date', { toDate: '2026-01-31' }],
+    ['search text', { q: 'abc' }],
+    ['drafts', { drafts: true }],
+  ])('is true when %s is set', (_label, patch) => {
+    expect(hasActiveFilters({ ...DEFAULT_BOOKS_FILTERS, ...patch })).toBe(true)
+  })
+
+  it('ignores a whitespace-only search', () => {
+    expect(hasActiveFilters({ ...DEFAULT_BOOKS_FILTERS, q: '   ' })).toBe(false)
+  })
+
+  it('lets callers override q and drafts', () => {
+    expect(hasActiveFilters(DEFAULT_BOOKS_FILTERS, { q: 'abc' })).toBe(true)
+    expect(hasActiveFilters(DEFAULT_BOOKS_FILTERS, { drafts: true })).toBe(true)
+    expect(hasActiveFilters({ ...DEFAULT_BOOKS_FILTERS, q: 'abc', drafts: true }, { q: '', drafts: false })).toBe(false)
   })
 })
