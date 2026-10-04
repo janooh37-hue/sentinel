@@ -8,13 +8,14 @@
  * — see the `bottom-[...]` comment below for the clearance arithmetic.
  */
 import { useRef, useState } from 'react'
-import { useLocation, useNavigate } from 'react-router-dom'
+import { matchPath, useLocation, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { ChevronDown, ChevronUp, Printer, Upload, X } from 'lucide-react'
 
 import type { BookRead } from '@/lib/api'
 import { useAuth } from '@/lib/authContext'
 import { cn } from '@/lib/utils'
+import { useIsMobile } from '@/lib/useIsMobile'
 import { ScanBackThumb } from './ScanBackThumb'
 import { ScanBackUploadZone } from './ScanBackRow'
 import { ageDays, dockDismissKeyFor, today, useFileSignedCopy, useScanBack, useScanBackUpload } from './useScanBack'
@@ -83,6 +84,7 @@ export function ScanBackDock(): React.JSX.Element | null {
   const { user } = useAuth()
   const { books, count } = useScanBack()
   const { file, busy } = useFileSignedCopy()
+  const isMobile = useIsMobile()
   const { upload, busy: autoBusy } = useScanBackUpload()
   const [open, setOpen] = useState(() => localStorage.getItem(OPEN_KEY) === '1')
   const dismissKey = dockDismissKeyFor(user?.id ?? 'anon')
@@ -91,7 +93,16 @@ export function ScanBackDock(): React.JSX.Element | null {
   // Nothing to nag about, the user is already on the page that IS the dock, or
   // they put it away for today — an ambient reminder that can't be silenced is
   // just an obstacle, and it floats over the record pane's own buttons.
-  if (count === 0 || pathname === '/scan-back' || dismissed) return null
+  // On a phone the record page owns the bottom edge (its action dock) — this
+  // pill would sit on top of it, so it steps aside there.
+  if (
+    count === 0 ||
+    pathname === '/scan-back' ||
+    dismissed ||
+    (isMobile && matchPath('/books/:id', pathname))
+  ) {
+    return null
+  }
 
   // Compute-write-set, not a side effect inside the updater: React 19 dev
   // StrictMode double-invokes state updaters to surface impurity, and a
