@@ -35,10 +35,10 @@ function renderActions({
 }
 
 describe('RecordDecisionActions (English)', () => {
-  it('renders Return, Reject, and Sign & approve actions', () => {
+  it('renders Return for changes, Reject, and Sign & approve actions', () => {
     renderActions()
 
-    expect(screen.getByRole('button', { name: 'Return' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Return for changes' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Reject' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Sign & approve' })).toBeInTheDocument()
   })
@@ -47,7 +47,7 @@ describe('RecordDecisionActions (English)', () => {
     const user = userEvent.setup()
     const callbacks = renderActions()
 
-    await user.click(screen.getByRole('button', { name: 'Return' }))
+    await user.click(screen.getByRole('button', { name: 'Return for changes' }))
     await user.click(screen.getByRole('button', { name: 'Reject' }))
     await user.click(screen.getByRole('button', { name: 'Sign & approve' }))
 
@@ -59,7 +59,7 @@ describe('RecordDecisionActions (English)', () => {
   it('disables all actions while a decision is pending', () => {
     renderActions({ busy: true })
 
-    expect(screen.getByRole('button', { name: 'Return' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Return for changes' })).toBeDisabled()
     expect(screen.getByRole('button', { name: 'Reject' })).toBeDisabled()
     expect(screen.getByRole('button', { name: 'Sign & approve' })).toBeDisabled()
   })
@@ -71,7 +71,7 @@ describe('RecordDecisionActions (English)', () => {
     renderActions({ returnButtonRef, rejectButtonRef, signButtonRef })
 
     returnButtonRef.current?.focus()
-    expect(screen.getByRole('button', { name: 'Return' })).toHaveFocus()
+    expect(screen.getByRole('button', { name: 'Return for changes' })).toHaveFocus()
 
     rejectButtonRef.current?.focus()
     expect(screen.getByRole('button', { name: 'Reject' })).toHaveFocus()
@@ -94,7 +94,7 @@ describe('RecordDecisionActions (Arabic)', () => {
   it('renders all three Arabic action labels', () => {
     renderActions()
 
-    expect(screen.getByRole('button', { name: 'إعادة' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'إعادة للتعديل' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'رفض' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'التوقيع والموافقة' })).toBeInTheDocument()
   })

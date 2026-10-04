@@ -26,7 +26,11 @@
 import * as React from 'react'
 import * as DropdownMenuPrimitive from '@radix-ui/react-dropdown-menu'
 
+import { Loader2 } from 'lucide-react'
+
 import { cn } from '@/lib/utils'
+
+import { Kbd } from './kbd'
 
 /** Root + sub-parts wrapped (not re-exported) so this file only exports
  *  component declarations — keeps react-refresh happy. */
@@ -69,20 +73,75 @@ export const DropdownMenuItem = React.forwardRef<
   React.ElementRef<typeof DropdownMenuPrimitive.Item>,
   React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Item> & {
     variant?: 'default' | 'danger'
+    /** Why the item is unavailable. Sets `aria-disabled` (the item stays
+     *  focusable and its reason is read) and shows the reason on a second
+     *  line; selecting it is a no-op. Works on touch, unlike a tooltip. */
+    reason?: string
+    /** Key hint shown at the item's end + `aria-keyshortcuts`. */
+    shortcut?: string
+    /** Spinner + `aria-busy`; selecting is a no-op. */
+    pending?: boolean
   }
->(({ className, variant = 'default', ...props }, ref) => (
-  <DropdownMenuPrimitive.Item
-    ref={ref}
-    className={cn(
-      'flex cursor-pointer select-none items-center gap-2.5 rounded-lg px-2.5 py-2 text-[0.84em] outline-none transition-colors',
-      'focus:bg-surface-tinted data-[highlighted]:bg-surface-tinted',
-      'data-[disabled]:pointer-events-none data-[disabled]:opacity-40',
-      variant === 'danger' ? 'text-accent' : 'text-foreground',
-      className,
-    )}
-    {...props}
-  />
-))
+>(
+  (
+    { className, variant = 'default', reason, shortcut, pending = false, onSelect, children, ...props },
+    ref,
+  ) => {
+    const reasonId = React.useId()
+    const blocked = Boolean(reason) || pending
+    return (
+      <DropdownMenuPrimitive.Item
+        ref={ref}
+        {...(blocked ? { 'aria-disabled': true } : null)}
+        {...(pending ? { 'aria-busy': true } : null)}
+        {...(shortcut && !reason ? { 'aria-keyshortcuts': shortcut } : null)}
+        {...(reason ? { 'aria-describedby': reasonId } : null)}
+        {...(blocked || onSelect
+          ? {
+              onSelect: blocked
+                ? (event: Event) => {
+                    event.preventDefault()
+                  }
+                : onSelect,
+            }
+          : null)}
+        className={cn(
+          'flex cursor-pointer select-none items-center gap-2.5 rounded-lg px-2.5 py-2 text-[0.84em] outline-none transition-colors motion-reduce:transition-none',
+          'focus:bg-surface-tinted data-[highlighted]:bg-surface-tinted',
+          'data-[disabled]:pointer-events-none data-[disabled]:opacity-40',
+          blocked && 'cursor-not-allowed opacity-60',
+          variant === 'danger' ? 'text-accent' : 'text-foreground',
+          className,
+        )}
+        {...props}
+      >
+        {props.asChild ? (
+          children
+        ) : reason ? (
+          <span className="flex min-w-0 flex-col gap-0.5">
+            <span className="flex items-center gap-2.5">{children}</span>
+            <span id={reasonId} className="text-[0.85em] leading-snug text-muted-foreground">
+              {reason}
+            </span>
+          </span>
+        ) : (
+          children
+        )}
+        {pending && !props.asChild ? (
+          <Loader2
+            className="ms-auto h-3.5 w-3.5 animate-spin motion-reduce:animate-none"
+            aria-hidden="true"
+          />
+        ) : null}
+        {shortcut && !reason && !pending && !props.asChild ? (
+          <span className="ms-auto ps-4">
+            <Kbd>{shortcut}</Kbd>
+          </span>
+        ) : null}
+      </DropdownMenuPrimitive.Item>
+    )
+  },
+)
 DropdownMenuItem.displayName = DropdownMenuPrimitive.Item.displayName
 
 export const DropdownMenuSeparator = React.forwardRef<

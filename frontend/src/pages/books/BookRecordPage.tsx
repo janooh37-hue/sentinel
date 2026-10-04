@@ -1284,7 +1284,7 @@ export function BookRecordPage(): React.JSX.Element {
                 {canManageIncludedPapers && (
                   <DropdownMenuItem onSelect={() => overlay.open('papers')}>
                     <FileStack className="h-3.5 w-3.5" aria-hidden="true" />
-                    {t('books.includedPapers.addToPdf', { defaultValue: 'Add to PDF' })}
+                    {t('books.includedPapers.addToPdf')}
                   </DropdownMenuItem>
                 )}
                 {state === 'approved' && current?.signed_pdf_url && (

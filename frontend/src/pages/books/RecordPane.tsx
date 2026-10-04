@@ -4,7 +4,7 @@
  * overlay and the add-scan flow (＋ frame, hidden file input, other-record
  * confirm dialog).
  */
-import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react'
+import { Suspense, lazy, useEffect, useId, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import {
   CornerUpLeft,
@@ -34,10 +34,12 @@ import {
 } from '@/components/ui/alert-dialog'
 import { Button } from '@/components/ui/button'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
+import { Hint } from '@/components/ui/hint'
 import { useAuth } from '@/lib/authContext'
 import { currentBookDocId } from '@/lib/bookDocument'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { useFocusTrap } from '@/lib/useFocusTrap'
+import { useIsMobile } from '@/lib/useIsMobile'
 import { bidi } from '@/lib/bidi'
 import { cn } from '@/lib/utils'
 
@@ -576,6 +578,10 @@ function PaneBtn({
   iconOnly = false,
   label,
   onClick,
+  shortcut,
+  reason,
+  pending = false,
+  pendingLabel,
   children,
 }: {
   primary?: boolean
@@ -583,25 +589,66 @@ function PaneBtn({
   iconOnly?: boolean
   label?: string
   onClick?: () => void
+  /** Tooltip key + `aria-keyshortcuts`. */
+  shortcut?: string
+  /** Why it's unavailable: `aria-disabled` (still focusable, click no-op); tooltip on
+   *  desktop, visible helper line on touch. */
+  reason?: string
+  /** Spinner + `aria-busy`; children swap to `pendingLabel` when given. */
+  pending?: boolean
+  pendingLabel?: string
   children: React.ReactNode
 }): React.JSX.Element {
-  return (
+  const isMobile = useIsMobile()
+  const reasonId = useId()
+  const blocked = Boolean(reason) || pending
+  const touchReason = Boolean(reason) && isMobile
+  const hintLabel = reason ? (isMobile ? undefined : reason) : shortcut ? label : undefined
+  const button = (
     <button
       type="button"
       disabled={disabled}
-      onClick={onClick}
+      onClick={blocked ? undefined : onClick}
+      aria-disabled={blocked ? true : undefined}
+      aria-busy={pending ? true : undefined}
+      aria-keyshortcuts={shortcut}
+      aria-describedby={touchReason ? reasonId : undefined}
       aria-label={iconOnly ? label : undefined}
-      title={iconOnly ? label : undefined}
+      title={iconOnly && !hintLabel ? label : undefined}
       className={cn(
-        'inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-[0.74em] font-semibold transition-colors',
+        'inline-flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-[0.74em] font-semibold transition-colors motion-reduce:transition-none',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50',
+        blocked && 'opacity-60',
         primary
           ? 'bg-primary text-primary-foreground hover:bg-primary-hover'
           : 'border border-border text-muted-foreground hover:border-primary hover:text-primary',
         iconOnly && 'h-8 w-8 justify-center p-0',
       )}
     >
-      {children}
+      {pending ? (
+        <>
+          <Loader2 className="h-3.5 w-3.5 animate-spin motion-reduce:animate-none" aria-hidden="true" />
+          {iconOnly ? null : (pendingLabel ?? children)}
+        </>
+      ) : (
+        children
+      )}
     </button>
+  )
+  const withHint = hintLabel ? (
+    <Hint label={hintLabel} shortcut={reason ? undefined : shortcut} side="bottom">
+      {button}
+    </Hint>
+  ) : (
+    button
+  )
+  if (!touchReason) return withHint
+  return (
+    <span className="inline-flex flex-col items-start gap-0.5">
+      {withHint}
+      <span id={reasonId} className="max-w-[14rem] text-[0.7em] leading-tight text-muted-foreground">
+        {reason}
+      </span>
+    </span>
   )
 }

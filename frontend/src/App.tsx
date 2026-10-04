@@ -16,6 +16,7 @@ import { EmployeeLookupPage } from '@/pages/employees/EmployeeLookupPage'
 import { LoginPage } from '@/pages/auth/LoginPage'
 import { NotFoundPage } from '@/pages/NotFoundPage'
 import { MigrationGate } from '@/pages/system/MigrationWizard'
+import { TooltipProvider } from '@/components/ui/tooltip'
 import { KeyboardShortcutsProvider } from '@/lib/keyboardShortcuts'
 import { AuthProvider } from '@/lib/AuthProvider'
 import { useAuth } from '@/lib/authContext'
@@ -592,9 +593,11 @@ function App(): React.JSX.Element {
         <AuthProvider>
           <BrowserRouter>
             <KeyboardShortcutsProvider>
-              <MigrationGate>
-                <Shell />
-              </MigrationGate>
+              <TooltipProvider delayDuration={400} skipDelayDuration={150}>
+                <MigrationGate>
+                  <Shell />
+                </MigrationGate>
+              </TooltipProvider>
             </KeyboardShortcutsProvider>
           </BrowserRouter>
         </AuthProvider>

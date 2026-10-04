@@ -3,6 +3,8 @@ import * as TooltipPrimitive from '@radix-ui/react-tooltip'
 
 import { cn } from '@/lib/utils'
 
+import { TooltipProviderContext } from './tooltip-context'
+
 // Re-export the Radix primitives as proper React components so the
 // react-refresh ESLint rule (which forbids non-component named exports
 // from component files) keeps quiet. The wrappers add no logic beyond
@@ -11,7 +13,11 @@ import { cn } from '@/lib/utils'
 export function TooltipProvider(
   props: React.ComponentProps<typeof TooltipPrimitive.Provider>,
 ): React.JSX.Element {
-  return <TooltipPrimitive.Provider {...props} />
+  return (
+    <TooltipProviderContext.Provider value>
+      <TooltipPrimitive.Provider {...props} />
+    </TooltipProviderContext.Provider>
+  )
 }
 
 export function Tooltip(
