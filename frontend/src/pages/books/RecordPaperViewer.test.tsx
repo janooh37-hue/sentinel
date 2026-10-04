@@ -153,7 +153,7 @@ describe('RecordPaperViewer', () => {
       />,
     )
     resize(600)
-    expect(screen.getByRole('button', { name: 'Delete this document' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Delete this scan' })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'More' })).not.toBeInTheDocument()
     unmount()
 

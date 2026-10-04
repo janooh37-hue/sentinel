@@ -42,7 +42,6 @@ export function useListTier(
       const rem = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16
       setTier(tierForWidth(content, rem))
     }
-    // eslint-disable-next-line react-hooks/set-state-in-effect -- measure before first paint
     measure()
     const observer = new ResizeObserver(measure)
     observer.observe(element)

@@ -158,7 +158,8 @@ export function RecordPane({
   const canEdit = has('books.edit')
   const canScanCap = has('documents.scan')
   const canScan = canScanCap && canEdit
-  const fileRef = useRef<HTMLInputElement | null>(null)
+  // State (not a ref): the workflow buttons built during render click it.
+  const [fileInput, setFileInput] = useState<HTMLInputElement | null>(null)
   const replaceRef = useRef<HTMLInputElement | null>(null)
   const closeRef = useRef<HTMLButtonElement | null>(null)
   const addScan = useAddScan(book?.id ?? null)
@@ -350,7 +351,7 @@ export function RecordPane({
       case 'revise':
         return { ...base, label: t('books.pane.revise'), icon: <CornerUpLeft className="h-3.5 w-3.5 -scale-x-100" aria-hidden />, onClick: openFull }
       case 'scanSigned':
-        return { ...base, disabled: addScan.busy, label: t('books.pane.scanSignedCopy'), icon: <Upload className="h-3.5 w-3.5" aria-hidden />, onClick: () => fileRef.current?.click() }
+        return { ...base, disabled: addScan.busy, label: t('books.pane.scanSignedCopy'), icon: <Upload className="h-3.5 w-3.5" aria-hidden />, onClick: () => fileInput?.click() }
       case 'downloadSigned':
         return signedPaper
           ? { ...base, label: t('books.record.downloadSigned'), icon: <Download className="h-3.5 w-3.5" aria-hidden />, onClick: () => downloadPaper(signedPaper) }
@@ -446,7 +447,7 @@ export function RecordPane({
       <button
         type="button"
         disabled={addScan.busy}
-        onClick={() => fileRef.current?.click()}
+        onClick={() => fileInput?.click()}
         className="flex w-14 shrink-0 flex-col items-center gap-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
         <span className="grid aspect-[210/297] w-full place-items-center rounded-[3px] border-2 border-dashed border-border bg-surface-raised text-faint transition-colors hover:border-primary hover:text-primary motion-reduce:transition-none">
@@ -668,7 +669,7 @@ export function RecordPane({
                   </DropdownMenuItem>
                 )}
                 {showScanSignedInMenu && (
-                  <DropdownMenuItem disabled={addScan.busy} onSelect={() => fileRef.current?.click()}>
+                  <DropdownMenuItem disabled={addScan.busy} onSelect={() => fileInput?.click()}>
                     <Upload className="h-3.5 w-3.5" aria-hidden />
                     {t('books.pane.scanSignedCopy')}
                   </DropdownMenuItem>
@@ -712,7 +713,7 @@ export function RecordPane({
       )}
 
       <input
-        ref={fileRef}
+        ref={setFileInput}
         type="file"
         accept="application/pdf,image/*"
         className="hidden"

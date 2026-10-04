@@ -8,6 +8,7 @@ import { Eye, FileText } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import type { BookRead } from '@/lib/api'
+import { bidi } from '@/lib/bidi'
 import { parseUtcMs } from '@/lib/time'
 import { cn } from '@/lib/utils'
 
@@ -47,7 +48,7 @@ export function WordSessionBanner({
       <span className="min-w-0 flex-1">
         {!compact && (
           <b className="block">
-            {t('books.status.wordActive', { name: session.user_name ?? '' })}
+            {t('books.status.wordActive', { name: bidi(session.user_name ?? '') })}
           </b>
         )}
         {t('books.paper.wordBanner', { t: time })}

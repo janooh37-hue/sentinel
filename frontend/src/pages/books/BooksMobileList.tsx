@@ -19,6 +19,7 @@ import { addToBasket } from '@/lib/emailBasket'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { cn } from '@/lib/utils'
 import { sealDescriptor, signedSourceOf } from './bookStateLabel'
+import { newRecordHref } from './newRecordHref'
 import { deleteBlockReason } from './recordDelete'
 import { useRecordDelete } from './RecordDeleteProvider'
 import { paperCountOf, papersOf } from './recordPapers'
@@ -141,11 +142,10 @@ export function BooksMobileList({
     return () => window.clearTimeout(handle)
   }, [flashId])
 
-  const navFor = (): RecordNavState => ({
-    from: `${location.pathname}${location.search}`,
-    queue,
-    scrollY: scrollerRef.current?.scrollTop ?? 0,
-  })
+  const from = `${location.pathname}${location.search}`
+  // Render-time links carry no offset; a plain tap reads the live one at click.
+  const linkNav: RecordNavState = { from, queue, scrollY: 0 }
+  const navFor = (): RecordNavState => ({ ...linkNav, scrollY: scrollerRef.current?.scrollTop ?? 0 })
   const handleLinkClick = (id: number) => (e: React.MouseEvent<HTMLAnchorElement>): void => {
     // Plain taps carry the live scroll offset; modified clicks (new tab) keep the
     // <Link>'s own href + state.
@@ -199,8 +199,8 @@ export function BooksMobileList({
                 <EmptyState
                   icon={BookOpen}
                   message={hasFilters ? t('books.list.noMatch') : t('books.emptyUnfiltered')}
-                  actionLabel={hasFilters ? t('books.filters.clear') : undefined}
-                  onAction={hasFilters ? onClearFilters : undefined}
+                  actionLabel={hasFilters ? t('books.filters.clear') : t('books.newRecord')}
+                  onAction={hasFilters ? onClearFilters : () => navigate(newRecordHref(isInmateReporter))}
                 />
               </div>
             ) : (
@@ -223,7 +223,7 @@ export function BooksMobileList({
                         ? papersOf(row, { inmateReporter: true }).length
                         : paperCountOf(row)
                     }
-                    link={recordLinkProps(row.id, navFor())}
+                    link={recordLinkProps(row.id, linkNav)}
                     onLinkClick={handleLinkClick(row.id)}
                     onTogglePick={() => togglePick(row.id)}
                     onSubmit={() => submitBook(row.id)}

@@ -640,7 +640,7 @@ function BookRecordPageBody(): React.JSX.Element {
   const handleRevise = useCallback((): void => {
     if (!book || !current?.template_id) return
     navigate(`${serviceHref(current.template_id)}?revise=${book.id}`)
-  }, [book, current?.template_id, navigate])
+  }, [book, current, navigate])
 
   // "Email via Outlook" — the record's own handoff entry point. It builds the
   // SAME one-item basket prefill the tray builds (subject/body templates,
@@ -737,7 +737,7 @@ function BookRecordPageBody(): React.JSX.Element {
       subject: book.subject ?? '',
       versionNo: current.version_no,
     })
-  }, [book, current, busy])
+  }, [book, current, busy, setSignConfirm])
 
   // Discard (never re-fire) the confirmation the instant the captured
   // record/version stops being the one on screen, or decide eligibility is
@@ -867,7 +867,7 @@ function BookRecordPageBody(): React.JSX.Element {
       step(id, versionId)
       return true
     },
-    [isInmateReporter, step],
+    [isInmateReporter, step, setArmedFor],
   )
   useShortcutAction('recordNext', () => stepTo(queue.nextId, queue.nextVersionId))
   useShortcutAction('recordPrev', () => stepTo(queue.prevId, queue.prevVersionId))
@@ -981,6 +981,8 @@ function BookRecordPageBody(): React.JSX.Element {
         if (markId > 0) deleteMarkMutate(markId)
       },
       onPdfReady,
+      pickSignedFile: () => fileSignedRef.current?.click(),
+      pickReplacementFile: () => replaceSignedRef.current?.click(),
       fileSignedRef,
       replaceSignedRef,
       desktopSignRef,
@@ -995,6 +997,11 @@ function BookRecordPageBody(): React.JSX.Element {
     [
       back,
       step,
+      setArmedFor,
+      setReason,
+      setUnfileOpen,
+      setWordReopenTrigger,
+      setAdjustSigTrigger,
       openOverlay,
       handleRevise,
       requestSignConfirm,

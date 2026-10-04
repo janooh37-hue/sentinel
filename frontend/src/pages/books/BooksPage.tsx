@@ -77,6 +77,7 @@ import { ScanBackEntry } from '@/pages/scanBack/ScanBackEntry'
 import { ApiError } from '@/lib/api'
 import { useInmateReportSubmit } from '@/components/books/useInmateReportSubmit'
 import { serviceHref } from '@/lib/quickActions'
+import { newRecordHref } from './newRecordHref'
 import { useSearchParam } from '@/lib/urlState'
 
 const PANE_SIZE_STORAGE_KEY = 'gssg.books.pane.size'
@@ -581,7 +582,7 @@ export function BooksPage(): React.JSX.Element {
       message={t('books.emptyUnfiltered')}
       actionLabel={t('books.newRecord')}
       onAction={() =>
-        navigate(isInmateReporter ? serviceHref('Inmate Conduct Violations') : '/services')
+        navigate(newRecordHref(isInmateReporter))
       }
     />
   )

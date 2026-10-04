@@ -114,16 +114,17 @@ function sanitizeZoom(value: unknown): Zoom {
 }
 
 /** The signed copy's caption date: Western digits, isolated so it never reorders inside Arabic text. */
-function signedDateLabel(iso: string | null | undefined): string | null {
+function signedDateLabel(iso: string | null | undefined, locale: string): string | null {
   if (!iso) return null
   const ms = parseUtcMs(iso)
   if (Number.isNaN(ms)) return null
-  const text = new Intl.DateTimeFormat('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }).format(ms)
+  const text = new Intl.DateTimeFormat(`${locale}-u-nu-latn`, { day: '2-digit', month: 'short', year: 'numeric' }).format(ms)
   return `\u2066${text}\u2069`
 }
 
 export function RecordDesk({ book, caps, view, actions }: RecordPieceProps): React.JSX.Element {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
+  const locale = i18n.language.startsWith('ar') ? 'ar-AE' : 'en-GB'
   const chrome = useRecordChrome()
   const [searchParams, setSearchParams] = useSearchParams()
   const { isInmateReporter, canRevise } = caps
@@ -227,7 +228,7 @@ export function RecordDesk({ book, caps, view, actions }: RecordPieceProps): Rea
   const page = pageInfo && pageInfo.url === deskUrl ? pageInfo : null
 
   // --- caption ------------------------------------------------------------
-  const signedDate = signedDateLabel(view.currentSteps.find((s) => s.state === 'approved')?.decided_at)
+  const signedDate = signedDateLabel(view.currentSteps.find((s) => s.state === 'approved')?.decided_at, locale)
   let caption: PaperCaption | null = null
   if (liveActive) caption = { text: t('books.paper.live'), ok: false }
   else if (selectedPaper?.kind === 'signed') {

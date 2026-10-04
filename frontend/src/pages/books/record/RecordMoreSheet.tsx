@@ -147,7 +147,7 @@ export function RecordMoreSheet({
 
   const { isInmateReporter, canMark, canMutateCurrent, canOverrideState, canManageRevisionAccess, canManageIncludedPapers, canManageSignedPaper } = caps
   const { bookId, state, current, recordHasPapers, emailingRecord, wordReopenTrigger, adjustSigTrigger, armed } = view
-  const { openOverlay, emailViaOutlook, setUnfileOpen, replaceSignedRef, fileSignedRef, setArmedFor } = actions
+  const { openOverlay, emailViaOutlook, setUnfileOpen, pickSignedFile, pickReplacementFile, setArmedFor } = actions
   const close = (): void => onOpenChange(false)
   const reasonOf = (key: string | undefined): string | undefined => (key ? t(key) : undefined)
   const hasSignedCopy = state === 'approved' && Boolean(current?.signed_pdf_url)
@@ -229,7 +229,7 @@ export function RecordMoreSheet({
         icon: iconOf(Upload),
         label: t('books.pane.scanSignedCopy'),
         pending: view.scanBusy,
-        onSelect: () => fileSignedRef.current?.click(),
+        onSelect: pickSignedFile,
       })
     }
     if (adjustSigTrigger) {
@@ -247,7 +247,7 @@ export function RecordMoreSheet({
         icon: iconOf(RefreshCw),
         label: t('books.pane.replacePaper'),
         hint: t('books.record.hint.replace'),
-        onSelect: () => replaceSignedRef.current?.click(),
+        onSelect: pickReplacementFile,
       })
     }
   }

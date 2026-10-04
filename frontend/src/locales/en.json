@@ -1830,9 +1830,7 @@
     "bulk": {
       "delete": "Delete",
       "deleteTitle": "Delete {{count}} selected record(s)?",
-      "deleteBody": "Soft-delete the selected entries? They stay in records and ref numbers are not reused.",
-      "deleted": "Deleted {{count}} record(s)",
-      "deleteError": "Couldn't delete {{count}} record(s)"
+      "deleteBody": "Soft-delete the selected entries? They stay in records and ref numbers are not reused."
     },
     "filters": {
       "category": "Category",
@@ -1876,7 +1874,6 @@
     },
     "toast": {
       "created": "Book entry created",
-      "deleted": "Draft discarded",
       "voided": "Draft discarded — record voided"
     },
     "completion": {
@@ -1888,6 +1885,7 @@
       "printUnavailable": "PDF unavailable — open the record for the DOCX fallback."
     },
     "emptyUnfiltered": "No book entries yet",
+    "newRecord": "New record",
     "approvals": {
       "title": "Approvals",
       "tabSent": "Sent by me",
@@ -2008,7 +2006,8 @@
       "cancel": "Cancel",
       "viewHint": "Fix here, then revise & resubmit.",
       "mark": "Mark up",
-      "markingOn": "Marking on — tap to cancel"
+      "markingOn": "Marking on — tap to cancel",
+      "deleted": "Mark deleted"
     },
     "versions": {
       "title": "Version history",
@@ -2121,7 +2120,6 @@
       "print": "Print",
       "emailViaOutlook": "Email via Outlook",
       "downloadSigned": "Download signed PDF",
-      "viewOriginal": "Original form",
       "noDocument": "No document on this record.",
       "importedNoPreview": "This imported record's file isn't a PDF, so it can't be previewed here.",
       "downloadImported": "Download original ({{format}})",
@@ -2145,8 +2143,6 @@
       "metaDraft": "draft",
       "metaAwaitingScan": "out for signing",
       "metaScanned": "signed copy filed",
-      "prevAwaiting": "Previous awaiting record",
-      "nextAwaiting": "Next awaiting record",
       "queuePosition": "{{n}} of {{total}}",
       "title": "Record",
       "more": "More",
@@ -2236,6 +2232,7 @@
       "approveSignedCopy": "Approve — signed copy",
       "justAttach": "Just attach",
       "deletePaper": "Delete this document",
+      "deleteScan": "Delete this scan",
       "replacePaper": "Replace this document",
       "deletePaperTitle": "Delete this document?",
       "deletePaperBody": "This permanently removes the attached document from the record. This cannot be undone.",
@@ -2323,6 +2320,7 @@
       "discard": "Discard draft…",
       "noSavesYet": "No save from Word yet",
       "discardConfirm": "The book will be voided; its number stays in the register. Continue?",
+      "discardConfirmLabel": "Discard draft",
       "finished": "Version saved — {{ref}}",
       "step1": "Press «Open in Word», then allow the browser's confirmation",
       "step2": "Save from inside Word (Ctrl+S)",

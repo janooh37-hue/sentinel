@@ -24,6 +24,7 @@ import { hasServiceRecordsCap } from '@/lib/dashboardLayout'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { cn } from '@/lib/utils'
 
+import { BooksFilterFields } from './BooksFilterFields'
 import type { BooksFilters } from './booksFiltersUtils'
 import type { RailItem } from './FormRail'
 
@@ -133,21 +134,12 @@ export function FiltersPopover({
   categories: BookCategoryRead[]
   onChange: (next: BooksFilters) => void
 }): React.JSX.Element {
-  const { t, i18n } = useTranslation()
-  const isAr = i18n.language.startsWith('ar')
+  const { t } = useTranslation()
   const { triggerRef, position, toggle, close } = useAnchoredPanel()
   const activeCount =
     filters.categoryIds.length +
     (filters.direction !== 'all' ? 1 : 0) +
     (filters.fromDate || filters.toDate ? 1 : 0)
-
-  const toggleCategory = (id: string): void =>
-    onChange({
-      ...filters,
-      categoryIds: filters.categoryIds.includes(id)
-        ? filters.categoryIds.filter((c) => c !== id)
-        : [...filters.categoryIds, id],
-    })
 
   return (
     <>
@@ -182,76 +174,12 @@ export function FiltersPopover({
           className="w-[20rem] p-3"
         >
           <div className="flex flex-col gap-3 text-[0.82em]">
-            <fieldset>
-              <legend className="mb-1 text-[0.85em] font-bold uppercase tracking-[0.07em] text-muted-foreground">
-                {t('books.filters.category')}
-              </legend>
-              <ul className="max-h-48 overflow-y-auto rounded-lg border border-hairline py-1">
-                {categories.map((cat) => {
-                  const name = isAr ? (cat.name_ar ?? cat.name_en) : (cat.name_en ?? cat.name_ar)
-                  const checked = filters.categoryIds.includes(cat.id)
-                  return (
-                    <li key={cat.id}>
-                      <label className="flex min-h-9 cursor-pointer items-center gap-2.5 px-3 py-1.5 hover:bg-surface-tinted pointer-coarse:min-h-11">
-                        <input
-                          type="checkbox"
-                          checked={checked}
-                          onChange={() => toggleCategory(cat.id)}
-                          className="h-4 w-4 accent-primary"
-                        />
-                        <span dir="auto" className={cn(checked && 'font-semibold text-primary')}>
-                          {name}
-                        </span>
-                      </label>
-                    </li>
-                  )
-                })}
-              </ul>
-            </fieldset>
-            <fieldset>
-              <legend className="mb-1 text-[0.85em] font-bold uppercase tracking-[0.07em] text-muted-foreground">
-                {t('books.filters.direction')}
-              </legend>
-              <div className="flex flex-wrap gap-1.5">
-                {(['all', 'incoming', 'outgoing'] as const).map((dir) => (
-                  <button
-                    key={dir}
-                    type="button"
-                    aria-pressed={filters.direction === dir}
-                    onClick={() => onChange({ ...filters, direction: dir })}
-                    className={cn(
-                      CHIP,
-                      filters.direction === dir
-                        ? 'border-primary/40 bg-primary-soft text-primary'
-                        : 'border-transparent bg-surface-tinted text-muted-foreground hover:bg-border hover:text-foreground',
-                    )}
-                  >
-                    {t(`books.direction.${dir}`)}
-                  </button>
-                ))}
-              </div>
-            </fieldset>
-            <div className="flex items-center gap-2">
-              <input
-                type="date"
-                value={filters.fromDate}
-                onChange={(e) => onChange({ ...filters, fromDate: e.target.value })}
-                aria-label={t('books.filters.dateFrom')}
-                data-testid="records-date-from"
-                className="h-9 min-w-0 flex-1 rounded-full border border-hairline bg-surface px-3 font-mono text-[0.9em] text-foreground focus:outline-none focus:ring-2 focus:ring-ring pointer-coarse:h-11"
-              />
-              <span aria-hidden className="text-muted-foreground">
-                —
-              </span>
-              <input
-                type="date"
-                value={filters.toDate}
-                onChange={(e) => onChange({ ...filters, toDate: e.target.value })}
-                aria-label={t('books.filters.dateTo')}
-                data-testid="records-date-to"
-                className="h-9 min-w-0 flex-1 rounded-full border border-hairline bg-surface px-3 font-mono text-[0.9em] text-foreground focus:outline-none focus:ring-2 focus:ring-ring pointer-coarse:h-11"
-              />
-            </div>
+            <BooksFilterFields
+              filters={filters}
+              categories={categories}
+              onChange={onChange}
+              testIdPrefix="records-"
+            />
             {activeCount > 0 && (
               <button
                 type="button"

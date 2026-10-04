@@ -17,6 +17,7 @@ import { cn } from '@/lib/utils'
 import { serviceArtwork, serviceGlyph, useServiceLabel } from './serviceLabels'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { hasServiceRecordsCap } from '@/lib/dashboardLayout'
+import { CategoryChecklist, DateRangeFields, DirectionChips } from './BooksFilterFields'
 import { DEFAULT_BOOKS_FILTERS, hasActiveFilters, type BooksFilters } from './booksFiltersUtils'
 import { useMyRecordsCount } from './useMyRecordsCount'
 import { useAuth } from '@/lib/authContext'
@@ -34,8 +35,7 @@ export function BooksFilterBar({
   services,
   onChange,
 }: BooksFilterBarProps): React.JSX.Element {
-  const { t, i18n } = useTranslation()
-  const isAr = i18n.language.startsWith('ar')
+  const { t } = useTranslation()
   const serviceLabel = useServiceLabel()
   const { has } = useCapabilities()
   const { user } = useAuth()
@@ -69,13 +69,6 @@ export function BooksFilterBar({
 
   const clear = (): void => {
     onChange({ ...DEFAULT_BOOKS_FILTERS })
-  }
-
-  const toggleCategory = (id: string): void => {
-    const next = filters.categoryIds.includes(id)
-      ? filters.categoryIds.filter((c) => c !== id)
-      : [...filters.categoryIds, id]
-    onChange({ ...filters, categoryIds: next })
   }
 
   // Debounce the search box — onChange is called immediately for other fields
@@ -144,7 +137,7 @@ export function BooksFilterBar({
         <button
           type="button"
           data-testid="category-filter"
-          aria-haspopup="listbox"
+          aria-haspopup="true"
           aria-expanded={catOpen}
           onClick={() => setCatOpen((v) => !v)}
           className={cn(
@@ -160,7 +153,7 @@ export function BooksFilterBar({
               {filters.categoryIds.length}
             </span>
           ) : (
-            <span className="text-muted-foreground/70">{t('books.filters.categoryAll', { defaultValue: 'All' })}</span>
+            <span className="text-muted-foreground/70">{t('books.filters.categoryAll')}</span>
           )}
           <ChevronDown
             className={cn('h-3.5 w-3.5 shrink-0 transition-transform', catOpen && 'rotate-180')}
@@ -170,51 +163,11 @@ export function BooksFilterBar({
 
         {catOpen && (
           <div
-            role="listbox"
-            aria-multiselectable="true"
+            role="group"
             aria-label={t('books.filters.category')}
             className="absolute start-0 top-full z-50 mt-1.5 min-w-[200px] overflow-hidden rounded-xl border border-hairline bg-surface shadow-lg"
           >
-            <ul className="max-h-64 overflow-y-auto py-1">
-              {categories.map((cat) => {
-                const label = isAr ? (cat.name_ar ?? cat.name_en) : (cat.name_en ?? cat.name_ar)
-                const checked = filters.categoryIds.includes(cat.id)
-                return (
-                  <li key={cat.id}>
-                    <button
-                      type="button"
-                      role="option"
-                      aria-selected={checked}
-                      onClick={() => toggleCategory(cat.id)}
-                      className={cn(
-                        'flex w-full items-center gap-2.5 px-3 py-2 text-[0.82em] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
-                        checked
-                          ? 'bg-primary-soft font-semibold text-primary'
-                          : 'text-foreground hover:bg-surface-tinted',
-                      )}
-                    >
-                      {/* Visible checkbox indicator */}
-                      <span
-                        aria-hidden="true"
-                        className={cn(
-                          'inline-flex h-4 w-4 shrink-0 items-center justify-center rounded border',
-                          checked
-                            ? 'border-primary bg-primary text-primary-foreground'
-                            : 'border-hairline bg-surface',
-                        )}
-                      >
-                        {checked && (
-                          <svg viewBox="0 0 10 8" className="h-2.5 w-2.5 fill-current" aria-hidden="true">
-                            <path d="M1 4l3 3 5-6" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round" />
-                          </svg>
-                        )}
-                      </span>
-                      <span dir="auto">{label}</span>
-                    </button>
-                  </li>
-                )
-              })}
-            </ul>
+            <CategoryChecklist filters={filters} categories={categories} onChange={onChange} className="max-h-64" />
             {filters.categoryIds.length > 0 && (
               <div className="border-t border-hairline px-3 py-1.5">
                 <button
@@ -322,28 +275,7 @@ export function BooksFilterBar({
 
       {/* Direction chips + date + search row (scrollable on mobile) */}
       <div className="flex items-center gap-2 overflow-x-auto pb-0.5 md:flex-wrap md:pb-0">
-        {/* Direction chips */}
-        <div className="flex shrink-0 items-center gap-1.5" data-testid="direction-toggle">
-          {(['all', 'incoming', 'outgoing'] as const).map((dir) => {
-            const active = filters.direction === dir
-            return (
-              <button
-                key={dir}
-                type="button"
-                onClick={() => onChange({ ...filters, direction: dir })}
-                aria-pressed={active}
-                className={cn(
-                  'inline-flex items-center rounded-full px-3 py-1 text-[0.78em] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background max-md:min-h-[36px] max-md:py-1.5',
-                  active
-                    ? 'bg-primary-soft font-semibold text-primary'
-                    : 'bg-surface-tinted text-muted-foreground hover:bg-border hover:text-foreground',
-                )}
-              >
-                {t(`books.direction.${dir}`)}
-              </button>
-            )
-          })}
-        </div>
+        <DirectionChips filters={filters} onChange={onChange} testId="direction-toggle" />
 
         <div className="hidden h-5 w-px shrink-0 bg-hairline md:block" />
         <div className="flex shrink-0 items-center gap-1.5" data-testid="status-toggle">
@@ -418,30 +350,7 @@ export function BooksFilterBar({
 
         <div className="hidden h-5 w-px shrink-0 bg-hairline md:block" />
 
-        {/* Date range — visible From / To labels (a bare date input says nothing) */}
-        <div className="flex shrink-0 items-center gap-2">
-          <label className="flex items-center gap-1.5 text-[0.78em] text-muted-foreground">
-            <span>{t('books.filters.dateFrom')}</span>
-            <input
-              type="date"
-              value={filters.fromDate}
-              onChange={(e) => onChange({ ...filters, fromDate: e.target.value })}
-              className="h-8 rounded-full border border-hairline bg-surface px-3 font-mono text-[0.95em] text-foreground focus:outline-none focus:ring-2 focus:ring-ring max-md:min-h-[36px]"
-              data-testid="date-from"
-            />
-          </label>
-          <span className="text-xs text-muted-foreground" aria-hidden="true">—</span>
-          <label className="flex items-center gap-1.5 text-[0.78em] text-muted-foreground">
-            <span>{t('books.filters.dateTo')}</span>
-            <input
-              type="date"
-              value={filters.toDate}
-              onChange={(e) => onChange({ ...filters, toDate: e.target.value })}
-              className="h-8 rounded-full border border-hairline bg-surface px-3 font-mono text-[0.95em] text-foreground focus:outline-none focus:ring-2 focus:ring-ring max-md:min-h-[36px]"
-              data-testid="date-to"
-            />
-          </label>
-        </div>
+        <DateRangeFields filters={filters} onChange={onChange} className="shrink-0" />
 
         <div className="hidden h-5 w-px shrink-0 bg-hairline md:block" />
 

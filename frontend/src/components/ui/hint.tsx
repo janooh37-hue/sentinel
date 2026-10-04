@@ -4,12 +4,12 @@ import { Kbd } from './kbd'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './tooltip'
 import { useHasTooltipProvider } from './tooltip-context'
 
-/** Vertical sides are direction-safe; `start`/`end` resolve against the
+/** Vertical and physical `left`/`right` sides are direction-safe; `start`/`end` resolve against the
  *  document direction because Radix `side` is physical. */
-export type HintSide = 'top' | 'bottom' | 'start' | 'end'
+export type HintSide = 'top' | 'bottom' | 'start' | 'end' | 'left' | 'right'
 
 function resolveSide(side: HintSide): 'top' | 'bottom' | 'left' | 'right' {
-  if (side === 'top' || side === 'bottom') return side
+  if (side === 'top' || side === 'bottom' || side === 'left' || side === 'right') return side
   const rtl = typeof document !== 'undefined' && document.documentElement.dir === 'rtl'
   if (side === 'start') return rtl ? 'right' : 'left'
   return rtl ? 'left' : 'right'

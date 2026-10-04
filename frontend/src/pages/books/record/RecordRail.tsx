@@ -7,7 +7,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Check, ChevronDown, AlertTriangle, Clock, PanelRightClose, PanelRightOpen, X } from 'lucide-react'
-import type { SealTone } from '../bookStateLabel'
+import { TONE, type StationTone } from './recordTones'
 import { reviewerSteps } from '@/components/books/reviewers'
 import { ReviewerList } from '@/components/books/ReviewerList'
 import type { BookApprovalStepRead, NotifyMessageRead } from '@/lib/api'
@@ -27,24 +27,7 @@ export interface Station {
   meta: string
   note?: string | null
   state: StationState
-  tone: 'navy' | 'amber' | 'green' | 'red' | 'blue'
-}
-
-export const TONE: Record<Station['tone'], { bg: string; fg: string }> = {
-  navy: { bg: 'var(--primary-soft)', fg: 'var(--primary)' },
-  amber: { bg: 'var(--warning-soft)', fg: 'var(--warning)' },
-  green: { bg: 'var(--success-soft)', fg: 'var(--success)' },
-  red: { bg: 'var(--accent-soft)', fg: 'var(--accent)' },
-  blue: { bg: 'var(--info-soft)', fg: 'var(--info)' },
-}
-
-// sealDescriptor tone → this page's Station tone vocabulary.
-export const SEAL_TO_STATION_TONE: Record<SealTone, Station['tone']> = {
-  neutral: 'navy',
-  warning: 'amber',
-  success: 'green',
-  accent: 'red',
-  info: 'blue',
+  tone: StationTone
 }
 
 /** The station that best summarizes "where this record is right now" — for
@@ -354,7 +337,7 @@ export function RecordRail({ book, view }: RecordRailProps): React.JSX.Element |
       data-record-rail="strip"
       className="relative hidden w-[52px] shrink-0 bg-surface transition-[width] motion-reduce:transition-none md:block"
     >
-      <Hint label={t('books.record.showProgress')} side="start">
+      <Hint label={t('books.record.showProgress')} side="left">
         <button
           type="button"
           data-rail-toggle

@@ -27,7 +27,7 @@ describe('WordSessionBanner', () => {
 
   it('names the editor and explains the preview is the saved version', () => {
     render(<WordSessionBanner book={active} live={false} />)
-    expect(screen.getByText('Being edited in Word by Mariam.')).toBeInTheDocument()
+    expect(screen.getByText('Being edited in Word by \u2068Mariam\u2069.')).toBeInTheDocument()
     expect(screen.getByRole('note')).toHaveTextContent(/last saved version/)
   })
 
@@ -47,6 +47,6 @@ describe('WordSessionBanner', () => {
 
   it('compact omits the editor line', () => {
     render(<WordSessionBanner book={active} compact live={false} />)
-    expect(screen.queryByText('Being edited in Word by Mariam.')).toBeNull()
+    expect(screen.queryByText('Being edited in Word by \u2068Mariam\u2069.')).toBeNull()
   })
 })

@@ -474,7 +474,7 @@ export function RecordPaperViewer({
                 <ToolbarBtn
                   isOverlay={isOverlay}
                   danger
-                  label={t('books.pane.deletePaper')}
+                  label={t('books.pane.deleteScan')}
                   onClick={() => onDeletePaper(paper)}
                 >
                   <Trash2 className="h-3 w-3" aria-hidden />

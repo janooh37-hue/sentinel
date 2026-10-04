@@ -112,6 +112,9 @@ export interface RecordActions {
   createMark: (mark: MarkInput) => void
   deleteMark: (id: number) => void
   onPdfReady: () => void
+  /** Open the scanned-copy / replacement file pickers (the hidden inputs live in the header). */
+  pickSignedFile: () => void
+  pickReplacementFile: () => void
   fileSignedRef: RefObject<HTMLInputElement | null>
   replaceSignedRef: RefObject<HTMLInputElement | null>
   desktopSignRef: RefObject<HTMLButtonElement | null>

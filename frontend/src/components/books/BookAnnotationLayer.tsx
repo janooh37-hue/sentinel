@@ -102,7 +102,7 @@ export function BookAnnotationLayer({
   const { pendingIds, scheduleDelete } = useDeferredDelete<{ id: number }>({
     onCommit: (p) => onDelete?.(p.id),
     notify: ({ onUndo }) => {
-      toast(t('common.deletedToast'), {
+      toast(t('books.annotations.deleted'), {
         duration: 6000,
         action: { label: t('common.undo'), onClick: onUndo },
       })
