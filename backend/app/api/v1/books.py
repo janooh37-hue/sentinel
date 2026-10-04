@@ -10,6 +10,7 @@ Both are wired into ``main.py`` under ``/api/v1``.
 from __future__ import annotations
 
 import base64
+from collections.abc import Sequence
 from datetime import date, datetime
 from typing import Annotated, Literal
 
@@ -235,10 +236,12 @@ def list_classifications(
 def book_facets(
     db: Annotated[Session, Depends(get_db)],
     user: Annotated[User, Depends(require_capability("books.view"))],
+    created_by_me: bool = False,
 ) -> BookFacetsResponse:
     """Per-service counts for the Records rail + per-service approval-state
-    counts for the status spine. Global, unpaginated."""
-    all_records, services = book_service.service_facets(db, user)
+    counts for the status spine. Global, unpaginated; ``created_by_me`` narrows
+    every count to records the caller created."""
+    all_records, services = book_service.service_facets(db, user, created_by_me=created_by_me)
     return BookFacetsResponse(
         total=all_records.count,
         states=all_records.states,
@@ -557,6 +560,7 @@ def list_books(
     from_date: datetime | None = None,
     to_date: date | None = None,
     include_deleted: bool = False,
+    created_by_me: bool = False,
     limit: int = Query(LIST_DEFAULT_LIMIT, ge=1, le=LIST_MAX_LIMIT),
     offset: int = Query(0, ge=0),
 ) -> BookListResponse:
@@ -571,6 +575,7 @@ def list_books(
         from_date=from_date,
         to_date=to_date,
         include_deleted=include_deleted,
+        created_by_me=created_by_me,
         limit=limit,
         offset=offset,
     )
@@ -592,12 +597,27 @@ def list_books(
         item.search_snippet = fts_snippets.get(row.id) or None
         _fill_draft_fields(item, row, db, by_book=by_book)
         items.append(item)
+    _attach_creator_names(db, rows, items)
     return BookListResponse(
         items=items,
         total=total,
         limit=limit,
         offset=offset,
     )
+
+
+def _attach_creator_names(db: Session, rows: Sequence[Book], items: Sequence[BookRead]) -> None:
+    """Set ``created_by_user_id`` / ``created_by_name`` on list-shaped items with a
+    single batched name lookup. ``created_by_g`` stays None in lists (like
+    ``submitted_by_g``). ``rows`` and ``items`` are index-aligned."""
+    names = book_service.resolve_names_by_ids(
+        db, {r.created_by_user_id for r in rows if r.created_by_user_id is not None}
+    )
+    for row, item in zip(rows, items, strict=True):
+        item.created_by_user_id = row.created_by_user_id
+        item.created_by_name = (
+            names.get(row.created_by_user_id) if row.created_by_user_id is not None else None
+        )
 
 
 def _enrich_path_fields(
@@ -661,7 +681,9 @@ def list_awaiting(
 ) -> list[BookRead]:
     """Return the caller's actionable signing and advisory assignments."""
     rows = book_service.list_awaiting(db, user_id=user.id)
-    return [_build_book_response(db, row, user, detail=False) for row in rows]
+    items = [_build_book_response(db, row, user, detail=False) for row in rows]
+    _attach_creator_names(db, rows, items)
+    return items
 
 
 @router.get("/awaiting-scan", response_model=list[BookRead])
@@ -686,7 +708,9 @@ def list_awaiting_scan(
         user_id=None if scope == "all" else user.id,
         user=user,
     )
-    return [_build_book_response(db, row, user, detail=False) for row in rows]
+    items = [_build_book_response(db, row, user, detail=False) for row in rows]
+    _attach_creator_names(db, rows, items)
+    return items
 
 
 _SENT_STATUSES = frozenset(
@@ -711,7 +735,7 @@ def get_approval_log(
     scope: Annotated[Literal["sent", "received"], Query()] = "received",
     kind: Annotated[Literal["approver", "reviewer"] | None, Query()] = None,
     status: Annotated[str | None, Query()] = None,
-    sort: Annotated[Literal["oldest", "newest"], Query()] = "oldest",
+    sort: Annotated[Literal["oldest", "newest"], Query()] = "newest",
     limit: int = Query(LIST_DEFAULT_LIMIT, ge=1, le=LIST_MAX_LIMIT),
     offset: int = Query(0, ge=0),
 ) -> ApprovalLogResponse:
@@ -785,7 +809,7 @@ def get_approval_log_neighbors(
     scope: Annotated[Literal["sent", "received"], Query()] = "received",
     kind: Annotated[Literal["approver", "reviewer"] | None, Query()] = None,
     status: Annotated[str, Query()] = "pending",
-    sort: Annotated[Literal["oldest", "newest"], Query()] = "oldest",
+    sort: Annotated[Literal["oldest", "newest"], Query()] = "newest",
     version_id: Annotated[int | None, Query(gt=0)] = None,
 ) -> ApprovalLogNeighborsResponse:
     """Previous/next in the same filtered/ordered worklist the log page uses —
@@ -1003,6 +1027,10 @@ def _build_book_detail(db: Session, row: Book) -> BookRead:
     item.subject = book_service.derive_subject(row)
     item.submitted_by_name = book_service.submitter_name(db, row)
     item.submitted_by_g = book_service.submitter_g_number(db, row)
+    if row.created_by_user_id is not None:
+        creator = db.get(User, row.created_by_user_id)
+        item.created_by_name = book_service.resolve_user_name_by_id(db, row.created_by_user_id)
+        item.created_by_g = creator.employee_id if creator and creator.employee_id else None
     item.doc_manager_user_id, item.doc_manager_name, item.doc_manager_has_signature = (
         book_service.resolve_doc_manager_user(db, row)
     )
@@ -1155,6 +1183,13 @@ def _build_scoped_book_response(
         submitted_by_user_id=_context_user_id(context, "submitted_by_user_id"),
         submitted_by_name=_context_string(context, "submitted_by_name"),
         submitted_by_g=None,
+        created_by_user_id=row.created_by_user_id,
+        created_by_name=(
+            book_service.resolve_user_name_by_id(db, row.created_by_user_id)
+            if row.created_by_user_id is not None
+            else None
+        ),
+        created_by_g=None,
         submitted_at=selected_read.submitted_at,
         doc_manager_user_id=_context_user_id(context, "doc_manager_user_id"),
         doc_manager_name=_context_string(context, "doc_manager_name"),
@@ -1474,7 +1509,7 @@ def create_book(
         category_id=payload.category_id,
         service_id=OTHER_SERVICE_ID,
     )
-    row = book_service.create_book(db, payload)
+    row = book_service.create_book(db, payload, created_by_user_id=user.id)
     return _build_book_response(db, row, user)
 
 

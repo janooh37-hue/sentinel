@@ -930,3 +930,76 @@ def test_restricted_worklist_row_never_leaks_the_live_current_submitter_name(api
     assert row["submitted_by_user_id"] is None
     assert row["submitted_by_name"] != "secret-resubmitter@x.ae"
     assert row["submitted_by_name"] == "original-submitter@x.ae"
+
+
+# ── default sort: newest first ────────────────────────────────────────────────
+
+
+def _stamp_submitted(book: Book, days: float) -> None:
+    book.versions[0].approval_context = {"submitted_at": _days_ago(days).isoformat()}
+
+
+def _three_by_age(db: Session, **book_kwargs) -> None:
+    """Books 1..3 submitted 3, 2 and 1 days ago (book 3 is the newest)."""
+    for i, age in ((1, 3), (2, 2), (3, 1)):
+        book = _submitted_book(db, book_id=i, ref=f"HR-{i:04d}", **book_kwargs)
+        _stamp_submitted(book, age)
+    db.commit()
+
+
+def test_sent_approved_defaults_to_newest_first_and_oldest_flips_it(api_db: Session):
+    submitter = _user(api_db, "submitter@x.ae", "operator")
+    approver = _user(api_db, "approver@x.ae", "manager")
+    _three_by_age(
+        api_db,
+        submitter=submitter,
+        approver=approver,
+        state="approved",
+        approver_state="approved",
+    )
+
+    client = _client(api_db, submitter)
+    params = {"scope": "sent", "status": "approved"}
+    default = client.get("/api/v1/books/approval-log", params=params).json()
+    assert [row["book_id"] for row in default["items"]] == [3, 2, 1]
+    oldest = client.get("/api/v1/books/approval-log", params={**params, "sort": "oldest"}).json()
+    assert [row["book_id"] for row in oldest["items"]] == [1, 2, 3]
+
+
+def test_received_pending_defaults_to_newest_first_and_oldest_flips_it(api_db: Session):
+    me = _user(api_db, "me@x.ae", "manager")
+    submitter = _user(api_db, "submitter@x.ae", "operator")
+    _three_by_age(api_db, submitter=submitter, approver=me)
+
+    client = _client(api_db, me)
+    params = {"scope": "received", "status": "pending"}
+    default = client.get("/api/v1/books/approval-log", params=params).json()
+    assert [row["book_id"] for row in default["items"]] == [3, 2, 1]
+    oldest = client.get("/api/v1/books/approval-log", params={**params, "sort": "oldest"}).json()
+    assert [row["book_id"] for row in oldest["items"]] == [1, 2, 3]
+
+
+def test_neighbors_default_to_newest_first_and_follow_the_sort(api_db: Session):
+    me = _user(api_db, "me@x.ae", "manager")
+    submitter = _user(api_db, "submitter@x.ae", "operator")
+    _three_by_age(api_db, submitter=submitter, approver=me)
+
+    client = _client(api_db, me)
+    default = client.get("/api/v1/books/approval-log/2/neighbors").json()
+    assert default["position"] == 2
+    assert default["previous"]["book_id"] == 3
+    assert default["next"]["book_id"] == 1
+    oldest = client.get("/api/v1/books/approval-log/2/neighbors", params={"sort": "oldest"}).json()
+    assert oldest["previous"]["book_id"] == 1
+    assert oldest["next"]["book_id"] == 3
+
+
+def test_approval_summary_oldest_waiting_stays_the_oldest(api_db: Session):
+    """The default list order flipped; the 'oldest waiting' metadata did not."""
+    me = _user(api_db, "me@x.ae", "manager")
+    submitter = _user(api_db, "submitter@x.ae", "operator")
+    _three_by_age(api_db, submitter=submitter, approver=me)
+
+    summary = _client(api_db, me).get("/api/v1/books/approval-summary").json()
+    assert summary["signature"]["count"] == 3
+    assert summary["signature"]["oldest"]["book_id"] == 1

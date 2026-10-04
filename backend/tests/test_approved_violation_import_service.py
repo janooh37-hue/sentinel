@@ -105,6 +105,7 @@ def test_commit_creates_one_approved_searchable_record_without_violation_row(
     assert book.category_id == "NAT"
     assert book.approval_state == "approved"
     assert book.submitted_by_user_id == admin_user.id
+    assert book.created_by_user_id == admin_user.id
     assert "Violation details" in book.search_text
     assert "2026-08-10" in book.search_text
     assert "Ali Hassan" in book.search_text

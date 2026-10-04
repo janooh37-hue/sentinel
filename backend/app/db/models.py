@@ -212,6 +212,9 @@ class Book(Base):
     # FK to users.id omitted — SQLite batch ALTER cannot add a named FK constraint
     # to an existing table; referential integrity is enforced at the app layer.
     submitted_by_user_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Original creator (users.id): immutable; set once at creation. No FK, same
+    # SQLite batch-ALTER reason as submitted_by_user_id.
+    created_by_user_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     # The Manager directory row actually printed on the doc (reviewer/manager-
     # routed approvals, 2026-06-23). Submit-for-approval follows its `user_id`
     # link to auto-route. FK omitted (SQLite batch ALTER) — integrity app-side.
@@ -248,6 +251,7 @@ class Book(Base):
         UniqueConstraint("ref_number", name="uq_books_ref_number"),
         Index("ix_books_employee_id", "employee_id"),
         Index("ix_books_created_at", "created_at"),
+        Index("ix_books_created_by_user_id", "created_by_user_id"),
     )
 
 

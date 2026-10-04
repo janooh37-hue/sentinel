@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import secrets
 from collections.abc import Iterator
+from datetime import datetime
 
 import pytest
 from fastapi.testclient import TestClient
@@ -21,6 +22,7 @@ from app.db.models import Base, Book, BookCategory, BookVersion, User
 from app.db.session import attach_sqlite_pragmas, get_db
 from app.main import create_app
 from app.services import book_service, perm_service
+from tests.conftest import make_user
 
 
 def _add_book(
@@ -241,3 +243,149 @@ def test_filter_composes_with_the_other_filters(db_session: Session) -> None:
         db_session, service_id="Leave Application Form", direction="incoming", limit=500
     )
     assert {r.ref_number for r in rows} == {"C-3"}
+
+
+# ── created_by_me + newest-first ordering ─────────────────────────────────────
+
+
+def _owned_book(
+    db: Session,
+    *,
+    ref: str,
+    creator: User | None,
+    template_id: str = "Report",
+    subject: str = "whatever",
+    approval_state: str = "none",
+    created_at: datetime | None = None,
+) -> Book:
+    if db.get(BookCategory, "GS") is None:
+        db.add(BookCategory(id="GS", prefix="GS"))
+        db.flush()
+    book = Book(
+        ref_number=ref,
+        category_id="GS",
+        subject=subject,
+        direction="outgoing",
+        approval_state=approval_state,
+        created_by_user_id=creator.id if creator is not None else None,
+    )
+    if created_at is not None:
+        book.created_at = created_at
+    db.add(book)
+    db.flush()
+    db.add(BookVersion(book_id=book.id, version_no=1, template_id=template_id))
+    db.flush()
+    return book
+
+
+def test_created_by_me_returns_only_my_rows_with_matching_total(db_session: Session) -> None:
+    me = make_user(db_session, role="admin", email="me@x.ae")
+    other = make_user(db_session, role="admin", email="other@x.ae")
+    _owned_book(db_session, ref="M-1", creator=me)
+    _owned_book(db_session, ref="M-2", creator=me)
+    _owned_book(db_session, ref="O-1", creator=other)
+    _owned_book(db_session, ref="N-1", creator=None)
+    db_session.commit()
+
+    rows, total, _ = book_service.list_books(db_session, user=me, created_by_me=True)
+    assert {r.ref_number for r in rows} == {"M-1", "M-2"}
+    assert total == 2
+
+    everything, everything_total, _ = book_service.list_books(db_session, user=me)
+    assert len(everything) == everything_total == 4
+
+
+def test_created_by_me_ignores_submitter(db_session: Session) -> None:
+    """The creator, not whoever submitted, decides 'created by me'."""
+    me = make_user(db_session, role="admin", email="me@x.ae")
+    other = make_user(db_session, role="admin", email="other@x.ae")
+    book = _owned_book(db_session, ref="S-1", creator=other)
+    book.submitted_by_user_id = me.id
+    db_session.commit()
+
+    rows, total, _ = book_service.list_books(db_session, user=me, created_by_me=True)
+    assert rows == []
+    assert total == 0
+
+
+def test_created_by_me_composes_with_service_id_and_q(db_session: Session) -> None:
+    me = make_user(db_session, role="admin", email="me@x.ae")
+    other = make_user(db_session, role="admin", email="other@x.ae")
+    _owned_book(db_session, ref="C-1", creator=me, template_id="Report", subject="alpha report")
+    _owned_book(db_session, ref="C-2", creator=me, template_id="Report", subject="beta report")
+    _owned_book(db_session, ref="C-3", creator=me, template_id="Warning Form", subject="alpha")
+    _owned_book(db_session, ref="C-4", creator=other, template_id="Report", subject="alpha report")
+    db_session.commit()
+
+    rows, total, _ = book_service.list_books(
+        db_session, user=me, created_by_me=True, service_id="Report"
+    )
+    assert {r.ref_number for r in rows} == {"C-1", "C-2"}
+    assert total == 2
+
+    rows, total, _ = book_service.list_books(
+        db_session, user=me, created_by_me=True, service_id="Report", q="alpha"
+    )
+    assert {r.ref_number for r in rows} == {"C-1"}
+    assert total == 1
+
+
+def test_created_by_me_without_a_caller_matches_nothing(db_session: Session) -> None:
+    me = make_user(db_session, role="admin", email="me@x.ae")
+    _owned_book(db_session, ref="X-1", creator=me)
+    db_session.commit()
+
+    rows, total, _ = book_service.list_books(db_session, created_by_me=True)
+    assert rows == []
+    assert total == 0
+
+
+def test_route_created_by_me(api_db: Session) -> None:
+    me = make_user(api_db, role="admin", email="route-me@x.ae")
+    other = make_user(api_db, role="admin", email="route-other@x.ae")
+    _owned_book(api_db, ref="R-1", creator=me)
+    _owned_book(api_db, ref="R-2", creator=other)
+    api_db.commit()
+
+    app = create_app()
+    app.dependency_overrides[get_db] = lambda: api_db
+    app.dependency_overrides[get_current_user] = lambda: me
+    client = TestClient(app)
+
+    mine = client.get("/api/v1/books", params={"created_by_me": True}).json()
+    assert [i["ref_number"] for i in mine["items"]] == ["R-1"]
+    assert mine["total"] == 1
+    everyone = client.get("/api/v1/books").json()
+    assert everyone["total"] == 2
+
+
+def test_list_is_newest_first_for_every_approval_state(db_session: Session) -> None:
+    for state in ("none", "pending", "awaiting_scan", "approved", "rejected", "returned"):
+        for n, day in enumerate((1, 2, 3), start=1):
+            _owned_book(
+                db_session,
+                ref=f"{state}-{n}",
+                creator=None,
+                approval_state=state,
+                created_at=datetime(2026, 7, day, 9, 0),
+            )
+    db_session.commit()
+
+    for state in ("none", "pending", "awaiting_scan", "approved", "rejected", "returned"):
+        rows, total, _ = book_service.list_books(db_session, approval_state=state, limit=500)
+        assert [r.ref_number for r in rows] == [f"{state}-3", f"{state}-2", f"{state}-1"]
+        assert total == 3
+
+
+def test_equal_timestamps_break_ties_by_id_descending(db_session: Session) -> None:
+    same = datetime(2026, 7, 1, 9, 0)
+    books = [
+        _owned_book(db_session, ref=f"T-{i}", creator=None, created_at=same) for i in range(1, 5)
+    ]
+    db_session.commit()
+
+    rows, _total, _ = book_service.list_books(db_session, limit=500)
+    assert [r.id for r in rows] == sorted((b.id for b in books), reverse=True)
+
+    page, _total, _ = book_service.list_books(db_session, limit=2, offset=1)
+    assert [r.id for r in page] == sorted((b.id for b in books), reverse=True)[1:3]

@@ -715,8 +715,13 @@ class ServiceCount(NamedTuple):
     states: dict[str, int]
 
 
+def _created_by_clause(user: User | None) -> ColumnElement[bool]:
+    """Records created by the caller (immutable creator). No caller = no rows."""
+    return false() if user is None else Book.created_by_user_id == user.id
+
+
 def service_facets(
-    db: Session, user: User | None = None
+    db: Session, user: User | None = None, *, created_by_me: bool = False
 ) -> tuple[ServiceCount, list[ServiceCount]]:
     """`(all_records, per_service)` over EVERY non-deleted book.
 
@@ -765,6 +770,8 @@ def service_facets(
         visibility = user_visibility_clause(db, user)
         if visibility is not None:
             stmt = stmt.where(visibility)
+    if created_by_me:
+        stmt = stmt.where(_created_by_clause(user))
 
     all_states: Counter[str] = Counter()
     per_service: dict[str, Counter[str]] = {}
@@ -811,6 +818,7 @@ def list_books(
     limit: int = LIST_DEFAULT_LIMIT,
     offset: int = 0,
     include_deleted: bool = False,
+    created_by_me: bool = False,
 ) -> tuple[list[Book], int, dict[int, str]]:
     """Paginated list with optional filters.
 
@@ -839,6 +847,11 @@ def list_books(
     if not include_deleted:
         stmt = stmt.where(Book.deleted_at.is_(None))
         count_stmt = count_stmt.where(Book.deleted_at.is_(None))
+
+    if created_by_me:
+        mine = _created_by_clause(user)
+        stmt = stmt.where(mine)
+        count_stmt = count_stmt.where(mine)
 
     if category_id is not None:
         stmt = stmt.where(Book.category_id == category_id)
@@ -885,7 +898,7 @@ def list_books(
             selectinload(Book.category),
             selectinload(Book.versions).selectinload(BookVersion.approval_steps),
         )
-        .order_by(Book.created_at.desc())
+        .order_by(Book.created_at.desc(), Book.id.desc())
         .limit(limit)
         .offset(offset)
     )
@@ -971,7 +984,7 @@ def _get_book_with_versions(db: Session, book_id: int) -> Book:
 # ---------------------------------------------------------------------------
 
 
-def create_book(db: Session, payload: BookCreate) -> Book:
+def create_book(db: Session, payload: BookCreate, *, created_by_user_id: int | None = None) -> Book:
     """Atomically allocate a ref number and insert the book row.
 
     Uses SQLite's ``BEGIN IMMEDIATE`` to serialise concurrent writers.
@@ -1011,6 +1024,7 @@ def create_book(db: Session, payload: BookCreate) -> Book:
         direction=payload.direction,
         stamp_style=payload.stamp_style,
         created_at=datetime.now(UTC).replace(tzinfo=None),
+        created_by_user_id=created_by_user_id,
         deleted_at=None,
     )
     db.add(row)
@@ -1040,9 +1054,46 @@ def update_book(db: Session, book_id: int, payload: BookUpdate) -> Book:
     return row
 
 
+_DELETABLE_APPROVAL_STATES: Final[frozenset[str]] = frozenset({"none", "returned", "rejected"})
+
+
+def is_deletable(book: Book, has_active_session: bool) -> bool:
+    """A record may be deleted only when it is not voided, has no approval in
+    flight or completed (none/returned/rejected), and has no live Word session
+    (deleting under a WebDAV session would orphan it)."""
+    return (
+        book.voided_at is None
+        and book.approval_state in _DELETABLE_APPROVAL_STATES
+        and not has_active_session
+    )
+
+
 def delete_book(db: Session, book_id: int) -> None:
-    """Soft-delete: set deleted_at.  Ref number is NOT released."""
+    """Soft-delete: set deleted_at.  Ref number is NOT released.
+
+    Raises ``BOOK_NOT_DELETABLE`` (409) when the record is voided, pending or
+    approved (or awaiting a scan), or has an active Word edit session.
+    """
     row = get_book(db, book_id)
+    has_active_session = (
+        db.scalar(
+            select(BookEditSession.id)
+            .where(BookEditSession.book_id == row.id, BookEditSession.state == "active")
+            .limit(1)
+        )
+        is not None
+    )
+    if not is_deletable(row, has_active_session):
+        raise AppError(
+            "BOOK_NOT_DELETABLE",
+            "This record cannot be deleted in its current state.",
+            http_status=409,
+            details={
+                "approval_state": row.approval_state,
+                "voided": row.voided_at is not None,
+                "active_session": has_active_session,
+            },
+        )
     row.deleted_at = datetime.now(UTC).replace(tzinfo=None)
     db.commit()
 
@@ -2398,7 +2449,7 @@ def approval_log_sent(
     limit: int,
     offset: int,
     status: str = "all",
-    sort: str = "oldest",
+    sort: str = "newest",
 ) -> tuple[list[ApprovalLogItem], int]:
     """Books the caller submitted for approval — their outbox. Current
     pending submissions unless ``status`` narrows to one aggregate state."""
@@ -2428,7 +2479,7 @@ def approval_log_received(
     user: User,
     kind: str = "approver",
     status: str = "pending",
-    sort: str = "oldest",
+    sort: str = "newest",
     limit: int,
     offset: int,
 ) -> tuple[list[ApprovalLogItem], int]:
@@ -3484,6 +3535,7 @@ __all__ = [
     "get_book",
     "get_book_by_ref",
     "get_book_detail",
+    "is_deletable",
     "is_document_signed_locked",
     "list_approver_candidates",
     "list_awaiting",

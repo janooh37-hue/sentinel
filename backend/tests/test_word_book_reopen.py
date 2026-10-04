@@ -347,6 +347,7 @@ def test_approved_revision_becomes_resubmittable_and_report_stays_approved(
         date="2026-09-16",
         sign=False,
     )
+    assert db_session.get(Book, report_info.book_id).created_by_user_id == submitter.id
     report_session = (
         db_session.query(BookEditSession)
         .filter_by(book_id=report_info.book_id, state="active")
