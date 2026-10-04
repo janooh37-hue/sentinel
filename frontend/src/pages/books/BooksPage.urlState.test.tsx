@@ -17,12 +17,16 @@ vi.mock('@/lib/api', () => ({
   ApiError: class ApiError extends Error {},
 }))
 vi.mock('@/lib/useCapabilities', () => ({ useCapabilities: () => ({ has: () => true }) }))
-vi.mock('@/lib/authContext', () => ({ useAuth: () => ({ user: { role: 'admin' } }) }))
-const viewport = vi.hoisted(() => ({ mobile: false }))
+const viewport = vi.hoisted(() => ({ mobile: false, role: 'admin' }))
+vi.mock('@/lib/authContext', () => ({ useAuth: () => ({ user: { role: viewport.role } }) }))
 vi.mock('@/lib/useIsMobile', () => ({ useIsMobile: () => viewport.mobile }))
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (key: string) => key, i18n: { language: 'en' } }) }))
 vi.mock('./StatusSpine', () => ({ StatusSpine: ({ active, onChange }: { active: string; onChange: (state: string) => void }) => <button aria-label="status-filter" onClick={() => onChange('approved')}>{active}</button> }))
-vi.mock('./FormRail', () => ({ FormRail: () => null }))
+vi.mock('./FormRail', () => ({
+  FormRail: ({ mine }: { mine?: { pressed: boolean; onToggle: () => void } }) =>
+    mine ? <button aria-label="mine-toggle" aria-pressed={mine.pressed} onClick={mine.onToggle} /> : null,
+  MineChip: () => null,
+}))
 vi.mock('./RecordsList', () => ({ RecordsList: () => null }))
 vi.mock('./RecordPane', () => ({ RecordPane: ({ book }: { book: { id: number } | null }) => <div data-testid="record-pane">{book?.id ?? 'none'}</div> }))
 vi.mock('@/pages/scanBack/ScanBackEntry', () => ({ ScanBackEntry: () => null }))
@@ -42,6 +46,7 @@ function setup(entry = '/books?status=pending&q=abc&open=42') {
 
 beforeEach(() => {
   viewport.mobile = false
+  viewport.role = 'admin'
   vi.mocked(api.listBooks).mockClear()
   vi.mocked(api.getBookFacets).mockClear()
 })
@@ -82,6 +87,37 @@ describe('Books URL state', () => {
     setup('/books?mine=1')
     await waitFor(() => expect(api.getBookFacets).toHaveBeenCalled())
     expect(vi.mocked(api.getBookFacets).mock.calls).toEqual([[{ created_by_me: true }]])
+  })
+
+  it('the Created-by-me toggle writes mine=1, refetches the list and the facets, and toggles back', async () => {
+    setup('/books')
+    const search = (): URLSearchParams =>
+      new URLSearchParams(screen.getByTestId('url').textContent?.split('?')[1])
+    const toggle = await screen.findByLabelText('mine-toggle')
+    await waitFor(() => expect(api.listBooks).toHaveBeenCalledWith({ limit: 500 }))
+    expect(toggle).toHaveAttribute('aria-pressed', 'false')
+    expect(search().get('mine')).toBeNull()
+
+    await userEvent.click(toggle)
+    expect(search().get('mine')).toBe('1')
+    await waitFor(() =>
+      expect(api.listBooks).toHaveBeenCalledWith({ limit: 500, created_by_me: true }),
+    )
+    expect(api.getBookFacets).toHaveBeenCalledWith({ created_by_me: true })
+    expect(screen.getByLabelText('mine-toggle')).toHaveAttribute('aria-pressed', 'true')
+
+    vi.mocked(api.listBooks).mockClear()
+    await userEvent.click(screen.getByLabelText('mine-toggle'))
+    expect(search().get('mine')).toBeNull()
+    await waitFor(() => expect(api.listBooks).toHaveBeenCalledWith({ limit: 500 }))
+  })
+
+  it('hides the Created-by-me toggle from inmate reporters, even with mine=1 in the URL', async () => {
+    viewport.role = 'inmate_reporter'
+    setup('/books?mine=1')
+    await waitFor(() => expect(api.listBooks).toHaveBeenCalledWith({ limit: 500 }))
+    expect(screen.queryByLabelText('mine-toggle')).not.toBeInTheDocument()
+    expect(api.listBooks).not.toHaveBeenCalledWith(expect.objectContaining({ created_by_me: true }))
   })
 
   it('phone filters survive a remount', async () => {
