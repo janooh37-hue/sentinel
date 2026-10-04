@@ -17,7 +17,7 @@
  *  - Gated behind books.submit (caller already gates the trigger)
  */
 
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import * as RadixDialog from '@radix-ui/react-dialog'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
@@ -35,6 +35,7 @@ interface Props {
 }
 
 export function SubmitForApprovalDialog({ bookId, onClose }: Props): React.JSX.Element {
+  const submitReasonId = useId()
   const { t } = useTranslation()
   const navigate = useNavigate()
   const qc = useQueryClient()
@@ -341,7 +342,15 @@ export function SubmitForApprovalDialog({ bookId, onClose }: Props): React.JSX.E
 
           {/* footer */}
           <footer className="border-t border-hairline px-5 py-4">
-            <div className="flex items-center justify-end gap-2.5">
+            <div className="flex flex-wrap items-center justify-end gap-2.5">
+              {!canSubmit && (
+                <span
+                  id={submitReasonId}
+                  className="me-auto text-[0.78em] leading-snug text-muted-foreground"
+                >
+                  {t('books.reason.submitNoApprover')}
+                </span>
+              )}
               <button
                 type="button"
                 onClick={onClose}
@@ -352,9 +361,14 @@ export function SubmitForApprovalDialog({ bookId, onClose }: Props): React.JSX.E
               {(showLinkedChip || approvers.length > 0) && (
                 <button
                   type="button"
-                  disabled={!canSubmit || submitMutation.isPending}
-                  onClick={() => submitMutation.mutate()}
-                  className="rounded-lg bg-primary px-4 py-2 text-[0.84em] font-semibold text-primary-foreground transition-colors hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-40"
+                  aria-disabled={!canSubmit || submitMutation.isPending ? true : undefined}
+                  aria-describedby={!canSubmit ? submitReasonId : undefined}
+                  aria-busy={submitMutation.isPending ? true : undefined}
+                  onClick={() => {
+                    if (!canSubmit || submitMutation.isPending) return
+                    submitMutation.mutate()
+                  }}
+                  className="rounded-lg bg-primary px-4 py-2 text-[0.84em] font-semibold text-primary-foreground transition-colors hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring aria-disabled:opacity-40"
                 >
                   {t('books.approval.submitForApproval')}
                 </button>

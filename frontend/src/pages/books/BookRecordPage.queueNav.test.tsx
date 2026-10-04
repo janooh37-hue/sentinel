@@ -10,7 +10,7 @@
  * phone and desktop, so there is nothing to assert twice.
  */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { describe, it, expect, vi, beforeAll, beforeEach, afterAll } from 'vitest'
@@ -22,6 +22,8 @@ import type * as AuthContextModule from '@/lib/authContext'
 import { api } from '@/lib/api'
 import { BookRecordPage } from './BookRecordPage'
 import { QueueNav } from './QueueNav'
+import { RecordDeleteProvider } from './RecordDeleteProvider'
+import { KeyboardShortcutsProvider } from '@/lib/keyboardShortcuts'
 
 const mockHas = vi.fn<(cap: string) => boolean>(() => false)
 
@@ -180,10 +182,12 @@ function renderRecord(): void {
   render(
     <QueryClientProvider client={queryClient}>
       <MemoryRouter initialEntries={['/books/48']}>
-        <Routes>
-          <Route path="/books/:id" element={<BookRecordPage />} />
-          <Route path="/ledger" element={<LedgerProbe />} />
-        </Routes>
+        <RecordDeleteProvider>
+          <Routes>
+            <Route path="/books/:id" element={<BookRecordPage />} />
+            <Route path="/ledger" element={<LedgerProbe />} />
+          </Routes>
+        </RecordDeleteProvider>
       </MemoryRouter>
     </QueryClientProvider>,
   )
@@ -241,9 +245,93 @@ describe('BookRecordPage — Email via Outlook', () => {
     vi.mocked(api.getBook).mockResolvedValue(recordFixture({ versions: [] }) as never)
     renderRecord()
     await userEvent.click(await screen.findByRole('button', { name: 'Tools' }))
-    expect(await screen.findByRole('menuitem', { name: 'Email via Outlook' })).toHaveAttribute(
+    expect(await screen.findByRole('menuitem', { name: /^Email via Outlook/ })).toHaveAttribute(
       'aria-disabled',
       'true',
     )
+  })
+})
+
+// ---------------------------------------------------------------------------
+// J / K and Back — the list-originated navigation state.
+// ---------------------------------------------------------------------------
+
+function NavProbe(): React.JSX.Element {
+  const location = useLocation()
+  return (
+    <>
+      <output data-testid="loc">{`${location.pathname}${location.search}`}</output>
+      <output data-testid="loc-state">{JSON.stringify(location.state)}</output>
+    </>
+  )
+}
+
+const LIST_STATE = { from: '/books?status=pending&open=47', queue: [47, 48, 49], scrollY: 120 }
+
+function renderFromList(initialId = 48): void {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  render(
+    <QueryClientProvider client={queryClient}>
+      <MemoryRouter initialEntries={[{ pathname: `/books/${initialId}`, state: LIST_STATE }]}>
+        <KeyboardShortcutsProvider>
+          <RecordDeleteProvider>
+            <Routes>
+              <Route path="/books/:id" element={<><NavProbe /><BookRecordPage /></>} />
+              <Route path="/books" element={<NavProbe />} />
+            </Routes>
+          </RecordDeleteProvider>
+        </KeyboardShortcutsProvider>
+      </MemoryRouter>
+    </QueryClientProvider>,
+  )
+}
+
+describe('BookRecordPage — J / K and Back', () => {
+  beforeEach(() => {
+    mockHas.mockImplementation(() => false)
+    vi.mocked(api.getBook).mockReset()
+    vi.mocked(api.getBook).mockImplementation(
+      async (id: number) =>
+        recordFixture({ id, ref_number: `GS-00${id}`, approval_state: 'pending' }) as never,
+    )
+  })
+
+  it('J and K step through the list queue, replacing the entry and forwarding the state', async () => {
+    renderFromList(48)
+    await screen.findByTestId('queue-position')
+    expect(screen.getByTestId('queue-position')).toHaveTextContent('2 of 3')
+
+    fireEvent.keyDown(document.body, { key: 'j', code: 'KeyJ' })
+    await waitFor(() => expect(screen.getByTestId('loc')).toHaveTextContent('/books/49'))
+    // The list state travels with the step unchanged (`open` is only stripped on Back).
+    expect(JSON.parse(screen.getByTestId('loc-state').textContent ?? 'null')).toEqual(LIST_STATE)
+    await waitFor(() => expect(screen.getByTestId('queue-position')).toHaveTextContent('3 of 3'))
+
+    // J at the tail declines: nothing moves.
+    fireEvent.keyDown(document.body, { key: 'j', code: 'KeyJ' })
+    expect(screen.getByTestId('loc')).toHaveTextContent('/books/49')
+
+    fireEvent.keyDown(document.body, { key: 'k', code: 'KeyK' })
+    await waitFor(() => expect(screen.getByTestId('loc')).toHaveTextContent('/books/48'))
+  })
+
+  it('Back returns to the originating list focused on the record the reader ended on', async () => {
+    renderFromList(48)
+    fireEvent.keyDown(document.body, { key: 'j', code: 'KeyJ' })
+    await waitFor(() => expect(screen.getByTestId('loc')).toHaveTextContent('/books/49'))
+
+    await userEvent.click(await screen.findByRole('button', { name: /^Back to records/ }))
+
+    await waitFor(() => expect(screen.getByTestId('loc')).toHaveTextContent(/^\/books\?status=pending$/))
+    expect(JSON.parse(screen.getByTestId('loc-state').textContent ?? 'null')).toEqual({
+      focusBookId: 49,
+      scrollY: 120,
+    })
+  })
+
+  it('a click on the queue arrows steps the same way', async () => {
+    renderFromList(48)
+    await userEvent.click(await screen.findByTestId('queue-next'))
+    await waitFor(() => expect(screen.getByTestId('loc')).toHaveTextContent('/books/49'))
   })
 })

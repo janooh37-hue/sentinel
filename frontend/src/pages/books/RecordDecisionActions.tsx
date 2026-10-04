@@ -1,8 +1,13 @@
-import { CornerUpLeft, PenLine, X } from 'lucide-react'
+import { CornerUpLeft, Loader2, PenLine, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
+
+export type DecisionPending = 'sign' | 'return' | 'reject'
 
 export interface RecordDecisionActionsProps {
   busy: boolean
+  /** The act whose request is in flight: that button swaps to its pending
+   *  label ("Signing…" / "Returning…" / "Rejecting…") with a spinner. */
+  pending?: DecisionPending | null
   onReturn: () => void
   onReject: () => void
   onSign: () => void
@@ -13,6 +18,7 @@ export interface RecordDecisionActionsProps {
 
 export function RecordDecisionActions({
   busy,
+  pending = null,
   onReturn,
   onReject,
   onSign,
@@ -22,7 +28,10 @@ export function RecordDecisionActions({
 }: RecordDecisionActionsProps): React.JSX.Element {
   const { t } = useTranslation()
   const buttonClass =
-    'flex min-h-[46px] min-w-0 items-center justify-center gap-1.5 rounded-lg border px-2 text-center text-[0.75em] font-semibold leading-tight transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50'
+    'flex min-h-[46px] min-w-0 items-center justify-center gap-1.5 rounded-lg border px-2 text-center text-[0.75em] font-semibold leading-tight transition-colors motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50'
+  const spinner = (
+    <Loader2 className="h-4 w-4 shrink-0 animate-spin motion-reduce:animate-none" aria-hidden />
+  )
 
   return (
     <div className="grid grid-cols-3 gap-2">
@@ -30,31 +39,34 @@ export function RecordDecisionActions({
         ref={returnButtonRef}
         type="button"
         disabled={busy}
+        aria-busy={pending === 'return' ? true : undefined}
         onClick={onReturn}
         className={`${buttonClass} border-warning/40 bg-warning/10 text-warning hover:bg-warning/15`}
       >
-        <CornerUpLeft className="h-4 w-4 shrink-0" aria-hidden />
-        <span>{t('books.approval.return')}</span>
+        {pending === 'return' ? spinner : <CornerUpLeft className="h-4 w-4 shrink-0" aria-hidden />}
+        <span>{pending === 'return' ? t('books.approval.returning') : t('books.approval.return')}</span>
       </button>
       <button
         ref={rejectButtonRef}
         type="button"
         disabled={busy}
+        aria-busy={pending === 'reject' ? true : undefined}
         onClick={onReject}
         className={`${buttonClass} border-accent/40 bg-accent/10 text-accent hover:bg-accent/15`}
       >
-        <X className="h-4 w-4 shrink-0" strokeWidth={2.4} aria-hidden />
-        <span>{t('books.approval.reject')}</span>
+        {pending === 'reject' ? spinner : <X className="h-4 w-4 shrink-0" strokeWidth={2.4} aria-hidden />}
+        <span>{pending === 'reject' ? t('books.approval.rejecting') : t('books.approval.reject')}</span>
       </button>
       <button
         ref={signButtonRef}
         type="button"
         disabled={busy}
+        aria-busy={pending === 'sign' ? true : undefined}
         onClick={onSign}
         className={`${buttonClass} border-success bg-success text-background hover:bg-success/90`}
       >
-        <PenLine className="h-4 w-4 shrink-0" aria-hidden />
-        <span>{t('books.approval.signApprove')}</span>
+        {pending === 'sign' ? spinner : <PenLine className="h-4 w-4 shrink-0" aria-hidden />}
+        <span>{pending === 'sign' ? t('books.approval.signing') : t('books.approval.signApprove')}</span>
       </button>
     </div>
   )

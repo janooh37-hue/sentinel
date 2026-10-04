@@ -16,6 +16,7 @@ import type { BookAnnotationLayer } from '@/components/books/BookAnnotationLayer
 import type { WordReopenTrigger } from '@/components/books/BookWordActions'
 import type { AdjustSignatureTrigger } from '@/components/signature/AdjustSignatureAction'
 import type { RecordNavContext } from '../useRecordNavContext'
+import type { NextStep } from '../recordNextStep'
 import type { Station } from './RecordRail'
 
 export interface RecordCaps {
@@ -61,6 +62,12 @@ export interface RecordView {
   userId: number | undefined
   backLabel: string
   queue: RecordNavContext['queue']
+  /** `recordNextStep(book, ctx)`, computed once in BRP; null until the book loads. */
+  nextStep: NextStep | null
+  /** The decision whose request is in flight (drives "Signing…" / "Returning…" / "Rejecting…"). */
+  pendingAct: 'sign' | 'return' | 'reject' | null
+  /** Creator name, or the localized "Not recorded" when unknown. */
+  creator: string
   armed: boolean
   annotatable: boolean
   annMode: 'view' | 'mark'
@@ -113,6 +120,10 @@ export interface RecordActions {
   decisionPanelRef: RefObject<HTMLDivElement | null>
   panelReturnButtonRef: RefObject<HTMLButtonElement | null>
   panelRejectButtonRef: RefObject<HTMLButtonElement | null>
+  /** Open BRP's destructive "Delete record" confirmation (then `scheduleDelete` + `back()`). */
+  requestDelete: () => void
+  /** Copy the reference number and toast `books.record.copiedRef`. */
+  copyRef: () => void
 }
 
 export interface RecordPieceProps {

@@ -22,6 +22,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
 import {
   Check,
+  ChevronRight,
   CornerUpLeft,
   PenLine,
   Printer,
@@ -36,6 +37,7 @@ import {
   apiErrorMessage,
   type BookApprovalStepRead,
   type BookVersionRead,
+  type BookAnnotationRead,
 } from '@/lib/api'
 import { useAuth } from '@/lib/authContext'
 import { useCapabilities } from '@/lib/useCapabilities'
@@ -57,7 +59,7 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import type { WordReopenTrigger } from '@/components/books/BookWordActions'
 import type { AdjustSignatureTrigger } from '@/components/signature/AdjustSignatureAction'
 import { IncludedPapersDialog } from './IncludedPapersDialog'
-import { RecordChromeProvider } from './record/RecordChrome'
+import { RecordChromeProvider, useRecordChrome } from './record/RecordChrome'
 import { isIncludedPapersOwner } from './includedPapersState'
 import { describeListFrom, useRecordNavContext } from './useRecordNavContext'
 import { buildRecordBasketItem } from './recordsBasket'
@@ -72,11 +74,16 @@ import { useManagePaper } from './useManagePaper'
 import { paperUrl, type Paper } from './recordPapers'
 import { useRecordPrintMode } from './useRecordPrintMode'
 import { serviceHref } from '@/lib/quickActions'
+import { copyToClipboard } from '@/lib/clipboard'
+import { useShortcutAction } from '@/lib/useKeyboardShortcuts'
 import { RecordHeader } from './record/RecordHeader'
 import { RecordDesk, DecisionReasonForm } from './record/RecordDesk'
 import { RecordDock } from './record/RecordDock'
 import { RecordPhoneProgress, RecordRail, type Station } from './record/RecordRail'
-import type { RecordActions, RecordCaps, RecordView } from './record/recordActions'
+import type { MarkInput, RecordActions, RecordCaps, RecordView } from './record/recordActions'
+import { recordNextStep } from './recordNextStep'
+import { deleteBlockReason } from './recordDelete'
+import { useRecordDelete } from './RecordDeleteProvider'
 
 type TFn = (key: string, opts?: Record<string, unknown>) => string
 
@@ -91,7 +98,7 @@ type TFn = (key: string, opts?: Record<string, unknown>) => string
 function parseApprovalContext(params: URLSearchParams): ApprovalContext | null {
   const tab = params.get('tab')
   if (!isApprovalScope(tab)) return null
-  const sort: ApprovalSort = params.get('sort') === 'newest' ? 'newest' : 'oldest'
+  const sort: ApprovalSort = params.get('sort') === 'oldest' ? 'oldest' : 'newest'
   const pageRaw = Number.parseInt(params.get('page') ?? '', 10)
   const page = Number.isInteger(pageRaw) && pageRaw >= 1 ? pageRaw : 1
   if (tab === 'sent') {
@@ -125,7 +132,7 @@ function parseApprovalContext(params: URLSearchParams): ApprovalContext | null {
 function buildTimeline(
   versions: BookVersionRead[],
   approvalState: string,
-  submitter: string,
+  creator: string,
   t: TFn,
   signedSource?: 'in_app' | 'scan' | null,
 ): Station[] {
@@ -138,7 +145,7 @@ function buildTimeline(
         key: `sub-${v.id}`,
         icon: <Upload className="h-[15px] w-[15px]" strokeWidth={2} />,
         label: t('books.record.stationCreated'),
-        meta: `${submitter} · v1 · ${v.created_at.slice(0, 10)}`,
+        meta: `${creator} · v1 · ${v.created_at.slice(0, 10)}`,
         state: 'done',
         tone: 'navy',
       })
@@ -147,7 +154,7 @@ function buildTimeline(
         key: `rev-${v.id}`,
         icon: <CornerUpLeft className="h-[15px] w-[15px] -scale-x-100" strokeWidth={2} />,
         label: t('books.record.stationRevised'),
-        meta: `${v.created_by_name ?? submitter} · v${v.version_no}`,
+        meta: `${v.created_by_name ?? creator} · v${v.version_no}`,
         state: 'done',
         tone: 'blue',
       })
@@ -273,6 +280,9 @@ function BookRecordPageBody(): React.JSX.Element {
   const isMobile = useIsMobile()
   const bookId = Number(id)
   const onPdfReady = useRecordPrintMode()
+  const chrome = useRecordChrome()
+  const { scheduleDelete } = useRecordDelete()
+  const [deleteOpen, setDeleteOpen] = useState(false)
 
   const versionIdParam = (() => {
     const raw = Number.parseInt(searchParams.get('version_id') ?? '', 10)
@@ -396,6 +406,7 @@ function BookRecordPageBody(): React.JSX.Element {
     isIncludedPapersOwner(book, user?.id)
 
   const submitter = book?.submitted_by_name ?? '—'
+  const creator = book?.created_by_name ?? t('books.record.creatorUnknown')
   const state = book?.approval_state ?? 'none'
   const signedSource = book ? signedSourceOf(book) : null
 
@@ -429,8 +440,8 @@ function BookRecordPageBody(): React.JSX.Element {
 
   const stations = useMemo(
     () =>
-      book ? buildTimeline(versions, book.approval_state, submitter, t, signedSource) : [],
-    [book, versions, submitter, t, signedSource],
+      book ? buildTimeline(versions, book.approval_state, creator, t, signedSource) : [],
+    [book, versions, creator, t, signedSource],
   )
 
   // Assignee/footer derivation (with reviewer support).
@@ -550,16 +561,33 @@ function BookRecordPageBody(): React.JSX.Element {
     enabled: annotatable && Number.isFinite(bookId) && current?.id != null,
   })
 
+  const annotationsKey = ['books', 'annotations', bookId, current?.id] as const
+  // Optimistic (StarButton idiom): the mark shows at once under a negative
+  // placeholder id, rolls back on error, and the server copy replaces it on settle.
   const createMark = useMutation({
-    mutationFn: (m: {
-      page: number
-      kind: 'pin' | 'highlight'
-      geometry: Record<string, number>
-      comment: string
-    }) => api.createBookAnnotation(bookId, current!.id, m),
-    onSuccess: () =>
-      void qc.invalidateQueries({ queryKey: ['books', 'annotations', bookId, current?.id] }),
-    onError: (err) => toast.error(apiErrorMessage(err)),
+    mutationFn: (m: MarkInput) => api.createBookAnnotation(bookId, current!.id, m),
+    onMutate: async (m) => {
+      await qc.cancelQueries({ queryKey: annotationsKey })
+      const prev = qc.getQueryData<BookAnnotationRead[]>(annotationsKey)
+      const optimistic: BookAnnotationRead = {
+        id: -Date.now(),
+        version_id: current!.id,
+        page: m.page,
+        kind: m.kind,
+        geometry: m.geometry,
+        comment: m.comment,
+        author_user_id: user?.id ?? null,
+        author_name: null,
+        created_at: new Date().toISOString(),
+      }
+      qc.setQueryData<BookAnnotationRead[]>(annotationsKey, [...(prev ?? []), optimistic])
+      return { prev }
+    },
+    onError: (err, _m, ctx) => {
+      qc.setQueryData<BookAnnotationRead[]>(annotationsKey, ctx?.prev ?? [])
+      toast.error(apiErrorMessage(err))
+    },
+    onSettled: () => void qc.invalidateQueries({ queryKey: annotationsKey }),
   })
   const deleteMark = useMutation({
     mutationFn: (annId: number) => api.deleteBookAnnotation(bookId, current!.id, annId),
@@ -594,7 +622,7 @@ function BookRecordPageBody(): React.JSX.Element {
       void api
         .listApprovalLog({
           scope: 'received',
-          kind: 'approver', status: 'pending', sort: 'oldest', limit: 2, offset: 0,
+          kind: 'approver', status: 'pending', sort: effectiveApprovalContext?.sort ?? 'newest', limit: 2, offset: 0,
         })
         .then((res) => {
           const row = res.items.find((item) => item.book_id !== justSignedId)
@@ -735,6 +763,68 @@ function BookRecordPageBody(): React.JSX.Element {
     if (stillEligible) signMutation.mutate()
   }
 
+  // The one "what is this record waiting for / what can I do" answer, shared by
+  // the header, the dock and the Records pane (`recordNextStep`).
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 60_000)
+    return () => window.clearInterval(timer)
+  }, [])
+  const locale = i18n.language
+  const nextStep = useMemo(
+    () =>
+      book
+        ? recordNextStep(book, {
+            has,
+            canEdit,
+            canGenerate,
+            canMutateCurrent,
+            isInmateReporter,
+            inmateAction: reporterAction,
+            isAssignee,
+            isReviewer: myReview != null,
+            hasDocument: recordHasPapers,
+            canManageIncludedPapers,
+            now,
+            locale,
+          })
+        : null,
+    [
+      book,
+      has,
+      canEdit,
+      canGenerate,
+      canMutateCurrent,
+      isInmateReporter,
+      reporterAction,
+      isAssignee,
+      myReview,
+      recordHasPapers,
+      canManageIncludedPapers,
+      now,
+      locale,
+    ],
+  )
+  const pendingAct: RecordView['pendingAct'] = signMutation.isPending
+    ? 'sign'
+    : decideMutation.isPending
+      ? decideMutation.variables?.act === 'reject'
+        ? 'reject'
+        : decideMutation.variables?.act === 'return'
+          ? 'return'
+          : null
+      : null
+  const deleteBlocked = book ? deleteBlockReason(book, { has, isInmateReporter }) : 'noCapability'
+
+  const copyRef = useCallback((): void => {
+    if (!book) return
+    const refNumber = book.ref_number
+    void copyToClipboard(refNumber).then((ok) => {
+      if (ok) toast.success(t('books.record.copiedRef', { ref: bidi(refNumber) }))
+      else toast.error(t('common.copyFailed'))
+    })
+  }, [book, t])
+
   const caps: RecordCaps = useMemo(
     () => ({
       has,
@@ -768,6 +858,62 @@ function BookRecordPageBody(): React.JSX.Element {
     ],
   )
 
+  // ── Record keys (bare keys; handlers decline with `false` when not applicable) ──
+  const canDecideNow = nextStep?.decide === true && action === 'decide'
+  const stepTo = useCallback(
+    (id: number | null, versionId: number | null): boolean => {
+      if (isInmateReporter || id == null) return false
+      setArmedFor(null)
+      step(id, versionId)
+      return true
+    },
+    [isInmateReporter, step],
+  )
+  useShortcutAction('recordNext', () => stepTo(queue.nextId, queue.nextVersionId))
+  useShortcutAction('recordPrev', () => stepTo(queue.prevId, queue.prevVersionId))
+  useShortcutAction('copyRef', () => {
+    if (!book) return false
+    copyRef()
+  })
+  useShortcutAction('signConfirm', () => {
+    if (!canDecideNow || busy) return false
+    requestSignConfirm(isMobile ? mobileDockSignRef : desktopSignRef)
+  })
+  useShortcutAction('toggleMark', () => {
+    if (!canMark || !canDecideNow) return false
+    setArmedFor(armed ? null : bookId)
+  })
+  // The ONE escape resolver of this page: rail drawer → full-screen viewer →
+  // focus mode → Back. Radix overlays and editable targets never reach it.
+  useShortcutAction('escape', () => {
+    if (chrome.railDrawerOpen) {
+      chrome.closeRailDrawer()
+      return
+    }
+    if (chrome.fullscreen) {
+      chrome.setFullscreen(false)
+      return
+    }
+    if (chrome.focus) {
+      chrome.setFocus(false)
+      return
+    }
+    back()
+  })
+
+  // Tab title: "<ref> · <subject> — GSSG"; restored on unmount, untouched while printing.
+  const printMode = searchParams.get('print') === '1'
+  const titleRef = book?.ref_number
+  const titleSubject = book?.subject
+  useEffect(() => {
+    if (!titleRef || printMode) return
+    const previous = document.title
+    document.title = `${titleRef} · ${titleSubject || t('books.record.untitled')} — GSSG`
+    return () => {
+      document.title = previous
+    }
+  }, [titleRef, titleSubject, printMode, t])
+
   const view: RecordView = {
     bookId,
     isMobile,
@@ -787,6 +933,9 @@ function BookRecordPageBody(): React.JSX.Element {
     userId: user?.id,
     backLabel,
     queue,
+    nextStep,
+    pendingAct,
+    creator,
     armed,
     annotatable,
     annMode,
@@ -808,6 +957,7 @@ function BookRecordPageBody(): React.JSX.Element {
   const createMarkMutate = createMark.mutate
   const deleteMarkMutate = deleteMark.mutate
   const openOverlay = overlay.open
+  const requestDelete = useCallback((): void => setDeleteOpen(true), [])
   const actions: RecordActions = useMemo(
     () => ({
       back,
@@ -826,7 +976,10 @@ function BookRecordPageBody(): React.JSX.Element {
       setWordReopenTrigger,
       setAdjustSigTrigger,
       createMark: createMarkMutate,
-      deleteMark: deleteMarkMutate,
+      // Optimistic marks carry a negative placeholder id until the server answers.
+      deleteMark: (markId) => {
+        if (markId > 0) deleteMarkMutate(markId)
+      },
       onPdfReady,
       fileSignedRef,
       replaceSignedRef,
@@ -836,6 +989,8 @@ function BookRecordPageBody(): React.JSX.Element {
       decisionPanelRef,
       panelReturnButtonRef,
       panelRejectButtonRef,
+      requestDelete,
+      copyRef,
     }),
     [
       back,
@@ -852,8 +1007,13 @@ function BookRecordPageBody(): React.JSX.Element {
       createMarkMutate,
       deleteMarkMutate,
       onPdfReady,
+      requestDelete,
+      copyRef,
     ],
   )
+
+  // Banners yield the screen to the document in focus mode (desktop only).
+  const hideBanners = chrome.focus && !isMobile
 
   if (!Number.isFinite(bookId) || (error instanceof ApiError && error.status === 404)) {
     return <NotFoundPage />
@@ -911,9 +1071,27 @@ function BookRecordPageBody(): React.JSX.Element {
         title={t('books.pane.unfileSignedTitle')}
         description={t('books.pane.unfileSignedBody')}
         confirmLabel={t('books.pane.unfileSignedConfirm')}
+        destructive
         onConfirm={() => {
           setUnfileOpen(false)
           void manage.deletePaper(SIGNED_PAPER)
+        }}
+      />
+
+      {/* Delete record / draft: confirm, then hide at once and commit after 6 s
+          (Undo in the toast) while the reader returns to the list. */}
+      <ConfirmDialog
+        open={deleteOpen && deleteBlocked === null && book !== undefined}
+        onOpenChange={setDeleteOpen}
+        title={t('books.record.deleteTitle', { ref: bidi(book?.ref_number ?? '') })}
+        description={t('books.record.deleteBody')}
+        confirmLabel={state === 'none' ? t('books.record.deleteDraft') : t('books.record.delete')}
+        destructive
+        onConfirm={() => {
+          if (!book || deleteBlocked !== null) return
+          setDeleteOpen(false)
+          scheduleDelete([{ id: book.id, ref: book.ref_number }])
+          back()
         }}
       />
 
@@ -945,11 +1123,16 @@ function BookRecordPageBody(): React.JSX.Element {
       />
 
       {/* Post-sign "what's next" — only after a sign succeeds THIS session. */}
-      {state === 'approved' && nextWaiting !== undefined && (
+      {state === 'approved' && nextWaiting !== undefined && !hideBanners && (
         <div
-          className="border-b border-hairline bg-success-soft/40 px-5 py-2.5 text-[0.8em]"
+          role="status"
+          className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-hairline bg-success-soft/40 px-4 py-2.5 text-[0.8em] sm:px-5"
           data-print-hide
         >
+          <span className="flex min-w-0 flex-1 items-center gap-2 font-semibold text-success">
+            <Check className="h-4 w-4 shrink-0" strokeWidth={2.4} aria-hidden />
+            {t('books.approval.signed')}
+          </span>
           {nextWaiting ? (
             <button
               type="button"
@@ -964,9 +1147,10 @@ function BookRecordPageBody(): React.JSX.Element {
                     : `/books/${nextWaiting.bookId}`,
                 )
               }
-              className="font-semibold text-success underline-offset-2 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              className="inline-flex min-h-11 items-center gap-1.5 rounded-lg bg-primary px-3.5 text-[0.95em] font-semibold text-primary-foreground transition-colors hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none md:min-h-9"
             >
-              {t('books.approval.reviewNextWaiting')} — <bdi dir="ltr">{nextWaiting.refNumber}</bdi>
+              {t('books.record.reviewNext', { ref: bidi(nextWaiting.refNumber) })}
+              <ChevronRight className="h-4 w-4 rtl:-scale-x-100" strokeWidth={2.2} aria-hidden />
             </button>
           ) : (
             <span className="text-muted-foreground">{t('books.approval.noSignaturesWaiting')}</span>
@@ -975,7 +1159,7 @@ function BookRecordPageBody(): React.JSX.Element {
       )}
 
       {/* override banner: approver sees that reviewers requested changes */}
-      {action === 'decide' && changesRequestedCount(currentSteps) > 0 && (
+      {action === 'decide' && !hideBanners && changesRequestedCount(currentSteps) > 0 && (
         <div
           className="border-b border-warning/30 bg-warning/10 px-5 py-2.5 text-[0.78em] text-warning"
           data-testid="override-banner"

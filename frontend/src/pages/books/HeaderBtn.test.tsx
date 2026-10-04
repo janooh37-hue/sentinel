@@ -5,11 +5,11 @@ import { describe, expect, it, vi } from 'vitest'
 import { HeaderBtn } from './HeaderBtn'
 
 describe('HeaderBtn', () => {
-  it('renders icon-only controls with an accessible tooltip label', () => {
+  it('renders icon-only controls with an accessible name and no title attribute', () => {
     render(<HeaderBtn icon={<Printer aria-hidden="true" />} label="Print" iconOnly />)
 
     const button = screen.getByRole('button', { name: 'Print' })
-    expect(button).toHaveAttribute('title', 'Print')
+    expect(button).not.toHaveAttribute('title')
     expect(button).not.toHaveTextContent('Print')
   })
 

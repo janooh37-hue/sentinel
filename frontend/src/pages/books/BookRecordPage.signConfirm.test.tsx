@@ -18,6 +18,7 @@ import type * as ApiModule from '@/lib/api'
 import type * as AuthContextModule from '@/lib/authContext'
 import { api, ApiError } from '@/lib/api'
 import { BookRecordPage } from './BookRecordPage'
+import { RecordDeleteProvider } from './RecordDeleteProvider'
 
 const mockHas = vi.fn<(cap: string) => boolean>(() => false)
 
@@ -83,9 +84,11 @@ function renderOverlayRecord(initialEntry: string): void {
     <QueryClientProvider client={makeQc()}>
       <MemoryRouter initialEntries={[initialEntry]}>
         <LocationProbe />
-        <Routes>
-          <Route path="/books/:id" element={<BookRecordPage />} />
-        </Routes>
+        <RecordDeleteProvider>
+          <Routes>
+            <Route path="/books/:id" element={<BookRecordPage />} />
+          </Routes>
+        </RecordDeleteProvider>
       </MemoryRouter>
     </QueryClientProvider>,
   )
@@ -138,9 +141,11 @@ function renderRecord(qc: QueryClient): void {
   render(
     <QueryClientProvider client={qc}>
       <MemoryRouter initialEntries={['/books/48']}>
-        <Routes>
-          <Route path="/books/:id" element={<BookRecordPage />} />
-        </Routes>
+        <RecordDeleteProvider>
+          <Routes>
+            <Route path="/books/:id" element={<BookRecordPage />} />
+          </Routes>
+        </RecordDeleteProvider>
       </MemoryRouter>
     </QueryClientProvider>,
   )
@@ -330,10 +335,10 @@ describe('BookRecordPage — URL-backed actions', () => {
   it('pushes submit into history and Back closes it without leaving the record', async () => {
     renderOverlayRecord('/books/5')
 
-    await userEvent.click(await screen.findByRole('button', { name: 'Send for approval' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'Change approver…' }))
     expect(screen.getByTestId('location')).toHaveTextContent('/books/5?action=submit')
     // The modal hides the rest of the page; the probe stands in for browser Back.
-    fireEvent.click(screen.getByRole('button', { name: 'Back', hidden: true }))
+    fireEvent.click(screen.getByText('Back', { selector: 'button' }))
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
     expect(screen.getByTestId('location')).toHaveTextContent(/^\/books\/5$/)
   })

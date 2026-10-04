@@ -15,6 +15,7 @@ import type * as ApiModule from '@/lib/api'
 import type * as AuthContextModule from '@/lib/authContext'
 import { api } from '@/lib/api'
 import { BookRecordPage } from './BookRecordPage'
+import { RecordDeleteProvider } from './RecordDeleteProvider'
 
 const mockHas = vi.fn<(cap: string) => boolean>(() => false)
 
@@ -87,9 +88,11 @@ function renderRecord(): void {
   render(
     <QueryClientProvider client={qc}>
       <MemoryRouter initialEntries={['/books/48']}>
-        <Routes>
-          <Route path="/books/:id" element={<BookRecordPage />} />
-        </Routes>
+        <RecordDeleteProvider>
+          <Routes>
+            <Route path="/books/:id" element={<BookRecordPage />} />
+          </Routes>
+        </RecordDeleteProvider>
       </MemoryRouter>
     </QueryClientProvider>,
   )
