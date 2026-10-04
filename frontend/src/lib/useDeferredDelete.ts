@@ -11,30 +11,30 @@ export interface PendingDelete {
   id: number
 }
 
-export interface NotifyArgs {
-  pending: PendingDelete
+export interface NotifyArgs<T extends PendingDelete = PendingDelete> {
+  pending: T
   onUndo: () => void
 }
 
-interface UseDeferredDeleteOpts {
-  onCommit: (p: PendingDelete) => Promise<void> | void
+interface UseDeferredDeleteOpts<T extends PendingDelete> {
+  onCommit: (p: T) => Promise<void> | void
   /** Show the undo toast; wire its Undo action to `onUndo`. */
-  notify: (args: NotifyArgs) => void
+  notify: (args: NotifyArgs<T>) => void
   delayMs?: number
 }
 
-export function useDeferredDelete({
+export function useDeferredDelete<T extends PendingDelete = PendingDelete>({
   onCommit,
   notify,
   delayMs = 6000,
-}: UseDeferredDeleteOpts): {
+}: UseDeferredDeleteOpts<T>): {
   pendingIds: Set<number>
-  scheduleDelete: (p: PendingDelete) => void
+  scheduleDelete: (p: T) => void
   flushAll: () => void
 } {
   const [pendingIds, setPendingIds] = useState<Set<number>>(new Set())
   const timers = useRef(
-    new Map<number, { timer: ReturnType<typeof setTimeout>; pending: PendingDelete }>(),
+    new Map<number, { timer: ReturnType<typeof setTimeout>; pending: T }>(),
   )
 
   // Keep the latest onCommit in a ref so commit/flushAll stay identity-stable.
@@ -56,7 +56,7 @@ export function useDeferredDelete({
   }, [])
 
   const commit = useCallback(
-    (p: PendingDelete) => {
+    (p: T) => {
       const rec = timers.current.get(p.id)
       if (rec) clearTimeout(rec.timer)
       timers.current.delete(p.id)
@@ -77,8 +77,11 @@ export function useDeferredDelete({
   )
 
   const scheduleDelete = useCallback(
-    (pending: PendingDelete) => {
+    (pending: T) => {
       setPendingIds((prev) => new Set(prev).add(pending.id))
+      // Re-scheduling an id that is already pending re-arms its timer.
+      const existing = timers.current.get(pending.id)
+      if (existing) clearTimeout(existing.timer)
       const timer = setTimeout(() => commit(pending), delayMs)
       timers.current.set(pending.id, { timer, pending })
       notify({ pending, onUndo: () => undo(pending.id) })

@@ -52,7 +52,7 @@ import { ReviewSuggestionsSheet } from './ReviewSuggestionsSheet'
 import { CreateSmartFolderDialog } from './CreateSmartFolderDialog'
 import type { SmartFolder, SmartFolderSuggestion } from '@/lib/api'
 import { toast } from 'sonner'
-import { useDeferredDelete, type PendingDelete } from './useDeferredDelete'
+import { useDeferredDelete, type PendingDelete } from '@/lib/useDeferredDelete'
 import {
   DEFAULT_MAILBOX_VIEW,
   type MailboxView,

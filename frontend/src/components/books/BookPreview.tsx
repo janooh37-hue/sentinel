@@ -13,15 +13,16 @@
 import { Suspense, lazy, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import * as Dialog from '@radix-ui/react-dialog'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { ExternalLink, Loader2, PencilLine, Send, Trash2, X } from 'lucide-react'
-import { toast } from 'sonner'
 
 import { api } from '@/lib/api'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { useAuth } from '@/lib/authContext'
 import { inmateReporterActionFor } from './book-detail-drawer-utils'
+import { deleteBlockReason } from '@/pages/books/recordDelete'
+import { useRecordDelete } from '@/pages/books/RecordDeleteProvider'
 import { cn } from '@/lib/utils'
 import { serviceHref } from '@/lib/quickActions'
 
@@ -44,7 +45,7 @@ export function BookPreview({ bookId, onClose, onSubmitForApproval }: Props): Re
   // from edit/discard: the draft preview's primary action keys off this alone.
   const canSubmitBook = has('books.submit')
   const navigate = useNavigate()
-  const qc = useQueryClient()
+  const { scheduleDelete } = useRecordDelete()
   const [confirming, setConfirming] = useState<{ bookId: number | null; value: boolean }>({ bookId, value: false })
   const isConfirming = confirming.bookId === bookId && confirming.value
 
@@ -54,21 +55,17 @@ export function BookPreview({ bookId, onClose, onSubmitForApproval }: Props): Re
     enabled: bookId !== null,
   })
 
-  const discardMutation = useMutation({
-    mutationFn: () => api.deleteBook(book!.id),
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ['books'] })
-      void qc.invalidateQueries({ queryKey: ['dashboard'] })
-      toast.success(t('books.toast.deleted'))
-      onClose()
-    },
-    onError: (err) => toast.error(err instanceof Error ? err.message : String(err)),
-  })
+  // Discard goes through the shared deferred-delete service (6 s Undo toast).
+  const discard = (): void => {
+    if (!book) return
+    scheduleDelete([{ id: book.id, ref: book.ref_number ?? `#${book.id}` }])
+    onClose()
+  }
 
   const versions = book?.versions ?? []
   const current = versions.length > 0 ? versions[versions.length - 1] : undefined
   const reporterAction = book ? inmateReporterActionFor(book, user?.id) : 'read-only'
-  const canDiscard = !isInmateReporter && canEdit
+  const canDiscard = book ? deleteBlockReason(book, { has, isInmateReporter }) === null : false
   const canContinue = isInmateReporter ? reporterAction === 'edit-submit' : canEdit
   const canSubmitCurrent = isInmateReporter ? reporterAction === 'edit-submit' : canSubmitBook
   const pdfUrl = current?.document_id
@@ -172,7 +169,7 @@ export function BookPreview({ bookId, onClose, onSubmitForApproval }: Props): Re
                       className="inline-flex h-9 items-center rounded-lg border border-hairline px-3 text-[0.82em] font-medium text-muted-foreground transition-colors hover:bg-surface-tinted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
                       {t('common.cancel')}
                     </button>
-                    <button type="button" disabled={discardMutation.isPending} onClick={() => discardMutation.mutate()}
+                    <button type="button" onClick={discard}
                       className="inline-flex h-9 items-center gap-1.5 rounded-lg bg-destructive px-4 text-[0.82em] font-semibold text-white transition-opacity hover:opacity-90 disabled:opacity-40">
                       <Trash2 className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
                       {t('books.preview.discard')}

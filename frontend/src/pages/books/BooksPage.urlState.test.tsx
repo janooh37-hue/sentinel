@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { useLocation, MemoryRouter, Route, Routes, useNavigate } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 import { BooksPage } from './BooksPage'
+import { RecordDeleteProvider } from './RecordDeleteProvider'
 
 vi.mock('@/lib/api', () => ({
   api: {
@@ -34,7 +35,7 @@ function LocationProbe() {
 
 function setup() {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
-  return render(<QueryClientProvider client={client}><MemoryRouter initialEntries={['/elsewhere', '/books?status=pending&q=abc&open=42']} initialIndex={1}><LocationProbe /><Routes><Route path="/books" element={<BooksPage />} /></Routes></MemoryRouter></QueryClientProvider>)
+  return render(<QueryClientProvider client={client}><MemoryRouter initialEntries={['/elsewhere', '/books?status=pending&q=abc&open=42']} initialIndex={1}><LocationProbe /><RecordDeleteProvider><Routes><Route path="/books" element={<BooksPage />} /></Routes></RecordDeleteProvider></MemoryRouter></QueryClientProvider>)
 }
 
 describe('Books URL state', () => {

@@ -3,7 +3,7 @@
  * (separate from the provider) so the .tsx file only exports a component.
  */
 
-import { useContext, useEffect } from 'react'
+import { useContext, useEffect, useRef } from 'react'
 
 import {
   ShortcutsContext,
@@ -14,14 +14,26 @@ import {
 
 /**
  * Register a handler for a named shortcut action while the calling component
- * is mounted. Re-registers when `handler` changes.
+ * is mounted.
+ *
+ * The latest `handler` is kept in a ref and a stable trampoline is registered
+ * once per `(register, action)`, so re-renders (inline closures) never
+ * reorder the handler stack. A `null` handler declines (falls through to the
+ * next handler), exactly like returning `false`.
  */
 export function useShortcutAction(action: ShortcutAction, handler: Handler | null): void {
   const ctx = useContext(ShortcutsContext)
+  // `register` is stable for the provider's lifetime; `ctx` itself changes
+  // whenever the help sheet toggles and must not re-register anything.
+  const register = ctx?.register
+  const handlerRef = useRef(handler)
   useEffect(() => {
-    if (!ctx || !handler) return
-    return ctx.register(action, handler)
-  }, [ctx, action, handler])
+    handlerRef.current = handler
+  })
+  useEffect(() => {
+    if (!register) return
+    return register(action, () => (handlerRef.current ? handlerRef.current() : false))
+  }, [register, action])
 }
 
 export function useShortcutsContext(): ShortcutsContextValue {

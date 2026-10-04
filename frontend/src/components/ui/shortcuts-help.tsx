@@ -10,7 +10,8 @@ import { useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
 
 import { Button } from '@/components/ui/button'
-import { SHORTCUTS } from '@/lib/shortcutsContext'
+import { Kbd } from '@/components/ui/kbd'
+import { RECORD_SHORTCUTS, SHORTCUTS } from '@/lib/shortcutsContext'
 import { useShortcutsContext } from '@/lib/useKeyboardShortcuts'
 
 function comboLabel(combo: { ctrl?: true; key: string }, isMac: boolean): string {
@@ -56,7 +57,7 @@ export function ShortcutsHelpDialog(): React.JSX.Element | null {
         onClick={() => setHelpOpen(false)}
         aria-hidden="true"
       />
-      <div className="relative z-10 w-[420px] max-w-[92vw] rounded-lg border border-border bg-background p-5 shadow-xl">
+      <div className="relative z-10 max-h-[90dvh] w-[420px] max-w-[92vw] overflow-y-auto rounded-lg border border-border bg-background p-5 shadow-xl">
         <h3 className="mb-1 text-base font-semibold text-foreground">
           {t('shortcuts.title')}
         </h3>
@@ -72,6 +73,25 @@ export function ShortcutsHelpDialog(): React.JSX.Element | null {
               <kbd className="rounded border border-border bg-background px-2 py-0.5 font-mono text-xs text-foreground shadow-sm">
                 {comboLabel(s.combo, isMac)}
               </kbd>
+            </li>
+          ))}
+        </ul>
+
+        <h4 className="mb-1.5 mt-4 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+          {t('shortcuts.records.group')}
+        </h4>
+        <ul className="flex flex-col gap-1.5">
+          {RECORD_SHORTCUTS.map((s) => (
+            <li
+              key={s.action}
+              className="flex items-center justify-between gap-3 rounded-md border border-border bg-surface px-3 py-2"
+            >
+              <span className="text-xs text-foreground">{t(s.labelKey)}</span>
+              <span className="flex items-center gap-1">
+                {s.keys.map((k) => (
+                  <Kbd key={k}>{k === 'Ctrl' && isMac ? '⌘' : k}</Kbd>
+                ))}
+              </span>
             </li>
           ))}
         </ul>
