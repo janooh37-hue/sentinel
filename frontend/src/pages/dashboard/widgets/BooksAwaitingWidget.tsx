@@ -135,7 +135,7 @@ export function BooksAwaitingWidget(): React.JSX.Element | null {
 
   const context: ApprovalContext | null =
     primaryKind != null
-      ? { tab: 'received', kind: primaryKind, status: 'pending', sort: 'oldest', page: 1 }
+      ? { tab: 'received', kind: primaryKind, status: 'pending', sort: 'newest', page: 1 }
       : null
 
   const previewQuery = useQuery({
@@ -145,7 +145,7 @@ export function BooksAwaitingWidget(): React.JSX.Element | null {
         scope: 'received',
         kind: apiKindOf(context!.kind),
         status: 'pending',
-        sort: 'oldest',
+        sort: 'newest',
         limit: PREVIEW_LIMIT,
       }),
     enabled: context != null,

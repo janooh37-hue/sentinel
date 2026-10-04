@@ -45,7 +45,11 @@ export function WordSessionActions({
   book,
   isMobile,
   onFinished,
-}: WordActionProps): React.JSX.Element | null {
+}: WordActionProps & {
+  /** Hosts pass this to state intent: the finish/discard controls are always
+   *  rendered with visible text labels (the icon-only form was removed). */
+  labelled?: boolean
+}): React.JSX.Element | null {
   const { t } = useTranslation()
   const qc = useQueryClient()
   const [discardOpen, setDiscardOpen] = useState(false)
@@ -65,7 +69,7 @@ export function WordSessionActions({
     mutationFn: () => api.discardWordSession(book.id),
     onSuccess: () => {
       invalidate()
-      toast.success(t('books.toast.deleted'))
+      toast.success(t('books.toast.voided'))
     },
     onError: (err) => toast.error(apiErrorMessage(err)),
   })
@@ -96,22 +100,20 @@ export function WordSessionActions({
         type="button"
         disabled={busy}
         onClick={() => finishMutation.mutate()}
-        className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-transparent bg-primary p-0 text-[0.82em] font-semibold text-primary-foreground transition-colors hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
-        aria-label={t('books.word.finish')}
-        title={t('books.word.finish')}
+        className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-lg border border-transparent bg-primary px-3 py-1.5 text-[0.82em] font-semibold text-primary-foreground transition-colors hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 motion-reduce:transition-none md:min-h-9"
       >
-        <Check className="h-3.5 w-3.5" />
+        <Check className="h-3.5 w-3.5" aria-hidden />
+        {t('books.word.finish')}
       </button>
 
       <button
         type="button"
         disabled={busy}
         onClick={() => setDiscardOpen(true)}
-        className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-accent/40 p-0 text-[0.82em] font-semibold text-accent transition-colors hover:bg-accent/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
-        aria-label={t('books.word.discard')}
-        title={t('books.word.discard')}
+        className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-lg border border-destructive/50 bg-transparent px-3 py-1.5 text-[0.82em] font-semibold text-destructive transition-colors hover:bg-destructive/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 motion-reduce:transition-none md:min-h-9"
       >
-        <Trash2 className="h-3.5 w-3.5" />
+        <Trash2 className="h-3.5 w-3.5" aria-hidden />
+        {t('books.word.discard')}
       </button>
 
       <ConfirmDialog

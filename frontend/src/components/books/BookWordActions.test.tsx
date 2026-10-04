@@ -10,6 +10,7 @@ import { createElement, type ReactNode } from 'react'
 import i18n from 'i18next'
 import { initReactI18next } from 'react-i18next'
 
+import { toast } from 'sonner'
 import { WordReopenButton, WordSessionActions } from './BookWordActions'
 import { BookStatusChips } from './BookStatusChips'
 import * as apiMod from '@/lib/api'
@@ -22,8 +23,9 @@ void i18n.use(initReactI18next).init({
     ar: {
       translation: {
         'books.word.finish': 'إنهاء التحرير',
-        'books.word.discard': 'تجاهل',
+        'books.word.discard': 'تجاهل المسودة…',
         'books.word.discardConfirm': 'سيصبح الكتاب ملغياً ويبقى رقمه محفوظاً في السجل. متابعة؟',
+        'books.toast.voided': 'أُلغيت المسودة — السجل ملغى',
         'books.word.draft': 'مسودة — رقم محجوز',
         'books.word.editing': 'قيد التحرير',
         'books.word.editingBy': 'قيد التحرير في Word — {{name}}',
@@ -155,17 +157,19 @@ describe('Word action components', () => {
     vi.restoreAllMocks()
   })
 
-  it('(a) renders labelled icon-only Finish and Discard actions in Arabic', () => {
+  it('(a) renders labelled Finish (solid) and Discard (red outline) buttons with visible text in Arabic', () => {
     render(
-      createElement(WordSessionActions, { book: ACTIVE_SESSION_BOOK }),
+      createElement(WordSessionActions, { book: ACTIVE_SESSION_BOOK, labelled: true }),
       { wrapper: wrapper(makeQc()) },
     )
     const finish = screen.getByRole('button', { name: 'إنهاء التحرير' })
-    const discard = screen.getByRole('button', { name: 'تجاهل' })
-    expect(finish).toHaveAttribute('title', 'إنهاء التحرير')
-    expect(discard).toHaveAttribute('title', 'تجاهل')
-    expect(finish).not.toHaveTextContent('إنهاء التحرير')
-    expect(discard).not.toHaveTextContent('تجاهل')
+    const discard = screen.getByRole('button', { name: 'تجاهل المسودة…' })
+    expect(finish).toHaveTextContent('إنهاء التحرير')
+    expect(discard).toHaveTextContent('تجاهل المسودة…')
+    expect(finish).not.toHaveAttribute('title')
+    expect(discard).not.toHaveAttribute('title')
+    expect(finish.className).toContain('bg-primary')
+    expect(discard.className).toContain('border-destructive')
   })
 
   it('(b) on mobile: shows disabled "فتح في Word" with the PC hint', () => {
@@ -204,28 +208,41 @@ describe('Word action components', () => {
     })
   })
 
-  it('(e) discard: click تجاهل → confirm → calls api.discardWordSession and invalidates [books]', async () => {
+  it('(e) discard: click تجاهل → confirm → calls api.discardWordSession, toasts voided, invalidates [books]', async () => {
     const qc = makeQc()
     const spy = vi.spyOn(qc, 'invalidateQueries')
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     vi.spyOn(apiMod.api, 'discardWordSession').mockResolvedValue({} as any)
 
     render(
-      createElement(WordSessionActions, { book: ACTIVE_SESSION_BOOK }),
+      createElement(WordSessionActions, { book: ACTIVE_SESSION_BOOK, labelled: true }),
       { wrapper: wrapper(qc) },
     )
-    // Open the discard confirm dialog
-    await userEvent.click(screen.getByRole('button', { name: /تجاهل/ }))
-    // Wait for dialog to open, then get all buttons with the label (trigger + dialog confirm)
-    await screen.findByRole('button', { name: /تجاهل/ })
-    const confirmBtns = screen.getAllByRole('button', { name: /تجاهل/ })
-    // The dialog confirm button is the last one (dialog is appended to body)
+    // Nothing is sent until the confirm dialog is accepted.
+    await userEvent.click(screen.getByRole('button', { name: 'تجاهل المسودة…' }))
+    expect(apiMod.api.discardWordSession).not.toHaveBeenCalled()
+    expect(await screen.findByRole('dialog')).toHaveTextContent(/سيصبح الكتاب ملغياً/)
+    // The dialog confirm is appended last (trigger + dialog both carry the label).
+    const confirmBtns = screen.getAllByRole('button', { name: /تجاهل المسودة/ })
     await userEvent.click(confirmBtns[confirmBtns.length - 1])
     await waitFor(() => expect(apiMod.api.discardWordSession).toHaveBeenCalledWith(1))
+    await waitFor(() => expect(toast.success).toHaveBeenCalledWith('أُلغيت المسودة — السجل ملغى'))
     await waitFor(() => {
       const keys = spy.mock.calls.map((c) => JSON.stringify(c[0]?.queryKey))
       expect(keys.some((k) => k.includes('books'))).toBe(true)
     })
+  })
+
+  it('(e2) cancelling the discard confirm sends nothing', async () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    vi.spyOn(apiMod.api, 'discardWordSession').mockResolvedValue({} as any)
+    render(
+      createElement(WordSessionActions, { book: ACTIVE_SESSION_BOOK, labelled: true }),
+      { wrapper: wrapper(makeQc()) },
+    )
+    await userEvent.click(screen.getByRole('button', { name: 'تجاهل المسودة…' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'إلغاء' }))
+    expect(apiMod.api.discardWordSession).not.toHaveBeenCalled()
   })
 
   it('(f) finished book renders Arabic "تعديل في Word (ينشئ إصداراً جديداً)" button', () => {

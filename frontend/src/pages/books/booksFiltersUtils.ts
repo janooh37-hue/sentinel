@@ -3,7 +3,7 @@ import type { BookRead } from '@/lib/api'
 export interface BooksFilters {
   categoryIds: string[]
   direction: 'all' | 'incoming' | 'outgoing'
-  status: 'all' | 'none' | 'pending' | 'approved' | 'returned' | 'rejected'
+  status: 'all' | 'none' | 'pending' | 'awaiting_scan' | 'approved' | 'returned' | 'rejected'
   fromDate: string
   toDate: string
   q: string

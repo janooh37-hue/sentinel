@@ -6,7 +6,7 @@
  */
 
 import { useEffect, useEffectEvent, useRef, useState } from 'react'
-import { ChevronDown, X } from 'lucide-react'
+import { ChevronDown, UserRound, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import type { BookCategoryRead, ServiceFacetRead } from '@/lib/api'
@@ -18,6 +18,8 @@ import { serviceArtwork, serviceGlyph, useServiceLabel } from './serviceLabels'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { hasServiceRecordsCap } from '@/lib/dashboardLayout'
 import { DEFAULT_BOOKS_FILTERS, hasActiveFilters, type BooksFilters } from './booksFiltersUtils'
+import { useMyRecordsCount } from './useMyRecordsCount'
+import { useAuth } from '@/lib/authContext'
 
 interface BooksFilterBarProps {
   filters: BooksFilters
@@ -36,6 +38,9 @@ export function BooksFilterBar({
   const isAr = i18n.language.startsWith('ar')
   const serviceLabel = useServiceLabel()
   const { has } = useCapabilities()
+  const { user } = useAuth()
+  const isInmateReporter = user?.role === 'inmate_reporter'
+  const { count: myCount } = useMyRecordsCount({ enabled: !isInmateReporter })
   const visibleServices = services.filter((service) => hasServiceRecordsCap(service.id, has))
   const selectedServiceAllowed =
     filters.serviceId === 'all' || hasServiceRecordsCap(filters.serviceId, has)
@@ -346,6 +351,9 @@ export function BooksFilterBar({
             ['all', t('books.filters.statusAll')],
             ['none', t('books.approval.stateDraft')],
             ['pending', t('books.approval.statePending')],
+            ...(isInmateReporter
+              ? []
+              : ([['awaiting_scan', t('books.approval.stateAwaitingScan')]] as const)),
             ['approved', t('books.approval.stateApproved')],
             ['returned', t('books.approval.stateReturned')],
             ['rejected', t('books.approval.stateRejected')],
@@ -381,27 +389,58 @@ export function BooksFilterBar({
           {t('books.filters.drafts')}
         </button>
 
+        {/* "Created by me" — hidden for inmate reporters (they only ever see their own) */}
+        {!isInmateReporter && (
+          <button
+            type="button"
+            data-testid="mine-filter"
+            aria-pressed={filters.mine}
+            onClick={() => onChange({ ...filters, mine: !filters.mine })}
+            className={cn(
+              'inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1 text-[0.78em] transition-colors motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background max-md:min-h-[36px] max-md:py-1.5',
+              filters.mine
+                ? 'bg-primary-soft font-semibold text-primary'
+                : 'bg-surface-tinted text-muted-foreground hover:bg-border hover:text-foreground',
+            )}
+          >
+            <UserRound className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
+            {t('books.list.createdByMe')}
+            {myCount !== null ? (
+              <bdi
+                dir="ltr"
+                className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-surface px-1 text-[0.85em] font-bold tabular-nums"
+              >
+                {myCount}
+              </bdi>
+            ) : null}
+          </button>
+        )}
+
         <div className="hidden h-5 w-px shrink-0 bg-hairline md:block" />
 
-        {/* Date range */}
+        {/* Date range — visible From / To labels (a bare date input says nothing) */}
         <div className="flex shrink-0 items-center gap-2">
-          <input
-            type="date"
-            value={filters.fromDate}
-            onChange={(e) => onChange({ ...filters, fromDate: e.target.value })}
-            aria-label={t('books.filters.dateFrom')}
-            className="h-8 rounded-full border border-hairline bg-surface px-3 font-mono text-[0.78em] text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-            data-testid="date-from"
-          />
-          <span className="text-xs text-muted-foreground">—</span>
-          <input
-            type="date"
-            value={filters.toDate}
-            onChange={(e) => onChange({ ...filters, toDate: e.target.value })}
-            aria-label={t('books.filters.dateTo')}
-            className="h-8 rounded-full border border-hairline bg-surface px-3 font-mono text-[0.78em] text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-            data-testid="date-to"
-          />
+          <label className="flex items-center gap-1.5 text-[0.78em] text-muted-foreground">
+            <span>{t('books.filters.dateFrom')}</span>
+            <input
+              type="date"
+              value={filters.fromDate}
+              onChange={(e) => onChange({ ...filters, fromDate: e.target.value })}
+              className="h-8 rounded-full border border-hairline bg-surface px-3 font-mono text-[0.95em] text-foreground focus:outline-none focus:ring-2 focus:ring-ring max-md:min-h-[36px]"
+              data-testid="date-from"
+            />
+          </label>
+          <span className="text-xs text-muted-foreground" aria-hidden="true">—</span>
+          <label className="flex items-center gap-1.5 text-[0.78em] text-muted-foreground">
+            <span>{t('books.filters.dateTo')}</span>
+            <input
+              type="date"
+              value={filters.toDate}
+              onChange={(e) => onChange({ ...filters, toDate: e.target.value })}
+              className="h-8 rounded-full border border-hairline bg-surface px-3 font-mono text-[0.95em] text-foreground focus:outline-none focus:ring-2 focus:ring-ring max-md:min-h-[36px]"
+              data-testid="date-to"
+            />
+          </label>
         </div>
 
         <div className="hidden h-5 w-px shrink-0 bg-hairline md:block" />

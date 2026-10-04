@@ -45,6 +45,7 @@ import { useApprovalSummary } from '@/lib/useApprovalSummary'
 import { useAuth } from '@/lib/authContext'
 import { cn } from '@/lib/utils'
 import { ApprovalPreviewDialog, StatusChip } from './ApprovalPreviewDialog'
+import type { RecordNavState } from './useRecordNavContext'
 
 const ScanPdfCanvas = lazy(() => import('@/pages/scanInbox/ScanPdfCanvas'))
 
@@ -315,13 +316,22 @@ export function ApprovalsPage(): React.JSX.Element {
 
   function openRow(item: ApprovalLogItem): void {
     if (!context) return
+    const scrollY = listRef.current?.scrollTop ?? 0
     // Stash scroll + focus on THIS history entry before navigating away, so
     // browser-back restores them.
     navigate(location.pathname + location.search, {
       replace: true,
-      state: { scrollY: listRef.current?.scrollTop ?? 0, focusBookId: item.book_id },
+      state: { scrollY, focusBookId: item.book_id },
     })
-    navigate(approvalRecordUrl(item.book_id, item.version_id, context))
+    // The record page keeps its approval-queue URL context (version + tab/kind/
+    // status/sort/page) and gets the list it came from, so Back returns here
+    // focused on this row (the restore effect above reads the same state shape).
+    const nav: RecordNavState = {
+      from: location.pathname + location.search,
+      queue: rows.map((row) => row.book_id),
+      scrollY,
+    }
+    navigate(approvalRecordUrl(item.book_id, item.version_id, context), { state: nav })
   }
 
   if (summaryQuery.isPending) {

@@ -13,7 +13,7 @@ import type { ApprovalContext } from '@/lib/approvals'
 import type { ApprovalLogItem, ApprovalLogNeighborsResponse } from '@/lib/api'
 import * as apiMod from '@/lib/api'
 
-const CONTEXT: ApprovalContext = { tab: 'received', kind: 'sign', status: 'pending', sort: 'oldest', page: 1 }
+const CONTEXT: ApprovalContext = { tab: 'received', kind: 'sign', status: 'pending', sort: 'newest', page: 1 }
 
 function wrapper({ children }: { children: ReactNode }) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
@@ -61,7 +61,7 @@ describe('useAwaitingQueue', () => {
     expect(result.current.nextId).toBe(30)
     expect(result.current.nextVersionId).toBe(301)
     expect(apiMod.api.approvalLogNeighbors).toHaveBeenCalledWith(20, {
-      scope: 'received', kind: 'approver', status: 'pending', sort: 'oldest', version_id: 201,
+      scope: 'received', kind: 'approver', status: 'pending', sort: 'newest', version_id: 201,
     })
   })
 

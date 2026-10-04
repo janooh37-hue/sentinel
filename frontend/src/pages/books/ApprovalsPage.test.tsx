@@ -109,7 +109,12 @@ function row(overrides: Partial<ApprovalLogItem>): ApprovalLogItem {
 
 function LocationProbe(): React.JSX.Element {
   const loc = useLocation()
-  return <span data-testid="location">{`${loc.pathname}${loc.search}`}</span>
+  return (
+    <>
+      <span data-testid="location">{`${loc.pathname}${loc.search}`}</span>
+      <span data-testid="location-state">{JSON.stringify(loc.state)}</span>
+    </>
+  )
 }
 
 function renderPage(initialEntry = '/books/approvals') {
@@ -146,14 +151,14 @@ describe('ApprovalsPage generic landing + URL canonicalization', () => {
         scope: 'received',
         kind: 'approver',
         status: 'pending',
-        sort: 'oldest',
+        sort: 'newest',
         limit: 100,
         offset: 0,
       }),
     )
     await waitFor(() =>
       expect(screen.getByTestId('location')).toHaveTextContent(
-        '/books/approvals?tab=received&kind=sign&status=pending&sort=oldest&page=1',
+        '/books/approvals?tab=received&kind=sign&status=pending&sort=newest&page=1',
       ),
     )
   })
@@ -172,7 +177,7 @@ describe('ApprovalsPage generic landing + URL canonicalization', () => {
         scope: 'received',
         kind: 'reviewer',
         status: 'pending',
-        sort: 'oldest',
+        sort: 'newest',
         limit: 100,
         offset: 0,
       }),
@@ -193,7 +198,7 @@ describe('ApprovalsPage generic landing + URL canonicalization', () => {
         scope: 'sent',
         kind: undefined,
         status: 'pending',
-        sort: 'oldest',
+        sort: 'newest',
         limit: 100,
         offset: 0,
       }),
@@ -238,7 +243,7 @@ describe('ApprovalsPage generic landing + URL canonicalization', () => {
     )
     await waitFor(() =>
       expect(screen.getByTestId('location')).toHaveTextContent(
-        '/books/approvals?tab=received&kind=review&status=all&sort=oldest&page=1',
+        '/books/approvals?tab=received&kind=review&status=all&sort=newest&page=1',
       ),
     )
   })
@@ -294,14 +299,14 @@ describe('ApprovalsPage sub-tabs and filters', () => {
     expect(screen.getByTestId('approvals-filter-all')).toBeInTheDocument()
   })
 
-  it('sort toggle flips oldest/newest and resets to page 1', async () => {
+  it('sort toggle flips newest/oldest and resets to page 1', async () => {
     vi.mocked(api.getApprovalSummary).mockResolvedValue(summary())
     renderPage()
     await screen.findByTestId('approvals-sort-toggle')
     await userEvent.click(screen.getByTestId('approvals-sort-toggle'))
     await waitFor(() =>
       expect(api.listApprovalLog).toHaveBeenLastCalledWith(
-        expect.objectContaining({ scope: 'received', sort: 'newest' }),
+        expect.objectContaining({ scope: 'received', sort: 'oldest' }),
       ),
     )
   })
@@ -386,10 +391,16 @@ describe('ApprovalsPage rows', () => {
     await userEvent.click(await screen.findByText('HR-0002'))
     await waitFor(() =>
       expect(screen.getByTestId('location')).toHaveTextContent(
-        '/books/2?version_id=5&tab=received&kind=sign&status=pending&sort=oldest&page=1',
+        '/books/2?version_id=5&tab=received&kind=sign&status=pending&sort=newest&page=1',
       ),
     )
     expect(screen.getByTestId('record-page')).toBeInTheDocument()
+    // The record gets the list it came from + queue so Back returns focused on the row.
+    expect(JSON.parse(screen.getByTestId('location-state').textContent ?? 'null')).toEqual({
+      from: '/books/approvals?tab=received&kind=sign&status=pending&sort=newest&page=1',
+      queue: [2],
+      scrollY: 0,
+    })
   })
 
   it('opens a document preview from the thumbnail without navigating, then opens the full record', async () => {

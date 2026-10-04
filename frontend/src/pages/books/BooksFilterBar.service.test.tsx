@@ -44,6 +44,9 @@ vi.mock('@/lib/useCapabilities', () => ({
   }),
 }))
 
+vi.mock('@/lib/authContext', () => ({ useAuth: () => ({ user: { id: 1, role: 'manager' } }) }))
+vi.mock('./useMyRecordsCount', () => ({ useMyRecordsCount: () => ({ count: null }) }))
+
 const SERVICES: ServiceFacetRead[] = [
   { id: 'Report', count: 6, states: { none: 6 } },
   { id: 'other', count: 1, states: { none: 1 } },

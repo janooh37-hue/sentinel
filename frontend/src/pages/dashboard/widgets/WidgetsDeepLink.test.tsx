@@ -134,7 +134,7 @@ describe('BooksAwaitingWidget navigation', () => {
     vi.mocked(api.getApprovalSummary).mockResolvedValue(SIGNER_SUMMARY)
     renderInRouter(<BooksAwaitingWidget />)
     const link = await screen.findByTestId('approvals-full-log-link')
-    const expected = approvalQueueUrl({ tab: 'received', kind: 'sign', status: 'pending', sort: 'oldest', page: 1 })
+    const expected = approvalQueueUrl({ tab: 'received', kind: 'sign', status: 'pending', sort: 'newest', page: 1 })
     expect(link).toHaveAttribute('href', expected)
     await userEvent.click(link)
     await waitFor(() =>
@@ -158,7 +158,7 @@ describe('BooksAwaitingWidget navigation', () => {
       scope: 'received',
       kind: 'reviewer',
       status: 'pending',
-      sort: 'oldest',
+      sort: 'newest',
       limit: 5,
     })
   })

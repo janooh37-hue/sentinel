@@ -35,8 +35,8 @@ export function SentApprovalsWidget(): React.JSX.Element | null {
       ? Math.max(0, differenceInCalendarDays(new Date(), parseISO(oldest.submitted_at)))
       : null
 
-  const allSentUrl = approvalQueueUrl({ tab: 'sent', status: 'all', sort: 'oldest', page: 1 })
-  const returnedUrl = approvalQueueUrl({ tab: 'sent', status: 'returned', sort: 'oldest', page: 1 })
+  const allSentUrl = approvalQueueUrl({ tab: 'sent', status: 'all', sort: 'newest', page: 1 })
+  const returnedUrl = approvalQueueUrl({ tab: 'sent', status: 'returned', sort: 'newest', page: 1 })
 
   return (
     <div className="flex h-full w-full flex-col rounded-2xl bg-surface p-5">

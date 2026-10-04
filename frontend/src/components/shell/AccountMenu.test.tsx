@@ -1,11 +1,11 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, render, screen, waitFor } from '@testing-library/react'
 import userEvent, { type UserEvent } from '@testing-library/user-event'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, useLocation } from 'react-router-dom'
 import { toast } from 'sonner'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { ApiError, api, type SessionUser } from '@/lib/api'
+import { ApiError, api, type BookFacetsResponse, type SessionUser } from '@/lib/api'
 import { AuthProvider } from '@/lib/AuthProvider'
 import { AUTH_KEY } from '@/lib/authContext'
 import i18n from '@/lib/i18n'
@@ -56,6 +56,7 @@ describe('AccountMenu lock timer', () => {
     await i18n.changeLanguage('en')
     vi.spyOn(api, 'authMe').mockResolvedValue(USER)
     vi.spyOn(api, 'getEmailAccount').mockResolvedValue(null)
+    vi.spyOn(api, 'myCapabilities').mockResolvedValue([])
     vi.mocked(toast.error).mockReset()
   })
 
@@ -167,5 +168,76 @@ describe('AccountMenu lock timer', () => {
     expect(toast.error).toHaveBeenCalledWith(
       'Could not save the screen lock timer. Try again.',
     )
+  })
+})
+
+describe('AccountMenu My records', () => {
+  function Probe(): React.JSX.Element {
+    const loc = useLocation()
+    return <output data-testid="loc">{loc.pathname + loc.search}</output>
+  }
+  function renderWithProbe(): void {
+    render(
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        <MemoryRouter initialEntries={['/dashboard']}>
+          <AuthProvider>
+            <AccountMenu onLock={vi.fn()} />
+            <Probe />
+          </AuthProvider>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    )
+  }
+
+  beforeEach(async () => {
+    localStorage.clear()
+    await i18n.changeLanguage('en')
+    vi.spyOn(api, 'authMe').mockResolvedValue(USER)
+    vi.spyOn(api, 'getEmailAccount').mockResolvedValue(null)
+    vi.spyOn(api, 'myCapabilities').mockResolvedValue(['books.view'])
+    vi.spyOn(api, 'getBookFacets').mockResolvedValue({
+      total: 12,
+      states: {},
+      services: [],
+    } as unknown as BookFacetsResponse)
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('shows the created-by-me count (shared facets query) and opens /books?mine=1', async () => {
+    const user = userEvent.setup()
+    renderWithProbe()
+    await openMenu(user)
+    const row = await screen.findByRole('button', { name: /My records/ })
+    await waitFor(() => expect(row).toHaveTextContent('12'))
+    expect(api.getBookFacets).toHaveBeenCalledWith({ created_by_me: true })
+    await user.click(row)
+    expect(screen.getByTestId('loc')).toHaveTextContent('/books?mine=1')
+  })
+
+  it('does not fetch the count while the menu is closed', async () => {
+    renderWithProbe()
+    await screen.findByRole('button', { name: USER.email })
+    expect(api.getBookFacets).not.toHaveBeenCalled()
+  })
+
+  it('is absent without books.view', async () => {
+    vi.spyOn(api, 'myCapabilities').mockResolvedValue([])
+    const user = userEvent.setup()
+    renderWithProbe()
+    await openMenu(user)
+    await waitFor(() => expect(api.myCapabilities).toHaveBeenCalled())
+    expect(screen.queryByRole('button', { name: /My records/ })).not.toBeInTheDocument()
+  })
+
+  it('is absent for inmate reporters even with books.view', async () => {
+    vi.spyOn(api, 'authMe').mockResolvedValue({ ...USER, role: 'inmate_reporter' })
+    const user = userEvent.setup()
+    renderWithProbe()
+    await openMenu(user)
+    await waitFor(() => expect(api.myCapabilities).toHaveBeenCalled())
+    expect(screen.queryByRole('button', { name: /My records/ })).not.toBeInTheDocument()
   })
 })
