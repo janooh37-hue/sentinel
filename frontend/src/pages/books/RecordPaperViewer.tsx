@@ -429,7 +429,7 @@ export function RecordPaperViewer({
             {t('common.download')}
           </a>
           {narrow && (canReplace || canDelete) ? (
-            <DropdownMenu>
+            <DropdownMenu modal={false}>
               <DropdownMenuTrigger asChild>
                 <button
                   type="button"

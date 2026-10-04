@@ -546,20 +546,22 @@ export function BooksPage(): React.JSX.Element {
   })
 
   // Auto-select the first visible row when nothing is selected or the selected
-  // row fell out of the current filter. Render-time adjust (not an effect) —
-  // converges in one extra render and avoids a flash of the empty pane.
+  // row fell out of the current filter. An effect, not a render-time call: the
+  // selection is a URL param, and navigating while rendering updates the router
+  // mid-render (React's "Cannot update a component while rendering" error).
   // Inline tiers only: the drawer tier keeps the list full-width until a row is
   // chosen, and mobile never uses selectedId. A pending Back-restore selects its
   // own row, so it must not be pre-empted by the first row.
-  if (
+  const firstRowId = desktopRows[0]?.id ?? null
+  const needsAutoSelect =
     inlinePane &&
     !returnPending &&
     !openParam &&
-    desktopRows.length > 0 &&
+    firstRowId !== null &&
     (selectedId === null || !desktopRows.some((r) => r.id === selectedId))
-  ) {
-    setOpenParam(String(desktopRows[0].id))
-  }
+  useEffect(() => {
+    if (needsAutoSelect && firstRowId !== null) setOpenParam(String(firstRowId))
+  }, [needsAutoSelect, firstRowId, setOpenParam])
 
   const mineToggle = isInmateReporter
     ? undefined

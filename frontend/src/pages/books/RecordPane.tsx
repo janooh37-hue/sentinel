@@ -639,7 +639,9 @@ export function RecordPane({
         </Link>
         {hasMoreItems && (
           <span className="ms-auto">
-            <DropdownMenu>
+            {/* modal={false}: its items open dialogs / the file picker, and Radix's modal menu
+                leaves `pointer-events: none` on <body> when a dialog opens from it. */}
+            <DropdownMenu modal={false}>
               <DropdownMenuTrigger asChild>
                 <button type="button" className={paneBtnClass({ primary: false })}>
                   {t('books.pane.more')}

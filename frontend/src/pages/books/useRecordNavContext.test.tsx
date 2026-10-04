@@ -266,7 +266,7 @@ describe('useListReturnFocus', () => {
     await waitFor(() => expect(screen.getByTestId('state')).toHaveTextContent('null'))
     expect(onFlash).toHaveBeenCalledWith(3)
     expect(onSelect).not.toHaveBeenCalled()
-    expect(scrollIntoView).toHaveBeenCalledWith({ block: 'center' })
+    expect(scrollIntoView).toHaveBeenCalledWith({ block: 'nearest' })
     expect(screen.getByTestId('at').textContent).toBe('/books?status=pending')
   })
 })

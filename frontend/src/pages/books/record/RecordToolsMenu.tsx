@@ -88,8 +88,10 @@ export function RecordToolsMenu({ book, caps, view, actions }: RecordPieceProps)
     !isInmateReporter &&
     ((canOverrideState && canMutateCurrent) || canManageRevisionAccess || canManageSignedPaper || deleteVisible)
 
+  // modal={false}: its items open confirm dialogs, and Radix's modal menu leaves
+  // `pointer-events: none` on <body> when a dialog opens from it (page dead after Cancel/Delete).
   return (
-    <DropdownMenu>
+    <DropdownMenu modal={false}>
       <DropdownMenuTrigger asChild>
         <HeaderBtn
           icon={<Wrench className="h-3.5 w-3.5" aria-hidden="true" />}

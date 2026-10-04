@@ -267,7 +267,8 @@ export function useListReturnFocus(
     const scroller = scrollerRef.current
     if (scroller && Number.isFinite(scrollY)) scroller.scrollTop = scrollY
     const row = (scroller ?? document).querySelector<HTMLElement>(opts.rowSelector(focusBookId))
-    row?.scrollIntoView({ block: opts.isDesktop ? 'nearest' : 'center' })
+    // 'nearest' on both: the restored scrollY must survive when the row is already on screen.
+    row?.scrollIntoView({ block: 'nearest' })
     if (opts.isDesktop) opts.onSelect?.(focusBookId)
     else opts.onFlash?.(focusBookId)
     pendingClear.current = focusBookId
