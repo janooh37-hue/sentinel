@@ -71,6 +71,17 @@ describe('RecordChrome', () => {
     expect(window.sessionStorage.getItem(FOCUS_STORAGE_KEY)).toBeNull()
   })
 
+  it('entering focus mode closes the rail drawer so the first Esc is not spent on an invisible one', () => {
+    setWidth(1024)
+    const { result } = renderHook(() => useRecordChrome(), { wrapper })
+    act(() => result.current.toggleRail())
+    expect(result.current.railDrawerOpen).toBe(true)
+    act(() => result.current.setFocus(true))
+    expect(result.current.railDrawerOpen).toBe(false)
+    act(() => result.current.setFocus(false))
+    expect(result.current.railDrawerOpen).toBe(false)
+  })
+
   it('throws outside the provider', () => {
     function Probe(): null {
       useRecordChrome()

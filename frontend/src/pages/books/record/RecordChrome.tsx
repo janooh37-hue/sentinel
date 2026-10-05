@@ -11,11 +11,11 @@
  *               tab session but a new session starts with the chrome visible.
  *   fullscreen  the phone paper viewer; never persisted.
  *
- * `toggleRail()` is the single entry point for the header button and the `=`/
- * rail shortcut: width decides whether it opens the drawer or flips the rail
- * (proto:1081).
+ * `toggleRail()` is the single entry point for the header button and the rail's
+ * own toggles (there is no keyboard shortcut for the rail): width decides
+ * whether it opens the drawer or flips the rail (proto:1081).
  */
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 
 /** Same width the rail switches from drawer to docked column (the `xl` tier). */
 export const RAIL_BREAKPOINT = 1280
@@ -75,16 +75,19 @@ export function RecordChromeProvider({ children }: { children: React.ReactNode }
   const [focus, setFocusState] = useState<boolean>(readFocus)
   const [fullscreen, setFullscreen] = useState(false)
 
+  // Mirrors `rail` so toggling reads the latest value without a side effect
+  // inside a state updater (StrictMode double-invokes those).
+  const railRef = useRef(rail)
+
   const toggleRail = useCallback(() => {
     if (window.innerWidth < RAIL_BREAKPOINT) {
       setRailDrawerOpen((open) => !open)
       return
     }
-    setRail((current) => {
-      const next = current === 'open' ? 'closed' : 'open'
-      writeRail(next)
-      return next
-    })
+    const next = railRef.current === 'open' ? 'closed' : 'open'
+    railRef.current = next
+    writeRail(next)
+    setRail(next)
   }, [])
 
   const closeRailDrawer = useCallback(() => setRailDrawerOpen(false), [])
@@ -92,6 +95,9 @@ export function RecordChromeProvider({ children }: { children: React.ReactNode }
   const setFocus = useCallback((value: boolean) => {
     writeFocus(value)
     setFocusState(value)
+    // Focus mode hides the rail, so an open drawer would be invisible yet
+    // still swallow the first Esc.
+    if (value) setRailDrawerOpen(false)
   }, [])
 
   // Growing past the breakpoint (rotate, window resize) docks the rail, so a

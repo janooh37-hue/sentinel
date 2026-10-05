@@ -9,6 +9,8 @@ import { ApiError, api, type BookFacetsResponse, type SessionUser } from '@/lib/
 import { AuthProvider } from '@/lib/AuthProvider'
 import { AUTH_KEY } from '@/lib/authContext'
 import i18n from '@/lib/i18n'
+import { KeyboardShortcutsProvider } from '@/lib/keyboardShortcuts'
+import { useShortcutAction } from '@/lib/useKeyboardShortcuts'
 
 import { AccountMenu } from './AccountMenu'
 
@@ -239,5 +241,60 @@ describe('AccountMenu My records', () => {
     await openMenu(user)
     await waitFor(() => expect(api.myCapabilities).toHaveBeenCalled())
     expect(screen.queryByRole('button', { name: /My records/ })).not.toBeInTheDocument()
+  })
+})
+
+describe('AccountMenu vs. the keyboard shortcuts layer', () => {
+  const escape = vi.fn()
+  const next = vi.fn()
+  function PageActions(): null {
+    useShortcutAction('escape', escape)
+    useShortcutAction('recordNext', next)
+    return null
+  }
+
+  beforeEach(async () => {
+    localStorage.clear()
+    escape.mockReset()
+    next.mockReset()
+    await i18n.changeLanguage('en')
+    vi.spyOn(api, 'authMe').mockResolvedValue(USER)
+    vi.spyOn(api, 'getEmailAccount').mockResolvedValue(null)
+    vi.spyOn(api, 'myCapabilities').mockResolvedValue([])
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('is an overlay: Esc only closes it and J does not step records', async () => {
+    const user = userEvent.setup()
+    render(
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        <MemoryRouter>
+          <AuthProvider>
+            <KeyboardShortcutsProvider>
+              <PageActions />
+              <AccountMenu onLock={vi.fn()} />
+            </KeyboardShortcutsProvider>
+          </AuthProvider>
+        </MemoryRouter>
+      </QueryClientProvider>,
+    )
+    await openMenu(user)
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
+
+    await user.keyboard('j')
+    expect(next).not.toHaveBeenCalled()
+
+    await user.keyboard('{Escape}')
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+    expect(escape).not.toHaveBeenCalled()
+
+    // Closed again: the page's shortcuts resume.
+    await user.keyboard('j')
+    expect(next).toHaveBeenCalledTimes(1)
+    await user.keyboard('{Escape}')
+    expect(escape).toHaveBeenCalledTimes(1)
   })
 })

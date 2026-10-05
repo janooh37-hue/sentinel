@@ -182,6 +182,21 @@ describe('BookAnnotationLayer pin placement and composer', () => {
     expect(onDisarm).toHaveBeenCalledTimes(1)
   })
 
+  it('Esc on Cancel (not the textarea) also closes the composer, and the composer is a shortcuts overlay', () => {
+    const onDisarm = vi.fn()
+    renderLayer({ armed: true, onDisarm })
+    const root = screen.getByTestId('anno-root')
+    fireEvent.pointerDown(root, { clientX: 40, clientY: 40 })
+    fireEvent.pointerUp(root, { clientX: 40, clientY: 40 })
+    const composer = screen.getByTestId('anno-composer')
+    expect(composer).toHaveAttribute('data-anno-composer')
+    fireEvent.keyDown(within(composer).getByRole('button', { name: /books\.annotations\.cancel/ }), {
+      key: 'Escape',
+    })
+    expect(screen.queryByTestId('anno-composer')).not.toBeInTheDocument()
+    expect(onDisarm).toHaveBeenCalledTimes(1)
+  })
+
   it('Save says why it is blocked until a note is written', async () => {
     const user = userEvent.setup()
     const onCreate = vi.fn()

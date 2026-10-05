@@ -35,6 +35,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 
 import {
+  ShortcutRegisterContext,
   ShortcutsContext,
   type Handler,
   type ShortcutAction,
@@ -60,6 +61,8 @@ const BARE_KEY_ACTIONS: Readonly<Record<string, ShortcutAction>> = {
 
 /** Held keys must not re-fire these (one press = one effect). */
 const NO_REPEAT: Readonly<Partial<Record<ShortcutAction, true>>> = {
+  recordNext: true,
+  recordPrev: true,
   recordOpen: true,
   copyRef: true,
   focusDocument: true,
@@ -77,6 +80,8 @@ const OVERLAY_SELECTOR = [
   '[role="menu"][data-state="open"]',
   '[role="listbox"][data-state="open"]',
   '[aria-modal="true"]',
+  // The book annotation composer: a typed note must survive Esc/J/K/M.
+  '[data-anno-composer]',
 ].join(',')
 
 export function KeyboardShortcutsProvider({
@@ -155,6 +160,8 @@ export function KeyboardShortcutsProvider({
       if (e.altKey || !bareLayerAllowed(e)) return
 
       if (e.code === 'Escape' || e.key === 'Escape') {
+        // A held Esc must not cascade (exit focus, then auto-repeat → back).
+        if (e.repeat) return
         if (dispatch('escape')) e.preventDefault()
         return
       }
@@ -178,12 +185,13 @@ export function KeyboardShortcutsProvider({
     return () => window.removeEventListener('keydown', onKeyDown, true)
   }, [dispatch])
 
-  const value = useMemo<ShortcutsContextValue>(
-    () => ({ register, helpOpen, setHelpOpen }),
-    [register, helpOpen],
-  )
+  const value = useMemo<ShortcutsContextValue>(() => ({ helpOpen, setHelpOpen }), [helpOpen])
 
-  return <ShortcutsContext.Provider value={value}>{children}</ShortcutsContext.Provider>
+  return (
+    <ShortcutRegisterContext.Provider value={register}>
+      <ShortcutsContext.Provider value={value}>{children}</ShortcutsContext.Provider>
+    </ShortcutRegisterContext.Provider>
+  )
 }
 
 /** Guards shared by every non-Ctrl+K/N// key: IME, editable target, open overlay. */
