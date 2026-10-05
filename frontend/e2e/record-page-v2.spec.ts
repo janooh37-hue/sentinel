@@ -4,9 +4,8 @@
  * Fully mocked: every `/api/` request is answered by `RecordBackend` through
  * `page.route('**\/*')` (same harness as `lock-word-handoff.spec.ts`), so no
  * backend runs. PDFs are `backend/tests/fixtures/scan_triage/returned-form-text.pdf`.
- * Routes with no explicit stub answer a SAFE empty 200 shaped from the `request<T>`
- * type in `src/lib/api.ts` and are logged (attached to the test as
- * `unstubbed-routes.txt`, and printed). Set `E2E_STRICT_UNSTUBBED=1` to fail on them.
+ * Strict: any `/api/v1` request without an explicit stub here is aborted and recorded, and the test
+ * fails at teardown (same convention as `lock-word-handoff.spec.ts` / `signature-placement.spec.ts`).
  *
  * Covers plan §7 assertions 1-12:
  *    1 approved switcher/creator/title     2 header rows (≤768 up)   3 no horizontal overflow
@@ -14,7 +13,8 @@
  *    7 rail open / 52px strip / overlay    8 /books tiers (+ Aa 19/24)
  *    9 mine=1 + J/J/Back                   10 approvals sort         11 RTL (dir, dock, chevrons)
  *   12 keys (? C F Esc 0 S)
- * Screenshots: test-results/record-v2/<page>-<w>-<lang>[-aa<N>].png
+ *   13 list slice: Created-by-me on every surface, bulk delete + Undo, reporter / no-delete personas
+ * Screenshots: attached to each test (testInfo.attach) as <page>-<w>-<lang>[-aa<N>].png
  *
  * Hooks the spec depends on (grep before renaming): [data-header-row="a|b"], [data-record-header],
  * [data-records-page][data-tier], [data-records-scroller], [data-ptr-scroller], [data-book-id],
@@ -34,9 +34,9 @@
  *     pnpm -C /home/amh/Projects/sentinel-record-v2/frontend exec playwright test e2e/record-page-v2.spec.ts
  * (the config still probes 5173 for its own webServer; if that port is free it spawns one extra vite from
  * this worktree, which is harmless.) Filter with `-g "matrix"`, `-g "12:"` etc.
- * Optional env: E2E_REAL_CLOCK=1 (real 6.5 s waits instead of page.clock), E2E_STRICT_UNSTUBBED=1.
+ * Optional env: E2E_REAL_CLOCK=1 (real 6.5 s waits instead of page.clock).
  */
-import { mkdirSync, readFileSync } from 'node:fs'
+import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
 
 import type { Locator, Page, Route, TestInfo } from '@playwright/test'
@@ -68,19 +68,16 @@ const DESKTOP: Cell = { w: 1440, h: 900 }
 const CELLS: Cell[] = [PHONE, TABLET, LAPTOP, DESKTOP]
 
 const REAL_CLOCK = process.env['E2E_REAL_CLOCK'] === '1'
-const STRICT_UNSTUBBED = process.env['E2E_STRICT_UNSTUBBED'] === '1'
 const COMMIT_MS = 6_000
 /** Host serving the app (the config's baseURL); every other host is answered or aborted, never fetched. */
 const APP_HOST = new URL(process.env['PLAYWRIGHT_BASE_URL'] ?? 'http://localhost:5173').hostname
 
-const SHOT_DIR = fileURLToPath(new URL('../test-results/record-v2/', import.meta.url))
 const PDF_BYTES = readFileSync(
   fileURLToPath(
     new URL('../../backend/tests/fixtures/scan_triage/returned-form-text.pdf', import.meta.url),
   ),
 )
 const PDF_BASE64 = PDF_BYTES.toString('base64')
-const API_TS = readFileSync(fileURLToPath(new URL('../src/lib/api.ts', import.meta.url)), 'utf8')
 
 function loadLocale(lang: Lang): Record<string, unknown> {
   return JSON.parse(
@@ -176,23 +173,11 @@ const longArSubject =
 const SPECS: Spec[] = [
   { id: 42, ref: '1-0042', kind: 'pending-me', state: 'pending', svc: 'leave', by: 'saeed', daysAgo: 3, doc: true, approver: 'me',
     subj: ['Annual leave request — Saeed Al-Ameri (21 days)', longArSubject] },
-  { id: 43, ref: '1-0043', kind: 'pending-other', state: 'pending', svc: 'cert', by: 'fatima', daysAgo: 4, doc: true, approver: 'khalid',
-    subj: ['Experience certificate — Fatima Al-Hosani', 'شهادة خبرة — فاطمة الحوسني'] },
-  { id: 44, ref: '1-0044', kind: 'awaiting_scan', state: 'awaiting_scan', svc: 'permit', by: 'omar', daysAgo: 5, doc: true, approver: 'ahmed',
-    subj: ['Site access permit — Omar Al-Shamsi', 'تصريح دخول موقع — عمر الشامسي'] },
   { id: 45, ref: '1-0045', kind: 'approved (signed + 1 scan)', state: 'approved', svc: 'leave', by: 'khalid', daysAgo: 7, doc: true, approver: 'ahmed',
     signed: { by: 'ahmed', daysAgo: 3 }, scans: 1,
     subj: ['Emergency leave — Khalid Al-Mazrouei', 'إجازة طارئة — خالد المزروعي'] },
-  { id: 46, ref: '1-0046', kind: 'returned (3 marks)', state: 'returned', svc: 'leave', by: 'me', daysAgo: 8, doc: true, approver: 'ahmed',
-    marks: 3, note: ['Dates overlap with the Eid duty roster — please move by a week.', 'التواريخ تتعارض مع جدول مناوبة العيد — يرجى التأجيل أسبوعاً.'],
-    subj: ['Annual leave — Mariam Al-Ketbi (Eid period)', 'إجازة سنوية — مريم الكتبي (فترة العيد)'] },
-  { id: 47, ref: '1-0047', kind: 'rejected', state: 'rejected', svc: 'vehicle', by: 'me', daysAgo: 9, doc: true, approver: 'khalid', noTemplate: true,
-    note: ['Vehicle pool is frozen until Q1.', 'أسطول المركبات مجمّد حتى الربع الأول.'],
-    subj: ['Vehicle allocation — imported letter', 'تخصيص مركبة — خطاب مستورد'] },
   { id: 48, ref: '1-0048', kind: 'draft', state: 'none', svc: 'cert', by: 'me', daysAgo: 1, doc: true,
     subj: ['Salary certificate — Saeed Al-Ameri', 'شهادة راتب — سعيد العامري'] },
-  { id: 49, ref: '1-0049', kind: 'word-session draft', state: 'none', svc: 'permit', by: 'mariam', daysAgo: 1, doc: true, wordEditor: 'mariam',
-    subj: ['Contractor permit — custom wording', 'تصريح مقاول — صياغة خاصة'] },
   { id: 50, ref: '1-0050', kind: 'draft, PDF failed to render (no doc)', state: 'none', svc: 'cert', by: 'me', daysAgo: 0, doc: false,
     subj: ['To-whom-it-may-concern letter — Omar Al-Shamsi', 'خطاب لمن يهمه الأمر — عمر الشامسي'] },
   { id: 51, ref: '1-0038', kind: 'approved (signed)', state: 'approved', svc: 'cert', by: 'ahmed', daysAgo: 15, doc: true, approver: 'khalid',
@@ -227,7 +212,9 @@ const NEWEST_APPROVED_ID = 45
 const NEWEST_PENDING_ME_ID = 67
 const MINE_APPROVED_IDS = SPECS.filter((s) => s.by === 'me' && s.state === 'approved').map((s) => s.id)
 
-const daysAgoIso = (days: number): string => new Date(Date.now() - days * 86_400_000).toISOString()
+/** One base instant for every fixture timestamp, so a request never sees a drifted `daysAgoIso`. */
+const NOW = Date.now()
+const daysAgoIso = (days: number): string => new Date(NOW - days * 86_400_000).toISOString()
 const specOf = (id: number): Spec => {
   const spec = SPECS.find((s) => s.id === id)
   if (!spec) throw new Error(`no fixture ${id}`)
@@ -236,33 +223,6 @@ const specOf = (id: number): Spec => {
 
 // ────────────────────── fake backend (page.route harness) ──────────────────
 
-interface GetShape {
-  re: RegExp
-  fallback: unknown
-}
-
-/** Shapes of every `request<T>('GET', path)` in api.ts, so unknown GETs answer a type-safe empty. */
-function buildGetShapes(): GetShape[] {
-  const shapes: GetShape[] = []
-  const callRe = /request<([^\n]*?)>\(\s*'GET',\s*(`[^`]*`|'[^']*')/g
-  for (const m of API_TS.matchAll(callRe)) {
-    const type = m[1] ?? ''
-    let path = (m[2] ?? '').slice(1, -1)
-    // drop the query-string helper and everything after it, then turn `${id}` segments into wildcards
-    path = path.replace(/\$\{qs\(.*$/s, '').replace(/\?.*$/s, '')
-    if (!path.startsWith('/')) continue
-    const pattern = path.split(/\$\{[^}]*\}/).map(escapeRe).join('[^/]+')
-    let fallback: unknown = {}
-    if (/\[\]\s*$/.test(type) || /^Array</.test(type)) fallback = []
-    else if (/\|\s*null\s*$/.test(type)) fallback = null
-    else if (/(ListResponse|PageRead|Page|ListRead|SearchResponse)\b/.test(type))
-      fallback = { items: [], total: 0, limit: 50, offset: 0 }
-    shapes.push({ re: new RegExp(`^${pattern}$`), fallback })
-  }
-  return shapes
-}
-const GET_SHAPES = buildGetShapes()
-
 const CAPABILITIES = [
   'books.view', 'books.edit', 'books.create', 'books.submit', 'books.delete', 'books.approve',
   'books.override_state', 'books.templates', 'documents.generate', 'documents.scan', 'email.manage',
@@ -270,27 +230,53 @@ const CAPABILITIES = [
   ...Object.values(SERVICES).flatMap((s) => [`books.service.${s.id}`, `books.servicerecords.${s.id}`]),
 ]
 
+/** Who is signed in. `staff` is an operator without `books.delete`; `reporter` is an inmate reporter. */
+type Persona = 'admin' | 'staff' | 'reporter'
+
+const PERSONAS: Record<
+  Persona,
+  { role: 'admin' | 'operator' | 'inmate_reporter'; isAdmin: boolean; isManager: boolean; caps: string[] }
+> = {
+  admin: { role: 'admin', isAdmin: true, isManager: true, caps: CAPABILITIES },
+  staff: {
+    role: 'operator',
+    isAdmin: false,
+    isManager: false,
+    caps: CAPABILITIES.filter(
+      (c) => !['books.delete', 'books.override_state', 'users.manage', 'settings.view'].includes(c),
+    ),
+  },
+  reporter: {
+    role: 'inmate_reporter',
+    isAdmin: false,
+    isManager: false,
+    caps: ['app.access', 'documents.generate', 'books.view', 'books.submit'],
+  },
+}
+
 interface BackendOptions {
   lang: Lang
   /** Aa font scale: 16 | 19 | 22 | 24 */
   aa: number
+  persona: Persona
 }
 
 class RecordBackend {
   lang: Lang = 'en'
   aa = 16
+  persona: Persona = 'admin'
   readonly deleted = new Set<number>()
   readonly deleteRequests: string[] = []
   readonly signRequests: string[] = []
   readonly listRequests: URL[] = []
   readonly facetRequests: URL[] = []
   readonly approvalLogRequests: URL[] = []
-  readonly unstubbed: string[] = []
   readonly unhandled: string[] = []
 
   configure(options: BackendOptions): void {
     this.lang = options.lang
     this.aa = options.aa
+    this.persona = options.persona
   }
 
   async install(page: Page): Promise<void> {
@@ -541,13 +527,16 @@ class RecordBackend {
 
     // ── auth / shell ──
     if (method === 'GET' && path === '/auth/me') {
+      const persona = PERSONAS[this.persona]
       return void (await this.json(route, {
         id: ME.id, email: 'me@example.invalid', employee_id: 'G1001', name_en: ME.en, name_ar: ME.ar,
-        position: 'Records Officer', department: 'Records', photo_url: null, role: 'admin', status: 'active',
-        is_admin: true, is_manager: true, has_signature: true, idle_lock_seconds: 1800, lock_layout: 'band',
+        position: 'Records Officer', department: 'Records', photo_url: null, role: persona.role, status: 'active',
+        is_admin: persona.isAdmin, is_manager: persona.isManager, has_signature: true, idle_lock_seconds: 1800, lock_layout: 'band',
       }))
     }
-    if (method === 'GET' && path === '/auth/me/capabilities') return void (await this.json(route, CAPABILITIES))
+    if (method === 'GET' && path === '/auth/me/capabilities') {
+      return void (await this.json(route, PERSONAS[this.persona].caps))
+    }
     if (method === 'GET' && path === '/auth/capabilities') return void (await this.json(route, []))
     if (method === 'GET' && path === '/auth/users') return void (await this.json(route, []))
     if (method === 'GET' && path === '/system/migration-status') {
@@ -567,12 +556,12 @@ class RecordBackend {
     }
     if (method === 'GET' && path === '/email/account') return void (await this.json(route, null))
     if (method === 'GET' && path === '/notifications/counts') {
-      return void (await this.json(route, { approvals: 0, leaves: 0, scans: 0, emails: 0 }))
+      return void (await this.json(route, { approvals: 0, leaves: 0, scans: 0, emails: 0, monthly_reviews: 0, monthly_approvals: 0 }))
     }
     if (method === 'GET' && path === '/notifications/stream') {
       return void (await route.fulfill({
         status: 200, contentType: 'text/event-stream', headers: { 'cache-control': 'no-cache' },
-        body: 'event: counts\ndata: {"approvals":0,"leaves":0,"scans":0,"emails":0}\n\n',
+        body: 'event: counts\ndata: {"approvals":0,"leaves":0,"scans":0,"emails":0,"monthly_reviews":0,"monthly_approvals":0}\n\n',
       }))
     }
     if (method === 'GET' && path === '/scan-inbox/count') {
@@ -627,11 +616,11 @@ class RecordBackend {
     }
     if (method === 'GET' && path === '/books/approval-summary') {
       const pending = this.listOrder(this.liveSpecs()).filter((s) => s.state === 'pending' && s.approver === 'me')
-      const newest = pending[0] ? this.logItem(pending[0], 'received') : null
+      const oldest = pending.length > 0 ? this.logItem(pending[pending.length - 1]!, 'received') : null
       return void (await this.json(route, {
         can_view_sent: true,
         available_received_kinds: ['approver'],
-        signature: { count: pending.length, oldest: newest },
+        signature: { count: pending.length, oldest },
         review: { count: 0, oldest: null },
         sent: { count: this.liveSpecs().filter((s) => s.state !== 'none').length, oldest: null },
         returned_count: this.liveSpecs().filter((s) => s.state === 'returned').length,
@@ -719,31 +708,19 @@ class RecordBackend {
     }
     if (method === 'GET' && /^\/documents\/\d+\/download$/.test(path)) return void (await this.pdf(route, url))
 
-    // ── unknown: safe empty 200 + logged ──
-    const label = `${method} ${url.pathname}${url.search}`
-    this.unstubbed.push(label)
-    if (method === 'GET') {
-      const shape = GET_SHAPES.find((s) => s.re.test(path))
-      return void (await this.json(route, shape ? shape.fallback : []))
-    }
-    return void (await this.json(route, {}))
+    // ── anything else: aborted + recorded; the fixture fails the test at teardown ──
+    this.unhandled.push(`${method} ${url.pathname}${url.search}`)
+    await route.abort('failed')
   }
 }
 
 const test = base.extend<{ backend: RecordBackend }>({
   // `use` is renamed: react-hooks' /^use[A-Z]?/ heuristic flags the Playwright default name.
-  backend: async ({ page }, runTest, testInfo: TestInfo) => {
+  backend: async ({ page }, runTest) => {
     const backend = new RecordBackend()
     await backend.install(page)
     await runTest(backend)
-    const unstubbed = [...new Set(backend.unstubbed)]
-    if (unstubbed.length > 0) {
-      const body = unstubbed.join('\n')
-      await testInfo.attach('unstubbed-routes.txt', { body, contentType: 'text/plain' })
-      console.warn(`[record-v2 e2e] ${testInfo.title}: unstubbed routes answered with safe empties:\n${body}`)
-      if (STRICT_UNSTUBBED) expect(unstubbed, 'every API route must be stubbed').toEqual([])
-    }
-    expect(backend.unhandled, 'non-/api/v1 API requests').toEqual([])
+    expect(backend.unhandled, 'unstubbed /api requests (aborted)').toEqual([])
   },
 })
 
@@ -759,12 +736,14 @@ interface BootOptions {
   path?: string
   /** Install `page.clock` before the first navigation (deferred-delete timing). */
   clock?: boolean
+  /** Who is signed in; admin by default. */
+  persona?: Persona
 }
 
 async function boot(page: Page, backend: RecordBackend, options: BootOptions = {}): Promise<Lang> {
   const lang = options.lang ?? 'en'
   const aa = options.aa ?? 16
-  backend.configure({ lang, aa })
+  backend.configure({ lang, aa, persona: options.persona ?? 'admin' })
   const cell = options.cell ?? DESKTOP
   await page.setViewportSize({ width: cell.w, height: cell.h })
   if (options.clock && !REAL_CLOCK) await page.clock.install({ time: new Date() })
@@ -790,8 +769,7 @@ async function boot(page: Page, backend: RecordBackend, options: BootOptions = {
 
 const isPhone = (cell: Cell): boolean => cell.w < 768
 
-async function shot(page: Page, name: string, cell: Cell, lang: Lang, aa = 16): Promise<void> {
-  mkdirSync(SHOT_DIR, { recursive: true })
+async function shot(page: Page, testInfo: TestInfo, name: string, cell: Cell, lang: Lang, aa = 16): Promise<void> {
   if (name.startsWith('record')) {
     // The paper must have rendered (not a spinner) before the picture is taken.
     await page.waitForFunction(
@@ -804,9 +782,13 @@ async function shot(page: Page, name: string, cell: Cell, lang: Lang, aa = 16): 
       { timeout: 15_000 },
     )
   }
-  await page.waitForTimeout(350)
+  // Webfonts settled, so the picture is not taken mid-swap.
+  await page.evaluate(() => document.fonts.ready.then(() => undefined))
   const suffix = aa === 16 ? '' : `-aa${aa}`
-  await page.screenshot({ path: `${SHOT_DIR}${name}-${cell.w}-${lang}${suffix}.png`, animations: 'disabled' })
+  await testInfo.attach(`${name}-${cell.w}-${lang}${suffix}.png`, {
+    body: await page.screenshot({ animations: 'disabled' }),
+    contentType: 'image/png',
+  })
 }
 
 /** 3. No horizontal page overflow. */
@@ -821,6 +803,16 @@ async function expectNoHorizontalOverflow(page: Page, what: string): Promise<voi
 
 const scrollerOf = (page: Page): Locator => page.locator('[data-records-scroller], [data-ptr-scroller]').first()
 const rowOf = (page: Page, id: number): Locator => page.locator(`[data-book-id="${id}"]`).first()
+
+/** The creator filter is the boolean `created_by_me` only: no id-style creator param is ever sent (IDOR). */
+function expectBooleanCreatorFilterOnly(urls: readonly URL[]): void {
+  for (const u of urls) {
+    const stray = [...u.searchParams.keys()].filter(
+      (key) => key !== 'created_by_me' && /created_by|creator|user_id/i.test(key),
+    )
+    expect(stray, `no id-style creator param in ${u.toString()}`).toEqual([])
+  }
+}
 
 async function waitForList(page: Page, expectedId: number): Promise<void> {
   await expect(rowOf(page, expectedId)).toBeVisible({ timeout: 20_000 })
@@ -856,21 +848,39 @@ async function elapse(page: Page, ms: number): Promise<void> {
   else await page.clock.fastForward(ms)
 }
 
+/**
+ * Round-trips one request through the route handler. Requests reach it in the order the page sent
+ * them, so once this resolves any request the app issued earlier has already been recorded.
+ */
+async function flushRequests(page: Page): Promise<void> {
+  await page.evaluate(() => fetch('/api/v1/auth/me').then((r) => r.status))
+}
+
 async function box(locator: Locator): Promise<{ x: number; y: number; width: number; height: number }> {
   const b = await locator.boundingBox()
   if (!b) throw new Error('element has no bounding box')
   return b
 }
 
-const paperLocator = (page: Page): Locator =>
-  page.locator('[data-record-paper]').or(page.locator('.print-paper canvas')).first()
+const paperLocator = (page: Page): Locator => page.locator('[data-record-paper]').first()
 
+/** The paper's width once a pending zoom/fit has settled (two consecutive equal samples). */
 async function paperWidth(page: Page): Promise<number> {
   const paper = paperLocator(page)
   await expect(paper).toBeVisible({ timeout: 20_000 })
-  // let a pending zoom/fit settle
-  await page.waitForTimeout(500)
-  return (await box(paper)).width
+  let last = -1
+  await expect
+    .poll(
+      async () => {
+        const { width } = await box(paper)
+        const settled = width === last
+        last = width
+        return settled
+      },
+      { timeout: 10_000, message: 'paper width did not settle' },
+    )
+    .toBe(true)
+  return last
 }
 
 const dockOf = (page: Page): Locator => page.locator('[data-record-dock]').first()
@@ -890,25 +900,25 @@ async function expectStatusLine(page: Page, lang: Lang, key: string, vars: Recor
 test.describe('matrix: screenshots + no horizontal overflow (3)', () => {
   for (const cell of CELLS) {
     for (const lang of LANGS) {
-      test(`${cell.w}x${cell.h} ${lang}`, async ({ page, backend }) => {
+      test(`${cell.w}x${cell.h} ${lang}`, async ({ page, backend }, testInfo) => {
         await boot(page, backend, { lang, cell, path: '/books' })
 
         await waitForList(page, 50)
         await expectNoHorizontalOverflow(page, `list ${cell.w} ${lang}`)
-        await shot(page, 'list', cell, lang)
+        await shot(page, testInfo, 'list', cell, lang)
 
         await openRecord(page, lang, 42)
         await expectNoHorizontalOverflow(page, `record(decide) ${cell.w} ${lang}`)
-        await shot(page, 'record', cell, lang)
+        await shot(page, testInfo, 'record', cell, lang)
 
         await openRecord(page, lang, 45)
         await expectNoHorizontalOverflow(page, `record(approved) ${cell.w} ${lang}`)
-        await shot(page, 'record-approved', cell, lang)
+        await shot(page, testInfo, 'record-approved', cell, lang)
 
         await page.goto('/books/approvals?tab=sent&status=approved')
         await expect(page.locator('[data-book-id]').first()).toBeVisible({ timeout: 20_000 })
         await expectNoHorizontalOverflow(page, `approvals ${cell.w} ${lang}`)
-        await shot(page, 'approvals', cell, lang)
+        await shot(page, testInfo, 'approvals', cell, lang)
 
         // 11: RTL document + (phone) the dock reads from the inline-end
         await expect(page.locator('html')).toHaveAttribute('dir', lang === 'ar' ? 'rtl' : 'ltr')
@@ -917,11 +927,11 @@ test.describe('matrix: screenshots + no horizontal overflow (3)', () => {
   }
 
   for (const aa of [19, 24]) {
-    test(`1440x900 en at Aa ${aa}: list`, async ({ page, backend }) => {
+    test(`1440x900 en at Aa ${aa}: list`, async ({ page, backend }, testInfo) => {
       await boot(page, backend, { lang: 'en', aa, cell: DESKTOP, path: '/books' })
       await waitForList(page, 50)
       await expectNoHorizontalOverflow(page, `list 1440 Aa ${aa}`)
-      await shot(page, 'list', DESKTOP, 'en', aa)
+      await shot(page, testInfo, 'list', DESKTOP, 'en', aa)
     })
   }
 })
@@ -1122,7 +1132,7 @@ async function deleteDraftFromList(page: Page, lang: Lang, cell: Cell): Promise<
     .filter({ hasText: rx(lang, 'books.record.deleteTitle', { ref: specOf(48).ref }) })
     .last()
   await expect(confirm).toBeVisible()
-  await confirm.getByRole('button').filter({ hasNotText: rx(lang, 'common.cancel') }).first().click()
+  await confirm.getByRole('button', { name: rx(lang, 'books.record.deleteDraft', {}, true) }).click()
 }
 
 test.describe('6: delete with Undo and the 6 s commit', () => {
@@ -1145,7 +1155,7 @@ test.describe('6: delete with Undo and the 6 s commit', () => {
       expect(backend.deleteRequests, 'no DELETE right after Undo').toEqual([])
 
       await elapse(page, COMMIT_MS + 500)
-      await page.waitForTimeout(300)
+      await flushRequests(page)
       expect(backend.deleteRequests, 'no DELETE after the commit window either').toEqual([])
       await expect(rowOf(page, 48)).toBeVisible()
     })
@@ -1161,7 +1171,7 @@ test.describe('6: delete with Undo and the 6 s commit', () => {
       await elapse(page, COMMIT_MS + 500)
       await expect.poll(() => backend.deleteRequests.length, { timeout: 15_000 }).toBe(1)
       expect(backend.deleteRequests[0]).toMatch(/^DELETE \/api\/v1\/books\/48$/)
-      await page.waitForTimeout(500)
+      await flushRequests(page)
       expect(backend.deleteRequests, 'exactly one DELETE').toHaveLength(1)
       await expect(rowOf(page, 48)).toHaveCount(0)
     })
@@ -1181,7 +1191,7 @@ test.describe('6: delete with Undo and the 6 s commit', () => {
       .filter({ hasText: rx('en', 'books.record.deleteTitle', { ref: specOf(48).ref }) })
       .last()
     await expect(confirm).toBeVisible()
-    await confirm.getByRole('button').filter({ hasNotText: rx('en', 'common.cancel') }).first().click()
+    await confirm.getByRole('button', { name: rx('en', 'books.record.deleteDraft', {}, true) }).click()
     await expect(rowOf(page, 48)).toHaveCount(0)
     await expect(page.locator('body')).not.toHaveCSS('pointer-events', 'none')
     await page.getByRole('button', { name: rx('en', 'common.undo', {}, true) }).first().click()
@@ -1301,20 +1311,31 @@ test.describe('9: /books?status=approved&mine=1', () => {
       // list + facets requests carry created_by_me=true; the badge query (facets, mine) is on
       expect(backend.listRequests.length).toBeGreaterThan(0)
       for (const u of backend.listRequests) expect(u.searchParams.get('created_by_me'), u.toString()).toBe('true')
+      expectBooleanCreatorFilterOnly(backend.listRequests)
       expect(backend.facetRequests.length).toBeGreaterThan(0)
       for (const u of backend.facetRequests) expect(u.searchParams.get('created_by_me'), u.toString()).toBe('true')
+      expectBooleanCreatorFilterOnly(backend.facetRequests)
       await expect(scrollerOf(page).locator('[data-book-id]')).toHaveCount(ids.length)
 
-      // Align the 3rd row near the top, so the 5th is on screen without any scrolling: the restored
+      // Align the 3rd row just below the top (clear of the ~30px sticky day header, which the list's
+      // scroll-padding counts as covered), so the 5th is on screen without any scrolling: the restored
       // scroll position then has to match what the reader left, not just reveal the current row.
       const scroller = scrollerOf(page)
       await scroller.evaluate((el, id) => {
         const row = el.querySelector<HTMLElement>(`[data-book-id="${id}"]`)
         if (!row) throw new Error('3rd row missing')
-        el.scrollTop += row.getBoundingClientRect().top - el.getBoundingClientRect().top - 2
+        el.scrollTop += row.getBoundingClientRect().top - el.getBoundingClientRect().top - 40
       }, third)
-      await page.waitForTimeout(200)
-      const before = await scroller.evaluate((el) => el.scrollTop)
+      // wait for the programmatic scroll to land (two equal samples), then read it
+      let before = -1
+      await expect
+        .poll(async () => {
+          const top = await scroller.evaluate((el) => el.scrollTop)
+          const settled = top > 0 && top === before
+          before = top
+          return settled
+        })
+        .toBe(true)
       expect(before, 'the list is scrolled before opening a record').toBeGreaterThan(0)
       const preBox = await box(rowOf(page, fifth))
       const preScroll = await box(scroller)
@@ -1330,11 +1351,18 @@ test.describe('9: /books?status=approved&mine=1', () => {
       await waitForRecord(page, lang, fifth)
       expect(await page.evaluate(() => window.history.length), 'J/K navigate with replace: history did not grow').toBe(historyAfterOpen)
 
+      // The entry the reader leaves carries the list URL without `open`: the list re-adds it itself.
+      const carried = await page.evaluate(() => {
+        const usr = (window.history.state as { usr?: { from?: unknown } } | null)?.usr
+        return typeof usr?.from === 'string' ? usr.from : null
+      })
+      expect(carried, 'the record entry carries the list URL it was opened from').not.toBeNull()
+      expect(new URL(carried!, listUrl).searchParams.has('open'), 'history.state.usr.from has no `open`').toBe(false)
+
       await backButton(page, lang).click()
       await expect(page).toHaveURL(/\/books\?/)
       const back = new URL(page.url())
       expect(back.pathname).toBe('/books')
-      expect(back.searchParams.has('open'), 'the list URL has no `open`').toBe(false)
       expect(back.searchParams.get('status')).toBe(listUrl.searchParams.get('status'))
       expect(back.searchParams.get('mine')).toBe(listUrl.searchParams.get('mine'))
 
@@ -1349,13 +1377,20 @@ test.describe('9: /books?status=approved&mine=1', () => {
         await expect(row.locator('[aria-current="true"]').first()).toBeVisible()
         await expect(page.locator('[data-records-pane]').first()).toContainText(specOf(fifth).ref)
       }
-      const after = await scrollerOf(page).evaluate((el) => el.scrollTop)
+      // Once the page has settled, the desktop list re-selects the current record (`open=<fifth>`, replace);
+      // the phone list has no selection, so it never writes `open`.
+      await expect
+        .poll(() => new URL(page.url()).searchParams.get('open'), { message: 'settled `open` param' })
+        .toBe(isPhone(cell) ? null : String(fifth))
       // Restored to the saved scrollY, then revealed minimally (never re-centred): when the 5th row was already
       // fully on screen nothing moves, otherwise the list scrolls just enough to bring its bottom edge in.
-      expect(Math.abs(after - expectedAfter), `scroll restored (before ${before}, expected ${expectedAfter}, after ${after})`).toBeLessThanOrEqual(24)
-
+      await expect
+        .poll(
+          async () => Math.abs((await scrollerOf(page).evaluate((el) => el.scrollTop)) - expectedAfter),
+          { message: `scroll restored (before ${before}, expected ${expectedAfter})` },
+        )
+        .toBeLessThanOrEqual(24)
       // no redirect back into the record
-      await page.waitForTimeout(700)
       expect(new URL(page.url()).pathname).toBe('/books')
     })
   }
@@ -1483,4 +1518,252 @@ test.describe('12: keys (1440 en)', () => {
     await expect(page).toHaveURL(/\/books(\?|$)/)
     expect(new URL(page.url()).pathname).toBe('/books')
   })
+})
+
+// ───────────── 13: list slice — Created by me, bulk delete, personas ──────────
+
+/** Records the signed-in user created: what every Created-by-me badge shows. */
+const MINE_COUNT = SPECS.filter((s) => s.by === 'me').length
+
+/** i18next plural key for the counts used here (1 and 2); Arabic has a dual. */
+const plural = (lang: Lang, base: string, count: 1 | 2): string =>
+  `${base}_${count === 1 ? 'one' : lang === 'ar' ? 'two' : 'other'}`
+
+const accountButton = (page: Page): Locator => page.getByRole('button', { name: 'me@example.invalid' }).first()
+const mineParam = (page: Page): string | null => new URL(page.url()).searchParams.get('mine')
+
+test.describe('13a: Created by me on every surface', () => {
+  const surfaces: { name: string; cell: Cell; scope: string }[] = [
+    { name: 'desktop rail', cell: DESKTOP, scope: '[data-records-rail][data-rail-tier="full"]' },
+    { name: 'icon tier', cell: LAPTOP, scope: '[data-records-rail][data-rail-tier="icons"]' },
+    { name: 'drawer-tier chip', cell: TABLET, scope: '[data-records-page][data-tier="drawer"]' },
+    { name: 'phone chip', cell: PHONE, scope: 'body' },
+  ]
+  for (const lang of LANGS) {
+    for (const surface of surfaces) {
+      test(`${surface.name} ${lang}: toggle sets mine=1, sends created_by_me, badge shows the count`, async ({ page, backend }) => {
+        await boot(page, backend, { lang, cell: surface.cell, path: '/books' })
+        await waitForList(page, 50)
+        const toggle = page.locator(surface.scope).getByRole('button', { name: rx(lang, 'books.list.createdByMe') })
+        await expect(toggle).toHaveAttribute('aria-pressed', 'false')
+        await expect(toggle.locator('bdi'), 'badge number').toHaveText(String(MINE_COUNT))
+        await expect(rowOf(page, 51), "someone else's record is listed").toBeVisible()
+
+        const listsBefore = backend.listRequests.length
+        await toggle.click()
+        await expect(toggle).toHaveAttribute('aria-pressed', 'true')
+        await expect.poll(() => mineParam(page)).toBe('1')
+        await expect
+          .poll(() => backend.listRequests.slice(listsBefore).some((u) => u.searchParams.get('created_by_me') === 'true'))
+          .toBe(true)
+        await expect(rowOf(page, 51), "someone else's record leaves the list").toHaveCount(0)
+        await expect(rowOf(page, 48), 'my draft stays').toBeVisible()
+        await expect(toggle.locator('bdi')).toHaveText(String(MINE_COUNT))
+        expectBooleanCreatorFilterOnly(backend.listRequests)
+
+        await toggle.click()
+        await expect(toggle).toHaveAttribute('aria-pressed', 'false')
+        await expect.poll(() => mineParam(page)).toBeNull()
+        await expect(rowOf(page, 51)).toBeVisible()
+      })
+    }
+
+    test(`account menu ${lang}: My records opens /books?mine=1 with the badge number`, async ({ page, backend }) => {
+      await boot(page, backend, { lang, cell: DESKTOP, path: '/books' })
+      await waitForList(page, 50)
+      await accountButton(page).click()
+      const item = page.getByTestId('account-my-records')
+      await expect(item).toContainText(rx(lang, 'books.list.myRecords'))
+      await expect(item.locator('bdi'), 'badge number').toHaveText(String(MINE_COUNT))
+
+      const listsBefore = backend.listRequests.length
+      await item.click()
+      await expect.poll(() => mineParam(page)).toBe('1')
+      expect(new URL(page.url()).pathname).toBe('/books')
+      await expect
+        .poll(() => backend.listRequests.slice(listsBefore).some((u) => u.searchParams.get('created_by_me') === 'true'))
+        .toBe(true)
+      await expect(rowOf(page, 51), "someone else's record is not listed").toHaveCount(0)
+      await expect(rowOf(page, 48)).toBeVisible()
+      await expect(item, 'the menu closed').toHaveCount(0)
+    })
+  }
+})
+
+test.describe('13b: bulk delete', () => {
+  test('1440 en: draft + signed row → skipped text → Delete → confirm → Undo sends no DELETE', async ({ page, backend }) => {
+    const lang: Lang = 'en'
+    const draft = specOf(48)
+    const signed = specOf(45)
+    const skipped = rx(lang, plural(lang, 'books.list.skippedMany', 1), { count: 1 })
+    const deleteOne = rx(lang, plural(lang, 'books.list.deleteMany', 1), { count: 1 })
+    await boot(page, backend, { lang, cell: DESKTOP, path: '/books', clock: true })
+    await waitForList(page, draft.id)
+    await page.getByRole('checkbox', { name: rx(lang, 'books.list.selectRef', { ref: draft.ref }) }).check()
+    await page.getByRole('checkbox', { name: rx(lang, 'books.list.selectRef', { ref: signed.ref }) }).check()
+
+    const bar = page.getByRole('region', { name: rx(lang, plural(lang, 'books.list.selected', 2), { count: 2 }) })
+    await expect(bar).toBeVisible()
+    await expect(bar, 'the signed row is skipped').toContainText(skipped)
+    await bar.getByRole('button', { name: deleteOne }).click()
+
+    const confirm = page.getByRole('alertdialog').or(page.getByRole('dialog')).filter({ hasText: deleteOne }).last()
+    await expect(confirm).toBeVisible()
+    await expect(confirm, 'the confirm repeats the skipped count').toContainText(skipped)
+    await confirm.getByRole('button', { name: rx(lang, 'books.bulk.delete', {}, true) }).click()
+
+    await expect(rowOf(page, draft.id)).toHaveCount(0)
+    await expect(rowOf(page, signed.id), 'the signed row is kept').toBeVisible()
+    await expect(page.getByText(rx(lang, 'books.record.deleted', { ref: draft.ref })).first()).toBeVisible()
+    await page.getByRole('button', { name: rx(lang, 'common.undo', {}, true) }).first().click()
+    await expect(page.getByText(rx(lang, 'books.record.restored', { ref: draft.ref })).first()).toBeVisible()
+    await expect(rowOf(page, draft.id)).toBeVisible()
+    await elapse(page, COMMIT_MS + 500)
+    await flushRequests(page)
+    expect(backend.deleteRequests, 'Undo means no DELETE was ever sent').toEqual([])
+  })
+
+  test('390 ar: Select mode → draft + signed row → skipped text → Delete → confirm → Undo sends no DELETE', async ({ page, backend }) => {
+    const lang: Lang = 'ar'
+    const draft = specOf(48)
+    const signed = specOf(45)
+    const skipped = rx(lang, plural(lang, 'books.list.skippedMany', 1), { count: 1 })
+    const deleteOne = rx(lang, plural(lang, 'books.list.deleteMany', 1), { count: 1 })
+    await boot(page, backend, { lang, cell: PHONE, path: '/books', clock: true })
+    await waitForList(page, draft.id)
+    await page.getByRole('button', { name: rx(lang, 'books.list.select', {}, true) }).click()
+    await page.getByRole('checkbox', { name: rx(lang, 'books.list.selectRef', { ref: draft.ref }) }).check()
+    await page.getByRole('checkbox', { name: rx(lang, 'books.list.selectRef', { ref: signed.ref }) }).check()
+
+    await expect(page.getByText(rx(lang, plural(lang, 'books.list.selected', 2), { count: 2 }))).toBeVisible()
+    await expect(page.getByText(skipped), 'the signed row is skipped').toBeVisible()
+    await page.getByRole('button', { name: deleteOne }).click()
+
+    const confirm = page.getByRole('alertdialog').or(page.getByRole('dialog')).filter({ hasText: deleteOne }).last()
+    await expect(confirm).toBeVisible()
+    await expect(confirm, 'the confirm repeats the skipped count').toContainText(skipped)
+    await confirm.getByRole('button', { name: rx(lang, 'books.bulk.delete', {}, true) }).click()
+
+    await expect(rowOf(page, draft.id)).toHaveCount(0)
+    await expect(rowOf(page, signed.id), 'the signed row is kept').toBeVisible()
+    await expect(page.getByText(rx(lang, 'books.record.deleted', { ref: draft.ref })).first()).toBeVisible()
+    await page.getByRole('button', { name: rx(lang, 'common.undo', {}, true) }).first().click()
+    await expect(page.getByText(rx(lang, 'books.record.restored', { ref: draft.ref })).first()).toBeVisible()
+    await expect(rowOf(page, draft.id)).toBeVisible()
+    await elapse(page, COMMIT_MS + 500)
+    await flushRequests(page)
+    expect(backend.deleteRequests, 'Undo means no DELETE was ever sent').toEqual([])
+  })
+})
+
+test.describe('13c: personas', () => {
+  for (const cell of [DESKTOP, PHONE]) {
+    test(`${cell.w} en: inmate reporter has no Created by me, no created_by_me request, no bulk select`, async ({ page, backend }) => {
+      // `mine=1` in the URL must be ignored for a reporter
+      await boot(page, backend, { lang: 'en', cell, path: '/books?mine=1', persona: 'reporter' })
+      await waitForList(page, 50)
+      await expect(page.getByRole('button', { name: rx('en', 'books.list.createdByMe') })).toHaveCount(0)
+      await expect(page.getByTestId('mine-filter')).toHaveCount(0)
+      await expect(page.getByRole('checkbox')).toHaveCount(0)
+      await expect(page.getByRole('button', { name: rx('en', 'books.list.select', {}, true) })).toHaveCount(0)
+
+      await accountButton(page).click()
+      await expect(page.getByRole('dialog').first()).toBeVisible()
+      await expect(page.getByTestId('account-my-records')).toHaveCount(0)
+
+      await flushRequests(page)
+      expect(backend.listRequests.length).toBeGreaterThan(0)
+      for (const u of [...backend.listRequests, ...backend.facetRequests]) {
+        expect(u.searchParams.has('created_by_me'), u.toString()).toBe(false)
+      }
+      expectBooleanCreatorFilterOnly([...backend.listRequests, ...backend.facetRequests])
+    })
+
+    test(`${cell.w} en: staff without books.delete gets no bulk Delete`, async ({ page, backend }) => {
+      await boot(page, backend, { lang: 'en', cell, path: '/books', persona: 'staff' })
+      await waitForList(page, 48)
+      if (isPhone(cell)) await page.getByRole('button', { name: rx('en', 'books.list.select', {}, true) }).click()
+      await page.getByRole('checkbox', { name: rx('en', 'books.list.selectRef', { ref: specOf(48).ref }) }).check()
+
+      // the bulk bar is up (Add to email), and carries no Delete
+      const addToEmail = isPhone(cell) ? rx('en', 'basket.add', {}, true) : rx('en', 'basket.addN', { count: 1 })
+      await expect(page.getByRole('button', { name: addToEmail })).toBeVisible()
+      await expect(page.getByRole('button', { name: /delete/i })).toHaveCount(0)
+    })
+  }
+})
+
+// ─────────── 14: list keys — J moves the selection AND focus; Enter / Ctrl+Enter act on it ──────────
+
+/** The ids of the rendered rows, in list order. */
+const listRowIds = (page: Page): Promise<number[]> =>
+  scrollerOf(page).locator('[data-book-id]').evaluateAll((els) => els.map((el) => Number(el.getAttribute('data-book-id'))))
+
+/** The `open` row the desktop list currently shows in its pane (a URL param). */
+const openParam = (page: Page): string | null => new URL(page.url()).searchParams.get('open')
+
+/** Which list row (if any) holds keyboard focus. */
+const focusedRowId = (page: Page): Promise<number | null> =>
+  page.evaluate(() => {
+    const row = document.activeElement?.closest('[data-book-id]')
+    return row ? Number(row.getAttribute('data-book-id')) : null
+  })
+
+test.describe('14: list keys (J / Enter / Ctrl+Enter)', () => {
+  for (const lang of LANGS) {
+    test(`1440 ${lang}: click a row, J moves the selection and the focus, Enter opens the next row`, async ({ page, backend }) => {
+      await boot(page, backend, { lang, cell: DESKTOP, path: '/books' })
+      await waitForList(page, 50)
+      const [, clicked, next] = (await listRowIds(page)) as [number, number, number]
+      await rowOf(page, clicked).locator('button').first().click()
+      await expect.poll(() => openParam(page)).toBe(String(clicked))
+      await expect(page.locator('[data-records-pane]').first()).toContainText(specOf(clicked).ref)
+      expect(await focusedRowId(page), 'the click focuses the clicked row').toBe(clicked)
+
+      await page.keyboard.press('KeyJ')
+      await expect.poll(() => openParam(page), 'J selects the next row').toBe(String(next))
+      await expect(page.locator('[data-records-pane]').first()).toContainText(specOf(next).ref)
+      await expect.poll(() => focusedRowId(page), 'focus follows the selection').toBe(next)
+
+      await page.keyboard.press('Enter')
+      await waitForRecord(page, lang, next)
+      expect(new URL(page.url()).pathname, 'Enter opened the stepped-to row, not the clicked one').toBe(`/books/${next}`)
+    })
+
+    test(`1440 ${lang}: click a row, J, Ctrl+Enter opens the next row in a new tab`, async ({ page, backend, context }) => {
+      await boot(page, backend, { lang, cell: DESKTOP, path: '/books' })
+      await waitForList(page, 50)
+      const [, clicked, next] = (await listRowIds(page)) as [number, number, number]
+      await rowOf(page, clicked).locator('button').first().click()
+      await expect.poll(() => openParam(page)).toBe(String(clicked))
+      await expect(page.locator('[data-records-pane]').first()).toContainText(specOf(clicked).ref)
+      expect(await focusedRowId(page), 'the click focuses the clicked row').toBe(clicked)
+      await page.keyboard.press('KeyJ')
+      await expect.poll(() => focusedRowId(page), 'focus follows the selection').toBe(next)
+
+      const popupPromise = context.waitForEvent('page')
+      await page.keyboard.press('Control+Enter')
+      const popup = await popupPromise
+      await popup.waitForURL(/\/books\/\d+/)
+      expect(new URL(popup.url()).pathname, 'the new tab is the stepped-to row').toBe(`/books/${next}`)
+      await popup.close()
+      expect(new URL(page.url()).pathname, 'this tab stays on the list').toBe('/books')
+    })
+
+    test(`834 ${lang}: with the drawer open, J shows the next row in the drawer`, async ({ page, backend }) => {
+      await boot(page, backend, { lang, cell: TABLET, path: '/books' })
+      await waitForList(page, 50)
+      const [, clicked, next] = (await listRowIds(page)) as [number, number, number]
+      await rowOf(page, clicked).locator('button').first().click()
+      const drawer = page.locator('[data-records-pane]').first()
+      await expect(drawer).toHaveAttribute('data-pane-mode', 'drawer')
+      await expect(drawer).toContainText(specOf(clicked).ref)
+
+      await page.keyboard.press('KeyJ')
+      await expect.poll(() => openParam(page), 'J selects the next row').toBe(String(next))
+      await expect(drawer).toHaveAttribute('data-pane-mode', 'drawer')
+      await expect(drawer).toContainText(specOf(next).ref)
+      await expect(drawer).not.toContainText(specOf(clicked).ref)
+    })
+  }
 })
