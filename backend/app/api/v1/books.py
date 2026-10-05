@@ -614,7 +614,6 @@ def _attach_creator_names(db: Session, rows: Sequence[Book], items: Sequence[Boo
         db, {r.created_by_user_id for r in rows if r.created_by_user_id is not None}
     )
     for row, item in zip(rows, items, strict=True):
-        item.created_by_user_id = row.created_by_user_id
         item.created_by_name = (
             names.get(row.created_by_user_id) if row.created_by_user_id is not None else None
         )
@@ -1029,8 +1028,9 @@ def _build_book_detail(db: Session, row: Book) -> BookRead:
     item.submitted_by_g = book_service.submitter_g_number(db, row)
     if row.created_by_user_id is not None:
         creator = db.get(User, row.created_by_user_id)
-        item.created_by_name = book_service.resolve_user_name_by_id(db, row.created_by_user_id)
-        item.created_by_g = creator.employee_id if creator and creator.employee_id else None
+        if creator is not None:
+            item.created_by_name = book_service.user_display_name(db, creator)
+            item.created_by_g = creator.employee_id or None
     item.doc_manager_user_id, item.doc_manager_name, item.doc_manager_has_signature = (
         book_service.resolve_doc_manager_user(db, row)
     )
@@ -1151,6 +1151,7 @@ def _build_scoped_book_response(
     selected: BookVersion,
     allowed_version_ids: frozenset[int],
     access_scope: Literal["full", "assigned_revision"],
+    resolve_creator_name: bool = True,
 ) -> BookRead:
     context = selected.approval_context if isinstance(selected.approval_context, dict) else {}
     category_id = _context_string(context, "category_id")
@@ -1186,7 +1187,7 @@ def _build_scoped_book_response(
         created_by_user_id=row.created_by_user_id,
         created_by_name=(
             book_service.resolve_user_name_by_id(db, row.created_by_user_id)
-            if row.created_by_user_id is not None
+            if resolve_creator_name and row.created_by_user_id is not None
             else None
         ),
         created_by_g=None,
@@ -1280,6 +1281,7 @@ def _build_book_response(
         selected=selected,
         allowed_version_ids=access.allowed_version_ids,
         access_scope="full" if access.full_access else "assigned_revision",
+        resolve_creator_name=detail,
     )
 
 
