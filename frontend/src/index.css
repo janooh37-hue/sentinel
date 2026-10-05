@@ -1870,13 +1870,22 @@ body {
     color: #1c1f24 !important;
     font-size: 9pt !important;
   }
+  /* Same face as the copied table (vehicleTable.ts → basketEmail styles):
+     navy header with white bold text, black rules, centred cells. */
   #root .print-vehicle-list th,
   #root .print-vehicle-list td {
-    border: 1px solid #1c1f24 !important;
+    border: 1px solid #000 !important;
     background: #fff !important;
-    padding: 3pt 5pt;
-    text-align: start;
+    padding: 3pt 6pt;
+    text-align: center;
     vertical-align: middle;
+  }
+  #root .print-vehicle-list th {
+    background: #0d2845 !important;
+    color: #fff !important;
+    font-weight: 700;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
   }
   /* Data cells never break onto a second line: the column grows to fit. Only
      a long header may wrap, so headers don't take width the data doesn't need. */
