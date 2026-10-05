@@ -1,8 +1,12 @@
 import '@testing-library/jest-dom/vitest'
 
 import i18n from 'i18next'
+import { createElement, type ReactElement, type ReactNode } from 'react'
 import { initReactI18next } from 'react-i18next'
+import type * as Rtl from '@testing-library/react'
+import { vi } from 'vitest'
 
+import { TooltipProvider } from '@/components/ui/tooltip'
 import en from '@/locales/en.json'
 
 // Polyfill localStorage for jsdom (used in tests for basket storage)
@@ -110,6 +114,25 @@ if (typeof window !== 'undefined' && typeof window.matchMedia !== 'function') {
       dispatchEvent: () => false,
     }) as MediaQueryList) as typeof window.matchMedia
 }
+
+// `Hint` (and every Radix tooltip) requires an ancestor `TooltipProvider`, which
+// App mounts above Shell. Mirror that for every `render`: the provider goes
+// outermost, around any per-test `wrapper` (routers, query clients, …).
+vi.mock('@testing-library/react', async (importOriginal) => {
+  const rtl = await importOriginal<typeof Rtl>()
+  // Tests are typed against the real RTL module; only the runtime shape matters here.
+  const render = (ui: ReactNode, options?: Omit<Rtl.RenderOptions, 'queries'>): Rtl.RenderResult => {
+    const Inner = options?.wrapper
+    const wrapper = ({ children }: { children?: ReactNode }): ReactElement =>
+      createElement(TooltipProvider, {
+        delayDuration: 400,
+        skipDelayDuration: 150,
+        children: Inner ? createElement(Inner, { children }) : children,
+      })
+    return rtl.render(ui, { ...options, wrapper })
+  }
+  return { ...rtl, render }
+})
 
 // Initialise i18n synchronously for tests so translation keys resolve to
 // English strings without hitting the language detector.

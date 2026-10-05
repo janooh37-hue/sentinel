@@ -65,6 +65,9 @@ export type StatusKey =
   | 'approvedNoName'
   | 'returnedNoName'
   | 'rejectedNoName'
+  | 'approvedNoDate'
+  | 'approvedNoNameNoDate'
+  | 'wordActiveNoName'
 
 /** Full i18n key of a disabled-action explanation. */
 export type ReasonKey =
@@ -192,10 +195,15 @@ function step(
   },
 ): NextStep {
   const { secondary = [], overflow = [], ...rest } = parts
-  // Never render a dangling "by ·": no resolvable name → the nameless sentence.
-  const needsName = status.key === 'pendingOther' || status.key === 'approved' || status.key === 'returned' || status.key === 'rejected'
-  const nameless: NextStep['status'] =
-    needsName && !status.vars.name ? { ...status, key: `${status.key}NoName` as StatusKey } : status
+  // Never render a dangling "by ·" / "· <date>": drop the clause whose var is missing.
+  const { key, vars } = status
+  let resolved: StatusKey = key
+  if (key === 'approved') {
+    resolved = !vars.name ? (vars.date ? 'approvedNoName' : 'approvedNoNameNoDate') : !vars.date ? 'approvedNoDate' : key
+  } else if (key === 'pendingOther' || key === 'returned' || key === 'rejected' || key === 'wordActive') {
+    if (!vars.name) resolved = `${key}NoName`
+  }
+  const nameless: NextStep['status'] = resolved === key ? status : { ...status, key: resolved }
   const out: NextStep = { status: nameless, secondary, overflow, ...rest }
   if (out.disabled && Object.keys(out.disabled).length === 0) delete out.disabled
   return out
@@ -228,8 +236,20 @@ export function recordNextStep(book: BookRead, ctx: NextStepContext): NextStep {
         ? ctx.inmateAction === 'edit-submit'
         : canSendForApproval(state, { canSubmitBook }))
   const canReroute = !inmate && ctx.canMutateCurrent && canSendForApproval('pending', { canSubmitBook })
+  // Continue = reopen the form that made the record. A Word-authored book's
+  // truth is its docx (the form would open empty) and an inmate's own report
+  // is edited in place, so neither is ever offered Continue editing.
   const canContinue =
-    ctx.canMutateCurrent && (inmate ? ctx.inmateAction === 'edit-submit' : ctx.canEdit)
+    !book.is_word_book &&
+    !isInmateReport &&
+    ctx.canMutateCurrent &&
+    (inmate ? ctx.inmateAction === 'edit-submit' : ctx.canEdit)
+  // The same template / permission reasons as Revise; "reporter locked" is
+  // moot here — `canContinue` already requires the reporter's edit rights.
+  const continueBlock = reviseBlockReason(book, ctx)
+  const continueKey = continueBlock === 'reporterLocked' ? null : reviseReasonKey(continueBlock)
+  const continueDisabled: Partial<Record<ActionId, ReasonKey>> =
+    canContinue && continueKey ? { continueEditing: continueKey } : {}
   const canFileSigned =
     !inmate && ctx.canMutateCurrent && canFileSignedCopy(state, { canEdit: ctx.canEdit, canScan })
   const hasSignedCopy = state === 'approved' && Boolean(current?.signed_pdf_url)
@@ -253,6 +273,18 @@ export function recordNextStep(book: BookRead, ctx: NextStepContext): NextStep {
     return step({ key: 'voided', vars: {} }, { overflow: ['print'] })
   }
 
+  // An active Word session owns the row in every state: Finish / Discard must
+  // stay reachable after "Edit in Word (creates new version)" re-opens a
+  // returned / rejected / approved record (backend leaves approval_state alone).
+  if (wordActive && (canWord || state === 'none')) {
+    return step(
+      { key: 'wordActive', vars: { name: book.edit_session?.user_name ?? '' } },
+      canWord
+        ? { primary: 'finishEditing', secondary: ['discardDraft'], overflow: ['print'] }
+        : { overflow: ['print'] },
+    )
+  }
+
   // An advisory reviewer's pending step stays actionable whatever the aggregate
   // state (late feedback) — unless the same user is deciding the signer step.
   const deciding = state === 'pending' && ctx.isAssignee && canApprove
@@ -265,21 +297,13 @@ export function recordNextStep(book: BookRead, ctx: NextStepContext): NextStep {
 
   switch (state) {
     case 'none': {
-      if (wordActive) {
-        return step(
-          { key: 'wordActive', vars: { name: book.edit_session?.user_name ?? '' } },
-          canWord
-            ? { primary: 'finishEditing', secondary: ['discardDraft'], overflow: ['print'] }
-            : { overflow: ['print'] },
-        )
-      }
       if (!ctx.hasDocument) {
         return step(
           { key: 'noDoc', vars: {} },
           {
             primary: canContinue ? 'continueEditing' : undefined,
             overflow: pick([['deleteDraft', deleteVisible]]),
-            disabled: deleteDisabled('deleteDraft'),
+            disabled: { ...continueDisabled, ...deleteDisabled('deleteDraft') },
           },
         )
       }
@@ -295,7 +319,7 @@ export function recordNextStep(book: BookRead, ctx: NextStepContext): NextStep {
             ['scanSigned', canFileSigned],
             ['deleteDraft', deleteVisible],
           ]),
-          disabled: { ...emailDisabled, ...deleteDisabled('deleteDraft') },
+          disabled: { ...continueDisabled, ...emailDisabled, ...deleteDisabled('deleteDraft') },
         },
       )
     }

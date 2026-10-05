@@ -4,7 +4,7 @@
  */
 
 import { Suspense, lazy, useCallback, useMemo, useRef, useState } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useLocation, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { Maximize2 } from 'lucide-react'
 import { RecordDecisionActions } from '../RecordDecisionActions'
@@ -123,6 +123,7 @@ export function RecordDesk({ book, caps, view, actions }: RecordPieceProps): Rea
   const { t } = useTranslation()
   const chrome = useRecordChrome()
   const [searchParams, setSearchParams] = useSearchParams()
+  const location = useLocation()
   const { isInmateReporter, canRevise } = caps
   const { isMobile, isAr, isPending, action, decision, busy, current, liveVersion, pdfUrl, userId, armed, annotatable, annMode, annotations, markBusy, decisionReasonFormProps } = view
   const { setArmedFor, handleRevise, requestSignConfirm, openMobileDecision, createMark, deleteMark, onPdfReady, mobileInlineSignRef, decisionPanelRef, panelReturnButtonRef, panelRejectButtonRef } = actions
@@ -163,10 +164,11 @@ export function RecordDesk({ book, caps, view, actions }: RecordPieceProps): Rea
           next.set('paper', key)
           return next
         },
-        { replace: true },
+        // Keep the entry's state: it carries the record's queue / Back target.
+        { replace: true, state: location.state },
       )
     },
-    [setSearchParams],
+    [setSearchParams, location.state],
   )
 
   // --- Word session: the preview is the last saved version; the live draft is opt-in, never polled ---

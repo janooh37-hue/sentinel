@@ -350,6 +350,16 @@ export function BookAnnotationLayer({
                 anchorTop={top + 8}
                 dir="auto"
                 testId="anno-composer"
+                composer
+                onKeyDown={(e) => {
+                  // Esc closes the composer locally from any control inside it
+                  // (textarea, Cancel, Save, padding); the page-level Esc (back / focus) must not also fire.
+                  if (e.key === 'Escape') {
+                    e.preventDefault()
+                    e.stopPropagation()
+                    closeDraft()
+                  }
+                }}
                 sheetBottom={isPhone ? keyboardInset : undefined}
                 className={cn(
                   'rounded-xl border border-hairline bg-surface p-3 shadow-2xl',
@@ -362,14 +372,6 @@ export function BookAnnotationLayer({
                   rows={2}
                   value={draftText}
                   onChange={(e) => setDraftText(e.target.value)}
-                  onKeyDown={(e) => {
-                    // Esc closes the composer locally; the page-level Esc (back / focus) must not also fire.
-                    if (e.key === 'Escape') {
-                      e.preventDefault()
-                      e.stopPropagation()
-                      closeDraft()
-                    }
-                  }}
                   placeholder={t('books.annotations.composerPlaceholder')}
                   className="w-full rounded-md border border-hairline bg-background px-2 py-1.5 text-[0.74em] text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/30"
                 />
@@ -442,6 +444,8 @@ function MarkPopover({
   /** Phone: ignore the anchor and pin to the bottom, clear of the keyboard. */
   sheetBottom,
   testId,
+  composer,
+  onKeyDown,
   children,
 }: {
   rootRef: React.RefObject<HTMLDivElement | null>
@@ -451,6 +455,9 @@ function MarkPopover({
   dir?: 'auto' | 'ltr' | 'rtl'
   sheetBottom?: number
   testId?: string
+  /** The draft composer: tagged so the shortcuts layer treats it as an overlay. */
+  composer?: boolean
+  onKeyDown?: React.KeyboardEventHandler<HTMLDivElement>
   children: React.ReactNode
 }): React.JSX.Element {
   const cardRef = useRef<HTMLDivElement>(null)
@@ -501,6 +508,8 @@ function MarkPopover({
       dir={dir}
       data-anno-ui
       data-testid={testId}
+      data-anno-composer={composer ? '' : undefined}
+      onKeyDown={onKeyDown}
       className={cn(
         'pointer-events-auto fixed z-[70]',
         sheetBottom != null ? 'inset-x-2' : 'left-0 top-0',

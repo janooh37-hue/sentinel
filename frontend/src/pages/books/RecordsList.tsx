@@ -26,7 +26,6 @@ type BookReadWithSnippet = BookRead & { search_snippet?: string | null }
 import { cn } from '@/lib/utils'
 
 import { BookStatusChips } from '@/components/books/BookStatusChips'
-import { Hint } from '@/components/ui/hint'
 import { ServiceArtwork } from '@/components/ui/service-artwork'
 import { signedSourceOf } from './bookStateLabel'
 import { subjectEmployeePart } from './formKind'
@@ -167,24 +166,24 @@ export function RecordsList({
                   {artwork ? <ServiceArtwork artwork={artwork} size="row" /> : glyph}
                 </span>
                 <div className="flex min-w-0 flex-1 flex-col @[26rem]:flex-row @[26rem]:items-center @[26rem]:gap-2.5">
-                  <Hint label={t('books.pane.openRecord')} shortcut="Enter">
-                    <Link
-                      {...recordLinkProps(row.id, linkNav)}
-                      onClick={(e) => {
-                        const modified = e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey
-                        if (e.defaultPrevented || modified) return
-                        e.preventDefault()
-                        open()
-                      }}
-                      className={cn(
-                        'relative z-10 w-fit shrink-0 rounded-sm font-mono text-[0.7em] font-bold text-primary hover:underline @[26rem]:w-[4.6rem]',
-                        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                        row.voided_at && 'line-through',
-                      )}
-                    >
-                      <bdi dir="ltr">{row.ref_number}</bdi>
-                    </Link>
-                  </Hint>
+                  <Link
+                    {...recordLinkProps(row.id, linkNav)}
+                    // Enter only opens the selected row, so only that row advertises it.
+                    aria-keyshortcuts={isSelected ? 'Enter' : undefined}
+                    onClick={(e) => {
+                      const modified = e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey
+                      if (e.defaultPrevented || modified) return
+                      e.preventDefault()
+                      open()
+                    }}
+                    className={cn(
+                      'relative z-10 w-fit shrink-0 rounded-sm font-mono text-[0.7em] font-bold text-primary hover:underline @[26rem]:w-[4.6rem]',
+                      'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                      row.voided_at && 'line-through',
+                    )}
+                  >
+                    <bdi dir="ltr">{row.ref_number}</bdi>
+                  </Link>
                   <button
                     type="button"
                     aria-current={isSelected ? 'true' : undefined}

@@ -67,11 +67,15 @@ export const RECORD_SHORTCUTS: readonly RecordShortcutDescriptor[] = [
  */
 export type Handler = () => boolean | void
 
+/** Help-sheet state. Changes when the sheet toggles; action registration lives in `ShortcutRegisterContext`. */
 export interface ShortcutsContextValue {
-  /** Stable identity for the lifetime of the provider. */
-  register: (action: ShortcutAction, handler: Handler) => () => void
   helpOpen: boolean
   setHelpOpen: (open: boolean) => void
 }
 
 export const ShortcutsContext = createContext<ShortcutsContextValue | null>(null)
+
+export type RegisterShortcut = (action: ShortcutAction, handler: Handler) => () => void
+
+/** Stable identity for the lifetime of the provider, so `useShortcutAction` callers never re-render when help toggles. */
+export const ShortcutRegisterContext = createContext<RegisterShortcut | null>(null)

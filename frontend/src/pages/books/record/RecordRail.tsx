@@ -279,18 +279,28 @@ export function RecordRail({ book, view }: RecordRailProps): React.JSX.Element |
   const overlayRef = useRef<HTMLElement | null>(null)
 
   // Click outside the overlay (but not on its toggle) dismisses it; Esc is the page's resolver.
+  // Any other close (Close button, Esc, toggle) hands focus back to the strip toggle, since the
+  // focused control inside the drawer is removed with it; an outside click keeps its own target.
   const overlayOpen = railDrawerOpen && !docked
   useEffect(() => {
     if (!overlayOpen) return
+    let restoreFocus = true
     overlayRef.current?.querySelector<HTMLElement>('[data-rail-close]')?.focus()
     const onPointerDown = (e: PointerEvent): void => {
       const target = e.target as Node
       if (overlayRef.current?.contains(target)) return
       if ((target as Element).closest?.('[data-rail-toggle]')) return
+      restoreFocus = false
       closeRailDrawer()
     }
     document.addEventListener('pointerdown', onPointerDown)
-    return () => document.removeEventListener('pointerdown', onPointerDown)
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown)
+      const active = document.activeElement
+      if (restoreFocus && (!active || active === document.body)) {
+        document.querySelector<HTMLElement>('[data-rail-toggle]')?.focus()
+      }
+    }
   }, [overlayOpen, closeRailDrawer])
 
   if (focus) return null

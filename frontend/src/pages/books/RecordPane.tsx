@@ -58,6 +58,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Hint } from '@/components/ui/hint'
+import { ariaKeyShortcut } from '@/components/ui/keyshortcut'
 import { IconAction } from '@/components/ui/icon-action'
 import { useAuth } from '@/lib/authContext'
 import { bidi } from '@/lib/bidi'
@@ -66,7 +67,7 @@ import { copyToClipboard } from '@/lib/clipboard'
 import { serviceHref } from '@/lib/quickActions'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { useFocusTrap } from '@/lib/useFocusTrap'
-import { useIsMobile } from '@/lib/useIsMobile'
+import { useInlineReason } from '@/lib/useInlineReason'
 import { cn } from '@/lib/utils'
 
 import { inmateReporterActionFor } from '@/components/books/book-detail-drawer-utils'
@@ -299,11 +300,8 @@ export function RecordPane({
   }
 
   // ── Next step: the one status sentence + the footer's workflow buttons ─────
-  // Word-authored book: its truth is the docx, not re-renderable fields. The
-  // rich-editor "Continue editing" would open an empty form, so it's hidden for
-  // these (BookWordActions carries the Word actions). `is_word_book` is a
-  // backend flag computed for LIST rows too.
-  const isWordBook = book.is_word_book
+  // Word-authored books and an inmate's own report never get "Continue editing":
+  // `recordNextStep` leaves it out (BookWordActions carries the Word actions).
   const versions = book.versions ?? []
   const liveVersion = versions.length ? versions[versions.length - 1] : undefined
   const currentVersion =
@@ -353,9 +351,7 @@ export function RecordPane({
       case 'sendForApproval':
         return { ...base, label: t('books.approval.submitForApproval'), icon: <Send className="h-3.5 w-3.5" aria-hidden />, onClick: () => onSubmit(book.id) }
       case 'continueEditing':
-        return isWordBook || isInmateReport
-          ? null
-          : { ...base, label: t('books.pane.continueDraft'), icon: <PenLine className="h-3.5 w-3.5" aria-hidden />, onClick: () => onContinueDraft(book.id) }
+        return { ...base, label: t('books.pane.continueDraft'), icon: <PenLine className="h-3.5 w-3.5" aria-hidden />, onClick: () => onContinueDraft(book.id) }
       case 'revise':
         return { ...base, label: t('books.pane.revise'), icon: <CornerUpLeft className="h-3.5 w-3.5 -scale-x-100" aria-hidden />, onClick: openFull }
       case 'scanSigned':
@@ -940,11 +936,13 @@ export function PaneBtn({
   pendingLabel?: string
   children: React.ReactNode
 }): React.JSX.Element {
-  const isMobile = useIsMobile()
+  const inlineReason = useInlineReason()
   const reasonId = useId()
   const blocked = Boolean(reason) || pending
-  const touchReason = Boolean(reason) && isMobile
-  const hintLabel = reason ? (isMobile ? undefined : reason) : iconOnly || shortcut ? label : undefined
+  const touchReason = Boolean(reason) && inlineReason
+  const hintLabel = reason ? (inlineReason ? undefined : reason) : iconOnly || shortcut ? label : undefined
+  // The shortcut does not apply while blocked: no hint key, no aria-keyshortcuts.
+  const activeShortcut = blocked ? undefined : shortcut
   const button = (
     <button
       type="button"
@@ -952,7 +950,7 @@ export function PaneBtn({
       onClick={blocked ? undefined : onClick}
       aria-disabled={blocked ? true : undefined}
       aria-busy={pending ? true : undefined}
-      aria-keyshortcuts={shortcut}
+      aria-keyshortcuts={activeShortcut ? ariaKeyShortcut(activeShortcut) : undefined}
       aria-describedby={touchReason ? reasonId : undefined}
       aria-label={iconOnly ? label : undefined}
       className={paneBtnClass({ primary, iconOnly, blocked })}
@@ -968,7 +966,7 @@ export function PaneBtn({
     </button>
   )
   const withHint = hintLabel ? (
-    <Hint label={hintLabel} shortcut={reason ? undefined : shortcut} side="bottom">
+    <Hint label={hintLabel} shortcut={activeShortcut} side="bottom">
       {button}
     </Hint>
   ) : (

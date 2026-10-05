@@ -191,6 +191,29 @@ describe('recordNextStep rows', () => {
     expect(r.overflow).not.toContain('changeState')
   })
 
+  it('Continue editing is never offered for a Word-authored book or an inmate\'s own report', () => {
+    const word = recordNextStep(bookOf('none', { is_word_book: true }), ctxOf())
+    expect(word.primary).toBe('sendForApproval')
+    expect(word.secondary).toEqual([])
+    const noSubmit = ADMIN_CAPS.filter((c) => c !== 'books.submit')
+    expect(recordNextStep(bookOf('none', { is_word_book: true }), ctxOf({}, noSubmit)).primary).toBeUndefined()
+    const report = recordNextStep(
+      bookOf('none', { ref_number: 'REPORT-1' }),
+      ctxOf({ isInmateReporter: true, inmateAction: 'edit-submit' }, []),
+    )
+    expect(report.primary).toBe('sendForApproval')
+    expect(report.secondary).toEqual([])
+  })
+
+  it('Continue editing carries the revise reason when the draft has no form template', () => {
+    const book = bookOf('none', {
+      versions: [{ id: 10, version_no: 1, status: 'none', template_id: null, has_fields: false }],
+    })
+    const r = recordNextStep(book, ctxOf())
+    expect(r.secondary).toEqual(['continueEditing'])
+    expect(r.disabled).toEqual({ continueEditing: 'books.reason.reviseNoTemplate' })
+  })
+
   it('returned: revise & resubmit with the returner and the quoted note', () => {
     const book = bookOf('returned', {
       steps: [stepOf({ state: 'returned', note: 'Fix the dates.', assignee_name: 'Khalid' })],
@@ -223,11 +246,47 @@ describe('recordNextStep rows', () => {
     expect(r.disabled).toEqual({ revise: 'books.reason.reviseNoTemplate' })
   })
 
-  it('returned + active Word session: Delete record is disabled with the Word reason', () => {
-    const book = bookOf('returned', { edit_session: { state: 'active', user_id: 3 } })
+  it('returned + active Word session: Finish / Discard are reachable (no stuck row)', () => {
+    const book = bookOf('returned', { edit_session: { state: 'active', user_id: 3, user_name: 'Mariam' } })
     const r = recordNextStep(book, ctxOf())
-    expect(r.overflow).toContain('deleteRecord')
-    expect(r.disabled?.deleteRecord).toBe('books.reason.wordSession')
+    expect(r.status).toEqual({ key: 'wordActive', vars: { name: 'Mariam' } })
+    expect(r.primary).toBe('finishEditing')
+    expect(r.secondary).toEqual(['discardDraft'])
+  })
+
+  it('approved + active Word session (Edit in Word re-open): Finish / Discard are reachable', () => {
+    const book = bookOf('approved', {
+      signedPdfUrl: '/s.pdf',
+      edit_session: { state: 'active', user_id: 3, user_name: 'Mariam' },
+    })
+    const r = recordNextStep(book, ctxOf())
+    expect(r.status.key).toBe('wordActive')
+    expect(r.primary).toBe('finishEditing')
+    expect(r.secondary).toEqual(['discardDraft'])
+  })
+
+  it('an active Word session the user cannot mutate keeps the row for its state', () => {
+    const book = bookOf('returned', { edit_session: { state: 'active', user_id: 3, user_name: 'Mariam' } })
+    const r = recordNextStep(book, ctxOf({ canMutateCurrent: false }))
+    expect(r.status.key).toBe('returnedNoName')
+    expect(r.primary).not.toBe('finishEditing')
+  })
+
+  it('status sentences never dangle: no signing date / no editor name use their own variants', () => {
+    const approved = bookOf('approved', {
+      steps: [stepOf({ state: 'approved', decided_at: null, assignee_name: 'Khalid' })],
+    })
+    expect(recordNextStep(approved, ctxOf()).status).toEqual({
+      key: 'approvedNoDate',
+      vars: { name: 'Khalid', date: '' },
+    })
+    const anonymous = bookOf('approved', {
+      doc_manager_name: null,
+      steps: [stepOf({ state: 'approved', decided_at: null, assignee_name: null })],
+    })
+    expect(recordNextStep(anonymous, ctxOf()).status.key).toBe('approvedNoNameNoDate')
+    const word = bookOf('none', { edit_session: { state: 'active', user_id: 3, user_name: null } })
+    expect(recordNextStep(word, ctxOf()).status.key).toBe('wordActiveNoName')
   })
 
   it('Delete is hidden without books.delete', () => {

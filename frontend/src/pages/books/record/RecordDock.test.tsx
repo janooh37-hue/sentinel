@@ -230,6 +230,16 @@ describe('RecordDock', () => {
     expect(dock.getByRole('button', { name: /Discard draft/ })).toBeVisible()
   })
 
+  it.each(['returned', 'approved'])(
+    'Word session re-opened on a %s record: Finish editing / Discard draft… are still on the dock',
+    (state) => {
+      mount(bookOf(state, { edit_session: { state: 'active', user_name: 'Sara' } }))
+      const dock = within(dockEl())
+      expect(dock.getByRole('button', { name: 'Finish editing' })).toBeVisible()
+      expect(dock.getByRole('button', { name: /Discard draft/ })).toBeVisible()
+    },
+  )
+
   it('labelled dock buttons are at least 46px tall and the primary grows', () => {
     mount(bookOf('pending', { steps: [stepOf()] }), { decider: true })
     const sign = within(dockEl()).getByRole('button', { name: 'Sign & approve' })

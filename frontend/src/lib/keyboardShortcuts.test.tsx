@@ -139,19 +139,27 @@ describe('bare-key layer', () => {
     expect(next).not.toHaveBeenCalled()
   })
 
-  it('does not re-fire one-shot actions on key repeat but does for J', () => {
+  it('does not re-fire one-shot actions or record stepping on key repeat, but does for zoom', () => {
     const next = vi.fn()
+    const prev = vi.fn()
     const mark = vi.fn()
+    const zoomIn = vi.fn()
     renderWith(
       <>
         <Probe action="recordNext" handler={next} />
+        <Probe action="recordPrev" handler={prev} />
         <Probe action="toggleMark" handler={mark} />
+        <Probe action="zoomIn" handler={zoomIn} />
       </>,
     )
     press({ key: 'j', code: 'KeyJ', repeat: true })
+    press({ key: 'k', code: 'KeyK', repeat: true })
     press({ key: 'm', code: 'KeyM', repeat: true })
-    expect(next).toHaveBeenCalledTimes(1)
+    press({ key: '=', code: 'Equal', repeat: true })
+    expect(next).not.toHaveBeenCalled()
+    expect(prev).not.toHaveBeenCalled()
     expect(mark).not.toHaveBeenCalled()
+    expect(zoomIn).toHaveBeenCalledTimes(1)
   })
 
   it('leaves Enter alone on a focused button or link', () => {
@@ -328,6 +336,33 @@ describe('escape', () => {
     )
     press({ key: 'Escape', code: 'Escape' })
     expect(esc).not.toHaveBeenCalled()
+  })
+
+  it('does not re-fire on a held Esc (no focus-exit → back cascade)', () => {
+    const esc = vi.fn()
+    renderWith(<Probe action="escape" handler={esc} />)
+    press({ key: 'Escape', code: 'Escape' })
+    press({ key: 'Escape', code: 'Escape', repeat: true })
+    expect(esc).toHaveBeenCalledTimes(1)
+  })
+
+  it('is skipped while the annotation composer is open', () => {
+    const esc = vi.fn()
+    const next = vi.fn()
+    renderWith(
+      <>
+        <Probe action="escape" handler={esc} />
+        <Probe action="recordNext" handler={next} />
+        <div data-anno-composer>
+          <button type="button">Cancel</button>
+        </div>
+      </>,
+    )
+    const cancel = screen.getByRole('button', { name: 'Cancel' })
+    press({ key: 'Escape', code: 'Escape' }, cancel)
+    press({ key: 'j', code: 'KeyJ' }, cancel)
+    expect(esc).not.toHaveBeenCalled()
+    expect(next).not.toHaveBeenCalled()
   })
 })
 

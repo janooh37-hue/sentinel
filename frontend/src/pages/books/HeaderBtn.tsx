@@ -3,7 +3,8 @@ import { forwardRef, useId } from 'react'
 
 import { Hint } from '@/components/ui/hint'
 import { cn } from '@/lib/utils'
-import { useIsMobile } from '@/lib/useIsMobile'
+import { ariaKeyShortcut } from '@/components/ui/keyshortcut'
+import { useInlineReason } from '@/lib/useInlineReason'
 
 export type BtnTone = 'plain' | 'amber' | 'red' | 'green-solid' | 'navy-solid'
 
@@ -71,21 +72,24 @@ export const HeaderBtn = forwardRef<
   },
   ref,
 ): React.JSX.Element {
-  const isMobile = useIsMobile()
+  const inlineReason = useInlineReason()
   const reasonId = useId()
   const blocked = Boolean(reason) || pending
   const shownLabel = pending && pendingLabel ? pendingLabel : label
-  const touchReason = Boolean(reason) && isMobile
+  const touchReason = Boolean(reason) && inlineReason
   // Desktop reason wins (the shortcut does not apply while blocked); otherwise
   // a shortcut — or an icon-only control, which has no visible text — gets a
-  // label tooltip (never a `title`). Touch shows the reason inline.
+  // label tooltip (never a `title`). Touch / hover-less devices show the
+  // reason inline instead (tooltips never open there).
   const hintLabel = reason
-    ? isMobile
+    ? inlineReason
       ? undefined
       : reason
     : shortcut || iconOnly
       ? shownLabel
       : undefined
+  // The shortcut does not apply while blocked: no hint key, no aria-keyshortcuts.
+  const activeShortcut = blocked ? undefined : shortcut
   const button = (
     <button
       ref={ref}
@@ -97,7 +101,7 @@ export const HeaderBtn = forwardRef<
       aria-label={iconOnly ? shownLabel : undefined}
       aria-disabled={blocked ? true : undefined}
       aria-busy={pending ? true : undefined}
-      aria-keyshortcuts={shortcut}
+      aria-keyshortcuts={activeShortcut ? ariaKeyShortcut(activeShortcut) : undefined}
       aria-describedby={touchReason ? reasonId : undefined}
       {...rest}
       className={cn(
@@ -118,7 +122,7 @@ export const HeaderBtn = forwardRef<
   )
   const withHint =
     hintLabel ? (
-      <Hint label={hintLabel} shortcut={reason ? undefined : shortcut} side="bottom">
+      <Hint label={hintLabel} shortcut={activeShortcut} side="bottom">
         {button}
       </Hint>
     ) : (

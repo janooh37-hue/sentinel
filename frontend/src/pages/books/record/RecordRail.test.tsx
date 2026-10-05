@@ -2,6 +2,7 @@
  * The progress rail's three shapes (docked ≥1280, 52px strip, 280px overlay),
  * focus hiding it, and the phone full-screen viewer's dialog contract.
  */
+import { useEffect } from 'react'
 import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -85,6 +86,54 @@ describe('RecordRail', () => {
 
     await userEvent.click(screen.getByRole('button', { name: 'Close' }))
     expect(document.querySelector('[data-record-rail="overlay"]')).toBeNull()
+  })
+
+  it('returns focus to the strip toggle when the drawer closes from inside (Close button, page Esc)', async () => {
+    setWidth(1024)
+    function EscResolver(): null {
+      const chrome = useRecordChrome()
+      useEffect(() => {
+        const onKey = (e: KeyboardEvent): void => {
+          if (e.key === 'Escape') chrome.closeRailDrawer()
+        }
+        window.addEventListener('keydown', onKey)
+        return () => window.removeEventListener('keydown', onKey)
+      }, [chrome])
+      return null
+    }
+    render(
+      <RecordChromeProvider>
+        <RecordRail book={undefined} view={view} />
+        <EscResolver />
+        <button type="button">elsewhere</button>
+      </RecordChromeProvider>,
+    )
+    const toggle = screen.getByRole('button', { name: 'Show progress' })
+
+    await userEvent.click(toggle)
+    await userEvent.click(screen.getByRole('button', { name: 'Close' }))
+    expect(document.querySelector('[data-record-rail="overlay"]')).toBeNull()
+    expect(toggle).toHaveFocus()
+
+    await userEvent.click(toggle)
+    expect(screen.getByRole('button', { name: 'Close' })).toHaveFocus()
+    await userEvent.keyboard('{Escape}')
+    expect(document.querySelector('[data-record-rail="overlay"]')).toBeNull()
+    expect(toggle).toHaveFocus()
+  })
+
+  it('does not steal focus when an outside click closes the drawer', async () => {
+    setWidth(1024)
+    render(
+      <RecordChromeProvider>
+        <RecordRail book={undefined} view={view} />
+        <button type="button">elsewhere</button>
+      </RecordChromeProvider>,
+    )
+    await userEvent.click(screen.getByRole('button', { name: 'Show progress' }))
+    await userEvent.click(screen.getByRole('button', { name: 'elsewhere' }))
+    expect(document.querySelector('[data-record-rail="overlay"]')).toBeNull()
+    expect(screen.getByRole('button', { name: 'elsewhere' })).toHaveFocus()
   })
 
   it('is hidden in focus mode', async () => {

@@ -3,9 +3,10 @@
  * (separate from the provider) so the .tsx file only exports a component.
  */
 
-import { useContext, useEffect, useRef } from 'react'
+import { useContext, useEffect, useLayoutEffect, useRef } from 'react'
 
 import {
+  ShortcutRegisterContext,
   ShortcutsContext,
   type Handler,
   type ShortcutAction,
@@ -22,12 +23,13 @@ import {
  * next handler), exactly like returning `false`.
  */
 export function useShortcutAction(action: ShortcutAction, handler: Handler | null): void {
-  const ctx = useContext(ShortcutsContext)
-  // `register` is stable for the provider's lifetime; `ctx` itself changes
-  // whenever the help sheet toggles and must not re-register anything.
-  const register = ctx?.register
+  // Stable for the provider's lifetime and independent of the help-sheet
+  // state, so this hook never re-renders its caller when help toggles.
+  const register = useContext(ShortcutRegisterContext)
   const handlerRef = useRef(handler)
-  useEffect(() => {
+  // Layout effect: the ref must hold this render's handler before any key
+  // event can be dispatched after commit.
+  useLayoutEffect(() => {
     handlerRef.current = handler
   })
   useEffect(() => {
