@@ -98,6 +98,7 @@ describe('RecordsList row a11y', () => {
 
   it('advertises Enter only on the selected row link, without remounting it on selection change', () => {
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const nav = (scrollY = 0) => ({ from: '/books', queue: [1, 2], scrollY })
     const tree = (selectedId: number): React.JSX.Element => (
       <QueryClientProvider client={client}>
         <MemoryRouter initialEntries={['/books']}>
@@ -107,7 +108,8 @@ describe('RecordsList row a11y', () => {
             onSelect={vi.fn()}
             selected={new Set()}
             onToggleSelect={vi.fn()}
-            from="/books"
+            nav={nav}
+            isInmateReporter={false}
           />
         </MemoryRouter>
       </QueryClientProvider>

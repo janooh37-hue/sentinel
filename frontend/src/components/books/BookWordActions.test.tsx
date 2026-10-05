@@ -243,7 +243,7 @@ describe('Word action components', () => {
     vi.mocked(toast.success).mockClear()
     vi.spyOn(apiMod.api, 'discardWordSession').mockResolvedValue({ ...ACTIVE_SESSION_BOOK, voided_at: null })
     render(
-      createElement(WordSessionActions, { book: ACTIVE_SESSION_BOOK, labelled: true }),
+      createElement(WordSessionActions, { book: ACTIVE_SESSION_BOOK }),
       { wrapper: wrapper(makeQc()) },
     )
     await userEvent.click(screen.getByRole('button', { name: 'تجاهل المسودة…' }))

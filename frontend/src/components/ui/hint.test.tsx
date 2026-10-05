@@ -6,7 +6,7 @@ import { Hint } from './hint'
 import { IconAction } from './icon-action'
 import { TooltipProvider } from './tooltip'
 
-/** An explicit provider: these tests exercise Hint itself, not the standalone fallback. */
+/** An explicit provider with zero delay so tooltips open immediately. */
 function renderHint(ui: React.ReactElement, dir: 'ltr' | 'rtl' = 'ltr') {
   document.documentElement.dir = dir
   return render(<TooltipProvider delayDuration={0}>{ui}</TooltipProvider>)
@@ -60,17 +60,6 @@ describe('Hint', () => {
     expect(await screen.findByRole('tooltip')).toHaveTextContent('Next record')
     await user.keyboard('{Escape}')
     expect(screen.queryByRole('tooltip')).not.toBeInTheDocument()
-  })
-
-  it('works without an app-level TooltipProvider (standalone fallback)', async () => {
-    const user = userEvent.setup()
-    render(
-      <Hint label="Tip">
-        <button type="button">Go</button>
-      </Hint>,
-    )
-    await user.tab()
-    expect(await screen.findByRole('tooltip', {}, { timeout: 2000 })).toHaveTextContent('Tip')
   })
 
   it.each([
