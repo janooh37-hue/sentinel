@@ -133,9 +133,9 @@ def list_employees(
 def create_employee(
     payload: EmployeeCreate,
     db: Annotated[Session, Depends(get_db)],
-    _user: Annotated[User, Depends(require_capability("employees.create"))],
+    user: Annotated[User, Depends(require_capability("employees.create"))],
 ) -> EmployeeRead:
-    row = employee_service.create_employee(db, payload)
+    row = employee_service.create_employee(db, payload, actor_user_id=user.id)
     return EmployeeRead.model_validate(row).model_copy(update=_photo_fields(db, row.id))
 
 
@@ -206,9 +206,9 @@ def update_employee(
     employee_id: str,
     payload: EmployeeUpdate,
     db: Annotated[Session, Depends(get_db)],
-    _user: Annotated[User, Depends(require_capability("employees.edit"))],
+    user: Annotated[User, Depends(require_capability("employees.edit"))],
 ) -> EmployeeRead:
-    row = employee_service.update_employee(db, employee_id, payload)
+    row = employee_service.update_employee(db, employee_id, payload, actor_user_id=user.id)
     return EmployeeRead.model_validate(row).model_copy(
         update={**_photo_fields(db, row.id), **_passport_scan_field(row.id)}
     )

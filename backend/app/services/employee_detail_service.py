@@ -201,6 +201,21 @@ def get_employee_detail(db: Session, employee_id: str) -> sx.EmployeeDetailRead 
         )
     )
 
+    recent_status_events = list(
+        db.execute(
+            select(
+                models.EmployeeStatusEvent,
+                func.coalesce(func.nullif(models.User.display_name, ""), models.User.email),
+            )
+            .outerjoin(models.User, models.EmployeeStatusEvent.actor_user_id == models.User.id)
+            .where(models.EmployeeStatusEvent.employee_id == emp.id)
+            .order_by(
+                models.EmployeeStatusEvent.created_at.desc(), models.EmployeeStatusEvent.id.desc()
+            )
+            .limit(ACTIVITY_LIMIT)
+        ).tuples()
+    )
+
     activity = _build_activity(
         recent_docs,
         recent_leaves,
@@ -208,6 +223,7 @@ def get_employee_detail(db: Session, employee_id: str) -> sx.EmployeeDetailRead 
         recent_ledger,
         recent_absences,
         recent_duty_events,
+        recent_status_events,
     )
 
     recent_sms = [
@@ -255,6 +271,7 @@ def _build_activity(
     ledger: list[sx.RecentLedgerRead],
     absences: list[sx.RecentAbsenceRead],
     duty_events: list[models.DutyAssignmentEvent],
+    status_events: list[tuple[models.EmployeeStatusEvent, str | None]] | None = None,
 ) -> list[sx.ActivityItemRead]:
     items: list[sx.ActivityItemRead] = []
     for d in docs:
@@ -321,6 +338,23 @@ def _build_activity(
                 to_unit=event.to_unit,
                 to_post=event.to_post,
                 reason=event.reason,
+            )
+        )
+    for status_event, actor_name in status_events or []:
+        items.append(
+            sx.ActivityItemRead(
+                when=status_event.created_at,
+                kind="status",
+                summary=status_event.to_status,
+                ref_id=status_event.id,
+                from_status=status_event.from_status,
+                to_status=status_event.to_status,
+                effective_date=status_event.effective_date,
+                site=status_event.site,
+                return_date=status_event.return_date,
+                status_event_kind=status_event.kind,
+                status_source=status_event.source,
+                actor_name=actor_name,
             )
         )
     items.sort(key=lambda x: x.when, reverse=True)

@@ -26,10 +26,13 @@ from app.schemas.employee import (
     EMPLOYEE_STATUS_ACTIVE,
     EMPLOYEE_STATUS_RESIGNED,
     EMPLOYEE_STATUS_TERMINATED,
+    EMPLOYEE_STATUS_TRANSFERRED,
     EmployeeCreate,
     EmployeeUpdate,
     validate_status_end_date,
+    validate_transfer_fields,
 )
+from app.services import employee_status_history as history
 from app.services import workforce_schedule_service
 from app.services.extraction_service import _MATCH_THRESHOLD, _name_scores
 
@@ -146,7 +149,28 @@ def get_employee(db: Session, employee_id: str) -> Employee:
     return row
 
 
-def create_employee(db: Session, payload: EmployeeCreate) -> Employee:
+def _validate_transfer(
+    status: str,
+    end_date: date | None,
+    site: str | None,
+    return_date: date | None,
+) -> None:
+    try:
+        validate_transfer_fields(status, end_date, site, return_date)
+    except ValueError as exc:
+        raise ValidationFailedError(
+            "EMPLOYEE_INVALID_TRANSFER",
+            str(exc),
+            status=status,
+            end_date=str(end_date) if end_date else None,
+            transfer_site=site,
+            transfer_return_date=str(return_date) if return_date else None,
+        ) from exc
+
+
+def create_employee(
+    db: Session, payload: EmployeeCreate, *, actor_user_id: int | None = None
+) -> Employee:
     existing = db.get(Employee, payload.id)
     if existing is not None:
         raise ConflictError(
@@ -154,24 +178,97 @@ def create_employee(db: Session, payload: EmployeeCreate) -> Employee:
             f"Employee {payload.id!r} already exists",
             id=payload.id,
         )
-    row = Employee(**payload.model_dump())
+    data = payload.model_dump()
+    target: str = payload.status
+    end = payload.end_date
+    # Only Transferred keeps a site / return date.
+    if target == EMPLOYEE_STATUS_TRANSFERRED:
+        data["transfer_site"] = (payload.transfer_site or "").strip()
+    else:
+        data["transfer_site"] = None
+        data["transfer_return_date"] = None
+    site: str | None = data["transfer_site"]
+    return_date: date | None = data["transfer_return_date"]
+    scheduled = target != EMPLOYEE_STATUS_ACTIVE and end is not None and end > date.today()
+    if scheduled:
+        # Same rule as update_employee: a future departure stays Active.
+        data["pending_status"] = target
+        data["status"] = EMPLOYEE_STATUS_ACTIVE
+    row = Employee(**data)
     db.add(row)
+    if target != EMPLOYEE_STATUS_ACTIVE:
+        history.record_status_event(
+            db,
+            payload.id,
+            from_status=EMPLOYEE_STATUS_ACTIVE,
+            to_status=target,
+            effective_date=end,
+            kind=history.KIND_SCHEDULED if scheduled else history.KIND_CHANGED,
+            source=history.SOURCE_MANUAL,
+            actor_user_id=actor_user_id,
+            site=site,
+            return_date=return_date,
+        )
     db.commit()
     db.refresh(row)
     return row
 
 
-def update_employee(db: Session, employee_id: str, payload: EmployeeUpdate) -> Employee:
+def update_employee(
+    db: Session,
+    employee_id: str,
+    payload: EmployeeUpdate,
+    *,
+    actor_user_id: int | None = None,
+) -> Employee:
+    """Patch an employee, recording status history for real status changes.
+
+    History rules (``employee_status_events``):
+
+    * immediate change (today-or-past ``end_date``, status differs) -> ``changed``;
+    * future-dated change -> ``scheduled`` (row stays Active with
+      ``pending_status``); re-scheduling a different target/date/site records a
+      fresh ``scheduled``;
+    * clearing ``end_date`` on an Active row with a pending departure ->
+      ``scheduled_cancelled``;
+    * non-Active -> Active -> ``changed`` dated ``effective_date`` (default
+      today) with the old transfer site;
+    * no-op edits (the form re-sending the same status/end_date) and edits that
+      only touch ``transfer_site`` / ``transfer_return_date`` of an
+      already-Transferred employee record nothing.
+
+    ``effective_date`` is write-only: it never reaches the row.
+    """
     row = get_employee(db, employee_id)
     data: dict[str, Any] = payload.model_dump(exclude_unset=True)
+    effective_date_in: date | None = data.pop("effective_date", None)
 
     # A human-entered/confirmed passport number is provenance 'manual'.
     if "passport_no" in data:
         data["passport_no_source"] = "manual"
 
+    old_status = row.status
+    old_end = row.end_date
+    old_pending = row.pending_status
+    old_site = row.transfer_site
+    old_return = row.transfer_return_date
+
     # Merge the patch over the current row to evaluate the invariant.
     merged_status = data.get("status", row.status)
     merged_end = data.get("end_date", row.end_date)
+    requested_status = merged_status
+
+    # Validate the REQUESTED target (before a future date becomes a scheduled
+    # change). Only a Transferred target inherits the row's site / return date;
+    # for any other target only an explicit payload return date is checked, so
+    # Transferred -> Resigned is not rejected for the row's stale return date.
+    if requested_status == EMPLOYEE_STATUS_TRANSFERRED:
+        req_site = data.get("transfer_site", old_site)
+        req_return = data.get("transfer_return_date", old_return)
+    else:
+        req_site = None
+        req_return = data.get("transfer_return_date")
+    _validate_transfer(requested_status, merged_end, req_site, req_return)
 
     # Scheduled departure. A departure dated in the FUTURE keeps the employee
     # Active through their notice period — they are still working — and records
@@ -181,10 +278,14 @@ def update_employee(db: Session, employee_id: str, payload: EmployeeUpdate) -> E
     #
     # This lives in the service, not in StatusDialog, so the full EmployeeForm
     # gets the same rule and there is one place to be correct.
+    # A Transferred employee is already off this roster, so a later departure
+    # (e.g. resigning from the new site) applies at once instead of putting them
+    # back to Active for a notice period they are not serving here.
     is_scheduled_departure = (
         merged_status != EMPLOYEE_STATUS_ACTIVE
         and merged_end is not None
         and merged_end > date.today()
+        and row.status != EMPLOYEE_STATUS_TRANSFERRED
     )
     # A REAL reactivation, not merely a payload that happens to carry the
     # employee's current status. EmployeeForm submits every field it renders,
@@ -220,6 +321,95 @@ def update_employee(db: Session, employee_id: str, payload: EmployeeUpdate) -> E
             end_date=str(merged_end) if merged_end else None,
         ) from exc
 
+    # Transfer fields live on the row only while Transferred, or while a
+    # transfer is pending. Any other outcome (including leaving Transferred and
+    # reactivation) clears both.
+    final_status = data.get("status", row.status)
+    final_pending = data.get("pending_status", row.pending_status)
+    if final_status == EMPLOYEE_STATUS_TRANSFERRED or final_pending == EMPLOYEE_STATUS_TRANSFERRED:
+        if requested_status == EMPLOYEE_STATUS_TRANSFERRED:
+            data["transfer_site"] = (req_site or "").strip()
+            data["transfer_return_date"] = req_return
+    else:
+        data["transfer_site"] = None
+        data["transfer_return_date"] = None
+    if is_reactivation:
+        data["end_date"] = None
+
+    # --- status history -------------------------------------------------
+    today = date.today()
+    event: dict[str, Any] | None = None
+    new_site: str | None = data.get("transfer_site", old_site)
+    new_return: date | None = data.get("transfer_return_date", old_return)
+    if is_scheduled_departure:
+        unchanged = (
+            old_status == EMPLOYEE_STATUS_ACTIVE
+            and old_pending == requested_status
+            and old_end == merged_end
+            and old_site == new_site
+            and old_return == new_return
+        )
+        if not unchanged:
+            event = {
+                "from_status": EMPLOYEE_STATUS_ACTIVE,
+                "to_status": requested_status,
+                "effective_date": merged_end,
+                "kind": history.KIND_SCHEDULED,
+                "site": new_site,
+                "return_date": new_return,
+            }
+    elif is_reactivation:
+        event = {
+            "from_status": old_status,
+            "to_status": EMPLOYEE_STATUS_ACTIVE,
+            "effective_date": effective_date_in or today,
+            "kind": history.KIND_CHANGED,
+            "site": old_site,
+            "return_date": None,
+        }
+    elif old_status == EMPLOYEE_STATUS_ACTIVE and old_pending and is_end_date_cleared:
+        event = {
+            "from_status": EMPLOYEE_STATUS_ACTIVE,
+            "to_status": old_pending,
+            "effective_date": old_end,
+            "kind": history.KIND_SCHEDULED_CANCELLED,
+            "site": old_site,
+            "return_date": old_return,
+        }
+    elif is_immediate_departure and old_status != requested_status:
+        event = {
+            "from_status": old_status,
+            "to_status": requested_status,
+            "effective_date": merged_end,
+            "kind": history.KIND_CHANGED,
+            "site": new_site,
+            "return_date": new_return,
+        }
+    elif (
+        old_status == EMPLOYEE_STATUS_ACTIVE
+        and old_pending
+        and final_status == EMPLOYEE_STATUS_ACTIVE
+        and data.get("end_date") is not None
+        and data["end_date"] != old_end
+    ):
+        # Only the date of an already-pending departure moved.
+        event = {
+            "from_status": EMPLOYEE_STATUS_ACTIVE,
+            "to_status": old_pending,
+            "effective_date": data["end_date"],
+            "kind": history.KIND_SCHEDULED,
+            "site": new_site,
+            "return_date": new_return,
+        }
+    if event is not None:
+        history.record_status_event(
+            db,
+            row.id,
+            source=history.SOURCE_MANUAL,
+            actor_user_id=actor_user_id,
+            **event,
+        )
+
     for k, v in data.items():
         setattr(row, k, v)
     if "duty_unit" in data:
@@ -238,7 +428,7 @@ def update_employee(db: Session, employee_id: str, payload: EmployeeUpdate) -> E
 
 # Only these may be promoted out of `pending_status` into `status`.
 _PENDING_TARGETS: Final[frozenset[str]] = frozenset(
-    {EMPLOYEE_STATUS_RESIGNED, EMPLOYEE_STATUS_TERMINATED}
+    {EMPLOYEE_STATUS_RESIGNED, EMPLOYEE_STATUS_TERMINATED, EMPLOYEE_STATUS_TRANSFERRED}
 )
 
 
@@ -255,7 +445,7 @@ def apply_due_departures(db: Session, *, today: date | None = None) -> list[Empl
     because the filter is `<= today` rather than `== today`.
 
     `pending_status` is free text — SQLite has no enum — so the filter is
-    restricted to the two legal targets. A hand-edited or imported junk value is
+    restricted to the legal targets (`_PENDING_TARGETS`). A hand-edited or imported junk value is
     left in place rather than promoted into `status`.
     """
     cutoff = today or date.today()
@@ -270,20 +460,80 @@ def apply_due_departures(db: Session, *, today: date | None = None) -> list[Empl
         )
     )
     for row in rows:
-        # The `or` is unreachable — the WHERE clause admits only the two legal
+        # The `or` is unreachable — the WHERE clause admits only the legal
         # targets, never NULL — but `pending_status` is `str | None`, so it is
         # what narrows the type for the assignment. Not a real fallback.
-        row.status = row.pending_status or EMPLOYEE_STATUS_ACTIVE
+        target = row.pending_status or EMPLOYEE_STATUS_ACTIVE
+        history.record_status_event(
+            db,
+            row.id,
+            from_status=EMPLOYEE_STATUS_ACTIVE,
+            to_status=target,
+            effective_date=row.end_date,
+            kind=history.KIND_APPLIED,
+            source=history.SOURCE_SCHEDULER,
+            site=row.transfer_site,
+            return_date=row.transfer_return_date,
+        )
+        row.status = target
         row.pending_status = None
     if rows:
         db.commit()
     return rows
 
 
+def apply_due_transfer_returns(
+    db: Session, *, today: date | None = None
+) -> list[tuple[Employee, date, str | None]]:
+    """Return Transferred employees whose expected return date has come.
+
+    Each employee with ``status == 'Transferred'`` and
+    ``transfer_return_date <= today`` becomes Active again; ``end_date``,
+    ``transfer_site``, ``transfer_return_date`` and ``pending_status`` are
+    cleared and an ``applied`` Transferred -> Active event is recorded dated the
+    return date. Returns ``(employee, return_date, old_site)`` per row moved.
+    Idempotent (the return date is cleared) and catches up missed runs.
+    """
+    cutoff = today or date.today()
+    rows = list(
+        db.scalars(
+            select(Employee).where(
+                Employee.status == EMPLOYEE_STATUS_TRANSFERRED,
+                Employee.transfer_return_date.is_not(None),
+                Employee.transfer_return_date <= cutoff,
+            )
+        )
+    )
+    moved: list[tuple[Employee, date, str | None]] = []
+    for row in rows:
+        returned_on = cast(date, row.transfer_return_date)
+        site = row.transfer_site
+        history.record_status_event(
+            db,
+            row.id,
+            from_status=EMPLOYEE_STATUS_TRANSFERRED,
+            to_status=EMPLOYEE_STATUS_ACTIVE,
+            effective_date=returned_on,
+            kind=history.KIND_APPLIED,
+            source=history.SOURCE_SCHEDULER,
+            site=site,
+        )
+        row.status = EMPLOYEE_STATUS_ACTIVE
+        row.end_date = None
+        row.pending_status = None
+        row.transfer_site = None
+        row.transfer_return_date = None
+        moved.append((row, returned_on, site))
+    if rows:
+        db.commit()
+    return moved
+
+
 __all__ = [
     "LIST_DEFAULT_LIMIT",
     "LIST_MAX_LIMIT",
     "apply_due_departures",
+    "apply_due_transfer_returns",
     "create_employee",
     "get_employee",
     "list_employees",

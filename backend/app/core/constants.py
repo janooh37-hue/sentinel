@@ -170,10 +170,12 @@ STAMP_STYLES: Final[tuple[str, ...]] = (
 EMPLOYEE_STATUS_ACTIVE: Final[str] = "Active - نشط"
 EMPLOYEE_STATUS_RESIGNED: Final[str] = "Resigned - مستقيل"
 EMPLOYEE_STATUS_TERMINATED: Final[str] = "Terminated - مفصول"
+EMPLOYEE_STATUS_TRANSFERRED: Final[str] = "Transferred - منقول"
 EMPLOYEE_STATUS_LIST: Final[tuple[str, ...]] = (
     EMPLOYEE_STATUS_ACTIVE,
     EMPLOYEE_STATUS_RESIGNED,
     EMPLOYEE_STATUS_TERMINATED,
+    EMPLOYEE_STATUS_TRANSFERRED,
 )
 
 
