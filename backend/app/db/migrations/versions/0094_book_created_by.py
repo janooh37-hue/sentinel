@@ -52,8 +52,16 @@ def upgrade() -> None:
         batch.add_column(sa.Column("created_by_user_id", sa.Integer(), nullable=True))
         batch.create_index("ix_books_created_by_user_id", ["created_by_user_id"])
 
-    # SQLite batch recreation drops triggers attached to the old books table.
+    # Defensive no-op: batch add_column/create_index does not recreate `books`,
+    # so the triggers survive and IF NOT EXISTS makes this harmless. The
+    # downgrade restore below is the required one (drop_column recreates `books`).
     _restore_books_fts_triggers()
+
+    # Temporary index so the per-book session lookup below is not a full scan.
+    op.execute(
+        "CREATE INDEX IF NOT EXISTS tmp_ix_bes_book_created "
+        "ON book_edit_sessions (book_id, created_at, id)"
+    )
 
     # Backfill precedence: v1 version creator, then the earliest Word edit
     # session user, then the submitter. Ledger `created_by` is a G-number string
@@ -82,10 +90,11 @@ def upgrade() -> None:
                 ),
                 books.submitted_by_user_id
             )
-            WHERE created_by_user_id IS NULL
             """
         )
     )
+
+    op.execute("DROP INDEX IF EXISTS tmp_ix_bes_book_created")
 
 
 def downgrade() -> None:

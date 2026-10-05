@@ -67,6 +67,7 @@ def _seed_pre_migration_db(engine: Engine) -> None:
             (4, None),  # nothing recorded -> stays NULL
             (5, 31),  # v1 creator NULL, no session -> submitter
             (6, None),  # only a revision row exists: MIN(version_no) is that row
+            (7, None),  # two sessions tie on created_at -> lowest session id
         ):
             c.execute(
                 text("INSERT INTO books (id, submitted_by_user_id) VALUES (:id, :s)"),
@@ -93,6 +94,8 @@ def _seed_pre_migration_db(engine: Engine) -> None:
             (1, 21, "2026-01-01 00:00:00"),
             (2, 22, "2026-02-02 00:00:00"),  # later session, listed first
             (2, 21, "2026-02-01 00:00:00"),  # earliest session -> 21
+            (7, 23, "2026-03-01 00:00:00"),  # tied created_at: lowest id wins -> 23
+            (7, 24, "2026-03-01 00:00:00"),
         ):
             c.execute(
                 text(
@@ -147,8 +150,11 @@ def test_model_declares_an_indexed_nullable_creator_column() -> None:
 
 
 def test_there_is_exactly_one_head() -> None:
-    heads = ScriptDirectory.from_config(Config(str(ROOT / "alembic.ini"))).get_heads()
-    assert heads == [HEAD]
+    script = ScriptDirectory.from_config(Config(str(ROOT / "alembic.ini")))
+    heads = script.get_heads()
+    assert len(heads) == 1
+    assert HEAD in {r.revision for r in script.walk_revisions("base", heads[0])}
+    assert script.get_revision(HEAD).down_revision == PARENT
 
 
 def test_upgrade_backfills_in_precedence_order(tmp_path: Path) -> None:
@@ -158,7 +164,7 @@ def test_upgrade_backfills_in_precedence_order(tmp_path: Path) -> None:
 
     command.upgrade(_config(database), HEAD)
 
-    assert _creators(engine) == {1: 11, 2: 21, 3: 31, 4: None, 5: 31, 6: 12}
+    assert _creators(engine) == {1: 11, 2: 21, 3: 31, 4: None, 5: 31, 6: 12, 7: 23}
     with engine.connect() as c:
         assert "ix_books_created_by_user_id" in {
             index["name"] for index in inspect(c).get_indexes("books")
@@ -166,7 +172,8 @@ def test_upgrade_backfills_in_precedence_order(tmp_path: Path) -> None:
     engine.dispose()
 
 
-def test_upgrade_keeps_fts_indexing_new_and_updated_rows(tmp_path: Path) -> None:
+def test_upgrade_keeps_fts_triggers_indexing_new_and_updated_rows(tmp_path: Path) -> None:
+    """Triggers survive upgrade (batch add_column leaves `books` in place)."""
     database = tmp_path / "created-by-fts.db"
     engine = create_engine(f"sqlite:///{database}")
     _seed_pre_migration_db(engine)
@@ -199,7 +206,7 @@ def test_downgrade_and_reupgrade_round_trip(tmp_path: Path) -> None:
         assert "ix_books_created_by_user_id" not in {
             index["name"] for index in inspector.get_indexes("books")
         }
-        assert c.execute(text("SELECT COUNT(*) FROM books")).scalar_one() == 6
+        assert c.execute(text("SELECT COUNT(*) FROM books")).scalar_one() == 7
     assert _triggers(engine) == {"books_ai", "books_ad", "books_au"}
     with engine.begin() as c:
         c.execute(text("INSERT INTO books (id, search_text) VALUES (101, 'okapi')"))
@@ -207,6 +214,6 @@ def test_downgrade_and_reupgrade_round_trip(tmp_path: Path) -> None:
 
     command.upgrade(config, HEAD)
 
-    assert _creators(engine) == {1: 11, 2: 21, 3: 31, 4: None, 5: 31, 6: 12, 101: None}
+    assert _creators(engine) == {1: 11, 2: 21, 3: 31, 4: None, 5: 31, 6: 12, 7: 23, 101: None}
     assert _triggers(engine) == {"books_ai", "books_ad", "books_au"}
     engine.dispose()
