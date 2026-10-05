@@ -832,17 +832,19 @@ def _run_pending_departure_flip() -> None:
             status_en, status_ar = labels
             name_ar = emp.name_ar or emp.name_en
             ref = _isolate(f"({emp.id})")
-            if emp.status == EMPLOYEE_STATUS_TRANSFERRED and emp.transfer_site:
+            if emp.status == EMPLOYEE_STATUS_TRANSFERRED:
+                # The site is required on entry; a hand-edited row without one
+                # still reads as a transfer, just without the destination.
+                site_en = f" to {emp.transfer_site}" if emp.transfer_site else ""
+                site_ar = f" إلى {_isolate(emp.transfer_site)}" if emp.transfer_site else ""
                 messages = {
                     "en": (
                         "GSSG Manager",
-                        f"Transfer applied\n{emp.name_en} ({emp.id}) "
-                        f"transferred to {emp.transfer_site}",
+                        f"Transfer applied\n{emp.name_en} ({emp.id}) transferred{site_en}",
                     ),
                     "ar": (
                         "GSSG Manager",
-                        f"تم تطبيق النقل\n{_isolate(name_ar)} {ref} "
-                        f"نُقل إلى {_isolate(emp.transfer_site)}",
+                        f"تم تطبيق النقل\n{_isolate(name_ar)} {ref} نُقل{site_ar}",
                     ),
                 }
             else:

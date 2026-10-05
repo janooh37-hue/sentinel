@@ -26,7 +26,11 @@ depends_on: str | Sequence[str] | None = None
 def _parse_date(value: object) -> date | None:
     if not value:
         return None
-    return datetime.strptime(str(value)[:10], "%Y-%m-%d").date()
+    try:
+        return datetime.strptime(str(value)[:10], "%Y-%m-%d").date()
+    except ValueError:
+        # A malformed legacy value must not abort the upgrade.
+        return None
 
 
 def upgrade() -> None:
