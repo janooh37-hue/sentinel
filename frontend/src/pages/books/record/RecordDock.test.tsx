@@ -11,7 +11,6 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { BookApprovalStepRead, BookRead } from '@/lib/api'
 import i18n from '@/lib/i18n'
-import { RecordDeleteProvider } from '../RecordDeleteProvider'
 import { recordNextStep, type NextStepContext } from '../recordNextStep'
 import type { RecordActions, RecordCaps, RecordView } from './recordActions'
 import { RecordDock } from './RecordDock'
@@ -149,6 +148,7 @@ function mount(book: BookRead, s: Setup = {}) {
     openMobileDecision: vi.fn(),
     submitReport: vi.fn(),
     emailViaOutlook: vi.fn(),
+    requestDelete: vi.fn(),
     setUnfileOpen: vi.fn(),
     setArmedFor: vi.fn(),
     mobileDockSignRef: { current: null },
@@ -159,9 +159,7 @@ function mount(book: BookRead, s: Setup = {}) {
   render(
     <QueryClientProvider client={qc}>
       <MemoryRouter>
-        <RecordDeleteProvider>
-          <RecordDock book={book} caps={caps} view={view} actions={actions} />
-        </RecordDeleteProvider>
+        <RecordDock book={book} caps={caps} view={view} actions={actions} />
       </MemoryRouter>
     </QueryClientProvider>,
   )
@@ -284,7 +282,7 @@ describe('RecordDock', () => {
       expect(within(sheet).queryByRole('button', { name: /Mark up/ })).toBeNull()
     })
 
-    it('Delete is the last row for a draft: confirm schedules the delete and goes back', async () => {
+    it('Delete is the last row for a draft: it hands off to the guarded requestDelete and schedules nothing itself', async () => {
       const { actions } = mount(bookOf('none'))
       await userEvent.click(screen.getByRole('button', { name: 'More' }))
       const sheet = await screen.findByRole('dialog')
@@ -293,12 +291,12 @@ describe('RecordDock', () => {
       expect(rows[rows.length - 1]).toBe(del)
 
       await userEvent.click(del)
-      const confirm = await screen.findByRole('dialog', { name: /Delete record/ })
-      expect(within(confirm).getByText(/Delete record/)).toBeVisible()
-      await userEvent.click(within(confirm).getByRole('button', { name: 'Delete draft' }))
 
-      expect(actions.back).toHaveBeenCalledTimes(1)
-      expect(toastFn).toHaveBeenCalledWith(expect.stringContaining('deleted'), expect.anything())
+      // The record page owns the confirm dialog and the deleteBlocked re-check.
+      expect(actions.requestDelete).toHaveBeenCalledTimes(1)
+      expect(screen.queryByRole('dialog', { name: /Delete record/ })).toBeNull()
+      expect(actions.back).not.toHaveBeenCalled()
+      expect(toastFn).not.toHaveBeenCalled()
     })
 
     it('shows why Delete is unavailable, as text, and does not act on it', async () => {

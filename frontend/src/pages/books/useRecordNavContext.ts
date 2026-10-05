@@ -117,7 +117,13 @@ const EMPTY_QUEUE: AwaitingQueue = {
   nextVersionId: null,
 }
 
-function queueFromIds(ids: readonly number[], bookId: number | null): AwaitingQueue {
+function queueFromIds(
+  allIds: readonly number[],
+  bookId: number | null,
+  hiddenIds?: ReadonlySet<number>,
+): AwaitingQueue {
+  // Records mid-delete drop out of the walk (the open record itself stays put).
+  const ids = hiddenIds?.size ? allIds.filter((id) => id === bookId || !hiddenIds.has(id)) : allIds
   const at = bookId === null ? -1 : ids.indexOf(bookId)
   if (at === -1) return { ...EMPTY_QUEUE, total: ids.length }
   return {
@@ -134,6 +140,7 @@ export function useRecordNavContext({
   bookId,
   versionId,
   approvalContext,
+  hiddenIds,
 }: {
   /** The record on screen. */
   bookId: number | null
@@ -141,15 +148,23 @@ export function useRecordNavContext({
   versionId: number | null
   /** The approvals-log context parsed from the URL; null outside it. */
   approvalContext: ApprovalContext | null
+  /** Records whose delete is pending; queue neighbours never include them. */
+  hiddenIds?: ReadonlySet<number>
 }): RecordNavContext {
   const navigate = useNavigate()
   const location = useLocation()
   const navState = isRecordNavState(location.state) ? location.state : null
 
-  const approvalQueue = useAwaitingQueue(bookId, versionId, approvalContext, approvalContext != null)
+  const approvalQueue = useAwaitingQueue(
+    bookId,
+    versionId,
+    approvalContext,
+    approvalContext != null,
+    hiddenIds,
+  )
   const queue = useMemo(
-    () => (approvalContext ? approvalQueue : queueFromIds(navState?.queue ?? [], bookId)),
-    [approvalContext, approvalQueue, navState, bookId],
+    () => (approvalContext ? approvalQueue : queueFromIds(navState?.queue ?? [], bookId, hiddenIds)),
+    [approvalContext, approvalQueue, navState, bookId, hiddenIds],
   )
 
   const back = useCallback(() => {

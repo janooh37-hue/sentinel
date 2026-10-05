@@ -6,6 +6,7 @@ import { Link } from 'react-router-dom'
 
 import { EmptyState } from '@/components/ui/empty-state'
 import { api, type BookRead } from '@/lib/api'
+import { useRecordDelete } from '@/pages/books/RecordDeleteProvider'
 import { StateSeal } from '@/pages/books/StateSeal'
 
 const PAGE_SIZE = 4
@@ -15,11 +16,12 @@ type ReportState = 'pending' | 'approved'
 function ReportSection({ state }: { state: ReportState }): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const [offset, setOffset] = useState(0)
+  const { pendingIds } = useRecordDelete()
   const query = useQuery({
     queryKey: ['books', 'inmate-reporter-dashboard', state, offset],
     queryFn: () => api.listBooks({ approval_state: state, limit: PAGE_SIZE, offset }),
   })
-  const items = query.data?.items ?? []
+  const items = (query.data?.items ?? []).filter((book) => !pendingIds.has(book.id))
   const total = query.data?.total ?? 0
   const titleKey = state === 'pending' ? 'pending' : 'approved'
 

@@ -9,12 +9,13 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
+import { MemoryRouter, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type * as ApiModule from '@/lib/api'
 import type * as AuthContextModule from '@/lib/authContext'
 import { api } from '@/lib/api'
+import { toast } from 'sonner'
 import { BookRecordPage } from './BookRecordPage'
 import { RecordDeleteProvider } from './RecordDeleteProvider'
 
@@ -101,10 +102,12 @@ function fixture(overrides: Record<string, unknown> = {}): unknown {
 
 function LocationProbe(): React.JSX.Element {
   const location = useLocation()
+  const navigate = useNavigate()
   return (
     <>
       <output data-testid="loc">{`${location.pathname}${location.search}`}</output>
       <output data-testid="loc-state">{JSON.stringify(location.state)}</output>
+      <button type="button" onClick={() => navigate(-1)}>history-back</button>
     </>
   )
 }
@@ -210,5 +213,30 @@ describe('BookRecordPage — Delete', () => {
     })
     expect(api.deleteBook).toHaveBeenCalledTimes(1)
     expect(api.deleteBook).toHaveBeenCalledWith(48)
+  })
+
+  it('renders the record inert while its delete is pending, and live again after Undo', async () => {
+    vi.mocked(api.getBook).mockResolvedValue(fixture() as never)
+    renderRecord()
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Tools' }))
+    await userEvent.click(await screen.findByRole('menuitem', { name: /^Delete draft/ }))
+    const dialog = await screen.findByRole('dialog')
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Delete draft' }))
+    await waitFor(() => expect(screen.getByTestId('loc')).toHaveTextContent('/books?status=draft'))
+
+    // Browser Back during the undo window lands on the doomed record again.
+    await userEvent.click(screen.getByRole('button', { name: 'history-back' }))
+    expect(await screen.findByTestId('record-pending-delete')).toBeVisible()
+    expect(screen.queryByRole('button', { name: 'Tools' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /^Delete/ })).not.toBeInTheDocument()
+    expect(api.deleteBook).not.toHaveBeenCalled()
+
+    // Undo (the toast action) clears the pending id: the record is interactive again.
+    const undoOptions = vi.mocked(toast).mock.calls.at(-1)?.[1] as unknown as { action: { onClick: () => void } }
+    act(() => undoOptions.action.onClick())
+    expect(await screen.findByRole('button', { name: 'Tools' })).toBeInTheDocument()
+    expect(screen.queryByTestId('record-pending-delete')).not.toBeInTheDocument()
+    expect(api.deleteBook).not.toHaveBeenCalled()
   })
 })

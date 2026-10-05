@@ -21,6 +21,12 @@ import type { ApprovalLogItem, ApprovalSummaryResponse } from '@/lib/api'
 import { paperKey, type Paper } from './recordPapers'
 import { ApprovalsPage } from './ApprovalsPage'
 
+const deleteState = vi.hoisted(() => ({ pendingIds: new Set<number>() as ReadonlySet<number> }))
+
+vi.mock('./RecordDeleteProvider', () => ({
+  useRecordDelete: () => ({ scheduleDelete: vi.fn(), pendingIds: deleteState.pendingIds }),
+}))
+
 vi.mock('@/lib/authContext', () => ({
   useAuth: () => ({ status: 'authed', user: { id: 7 } }),
 }))
@@ -334,6 +340,7 @@ describe('ApprovalsPage pagination', () => {
 
 describe('ApprovalsPage rows', () => {
   beforeEach(() => {
+    deleteState.pendingIds = new Set()
     vi.mocked(api.getApprovalSummary).mockResolvedValue(summary())
   })
 
@@ -348,6 +355,28 @@ describe('ApprovalsPage rows', () => {
     expect(await screen.findByText('HR-0001')).toBeInTheDocument()
     expect(screen.getByText('Pending one')).toBeInTheDocument()
     expect(screen.getByText('Submitter')).toBeInTheDocument()
+  })
+
+  it('hides a record whose delete is pending, from the rows and the queue handed to the record', async () => {
+    deleteState.pendingIds = new Set([2])
+    vi.mocked(api.listApprovalLog).mockResolvedValue({
+      items: [
+        row({ book_id: 1, ref_number: 'HR-0001' }),
+        row({ book_id: 2, ref_number: 'HR-0002' }),
+        row({ book_id: 3, ref_number: 'HR-0003' }),
+      ],
+      total: 3,
+      limit: 100,
+      offset: 0,
+    })
+    renderPage()
+    await userEvent.click(await screen.findByText('HR-0001'))
+    expect(screen.queryByText('HR-0002')).not.toBeInTheDocument()
+    await waitFor(() =>
+      expect(JSON.parse(screen.getByTestId('location-state').textContent ?? 'null')).toMatchObject({
+        queue: [1, 3],
+      }),
+    )
   })
 
   it('shows a late-advisory badge and the record outcome for a decided book with a still-pending review', async () => {

@@ -35,6 +35,8 @@ export function useAwaitingQueue(
   versionId: number | null,
   context: ApprovalContext | null,
   enabled: boolean,
+  /** Records whose delete is pending (`useRecordDelete().pendingIds`): never offered as a neighbour. */
+  hiddenIds?: ReadonlySet<number>,
 ): AwaitingQueue {
   const { data } = useQuery({
     queryKey: ['books', 'approval-log', 'neighbors', bookId, versionId, context],
@@ -50,12 +52,14 @@ export function useAwaitingQueue(
     staleTime: 30_000,
   })
   if (!data) return EMPTY
+  const prev = data.previous && !hiddenIds?.has(data.previous.book_id) ? data.previous : null
+  const next = data.next && !hiddenIds?.has(data.next.book_id) ? data.next : null
   return {
     position: data.position,
     total: data.total,
-    prevId: data.previous?.book_id ?? null,
-    prevVersionId: data.previous?.version_id ?? null,
-    nextId: data.next?.book_id ?? null,
-    nextVersionId: data.next?.version_id ?? null,
+    prevId: prev?.book_id ?? null,
+    prevVersionId: prev?.version_id ?? null,
+    nextId: next?.book_id ?? null,
+    nextVersionId: next?.version_id ?? null,
   }
 }

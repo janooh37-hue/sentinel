@@ -25,14 +25,11 @@ import {
   UserCog,
   X,
 } from 'lucide-react'
-import { useId, useState } from 'react'
+import { useId } from 'react'
 import { useTranslation } from 'react-i18next'
 
-import { ConfirmDialog } from '@/components/ui/confirm-dialog'
-import { bidi } from '@/lib/bidi'
 import { cn } from '@/lib/utils'
 import { deleteBlockReason, deleteReasonKey } from '../recordDelete'
-import { useRecordDelete } from '../RecordDeleteProvider'
 import type { NextStep } from '../recordNextStep'
 import type { RecordPieceProps } from './recordActions'
 
@@ -141,8 +138,6 @@ export function RecordMoreSheet({
   onOpenChange,
 }: RecordMoreSheetProps): React.JSX.Element | null {
   const { t } = useTranslation()
-  const { scheduleDelete } = useRecordDelete()
-  const [confirmDelete, setConfirmDelete] = useState(false)
   if (!book) return null
 
   const { isInmateReporter, canMark, canMutateCurrent, canOverrideState, canManageRevisionAccess, canManageIncludedPapers, canManageSignedPaper } = caps
@@ -297,7 +292,7 @@ export function RecordMoreSheet({
       reason: reasonOf(deleteReasonKey(blockReason) ?? undefined),
       danger: true,
       testId: 'record-more-delete',
-      onSelect: () => setConfirmDelete(true),
+      onSelect: () => actions.requestDelete(),
     })
   }
 
@@ -363,19 +358,6 @@ export function RecordMoreSheet({
           </Dialog.Content>
         </Dialog.Portal>
       </Dialog.Root>
-
-      <ConfirmDialog
-        open={confirmDelete}
-        onOpenChange={setConfirmDelete}
-        title={t('books.record.deleteTitle', { ref: bidi(book.ref_number) })}
-        description={t('books.record.deleteBody')}
-        confirmLabel={state === 'none' ? t('books.record.deleteDraft') : t('books.record.delete')}
-        destructive
-        onConfirm={() => {
-          scheduleDelete([{ id: book.id, ref: book.ref_number }])
-          actions.back()
-        }}
-      />
     </>
   )
 }
