@@ -311,3 +311,38 @@ def test_scoped_projection_exposes_creator_id_and_name_but_not_g(api_db: Session
     assert body["created_by_user_id"] == creator.id
     assert body["created_by_name"] == "Scoped Creator"
     assert body["created_by_g"] is None
+
+
+def test_inmate_reporter_created_by_me_never_widens_visibility(api_db: Session) -> None:
+    """``created_by_me`` narrows on top of the reporter visibility clause: a
+    staff-created shared record and another reporter's draft stay out of the
+    list and the facet counts, and so does a draft the reporter 'created' but
+    whose original creator is someone else (hidden by visibility)."""
+    reporter = make_user(api_db, role="inmate_reporter", email="rep@x.ae")
+    other_reporter = make_user(api_db, role="inmate_reporter", email="rep2@x.ae")
+    staff = make_user(api_db, role="operator", email="staff@x.ae")
+    _hand_built(api_db, book_id=1, creator=reporter, state="pending", version_creator=reporter)
+    _hand_built(api_db, book_id=2, creator=staff, state="approved", version_creator=staff)
+    _hand_built(
+        api_db, book_id=3, creator=other_reporter, state="none", version_creator=other_reporter
+    )
+    _hand_built(api_db, book_id=4, creator=reporter, state="none", version_creator=other_reporter)
+    # Reporters only hold the violations category; move the seeded books there.
+    api_db.add(BookCategory(id="NAT", prefix="NAT"))
+    api_db.flush()
+    for book in api_db.query(Book).all():
+        book.category_id = "NAT"
+        book.versions[0].template_id = "Inmate Conduct Violations"
+    api_db.commit()
+
+    client = _client(api_db, reporter)
+    response = client.get("/api/v1/books", params={"created_by_me": True, "limit": 100})
+    assert response.status_code == 200
+    listed = response.json()
+    assert [item["id"] for item in listed["items"]] == [1]
+    assert listed["total"] == 1
+
+    facets = client.get("/api/v1/books/facets", params={"created_by_me": True}).json()
+    assert facets["total"] == 1
+    assert facets["states"] == {"pending": 1}
+    assert sum(s["count"] for s in facets["services"]) == 1

@@ -12,7 +12,7 @@ from datetime import datetime
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.api.deps import get_current_user
@@ -257,11 +257,13 @@ def _owned_book(
     subject: str = "whatever",
     approval_state: str = "none",
     created_at: datetime | None = None,
+    book_id: int | None = None,
 ) -> Book:
     if db.get(BookCategory, "GS") is None:
         db.add(BookCategory(id="GS", prefix="GS"))
         db.flush()
     book = Book(
+        id=book_id,
         ref_number=ref,
         category_id="GS",
         subject=subject,
@@ -379,13 +381,34 @@ def test_list_is_newest_first_for_every_approval_state(db_session: Session) -> N
 
 def test_equal_timestamps_break_ties_by_id_descending(db_session: Session) -> None:
     same = datetime(2026, 7, 1, 9, 0)
-    books = [
-        _owned_book(db_session, ref=f"T-{i}", creator=None, created_at=same) for i in range(1, 5)
-    ]
+    # Insertion order differs from id order, so only an explicit id tiebreak
+    # (not rowid scan order) yields a stable descending sequence.
+    for book_id in (3, 1, 4, 2):
+        _owned_book(db_session, ref=f"T-{book_id}", creator=None, created_at=same, book_id=book_id)
     db_session.commit()
 
     rows, _total, _ = book_service.list_books(db_session, limit=500)
-    assert [r.id for r in rows] == sorted((b.id for b in books), reverse=True)
+    assert [r.id for r in rows] == [4, 3, 2, 1]
 
-    page, _total, _ = book_service.list_books(db_session, limit=2, offset=1)
-    assert [r.id for r in page] == sorted((b.id for b in books), reverse=True)[1:3]
+    paged = [
+        book_service.list_books(db_session, limit=1, offset=offset)[0][0].id for offset in range(4)
+    ]
+    assert paged == [4, 3, 2, 1]
+
+    # SQLite scans the created_at index backwards and returns ties in rowid
+    # order, so the behaviour above holds by accident without the tiebreak.
+    # Pin the guarantee itself: the list query must order by id explicitly.
+    statements: list[str] = []
+
+    def _capture(_conn, _cursor, statement, *_args) -> None:
+        statements.append(statement)
+
+    engine = db_session.get_bind()
+    event.listen(engine, "before_cursor_execute", _capture)
+    try:
+        book_service.list_books(db_session, limit=2, offset=1)
+    finally:
+        event.remove(engine, "before_cursor_execute", _capture)
+    ordered = [s for s in statements if "ORDER BY" in s and "books.created_at DESC" in s]
+    assert ordered
+    assert all("books.created_at DESC, books.id DESC" in s for s in ordered)
