@@ -62,6 +62,17 @@ describe('Hint', () => {
     expect(screen.queryByRole('tooltip')).not.toBeInTheDocument()
   })
 
+  it('works without an app-level TooltipProvider (standalone fallback)', async () => {
+    const user = userEvent.setup()
+    render(
+      <Hint label="Tip">
+        <button type="button">Go</button>
+      </Hint>,
+    )
+    await user.tab()
+    expect(await screen.findByRole('tooltip', {}, { timeout: 2000 })).toHaveTextContent('Tip')
+  })
+
   it.each([
     ['ltr', 'start', 'left'],
     ['ltr', 'end', 'right'],
