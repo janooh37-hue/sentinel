@@ -164,3 +164,80 @@ def test_facets_agree_with_the_service_filter(db_session: Session) -> None:
             db_session, service_id=facet.service_id, limit=500
         )
         assert total == facet.count, f"{facet.service_id}: {total} != {facet.count}"
+
+
+def _seed_created_by(db: Session) -> User:
+    """`_seed` rows, with F-1, F-2, F-4 and F-9 created by `me` and F-3 by someone else."""
+    _seed(db)
+    me = User(email="me@test.ae", password_hash="x", role="admin", status="active")
+    other = User(email="other@test.ae", password_hash="x", role="admin", status="active")
+    db.add_all([me, other])
+    db.flush()
+    for ref, creator in (
+        ("F-1", me),
+        ("F-2", me),
+        ("F-4", me),
+        ("F-9", me),
+        ("F-3", other),
+    ):
+        db.query(Book).filter_by(ref_number=ref).one().created_by_user_id = creator.id
+    db.commit()
+    return me
+
+
+def test_created_by_me_facets_cover_only_my_records(db_session: Session) -> None:
+    me = _seed_created_by(db_session)
+    all_records, services = book_service.service_facets(db_session, me, created_by_me=True)
+    assert all_records.count == 4
+    assert all_records.states == {"pending": 1, "approved": 2, "none": 1}
+    by_id = {s.service_id: s for s in services}
+    assert by_id["Leave Application Form"].count == 2
+    assert by_id["Leave Application Form"].states == {"pending": 1, "approved": 1}
+    assert by_id["Report"].count == 1
+    assert by_id[OTHER_SERVICE_ID].count == 1
+    assert sum(s.count for s in services) == all_records.count
+
+
+def test_created_by_me_facets_agree_with_the_filtered_list(db_session: Session) -> None:
+    """The :158-166 invariant, under created_by_me: every facet count equals the
+    total the list returns for the same filter pair."""
+    me = _seed_created_by(db_session)
+    all_records, services = book_service.service_facets(db_session, me, created_by_me=True)
+    _rows, list_total, _ = book_service.list_books(
+        db_session, user=me, created_by_me=True, limit=500
+    )
+    assert list_total == all_records.count
+    for facet in services:
+        _rows, total, _ = book_service.list_books(
+            db_session, user=me, created_by_me=True, service_id=facet.service_id, limit=500
+        )
+        assert total == facet.count, f"{facet.service_id}: {total} != {facet.count}"
+        for state, count in facet.states.items():
+            _rows, state_total, _ = book_service.list_books(
+                db_session,
+                user=me,
+                created_by_me=True,
+                service_id=facet.service_id,
+                approval_state=state,
+                limit=500,
+            )
+            assert state_total == count
+
+
+def test_created_by_me_is_off_by_default(db_session: Session) -> None:
+    me = _seed_created_by(db_session)
+    all_records, _services = book_service.service_facets(db_session, me)
+    assert all_records.count == 10
+
+
+def test_route_created_by_me(api_db: Session) -> None:
+    me = _seed_created_by(api_db)
+    app = create_app()
+    app.dependency_overrides[get_db] = lambda: api_db
+    app.dependency_overrides[get_current_user] = lambda: me
+    client = TestClient(app)
+    mine = client.get("/api/v1/books/facets", params={"created_by_me": True}).json()
+    assert mine["total"] == 4
+    assert sum(s["count"] for s in mine["services"]) == 4
+    everyone = client.get("/api/v1/books/facets").json()
+    assert everyone["total"] == 10

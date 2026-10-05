@@ -1,7 +1,8 @@
 /**
- * Pure helpers for BookDetailDrawer, split into a sibling module so the
- * component file stays component-only for react-refresh (repo convention,
- * mirrors `authContext.ts` next to `AuthProvider.tsx`).
+ * Pure helpers for the book record / approval surfaces (footer action,
+ * send-for-approval and signed-copy gates), kept in a component-free module for
+ * react-refresh (repo convention, mirrors `authContext.ts` next to
+ * `AuthProvider.tsx`).
  */
 
 export type FooterAction = 'decide' | 'revise' | 'submit' | 'review' | 'none'

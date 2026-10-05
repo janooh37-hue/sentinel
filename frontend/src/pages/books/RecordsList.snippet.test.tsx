@@ -11,16 +11,24 @@ import { describe, it, expect, vi } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createElement, type ReactNode } from 'react'
+import { MemoryRouter } from 'react-router-dom'
 
 import { RecordsList } from './RecordsList'
 import type { BookRead } from '@/lib/api'
+import type { RecordNavState } from './useRecordNavContext'
+
+const NAV: RecordNavState = { from: '/books', queue: [], scrollY: 0 }
 
 // RecordsList reads service labels via useServiceLabel(), which queries
 // ['templates'] through React Query — every render needs a provider.
 function renderWithClient(ui: React.ReactElement): ReturnType<typeof render> {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
-    createElement(QueryClientProvider, { client: qc }, ui as unknown as ReactNode),
+    createElement(
+      QueryClientProvider,
+      { client: qc },
+      createElement(MemoryRouter, null, ui as unknown as ReactNode),
+    ),
   )
 }
 
@@ -29,7 +37,6 @@ vi.mock('react-i18next', () => ({
     t: (k: string) => {
       const ar: Record<string, string> = {
         'books.search.bodyMatch': 'تطابق في نص الكتاب',
-        'books.empty': 'لا توجد إدخالات',
         'books.pane.papers': 'الأوراق',
       }
       return ar[k] ?? k
@@ -93,7 +100,9 @@ describe('RecordsList snippet rendering (lng=ar)', () => {
       createElement(RecordsList, {
         rows: [book as BookRead],
         selectedId: null,
+        nav: () => NAV,
         onSelect: () => undefined,
+        isInmateReporter: false,
       }),
     )
 
@@ -116,7 +125,9 @@ describe('RecordsList snippet rendering (lng=ar)', () => {
       createElement(RecordsList, {
         rows: [book as BookRead],
         selectedId: null,
+        nav: () => NAV,
         onSelect: () => undefined,
+        isInmateReporter: false,
       }),
     )
 
@@ -131,7 +142,9 @@ describe('RecordsList snippet rendering (lng=ar)', () => {
       createElement(RecordsList, {
         rows: [book as BookRead],
         selectedId: null,
+        nav: () => NAV,
         onSelect: () => undefined,
+        isInmateReporter: false,
       }),
     )
 

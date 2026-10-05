@@ -18,8 +18,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import i18n from '@/lib/i18n'
 import type { ApprovalLogItem, ApprovalSummaryResponse } from '@/lib/api'
-import type { Paper } from './recordPapers'
+import { paperKey, type Paper } from './recordPapers'
 import { ApprovalsPage } from './ApprovalsPage'
+
+const deleteState = vi.hoisted(() => ({ pendingIds: new Set<number>() as ReadonlySet<number> }))
+
+vi.mock('./RecordDeleteProvider', () => ({
+  useRecordDelete: () => ({ scheduleDelete: vi.fn(), pendingIds: deleteState.pendingIds }),
+}))
 
 vi.mock('@/lib/authContext', () => ({
   useAuth: () => ({ status: 'authed', user: { id: 7 } }),
@@ -28,20 +34,23 @@ vi.mock('@/lib/authContext', () => ({
 vi.mock('@/pages/books/RecordPaperViewer', () => ({
   default: ({
     papers,
-    paperIndex,
-    isOverlay,
+    selectedKey,
+    mode,
   }: {
     papers: Paper[]
-    paperIndex: number
-    isOverlay?: boolean
-  }) => (
-    <div
-      data-testid="record-paper-viewer"
-      data-paper-kind={papers[paperIndex]?.kind}
-      data-paper-url={papers[paperIndex]?.url}
-      data-overlay={isOverlay ? 'true' : 'false'}
-    />
-  ),
+    selectedKey: string | null
+    mode: string
+  }) => {
+    const selected = papers.find((p) => paperKey(p) === selectedKey) ?? papers[0]
+    return (
+      <div
+        data-testid="record-paper-viewer"
+        data-paper-kind={selected?.kind}
+        data-paper-url={selected?.url}
+        data-mode={mode}
+      />
+    )
+  },
 }))
 
 vi.mock('@/pages/scanInbox/ScanPdfCanvas', () => ({
@@ -106,7 +115,12 @@ function row(overrides: Partial<ApprovalLogItem>): ApprovalLogItem {
 
 function LocationProbe(): React.JSX.Element {
   const loc = useLocation()
-  return <span data-testid="location">{`${loc.pathname}${loc.search}`}</span>
+  return (
+    <>
+      <span data-testid="location">{`${loc.pathname}${loc.search}`}</span>
+      <span data-testid="location-state">{JSON.stringify(loc.state)}</span>
+    </>
+  )
 }
 
 function renderPage(initialEntry = '/books/approvals') {
@@ -143,14 +157,14 @@ describe('ApprovalsPage generic landing + URL canonicalization', () => {
         scope: 'received',
         kind: 'approver',
         status: 'pending',
-        sort: 'oldest',
+        sort: 'newest',
         limit: 100,
         offset: 0,
       }),
     )
     await waitFor(() =>
       expect(screen.getByTestId('location')).toHaveTextContent(
-        '/books/approvals?tab=received&kind=sign&status=pending&sort=oldest&page=1',
+        '/books/approvals?tab=received&kind=sign&status=pending&sort=newest&page=1',
       ),
     )
   })
@@ -169,7 +183,7 @@ describe('ApprovalsPage generic landing + URL canonicalization', () => {
         scope: 'received',
         kind: 'reviewer',
         status: 'pending',
-        sort: 'oldest',
+        sort: 'newest',
         limit: 100,
         offset: 0,
       }),
@@ -190,7 +204,7 @@ describe('ApprovalsPage generic landing + URL canonicalization', () => {
         scope: 'sent',
         kind: undefined,
         status: 'pending',
-        sort: 'oldest',
+        sort: 'newest',
         limit: 100,
         offset: 0,
       }),
@@ -235,7 +249,7 @@ describe('ApprovalsPage generic landing + URL canonicalization', () => {
     )
     await waitFor(() =>
       expect(screen.getByTestId('location')).toHaveTextContent(
-        '/books/approvals?tab=received&kind=review&status=all&sort=oldest&page=1',
+        '/books/approvals?tab=received&kind=review&status=all&sort=newest&page=1',
       ),
     )
   })
@@ -291,14 +305,14 @@ describe('ApprovalsPage sub-tabs and filters', () => {
     expect(screen.getByTestId('approvals-filter-all')).toBeInTheDocument()
   })
 
-  it('sort toggle flips oldest/newest and resets to page 1', async () => {
+  it('sort toggle flips newest/oldest and resets to page 1', async () => {
     vi.mocked(api.getApprovalSummary).mockResolvedValue(summary())
     renderPage()
     await screen.findByTestId('approvals-sort-toggle')
     await userEvent.click(screen.getByTestId('approvals-sort-toggle'))
     await waitFor(() =>
       expect(api.listApprovalLog).toHaveBeenLastCalledWith(
-        expect.objectContaining({ scope: 'received', sort: 'newest' }),
+        expect.objectContaining({ scope: 'received', sort: 'oldest' }),
       ),
     )
   })
@@ -326,6 +340,7 @@ describe('ApprovalsPage pagination', () => {
 
 describe('ApprovalsPage rows', () => {
   beforeEach(() => {
+    deleteState.pendingIds = new Set()
     vi.mocked(api.getApprovalSummary).mockResolvedValue(summary())
   })
 
@@ -340,6 +355,28 @@ describe('ApprovalsPage rows', () => {
     expect(await screen.findByText('HR-0001')).toBeInTheDocument()
     expect(screen.getByText('Pending one')).toBeInTheDocument()
     expect(screen.getByText('Submitter')).toBeInTheDocument()
+  })
+
+  it('hides a record whose delete is pending, from the rows and the queue handed to the record', async () => {
+    deleteState.pendingIds = new Set([2])
+    vi.mocked(api.listApprovalLog).mockResolvedValue({
+      items: [
+        row({ book_id: 1, ref_number: 'HR-0001' }),
+        row({ book_id: 2, ref_number: 'HR-0002' }),
+        row({ book_id: 3, ref_number: 'HR-0003' }),
+      ],
+      total: 3,
+      limit: 100,
+      offset: 0,
+    })
+    renderPage()
+    await userEvent.click(await screen.findByText('HR-0001'))
+    expect(screen.queryByText('HR-0002')).not.toBeInTheDocument()
+    await waitFor(() =>
+      expect(JSON.parse(screen.getByTestId('location-state').textContent ?? 'null')).toMatchObject({
+        queue: [1, 3],
+      }),
+    )
   })
 
   it('shows a late-advisory badge and the record outcome for a decided book with a still-pending review', async () => {
@@ -383,10 +420,16 @@ describe('ApprovalsPage rows', () => {
     await userEvent.click(await screen.findByText('HR-0002'))
     await waitFor(() =>
       expect(screen.getByTestId('location')).toHaveTextContent(
-        '/books/2?version_id=5&tab=received&kind=sign&status=pending&sort=oldest&page=1',
+        '/books/2?version_id=5&tab=received&kind=sign&status=pending&sort=newest&page=1',
       ),
     )
     expect(screen.getByTestId('record-page')).toBeInTheDocument()
+    // The record gets the list it came from + queue so Back returns focused on the row.
+    expect(JSON.parse(screen.getByTestId('location-state').textContent ?? 'null')).toEqual({
+      from: '/books/approvals?tab=received&kind=sign&status=pending&sort=newest&page=1',
+      queue: [2],
+      scrollY: 0,
+    })
   })
 
   it('opens a document preview from the thumbnail without navigating, then opens the full record', async () => {
@@ -406,7 +449,7 @@ describe('ApprovalsPage rows', () => {
       '/api/v1/documents/7/download?format=pdf&version_id=1',
     )
     expect(screen.getByTestId('record-paper-viewer')).toHaveAttribute('data-paper-kind', 'generated')
-    expect(screen.getByTestId('record-paper-viewer')).toHaveAttribute('data-overlay', 'true')
+    expect(screen.getByTestId('record-paper-viewer')).toHaveAttribute('data-mode', 'dialog')
     expect(screen.getByTestId('location')).toHaveTextContent('/books/approvals')
 
     await userEvent.click(screen.getByRole('button', { name: /open full record/i }))

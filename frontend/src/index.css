@@ -1689,7 +1689,7 @@ body {
   }
 }
 
-/* End-anchored detail drawer (BookDetailDrawer): a bottom-sheet on mobile and a
+/* End-anchored detail drawer (`.drawer-end`): a bottom-sheet on mobile and a
    full-height side panel pinned to the inline-end edge above md. Mobile reuses
    the bottom-sheet slide-up; desktop slides in from the inline-end edge (right
    in LTR, left in RTL). Same iOS curve as the start-edge sheet. Reduced-motion

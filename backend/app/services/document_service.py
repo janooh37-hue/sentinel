@@ -1589,7 +1589,6 @@ def generate_document(
                 field=field_meta["key"],
             )
 
-
     # Forms with an explicit manager-signature checkbox honor the operator's
     # choice; all other forms keep their server-enforced signing policy.
     signing_path = form_policy.signing_path_of(template_id)
@@ -1868,9 +1867,7 @@ def generate_document(
     )
 
     # Classified and vehicle papers carry their shared ref in template data.
-    if commit and (
-        _classification is not None or template_id in VEHICLE_LETTER_FORMS
-    ):
+    if commit and (_classification is not None or template_id in VEHICLE_LETTER_FORMS):
         data["ref"] = raw_ref
 
     # Truthful embed flag: ``sig1_path`` survives _build_template_data only
@@ -2109,6 +2106,7 @@ def generate_document(
                 doc_path=_rel(docx_path) or str(docx_path),
                 created_at=ts.replace(tzinfo=None),
                 deleted_at=None,
+                created_by_user_id=current_user.id if current_user is not None else None,
                 search_text=build_search_text(subject=_subject, ref=raw_ref, body=_body_text),
             )
             db.add(book_row)
@@ -2453,9 +2451,7 @@ def generate_document(
                 stamps=artifact_service.StampPlan(
                     reference=raw_ref if commit else None,
                     header_reference=commit and _classification is None,
-                    aztec_corner=(
-                        aztec_corner_for(companion_template_id) if commit else None
-                    ),
+                    aztec_corner=(aztec_corner_for(companion_template_id) if commit else None),
                 ),
                 converter=pdf_converter,
             )

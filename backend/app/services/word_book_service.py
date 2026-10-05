@@ -122,6 +122,7 @@ def create_word_book(
         classification_code=classification_code,
         approval_state="none",
         submitted_by_user_id=user.id,
+        created_by_user_id=user.id,
         doc_manager_id=manager_id,
     )
     db.add(book)
@@ -268,6 +269,7 @@ def create_report_word_book(
         classification_code=None,
         approval_state="none" if user.role == INMATE_REPORTER_ROLE else "approved",
         submitted_by_user_id=user.id,
+        created_by_user_id=user.id,
         created_at=now,
     )
     db.add(book)

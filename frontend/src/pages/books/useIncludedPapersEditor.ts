@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query'
 
 import { api } from '@/lib/api'
 import type { IncludedPaperRead } from '@/lib/api'
+import { purgePdfCaches } from '@/lib/pdfCachePurge'
 
 import {
   addStagedPaper,
@@ -97,6 +98,8 @@ export function useIncludedPapersEditor(book: IncludedPapersBook): IncludedPaper
     setError(null)
     try {
       await api.saveIncludedPapers(book.id, includedPapersRequest(state))
+      // The package PDF changed under the same URL: drop the cached bytes.
+      purgePdfCaches()
       await queryClient.invalidateQueries({ queryKey: ['books'] })
     } catch (caught) {
       setError(caught)

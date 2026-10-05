@@ -10,6 +10,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query'
 
 import { api, ApiError, type SessionUser } from '@/lib/api'
 import { AUTH_KEY, AuthContext, type AuthContextValue, type AuthStatus } from '@/lib/authContext'
+import { purgePdfCaches } from '@/lib/pdfCachePurge'
 import { markActivity } from '@/lib/useLockState'
 
 
@@ -46,6 +47,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }): React
       queryClient.removeQueries({
         predicate: (q) => q.queryKey[0] !== 'auth-me',
       })
+      purgePdfCaches()
       queryClient.setQueryData(AUTH_KEY, me)
       return me
     },
@@ -60,6 +62,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }): React
       // caches so they refetch clean on next sign-in.
       queryClient.setQueryData(AUTH_KEY, null)
       queryClient.removeQueries({ predicate: (q) => q.queryKey[0] !== 'auth-me' })
+      purgePdfCaches()
     }
   }, [queryClient])
 

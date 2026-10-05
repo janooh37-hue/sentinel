@@ -24,10 +24,15 @@ import type { ApprovalLogItem, ApprovalSummaryResponse } from '@/lib/api'
 import { BooksAwaitingWidget } from './BooksAwaitingWidget'
 import { WaitingApprovalsCard } from './WaitingApprovalsCard'
 
-// BookDetailDrawer reads the session user for step ownership; useApprovalSummary
-// reads it for the query key/enabled gate.
+const deleteState = vi.hoisted(() => ({ pendingIds: new Set<number>() as ReadonlySet<number> }))
+
+// useApprovalSummary reads the session user for the query key/enabled gate.
 vi.mock('@/lib/authContext', () => ({
   useAuth: () => ({ user: { id: 42 }, status: 'authed' }),
+}))
+
+vi.mock('@/pages/books/RecordDeleteProvider', () => ({
+  useRecordDelete: () => ({ scheduleDelete: vi.fn(), pendingIds: deleteState.pendingIds }),
 }))
 
 vi.mock('@/lib/api', async (importOriginal) => {
@@ -125,6 +130,7 @@ function renderInRouter(ui: React.ReactElement) {
 }
 
 beforeEach(() => {
+  deleteState.pendingIds = new Set()
   vi.mocked(api.getApprovalSummary).mockReset()
   vi.mocked(api.listApprovalLog).mockReset()
   vi.mocked(api.listApprovalLog).mockResolvedValue({ items: [], total: 0, limit: 5, offset: 0 })
@@ -135,7 +141,7 @@ describe('BooksAwaitingWidget navigation', () => {
     vi.mocked(api.getApprovalSummary).mockResolvedValue(SIGNER_SUMMARY)
     renderInRouter(<BooksAwaitingWidget />)
     const link = await screen.findByTestId('approvals-full-log-link')
-    const expected = approvalQueueUrl({ tab: 'received', kind: 'sign', status: 'pending', sort: 'oldest', page: 1 })
+    const expected = approvalQueueUrl({ tab: 'received', kind: 'sign', status: 'pending', sort: 'newest', page: 1 })
     expect(link).toHaveAttribute('href', expected)
     await userEvent.click(link)
     await waitFor(() =>
@@ -159,7 +165,7 @@ describe('BooksAwaitingWidget navigation', () => {
       scope: 'received',
       kind: 'reviewer',
       status: 'pending',
-      sort: 'oldest',
+      sort: 'newest',
       limit: 5,
     })
   })
@@ -172,6 +178,21 @@ describe('BooksAwaitingWidget navigation', () => {
     const ref = await screen.findByText('HR-0001')
     expect(ref.tagName).toBe('BDI')
     expect(ref).toHaveAttribute('dir', 'ltr')
+  })
+
+  it('does not list a record whose delete is pending', async () => {
+    deleteState.pendingIds = new Set([1])
+    vi.mocked(api.getApprovalSummary).mockResolvedValue(SIGNER_SUMMARY)
+    vi.mocked(api.listApprovalLog).mockResolvedValue({
+      items: [PREVIEW_ROW, { ...PREVIEW_ROW, book_id: 2, ref_number: 'HR-0002' }],
+      total: 2,
+      limit: 5,
+      offset: 0,
+    })
+    renderInRouter(<BooksAwaitingWidget />)
+
+    expect(await screen.findByText('HR-0002')).toBeInTheDocument()
+    expect(screen.queryByText('HR-0001')).not.toBeInTheDocument()
   })
 
   it('self-hides only when the caller has no assigned received kind at all', async () => {

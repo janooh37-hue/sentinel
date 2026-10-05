@@ -21,6 +21,7 @@ import {
   Settings as SettingsIcon,
   LinkIcon,
   ShieldCheck,
+  UserRound,
 } from 'lucide-react'
 import { toast } from 'sonner'
 
@@ -31,6 +32,8 @@ import type { SessionUser } from '@/lib/api'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { useIdentity } from '@/lib/useIdentity'
 import { AUTH_KEY, useAuth } from '@/lib/authContext'
+import { useCapabilities } from '@/lib/useCapabilities'
+import { useMyRecordsCount } from '@/pages/books/useMyRecordsCount'
 import { DEFAULT_IDLE_LOCK_SECONDS } from '@/lib/useLockState'
 import type { LockLayout, LockTimerSeconds } from '@/lib/useLockState'
 
@@ -92,6 +95,11 @@ export function AccountMenu({
   const queryClient = useQueryClient()
 
   const { user } = useAuth()
+  // "My records": the Records page's "Created by me" count, over the shared
+  // ['books','facets',true] query; only fetched while the menu is open.
+  const { has } = useCapabilities()
+  const canViewMine = user?.role !== 'inmate_reporter' && has('books.view')
+  const { count: myRecordsCount } = useMyRecordsCount({ enabled: open && canViewMine })
   // inmate_reporter's route allowlist blocks GET /email/account outright —
   // this role has no mailbox/email surface at all (§8 restricted shell).
   const accountQuery = useQuery({
@@ -246,6 +254,7 @@ export function AccountMenu({
       {open && (
         <div
           role="dialog"
+          data-state="open"
           aria-label={t('appBar.account', { defaultValue: 'Account' })}
           className="absolute end-0 top-full z-50 mt-2 w-80 overflow-hidden rounded-2xl border border-hairline bg-surface shadow-xl"
         >
@@ -303,6 +312,28 @@ export function AccountMenu({
 
           {/* Actions */}
           <div className="flex flex-col py-1.5">
+            {canViewMine && (
+              <button
+                type="button"
+                data-testid="account-my-records"
+                onClick={() => {
+                  setOpen(false)
+                  navigate('/books?mine=1')
+                }}
+                className="flex min-h-11 w-full items-center gap-2.5 px-4 py-2.5 text-start text-[0.9em] text-foreground transition-colors motion-reduce:transition-none hover:bg-surface-tinted"
+              >
+                <UserRound className="h-4 w-4 text-muted-foreground" strokeWidth={1.7} aria-hidden />
+                <span className="flex-1">{t('books.list.myRecords')}</span>
+                {myRecordsCount !== null && (
+                  <bdi
+                    dir="ltr"
+                    className="flex h-5 min-w-5 items-center justify-center rounded-full bg-surface-tinted px-1.5 text-[0.7em] font-bold tabular-nums text-muted-foreground"
+                  >
+                    {myRecordsCount}
+                  </bdi>
+                )}
+              </button>
+            )}
             {isAdmin && (
               <button
                 type="button"

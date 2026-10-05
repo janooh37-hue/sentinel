@@ -94,20 +94,20 @@ export function isLateAdvisory(item: ApprovalLogItem): boolean {
  *  render the no-assigned-work empty state). */
 export function defaultApprovalContext(summary: ApprovalSummaryResponse): ApprovalContext | null {
   if (summary.signature.count > 0) {
-    return { tab: 'received', kind: 'sign', status: 'pending', sort: 'oldest', page: 1 }
+    return { tab: 'received', kind: 'sign', status: 'pending', sort: 'newest', page: 1 }
   }
   if (summary.review.count > 0) {
-    return { tab: 'received', kind: 'review', status: 'pending', sort: 'oldest', page: 1 }
+    return { tab: 'received', kind: 'review', status: 'pending', sort: 'newest', page: 1 }
   }
   if (summary.can_view_sent) {
-    return { tab: 'sent', status: 'pending', sort: 'oldest', page: 1 }
+    return { tab: 'sent', status: 'pending', sort: 'newest', page: 1 }
   }
   const kinds = summary.available_received_kinds ?? []
   if (kinds.includes('reviewer')) {
-    return { tab: 'received', kind: 'review', status: 'all', sort: 'oldest', page: 1 }
+    return { tab: 'received', kind: 'review', status: 'all', sort: 'newest', page: 1 }
   }
   if (kinds.includes('approver')) {
-    return { tab: 'received', kind: 'sign', status: 'all', sort: 'oldest', page: 1 }
+    return { tab: 'received', kind: 'sign', status: 'all', sort: 'newest', page: 1 }
   }
   return null
 }
@@ -122,7 +122,7 @@ export function normalizeApprovalContext(
 ): ApprovalContext | null {
   const tabParam = params.get('tab')
   const tab = isApprovalScope(tabParam) ? tabParam : null
-  const sort = isApprovalSort(params.get('sort')) ? (params.get('sort') as ApprovalSort) : 'oldest'
+  const sort = isApprovalSort(params.get('sort')) ? (params.get('sort') as ApprovalSort) : 'newest'
   const pageValue = Number.parseInt(params.get('page') ?? '', 10)
   const page = Number.isInteger(pageValue) && pageValue >= 1 ? pageValue : 1
   if (tab === 'sent') {

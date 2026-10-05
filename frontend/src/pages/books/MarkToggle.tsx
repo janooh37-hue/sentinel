@@ -25,6 +25,7 @@ export function MarkToggle({
       onClick={onToggle}
       testId="mark-toggle"
       ariaPressed={armed}
+      shortcut="M"
     />
   )
 }

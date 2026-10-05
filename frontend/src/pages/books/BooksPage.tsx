@@ -1,37 +1,47 @@
 /**
  * Records page (Book Reference).
  *
- * Desktop — three-pane register (visual contract:
- * docs/prototypes/records-redesign-2026-06-10/final-records.html):
- *   Header (title · meta · "New entry" pill)
- *   StatusSpine (All + 5 approval states, counts from /books/facets — the active
- *     segment filters, and the counts scope to the selected service)
- *   FormRail (one entry per service) | day-grouped RecordsList | RecordPane
+ * Desktop (≥ 768) — spine + register. The wrapper is a CSS container
+ * (`@container/page`) and `useListTier` reads the same width for behaviour:
+ *   drawer  < 64rem    full-width list; rail → Service chip; pane = end drawer
+ *                      (× / Esc), nothing auto-selected
+ *   icons   64–80rem   `w-14` icon rail + inline pane
+ *   full    ≥ 80rem    15rem rail + inline pane
+ * The inmate-reporter variant has no rail in any tier (the drawer still applies
+ * below 64rem). Header · StatusSpine (All + approval states, counts from
+ * /books/facets) · FormRail | day-grouped RecordsList | RecordPane.
  *
- * Mobile — BooksFilterBar + BookMobileCard list.
+ * Mobile — BooksFilterBar + BooksMobileList.
  *
  * Both layouts scope the list fetch SERVER-side to the selected service
  * (`railScope`, see below) — desktop from the rail, mobile from the filter bar's
  * Service popover. Filtering a service client-side would silently truncate it to
  * whatever fell inside the 500-row window.
+ *
+ * Every open of a record from here (row, ref link, pane, Enter) goes through
+ * `openRecord` with `{ from, queue, scrollY }`, so the record page can step
+ * J/K through this list and Back returns here with the row selected.
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowDownLeft, ArrowUpRight, BookOpen, ChevronRight, Send, Stamp, Trash2 } from 'lucide-react'
+import { createPortal } from 'react-dom'
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
+import { useQuery } from '@tanstack/react-query'
+import { BookOpen, ChevronRight, Stamp, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
-import { api, apiErrorMessage } from '@/lib/api'
+import { api } from '@/lib/api'
 import type { BookRead } from '@/lib/api'
+import { bidi } from '@/lib/bidi'
+import { copyToClipboard } from '@/lib/clipboard'
 import { addToBasket } from '@/lib/emailBasket'
 import { buildRecordBasketItem } from './recordsBasket'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { EmptyState } from '@/components/ui/empty-state'
 import { Input } from '@/components/ui/input'
 import { SkeletonRow } from '@/components/ui/skeleton'
-import { BooksFilterBar, type BooksFilters } from './BooksFilterBar'
+import { BooksFilterBar } from './BooksFilterBar'
 import { SubmitForApprovalDialog } from '@/components/books/SubmitForApprovalDialog'
 import { BookPreview } from '@/components/books/BookPreview'
 import { BookStatusChips } from '@/components/books/BookStatusChips'
@@ -39,64 +49,124 @@ import { WordSessionActions } from '@/components/books/BookWordActions'
 import { useIsMobile } from '@/lib/useIsMobile'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { useAuth } from '@/lib/authContext'
+import { useLocalStorage } from '@/lib/useLocalStorage'
+import { useShortcutAction } from '@/lib/useKeyboardShortcuts'
+import { useFocusTrap } from '@/lib/useFocusTrap'
 import { cn } from '@/lib/utils'
-import { PullToRefresh } from '@/components/refresh/PullToRefresh'
 import { RefreshButton } from '@/components/refresh/RefreshButton'
-import { DEFAULT_BOOKS_FILTERS, matchesBookFilters, matchesDesktopSearchRow, normalizeFilters } from './booksFiltersUtils'
-import { sealDescriptor, signedSourceOf } from './bookStateLabel'
+import {
+  DEFAULT_BOOKS_FILTERS,
+  hasActiveFilters,
+  matchesBookFilters,
+  matchesDesktopSearchRow,
+  type BooksFilters,
+} from './booksFiltersUtils'
+import { booksFacetsKey, useMyRecordsCount } from './useMyRecordsCount'
 import { StatusSpine, type SpineState } from './StatusSpine'
-import { FormRail, type RailItem } from './FormRail'
+import { FormRail, MineChip, type RailItem } from './FormRail'
 import { bookHeaderText, railItemsFrom, spineCountsFrom, useServiceLabel } from './serviceLabels'
+import { BooksMobileList } from './BooksMobileList'
 import { RecordsList } from './RecordsList'
-import { RecordPane } from './RecordPane'
+import { FiltersPopover, ServicePopover } from './RecordsFilterPopovers'
+import { RecordPane, type PaneSize } from './RecordPane'
+import { deleteBlockReason } from './recordDelete'
+import { useRecordDelete } from './RecordDeleteProvider'
+import { openRecord, useListReturnFocus, type RecordNavState } from './useRecordNavContext'
+import { useListTier } from './useListTier'
 import { ScanBackEntry } from '@/pages/scanBack/ScanBackEntry'
-import { inmateReporterActionFor } from '@/components/books/book-detail-drawer-utils'
 import { ApiError } from '@/lib/api'
 import { useInmateReportSubmit } from '@/components/books/useInmateReportSubmit'
 import { serviceHref } from '@/lib/quickActions'
+import { newRecordHref } from './newRecordHref'
 import { useSearchParam } from '@/lib/urlState'
 
-const DEFAULT_FILTERS = DEFAULT_BOOKS_FILTERS
+const PANE_SIZE_STORAGE_KEY = 'gssg.books.pane.size'
 
-function formatDate(iso: string): string {
-  return iso.slice(0, 10)
+/** Pane column widths per size (the grid's third track; collapsed is a strip). */
+const PANE_WIDTH: Record<PaneSize, string> = {
+  collapsed: '52px',
+  normal: 'clamp(22rem,34%,32rem)',
+  wide: 'clamp(30rem,52%,56rem)',
+}
+
+/**
+ * The end-anchored drawer shell: a modal dialog that traps and restores focus.
+ * `data-shortcuts-through` keeps the page's list keys (J/K/Enter/C/Esc) live
+ * inside it; Radix overlays stacked above still stand the shortcut layer down.
+ */
+function RecordDrawer({
+  label,
+  closeLabel,
+  children,
+}: {
+  label: string
+  closeLabel: string
+  children: React.ReactNode
+}): React.JSX.Element {
+  const ref = useFocusTrap<HTMLDivElement>(true, `[aria-label="${closeLabel}"]`)
+  return (
+    <div
+      ref={ref}
+      role="dialog"
+      aria-modal="true"
+      aria-label={label}
+      tabIndex={-1}
+      data-shortcuts-through
+      data-state="open"
+      className="drawer-end fixed inset-y-0 end-0 z-40 w-full max-w-[26rem] shadow-2xl focus-visible:outline-none"
+    >
+      {children}
+    </div>
+  )
 }
 
 export function BooksPage(): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const isAr = i18n.language.startsWith('ar')
-  const qc = useQueryClient()
   const { has } = useCapabilities()
   const { user } = useAuth()
   const isInmateReporter = user?.role === 'inmate_reporter'
   const canDelete = has('books.delete')
   const canSubmit = has('books.submit')
   const navigate = useNavigate()
+  const location = useLocation()
   const isMobile = useIsMobile()
   const isDesktop = !isMobile
+  const { scheduleDelete, pendingIds } = useRecordDelete()
 
-  // Additional mobile-only filters stay local; shared filters are URL-backed.
-  const [rawFilters, setRawFilters] = useState<BooksFilters>(DEFAULT_FILTERS)
+  // Every filter is URL-backed (replace), so they survive a remount, a reload
+  // and a Back from a record.
   const [searchParams, setSearchParams] = useSearchParams()
   const [statusParam, setStatusParam] = useSearchParam('status', { fallback: 'all' })
   const [serviceParam, setServiceParam] = useSearchParam('service', { fallback: 'all' })
   const [searchParam, setSearchParam] = useSearchParam('q')
   const [draftsParam, setDraftsParam] = useSearchParam('drafts')
+  const [categoriesParam] = useSearchParam('categories')
+  const [directionParam] = useSearchParam('direction', { fallback: 'all' })
+  const [fromParam] = useSearchParam('from')
+  const [toParam] = useSearchParam('to')
+  const [mineParam] = useSearchParam('mine')
   const [openParam, setOpenParam] = useSearchParam('open')
   const status = (statusParam === 'draft' ? 'none' : statusParam) as BooksFilters['status']
-  const filters = useMemo(
-    () => normalizeFilters({
-      ...rawFilters,
+  // "Created by me" is hidden for inmate reporters, so the param is ignored.
+  const mine = mineParam === '1' && !isInmateReporter
+  const filters = useMemo<BooksFilters>(
+    () => ({
+      categoryIds: categoriesParam ? categoriesParam.split(',').filter(Boolean) : [],
+      direction:
+        directionParam === 'incoming' || directionParam === 'outgoing' ? directionParam : 'all',
+      fromDate: fromParam,
+      toDate: toParam,
       status,
       serviceId: serviceParam,
       q: searchParam,
       drafts: draftsParam === '1',
+      mine,
     }),
-    [rawFilters, status, serviceParam, searchParam, draftsParam],
+    [categoriesParam, directionParam, fromParam, toParam, status, serviceParam, searchParam, draftsParam, mine],
   )
   const setFilters = (next: BooksFilters | ((prev: BooksFilters) => BooksFilters)): void => {
     const value = typeof next === 'function' ? next(filters) : next
-    setRawFilters(value)
     const params = new URLSearchParams(searchParams)
     const update = (key: string, value: string, fallback: string): void => {
       if (value === fallback) params.delete(key)
@@ -106,8 +176,14 @@ export function BooksPage(): React.JSX.Element {
     update('service', value.serviceId, 'all')
     update('q', value.q, '')
     update('drafts', value.drafts ? '1' : '', '')
+    update('categories', value.categoryIds.join(','), '')
+    update('direction', value.direction, 'all')
+    update('from', value.fromDate, '')
+    update('to', value.toDate, '')
+    update('mine', value.mine ? '1' : '', '')
     setSearchParams(params, { replace: true })
   }
+  const clearAllFilters = (): void => setFilters({ ...DEFAULT_BOOKS_FILTERS })
   const [submitBookId, setSubmitBookId] = useState<number | null>(null)
   const [previewBookId, setPreviewBookId] = useState<number | null>(null)
   const reporterSubmitMutation = useInmateReportSubmit({
@@ -131,6 +207,16 @@ export function BooksPage(): React.JSX.Element {
     else setSubmitBookId(bookId)
   }
 
+  // ── Layout tier + pane state ────────────────────────────────────────────────
+  const [wrapEl, setWrapEl] = useState<HTMLDivElement | null>(null)
+  const tier = useListTier(wrapEl)
+  const inlinePane = isDesktop && (tier === 'icons' || tier === 'full')
+  const drawerTier = isDesktop && tier === 'drawer'
+  const [storedPaneSize, setPaneSize] = useLocalStorage<PaneSize>(PANE_SIZE_STORAGE_KEY, 'normal')
+  const paneSize: PaneSize =
+    storedPaneSize === 'collapsed' || storedPaneSize === 'wide' ? storedPaneSize : 'normal'
+  const scrollerRef = useRef<HTMLDivElement | null>(null)
+
   // ── Desktop pane state (filters and master-detail selection live in URL) ───
   const spineState = status
   const setSpineState = (value: SpineState): void => setStatusParam(value)
@@ -143,36 +229,48 @@ export function BooksPage(): React.JSX.Element {
     setDraftsParam(next ? '1' : null)
   }
   const selectedId = Number.parseInt(openParam, 10) || null
-  const setSelectedId = (value: number): void => setOpenParam(String(value))
-  // Multi-select for "Add to email" bulk action (book ids).
+  // The row the page itself (not the user) put in `open`; see the drawer-tier effect.
+  const autoSelectedRef = useRef<number | null>(null)
+  const setSelectedId = (value: number): void => {
+    autoSelectedRef.current = null
+    setOpenParam(String(value))
+  }
+  // Multi-select for the bulk actions (Add to email / Delete), book ids.
   const [selectedForBasket, setSelectedForBasket] = useState<Set<number>>(new Set())
   const [highlightedId, setHighlightedId] = useState<number | null>(null)
   // Rail + spine numbers over EVERY record — the 500-row page window is why
   // these used to disagree with the page's own total.
+  // Page facets follow the "Created by me" toggle; the badge count below is a
+  // separate always-on query (same key as this one while the toggle is on).
   const facetsQuery = useQuery({
-    queryKey: ['books', 'facets'],
-    queryFn: () => api.getBookFacets(),
+    queryKey: booksFacetsKey(mine),
+    queryFn: () => api.getBookFacets(mine ? { created_by_me: true } : {}),
   })
+  const { count: myRecordsCount } = useMyRecordsCount({ enabled: !isInmateReporter })
 
   // ── Data: one server-scoped fetch; both branches filter client-side ────────
-  // `railService` (the desktop rail's own selection) is a desktop-only concept
-  // — it must never leak into mobile, so a desktop→mobile resize with a rail
-  // service selected can't leave the mobile list silently filtered with no
-  // indicator that a filter is active. Mobile instead scopes on
-  // `filters.serviceId`, the operator's own visible choice in the mobile
-  // Service popover (its trigger shows the selected label), so the scoping is
-  // never silent. Without this, mobile filtered client-side over an unscoped
-  // 500-row window, undercounting services with more rows further back in the
-  // table (e.g. Leave Application Form: 276 true vs 230 visible).
-  const railScope = isDesktop ? railService : filters.serviceId
+  // `serviceParam` (`?service=`) is the single source for the service scope: the
+  // desktop rail, the desktop Service popover and the mobile Service popover all
+  // write it, so both layouts fetch the same server-side-scoped list. Without
+  // that, mobile filtered client-side over an unscoped 500-row window,
+  // undercounting services with more rows further back in the table (e.g. Leave
+  // Application Form: 276 true vs 230 visible).
+  const railScope = serviceParam
   const listQuery = useQuery({
-    queryKey: ['books', 'all', railScope],
+    queryKey: ['books', 'all', railScope, mine],
     queryFn: () =>
-      api.listBooks(
-        railScope === 'all' ? { limit: 500 } : { service_id: railScope, limit: 500 },
-      ),
+      api.listBooks({
+        limit: 500,
+        ...(railScope === 'all' ? {} : { service_id: railScope }),
+        ...(mine ? { created_by_me: true } : {}),
+      }),
   })
-  const allRows: BookRead[] = useMemo(() => listQuery.data?.items ?? [], [listQuery.data])
+  // Rows whose delete is pending (6 s Undo window) are gone everywhere here —
+  // desktop list, search results, pane pool and the rows handed to the phone list.
+  const allRows: BookRead[] = useMemo(
+    () => (listQuery.data?.items ?? []).filter((row) => !pendingIds.has(row.id)),
+    [listQuery.data, pendingIds],
+  )
 
   // ── Debounced server search (desktop, >= 2 chars) ───────────────────────────
   // Mirror BooksFilterBar's 300 ms debounce. When active, desktopRows comes
@@ -187,11 +285,16 @@ export function BooksPage(): React.JSX.Element {
   }, [search])
   const serverSearchActive = debouncedSearch.trim().length >= 2
   const searchQuery = useQuery({
-    queryKey: ['books', 'search', debouncedSearch],
-    queryFn: () => api.listBooks({ q: debouncedSearch, limit: 500 }),
+    queryKey: ['books', 'search', debouncedSearch, mine],
+    queryFn: () =>
+      api.listBooks({ q: debouncedSearch, limit: 500, ...(mine ? { created_by_me: true } : {}) }),
     enabled: serverSearchActive,
     staleTime: 30_000,
   })
+  const searchItems: BookRead[] | undefined = useMemo(
+    () => searchQuery.data?.items.filter((row) => !pendingIds.has(row.id)),
+    [searchQuery.data, pendingIds],
+  )
 
   const categoriesQuery = useQuery({
     queryKey: ['book-categories'],
@@ -205,18 +308,20 @@ export function BooksPage(): React.JSX.Element {
   // fetched window, open the full record page in place of this entry. Later
   // in-page selections only update `open`, so they never re-trigger this.
   const deepLinkOpenRef = useRef<number | null>(Number.parseInt(openParam, 10) || null)
+  const deepLinkBouncedRef = useRef(false)
   useEffect(() => {
     const target = deepLinkOpenRef.current
     if (target === null) return
     if (isDesktop && !listQuery.isSuccess) return
     deepLinkOpenRef.current = null
     if (!isDesktop || !allRows.some((row) => row.id === target)) {
+      deepLinkBouncedRef.current = true
       navigate(`/books/${target}`, { replace: true })
       return
     }
     setHighlightedId(target)
     window.setTimeout(() => {
-      document.querySelector(`[data-id="${target}"]`)?.scrollIntoView({ block: 'center' })
+      document.querySelector(`[data-book-id="${target}"]`)?.scrollIntoView({ block: 'center' })
     }, 100)
   }, [isDesktop, listQuery.isSuccess, allRows, navigate])
   // Auto-clear the highlight after a brief flash so re-navigating to the same
@@ -236,23 +341,7 @@ export function BooksPage(): React.JSX.Element {
     [allRows, filters],
   )
 
-  // Mobile open routing: full-screen record page (`/books/:id`) in any state.
-  const openBook = useCallback(
-    (row: BookRead): void => {
-      navigate(`/books/${row.id}`)
-    },
-    [navigate],
-  )
-
-  const hasFilters =
-    filters.categoryIds.length > 0 ||
-    filters.serviceId !== 'all' ||
-    filters.direction !== 'all' ||
-    filters.status !== 'all' ||
-    !!filters.fromDate ||
-    !!filters.toDate ||
-    !!filters.q.trim() ||
-    !!filters.drafts
+  const hasFilters = hasActiveFilters(filters)
 
   // Header-line counts. Sourced from facets (global), not listQuery (now
   // service-scoped) — this must agree with the rail's "All" count.
@@ -276,8 +365,8 @@ export function BooksPage(): React.JSX.Element {
   )
 
   const railItems = useMemo<RailItem[]>(
-    () => railItemsFrom(facetsQuery.data, t('books.formKind.all'), serviceLabel),
-    [facetsQuery.data, serviceLabel, t],
+    () => railItemsFrom(facetsQuery.data, t('books.formKind.all'), serviceLabel, serviceParam),
+    [facetsQuery.data, serviceLabel, t, serviceParam],
   )
 
   // Draft books (is_draft && !voided_at) — shown in the group card above the list
@@ -286,21 +375,32 @@ export function BooksPage(): React.JSX.Element {
     [allRows],
   )
 
+  // Newest first, always: the list is grouped by day, so rows must arrive sorted.
   const desktopRows: BookRead[] = useMemo(() => {
+    // Category / direction / date come from the Filters popover (the phone's
+    // BooksFilterBar writes the same URL params).
+    const passesAdvanced = (row: BookRead): boolean => {
+      if (filters.categoryIds.length > 0 && !filters.categoryIds.includes(row.category_id)) return false
+      if (filters.direction !== 'all' && row.direction !== filters.direction) return false
+      const day = row.created_at.slice(0, 10)
+      if (filters.fromDate && day < filters.fromDate) return false
+      if (filters.toDate && day > filters.toDate) return false
+      return true
+    }
     // When a debounced server search is active (>= 2 chars), use server results
     // (which carry search_snippet on body-hit rows) instead of client filtering.
-    if (serverSearchActive && searchQuery.data) {
-      const serverRows = searchQuery.data.items
+    if (serverSearchActive && searchItems) {
       // The debounced search hits the server unscoped by service, so (unlike
       // the main list query below) this branch still needs a client guard.
-      return serverRows
-        .filter((row) => matchesDesktopSearchRow(row, { railService, showDrafts, spineState }))
+      return searchItems
+        .filter((row) => matchesDesktopSearchRow(row, { railService, showDrafts, spineState }) && passesAdvanced(row))
         .sort((a, b) => b.created_at.localeCompare(a.created_at))
     }
     // The server already scoped allRows to railService (listQuery), so no
     // service filter is needed here.
     const q = search.trim().toLowerCase()
     const filtered = allRows.filter((row) => {
+      if (!passesAdvanced(row)) return false
       if (showDrafts) return row.is_draft && !row.voided_at
       if (spineState !== 'all' && row.approval_state !== spineState) return false
       if (q && !`${row.ref_number} ${row.subject ?? ''}`.toLowerCase().includes(q)) return false
@@ -310,12 +410,49 @@ export function BooksPage(): React.JSX.Element {
     // so unsorted input would split a day into duplicate sections (key collision).
     // `filtered` is already a copy; never mutate allRows.
     return filtered.sort((a, b) => b.created_at.localeCompare(a.created_at))
-  }, [allRows, spineState, railService, search, showDrafts, serverSearchActive, searchQuery.data])
+  }, [allRows, filters, spineState, railService, search, showDrafts, serverSearchActive, searchItems])
+  const desktopRowIds = useMemo(() => desktopRows.map((row) => row.id), [desktopRows])
 
   const selectedBook = useMemo(() => {
-    const pool = serverSearchActive && searchQuery.data ? searchQuery.data.items : allRows
+    const pool = serverSearchActive && searchItems ? searchItems : allRows
     return pool.find((r) => r.id === selectedId) ?? allRows.find((r) => r.id === selectedId) ?? null
-  }, [allRows, selectedId, serverSearchActive, searchQuery.data])
+  }, [allRows, selectedId, serverSearchActive, searchItems])
+  // Below 64rem the pane is a drawer, open while a record is selected.
+  const drawerOpen = drawerTier && selectedBook !== null
+
+  // ── Navigation: every open carries the list context ─────────────────────────
+  const listUrl = `${location.pathname}${location.search}`
+  const buildNav = useCallback(
+    (scrollY?: number): RecordNavState => ({
+      from: listUrl,
+      queue: desktopRowIds,
+      scrollY: scrollY ?? scrollerRef.current?.scrollTop ?? 0,
+    }),
+    [listUrl, desktopRowIds],
+  )
+  const openFromList = useCallback(
+    (id: number): void => openRecord(navigate, id, buildNav()),
+    [navigate, buildNav],
+  )
+
+  // Back from a record: restore the scroll, select the row (inline tiers) or
+  // flash it (drawer tier — selecting would pop the drawer open).
+  useListReturnFocus(scrollerRef, {
+    isDesktop: inlinePane,
+    ready: isDesktop && tier !== null && listQuery.isSuccess,
+    onSelect: setSelectedId,
+    onFlash: setHighlightedId,
+  })
+  const returnPending = typeof (location.state as { focusBookId?: unknown } | null)?.focusBookId === 'number'
+
+  const closeDrawer = (): void => {
+    const id = selectedId
+    setOpenParam(null)
+    // Focus returns to the row that opened the drawer.
+    window.requestAnimationFrame(() => {
+      document.querySelector<HTMLElement>(`[data-book-id="${id}"] button`)?.focus()
+    })
+  }
 
   const handleToggleSelect = useCallback((id: number) => {
     setSelectedForBasket((prev) => {
@@ -326,37 +463,47 @@ export function BooksPage(): React.JSX.Element {
     })
   }, [])
 
-  // Bulk soft-delete of the checkbox selection. Uses the same DELETE /books/{id}
-  // endpoint as a single delete (sets deleted_at; ref numbers are not reused).
+  // ── Bulk actions ─────────────────────────────────────────────────────────────
+  // Only rows currently shown count: a row hidden by a filter / search change is
+  // neither counted nor acted on (it stays ticked and returns with its row).
+  const selectedRows = useMemo(() => {
+    const byId = new Map(desktopRows.map((row) => [row.id, row]))
+    return [...selectedForBasket].flatMap((id) => {
+      const row = byId.get(id)
+      return row ? [row] : []
+    })
+  }, [selectedForBasket, desktopRows])
+  // Signed / in-flight / Word-session rows are skipped, never deleted.
+  const deletableRows = useMemo(
+    () => selectedRows.filter((row) => deleteBlockReason(row, { has, isInmateReporter }) === null),
+    [selectedRows, has, isInmateReporter],
+  )
+  const skippedCount = selectedRows.length - deletableRows.length
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false)
-  const deleteMutation = useMutation({
-    mutationFn: async (ids: number[]) => {
-      const results = await Promise.allSettled(ids.map((id) => api.deleteBook(id)))
-      const failed = results.filter((r) => r.status === 'rejected').length
-      return { total: ids.length, failed }
-    },
-    onSuccess: ({ total, failed }) => {
-      void qc.invalidateQueries({ queryKey: ['books'] })
-      setSelectedForBasket(new Set())
-      const removed = total - failed
-      if (removed > 0) toast.success(t('books.bulk.deleted', { count: removed }))
-      if (failed > 0) toast.error(t('books.bulk.deleteError', { count: failed }))
-    },
-    onError: (err) => toast.error(apiErrorMessage(err)),
-  })
+
+  // After rows are scheduled for deletion the selection moves to the nearest
+  // surviving row (inline tiers) or the drawer closes.
+  const moveSelectionAfterDelete = (removed: ReadonlySet<number>): void => {
+    if (selectedId === null || !removed.has(selectedId)) return
+    if (drawerTier) {
+      setOpenParam(null)
+      return
+    }
+    const at = desktopRows.findIndex((row) => row.id === selectedId)
+    const remaining = desktopRows.filter((row) => !removed.has(row.id))
+    const next = remaining[Math.min(Math.max(at, 0), remaining.length - 1)]
+    setOpenParam(next ? String(next.id) : null)
+  }
+
+  const handleBulkDelete = (): void => {
+    const removed = new Set(deletableRows.map((row) => row.id))
+    scheduleDelete(deletableRows.map((row) => ({ id: row.id, ref: row.ref_number })))
+    setSelectedForBasket(new Set())
+    moveSelectionAfterDelete(removed)
+  }
 
   const handleAddToEmail = useCallback(async () => {
-    const ids = [...selectedForBasket]
-    // Same pool-then-fallback as selectedBook: a checkbox can only be set on a
-    // row that's currently rendered (desktopRows), which during an active
-    // search comes from searchQuery.data, not allRows.
-    const pool = serverSearchActive && searchQuery.data ? searchQuery.data.items : allRows
-    const results = await Promise.allSettled(
-      ids.map((id) => {
-        const book = pool.find((r) => r.id === id) ?? allRows.find((r) => r.id === id)
-        return book ? buildRecordBasketItem(book) : Promise.resolve(null)
-      }),
-    )
+    const results = await Promise.allSettled(selectedRows.map((row) => buildRecordBasketItem(row)))
     let added = 0
     for (const r of results) {
       if (r.status === 'fulfilled' && r.value) {
@@ -369,7 +516,7 @@ export function BooksPage(): React.JSX.Element {
     } else {
       toast(t('basket.tray.alreadyIn', { kind: t('basket.add') }))
     }
-  }, [selectedForBasket, allRows, serverSearchActive, searchQuery.data, t])
+  }, [selectedRows, t])
 
   // Single-record "Add to email" from the record pane (same enrichment as the
   // bulk multi-select; toasts added / already-in / not-found).
@@ -389,25 +536,133 @@ export function BooksPage(): React.JSX.Element {
     [t],
   )
 
+  // ── Keyboard: J/K move the selection, Enter opens, Ctrl+Enter opens in a new
+  //    tab, C copies the ref, Esc closes the drawer ──────────────────────────────
+  // Active only on the desktop list and, in the drawer tier, only while the
+  // drawer is open (nothing is "selected" in the user's mind otherwise).
+  const keysActive = isDesktop && tier !== null && desktopRows.length > 0 && (!drawerTier || drawerOpen)
+  const stepSelection = (delta: 1 | -1): boolean => {
+    if (!keysActive) return false
+    const at = desktopRows.findIndex((row) => row.id === selectedId)
+    const nextIndex = at === -1 ? (delta > 0 ? 0 : desktopRows.length - 1) : at + delta
+    const next = desktopRows[Math.min(Math.max(nextIndex, 0), desktopRows.length - 1)]
+    if (next.id !== selectedId) {
+      // Focus follows the selection when it was on a row, so Enter / Ctrl+Enter
+      // act on the row just stepped to rather than the one last clicked.
+      const focusInRow = document.activeElement?.closest('[data-book-id]') != null
+      setSelectedId(next.id)
+      const row = scrollerRef.current?.querySelector<HTMLElement>(`[data-book-id="${next.id}"]`)
+      row?.scrollIntoView({ block: 'nearest' })
+      if (focusInRow) row?.querySelector<HTMLElement>('button')?.focus({ preventScroll: true })
+    }
+    return true
+  }
+  useShortcutAction('recordNext', () => stepSelection(1))
+  useShortcutAction('recordPrev', () => stepSelection(-1))
+  useShortcutAction('recordOpen', () => {
+    if (!keysActive || selectedBook === null) return false
+    openFromList(selectedBook.id)
+  })
+  useShortcutAction('recordOpenNewTab', () => {
+    // A focused row wins over the selection (Ctrl+Enter works from a Tab-focused
+    // row, even in the drawer tier with the drawer closed).
+    if (!isDesktop || tier === null) return false
+    const focusedRow = document.activeElement?.closest<HTMLElement>('[data-book-id]')
+    const id = Number(focusedRow?.dataset.bookId) || (keysActive ? selectedBook?.id : undefined)
+    if (!id) return false
+    window.open(`/books/${id}`, '_blank', 'noopener')
+  })
+  useShortcutAction('copyRef', () => {
+    if (!keysActive || selectedBook === null) return false
+    const { ref_number: ref } = selectedBook
+    void copyToClipboard(ref).then((ok) => {
+      if (ok) toast.success(t('books.record.copiedRef', { ref: bidi(ref) }))
+      else toast.error(t('common.copyFailed'))
+    })
+  })
+  useShortcutAction('escape', () => {
+    if (!drawerOpen) return false
+    closeDrawer()
+  })
+
   // Auto-select the first visible row when nothing is selected or the selected
-  // row fell out of the current filter. Render-time adjust (not an effect) —
-  // converges in one extra render and avoids a flash of the empty pane.
-  // Gated on isDesktop: mobile never uses selectedId so this is a no-op there,
-  // but the redundant setState still wastes a render cycle on every mobile paint.
-  if (
-    isDesktop &&
-    !openParam &&
-    desktopRows.length > 0 &&
+  // row fell out of the current filter. An effect, not a render-time call: the
+  // selection is a URL param, and navigating while rendering updates the router
+  // mid-render (React's "Cannot update a component while rendering" error).
+  // Inline tiers only: the drawer tier keeps the list full-width until a row is
+  // chosen, and mobile never uses selectedId. A pending Back-restore selects its
+  // own row, so it must not be pre-empted by the first row.
+  const firstRowId = desktopRows[0]?.id ?? null
+  // No `open` at all, or an `open` whose record is gone (Created-by-me / service
+  // change dropped it) → pick the first row.
+  const selectionGone = openParam ? listQuery.isSuccess && selectedBook === null : true
+  const needsAutoSelect =
+    inlinePane &&
+    !returnPending &&
+    selectionGone &&
+    firstRowId !== null &&
     (selectedId === null || !desktopRows.some((r) => r.id === selectedId))
-  ) {
-    setOpenParam(String(desktopRows[0].id))
+  useEffect(() => {
+    // A deep link that is bouncing to the record page (declared above, so it has
+    // already run this commit) must not race a re-selection.
+    if (!needsAutoSelect || firstRowId === null || deepLinkBouncedRef.current) return
+    autoSelectedRef.current = firstRowId
+    setOpenParam(String(firstRowId))
+  }, [needsAutoSelect, firstRowId, setOpenParam])
+  // Crossing into the drawer tier must not pop the drawer for a row the page
+  // (not the user) selected; a user-chosen or deep-linked `open` stays.
+  useEffect(() => {
+    if (!drawerTier || autoSelectedRef.current === null) return
+    if (autoSelectedRef.current === selectedId) setOpenParam(null)
+    autoSelectedRef.current = null
+  }, [drawerTier, selectedId, setOpenParam])
+
+  const mineToggle = isInmateReporter
+    ? undefined
+    : {
+        pressed: mine,
+        count: myRecordsCount,
+        onToggle: () => setFilters({ ...filters, mine: !filters.mine }),
+      }
+
+  const listEmpty = hasFilters ? (
+    <EmptyState
+      icon={BookOpen}
+      message={t('books.list.noMatch')}
+      actionLabel={t('books.filters.clear')}
+      onAction={clearAllFilters}
+    />
+  ) : (
+    <EmptyState
+      icon={BookOpen}
+      message={t('books.emptyUnfiltered')}
+      actionLabel={t('books.newRecord')}
+      onAction={() =>
+        navigate(newRecordHref(isInmateReporter))
+      }
+    />
+  )
+
+  const paneProps = {
+    nav: buildNav,
+    onSizeChange: setPaneSize,
+    onContinueDraft: (id: number) => setPreviewBookId(id),
+    onSubmit: submitBook,
+    onSelectBook: (id: number) => setSelectedId(id),
+    onAddToEmail: handleAddOneToEmail,
+    onDeleted: (id: number) => moveSelectionAfterDelete(new Set([id])),
   }
 
   return (
     <div className="flex h-full flex-1 flex-col overflow-hidden bg-background">
       {isDesktop ? (
-        /* ───── Desktop: spine + three panes ───── */
-        <div className="flex min-h-0 flex-1 flex-col px-6 pb-5 pt-4">
+        /* ───── Desktop: spine + register + pane ───── */
+        <div
+          ref={setWrapEl}
+          data-records-page
+          data-tier={tier ?? undefined}
+          className="@container/page flex min-h-0 flex-1 flex-col px-6 pb-5 pt-4"
+        >
           <header className="mb-3 flex shrink-0 items-end justify-between gap-4">
             <div className="min-w-0">
               <h1 className="text-[1.45em] font-bold tracking-tight text-foreground">{t('books.title')}</h1>
@@ -421,7 +676,7 @@ export function BooksPage(): React.JSX.Element {
                 <button
                   type="button"
                   onClick={() => navigate('/books/approvals')}
-                  className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-hairline bg-surface-tinted px-4 py-2 text-[0.85em] font-semibold text-foreground transition-colors hover:border-primary hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                  className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-hairline bg-surface-tinted px-4 py-2 text-[0.85em] font-semibold text-foreground transition-colors hover:border-primary hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 motion-reduce:transition-none"
                 >
                   <Stamp className="h-3.5 w-3.5" strokeWidth={2} />
                   {t('books.approvals.title')}
@@ -439,7 +694,7 @@ export function BooksPage(): React.JSX.Element {
               <button
                 type="button"
                 onClick={() => void facetsQuery.refetch()}
-                className="rounded-full border border-hairline px-3 py-1 text-[0.75em] font-semibold text-muted-foreground transition-colors hover:border-primary hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="rounded-full border border-hairline px-3 py-1 text-[0.75em] font-semibold text-muted-foreground transition-colors hover:border-primary hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none"
               >
                 {t('common.retry')}
               </button>
@@ -453,35 +708,59 @@ export function BooksPage(): React.JSX.Element {
             />
           )}
           <div
+            style={{ '--pane-w': PANE_WIDTH[inlinePane ? paneSize : 'normal'] } as React.CSSProperties}
             className={cn(
-              'grid min-h-0 flex-1 gap-3',
+              'grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)] gap-3',
               isInmateReporter
-                ? 'grid-cols-[minmax(0,1fr)_clamp(360px,36%,480px)]'
-                : 'grid-cols-[15rem_minmax(0,1fr)_clamp(360px,36%,480px)]',
+                ? '@5xl/page:grid-cols-[minmax(0,1fr)_var(--pane-w)]'
+                : '@5xl/page:grid-cols-[3.5rem_minmax(0,1fr)_var(--pane-w)] @7xl/page:grid-cols-[15rem_minmax(0,1fr)_var(--pane-w)]',
             )}
           >
-            {!isInmateReporter &&
-              (facetsQuery.isError ? (
-                <div className="rounded-2xl border border-hairline bg-surface py-8">
-                  <EmptyState
-                    icon={BookOpen}
-                    message={t('common.loadError')}
-                    actionLabel={t('common.retry')}
-                    onAction={() => void facetsQuery.refetch()}
+            {!isInmateReporter && (
+              <div className="hidden min-h-0 @5xl/page:grid">
+                {facetsQuery.isError ? (
+                  <div className="rounded-2xl border border-hairline bg-surface py-8">
+                    <EmptyState
+                      icon={BookOpen}
+                      message={t('common.loadError')}
+                      actionLabel={t('common.retry')}
+                      onAction={() => void facetsQuery.refetch()}
+                    />
+                  </div>
+                ) : (
+                  <FormRail
+                    items={railItems}
+                    active={railService}
+                    onChange={setRailService}
+                    tier={tier === 'icons' ? 'icons' : 'full'}
+                    mine={mineToggle}
                   />
-                </div>
-              ) : (
-                <FormRail items={railItems} active={railService} onChange={setRailService} />
-              ))}
+                )}
+              </div>
+            )}
             <section className="flex min-h-0 flex-col overflow-hidden rounded-2xl border border-hairline bg-surface">
-              <div className="flex shrink-0 items-center gap-2 border-b border-hairline p-2.5">
+              <div className="flex shrink-0 flex-wrap items-center gap-2 border-b border-hairline p-2.5">
                 <Input
                   value={search}
                   onChange={(e) => handleSearchChange(e.target.value)}
                   placeholder={t('books.pane.searchPlaceholder')}
-                  className="h-8 min-w-0 flex-1 rounded-full border-hairline bg-surface-raised text-[0.82em]"
+                  className="h-8 min-w-[10rem] flex-1 rounded-full border-hairline bg-surface-raised text-[0.82em] pointer-coarse:h-11"
                   data-testid="records-search"
                 />
+                {/* Below 64rem there is no rail: its two jobs move into the toolbar. */}
+                {!isInmateReporter && (
+                  <span className="contents @5xl/page:hidden">
+                    <ServicePopover items={railItems} active={railService} onChange={setRailService} />
+                  </span>
+                )}
+                {!isInmateReporter && (
+                  <FiltersPopover filters={filters} categories={categories} onChange={setFilters} />
+                )}
+                {mineToggle && (
+                  <span className="contents @5xl/page:hidden">
+                    <MineChip {...mineToggle} variant="chip" />
+                  </span>
+                )}
                 {/* Drafts filter pill — shows only when there are drafts */}
                 {draftBooks.length > 0 && (
                   <button
@@ -489,7 +768,7 @@ export function BooksPage(): React.JSX.Element {
                     onClick={() => setShowDrafts((v) => !v)}
                     aria-pressed={showDrafts}
                     className={cn(
-                      'inline-flex shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-[0.75em] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                      'inline-flex min-h-8 shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-[0.75em] font-semibold transition-colors motion-reduce:transition-none pointer-coarse:min-h-11 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
                       showDrafts
                         ? 'border-warning/40 bg-warning-soft text-warning'
                         : 'border-hairline bg-surface-tinted text-muted-foreground hover:bg-border hover:text-foreground',
@@ -497,7 +776,7 @@ export function BooksPage(): React.JSX.Element {
                   >
                     {t('books.filters.drafts')}
                     <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-warning/20 px-1 text-[0.85em] font-bold text-warning">
-                      {draftBooks.length}
+                      <bdi dir="ltr">{draftBooks.length}</bdi>
                     </span>
                   </button>
                 )}
@@ -527,9 +806,9 @@ export function BooksPage(): React.JSX.Element {
                           <span className="flex items-center gap-1.5 text-[0.75em] font-bold uppercase tracking-[0.07em] text-warning">
                             <ChevronRight
                               aria-hidden
-                              className="h-3.5 w-3.5 transition-transform group-open:rotate-90 rtl:-scale-x-100"
+                              className="h-3.5 w-3.5 transition-transform motion-reduce:transition-none group-open:rotate-90 rtl:-scale-x-100"
                             />
-                            {t('books.filters.drafts')} ({draftBooks.length})
+                            {t('books.filters.drafts')} (<bdi dir="ltr">{draftBooks.length}</bdi>)
                           </span>
                         </summary>
                         <div className="mt-2 flex flex-col gap-1.5">
@@ -543,7 +822,7 @@ export function BooksPage(): React.JSX.Element {
                           {draftBooks.slice(0, 3).map((draft) => (
                             <div
                               key={draft.id}
-                              className="flex items-center gap-2 rounded-lg bg-surface px-2.5 py-1.5"
+                              className="flex flex-wrap items-center gap-2 rounded-lg bg-surface px-2.5 py-1.5"
                             >
                               <span className="font-mono text-[0.72em] font-bold text-primary">
                                 <bdi dir="ltr">{draft.ref_number}</bdi>
@@ -561,34 +840,50 @@ export function BooksPage(): React.JSX.Element {
                               onClick={() => setShowDrafts(true)}
                               className="text-start text-[0.72em] text-muted-foreground underline hover:text-foreground"
                             >
-                              +{draftBooks.length - 3} {t('books.filters.drafts')}
+                              +<bdi dir="ltr">{draftBooks.length - 3}</bdi> {t('books.filters.drafts')}
                             </button>
                           )}
                         </div>
                       </details>
                     </div>
                   )}
-                  {!isInmateReporter && selectedForBasket.size > 0 && (
-                    <div className="flex shrink-0 items-center gap-3 border-b border-hairline bg-surface-raised px-3.5 py-2">
-                      <span className="text-xs text-muted-foreground">
-                        {t('basket.tray.count', { count: selectedForBasket.size })}
-                      </span>
+                  {!isInmateReporter && selectedRows.length > 0 && (
+                    <div
+                      role="region"
+                      aria-label={t('books.list.selected', { count: selectedRows.length })}
+                      className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1.5 border-b border-hairline bg-surface-raised px-3.5 py-2"
+                    >
+                      <div className="flex flex-col">
+                        <span className="text-xs text-foreground">
+                          {t('books.list.selected', { count: selectedRows.length })}
+                        </span>
+                        {skippedCount > 0 && (
+                          <small className="text-[0.7rem] text-muted-foreground">
+                            {t('books.list.skippedMany', { count: skippedCount })}
+                          </small>
+                        )}
+                      </div>
                       <button
                         type="button"
                         onClick={() => void handleAddToEmail()}
-                        className="inline-flex items-center gap-1.5 rounded-full bg-primary px-3 py-1 text-xs font-semibold text-primary-foreground transition-colors hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1"
+                        className="inline-flex min-h-8 items-center gap-1.5 rounded-full bg-primary px-3 py-1 text-xs font-semibold text-primary-foreground transition-colors hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 motion-reduce:transition-none pointer-coarse:min-h-11"
                       >
-                        {t('basket.addN', { count: selectedForBasket.size })}
+                        {t('basket.addN', { count: selectedRows.length })}
                       </button>
                       {canDelete && (
                         <button
                           type="button"
-                          onClick={() => setConfirmDeleteOpen(true)}
-                          disabled={deleteMutation.isPending}
-                          className="ms-auto inline-flex items-center gap-1.5 rounded-full border border-accent/40 px-3 py-1 text-xs font-semibold text-accent transition-colors hover:bg-accent/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1 disabled:opacity-50"
+                          aria-disabled={deletableRows.length === 0 ? true : undefined}
+                          onClick={() => {
+                            if (deletableRows.length > 0) setConfirmDeleteOpen(true)
+                          }}
+                          className={cn(
+                            'ms-auto inline-flex min-h-8 items-center gap-1.5 rounded-full border border-accent/40 px-3 py-1 text-xs font-semibold text-accent transition-colors hover:bg-accent/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1 motion-reduce:transition-none pointer-coarse:min-h-11',
+                            deletableRows.length === 0 && 'opacity-50',
+                          )}
                         >
-                          <Trash2 className="h-3.5 w-3.5" strokeWidth={2} />
-                          {t('books.bulk.delete')}
+                          <Trash2 className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
+                          {t('books.list.deleteMany', { count: deletableRows.length })}
                         </button>
                       )}
                     </div>
@@ -600,22 +895,46 @@ export function BooksPage(): React.JSX.Element {
                     onSelect={setSelectedId}
                     selected={isInmateReporter ? undefined : selectedForBasket}
                     onToggleSelect={isInmateReporter ? undefined : handleToggleSelect}
+                    nav={buildNav}
+                    scrollerRef={scrollerRef}
+                    empty={listEmpty}
+                    isInmateReporter={isInmateReporter}
                   />
                 </>
               )}
             </section>
-            <RecordPane
-              book={selectedBook}
-              onOpenRecord={(id) => navigate(`/books/${id}`)}
-              onContinueDraft={(id) => setPreviewBookId(id)}
-              onSubmit={submitBook}
-              onSelectBook={(id) => setSelectedId(id)}
-              onAddToEmail={handleAddOneToEmail}
-            />
+            {inlinePane && (
+              <RecordPane
+                {...paneProps}
+                book={selectedBook}
+                mode="inline"
+                size={paneSize}
+              />
+            )}
           </div>
+          {drawerOpen && selectedBook !== null &&
+            createPortal(
+              <>
+                <div
+                  aria-hidden
+                  className="fixed inset-0 z-40 bg-foreground/15"
+                  onClick={closeDrawer}
+                />
+                <RecordDrawer label={selectedBook.ref_number} closeLabel={t('common.close')}>
+                  <RecordPane
+                    {...paneProps}
+                    book={selectedBook}
+                    mode="drawer"
+                    size="normal"
+                    onClose={closeDrawer}
+                  />
+                </RecordDrawer>
+              </>,
+              document.body,
+            )}
         </div>
       ) : (
-        /* ───── Mobile: header + filter bar + card list (unchanged) ───── */
+        /* ───── Mobile: header + filter bar + card list ───── */
         <>
           <header className="px-6 pb-3 pt-5">
             <div className="flex items-end justify-between gap-4">
@@ -636,7 +955,7 @@ export function BooksPage(): React.JSX.Element {
                   <button
                     type="button"
                     onClick={() => navigate('/books/approvals')}
-                    className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-hairline bg-surface-tinted px-4 py-2 text-[0.85em] font-semibold text-foreground transition-colors hover:border-primary hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                    className="inline-flex shrink-0 items-center gap-1.5 rounded-full border border-hairline bg-surface-tinted px-4 py-2 text-[0.85em] font-semibold text-foreground transition-colors hover:border-primary hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 motion-reduce:transition-none"
                   >
                     <Stamp className="h-3.5 w-3.5" strokeWidth={2} />
                     {t('books.approvals.title')}
@@ -687,55 +1006,20 @@ export function BooksPage(): React.JSX.Element {
             )}
           </div>
 
-          {/* Card list */}
-          <div className="flex-1 min-h-0">
-          <PullToRefresh>
-          <div className="px-6 pb-6">
-            {listQuery.isPending ? (
-              <div className="flex flex-col overflow-hidden rounded-2xl border border-hairline bg-surface">
-                {Array.from({ length: 6 }).map((_, i) => (
-                  <SkeletonRow key={i} cols={5} />
-                ))}
-              </div>
-            ) : listQuery.isError ? (
-              <div className="rounded-2xl border border-hairline bg-surface py-12">
-                <EmptyState
-                  icon={BookOpen}
-                  message={t('common.loadError')}
-                  actionLabel={t('common.retry')}
-                  onAction={() => void listQuery.refetch()}
-                />
-              </div>
-            ) : mobileRows.length === 0 ? (
-              <div className="rounded-2xl border border-hairline bg-surface py-12">
-                <EmptyState
-                  icon={BookOpen}
-                  message={hasFilters ? t('books.empty') : t('books.emptyUnfiltered')}
-                />
-              </div>
-            ) : (
-              <div className="flex flex-col gap-2 pb-24">
-                {mobileRows.map((row) => (
-                  <BookMobileCard
-                    key={row.id}
-                    row={row}
-                    isAr={isAr}
-                    canSubmit={
-                      isInmateReporter
-                        ? inmateReporterActionFor(row, user?.id) === 'edit-submit'
-                        : canSubmit
-                    }
-                    highlighted={row.id === highlightedId}
-                    onSubmit={() => submitBook(row.id)}
-                    onOpen={() => openBook(row)}
-                    t={t}
-                  />
-                ))}
-              </div>
-            )}
-          </div>
-          </PullToRefresh>
-          </div>
+          <BooksMobileList
+            isPending={listQuery.isPending}
+            isError={listQuery.isError}
+            onRetry={() => void listQuery.refetch()}
+            rows={mobileRows}
+            hasFilters={hasFilters}
+            isAr={isAr}
+            isInmateReporter={isInmateReporter}
+            canSubmit={canSubmit}
+            userId={user?.id}
+            highlightedId={highlightedId}
+            onSubmit={submitBook}
+            onClearFilters={clearAllFilters}
+          />
         </>
       )}
 
@@ -759,172 +1043,22 @@ export function BooksPage(): React.JSX.Element {
         <ConfirmDialog
           open={confirmDeleteOpen}
           onOpenChange={setConfirmDeleteOpen}
-          title={t('books.bulk.deleteTitle', { count: selectedForBasket.size })}
-          description={t('books.bulk.deleteBody')}
+          title={t('books.list.deleteMany', { count: deletableRows.length })}
+          description={
+            skippedCount > 0 ? (
+              <>
+                <p>{t('books.record.deleteBody')}</p>
+                <p>{t('books.list.skippedMany', { count: skippedCount })}</p>
+              </>
+            ) : (
+              t('books.record.deleteBody')
+            )
+          }
           confirmLabel={t('books.bulk.delete')}
-          onConfirm={() => deleteMutation.mutate([...selectedForBasket])}
+          onConfirm={handleBulkDelete}
           destructive
         />
       )}
     </div>
-  )
-}
-
-function ApprovalStatePill({
-  state,
-  signingPath,
-  signedSource,
-  t,
-}: {
-  state: string
-  signingPath?: string | null
-  signedSource?: string | null
-  t: (key: string) => string
-}): React.JSX.Element {
-  // Mobile keeps its own (amber-draft) chip palette for now — known deferral
-  // for the next mobile pass; labels are path-aware via sealDescriptor.
-  const variants: Record<string, string> = {
-    none: 'bg-warning-soft text-warning',
-    pending: 'bg-warning-soft text-warning',
-    awaiting_scan: 'bg-info-soft text-info',
-    approved: 'bg-success-soft text-success',
-    rejected: 'bg-destructive/10 text-destructive',
-    returned: 'bg-info-soft text-info',
-  }
-  const cls = variants[state] ?? 'bg-surface-tinted text-muted-foreground'
-  // sealDescriptor falls back to the raw state string for unknown states.
-  const label = t(sealDescriptor(state, { signingPath, signedSource }).labelKey)
-  return (
-    <span
-      className={cn(
-        'inline-flex items-center rounded-full px-2.5 py-0.5 text-[0.72em] font-semibold uppercase tracking-[0.06em]',
-        cls,
-      )}
-    >
-      {label}
-    </span>
-  )
-}
-
-function DirectionPill({
-  direction,
-  t,
-}: {
-  direction: string | null
-  t: (key: string) => string
-}): React.JSX.Element {
-  if (!direction) return <span className="text-muted-foreground">—</span>
-  const isIncoming = direction === 'incoming'
-  const Icon = isIncoming ? ArrowDownLeft : ArrowUpRight
-  return (
-    <span
-      className={cn(
-        'inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[0.72em] font-semibold uppercase tracking-[0.06em]',
-        isIncoming
-          ? 'bg-info-soft text-info'
-          : 'bg-success-soft text-success',
-      )}
-    >
-      <Icon className="h-3 w-3" strokeWidth={2} />
-      {t(`books.direction.${direction}`)}
-    </span>
-  )
-}
-
-// ─── Mobile-only book card ───────────────────────────────────────────────────
-// Mirrors the desktop row but stacks ref + approval / subject / meta so the
-// approval column never overflows the viewport (the dense table clips it).
-
-interface BookMobileCardProps {
-  row: BookRead
-  isAr: boolean
-  canSubmit: boolean
-  highlighted: boolean
-  onSubmit: () => void
-  onOpen: () => void
-  t: (key: string) => string
-}
-
-function BookMobileCard({
-  row,
-  isAr,
-  canSubmit,
-  highlighted,
-  onSubmit,
-  onOpen,
-  t,
-}: BookMobileCardProps): React.JSX.Element {
-  const catLabel = isAr
-    ? (row.category.name_ar ?? row.category.name_en)
-    : (row.category.name_en ?? row.category.name_ar)
-  return (
-    <article
-      data-id={row.id}
-      role="button"
-      tabIndex={0}
-      className={cn(
-        'flex cursor-pointer flex-col gap-2 rounded-2xl border border-hairline bg-surface p-3.5 transition-colors',
-        highlighted && 'bg-accent-soft',
-      )}
-      onClick={onOpen}
-      onKeyDown={(e) => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault()
-          onOpen()
-        }
-      }}
-    >
-      {/* ref + approval action */}
-      <div className="flex items-center justify-between gap-2">
-        <span className="font-mono text-[0.85em] font-semibold text-primary">
-          <bdi dir="ltr">{row.ref_number}</bdi>
-        </span>
-        {row.approval_state !== 'none' ? (
-          <ApprovalStatePill
-            state={row.approval_state}
-            signingPath={row.signing_path}
-            signedSource={signedSourceOf(row)}
-            t={t}
-          />
-        ) : (
-          <>
-            <ApprovalStatePill state="none" t={t} />
-            {canSubmit ? (
-              <button
-                type="button"
-                onClick={(e) => { e.stopPropagation(); onSubmit() }}
-                className={cn(
-                  'inline-flex shrink-0 items-center gap-1 rounded-full px-2.5 py-1.5 text-[0.72em] font-medium transition-colors min-h-[36px]',
-                  'border border-hairline text-muted-foreground hover:border-primary hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                  row.category.requires_approval &&
-                    'border-warning/50 text-warning hover:border-warning hover:text-warning',
-                )}
-              >
-                <Send className="h-2.5 w-2.5" strokeWidth={2} />
-                {row.category.requires_approval
-                  ? t('books.approval.needsApproval')
-                  : t('books.approval.submitForApproval')}
-              </button>
-            ) : null}
-          </>
-        )}
-      </div>
-
-      {/* subject */}
-      {row.subject ? (
-        <p className="line-clamp-2 text-[0.85em] leading-snug text-foreground" dir="auto">
-          {row.subject}
-        </p>
-      ) : null}
-
-      {/* category · direction · date */}
-      <div className="flex flex-wrap items-center gap-2 text-[0.72em] text-muted-foreground">
-        <span className="inline-flex items-center rounded-full bg-surface-tinted px-2.5 py-0.5 font-medium uppercase tracking-[0.06em]">
-          {catLabel}
-        </span>
-        {row.direction && <DirectionPill direction={row.direction} t={t} />}
-        <span className="ms-auto font-mono">{formatDate(row.created_at)}</span>
-      </div>
-    </article>
   )
 }

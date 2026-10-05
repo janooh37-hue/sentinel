@@ -90,6 +90,7 @@ export function GatewayIndicator(): React.JSX.Element | null {
         <div
           ref={panelRef}
           role="dialog"
+          data-state="open"
           tabIndex={-1}
           aria-label={t('gateway.indicator.menuLabel')}
           className="anim-pop-in anim-pop-in-end absolute end-0 top-full z-50 mt-2 w-[calc(100vw-2rem)] max-w-[280px] overflow-hidden rounded-2xl border border-hairline bg-surface shadow-xl focus-visible:outline-none"

@@ -429,6 +429,7 @@ def commit_approved_import(
             created_at=created_at,
             deleted_at=None,
             submitted_by_user_id=owner.id,
+            created_by_user_id=owner.id,
             approval_state="approved",
             search_text=build_search_text(
                 subject=cleaned_subject,

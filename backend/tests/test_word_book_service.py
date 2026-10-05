@@ -48,6 +48,7 @@ def _header_text(path: Path) -> str:
         if any(t.text for t in element.findall("./" + qn("w:r") + "/" + qn("w:t")))
     )
 
+
 # ---------------------------------------------------------------------------
 # Tests
 # ---------------------------------------------------------------------------
@@ -89,6 +90,7 @@ def test_create_classified_book_returns_session_info(db_session, tmp_path, monke
     assert book.classification_code == "5/1"
     assert book.category_id == "GS"
     assert book.approval_state == "none"
+    assert book.created_by_user_id == user.id
 
     # Edit session exists and is active
     session = db_session.query(BookEditSession).filter_by(book_id=info.book_id).one()

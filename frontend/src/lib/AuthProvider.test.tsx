@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { api, type CapabilityRead, type SessionUser } from '@/lib/api'
 
 import { AuthProvider } from './AuthProvider'
+import { registerPdfCachePurger } from './pdfCachePurge'
 import { useAuth } from './authContext'
 import { capabilityCatalogKey, useCapabilityCatalog } from './useCapabilityCatalog'
 
@@ -93,6 +94,42 @@ describe('AuthProvider login activity', () => {
       expect(activity).toBeLessThanOrEqual(Date.now())
       expect(client.getQueryData(['ledger', 'unread-recent'])).toBeUndefined()
     })
+  })
+
+  it('purges the PDF document and thumbnail caches on login and on logout', async () => {
+    vi.spyOn(api, 'logout').mockResolvedValue(undefined)
+    const purge = vi.fn()
+    const unregister = registerPdfCachePurger(purge)
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    function SessionButtons(): React.JSX.Element {
+      const { login, logout } = useAuth()
+      return (
+        <>
+          <button type="button" onClick={() => void login('abdulla@example.test', 'Secret123!')}>
+            Sign in
+          </button>
+          <button type="button" onClick={() => void logout()}>
+            Sign out
+          </button>
+        </>
+      )
+    }
+    try {
+      render(
+        <QueryClientProvider client={client}>
+          <AuthProvider>
+            <SessionButtons />
+          </AuthProvider>
+        </QueryClientProvider>,
+      )
+
+      await userEvent.click(await screen.findByRole('button', { name: 'Sign in' }))
+      await waitFor(() => expect(purge).toHaveBeenCalledTimes(1))
+      await userEvent.click(screen.getByRole('button', { name: 'Sign out' }))
+      await waitFor(() => expect(purge).toHaveBeenCalledTimes(2))
+    } finally {
+      unregister()
+    }
   })
 
   it('removes the old identity catalog on logout and fetches again after re-authentication', async () => {

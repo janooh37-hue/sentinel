@@ -348,7 +348,7 @@ function GenericDashboardPage({ onNavigate }: DashboardPageProps): React.JSX.Ele
           <WaitingApprovalsCard
             onReview={() =>
               navigate(
-                approvalSummary ? approvalQueueUrl(defaultApprovalContext(approvalSummary) ?? { tab: 'received', kind: 'sign', status: 'all', sort: 'oldest', page: 1 }) : APPROVALS_LOG_PATH,
+                approvalSummary ? approvalQueueUrl(defaultApprovalContext(approvalSummary) ?? { tab: 'received', kind: 'sign', status: 'all', sort: 'newest', page: 1 }) : APPROVALS_LOG_PATH,
               )
             }
           />

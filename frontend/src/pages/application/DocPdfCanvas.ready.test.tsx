@@ -1,4 +1,4 @@
-import { render, waitFor } from '@testing-library/react'
+import { fireEvent, render, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const { getDocumentMock } = vi.hoisted(() => ({
@@ -10,12 +10,14 @@ vi.mock('pdfjs-dist', () => ({
   getDocument: getDocumentMock,
 }))
 
+import { clearPdfDocCache } from '@/lib/pdfDocCache'
 import DocPdfCanvas from './DocPdfCanvas'
 
 describe('DocPdfCanvas readiness', () => {
   beforeEach(() => {
     vi.restoreAllMocks()
     getDocumentMock.mockReset()
+    clearPdfDocCache()
   })
 
   it('calls onReady once after every page finishes painting', async () => {
@@ -31,6 +33,7 @@ describe('DocPdfCanvas readiness', () => {
         getPage: vi.fn().mockResolvedValue({
           getViewport: vi.fn(() => ({ width: 100, height: 100 })),
           render: renderPage,
+          cleanup: vi.fn(),
         }),
       }),
     })
@@ -55,6 +58,7 @@ describe('DocPdfCanvas readiness', () => {
         getPage: vi.fn().mockResolvedValue({
           getViewport: vi.fn(() => ({ width: 100, height: 100 })),
           render: vi.fn(() => ({ promise: Promise.resolve() })),
+          cleanup: vi.fn(),
         }),
       }),
     })
@@ -81,6 +85,7 @@ describe('DocPdfCanvas readiness', () => {
         getPage: vi.fn().mockResolvedValue({
           getViewport: vi.fn(() => ({ width: 100, height: 100 })),
           render: renderPage,
+          cleanup: vi.fn(),
         }),
       }),
     })
@@ -101,7 +106,7 @@ describe('DocPdfCanvas readiness', () => {
 
     const view = render(<DocPdfCanvas pdfUrl="/document.pdf" onReady={onReady} />)
 
-    await waitFor(() => expect(view.getByText("Couldn't render this file")).toBeInTheDocument())
+    await waitFor(() => expect(view.getByText('Couldn’t render this PDF')).toBeInTheDocument())
     expect(onReady).not.toHaveBeenCalled()
   })
 
@@ -113,6 +118,7 @@ describe('DocPdfCanvas readiness', () => {
         getPage: vi.fn().mockResolvedValue({
           getViewport: vi.fn(() => ({ width: 100, height: 100 })),
           render: vi.fn(() => ({ promise: Promise.resolve() })),
+          cleanup: vi.fn(),
         }),
       }),
     })
@@ -121,7 +127,57 @@ describe('DocPdfCanvas readiness', () => {
 
     const view = render(<DocPdfCanvas pdfUrl="/document.pdf" onReady={onReady} />)
 
-    await waitFor(() => expect(view.getByText("Couldn't render this file")).toBeInTheDocument())
+    await waitFor(() => expect(view.getByText('Couldn’t render this PDF')).toBeInTheDocument())
     expect(onReady).not.toHaveBeenCalled()
+  })
+
+  it('Retry refetches after a failed load and then paints', async () => {
+    const onReady = vi.fn()
+    getDocumentMock.mockReturnValue({
+      promise: Promise.resolve({
+        numPages: 1,
+        getPage: vi.fn().mockResolvedValue({
+          getViewport: vi.fn(() => ({ width: 100, height: 100 })),
+          render: vi.fn(() => ({ promise: Promise.resolve() })),
+          cleanup: vi.fn(),
+        }),
+      }),
+    })
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce({ ok: false, status: 500 })
+      .mockResolvedValue({ ok: true, text: async () => 'AQ==' })
+    vi.stubGlobal('fetch', fetchMock)
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({} as CanvasRenderingContext2D)
+
+    const view = render(<DocPdfCanvas pdfUrl="/retry.pdf" onReady={onReady} />)
+    await waitFor(() => expect(view.getByText('Couldn’t render this PDF')).toBeInTheDocument())
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+
+    fireEvent.click(view.getByRole('button', { name: 'Retry' }))
+    await waitFor(() => expect(onReady).toHaveBeenCalledTimes(1))
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(view.container.querySelector('canvas')).not.toBeNull()
+  })
+
+  it('lays out one aspect-correct placeholder per page before anything paints', async () => {
+    getDocumentMock.mockReturnValue({
+      promise: Promise.resolve({
+        numPages: 3,
+        getPage: vi.fn().mockResolvedValue({
+          getViewport: vi.fn(() => ({ width: 200, height: 400 })),
+          render: vi.fn(() => ({ promise: Promise.resolve() })),
+          cleanup: vi.fn(),
+        }),
+      }),
+    })
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, text: async () => 'AQ==' }))
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({} as CanvasRenderingContext2D)
+
+    const view = render(<DocPdfCanvas pdfUrl="/pages.pdf" sizing="fit" bare />)
+    await waitFor(() => expect(view.container.querySelectorAll('[data-pdf-page]')).toHaveLength(3))
+    const first = view.container.querySelector<HTMLElement>('[data-pdf-page="1"]')
+    expect(first?.style.aspectRatio).toBe('200 / 400')
+    expect(first?.style.width).toBe('100%')
   })
 })

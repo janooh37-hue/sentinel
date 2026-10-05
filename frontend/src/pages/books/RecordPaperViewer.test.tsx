@@ -1,0 +1,201 @@
+import { act, render, screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+import type { PdfDocLease } from '@/lib/pdfDocCache'
+
+import RecordPaperViewer from './RecordPaperViewer'
+import type { Paper } from './recordPapers'
+
+const { leasePdfUrlMock } = vi.hoisted(() => ({ leasePdfUrlMock: vi.fn() }))
+
+vi.mock('@/lib/pdfDocCache', () => ({ leasePdfUrl: leasePdfUrlMock }))
+vi.mock('pdfjs-dist', () => ({ GlobalWorkerOptions: {}, getDocument: vi.fn() }))
+vi.mock('@/lib/pdf', () => ({
+  pdfWorkerUrl: '/worker.js',
+  toBase64Url: (u: string) => u,
+  base64ToBytes: () => new Uint8Array(),
+}))
+
+const observers: Array<{ cb: ResizeObserverCallback; el: Element }> = []
+
+class MockResizeObserver {
+  private readonly cb: ResizeObserverCallback
+  constructor(cb: ResizeObserverCallback) {
+    this.cb = cb
+  }
+  observe(el: Element): void {
+    observers.push({ cb: this.cb, el })
+  }
+  unobserve(): void {}
+  disconnect(): void {
+    for (let i = observers.length - 1; i >= 0; i -= 1) {
+      if (observers[i].cb === this.cb) observers.splice(i, 1)
+    }
+  }
+}
+
+function resize(width: number): void {
+  act(() => {
+    for (const { cb, el } of observers) {
+      cb([{ target: el, contentRect: { width } } as unknown as ResizeObserverEntry], {} as ResizeObserver)
+    }
+  })
+}
+
+const scan = (i: number): Paper => ({
+  kind: 'scan',
+  url: `/api/v1/books/1/attachments/${i}`,
+  downloadUrl: `/api/v1/books/1/attachments/${i}`,
+  filename: `scan-${i}.png`,
+  isPdf: false,
+  attachmentIndex: i,
+})
+
+describe('RecordPaperViewer', () => {
+  beforeEach(() => {
+    vi.stubGlobal('ResizeObserver', MockResizeObserver)
+  })
+  afterEach(() => {
+    observers.length = 0
+    vi.unstubAllGlobals()
+  })
+
+  it('Fit is the container width minus padding, and follows resizes and zoom', async () => {
+    render(
+      <RecordPaperViewer papers={[scan(0)]} selectedKey="scan-0" onSelectKey={() => undefined} mode="pane" />,
+    )
+    resize(500)
+    const img = screen.getByRole('img', { name: 'scan-0.png' })
+    expect(img).toHaveStyle({ width: '468px' })
+
+    resize(700)
+    expect(screen.getByRole('img', { name: 'scan-0.png' })).toHaveStyle({ width: '668px' })
+
+    await userEvent.click(screen.getByRole('button', { name: 'Zoom in' }))
+    expect(screen.getByRole('img', { name: 'scan-0.png' })).toHaveStyle({ width: '802px' })
+  })
+
+  it('selects by key and reports key picks', async () => {
+    const onSelectKey = vi.fn()
+    render(
+      <RecordPaperViewer
+        papers={[scan(0), scan(3)]}
+        selectedKey="scan-3"
+        onSelectKey={onSelectKey}
+        mode="pane"
+      />,
+    )
+    resize(400)
+    expect(screen.getByRole('img', { name: 'scan-3.png' })).toBeInTheDocument()
+    await userEvent.click(screen.getAllByRole('button', { pressed: false })[0])
+    expect(onSelectKey).toHaveBeenCalledWith('scan-0')
+  })
+
+  it('falls back to the first paper when the selected key is gone', () => {
+    render(
+      <RecordPaperViewer papers={[scan(0)]} selectedKey="signed" onSelectKey={() => undefined} mode="overlay" />,
+    )
+    resize(400)
+    expect(screen.getByRole('img', { name: 'scan-0.png' })).toBeInTheDocument()
+  })
+
+  it('hides the strip for a single paper unless there is something to add', () => {
+    const { unmount } = render(
+      <RecordPaperViewer papers={[scan(0)]} selectedKey="scan-0" onSelectKey={() => undefined} mode="pane" />,
+    )
+    resize(500)
+    expect(screen.queryByRole('button', { pressed: true })).not.toBeInTheDocument()
+    unmount()
+
+    render(
+      <RecordPaperViewer
+        papers={[scan(0)]}
+        selectedKey="scan-0"
+        onSelectKey={() => undefined}
+        mode="pane"
+        addScanSlot={<button type="button">Add scan</button>}
+      />,
+    )
+    resize(500)
+    expect(screen.getByRole('button', { pressed: true })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Add scan' })).toBeInTheDocument()
+  })
+
+  it('names scans "Scan N" in the strip, with the filename as their hint', () => {
+    render(
+      <RecordPaperViewer
+        papers={[scan(0), scan(3)]}
+        selectedKey="scan-0"
+        onSelectKey={() => undefined}
+        mode="pane"
+      />,
+    )
+    resize(500)
+    expect(screen.getByRole('button', { name: 'Scan 1' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Scan 2' })).toBeInTheDocument()
+  })
+
+  it('the overlay toolbar carries the paper switcher', async () => {
+    const onSelectKey = vi.fn()
+    render(
+      <RecordPaperViewer papers={[scan(0), scan(3)]} selectedKey="scan-0" onSelectKey={onSelectKey} mode="overlay" />,
+    )
+    resize(500)
+    await userEvent.click(screen.getByRole('button', { name: 'Scan 2' }))
+    expect(onSelectKey).toHaveBeenCalledWith('scan-3')
+  })
+
+  it('collapses Replace / Delete into a ⋯ menu on a narrow viewer', () => {
+    const { unmount } = render(
+      <RecordPaperViewer
+        papers={[scan(0)]}
+        selectedKey="scan-0"
+        onSelectKey={() => undefined}
+        mode="pane"
+        onDeletePaper={() => undefined}
+        onReplacePaper={() => undefined}
+      />,
+    )
+    resize(600)
+    expect(screen.getByRole('button', { name: 'Delete this scan' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'More' })).not.toBeInTheDocument()
+    unmount()
+
+    render(
+      <RecordPaperViewer
+        papers={[scan(0)]}
+        selectedKey="scan-0"
+        onSelectKey={() => undefined}
+        mode="pane"
+        onDeletePaper={() => undefined}
+        onReplacePaper={() => undefined}
+      />,
+    )
+    resize(380)
+    expect(screen.queryByRole('button', { name: 'Delete this document' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'More' })).toBeInTheDocument()
+  })
+
+  it('releases a lease that resolves after the viewer was torn down', async () => {
+    // `Promise.withResolvers` is the house style, but tsconfig pins lib ES2023, hence the executor.
+    let resolve: (lease: PdfDocLease) => void = () => undefined
+    const promise = new Promise<PdfDocLease>((res) => {
+      resolve = res
+    })
+    leasePdfUrlMock.mockReturnValueOnce(promise)
+    const release = vi.fn()
+    const pdf: Paper = { ...scan(0), url: '/api/v1/books/1/attachments/0?v=aa', filename: 'scan-0.pdf', isPdf: true }
+    const { unmount } = render(
+      <RecordPaperViewer papers={[pdf]} selectedKey="scan-0" onSelectKey={() => undefined} mode="pane" />,
+    )
+    resize(500)
+    await vi.waitFor(() => expect(leasePdfUrlMock).toHaveBeenCalledTimes(1))
+
+    unmount()
+    // The cache resolved the lease just as cleanup ran (it does not see the abort in time).
+    resolve({ doc: {} as PdfDocLease['doc'], release })
+    await promise
+    await vi.waitFor(() => expect(release).toHaveBeenCalledTimes(1))
+  })
+})

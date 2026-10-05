@@ -14,6 +14,7 @@ function Page(): React.JSX.Element {
     <div>
       <p data-testid="where">{location.pathname + location.search}</p>
       <p data-testid="q">{q}</p>
+      <p data-testid="state">{JSON.stringify(location.state)}</p>
       {overlay.value === 'edit' ? <div role="dialog">Edit</div> : null}
       <button type="button" onClick={() => overlay.open('edit')}>open</button>
       <button type="button" onClick={() => overlay.close()}>close</button>
@@ -36,6 +37,19 @@ function renderAt(entries: string[]): void {
 }
 
 describe('useUrlOverlay', () => {
+  it('open keeps the entry state (record nav context) alongside the overlay marker', async () => {
+    const nav = { from: '/books', queue: [1, 2], scrollY: 5 }
+    render(
+      <MemoryRouter initialEntries={[{ pathname: '/page', state: nav }]}>
+        <Routes>
+          <Route path="/page" element={<Page />} />
+        </Routes>
+      </MemoryRouter>,
+    )
+    await userEvent.click(screen.getByRole('button', { name: 'open' }))
+    expect(JSON.parse(screen.getByTestId('state').textContent ?? '')).toEqual({ ...nav, overlay: true })
+  })
+
   it('closing a directly opened overlay stays on the page', async () => {
     renderAt(['/page?action=edit'])
     expect(screen.getByRole('dialog')).toBeInTheDocument()

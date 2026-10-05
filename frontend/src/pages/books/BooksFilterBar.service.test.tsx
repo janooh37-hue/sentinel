@@ -8,7 +8,8 @@ import userEvent from '@testing-library/user-event'
 
 const capabilityState = vi.hoisted(() => ({ allowed: new Set<string>() }))
 
-import { BooksFilterBar, type BooksFilters } from './BooksFilterBar'
+import { BooksFilterBar } from './BooksFilterBar'
+import { DEFAULT_BOOKS_FILTERS, type BooksFilters } from './booksFiltersUtils'
 import type { ServiceFacetRead } from '@/lib/api'
 
 // Arabic throughout: an EN-only assertion cannot catch an AR leak here.
@@ -43,29 +44,23 @@ vi.mock('@/lib/useCapabilities', () => ({
   }),
 }))
 
+vi.mock('@/lib/authContext', () => ({ useAuth: () => ({ user: { id: 1, role: 'manager' } }) }))
+vi.mock('./useMyRecordsCount', () => ({ useMyRecordsCount: () => ({ count: null }) }))
+
 const SERVICES: ServiceFacetRead[] = [
   { id: 'Report', count: 6, states: { none: 6 } },
   { id: 'other', count: 1, states: { none: 1 } },
 ]
 
-const BASE: BooksFilters = {
-  categoryIds: [],
-  direction: 'all',
-  status: 'all',
-  fromDate: '',
-  toDate: '',
-  q: '',
-  drafts: false,
-  serviceId: 'all',
-}
+const BASE: BooksFilters = DEFAULT_BOOKS_FILTERS
 
-function setup(filters: Partial<BooksFilters> = {}) {
+function setup(filters: Partial<BooksFilters> = {}, services: ServiceFacetRead[] = SERVICES) {
   const onChange = vi.fn()
   render(
     <BooksFilterBar
       filters={{ ...BASE, ...filters }}
       categories={[]}
-      services={SERVICES}
+      services={services}
       onChange={onChange}
     />,
   )
@@ -80,6 +75,13 @@ beforeEach(() => {
   ])
 })
 describe('BooksFilterBar service filter', () => {
+  it('keeps the active service as an option when the facets omit it (Created by me)', async () => {
+    setup({ serviceId: 'Report', mine: true }, [{ id: 'other', count: 1, states: { none: 1 } }])
+    expect(screen.getByTestId('service-filter')).toHaveTextContent('تقرير')
+    await userEvent.click(screen.getByTestId('service-filter'))
+    expect(screen.getByRole('option', { name: /تقرير/ })).toHaveAttribute('aria-selected', 'true')
+  })
+
   it('renders a Service trigger distinct from the Category trigger', () => {
     setup()
     const category = screen.getByTestId('category-filter')

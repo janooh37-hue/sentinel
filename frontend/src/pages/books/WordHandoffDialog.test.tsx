@@ -27,6 +27,7 @@ vi.mock('react-i18next', () => ({
         'books.word.discard': 'تجاهل',
         'books.word.noSavesYet': 'لم يصل أي حفظ من Word بعد',
         'books.word.discardConfirm': 'سيصبح الكتاب ملغياً ويبقى رقمه محفوظاً في السجل. متابعة؟',
+        'books.word.discardConfirmLabel': 'تجاهل المسودة',
         'books.word.finished': opts?.ref ? `تم اعتماد الإصدار — ${String(opts.ref)}` : 'تم اعتماد الإصدار',
         'books.word.finishedPdfTitle': opts?.ref ? `تم حفظ الكتاب — ${String(opts.ref)}` : 'تم حفظ الكتاب',
         'books.word.pdfPending': 'جارٍ تجهيز ملف PDF — يمكنك تنزيل ملف DOCX الآن',
@@ -235,7 +236,7 @@ describe('WordHandoffDialog', () => {
       expect(screen.getByText('سيصبح الكتاب ملغياً ويبقى رقمه محفوظاً في السجل. متابعة؟')).toBeTruthy(),
     )
     // Click the confirm button
-    await user.click(screen.getByText('تأكيد'))
+    await user.click(screen.getByRole('button', { name: 'تجاهل المسودة' }))
     await waitFor(() => expect(discardSpy).toHaveBeenCalledWith(42))
     await waitFor(() => expect(onClose).toHaveBeenCalled())
   })

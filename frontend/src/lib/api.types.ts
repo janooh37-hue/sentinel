@@ -2360,7 +2360,8 @@ export interface paths {
         /**
          * Book Facets
          * @description Per-service counts for the Records rail + per-service approval-state
-         *     counts for the status spine. Global, unpaginated.
+         *     counts for the status spine. Global, unpaginated; ``created_by_me`` narrows
+         *     every count to records the caller created.
          */
         get: operations["book_facets_api_v1_books_facets_get"];
         put?: never;
@@ -7904,6 +7905,12 @@ export interface components {
             submitted_by_name?: string | null;
             /** Submitted By G */
             submitted_by_g?: string | null;
+            /** Created By User Id */
+            created_by_user_id?: number | null;
+            /** Created By Name */
+            created_by_name?: string | null;
+            /** Created By G */
+            created_by_g?: string | null;
             /** Submitted At */
             submitted_at?: string | null;
             /** Doc Manager User Id */
@@ -20470,7 +20477,9 @@ export interface operations {
     };
     book_facets_api_v1_books_facets_get: {
         parameters: {
-            query?: never;
+            query?: {
+                created_by_me?: boolean;
+            };
             header?: never;
             path?: never;
             cookie?: {
@@ -20881,6 +20890,7 @@ export interface operations {
                 from_date?: string | null;
                 to_date?: string | null;
                 include_deleted?: boolean;
+                created_by_me?: boolean;
                 limit?: number;
                 offset?: number;
             };

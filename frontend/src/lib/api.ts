@@ -2019,6 +2019,7 @@ export const api = {
     include_deleted?: boolean
     limit?: number
     offset?: number
+    created_by_me?: boolean
   } = {}) => request<BookListResponse>('GET', `/books${qs({ ...params })}`),
   getBook: (id: number, versionId?: number) =>
     request<BookRead>('GET', `/books/${id}${qs({ version_id: versionId })}`),
@@ -2083,7 +2084,8 @@ export const api = {
   /** GET /books/facets — per-service counts + per-service approval-state
    *  counts, over every record (not a page window). Backs the Records rail
    *  and the status spine. */
-  getBookFacets: () => request<BookFacetsResponse>('GET', '/books/facets'),
+  getBookFacets: (params: { created_by_me?: boolean } = {}) =>
+    request<BookFacetsResponse>('GET', `/books/facets${qs({ ...params })}`),
 
   // --- books approval worklist (#31, revision-scoped) ---
   /** GET /books/awaiting — the caller's actionable signing and advisory
@@ -2668,8 +2670,17 @@ export const api = {
   getJob: (jobId: string) => request<JobStatusResponse>('GET', `/jobs/${jobId}`),
   getDocument: (docId: number, versionId?: number) =>
     request<DocumentRead>('GET', `/documents/${docId}${qs({ version_id: versionId })}`),
-  documentDownloadUrl: (docId: number, format: 'docx' | 'pdf', versionId?: number) =>
-    `${BASE}/documents/${docId}/download${qs({ format, version_id: versionId })}`,
+  documentDownloadUrl: (
+    docId: number,
+    format: 'docx' | 'pdf',
+    versionId?: number,
+    original?: boolean,
+  ) =>
+    `${BASE}/documents/${docId}/download${qs({
+      format,
+      version_id: versionId,
+      original: original ? true : undefined,
+    })}`,
   /** Park an attachment upload for a later generate call; the returned token
    * is echoed back inside `DocumentGenerateRequest.attachments`
    * (`source: 'staged'`). Forms signing paths & attachments, 2026-06-11. */

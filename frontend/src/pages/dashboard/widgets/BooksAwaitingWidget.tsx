@@ -24,6 +24,7 @@ import { useApprovalSummary } from '@/lib/useApprovalSummary'
 import { useAuth } from '@/lib/authContext'
 import { EmptyState } from '@/components/ui/empty-state'
 import { Skeleton } from '@/components/ui/skeleton'
+import { useRecordDelete } from '@/pages/books/RecordDeleteProvider'
 import { cn } from '@/lib/utils'
 
 const PREVIEW_LIMIT = 5
@@ -113,6 +114,7 @@ export function BooksAwaitingWidget(): React.JSX.Element | null {
   const isAr = i18n.language.startsWith('ar')
   const dfLocale = isAr ? arLocale : undefined
   const { user } = useAuth()
+  const { pendingIds } = useRecordDelete()
 
   const summaryQuery = useApprovalSummary()
   const summary = summaryQuery.data
@@ -135,7 +137,7 @@ export function BooksAwaitingWidget(): React.JSX.Element | null {
 
   const context: ApprovalContext | null =
     primaryKind != null
-      ? { tab: 'received', kind: primaryKind, status: 'pending', sort: 'oldest', page: 1 }
+      ? { tab: 'received', kind: primaryKind, status: 'pending', sort: 'newest', page: 1 }
       : null
 
   const previewQuery = useQuery({
@@ -145,7 +147,7 @@ export function BooksAwaitingWidget(): React.JSX.Element | null {
         scope: 'received',
         kind: apiKindOf(context!.kind),
         status: 'pending',
-        sort: 'oldest',
+        sort: 'newest',
         limit: PREVIEW_LIMIT,
       }),
     enabled: context != null,
@@ -156,7 +158,7 @@ export function BooksAwaitingWidget(): React.JSX.Element | null {
   // dashboard for authorized-but-idle callers.
   if (summary && summary.available_received_kinds.length === 0) return null
 
-  const rows = previewQuery.data?.items ?? []
+  const rows = (previewQuery.data?.items ?? []).filter((item) => !pendingIds.has(item.book_id))
   const isLoading = summaryQuery.isPending || (context != null && previewQuery.isPending)
   const isEmpty = context != null && previewQuery.isSuccess && rows.length === 0
 

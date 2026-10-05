@@ -43,7 +43,7 @@ vi.mock('sonner', () => ({
 }))
 vi.mock('./useSyncStatus', () => ({ useSyncStatus: () => ({ status: null }) }))
 vi.mock('./useContextSource', () => ({ useContextSource: () => ({ peopleCount: 0, entry: null }) }))
-vi.mock('./useDeferredDelete', () => ({ useDeferredDelete: () => ({ pendingIds: new Set(), scheduleDelete: vi.fn() }) }))
+vi.mock('@/lib/useDeferredDelete', () => ({ useDeferredDelete: () => ({ pendingIds: new Set(), scheduleDelete: vi.fn() }) }))
 // Stubbed down to the one shell-relevant affordance: the ＋New email button.
 // The stub reproduces the real rail's accessible name (`aria-label` →
 // `ledger.outlook.newEmail`) so the click target is the same one users hit.

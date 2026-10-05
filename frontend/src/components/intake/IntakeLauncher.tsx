@@ -57,6 +57,7 @@ function LauncherInner(): React.JSX.Element {
       {open && (
         <div
           role="dialog"
+          data-state="open"
           aria-label={t('intake.drawerTitle')}
           className="anim-pop-in anim-pop-in-end absolute end-0 top-full z-50 mt-2 w-[calc(100vw-2rem)] max-w-[420px] overflow-hidden rounded-2xl border border-hairline bg-surface shadow-xl"
         >

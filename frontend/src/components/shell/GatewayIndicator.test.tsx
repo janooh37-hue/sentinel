@@ -3,6 +3,9 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { describe, expect, it, vi } from 'vitest'
 
+import { KeyboardShortcutsProvider } from '@/lib/keyboardShortcuts'
+import { useShortcutAction } from '@/lib/useKeyboardShortcuts'
+
 import { GatewayIndicator } from './GatewayIndicator'
 
 vi.mock('@/lib/useGatewayStatus', () => ({ useGatewayStatus: vi.fn() }))
@@ -74,5 +77,30 @@ describe('GatewayIndicator', () => {
     const link = screen.getByRole('button', { name: /nav\.sendToGroup|send to group/i })
     await userEvent.click(link)
     expect(navigateMock).toHaveBeenCalledWith('/messages/broadcast')
+  })
+
+  it('is an overlay for the shortcuts layer: Esc closes it without firing the page Esc, J is inert', async () => {
+    mockState('connected')
+    const escape = vi.fn()
+    const next = vi.fn()
+    function PageActions(): null {
+      useShortcutAction('escape', escape)
+      useShortcutAction('recordNext', next)
+      return null
+    }
+    render(
+      <MemoryRouter>
+        <KeyboardShortcutsProvider>
+          <PageActions />
+          <GatewayIndicator />
+        </KeyboardShortcutsProvider>
+      </MemoryRouter>,
+    )
+    await userEvent.click(screen.getByRole('button', { name: /whatsapp/i }))
+    expect(screen.getByRole('dialog')).toBeInTheDocument()
+    await userEvent.keyboard('j')
+    expect(next).not.toHaveBeenCalled()
+    await userEvent.keyboard('{Escape}')
+    expect(escape).not.toHaveBeenCalled()
   })
 })

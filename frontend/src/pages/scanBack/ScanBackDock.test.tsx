@@ -16,6 +16,8 @@ vi.mock('./useScanBack', async (orig) => ({
   useFileSignedCopy: () => ({ file: vi.fn(), busy: false }),
   useScanBackUpload: () => ({ upload: vi.fn(), busy: false }),
 }))
+const phone = vi.hoisted(() => ({ on: false }))
+vi.mock('@/lib/useIsMobile', () => ({ useIsMobile: () => phone.on }))
 vi.mock('@/lib/authContext', () => ({ useAuth: () => ({ user: { id: 42 }, status: 'authed' }) }))
 
 const renderDock = (path = '/books'): void => {
@@ -29,6 +31,7 @@ describe('ScanBackDock', () => {
   beforeEach(async () => {
     localStorage.clear()
     state.count = 2
+    phone.on = false
     await i18n.changeLanguage('en')
   })
 
@@ -55,6 +58,30 @@ describe('ScanBackDock', () => {
   it('renders nothing on the scan-back page itself', () => {
     renderDock('/scan-back')
     expect(screen.queryByRole('button', { name: /to scan back/i })).not.toBeInTheDocument()
+  })
+
+  // The record page's phone action dock owns the bottom edge.
+  it('steps aside on a phone record page, but not elsewhere or on desktop', () => {
+    phone.on = true
+    const { unmount } = render(
+      <MemoryRouter initialEntries={['/books/48']}><ScanBackDock /></MemoryRouter>,
+    )
+    expect(screen.queryByRole('button', { name: /to scan back/i })).not.toBeInTheDocument()
+    unmount()
+
+    renderDock('/books')
+    expect(screen.getByRole('button', { name: /to scan back/i })).toBeInTheDocument()
+  })
+
+  it('stays on the phone approvals page, which is not a record page', () => {
+    phone.on = true
+    renderDock('/books/approvals')
+    expect(screen.getByRole('button', { name: /to scan back/i })).toBeInTheDocument()
+  })
+
+  it('stays on the desktop record page', () => {
+    renderDock('/books/48')
+    expect(screen.getByRole('button', { name: /to scan back/i })).toBeInTheDocument()
   })
 
   it('labels the pill in Arabic under lng=ar', async () => {
