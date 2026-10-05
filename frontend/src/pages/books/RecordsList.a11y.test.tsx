@@ -91,6 +91,35 @@ describe('RecordsList row a11y', () => {
     expect(onSelect).not.toHaveBeenCalled()
   })
 
+  it('advertises Enter only on the selected row link, without remounting it on selection change', () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    const tree = (selectedId: number): React.JSX.Element => (
+      <QueryClientProvider client={client}>
+        <MemoryRouter initialEntries={['/books']}>
+          <RecordsList
+            rows={[makeBook(1), makeBook(2)]}
+            selectedId={selectedId}
+            onSelect={vi.fn()}
+            selected={new Set()}
+            onToggleSelect={vi.fn()}
+            from="/books"
+          />
+        </MemoryRouter>
+      </QueryClientProvider>
+    )
+    const { rerender } = render(tree(1))
+    const link1 = within(rowOf(1)).getByRole('link', { name: 'GS-0001' })
+    const link2 = within(rowOf(2)).getByRole('link', { name: 'GS-0002' })
+    expect(link1).toHaveAttribute('aria-keyshortcuts', 'Enter')
+    expect(link2).not.toHaveAttribute('aria-keyshortcuts')
+
+    rerender(tree(2))
+    expect(within(rowOf(1)).getByRole('link', { name: 'GS-0001' })).toBe(link1)
+    expect(within(rowOf(2)).getByRole('link', { name: 'GS-0002' })).toBe(link2)
+    expect(link1).not.toHaveAttribute('aria-keyshortcuts')
+    expect(link2).toHaveAttribute('aria-keyshortcuts', 'Enter')
+  })
+
   it('renders the ref as a link to the record that carries the list nav state', async () => {
     setup([makeBook(1), makeBook(2)])
     const link = within(rowOf(2)).getByRole('link', { name: 'GS-0002' })

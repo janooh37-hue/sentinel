@@ -1,8 +1,8 @@
 import * as React from 'react'
 
 import { Kbd } from './kbd'
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './tooltip'
-import { useHasTooltipProvider } from './tooltip-context'
+import { ariaKeyShortcut } from './keyshortcut'
+import { Tooltip, TooltipContent, TooltipTrigger } from './tooltip'
 
 /** Vertical and physical `left`/`right` sides are direction-safe; `start`/`end` resolve against the
  *  document direction because Radix `side` is physical. */
@@ -17,8 +17,9 @@ function resolveSide(side: HintSide): 'top' | 'bottom' | 'left' | 'right' {
 
 /**
  * Tooltip with a label and an optional shortcut. The trigger child gets
- * `aria-keyshortcuts`; `title` is never set (the tooltip replaces it). The
- * tooltip is a visual hint only: the child must carry its own accessible name.
+ * `aria-keyshortcuts` (ARIA key tokens derived from the display glyph); `title`
+ * is never set (the tooltip replaces it). The tooltip is a visual hint only: the
+ * child must carry its own accessible name. Requires an ancestor `TooltipProvider`.
  */
 export function Hint({
   label,
@@ -31,11 +32,10 @@ export function Hint({
   side?: HintSide
   children: React.ReactElement<Record<string, unknown>>
 }): React.JSX.Element {
-  const hasProvider = useHasTooltipProvider()
   const trigger = shortcut
-    ? React.cloneElement(children, { 'aria-keyshortcuts': shortcut })
+    ? React.cloneElement(children, { 'aria-keyshortcuts': ariaKeyShortcut(shortcut) })
     : children
-  const tip = (
+  return (
     <Tooltip>
       <TooltipTrigger asChild>{trigger}</TooltipTrigger>
       <TooltipContent side={resolveSide(side)} className="flex items-center gap-2">
@@ -43,12 +43,5 @@ export function Hint({
         {shortcut ? <Kbd>{shortcut}</Kbd> : null}
       </TooltipContent>
     </Tooltip>
-  )
-  return hasProvider ? (
-    tip
-  ) : (
-    <TooltipProvider delayDuration={400} skipDelayDuration={150}>
-      {tip}
-    </TooltipProvider>
   )
 }

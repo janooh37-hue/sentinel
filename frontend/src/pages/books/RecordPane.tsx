@@ -58,6 +58,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { Hint } from '@/components/ui/hint'
+import { ariaKeyShortcut } from '@/components/ui/keyshortcut'
 import { IconAction } from '@/components/ui/icon-action'
 import { useAuth } from '@/lib/authContext'
 import { bidi } from '@/lib/bidi'
@@ -66,7 +67,7 @@ import { copyToClipboard } from '@/lib/clipboard'
 import { serviceHref } from '@/lib/quickActions'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { useFocusTrap } from '@/lib/useFocusTrap'
-import { useIsMobile } from '@/lib/useIsMobile'
+import { useInlineReason } from '@/lib/useInlineReason'
 import { cn } from '@/lib/utils'
 
 import { inmateReporterActionFor } from '@/components/books/book-detail-drawer-utils'
@@ -935,11 +936,13 @@ export function PaneBtn({
   pendingLabel?: string
   children: React.ReactNode
 }): React.JSX.Element {
-  const isMobile = useIsMobile()
+  const inlineReason = useInlineReason()
   const reasonId = useId()
   const blocked = Boolean(reason) || pending
-  const touchReason = Boolean(reason) && isMobile
-  const hintLabel = reason ? (isMobile ? undefined : reason) : iconOnly || shortcut ? label : undefined
+  const touchReason = Boolean(reason) && inlineReason
+  const hintLabel = reason ? (inlineReason ? undefined : reason) : iconOnly || shortcut ? label : undefined
+  // The shortcut does not apply while blocked: no hint key, no aria-keyshortcuts.
+  const activeShortcut = blocked ? undefined : shortcut
   const button = (
     <button
       type="button"
@@ -947,7 +950,7 @@ export function PaneBtn({
       onClick={blocked ? undefined : onClick}
       aria-disabled={blocked ? true : undefined}
       aria-busy={pending ? true : undefined}
-      aria-keyshortcuts={shortcut}
+      aria-keyshortcuts={activeShortcut ? ariaKeyShortcut(activeShortcut) : undefined}
       aria-describedby={touchReason ? reasonId : undefined}
       aria-label={iconOnly ? label : undefined}
       className={paneBtnClass({ primary, iconOnly, blocked })}
@@ -963,7 +966,7 @@ export function PaneBtn({
     </button>
   )
   const withHint = hintLabel ? (
-    <Hint label={hintLabel} shortcut={reason ? undefined : shortcut} side="bottom">
+    <Hint label={hintLabel} shortcut={activeShortcut} side="bottom">
       {button}
     </Hint>
   ) : (
