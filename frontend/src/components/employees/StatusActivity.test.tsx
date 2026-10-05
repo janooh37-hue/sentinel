@@ -74,7 +74,7 @@ describe('StatusActivity', () => {
     const { title, detail } = text()
     expect(title).toBe('نشط ← منقول')
     expect(title).not.toMatch(/Active|Transferred/)
-    expect(detail).toContain('اعتباراً من')
+    expect(detail).toContain('اعتبارًا من')
     expect(detail).not.toMatch(/Effective|By /)
   })
 })

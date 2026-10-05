@@ -525,14 +525,14 @@
       "statusEvent": {
         "change": "{{from}} ← {{to}}",
         "initial": "سُجّل كـ {{to}}",
-        "returned": "العودة إلى الخدمة (نشط)",
+        "returned": "العودة إلى الخدمة",
         "scheduled": "مجدول: {{from}} ← {{to}}",
         "scheduledCancelled": "أُلغي التغيير المجدول إلى {{to}}",
-        "effective": "اعتباراً من {{date}}",
+        "effective": "اعتبارًا من {{date}}",
         "returnedOn": "العودة بتاريخ {{date}}",
         "expectedReturn": "العودة المتوقعة {{date}}",
-        "imported": "سجل سابق",
-        "bySchedulerAuto": "طُبّق تلقائياً",
+        "imported": "سجل قائم مسبقًا",
+        "bySchedulerAuto": "طُبّق تلقائيًا",
         "fromResignationLetter": "من خطاب الاستقالة",
         "by": "بواسطة {{name}}",
         "openProfile": "فتح ملف الموظف"

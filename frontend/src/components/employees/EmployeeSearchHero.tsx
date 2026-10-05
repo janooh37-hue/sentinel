@@ -226,7 +226,7 @@ export function EmployeeSearchHero({
                             className="h-1.5 w-1.5 rounded-full"
                             style={{ background: pillFg }}
                           />
-                          <span className="truncate">{pillLabel}</span>
+                          <span className="truncate" title={pillLabel}>{pillLabel}</span>
                         </span>
                         <PendingDepartureBadge
                           status={row.status}

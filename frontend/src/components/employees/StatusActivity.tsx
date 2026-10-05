@@ -68,11 +68,15 @@ export function StatusActivity({ item }: { item: StatusActivityValue }): React.J
 
   return (
     <span className="block min-w-0">
-      <span data-testid="status-activity-title" className="block truncate text-sm font-semibold text-foreground">
+      <span data-testid="status-activity-title" className="block truncate text-sm font-semibold text-foreground" title={title}>
         {title}
       </span>
       {parts.length > 0 && (
-        <span data-testid="status-activity-detail" className="mt-0.5 block truncate text-xs text-muted-foreground">
+        <span
+          data-testid="status-activity-detail"
+          className="mt-0.5 block truncate text-xs text-muted-foreground"
+          title={parts.join(' · ')}
+        >
           {parts.join(' · ')}
         </span>
       )}
