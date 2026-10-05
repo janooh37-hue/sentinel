@@ -110,7 +110,8 @@ export interface RecordActions {
   setWordReopenTrigger: (trigger: WordReopenTrigger | null) => void
   setAdjustSigTrigger: (trigger: AdjustSignatureTrigger | null) => void
   createMark: (mark: MarkInput) => void
-  deleteMark: (id: number) => void
+  /** Resolves once the DELETE and the annotations refetch have settled; never rejects. */
+  deleteMark: (id: number) => Promise<void>
   onPdfReady: () => void
   /** Open the scanned-copy / replacement file pickers (the hidden inputs live in the header). */
   pickSignedFile: () => void

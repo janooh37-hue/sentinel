@@ -27,6 +27,7 @@ import {
   PenLine,
   Printer,
   Send,
+  Trash2,
   Upload,
   X,
 } from 'lucide-react'
@@ -56,6 +57,7 @@ import { RECEIVED_STATUSES, SENT_STATUSES, approvalRecordUrl, isApprovalScope } 
 import type { ApprovalContext, ApprovalKind, ApprovalSort, ApprovalStatus } from '@/lib/approvals'
 
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
+import { EmptyState } from '@/components/ui/empty-state'
 import type { WordReopenTrigger } from '@/components/books/BookWordActions'
 import type { AdjustSignatureTrigger } from '@/components/signature/AdjustSignatureAction'
 import { IncludedPapersDialog } from './IncludedPapersDialog'
@@ -283,7 +285,8 @@ function BookRecordPageBody(): React.JSX.Element {
   const onPdfReady = useRecordPrintMode()
   useRecordPrintShortcut()
   const chrome = useRecordChrome()
-  const { scheduleDelete } = useRecordDelete()
+  const { scheduleDelete, pendingIds } = useRecordDelete()
+  const pendingDelete = pendingIds.has(bookId)
   const [deleteOpenFor, setDeleteOpenFor] = useState<number | null>(null)
   const deleteOpen = deleteOpenFor === bookId
   const setDeleteOpen = useCallback(
@@ -564,6 +567,7 @@ function BookRecordPageBody(): React.JSX.Element {
     bookId: Number.isFinite(bookId) ? bookId : null,
     versionId: current?.id ?? null,
     approvalContext: effectiveApprovalContext,
+    hiddenIds: pendingIds,
   })
   const backFilter = describeListFrom(backFrom, t)
   const backLabel = backFilter
@@ -606,8 +610,9 @@ function BookRecordPageBody(): React.JSX.Element {
   })
   const deleteMark = useMutation({
     mutationFn: (annId: number) => api.deleteBookAnnotation(bookId, current!.id, annId),
-    onSuccess: () =>
-      void qc.invalidateQueries({ queryKey: ['books', 'annotations', bookId, current?.id] }),
+    // Returned promise keeps `mutateAsync` pending until the annotations refetch
+    // lands, so the layer can keep the mark hidden until then.
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['books', 'annotations', bookId, current?.id] }),
     onError: (err) => toast.error(apiErrorMessage(err)),
   })
 
@@ -890,15 +895,15 @@ function BookRecordPageBody(): React.JSX.Element {
   useShortcutAction('recordNext', () => stepTo(queue.nextId, queue.nextVersionId))
   useShortcutAction('recordPrev', () => stepTo(queue.prevId, queue.prevVersionId))
   useShortcutAction('copyRef', () => {
-    if (!book) return false
+    if (!book || pendingDelete) return false
     copyRef()
   })
   useShortcutAction('signConfirm', () => {
-    if (!canDecideNow || busy) return false
+    if (!canDecideNow || busy || pendingDelete) return false
     requestSignConfirm(isMobile ? mobileDockSignRef : desktopSignRef)
   })
   useShortcutAction('toggleMark', () => {
-    if (!canMark || !canDecideNow) return false
+    if (!canMark || !canDecideNow || pendingDelete) return false
     setArmedFor(armed ? null : bookId)
   })
   // The ONE escape resolver of this page: rail drawer → full-screen viewer →
@@ -974,7 +979,7 @@ function BookRecordPageBody(): React.JSX.Element {
   const replacePaper = manage.replacePaper
   const reporterSubmit = reporterSubmitMutation.mutate
   const createMarkMutate = createMark.mutate
-  const deleteMarkMutate = deleteMark.mutate
+  const deleteMarkAsync = deleteMark.mutateAsync
   const openOverlay = overlay.open
   const requestDelete = useCallback((): void => setDeleteOpen(true), [setDeleteOpen])
   const actions: RecordActions = useMemo(
@@ -996,8 +1001,9 @@ function BookRecordPageBody(): React.JSX.Element {
       setAdjustSigTrigger,
       createMark: createMarkMutate,
       // Optimistic marks carry a negative placeholder id until the server answers.
-      deleteMark: (markId) => {
-        if (markId > 0) deleteMarkMutate(markId)
+      deleteMark: async (markId) => {
+        // `mutateAsync` settles after onSuccess' annotations refetch; onError already toasted.
+        if (markId > 0) await deleteMarkAsync(markId).catch(() => undefined)
       },
       onPdfReady,
       pickSignedFile: () => fileSignedRef.current?.click(),
@@ -1031,7 +1037,7 @@ function BookRecordPageBody(): React.JSX.Element {
       refetch,
       replacePaper,
       createMarkMutate,
-      deleteMarkMutate,
+      deleteMarkAsync,
       onPdfReady,
       requestDelete,
       copyRef,
@@ -1043,6 +1049,26 @@ function BookRecordPageBody(): React.JSX.Element {
 
   if (!Number.isFinite(bookId) || (error instanceof ApiError && error.status === 404)) {
     return <NotFoundPage />
+  }
+
+  // The record is queued for deletion (6 s Undo window): render it inert, with
+  // no actions, so Back/Forward or a direct URL can't act on a doomed record.
+  // No redirect — Undo clears `pendingIds` and the record renders again.
+  if (pendingDelete) {
+    return (
+      <div
+        role="status"
+        data-testid="record-pending-delete"
+        className="flex flex-1 flex-col items-center justify-center bg-background p-6"
+      >
+        <EmptyState
+          icon={Trash2}
+          message={t('books.record.pendingDelete')}
+          actionLabel={t('books.record.back')}
+          onAction={back}
+        />
+      </div>
+    )
   }
 
   if (isError) {

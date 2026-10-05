@@ -856,6 +856,22 @@ async function elapse(page: Page, ms: number): Promise<void> {
   else await page.clock.fastForward(ms)
 }
 
+/**
+ * Freeze the fake clock (no-op under E2E_REAL_CLOCK) so the app's 6 s deferred-delete timer cannot race
+ * the assertions between the confirm click and `elapse()`. Call after boot, right before the confirm click.
+ */
+async function pauseClock(page: Page): Promise<void> {
+  if (REAL_CLOCK) return
+  const now = await page.evaluate(() => Date.now())
+  await page.clock.pauseAt(now + 50)
+}
+
+/** Run a short slice of fake time (well under COMMIT_MS) so UI timers/rAF (toast mount, navigation) settle. */
+async function settleUi(page: Page): Promise<void> {
+  if (REAL_CLOCK) return
+  await page.clock.runFor(500)
+}
+
 async function box(locator: Locator): Promise<{ x: number; y: number; width: number; height: number }> {
   const b = await locator.boundingBox()
   if (!b) throw new Error('element has no bounding box')
@@ -1122,7 +1138,9 @@ async function deleteDraftFromList(page: Page, lang: Lang, cell: Cell): Promise<
     .filter({ hasText: rx(lang, 'books.record.deleteTitle', { ref: specOf(48).ref }) })
     .last()
   await expect(confirm).toBeVisible()
+  await pauseClock(page)
   await confirm.getByRole('button').filter({ hasNotText: rx(lang, 'common.cancel') }).first().click()
+  await settleUi(page)
 }
 
 test.describe('6: delete with Undo and the 6 s commit', () => {
@@ -1140,6 +1158,7 @@ test.describe('6: delete with Undo and the 6 s commit', () => {
       await expect(page.locator('body')).not.toHaveCSS('pointer-events', 'none')
 
       await page.getByRole('button', { name: rx(lang, 'common.undo', {}, true) }).first().click()
+      await settleUi(page)
       await expect(page.getByText(rx(lang, 'books.record.restored', { ref: specOf(48).ref })).first()).toBeVisible()
       await expect(rowOf(page, 48)).toBeVisible()
       expect(backend.deleteRequests, 'no DELETE right after Undo').toEqual([])
@@ -1181,7 +1200,9 @@ test.describe('6: delete with Undo and the 6 s commit', () => {
       .filter({ hasText: rx('en', 'books.record.deleteTitle', { ref: specOf(48).ref }) })
       .last()
     await expect(confirm).toBeVisible()
+    await pauseClock(page)
     await confirm.getByRole('button').filter({ hasNotText: rx('en', 'common.cancel') }).first().click()
+    await settleUi(page)
     await expect(rowOf(page, 48)).toHaveCount(0)
     await expect(page.locator('body')).not.toHaveCSS('pointer-events', 'none')
     await page.getByRole('button', { name: rx('en', 'common.undo', {}, true) }).first().click()

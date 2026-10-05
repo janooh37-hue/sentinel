@@ -45,6 +45,7 @@ import { useApprovalSummary } from '@/lib/useApprovalSummary'
 import { useAuth } from '@/lib/authContext'
 import { cn } from '@/lib/utils'
 import { ApprovalPreviewDialog, StatusChip } from './ApprovalPreviewDialog'
+import { useRecordDelete } from './RecordDeleteProvider'
 import type { RecordNavState } from './useRecordNavContext'
 
 const ScanPdfCanvas = lazy(() => import('@/pages/scanInbox/ScanPdfCanvas'))
@@ -250,6 +251,7 @@ export function ApprovalsPage(): React.JSX.Element {
   const dfLocale = isAr ? arLocale : undefined
   const [searchParams, setSearchParams] = useSearchParams()
   const listRef = useRef<HTMLDivElement | null>(null)
+  const { pendingIds } = useRecordDelete()
   const [preview, setPreview] = useState<ApprovalLogItem | null>(null)
   const previewTriggerRef = useRef<HTMLButtonElement | null>(null)
 
@@ -282,14 +284,16 @@ export function ApprovalsPage(): React.JSX.Element {
       }),
     enabled: context != null,
   })
-  const rows: ApprovalLogItem[] = logQuery.data?.items ?? []
+  const logRows: ApprovalLogItem[] = logQuery.data?.items ?? []
+  // Records inside their 6 s delete-Undo window are hidden from the worklist.
+  const rows = logRows.filter((row) => !pendingIds.has(row.book_id))
   const total = logQuery.data?.total ?? 0
   const pageCount = Math.max(1, Math.ceil(total / APPROVALS_PAGE_SIZE))
 
   // An emptied final page (a decision moved the last row off it) normalizes
   // back to the last available page.
   useEffect(() => {
-    if (context && logQuery.data && rows.length === 0 && context.page > 1 && context.page > pageCount) {
+    if (context && logQuery.data && logRows.length === 0 && context.page > 1 && context.page > pageCount) {
       updateContext({ ...context, page: pageCount })
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps

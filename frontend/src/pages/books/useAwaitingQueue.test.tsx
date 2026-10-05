@@ -83,6 +83,23 @@ describe('useAwaitingQueue', () => {
     expect(result.current.nextId).toBeNull()
   })
 
+  it('never offers a neighbour whose delete is pending', async () => {
+    vi.spyOn(apiMod.api, 'approvalLogNeighbors').mockResolvedValue(
+      neighborsResult({
+        position: 2, total: 3,
+        previous: neighborRow(10, 101),
+        next: neighborRow(30, 301),
+      }),
+    )
+    const hidden = new Set([30])
+    const { result } = renderHook(() => useAwaitingQueue(20, 201, CONTEXT, true, hidden), { wrapper })
+    await waitFor(() => expect(result.current.total).toBe(3))
+    expect(result.current.prevId).toBe(10)
+    expect(result.current.prevVersionId).toBe(101)
+    expect(result.current.nextId).toBeNull()
+    expect(result.current.nextVersionId).toBeNull()
+  })
+
   it('does not fetch when disabled', async () => {
     vi.spyOn(apiMod.api, 'approvalLogNeighbors').mockResolvedValue(neighborsResult({}))
     const { result } = renderHook(() => useAwaitingQueue(20, 201, CONTEXT, false), { wrapper })

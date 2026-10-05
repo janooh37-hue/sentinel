@@ -3,14 +3,24 @@
  * reading. Disarmed it is pointer-events:none so native pinch-zoom and scroll
  * reach the paper underneath; armed it becomes interactive.
  */
-import { render, screen, fireEvent, within } from '@testing-library/react'
+import { act, render, screen, fireEvent, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { describe, it, expect, vi } from 'vitest'
+import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest'
 
 import { BookAnnotationLayer, MarksStepper } from './BookAnnotationLayer'
 import type { BookAnnotation, PageBox } from './annotation-utils'
 
 vi.mock('react-i18next', () => ({ useTranslation: () => ({ t: (k: string) => k }) }))
+
+const { toastFn, toastError, toastSuccess, toastDismiss } = vi.hoisted(() => ({
+  toastFn: vi.fn(),
+  toastError: vi.fn(),
+  toastSuccess: vi.fn(),
+  toastDismiss: vi.fn(),
+}))
+vi.mock('sonner', () => ({
+  toast: Object.assign(toastFn, { error: toastError, success: toastSuccess, dismiss: toastDismiss }),
+}))
 
 const PAGES: PageBox[] = [{ page: 1, left: 0, top: 0, width: 400, height: 560 }]
 
@@ -258,6 +268,86 @@ describe('BookAnnotationLayer marks', () => {
     } finally {
       vi.useRealTimers()
     }
+  })
+})
+
+describe('BookAnnotationLayer delete + Undo toast', () => {
+  type UndoToast = [string, { action: { onClick: () => void } }]
+  const undoAction = (): (() => void) => {
+    const call = toastFn.mock.calls[0] as UndoToast
+    return call[1].action.onClick
+  }
+  const deleteFirstMark = (props: Partial<React.ComponentProps<typeof BookAnnotationLayer>>) => {
+    const utils = renderLayer({ armed: true, currentUserId: 9, annotations: [MARKS[0]], ...props })
+    fireEvent.click(screen.getByRole('button', { name: 'books.annotations.markN' }))
+    fireEvent.click(screen.getByRole('button', { name: 'books.annotations.delete' }))
+    return utils
+  }
+
+  beforeEach(() => {
+    vi.useFakeTimers({ shouldAdvanceTime: true })
+    toastFn.mockReset().mockReturnValue('toast-1')
+    toastError.mockReset()
+    toastSuccess.mockReset()
+    toastDismiss.mockReset()
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('Undo inside the window restores the mark, sends nothing and shows no error', async () => {
+    const onDelete = vi.fn()
+    deleteFirstMark({ onDelete })
+    act(() => undoAction()())
+    expect(screen.getByRole('button', { name: 'books.annotations.markN' })).toBeInTheDocument()
+    await vi.advanceTimersByTimeAsync(10_000)
+    expect(onDelete).not.toHaveBeenCalled()
+    expect(toastError).not.toHaveBeenCalled()
+    expect(toastDismiss).not.toHaveBeenCalled()
+  })
+
+  it('unmounting commits the delete once and dismisses the Undo toast', () => {
+    const onDelete = vi.fn()
+    const { unmount } = deleteFirstMark({ onDelete })
+    expect(toastFn).toHaveBeenCalledTimes(1)
+    expect(onDelete).not.toHaveBeenCalled()
+    unmount()
+    expect(onDelete).toHaveBeenCalledTimes(1)
+    expect(onDelete).toHaveBeenCalledWith(1)
+    expect(toastDismiss).toHaveBeenCalledWith('toast-1')
+  })
+
+  it('an Undo that lands after the commit says too late, never "restored"', async () => {
+    const onDelete = vi.fn()
+    deleteFirstMark({ onDelete })
+    await vi.advanceTimersByTimeAsync(6100)
+    expect(onDelete).toHaveBeenCalledTimes(1)
+    expect(toastDismiss).toHaveBeenCalledWith('toast-1')
+    act(() => undoAction()())
+    expect(toastError).toHaveBeenCalledWith('books.annotations.undoTooLate')
+    expect(toastSuccess).not.toHaveBeenCalled()
+    expect(onDelete).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps the mark hidden until onDelete (server delete + refetch) settles', async () => {
+    let settle!: () => void
+    const onDelete = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          settle = resolve
+        }),
+    )
+    deleteFirstMark({ onDelete })
+    await vi.advanceTimersByTimeAsync(6100)
+    expect(onDelete).toHaveBeenCalledWith(1)
+    expect(screen.queryByRole('button', { name: 'books.annotations.markN' })).not.toBeInTheDocument()
+    await act(async () => {
+      settle()
+      await vi.advanceTimersByTimeAsync(0)
+    })
+    // The parent's refetch would have dropped the mark by now; this static
+    // prop still has it, so it shows again once the delete has settled.
+    expect(screen.getByRole('button', { name: 'books.annotations.markN' })).toBeInTheDocument()
   })
 })
 
