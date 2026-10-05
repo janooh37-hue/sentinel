@@ -137,6 +137,9 @@ export function PendingDeparturesWidget(): React.JSX.Element | null {
 
                 <span className="shrink-0 rounded-md bg-surface-tinted px-1.5 py-0.5 text-[0.68em] font-semibold text-foreground">
                   {pendingStatus ? t(`employees.status.${pendingStatus}`) : ''}
+                  {pendingStatus === 'Transferred' && emp.transfer_site ? (
+                    <> · <bdi>{emp.transfer_site}</bdi></>
+                  ) : null}
                 </span>
 
                 <div className="flex shrink-0 items-center gap-1 text-warning">

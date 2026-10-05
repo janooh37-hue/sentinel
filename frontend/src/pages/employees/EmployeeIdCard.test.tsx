@@ -180,3 +180,23 @@ describe('EmployeeIdCard — the time-sheet action', () => {
     expect(screen.queryByRole('button', { name: 'Edit' })).not.toBeInTheDocument()
   })
 })
+
+describe('EmployeeIdCard — status pill dates', () => {
+  it('shows the departure date on a resigned employee', () => {
+    wrap({ ...EMPLOYEE, status: 'Resigned', end_date: '2026-08-15' } as EmployeeRead)
+    expect(screen.getByText(/Resigned · .*15\/08\/2026/)).toBeInTheDocument()
+  })
+
+  it('shows site, date and expected return on a transferred employee', () => {
+    wrap({
+      ...EMPLOYEE,
+      status: 'Transferred',
+      end_date: '2026-08-15',
+      transfer_site: 'Port A',
+      transfer_return_date: '2026-11-15',
+    } as EmployeeRead)
+    expect(
+      screen.getByText(/Transferred · .*Port A.* · .*15\/08\/2026.* → .*15\/11\/2026/),
+    ).toBeInTheDocument()
+  })
+})

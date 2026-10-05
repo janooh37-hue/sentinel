@@ -88,6 +88,9 @@ vi.mock('react-i18next', () => ({
         'employees.activity.violation': 'Violations',
         'employees.activity.ledger': 'Correspondence',
         'employees.activity.duty_location': 'Duty location',
+        'employees.activity.status': 'Status changes',
+        'employees.activity.statusEvent.openProfile': 'Open employee profile',
+        'employees.activity.statusEvent.returned': 'Returned to Active',
         'employees.activity.dutyLocation.transfer': 'Transferred',
         'employees.activity.dutyLocation.initial_placement': 'Initial placement',
         'employees.activity.dutyLocation.unassigned': 'Unassigned',
@@ -167,6 +170,33 @@ describe('EmployeeActivitySection', () => {
       background: 'var(--primary-soft)',
       color: 'var(--primary-on-soft)',
     })
+  })
+
+  it('filters and links status history to the employee profile', async () => {
+    const statusItem: EmployeeActivityItemRead = {
+      ...items[0],
+      kind: 'status',
+      source_id: 66,
+      target_id: 66,
+      employee_id: 'G600',
+      title: 'Status',
+      from_status: 'Transferred',
+      to_status: 'Active',
+      effective_date: '2026-09-20',
+      status_event_kind: 'changed',
+      status_source: 'manual',
+      actor_name: 'Ahmed',
+    }
+    vi.mocked(api.listEmployeeActivity).mockResolvedValue({ items: [statusItem], total: 1, limit: 25, offset: 0 })
+
+    wrap(<EmployeeActivitySection onOpenProfile={() => {}} />)
+    await userEvent.click(within(screen.getByRole('group', { name: /activity type/i })).getByRole('button', { name: 'Status changes' }))
+
+    await waitFor(() => expect(api.listEmployeeActivity).toHaveBeenLastCalledWith(
+      expect.objectContaining({ kind: 'status' }),
+    ))
+    expect(await screen.findByText('Returned to Active')).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /open employee profile/i })).toHaveAttribute('href', '/employees/G600')
   })
 
   it('resets to the first page when employee or type changes', async () => {

@@ -313,7 +313,8 @@
       "active": "Active",
       "onLeave": "On leave",
       "resigned": "Resigned",
-      "terminated": "Terminated"
+      "terminated": "Terminated",
+      "transferred": "Transferred"
     },
     "statusPill": {
       "onLeave": "On leave",
@@ -351,6 +352,10 @@
       "position_ar": "Position (Arabic)",
       "status": "Status",
       "end_date": "End date",
+      "effective_date": "Effective date",
+      "transfer_site": "Destination site",
+      "transfer_return_date": "Expected return date",
+      "return_date": "Return date",
       "passport_no": "Passport No.",
       "passport_expiry": "Passport Expiry",
       "uae_id_no": "UAE ID No.",
@@ -366,13 +371,22 @@
     "status": {
       "Active": "Active",
       "Resigned": "Resigned",
-      "Terminated": "Terminated"
+      "Terminated": "Terminated",
+      "Transferred": "Transferred"
+    },
+    "statusDetail": {
+      "dated": "{{status}} · {{date}}",
+      "transferredSite": "{{status}} · {{site}} · {{date}}",
+      "transferredReturn": "{{status}} · {{date}} → {{returnDate}}",
+      "transferredSiteReturn": "{{status}} · {{site}} · {{date}} → {{returnDate}}"
     },
     "statusDialog": {
       "title": "Change status"
     },
     "validation": {
       "endDateRequired": "End date is required when status is not Active",
+      "transferSiteRequired": "Destination site is required for a transfer",
+      "returnAfterEffective": "Expected return date must be after the effective date",
       "idRequired": "Employee ID is required",
       "nameEnRequired": "Name (English) is required"
     },
@@ -380,7 +394,8 @@
       "total": "Total workforce",
       "active": "Active",
       "resigned": "Resigned",
-      "terminated": "Terminated"
+      "terminated": "Terminated",
+      "transferred": "Transferred"
     },
     "list": {
       "empty": "No employees found",
@@ -459,6 +474,7 @@
       "violation": "Violations",
       "ledger": "Correspondence",
       "duty_location": "Duty location",
+      "status": "Status changes",
       "employee": "Employee",
       "activity": "Activity",
       "type": "Type",
@@ -476,6 +492,21 @@
         "unassigned": "Unassigned",
         "openEmployeeActivity": "Open employee activity",
         "historyBegins": "History begins at"
+      },
+      "statusEvent": {
+        "change": "{{from}} → {{to}}",
+        "initial": "Recorded as {{to}}",
+        "returned": "Returned to Active",
+        "scheduled": "Scheduled: {{from}} → {{to}}",
+        "scheduledCancelled": "Scheduled {{to}} cancelled",
+        "effective": "Effective {{date}}",
+        "returnedOn": "Returned {{date}}",
+        "expectedReturn": "Expected return {{date}}",
+        "imported": "Existing record",
+        "bySchedulerAuto": "Applied automatically",
+        "fromResignationLetter": "From resignation letter",
+        "by": "By {{name}}",
+        "openProfile": "Open employee profile"
       },
       "loadMore": "Load more activity",
       "loading": "Loading recent activity",
