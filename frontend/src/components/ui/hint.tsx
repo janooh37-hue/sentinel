@@ -1,5 +1,7 @@
 import * as React from 'react'
 
+import { cn } from '@/lib/utils'
+
 import { Kbd } from './kbd'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './tooltip'
 import { useHasTooltipProvider } from './tooltip-context'
@@ -17,8 +19,10 @@ function resolveSide(side: HintSide): 'top' | 'bottom' | 'left' | 'right' {
 
 /**
  * Tooltip with a label and an optional shortcut. The trigger child gets
- * `aria-keyshortcuts`; `title` is never set (the tooltip replaces it). The
- * tooltip is a visual hint only: the child must carry its own accessible name.
+ * `aria-keyshortcuts` (unless it already sets one); `title` is never set (the
+ * tooltip replaces it). The tooltip is a visual hint only: the child must carry
+ * its own accessible name. A `disabled` child is wrapped in a focusable
+ * `<span>` so the tooltip (the reason it is blocked) still opens on hover and Tab.
  */
 export function Hint({
   label,
@@ -32,9 +36,23 @@ export function Hint({
   children: React.ReactElement<Record<string, unknown>>
 }): React.JSX.Element {
   const hasProvider = useHasTooltipProvider()
-  const trigger = shortcut
-    ? React.cloneElement(children, { 'aria-keyshortcuts': shortcut })
-    : children
+  // A child's own `aria-keyshortcuts` (e.g. a modifier combo) wins over the displayed key.
+  const keyed =
+    shortcut && children.props['aria-keyshortcuts'] === undefined
+      ? React.cloneElement(children, { 'aria-keyshortcuts': shortcut })
+      : children
+  // A disabled button fires no pointer or focus events, so it can never open the tooltip itself.
+  // Its wrapper takes the trigger role (hover + Tab) and the button stops swallowing pointer events.
+  const blocked = keyed.props.disabled === true
+  const trigger = blocked ? (
+    <span tabIndex={0} role="group" aria-label={label} className="inline-flex">
+      {React.cloneElement(keyed, {
+        className: cn(keyed.props.className as string | undefined, 'pointer-events-none'),
+      })}
+    </span>
+  ) : (
+    keyed
+  )
   const tip = (
     <Tooltip>
       <TooltipTrigger asChild>{trigger}</TooltipTrigger>

@@ -84,14 +84,32 @@ export const DropdownMenuItem = React.forwardRef<
   }
 >(
   (
-    { className, variant = 'default', reason, shortcut, pending = false, onSelect, children, ...props },
+    { className, variant = 'default', reason, shortcut, pending = false, onSelect, children, asChild, ...rest },
     ref,
   ) => {
     const reasonId = React.useId()
     const blocked = Boolean(reason) || pending
+    const reasonBlock = (content: React.ReactNode): React.JSX.Element => (
+      <span className="flex min-w-0 flex-col gap-0.5">
+        <span className="flex items-center gap-2.5">{content}</span>
+        <span id={reasonId} className="text-[0.85em] leading-snug text-muted-foreground">
+          {reason}
+        </span>
+      </span>
+    )
+    // A blocked `asChild` child (an <a>, a router Link) keeps its own onClick/href: stop both in the
+    // capture phase, before the child's handler runs and before the browser navigates.
+    const stopBlockedActivation = (event: React.SyntheticEvent): void => {
+      event.preventDefault()
+      event.stopPropagation()
+    }
     return (
       <DropdownMenuPrimitive.Item
         ref={ref}
+        asChild={asChild}
+        {...(blocked && asChild
+          ? { onClickCapture: stopBlockedActivation, onAuxClickCapture: stopBlockedActivation }
+          : null)}
         {...(blocked ? { 'aria-disabled': true } : null)}
         {...(pending ? { 'aria-busy': true } : null)}
         {...(shortcut && !reason ? { 'aria-keyshortcuts': shortcut } : null)}
@@ -113,31 +131,31 @@ export const DropdownMenuItem = React.forwardRef<
           variant === 'danger' ? 'text-accent' : 'text-foreground',
           className,
         )}
-        {...props}
+        {...rest}
       >
-        {props.asChild ? (
-          children
-        ) : reason ? (
-          <span className="flex min-w-0 flex-col gap-0.5">
-            <span className="flex items-center gap-2.5">{children}</span>
-            <span id={reasonId} className="text-[0.85em] leading-snug text-muted-foreground">
-              {reason}
-            </span>
-          </span>
+        {asChild ? (
+          // Slot takes exactly one element: the reason goes inside the child, not beside it.
+          reason && React.isValidElement<{ children?: React.ReactNode }>(children) ? (
+            React.cloneElement(children, undefined, reasonBlock(children.props.children))
+          ) : (
+            children
+          )
         ) : (
-          children
+          <>
+            {reason ? reasonBlock(children) : children}
+            {pending ? (
+              <Loader2
+                className="ms-auto h-3.5 w-3.5 animate-spin motion-reduce:animate-none"
+                aria-hidden="true"
+              />
+            ) : null}
+            {shortcut && !reason && !pending ? (
+              <span className="ms-auto ps-4">
+                <Kbd>{shortcut}</Kbd>
+              </span>
+            ) : null}
+          </>
         )}
-        {pending && !props.asChild ? (
-          <Loader2
-            className="ms-auto h-3.5 w-3.5 animate-spin motion-reduce:animate-none"
-            aria-hidden="true"
-          />
-        ) : null}
-        {shortcut && !reason && !pending && !props.asChild ? (
-          <span className="ms-auto ps-4">
-            <Kbd>{shortcut}</Kbd>
-          </span>
-        ) : null}
       </DropdownMenuPrimitive.Item>
     )
   },

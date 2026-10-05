@@ -1825,12 +1825,9 @@
     "eyebrow": "Operations",
     "pageMeta": "{{total}} entries · ref-number log",
     "stampPreview": "Stamp preview",
-    "empty": "No book entries match these filters.",
     "confirmDelete": "Soft-delete this entry? It stays in records; ref number is not reused.",
     "bulk": {
-      "delete": "Delete",
-      "deleteTitle": "Delete {{count}} selected record(s)?",
-      "deleteBody": "Soft-delete the selected entries? They stay in records and ref numbers are not reused."
+      "delete": "Delete"
     },
     "filters": {
       "category": "Category",
@@ -1853,7 +1850,6 @@
     },
     "columns": {
       "ref": "Ref",
-      "subject": "Subject",
       "category": "Category",
       "direction": "Direction",
       "date": "Date",
@@ -2012,18 +2008,12 @@
     },
     "versions": {
       "title": "Version history",
-      "current": "current",
       "revise": "Revise & regenerate",
-      "reviseHint": "Returned — you can revise & resubmit",
       "prefillFailed": "Couldn't load the saved form data to revise.",
-      "signedPdf": "Signed PDF",
       "trigger": {
         "initial": "Initial",
         "revision": "Revision"
       }
-    },
-    "executedCopy": {
-      "title": "Executed copy"
     },
     "stateOverride": {
       "trigger": "Change state (admin)…",
@@ -2105,7 +2095,7 @@
       "restoredMany_other": "{{count}} records restored"
     },
     "reason": {
-      "inFlight": "In-flight or signed records can’t be deleted. Use “Change state (admin)…” to void it.",
+      "inFlight": "In-flight or signed records can’t be deleted. Use “{{action}}” to void it.",
       "wordSession": "Finish or discard the Word session first.",
       "reviseNoTemplate": "Can’t revise: not made from a form template.",
       "reviseNoPermission": "Needs document-generation permission.",
@@ -2212,10 +2202,6 @@
     "pane": {
       "noPapersTitle": "No papers yet",
       "noPapersBody": "Generate the document to see its pages here.",
-      "generated": "Generated PDF",
-      "signedCopy": "Signed copy",
-      "scan": "Scan",
-      "imported": "Imported document",
       "addScan": "Add scan",
       "addScanHint": "Scan or drop a returned paper — OCR matches the stamped ref and files it here",
       "scanReading": "Reading scan (OCR)…",

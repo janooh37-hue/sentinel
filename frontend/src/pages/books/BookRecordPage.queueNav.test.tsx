@@ -127,6 +127,20 @@ describe('QueueNav (Arabic)', () => {
     expect(screen.getByLabelText('السجل التالي')).toBeInTheDocument()
     expect(screen.getByTestId('queue-position')).toHaveTextContent('2 من 3')
   })
+
+  it('isolates only the numbers, never the whole sentence (an LTR isolate reverses "n من total")', () => {
+    render(<QueueNav position={2} total={3} onPrev={vi.fn()} onNext={vi.fn()} />)
+    const counter = screen.getByTestId('queue-position')
+    const isolates = Array.from(counter.querySelectorAll('bdi[dir="ltr"]'))
+    expect(isolates.map((el) => el.textContent)).toEqual(['2', '3'])
+    expect(counter.textContent).toBe('2 من 3')
+  })
+
+  it('compact form stays one LTR isolate "n/total"', () => {
+    render(<QueueNav position={2} total={3} compact onPrev={vi.fn()} onNext={vi.fn()} />)
+    const isolates = Array.from(screen.getByTestId('queue-position').querySelectorAll('bdi[dir="ltr"]'))
+    expect(isolates.map((el) => el.textContent)).toEqual(['2/3'])
+  })
 })
 
 

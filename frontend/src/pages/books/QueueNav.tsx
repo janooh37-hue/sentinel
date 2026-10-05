@@ -16,6 +16,13 @@ import { useTranslation } from 'react-i18next'
 import { Hint } from '@/components/ui/hint'
 import { cn } from '@/lib/utils'
 
+// Private-use delimiters: placeholders survive translation and are swapped for isolated numbers
+// (same technique as `StatusText` in record/RecordHeader).
+const NUM_OPEN = '\uE000'
+const NUM_CLOSE = '\uE001'
+const NUM_TOKEN = new RegExp(`(${NUM_OPEN}\\w+${NUM_CLOSE})`)
+const NUM_TOKEN_ONE = new RegExp(`^${NUM_OPEN}(\\w+)${NUM_CLOSE}$`)
+
 export function QueueNav({
   position,
   total,
@@ -79,9 +86,24 @@ export function QueueNav({
         data-testid="queue-position"
         className="min-w-[2.5rem] px-1 text-center font-mono text-[0.72em] font-semibold tabular-nums text-muted-foreground"
       >
-        <bdi dir="ltr">
-          {compact ? `${position}/${total}` : t('books.record.queuePosition', { n: position, total })}
-        </bdi>
+        {compact ? (
+          <bdi dir="ltr">{`${position}/${total}`}</bdi>
+        ) : (
+          t('books.record.queuePosition', {
+            n: `${NUM_OPEN}n${NUM_CLOSE}`,
+            total: `${NUM_OPEN}total${NUM_CLOSE}`,
+          })
+            .split(NUM_TOKEN)
+            .map((part, i) => {
+              const key = NUM_TOKEN_ONE.exec(part)?.[1]
+              if (!key) return part
+              return (
+                <bdi key={i} dir="ltr">
+                  {key === 'n' ? position : total}
+                </bdi>
+              )
+            })
+        )}
       </span>
       {compact ? next : (
         <Hint label={t('books.record.nextRecord')} shortcut="J" side="bottom">

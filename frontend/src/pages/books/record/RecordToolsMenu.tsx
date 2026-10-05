@@ -219,7 +219,7 @@ export function RecordToolsMenu({ book, caps, view, actions }: RecordPieceProps)
                 <DropdownMenuItem
                   variant="danger"
                   data-testid="record-delete-trigger"
-                  reason={deleteReasonText ? t(deleteReasonText) : undefined}
+                  reason={deleteReasonText ? t(deleteReasonText, { action: t('books.stateOverride.trigger') }) : undefined}
                   onSelect={requestDelete}
                 >
                   <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />

@@ -149,7 +149,8 @@ export function RecordMoreSheet({
   const { bookId, state, current, recordHasPapers, emailingRecord, wordReopenTrigger, adjustSigTrigger, armed } = view
   const { openOverlay, emailViaOutlook, setUnfileOpen, pickSignedFile, pickReplacementFile, setArmedFor } = actions
   const close = (): void => onOpenChange(false)
-  const reasonOf = (key: string | undefined): string | undefined => (key ? t(key) : undefined)
+  const reasonOf = (key: string | undefined): string | undefined =>
+    key ? t(key, { action: t('books.stateOverride.trigger') }) : undefined
   const hasSignedCopy = state === 'approved' && Boolean(current?.signed_pdf_url)
 
   const documentRows: SheetRow[] = [
