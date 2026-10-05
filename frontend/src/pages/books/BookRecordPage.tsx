@@ -64,6 +64,7 @@ import { isIncludedPapersOwner } from './includedPapersState'
 import { describeListFrom, useRecordNavContext } from './useRecordNavContext'
 import { buildRecordBasketItem } from './recordsBasket'
 import { buildBasketPrefill } from '@/lib/basketEmail'
+import { currentBookDocId } from '@/lib/bookDocument'
 import { getRecentRecipientsForForm } from '@/lib/recentRecipients'
 import { basketKey } from '@/lib/emailBasket'
 
@@ -282,7 +283,12 @@ function BookRecordPageBody(): React.JSX.Element {
   const onPdfReady = useRecordPrintMode()
   const chrome = useRecordChrome()
   const { scheduleDelete } = useRecordDelete()
-  const [deleteOpen, setDeleteOpen] = useState(false)
+  const [deleteOpenFor, setDeleteOpenFor] = useState<number | null>(null)
+  const deleteOpen = deleteOpenFor === bookId
+  const setDeleteOpen = useCallback(
+    (open: boolean): void => setDeleteOpenFor(open ? bookId : null),
+    [bookId],
+  )
 
   const versionIdParam = (() => {
     const raw = Number.parseInt(searchParams.get('version_id') ?? '', 10)
@@ -315,7 +321,12 @@ function BookRecordPageBody(): React.JSX.Element {
 
   const fileSignedRef = useRef<HTMLInputElement | null>(null)
   const replaceSignedRef = useRef<HTMLInputElement | null>(null)
-  const [unfileOpen, setUnfileOpen] = useState(false)
+  const [unfileOpenFor, setUnfileOpenFor] = useState<number | null>(null)
+  const unfileOpen = unfileOpenFor === bookId
+  const setUnfileOpen = useCallback(
+    (open: boolean): void => setUnfileOpenFor(open ? bookId : null),
+    [bookId],
+  )
   // Inline reason panel for return/reject (backend requires a non-empty reason).
   const [reason, setReason] = useState('')
   const decisionPanelRef = useRef<HTMLDivElement | null>(null)
@@ -538,6 +549,7 @@ function BookRecordPageBody(): React.JSX.Element {
   // the queue arrows change the id param, so a bare useState(false) would
   // carry a live overlay from one record onto the next unarmed paper.
   const [armedFor, setArmedFor] = useState<number | null>(null)
+  const focusMode = chrome.focus && !isMobile
   const armed = armedFor === bookId
   const canMark = state === 'pending' && action === 'decide'
   const annMode: 'view' | 'mark' = canMark ? 'mark' : 'view'
@@ -582,13 +594,14 @@ function BookRecordPageBody(): React.JSX.Element {
         created_at: new Date().toISOString(),
       }
       qc.setQueryData<BookAnnotationRead[]>(annotationsKey, [...(prev ?? []), optimistic])
-      return { prev }
+      return { prev, key: annotationsKey }
     },
     onError: (err, _m, ctx) => {
-      qc.setQueryData<BookAnnotationRead[]>(annotationsKey, ctx?.prev ?? [])
+      qc.setQueryData<BookAnnotationRead[]>(ctx?.key ?? annotationsKey, ctx?.prev ?? [])
       toast.error(apiErrorMessage(err))
     },
-    onSettled: () => void qc.invalidateQueries({ queryKey: annotationsKey }),
+    onSettled: (_d, _e, _m, ctx) =>
+      void qc.invalidateQueries({ queryKey: ctx?.key ?? annotationsKey }),
   })
   const deleteMark = useMutation({
     mutationFn: (annId: number) => api.deleteBookAnnotation(bookId, current!.id, annId),
@@ -649,6 +662,9 @@ function BookRecordPageBody(): React.JSX.Element {
   // consumes it. A record with no generated document has nothing to attach, so
   // the action stays disabled rather than producing an empty email.
   const recordHasPapers = current?.document_id != null
+  // Same definition as RecordPane: a generated OR imported paper counts.
+  const recordHasDocument =
+    (book ? currentBookDocId(book) !== undefined : false) || Boolean(book?.imported_doc?.pdf_url)
   const [emailingRecord, setEmailingRecord] = useState(false)
 
   const handleEmailViaOutlook = useCallback(async (): Promise<void> => {
@@ -784,7 +800,7 @@ function BookRecordPageBody(): React.JSX.Element {
             inmateAction: reporterAction,
             isAssignee,
             isReviewer: myReview != null,
-            hasDocument: recordHasPapers,
+            hasDocument: recordHasDocument,
             canManageIncludedPapers,
             now,
             locale,
@@ -800,7 +816,7 @@ function BookRecordPageBody(): React.JSX.Element {
       reporterAction,
       isAssignee,
       myReview,
-      recordHasPapers,
+      recordHasDocument,
       canManageIncludedPapers,
       now,
       locale,
@@ -895,7 +911,7 @@ function BookRecordPageBody(): React.JSX.Element {
       chrome.setFullscreen(false)
       return
     }
-    if (chrome.focus) {
+    if (focusMode) {
       chrome.setFocus(false)
       return
     }
@@ -958,7 +974,7 @@ function BookRecordPageBody(): React.JSX.Element {
   const createMarkMutate = createMark.mutate
   const deleteMarkMutate = deleteMark.mutate
   const openOverlay = overlay.open
-  const requestDelete = useCallback((): void => setDeleteOpen(true), [])
+  const requestDelete = useCallback((): void => setDeleteOpen(true), [setDeleteOpen])
   const actions: RecordActions = useMemo(
     () => ({
       back,
@@ -1021,7 +1037,7 @@ function BookRecordPageBody(): React.JSX.Element {
   )
 
   // Banners yield the screen to the document in focus mode (desktop only).
-  const hideBanners = chrome.focus && !isMobile
+  const hideBanners = focusMode
 
   if (!Number.isFinite(bookId) || (error instanceof ApiError && error.status === 404)) {
     return <NotFoundPage />
