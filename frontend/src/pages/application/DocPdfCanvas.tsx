@@ -26,7 +26,7 @@ import { useTranslation } from 'react-i18next'
 
 import { PdfPages } from '@/components/books/PdfPages'
 import { DocumentState } from '@/components/books/DocumentState'
-import { documentErrorKind } from '@/components/books/documentState'
+import { documentErrorKind } from '@/components/books/documentError'
 import { leasePdfBase64, leasePdfUrl, PdfFetchError, type PdfDocLease } from '@/lib/pdfDocCache'
 import { cn } from '@/lib/utils'
 

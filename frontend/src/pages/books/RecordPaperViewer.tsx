@@ -26,7 +26,7 @@ import { Download, FileText, Maximize2, MoreHorizontal, Minus, Plus, RefreshCw, 
 import { useTranslation } from 'react-i18next'
 
 import { DocumentState } from '@/components/books/DocumentState'
-import { documentErrorKind } from '@/components/books/documentState'
+import { documentErrorKind } from '@/components/books/documentError'
 import { PdfPages } from '@/components/books/PdfPages'
 import {
   DropdownMenu,

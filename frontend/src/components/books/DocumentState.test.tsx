@@ -5,7 +5,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { ApiError } from '@/lib/api'
 
 import { DocumentState } from './DocumentState'
-import { documentErrorKind } from './documentState'
+import { documentErrorKind } from './documentError'
 
 describe('DocumentState', () => {
   it('loading is a status region', () => {
