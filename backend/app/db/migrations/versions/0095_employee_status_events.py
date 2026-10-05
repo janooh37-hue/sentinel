@@ -4,8 +4,8 @@ Adds ``employees.transfer_site`` / ``employees.transfer_return_date``, the
 append-only ``employee_status_events`` history table, and backfills one
 ``imported`` event per employee who is already non-Active.
 
-Revision ID: 0094_employee_status_events
-Revises: 0093_password_setup
+Revision ID: 0095_employee_status_events
+Revises: 0094_book_created_by
 Create Date: 2026-10-05 00:00:00.000000
 """
 
@@ -17,8 +17,8 @@ from datetime import UTC, date, datetime, time
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "0094_employee_status_events"
-down_revision: str | Sequence[str] | None = "0093_password_setup"
+revision: str = "0095_employee_status_events"
+down_revision: str | Sequence[str] | None = "0094_book_created_by"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

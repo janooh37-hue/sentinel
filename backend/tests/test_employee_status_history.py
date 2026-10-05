@@ -585,7 +585,7 @@ def test_single_alembic_head():
     assert len(heads) == 1
 
 
-def test_migration_0094_backfills_and_downgrades(tmp_path: Path):
+def test_migration_0095_backfills_and_downgrades(tmp_path: Path):
     url = f"sqlite:///{tmp_path / 'm.db'}"
     config = _config(url)
     command.upgrade(config, "0093_password_setup")
@@ -598,7 +598,7 @@ def test_migration_0094_backfills_and_downgrades(tmp_path: Path):
                 "('G3', 'C', 'Terminated', '2026-04-02', '2026-01-01', '2026-01-01')"
             )
         )
-    command.upgrade(config, "0094_employee_status_events")
+    command.upgrade(config, "0095_employee_status_events")
     with engine.connect() as conn:
         rows = conn.execute(
             text(
@@ -614,7 +614,7 @@ def test_migration_0094_backfills_and_downgrades(tmp_path: Path):
         assert [str(r[7])[:10] for r in rows] == ["2026-03-01", "2026-04-02"]
         cols = {r[1] for r in conn.execute(text("PRAGMA table_info(employees)"))}
         assert {"transfer_site", "transfer_return_date"} <= cols
-    command.downgrade(config, "0093_password_setup")
+    command.downgrade(config, "0094_book_created_by")
     with engine.connect() as conn:
         cols = {r[1] for r in conn.execute(text("PRAGMA table_info(employees)"))}
         assert not {"transfer_site", "transfer_return_date"} & cols
