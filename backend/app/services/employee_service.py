@@ -330,6 +330,13 @@ def update_employee(
         if requested_status == EMPLOYEE_STATUS_TRANSFERRED:
             data["transfer_site"] = (req_site or "").strip()
             data["transfer_return_date"] = req_return
+        else:
+            # e.g. a full EmployeeForm save (status still 'Active') on a row
+            # with a PENDING transfer: its transfer fields arrive as nulls but
+            # the transfer is still pending, so keep the stored site/return or
+            # the flip would land a site-less transfer with no auto-return.
+            data.pop("transfer_site", None)
+            data.pop("transfer_return_date", None)
     else:
         data["transfer_site"] = None
         data["transfer_return_date"] = None

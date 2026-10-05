@@ -307,6 +307,53 @@ def test_pending_departure_untouched_by_form_resend(db_session):
     assert len(_events(db_session)) == 1
 
 
+def test_full_form_save_keeps_pending_transfer_fields_through_flip(db_session):
+    # Regression: EmployeeForm sends transfer_site/transfer_return_date = null
+    # for a still-Active row; a pending transfer must keep its stored values so
+    # the flip lands Transferred WITH a site and the auto-return still fires.
+    _emp(db_session)
+    employee_service.update_employee(
+        db_session,
+        "G7001",
+        EmployeeUpdate(
+            status="Transferred",
+            end_date=FUTURE,
+            transfer_site="Abu Dhabi",
+            transfer_return_date=LATER,
+        ),
+    )
+    employee_service.update_employee(
+        db_session,
+        "G7001",
+        EmployeeUpdate(
+            status="Active",
+            end_date=FUTURE,
+            transfer_site=None,
+            transfer_return_date=None,
+            effective_date=None,
+            nationality="9",
+        ),
+    )
+    row = db_session.get(Employee, "G7001")
+    assert (row.pending_status, row.transfer_site, row.transfer_return_date) == (
+        "Transferred",
+        "Abu Dhabi",
+        LATER,
+    )
+    assert len(_events(db_session)) == 1
+
+    employee_service.apply_due_departures(db_session, today=FUTURE)
+    row = db_session.get(Employee, "G7001")
+    assert (row.status, row.transfer_site, row.transfer_return_date) == (
+        "Transferred",
+        "Abu Dhabi",
+        LATER,
+    )
+    (moved,) = employee_service.apply_due_transfer_returns(db_session, today=LATER)
+    assert moved[1:] == (LATER, "Abu Dhabi")
+    assert db_session.get(Employee, "G7001").status == "Active"
+
+
 # --- create -------------------------------------------------------------------
 
 

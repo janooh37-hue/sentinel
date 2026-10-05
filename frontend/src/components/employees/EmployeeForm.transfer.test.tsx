@@ -112,4 +112,30 @@ describe('EmployeeForm transfer fields', () => {
     expect(payload.effective_date).toBe('2026-09-01')
     expect(payload.transfer_site).toBeNull()
   })
+
+  it('keeps a pending transfer\'s site and return date on a full save', async () => {
+    // Regression: a still-Active employee with pending_status=Transferred must
+    // not send nulls, or the flip lands a site-less transfer.
+    const onSubmit = vi.fn()
+    render(
+      <EmployeeForm
+        mode="edit"
+        initial={{
+          ...BASE,
+          end_date: '2099-08-15',
+          pending_status: 'Transferred',
+          transfer_site: 'Abu Dhabi',
+          transfer_return_date: '2099-11-15',
+        }}
+        onSubmit={onSubmit}
+      />,
+    )
+    await userEvent.click(screen.getByRole('button', { name: /save/i }))
+    await waitFor(() => expect(onSubmit).toHaveBeenCalled())
+    const payload = onSubmit.mock.calls[0][0]
+    expect(payload.status).toBe('Active')
+    expect(payload.transfer_site).toBe('Abu Dhabi')
+    expect(payload.transfer_return_date).toBe('2099-11-15')
+    expect(payload.effective_date).toBeNull()
+  })
 })

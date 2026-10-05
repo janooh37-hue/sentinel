@@ -236,11 +236,25 @@ export function EmployeeForm({
     <form
       onSubmit={handleSubmit(async (vals) => {
         // Only send what applies to the chosen status: transfer fields for
-        // Transferred, the return date only when reactivating.
+        // Transferred, the return date only when reactivating. A still-Active
+        // employee with a PENDING transfer keeps its stored site/return date —
+        // sending nulls would make the flip land a site-less transfer.
+        const keepPendingTransfer =
+          vals.status === 'Active' && initial?.pending_status === 'Transferred'
         await onSubmit({
           ...vals,
-          transfer_site: vals.status === 'Transferred' ? vals.transfer_site : null,
-          transfer_return_date: vals.status === 'Transferred' ? vals.transfer_return_date : null,
+          transfer_site:
+            vals.status === 'Transferred'
+              ? vals.transfer_site
+              : keepPendingTransfer
+                ? (initial?.transfer_site ?? null)
+                : null,
+          transfer_return_date:
+            vals.status === 'Transferred'
+              ? vals.transfer_return_date
+              : keepPendingTransfer
+                ? (initial?.transfer_return_date ?? null)
+                : null,
           effective_date: isReactivation ? vals.effective_date : null,
         })
       })}
