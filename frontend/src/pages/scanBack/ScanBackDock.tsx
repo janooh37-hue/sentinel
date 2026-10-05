@@ -8,7 +8,7 @@
  * — see the `bottom-[...]` comment below for the clearance arithmetic.
  */
 import { useRef, useState } from 'react'
-import { matchPath, useLocation, useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { ChevronDown, ChevronUp, Printer, Upload, X } from 'lucide-react'
 
@@ -99,7 +99,7 @@ export function ScanBackDock(): React.JSX.Element | null {
     count === 0 ||
     pathname === '/scan-back' ||
     dismissed ||
-    (isMobile && matchPath('/books/:id', pathname))
+    (isMobile && /^\/books\/\d+\/?$/.test(pathname))
   ) {
     return null
   }

@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import { api } from '@/lib/api'
 import type { BookRead, IncludedPaperRead, IncludedPapersPreviewRead } from '@/lib/api'
+import { registerPdfCachePurger } from '@/lib/pdfCachePurge'
 
 import { IncludedPapersDialog } from './IncludedPapersDialog'
 
@@ -120,6 +121,8 @@ describe('IncludedPapersDialog', () => {
       .spyOn(api, 'saveIncludedPapers')
       .mockResolvedValue(undefined as unknown as BookRead)
     const onOpenChange = vi.fn()
+    const purge = vi.fn()
+    const unregister = registerPdfCachePurger(purge)
     render(
       <IncludedPapersDialog
         open
@@ -174,6 +177,9 @@ describe('IncludedPapersDialog', () => {
       ],
     })
     expect(onOpenChange).toHaveBeenCalledWith(false)
+    // The package PDF now differs under the same URL: cached bytes must go.
+    expect(purge).toHaveBeenCalledTimes(1)
+    unregister()
   })
 
   it('keeps Review and Save reachable from the Preview tab, with a reason while nothing changed', async () => {

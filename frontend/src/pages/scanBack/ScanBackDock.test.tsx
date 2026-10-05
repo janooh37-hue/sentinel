@@ -73,6 +73,12 @@ describe('ScanBackDock', () => {
     expect(screen.getByRole('button', { name: /to scan back/i })).toBeInTheDocument()
   })
 
+  it('stays on the phone approvals page, which is not a record page', () => {
+    phone.on = true
+    renderDock('/books/approvals')
+    expect(screen.getByRole('button', { name: /to scan back/i })).toBeInTheDocument()
+  })
+
   it('stays on the desktop record page', () => {
     renderDock('/books/48')
     expect(screen.getByRole('button', { name: /to scan back/i })).toBeInTheDocument()

@@ -2,8 +2,9 @@
  * Delete / replace one film-strip paper. Routes by paper kind:
  *   - scan   → the plain-attachment endpoints (by index)
  *   - signed → the signed-copy endpoints (unfile reverts approval; replace keeps it)
- * Generated/imported papers are read-only (no delete/replace). Invalidates the
- * `['books']` query so every record surface refreshes.
+ * Generated/imported papers are read-only (no delete/replace). A successful run
+ * purges the PDF document and thumbnail caches and invalidates the `['books']`
+ * query so every record surface refreshes.
  */
 import { useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
@@ -11,6 +12,7 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
 import { api, apiErrorMessage } from '@/lib/api'
+import { purgePdfCaches } from '@/lib/pdfCachePurge'
 
 import type { Paper } from './recordPapers'
 
@@ -28,6 +30,8 @@ export function useManagePaper(bookId: number | null): {
     setBusy(true)
     try {
       await fn()
+      // The replaced/removed file's cached bytes and thumbnail must not outlive it.
+      purgePdfCaches()
       await qc.invalidateQueries({ queryKey: ['books'] })
       toast.success(t(successKey))
     } catch (err) {

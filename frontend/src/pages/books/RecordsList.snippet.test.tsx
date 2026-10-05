@@ -100,6 +100,7 @@ describe('RecordsList snippet rendering (lng=ar)', () => {
         selectedId: null,
         from: '/books',
         onSelect: () => undefined,
+        isInmateReporter: false,
       }),
     )
 
@@ -124,6 +125,7 @@ describe('RecordsList snippet rendering (lng=ar)', () => {
         selectedId: null,
         from: '/books',
         onSelect: () => undefined,
+        isInmateReporter: false,
       }),
     )
 
@@ -140,6 +142,7 @@ describe('RecordsList snippet rendering (lng=ar)', () => {
         selectedId: null,
         from: '/books',
         onSelect: () => undefined,
+        isInmateReporter: false,
       }),
     )
 

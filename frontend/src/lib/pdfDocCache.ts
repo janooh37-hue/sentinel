@@ -12,13 +12,15 @@
  * A document is destroyed when it is evicted (more than `PDF_DOC_CACHE_SIZE`
  * loaded entries, least-recently-used idle one first) — never while a lease is
  * still held. Idle entries older than `IDLE_TTL_MS` are dropped instead of
- * reused, so bytes regenerated under the same URL (adjusted signature, Word
- * save) are not served stale for long. A failed load is never cached, so a
+ * reused. A paper whose bytes change gets a new URL (see `recordPapers`), and
+ * `invalidatePdfDocs` / `purgePdfCaches` forget entries after a mutation, so
+ * replaced files are never served stale. A failed load is never cached, so a
  * "Retry" refetches.
  */
 import * as pdfjsLib from 'pdfjs-dist'
 import type { PDFDocumentProxy } from 'pdfjs-dist'
 
+import { registerPdfCachePurger } from '@/lib/pdfCachePurge'
 import { base64ToBytes, pdfWorkerUrl, toBase64Url } from '@/lib/pdf'
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl
@@ -44,10 +46,10 @@ interface Entry {
 // Map insertion order = recency (oldest first); a touch re-inserts.
 const entries = new Map<string, Entry>()
 
-function destroyDoc(doc: PDFDocumentProxy): void {
+function destroyQuietly(target: { destroy: () => Promise<void> }): void {
   try {
     // Best-effort cleanup: a rejected destroy (or a test stub without one) is ignored.
-    void Promise.resolve(doc.destroy()).catch(() => undefined)
+    void Promise.resolve(target.destroy()).catch(() => undefined)
   } catch {
     // ignore
   }
@@ -55,9 +57,29 @@ function destroyDoc(doc: PDFDocumentProxy): void {
 
 function drop(entry: Entry): void {
   if (entries.get(entry.key) === entry) entries.delete(entry.key)
-  if (entry.doc) destroyDoc(entry.doc)
+  if (entry.doc) destroyQuietly(entry.doc)
   else entry.controller.abort()
 }
+
+/**
+ * Forget every entry whose key matches (a key prefix, or a predicate). Idle
+ * documents are destroyed; documents still leased are only forgotten — their
+ * holders keep rendering and destroy them on release, and the next lease of the
+ * key refetches.
+ */
+export function invalidatePdfDocs(match: string | ((key: string) => boolean)): void {
+  const matches = typeof match === 'string' ? (key: string) => key.startsWith(match) : match
+  for (const entry of [...entries.values()]) {
+    if (!matches(entry.key)) continue
+    if (entry.refs === 0) {
+      drop(entry)
+    } else if (entries.get(entry.key) === entry) {
+      entries.delete(entry.key)
+    }
+  }
+}
+
+registerPdfCachePurger(() => invalidatePdfDocs(() => true))
 
 /** Evict least-recently-used idle documents until at most N are loaded. */
 function trim(): void {
@@ -100,11 +122,17 @@ export function leasePdfDoc(
       promise: Promise.resolve(null as unknown as PDFDocumentProxy),
     }
     created.promise = load(controller.signal)
-      .then((data) => pdfjsLib.getDocument({ data, disableFontFace: true }).promise)
+      .then((data) => {
+        if (controller.signal.aborted) throw new DOMException('Aborted', 'AbortError')
+        const task = pdfjsLib.getDocument({ data, disableFontFace: true })
+        // An abort while pdf.js is still parsing must stop the worker-side load too.
+        controller.signal.addEventListener('abort', () => destroyQuietly(task), { once: true })
+        return task.promise
+      })
       .then((doc) => {
-        if (entries.get(key) !== created) {
+        if (controller.signal.aborted) {
           // Every lease was released while loading — nothing wants it.
-          destroyDoc(doc)
+          destroyQuietly(doc)
           throw new DOMException('Aborted', 'AbortError')
         }
         created.doc = doc
@@ -115,6 +143,9 @@ export function leasePdfDoc(
         if (entries.get(key) === created) entries.delete(key)
         throw err
       })
+    // Leases attach their own handlers; this keeps a load nobody awaits (all
+    // leases aborted first) from surfacing as an unhandled rejection.
+    created.promise.catch(() => undefined)
     entries.set(key, created)
     entry = created
   } else {
@@ -132,13 +163,16 @@ export function leasePdfDoc(
     held.refs -= 1
     held.releasedAt = Date.now()
     if (held.refs > 0) return
+    const cached = entries.get(held.key) === held
     if (!held.doc) {
       // Nobody is waiting on the in-flight load any more.
       held.controller.abort()
-      if (entries.get(held.key) === held) entries.delete(held.key)
+      if (cached) entries.delete(held.key)
       return
     }
-    trim()
+    // Forgotten by `invalidatePdfDocs` while leased: destroy now, nothing can reuse it.
+    if (!cached) destroyQuietly(held.doc)
+    else trim()
   }
 
   return new Promise<PdfDocLease>((resolve, reject) => {

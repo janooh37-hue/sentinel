@@ -22,7 +22,7 @@ import { sealDescriptor, signedSourceOf } from './bookStateLabel'
 import { newRecordHref } from './newRecordHref'
 import { deleteBlockReason } from './recordDelete'
 import { useRecordDelete } from './RecordDeleteProvider'
-import { paperCountOf, papersOf } from './recordPapers'
+import { paperCountOf } from './recordPapers'
 import { buildRecordBasketItem } from './recordsBasket'
 import { openRecord, recordLinkProps, useListReturnFocus } from './useRecordNavContext'
 import type { RecordNavState } from './useRecordNavContext'
@@ -218,11 +218,7 @@ export function BooksMobileList({
                     highlighted={row.id === highlightedId || row.id === flashId}
                     selectMode={selectMode}
                     picked={picked.has(row.id)}
-                    paperCount={
-                      isInmateReporter
-                        ? papersOf(row, { inmateReporter: true }).length
-                        : paperCountOf(row)
-                    }
+                    paperCount={paperCountOf(row, { inmateReporter: isInmateReporter })}
                     link={recordLinkProps(row.id, linkNav)}
                     onLinkClick={handleLinkClick(row.id)}
                     onTogglePick={() => togglePick(row.id)}

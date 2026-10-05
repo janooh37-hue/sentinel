@@ -33,6 +33,7 @@ describe('DocPdfCanvas readiness', () => {
         getPage: vi.fn().mockResolvedValue({
           getViewport: vi.fn(() => ({ width: 100, height: 100 })),
           render: renderPage,
+          cleanup: vi.fn(),
         }),
       }),
     })
@@ -57,6 +58,7 @@ describe('DocPdfCanvas readiness', () => {
         getPage: vi.fn().mockResolvedValue({
           getViewport: vi.fn(() => ({ width: 100, height: 100 })),
           render: vi.fn(() => ({ promise: Promise.resolve() })),
+          cleanup: vi.fn(),
         }),
       }),
     })
@@ -83,6 +85,7 @@ describe('DocPdfCanvas readiness', () => {
         getPage: vi.fn().mockResolvedValue({
           getViewport: vi.fn(() => ({ width: 100, height: 100 })),
           render: renderPage,
+          cleanup: vi.fn(),
         }),
       }),
     })
@@ -115,6 +118,7 @@ describe('DocPdfCanvas readiness', () => {
         getPage: vi.fn().mockResolvedValue({
           getViewport: vi.fn(() => ({ width: 100, height: 100 })),
           render: vi.fn(() => ({ promise: Promise.resolve() })),
+          cleanup: vi.fn(),
         }),
       }),
     })
@@ -135,6 +139,7 @@ describe('DocPdfCanvas readiness', () => {
         getPage: vi.fn().mockResolvedValue({
           getViewport: vi.fn(() => ({ width: 100, height: 100 })),
           render: vi.fn(() => ({ promise: Promise.resolve() })),
+          cleanup: vi.fn(),
         }),
       }),
     })
@@ -162,6 +167,7 @@ describe('DocPdfCanvas readiness', () => {
         getPage: vi.fn().mockResolvedValue({
           getViewport: vi.fn(() => ({ width: 200, height: 400 })),
           render: vi.fn(() => ({ promise: Promise.resolve() })),
+          cleanup: vi.fn(),
         }),
       }),
     })

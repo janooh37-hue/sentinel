@@ -45,6 +45,23 @@ interface BookLike {
   attachment_paths?: string[] | null
   versions?: VersionLike[] | null
   imported_doc?: ImportedDocLike | null
+  /** Advances on signed-copy replace/removal and included-papers save. */
+  included_papers_revision?: number | null
+}
+
+/** Appends one query param, whichever of `?` / `&` the URL needs. */
+function withParam(url: string, name: string, value: string | number): string {
+  return `${url}${url.includes('?') ? '&' : '?'}${name}=${value}`
+}
+
+/** FNV-1a (32-bit) as hex: a short, stable content token for a stored path. */
+function shortHash(text: string): string {
+  let hash = 0x811c9dc5
+  for (let i = 0; i < text.length; i += 1) {
+    hash ^= text.charCodeAt(i)
+    hash = Math.imul(hash, 0x01000193)
+  }
+  return (hash >>> 0).toString(16)
 }
 
 const IMAGE_EXT = /\.(png|jpe?g|gif|webp|bmp)$/i
@@ -52,7 +69,11 @@ const IMAGE_EXT = /\.(png|jpe?g|gif|webp|bmp)$/i
 /** Stable identity of a paper: `?paper=<key>` and selection state use it. */
 export type PaperKey = 'signed' | 'generated' | 'imported' | `scan-${number}`
 
-/** `scan-N` uses the `attachment_paths` index, so a key survives deleting another scan. */
+/**
+ * `scan-N` uses the `attachment_paths` index, so deleting an earlier scan shifts
+ * the keys of the scans after it. The scan URL carries a hash of the stored
+ * path, so the shifted paper is a new URL (and a new PDF cache entry).
+ */
 export function paperKey(p: Pick<Paper, 'kind' | 'attachmentIndex'>): PaperKey {
   return p.kind === 'scan' ? `scan-${p.attachmentIndex ?? 0}` : p.kind
 }
@@ -61,21 +82,26 @@ export function paperKey(p: Pick<Paper, 'kind' | 'attachmentIndex'>): PaperKey {
  * The one builder for a record document's inline/download URL.
  * `signed` appends a `rev` marker: the plain URL is identical before and after
  * signing (the server swaps in the signed artifact once the version is locked),
- * so without it the canvas keeps the cached unsigned bytes.
+ * so without it the canvas keeps the cached unsigned bytes. `revision` (the
+ * book's `included_papers_revision`) is folded into the same `rev` value so the
+ * URL changes whenever the package does; the server ignores it.
  */
 export function paperUrl({
   documentId,
   versionId,
   original,
   signed,
+  revision,
 }: {
   documentId: number
   versionId?: number | null
   original?: boolean
   signed?: boolean
+  revision?: number | null
 }): string {
   const url = api.documentDownloadUrl(documentId, 'pdf', versionId ?? undefined, original)
-  return signed ? `${url}&rev=signed` : url
+  const rev = [signed ? 'signed' : null, revision ?? null].filter((part) => part !== null).join('-')
+  return rev ? withParam(url, 'rev', rev) : url
 }
 
 function currentVersionOf(book: Pick<BookLike, 'versions'>): VersionLike | undefined {
@@ -98,12 +124,17 @@ export function papersOf(book: BookLike, opts: { inmateReporter: boolean }): Pap
   const importedPapers: Paper[] = []
   const scanPapers: Paper[] = []
 
+  // `revision` keeps the signed and generated URLs moving when the signed copy
+  // or the included-papers package changes under an otherwise identical URL.
+  const revision = book.included_papers_revision
   const current = currentVersionOf(book)
   if (current?.status === 'approved' && current.signed_pdf_url) {
+    const signedUrl =
+      revision == null ? current.signed_pdf_url : withParam(current.signed_pdf_url, 'rev', revision)
     signedPapers.push({
       kind: 'signed',
-      url: current.signed_pdf_url,
-      downloadUrl: current.signed_pdf_url,
+      url: signedUrl,
+      downloadUrl: signedUrl,
       filename: `${book.ref_number}-signed.pdf`,
       isPdf: true,
     })
@@ -114,7 +145,7 @@ export function papersOf(book: BookLike, opts: { inmateReporter: boolean }): Pap
     // Staff always request the pre-signature original: once a signed copy is
     // filed the plain download URL swaps to serving the signed artifact, which
     // would hide the original form. The signed copy has its own paper.
-    const url = paperUrl({ documentId: docId, original: !inmateReporter })
+    const url = paperUrl({ documentId: docId, original: !inmateReporter, revision })
     generatedPapers.push({
       kind: 'generated',
       url,
@@ -144,7 +175,9 @@ export function papersOf(book: BookLike, opts: { inmateReporter: boolean }): Pap
   if (!inmateReporter) {
     ;(book.attachment_paths ?? []).forEach((path, index) => {
       const filename = path.split('/').pop() ?? `scan-${index}`
-      const url = `/api/v1/books/${book.id}/attachments/${index}`
+      // The stored path is unique per upload, so replacing the file at this
+      // index (or shifting the index) yields a new URL and a fresh cache entry.
+      const url = withParam(`/api/v1/books/${book.id}/attachments/${index}`, 'v', shortHash(path))
       scanPapers.push({
         kind: 'scan',
         url,
@@ -226,11 +259,17 @@ export function paperResetSignature(book: Pick<BookLike, 'id' | 'approval_state'
   return `${book.id}:${book.approval_state}:${papers.map(paperKey).join()}`
 }
 
-/** Count papers without building URL strings — for per-row chips in long lists. */
-export function paperCountOf(book: BookLike): number {
+/**
+ * Count papers without building URL strings — for per-row chips in long lists.
+ * Mirrors `papersOf`, including its `inmateReporter` rules, so every surface
+ * shows the number of papers the record pane will list.
+ */
+export function paperCountOf(book: BookLike, opts: { inmateReporter: boolean }): number {
   const current = currentVersionOf(book)
-  const generated = currentBookDocId(book) !== undefined ? 1 : 0
   const signed = current?.status === 'approved' && current.signed_pdf_url ? 1 : 0
+  const generated =
+    currentBookDocId(book) !== undefined && !(opts.inmateReporter && signed > 0) ? 1 : 0
   const imported = book.imported_doc?.pdf_url ? 1 : 0
-  return generated + signed + imported + (book.attachment_paths?.length ?? 0)
+  const scans = opts.inmateReporter ? 0 : (book.attachment_paths?.length ?? 0)
+  return generated + signed + imported + scans
 }

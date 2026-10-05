@@ -2,9 +2,14 @@ import { act, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
+import type { PdfDocLease } from '@/lib/pdfDocCache'
+
 import RecordPaperViewer from './RecordPaperViewer'
 import type { Paper } from './recordPapers'
 
+const { leasePdfUrlMock } = vi.hoisted(() => ({ leasePdfUrlMock: vi.fn() }))
+
+vi.mock('@/lib/pdfDocCache', () => ({ leasePdfUrl: leasePdfUrlMock }))
 vi.mock('pdfjs-dist', () => ({ GlobalWorkerOptions: {}, getDocument: vi.fn() }))
 vi.mock('@/lib/pdf', () => ({
   pdfWorkerUrl: '/worker.js',
@@ -170,5 +175,27 @@ describe('RecordPaperViewer', () => {
     resize(380)
     expect(screen.queryByRole('button', { name: 'Delete this document' })).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'More' })).toBeInTheDocument()
+  })
+
+  it('releases a lease that resolves after the viewer was torn down', async () => {
+    // `Promise.withResolvers` is the house style, but tsconfig pins lib ES2023, hence the executor.
+    let resolve: (lease: PdfDocLease) => void = () => undefined
+    const promise = new Promise<PdfDocLease>((res) => {
+      resolve = res
+    })
+    leasePdfUrlMock.mockReturnValueOnce(promise)
+    const release = vi.fn()
+    const pdf: Paper = { ...scan(0), url: '/api/v1/books/1/attachments/0?v=aa', filename: 'scan-0.pdf', isPdf: true }
+    const { unmount } = render(
+      <RecordPaperViewer papers={[pdf]} selectedKey="scan-0" onSelectKey={() => undefined} mode="pane" />,
+    )
+    resize(500)
+    await vi.waitFor(() => expect(leasePdfUrlMock).toHaveBeenCalledTimes(1))
+
+    unmount()
+    // The cache resolved the lease just as cleanup ran (it does not see the abort in time).
+    resolve({ doc: {} as PdfDocLease['doc'], release })
+    await promise
+    await vi.waitFor(() => expect(release).toHaveBeenCalledTimes(1))
   })
 })

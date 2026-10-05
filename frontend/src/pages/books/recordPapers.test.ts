@@ -5,10 +5,12 @@ import type { ApprovalLogItem } from '@/lib/api'
 import {
   approvalItemPapers,
   defaultPaperKey,
+  paperCountOf,
   paperKey,
   paperResetSignature,
   papersOf,
   paperUrl,
+  type Paper,
 } from './recordPapers'
 
 const STAFF = { inmateReporter: false }
@@ -100,6 +102,87 @@ describe('papersOf', () => {
       expect(papers[0].downloadUrl).not.toContain('original=true')
     }
   })
+
+  describe('content tokens in URLs (a changed paper must get a new URL)', () => {
+    const scanUrls = (paths: string[]): string[] =>
+      papersOf({ ...signedBook, attachment_paths: paths } as never, STAFF)
+        .filter((p) => p.kind === 'scan')
+        .map((p) => p.url)
+
+    it('scan URL changes when the file at an index is replaced', () => {
+      const before = scanUrls(['book_attachments/1/aaa-scan.pdf', 'book_attachments/1/bbb-scan.pdf'])
+      const after = scanUrls(['book_attachments/1/ccc-scan.pdf', 'book_attachments/1/bbb-scan.pdf'])
+      expect(after[0]).not.toBe(before[0])
+      expect(after[1]).toBe(before[1])
+      expect(before[0]).toMatch(/^\/api\/v1\/books\/1\/attachments\/0\?v=[0-9a-f]+$/)
+    })
+
+    it('the survivor of a deleted earlier scan does not reuse the deleted scan URL', () => {
+      const before = scanUrls(['book_attachments/1/aaa-scan.pdf', 'book_attachments/1/bbb-scan.pdf'])
+      const after = scanUrls(['book_attachments/1/bbb-scan.pdf'])
+      expect(after[0]).not.toBe(before[0])
+    })
+
+    it('the scan download URL carries the token too', () => {
+      const scan = papersOf(signedBook as never, STAFF).find((p) => p.kind === 'scan')!
+      expect(scan.downloadUrl).toMatch(/\?v=[0-9a-f]+$/)
+    })
+
+    it('signed and generated URLs change with included_papers_revision', () => {
+      const at = (revision: number): Paper[] =>
+        papersOf({ ...signedBook, included_papers_revision: revision } as never, STAFF)
+      const [signed1, generated1] = at(1)
+      const [signed2, generated2] = at(2)
+      expect(signed2.url).not.toBe(signed1.url)
+      expect(signed1.url).toBe('/api/v1/documents/5/download?format=pdf&rev=1')
+      expect(generated2.url).not.toBe(generated1.url)
+      expect(generated1.url).toContain('original=true')
+      expect(generated1.downloadUrl).toBe(generated1.url)
+    })
+
+    it('appends the revision with ? when the signed URL has no query', () => {
+      const book = {
+        ...signedBook,
+        included_papers_revision: 4,
+        versions: [
+          { version_no: 1, document_id: 5, status: 'approved', signed_pdf_url: '/api/v1/books/1/versions/7/signed-document' },
+        ],
+      }
+      expect(papersOf(book as never, STAFF)[0].url).toBe(
+        '/api/v1/books/1/versions/7/signed-document?rev=4',
+      )
+    })
+
+    it('inmate reporters get the revision on their generated paper', () => {
+      const a = papersOf({ ...pendingBookWithScan, included_papers_revision: 1 } as never, INMATE)[0]
+      const b = papersOf({ ...pendingBookWithScan, included_papers_revision: 2 } as never, INMATE)[0]
+      expect(a.url).not.toBe(b.url)
+      expect(a.url).not.toContain('original=true')
+    })
+  })
+})
+
+describe('paperCountOf', () => {
+  it('staff: counts signed, original, imported and scans', () => {
+    expect(paperCountOf(signedBook as never, STAFF)).toBe(3)
+    expect(paperCountOf(importedBook as never, STAFF)).toBe(1)
+  })
+
+  it('inmate reporter, signed: only the signed copy (no original, no scans)', () => {
+    expect(paperCountOf(signedBook as never, INMATE)).toBe(1)
+  })
+
+  it('inmate reporter, unsigned: the generated paper only', () => {
+    expect(paperCountOf(pendingBookWithScan as never, INMATE)).toBe(1)
+  })
+
+  it('always equals papersOf().length for the same role', () => {
+    for (const book of [signedBook, draftBook, pendingBookWithScan, importedBook]) {
+      for (const opts of [STAFF, INMATE]) {
+        expect(paperCountOf(book as never, opts)).toBe(papersOf(book as never, opts).length)
+      }
+    }
+  })
 })
 
 describe('paperKey / defaultPaperKey', () => {
@@ -158,6 +241,13 @@ describe('paperUrl', () => {
     )
     expect(paperUrl({ documentId: 7, signed: true })).toBe(
       '/api/v1/documents/7/download?format=pdf&rev=signed',
+    )
+  })
+
+  it('folds the package revision into the same rev marker', () => {
+    expect(paperUrl({ documentId: 7, revision: 3 })).toBe('/api/v1/documents/7/download?format=pdf&rev=3')
+    expect(paperUrl({ documentId: 7, signed: true, revision: 3 })).toBe(
+      '/api/v1/documents/7/download?format=pdf&rev=signed-3',
     )
   })
 })
