@@ -72,7 +72,7 @@ import { signedSourceOf } from './bookStateLabel'
 import { useAddScan } from './useAddScan'
 import { useManagePaper } from './useManagePaper'
 import { paperUrl, type Paper } from './recordPapers'
-import { useRecordPrintMode } from './useRecordPrintMode'
+import { useRecordPrintMode, useRecordPrintShortcut } from './useRecordPrintMode'
 import { serviceHref } from '@/lib/quickActions'
 import { copyToClipboard } from '@/lib/clipboard'
 import { useShortcutAction } from '@/lib/useKeyboardShortcuts'
@@ -280,6 +280,7 @@ function BookRecordPageBody(): React.JSX.Element {
   const isMobile = useIsMobile()
   const bookId = Number(id)
   const onPdfReady = useRecordPrintMode()
+  useRecordPrintShortcut()
   const chrome = useRecordChrome()
   const { scheduleDelete } = useRecordDelete()
   const [deleteOpen, setDeleteOpen] = useState(false)
@@ -901,18 +902,19 @@ function BookRecordPageBody(): React.JSX.Element {
     back()
   })
 
-  // Tab title: "<ref> · <subject> — GSSG"; restored on unmount, untouched while printing.
-  const printMode = searchParams.get('print') === '1'
+  // Tab title: "<ref> · <subject> — GSSG"; restored on unmount. Kept while
+  // printing (`?print=1`): it is the saved-PDF filename, and manual Print
+  // enters print mode on this very page.
   const titleRef = book?.ref_number
   const titleSubject = book?.subject
   useEffect(() => {
-    if (!titleRef || printMode) return
+    if (!titleRef) return
     const previous = document.title
     document.title = `${titleRef} · ${titleSubject || t('books.record.untitled')} — GSSG`
     return () => {
       document.title = previous
     }
-  }, [titleRef, titleSubject, printMode, t])
+  }, [titleRef, titleSubject, t])
 
   const view: RecordView = {
     bookId,

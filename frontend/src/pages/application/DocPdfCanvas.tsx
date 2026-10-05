@@ -50,8 +50,17 @@ interface DocPdfCanvasCommonProps {
    * the scroll content).
    */
   renderOverlay?: (pages: PageBox[]) => React.ReactNode
-  /** Called once after all PDF pages have finished painting. */
+  /**
+   * Called after all PDF pages have finished painting. Without `eager` that
+   * is the pages near the viewport, once per document; with `eager` it is
+   * every page, after each completed pass.
+   */
   onReady?: () => void
+  /**
+   * Paint every page before `onReady` (and never release one): print mode,
+   * where a page that has not painted prints as a blank box.
+   */
+  eager?: boolean
   /**
    * `natural` (default): each page at its 1.5× size, capped to the container.
    * `fit`: pages fill the container width — the host sets the width, so a zoom
@@ -87,7 +96,7 @@ export default function DocPdfCanvas(props: DocPdfCanvasProps): React.JSX.Elemen
 
 type LoadState =
   | { kind: 'loading' }
-  | { kind: 'loaded'; doc: PDFDocumentProxy; painted: boolean }
+  | { kind: 'loaded'; doc: PDFDocumentProxy }
   | { kind: 'error'; error: unknown }
 
 function DocPdfCanvasRenderer({
@@ -97,16 +106,17 @@ function DocPdfCanvasRenderer({
   docxUrl,
   renderOverlay,
   onReady,
+  eager = false,
   sizing = 'natural',
   bare = false,
   onPageChange,
 }: DocPdfCanvasProps): React.JSX.Element {
   const { t } = useTranslation()
   const wrapperRef = useRef<HTMLDivElement | null>(null)
-  const onReadyRef = useRef(onReady)
-  useEffect(() => {
-    onReadyRef.current = onReady
-  }, [onReady])
+  // `onPainted` is stored by PdfPages before its paint effect runs, so this
+  // closure is the current render's: the first eager pass after `eager`
+  // flips on can complete synchronously and must see the new `eager`/`onReady`.
+  const readyFired = useRef(false)
   const [state, setState] = useState<LoadState>({ kind: 'loading' })
   // Retry bumps this: a failed load is never cached, so the effect refetches.
   const [nonce, setNonce] = useState(0)
@@ -137,8 +147,13 @@ function DocPdfCanvasRenderer({
         : leasePdfUrl(source, controller.signal)
     request.then(
       (l) => {
+        // Cleanup ran while the lease was in flight: nobody will release it later.
+        if (controller.signal.aborted) {
+          l.release()
+          return
+        }
         lease = l
-        setState({ kind: 'loaded', doc: l.doc, painted: false })
+        setState({ kind: 'loaded', doc: l.doc })
       },
       (error: unknown) => {
         if (controller.signal.aborted) return
@@ -154,23 +169,27 @@ function DocPdfCanvasRenderer({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [source, nonce])
 
-  const painted = state.kind === 'loaded' && state.painted
-  useEffect(() => {
-    if (painted) onReadyRef.current?.()
-  }, [painted])
+  const handlePainted = (): void => {
+    if (readyFired.current && !eager) return
+    readyFired.current = true
+    onReady?.()
+  }
 
   // Keep page boxes in sync as the responsive boxes reflow (only when an
-  // overlay consumer is attached).
+  // overlay consumer is attached). The wrapper exists once the PDF has loaded.
+  const hasOverlay = renderOverlay !== undefined
+  const loaded = state.kind === 'loaded'
   useEffect(() => {
-    if (!renderOverlay) return
+    if (!hasOverlay || !loaded) return
     const wrap = wrapperRef.current
     if (!wrap) return
     const ro = new ResizeObserver(() => measure())
     ro.observe(wrap)
     return () => ro.disconnect()
-  }, [renderOverlay, measure])
+  }, [hasOverlay, loaded, measure])
 
   const retry = (): void => {
+    readyFired.current = false
     setState({ kind: 'loading' })
     setNonce((n) => n + 1)
   }
@@ -204,7 +223,7 @@ function DocPdfCanvasRenderer({
   }
 
   return (
-    <div className={frame}>
+    <div className={frame} data-pdf-canvas>
       {state.kind === 'loading' ? (
         <DocumentState kind="loading" />
       ) : (
@@ -213,9 +232,10 @@ function DocPdfCanvasRenderer({
             doc={state.doc}
             sizing={{ kind: sizing === 'fit' ? 'fit' : 'natural' }}
             pageClassName="rounded-lg shadow-lg"
+            eager={eager}
             onLayout={renderOverlay ? measure : undefined}
             onCurrentPage={onPageChange}
-            onPainted={() => setState((s) => (s.kind === 'loaded' && !s.painted ? { ...s, painted: true } : s))}
+            onPainted={handlePainted}
             onError={(error) => {
               console.error('DocPdfCanvas render failed:', error)
               setState({ kind: 'error', error })

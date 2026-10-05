@@ -34,6 +34,7 @@ import { cn } from '@/lib/utils'
 import { deleteBlockReason, deleteReasonKey } from '../recordDelete'
 import { useRecordDelete } from '../RecordDeleteProvider'
 import type { NextStep } from '../recordNextStep'
+import { useRecordPrint } from '../useRecordPrintMode'
 import type { RecordPieceProps } from './recordActions'
 
 interface SheetRow {
@@ -143,6 +144,7 @@ export function RecordMoreSheet({
   const { t } = useTranslation()
   const { scheduleDelete } = useRecordDelete()
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const print = useRecordPrint()
   if (!book) return null
 
   const { isInmateReporter, canMark, canMutateCurrent, canOverrideState, canManageRevisionAccess, canManageIncludedPapers, canManageSignedPaper } = caps
@@ -158,7 +160,7 @@ export function RecordMoreSheet({
       icon: iconOf(Printer),
       label: t('books.record.print'),
       hint: t('books.record.hint.print'),
-      onSelect: () => window.print(),
+      onSelect: print,
     },
   ]
   if (!isInmateReporter) {

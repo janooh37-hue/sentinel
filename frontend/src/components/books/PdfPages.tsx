@@ -2,12 +2,14 @@
  * PdfPages — the shared page stack for every pdf.js canvas viewer on the record
  * surfaces (the desk's `DocPdfCanvas`, the pane's `PaperCanvas`).
  *
- *  - Every page is an aspect-correct placeholder box from the first frame, so
- *    the layout, the page counter and the annotation boxes never wait for paint.
- *  - Pages paint lazily: the ones near the viewport first (IntersectionObserver),
- *    then — for documents up to `EAGER_PAGE_LIMIT` pages, so printing and the
- *    "ready" callback keep working — the rest in order. Longer documents only
- *    paint what is scrolled near.
+ *  - Pages paint lazily: the ones near the viewport (IntersectionObserver),
+ *    and only those. `eager` (print mode) paints every page, near ones first,
+ *    and reports `onPainted` only once all of them have — a page that has
+ *    not painted prints as a blank box.
+ *  - Memory is bounded: a page that scrolls more than `FREE_MARGIN_PAGES`
+ *    away from the near set is released (canvas zeroed, `page.cleanup()`) and
+ *    repaints when it comes back. Nothing is released while `eager`, and
+ *    everything is released on unmount / document change.
  *  - Zoom is CSS first: the boxes resize instantly and the existing bitmap
  *    scales with them; a debounced re-raster then repaints at
  *    `displayWidth × devicePixelRatio`, capped at ≈8 MP per page.
@@ -27,7 +29,7 @@ export type PdfSizing =
   /** an explicit CSS width in px (pane zoom) */
   | { kind: 'width'; px: number }
 
-const EAGER_PAGE_LIMIT = 12
+const FREE_MARGIN_PAGES = 2
 const MAX_RASTER_PIXELS = 8_000_000
 const RERASTER_DEBOUNCE_MS = 200
 const NATURAL_SCALE = 1.5
@@ -35,6 +37,17 @@ const NATURAL_SCALE = 1.5
 interface PageSize {
   width: number
   height: number
+}
+
+/** Replace a page box's bitmap, zeroing the old canvas so its pixels are freed now, not at GC. */
+function setBoxCanvas(box: HTMLElement, next: HTMLCanvasElement | null): void {
+  const old = Array.from(box.querySelectorAll('canvas'))
+  if (next) box.replaceChildren(next)
+  else box.replaceChildren()
+  for (const canvas of old) {
+    canvas.width = 0
+    canvas.height = 0
+  }
 }
 
 /** Nearest ancestor that scrolls vertically, or null (the viewport). */
@@ -55,8 +68,13 @@ export interface PdfPagesProps {
   onLayout?: () => void
   /** The page nearest the top of the viewport changed. */
   onCurrentPage?: (page: number, total: number) => void
-  /** Every page that will paint without scrolling has painted. */
+  /**
+   * Every page meant to paint has painted: the near pages — or, with `eager`,
+   * all of them. Fires after each completed pass.
+   */
   onPainted?: () => void
+  /** Print mode: paint every page (never release one) before `onPainted`. */
+  eager?: boolean
   /** A page could not be rendered. */
   onError?: (err: unknown) => void
 }
@@ -69,6 +87,7 @@ export function PdfPages({
   onLayout,
   onCurrentPage,
   onPainted,
+  eager = false,
   onError,
 }: PdfPagesProps): React.JSX.Element {
   const hostRef = useRef<HTMLDivElement | null>(null)
@@ -92,12 +111,16 @@ export function PdfPages({
 
   // 1 — page proxies + natural sizes (placeholders need the aspect ratio).
   useEffect(() => {
+    const host = hostRef.current
+    const painting = painted.current
     let cancelled = false
-    painted.current = new Map()
+    let loaded: PDFPageProxy[] = []
+    painting.clear()
     void (async () => {
       try {
         const list = await Promise.all(Array.from({ length: doc.numPages }, (_, i) => doc.getPage(i + 1)))
         if (cancelled) return
+        loaded = list
         setPages(list)
         setSizes(
           list.map((p) => {
@@ -111,6 +134,10 @@ export function PdfPages({
     })()
     return () => {
       cancelled = true
+      // Unmount / another document: free every bitmap and page resource now.
+      painting.clear()
+      host?.querySelectorAll<HTMLElement>('[data-pdf-page]').forEach((box) => setBoxCanvas(box, null))
+      for (const page of loaded) page.cleanup()
     }
   }, [doc])
 
@@ -196,7 +223,8 @@ export function PdfPages({
     if (sizes.length > 0) onLayoutRef.current?.()
   }, [sizes, rasterWidth])
 
-  // 4 — paint: near pages first, then (short documents) the rest in order.
+  // 4 — paint: the near pages first; with `eager` every other page after them.
+  // Outside print mode, pages far from the near set are released first.
   const visibleKey = visible.join(',')
   useEffect(() => {
     const host = hostRef.current
@@ -204,11 +232,21 @@ export function PdfPages({
     let cancelled = false
     let task: RenderTask | null = null
     const near = visibleKey === '' ? [] : visibleKey.split(',').map(Number)
-    const rest =
-      pages.length <= EAGER_PAGE_LIMIT
-        ? pages.map((_, i) => i + 1).filter((n) => !near.includes(n))
-        : []
-    const order = near.length === 0 && pages.length > EAGER_PAGE_LIMIT ? [1] : [...near, ...rest]
+    if (!eager && near.length > 0) {
+      const keep = new Set<number>()
+      for (const n of near) {
+        for (let k = n - FREE_MARGIN_PAGES; k <= n + FREE_MARGIN_PAGES; k++) keep.add(k)
+      }
+      for (const n of Array.from(painted.current.keys())) {
+        if (keep.has(n)) continue
+        const farBox = host.querySelector<HTMLElement>(`[data-pdf-page="${n}"]`)
+        if (farBox) setBoxCanvas(farBox, null)
+        painted.current.delete(n)
+        pages[n - 1]?.cleanup()
+      }
+    }
+    const rest = eager ? pages.map((_, i) => i + 1).filter((n) => !near.includes(n)) : []
+    const order = near.length === 0 && !eager ? [1] : [...near, ...rest]
 
     void (async () => {
       try {
@@ -239,9 +277,13 @@ export function PdfPages({
           task = page.render({ canvas, canvasContext: ctx, viewport })
           await task.promise
           task = null
-          if (cancelled) return
+          if (cancelled) {
+            canvas.width = 0
+            canvas.height = 0
+            return
+          }
           // Swap only once the new bitmap is ready: the old one keeps showing meanwhile.
-          box.replaceChildren(canvas)
+          setBoxCanvas(box, canvas)
           painted.current.set(n, Math.round(target))
         }
         if (!cancelled) onPaintedRef.current?.()
@@ -260,7 +302,7 @@ export function PdfPages({
         // a stub render task without cancel
       }
     }
-  }, [pages, rasterWidth, visibleKey, sizing.kind])
+  }, [pages, rasterWidth, visibleKey, sizing.kind, eager])
 
   return (
     <div

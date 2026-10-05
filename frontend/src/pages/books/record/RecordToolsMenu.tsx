@@ -32,6 +32,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import type { RecordPieceProps } from './recordActions'
+import { useRecordPrint } from '../useRecordPrintMode'
 
 function GroupLabel({ children }: { children: React.ReactNode }): React.JSX.Element {
   return (
@@ -57,6 +58,7 @@ function Labelled({ label, hint }: { label: string; hint?: string }): React.JSX.
 
 export function RecordToolsMenu({ book, caps, view, actions }: RecordPieceProps): React.JSX.Element | null {
   const { t } = useTranslation()
+  const print = useRecordPrint()
   const {
     has,
     canMutateCurrent,
@@ -103,7 +105,7 @@ export function RecordToolsMenu({ book, caps, view, actions }: RecordPieceProps)
           still-open menu lands on the sheet when Print runs from it. */}
       <DropdownMenuContent align="end" side="bottom" data-print-hide>
         <GroupLabel>{t('books.record.toolsDocument')}</GroupLabel>
-        <DropdownMenuItem onSelect={() => window.print()}>
+        <DropdownMenuItem onSelect={print}>
           <Printer className="h-3.5 w-3.5" aria-hidden="true" />
           {t('books.record.print')}
         </DropdownMenuItem>
