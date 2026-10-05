@@ -1117,6 +1117,17 @@ def _current_version(book: Book) -> BookVersion | None:
     return book.versions[-1] if book.versions else None
 
 
+def is_report(book: Book) -> bool:
+    """A Word-authored Report: its author signs it, the manager only reviews it."""
+    version = _current_version(book)
+    return (
+        book.category_id == "GS"
+        and book.ref_number.startswith("REPORT-")
+        and version is not None
+        and version.template_id == "Report"
+    )
+
+
 def _approver_steps(version: BookVersion | None) -> list[BookApprovalStep]:
     """Steps that gate approval_state — the single signing manager (kind=approver).
     Legacy rows created before migration 0039 default to 'approver'; in-memory
@@ -1145,7 +1156,8 @@ def _recompute_approval_state(book: Book) -> None:
         state = "approved"
     else:
         state = "pending"
-    if version is not None:
+    # A Report's version status is its author's signature, never the review.
+    if version is not None and not is_report(book):
         version.status = state
     book.approval_state = state
 
@@ -1284,28 +1296,27 @@ def submit_for_approval(
     if version is None:
         raise ValidationFailedError("NO_VERSION", "Book has no version to submit")
     caller = db.get(User, submitted_by_user_id)
-    inmate_report = bool(
-        caller is not None
-        and caller.role == INMATE_REPORTER_ROLE
-        and book.category_id == "GS"
-        and book.ref_number.startswith("REPORT-")
-        and version.template_id == "Report"
-    )
+    report = is_report(book)
+    inmate_report = bool(caller is not None and caller.role == INMATE_REPORTER_ROLE and report)
     if version.status == "awaiting_scan":
         raise ValidationFailedError(
             "AWAITING_SCAN",
             "This form awaits its signed scanned copy; file the scan instead of "
             "submitting for approval.",
         )
-    if version.manager_sig_embedded and not inmate_report:
+    if version.manager_sig_embedded and not report:
         raise ValidationFailedError(
             "SIGNATURE_ALREADY_PRESENT",
             "This form already carries the manager signature; it can't be sent for approval.",
         )
-    if (version.status == "approved" or version.signed_pdf_path) and not inmate_report:
+    if (version.status == "approved" or version.signed_pdf_path) and not report:
         raise ValidationFailedError(
             "ALREADY_SIGNED",
             "This version is already signed/approved; it can't be re-submitted for approval.",
+        )
+    if report and any(s.state == "approved" for s in _approver_steps(version)):
+        raise ValidationFailedError(
+            "ALREADY_REVIEWED", "This Report revision has already been reviewed."
         )
 
     if caller is not None and caller.role == INMATE_REPORTER_ROLE:
@@ -1689,6 +1700,9 @@ def sign_book(db: Session, book_id: int, *, user_id: int, version_id: int) -> Bo
     Mirrors ``decide_step``'s authorization + state machine, but instead of
     merely advancing the step it physically signs: ``render_signed_artifact``
     re-renders the version's document with the signer's signature injected.
+
+    A Report carries its author's signature, so its manager only records the
+    review: the step is approved and the paper is left untouched.
     """
     from app.services import document_service, included_papers_service, signature_placement_service
 
@@ -1700,6 +1714,15 @@ def sign_book(db: Session, book_id: int, *, user_id: int, version_id: int) -> Bo
         raise ValidationFailedError("NO_PENDING_STEP", "Book has no step awaiting a signature")
     if current.assignee_user_id != user_id:
         raise ValidationFailedError("NOT_YOUR_STEP", "This signature is assigned to another user")
+    report_version = _current_version(book)
+    if report_version is not None and is_report(book):
+        current.state = "approved"
+        current.decided_at = datetime.now(UTC).replace(tzinfo=None)
+        retain_revision_access(db, report_version, current)
+        _recompute_approval_state(book)
+        db.commit()
+        db.refresh(book)
+        return book
     signer = db.get(User, user_id)
     if signer is None:
         raise ValidationFailedError("NO_SIGNATURE", "لا يوجد توقيع محفوظ لحسابك")
@@ -3543,6 +3566,7 @@ __all__ = [
     "get_book_detail",
     "is_deletable",
     "is_document_signed_locked",
+    "is_report",
     "list_approver_candidates",
     "list_awaiting",
     "list_book_categories",

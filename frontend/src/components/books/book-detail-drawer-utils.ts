@@ -5,6 +5,8 @@
  * `AuthProvider.tsx`).
  */
 
+import type { ReportReview } from '@/pages/books/bookStateLabel'
+
 export type FooterAction = 'decide' | 'revise' | 'submit' | 'review' | 'none'
 
 /**
@@ -68,10 +70,16 @@ export function canFileSignedCopy(
  * draft, or RE-ROUTE a still-pending request to a different signing manager.
  * Mirrors the backend `submit_for_approval`, which rebuilds the chain for
  * `none`/`pending` but rejects `awaiting_scan` ("file the scan instead") and an
- * already-approved version. Requires `books.submit`.
+ * already-approved version — except a Report not yet reviewed: it is signed by
+ * its author at creation, so sending it asks its manager to review it.
+ * Requires `books.submit`.
  */
-export function canSendForApproval(state: string, caps: { canSubmitBook: boolean }): boolean {
-  return caps.canSubmitBook && (state === 'none' || state === 'pending')
+export function canSendForApproval(
+  state: string,
+  caps: { canSubmitBook: boolean },
+  review?: ReportReview | null,
+): boolean {
+  return caps.canSubmitBook && (state === 'none' || state === 'pending' || review === 'unsent')
 }
 
 export type InmateReporterAction = 'edit-submit' | 'correct-resubmit' | 'read-only'

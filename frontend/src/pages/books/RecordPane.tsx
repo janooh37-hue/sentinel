@@ -15,6 +15,7 @@ import { Suspense, lazy, useEffect, useId, useMemo, useRef, useState } from 'rea
 import { createPortal } from 'react-dom'
 import { Link, useNavigate } from 'react-router-dom'
 import {
+  CheckCheck,
   ChevronDown,
   ChevronsLeftRight,
   Copy,
@@ -78,7 +79,7 @@ import { ServiceArtwork } from '@/components/ui/service-artwork'
 import { WordReopenButton, WordSessionActions } from '@/components/books/BookWordActions'
 import type { WordReopenTrigger } from '@/components/books/BookWordActions'
 import { WordSessionBanner } from '@/components/books/WordSessionBanner'
-import { sealDescriptor, signedSourceOf } from './bookStateLabel'
+import { reportReviewOf, sealDescriptor, signedSourceOf } from './bookStateLabel'
 import { IncludedPapersDialog } from './IncludedPapersDialog'
 import { isIncludedPapersOwner } from './includedPapersState'
 import { subjectEmployeePart } from './formKind'
@@ -273,7 +274,8 @@ export function RecordPane({
   const artwork = serviceArtwork(book.service_id)
   const glyph = serviceGlyph(book.service_id)
   const who = subjectEmployeePart(book.subject, { classified: !!book.classification_code })
-  const seal = sealDescriptor(state, { signingPath: book.signing_path, signedSource: signedSourceOf(book) })
+  const review = reportReviewOf(book)
+  const seal = sealDescriptor(state, { signingPath: book.signing_path, signedSource: signedSourceOf(book), review })
 
   if (mode === 'inline' && size === 'collapsed') {
     return (
@@ -351,7 +353,7 @@ export function RecordPane({
     const base = { id, disabled: false, reason: reasonOf(id) }
     switch (id) {
       case 'sendForApproval':
-        return { ...base, label: t('books.approval.submitForApproval'), icon: <Send className="h-3.5 w-3.5" aria-hidden />, onClick: () => onSubmit(book.id) }
+        return { ...base, label: t(review ? 'books.approval.sendForReview' : 'books.approval.submitForApproval'), icon: <Send className="h-3.5 w-3.5" aria-hidden />, onClick: () => onSubmit(book.id) }
       case 'continueEditing':
         return { ...base, label: t('books.pane.continueDraft'), icon: <PenLine className="h-3.5 w-3.5" aria-hidden />, onClick: () => onContinueDraft(book.id) }
       case 'revise':
@@ -363,7 +365,9 @@ export function RecordPane({
           ? { ...base, label: t('books.record.downloadSigned'), icon: <Download className="h-3.5 w-3.5" aria-hidden />, onClick: () => downloadPaper(signedPaper) }
           : null
       case 'sign':
-        return { ...base, label: t('books.approval.signApprove'), icon: <PenLine className="h-3.5 w-3.5" aria-hidden />, onClick: openFull }
+        return review
+          ? { ...base, label: t('books.approval.markReviewed'), icon: <CheckCheck className="h-3.5 w-3.5" aria-hidden />, onClick: openFull }
+          : { ...base, label: t('books.approval.signApprove'), icon: <PenLine className="h-3.5 w-3.5" aria-hidden />, onClick: openFull }
       case 'approveReviewed':
         return { ...base, label: t('books.reviewers.approveReviewed'), icon: <PenLine className="h-3.5 w-3.5" aria-hidden />, onClick: openFull }
       default:
@@ -499,7 +503,7 @@ export function RecordPane({
             <Copy className="h-3 w-3" aria-hidden />
           </button>
         </Hint>
-        <StateSeal state={state} signingPath={book.signing_path} signedSource={signedSourceOf(book)} />
+        <StateSeal state={state} signingPath={book.signing_path} signedSource={signedSourceOf(book)} review={review} />
         <span className="ms-auto flex items-center gap-1">
           {mode === 'inline' ? (
             <>

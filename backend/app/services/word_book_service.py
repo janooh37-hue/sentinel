@@ -569,8 +569,9 @@ def finish_word_session(
             "signer_employee_id": session.signer_employee_id,
             "signed": signed,
         }
-    if user.role == INMATE_REPORTER_ROLE and is_report:
-        book.approval_state = "none"
+    if is_report:
+        # A revision is a fresh, unsent paper; any review belongs to the old one.
+        book.approval_state = "none" if user.role == INMATE_REPORTER_ROLE else "approved"
 
     # A Word revision of an approved record must become resubmittable.
     if max_version_no > 0 and not signed and not is_report:
