@@ -64,7 +64,11 @@ function setup(
           onSelect={onSelect}
           selected={new Set()}
           onToggleSelect={onToggleSelect}
-          from="/books?status=pending&open=1"
+          nav={(scrollY = 0) => ({
+            from: '/books?status=pending&open=1',
+            queue: rows.map((row) => row.id),
+            scrollY,
+          })}
           {...props}
         />
         <Probe />
@@ -83,7 +87,7 @@ const rowOf = (id: number): HTMLElement => {
 describe('RecordsList row a11y', () => {
   it('keeps the checkbox out of the select button and labels it with the ref', async () => {
     const { onSelect, onToggleSelect } = setup([makeBook(1)])
-    const checkbox = screen.getByRole('checkbox', { name: 'Select GS-0001' })
+    const checkbox = screen.getByRole('checkbox', { name: /^Select \u2068GS-0001\u2069$/ })
     expect(checkbox.closest('button')).toBeNull()
 
     await userEvent.click(checkbox)

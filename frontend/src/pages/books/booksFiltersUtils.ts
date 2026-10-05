@@ -49,15 +49,6 @@ export function hasActiveFilters(
 }
 
 /**
- * Merge a stored (potentially stale) filters object over the current defaults
- * so any newly-added field always has a sane initial value for returning users
- * whose persisted object predates the field.
- */
-export function normalizeFilters(stored: Partial<BooksFilters>): BooksFilters {
-  return { ...DEFAULT_BOOKS_FILTERS, ...stored }
-}
-
-/**
  * Mobile's client-side row predicate (BooksPage's `mobileRows`, unscoped
  * `allRows`). Service MUST gate before the drafts early-return: otherwise
  * "service X + drafts" would leak every service's drafts through here while

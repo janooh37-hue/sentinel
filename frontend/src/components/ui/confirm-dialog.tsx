@@ -36,7 +36,7 @@ interface ConfirmDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   title: string
-  description?: string
+  description?: React.ReactNode
   /** Label for the confirm button. Defaults to t('common.confirm'). */
   confirmLabel?: string
   onConfirm: () => void
@@ -73,8 +73,13 @@ export function ConfirmDialog({
       >
         <AlertDialogHeader>
           <AlertDialogTitle>{title}</AlertDialogTitle>
-          {description && (
+          {typeof description === 'string' && (
             <AlertDialogDescription>{description}</AlertDialogDescription>
+          )}
+          {description != null && typeof description !== 'string' && (
+            <AlertDialogDescription asChild>
+              <div className="space-y-1">{description}</div>
+            </AlertDialogDescription>
           )}
         </AlertDialogHeader>
         <AlertDialogFooter>
