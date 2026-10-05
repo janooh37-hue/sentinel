@@ -2033,7 +2033,8 @@
     },
     "toast": {
       "created": "تم إنشاء إدخال الدفتر",
-      "voided": "أُلغيت المسودة — السجل ملغى"
+      "voided": "أُلغيت المسودة — السجل ملغى",
+      "wordSessionDiscarded": "أُلغيت جلسة التحرير في Word"
     },
     "completion": {
       "savedToRecords": "تم الحفظ في السجلات",
@@ -2222,6 +2223,9 @@
       "approvedNoName": "تم التوقيع · {{date}}",
       "returnedNoName": "أُعيد:",
       "rejectedNoName": "رُفض:",
+      "approvedNoDate": "وقّعه {{name}}",
+      "approvedNoNameNoDate": "تم التوقيع",
+      "wordActiveNoName": "قيد التحرير في Word.",
       "voided": "ملغى — محفوظ للسجل فقط."
     },
     "paper": {

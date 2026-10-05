@@ -22,6 +22,7 @@ import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   ArrowLeft,
+  Check,
   Copy,
   CornerUpLeft,
   Download,
@@ -41,6 +42,7 @@ import type { ActionId, NextStep } from '../recordNextStep'
 import { RAIL_BREAKPOINT, useRecordChrome } from './RecordChrome'
 import { TONE, SEAL_TO_STATION_TONE } from './recordTones'
 import { Quote } from './Quote'
+import { useReviewVerdict } from './useReviewVerdict'
 import { RecordToolsMenu } from './RecordToolsMenu'
 import { BookStatusChips } from '@/components/books/BookStatusChips'
 import { WordReopenButton, WordSessionActions } from '@/components/books/BookWordActions'
@@ -156,12 +158,96 @@ function useRailDocked(): boolean {
   return docked
 }
 
-export function RecordHeader({ book, caps, view, actions }: RecordPieceProps): React.JSX.Element {
+/** Focus bar's reviewer verdict: just "Approve as reviewed". "Request changes"
+ *  needs a note field, which does not fit the 52px bar. */
+function FocusApproveReviewed({
+  bookId,
+  versionId,
+}: {
+  bookId: number
+  versionId: number
+}): React.JSX.Element {
+  const { t } = useTranslation()
+  const verdict = useReviewVerdict(bookId, versionId)
+  return (
+    <HeaderBtn
+      icon={<Check className="h-3.5 w-3.5" strokeWidth={2.5} aria-hidden="true" />}
+      label={t('books.reviewers.approveReviewed')}
+      tone="green-solid"
+      testId="reviewer-approve-btn"
+      pending={verdict.pending}
+      onClick={verdict.approve}
+    />
+  )
+}
+
+/** Reopen-in-Word and adjust-signature render as Tools / More items, but the
+ *  components owning their mutation / dialog / eligibility query mount here
+ *  unconditionally — independent of any menu being open (see their own docs). */
+function RecordHeaderHosts({ book, caps, view, actions }: RecordPieceProps): React.JSX.Element {
+  const { canMutateCurrent, isInmateReporter, isInmateReport } = caps
+  const { isMobile, current } = view
+  const {
+    submitReport,
+    fileSignedCopy,
+    replaceSignedPaper,
+    setWordReopenTrigger,
+    setAdjustSigTrigger,
+    fileSignedRef,
+    replaceSignedRef,
+  } = actions
+  return (
+    <>
+      {(!isInmateReporter || isInmateReport) && book && canMutateCurrent && (
+        <WordReopenButton
+          book={book}
+          isMobile={isMobile}
+          hideTrigger
+          onTriggerChange={setWordReopenTrigger}
+          onFinished={isInmateReport ? () => submitReport(book.id) : undefined}
+        />
+      )}
+      {!isInmateReporter && canMutateCurrent && current?.document_id != null && (
+        <AdjustSignatureAction
+          documentId={current.document_id}
+          hideTrigger
+          onTriggerChange={setAdjustSigTrigger}
+        />
+      )}
+      <input
+        ref={fileSignedRef}
+        type="file"
+        accept="application/pdf,image/*"
+        className="hidden"
+        onChange={(e) => {
+          const f = e.target.files?.[0]
+          if (f && book) {
+            void fileSignedCopy(f, book.ref_number)
+          }
+          e.target.value = ''
+        }}
+      />
+      <input
+        ref={replaceSignedRef}
+        type="file"
+        accept="application/pdf,image/*"
+        className="hidden"
+        onChange={(e) => {
+          const f = e.target.files?.[0]
+          if (f) void replaceSignedPaper(f)
+          e.target.value = ''
+        }}
+      />
+    </>
+  )
+}
+
+function RecordHeaderBar({ book, caps, view, actions }: RecordPieceProps): React.JSX.Element {
   const { t } = useTranslation()
   const chrome = useRecordChrome()
   const railDocked = useRailDocked()
   const [subjectOpen, setSubjectOpen] = useState(false)
-  const { canMutateCurrent, isInmateReporter, isInmateReport, canMark } = caps
+  const { isInmateReporter, isInmateReport, canMark } = caps
   const {
     bookId,
     isMobile,
@@ -188,12 +274,7 @@ export function RecordHeader({ book, caps, view, actions }: RecordPieceProps): R
     handleRevise,
     requestSignConfirm,
     submitReport,
-    fileSignedCopy,
-    replaceSignedPaper,
-    setWordReopenTrigger,
-    setAdjustSigTrigger,
     fileSignedRef,
-    replaceSignedRef,
     desktopSignRef,
     copyRef,
   } = actions
@@ -268,7 +349,12 @@ export function RecordHeader({ book, caps, view, actions }: RecordPieceProps): R
     ) : null
 
   /** One next-step action as a labelled header button. */
-  const renderAction = (id: ActionId, step_: NextStep, primary: boolean): React.JSX.Element | null => {
+  const renderAction = (
+    id: ActionId,
+    step_: NextStep,
+    primary: boolean,
+    compact = false,
+  ): React.JSX.Element | null => {
     const reasonKey = step_.disabled?.[id]
     const reason = reasonKey ? t(reasonKey) : undefined
     switch (id) {
@@ -349,7 +435,7 @@ export function RecordHeader({ book, caps, view, actions }: RecordPieceProps): R
             icon={<PenLine className="h-3.5 w-3.5" aria-hidden="true" />}
             label={t('books.pane.continueDraft')}
             tone={primary ? 'navy-solid' : 'plain'}
-            reason={current?.template_id ? undefined : t('books.reason.reviseNoTemplate')}
+            reason={reason}
             onClick={handleRevise}
           />
         )
@@ -390,6 +476,8 @@ export function RecordHeader({ book, caps, view, actions }: RecordPieceProps): R
           </a>
         ) : null
       case 'approveReviewed':
+        // The full reviewer control (note textarea) cannot fit the 52px focus bar.
+        if (compact) return book && current ? <FocusApproveReviewed bookId={book.id} versionId={current.id} /> : null
         return reviewerBlock
       case 'finishEditing':
         return book ? (
@@ -419,54 +507,6 @@ export function RecordHeader({ book, caps, view, actions }: RecordPieceProps): R
     })
   }
 
-  // Reopen-in-Word and adjust-signature render as Tools / More items, but the
-  // components owning their mutation / dialog / eligibility query mount here
-  // unconditionally — independent of any menu being open (see their own docs).
-  const hosts = (
-    <>
-      {(!isInmateReporter || isInmateReport) && book && canMutateCurrent && (
-        <WordReopenButton
-          book={book}
-          isMobile={isMobile}
-          hideTrigger
-          onTriggerChange={setWordReopenTrigger}
-          onFinished={isInmateReport ? () => submitReport(book.id) : undefined}
-        />
-      )}
-      {!isInmateReporter && canMutateCurrent && current?.document_id != null && (
-        <AdjustSignatureAction
-          documentId={current.document_id}
-          hideTrigger
-          onTriggerChange={setAdjustSigTrigger}
-        />
-      )}
-      <input
-        ref={fileSignedRef}
-        type="file"
-        accept="application/pdf,image/*"
-        className="hidden"
-        onChange={(e) => {
-          const f = e.target.files?.[0]
-          if (f && book) {
-            void fileSignedCopy(f, book.ref_number)
-          }
-          e.target.value = ''
-        }}
-      />
-      <input
-        ref={replaceSignedRef}
-        type="file"
-        accept="application/pdf,image/*"
-        className="hidden"
-        onChange={(e) => {
-          const f = e.target.files?.[0]
-          if (f) void replaceSignedPaper(f)
-          e.target.value = ''
-        }}
-      />
-    </>
-  )
-
   const descriptor = book ? sealDescriptor(shownState, { signingPath: book.signing_path, signedSource }) : null
   const statusTone = descriptor ? TONE[SEAL_TO_STATION_TONE[descriptor.tone]] : null
 
@@ -478,13 +518,7 @@ export function RecordHeader({ book, caps, view, actions }: RecordPieceProps): R
         data-print-hide
         className="flex h-[52px] shrink-0 items-center gap-2.5 border-b border-hairline bg-surface px-3.5"
       >
-        <IconAction
-          aria-label={backLabel}
-          hint={backLabel}
-          shortcut="Esc"
-          hintSide="bottom"
-          onClick={back}
-        >
+        <IconAction aria-label={backLabel} hint={backLabel} hintSide="bottom" onClick={back}>
           <ArrowLeft className="h-4 w-4 rtl:-scale-x-100" strokeWidth={2.2} aria-hidden="true" />
         </IconAction>
         {book && <CopyRef refNumber={book.ref_number} onCopy={copyRef} />}
@@ -494,7 +528,7 @@ export function RecordHeader({ book, caps, view, actions }: RecordPieceProps): R
         </span>
         {nextStep?.primary && (
           <div className="flex shrink-0 items-center gap-2">
-            {renderAction(nextStep.primary, nextStep, true)}
+            {renderAction(nextStep.primary, nextStep, true, true)}
           </div>
         )}
         <HeaderBtn
@@ -505,7 +539,6 @@ export function RecordHeader({ book, caps, view, actions }: RecordPieceProps): R
           testId="record-exit-focus"
           onClick={() => chrome.setFocus(false)}
         />
-        {hosts}
       </header>
     )
   }
@@ -567,7 +600,6 @@ export function RecordHeader({ book, caps, view, actions }: RecordPieceProps): R
             )}
           </>
         )}
-        {hosts}
       </header>
     )
   }
@@ -667,7 +699,18 @@ export function RecordHeader({ book, caps, view, actions }: RecordPieceProps): R
           )}
         </div>
       )}
-      {hosts}
     </header>
+  )
+}
+
+/** The header: one bar (focus / phone / desktop) plus the hidden hosts. The
+ *  hosts are a sibling at a fixed position, so switching shape (focus toggle,
+ *  crossing 768px) never remounts them. */
+export function RecordHeader(props: RecordPieceProps): React.JSX.Element {
+  return (
+    <>
+      <RecordHeaderBar {...props} />
+      <RecordHeaderHosts {...props} />
+    </>
   )
 }

@@ -67,9 +67,13 @@ export function WordSessionActions({
 
   const discardMutation = useMutation({
     mutationFn: () => api.discardWordSession(book.id),
-    onSuccess: () => {
+    onSuccess: (discardedBook) => {
       invalidate()
-      toast.success(t('books.toast.voided'))
+      // The backend voids only a book with no committed versions; discarding a
+      // re-opened session leaves the record intact.
+      toast.success(
+        t(discardedBook.voided_at ? 'books.toast.voided' : 'books.toast.wordSessionDiscarded'),
+      )
     },
     onError: (err) => toast.error(apiErrorMessage(err)),
   })

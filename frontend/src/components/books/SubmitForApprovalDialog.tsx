@@ -155,6 +155,10 @@ export function SubmitForApprovalDialog({ bookId, onClose }: Props): React.JSX.E
   // Loading: both book + approvers need to be ready before we show anything.
   const isLoading = bookQuery.isPending || (showApproverSelect && approversQuery.isPending)
 
+  // The "pick an approver" reason explains a visible-but-disabled Submit — not
+  // the loading skeleton, and not the no-approvers state (which has no button).
+  const showSubmitReason = !isLoading && (showLinkedChip || approvers.length > 0) && !canSubmit
+
   return (
     <RadixDialog.Root open onOpenChange={(open) => { if (!open) onClose() }}>
       <RadixDialog.Portal>
@@ -343,7 +347,7 @@ export function SubmitForApprovalDialog({ bookId, onClose }: Props): React.JSX.E
           {/* footer */}
           <footer className="border-t border-hairline px-5 py-4">
             <div className="flex flex-wrap items-center justify-end gap-2.5">
-              {!canSubmit && (
+              {showSubmitReason && (
                 <span
                   id={submitReasonId}
                   className="me-auto text-[0.78em] leading-snug text-muted-foreground"
@@ -362,7 +366,7 @@ export function SubmitForApprovalDialog({ bookId, onClose }: Props): React.JSX.E
                 <button
                   type="button"
                   aria-disabled={!canSubmit || submitMutation.isPending ? true : undefined}
-                  aria-describedby={!canSubmit ? submitReasonId : undefined}
+                  aria-describedby={showSubmitReason ? submitReasonId : undefined}
                   aria-busy={submitMutation.isPending ? true : undefined}
                   onClick={() => {
                     if (!canSubmit || submitMutation.isPending) return

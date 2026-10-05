@@ -13,7 +13,6 @@
  */
 
 import * as Dialog from '@radix-ui/react-dialog'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
 import {
   Check,
   CornerUpLeft,
@@ -30,14 +29,13 @@ import {
 import { useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
-import { toast } from 'sonner'
 
 import { WordSessionActions } from '@/components/books/BookWordActions'
-import { api, ApiError, apiErrorMessage } from '@/lib/api'
 import { cn } from '@/lib/utils'
 import type { ActionId, ReasonKey } from '../recordNextStep'
 import type { RecordPieceProps } from './recordActions'
 import { RecordMoreSheet } from './RecordMoreSheet'
+import { useReviewVerdict } from './useReviewVerdict'
 
 type Tone = 'plain' | 'amber' | 'red' | 'sign' | 'primary'
 
@@ -64,7 +62,7 @@ interface DockAction {
   disabled?: boolean
   pending?: boolean
   /** Why it cannot run: the button stays focusable and the reason prints above the dock. */
-  reasonKey?: ReasonKey | 'books.word.needsPc'
+  reasonKey?: ReasonKey
   buttonRef?: React.Ref<HTMLButtonElement>
 }
 
@@ -74,35 +72,52 @@ function Spinner(): React.JSX.Element {
   return <Loader2 className={cn(ICON, 'animate-spin motion-reduce:animate-none')} aria-hidden="true" />
 }
 
-/** Advisory reviewer verdict. "Request changes" needs a note, so it opens a small sheet. */
-function useReviewVerdict(bookId: number, versionId: number | undefined): {
-  approve: () => void
+/** The note field lives in its own component so it unmounts with the dialog: a
+ *  note typed for one record can never pre-fill (and be submitted for) another. */
+function RequestChangesForm({
+  pending,
+  onSubmit,
+}: {
   pending: boolean
-  mutate: (v: { decision: 'reviewed' | 'changes_requested'; note?: string }, onDone?: () => void) => void
-} {
+  onSubmit: (note: string) => void
+}): React.JSX.Element {
   const { t } = useTranslation()
-  const qc = useQueryClient()
-  const mut = useMutation({
-    mutationFn: (v: { decision: 'reviewed' | 'changes_requested'; note?: string }) =>
-      api.reviewBook(bookId, versionId ?? 0, v.decision, v.note),
-    onSuccess: () => {
-      void qc.invalidateQueries({ queryKey: ['books'] })
-      toast.success(t('books.reviewers.recorded'))
-    },
-    onError: (e) => {
-      if (e instanceof ApiError && e.code === 'REVISION_CHANGED') {
-        void qc.invalidateQueries({ queryKey: ['books', 'detail', bookId] })
-        toast.error(t('books.approval.revisionChanged'))
-        return
-      }
-      toast.error(apiErrorMessage(e))
-    },
-  })
-  return {
-    approve: () => mut.mutate({ decision: 'reviewed' }),
-    pending: mut.isPending,
-    mutate: (v, onDone) => mut.mutate(v, { onSuccess: onDone }),
-  }
+  const [note, setNote] = useState('')
+  const empty = note.trim().length === 0
+  return (
+    <>
+      <label className="flex flex-col gap-1 text-[0.8em] font-medium text-muted-foreground">
+        {t('books.approval.reasonLabel')}
+        <textarea
+          rows={3}
+          value={note}
+          dir="auto"
+          onChange={(e) => setNote(e.target.value)}
+          placeholder={t('books.approval.reasonPlaceholder')}
+          className="w-full rounded-lg border border-hairline bg-background px-3 py-2 text-[1.05em] text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/30"
+        />
+      </label>
+      {empty && (
+        <p className="text-[0.74em] text-muted-foreground">{t('books.approval.reasonRequired')}</p>
+      )}
+      <div className="flex gap-2">
+        <Dialog.Close asChild>
+          <button type="button" className={cn(BUTTON, TONE.plain, 'flex-1')}>
+            {t('books.approval.cancelDecision')}
+          </button>
+        </Dialog.Close>
+        <button
+          type="button"
+          disabled={pending || empty}
+          onClick={() => onSubmit(note.trim())}
+          className={cn(BUTTON, TONE.amber, 'flex-1')}
+        >
+          <CornerUpLeft className={ICON} aria-hidden="true" />
+          {t('books.reviewers.requestChanges')}
+        </button>
+      </div>
+    </>
+  )
 }
 
 function RequestChangesSheet({
@@ -119,8 +134,6 @@ function RequestChangesSheet({
   isAr: boolean
 }): React.JSX.Element {
   const { t } = useTranslation()
-  const [note, setNote] = useState('')
-  const empty = note.trim().length === 0
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
@@ -137,36 +150,7 @@ function RequestChangesSheet({
           <Dialog.Title className="text-[0.95em] font-semibold text-foreground">
             {t('books.reviewers.requestChanges')}
           </Dialog.Title>
-          <label className="flex flex-col gap-1 text-[0.8em] font-medium text-muted-foreground">
-            {t('books.approval.reasonLabel')}
-            <textarea
-              rows={3}
-              value={note}
-              dir="auto"
-              onChange={(e) => setNote(e.target.value)}
-              placeholder={t('books.approval.reasonPlaceholder')}
-              className="w-full rounded-lg border border-hairline bg-background px-3 py-2 text-[1.05em] text-foreground placeholder:text-muted-foreground focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/30"
-            />
-          </label>
-          {empty && (
-            <p className="text-[0.74em] text-muted-foreground">{t('books.approval.reasonRequired')}</p>
-          )}
-          <div className="flex gap-2">
-            <Dialog.Close asChild>
-              <button type="button" className={cn(BUTTON, TONE.plain, 'flex-1')}>
-                {t('books.approval.cancelDecision')}
-              </button>
-            </Dialog.Close>
-            <button
-              type="button"
-              disabled={pending || empty}
-              onClick={() => onSubmit(note.trim())}
-              className={cn(BUTTON, TONE.amber, 'flex-1')}
-            >
-              <CornerUpLeft className={ICON} aria-hidden="true" />
-              {t('books.reviewers.requestChanges')}
-            </button>
-          </div>
+          <RequestChangesForm pending={pending} onSubmit={onSubmit} />
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>
@@ -230,23 +214,15 @@ export function RecordDock({ book, caps, view, actions }: RecordPieceProps): Rea
             else actions.openOverlay('submit')
           },
         }
-      case 'continueEditing': {
-        // Continue = reopen the form that made the record. A Word-authored
-        // record can only be continued in Word, which needs a PC.
-        const reasonKey = book.is_word_book
-          ? 'books.word.needsPc'
-          : current?.template_id
-            ? undefined
-            : 'books.reason.reviseNoTemplate'
+      case 'continueEditing':
         return {
           id,
           tone: nextStep.primary === id ? 'primary' : 'plain',
           icon: <PenLine className={ICON} aria-hidden="true" />,
           label: t('books.pane.continueDraft'),
-          reasonKey,
+          reasonKey: nextStep.disabled?.continueEditing,
           onClick: actions.handleRevise,
         }
-      }
       case 'revise':
         return {
           id,
@@ -433,6 +409,7 @@ export function RecordDock({ book, caps, view, actions }: RecordPieceProps): Rea
         onOpenChange={setSheetOpen}
       />
       <RequestChangesSheet
+        key={bookId}
         open={changesOpen}
         onOpenChange={setChangesOpen}
         pending={verdict.pending}

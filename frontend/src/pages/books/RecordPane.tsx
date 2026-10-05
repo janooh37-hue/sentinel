@@ -299,11 +299,8 @@ export function RecordPane({
   }
 
   // ── Next step: the one status sentence + the footer's workflow buttons ─────
-  // Word-authored book: its truth is the docx, not re-renderable fields. The
-  // rich-editor "Continue editing" would open an empty form, so it's hidden for
-  // these (BookWordActions carries the Word actions). `is_word_book` is a
-  // backend flag computed for LIST rows too.
-  const isWordBook = book.is_word_book
+  // Word-authored books and an inmate's own report never get "Continue editing":
+  // `recordNextStep` leaves it out (BookWordActions carries the Word actions).
   const versions = book.versions ?? []
   const liveVersion = versions.length ? versions[versions.length - 1] : undefined
   const currentVersion =
@@ -353,9 +350,7 @@ export function RecordPane({
       case 'sendForApproval':
         return { ...base, label: t('books.approval.submitForApproval'), icon: <Send className="h-3.5 w-3.5" aria-hidden />, onClick: () => onSubmit(book.id) }
       case 'continueEditing':
-        return isWordBook || isInmateReport
-          ? null
-          : { ...base, label: t('books.pane.continueDraft'), icon: <PenLine className="h-3.5 w-3.5" aria-hidden />, onClick: () => onContinueDraft(book.id) }
+        return { ...base, label: t('books.pane.continueDraft'), icon: <PenLine className="h-3.5 w-3.5" aria-hidden />, onClick: () => onContinueDraft(book.id) }
       case 'revise':
         return { ...base, label: t('books.pane.revise'), icon: <CornerUpLeft className="h-3.5 w-3.5 -scale-x-100" aria-hidden />, onClick: openFull }
       case 'scanSigned':

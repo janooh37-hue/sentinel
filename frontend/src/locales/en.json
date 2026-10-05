@@ -1874,7 +1874,8 @@
     },
     "toast": {
       "created": "Book entry created",
-      "voided": "Draft discarded — record voided"
+      "voided": "Draft discarded — record voided",
+      "wordSessionDiscarded": "Word editing session discarded"
     },
     "completion": {
       "savedToRecords": "Saved to Records",
@@ -2055,6 +2056,9 @@
       "approvedNoName": "Signed · {{date}}",
       "returnedNoName": "Returned:",
       "rejectedNoName": "Rejected:",
+      "approvedNoDate": "Signed by {{name}}",
+      "approvedNoNameNoDate": "Signed",
+      "wordActiveNoName": "Being edited in Word.",
       "voided": "Voided — kept for the record only."
     },
     "paper": {

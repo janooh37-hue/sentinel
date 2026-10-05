@@ -24,6 +24,7 @@ void i18n.use(initReactI18next).init({
       translation: {
         'books.word.finish': 'إنهاء التحرير',
         'books.word.discard': 'تجاهل المسودة…',
+        'books.toast.wordSessionDiscarded': 'أُلغيت جلسة التحرير في Word',
         'books.word.discardConfirm': 'سيصبح الكتاب ملغياً ويبقى رقمه محفوظاً في السجل. متابعة؟',
         'books.toast.voided': 'أُلغيت المسودة — السجل ملغى',
         'books.word.draft': 'مسودة — رقم محجوز',
@@ -211,8 +212,10 @@ describe('Word action components', () => {
   it('(e) discard: click تجاهل → confirm → calls api.discardWordSession, toasts voided, invalidates [books]', async () => {
     const qc = makeQc()
     const spy = vi.spyOn(qc, 'invalidateQueries')
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    vi.spyOn(apiMod.api, 'discardWordSession').mockResolvedValue({} as any)
+    vi.spyOn(apiMod.api, 'discardWordSession').mockResolvedValue({
+      ...ACTIVE_SESSION_BOOK,
+      voided_at: '2026-10-05T00:00:00',
+    })
 
     render(
       createElement(WordSessionActions, { book: ACTIVE_SESSION_BOOK, labelled: true }),
@@ -231,6 +234,22 @@ describe('Word action components', () => {
       const keys = spy.mock.calls.map((c) => JSON.stringify(c[0]?.queryKey))
       expect(keys.some((k) => k.includes('books'))).toBe(true)
     })
+  })
+
+  it('(e3) discarding a re-opened session leaves the book intact: toasts "session discarded", not "voided"', async () => {
+    vi.mocked(toast.success).mockClear()
+    vi.spyOn(apiMod.api, 'discardWordSession').mockResolvedValue({ ...ACTIVE_SESSION_BOOK, voided_at: null })
+    render(
+      createElement(WordSessionActions, { book: ACTIVE_SESSION_BOOK, labelled: true }),
+      { wrapper: wrapper(makeQc()) },
+    )
+    await userEvent.click(screen.getByRole('button', { name: 'تجاهل المسودة…' }))
+    const confirmBtns = await screen.findAllByRole('button', { name: /تجاهل المسودة/ })
+    await userEvent.click(confirmBtns[confirmBtns.length - 1])
+    await waitFor(() =>
+      expect(toast.success).toHaveBeenCalledWith('أُلغيت جلسة التحرير في Word'),
+    )
+    expect(toast.success).not.toHaveBeenCalledWith('أُلغيت المسودة — السجل ملغى')
   })
 
   it('(e2) cancelling the discard confirm sends nothing', async () => {

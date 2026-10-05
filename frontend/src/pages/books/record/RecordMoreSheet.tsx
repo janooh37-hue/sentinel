@@ -245,7 +245,7 @@ export function RecordMoreSheet({
       editingRows.push({
         id: 'replace',
         icon: iconOf(RefreshCw),
-        label: t('books.pane.replacePaper'),
+        label: t('books.pane.replaceSigned'),
         hint: t('books.record.hint.replace'),
         onSelect: pickReplacementFile,
       })

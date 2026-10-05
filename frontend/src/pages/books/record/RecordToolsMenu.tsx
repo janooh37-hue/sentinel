@@ -84,9 +84,11 @@ export function RecordToolsMenu({ book, caps, view, actions }: RecordPieceProps)
       canReroute ||
       canScanSigned ||
       canManageSignedPaper)
-  const showAdmin =
-    !isInmateReporter &&
-    ((canOverrideState && canMutateCurrent) || canManageRevisionAccess || canManageSignedPaper || deleteVisible)
+  // Delete sits last, after its own separator — but only when it follows other
+  // admin items; alone it would put a rule right under the group label.
+  const hasOtherAdmin =
+    (canOverrideState && canMutateCurrent) || canManageRevisionAccess || canManageSignedPaper
+  const showAdmin = !isInmateReporter && (hasOtherAdmin || deleteVisible)
 
   // modal={false}: its items open confirm dialogs, and Radix's modal menu leaves
   // `pointer-events: none` on <body> when a dialog opens from it (page dead after Cancel/Delete).
@@ -215,7 +217,7 @@ export function RecordToolsMenu({ book, caps, view, actions }: RecordPieceProps)
             )}
             {deleteVisible && (
               <>
-                <DropdownMenuSeparator />
+                {hasOtherAdmin && <DropdownMenuSeparator />}
                 <DropdownMenuItem
                   variant="danger"
                   data-testid="record-delete-trigger"
