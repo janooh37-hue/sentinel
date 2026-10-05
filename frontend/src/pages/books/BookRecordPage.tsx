@@ -546,6 +546,7 @@ function BookRecordPageBody(): React.JSX.Element {
     step,
     queue,
     from: backFrom,
+    navState,
   } = useRecordNavContext({
     bookId: Number.isFinite(bookId) ? bookId : null,
     versionId: current?.id ?? null,
@@ -1152,6 +1153,7 @@ function BookRecordPageBody(): React.JSX.Element {
                         effectiveApprovalContext,
                       )
                     : `/books/${nextWaiting.bookId}`,
+                  { replace: true, state: navState },
                 )
               }
               className="inline-flex min-h-11 items-center gap-1.5 rounded-lg bg-primary px-3.5 text-[0.95em] font-semibold text-primary-foreground transition-colors hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none md:min-h-9"

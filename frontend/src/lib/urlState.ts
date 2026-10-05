@@ -70,9 +70,12 @@ export function useUrlOverlay(
       for (const [k, v] of Object.entries(extra ?? {})) params.set(k, v)
       // Switching overlays replaces, so one Back always returns to the page.
       const replace = value !== null && pushedInApp
-      navigate({ search: `?${params}` }, { replace, state: { overlay: true } })
+      // Spread the entry's state so the record's nav context (queue, from,
+      // scrollY) survives while the overlay is open.
+      const carried = typeof location.state === 'object' && location.state !== null ? location.state : {}
+      navigate({ search: `?${params}` }, { replace, state: { ...carried, overlay: true } })
     },
-    [key, location.search, navigate, pushedInApp, value],
+    [key, location.search, location.state, navigate, pushedInApp, value],
   )
 
   const close = useCallback(() => {

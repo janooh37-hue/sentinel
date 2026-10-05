@@ -41,7 +41,6 @@ function Probe({ approvalContext = null }: { approvalContext?: ApprovalContext |
       <output data-testid="at">{location.pathname}{location.search}</output>
       <output data-testid="state">{JSON.stringify(location.state)}</output>
       <output data-testid="queue">{JSON.stringify(nav.queue)}</output>
-      <output data-testid="index">{String(nav.index)}</output>
       <output data-testid="from">{String(nav.from)}</output>
       <button onClick={() => nav.queue.nextId != null && nav.step(nav.queue.nextId, nav.queue.nextVersionId)}>next</button>
       <button onClick={() => nav.back()}>back</button>
@@ -108,15 +107,12 @@ describe('useRecordNavContext', () => {
     const user = userEvent.setup()
     setup()
     await user.click(screen.getByText('open-1'))
-    expect(screen.getByTestId('index')).toHaveTextContent('0')
     expect(screen.getByTestId('from')).toHaveTextContent(FROM)
 
     await user.click(screen.getByText('next'))
     expect(screen.getByTestId('at')).toHaveTextContent('/books/2')
-    expect(screen.getByTestId('index')).toHaveTextContent('1')
     await user.click(screen.getByText('next'))
     expect(screen.getByTestId('at')).toHaveTextContent('/books/3')
-    expect(screen.getByTestId('index')).toHaveTextContent('2')
 
     // The queue survived both steps, still forwarded in history state.
     expect(JSON.parse(screen.getByTestId('state').textContent ?? '')).toEqual({
@@ -167,7 +163,7 @@ describe('useRecordNavContext', () => {
     const user = userEvent.setup()
     const ctx: ApprovalContext = { tab: 'received', kind: 'sign', status: 'pending', sort: 'newest', page: 1 }
     setup(ctx, ['/books/12?paper=signed&tab=received'])
-    await waitFor(() => expect(screen.getByTestId('index')).toHaveTextContent('1'))
+    await waitFor(() => expect(JSON.parse(screen.getByTestId('queue').textContent ?? '').position).toBe(2))
     expect(JSON.parse(screen.getByTestId('queue').textContent ?? '')).toMatchObject({
       prevId: 11,
       prevVersionId: 111,

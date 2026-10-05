@@ -93,15 +93,33 @@ const actions = {
 function LocationProbe(): React.JSX.Element {
   const location = useLocation()
   const navType = useNavigationType()
-  return <output data-testid="loc">{`${location.pathname}${location.search}|${navType}`}</output>
+  return (
+    <>
+      <output data-testid="loc">{`${location.pathname}${location.search}|${navType}`}</output>
+      <output data-testid="loc-state">{JSON.stringify(location.state)}</output>
+    </>
+  )
 }
 
 function renderDesk(
   book: BookRead,
-  { caps = makeCaps(), view = makeView(book), url = '/books/1' } = {},
+  {
+    caps = makeCaps(),
+    view = makeView(book),
+    url = '/books/1',
+    state = undefined as unknown,
+  } = {},
 ): void {
   render(
-    <MemoryRouter initialEntries={[url]}>
+    <MemoryRouter
+      initialEntries={[
+        {
+          pathname: url.split('?')[0],
+          search: url.includes('?') ? `?${url.split('?')[1]}` : '',
+          state,
+        },
+      ]}
+    >
       <RecordChromeProvider>
         <RecordDesk book={book} caps={caps} view={view} actions={actions} />
         <LocationProbe />
@@ -132,6 +150,16 @@ describe('RecordDesk papers', () => {
     // (rendered in the toolbar and in the phone row; CSS shows one per breakpoint)
     expect(screen.getAllByText(/Signed copy ·/).length).toBeGreaterThan(0)
     expect(screen.getAllByText(/^\d{4}-\d{2}-\d{2}$/, { selector: 'bdi' }).length).toBeGreaterThan(0)
+  })
+
+  it('keeps the record nav state (queue / Back target) when a paper is picked', async () => {
+    const user = userEvent.setup()
+    const navState = { from: '/books?status=pending', queue: [1, 2, 3], scrollY: 120 }
+    renderDesk(makeBook(), { url: '/books/1?paper=generated', state: navState })
+    await screen.findByTestId('doc-pdf-canvas')
+    await user.click(within(switcher()!).getByRole('button', { name: 'Signed copy' }))
+    expect(screen.getByTestId('loc')).toHaveTextContent('paper=signed|REPLACE')
+    expect(JSON.parse(screen.getByTestId('loc-state').textContent ?? 'null')).toEqual(navState)
   })
 
   it('honours ?paper= and writes a pick back with replace, leaving other params alone', async () => {

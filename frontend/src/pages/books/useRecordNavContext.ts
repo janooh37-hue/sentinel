@@ -102,8 +102,6 @@ export interface RecordNavContext {
   queue: AwaitingQueue
   /** The originating list URL (no `open`), or null for a direct open. */
   from: string | null
-  /** 0-based position of this record in the queue, null when not queued. */
-  index: number | null
   /** The forwarded state, null when the record was opened directly. */
   navState: RecordNavState | null
 }
@@ -177,7 +175,6 @@ export function useRecordNavContext({
     step,
     queue,
     from: navState ? stripOpenParam(navState.from) : null,
-    index: queue.position === null ? null : queue.position - 1,
     navState,
   }
 }
