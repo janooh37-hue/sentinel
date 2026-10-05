@@ -1003,3 +1003,13 @@ def test_approval_summary_oldest_waiting_stays_the_oldest(api_db: Session):
     summary = _client(api_db, me).get("/api/v1/books/approval-summary").json()
     assert summary["signature"]["count"] == 3
     assert summary["signature"]["oldest"]["book_id"] == 1
+
+
+def test_approval_summary_sent_oldest_stays_the_oldest(api_db: Session):
+    submitter = _user(api_db, "submitter@x.ae", "operator")
+    approver = _user(api_db, "approver@x.ae", "manager")
+    _three_by_age(api_db, submitter=submitter, approver=approver)
+
+    summary = _client(api_db, submitter).get("/api/v1/books/approval-summary").json()
+    assert summary["sent"]["count"] == 3
+    assert summary["sent"]["oldest"]["book_id"] == 1

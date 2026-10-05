@@ -447,11 +447,7 @@ def assert_record_type_visible(db: Session, user: User, row: Book) -> None:
         if newest is None
         else None
     )
-    if draft_service is not None and db.scalar(
-        select(BookEditSession.id)
-        .where(BookEditSession.book_id == row.id, BookEditSession.state == "active")
-        .limit(1)
-    ):
+    if draft_service is not None and has_active_edit_session(db, row.id):
         service_id = draft_service
     else:
         service_id = resolve_service(
@@ -1068,6 +1064,18 @@ def is_deletable(book: Book, has_active_session: bool) -> bool:
     )
 
 
+def has_active_edit_session(db: Session, book_id: int) -> bool:
+    """True when ``book_id`` has an active Word edit session."""
+    return (
+        db.scalar(
+            select(BookEditSession.id)
+            .where(BookEditSession.book_id == book_id, BookEditSession.state == "active")
+            .limit(1)
+        )
+        is not None
+    )
+
+
 def delete_book(db: Session, book_id: int) -> None:
     """Soft-delete: set deleted_at.  Ref number is NOT released.
 
@@ -1075,14 +1083,7 @@ def delete_book(db: Session, book_id: int) -> None:
     approved (or awaiting a scan), or has an active Word edit session.
     """
     row = get_book(db, book_id)
-    has_active_session = (
-        db.scalar(
-            select(BookEditSession.id)
-            .where(BookEditSession.book_id == row.id, BookEditSession.state == "active")
-            .limit(1)
-        )
-        is not None
-    )
+    has_active_session = has_active_edit_session(db, row.id)
     if not is_deletable(row, has_active_session):
         raise AppError(
             "BOOK_NOT_DELETABLE",
@@ -2544,7 +2545,7 @@ def approval_summary(db: Session, user: User) -> ApprovalSummaryResponse:
     reviewer_history = _approval_worklist(db, user, kind="reviewer", status="all")
     can_view_sent = perm_service.has_capability(db, user, "books.view")
     sent_items, sent_total = (
-        approval_log_sent(db, user=user, limit=1, offset=0, status="pending")
+        approval_log_sent(db, user=user, limit=1, offset=0, status="pending", sort="oldest")
         if can_view_sent
         else ([], 0)
     )
@@ -2581,6 +2582,11 @@ def approval_summary(db: Session, user: User) -> ApprovalSummaryResponse:
         returned_count=returned_total,
         actionable_count=len(actionable_books),
     )
+
+
+def user_display_name(db: Session, user: User) -> str:
+    """Public form of the display-name resolution for an already-fetched user."""
+    return _resolve_user_name(db, user)
 
 
 def _resolve_user_name(db: Session, user: User) -> str:
