@@ -18,7 +18,8 @@ const COPY = {
   en: {
     classification: 'Classification*',
     create: 'Create & open in Word',
-    discard: 'Discard',
+    discard: 'Discard draft…',
+    discardConfirm: 'Discard draft',
     finish: 'Finish editing',
     finishedPrefix: 'Book saved',
     lock: 'App locked',
@@ -32,7 +33,8 @@ const COPY = {
   ar: {
     classification: 'التبويب*',
     create: 'إنشاء وفتح في Word',
-    discard: 'تجاهل',
+    discard: 'إلغاء المسودة…',
+    discardConfirm: 'إلغاء المسودة',
     finish: 'إنهاء التحرير',
     finishedPrefix: 'تم حفظ الكتاب',
     lock: 'التطبيق مقفل',
@@ -1150,7 +1152,7 @@ test('late create response replaces the prior token only after unlock and does n
   const firstDialog = handoffDialog(page, locale)
   await firstDialog.getByRole('button', { name: COPY.en.discard, exact: true }).click()
   const confirmation = page.getByRole('dialog', { name: COPY.en.discard, exact: true })
-  await confirmation.getByRole('button', { name: 'Confirm', exact: true }).click()
+  await confirmation.getByRole('button', { name: COPY.en.discardConfirm, exact: true }).click()
   await expect(firstDialog).toBeHidden()
   expect(backend.discardedBookIds).toEqual([first.id])
 
@@ -1189,8 +1191,10 @@ test('late Records reopen response stays behind the lock and presents once after
   await expect(page.getByText(existing.ref_number, { exact: true }).first()).toBeVisible()
 
   const releaseReopen = backend.deferNextReopen()
+  // "Edit in Word" lives in the record pane's More menu (not a footer button).
+  await page.getByRole('button', { name: 'More', exact: true }).click()
   await page
-    .getByRole('button', { name: 'Edit in Word (creates a new version)', exact: true })
+    .getByRole('menuitem', { name: 'Edit in Word (creates a new version)', exact: true })
     .click()
   await expect.poll(() => backend.reopenedBookIds).toEqual([existing.id])
   await idleLock(page, locale, 'band')

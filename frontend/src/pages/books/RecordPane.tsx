@@ -383,11 +383,11 @@ export function RecordPane({
   const scanSignedShown = workflow.some((a) => a.id === 'scanSigned')
 
   // ── More ▾ ────────────────────────────────────────────────────────────────
-  const hasWordReopen =
-    (!isInmateReporter || isInmateReport) &&
-    !book.voided_at &&
-    (versions.length > 0 || isWordBook) &&
-    book.edit_session?.state !== 'active'
+  // WordReopenButton gates its own trigger (finished, not voided, no active session) but
+  // must stay mounted for the whole record: the reopen response flips `edit_session`
+  // active, and unmounting then would drop the retained handoff session (a late
+  // response behind the lock screen would never present after unlock).
+  const hasWordReopen = !isInmateReporter || isInmateReport
   const showScanSignedInMenu = ns.overflow.includes('scanSigned') && !scanSignedShown
   const showAddToPdf = canManageIncludedPapers
   const showEmail = !isInmateReporter && ns.overflow.includes('email')

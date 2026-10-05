@@ -68,6 +68,9 @@ const NO_REPEAT: Readonly<Partial<Record<ShortcutAction, true>>> = {
   zoomFit: true,
 }
 
+/** The lock screen (`LockOverlay`) — while mounted, no shortcut may act. */
+const LOCK_OVERLAY_SELECTOR = '[data-lock-overlay]'
+
 const OVERLAY_SELECTOR = [
   '[role="dialog"][data-state="open"]',
   '[role="alertdialog"][data-state="open"]',
@@ -114,6 +117,10 @@ export function KeyboardShortcutsProvider({
 
   useEffect(() => {
     function onKeyDown(e: KeyboardEvent): void {
+      // The lock screen swallows every key (it stops propagation at its own
+      // root), but this listener runs in the capture phase and would otherwise
+      // fire first: no shortcut, help sheet or Esc resolver may run beneath it.
+      if (document.querySelector(LOCK_OVERLAY_SELECTOR)) return
       const mod = e.ctrlKey || e.metaKey
 
       if (mod) {

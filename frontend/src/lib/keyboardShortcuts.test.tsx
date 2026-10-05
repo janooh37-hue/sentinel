@@ -331,6 +331,38 @@ describe('escape', () => {
   })
 })
 
+describe('lock screen', () => {
+  it('suppresses every layer (bare, modifier, Esc, help) while the lock overlay is mounted', () => {
+    const next = vi.fn()
+    const esc = vi.fn()
+    const search = vi.fn()
+    const create = vi.fn()
+    renderWith(
+      <>
+        <Probe action="recordNext" handler={next} />
+        <Probe action="escape" handler={esc} />
+        <Probe action="focusSearch" handler={search} />
+        <Probe action="newItem" handler={create} />
+        <div role="dialog" data-state="open" data-lock-overlay="true">
+          <button type="button">Show password</button>
+        </div>
+      </>,
+    )
+    const button = screen.getByRole('button', { name: 'Show password' })
+    expect(press({ key: 'j', code: 'KeyJ' }, button)).toBe(true)
+    expect(press({ key: 'Escape', code: 'Escape' }, button)).toBe(true)
+    expect(press({ key: 'k', code: 'KeyK', ctrlKey: true }, button)).toBe(true)
+    expect(press({ key: 'n', code: 'KeyN', ctrlKey: true }, button)).toBe(true)
+    expect(press({ key: '/', code: 'Slash', ctrlKey: true }, button)).toBe(true)
+    expect(press({ key: '?', code: 'Slash', shiftKey: true }, button)).toBe(true)
+    expect(next).not.toHaveBeenCalled()
+    expect(esc).not.toHaveBeenCalled()
+    expect(search).not.toHaveBeenCalled()
+    expect(create).not.toHaveBeenCalled()
+    expect(screen.getByTestId('help')).toHaveTextContent('closed')
+  })
+})
+
 describe('help', () => {
   it('? opens the help sheet; Escape closes it without running the page resolver', () => {
     const esc = vi.fn()
