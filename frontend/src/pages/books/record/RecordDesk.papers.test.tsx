@@ -255,4 +255,54 @@ describe('RecordDesk Word banner', () => {
     await user.click(screen.getByRole('button', { name: 'Show saved version' }))
     expect((await screen.findByTestId('doc-pdf-canvas')).dataset.url).toContain('/api/v1/documents/10/download')
   })
+
+  it('returns to a saved paper when the switcher is used while the live draft is on', async () => {
+    const user = userEvent.setup()
+    const book = wordBook({ attachment_paths: ['vault/scan-a.pdf'] })
+    renderDesk(book, { view: makeView(book, { state: 'none' }) })
+
+    await user.click(screen.getByRole('button', { name: 'Show live draft' }))
+    expect((await screen.findByTestId('doc-pdf-canvas')).dataset.url).toContain('/word-sessions/preview')
+
+    await user.click(within(switcher()!).getByRole('button', { name: 'Scan 1' }))
+    expect(screen.getByTestId('doc-pdf-canvas').dataset.url).not.toContain('/word-sessions/preview')
+    expect(screen.getByRole('button', { name: 'Show live draft' })).toBeInTheDocument()
+  })
+
+  it('offers Expand only while the desk shows a saved paper, never the live draft', async () => {
+    const user = userEvent.setup()
+    const book = wordBook()
+    renderDesk(book, { view: makeView(book, { state: 'none' }) })
+
+    expect(screen.getByRole('button', { name: 'Expand' })).toBeInTheDocument()
+    await user.click(screen.getByRole('button', { name: 'Show live draft' }))
+    expect(screen.queryByRole('button', { name: 'Expand' })).not.toBeInTheDocument()
+  })
+
+  it('offers no Expand when there is no paper at all', () => {
+    const book = wordBook({
+      versions: [{ id: 5, version_no: 1, status: 'draft', document_id: null, signed_pdf_url: null, approval_steps: [] }],
+    })
+    renderDesk(book, { view: makeView(book, { state: 'none' }) })
+    expect(screen.queryByRole('button', { name: 'Expand' })).not.toBeInTheDocument()
+  })
+})
+
+describe('RecordDesk zoom', () => {
+  it('ignores a stored numeric zoom for an image scan, which has no zoom controls', async () => {
+    localStorage.setItem('gssg.books.record.zoom', JSON.stringify(3))
+    const book = makeBook({ attachment_paths: ['vault/scan-a.png'] })
+    renderDesk(book, { url: '/books/1?paper=scan-0' })
+
+    expect(await screen.findByRole('img')).toBeInTheDocument()
+    const paper = document.querySelector<HTMLElement>('[data-record-paper]')!
+    expect(paper.style.width).toBe('100%')
+  })
+
+  it('still applies the stored zoom to a PDF', async () => {
+    localStorage.setItem('gssg.books.record.zoom', JSON.stringify(2))
+    renderDesk(makeBook())
+    await screen.findByTestId('doc-pdf-canvas')
+    expect(document.querySelector<HTMLElement>('[data-record-paper]')!.style.width).toBe('1588px')
+  })
 })

@@ -49,6 +49,15 @@ export function FullscreenViewer({
 
   const paper = papers.find((p) => paperKey(p) === selectedKey) ?? papers[0]
 
+  // A new paper starts fit-to-width on its first page, not at the last one's zoom and page.
+  const currentKey = paper ? paperKey(paper) : null
+  const [shownKey, setShownKey] = useState(currentKey)
+  if (shownKey !== currentKey) {
+    setShownKey(currentKey)
+    setZoom(1)
+    setPage(null)
+  }
+
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent): void => {
       if (e.key === 'Escape') {

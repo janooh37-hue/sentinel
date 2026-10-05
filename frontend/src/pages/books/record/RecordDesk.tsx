@@ -155,8 +155,12 @@ export function RecordDesk({ book, caps, view, actions }: RecordPieceProps): Rea
         ? defaultPaperKey(book, papers)
         : null
   const selectedPaper = papers.find((p) => paperKey(p) === selectedKey)
+  // The Word live draft (opt-in, never polled) outranks the picked paper on the desk.
+  const [liveFor, setLiveFor] = useState<number | null>(null)
+  // Picking a paper leaves the live draft; the banner toggle brings it back.
   const selectKey = useCallback(
     (key: PaperKey): void => {
+      setLiveFor(null)
       setSearchParams(
         (prev) => {
           const next = new URLSearchParams(prev)
@@ -173,7 +177,6 @@ export function RecordDesk({ book, caps, view, actions }: RecordPieceProps): Rea
   const sessionBook = book && !book.voided_at && book.edit_session?.state === 'active' ? book : undefined
   const session = sessionBook?.edit_session
   const canShowLive = !!sessionBook && caps.canEdit && sessionBook.access_scope !== 'assigned_revision'
-  const [liveFor, setLiveFor] = useState<number | null>(null)
   const liveActive = canShowLive && liveFor === bookId
   const liveUrl =
     liveActive && sessionBook && session
@@ -204,10 +207,18 @@ export function RecordDesk({ book, caps, view, actions }: RecordPieceProps): Rea
   }
 
   const hasDocument = papers.length > 0 || liveActive
+  // The full-screen viewer shows the saved papers, never the live draft, so
+  // Expand / `F` are offered only when the desk shows one of them.
+  const expandable = papers.length > 0 && !liveActive
+  const printRequested = searchParams.get('print') === '1'
   useShortcutAction('focusDocument', () => {
-    if (!hasDocument) return false
-    if (isMobile) chrome.setFullscreen(!chrome.fullscreen)
-    else chrome.setFocus(!chrome.focus)
+    if (isMobile) {
+      if (!expandable) return false
+      chrome.setFullscreen(!chrome.fullscreen)
+    } else {
+      if (!hasDocument) return false
+      chrome.setFocus(!chrome.focus)
+    }
   })
   useShortcutAction('zoomIn', () => (canZoom ? stepZoom(1) : false))
   useShortcutAction('zoomOut', () => (canZoom ? stepZoom(-1) : false))
@@ -268,7 +279,7 @@ export function RecordDesk({ book, caps, view, actions }: RecordPieceProps): Rea
   ) : null
 
   const paperStyle: React.CSSProperties =
-    zoom === 'fit' || isMobile
+    zoom === 'fit' || isMobile || deskUrl === null
       ? { width: '100%', maxWidth: 'var(--paper-w)' }
       : { width: Math.round(PAPER_ACTUAL_PX * zoom) }
 
@@ -281,6 +292,7 @@ export function RecordDesk({ book, caps, view, actions }: RecordPieceProps): Rea
           docxUrl={onGenerated || liveActive ? (current?.docx_url ?? undefined) : undefined}
           sizing="fit"
           bare
+          eager={printRequested}
           onReady={onPdfReady}
           onPageChange={(p, total) => setPageInfo({ url: deskUrl, page: p, total })}
           renderOverlay={
@@ -430,7 +442,7 @@ export function RecordDesk({ book, caps, view, actions }: RecordPieceProps): Rea
           className="print-paper relative mx-auto shrink-0"
           style={paperStyle}
         >
-          {deskUrl !== null || selectedPaper ? (
+          {expandable ? (
             <button
               type="button"
               data-print-hide
@@ -470,7 +482,7 @@ export function RecordDesk({ book, caps, view, actions }: RecordPieceProps): Rea
         )}
       </div>
 
-      {chrome.fullscreen && papers.length > 0 && (
+      {chrome.fullscreen && expandable && (
         <FullscreenViewer
           papers={papers}
           labels={labels}
