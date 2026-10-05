@@ -41,7 +41,7 @@ function vehicle(overrides: Partial<VehicleListItem> = {}): VehicleListItem {
 }
 
 describe('buildVehicleTable', () => {
-  it('builds exactly five cells and leaves a missing insurance date blank', () => {
+  it('includes every field, VIN included, and leaves missing values blank', () => {
     const table = buildVehicleTable(
       [vehicle({ insurance_expiry: null, type_en: 'Toyota\n\t  Coaster' })],
       'en',
@@ -52,21 +52,32 @@ describe('buildVehicleTable', () => {
     expect(table.headers).toEqual([
       'Plate',
       'Type',
+      'vehicles.vin',
+      'vehicles.trafficCode',
+      'vehicles.class',
+      'vehicles.make',
+      'vehicles.model',
+      'vehicles.modelYear',
+      'vehicles.colour',
       'License start',
       'License expiry',
       'Insurance expiry',
     ])
-    expect(table.headers).toHaveLength(5)
-    expect(table.rows[0]).toHaveLength(5)
     expect(table.rows[0]).toEqual([
       '14 \\ 005821',
       'Toyota Coaster',
+      'JT123456789000101',
+      '1180021637',
+      'Light bus',
+      '',
+      '',
+      '',
+      '',
       '02/01/2026',
       '31/12/2026',
       '',
     ])
-    expect(table.rows[0][4]).not.toBe(EMPTY_VALUE)
-    expect(table.rows[0][4]).not.toMatch(/\d/u)
+    expect(table.rows[0]).not.toContain(EMPTY_VALUE)
   })
 
   it('uses RTL direction and the Arabic type for an Arabic locale', () => {
