@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
 import { EmployeeBadgeCard } from './EmployeeBadgeCard'
 import { DutyLocationActivity } from './DutyLocationActivity'
+import { StatusActivity } from './StatusActivity'
 import { EmployeeActivityLookup } from './EmployeeActivityLookup'
 import { api, type EmployeeActivityItemRead, type EmployeeActivityKind, type EmployeeListItem } from '@/lib/api'
 import { pickEmployeeName } from '@/lib/employeeName'
@@ -36,6 +37,11 @@ const KIND_STYLES: Record<EmployeeActivityKind, { soft: string; color: string; i
     color: 'var(--primary-on-soft)',
     icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M12 21s7-6 7-12a7 7 0 1 0-14 0c0 6 7 12 7 12Zm0-9.5h.01" /></svg>,
   },
+  status: {
+    soft: 'var(--info-soft)',
+    color: 'var(--info)',
+    icon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M4 8h13m-4-4 4 4-4 4M20 16H7m4-4-4 4 4 4" /></svg>,
+  },
 }
 
 function activityHref(item: EmployeeActivityItemRead): string {
@@ -50,6 +56,8 @@ function activityHref(item: EmployeeActivityItemRead): string {
       return `/ledger?mail=${item.source_id}`
     case 'duty_location':
       return `/employees/${encodeURIComponent(item.employee_id)}?tab=activity`
+    case 'status':
+      return `/employees/${encodeURIComponent(item.employee_id)}`
   }
 }
 
@@ -159,7 +167,7 @@ export function EmployeeActivitySection({ onOpenProfile }: EmployeeActivitySecti
             <div className="mb-6 flex flex-wrap items-center gap-2.5">
               <EmployeeActivityLookup onSelect={handleEmployeeSelect} onOpenProfile={onOpenProfile} />
               <div role="group" aria-label={t('employees.activity.typeLabel')} className="flex flex-wrap gap-1.5">
-                {(['all', 'document', 'leave', 'violation', 'ledger', 'duty_location'] as const).map((value) => (
+                {(['all', 'document', 'leave', 'violation', 'ledger', 'duty_location', 'status'] as const).map((value) => (
                   <button
                     key={value}
                     type="button"
@@ -282,7 +290,7 @@ function ActivityRow({
     .join('')
     .toUpperCase()
   const date = new Date(item.occurred_at)
-  const action = item.kind === 'duty_location'
+  const action = item.kind === 'duty_location' || item.kind === 'status'
     ? null
     : t(
         `employees.activity.actions.${item.kind}`,
@@ -290,6 +298,8 @@ function ActivityRow({
       )
   const destinationKey = item.kind === 'duty_location'
     ? 'employees.activity.dutyLocation.openEmployeeActivity'
+    : item.kind === 'status'
+      ? 'employees.activity.statusEvent.openProfile'
     : {
         document: 'employees.activity.openDocument',
         leave: 'employees.activity.openLeave',
@@ -309,6 +319,8 @@ function ActivityRow({
       <span className="min-w-0 flex-1">
         {item.kind === 'duty_location' ? (
           <DutyLocationActivity item={item} />
+        ) : item.kind === 'status' ? (
+          <StatusActivity item={item} />
         ) : (
           <>
             <span dir="auto" className="block truncate text-sm font-semibold text-foreground">{item.title}</span>

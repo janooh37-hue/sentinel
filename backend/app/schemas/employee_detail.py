@@ -18,6 +18,7 @@ from pydantic import BaseModel, Field
 
 from app.schemas._base import ORMBase
 from app.schemas.employee import EmployeeRead
+from app.schemas.employee_activity import StatusEventKind, StatusEventSource
 from app.schemas.employee_completeness import CompletenessRead
 from app.schemas.linked_document import LinkedDocumentRead
 from app.schemas.notify import NotifyMessageRead as NotifyMessageRead
@@ -79,7 +80,7 @@ class RecentLedgerRead(ORMBase):
 
 class ActivityItemRead(ORMBase):
     when: datetime
-    kind: Literal["document", "leave", "violation", "ledger", "absence", "duty_location"]
+    kind: Literal["document", "leave", "violation", "ledger", "absence", "duty_location", "status"]
     summary: str
     ref_id: int
     event_type: Literal["initial_placement", "transfer"] | None = None
@@ -90,6 +91,15 @@ class ActivityItemRead(ORMBase):
     to_unit: str | None = None
     to_post: str | None = None
     reason: str | None = None
+    # kind == "status" only (see EmployeeStatusEvent).
+    from_status: str | None = None
+    to_status: str | None = None
+    effective_date: date_t | None = None
+    site: str | None = None
+    return_date: date_t | None = None
+    status_event_kind: StatusEventKind | None = None
+    status_source: StatusEventSource | None = None
+    actor_name: str | None = None
 
 
 class EmployeeDetailRead(BaseModel):

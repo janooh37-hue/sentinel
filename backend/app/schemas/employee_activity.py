@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import Literal
 
 from pydantic import BaseModel
@@ -8,7 +8,12 @@ from pydantic import BaseModel
 from app.schemas._base import ORMBase
 
 DutyLocationEventType = Literal["initial_placement", "transfer"]
-EmployeeActivityKind = Literal["document", "leave", "violation", "ledger", "duty_location"]
+EmployeeActivityKind = Literal[
+    "document", "leave", "violation", "ledger", "duty_location", "status"
+]
+# `employee_status_events.kind` / `.source` — see EmployeeStatusEvent.
+StatusEventKind = Literal["changed", "scheduled", "scheduled_cancelled", "applied", "imported"]
+StatusEventSource = Literal["manual", "resignation_letter", "scheduler", "backfill"]
 
 
 class EmployeeActivityItemRead(ORMBase):
@@ -35,6 +40,16 @@ class EmployeeActivityItemRead(ORMBase):
     to_unit: str | None = None
     to_post: str | None = None
     reason: str | None = None
+
+    # kind == "status" only.
+    from_status: str | None = None
+    to_status: str | None = None
+    effective_date: date | None = None
+    site: str | None = None
+    return_date: date | None = None
+    status_event_kind: StatusEventKind | None = None
+    status_source: StatusEventSource | None = None
+    actor_name: str | None = None
 
 
 class EmployeeActivityListRead(BaseModel):

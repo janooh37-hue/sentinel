@@ -2,16 +2,20 @@
  * Zod schema mirroring `EmployeeCreate` / `EmployeeUpdate`.
  *
  * Front-of-mind invariants:
- *   * Canonical statuses ("Active" | "Resigned" | "Terminated") — UI shows
+ *   * Canonical statuses ("Active" | "Resigned" | "Terminated" | "Transferred") — UI shows
  *     bilingual labels via i18n, but the wire/DB value is the English key.
  *   * status ≠ Active ⇒ end_date is required (mirrors the Pydantic validator
  *     and v3.5.4's `_emp_sync_end_date_widget`). Failing this client-side
  *     gives an instant error while the server still validates.
+ *   * status = Transferred ⇒ transfer_site is required; transfer_return_date
+ *     is optional but must be after end_date (the effective date).
+ *   * effective_date is the RETURN date recorded when a non-Active employee
+ *     is reactivated (write-only; the form clears it otherwise).
  */
 
 import { z } from 'zod'
 
-export const EMPLOYEE_STATUSES = ['Active', 'Resigned', 'Terminated'] as const
+export const EMPLOYEE_STATUSES = ['Active', 'Resigned', 'Terminated', 'Transferred'] as const
 export type EmployeeStatusKey = (typeof EMPLOYEE_STATUSES)[number]
 
 // Strings come in as either ISO yyyy-MM-dd (HTML date input) or empty; we
@@ -41,6 +45,9 @@ export const employeeFormSchema = z
     doj_company: optionalDate,
     status: z.enum(EMPLOYEE_STATUSES),
     end_date: optionalDate,
+    transfer_site: optionalText(128),
+    transfer_return_date: optionalDate,
+    effective_date: optionalDate,
     department: optionalText(128),
     position: optionalText(128),
     position_ar: optionalText(128),
@@ -61,6 +68,19 @@ export const employeeFormSchema = z
         path: ['end_date'],
         message: 'endDateRequired',
       })
+    }
+    if (data.status === 'Transferred') {
+      if (!data.transfer_site) {
+        ctx.addIssue({ code: 'custom', path: ['transfer_site'], message: 'transferSiteRequired' })
+      }
+      // ISO yyyy-MM-dd strings compare correctly as text.
+      if (data.transfer_return_date && data.end_date && data.transfer_return_date <= data.end_date) {
+        ctx.addIssue({
+          code: 'custom',
+          path: ['transfer_return_date'],
+          message: 'returnAfterEffective',
+        })
+      }
     }
   })
 

@@ -98,7 +98,10 @@ export function EmployeeLookupPage(): React.JSX.Element {
   )
 
   const submitCreate = async (values: EmployeeFormOutput): Promise<void> => {
-    await createMutation.mutateAsync(values satisfies EmployeeCreate)
+    // `effective_date` is the write-only reactivation return date — update only.
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const { effective_date: _ignored, ...createValues } = values
+    await createMutation.mutateAsync(createValues satisfies EmployeeCreate)
   }
 
   const handleSelect = useCallback(

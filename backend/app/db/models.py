@@ -71,6 +71,12 @@ class Employee(Base):
     # pending departure. Only ever 'Resigned' or 'Terminated': written by the
     # Resignation Letter and by update_employee, cleared on flip or cancel.
     pending_status: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    # Destination site while Transferred, or while a transfer is pending
+    # (`pending_status == 'Transferred'`). Cleared on leaving Transferred.
+    transfer_site: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    # Expected return of a temporary transfer: the daily job reactivates the
+    # employee on this date. NULL = open-ended transfer.
+    transfer_return_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     department: Mapped[str | None] = mapped_column(String(128), nullable=True)
     position: Mapped[str | None] = mapped_column(String(128), nullable=True)
     position_ar: Mapped[str | None] = mapped_column(String(128), nullable=True)
@@ -111,6 +117,42 @@ class Employee(Base):
     __table_args__ = (
         Index("ix_employees_status", "status"),
         Index("ix_employees_supervisor_id", "supervisor_id"),
+    )
+
+
+class EmployeeStatusEvent(Base):
+    """Append-only history of an employee's status (migration 0094).
+
+    One row per real change from any writer — the status dialog / form, the
+    Resignation Letter, the daily scheduler — plus one ``imported`` row per
+    employee who was already non-Active when history began. Surfaced as the
+    ``status`` kind in the employee Activity tab.
+
+    ``kind``: changed | scheduled | scheduled_cancelled | applied | imported.
+    ``source``: manual | resignation_letter | scheduler | backfill.
+    ``effective_date`` is the business date (departure / return); ``created_at``
+    is when it was saved.
+    """
+
+    __tablename__ = "employee_status_events"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    employee_id: Mapped[str] = mapped_column(
+        String(16), ForeignKey("employees.id", ondelete="CASCADE"), nullable=False
+    )
+    from_status: Mapped[str] = mapped_column(String(32), nullable=False)
+    to_status: Mapped[str] = mapped_column(String(32), nullable=False)
+    effective_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    site: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    # Expected return date of a temporary transfer, as known when recorded.
+    return_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    kind: Mapped[str] = mapped_column(String(32), nullable=False)
+    source: Mapped[str] = mapped_column(String(32), nullable=False)
+    actor_user_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, nullable=False)
+
+    __table_args__ = (
+        Index("ix_employee_status_events_employee_created", "employee_id", "created_at"),
     )
 
 

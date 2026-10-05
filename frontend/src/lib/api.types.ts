@@ -6600,7 +6600,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "document" | "leave" | "violation" | "ledger" | "absence" | "duty_location";
+            kind: "document" | "leave" | "violation" | "ledger" | "absence" | "duty_location" | "status";
             /** Summary */
             summary: string;
             /** Ref Id */
@@ -6621,6 +6621,22 @@ export interface components {
             to_post?: string | null;
             /** Reason */
             reason?: string | null;
+            /** From Status */
+            from_status?: string | null;
+            /** To Status */
+            to_status?: string | null;
+            /** Effective Date */
+            effective_date?: string | null;
+            /** Site */
+            site?: string | null;
+            /** Return Date */
+            return_date?: string | null;
+            /** Status Event Kind */
+            status_event_kind?: ("changed" | "scheduled" | "scheduled_cancelled" | "applied" | "imported") | null;
+            /** Status Source */
+            status_source?: ("manual" | "resignation_letter" | "scheduler" | "backfill") | null;
+            /** Actor Name */
+            actor_name?: string | null;
         };
         /**
          * AddressBookContactCreate
@@ -9416,7 +9432,7 @@ export interface components {
              * Kind
              * @enum {string}
              */
-            kind: "document" | "leave" | "violation" | "ledger" | "duty_location";
+            kind: "document" | "leave" | "violation" | "ledger" | "duty_location" | "status";
             /** Source Id */
             source_id: number;
             /** Target Id */
@@ -9462,6 +9478,22 @@ export interface components {
             to_post?: string | null;
             /** Reason */
             reason?: string | null;
+            /** From Status */
+            from_status?: string | null;
+            /** To Status */
+            to_status?: string | null;
+            /** Effective Date */
+            effective_date?: string | null;
+            /** Site */
+            site?: string | null;
+            /** Return Date */
+            return_date?: string | null;
+            /** Status Event Kind */
+            status_event_kind?: ("changed" | "scheduled" | "scheduled_cancelled" | "applied" | "imported") | null;
+            /** Status Source */
+            status_source?: ("manual" | "resignation_letter" | "scheduler" | "backfill") | null;
+            /** Actor Name */
+            actor_name?: string | null;
         };
         /** EmployeeActivityListRead */
         EmployeeActivityListRead: {
@@ -9657,9 +9689,13 @@ export interface components {
              * @default Active
              * @enum {string}
              */
-            status: "Active" | "Resigned" | "Terminated";
+            status: "Active" | "Resigned" | "Terminated" | "Transferred";
             /** End Date */
             end_date?: string | null;
+            /** Transfer Site */
+            transfer_site?: string | null;
+            /** Transfer Return Date */
+            transfer_return_date?: string | null;
             /** Department */
             department?: string | null;
             /** Position */
@@ -9732,7 +9768,7 @@ export interface components {
              * Status
              * @enum {string}
              */
-            status: "Active" | "Resigned" | "Terminated";
+            status: "Active" | "Resigned" | "Terminated" | "Transferred";
             /** Department */
             department: string | null;
             /** Position */
@@ -9753,7 +9789,11 @@ export interface components {
             /** End Date */
             end_date?: string | null;
             /** Pending Status */
-            pending_status?: ("Active" | "Resigned" | "Terminated") | null;
+            pending_status?: ("Active" | "Resigned" | "Terminated" | "Transferred") | null;
+            /** Transfer Site */
+            transfer_site?: string | null;
+            /** Transfer Return Date */
+            transfer_return_date?: string | null;
         };
         /** EmployeeListResponse */
         EmployeeListResponse: {
@@ -9784,11 +9824,15 @@ export interface components {
              * Status
              * @enum {string}
              */
-            status: "Active" | "Resigned" | "Terminated";
+            status: "Active" | "Resigned" | "Terminated" | "Transferred";
             /** End Date */
             end_date: string | null;
             /** Pending Status */
-            pending_status: ("Active" | "Resigned" | "Terminated") | null;
+            pending_status: ("Active" | "Resigned" | "Terminated" | "Transferred") | null;
+            /** Transfer Site */
+            transfer_site?: string | null;
+            /** Transfer Return Date */
+            transfer_return_date?: string | null;
             /** Department */
             department: string | null;
             /** Position */
@@ -9877,9 +9921,15 @@ export interface components {
             /** Doj Company */
             doj_company?: string | null;
             /** Status */
-            status?: ("Active" | "Resigned" | "Terminated") | null;
+            status?: ("Active" | "Resigned" | "Terminated" | "Transferred") | null;
             /** End Date */
             end_date?: string | null;
+            /** Transfer Site */
+            transfer_site?: string | null;
+            /** Transfer Return Date */
+            transfer_return_date?: string | null;
+            /** Effective Date */
+            effective_date?: string | null;
             /** Department */
             department?: string | null;
             /** Position */
@@ -16814,7 +16864,7 @@ export interface operations {
         parameters: {
             query?: {
                 employee_id?: string | null;
-                kind?: ("document" | "leave" | "violation" | "ledger" | "duty_location") | null;
+                kind?: ("document" | "leave" | "violation" | "ledger" | "duty_location" | "status") | null;
                 limit?: number;
                 offset?: number;
             };

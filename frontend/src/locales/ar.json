@@ -357,7 +357,8 @@
       "active": "نشط",
       "onLeave": "في إجازة",
       "resigned": "مستقيل",
-      "terminated": "مفصول"
+      "terminated": "مفصول",
+      "transferred": "منقول"
     },
     "statusPill": {
       "onLeave": "في إجازة",
@@ -395,6 +396,10 @@
       "position_ar": "المسمى الوظيفي (عربي)",
       "status": "الحالة",
       "end_date": "تاريخ نهاية الخدمة",
+      "effective_date": "تاريخ السريان",
+      "transfer_site": "موقع النقل",
+      "transfer_return_date": "تاريخ العودة المتوقع",
+      "return_date": "تاريخ العودة",
       "passport_no": "رقم الجواز",
       "passport_expiry": "انتهاء صلاحية الجواز",
       "uae_id_no": "رقم الهوية الإماراتية",
@@ -410,13 +415,22 @@
     "status": {
       "Active": "نشط",
       "Resigned": "مستقيل",
-      "Terminated": "مفصول"
+      "Terminated": "مفصول",
+      "Transferred": "منقول"
+    },
+    "statusDetail": {
+      "dated": "{{status}} · {{date}}",
+      "transferredSite": "{{status}} · {{site}} · {{date}}",
+      "transferredReturn": "{{status}} · {{date}} ← {{returnDate}}",
+      "transferredSiteReturn": "{{status}} · {{site}} · {{date}} ← {{returnDate}}"
     },
     "statusDialog": {
       "title": "تغيير الحالة"
     },
     "validation": {
       "endDateRequired": "تاريخ نهاية الخدمة مطلوب عند تغيير الحالة عن نشط",
+      "transferSiteRequired": "موقع النقل مطلوب عند النقل",
+      "returnAfterEffective": "يجب أن يكون تاريخ العودة المتوقع بعد تاريخ سريان النقل",
       "idRequired": "رقم الموظف مطلوب",
       "nameEnRequired": "الاسم بالإنجليزية مطلوب"
     },
@@ -424,7 +438,8 @@
       "total": "إجمالي الموظفين",
       "active": "نشط",
       "resigned": "مستقيل",
-      "terminated": "مفصول"
+      "terminated": "مفصول",
+      "transferred": "منقول"
     },
     "list": {
       "empty": "لا يوجد موظفون",
@@ -503,6 +518,7 @@
       "violation": "المخالفات",
       "ledger": "المراسلات",
       "duty_location": "موقع العمل",
+      "status": "تغييرات الحالة",
       "employee": "الموظف",
       "activity": "النشاط",
       "type": "النوع",
@@ -520,6 +536,21 @@
         "unassigned": "غير محدد",
         "openEmployeeActivity": "فتح نشاط الموظف",
         "historyBegins": "يبدأ السجل من"
+      },
+      "statusEvent": {
+        "change": "{{from}} ← {{to}}",
+        "initial": "سُجّل كـ {{to}}",
+        "returned": "العودة إلى الخدمة",
+        "scheduled": "مجدول: {{from}} ← {{to}}",
+        "scheduledCancelled": "أُلغي التغيير المجدول إلى {{to}}",
+        "effective": "اعتبارًا من {{date}}",
+        "returnedOn": "العودة بتاريخ {{date}}",
+        "expectedReturn": "العودة المتوقعة {{date}}",
+        "imported": "سجل قائم مسبقًا",
+        "bySchedulerAuto": "طُبّق تلقائيًا",
+        "fromResignationLetter": "من خطاب الاستقالة",
+        "by": "بواسطة {{name}}",
+        "openProfile": "فتح ملف الموظف"
       },
       "loadMore": "تحميل المزيد من الأنشطة",
       "loading": "جارٍ تحميل النشاط الأخير",

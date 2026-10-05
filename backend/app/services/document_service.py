@@ -82,6 +82,12 @@ from app.services import (
     manager_service,
 )
 from app.services._pdf_executor import convert_docx_to_pdf as convert_docx_to_pdf
+from app.services.employee_status_history import (
+    KIND_CHANGED,
+    KIND_SCHEDULED,
+    SOURCE_RESIGNATION_LETTER,
+    record_status_event,
+)
 
 _build_docx_filename = artifact_service.build_docx_filename
 _output_dir_for_admin = artifact_service.output_dir_for_admin
@@ -666,6 +672,7 @@ def _record_pending_resignation(
     fields: dict[str, Any],
     *,
     today: date | None = None,
+    actor_user_id: int | None = None,
 ) -> None:
     """Record where a Resignation Letter's subject is headed.
 
@@ -689,11 +696,26 @@ def _record_pending_resignation(
         return
     effective = parsed.date()
     employee.end_date = effective
-    if effective > (today or date.today()):
+    scheduled = effective > (today or date.today())
+    if scheduled:
         employee.pending_status = EMPLOYEE_STATUS_RESIGNED
     else:
         employee.status = EMPLOYEE_STATUS_RESIGNED
         employee.pending_status = None
+    # An Active employee carries no transfer fields, but a pending Transferred
+    # being superseded by the letter must not leave its site behind.
+    employee.transfer_site = None
+    employee.transfer_return_date = None
+    record_status_event(
+        db,
+        employee.id,
+        from_status=EMPLOYEE_STATUS_ACTIVE,
+        to_status=EMPLOYEE_STATUS_RESIGNED,
+        effective_date=effective,
+        kind=KIND_SCHEDULED if scheduled else KIND_CHANGED,
+        source=SOURCE_RESIGNATION_LETTER,
+        actor_user_id=actor_user_id,
+    )
 
 
 @functools.cache
@@ -2515,7 +2537,12 @@ def generate_document(
     # inside this transaction, so it is atomic with the Document insert. Preview
     # (commit=False) must not touch the employee record.
     if commit and template_id == "Resignation Letter":
-        _record_pending_resignation(db, employee, fields)
+        _record_pending_resignation(
+            db,
+            employee,
+            fields,
+            actor_user_id=current_user.id if current_user is not None else None,
+        )
     db.commit()
     db.refresh(doc_row)
 
