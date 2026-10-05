@@ -1824,9 +1824,32 @@ body {
     margin: 12mm;
   }
   .print-register,
-  .print-vehicle-report,
-  .print-vehicle-list {
+  .print-vehicle-report {
     page: register;
+  }
+  /* The fleet list carries every vehicle field (12 columns), so it gets a
+     landscape sheet of its own. */
+  @page vehicle-list {
+    size: A4 landscape;
+    margin: 10mm;
+  }
+  /* It mounts as a flex item of <main>; without an explicit width it shrinks
+     to its content instead of spanning the sheet. fit-content lets it grow
+     with a table wider than the sheet, so the heading still spans the table
+     after Chrome shrinks the page to fit. */
+  .print-vehicle-list {
+    page: vehicle-list;
+    width: fit-content;
+    min-width: 100%;
+    flex-shrink: 0;
+  }
+  /* A table wider than the sheet is shrunk to fit by Chrome only when it
+     overflows to the RIGHT; in an Arabic (RTL) page it overflows left and is
+     clipped instead. Lay the print view's ancestors out LTR — everything else
+     on them is print-hidden — while the heading and table keep their own
+     `dir`, so Arabic still reads right to left. */
+  *:has(.print-vehicle-list) {
+    direction: ltr;
   }
   /* The fleet list is a fixed paper document, not a scaled copy of the live
      UI. Pin its face, ink, and rules so both the Aa setting and dark theme are
@@ -1835,7 +1858,7 @@ body {
     background: #fff !important;
     color: #1c1f24 !important;
     font-family: Arial, sans-serif !important;
-    font-size: 11pt !important;
+    font-size: 9pt !important;
   }
   #root .print-vehicle-list * {
     color: #1c1f24 !important;
@@ -1845,15 +1868,20 @@ body {
     border-collapse: collapse;
     background: #fff !important;
     color: #1c1f24 !important;
-    font-size: 11pt !important;
+    font-size: 9pt !important;
   }
   #root .print-vehicle-list th,
   #root .print-vehicle-list td {
     border: 1px solid #1c1f24 !important;
     background: #fff !important;
-    padding: 5pt 6pt;
+    padding: 3pt 5pt;
     text-align: start;
     vertical-align: middle;
+  }
+  /* Data cells never break onto a second line: the column grows to fit. Only
+     a long header may wrap, so headers don't take width the data doesn't need. */
+  #root .print-vehicle-list td {
+    white-space: nowrap;
   }
   .print-vehicle-list-heading {
     margin-block-end: 10pt;

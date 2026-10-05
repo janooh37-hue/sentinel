@@ -21,8 +21,9 @@ export interface VehicleTableSnapshot {
 const NAVY = '#0d2845'
 const TEXT_CELL_STYLE = `${TD_STYLE};mso-number-format:'\\@'`
 const TEXT_HEADER_STYLE = `${thStyle(NAVY)};mso-number-format:'\\@'`
-/** Columns whose cells are codes/numbers/dates: isolated LTR inside RTL HTML. */
-const LTR_COLUMNS = new Set([0, 2, 3, 7, 9, 10, 11])
+
+/** Columns whose cells are codes/numbers/dates: isolated LTR inside RTL text. */
+export const LTR_COLUMNS = new Set([0, 2, 3, 7, 9, 10, 11])
 
 const clean = (value: string | number | null | undefined) =>
   value == null ? '' : String(value).replace(/\s+/gu, ' ').trim()

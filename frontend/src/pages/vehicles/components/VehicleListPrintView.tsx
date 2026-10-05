@@ -1,12 +1,4 @@
-import type { VehicleTableSnapshot } from '../vehicleTable'
-
-const COLUMNS = [
-  { id: 'plate', width: '20%' },
-  { id: 'vehicle', width: '29%' },
-  { id: 'traffic-code', width: '17%' },
-  { id: 'licence-expiry', width: '17%' },
-  { id: 'fines', width: '17%' },
-] as const
+import { LTR_COLUMNS, type VehicleTableSnapshot } from '../vehicleTable'
 
 export function VehicleListPrintView(props: {
   table: VehicleTableSnapshot
@@ -16,8 +8,12 @@ export function VehicleListPrintView(props: {
   const { table, title, scopeLabel } = props
 
   return (
-    <div className="print-register hidden print:block print-vehicle-list">
-      <div className="print-vehicle-list-heading">
+    // Own landscape page (`@page vehicle-list`); auto table layout sizes each
+    // column to its content and data cells never wrap. A table wider than the
+    // sheet is shrunk to fit (see the `:has(.print-vehicle-list)` rule in
+    // index.css), so the heading and table carry the reading direction.
+    <div className="hidden print:block print-vehicle-list">
+      <div dir={table.direction} className="print-vehicle-list-heading">
         <h1>{title}</h1>
         <div>
           <span>{table.rows.length}</span>
@@ -25,12 +21,7 @@ export function VehicleListPrintView(props: {
         </div>
       </div>
 
-      <table dir={table.direction} style={{ tableLayout: 'fixed', width: '100%' }}>
-        <colgroup>
-          {COLUMNS.map((column) => (
-            <col key={column.id} style={{ width: column.width }} />
-          ))}
-        </colgroup>
+      <table dir={table.direction} style={{ width: '100%' }}>
         <thead>
           <tr>
             {table.headers.map((header) => (
@@ -45,7 +36,7 @@ export function VehicleListPrintView(props: {
             <tr key={rowIndex}>
               {row.map((cell, cellIndex) => (
                 <td key={cellIndex}>
-                  {cellIndex === 0 || cellIndex >= 2 ? <bdi dir="ltr">{cell}</bdi> : cell}
+                  {LTR_COLUMNS.has(cellIndex) ? <bdi dir="ltr">{cell}</bdi> : cell}
                 </td>
               ))}
             </tr>
