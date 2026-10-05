@@ -17,7 +17,7 @@ import { RecordDeleteProvider } from './RecordDeleteProvider'
 
 vi.mock('@/lib/api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/api')>()
-  return { ...actual, api: { ...actual.api, listTemplates: vi.fn().mockResolvedValue({ items: [] }) } }
+  return { ...actual, api: { ...actual.api, getBook: vi.fn().mockRejectedValue(new Error('no detail')), listTemplates: vi.fn().mockResolvedValue({ items: [] }) } }
 })
 vi.mock('@/lib/useCapabilities', () => ({ useCapabilities: () => ({ has: () => true }) }))
 vi.mock('@/lib/authContext', () => ({ useAuth: () => ({ user: { id: 7, role: 'admin' } }) }))

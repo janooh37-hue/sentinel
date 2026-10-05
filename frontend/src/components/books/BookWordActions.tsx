@@ -45,11 +45,7 @@ export function WordSessionActions({
   book,
   isMobile,
   onFinished,
-}: WordActionProps & {
-  /** Hosts pass this to state intent: the finish/discard controls are always
-   *  rendered with visible text labels (the icon-only form was removed). */
-  labelled?: boolean
-}): React.JSX.Element | null {
+}: WordActionProps): React.JSX.Element | null {
   const { t } = useTranslation()
   const qc = useQueryClient()
   const [discardOpen, setDiscardOpen] = useState(false)
@@ -119,9 +115,9 @@ export function WordSessionActions({
       <ConfirmDialog
         open={discardOpen}
         onOpenChange={setDiscardOpen}
-        title={t('books.word.discard')}
+        title={t('books.word.discardConfirmLabel')}
         description={t('books.word.discardConfirm')}
-        confirmLabel={t('books.word.discard')}
+        confirmLabel={t('books.word.discardConfirmLabel')}
         onConfirm={() => discardMutation.mutate()}
         destructive
       />

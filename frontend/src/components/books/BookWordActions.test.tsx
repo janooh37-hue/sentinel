@@ -3,7 +3,7 @@
  * All i18n assertions use lng=ar so English leaks are caught.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createElement, type ReactNode } from 'react'
@@ -24,6 +24,7 @@ void i18n.use(initReactI18next).init({
       translation: {
         'books.word.finish': 'إنهاء التحرير',
         'books.word.discard': 'تجاهل المسودة…',
+        'books.word.discardConfirmLabel': 'تجاهل المسودة',
         'books.word.discardConfirm': 'سيصبح الكتاب ملغياً ويبقى رقمه محفوظاً في السجل. متابعة؟',
         'books.toast.voided': 'أُلغيت المسودة — السجل ملغى',
         'books.word.draft': 'مسودة — رقم محجوز',
@@ -159,7 +160,7 @@ describe('Word action components', () => {
 
   it('(a) renders labelled Finish (solid) and Discard (red outline) buttons with visible text in Arabic', () => {
     render(
-      createElement(WordSessionActions, { book: ACTIVE_SESSION_BOOK, labelled: true }),
+      createElement(WordSessionActions, { book: ACTIVE_SESSION_BOOK }),
       { wrapper: wrapper(makeQc()) },
     )
     const finish = screen.getByRole('button', { name: 'إنهاء التحرير' })
@@ -215,16 +216,18 @@ describe('Word action components', () => {
     vi.spyOn(apiMod.api, 'discardWordSession').mockResolvedValue({} as any)
 
     render(
-      createElement(WordSessionActions, { book: ACTIVE_SESSION_BOOK, labelled: true }),
+      createElement(WordSessionActions, { book: ACTIVE_SESSION_BOOK }),
       { wrapper: wrapper(qc) },
     )
     // Nothing is sent until the confirm dialog is accepted.
     await userEvent.click(screen.getByRole('button', { name: 'تجاهل المسودة…' }))
     expect(apiMod.api.discardWordSession).not.toHaveBeenCalled()
     expect(await screen.findByRole('dialog')).toHaveTextContent(/سيصبح الكتاب ملغياً/)
-    // The dialog confirm is appended last (trigger + dialog both carry the label).
-    const confirmBtns = screen.getAllByRole('button', { name: /تجاهل المسودة/ })
-    await userEvent.click(confirmBtns[confirmBtns.length - 1])
+    // The final confirm carries the verb without the opener's ellipsis.
+    const dialog = screen.getByRole('dialog')
+    expect(dialog).toHaveTextContent('تجاهل المسودة')
+    expect(dialog).not.toHaveTextContent('…')
+    await userEvent.click(within(dialog).getByRole('button', { name: 'تجاهل المسودة' }))
     await waitFor(() => expect(apiMod.api.discardWordSession).toHaveBeenCalledWith(1))
     await waitFor(() => expect(toast.success).toHaveBeenCalledWith('أُلغيت المسودة — السجل ملغى'))
     await waitFor(() => {
@@ -237,7 +240,7 @@ describe('Word action components', () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     vi.spyOn(apiMod.api, 'discardWordSession').mockResolvedValue({} as any)
     render(
-      createElement(WordSessionActions, { book: ACTIVE_SESSION_BOOK, labelled: true }),
+      createElement(WordSessionActions, { book: ACTIVE_SESSION_BOOK }),
       { wrapper: wrapper(makeQc()) },
     )
     await userEvent.click(screen.getByRole('button', { name: 'تجاهل المسودة…' }))
