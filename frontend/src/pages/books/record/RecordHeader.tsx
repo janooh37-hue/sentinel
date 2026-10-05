@@ -40,6 +40,7 @@ import { recordStateOf, sealDescriptor } from '../bookStateLabel'
 import type { ActionId, NextStep } from '../recordNextStep'
 import { RAIL_BREAKPOINT, useRecordChrome } from './RecordChrome'
 import { TONE, SEAL_TO_STATION_TONE } from './recordTones'
+import { Quote } from './Quote'
 import { RecordToolsMenu } from './RecordToolsMenu'
 import { BookStatusChips } from '@/components/books/BookStatusChips'
 import { WordReopenButton, WordSessionActions } from '@/components/books/BookWordActions'
@@ -140,19 +141,6 @@ function StatusText({ status }: { status: NextStep['status'] }): React.JSX.Eleme
         )
       })}
     </b>
-  )
-}
-
-/** Returned/rejected note: «» in Arabic, “” in English; the note itself is `<bdi>` so a note in the other script reads correctly. */
-function Quote({ text, className }: { text: string; className?: string }): React.JSX.Element {
-  const { i18n } = useTranslation()
-  const [open, close] = i18n.language.startsWith('ar') ? ['«', '»'] : ['“', '”']
-  return (
-    <span className={className}>
-      {open}
-      <bdi>{text}</bdi>
-      {close}
-    </span>
   )
 }
 

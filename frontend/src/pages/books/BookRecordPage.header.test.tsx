@@ -205,7 +205,7 @@ describe('BookRecordPage — header', () => {
     const status = await screen.findByTestId('record-status-line')
     expect(status).toHaveTextContent('Returned by')
     expect(status).toHaveTextContent('Manager Khalid')
-    expect(screen.getByText('Fix the dates')).toBeVisible()
+    expect(within(screen.getByTestId('record-status-line').parentElement!).getByText('Fix the dates')).toBeVisible()
     expect(screen.queryByRole('button', { name: 'Tools' })).not.toBeInTheDocument()
     expect(document.querySelector('[data-header-row]')).toBeNull()
     expect(screen.getByTestId('record-creator')).toHaveTextContent('Aisha Operator')

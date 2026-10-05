@@ -18,6 +18,7 @@ import type { BookRead } from '@/lib/api'
 import { Hint } from '@/components/ui/hint'
 import type { RecordView } from './recordActions'
 import { RAIL_BREAKPOINT, useRecordChrome } from './RecordChrome'
+import { Quote } from './Quote'
 
 export type StationState = 'done' | 'live' | 'future'
 export interface Station {
@@ -112,7 +113,7 @@ function RecordTimelineContent({
                     className="mt-1.5 rounded-md px-2 py-1 text-[0.7em]"
                     style={{ background: tone.bg, color: tone.fg }}
                   >
-                    “{s.note}”
+                    <Quote text={s.note} />
                   </div>
                 )}
               </div>
