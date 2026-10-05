@@ -19,7 +19,7 @@ import { cn } from '@/lib/utils'
 import { paperKey, type Paper, type PaperKey } from '../recordPapers'
 
 export interface PaperCaption {
-  text: string
+  text: React.ReactNode
   /** the paper is the signed copy — rendered in the success tone, always with its words */
   ok: boolean
 }

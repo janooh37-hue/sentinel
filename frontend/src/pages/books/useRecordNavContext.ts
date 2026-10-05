@@ -267,12 +267,18 @@ export function useListReturnFocus(
     const scroller = scrollerRef.current
     if (scroller && Number.isFinite(scrollY)) scroller.scrollTop = scrollY
     const row = (scroller ?? document).querySelector<HTMLElement>(opts.rowSelector(focusBookId))
+    if (!row) {
+      // Not rendered (deleted, pending deletion, filtered out): selecting it would
+      // write a dead `open` param. Keep the restored scroll, just drop the state.
+      navigate(latestLocation.current, { replace: true, state: null })
+      return
+    }
     // 'nearest' on both: the restored scrollY must survive when the row is already on screen.
-    row?.scrollIntoView({ block: 'nearest' })
+    row.scrollIntoView({ block: 'nearest' })
     if (opts.isDesktop) opts.onSelect?.(focusBookId)
     else opts.onFlash?.(focusBookId)
     pendingClear.current = focusBookId
-  }, [returnState, ready, location.key, scrollerRef])
+  }, [returnState, ready, location.key, scrollerRef, navigate])
 
   // 2. Clear the state once the selection (an `open` replace) has landed, so
   //    the clearing navigate never rewinds the URL to the pre-select search.

@@ -1934,6 +1934,7 @@
       "singleSignerHint": "One manager signs and approves this book.",
       "reject": "Reject",
       "return": "Return for changes",
+      "returnShort": "Return",
       "addNote": "Add note",
       "priority": "Priority",
       "high": "High",
@@ -2050,6 +2051,10 @@
       "approved": "Signed by {{name}} · {{date}}",
       "returned": "Returned by {{name}}:",
       "rejected": "Rejected by {{name}}:",
+      "pendingOtherNoName": "Waiting for approval · {{ago}}",
+      "approvedNoName": "Signed · {{date}}",
+      "returnedNoName": "Returned:",
+      "rejectedNoName": "Rejected:",
       "voided": "Voided — kept for the record only."
     },
     "paper": {

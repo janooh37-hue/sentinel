@@ -180,6 +180,14 @@ export function RecordPane({
     enabled: !isInmateReporter && includedPapersOpen && includedBookId !== null,
   })
 
+  // The list row can lack approver names; the detail (same cache entry the
+  // record page and the included-papers dialog use) carries them.
+  const statusDetail = useQuery({
+    queryKey: ['books', 'detail', includedBookId],
+    queryFn: () => api.getBook(includedBookId!),
+    enabled: includedBookId !== null,
+  })
+
   // Papers: signed → generated → imported → scans (shared with the record page
   // and the full-preview overlay, which receives this exact list).
   const papers = useMemo(
@@ -314,7 +322,7 @@ export function RecordPane({
     canMutateCurrent &&
     currentVersion?.document_id != null &&
     isIncludedPapersOwner(book, user?.id)
-  const ns: NextStep = recordNextStep(book, {
+  const ns: NextStep = recordNextStep(statusDetail.data?.id === book.id ? { ...book, ...statusDetail.data } : book, {
     has,
     canEdit,
     canGenerate: has('documents.generate'),

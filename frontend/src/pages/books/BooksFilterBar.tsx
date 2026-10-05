@@ -273,9 +273,55 @@ export function BooksFilterBar({
 
       <div className="hidden h-5 w-px bg-hairline md:block" />
 
-      {/* Direction chips + date + search row (scrollable on mobile) */}
-      <div className="flex items-center gap-2 overflow-x-auto pb-0.5 md:flex-wrap md:pb-0">
-        <DirectionChips filters={filters} onChange={onChange} testId="direction-toggle" />
+      {/* "Created by me" — hidden for inmate reporters (they only ever see their own) */}
+      {!isInmateReporter && (
+        <button
+          type="button"
+          data-testid="mine-filter"
+          aria-pressed={filters.mine}
+          onClick={() => onChange({ ...filters, mine: !filters.mine })}
+          className={cn(
+            'inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1 text-[0.78em] transition-colors motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background max-md:min-h-[36px] max-md:py-1.5',
+            filters.mine
+              ? 'bg-primary-soft font-semibold text-primary'
+              : 'bg-surface-tinted text-muted-foreground hover:bg-border hover:text-foreground',
+          )}
+        >
+          <UserRound className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
+          {t('books.list.createdByMe')}
+          {myCount !== null ? (
+            <bdi
+              dir="ltr"
+              className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-surface px-1 text-[0.85em] font-bold tabular-nums"
+            >
+              {myCount}
+            </bdi>
+          ) : null}
+        </button>
+      )}
+      <div className="hidden h-5 w-px shrink-0 bg-hairline md:block" />
+
+      {/* Drafts pill */}
+      <button
+        type="button"
+        aria-pressed={!!filters.drafts}
+        onClick={() => onChange({ ...filters, drafts: !filters.drafts })}
+        className={cn(
+          'inline-flex shrink-0 items-center rounded-full px-3 py-1 text-[0.78em] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background max-md:min-h-[36px] max-md:py-1.5',
+          filters.drafts
+            ? 'bg-warning-soft font-semibold text-warning'
+            : 'bg-surface-tinted text-muted-foreground hover:bg-border hover:text-foreground',
+        )}
+      >
+        {t('books.filters.drafts')}
+      </button>
+
+      {/* Direction chips + status + date + search row. On the phone it scrolls
+          sideways under a fade at the inline-end edge (the cue that more chips
+          follow); "Drafts" and "Created by me" are pinned in the row above so
+          they never need a scroll to reach. */}
+      <div className="flex items-center gap-2 overflow-x-auto pb-0.5 max-md:w-full max-md:[mask-image:linear-gradient(to_right,#000_calc(100%-28px),transparent)] max-md:rtl:[mask-image:linear-gradient(to_left,#000_calc(100%-28px),transparent)] md:flex-wrap md:pb-0">
+        <DirectionChips filters={filters} onChange={onChange} testId="direction-toggle" className="shrink-0 flex-nowrap" />
 
         <div className="hidden h-5 w-px shrink-0 bg-hairline md:block" />
         <div className="flex shrink-0 items-center gap-1.5" data-testid="status-toggle">
@@ -303,50 +349,6 @@ export function BooksFilterBar({
             )
           })}
         </div>
-
-        <div className="hidden h-5 w-px shrink-0 bg-hairline md:block" />
-
-        {/* Drafts pill */}
-        <button
-          type="button"
-          aria-pressed={!!filters.drafts}
-          onClick={() => onChange({ ...filters, drafts: !filters.drafts })}
-          className={cn(
-            'inline-flex shrink-0 items-center rounded-full px-3 py-1 text-[0.78em] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background max-md:min-h-[36px] max-md:py-1.5',
-            filters.drafts
-              ? 'bg-warning-soft font-semibold text-warning'
-              : 'bg-surface-tinted text-muted-foreground hover:bg-border hover:text-foreground',
-          )}
-        >
-          {t('books.filters.drafts')}
-        </button>
-
-        {/* "Created by me" — hidden for inmate reporters (they only ever see their own) */}
-        {!isInmateReporter && (
-          <button
-            type="button"
-            data-testid="mine-filter"
-            aria-pressed={filters.mine}
-            onClick={() => onChange({ ...filters, mine: !filters.mine })}
-            className={cn(
-              'inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1 text-[0.78em] transition-colors motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background max-md:min-h-[36px] max-md:py-1.5',
-              filters.mine
-                ? 'bg-primary-soft font-semibold text-primary'
-                : 'bg-surface-tinted text-muted-foreground hover:bg-border hover:text-foreground',
-            )}
-          >
-            <UserRound className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
-            {t('books.list.createdByMe')}
-            {myCount !== null ? (
-              <bdi
-                dir="ltr"
-                className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-surface px-1 text-[0.85em] font-bold tabular-nums"
-              >
-                {myCount}
-              </bdi>
-            ) : null}
-          </button>
-        )}
 
         <div className="hidden h-5 w-px shrink-0 bg-hairline md:block" />
 

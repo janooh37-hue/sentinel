@@ -130,7 +130,8 @@ describe('RecordDesk papers', () => {
     expect((await screen.findByTestId('doc-pdf-canvas')).dataset.url).toBe(SIGNED_URL)
     // the signed copy says when it was signed, in words
     // (rendered in the toolbar and in the phone row; CSS shows one per breakpoint)
-    expect(screen.getAllByText(/Signed copy · /).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/Signed copy ·/).length).toBeGreaterThan(0)
+    expect(screen.getAllByText(/^\d{4}-\d{2}-\d{2}$/, { selector: 'bdi' }).length).toBeGreaterThan(0)
   })
 
   it('honours ?paper= and writes a pick back with replace, leaving other params alone', async () => {

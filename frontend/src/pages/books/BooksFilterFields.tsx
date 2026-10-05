@@ -66,10 +66,11 @@ export function DirectionChips({
   filters,
   onChange,
   testId,
-}: FieldProps & { testId?: string }): React.JSX.Element {
+  className,
+}: FieldProps & { testId?: string; className?: string }): React.JSX.Element {
   const { t } = useTranslation()
   return (
-    <div className="flex flex-wrap items-center gap-1.5" data-testid={testId}>
+    <div className={cn('flex flex-wrap items-center gap-1.5', className)} data-testid={testId}>
       {(['all', 'incoming', 'outgoing'] as const).map((dir) => {
         const active = filters.direction === dir
         return (

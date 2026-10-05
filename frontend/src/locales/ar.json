@@ -2101,6 +2101,7 @@
       "singleSignerHint": "يقوم مدير واحد بالتوقيع والموافقة على هذا الدفتر.",
       "reject": "رفض",
       "return": "إعادة للتعديل",
+      "returnShort": "إعادة",
       "addNote": "إضافة ملاحظة",
       "priority": "الأولوية",
       "high": "عالية",
@@ -2217,6 +2218,10 @@
       "approved": "وقّعه {{name}} · {{date}}",
       "returned": "أعاده {{name}}:",
       "rejected": "رفضه {{name}}:",
+      "pendingOtherNoName": "بانتظار الموافقة · {{ago}}",
+      "approvedNoName": "تم التوقيع · {{date}}",
+      "returnedNoName": "أُعيد:",
+      "rejectedNoName": "رُفض:",
       "voided": "ملغى — محفوظ للسجل فقط."
     },
     "paper": {

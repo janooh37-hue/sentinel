@@ -14,10 +14,11 @@ import type { BookRead } from '@/lib/api'
 import { RecordPane } from './RecordPane'
 
 const scheduleDelete = vi.hoisted(() => vi.fn())
+const getBook = vi.hoisted(() => vi.fn())
 
 vi.mock('@/lib/api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/api')>()
-  return { ...actual, api: { ...actual.api, listTemplates: vi.fn().mockResolvedValue({ items: [] }) } }
+  return { ...actual, api: { ...actual.api, getBook, listTemplates: vi.fn().mockResolvedValue({ items: [] }) } }
 })
 vi.mock('@/lib/useCapabilities', () => ({ useCapabilities: () => ({ has: () => true }) }))
 vi.mock('@/lib/authContext', () => ({ useAuth: () => ({ user: { id: 7, role: 'admin' } }) }))
@@ -81,6 +82,8 @@ describe('RecordPane footer', () => {
   beforeEach(() => {
     scheduleDelete.mockClear()
     onDeleted.mockClear()
+    getBook.mockReset()
+    getBook.mockRejectedValue(new Error('no detail'))
   })
 
   it('shows the primary and one secondary as labelled buttons, and Open record as a link — for a draft too', async () => {
@@ -133,5 +136,38 @@ describe('RecordPane footer', () => {
     await userEvent.click(item)
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
     expect(scheduleDelete).not.toHaveBeenCalled()
+  })
+
+  const signedRow = (assignee_name: string | null): BookRead =>
+    makeBook({
+      approval_state: 'approved',
+      versions: [
+        {
+          id: 11,
+          version_no: 1,
+          document_id: 5,
+          status: 'approved',
+          signed_pdf_url: '/api/v1/books/1/signed',
+          signed_source: 'in_app',
+          approval_steps: [
+            { id: 1, kind: 'approver', state: 'approved', assignee_name, decided_at: '2026-10-02T09:00:00' },
+          ],
+        },
+      ],
+      approval_steps: [
+        { id: 1, kind: 'approver', state: 'approved', assignee_name, decided_at: '2026-10-02T09:00:00' },
+      ],
+    })
+
+  it('never renders a dangling "by ·" when the row carries no approver name', async () => {
+    renderPane(signedRow(null))
+    expect(await screen.findByText(/Signed · /)).toBeInTheDocument()
+    expect(screen.queryByText(/Signed by/)).not.toBeInTheDocument()
+  })
+
+  it('uses the detail record for the signer name when the list row lacks it', async () => {
+    getBook.mockResolvedValue(signedRow('Ahmed'))
+    renderPane(signedRow(null))
+    expect(await screen.findByText(/Signed by/)).toHaveTextContent('Ahmed')
   })
 })

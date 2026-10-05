@@ -202,10 +202,12 @@ describe('useListReturnFocus', () => {
     isDesktop,
     onSelect,
     onFlash,
+    renderRow = true,
   }: {
     isDesktop: boolean
     onSelect?: (id: number) => void
     onFlash?: (id: number) => void
+    renderRow?: boolean
   }): React.JSX.Element {
     const scroller = useRef<HTMLDivElement>(null)
     const location = useLocation()
@@ -227,13 +229,13 @@ describe('useListReturnFocus', () => {
         <output data-testid="at">{location.pathname}{location.search}</output>
         <output data-testid="state">{JSON.stringify(location.state)}</output>
         <div ref={scroller} data-testid="scroller" style={{ overflow: 'auto', height: 100 }}>
-          <div data-id="3">row 3</div>
+          {renderRow && <div data-id="3">row 3</div>}
         </div>
       </div>
     )
   }
 
-  function renderReturn(props: { isDesktop: boolean; onSelect?: (id: number) => void; onFlash?: (id: number) => void }) {
+  function renderReturn(props: { isDesktop: boolean; onSelect?: (id: number) => void; onFlash?: (id: number) => void; renderRow?: boolean }) {
     const state: ListReturnState = { focusBookId: 3, scrollY: 77 }
     return render(
       <MemoryRouter initialEntries={[{ pathname: '/books', search: '?status=pending', state }]}>
@@ -267,6 +269,14 @@ describe('useListReturnFocus', () => {
     expect(onFlash).toHaveBeenCalledWith(3)
     expect(onSelect).not.toHaveBeenCalled()
     expect(scrollIntoView).toHaveBeenCalledWith({ block: 'nearest' })
+    expect(screen.getByTestId('at').textContent).toBe('/books?status=pending')
+  })
+
+  it('desktop: a focus id with no rendered row (pending deletion) writes no open param', async () => {
+    const onSelect = vi.fn()
+    renderReturn({ isDesktop: true, onSelect, renderRow: false })
+    await waitFor(() => expect(screen.getByTestId('state')).toHaveTextContent('null'))
+    expect(onSelect).not.toHaveBeenCalled()
     expect(screen.getByTestId('at').textContent).toBe('/books?status=pending')
   })
 })

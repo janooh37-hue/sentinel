@@ -15,7 +15,6 @@ import { WordSessionBanner } from '@/components/books/WordSessionBanner'
 import { Button } from '@/components/ui/button'
 import { buttonVariants } from '@/components/ui/button-variants'
 import { api } from '@/lib/api'
-import { parseUtcMs } from '@/lib/time'
 import { useLocalStorage } from '@/lib/useLocalStorage'
 import { useShortcutAction } from '@/lib/useKeyboardShortcuts'
 import { cn } from '@/lib/utils'
@@ -113,18 +112,15 @@ function sanitizeZoom(value: unknown): Zoom {
   return typeof value === 'number' && value >= MIN_ZOOM && value <= MAX_ZOOM ? value : 'fit'
 }
 
-/** The signed copy's caption date: Western digits, isolated so it never reorders inside Arabic text. */
-function signedDateLabel(iso: string | null | undefined, locale: string): string | null {
+/** The signed copy's caption date: numeric `YYYY-MM-DD`, the same shape as the header meta and status lines. */
+function signedDateLabel(iso: string | null | undefined): string | null {
   if (!iso) return null
-  const ms = parseUtcMs(iso)
-  if (Number.isNaN(ms)) return null
-  const text = new Intl.DateTimeFormat(`${locale}-u-nu-latn`, { day: '2-digit', month: 'short', year: 'numeric' }).format(ms)
-  return `\u2066${text}\u2069`
+  const day = iso.slice(0, 10)
+  return /^\d{4}-\d{2}-\d{2}$/.test(day) ? day : null
 }
 
 export function RecordDesk({ book, caps, view, actions }: RecordPieceProps): React.JSX.Element {
-  const { t, i18n } = useTranslation()
-  const locale = i18n.language.startsWith('ar') ? 'ar-AE' : 'en-GB'
+  const { t } = useTranslation()
   const chrome = useRecordChrome()
   const [searchParams, setSearchParams] = useSearchParams()
   const { isInmateReporter, canRevise } = caps
@@ -228,11 +224,24 @@ export function RecordDesk({ book, caps, view, actions }: RecordPieceProps): Rea
   const page = pageInfo && pageInfo.url === deskUrl ? pageInfo : null
 
   // --- caption ------------------------------------------------------------
-  const signedDate = signedDateLabel(view.currentSteps.find((s) => s.state === 'approved')?.decided_at, locale)
+  const signedDate = signedDateLabel(view.currentSteps.find((s) => s.state === 'approved')?.decided_at)
   let caption: PaperCaption | null = null
   if (liveActive) caption = { text: t('books.paper.live'), ok: false }
   else if (selectedPaper?.kind === 'signed') {
-    if (signedDate) caption = { text: t('books.paper.captionSigned', { date: signedDate }), ok: true }
+    if (signedDate) {
+      const marker = '\uE000'
+      const [before, after = ''] = t('books.paper.captionSigned', { date: marker }).split(marker)
+      caption = {
+        text: (
+          <>
+            {before}
+            <bdi dir="ltr" className="tabular-nums">{signedDate}</bdi>
+            {after}
+          </>
+        ),
+        ok: true,
+      }
+    }
   } else if (selectedPaper && selectedPaper.kind !== 'scan') {
     if (view.state === 'awaiting_scan') caption = { text: t('books.paper.captionAwaitingScan'), ok: false }
     else if (view.state === 'pending') caption = { text: t('books.paper.captionPending'), ok: false }
@@ -390,27 +399,15 @@ export function RecordDesk({ book, caps, view, actions }: RecordPieceProps): Rea
         {/* phone: 44px chip row (switcher · Expand), caption, marks, armed tools */}
         {hasDocument && (
           <div dir={dir} data-print-hide className="mb-2.5 flex flex-col gap-2 md:hidden">
-            <div className="flex items-center gap-2">
-              <div className="min-w-0 flex-1">
-                {papers.length > 1 ? (
-                  <PaperSwitcher
-                    papers={papers}
-                    labels={labels}
-                    selectedKey={selectedKey}
-                    onSelect={selectKey}
-                    variant="chips"
-                  />
-                ) : null}
-              </div>
-              <button
-                type="button"
-                onClick={() => chrome.setFullscreen(true)}
-                className="inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-full border border-border bg-surface px-3.5 text-[0.8em] font-semibold text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                <Maximize2 className="h-3.5 w-3.5" aria-hidden />
-                {t('books.record.expand')}
-              </button>
-            </div>
+            {papers.length > 1 ? (
+              <PaperSwitcher
+                papers={papers}
+                labels={labels}
+                selectedKey={selectedKey}
+                onSelect={selectKey}
+                variant="chips"
+              />
+            ) : null}
             {caption?.text ? (
               <span className={cn('text-[0.8em]', caption.ok ? 'font-semibold text-success' : 'text-muted-foreground')}>
                 {caption.text}
@@ -434,16 +431,14 @@ export function RecordDesk({ book, caps, view, actions }: RecordPieceProps): Rea
           style={paperStyle}
         >
           {deskUrl !== null || selectedPaper ? (
-            // Corner affordance for touch; the labelled "Expand" chip above is the accessible control.
             <button
               type="button"
-              aria-hidden
-              tabIndex={-1}
               data-print-hide
               onClick={() => chrome.setFullscreen(true)}
-              className="absolute end-2 top-2 z-10 grid h-11 w-11 place-items-center rounded-xl border border-border bg-surface/90 text-foreground shadow-sm md:hidden"
+              className="absolute end-2 top-2 z-10 inline-flex min-h-11 items-center gap-1.5 rounded-xl border border-border bg-surface/90 px-3 text-[0.8em] font-semibold text-foreground shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:hidden"
             >
               <Maximize2 className="h-[1.0625rem] w-[1.0625rem]" aria-hidden />
+              {t('books.record.expand')}
             </button>
           ) : null}
           {paperBody}

@@ -52,19 +52,23 @@ function RecordTimelineContent({
   currentVersionNo,
   liveVersionNo,
   sms,
+  showHeading = true,
 }: {
   stations: Station[]
   currentSteps: BookApprovalStepRead[]
   currentVersionNo?: number
   liveVersionNo?: number
   sms?: NotifyMessageRead[] | null
+  showHeading?: boolean
 }): React.JSX.Element {
   const { t } = useTranslation()
   return (
     <>
-      <h2 className="mb-5 text-[0.66em] font-bold uppercase tracking-[0.12em] text-muted-foreground">
-        {t('books.record.progress')}
-      </h2>
+      {showHeading && (
+        <h2 className="mb-5 text-[0.66em] font-bold uppercase tracking-[0.12em] text-muted-foreground">
+          {t('books.record.progress')}
+        </h2>
+      )}
       <ol>
         {stations.map((s, i) => {
           const last = i === stations.length - 1
@@ -293,6 +297,7 @@ export function RecordRail({ book, view }: RecordRailProps): React.JSX.Element |
   const summary = currentSummaryStation(stations)
   const timeline = (
     <RecordTimelineContent
+      showHeading={false}
       stations={stations}
       currentSteps={currentSteps}
       currentVersionNo={current?.version_no}
@@ -301,7 +306,7 @@ export function RecordRail({ book, view }: RecordRailProps): React.JSX.Element |
     />
   )
   const heading = (
-    <b className="text-[0.6875rem] font-bold uppercase tracking-[0.07em] text-faint">{t('books.record.progress')}</b>
+    <h2 className="text-[0.6875rem] font-bold uppercase tracking-[0.07em] text-faint">{t('books.record.progress')}</h2>
   )
 
   if (docked && rail === 'open') {

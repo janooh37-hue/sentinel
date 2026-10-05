@@ -792,6 +792,18 @@ const isPhone = (cell: Cell): boolean => cell.w < 768
 
 async function shot(page: Page, name: string, cell: Cell, lang: Lang, aa = 16): Promise<void> {
   mkdirSync(SHOT_DIR, { recursive: true })
+  if (name.startsWith('record')) {
+    // The paper must have rendered (not a spinner) before the picture is taken.
+    await page.waitForFunction(
+      () => {
+        const c = document.querySelector<HTMLCanvasElement>('[data-record-paper] canvas')
+        const r = c?.getBoundingClientRect()
+        return Boolean(r && r.width > 0 && r.height > 0)
+      },
+      undefined,
+      { timeout: 15_000 },
+    )
+  }
   await page.waitForTimeout(350)
   const suffix = aa === 16 ? '' : `-aa${aa}`
   await page.screenshot({ path: `${SHOT_DIR}${name}-${cell.w}-${lang}${suffix}.png`, animations: 'disabled' })

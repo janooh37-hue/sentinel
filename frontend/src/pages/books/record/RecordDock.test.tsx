@@ -193,7 +193,7 @@ describe('RecordDock', () => {
       'decide',
       bookOf('pending', { steps: [stepOf()] }),
       { decider: true },
-      ['More', 'Return for changes', 'Reject', 'Sign & approve'],
+      ['More', 'Return', 'Reject', 'Sign & approve'],
     ],
     [
       'awaiting a signed scan',

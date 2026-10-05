@@ -61,6 +61,10 @@ export type StatusKey =
   | 'returned'
   | 'rejected'
   | 'voided'
+  | 'pendingOtherNoName'
+  | 'approvedNoName'
+  | 'returnedNoName'
+  | 'rejectedNoName'
 
 /** Full i18n key of a disabled-action explanation. */
 export type ReasonKey =
@@ -188,7 +192,11 @@ function step(
   },
 ): NextStep {
   const { secondary = [], overflow = [], ...rest } = parts
-  const out: NextStep = { status, secondary, overflow, ...rest }
+  // Never render a dangling "by ·": no resolvable name → the nameless sentence.
+  const needsName = status.key === 'pendingOther' || status.key === 'approved' || status.key === 'returned' || status.key === 'rejected'
+  const nameless: NextStep['status'] =
+    needsName && !status.vars.name ? { ...status, key: `${status.key}NoName` as StatusKey } : status
+  const out: NextStep = { status: nameless, secondary, overflow, ...rest }
   if (out.disabled && Object.keys(out.disabled).length === 0) delete out.disabled
   return out
 }

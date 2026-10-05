@@ -143,6 +143,19 @@ function StatusText({ status }: { status: NextStep['status'] }): React.JSX.Eleme
   )
 }
 
+/** Returned/rejected note: «» in Arabic, “” in English; the note itself is `<bdi>` so a note in the other script reads correctly. */
+function Quote({ text, className }: { text: string; className?: string }): React.JSX.Element {
+  const { i18n } = useTranslation()
+  const [open, close] = i18n.language.startsWith('ar') ? ['«', '»'] : ['“', '”']
+  return (
+    <span className={className}>
+      {open}
+      <bdi>{text}</bdi>
+      {close}
+    </span>
+  )
+}
+
 /** True from the width where the rail docks beside the desk (below it the
  *  toggle opens the overlay drawer). */
 function useRailDocked(): boolean {
@@ -511,7 +524,6 @@ export function RecordHeader({ book, caps, view, actions }: RecordPieceProps): R
 
   // ── Phone: back · ref · i/n, clamped subject, status line ─────────────────
   if (isMobile) {
-    const reviseReason = nextStep?.disabled?.revise ? t(nextStep.disabled.revise) : null
     return (
       <header
         data-record-header="phone"
@@ -563,10 +575,7 @@ export function RecordHeader({ book, caps, view, actions }: RecordPieceProps): R
               </span>
             </div>
             {nextStep.quote && (
-              <q className="mt-1.5 block text-[0.82em] italic text-muted-foreground">{nextStep.quote}</q>
-            )}
-            {reviseReason && (
-              <p className="mt-1.5 text-[0.75em] text-muted-foreground">{reviseReason}</p>
+              <Quote text={nextStep.quote} className="mt-1.5 block text-[0.82em] italic text-muted-foreground" />
             )}
           </>
         )}
@@ -657,7 +666,7 @@ export function RecordHeader({ book, caps, view, actions }: RecordPieceProps): R
               {nextStep.quote && (
                 <>
                   {' '}
-                  <q className="italic text-muted-foreground">{nextStep.quote}</q>
+                  <Quote text={nextStep.quote} className="italic text-muted-foreground" />
                 </>
               )}
             </span>

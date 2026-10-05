@@ -57,6 +57,8 @@ interface DockAction {
   tone: Tone
   icon: React.ReactNode
   label: string
+  /** Accessible name when `label` is a short visual form. */
+  fullLabel?: string
   onClick?: () => void
   href?: string
   disabled?: boolean
@@ -201,7 +203,8 @@ export function RecordDock({ book, caps, view, actions }: RecordPieceProps): Rea
           id,
           tone: 'amber',
           icon: pendingAct === 'return' ? <Spinner /> : <CornerUpLeft className={ICON} aria-hidden="true" />,
-          label: pendingAct === 'return' ? t('books.approval.returning') : t('books.approval.return'),
+          label: pendingAct === 'return' ? t('books.approval.returning') : t('books.approval.returnShort'),
+          fullLabel: pendingAct === 'return' ? undefined : t('books.approval.return'),
           disabled: busy,
           pending: pendingAct === 'return',
           onClick: () => actions.openMobileDecision('return'),
@@ -317,7 +320,8 @@ export function RecordDock({ book, caps, view, actions }: RecordPieceProps): Rea
     const className = cn(
       BUTTON,
       TONE[a.tone],
-      a === primary ? 'flex-1 min-w-[7rem]' : 'shrink',
+      'gap-1 whitespace-nowrap',
+      a === primary ? 'flex-1 px-2' : 'shrink-0 px-[11px]',
       hideForObserver && 'pointer-events-none opacity-0',
     )
     const hiddenProps = hideForObserver ? { 'aria-hidden': true as const, inert: true } : {}
@@ -355,6 +359,7 @@ export function RecordDock({ book, caps, view, actions }: RecordPieceProps): Rea
         aria-disabled={a.reasonKey ? true : undefined}
         aria-busy={a.pending || undefined}
         onClick={blocked ? undefined : a.onClick}
+        aria-label={a.fullLabel}
         className={className}
         {...hiddenProps}
       >
@@ -383,7 +388,7 @@ export function RecordDock({ book, caps, view, actions }: RecordPieceProps): Rea
               <span>{t(key)}</span>
             </p>
           ))}
-          <div data-record-dock className="flex items-stretch gap-2">
+          <div data-record-dock className="flex items-stretch gap-1.5">
             <button
               type="button"
               data-dock-more
@@ -393,7 +398,7 @@ export function RecordDock({ book, caps, view, actions }: RecordPieceProps): Rea
               className={cn(
                 BUTTON,
                 TONE.plain,
-                'w-[54px] shrink-0 flex-col gap-0.5 px-0 text-[0.66em]',
+                'w-[48px] shrink-0 flex-col gap-0.5 px-0 text-[0.66em]',
               )}
             >
               <MoreHorizontal className="h-[18px] w-[18px]" aria-hidden="true" />
