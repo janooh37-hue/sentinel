@@ -2008,7 +2008,8 @@
       "viewHint": "Fix here, then revise & resubmit.",
       "mark": "Mark up",
       "markingOn": "Marking on — tap to cancel",
-      "deleted": "Mark deleted"
+      "deleted": "Mark deleted",
+      "undoTooLate": "Too late to undo — the mark was already deleted."
     },
     "versions": {
       "title": "Version history",
@@ -2102,7 +2103,11 @@
       "deletedMany_one": "{{count}} record deleted",
       "deletedMany_other": "{{count}} records deleted",
       "restoredMany_one": "{{count}} record restored",
-      "restoredMany_other": "{{count}} records restored"
+      "restoredMany_other": "{{count}} records restored",
+      "undoTooLateMany_one": "Too late to undo — {{count}} record was already deleted.",
+      "undoTooLateMany_other": "Too late to undo — {{count}} records were already deleted.",
+      "deleteFailedMany_one": "{{count}} record wasn’t deleted: {{refs}}",
+      "deleteFailedMany_other": "{{count}} records weren’t deleted: {{refs}}"
     },
     "reason": {
       "inFlight": "In-flight or signed records can’t be deleted. Use “Change state (admin)…” to void it.",
@@ -2158,6 +2163,8 @@
       "deleted": "Record {{ref}} deleted",
       "restored": "Record {{ref}} restored",
       "copyRef": "Copy reference number",
+      "undoTooLate": "Too late to undo — record {{ref}} was already deleted.",
+      "deleteFailed": "Record {{ref}} wasn’t deleted: {{reason}}",
       "copiedRef": "Copied {{ref}}",
       "prevRecord": "Previous record",
       "nextRecord": "Next record",

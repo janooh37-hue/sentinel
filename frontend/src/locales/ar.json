@@ -2175,7 +2175,8 @@
       "viewHint": "صحّح هنا، ثم راجِع وأعد الإرسال.",
       "mark": "ملاحظات على المستند",
       "markingOn": "التحديد مُفعّل — انقر للإلغاء",
-      "deleted": "تم حذف الملاحظة"
+      "deleted": "تم حذف الملاحظة",
+      "undoTooLate": "فات أوان التراجع — تم حذف الملاحظة بالفعل."
     },
     "versions": {
       "title": "سجل النسخ",
@@ -2301,7 +2302,19 @@
       "restoredMany_two": "تمت استعادة سجلين",
       "restoredMany_few": "تمت استعادة {{count}} سجلات",
       "restoredMany_many": "تمت استعادة {{count}} سجلاً",
-      "restoredMany_other": "تمت استعادة {{count}} سجلاً"
+      "restoredMany_other": "تمت استعادة {{count}} سجلاً",
+      "undoTooLateMany_zero": "لا توجد سجلات فات أوان التراجع عنها.",
+      "undoTooLateMany_one": "فات أوان التراجع — تم حذف سجل واحد بالفعل.",
+      "undoTooLateMany_two": "فات أوان التراجع — تم حذف سجلين بالفعل.",
+      "undoTooLateMany_few": "فات أوان التراجع — تم حذف {{count}} سجلات بالفعل.",
+      "undoTooLateMany_many": "فات أوان التراجع — تم حذف {{count}} سجلاً بالفعل.",
+      "undoTooLateMany_other": "فات أوان التراجع — تم حذف {{count}} سجلاً بالفعل.",
+      "deleteFailedMany_zero": "لم يتعذّر حذف أي سجل.",
+      "deleteFailedMany_one": "تعذّر حذف سجل واحد: {{refs}}",
+      "deleteFailedMany_two": "تعذّر حذف سجلين: {{refs}}",
+      "deleteFailedMany_few": "تعذّر حذف {{count}} سجلات: {{refs}}",
+      "deleteFailedMany_many": "تعذّر حذف {{count}} سجلاً: {{refs}}",
+      "deleteFailedMany_other": "تعذّر حذف {{count}} سجلاً: {{refs}}"
     },
     "reason": {
       "inFlight": "لا يمكن حذف سجل قيد الإجراء أو موقّع. استخدم «تغيير الحالة (للمشرف)…» لإلغائه.",
@@ -2357,6 +2370,8 @@
       "deleted": "تم حذف السجل {{ref}}",
       "restored": "تمت استعادة السجل {{ref}}",
       "copyRef": "نسخ الرقم المرجعي",
+      "undoTooLate": "فات أوان التراجع — تم حذف السجل {{ref}} بالفعل.",
+      "deleteFailed": "لم يُحذف السجل {{ref}}: {{reason}}",
       "copiedRef": "تم نسخ {{ref}}",
       "prevRecord": "السجل السابق",
       "nextRecord": "السجل التالي",

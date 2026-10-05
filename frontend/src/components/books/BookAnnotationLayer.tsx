@@ -68,8 +68,9 @@ export function BookAnnotationLayer({
     geometry: Record<string, number>
     comment: string
   }) => void
-  /** Called once the 6 s undo window has elapsed (or on unmount). */
-  onDelete?: (id: number) => void
+  /** Called once the 6 s undo window has elapsed (or on unmount). The mark stays
+   *  hidden until the returned promise settles (server delete + refetch). */
+  onDelete?: (id: number) => Promise<void> | void
   /** Fired after a mark is saved or cancelled — one arm yields one mark. */
   onDisarm?: () => void
   /** Controlled tool. When `onToolChange` is given the host renders the tools
@@ -99,13 +100,25 @@ export function BookAnnotationLayer({
   const pinRef = useRef<{ page: number; x: number; y: number; clientX: number; clientY: number } | null>(null)
 
   // Undo-able delete: the mark hides at once, the request fires after 6 s unless undone.
+  // The Undo toast is dismissed on commit (timer or unmount), so a late Undo
+  // can only come from a click already in flight: it says so, never "restored".
   const { pendingIds, scheduleDelete } = useDeferredDelete<{ id: number }>({
     onCommit: (p) => onDelete?.(p.id),
     notify: ({ onUndo }) => {
-      toast(t('books.annotations.deleted'), {
+      let undone = false
+      const toastId = toast(t('books.annotations.deleted'), {
         duration: 6000,
-        action: { label: t('common.undo'), onClick: onUndo },
+        action: {
+          label: t('common.undo'),
+          onClick: () => {
+            // A second click on the closing toast must not read as "too late".
+            if (undone) return
+            undone = true
+            if (!onUndo()) toast.error(t('books.annotations.undoTooLate'))
+          },
+        },
       })
+      return () => toast.dismiss(toastId)
     },
   })
 
