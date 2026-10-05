@@ -54,13 +54,13 @@ const SERVICES: ServiceFacetRead[] = [
 
 const BASE: BooksFilters = DEFAULT_BOOKS_FILTERS
 
-function setup(filters: Partial<BooksFilters> = {}) {
+function setup(filters: Partial<BooksFilters> = {}, services: ServiceFacetRead[] = SERVICES) {
   const onChange = vi.fn()
   render(
     <BooksFilterBar
       filters={{ ...BASE, ...filters }}
       categories={[]}
-      services={SERVICES}
+      services={services}
       onChange={onChange}
     />,
   )
@@ -75,6 +75,13 @@ beforeEach(() => {
   ])
 })
 describe('BooksFilterBar service filter', () => {
+  it('keeps the active service as an option when the facets omit it (Created by me)', async () => {
+    setup({ serviceId: 'Report', mine: true }, [{ id: 'other', count: 1, states: { none: 1 } }])
+    expect(screen.getByTestId('service-filter')).toHaveTextContent('تقرير')
+    await userEvent.click(screen.getByTestId('service-filter'))
+    expect(screen.getByRole('option', { name: /تقرير/ })).toHaveAttribute('aria-selected', 'true')
+  })
+
   it('renders a Service trigger distinct from the Category trigger', () => {
     setup()
     const category = screen.getByTestId('category-filter')

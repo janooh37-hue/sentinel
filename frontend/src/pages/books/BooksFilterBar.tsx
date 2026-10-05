@@ -45,6 +45,11 @@ export function BooksFilterBar({
   const selectedServiceAllowed =
     filters.serviceId === 'all' || hasServiceRecordsCap(filters.serviceId, has)
   const selectedServiceId = selectedServiceAllowed ? filters.serviceId : 'all'
+  // The selected service stays an option even when the (mine-scoped) facets omit it.
+  const serviceOptions: Pick<ServiceFacetRead, 'id'>[] =
+    selectedServiceId === 'all' || visibleServices.some((s) => s.id === selectedServiceId)
+      ? visibleServices
+      : [...visibleServices, { id: selectedServiceId }]
   const resetDeniedServiceRef = useRef<string | null>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [catOpen, setCatOpen] = useState(false)
@@ -137,7 +142,7 @@ export function BooksFilterBar({
         <button
           type="button"
           data-testid="category-filter"
-          aria-haspopup="true"
+          aria-haspopup="dialog"
           aria-expanded={catOpen}
           onClick={() => setCatOpen((v) => !v)}
           className={cn(
@@ -163,7 +168,7 @@ export function BooksFilterBar({
 
         {catOpen && (
           <div
-            role="group"
+            role="dialog"
             aria-label={t('books.filters.category')}
             className="absolute start-0 top-full z-50 mt-1.5 min-w-[200px] overflow-hidden rounded-xl border border-hairline bg-surface shadow-lg"
           >
@@ -236,7 +241,7 @@ export function BooksFilterBar({
                   <span dir="auto">{t('books.filters.serviceAll')}</span>
                 </button>
               </li>
-              {visibleServices.map((s) => {
+              {serviceOptions.map((s) => {
                 const checked = selectedServiceId === s.id
                 const artwork = serviceArtwork(s.id)
                 return (

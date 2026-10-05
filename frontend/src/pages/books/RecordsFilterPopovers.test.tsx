@@ -11,6 +11,7 @@ import { DEFAULT_BOOKS_FILTERS } from './booksFiltersUtils'
 import type { RailItem } from './FormRail'
 
 vi.mock('@/lib/useCapabilities', () => ({ useCapabilities: () => ({ has: () => true }) }))
+vi.mock('./serviceLabels', () => ({ useServiceLabel: () => (id: string) => `L:${id}` }))
 
 import { FiltersPopover, ServicePopover } from './RecordsFilterPopovers'
 
@@ -84,5 +85,12 @@ describe('ServicePopover', () => {
     await userEvent.click(within(panel).getByRole('button', { name: /All forms/ }))
     expect(onChange).toHaveBeenCalledWith('all')
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  it('keeps naming the active service when the (Created by me) facets omit it', () => {
+    render(<ServicePopover items={items} active="Warning Form" onChange={vi.fn()} />)
+    const chip = screen.getByRole('button', { name: /Service/ })
+    expect(chip).toHaveTextContent('L:Warning Form')
+    expect(chip).not.toHaveTextContent('All')
   })
 })

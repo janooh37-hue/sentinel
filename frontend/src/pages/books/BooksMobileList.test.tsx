@@ -5,7 +5,7 @@
  * the card without redirecting back into the record.
  */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { act, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -37,6 +37,10 @@ vi.mock('./RecordDeleteProvider', () => ({
 }))
 vi.mock('@/lib/emailBasket', () => ({ addToBasket: mocks.addToBasket }))
 vi.mock('./recordsBasket', () => ({ buildRecordBasketItem: mocks.buildItem }))
+
+/** Select checkbox for a ref (the ref is bidi-isolated inside the label). */
+const box = (ref: string): HTMLElement =>
+  screen.getByRole('checkbox', { name: new RegExp(`books\\.list\\.selectRef:.*${ref}`) })
 
 function book(id: number, over: Partial<BookRead> = {}): BookRead {
   return {
@@ -100,15 +104,16 @@ function renderList(
     onClearFilters: vi.fn(),
     ...props,
   }
-  render(
-    <QueryClientProvider client={new QueryClient()}>
+  const client = new QueryClient()
+  const tree = (p: BooksMobileListProps): React.JSX.Element => (
+    <QueryClientProvider client={client}>
       <MemoryRouter initialEntries={[entry]}>
         <Routes>
           <Route
             path="/books"
             element={
               <>
-                <BooksMobileList {...all} />
+                <BooksMobileList {...p} />
                 <Probe />
               </>
             }
@@ -116,9 +121,10 @@ function renderList(
           <Route path="/books/:id" element={<Probe />} />
         </Routes>
       </MemoryRouter>
-    </QueryClientProvider>,
+    </QueryClientProvider>
   )
-  return all
+  const { rerender } = render(tree(all))
+  return { ...all, setRows: (rows: BookRead[]) => rerender(tree({ ...all, rows })) }
 }
 
 beforeEach(() => {
@@ -133,10 +139,8 @@ beforeEach(() => {
 })
 
 describe('BooksMobileList cards', () => {
-  it('opens a record through a real link carrying { from, queue } and hides pending-delete rows', async () => {
-    mocks.pending = new Set([2])
-    renderList()
-    expect(screen.queryByText('G-2026-002')).not.toBeInTheDocument()
+  it('opens a record through a real link carrying { from, queue }', async () => {
+    renderList({ rows: [book(1), book(3)] })
     const link = screen.getByRole('link', { name: 'G-2026-003' })
     expect(link).toHaveAttribute('href', '/books/3')
     await userEvent.click(link)
@@ -179,20 +183,56 @@ describe('BooksMobileList select mode', () => {
     renderList()
     await userEvent.click(screen.getByRole('button', { name: 'books.list.select' }))
     expect(screen.queryByRole('link')).not.toBeInTheDocument()
-    await userEvent.click(screen.getByRole('checkbox', { name: 'books.list.selectRef:G-2026-001' }))
-    await userEvent.click(screen.getByRole('checkbox', { name: 'books.list.selectRef:G-2026-003' }))
+    await userEvent.click(box('G-2026-001'))
+    await userEvent.click(box('G-2026-003'))
     expect(screen.getByText('books.list.selected:2')).toBeInTheDocument()
     expect(screen.getAllByText('books.list.skippedMany:1').length).toBeGreaterThan(0)
     await userEvent.click(screen.getByRole('button', { name: 'books.list.deleteMany:1' }))
+    // Confirm step first: nothing is scheduled until the dialog is confirmed.
+    expect(mocks.scheduleDelete).not.toHaveBeenCalled()
+    const dialog = await screen.findByRole('dialog')
+    expect(within(dialog).getByText('books.record.deleteBody')).toBeInTheDocument()
+    expect(within(dialog).getByText('books.list.skippedMany:1')).toBeInTheDocument()
+    await userEvent.click(within(dialog).getByRole('button', { name: 'books.bulk.delete' }))
     expect(mocks.scheduleDelete).toHaveBeenCalledWith([{ id: 1, ref: 'G-2026-001' }])
     expect(mocks.toast).toHaveBeenCalledWith('books.list.skippedMany:1')
+  })
+
+  it('cancelling the confirm schedules nothing', async () => {
+    renderList()
+    await userEvent.click(screen.getByRole('button', { name: 'books.list.select' }))
+    await userEvent.click(box('G-2026-001'))
+    await userEvent.click(screen.getByRole('button', { name: 'books.list.deleteMany:1' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'common.cancel' }))
+    expect(mocks.scheduleDelete).not.toHaveBeenCalled()
+  })
+
+  it('Delete is disabled when every pick is blocked, with the skipped reason shown', async () => {
+    renderList()
+    await userEvent.click(screen.getByRole('button', { name: 'books.list.select' }))
+    await userEvent.click(box('G-2026-003'))
+    const del = screen.getByRole('button', { name: 'books.list.deleteMany:0' })
+    expect(del).toBeDisabled()
+    expect(del).toHaveAccessibleDescription('books.list.skippedMany:1')
+  })
+
+  it('prunes picks for rows that left the list so they do not reappear', async () => {
+    const view = renderList()
+    await userEvent.click(screen.getByRole('button', { name: 'books.list.select' }))
+    await userEvent.click(box('G-2026-001'))
+    expect(screen.getByText('books.list.selected:1')).toBeInTheDocument()
+    act(() => view.setRows([book(2), book(3, { approval_state: 'approved' })]))
+    expect(screen.queryByText(/books\.list\.selected/)).not.toBeInTheDocument()
+    act(() => view.setRows([book(1), book(2), book(3, { approval_state: 'approved' })]))
+    expect(screen.queryByText(/books\.list\.selected/)).not.toBeInTheDocument()
+    expect(box('G-2026-001')).not.toBeChecked()
   })
 
   it('bulk Add to email adds every picked record to the basket', async () => {
     renderList()
     await userEvent.click(screen.getByRole('button', { name: 'books.list.select' }))
-    await userEvent.click(screen.getByRole('checkbox', { name: 'books.list.selectRef:G-2026-001' }))
-    await userEvent.click(screen.getByRole('checkbox', { name: 'books.list.selectRef:G-2026-002' }))
+    await userEvent.click(box('G-2026-001'))
+    await userEvent.click(box('G-2026-002'))
     await userEvent.click(screen.getByRole('button', { name: 'basket.add' }))
     await waitFor(() => expect(mocks.addToBasket).toHaveBeenCalledTimes(2))
     expect(mocks.toast.success).toHaveBeenCalled()
@@ -201,7 +241,7 @@ describe('BooksMobileList select mode', () => {
   it('Done leaves select mode and drops the picks', async () => {
     renderList()
     await userEvent.click(screen.getByRole('button', { name: 'books.list.select' }))
-    await userEvent.click(screen.getByRole('checkbox', { name: 'books.list.selectRef:G-2026-001' }))
+    await userEvent.click(box('G-2026-001'))
     await userEvent.click(screen.getByRole('button', { name: 'common.done' }))
     expect(screen.queryByRole('checkbox')).not.toBeInTheDocument()
     expect(screen.queryByText(/books.list.selected/)).not.toBeInTheDocument()

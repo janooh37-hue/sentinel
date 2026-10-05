@@ -237,7 +237,13 @@ describe('AccountMenu My records', () => {
     const user = userEvent.setup()
     renderWithProbe()
     await openMenu(user)
+    // Wait for the capabilities to RESOLVE (not merely be requested): while they
+    // load `has()` is false, so the row is absent with or without the role gate.
     await waitFor(() => expect(api.myCapabilities).toHaveBeenCalled())
+    await act(async () => {
+      await vi.mocked(api.myCapabilities).mock.results[0]?.value
+    })
     expect(screen.queryByRole('button', { name: /My records/ })).not.toBeInTheDocument()
+    expect(api.getBookFacets).not.toHaveBeenCalled()
   })
 })

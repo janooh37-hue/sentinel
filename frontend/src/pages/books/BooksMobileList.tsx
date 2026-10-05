@@ -11,6 +11,17 @@ import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 
 import type { BookRead } from '@/lib/api'
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog'
+import { bidi } from '@/lib/bidi'
 import { EmptyState } from '@/components/ui/empty-state'
 import { SkeletonRow } from '@/components/ui/skeleton'
 import { PullToRefresh } from '@/components/refresh/PullToRefresh'
@@ -67,13 +78,10 @@ export function BooksMobileList({
   const navigate = useNavigate()
   const location = useLocation()
   const { has } = useCapabilities()
-  const { scheduleDelete, pendingIds } = useRecordDelete()
 
-  // Rows whose delete is pending are hidden at once (Undo brings them back).
-  const mobileRows = useMemo(
-    () => rows.filter((row) => !pendingIds.has(row.id)),
-    [rows, pendingIds],
-  )
+  // BooksPage already hides rows whose delete is pending (Undo brings them back).
+  const { scheduleDelete } = useRecordDelete()
+  const mobileRows = rows
   const queue = useMemo(() => mobileRows.map((row) => row.id), [mobileRows])
 
   // ── Select mode ───────────────────────────────────────────────────────────
@@ -81,6 +89,11 @@ export function BooksMobileList({
   const [picked, setPicked] = useState<ReadonlySet<number>>(new Set())
   const canBulk = !isInmateReporter
   const canDelete = canBulk && has('books.delete')
+  // Drop ticks for rows that left the list (filter relaxed/tightened), so they
+  // cannot silently reappear later. Adjusting state during render, guarded.
+  if ([...picked].some((id) => !mobileRows.some((row) => row.id === id))) {
+    setPicked(new Set([...picked].filter((id) => mobileRows.some((row) => row.id === id))))
+  }
   const pickedRows = mobileRows.filter((row) => picked.has(row.id))
   const deletableRows = canDelete
     ? pickedRows.filter(
@@ -101,6 +114,7 @@ export function BooksMobileList({
       return next
     })
 
+  const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false)
   const bulkDelete = (): void => {
     if (deletableRows.length === 0) return
     scheduleDelete(deletableRows.map((row) => ({ id: row.id, ref: row.ref_number })))
@@ -242,7 +256,7 @@ export function BooksMobileList({
               {t('books.list.selected', { count: pickedRows.length })}
             </div>
             {skippedCount > 0 ? (
-              <small className="block text-[0.72em] text-muted-foreground">
+              <small id="books-mobile-skipped" className="block text-[0.72em] text-muted-foreground">
                 {t('books.list.skippedMany', { count: skippedCount })}
               </small>
             ) : null}
@@ -258,11 +272,12 @@ export function BooksMobileList({
           {canDelete ? (
             <button
               type="button"
-              aria-disabled={deletableRows.length === 0}
-              onClick={bulkDelete}
+              disabled={deletableRows.length === 0}
+              aria-describedby={deletableRows.length === 0 ? 'books-mobile-skipped' : undefined}
+              onClick={() => setConfirmDeleteOpen(true)}
               className={cn(
                 'inline-flex min-h-11 shrink-0 items-center gap-1.5 rounded-full border border-destructive/50 px-3.5 text-[0.82em] font-semibold text-destructive focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                deletableRows.length === 0 && 'opacity-50',
+                'disabled:opacity-50',
               )}
             >
               <Trash2 className="h-4 w-4" aria-hidden />
@@ -271,6 +286,36 @@ export function BooksMobileList({
           ) : null}
         </div>
       ) : null}
+
+      <AlertDialog open={confirmDeleteOpen} onOpenChange={setConfirmDeleteOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {t('books.list.deleteMany', { count: deletableRows.length })}
+            </AlertDialogTitle>
+            <AlertDialogDescription>{t('books.record.deleteBody')}</AlertDialogDescription>
+            {skippedCount > 0 ? (
+              <p className="text-sm text-muted-foreground">
+                {t('books.list.skippedMany', { count: skippedCount })}
+              </p>
+            ) : null}
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogAction
+              onClick={() => {
+                setConfirmDeleteOpen(false)
+                bulkDelete()
+              }}
+              className="bg-accent text-white hover:bg-accent/90"
+            >
+              {t('books.bulk.delete')}
+            </AlertDialogAction>
+            <AlertDialogCancel onClick={() => setConfirmDeleteOpen(false)}>
+              {t('common.cancel')}
+            </AlertDialogCancel>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }
@@ -389,7 +434,7 @@ function BookMobileCard({
           type="checkbox"
           checked={picked}
           onChange={onTogglePick}
-          aria-label={t('books.list.selectRef', { ref: row.ref_number })}
+          aria-label={t('books.list.selectRef', { ref: bidi(row.ref_number) })}
           className="mt-0.5 h-5 w-5 shrink-0 accent-primary"
         />
       ) : null}
