@@ -65,6 +65,7 @@ function setup(
           selected={new Set()}
           onToggleSelect={onToggleSelect}
           from="/books?status=pending&open=1"
+          isInmateReporter={false}
           {...props}
         />
         <Probe />
@@ -133,5 +134,26 @@ describe('RecordsList row a11y', () => {
   it('shows the page-provided empty state when there are no rows', () => {
     setup([], { empty: <p>nothing here</p> })
     expect(screen.getByText('nothing here')).toBeInTheDocument()
+  })
+
+  describe('paper count', () => {
+    const signedWithScans = (): BookRead =>
+      makeBook(1, {
+        approval_state: 'approved',
+        versions: [
+          { version_no: 1, document_id: 5, status: 'approved', signed_pdf_url: '/signed.pdf' },
+        ],
+        attachment_paths: ['a/1.pdf', 'a/2.pdf'],
+      } as unknown as Partial<BookRead>)
+
+    it('staff: signed copy, original and both scans', () => {
+      setup([signedWithScans()])
+      expect(within(rowOf(1)).getByText('4 papers')).toBeInTheDocument()
+    })
+
+    it('inmate reporters: only the signed copy, matching the pane and the phone list', () => {
+      setup([signedWithScans()], { isInmateReporter: true })
+      expect(within(rowOf(1)).getByText('1 paper')).toBeInTheDocument()
+    })
   })
 })

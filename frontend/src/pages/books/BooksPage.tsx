@@ -844,6 +844,7 @@ export function BooksPage(): React.JSX.Element {
                     from={listUrl}
                     scrollerRef={scrollerRef}
                     empty={listEmpty}
+                    isInmateReporter={isInmateReporter}
                   />
                 </>
               )}

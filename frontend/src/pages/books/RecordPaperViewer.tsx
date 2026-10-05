@@ -38,6 +38,7 @@ import { Hint } from '@/components/ui/hint'
 import { leasePdfUrl, type PdfDocLease } from '@/lib/pdfDocCache'
 import { cn } from '@/lib/utils'
 
+import { cachedThumb, loadThumb, type ThumbInfo } from './recordPaperThumbs'
 import { paperKey, type Paper, type PaperKey } from './recordPapers'
 import { paperLabels } from './recordPaperLabels'
 
@@ -71,6 +72,12 @@ function PdfPaper({ url, width }: { url: string; width: number }): React.JSX.Ele
     let lease: PdfDocLease | null = null
     leasePdfUrl(url, controller.signal).then(
       (l) => {
+        // Cleanup ran between the lease resolving and this callback: nobody
+        // will release it, so do it here (else the cache slot is pinned forever).
+        if (controller.signal.aborted) {
+          l.release()
+          return
+        }
         lease = l
         setState({ kind: 'loaded', doc: l.doc })
       },
@@ -116,63 +123,26 @@ function PdfPaper({ url, width }: { url: string; width: number }): React.JSX.Ele
 }
 
 // ---------------------------------------------------------------------------
-// Thumbnails (cached first page + page count)
+// Thumbnails (cached first page + page count; built lazily, one at a time)
 
-interface ThumbInfo {
-  src: string | null
-  pages: number | null
-}
-const THUMB_CACHE_MAX = 40
-const thumbCache = new Map<string, ThumbInfo>()
-const THUMB_WIDTH = 64
-
-function rememberThumb(url: string, info: ThumbInfo): void {
-  thumbCache.delete(url)
-  thumbCache.set(url, info)
-  if (thumbCache.size > THUMB_CACHE_MAX) {
-    const oldest = thumbCache.keys().next().value
-    if (oldest !== undefined) thumbCache.delete(oldest)
-  }
-}
-
-async function buildThumb(url: string, signal: AbortSignal): Promise<ThumbInfo> {
-  const lease = await leasePdfUrl(url, signal)
-  try {
-    const page = await lease.doc.getPage(1)
-    const base = page.getViewport({ scale: 1 })
-    const scale = (THUMB_WIDTH * Math.min(window.devicePixelRatio || 1, 2)) / base.width
-    const viewport = page.getViewport({ scale })
-    const canvas = document.createElement('canvas')
-    canvas.width = Math.floor(viewport.width)
-    canvas.height = Math.floor(viewport.height)
-    const ctx = canvas.getContext('2d')
-    if (!ctx) return { src: null, pages: lease.doc.numPages }
-    await page.render({ canvas, canvasContext: ctx, viewport }).promise
-    return { src: canvas.toDataURL('image/jpeg', 0.7), pages: lease.doc.numPages }
-  } finally {
-    lease.release()
-  }
-}
-
-function useThumb(paper: Paper): ThumbInfo | null {
+function useThumb(paper: Paper, visible: boolean): ThumbInfo | null {
   const [, force] = useState(0)
   const url = paper.url
   const isPdf = paper.isPdf
-  const cached = thumbCache.get(url)
+  const cached = cachedThumb(url)
   useEffect(() => {
-    if (!isPdf || thumbCache.has(url)) return
+    if (!isPdf || !visible || cachedThumb(url)) return
     const controller = new AbortController()
-    buildThumb(url, controller.signal).then(
-      (info) => {
-        rememberThumb(url, info)
-        force((n) => n + 1)
+    loadThumb(url, controller.signal).then(
+      () => {
+        if (!controller.signal.aborted) force((n) => n + 1)
       },
       () => {
         // A thumbnail is decoration: fall back to the file icon.
       },
     )
     return () => controller.abort()
-  }, [url, isPdf])
+  }, [url, isPdf, visible])
   return isPdf ? (cached ?? null) : { src: url, pages: null }
 }
 
@@ -188,9 +158,23 @@ function PaperThumb({
   onSelect: () => void
 }): React.JSX.Element {
   const { t } = useTranslation()
-  const thumb = useThumb(paper)
+  const buttonRef = useRef<HTMLButtonElement>(null)
+  const [visible, setVisible] = useState(false)
+  // Only a frame that scrolled into view builds its thumbnail (a PDF is fetched
+  // in full for it); once seen it stays eligible.
+  useEffect(() => {
+    const el = buttonRef.current
+    if (!el || visible) return
+    const io = new IntersectionObserver((entries) => {
+      if (entries.some((e) => e.isIntersecting)) setVisible(true)
+    })
+    io.observe(el)
+    return () => io.disconnect()
+  }, [visible])
+  const thumb = useThumb(paper, visible)
   const button = (
     <button
+      ref={buttonRef}
       type="button"
       aria-pressed={active}
       onClick={onSelect}

@@ -63,6 +63,7 @@ export function RecordsList({
   from,
   scrollerRef,
   empty,
+  isInmateReporter,
 }: {
   rows: BookRead[]
   selectedId: number | null
@@ -76,6 +77,8 @@ export function RecordsList({
   scrollerRef?: React.RefObject<HTMLDivElement | null>
   /** Shown instead of the rows when there are none (the page knows why). */
   empty?: React.ReactNode
+  /** Inmate reporters see fewer papers per record; the count must match the pane. */
+  isInmateReporter: boolean
 }): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const navigate = useNavigate()
@@ -123,7 +126,7 @@ export function RecordsList({
             const label = serviceLabel(row.service_id)
             const who = subjectEmployeePart(row.subject, classified)
             const snippet = (row as BookReadWithSnippet).search_snippet
-            const paperCount = paperCountOf(row)
+            const paperCount = paperCountOf(row, { inmateReporter: isInmateReporter })
             const isChecked = selected?.has(row.id) ?? false
             const selectable = onToggleSelect != null
             const isSelected = row.id === selectedId
