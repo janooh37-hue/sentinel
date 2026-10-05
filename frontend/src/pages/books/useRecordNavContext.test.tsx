@@ -3,7 +3,7 @@ import { render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { useRef } from 'react'
 import { MemoryRouter, Route, Routes, useLocation, useNavigate, useParams } from 'react-router-dom'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 import type { ApprovalContext } from '@/lib/approvals'
 import {
@@ -191,6 +191,9 @@ describe('describeListFrom', () => {
     expect(describeListFrom('/books', t)).toBeNull()
     expect(describeListFrom(null, t)).toBeNull()
   })
+  it('labels the awaiting-scan status segment', () => {
+    expect(describeListFrom('/books?status=awaiting_scan', t)).toBe('books.approval.stateAwaitingScan')
+  })
 })
 
 describe('useListReturnFocus', () => {
@@ -242,9 +245,12 @@ describe('useListReturnFocus', () => {
     )
   }
 
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
   it('desktop: restores scroll, selects the row via open, reveals it, then clears the state', async () => {
-    const scrollIntoView = vi.fn()
-    Element.prototype.scrollIntoView = scrollIntoView
+    const scrollIntoView = vi.spyOn(Element.prototype, 'scrollIntoView').mockImplementation(() => {})
     const onSelect = vi.fn()
     renderReturn({ isDesktop: true, onSelect })
     await waitFor(() => expect(screen.getByTestId('state')).toHaveTextContent('null'))
@@ -256,8 +262,7 @@ describe('useListReturnFocus', () => {
   })
 
   it('phone: flashes the card, never sets open, then clears the state', async () => {
-    const scrollIntoView = vi.fn()
-    Element.prototype.scrollIntoView = scrollIntoView
+    const scrollIntoView = vi.spyOn(Element.prototype, 'scrollIntoView').mockImplementation(() => {})
     const onSelect = vi.fn()
     const onFlash = vi.fn()
     renderReturn({ isDesktop: false, onSelect, onFlash })

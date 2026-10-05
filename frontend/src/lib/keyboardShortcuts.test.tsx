@@ -139,6 +139,22 @@ describe('bare-key layer', () => {
     expect(next).not.toHaveBeenCalled()
   })
 
+  it('keeps working under an aria-modal layer marked data-shortcuts-through, but not under a Radix dialog on top of it', () => {
+    const next = vi.fn()
+    renderWith(
+      <>
+        <Probe action="recordNext" handler={next} />
+        <div aria-modal="true" role="dialog" data-state="open" data-shortcuts-through />
+      </>,
+    )
+    press({ key: 'j', code: 'KeyJ' })
+    expect(next).toHaveBeenCalledTimes(1)
+
+    render(<div role="alertdialog" data-state="open" />)
+    press({ key: 'j', code: 'KeyJ' })
+    expect(next).toHaveBeenCalledTimes(1)
+  })
+
   it('does not re-fire one-shot actions or record stepping on key repeat, but does for zoom', () => {
     const next = vi.fn()
     const prev = vi.fn()

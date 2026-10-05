@@ -74,12 +74,14 @@ const NO_REPEAT: Readonly<Partial<Record<ShortcutAction, true>>> = {
 /** The lock screen (`LockOverlay`) — while mounted, no shortcut may act. */
 const LOCK_OVERLAY_SELECTOR = '[data-lock-overlay]'
 
+// A modal layer that opts in with `data-shortcuts-through` (the Records drawer,
+// whose list keys are meant to keep working) does not stand the layer down.
 const OVERLAY_SELECTOR = [
-  '[role="dialog"][data-state="open"]',
+  '[role="dialog"][data-state="open"]:not([data-shortcuts-through])',
   '[role="alertdialog"][data-state="open"]',
   '[role="menu"][data-state="open"]',
   '[role="listbox"][data-state="open"]',
-  '[aria-modal="true"]',
+  '[aria-modal="true"]:not([data-shortcuts-through])',
   // The book annotation composer: a typed note must survive Esc/J/K/M.
   '[data-anno-composer]',
 ].join(',')

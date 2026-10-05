@@ -31,7 +31,7 @@ export function PermitDocumentVersions({ bookId }: { bookId: number }): React.JS
       </h3>
       {has('books.edit') && (
         <div className="flex flex-wrap items-center gap-2">
-          <WordSessionActions book={book} isMobile={isMobile} labelled />
+          <WordSessionActions book={book} isMobile={isMobile} />
           <WordReopenButton book={book} isMobile={isMobile} />
         </div>
       )}

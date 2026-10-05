@@ -236,7 +236,7 @@ describe('WordHandoffDialog', () => {
       expect(screen.getByText('سيصبح الكتاب ملغياً ويبقى رقمه محفوظاً في السجل. متابعة؟')).toBeTruthy(),
     )
     // Click the confirm button
-    await user.click(screen.getByText('تجاهل المسودة'))
+    await user.click(screen.getByRole('button', { name: 'تجاهل المسودة' }))
     await waitFor(() => expect(discardSpy).toHaveBeenCalledWith(42))
     await waitFor(() => expect(onClose).toHaveBeenCalled())
   })

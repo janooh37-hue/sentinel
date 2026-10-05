@@ -214,7 +214,34 @@ function pick(entries: Array<[ActionId, boolean]>): ActionId[] {
   return entries.filter(([, include]) => include).map(([id]) => id)
 }
 
+/**
+ * The next-step model. Delete is appended to every state's overflow whenever
+ * the viewer may see it (and Change state under the admin capability), disabled with its reason (in flight, Word session),
+ * so every surface (pane, Tools menu, More sheet) agrees from one place.
+ */
 export function recordNextStep(book: BookRead, ctx: NextStepContext): NextStep {
+  const built = buildNextStep(book, ctx)
+  // Change state (admin) is a Tools/More entry in every state, not only approved.
+  const out =
+    !ctx.isInmateReporter &&
+    ctx.canMutateCurrent &&
+    ctx.has('books.override_state') &&
+    !built.overflow.includes('changeState')
+      ? { ...built, overflow: [...built.overflow, 'changeState' as const] }
+      : built
+  const reason = deleteBlockReason(book, { has: ctx.has, isInmateReporter: ctx.isInmateReporter })
+  if (reason === 'noCapability' || reason === 'restricted') return out
+  const id: ActionId = book.approval_state === 'none' ? 'deleteDraft' : 'deleteRecord'
+  if (out.overflow.includes(id)) return out
+  const key = deleteReasonKey(reason)
+  return {
+    ...out,
+    overflow: [...out.overflow, id],
+    ...(key ? { disabled: { ...out.disabled, [id]: key } } : {}),
+  }
+}
+
+function buildNextStep(book: BookRead, ctx: NextStepContext): NextStep {
   const state = book.approval_state
   const current = currentVersionOf(book)
   const steps: BookApprovalStepRead[] = current?.approval_steps ?? book.approval_steps ?? []

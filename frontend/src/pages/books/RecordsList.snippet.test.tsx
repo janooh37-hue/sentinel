@@ -15,6 +15,9 @@ import { MemoryRouter } from 'react-router-dom'
 
 import { RecordsList } from './RecordsList'
 import type { BookRead } from '@/lib/api'
+import type { RecordNavState } from './useRecordNavContext'
+
+const NAV: RecordNavState = { from: '/books', queue: [], scrollY: 0 }
 
 // RecordsList reads service labels via useServiceLabel(), which queries
 // ['templates'] through React Query — every render needs a provider.
@@ -34,7 +37,6 @@ vi.mock('react-i18next', () => ({
     t: (k: string) => {
       const ar: Record<string, string> = {
         'books.search.bodyMatch': 'تطابق في نص الكتاب',
-        'books.empty': 'لا توجد إدخالات',
         'books.pane.papers': 'الأوراق',
       }
       return ar[k] ?? k
@@ -98,7 +100,7 @@ describe('RecordsList snippet rendering (lng=ar)', () => {
       createElement(RecordsList, {
         rows: [book as BookRead],
         selectedId: null,
-        from: '/books',
+        nav: () => NAV,
         onSelect: () => undefined,
         isInmateReporter: false,
       }),
@@ -123,7 +125,7 @@ describe('RecordsList snippet rendering (lng=ar)', () => {
       createElement(RecordsList, {
         rows: [book as BookRead],
         selectedId: null,
-        from: '/books',
+        nav: () => NAV,
         onSelect: () => undefined,
         isInmateReporter: false,
       }),
@@ -140,7 +142,7 @@ describe('RecordsList snippet rendering (lng=ar)', () => {
       createElement(RecordsList, {
         rows: [book as BookRead],
         selectedId: null,
-        from: '/books',
+        nav: () => NAV,
         onSelect: () => undefined,
         isInmateReporter: false,
       }),

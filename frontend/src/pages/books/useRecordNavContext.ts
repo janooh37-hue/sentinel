@@ -219,6 +219,7 @@ export function describeListFrom(
     approved: 'books.approval.stateApproved',
     returned: 'books.approval.stateReturned',
     rejected: 'books.approval.stateRejected',
+    awaiting_scan: 'books.approval.stateAwaitingScan',
   }
   if (status && stateKey[status]) return t(stateKey[status])
   return null
@@ -268,7 +269,9 @@ export function useListReturnFocus(
     latest.current = { isDesktop, onSelect, onFlash, rowSelector }
   })
 
-  // 1. Restore scroll, reveal the row, select/flash — once per history entry.
+  // 1. Restore scroll, reveal the row, select/flash. Keyed on `location.key`, so it runs once
+  //    per history entry *and* once more after the select's `open` replace mints a new key
+  //    (the state is still present then). The second pass is idempotent: same row, same select.
   useEffect(() => {
     if (!returnState || !ready) return
     const key = `${location.key}:${returnState.focusBookId}`

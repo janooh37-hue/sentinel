@@ -122,7 +122,7 @@ const STATUS_TOKEN_ONE = new RegExp(`^${STATUS_OPEN}(\\w+)${STATUS_CLOSE}$`)
 
 /** The localized status sentence with its values isolated: names in `<bdi>`,
  *  dates and "2 days ago" in `<bdi dir="ltr">` (same shape the prototype uses). */
-function StatusText({ status }: { status: NextStep['status'] }): React.JSX.Element {
+export function StatusText({ status }: { status: NextStep['status'] }): React.JSX.Element {
   const { t } = useTranslation()
   const placeholders: Record<string, string> = {}
   for (const key of Object.keys(status.vars)) placeholders[key] = `${STATUS_OPEN}${key}${STATUS_CLOSE}`
@@ -485,7 +485,6 @@ function RecordHeaderBar({ book, caps, view, actions }: RecordPieceProps): React
             key={id}
             book={book}
             isMobile={isMobile}
-            labelled
             onFinished={isInmateReport ? () => submitReport(book.id) : undefined}
           />
         ) : null

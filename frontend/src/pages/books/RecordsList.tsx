@@ -14,7 +14,7 @@
  * the paper-count chip drop out and the ref stacks over the label, so the list
  * stays legible beside a wide pane or in the narrow desktop tiers.
  */
-import { useMemo, useRef } from 'react'
+import { useRef } from 'react'
 import { FileText } from 'lucide-react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
@@ -26,6 +26,7 @@ type BookReadWithSnippet = BookRead & { search_snippet?: string | null }
 import { cn } from '@/lib/utils'
 
 import { BookStatusChips } from '@/components/books/BookStatusChips'
+import { bidi } from '@/lib/bidi'
 import { ServiceArtwork } from '@/components/ui/service-artwork'
 import { signedSourceOf } from './bookStateLabel'
 import { subjectEmployeePart } from './formKind'
@@ -59,7 +60,7 @@ export function RecordsList({
   onSelect,
   selected,
   onToggleSelect,
-  from,
+  nav,
   scrollerRef,
   empty,
   isInmateReporter,
@@ -70,8 +71,8 @@ export function RecordsList({
   onSelect: (id: number) => void
   selected?: Set<number>
   onToggleSelect?: (id: number) => void
-  /** The list URL (path + search) a record opened from here returns to. */
-  from: string
+  /** The page's one nav-state builder (list URL, queue, scroll); `0` pins scrollY for links. */
+  nav: (scrollY?: number) => RecordNavState
   /** The scroller, for the page's return-focus restore; an internal ref when omitted. */
   scrollerRef?: React.RefObject<HTMLDivElement | null>
   /** Shown instead of the rows when there are none (the page knows why). */
@@ -85,9 +86,7 @@ export function RecordsList({
   const serviceLabel = useServiceLabel()
   const internalRef = useRef<HTMLDivElement | null>(null)
   const scroller = scrollerRef ?? internalRef
-  const queue = useMemo(() => rows.map((row) => row.id), [rows])
-  const nav = (): RecordNavState => ({ from, queue, scrollY: scroller.current?.scrollTop ?? 0 })
-  const linkNav = { from, queue, scrollY: 0 }
+  const linkNav = nav(0)
 
   const days: { date: string; items: BookRead[] }[] = []
   for (const row of rows) {
@@ -101,7 +100,7 @@ export function RecordsList({
     <div
       ref={scroller}
       data-records-scroller
-      className="@container min-h-0 flex-1 overflow-y-auto"
+      className="@container min-h-0 flex-1 scroll-pt-8 overflow-y-auto"
     >
       {days.map(({ date, items }) => (
         <section key={date}>
@@ -155,7 +154,7 @@ export function RecordsList({
                   <label className="relative z-10 -ms-1.5 grid h-11 w-8 shrink-0 cursor-pointer place-items-center">
                     <input
                       type="checkbox"
-                      aria-label={t('books.list.selectRef', { ref: row.ref_number })}
+                      aria-label={t('books.list.selectRef', { ref: bidi(row.ref_number) })}
                       checked={isChecked}
                       onChange={() => onToggleSelect(row.id)}
                       className="h-4 w-4 cursor-pointer accent-primary"

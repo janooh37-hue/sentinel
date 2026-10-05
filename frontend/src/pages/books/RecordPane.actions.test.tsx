@@ -9,19 +9,23 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
+import i18n from 'i18next'
 import type { BookRead } from '@/lib/api'
 
 import { RecordPane } from './RecordPane'
 
 const scheduleDelete = vi.hoisted(() => vi.fn())
 const getBook = vi.hoisted(() => vi.fn())
+const gates = vi.hoisted(() => ({ caps: new Set<string>(), role: 'admin' }))
 
 vi.mock('@/lib/api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/api')>()
   return { ...actual, api: { ...actual.api, getBook, listTemplates: vi.fn().mockResolvedValue({ items: [] }) } }
 })
-vi.mock('@/lib/useCapabilities', () => ({ useCapabilities: () => ({ has: () => true }) }))
-vi.mock('@/lib/authContext', () => ({ useAuth: () => ({ user: { id: 7, role: 'admin' } }) }))
+vi.mock('@/lib/useCapabilities', () => ({
+  useCapabilities: () => ({ has: (cap: string) => gates.caps.has(cap) || gates.caps.has('*') }),
+}))
+vi.mock('@/lib/authContext', () => ({ useAuth: () => ({ user: { id: 7, role: gates.role } }) }))
 vi.mock('./RecordDeleteProvider', () => ({
   useRecordDelete: () => ({ scheduleDelete, pendingIds: new Set<number>() }),
 }))
@@ -43,7 +47,7 @@ function makeBook(over: Record<string, unknown> = {}): BookRead {
     signing_path: null,
     access_scope: 'full',
     created_by_name: 'Sara',
-    created_by_g: 'G1234',
+    created_by_g: null,
     approval_steps: [],
     attachment_paths: [],
     imported_doc: null,
@@ -82,6 +86,8 @@ describe('RecordPane footer', () => {
   beforeEach(() => {
     scheduleDelete.mockClear()
     onDeleted.mockClear()
+    gates.caps = new Set(['*'])
+    gates.role = 'admin'
     getBook.mockReset()
     getBook.mockRejectedValue(new Error('no detail'))
   })
@@ -93,11 +99,29 @@ describe('RecordPane footer', () => {
     expect(screen.getByRole('link', { name: 'Open full record' })).toHaveAttribute('href', '/books/1')
   })
 
-  it('shows who created the record', async () => {
+  it('shows who created the record, with the G-number from the detail (list rows carry none)', async () => {
+    getBook.mockResolvedValue(makeBook({ created_by_g: 'G1234' }))
     renderPane(makeBook())
     const meta = (await screen.findByText(/Created by/)).closest('p')!
     expect(within(meta).getByText('Sara').tagName).toBe('BDI')
-    expect(within(meta).getByText('G1234')).toBeInTheDocument()
+    expect(await within(meta).findByText('G1234')).toBeInTheDocument()
+  })
+
+  it('renders the returner note through Quote, not a bare <q>', async () => {
+    const steps = [
+      { id: 1, kind: 'approver', state: 'returned', assignee_name: 'Ahmed', decided_at: '2026-10-02T09:00:00', note: 'fix the dates' },
+    ]
+    renderPane(
+      makeBook({
+        approval_state: 'returned',
+        approval_steps: steps,
+        versions: [{ id: 11, version_no: 1, document_id: 5, status: 'returned', signed_pdf_url: null, approval_steps: steps }],
+      }),
+    )
+    const note = await screen.findByText('fix the dates')
+    expect(note.tagName).toBe('BDI')
+    expect(note.parentElement).toHaveTextContent('“fix the dates”')
+    expect(note.closest('q')).toBeNull()
   })
 
   it('deletes a draft from More after a confirm, deferred through scheduleDelete', async () => {
@@ -117,21 +141,16 @@ describe('RecordPane footer', () => {
       makeBook({
         approval_state: 'approved',
         versions: [
-          {
-            id: 11,
-            version_no: 1,
-            document_id: 5,
-            status: 'approved',
-            signed_pdf_url: '/api/v1/books/1/signed',
-            signed_source: 'in_app',
-            approval_steps: [],
-          },
+          { id: 11, version_no: 1, document_id: 5, status: 'approved', signed_pdf_url: '/api/v1/books/1/signed', signed_source: 'in_app', approval_steps: [] },
         ],
       }),
     )
     await userEvent.click(await screen.findByRole('button', { name: /More/ }))
     const item = await screen.findByRole('menuitem', { name: /Delete record/ })
     expect(item).toHaveAttribute('aria-disabled', 'true')
+    expect(item).toHaveTextContent(
+      i18n.t('books.reason.inFlight', { action: i18n.t('books.stateOverride.trigger') }),
+    )
 
     await userEvent.click(item)
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
@@ -161,7 +180,7 @@ describe('RecordPane footer', () => {
 
   it('never renders a dangling "by ·" when the row carries no approver name', async () => {
     renderPane(signedRow(null))
-    expect(await screen.findByText(/Signed · /)).toBeInTheDocument()
+    expect(await screen.findByText(/Signed ·/)).toBeInTheDocument()
     expect(screen.queryByText(/Signed by/)).not.toBeInTheDocument()
   })
 
@@ -169,5 +188,44 @@ describe('RecordPane footer', () => {
     getBook.mockResolvedValue(signedRow('Ahmed'))
     renderPane(signedRow(null))
     expect(await screen.findByText(/Signed by/)).toHaveTextContent('Ahmed')
+  })
+
+  describe('Delete gates', () => {
+    async function openMore(): Promise<void> {
+      await userEvent.click(await screen.findByRole('button', { name: /More/ }))
+    }
+
+    it('hides Delete without books.delete', async () => {
+      gates.caps = new Set(['books.read'])
+      renderPane(makeBook())
+      await openMore()
+      expect(screen.queryByRole('menuitem', { name: /Delete/ })).not.toBeInTheDocument()
+    })
+
+    it('hides Delete for an inmate reporter', async () => {
+      gates.role = 'inmate_reporter'
+      renderPane(makeBook())
+      await screen.findByRole('link', { name: 'Open full record' })
+      const more = screen.queryByRole('button', { name: /More/ })
+      if (more) await userEvent.click(more)
+      expect(screen.queryByRole('menuitem', { name: /Delete/ })).not.toBeInTheDocument()
+    })
+
+    it('hides Delete when access_scope is not full', async () => {
+      renderPane(makeBook({ access_scope: 'limited' }))
+      await openMore()
+      expect(screen.queryByRole('menuitem', { name: /Delete/ })).not.toBeInTheDocument()
+    })
+
+    it('blocks Delete with the Word-session reason during a live edit session', async () => {
+      renderPane(makeBook({ is_word_book: true, edit_session: { state: 'active' } }))
+      await openMore()
+      const item = await screen.findByRole('menuitem', { name: /Delete/ })
+      expect(item).toHaveAttribute('aria-disabled', 'true')
+      expect(item).toHaveTextContent(i18n.t('books.reason.wordSession'))
+      await userEvent.click(item)
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+      expect(scheduleDelete).not.toHaveBeenCalled()
+    })
   })
 })

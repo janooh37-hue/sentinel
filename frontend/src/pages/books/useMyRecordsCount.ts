@@ -7,10 +7,8 @@
  * share one request and one cache entry, whatever the toggle's state.
  */
 import { useQuery } from '@tanstack/react-query'
-import type { UseQueryResult } from '@tanstack/react-query'
 
 import { api } from '@/lib/api'
-import type { BookFacetsResponse } from '@/lib/api'
 
 /** The facets key; `mine = true` is the badge query. */
 export const booksFacetsKey = (mine: boolean): readonly ['books', 'facets', boolean] => [
@@ -22,12 +20,11 @@ export const booksFacetsKey = (mine: boolean): readonly ['books', 'facets', bool
 export function useMyRecordsCount({ enabled = true }: { enabled?: boolean } = {}): {
   /** Total records created by me; `null` until the first response. */
   count: number | null
-  query: UseQueryResult<BookFacetsResponse>
 } {
   const query = useQuery({
     queryKey: booksFacetsKey(true),
     queryFn: () => api.getBookFacets({ created_by_me: true }),
     enabled,
   })
-  return { count: query.data?.total ?? null, query }
+  return { count: query.data?.total ?? null }
 }

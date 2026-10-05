@@ -82,7 +82,8 @@ import { sealDescriptor, signedSourceOf } from './bookStateLabel'
 import { IncludedPapersDialog } from './IncludedPapersDialog'
 import { isIncludedPapersOwner } from './includedPapersState'
 import { subjectEmployeePart } from './formKind'
-import { deleteBlockReason, deleteReasonKey } from './recordDelete'
+import { Quote } from './record/Quote'
+import { StatusText } from './record/RecordHeader'
 import {
   recordNextStep,
   type ActionId,
@@ -336,9 +337,10 @@ export function RecordPane({
   })
   const reasonOf = (id: ActionId): string | undefined => {
     const key: ReasonKey | undefined = ns.disabled?.[id]
-    return key ? t(key) : undefined
+    return key ? t(key, { action: t('books.stateOverride.trigger') }) : undefined
   }
-  const statusVars = { ...ns.status.vars, ...(ns.status.vars.name ? { name: bidi(ns.status.vars.name) } : null) }
+  // List rows carry no G-number (the backend sets it on detail only).
+  const creatorG = statusDetail.data?.id === book.id ? statusDetail.data.created_by_g : null
   const openFull = (): void => openRecord(navigate, book.id, nav())
   const signedPaper = papers.find((p) => p.kind === 'signed')
 
@@ -388,9 +390,9 @@ export function RecordPane({
   const showAddToPdf = canManageIncludedPapers
   const showEmail = !isInmateReporter && ns.overflow.includes('email')
   const emailReason = reasonOf('email')
-  const delReason = deleteBlockReason(book, { has, isInmateReporter })
-  const showDelete = delReason !== 'noCapability' && delReason !== 'restricted'
-  const delReasonKey = deleteReasonKey(delReason)
+  const deleteId = ns.overflow.find((id) => id === 'deleteDraft' || id === 'deleteRecord')
+  const showDelete = deleteId !== undefined
+  const deleteReason = deleteId ? reasonOf(deleteId) : undefined
   const deleteLabel = state === 'none' ? t('books.record.deleteDraft') : t('books.record.delete')
   const hasMoreItems =
     wordTrigger !== null || showScanSignedInMenu || showAddToPdf || showEmail || showDelete
@@ -560,10 +562,10 @@ export function RecordPane({
             ) : (
               <span className="italic">{t('books.record.creatorUnknown')}</span>
             )}
-            {book.created_by_g && (
+            {creatorG && (
               <>
                 {' · '}
-                <bdi dir="ltr" className="font-mono tabular-nums">{book.created_by_g}</bdi>
+                <bdi dir="ltr" className="font-mono tabular-nums">{creatorG}</bdi>
               </>
             )}
             {' · '}
@@ -571,11 +573,12 @@ export function RecordPane({
           </p>
           {/* Status: the sentence the record page header shows, with the returner's note */}
           <p className="mt-2 text-[0.78em] text-foreground">
-            {t(`books.status.${ns.status.key}`, statusVars)}
+            <StatusText status={ns.status} />
             {ns.quote && (
-              <q className="ms-1 italic text-muted-foreground" dir="auto">
-                {ns.quote}
-              </q>
+              <>
+                {' '}
+                <Quote text={ns.quote} className="italic text-muted-foreground" />
+              </>
             )}
           </p>
         </div>
@@ -611,7 +614,6 @@ export function RecordPane({
         {(!isInmateReporter || isInmateReport) && (
           <WordSessionActions
             book={book}
-            labelled
             onFinished={isInmateReport ? () => onSubmit(book.id) : undefined}
           />
         )}
@@ -685,7 +687,7 @@ export function RecordPane({
                     <DropdownMenuSeparator />
                     <DropdownMenuItem
                       variant="danger"
-                      reason={delReasonKey ? t(delReasonKey) : undefined}
+                      reason={deleteReason}
                       onSelect={() => setDeleteRecordOpen(true)}
                     >
                       <Trash2 className="h-3.5 w-3.5" aria-hidden />

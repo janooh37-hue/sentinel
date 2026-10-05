@@ -51,6 +51,7 @@ import { useCapabilities } from '@/lib/useCapabilities'
 import { useAuth } from '@/lib/authContext'
 import { useLocalStorage } from '@/lib/useLocalStorage'
 import { useShortcutAction } from '@/lib/useKeyboardShortcuts'
+import { useFocusTrap } from '@/lib/useFocusTrap'
 import { cn } from '@/lib/utils'
 import { RefreshButton } from '@/components/refresh/RefreshButton'
 import {
@@ -58,7 +59,6 @@ import {
   hasActiveFilters,
   matchesBookFilters,
   matchesDesktopSearchRow,
-  normalizeFilters,
   type BooksFilters,
 } from './booksFiltersUtils'
 import { booksFacetsKey, useMyRecordsCount } from './useMyRecordsCount'
@@ -87,6 +87,37 @@ const PANE_WIDTH: Record<PaneSize, string> = {
   collapsed: '52px',
   normal: 'clamp(22rem,34%,32rem)',
   wide: 'clamp(30rem,52%,56rem)',
+}
+
+/**
+ * The end-anchored drawer shell: a modal dialog that traps and restores focus.
+ * `data-shortcuts-through` keeps the page's list keys (J/K/Enter/C/Esc) live
+ * inside it; Radix overlays stacked above still stand the shortcut layer down.
+ */
+function RecordDrawer({
+  label,
+  closeLabel,
+  children,
+}: {
+  label: string
+  closeLabel: string
+  children: React.ReactNode
+}): React.JSX.Element {
+  const ref = useFocusTrap<HTMLDivElement>(true, `[aria-label="${closeLabel}"]`)
+  return (
+    <div
+      ref={ref}
+      role="dialog"
+      aria-modal="true"
+      aria-label={label}
+      tabIndex={-1}
+      data-shortcuts-through
+      data-state="open"
+      className="drawer-end fixed inset-y-0 end-0 z-40 w-full max-w-[26rem] shadow-2xl focus-visible:outline-none"
+    >
+      {children}
+    </div>
+  )
 }
 
 export function BooksPage(): React.JSX.Element {
@@ -119,8 +150,8 @@ export function BooksPage(): React.JSX.Element {
   const status = (statusParam === 'draft' ? 'none' : statusParam) as BooksFilters['status']
   // "Created by me" is hidden for inmate reporters, so the param is ignored.
   const mine = mineParam === '1' && !isInmateReporter
-  const filters = useMemo(
-    () => normalizeFilters({
+  const filters = useMemo<BooksFilters>(
+    () => ({
       categoryIds: categoriesParam ? categoriesParam.split(',').filter(Boolean) : [],
       direction:
         directionParam === 'incoming' || directionParam === 'outgoing' ? directionParam : 'all',
@@ -198,7 +229,12 @@ export function BooksPage(): React.JSX.Element {
     setDraftsParam(next ? '1' : null)
   }
   const selectedId = Number.parseInt(openParam, 10) || null
-  const setSelectedId = (value: number): void => setOpenParam(String(value))
+  // The row the page itself (not the user) put in `open`; see the drawer-tier effect.
+  const autoSelectedRef = useRef<number | null>(null)
+  const setSelectedId = (value: number): void => {
+    autoSelectedRef.current = null
+    setOpenParam(String(value))
+  }
   // Multi-select for the bulk actions (Add to email / Delete), book ids.
   const [selectedForBasket, setSelectedForBasket] = useState<Set<number>>(new Set())
   const [highlightedId, setHighlightedId] = useState<number | null>(null)
@@ -213,16 +249,13 @@ export function BooksPage(): React.JSX.Element {
   const { count: myRecordsCount } = useMyRecordsCount({ enabled: !isInmateReporter })
 
   // ── Data: one server-scoped fetch; both branches filter client-side ────────
-  // `railService` (the desktop rail's own selection) is a desktop-only concept
-  // — it must never leak into mobile, so a desktop→mobile resize with a rail
-  // service selected can't leave the mobile list silently filtered with no
-  // indicator that a filter is active. Mobile instead scopes on
-  // `filters.serviceId`, the operator's own visible choice in the mobile
-  // Service popover (its trigger shows the selected label), so the scoping is
-  // never silent. Without this, mobile filtered client-side over an unscoped
-  // 500-row window, undercounting services with more rows further back in the
-  // table (e.g. Leave Application Form: 276 true vs 230 visible).
-  const railScope = isDesktop ? railService : filters.serviceId
+  // `serviceParam` (`?service=`) is the single source for the service scope: the
+  // desktop rail, the desktop Service popover and the mobile Service popover all
+  // write it, so both layouts fetch the same server-side-scoped list. Without
+  // that, mobile filtered client-side over an unscoped 500-row window,
+  // undercounting services with more rows further back in the table (e.g. Leave
+  // Application Form: 276 true vs 230 visible).
+  const railScope = serviceParam
   const listQuery = useQuery({
     queryKey: ['books', 'all', railScope, mine],
     queryFn: () =>
@@ -275,12 +308,14 @@ export function BooksPage(): React.JSX.Element {
   // fetched window, open the full record page in place of this entry. Later
   // in-page selections only update `open`, so they never re-trigger this.
   const deepLinkOpenRef = useRef<number | null>(Number.parseInt(openParam, 10) || null)
+  const deepLinkBouncedRef = useRef(false)
   useEffect(() => {
     const target = deepLinkOpenRef.current
     if (target === null) return
     if (isDesktop && !listQuery.isSuccess) return
     deepLinkOpenRef.current = null
     if (!isDesktop || !allRows.some((row) => row.id === target)) {
+      deepLinkBouncedRef.current = true
       navigate(`/books/${target}`, { replace: true })
       return
     }
@@ -330,8 +365,8 @@ export function BooksPage(): React.JSX.Element {
   )
 
   const railItems = useMemo<RailItem[]>(
-    () => railItemsFrom(facetsQuery.data, t('books.formKind.all'), serviceLabel),
-    [facetsQuery.data, serviceLabel, t],
+    () => railItemsFrom(facetsQuery.data, t('books.formKind.all'), serviceLabel, serviceParam),
+    [facetsQuery.data, serviceLabel, t, serviceParam],
   )
 
   // Draft books (is_draft && !voided_at) — shown in the group card above the list
@@ -388,10 +423,10 @@ export function BooksPage(): React.JSX.Element {
   // ── Navigation: every open carries the list context ─────────────────────────
   const listUrl = `${location.pathname}${location.search}`
   const buildNav = useCallback(
-    (): RecordNavState => ({
+    (scrollY?: number): RecordNavState => ({
       from: listUrl,
       queue: desktopRowIds,
-      scrollY: scrollerRef.current?.scrollTop ?? 0,
+      scrollY: scrollY ?? scrollerRef.current?.scrollTop ?? 0,
     }),
     [listUrl, desktopRowIds],
   )
@@ -429,15 +464,15 @@ export function BooksPage(): React.JSX.Element {
   }, [])
 
   // ── Bulk actions ─────────────────────────────────────────────────────────────
-  // A checkbox can only be set on a row that's currently rendered (desktopRows),
-  // which during an active search comes from searchItems, not allRows.
+  // Only rows currently shown count: a row hidden by a filter / search change is
+  // neither counted nor acted on (it stays ticked and returns with its row).
   const selectedRows = useMemo(() => {
-    const pool = serverSearchActive && searchItems ? searchItems : allRows
+    const byId = new Map(desktopRows.map((row) => [row.id, row]))
     return [...selectedForBasket].flatMap((id) => {
-      const row = pool.find((r) => r.id === id) ?? allRows.find((r) => r.id === id)
+      const row = byId.get(id)
       return row ? [row] : []
     })
-  }, [selectedForBasket, serverSearchActive, searchItems, allRows])
+  }, [selectedForBasket, desktopRows])
   // Signed / in-flight / Word-session rows are skipped, never deleted.
   const deletableRows = useMemo(
     () => selectedRows.filter((row) => deleteBlockReason(row, { has, isInmateReporter }) === null),
@@ -512,10 +547,13 @@ export function BooksPage(): React.JSX.Element {
     const nextIndex = at === -1 ? (delta > 0 ? 0 : desktopRows.length - 1) : at + delta
     const next = desktopRows[Math.min(Math.max(nextIndex, 0), desktopRows.length - 1)]
     if (next.id !== selectedId) {
+      // Focus follows the selection when it was on a row, so Enter / Ctrl+Enter
+      // act on the row just stepped to rather than the one last clicked.
+      const focusInRow = document.activeElement?.closest('[data-book-id]') != null
       setSelectedId(next.id)
-      scrollerRef.current
-        ?.querySelector(`[data-book-id="${next.id}"]`)
-        ?.scrollIntoView({ block: 'nearest' })
+      const row = scrollerRef.current?.querySelector<HTMLElement>(`[data-book-id="${next.id}"]`)
+      row?.scrollIntoView({ block: 'nearest' })
+      if (focusInRow) row?.querySelector<HTMLElement>('button')?.focus({ preventScroll: true })
     }
     return true
   }
@@ -526,10 +564,12 @@ export function BooksPage(): React.JSX.Element {
     openFromList(selectedBook.id)
   })
   useShortcutAction('recordOpenNewTab', () => {
-    // A focused row wins over the selection (Ctrl+Enter works from a Tab-focused row).
+    // A focused row wins over the selection (Ctrl+Enter works from a Tab-focused
+    // row, even in the drawer tier with the drawer closed).
+    if (!isDesktop || tier === null) return false
     const focusedRow = document.activeElement?.closest<HTMLElement>('[data-book-id]')
-    const id = Number(focusedRow?.dataset.bookId) || selectedBook?.id
-    if (!keysActive || !id) return false
+    const id = Number(focusedRow?.dataset.bookId) || (keysActive ? selectedBook?.id : undefined)
+    if (!id) return false
     window.open(`/books/${id}`, '_blank', 'noopener')
   })
   useShortcutAction('copyRef', () => {
@@ -553,15 +593,29 @@ export function BooksPage(): React.JSX.Element {
   // chosen, and mobile never uses selectedId. A pending Back-restore selects its
   // own row, so it must not be pre-empted by the first row.
   const firstRowId = desktopRows[0]?.id ?? null
+  // No `open` at all, or an `open` whose record is gone (Created-by-me / service
+  // change dropped it) → pick the first row.
+  const selectionGone = openParam ? listQuery.isSuccess && selectedBook === null : true
   const needsAutoSelect =
     inlinePane &&
     !returnPending &&
-    !openParam &&
+    selectionGone &&
     firstRowId !== null &&
     (selectedId === null || !desktopRows.some((r) => r.id === selectedId))
   useEffect(() => {
-    if (needsAutoSelect && firstRowId !== null) setOpenParam(String(firstRowId))
+    // A deep link that is bouncing to the record page (declared above, so it has
+    // already run this commit) must not race a re-selection.
+    if (!needsAutoSelect || firstRowId === null || deepLinkBouncedRef.current) return
+    autoSelectedRef.current = firstRowId
+    setOpenParam(String(firstRowId))
   }, [needsAutoSelect, firstRowId, setOpenParam])
+  // Crossing into the drawer tier must not pop the drawer for a row the page
+  // (not the user) selected; a user-chosen or deep-linked `open` stays.
+  useEffect(() => {
+    if (!drawerTier || autoSelectedRef.current === null) return
+    if (autoSelectedRef.current === selectedId) setOpenParam(null)
+    autoSelectedRef.current = null
+  }, [drawerTier, selectedId, setOpenParam])
 
   const mineToggle = isInmateReporter
     ? undefined
@@ -777,7 +831,7 @@ export function BooksPage(): React.JSX.Element {
                                 {draft.subject ?? '—'}
                               </span>
                               <BookStatusChips book={draft} noClassification />
-                              {!isInmateReporter && <WordSessionActions book={draft} labelled />}
+                              {!isInmateReporter && <WordSessionActions book={draft} />}
                             </div>
                           ))}
                           {draftBooks.length > 3 && (
@@ -793,15 +847,15 @@ export function BooksPage(): React.JSX.Element {
                       </details>
                     </div>
                   )}
-                  {!isInmateReporter && selectedForBasket.size > 0 && (
+                  {!isInmateReporter && selectedRows.length > 0 && (
                     <div
                       role="region"
-                      aria-label={t('books.list.selected', { count: selectedForBasket.size })}
+                      aria-label={t('books.list.selected', { count: selectedRows.length })}
                       className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-1.5 border-b border-hairline bg-surface-raised px-3.5 py-2"
                     >
                       <div className="flex flex-col">
                         <span className="text-xs text-foreground">
-                          {t('books.list.selected', { count: selectedForBasket.size })}
+                          {t('books.list.selected', { count: selectedRows.length })}
                         </span>
                         {skippedCount > 0 && (
                           <small className="text-[0.7rem] text-muted-foreground">
@@ -814,7 +868,7 @@ export function BooksPage(): React.JSX.Element {
                         onClick={() => void handleAddToEmail()}
                         className="inline-flex min-h-8 items-center gap-1.5 rounded-full bg-primary px-3 py-1 text-xs font-semibold text-primary-foreground transition-colors hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 motion-reduce:transition-none pointer-coarse:min-h-11"
                       >
-                        {t('basket.addN', { count: selectedForBasket.size })}
+                        {t('basket.addN', { count: selectedRows.length })}
                       </button>
                       {canDelete && (
                         <button
@@ -841,7 +895,7 @@ export function BooksPage(): React.JSX.Element {
                     onSelect={setSelectedId}
                     selected={isInmateReporter ? undefined : selectedForBasket}
                     onToggleSelect={isInmateReporter ? undefined : handleToggleSelect}
-                    from={listUrl}
+                    nav={buildNav}
                     scrollerRef={scrollerRef}
                     empty={listEmpty}
                     isInmateReporter={isInmateReporter}
@@ -858,7 +912,7 @@ export function BooksPage(): React.JSX.Element {
               />
             )}
           </div>
-          {drawerOpen &&
+          {drawerOpen && selectedBook !== null &&
             createPortal(
               <>
                 <div
@@ -866,10 +920,7 @@ export function BooksPage(): React.JSX.Element {
                   className="fixed inset-0 z-40 bg-foreground/15"
                   onClick={closeDrawer}
                 />
-                <div
-                  data-state="open"
-                  className="drawer-end fixed inset-y-0 end-0 z-40 w-full max-w-[26rem] shadow-2xl"
-                >
+                <RecordDrawer label={selectedBook.ref_number} closeLabel={t('common.close')}>
                   <RecordPane
                     {...paneProps}
                     book={selectedBook}
@@ -877,7 +928,7 @@ export function BooksPage(): React.JSX.Element {
                     size="normal"
                     onClose={closeDrawer}
                   />
-                </div>
+                </RecordDrawer>
               </>,
               document.body,
             )}
@@ -994,9 +1045,14 @@ export function BooksPage(): React.JSX.Element {
           onOpenChange={setConfirmDeleteOpen}
           title={t('books.list.deleteMany', { count: deletableRows.length })}
           description={
-            skippedCount > 0
-              ? `${t('books.record.deleteBody')} ${t('books.list.skippedMany', { count: skippedCount })}`
-              : t('books.record.deleteBody')
+            skippedCount > 0 ? (
+              <>
+                <p>{t('books.record.deleteBody')}</p>
+                <p>{t('books.list.skippedMany', { count: skippedCount })}</p>
+              </>
+            ) : (
+              t('books.record.deleteBody')
+            )
           }
           confirmLabel={t('books.bulk.delete')}
           onConfirm={handleBulkDelete}

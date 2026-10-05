@@ -27,6 +27,7 @@ import { cn } from '@/lib/utils'
 import { BooksFilterFields } from './BooksFilterFields'
 import type { BooksFilters } from './booksFiltersUtils'
 import type { RailItem } from './FormRail'
+import { useServiceLabel } from './serviceLabels'
 
 interface PanelPosition {
   top: number
@@ -34,11 +35,16 @@ interface PanelPosition {
   inlineEnd: number
 }
 
+/** Minimum gap (px) kept between a popover panel and the viewport edge. */
+const VIEWPORT_GUTTER = 8
+const FILTERS_PANEL_PX = 320 // w-[20rem]
+const SERVICE_PANEL_PX = 256 // w-[16rem]
+
 const CHIP =
   'inline-flex min-h-8 shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-[0.75em] font-semibold transition-colors motion-reduce:transition-none pointer-coarse:min-h-11 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
 
 /** Trigger + anchored panel state shared by both popovers. */
-function useAnchoredPanel(): {
+function useAnchoredPanel(widthPx: number): {
   triggerRef: React.RefObject<HTMLButtonElement | null>
   position: PanelPosition | null
   toggle: () => void
@@ -58,7 +64,13 @@ function useAnchoredPanel(): {
     const rect = triggerRef.current?.getBoundingClientRect()
     if (!rect) return
     const rtl = document.documentElement.dir === 'rtl'
-    setPosition({ top: rect.bottom + 6, inlineEnd: rtl ? rect.left : window.innerWidth - rect.right })
+    const vw = window.innerWidth
+    const raw = rtl ? rect.left : vw - rect.right
+    // Keep the whole panel (its width, itself capped to the viewport) on screen
+    // in both directions: `inset-inline-end` is the distance from the end edge.
+    const panelW = Math.min(widthPx, vw - VIEWPORT_GUTTER * 2)
+    const inlineEnd = Math.max(VIEWPORT_GUTTER, Math.min(raw, vw - panelW - VIEWPORT_GUTTER))
+    setPosition({ top: rect.bottom + 6, inlineEnd })
   }
   return { triggerRef, position, toggle, close }
 }
@@ -135,7 +147,7 @@ export function FiltersPopover({
   onChange: (next: BooksFilters) => void
 }): React.JSX.Element {
   const { t } = useTranslation()
-  const { triggerRef, position, toggle, close } = useAnchoredPanel()
+  const { triggerRef, position, toggle, close } = useAnchoredPanel(FILTERS_PANEL_PX)
   const activeCount =
     filters.categoryIds.length +
     (filters.direction !== 'all' ? 1 : 0) +
@@ -209,7 +221,8 @@ export function ServicePopover({
 }): React.JSX.Element {
   const { t } = useTranslation()
   const { has } = useCapabilities()
-  const { triggerRef, position, toggle, close } = useAnchoredPanel()
+  const { triggerRef, position, toggle, close } = useAnchoredPanel(SERVICE_PANEL_PX)
+  const serviceLabel = useServiceLabel()
   const visible = items.filter(
     (item) => item.serviceId === 'all' || hasServiceRecordsCap(item.serviceId, has),
   )
@@ -233,7 +246,9 @@ export function ServicePopover({
       >
         <span>{t('books.filters.service')}</span>
         <span className="max-w-[10rem] truncate font-medium" dir="auto">
-          {current?.label ?? t('books.filters.serviceAll')}
+          {active === 'all'
+            ? t('books.filters.serviceAll')
+            : (current?.label ?? serviceLabel(active))}
         </span>
         <ChevronDown
           className={cn(

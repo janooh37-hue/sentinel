@@ -112,11 +112,12 @@ describe('Books URL state', () => {
     await waitFor(() => expect(api.listBooks).toHaveBeenCalledWith({ limit: 500 }))
   })
 
-  it('hides the Created-by-me toggle from inmate reporters, even with mine=1 in the URL', async () => {
+  it('never scopes inmate reporters to "created by me": no badge query, no scoped list, even with mine=1', async () => {
     viewport.role = 'inmate_reporter'
     setup('/books?mine=1')
     await waitFor(() => expect(api.listBooks).toHaveBeenCalledWith({ limit: 500 }))
-    expect(screen.queryByLabelText('mine-toggle')).not.toBeInTheDocument()
+    await waitFor(() => expect(api.getBookFacets).toHaveBeenCalledWith({}))
+    expect(api.getBookFacets).not.toHaveBeenCalledWith({ created_by_me: true })
     expect(api.listBooks).not.toHaveBeenCalledWith(expect.objectContaining({ created_by_me: true }))
   })
 

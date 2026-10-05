@@ -387,7 +387,6 @@ export function RecordDock({ book, caps, view, actions }: RecordPieceProps): Rea
                 {book && (
                   <WordSessionActions
                     book={book}
-                    labelled
                     onFinished={caps.isInmateReport ? () => actions.submitReport(book.id) : undefined}
                   />
                 )}

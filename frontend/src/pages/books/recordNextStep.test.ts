@@ -109,7 +109,7 @@ describe('recordNextStep rows', () => {
     expect(r.status.key).toBe('noDoc')
     expect(r.primary).toBe('continueEditing')
     expect(r.secondary).toEqual([])
-    expect(r.overflow).toEqual(['deleteDraft'])
+    expect(r.overflow).toEqual(['deleteDraft', 'changeState'])
   })
 
   it('draft + Word session: finish editing, discard, print; names the editor', () => {
@@ -118,7 +118,8 @@ describe('recordNextStep rows', () => {
     expect(r.status).toEqual({ key: 'wordActive', vars: { name: 'Mariam' } })
     expect(r.primary).toBe('finishEditing')
     expect(r.secondary).toEqual(['discardDraft'])
-    expect(r.overflow).toEqual(['print'])
+    expect(r.overflow).toEqual(['print', 'changeState', 'deleteDraft'])
+    expect(r.disabled).toEqual({ deleteDraft: 'books.reason.wordSession' })
   })
 
   it('pending, I sign: sign & approve is the decide primary', () => {
@@ -127,7 +128,8 @@ describe('recordNextStep rows', () => {
     expect(r.primary).toBe('sign')
     expect(r.decide).toBe(true)
     expect(r.secondary).toEqual(['returnForChanges', 'reject'])
-    expect(r.overflow).toEqual(['markUp', 'reroute', 'scanSigned', 'print'])
+    expect(r.overflow).toEqual(['markUp', 'reroute', 'scanSigned', 'print', 'changeState', 'deleteRecord'])
+    expect(r.disabled).toEqual({ deleteRecord: 'books.reason.inFlight' })
   })
 
   it('pending, not me: no primary, change approver is secondary, names the approver and the age', () => {
@@ -149,7 +151,8 @@ describe('recordNextStep rows', () => {
     expect(r.status.key).toBe('reviewMine')
     expect(r.primary).toBe('approveReviewed')
     expect(r.secondary).toEqual(['requestChanges'])
-    expect(r.overflow).toEqual(['print'])
+    expect(r.overflow).toEqual(['print', 'changeState', 'deleteRecord'])
+    expect(r.disabled).toEqual({ deleteRecord: 'books.reason.inFlight' })
   })
 
   it('a pending reviewer stays actionable after the signer decided', () => {
@@ -163,7 +166,8 @@ describe('recordNextStep rows', () => {
     expect(r.status.key).toBe('awaitingScan')
     expect(r.primary).toBe('scanSigned')
     expect(r.secondary).toEqual([])
-    expect(r.overflow).toEqual(['print', 'email'])
+    expect(r.overflow).toEqual(['print', 'email', 'changeState', 'deleteRecord'])
+    expect(r.disabled).toEqual({ deleteRecord: 'books.reason.inFlight' })
   })
 
   it('approved: download signed is the primary; the signer and date fill the status', () => {
@@ -182,7 +186,9 @@ describe('recordNextStep rows', () => {
       'replaceSigned',
       'removeSigned',
       'changeState',
+      'deleteRecord',
     ])
+    expect(r.disabled).toEqual({ deleteRecord: 'books.reason.inFlight' })
   })
 
   it('approved without the admin override capability omits Change state', () => {
@@ -223,7 +229,7 @@ describe('recordNextStep rows', () => {
     expect(r.quote).toBe('Fix the dates.')
     expect(r.primary).toBe('revise')
     expect(r.secondary).toEqual([])
-    expect(r.overflow).toEqual(['print', 'deleteRecord'])
+    expect(r.overflow).toEqual(['print', 'deleteRecord', 'changeState'])
     expect(r.disabled).toBeUndefined()
   })
 
@@ -297,7 +303,10 @@ describe('recordNextStep rows', () => {
   it('email without a document is disabled with its reason', () => {
     const r = recordNextStep(bookOf('awaiting_scan'), ctxOf({ hasDocument: false }))
     expect(r.overflow).toContain('email')
-    expect(r.disabled).toEqual({ email: 'books.reason.emailNoDoc' })
+    expect(r.disabled).toEqual({
+      email: 'books.reason.emailNoDoc',
+      deleteRecord: 'books.reason.inFlight',
+    })
   })
 
   it('inmate reporter drafting their own report: send primary, no staff tools', () => {
@@ -310,11 +319,27 @@ describe('recordNextStep rows', () => {
     expect(r.overflow).toEqual(['print'])
   })
 
+  it('admin capability puts Change state in the overflow of every state; without it, absent', () => {
+    const noCap = ADMIN_CAPS.filter((c) => c !== 'books.override_state')
+    for (const state of ['none', 'pending'] as const) {
+      const book = bookOf(state, { steps: [stepOf({})] })
+      expect(recordNextStep(book, ctxOf()).overflow.filter((id) => id === 'changeState')).toHaveLength(1)
+      expect(recordNextStep(book, ctxOf({}, noCap)).overflow).not.toContain('changeState')
+    }
+  })
+
+  it('Delete is omitted when the viewer lacks books.delete', () => {
+    const caps = ADMIN_CAPS.filter((c) => c !== 'books.delete')
+    const r = recordNextStep(bookOf('pending', { steps: [stepOf({})] }), ctxOf({}, caps))
+    expect(r.overflow).not.toContain('deleteRecord')
+  })
+
   it('voided records are read-only', () => {
     const r = recordNextStep(bookOf('none', { voided_at: '2026-10-01T00:00:00' }), ctxOf())
     expect(r.status.key).toBe('voided')
     expect(r.primary).toBeUndefined()
-    expect(r.overflow).toEqual(['print'])
+    expect(r.overflow).toEqual(['print', 'changeState', 'deleteDraft'])
+    expect(r.disabled).toEqual({ deleteDraft: 'books.reason.inFlight' })
   })
 })
 
