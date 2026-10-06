@@ -22,7 +22,7 @@ const NAVY = '#0d2845'
 const TEXT_CELL_STYLE = `${TD_STYLE};mso-number-format:'\\@'`
 const TEXT_HEADER_STYLE = `${thStyle(NAVY)};mso-number-format:'\\@'`
 
-/** Columns whose cells are codes/numbers/dates: isolated LTR inside RTL text. */
+/** Codes/numbers/dates use LTR isolation; other cells use automatic direction. */
 export const LTR_COLUMNS = new Set([0, 2, 3, 7, 9, 10, 11])
 
 const clean = (value: string | number | null | undefined) =>
@@ -78,7 +78,7 @@ export function vehicleTableClipboard(table: VehicleTableSnapshot): CopyTableOpt
         .map((cell, index) => {
           const value = esc(cell)
           const content =
-            LTR_COLUMNS.has(index) ? `<bdi dir="ltr">${value}</bdi>` : value
+            LTR_COLUMNS.has(index) ? `<bdi dir="ltr">${value}</bdi>` : `<bdi>${value}</bdi>`
           return `<td style="${TEXT_CELL_STYLE}">${content}</td>`
         })
         .join('')

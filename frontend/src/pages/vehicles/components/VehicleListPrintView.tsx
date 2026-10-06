@@ -36,7 +36,7 @@ export function VehicleListPrintView(props: {
             <tr key={rowIndex}>
               {row.map((cell, cellIndex) => (
                 <td key={cellIndex}>
-                  {LTR_COLUMNS.has(cellIndex) ? <bdi dir="ltr">{cell}</bdi> : cell}
+                  {LTR_COLUMNS.has(cellIndex) ? <bdi dir="ltr">{cell}</bdi> : <bdi>{cell}</bdi>}
                 </td>
               ))}
             </tr>

@@ -105,18 +105,23 @@ describe('vehicleTableClipboard', () => {
 
     expect(typeCells).toEqual(["'=cmd", "'+1", "'-1", "'@sum"])
     for (const value of ['=cmd', '+1', '-1', '@sum']) {
-      expect(clipboard.html).toContain(`>${value}</td>`)
-      expect(clipboard.html).not.toContain(`>'${value}</td>`)
+      expect(clipboard.html).toContain(`<bdi>${value}</bdi></td>`)
+      expect(clipboard.html).not.toContain(`<bdi>'${value}</bdi></td>`)
     }
   })
 
-  it('isolates plate and date cells as LTR in RTL HTML', () => {
-    const clipboard = vehicleTableClipboard(buildVehicleTable([vehicle()], 'ar', t))
+  it('isolates codes as LTR and free text with automatic direction in RTL HTML', () => {
+    const clipboard = vehicleTableClipboard(
+      buildVehicleTable([vehicle({ make: 'Peugeot', model: '208 GTi', colour: 'أزرق' })], 'ar', t),
+    )
 
     expect(clipboard.html).toContain('<table dir="rtl"')
     expect(clipboard.html).toContain('<bdi dir="ltr">14 \\ 005821</bdi>')
     expect(clipboard.html).toContain('<bdi dir="ltr">02/01/2026</bdi>')
     expect(clipboard.html).toContain('<bdi dir="ltr">31/12/2026</bdi>')
     expect(clipboard.html).toContain('<bdi dir="ltr">03/01/2027</bdi>')
+    expect(clipboard.html).toContain('<bdi>Peugeot</bdi>')
+    expect(clipboard.html).toContain('<bdi>208 GTi</bdi>')
+    expect(clipboard.html).toContain('<bdi>أزرق</bdi>')
   })
 })
