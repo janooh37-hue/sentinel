@@ -1128,6 +1128,12 @@ def is_report(book: Book) -> bool:
     )
 
 
+def _received_step_kind(book: Book, kind: str | None) -> str:
+    """Worklist responsibility, without changing the step's decision semantics."""
+    kind = kind or "approver"
+    return "reviewer" if kind == "approver" and is_report(book) else kind
+
+
 def _approver_steps(version: BookVersion | None) -> list[BookApprovalStep]:
     """Steps that gate approval_state — the single signing manager (kind=approver).
     Legacy rows created before migration 0039 default to 'approver'; in-memory
@@ -2016,8 +2022,8 @@ def awaiting_count(db: Session, *, user_id: int, reviewer_only: bool) -> int:
     """COUNT twin of ``list_awaiting`` for badges: live books whose current
     version has a pending step assigned to ``user_id``.
 
-    ``reviewer_only`` keeps books where ``your_step_kind`` is 'reviewer' — a
-    pending reviewer step and no pending approver step (approver wins).
+    ``reviewer_only`` includes Report managers: their approver step requests
+    review, not a signature.
     """
     # Per version: does this user hold a pending approver / reviewer step?
     # Mirrors `(s.kind or "approver") == "approver"` in your_step_kind.
@@ -2044,6 +2050,13 @@ def awaiting_count(db: Session, *, user_id: int, reviewer_only: bool) -> int:
         if reviewer_only
         else or_(mine.c.approver == 1, mine.c.reviewer == 1)
     )
+    if reviewer_only:
+        report = and_(
+            Book.category_id == "GS",
+            Book.ref_number.startswith("REPORT-"),
+            BookVersion.template_id == "Report",
+        )
+        counted = or_(counted, and_(report, mine.c.approver == 1))
     stmt = (
         select(func.count())
         .select_from(mine)
@@ -2109,9 +2122,15 @@ def your_step_kind(book: Book, user_id: int) -> str | None:
     if version is None:
         return None
     pending = [s for s in version.approval_steps if s.state == "pending"]
-    if any((s.kind or "approver") == "approver" and s.assignee_user_id == user_id for s in pending):
+    if any(
+        _received_step_kind(book, s.kind) == "approver" and s.assignee_user_id == user_id
+        for s in pending
+    ):
         return "approver"
-    if any(s.kind == "reviewer" and s.assignee_user_id == user_id for s in pending):
+    if any(
+        _received_step_kind(book, s.kind) == "reviewer" and s.assignee_user_id == user_id
+        for s in pending
+    ):
         return "reviewer"
     return None
 
@@ -2146,7 +2165,11 @@ def _current_pending_step_of_kind(
     if version is None:
         return None
     for step in version.approval_steps:
-        if step.kind == kind and step.assignee_user_id == user_id and step.state == "pending":
+        if (
+            _received_step_kind(book, step.kind) == kind
+            and step.assignee_user_id == user_id
+            and step.state == "pending"
+        ):
             return step
     return None
 
@@ -2158,14 +2181,14 @@ def _history_assignment_version_no(book: Book, user_id: int, kind: str) -> int |
     for version in book.versions:
         for step in version.approval_steps:
             if (
-                step.kind == kind
+                _received_step_kind(book, step.kind) == kind
                 and step.assignee_user_id == user_id
                 and step.decided_at is not None
                 and step.state != "pending"
             ):
                 candidates.append((version.version_no, step.decided_at, step.id))
         for grant in version.revision_access:
-            if grant.kind == kind and grant.user_id == user_id:
+            if _received_step_kind(book, grant.kind) == kind and grant.user_id == user_id:
                 candidates.append((version.version_no, grant.decided_at, grant.id))
     if not candidates:
         return None
@@ -2174,6 +2197,8 @@ def _history_assignment_version_no(book: Book, user_id: int, kind: str) -> int |
 
 
 def _worklist_candidate_book_ids(db: Session, *, user_id: int, kind: str) -> set[int]:
+    # Report managers retain approver steps, but belong in the review worklist.
+    candidate_kinds = ("approver", "reviewer") if kind == "reviewer" else ("approver",)
     current_version_no = (
         select(func.max(BookVersion.version_no))
         .where(BookVersion.book_id == Book.id)
@@ -2189,7 +2214,7 @@ def _worklist_candidate_book_ids(db: Session, *, user_id: int, kind: str) -> set
                 Book.deleted_at.is_(None),
                 BookVersion.version_no == current_version_no,
                 BookApprovalStep.assignee_user_id == user_id,
-                BookApprovalStep.kind == kind,
+                BookApprovalStep.kind.in_(candidate_kinds),
                 BookApprovalStep.state == "pending",
             )
         )
@@ -2201,7 +2226,7 @@ def _worklist_candidate_book_ids(db: Session, *, user_id: int, kind: str) -> set
             .where(
                 Book.deleted_at.is_(None),
                 BookApprovalStep.assignee_user_id == user_id,
-                BookApprovalStep.kind == kind,
+                BookApprovalStep.kind.in_(candidate_kinds),
                 BookApprovalStep.state != "pending",
                 BookApprovalStep.decided_at.is_not(None),
             )
@@ -2215,7 +2240,7 @@ def _worklist_candidate_book_ids(db: Session, *, user_id: int, kind: str) -> set
             .where(
                 Book.deleted_at.is_(None),
                 BookRevisionAccess.user_id == user_id,
-                BookRevisionAccess.kind == kind,
+                BookRevisionAccess.kind.in_(candidate_kinds),
             )
         )
     )
@@ -2356,7 +2381,9 @@ def _build_worklist_item(
     names_by_id: dict[int, str],
 ) -> ApprovalLogItem:
     book, version, full = row.book, row.version, row.access_scope == "full"
-    approver_steps = [s for s in version.approval_steps if (s.kind or "approver") == "approver"]
+    approver_steps = [
+        s for s in version.approval_steps if _received_step_kind(book, s.kind) == "approver"
+    ]
     signer_step = next((s for s in approver_steps if s.state == "pending"), None) or (
         approver_steps[-1] if approver_steps else None
     )
@@ -2385,7 +2412,9 @@ def _build_worklist_item(
         else (book.category.name_en if full and book.category is not None else None)
     )
     verdict = row.status if row.status in _APPROVAL_VERDICTS else None
-    decided_stamps = [s.decided_at for s in approver_steps if s.decided_at is not None]
+    decided_stamps = [
+        s.decided_at for s in _approver_steps(version) if s.decided_at is not None
+    ]
     return ApprovalLogItem(
         book_id=book.id,
         ref_number=book.ref_number,
@@ -2403,7 +2432,7 @@ def _build_worklist_item(
         reviewer_names=[
             names_by_id.get(s.assignee_user_id, "")
             for s in version.approval_steps
-            if s.kind == "reviewer"
+            if _received_step_kind(book, s.kind) == "reviewer"
         ],
         submitted_at=_worklist_submitted_at(row),
         decided_at=(
