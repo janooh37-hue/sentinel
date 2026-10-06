@@ -17,6 +17,7 @@ import type { WordReopenTrigger } from '@/components/books/BookWordActions'
 import type { AdjustSignatureTrigger } from '@/components/signature/AdjustSignatureAction'
 import type { RecordNavContext } from '../useRecordNavContext'
 import type { NextStep } from '../recordNextStep'
+import type { ReportReview } from '../bookStateLabel'
 import type { Station } from './RecordRail'
 
 export interface RecordCaps {
@@ -54,6 +55,8 @@ export interface RecordView {
   busy: boolean
   submitter: string
   signedSource: string | null
+  /** Set for a Report: its manager reviews it instead of signing. */
+  review?: ReportReview | null
   current: BookVersionRead | undefined
   liveVersion: BookVersionRead | undefined
   currentSteps: BookApprovalStepRead[]

@@ -198,6 +198,11 @@ describe('ApprovalsPage generic landing + URL canonicalization', () => {
         can_view_sent: true,
       }),
     )
+    vi.mocked(api.listApprovalLog).mockResolvedValue({
+      ...emptyLog,
+      items: [row({ reviewer_names: ['Report Manager'], record_status: 'approved' })],
+      total: 1,
+    })
     renderPage()
     await waitFor(() =>
       expect(api.listApprovalLog).toHaveBeenCalledWith({
@@ -209,6 +214,10 @@ describe('ApprovalsPage generic landing + URL canonicalization', () => {
         offset: 0,
       }),
     )
+    expect(await screen.findByText(/^Reviewing manager:/)).toBeInTheDocument()
+    expect(screen.getByText('Report Manager')).toBeInTheDocument()
+    expect(screen.queryByText(/^Assigned signer:/)).not.toBeInTheDocument()
+    expect(screen.queryByText('Late advisory feedback')).not.toBeInTheDocument()
   })
 
   it('shows the neutral no-assigned-work state when nothing is authorized', async () => {
@@ -388,7 +397,7 @@ describe('ApprovalsPage rows', () => {
       }),
     )
     vi.mocked(api.listApprovalLog).mockResolvedValue({
-      items: [row({ status: 'pending', record_status: 'approved' })],
+      items: [row({ status: 'pending', record_status: 'approved', assigned_signer_user_id: 2 })],
       total: 1,
       limit: 100,
       offset: 0,

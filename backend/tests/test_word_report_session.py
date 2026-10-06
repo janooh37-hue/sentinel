@@ -402,6 +402,33 @@ def test_returned_report_reopens_finishes_and_can_be_resubmitted(db_session, tmp
     assert submitted.approval_state == "pending"
     assert submitted.doc_manager_id == manager.id
     assert submitted.versions[-1].approval_steps[0].assignee_user_id == manager_user.id
+    # Under review the author's signed paper keeps serving.
+    current = submitted.versions[-1]
+    signed_paper = current.signed_pdf_path
+    assert current.status == "approved"
+
+    # The manager reviews without a saved signature; the paper stays the author's.
+    reviewed = book_service.sign_book(
+        db_session, book.id, user_id=manager_user.id, version_id=current.id
+    )
+    current = reviewed.versions[-1]
+    assert reviewed.approval_state == "approved"
+    assert current.approval_steps[0].state == "approved"
+    assert current.approval_steps[0].decided_at is not None
+    assert current.signed_pdf_path == signed_paper
+    assert current.signed_by_user_id == reporter.id
+    assert current.status == "approved"
+
+    with pytest.raises(Exception) as exc:
+        book_service.submit_for_approval(
+            db_session,
+            book.id,
+            priority="Normal",
+            approver_user_id=manager_user.id,
+            reviewer_user_ids=[],
+            submitted_by_user_id=manager_user.id,
+        )
+    assert getattr(exc.value, "code", None) == "ALREADY_REVIEWED"
 
 
 def test_report_display_date():

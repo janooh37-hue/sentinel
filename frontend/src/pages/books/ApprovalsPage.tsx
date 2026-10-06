@@ -155,8 +155,13 @@ function ApprovalRow({ item, tab, dfLocale, onOpen, onPreview }: RowProps): Reac
   const { t } = useTranslation()
   const late = isLateAdvisory(item)
   const restricted = item.access_scope === 'assigned_revision'
-  const counterpartyLabel = tab === 'sent' ? t('books.approvals.assignedSigner') : t('books.approval.submitter')
-  const counterpartyName = tab === 'sent' ? item.approver_name : item.submitted_by_name
+  const reviewOnly = !item.approver_name && item.reviewer_names.length > 0
+  const counterpartyLabel = tab === 'sent'
+    ? t(reviewOnly ? 'books.approval.reviewManager' : 'books.approvals.assignedSigner')
+    : t('books.approval.submitter')
+  const counterpartyName = tab === 'sent'
+    ? item.approver_name ?? item.reviewer_names.join(', ')
+    : item.submitted_by_name
 
   return (
     <article

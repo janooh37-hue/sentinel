@@ -22,6 +22,7 @@ import { approverStep } from '@/components/books/reviewers'
 import { parseUtcMs } from '@/lib/time'
 
 import { deleteBlockReason, deleteReasonKey } from './recordDelete'
+import { reportReviewOf } from './bookStateLabel'
 
 export type ActionId =
   | 'sendForApproval'
@@ -68,6 +69,11 @@ export type StatusKey =
   | 'approvedNoDate'
   | 'approvedNoNameNoDate'
   | 'wordActiveNoName'
+  | 'reportUnsent'
+  | 'reportPending'
+  | 'reportSeen'
+  | 'reportReviewMine'
+  | 'reportReviewed'
 
 /** Full i18n key of a disabled-action explanation. */
 export type ReasonKey =
@@ -252,6 +258,7 @@ function buildNextStep(book: BookRead, ctx: NextStepContext): NextStep {
   const canApprove = ctx.has('books.approve')
   const canSubmitBook = ctx.has('books.submit')
   const canScan = ctx.has('documents.scan')
+  const review = reportReviewOf(book)
 
   // Gates mirrored from BookRecordPage so the model and the page agree.
   const canWord = ctx.canMutateCurrent && (!inmate || isInmateReport)
@@ -261,7 +268,7 @@ function buildNextStep(book: BookRead, ctx: NextStepContext): NextStep {
       ? state === 'none' && !wordActive
       : inmate
         ? ctx.inmateAction === 'edit-submit'
-        : canSendForApproval(state, { canSubmitBook }))
+        : canSendForApproval(state, { canSubmitBook }, review))
   const canReroute = !inmate && ctx.canMutateCurrent && canSendForApproval('pending', { canSubmitBook })
   // Continue = reopen the form that made the record. A Word-authored book's
   // truth is its docx (the form would open empty) and an inmate's own report
@@ -354,7 +361,7 @@ function buildNextStep(book: BookRead, ctx: NextStepContext): NextStep {
     case 'pending': {
       if (deciding) {
         return step(
-          { key: 'pendingMine', vars: {} },
+          { key: review ? 'reportReviewMine' : 'pendingMine', vars: {} },
           {
             primary: 'sign',
             decide: true,
@@ -368,14 +375,12 @@ function buildNextStep(book: BookRead, ctx: NextStepContext): NextStep {
           },
         )
       }
+      const approver = approverStep(steps)
+      const vars = { name: name(approver), ago: relativeAgo(book.submitted_at, ctx.now, ctx.locale) }
       return step(
-        {
-          key: 'pendingOther',
-          vars: {
-            name: name(approverStep(steps)),
-            ago: relativeAgo(book.submitted_at, ctx.now, ctx.locale),
-          },
-        },
+        review && vars.name
+          ? { key: approver?.seen_at ? 'reportSeen' : 'reportPending', vars }
+          : { key: 'pendingOther', vars },
         {
           secondary: pick([['reroute', canReroute]]),
           overflow: pick([
@@ -403,13 +408,17 @@ function buildNextStep(book: BookRead, ctx: NextStepContext): NextStep {
 
     case 'approved': {
       const signer = decisionStep(steps, ['approved'])
+      const unsent = review === 'unsent'
+      const date = signer?.decided_at?.slice(0, 10) ?? ''
       return step(
+        unsent
+          ? { key: 'reportUnsent', vars: {} }
+          : review === 'reviewed' && name(signer) && date
+            ? { key: 'reportReviewed', vars: { name: name(signer), date } }
+            : { key: 'approved', vars: { name: name(signer), date } },
         {
-          key: 'approved',
-          vars: { name: name(signer), date: signer?.decided_at?.slice(0, 10) ?? '' },
-        },
-        {
-          primary: hasSignedCopy ? 'downloadSigned' : undefined,
+          primary: unsent && canSend ? 'sendForApproval' : hasSignedCopy ? 'downloadSigned' : undefined,
+          secondary: pick([['downloadSigned', unsent && canSend && hasSignedCopy]]),
           overflow: pick([
             ['email', canEmail],
             ['print', true],

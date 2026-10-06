@@ -18,6 +18,8 @@ import { api, ApiError, apiErrorMessage, type BookDecideAction, type BookRead } 
 interface Params {
   bookId: number | undefined
   versionId: number | undefined
+  /** A Report's "sign" only records the manager's review. */
+  isReport?: boolean
   onDecided: (act: BookDecideAction) => void
   onSigned: () => void
 }
@@ -27,7 +29,7 @@ interface Actions {
   signMutation: UseMutationResult<BookRead, unknown, void>
 }
 
-export function useBookApprovalActions({ bookId, versionId, onDecided, onSigned }: Params): Actions {
+export function useBookApprovalActions({ bookId, versionId, isReport = false, onDecided, onSigned }: Params): Actions {
   const { t } = useTranslation()
   const qc = useQueryClient()
 
@@ -71,7 +73,7 @@ export function useBookApprovalActions({ bookId, versionId, onDecided, onSigned 
     mutationFn: () => api.signBook(bookId!, versionId!),
     onSuccess: () => {
       invalidateAll()
-      toast.success(t('books.approval.signed'))
+      toast.success(t(isReport ? 'books.approval.reviewedToast' : 'books.approval.signed'))
       onSigned()
     },
     onError: (err) => {
