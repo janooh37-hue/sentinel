@@ -225,7 +225,8 @@ export function ItemPermitFormDialog({
                 </span>
                 <button
                   type="button"
-                  className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+                  className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline disabled:opacity-50 disabled:no-underline"
+                  disabled={fields.length >= 50}
                   onClick={() => append({ name: '', quantity: 1 })}
                 >
                   <Plus className="h-3.5 w-3.5" aria-hidden />
