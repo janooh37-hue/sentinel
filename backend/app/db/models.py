@@ -1025,6 +1025,35 @@ class PermitVisit(Base):
     __table_args__ = (Index("ix_permit_visits_permit_occurred", "permit_id", "occurred_at"),)
 
 
+class ItemPermit(Base):
+    """An item-entry permit (إدخال مواد) — a 1/5 letter authorizing materials
+    into a facility zone, naming the employee who brings them. Shares the
+    Security Permit paper and book approval chain; no validity window.
+    """
+
+    __tablename__ = "item_permits"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    employee_id: Mapped[str] = mapped_column(String(16), ForeignKey("employees.id"))
+    recipient: Mapped[str] = mapped_column(String(255))
+    zone: Mapped[str] = mapped_column(String(8))  # 'red' | 'green'
+    site: Mapped[str] = mapped_column(String(255))
+    # list of {"name": str, "quantity": int}
+    items: Mapped[list[dict[str, Any]]] = mapped_column(JSON)
+    manager_id: Mapped[int | None] = mapped_column(Integer)
+    book_id: Mapped[int | None] = mapped_column(Integer)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    employee: Mapped[Employee] = relationship()
+
+    __table_args__ = (
+        CheckConstraint("zone IN ('red', 'green')", name="ck_item_permits_zone"),
+        Index("ix_item_permits_employee", "employee_id"),
+    )
+
+
 class WhatsAppMessage(Base):
     """One WhatsApp send attempt (success or failure) for an employee.
 

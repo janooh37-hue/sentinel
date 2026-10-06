@@ -189,3 +189,44 @@ def build_permit_letter_html(
     if has_vehicles:
         html += spacer + _vehicle_table(vehicles)
     return html
+
+
+def _table(header: str, rows: str) -> str:
+    return (
+        '<table style="font-size:11pt; text-align:center; width:auto">'
+        f'<thead><tr style="background-color:#eef2f6">{header}</tr></thead>'
+        f"<tbody>{rows}</tbody></table>"
+    )
+
+
+def build_item_permit_letter_html(
+    *,
+    zone: str,
+    site: str,
+    items: list[dict[str, object]],
+    employee: dict[str, str],
+) -> str:
+    """Body for the item-entry (إدخال مواد) letter: authorization paragraph, a
+    numbered items table, and the bringing employee's row. ``employee`` carries
+    ``id`` / ``title`` / ``name``. No «الإعتماد» line — the template's manager
+    e-signature is the only approval."""
+    para = (
+        '<p style="text-align:justify; line-height:1.45"><b>'
+        "لا مانع من إدخال المواد المبينة بالجدول أدناه إلى داخل "
+        f"{_ZONES[zone][0]} في {escape(site)}</b></p>"
+    )
+    item_rows = "".join(
+        f"<tr><td>{i}</td><td>{escape(str(it['name']))}</td><td>{it['quantity']}</td></tr>"
+        for i, it in enumerate(items, 1)
+    )
+    employee_row = (
+        f"<tr><td>{escape(employee['id'])}</td><td>{escape(employee['title'])}</td>"
+        f"<td>{escape(employee['name'])}</td></tr>"
+    )
+    spacer = "<p></p>"
+    return (
+        para
+        + _table("<th>م</th><th>المادة</th><th>العدد</th>", item_rows)
+        + spacer
+        + _table("<th>الرقم الوظيفي</th><th>المسمى الوظيفي</th><th>الإسم</th>", employee_row)
+    )
