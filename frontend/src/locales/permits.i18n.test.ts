@@ -93,6 +93,14 @@ const KEYS = [
   'permits.documentVersions.title',
   'permits.documentVersions.docx',
   'permits.documentVersions.pdf',
+  'permits.tabs.security',
+  'permits.tabs.items',
+  'permits.items.new',
+  'permits.items.columns.employee',
+  'permits.items.form.newTitle',
+  'permits.items.form.itemNameRequired',
+  'permits.items.detail.title',
+  'permits.items.delete.title',
 ]
 
 describe('permit i18n parity', () => {

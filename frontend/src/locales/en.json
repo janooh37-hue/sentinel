@@ -639,6 +639,70 @@
     }
   },
   "permits": {
+    "tabs": {
+      "security": "Security permits",
+      "items": "Item permits"
+    },
+    "items": {
+      "title": "Item entry permits",
+      "subtitle": "Materials brought into a zone — the responsible employee, items and quantities, and manager approval",
+      "search": "Search by employee, recipient, site or item…",
+      "new": "New item permit",
+      "empty": "No item permits match this search.",
+      "emptyRegister": "No item permits issued yet.",
+      "loadError": "Could not load item permits.",
+      "columns": {
+        "ref": "Ref.",
+        "employee": "Employee",
+        "zone": "Zone",
+        "items": "Items",
+        "approval": "Approval",
+        "created": "Created"
+      },
+      "count_one": "{{count}} item",
+      "count_other": "{{count}} items",
+      "more": "and {{count}} more",
+      "form": {
+        "newTitle": "New item entry permit",
+        "editTitle": "Edit item entry permit",
+        "help": "Authorize materials to be brought into a zone by an employee. A 1/5 letter is generated for approval.",
+        "employee": "Employee",
+        "employeeRequired": "Choose the employee.",
+        "recipient": "Addressed to",
+        "site": "Site",
+        "zone": "Zone",
+        "items": "Items",
+        "itemName": "Item",
+        "quantity": "Qty",
+        "addItem": "Add item",
+        "removeItem": "Remove item",
+        "itemNameRequired": "Enter the item name.",
+        "quantityInvalid": "Enter a whole number of 1 or more.",
+        "required": "This field is required.",
+        "create": "Create permit",
+        "save": "Save changes"
+      },
+      "detail": {
+        "title": "Item permit {{ref}}",
+        "createdAt": "Created {{date}}",
+        "ref": "Permit ref (1/5)",
+        "recipient": "Addressed to",
+        "zone": "Zone",
+        "site": "Site",
+        "employee": "Employee",
+        "employeeNo": "Employee no.",
+        "jobTitle": "Job title",
+        "name": "Name",
+        "items": "Items",
+        "no": "#",
+        "item": "Item",
+        "quantity": "Qty"
+      },
+      "delete": {
+        "title": "Delete item permit",
+        "help": "This removes the item permit from the register. This cannot be undone from the app."
+      }
+    },
     "title": "Security Permits",
     "eyebrow": "Access control",
     "subtitle": "Zone entry permits — who is authorized, for which zone, and until when",

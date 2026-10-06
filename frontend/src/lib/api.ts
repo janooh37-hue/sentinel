@@ -281,6 +281,13 @@ export type PersonIdScan = components['schemas']['PersonIdScan']
 export type PermitUpdate = components['schemas']['PermitUpdate']
 export type PermitSummary = components['schemas']['PermitSummary']
 
+export type ItemPermitRead = components['schemas']['ItemPermitRead']
+export type ItemPermitItem = components['schemas']['ItemPermitItem']
+export type ItemPermitCreate = components['schemas']['ItemPermitCreate']
+export type ItemPermitUpdate = components['schemas']['ItemPermitUpdate']
+export type ItemPermitListResponse = components['schemas']['ItemPermitListResponse']
+export type ItemPermitZone = ItemPermitRead['zone']
+
 // ─── Fleet vehicles ──────────────────────────────────────────────────────────
 export type VehicleListItem = components['schemas']['VehicleListItem']
 export type VehicleRead = components['schemas']['VehicleRead']
@@ -1501,6 +1508,18 @@ export const api = {
   /** Fetch any permit attachment IDM-safely (base64 → Blob) for inline preview. */
   fetchPermitDocumentBlob: (id: number): Promise<Blob> =>
     fetchPermitBlob(`/permits/${id}/document`),
+
+  // --- item permits (إدخال مواد) ---
+  listItemPermits: (params: { q?: string; limit?: number; offset?: number } = {}) =>
+    request<ItemPermitListResponse>('GET', `/item-permits${qs({ ...params })}`),
+  getItemPermit: (id: number) => request<ItemPermitRead>('GET', `/item-permits/${id}`),
+  createItemPermit: (body: ItemPermitCreate) =>
+    request<ItemPermitRead>('POST', '/item-permits', body),
+  updateItemPermit: (id: number, body: ItemPermitUpdate) =>
+    request<ItemPermitRead>('PATCH', `/item-permits/${id}`, body),
+  submitItemPermitApproval: (id: number) =>
+    request<ItemPermitRead>('POST', `/item-permits/${id}/submit-approval`),
+  deleteItemPermit: (id: number) => request<void>('DELETE', `/item-permits/${id}`),
 
   // Per-person UAE ID scan.
   uploadPersonDocument: (id: number, personId: number, file: File) => {

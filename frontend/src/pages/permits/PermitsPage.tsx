@@ -34,6 +34,8 @@ import { useDebouncedValue } from '@/lib/useDebouncedValue'
 import { PermitFormDialog } from './PermitFormDialog'
 import { PermitDetailDialog } from './PermitDetailDialog'
 import { PermitAccessBadge } from './PermitAccessBadge'
+import { ItemPermitsTab } from './ItemPermitsTab'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useSearchParam, useUrlOverlay } from '@/lib/urlState'
 import { fmtDate, statusTone } from './permitUtils'
 
@@ -59,6 +61,8 @@ export function PermitsPage(): React.JSX.Element {
   const [state, setState] = useSearchParam('state')
   const [zone, setZone] = useSearchParam('zone')
   const [q, setQ] = useSearchParam('q')
+  const [tabParam, setTab] = useSearchParam('tab')
+  const tab = tabParam === 'items' ? 'items' : 'security'
   const detailOverlay = useUrlOverlay('open')
   const actionOverlay = useUrlOverlay('action')
 
@@ -169,10 +173,10 @@ export function PermitsPage(): React.JSX.Element {
               {t('permits.eyebrow')}
             </div>
             <h1 className="mt-1 text-xl font-bold tracking-tight text-foreground md:text-[1.7em]">
-              {t('permits.title')}
+              {t(tab === 'items' ? 'permits.items.title' : 'permits.title')}
             </h1>
             <div className="mt-1 hidden text-[0.86em] text-muted-foreground md:block">
-              {t('permits.subtitle')}
+              {t(tab === 'items' ? 'permits.items.subtitle' : 'permits.subtitle')}
             </div>
           </div>
           <RefreshButton />
@@ -180,123 +184,134 @@ export function PermitsPage(): React.JSX.Element {
       </header>
 
       <div className="flex-1 overflow-y-auto px-4 pb-24 md:px-6" data-print-hide>
-        {/* Summary tiles */}
-        {tiles.length > 0 && (
-          <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
-            {tiles.map((tile) => (
-              <div key={tile.key} className="rounded-xl border border-border bg-surface px-3 py-2.5">
-                <div className={`text-2xl font-bold ${tile.tone}`}>{tile.value}</div>
-                <div className="text-[0.72rem] leading-tight text-muted-foreground">{tile.label}</div>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* Toolbar */}
-        <div className="mb-3 flex flex-wrap items-center gap-2">
-          <select className={selectCls} value={state} onChange={(e) => setState(e.target.value || null)} aria-label={t('permits.filters.state')}>
-            {STATE_OPTIONS.map((s) => (
-              <option key={s || 'all'} value={s}>
-                {s === '' ? t('permits.filters.all') : s === 'valid' ? t('permits.filters.valid') : t(`permits.status.${s}`)}
-              </option>
-            ))}
-          </select>
-          <select className={selectCls} value={zone} onChange={(e) => setZone(e.target.value || null)} aria-label={t('permits.filters.zone')}>
-            {ZONE_OPTIONS.map((z) => (
-              <option key={z || 'all'} value={z}>
-                {z === '' ? t('permits.filters.all') : t(`permits.zone.${z}`)}
-              </option>
-            ))}
-          </select>
-          <input
-            className={`${selectCls} min-w-[12rem] flex-1`}
-            placeholder={t('permits.filters.search')}
-            value={q}
-            dir="auto"
-            onChange={(e) => setQ(e.target.value || null)}
-          />
-
-          <div className="flex items-center gap-2 ms-auto">
-            {selected.size > 0 && (
-              <span className="text-xs text-muted-foreground">
-                {t('permits.selectedCount', { count: selected.size })}
-                <button
-                  type="button"
-                  className="ms-1.5 font-medium text-primary hover:underline"
-                  onClick={() => setSelected(new Set())}
-                >
-                  {t('permits.clearSelection')}
-                </button>
-              </span>
-            )}
-            <Button type="button" variant="outline" size="sm" onClick={() => setPrinting(true)}>
-              <Printer className="me-1.5 h-4 w-4" aria-hidden />
-              {selected.size ? t('permits.printSelected', { count: selected.size }) : t('permits.print')}
-            </Button>
-            {canCreate && (
-              <Button type="button" size="sm" onClick={openNew}>
-                <Plus className="me-1.5 h-4 w-4" aria-hidden />
-                {t('permits.new')}
-              </Button>
-            )}
-          </div>
-        </div>
-
-        {/* Table / states */}
-        {listQuery.isError ? (
-          <p className="py-8 text-center text-sm text-destructive">{t('permits.loadError')}</p>
-        ) : listQuery.isLoading ? (
-          <div className="overflow-hidden rounded-xl border border-border">
-            {Array.from({ length: 6 }).map((_, i) => (
-              <SkeletonRow key={i} cols={7} />
-            ))}
-          </div>
-        ) : rows.length === 0 ? (
-          <EmptyState
-            icon={ShieldCheck}
-            message={filtersActive ? t('permits.empty') : t('permits.emptyRegister')}
-            {...(!filtersActive && canCreate
-              ? { actionLabel: t('permits.new'), onAction: openNew }
-              : {})}
-          />
-        ) : (
-          <div className="overflow-x-auto rounded-xl border border-border">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-10">
-                    <input
-                      type="checkbox"
-                      aria-label={t('permits.selectAll')}
-                      checked={allSelected}
-                      onChange={toggleAll}
-                      className="h-4 w-4 cursor-pointer accent-primary"
-                    />
-                  </TableHead>
-                  <TableHead>{t('permits.columns.permitNo')}</TableHead>
-                  <TableHead>{t('permits.columns.company')}</TableHead>
-                  <TableHead>{t('permits.columns.zone')}</TableHead>
-                  <TableHead>{t('permits.columns.window')}</TableHead>
-                  <TableHead className="text-end">{t('permits.columns.people')}</TableHead>
-                  <TableHead className="text-end">{t('permits.columns.vehicles')}</TableHead>
-                  <TableHead>{t('permits.columns.status')}</TableHead>
-                  <TableHead className="w-16 text-end">{t('permits.columns.actions')}</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {rows.map((row) => (
-                  <PermitRowView
-                    key={row.id}
-                    row={row}
-                    selected={selected.has(row.id)}
-                    onToggle={() => toggleOne(row.id)}
-                    onOpen={() => detailOverlay.open(String(row.id))}
-                  />
+        <Tabs value={tab} onValueChange={(v) => setTab(v === 'items' ? v : null)}>
+          <TabsList>
+            <TabsTrigger value="security">{t('permits.tabs.security')}</TabsTrigger>
+            <TabsTrigger value="items">{t('permits.tabs.items')}</TabsTrigger>
+          </TabsList>
+          <TabsContent value="security" className="mt-4">
+            {/* Summary tiles */}
+            {tiles.length > 0 && (
+              <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
+                {tiles.map((tile) => (
+                  <div key={tile.key} className="rounded-xl border border-border bg-surface px-3 py-2.5">
+                    <div className={`text-2xl font-bold ${tile.tone}`}>{tile.value}</div>
+                    <div className="text-[0.72rem] leading-tight text-muted-foreground">{tile.label}</div>
+                  </div>
                 ))}
-              </TableBody>
-            </Table>
-          </div>
-        )}
+              </div>
+            )}
+
+            {/* Toolbar */}
+            <div className="mb-3 flex flex-wrap items-center gap-2">
+              <select className={selectCls} value={state} onChange={(e) => setState(e.target.value || null)} aria-label={t('permits.filters.state')}>
+                {STATE_OPTIONS.map((s) => (
+                  <option key={s || 'all'} value={s}>
+                    {s === '' ? t('permits.filters.all') : s === 'valid' ? t('permits.filters.valid') : t(`permits.status.${s}`)}
+                  </option>
+                ))}
+              </select>
+              <select className={selectCls} value={zone} onChange={(e) => setZone(e.target.value || null)} aria-label={t('permits.filters.zone')}>
+                {ZONE_OPTIONS.map((z) => (
+                  <option key={z || 'all'} value={z}>
+                    {z === '' ? t('permits.filters.all') : t(`permits.zone.${z}`)}
+                  </option>
+                ))}
+              </select>
+              <input
+                className={`${selectCls} min-w-[12rem] flex-1`}
+                placeholder={t('permits.filters.search')}
+                value={q}
+                dir="auto"
+                onChange={(e) => setQ(e.target.value || null)}
+              />
+
+              <div className="flex items-center gap-2 ms-auto">
+                {selected.size > 0 && (
+                  <span className="text-xs text-muted-foreground">
+                    {t('permits.selectedCount', { count: selected.size })}
+                    <button
+                      type="button"
+                      className="ms-1.5 font-medium text-primary hover:underline"
+                      onClick={() => setSelected(new Set())}
+                    >
+                      {t('permits.clearSelection')}
+                    </button>
+                  </span>
+                )}
+                <Button type="button" variant="outline" size="sm" onClick={() => setPrinting(true)}>
+                  <Printer className="me-1.5 h-4 w-4" aria-hidden />
+                  {selected.size ? t('permits.printSelected', { count: selected.size }) : t('permits.print')}
+                </Button>
+                {canCreate && (
+                  <Button type="button" size="sm" onClick={openNew}>
+                    <Plus className="me-1.5 h-4 w-4" aria-hidden />
+                    {t('permits.new')}
+                  </Button>
+                )}
+              </div>
+            </div>
+
+            {/* Table / states */}
+            {listQuery.isError ? (
+              <p className="py-8 text-center text-sm text-destructive">{t('permits.loadError')}</p>
+            ) : listQuery.isLoading ? (
+              <div className="overflow-hidden rounded-xl border border-border">
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <SkeletonRow key={i} cols={7} />
+                ))}
+              </div>
+            ) : rows.length === 0 ? (
+              <EmptyState
+                icon={ShieldCheck}
+                message={filtersActive ? t('permits.empty') : t('permits.emptyRegister')}
+                {...(!filtersActive && canCreate
+                  ? { actionLabel: t('permits.new'), onAction: openNew }
+                  : {})}
+              />
+            ) : (
+              <div className="overflow-x-auto rounded-xl border border-border">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-10">
+                        <input
+                          type="checkbox"
+                          aria-label={t('permits.selectAll')}
+                          checked={allSelected}
+                          onChange={toggleAll}
+                          className="h-4 w-4 cursor-pointer accent-primary"
+                        />
+                      </TableHead>
+                      <TableHead>{t('permits.columns.permitNo')}</TableHead>
+                      <TableHead>{t('permits.columns.company')}</TableHead>
+                      <TableHead>{t('permits.columns.zone')}</TableHead>
+                      <TableHead>{t('permits.columns.window')}</TableHead>
+                      <TableHead className="text-end">{t('permits.columns.people')}</TableHead>
+                      <TableHead className="text-end">{t('permits.columns.vehicles')}</TableHead>
+                      <TableHead>{t('permits.columns.status')}</TableHead>
+                      <TableHead className="w-16 text-end">{t('permits.columns.actions')}</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {rows.map((row) => (
+                      <PermitRowView
+                        key={row.id}
+                        row={row}
+                        selected={selected.has(row.id)}
+                        onToggle={() => toggleOne(row.id)}
+                        onOpen={() => detailOverlay.open(String(row.id))}
+                      />
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </TabsContent>
+          <TabsContent value="items" className="mt-4">
+            <ItemPermitsTab />
+          </TabsContent>
+        </Tabs>
       </div>
 
       {/* Print-only view — mounted once the detailed records load, hidden on
