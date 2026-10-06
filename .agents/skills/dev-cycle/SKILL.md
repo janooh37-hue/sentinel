@@ -27,7 +27,13 @@ description: "Fix bugs and add features on the laptop dev channel (branch dev, r
    - Required `AGENTS.md` reviews.
 6. **Publish:** `dev-channel.ps1 publish` (frontend build, migrate, restart, health check). `restart` alone for backend-only changes.
 7. **Report:** changes, commits, checks, failures, what to test on the dev URL.
-8. **Promote (gate):** after the user approves, `dev-channel.ps1 promote -Yes`. It refuses if main moved since the last sync; then `sync`, republish, ask the user to retest. Production goes live only via `scripts\mng.ps1 update` on GSSGAPP.
+8. **Promote (gate):** after the user approves, follow **Promotion** below. Production goes live only via `scripts\mng.ps1 update` on GSSGAPP.
+
+## Promotion
+
+- `dev` can carry dev-only commits that must never be promoted; currently `ceca5bad` (book approval routing).
+- Start a new branch from `origin/main` and cherry-pick only non-dev-only commits. Never PR `dev` directly or merge/rebase it wholesale into the promotion branch.
+- Before opening the PR, audit `git diff origin/main...<promo-branch>` and the PR text for dev-only logic, especially book approval changes in `book_service`, `notification_service`, `word_book_service`, and frontend `pages/books` / `components/books`. Shared files must contain only promoted hunks.
 
 ## Gates (ask)
 
