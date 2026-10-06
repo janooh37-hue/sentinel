@@ -31,9 +31,9 @@ description: "Fix bugs and add features on the laptop dev channel (branch dev, r
 
 ## Promotion
 
-- `dev` can carry dev-only commits that must never be promoted; currently `ceca5bad` (book approval routing).
-- Start a new branch from `origin/main` and cherry-pick only non-dev-only commits. Never PR `dev` directly or merge/rebase it wholesale into the promotion branch.
-- Before opening the PR, audit `git diff origin/main...<promo-branch>` and the PR text for dev-only logic, especially book approval changes in `book_service`, `notification_service`, `word_book_service`, and frontend `pages/books` / `components/books`. Shared files must contain only promoted hunks.
+- Word reaches the server through `ms-word:ofe|u|{GSSG_PUBLIC_BASE_URL}/dav/...`. On the laptop, that base URL is the tailnet dev host, set only in the gitignored dev `.env`; production sets its own. Never commit the dev host, change the `public_base_url` default, or alter Word/WebDAV URL building to make dev work. The code path stays identical; only `.env` differs.
+- Start a new branch from `origin/main` and cherry-pick the commits. Never PR `dev` directly.
+- Before opening the PR, audit `git diff origin/main...<promo-branch>` and the PR text for dev routing leaks. Grep added lines for non-placeholder `ts.net`, `127.0.0.1` / `localhost` / `8765` used as a Word/DAV base, and changes to `GSSG_PUBLIC_BASE_URL`, `public_base_url`, `/dav`, or `word_url`.
 
 ## Gates (ask)
 
