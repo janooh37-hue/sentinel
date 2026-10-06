@@ -214,9 +214,9 @@ describe('ApprovalsPage generic landing + URL canonicalization', () => {
         offset: 0,
       }),
     )
-    expect(await screen.findByText('Reviewing manager')).toBeInTheDocument()
+    expect(await screen.findByText(/^Reviewing manager:/)).toBeInTheDocument()
     expect(screen.getByText('Report Manager')).toBeInTheDocument()
-    expect(screen.queryByText('Assigned signer')).not.toBeInTheDocument()
+    expect(screen.queryByText(/^Assigned signer:/)).not.toBeInTheDocument()
     expect(screen.queryByText('Late advisory feedback')).not.toBeInTheDocument()
   })
 

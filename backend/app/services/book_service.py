@@ -2412,9 +2412,7 @@ def _build_worklist_item(
         else (book.category.name_en if full and book.category is not None else None)
     )
     verdict = row.status if row.status in _APPROVAL_VERDICTS else None
-    decided_stamps = [
-        s.decided_at for s in _approver_steps(version) if s.decided_at is not None
-    ]
+    decided_stamps = [s.decided_at for s in _approver_steps(version) if s.decided_at is not None]
     return ApprovalLogItem(
         book_id=book.id,
         ref_number=book.ref_number,

@@ -479,9 +479,11 @@ def test_report_manager_worklist_is_review_not_signature(
     for kind in ("approver", "reviewer"):
         rows = client.get("/api/v1/books/approval-log", params={"kind": kind}).json()["items"]
         assert [row["book_id"] for row in rows] == ([book.id] if kind == expected_kind else [])
-    sent = _client(api_db, submitter).get(
-        "/api/v1/books/approval-log", params={"scope": "sent"}
-    ).json()["items"][0]
+    sent = (
+        _client(api_db, submitter)
+        .get("/api/v1/books/approval-log", params={"scope": "sent"})
+        .json()["items"][0]
+    )
     assert sent["approver_name"] == (manager.email if expected_kind == "approver" else None)
     assert sent["reviewer_names"] == ([manager.email] if expected_kind == "reviewer" else [])
 
