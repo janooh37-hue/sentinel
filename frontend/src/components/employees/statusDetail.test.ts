@@ -13,9 +13,20 @@ afterEach(async () => {
 })
 
 describe('statusDetailText', () => {
-  it('Active is just the label', async () => {
-    await i18n.changeLanguage('en')
-    expect(statusDetailText(i18n.t, { status: 'Active', end_date: null })).toBe('Active')
+  it.each([
+    ['en', 'Active', 'Active'],
+    ['en', 'Loaned', 'Loaned'],
+    ['ar', 'Active', 'نشط'],
+    ['ar', 'Loaned', 'ملحق'],
+  ] as const)('%s: %s is just the label even with an end date and stale transfer fields', async (language, status, label) => {
+    await i18n.changeLanguage(language)
+    expect(statusDetailText(i18n.t, { status, end_date: null })).toBe(label)
+    expect(statusDetailText(i18n.t, {
+      status,
+      end_date: '2026-08-15',
+      transfer_site: 'Port A',
+      transfer_return_date: '2026-11-15',
+    })).toBe(label)
   })
 
   it('EN: resigned shows the date', async () => {

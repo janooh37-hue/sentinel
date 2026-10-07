@@ -1,10 +1,7 @@
-"""Scheduled departures — a future-dated resignation or termination keeps the
-employee Active through their notice period, then flips on the day.
+"""Scheduled departures keep working employees (Active or Loaned) on the roster
+through their notice period, then flip on the day.
 
-Pending departure ⇔ status == 'Active' AND pending_status IS NOT NULL AND
-end_date IS NOT NULL. `status` deliberately stays 'Active' while pending so
-every active-roster query keeps treating the person as the working employee
-they still are.
+Pending departure requires a working status, pending_status and end_date.
 """
 
 from datetime import date, timedelta
@@ -310,12 +307,14 @@ def test_flip_honours_an_injected_today(db_session):
     assert [e.id for e in flipped] == ["G9308"]
 
 
-def test_pending_filter_returns_only_scheduled_departures(db_session):
-    _make(db_session, "G9500")  # plain Active
+@pytest.mark.parametrize("status", ["Active", "Loaned"])
+def test_pending_filter_returns_only_scheduled_departures(db_session, status):
+    _make(db_session, "G9500", status=status)  # working, no departure
     _make(db_session, "G9501", status="Resigned", end_date=date(2026, 1, 31))  # departed
     _make(
         db_session,
         "G9502",
+        status=status,
         end_date=date.today() + timedelta(days=10),
         pending_status="Resigned",
     )

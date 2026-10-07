@@ -508,7 +508,9 @@ function Shell(): React.JSX.Element {
                 path="/duty-locations"
                 element={
                   <RequireCapability cap="documents.generate">
-                    <DutyLocationsPage />
+                    <RequireCapability cap="documents.duty_transfer">
+                      <DutyLocationsPage />
+                    </RequireCapability>
                   </RequireCapability>
                 }
               />

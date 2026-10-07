@@ -27,7 +27,7 @@ describe('ScanMatchDialog', () => {
     vi.restoreAllMocks()
     vi.spyOn(apiMod.api, 'scanDocumentUrl').mockReturnValue('/api/v1/scan-inbox/7/document')
     vi.spyOn(apiMod.api, 'listBooks').mockResolvedValue({ items: [], total: 0 } as never)
-    vi.spyOn(apiMod.api, 'listEmployees').mockResolvedValue({
+    vi.spyOn(apiMod.api, 'lookupEmployees').mockResolvedValue({
       items: [{ id: 'G1', name_en: 'Ahmed Ali', name_ar: null }],
       total: 1,
     } as never)

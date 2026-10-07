@@ -33,12 +33,13 @@ from app.db.workforce_models import (
     WorkShiftDefinition,
     WorkShiftOccurrence,
 )
+from app.schemas.employee import WORKING_STATUSES
 from app.services import attendance_correction_service
 from app.services.workforce_scope_service import normalize_scope_value, scope_allows
 from app.services.workforce_seed_service import OFFICE_CREW_CODE
 
 _ORGANIZATION_TIMEZONE = ZoneInfo("Asia/Dubai")
-_ACTIVE_EMPLOYEE_STATUS = "active"
+_WORKING_EMPLOYEE_STATUSES = frozenset(s.casefold() for s in WORKING_STATUSES)
 _NON_EMPLOYEE_ROW = "__aggregate_row__"
 
 
@@ -95,7 +96,7 @@ def _scope_allows(
     )
 
 def _is_active_employee(status: str | None) -> bool:
-    return (status or "").strip().casefold() == _ACTIVE_EMPLOYEE_STATUS
+    return (status or "").strip().casefold() in _WORKING_EMPLOYEE_STATUSES
 
 
 def _live_leaves(db: Session, *, operational_date: date) -> dict[str, str]:

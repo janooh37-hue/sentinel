@@ -37,7 +37,7 @@ describe('PendingDepartureBadge', () => {
     expect(container).toBeEmptyDOMElement()
   })
 
-  it('renders nothing when the employee is not Active, even with a stale pending marker', () => {
+  it('renders nothing when the employee is not working, even with a stale pending marker', () => {
     const { container } = renderBadge({
       status: 'Terminated',
       pendingStatus: 'Resigned',
@@ -46,15 +46,15 @@ describe('PendingDepartureBadge', () => {
     expect(container).toBeEmptyDOMElement()
   })
 
-  it('shows the English status and date', () => {
-    renderBadge({ status: 'Active', pendingStatus: 'Resigned', endDate: '2026-08-15' })
+  it.each(['Active', 'Loaned'] as const)('shows the English pending status and date for %s', (status) => {
+    renderBadge({ status, pendingStatus: 'Resigned', endDate: '2026-08-15' })
     expect(screen.getByText(/Resigned/)).toBeInTheDocument()
     expect(screen.getByText(/15\/08\/2026/)).toBeInTheDocument()
   })
 
-  it('shows the canonical Arabic status for Resigned', () => {
+  it.each(['Active', 'Loaned'] as const)('shows the canonical Arabic pending Resigned status for %s', (status) => {
     renderBadge(
-      { status: 'Active', pendingStatus: 'Resigned', endDate: '2026-08-15' },
+      { status, pendingStatus: 'Resigned', endDate: '2026-08-15' },
       'ar',
     )
     expect(screen.getByText(/مستقيل/)).toBeInTheDocument()

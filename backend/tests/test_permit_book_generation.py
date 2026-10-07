@@ -146,6 +146,8 @@ def test_to_read_exposes_book_ref(gen_env):
     assert read.book_id == permit.book_id
     assert read.book_ref is not None
     assert read.book_ref.startswith("1/5/")
+    # The register row carries the letter's book too (quick preview, no detail fetch).
+    assert permit_service.to_list_item(permit).book_id == permit.book_id
 
 
 def test_revoke_does_not_regenerate(gen_env, monkeypatch):

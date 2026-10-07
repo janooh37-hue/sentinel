@@ -109,12 +109,14 @@ def _require_record_type_access(
     *,
     category_id: str | None = None,
     service_id: str | None = None,
+    classification_code: str | None = None,
 ) -> None:
     book_service.require_record_type_access(
         db,
         user,
         category_id=category_id,
         service_id=service_id,
+        classification_code=classification_code,
     )
 
 
@@ -351,7 +353,15 @@ def create_word_session(
         _require_word_capability(db, user, "books.create")
         _require_word_capability(db, user, "books.view")
         service_id = "Report" if payload.signer_employee_id is not None else "General Book"
-        _require_record_type_access(db, user, category_id="GS", service_id=service_id)
+        _require_record_type_access(
+            db,
+            user,
+            category_id="GS",
+            service_id=service_id,
+            classification_code=(
+                payload.classification_code if service_id == "General Book" else None
+            ),
+        )
         if payload.signer_employee_id is not None:
             info = word_book_service.create_report_word_book(
                 db,

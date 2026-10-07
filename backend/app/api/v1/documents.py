@@ -54,8 +54,8 @@ from app.schemas.signature_placement import (
     SignatureIdentifyRequest,
     SignaturePageRead,
     SignaturePositionRequest,
-    SignatureReassignRequest,
     SignatureRead,
+    SignatureReassignRequest,
 )
 from app.services import (
     approved_import_service,
@@ -449,6 +449,9 @@ def generate_document(
         user,
         category_id=category_id,
         service_id=effective_service,
+        classification_code=(
+            payload.classification_code if effective_service == "General Book" else None
+        ),
     )
     if payload.revise_of_book_id is not None:
         revise_book = db.get(Book, payload.revise_of_book_id)
@@ -532,7 +535,7 @@ def commit_approved_violation(
     book_service.require_record_type_access(
         db,
         user,
-        category_id="NAT",
+        category_id="INV",
         service_id="Inmate Conduct Violations",
     )
     result = approved_import_service.commit_approved_import(

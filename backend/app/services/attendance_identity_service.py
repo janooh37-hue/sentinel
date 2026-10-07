@@ -34,6 +34,7 @@ from sqlalchemy.orm import Session
 
 from app.db.models import Employee
 from app.db.workforce_models import AttendanceProviderPerson
+from app.schemas.employee import WORKING_STATUSES
 
 MatchState = Literal["exact", "digits", "conflict", "none"]
 
@@ -82,7 +83,7 @@ class EmployeeCodeIndex:
         """Index every employee id by its canonical and digits-only forms."""
         statement = select(Employee.id)
         if active_only:
-            statement = statement.where(Employee.status == "Active")
+            statement = statement.where(Employee.status.in_(WORKING_STATUSES))
         index = cls()
         for employee_id in db.scalars(statement):
             canonical = canonical_code(employee_id)

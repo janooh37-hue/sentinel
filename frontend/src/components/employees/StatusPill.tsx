@@ -1,5 +1,5 @@
 /**
- * Status pill for the canonical Active/Resigned/Terminated/Transferred values.
+ * Status pill for the canonical Active/Resigned/Terminated/Transferred/Loaned values.
  *
  * Centralised so the colour mapping is consistent between the list pane,
  * detail header, and any future surfaces (audit log, reports).
@@ -15,6 +15,7 @@ const TONE_BY_STATUS: Record<EmployeeStatus, 'active' | 'warning' | 'danger' | '
   Resigned: 'warning',
   Terminated: 'danger',
   Transferred: 'info',
+  Loaned: 'active',
 }
 
 export function StatusPill({ status }: { status: EmployeeStatus }): React.JSX.Element {

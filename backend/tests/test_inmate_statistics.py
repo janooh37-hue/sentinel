@@ -64,7 +64,7 @@ def api_db(monkeypatch, tmp_path) -> Session:
     monkeypatch.setattr(session_mod, "SessionLocal", TestSession)
     db = TestSession()
     perm_service.seed_role_defaults(db)
-    db.add(BookCategory(id="NAT", prefix="IV"))
+    db.add(BookCategory(id="INV", prefix="INV"))
     db.commit()
     try:
         yield db
@@ -197,7 +197,7 @@ def _record(
 
     _REF["n"] += 1
     book = Book(
-        category_id="NAT",
+        category_id="INV",
         ref_number=ref or f"IV-2026-{_REF['n']:04d}",
         subject="مخالفة سلوكية",
         direction="outgoing",

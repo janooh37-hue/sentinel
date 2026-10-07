@@ -39,6 +39,7 @@ from app.db.workforce_models import (
     WorkShiftOverride,
     WorkStaffingRequirement,
 )
+from app.schemas.employee import WORKING_STATUSES
 from app.services.workforce_access_service import (
     allows_hierarchy,
     employee_in_scope,
@@ -901,7 +902,7 @@ def reconcile_duty_crew_membership(
     from app.services.workforce_seed_service import DUTY_UNIT_TO_CREW
 
     employee = db.get(Employee, employee_id)
-    if employee is None or employee.status.lower() != "active":
+    if employee is None or employee.status.lower() not in {s.lower() for s in WORKING_STATUSES}:
         return
     unit = (employee.duty_unit or "").strip()
     if not unit:

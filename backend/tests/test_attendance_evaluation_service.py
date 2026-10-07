@@ -17,12 +17,13 @@ from app.db.workforce_models import (
     AttendanceSyncState,
     WorkAttendancePolicy,
     WorkCrew,
+    WorkCrewMembership,
     WorkCrewSchedule,
     WorkRotationPattern,
     WorkShiftDefinition,
     WorkShiftOccurrence,
 )
-from app.services import attendance_correction_service
+from app.services import attendance_correction_service, workforce_read_service
 from app.services.attendance_evaluation_service import evaluate_case, materialize_scheduled_cases
 from app.services.workforce_access_service import organization_scope
 
@@ -31,8 +32,12 @@ SHIFT_START = datetime(2026, 8, 17, 4, tzinfo=UTC)
 SHIFT_END = SHIFT_START + timedelta(hours=8)
 
 
-def _seed_case(db_session, *, employee_id: str = "G-ATT-1") -> AttendanceCase:
-    employee = Employee(id=employee_id, name_en="Attendance Tester", name_ar="مختبر الحضور")
+def _seed_case(
+    db_session, *, employee_id: str = "G-ATT-1", status: str = "Active"
+) -> AttendanceCase:
+    employee = Employee(
+        id=employee_id, name_en="Attendance Tester", name_ar="مختبر الحضور", status=status
+    )
     actor = User(
         email=f"{employee_id.lower()}@attendance.test",
         password_hash="x",
@@ -115,7 +120,7 @@ def _seed_case(db_session, *, employee_id: str = "G-ATT-1") -> AttendanceCase:
     case = AttendanceCase(
         employee_id=employee.id,
         shift_occurrence_id=occurrence.id,
-        employee_status_snapshot="active",
+        employee_status_snapshot=status,
         crew_code_snapshot=crew.code,
         crew_name_snapshot="Alpha",
         shift_code_snapshot=shift.code,
@@ -148,8 +153,11 @@ def _punch(db_session, case: AttendanceCase, *, event_id: str, at: datetime, dir
     return punch
 
 
-def test_evaluator_keeps_presence_precedence_grace_boundaries_and_exception_facts_orthogonal(db_session):
-    case = _seed_case(db_session)
+@pytest.mark.parametrize("status", ["Active", "Loaned"])
+def test_evaluator_keeps_presence_precedence_grace_boundaries_and_exception_facts_orthogonal(
+    db_session, status
+):
+    case = _seed_case(db_session, status=status)
     _punch(db_session, case, event_id="in-at-grace", at=SHIFT_START + timedelta(minutes=10), direction="in")
 
     active = evaluate_case(db_session, case.id, evaluated_at=SHIFT_START + timedelta(minutes=20))
@@ -202,6 +210,38 @@ def test_evaluation_start_cutoff_leaves_pre_go_live_occurrence_without_case_or_r
     )
     assert skipped is None
     assert db_session.scalar(select(AttendanceEvaluation).where(AttendanceEvaluation.attendance_case_id == case.id)) is None
+
+
+@pytest.mark.parametrize("status", ["Active", "Loaned"])
+def test_working_employee_materializes_attendance_case(db_session, status):
+    seed = _seed_case(db_session, status=status)
+    occurrence = db_session.get(WorkShiftOccurrence, seed.shift_occurrence_id)
+    assert occurrence is not None
+    actor = db_session.scalar(select(User))
+    assert actor is not None
+    db_session.add(
+        WorkCrewMembership(
+            crew_id=occurrence.crew_id,
+            employee_id=seed.employee_id,
+            effective_from=SHIFT_START - timedelta(days=1),
+            created_by_user_id=actor.id,
+            updated_by_user_id=actor.id,
+        )
+    )
+    db_session.delete(seed)
+    db_session.flush()
+    (case,) = materialize_scheduled_cases(db_session, employee_id=seed.employee_id, horizon=UTC_NOW)
+    assert case.employee_status_snapshot == status
+    assert case.shift_occurrence_id == occurrence.id
+    roster = workforce_read_service.list_roster(
+        db_session, scope=organization_scope(), operational_date=case.operational_date
+    )
+    assert [row["employee_id"] for row in roster] == [case.employee_id]
+    _punch(db_session, case, event_id="working-in", at=SHIFT_START, direction="in")
+    evaluation = evaluate_case(
+        db_session, case.id, evaluated_at=SHIFT_START + timedelta(minutes=20)
+    )
+    assert (evaluation.presence_state, evaluation.reason_code) == ("on_duty", "PUNCH_IN_ACTIVE")
 
 
 def test_started_assignment_materialization_omits_future_occurrences_and_preserves_prior_snapshot(db_session):

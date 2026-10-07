@@ -108,7 +108,7 @@ def test_external_extraction_response_and_persistence_are_exact(
     assert row is not None
     assert (
         row.raw_text
-        == "Resident Identity Card\n784-1990-1234567-1\nName: LAYLA HASSAN\nالاسم: ليلى حسن\nIBAN AE070331234567890123456\nExpiry Date: 31/12/2030\n"  # noqa: RUF001 — literal Arabic text
+        == "Resident Identity Card\n784-1990-1234567-1\nName: LAYLA HASSAN\nالاسم: ليلى حسن\nIBAN AE070331234567890123456\nExpiry Date: 31/12/2030\n"
     )
     assert row.fields == {
         "uae_id_no": "784-1990-1234567-1",

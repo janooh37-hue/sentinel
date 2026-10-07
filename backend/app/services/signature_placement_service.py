@@ -970,7 +970,7 @@ def reassign_signature(
     dest_dir.mkdir(parents=True, exist_ok=True)
     destination_docx = dest_dir / tracked_docx.name
     try:
-        after_layout, after_pdf = _pdf_executor.reassign_signature_image(
+        _after_layout, after_pdf = _pdf_executor.reassign_signature_image(
             tracked_docx,
             destination_docx,
             signature_id=signature_id,

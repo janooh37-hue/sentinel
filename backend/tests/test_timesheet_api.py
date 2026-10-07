@@ -468,6 +468,41 @@ def test_export_returns_an_xlsx_with_an_rfc5987_arabic_filename(client, db_sessi
     assert client.get("/api/v1/timesheet/2026/7").json()["closed_at"] is not None
 
 
+@pytest.mark.parametrize("variant", ["attendance", "statistics"])
+def test_loaned_employee_is_excluded_from_list_and_export(client, db_session, variant):
+    _guard(db_session)
+    designation = db_session.query(TimesheetDesignation).filter_by(name_en="Security Guard").one()
+    db_session.add(
+        Employee(
+            id="G1002",
+            name_en="LOANED GUARD",
+            status="Active",
+            nationality="الإمارات",
+            doj=date(2020, 1, 1),
+        )
+    )
+    _add_assignment(db_session, "G1002", designation.id)
+    db_session.commit()
+    previous = client.get("/api/v1/timesheet/2026/6").json()
+    assert {row["employee_id"] for row in previous["rows"]} == {"G1001", "G1002"}
+
+    db_session.get(Employee, "G1002").status = "Loaned"
+    db_session.commit()
+    for month in (6, 7):
+        body = client.get(f"/api/v1/timesheet/2026/{month}").json()
+        assert [row["employee_id"] for row in body["rows"]] == ["G1001"]
+        assert body["removed"] == []
+
+    response = client.get(f"/api/v1/timesheet/2026/7/export?variant={variant}")
+    assert response.status_code == 200
+    workbook = load_workbook(io.BytesIO(response.content))
+    sheet = workbook.active
+    employee_ids = {row[0] for row in sheet.iter_rows(min_col=2, max_col=2, values_only=True)}
+    assert "G1001" in employee_ids
+    assert "G1002" not in employee_ids
+    assert db_session.query(TimesheetSnapshotRow).filter_by(employee_id="G1002").count() == 0
+
+
 def test_the_statistics_variant_is_a_second_workbook(client, db_session):
     _guard(db_session)
     response = client.get("/api/v1/timesheet/2026/7/export?variant=statistics")

@@ -399,7 +399,7 @@ export function ProfileTab({
   const missingSet = new Set(missing)
   const uaeExpiryDays = nearExpiryDays(employee.uae_id_expiry)
 
-  const transferFooter = canEdit ? (
+  const transferFooter = canEdit && has('documents.duty_transfer') ? (
     <div className="mt-3 flex justify-end">
       <Button
         type="button"

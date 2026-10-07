@@ -37,8 +37,9 @@ from app.db.models import (
     TimesheetStartAck,
     TimesheetStatFiller,
 )
+from app.schemas.employee import EmployeeUpdate
 from app.schemas.timesheet import TimesheetRosterAssignmentWrite
-from app.services import absence_service, leave_service
+from app.services import absence_service, employee_service, leave_service
 from app.services import timesheet_service as svc
 from tests.conftest import make_user
 
@@ -183,6 +184,117 @@ def test_a_quiet_guard_is_present_all_month(db_session, guards):
     assert grid.days_in_month == 31
 
 
+def test_active_employee_without_end_date_stays_on_roster_not_removed(db_session, guards):
+    employee = db_session.get(Employee, "G1001")
+    employee.status = "Active"
+    employee.end_date = None
+    db_session.commit()
+    for month in (7, 8):
+        grid = svc.build_month(db_session, 2026, month)
+        row = next(row for row in grid.rows if row.employee_id == "G1001")
+        assert row.codes == [CODE_PRESENT] * 31
+        assert "G1001" not in [removed.employee_id for removed in grid.removed]
+        assert not any(
+            warning.kind == "departed_but_active" and warning.employee_id == "G1001"
+            for warning in grid.warnings
+        )
+
+
+@pytest.mark.parametrize("end_date", [None, date(2026, 7, 20)])
+def test_current_loaned_status_excludes_live_months_without_reporting_removal(
+    db_session, guards, end_date
+):
+    employee = db_session.get(Employee, "G1001")
+    assert employee.id in {row.employee_id for row in svc.build_month(db_session, 2026, 7).rows}
+    employee.status = "Loaned"
+    employee.end_date = end_date
+    db_session.commit()
+
+    for month in (6, 7, 8):
+        grid = svc.build_month(db_session, 2026, month)
+        assert "G1001" not in {row.employee_id for row in grid.rows}
+        assert "G1001" not in {row.employee_id for row in grid.removed}
+        assert "G1002" in {row.employee_id for row in grid.rows}
+        assert not any(
+            warning.kind == "departed_but_active" and warning.employee_id == "G1001"
+            for warning in grid.warnings
+        )
+
+
+def test_status_change_to_loaned_does_not_rewrite_sealed_salary_rows(db_session, guards):
+    svc.close_month(db_session, 2026, 7)
+    db_session.get(Employee, "G1001").status = "Loaned"
+    db_session.commit()
+
+    assert "G1001" in {row.employee_id for row in svc.build_month(db_session, 2026, 7).rows}
+    assert "G1001" not in {row.employee_id for row in svc.build_month(db_session, 2026, 8).rows}
+
+
+@pytest.mark.parametrize(
+    ("status", "later_status"),
+    [
+        ("Resigned", None),
+        ("Terminated", None),
+        ("Transferred", None),
+        pytest.param("Transferred", "Resigned", id="Transferred-to-Resigned"),
+    ],
+)
+@pytest.mark.parametrize("scheduled", [False, True])
+def test_departed_loaned_employee_stays_off_live_salary_sheet_and_removed(
+    db_session, guards, monkeypatch, status, later_status, scheduled
+):
+    class FixedDate(date):
+        @classmethod
+        def today(cls):
+            return date(2026, 7, 1 if scheduled else 21)
+
+    monkeypatch.setattr(employee_service, "date", FixedDate)
+    employee_service.update_employee(db_session, "G1001", EmployeeUpdate(status="Loaned"))
+    employee = employee_service.update_employee(
+        db_session,
+        "G1001",
+        EmployeeUpdate(
+            status=status,
+            end_date=date(2026, 7, 20),
+            transfer_site="Other site" if status == "Transferred" else None,
+        ),
+    )
+    if scheduled:
+        assert employee.status == "Loaned"
+        assert [
+            row.id
+            for row in employee_service.apply_due_departures(db_session, today=date(2026, 7, 20))
+        ] == ["G1001"]
+    assert employee.status == status
+    if later_status:
+        employee_service.update_employee(
+            db_session, "G1001", EmployeeUpdate(status=later_status, end_date=date(2026, 7, 20))
+        )
+        assert employee.status == later_status
+
+    for month in (7, 8):
+        grid = svc.build_month(db_session, 2026, month)
+        assert "G1001" not in {row.employee_id for row in grid.rows}
+        assert "G1001" not in {row.employee_id for row in grid.removed}
+
+    # Returning to Active replaces the last exit from a working status.
+    employee_service.update_employee(db_session, "G1001", EmployeeUpdate(status="Active"))
+    departure_status = later_status or status
+    employee_service.update_employee(
+        db_session,
+        "G1001",
+        EmployeeUpdate(
+            status=departure_status,
+            end_date=date(2026, 7, 20),
+            transfer_site="Other site" if departure_status == "Transferred" else None,
+        ),
+    )
+    if scheduled:
+        employee_service.apply_due_departures(db_session, today=date(2026, 7, 20))
+    assert "G1001" in {row.employee_id for row in svc.build_month(db_session, 2026, 7).rows}
+    assert "G1001" in {row.employee_id for row in svc.build_month(db_session, 2026, 8).removed}
+
+
 def test_main_statistics_compensates_by_rank_then_groups_codes():
     assert svc._compensated_day(
         [CODE_SICK, CODE_ANNUAL, CODE_PRESENT, CODE_PRESENT, CODE_PRESENT], 3
@@ -317,11 +429,12 @@ def test_an_unmapped_nationality_blocks_the_download(db_session, guards):
     assert {i.kind for i in svc.build_month(db_session, 2026, 7).blocking} == {"no_nationality"}
 
 
-def test_warnings_are_reported_without_blocking(db_session, guards):
+@pytest.mark.parametrize("status", ["Active", "Loaned"])
+def test_warnings_are_reported_without_blocking(db_session, guards, status):
     db_session.get(Employee, "G1001").name_en = "Name G1002"  # duplicate_name
     employee = db_session.get(Employee, "G0999")
     employee.end_date = date(2026, 6, 1)  # departed_but_active
-    employee.status = "Active"
+    employee.status = status
     db_session.add(
         Leave(
             employee_id="G1002",
@@ -334,9 +447,8 @@ def test_warnings_are_reported_without_blocking(db_session, guards):
     )
     db_session.commit()
     grid = svc.build_month(db_session, 2026, 7)
-    assert {"duplicate_name", "departed_but_active", "unknown_leave"} <= {
-        i.kind for i in grid.warnings
-    }
+    assert {"duplicate_name", "unknown_leave"} <= {i.kind for i in grid.warnings}
+    assert any(i.kind == "departed_but_active" for i in grid.warnings) == (status == "Active")
     assert grid.blocking == []
 
 
@@ -1171,7 +1283,7 @@ def test_a_certificate_may_still_be_filed_against_a_closed_month(db_session, gua
 
 
 def test_build_month_does_not_query_once_per_row(db_session, guards, count_queries):
-    """275 rows must not become 1,100 round trips — the filler lookback included."""
+    """275 rows must not become 1,100 round trips, including fillers and status history."""
     svc.set_post_count(db_session, 2026, 7, 1)  # everyone but row 1 falls into block 2
     with count_queries() as small:
         svc.build_month(db_session, 2026, 7)
@@ -1188,7 +1300,7 @@ def test_build_month_does_not_query_once_per_row(db_session, guards, count_queri
     assert len(grid.rows) == 33
     assert grid.rows[-1].stat_filler == CODE_SICK  # the batched lookback really ran
     assert large.count == small.count
-    assert large.count <= 13
+    assert large.count <= 14  # one batched query for the latest departures from Loaned
 
 
 # --- fix round 1: the three writers agree, and the seal's two halves ---------

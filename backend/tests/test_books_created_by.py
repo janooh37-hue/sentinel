@@ -328,10 +328,10 @@ def test_inmate_reporter_created_by_me_never_widens_visibility(api_db: Session) 
     )
     _hand_built(api_db, book_id=4, creator=reporter, state="none", version_creator=other_reporter)
     # Reporters only hold the violations category; move the seeded books there.
-    api_db.add(BookCategory(id="NAT", prefix="NAT"))
+    api_db.add(BookCategory(id="INV", prefix="INV"))
     api_db.flush()
     for book in api_db.query(Book).all():
-        book.category_id = "NAT"
+        book.category_id = "INV"
         book.versions[0].template_id = "Inmate Conduct Violations"
     api_db.commit()
 

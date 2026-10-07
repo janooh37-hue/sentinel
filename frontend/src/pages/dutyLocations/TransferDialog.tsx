@@ -17,7 +17,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
-import { api, apiErrorMessage, type DutyTransferResult, type EmployeeListItem } from '@/lib/api'
+import { api, apiErrorMessage, type DutyTransferResult, type EmployeeLookupItem } from '@/lib/api'
 import { unitOptions, postsForUnit } from '@/lib/dutyUnits'
 import { buildTransferRequest } from './transferRequest'
 import { loadTransferDefaults, saveTransferDefaults } from './transferDefaults'
@@ -50,9 +50,9 @@ const FIELD =
 export interface TransferDialogProps {
   open: boolean
   /** The employees being moved (the current selection, possibly cross-unit). */
-  employees: readonly EmployeeListItem[]
+  employees: readonly EmployeeLookupItem[]
   /** All roster employees — used to derive destination suggestions. */
-  allEmployees: readonly EmployeeListItem[]
+  allEmployees: readonly EmployeeLookupItem[]
   onOpenChange: (open: boolean) => void
   /** Called after a successful transfer with its complete result. */
   onTransferred: (result: DutyTransferResult) => void

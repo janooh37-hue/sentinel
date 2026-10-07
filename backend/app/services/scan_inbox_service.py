@@ -229,6 +229,46 @@ def park_scan_back(
     return row
 
 
+def auto_file_email_reply(db: Session, *, ledger_entry_id: int, book_id: int) -> list[ScanInbox]:
+    """File a Threaded reply confirmation's attachments onto ``book_id``.
+
+    A Message-ID thread match plus a real attachment is stronger evidence than OCR
+    triage, so the rows the email ingest already queued for this ledger entry are
+    retagged ``email_reply_match``, routed to the book, and filed directly. A row
+    that cannot be filed parks as ``awaiting_confirmation`` for the operator — the
+    same fallback ``_process_one`` uses when an auto-file fails. Attachments whose
+    bytes were already queued under another row never reached this queue
+    (``content_hash`` dedup in ``enqueue_email_attachment``), so nothing double-files.
+    """
+    rows = list(
+        db.execute(
+            select(ScanInbox).where(
+                ScanInbox.ledger_entry_id == ledger_entry_id,
+                ScanInbox.state == "pending_ocr",
+            )
+        ).scalars()
+    )
+    for item in rows:
+        item.source = "email_reply_match"
+        item.document_type = "returned_form"
+        item.proposed_route = "book_attach"
+        item.proposed_book_id = book_id
+        item.confidence = 1.0
+        item.confidence_tier = "auto"
+        item.model_version = _MODEL_VERSION
+        try:
+            _apply_file(db, item, user=None)
+            item.state = "auto_filed"
+            item.resolution = "auto_filed"
+            item.resolved_at = _utcnow()
+        except Exception as exc:  # file failed → operator decides
+            log.warning("scan-inbox reply auto-file failed for %d: %s", item.id, exc)
+            item.state = "awaiting_confirmation"
+            item.error_detail = str(exc)[:512]
+    db.commit()
+    return rows
+
+
 # ─────────────────────────────── file actions ──────────────────────────────────
 
 

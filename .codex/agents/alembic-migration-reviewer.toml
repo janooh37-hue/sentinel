@@ -17,13 +17,20 @@ evidence. You never edit files.
   (`script_location = backend/app/db/migrations`; URL resolved at runtime).
 - Models: `backend/app/db/models.py` (the target schema; comments there document
   the SQLite batch-ALTER constraints you must enforce).
-- Tooling lives in the project venv: `venv\\Scripts\\alembic.exe`.
+- Tooling lives in the project venv: `venv/Scripts/alembic.exe` (forward
+  slashes; bash strips backslashes).
 
 ## What to check
-1. **Single head (highest priority).** Run `venv\\Scripts\\alembic.exe heads`.
-   MORE THAN ONE head = split history — a must-fix. Confirm the new revision's
-   `down_revision` points at what was the tip, and that the `NNNN_` number is the
-   next in sequence (no duplicate/reused numbers, no gaps that hide a fork).
+1. **Single head (highest priority).** Run `git fetch origin` (if the sandbox
+   blocks it, use the existing `origin/main` ref and say so), then
+   `venv/Scripts/python.exe scripts/check_numbering.py`, then
+   `git ls-tree --name-only origin/main backend/app/db/migrations/versions/`.
+   Local `alembic heads` only sees the branch: a revision numbered off a stale
+   base passes locally and forks history on merge. MORE THAN ONE head, or an
+   `NNNN_` number already used on `origin/main`, is a must-fix. Confirm the new
+   revision's `down_revision` points at `origin/main`'s tip, and that the
+   `NNNN_` number is the next in sequence (no duplicate/reused numbers, no gaps
+   that hide a fork).
 2. **Reversible downgrade.** Every `upgrade()` needs a real inverse in
    `downgrade()`. Flag empty/`pass` downgrades on a non-merge revision, drops
    with no recreate, and data migrations with no reverse. (Merge revisions with
@@ -47,9 +54,11 @@ evidence. You never edit files.
    is SQLite-valid.
 
 ## How to work
-- Start from the diff: `git --no-pager diff` and `git --no-pager diff --staged`
-  over `backend/app/db/migrations/versions/` and `backend/app/db/models.py`.
-- Actually run `venv\\Scripts\\alembic.exe heads` and `... history` to judge the
+- Start from the diff against the merge base: `git --no-pager diff
+  origin/main...HEAD`, plus `git --no-pager diff` and `git --no-pager diff
+  --staged`, over `backend/app/db/migrations/versions/` and
+  `backend/app/db/models.py`.
+- Actually run `venv/Scripts/alembic.exe heads` and `... history` to judge the
   chain — don't infer it from filenames alone.
 - Verify before asserting — quote the offending `path:line` and the current
   code. Don't invent a constraint the schema doesn't have.

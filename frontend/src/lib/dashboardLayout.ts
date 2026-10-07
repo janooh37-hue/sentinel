@@ -177,10 +177,6 @@ export function isQuickActionAllowed(
   return has('documents.generate') && has('books.view') && hasServiceCap(id, has)
 }
 
-export function isQuickActionId(id: string): id is QuickActionId {
-  return QUICK_ACTION_ID_SET.has(id)
-}
-
 export function mergeQuickActionsPreservingDenied(
   original: readonly DashboardQuickActionConfig[],
   editedAllowed: readonly DashboardQuickActionConfig[],

@@ -1,7 +1,7 @@
 /**
  * EmployeesTableField — multi-employee picker for the Passport Release list.
  *
- * Search + pick an employee → resolves via GET /employees/{id} and appends a
+ * Search + pick an employee → resolves via GET /employees/lookup/{id} and appends a
  * row auto-filled with ID, Name (Arabic, for the doc), Nationality, Passport
  * No. ＋ adds more; hard cap 15 (the template has 15 data rows). ID + Name
  * are read-only (identity); Nationality + Passport No are editable
@@ -62,7 +62,7 @@ export function EmployeesTableField({
     setBusy(true)
     setLookupErr(null)
     try {
-      const emp = await api.getEmployee(gid)
+      const emp = await api.getEmployeeLookup(gid)
       append({
         employee_id: emp.id,
         name: emp.name_ar || emp.name_en || '',

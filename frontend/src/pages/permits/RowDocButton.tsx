@@ -47,7 +47,8 @@ export function RowDocButton({
             type="button"
             onClick={onPreview}
             title={docName}
-            className="inline-flex items-center gap-1 rounded-md bg-success-soft px-2 py-1 text-[0.7rem] font-medium text-success hover:brightness-95"
+            aria-label={`${label}: ${docName}`}
+            className="inline-flex min-h-9 items-center gap-1 rounded-md bg-success-soft px-2 py-1 text-[0.7rem] font-medium text-success hover:brightness-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring max-md:min-h-11"
           >
             <FileCheck2 className="h-3.5 w-3.5" aria-hidden />
             {label}
@@ -57,7 +58,7 @@ export function RowDocButton({
               type="button"
               disabled={busy}
               onClick={() => ref.current?.click()}
-              className="text-[0.7rem] font-medium text-muted-foreground underline-offset-2 hover:text-foreground hover:underline disabled:opacity-50"
+              className="inline-flex min-h-9 items-center rounded-md px-1 text-[0.7rem] font-medium text-muted-foreground underline-offset-2 hover:text-foreground hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 max-md:min-h-11"
             >
               {t('permits.paper.replace')}
             </button>
@@ -69,7 +70,7 @@ export function RowDocButton({
           disabled={busy}
           onClick={() => ref.current?.click()}
           title={t('permits.doc.ocrHint')}
-          className="inline-flex items-center gap-1 rounded-md border border-dashed border-border-strong px-2 py-1 text-[0.7rem] font-medium text-muted-foreground hover:border-ring hover:text-foreground disabled:opacity-50"
+          className="inline-flex min-h-9 items-center gap-1 rounded-md border border-dashed border-border-strong px-2 py-1 text-[0.7rem] font-medium text-muted-foreground hover:border-ring hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 max-md:min-h-11"
         >
           <Upload className="h-3.5 w-3.5" aria-hidden />
           {t('permits.doc.upload', { label })}

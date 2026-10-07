@@ -285,3 +285,14 @@ def test_active_only_index_excludes_departed_employees(db_session):
 
     assert match_employee_code(index, "1234").state == "none"
     assert match_employee_code(EmployeeCodeIndex.build(db_session), "1234").state == "digits"
+
+
+@pytest.mark.parametrize("status", ["Active", "Loaned"])
+def test_active_only_index_includes_working_employees(db_session, status):
+    _employee(db_session, "G1234", status=status)
+    _employee(db_session, "G5678", status="Resigned")
+    db_session.flush()
+    index = EmployeeCodeIndex.build(db_session, active_only=True)
+    match = match_employee_code(index, "1234")
+    assert (match.state, match.employee_id) == ("digits", "G1234")
+    assert match_employee_code(index, "5678").state == "none"

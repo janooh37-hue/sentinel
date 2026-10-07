@@ -64,7 +64,9 @@ def api_db(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Session:
     monkeypatch.setattr(session_mod, "SessionLocal", test_session)
     db = test_session()
     perm_service.seed_role_defaults(db)
-    db.add(BookCategory(id="NAT", prefix="NAT", name_en="Inmate Conduct", name_ar="مخالفات"))
+    db.add(
+        BookCategory(id="INV", prefix="INV", name_en="Inmate violations", name_ar="مخالفات النزلاء")
+    )
     db.commit()
 
     settings = Settings(data_dir=tmp_path / "data")
@@ -709,7 +711,7 @@ def test_legacy_versionless_pending_inmate_record_is_shared_readable(api_db: Ses
     """A pre-migration/imported record with no BookVersion still shares by
     state — original_creator_user_id is None, never claimed by the reader."""
     book = Book(
-        category_id="NAT",
+        category_id="INV",
         ref_number="NAT-9001",
         subject="Inmate Conduct Violations — legacy",
         approval_state="approved",
@@ -728,14 +730,14 @@ def test_other_service_and_deleted_voided_books_stay_hidden(api_db: Session) -> 
     api_db.add(BookCategory(id="HR", prefix="HR", name_en="HR", name_ar="HR"))
     other = Book(category_id="HR", ref_number="HR-0001", subject="General Book — unrelated")
     deleted = Book(
-        category_id="NAT",
+        category_id="INV",
         ref_number="NAT-9002",
         subject="Inmate Conduct Violations — gone",
         approval_state="approved",
         deleted_at=__import__("datetime").datetime(2026, 1, 1),
     )
     voided = Book(
-        category_id="NAT",
+        category_id="INV",
         ref_number="NAT-9003",
         subject="Inmate Conduct Violations — voided",
         approval_state="approved",

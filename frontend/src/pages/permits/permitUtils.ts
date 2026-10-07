@@ -3,7 +3,7 @@
  * i18n key mapping, and a couple of small formatters. Kept framework-free so
  * both the table and the detail dialog stay consistent.
  */
-import type { PermitDerivedStatus, PermitZone } from '@/lib/api'
+import { api, type PermitDerivedStatus, type PermitZone } from '@/lib/api'
 
 export type Tone = 'neutral' | 'active' | 'warning' | 'danger' | 'info' | 'outline'
 
@@ -54,6 +54,23 @@ export function fmtDate(iso: string | null | undefined): string {
   if (!iso) return '—'
   return iso.slice(0, 10)
 }
+
+/** Locale long date ("22 Jul 2026" / Arabic), read as a UTC calendar day. */
+export function fmtLongDate(iso: string, language: string): string {
+  return new Intl.DateTimeFormat(language.startsWith('ar') ? language : 'en-GB', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    timeZone: 'UTC',
+  }).format(new Date(`${iso.slice(0, 10)}T00:00:00Z`))
+}
+
+/** The permit letter's book. One key, so the quick view, the full dialog's
+ *  version list and row-hover prefetch share a single cached fetch. */
+export const permitBookQuery = (bookId: number) => ({
+  queryKey: ['books', 'permit', bookId] as const,
+  queryFn: () => api.getBook(bookId),
+})
 
 /** Today as YYYY-MM-DD, for date-input `min` bounds. */
 export function todayISO(): string {

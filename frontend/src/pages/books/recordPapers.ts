@@ -104,7 +104,8 @@ export function paperUrl({
   return rev ? withParam(url, 'rev', rev) : url
 }
 
-function currentVersionOf(book: Pick<BookLike, 'versions'>): VersionLike | undefined {
+/** The newest version (highest `version_no`), whatever order the API sent. */
+export function currentVersionOf<V extends VersionLike>(book: { versions?: V[] | null }): V | undefined {
   const versions = book.versions ?? []
   return versions.length > 0
     ? versions.reduce((a, b) => (b.version_no >= a.version_no ? b : a))

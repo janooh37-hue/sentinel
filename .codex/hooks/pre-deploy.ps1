@@ -26,3 +26,4 @@ if ($problems.Count) {
     [Console]::Error.WriteLine("Blocked production deploy/update: " + ($problems -join '; ') + '.')
     exit 2
 }
+exit 0

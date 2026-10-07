@@ -4,6 +4,8 @@ import type { EmployeeActivityItemRead } from '@/lib/api'
 import { bidi } from '@/lib/bidi'
 import { formatDmy } from '@/lib/formatDmy'
 
+import { isWorkingStatus } from './schema'
+
 export type StatusActivityValue = Pick<
   EmployeeActivityItemRead,
   | 'from_status'
@@ -20,7 +22,7 @@ export type StatusActivityValue = Pick<
  * One employee status-history event (kind `status`).
  *
  *   Active → Transferred            Site X · Effective 15/08/2026 · By Ahmed
- *   Returned to Active              Returned 20/09/2026 · Applied automatically
+ *   Returned to service             Returned 20/09/2026 · Applied automatically
  *
  * Status values go through `employees.status.*` so Arabic never shows the raw
  * English enum; site / dates / actor name are bidi-isolated.
@@ -32,7 +34,8 @@ export function StatusActivity({ item }: { item: StatusActivityValue }): React.J
   const from = statusLabel(item.from_status)
   const to = statusLabel(item.to_status)
   const eventKind = item.status_event_kind ?? 'changed'
-  const returned = item.to_status === 'Active' && !!item.from_status && item.from_status !== 'Active'
+  const returned =
+    isWorkingStatus(item.to_status) && !!item.from_status && !isWorkingStatus(item.from_status)
 
   let title: string
   if (eventKind === 'scheduled_cancelled') {

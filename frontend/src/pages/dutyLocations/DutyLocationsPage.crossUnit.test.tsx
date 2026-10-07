@@ -15,7 +15,7 @@ import { afterEach, beforeEach, expect, test, vi } from 'vitest'
 import { api } from '@/lib/api'
 import { DutyLocationsPage } from './DutyLocationsPage'
 
-vi.mock('@/lib/api', () => ({ api: { listEmployees: vi.fn() } }))
+vi.mock('@/lib/api', () => ({ api: { lookupEmployees: vi.fn() } }))
 vi.mock('./AssignPopover', () => ({ AssignPopover: () => null }))
 vi.mock('./SupervisorDesignations', () => ({ SupervisorDesignations: () => null }))
 vi.mock('./LeaveDigestPanel', () => ({ LeaveDigestPanel: () => null }))
@@ -28,7 +28,7 @@ const ROSTER = [
 ]
 
 beforeEach(() => {
-  vi.mocked(api.listEmployees).mockResolvedValue({ items: ROSTER, total: ROSTER.length } as never)
+  vi.mocked(api.lookupEmployees).mockResolvedValue({ items: ROSTER, total: ROSTER.length } as never)
 })
 
 afterEach(() => {

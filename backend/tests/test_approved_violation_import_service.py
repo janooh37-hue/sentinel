@@ -45,7 +45,7 @@ def _prepare(
 ) -> str:
     monkeypatch.setenv("GSSG_DATA_DIR", str(tmp_path))
     get_settings.cache_clear()
-    db.add(BookCategory(id="NAT", prefix="NAT"))
+    db.add(BookCategory(id="INV", prefix="INV"))
     category = CorrespondenceCategory(
         key="gov_nat",
         name_en="Government / NAT",
@@ -58,7 +58,7 @@ def _prepare(
     db.add(
         CorrespondenceRule(
             trigger="document_generated",
-            condition_json={"category": "NAT", "template_id": "Inmate Conduct Violations"},
+            condition_json={"category": "INV", "template_id": "Inmate Conduct Violations"},
             category_id=category.id,
             enabled=True,
             sort=20,
@@ -101,8 +101,8 @@ def test_commit_creates_one_approved_searchable_record_without_violation_row(
     book = db_session.get(Book, result.book_id)
     document = db_session.get(Document, result.doc_id)
     version = db_session.scalar(select(BookVersion).where(BookVersion.book_id == book.id))
-    assert result.ref_number == "NAT-0001"
-    assert book.category_id == "NAT"
+    assert result.ref_number == "INV-0001"
+    assert book.category_id == "INV"
     assert book.approval_state == "approved"
     assert book.submitted_by_user_id == admin_user.id
     assert book.created_by_user_id == admin_user.id
@@ -128,8 +128,8 @@ def test_commit_creates_one_approved_searchable_record_without_violation_row(
 
     stamped = (tmp_path / document.pdf_path).read_bytes()
     with fitz.open(stream=stamped, filetype="pdf") as pdf:
-        assert "Ref: NAT-0001" in pdf[0].get_text()
-    assert qr_refs_from_bytes(stamped) == ["NAT-0001"]
+        assert "Ref: INV-0001" in pdf[0].get_text()
+    assert qr_refs_from_bytes(stamped) == ["INV-0001"]
     with pytest.raises(ValidationFailedError) as unfile:
         book_service.unfile_signed_copy(db_session, book.id, user=admin_user)
     assert unfile.value.code == "NO_SIGNED_COPY"
@@ -188,7 +188,7 @@ def test_failed_commit_rolls_back_rows_file_and_reference_then_allows_retry(
 
     monkeypatch.setattr(approved_import_service.correspondence_service, "log_event", real_log_event)
     result = _commit(db_session, admin_user, token)
-    assert result.ref_number == "NAT-0001"
+    assert result.ref_number == "INV-0001"
 
 
 def test_existing_final_file_survives_file_exists_failure(

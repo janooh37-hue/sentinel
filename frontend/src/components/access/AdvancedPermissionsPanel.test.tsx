@@ -88,7 +88,12 @@ function renderPanel(
   })
   return render(
     <QueryClientProvider client={client}>
-      <AdvancedPermissionsPanel user={user} perms={permissionData} capabilities={catalog} />
+      <AdvancedPermissionsPanel
+        user={user}
+        perms={permissionData}
+        capabilities={catalog}
+        mirroredServiceIds={new Set(['General Book', 'other'])}
+      />
     </QueryClientProvider>,
   )
 }

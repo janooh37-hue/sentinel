@@ -51,7 +51,8 @@ export function useUrlOverlay(
   linked: readonly string[] = [],
 ): {
   value: string | null
-  open: (value: string, extra?: Record<string, string>) => void
+  /** `extra` keys set alongside; a `null` value removes that key (e.g. a sibling overlay). */
+  open: (value: string, extra?: Record<string, string | null>) => void
   close: () => void
 } {
   const location = useLocation()
@@ -64,10 +65,13 @@ export function useUrlOverlay(
   const linkedKeys = linked.join('\n')
 
   const open = useCallback(
-    (next: string, extra?: Record<string, string>) => {
+    (next: string, extra?: Record<string, string | null>) => {
       const params = new URLSearchParams(location.search)
       params.set(key, next)
-      for (const [k, v] of Object.entries(extra ?? {})) params.set(k, v)
+      for (const [k, v] of Object.entries(extra ?? {})) {
+        if (v === null) params.delete(k)
+        else params.set(k, v)
+      }
       // Switching overlays replaces, so one Back always returns to the page.
       const replace = value !== null && pushedInApp
       // Spread the entry's state so the record's nav context (queue, from,

@@ -51,9 +51,7 @@ class LeaveHistory(Protocol):
     `leave_type` is matched against v3's stored values ("Annual", "Sick", ...).
     """
 
-    def get_employee_leaves_in_year(
-        self, g_number: str, year: int, leave_type: str
-    ) -> float:
+    def get_employee_leaves_in_year(self, g_number: str, year: int, leave_type: str) -> float:
         """Total days of `leave_type` taken in `year` (calendar year)."""
 
     def get_employee_leaves_in_period(
@@ -88,15 +86,12 @@ class BalanceResult:
 
 # Sentinel messages — kept as constants so callers can match exactly if they
 # want, and translation tables stay in one place. Bilingual format mirrors v3.
-_MSG_INVALID_JOIN: Final[str] = "Invalid join date\nتاريخ الالتحاق غير صالح"  # noqa: RUF001
+_MSG_INVALID_JOIN: Final[str] = "Invalid join date\nتاريخ الالتحاق غير صالح"
 _MSG_ELIGIBLE: Final[str] = "Eligible مؤهل"
 
 
 def _probation_message(days_remaining: int) -> str:
-    return (
-        f"Probation - {days_remaining} days left\n"
-        f"تجربة - {days_remaining} يوم متبقي"
-    )
+    return f"Probation - {days_remaining} days left\nتجربة - {days_remaining} يوم متبقي"
 
 
 class LeaveBalance:
@@ -172,12 +167,8 @@ class LeaveBalance:
                 months_in_prev_year = 12 - probation_end.month + 1
             else:
                 months_in_prev_year = 12
-            prev_earned = min(
-                months_in_prev_year * ANNUAL_ACCRUAL_PER_MONTH, ANNUAL_CAP_PER_YEAR
-            )
-            prev_taken = self.history.get_employee_leaves_in_year(
-                employee_id, prev_year, "Annual"
-            )
+            prev_earned = min(months_in_prev_year * ANNUAL_ACCRUAL_PER_MONTH, ANNUAL_CAP_PER_YEAR)
+            prev_taken = self.history.get_employee_leaves_in_year(employee_id, prev_year, "Annual")
             carry_over = min(max(0.0, prev_earned - prev_taken), CARRY_OVER_CAP)
         else:
             carry_over = 0.0
@@ -187,13 +178,9 @@ class LeaveBalance:
         else:
             months_earning = today.month
 
-        current_earned = min(
-            months_earning * ANNUAL_ACCRUAL_PER_MONTH, ANNUAL_CAP_PER_YEAR
-        )
+        current_earned = min(months_earning * ANNUAL_ACCRUAL_PER_MONTH, ANNUAL_CAP_PER_YEAR)
         total_available = min(carry_over + current_earned, TOTAL_AVAILABLE_CAP)
-        taken = self.history.get_employee_leaves_in_year(
-            employee_id, current_year, "Annual"
-        )
+        taken = self.history.get_employee_leaves_in_year(employee_id, current_year, "Annual")
         balance = max(0.0, total_available - taken)
         return balance, taken, current_earned, carry_over
 

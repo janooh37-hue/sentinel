@@ -15,7 +15,7 @@ vi.mock('@/lib/api', () => ({
   api: {
     updateEmployee: vi.fn(),
     transferDuty: vi.fn(),
-    listEmployees: vi.fn().mockResolvedValue({ items: [], total: 0 }),
+    lookupEmployees: vi.fn().mockResolvedValue({ items: [], total: 0 }),
   },
   apiErrorMessage: (e: unknown) => String(e),
 }))

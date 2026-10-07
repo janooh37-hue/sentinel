@@ -5,6 +5,7 @@ Local/LAN HR and document console: FastAPI/Python 3.12 backend, React/Vite/TypeS
 ## Production safety
 
 - On the production server (`GSSGAPP`), the main checkout is live production. Do not switch branches there; use a Git worktree for feature work.
+- On every host, cut feature worktrees from a freshly fetched `origin/main` (`git fetch origin && git worktree add -b feat/x .worktrees/x origin/main`). Local `main` lags, and a stale base reuses migration and ADR numbers already taken on `origin/main`.
 - The laptop `GSSGLT` is the dev channel: a production-backup snapshot restored to a dev data directory. Its `.env` sets `GSSG_DISABLE_SCHEDULER=1` and has no SMS, WhatsApp, or BioTime settings. Never copy `.email_key` or `.vapid_key` to it. Share it only via tailnet-only `tailscale serve`, never Funnel. See issue #160 and `docs/adr/0004-dev-channel-on-laptop-with-production-snapshot.md`.
 - Never deploy changes that are not committed and pushed to `origin/main`; a later `mng update` would overwrite them.
 - Do not commit secrets, `data/`, local PII, generated static assets, or accidental Word resaves of `backend/templates/*.docx`.
@@ -13,13 +14,14 @@ Local/LAN HR and document console: FastAPI/Python 3.12 backend, React/Vite/TypeS
 
 ## Commands
 
-Run Python through `venv\Scripts\` and frontend commands through pnpm.
+Run Python through `venv/Scripts/` and frontend commands through pnpm. Use forward slashes: they work in PowerShell and in bash, which strips backslashes.
 
 ```powershell
-venv\Scripts\python.exe -m pytest
-venv\Scripts\ruff.exe check .
-venv\Scripts\ruff.exe format --check .
-venv\Scripts\mypy.exe
+venv/Scripts/python.exe -m pytest
+venv/Scripts/ruff.exe check .
+venv/Scripts/ruff.exe format <files you changed>
+venv/Scripts/mypy.exe
+venv/Scripts/python.exe scripts/check_numbering.py
 pnpm -C frontend test
 pnpm -C frontend run lint
 pnpm -C frontend exec tsc -b --noEmit
@@ -27,15 +29,15 @@ pnpm -C frontend run build
 pnpm -C frontend run e2e
 ```
 
-Use the narrowest relevant check while iterating. The full backend suite takes about 90 seconds; combined frontend checks can exhaust memory on this host.
+Use the narrowest relevant check while iterating. The full backend suite takes about 25 minutes on `GSSGLT`: run it once, in the background, with no timeout. Combined frontend checks can exhaust memory on this host. `main` is not format-clean, so format only the files you change; `ruff format .` rewrites about 190 unrelated files. CI (`.github/workflows/checks.yml`) runs `ruff check`, `scripts/check_numbering.py`, and a format check of changed files on every pull request.
 
 Service operations:
 
 ```powershell
-scripts\mng.ps1 status
-scripts\mng.ps1 deploy
-scripts\mng.ps1 update
-scripts\mng.ps1 logs
+scripts/mng.ps1 status
+scripts/mng.ps1 deploy
+scripts/mng.ps1 update
+scripts/mng.ps1 logs
 ```
 
 ## Architecture
@@ -51,6 +53,7 @@ scripts\mng.ps1 logs
 - Arabic and English are peers. After UI strings, layouts, documents, or notifications change, run the `i18n-rtl-reviewer`; use logical CSS properties and verify both directions.
 - After SMS, WhatsApp, push, or notification formatting changes, run the `notification-template-reviewer`.
 - After migrations or schema changes, run the `alembic-migration-reviewer` and confirm exactly one Alembic head.
+- Reviewer definitions live in `.codex/agents/<name>.toml`; outside Codex, give a read-only reviewer that file's `developer_instructions` plus the diff against `origin/main`.
 - SQLite schema changes use `batch_alter_table`; populated NOT NULL columns need a default or backfill. Revision IDs are sequential `NNNN_slug` values.
 
 ## Project skills

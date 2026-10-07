@@ -48,7 +48,7 @@ function renderDialog(employee: Partial<EmployeeRead>): void {
   )
 }
 
-test('reactivating a transferred employee: return date defaults to today, sent as effective_date, transfer cleared', async () => {
+test.each(['Active', 'Loaned'] as const)('reactivating Transferred to %s: return date defaults to today, sent as effective_date, transfer cleared', async (status) => {
   vi.mocked(api.updateEmployee).mockResolvedValue({} as never)
   renderDialog({
     id: 'G100',
@@ -57,7 +57,7 @@ test('reactivating a transferred employee: return date defaults to today, sent a
     end_date: '2026-08-15',
     transfer_site: 'Site X',
   })
-  fireEvent.change(screen.getByTestId('status-select'), { target: { value: 'Active' } })
+  fireEvent.change(screen.getByTestId('status-select'), { target: { value: status } })
   const input = screen.getByLabelText(/employees\.fields\.return_date/) as HTMLInputElement
   const today = new Date()
   const iso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
@@ -65,13 +65,55 @@ test('reactivating a transferred employee: return date defaults to today, sent a
   fireEvent.change(input, { target: { value: '2026-09-20' } })
   fireEvent.click(screen.getByRole('button', { name: 'common.save' }))
   await waitFor(() =>
-    expect(api.updateEmployee).toHaveBeenCalledWith('G100', {
-      status: 'Active',
+    expect(api.updateEmployee).toHaveBeenLastCalledWith('G100', {
+      status,
       end_date: null,
       effective_date: '2026-09-20',
       transfer_site: null,
       transfer_return_date: null,
     }),
+  )
+})
+
+test.each(['Active', 'Loaned'] as const)('reactivating Resigned to %s sends the return date as effective_date', async (status) => {
+  vi.mocked(api.updateEmployee).mockResolvedValue({} as never)
+  renderDialog({ id: 'G100', name_en: 'John', status: 'Resigned', end_date: '2026-08-15' })
+  fireEvent.change(screen.getByTestId('status-select'), { target: { value: status } })
+  fireEvent.change(screen.getByLabelText(/employees\.fields\.return_date/), {
+    target: { value: '2026-09-20' },
+  })
+  expect(screen.queryByLabelText(/employees\.fields\.(end_date|transfer_site|transfer_return_date)/)).not.toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: 'common.save' }))
+  await waitFor(() =>
+    expect(api.updateEmployee).toHaveBeenLastCalledWith('G100', {
+      status,
+      end_date: null,
+      effective_date: '2026-09-20',
+    }),
+  )
+})
+
+test.each([
+  ['Active', 'Loaned'],
+  ['Loaned', 'Active'],
+] as const)('%s → %s sends only status, preserving a pending departure', async (from, to) => {
+  vi.mocked(api.updateEmployee).mockResolvedValue({} as never)
+  renderDialog({
+    id: 'G100',
+    name_en: 'John',
+    status: from,
+    end_date: '2099-08-15',
+    pending_status: 'Transferred',
+    transfer_site: 'Site X',
+    transfer_return_date: '2099-11-15',
+  })
+  fireEvent.change(screen.getByTestId('status-select'), { target: { value: to } })
+  expect(screen.queryByLabelText(/employees\.fields\.(end_date|effective_date|transfer_site|transfer_return_date|return_date)/)).not.toBeInTheDocument()
+  expect(screen.queryByText('employees.validation.endDateRequired')).not.toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'common.save' })).toBeEnabled()
+  fireEvent.click(screen.getByRole('button', { name: 'common.save' }))
+  await waitFor(() =>
+    expect(api.updateEmployee).toHaveBeenLastCalledWith('G100', { status: to }),
   )
 })
 

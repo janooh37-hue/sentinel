@@ -2,7 +2,7 @@
 
 ``POST /api/v1/duty/transfer`` — move employee(s), each to its own destination
 unit/post, and mint one General Book transfer letter. Gated on
-``documents.generate`` (the action produces a document).
+``documents.duty_transfer`` and ``documents.generate``.
 """
 
 from __future__ import annotations
@@ -26,6 +26,7 @@ def transfer(
     payload: DutyTransferRequest,
     db: Annotated[Session, Depends(get_db)],
     user: Annotated[User, Depends(require_capability("documents.generate"))],
+    _transfer: Annotated[User, Depends(require_capability("documents.duty_transfer"))],
 ) -> DutyTransferResult:
     return duty_service.transfer(
         db,

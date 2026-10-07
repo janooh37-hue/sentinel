@@ -42,12 +42,13 @@ interface Props {
   onEmail?: (employeeId: string) => void
 }
 
-/** Status → Badge tone (active→green, resigned→amber, terminated→red, transferred→blue). */
+/** Status → Badge tone (active/loaned→green, resigned→amber, terminated→red, transferred→blue). */
 const STATUS_TONE: Record<EmployeeStatus, 'active' | 'warning' | 'danger' | 'info'> = {
   Active: 'active',
   Resigned: 'warning',
   Terminated: 'danger',
   Transferred: 'info',
+  Loaned: 'active',
 }
 
 /** First letters of the first two name parts — avatar fallback. */

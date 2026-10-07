@@ -186,6 +186,9 @@ export type EmployeeListResponse = Omit<
   components['schemas']['EmployeeListResponse'],
   'items'
 > & { items: EmployeeListItem[] }
+export type EmployeeLookupItem = components['schemas']['EmployeeLookupItem']
+export type EmployeeLookupRead = components['schemas']['EmployeeLookupRead']
+export type EmployeeLookupResponse = components['schemas']['EmployeeLookupResponse']
 export type EmployeeCreate = components['schemas']['EmployeeCreate']
 export type EmployeeUpdate = components['schemas']['EmployeeUpdate'] & {
   // Duty-location columns — accepted by PATCH ahead of `gen:api`.
@@ -280,6 +283,13 @@ export type PersonIdScan = components['schemas']['PersonIdScan']
 
 export type PermitUpdate = components['schemas']['PermitUpdate']
 export type PermitSummary = components['schemas']['PermitSummary']
+
+export type ItemPermitRead = components['schemas']['ItemPermitRead']
+export type ItemPermitItem = components['schemas']['ItemPermitItem']
+export type ItemPermitCreate = components['schemas']['ItemPermitCreate']
+export type ItemPermitUpdate = components['schemas']['ItemPermitUpdate']
+export type ItemPermitListResponse = components['schemas']['ItemPermitListResponse']
+export type ItemPermitZone = ItemPermitRead['zones'][number]
 
 // ─── Fleet vehicles ──────────────────────────────────────────────────────────
 export type VehicleListItem = components['schemas']['VehicleListItem']
@@ -1299,7 +1309,7 @@ export interface ListEmployeesParams {
   q?: string
   status?: EmployeeStatus
   department?: string
-  /** Only scheduled departures — Active employees with a pending_status. */
+  /** Only scheduled departures — Active or Loaned employees with a pending_status. */
   pending?: boolean
   limit?: number
   offset?: number
@@ -1327,6 +1337,10 @@ export const api = {
   // --- employees ---
   listEmployees: (params: ListEmployeesParams = {}) =>
     request<EmployeeListResponse>('GET', `/employees${qs({ ...params })}`),
+  lookupEmployees: (params: { q?: string; limit?: number; offset?: number } = {}) =>
+    request<EmployeeLookupResponse>('GET', `/employees/lookup${qs({ ...params })}`),
+  getEmployeeLookup: (id: string) =>
+    request<EmployeeLookupRead>('GET', `/employees/lookup/${encodeURIComponent(id)}`),
   listEmployeeActivity: (params: ListEmployeeActivityParams = {}) =>
     request<EmployeeActivityListRead>('GET', `/employees/activity${qs({ ...params })}`),
   getEmployee: (id: string) => request<EmployeeRead>('GET', `/employees/${encodeURIComponent(id)}`),
@@ -1501,6 +1515,18 @@ export const api = {
   /** Fetch any permit attachment IDM-safely (base64 → Blob) for inline preview. */
   fetchPermitDocumentBlob: (id: number): Promise<Blob> =>
     fetchPermitBlob(`/permits/${id}/document`),
+
+  // --- item permits (إدخال مواد) ---
+  listItemPermits: (params: { q?: string; limit?: number; offset?: number } = {}) =>
+    request<ItemPermitListResponse>('GET', `/item-permits${qs({ ...params })}`),
+  getItemPermit: (id: number) => request<ItemPermitRead>('GET', `/item-permits/${id}`),
+  createItemPermit: (body: ItemPermitCreate) =>
+    request<ItemPermitRead>('POST', '/item-permits', body),
+  updateItemPermit: (id: number, body: ItemPermitUpdate) =>
+    request<ItemPermitRead>('PATCH', `/item-permits/${id}`, body),
+  submitItemPermitApproval: (id: number) =>
+    request<ItemPermitRead>('POST', `/item-permits/${id}/submit-approval`),
+  deleteItemPermit: (id: number) => request<void>('DELETE', `/item-permits/${id}`),
 
   // Per-person UAE ID scan.
   uploadPersonDocument: (id: number, personId: number, file: File) => {

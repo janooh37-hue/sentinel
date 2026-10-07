@@ -49,13 +49,16 @@ test('non-Active with end date: saves status + end_date', async () => {
   )
 })
 
-test('Active: saves with end_date null (clears stale end date)', async () => {
+test.each(['Active', 'Loaned'] as const)('%s: no departure fields, saves with end_date null (clears stale end date)', async (status) => {
   vi.mocked(api.updateEmployee).mockResolvedValue({} as never)
-  renderDialog({ id: 'G100', name_en: 'John', status: 'Active', end_date: '2026-01-01' })
+  renderDialog({ id: 'G100', name_en: 'John', status, end_date: '2026-01-01' })
+  expect(screen.queryByLabelText(/employees\.fields\.(end_date|effective_date|transfer_site|transfer_return_date|return_date)/)).not.toBeInTheDocument()
+  expect(screen.queryByText('employees.validation.endDateRequired')).not.toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'common.save' })).toBeEnabled()
   fireEvent.click(screen.getByRole('button', { name: 'common.save' }))
   await waitFor(() =>
     expect(api.updateEmployee).toHaveBeenCalledWith('G100', {
-      status: 'Active',
+      status,
       end_date: null,
     }),
   )

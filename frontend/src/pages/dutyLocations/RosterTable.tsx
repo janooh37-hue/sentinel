@@ -12,15 +12,15 @@ import { useTranslation } from 'react-i18next'
 import { Pencil } from 'lucide-react'
 
 import { cn } from '@/lib/utils'
-import type { EmployeeListItem } from '@/lib/api'
+import type { EmployeeLookupItem } from '@/lib/api'
 import { pickEmployeeName } from '@/lib/employeeName'
 
 export interface RosterTableProps {
   /** Active unit's employees, grouped by post (already filtered by search). */
-  groupedByPost: ReadonlyMap<string, EmployeeListItem[]>
+  groupedByPost: ReadonlyMap<string, EmployeeLookupItem[]>
   selected: ReadonlySet<string>
   onToggle: (id: string, on: boolean) => void
-  onAssign: (employee: EmployeeListItem) => void
+  onAssign: (employee: EmployeeLookupItem) => void
 }
 
 export function RosterTable({

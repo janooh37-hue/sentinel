@@ -14,12 +14,16 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Final
 
+from app.core.classifications import CLASSIFICATIONS
 from app.core.form_kind import OTHER_SERVICE_ID, SERVICE_IDS
 from app.core.roles import ADMIN_ROLE, INMATE_REPORTER_ROLE, MANAGER_ROLE, OPERATOR_ROLE
 
 SERVICE_CAP_PREFIX: Final[str] = "books.service."
 SERVICE_RECORDS_CAP_PREFIX: Final[str] = "books.servicerecords."
 CATEGORY_CAP_PREFIX: Final[str] = "books.category."
+CLASSIFICATION_CATEGORY_CAPABILITY_IDS: Final[frozenset[str]] = frozenset(
+    f"{CATEGORY_CAP_PREFIX}{classification.code}" for classification in CLASSIFICATIONS
+)
 SERVICE_CAPABILITY_IDS: Final[frozenset[str]] = frozenset(
     f"{SERVICE_CAP_PREFIX}{service_id}" for service_id in (*SERVICE_IDS, OTHER_SERVICE_ID)
 )
@@ -258,6 +262,14 @@ CAPABILITIES: Final[tuple[Capability, ...]] = (
         "إنشاء المستندات",
         "Create official documents from templates.",
         "إنشاء مستندات رسمية من القوالب.",
+    ),
+    Capability(
+        "documents.duty_transfer",
+        "documents",
+        "Transfer duty locations",
+        "نقل مواقع العمل",
+        "Move employees between duty locations and issue the transfer letter.",
+        "نقل الموظفين بين مواقع العمل وإصدار كتاب النقل.",
     ),
     Capability(
         "documents.scan",
@@ -592,6 +604,7 @@ _OPERATOR_CAPS: Final[frozenset[str]] = frozenset(
         "timesheet.view",
         "violations.view",
         "documents.generate",
+        "documents.duty_transfer",
         "documents.scan",
         "books.view",
         "permits.view",
@@ -654,7 +667,7 @@ INMATE_REPORTER_CAPS: Final[frozenset[str]] = frozenset(
         "books.submit",
         f"{SERVICE_CAP_PREFIX}Inmate Conduct Violations",
         f"{SERVICE_RECORDS_CAP_PREFIX}Inmate Conduct Violations",
-        f"{CATEGORY_CAP_PREFIX}NAT",
+        f"{CATEGORY_CAP_PREFIX}INV",
         f"{SERVICE_CAP_PREFIX}Report",
         f"{SERVICE_RECORDS_CAP_PREFIX}Report",
         f"{CATEGORY_CAP_PREFIX}GS",
@@ -680,6 +693,7 @@ __all__ = [
     "CAPABILITIES",
     "CAPABILITY_IDS",
     "CATEGORY_CAP_PREFIX",
+    "CLASSIFICATION_CATEGORY_CAPABILITY_IDS",
     "INMATE_REPORTER_CAPS",
     "OPT_IN_SERVICE_IDS",
     "ROLE_DEFAULTS",

@@ -61,7 +61,7 @@ def env(api_db: Session, monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Ite
     get_settings.cache_clear()
     (tmp_path / "data").mkdir()
     monkeypatch.setattr(document_service, "convert_docx_to_pdf", _write_pdf)
-    api_db.add(BookCategory(id="NAT", prefix="NAT"))
+    api_db.add(BookCategory(id="INV", prefix="INV"))
     api_db.add(Employee(id="G-2001", name_en="Reporter", name_ar="مقدم التقرير"))
     api_db.commit()
 

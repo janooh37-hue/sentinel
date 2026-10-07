@@ -41,6 +41,7 @@ import { pickEmployeeName } from '@/lib/employeeName'
 import {
   EMPLOYEE_STATUSES,
   employeeFormSchema,
+  isWorkingStatus,
   type EmployeeFormOutput,
   type EmployeeFormValues,
 } from './schema'
@@ -184,10 +185,11 @@ export function EmployeeForm({
   } = form
 
   const status = watch('status')
-  const endDateRequired = status !== 'Active'
+  const endDateRequired = !isWorkingStatus(status)
   const isTransferred = status === 'Transferred'
-  // Reactivating a departed/transferred employee asks for the return date.
-  const isReactivation = mode === 'edit' && initial?.status != null && initial.status !== 'Active' && status === 'Active'
+  // Reactivating a departed/transferred employee (to Active or Loaned) asks for the return date.
+  const isReactivation =
+    mode === 'edit' && initial?.status != null && !isWorkingStatus(initial.status) && isWorkingStatus(status)
 
   // Seed the extraction panel from an injected extraction (intake flow).
   const [extractionResult, setExtractionResult] = useState<ExtractionResponse | null>(
@@ -236,11 +238,11 @@ export function EmployeeForm({
     <form
       onSubmit={handleSubmit(async (vals) => {
         // Only send what applies to the chosen status: transfer fields for
-        // Transferred, the return date only when reactivating. A still-Active
-        // employee with a PENDING transfer keeps its stored site/return date —
-        // sending nulls would make the flip land a site-less transfer.
+        // Transferred, the return date only when reactivating. A still-working
+        // (Active/Loaned) employee with a PENDING transfer keeps its stored site/return
+        // date — sending nulls would make the flip land a site-less transfer.
         const keepPendingTransfer =
-          vals.status === 'Active' && initial?.pending_status === 'Transferred'
+          isWorkingStatus(vals.status) && initial?.pending_status === 'Transferred'
         await onSubmit({
           ...vals,
           transfer_site:

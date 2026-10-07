@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { describe, expect, it, vi } from 'vitest'
+import { toast } from 'sonner'
 
 import { api, type PermitRead } from '@/lib/api'
 import { PermitFormDialog } from './PermitFormDialog'
@@ -11,7 +12,7 @@ vi.mock('@/lib/useCapabilities', () => ({
 }))
 
 // Silence toast in tests
-vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
+vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn(), warning: vi.fn() } }))
 
 vi.mock('@/lib/api', async (importOriginal) => {
   const mod = await importOriginal<typeof import('@/lib/api')>()
@@ -431,4 +432,29 @@ describe('PermitFormDialog', () => {
     await userEvent.clear(screen.getByLabelText(/company/i))
     expect(screen.getByRole('button', { name: /save permit/i })).toBeDisabled()
     expect(updateSpy).not.toHaveBeenCalled()
+  })
+
+  it('warns (and still resolves) when the permit-paper scan fails to attach; create does not toast saved', async () => {
+    vi.mocked(toast.success).mockClear()
+    vi.spyOn(api, 'createPermit').mockResolvedValue({ id: 7, people: [], vehicles: [] } as never)
+    vi.spyOn(api, 'uploadPermitDocument').mockRejectedValue(new Error('boom'))
+    const onSaved = vi.fn()
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    render(
+      <QueryClientProvider client={qc}>
+        <PermitFormDialog open onOpenChange={vi.fn()} onSaved={onSaved} />
+      </QueryClientProvider>,
+    )
+    await userEvent.type(screen.getByLabelText(/company/i), 'ACME')
+    await userEvent.type(screen.getByPlaceholderText('Full name'), 'Ali')
+    await userEvent.type(screen.getByPlaceholderText('UAE ID'), '784-1')
+    await userEvent.type(screen.getByLabelText(/job \/ trade/i), 'Electrician')
+    await userEvent.click(screen.getByRole('button', { name: /al wathba 1.*green/i }))
+    const paper = document.querySelector('input[type="file"][accept="application/pdf,image/*"]') as HTMLInputElement
+    await userEvent.upload(paper, new File(['x'], 'paper.pdf', { type: 'application/pdf' }))
+    await userEvent.click(screen.getByRole('button', { name: /issue permit/i }))
+
+    await waitFor(() => expect(onSaved).toHaveBeenCalledWith(expect.objectContaining({ id: 7 })))
+    expect(toast.warning).toHaveBeenCalledWith(expect.stringContaining('1 scan could not be attached'))
+    expect(toast.success).not.toHaveBeenCalled()
   })

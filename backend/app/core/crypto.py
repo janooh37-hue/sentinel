@@ -12,6 +12,7 @@ a single-user local app).
 
 from __future__ import annotations
 
+import contextlib
 import os
 import stat
 from functools import lru_cache
@@ -41,10 +42,8 @@ def _load_or_create_key(data_dir: Path) -> bytes:
     key = Fernet.generate_key()
     path.write_bytes(key)
     # Restrict perms on POSIX (no-op on Windows).
-    try:
+    with contextlib.suppress(OSError):
         os.chmod(path, stat.S_IRUSR | stat.S_IWUSR)
-    except OSError:
-        pass
     return key
 
 

@@ -6,7 +6,7 @@ from current data.  The ``today`` kwarg is exposed so tests can pin the
 date deterministically.
 
 Filters worth flagging:
-- Active employees: ``status == 'Active'`` (same rule as ``employee_service``).
+- Working employees: ``status in WORKING_STATUSES`` (same rule as ``employee_service``).
 - Leaves: only ``status == 'Approved'`` count toward on-leave / upcoming;
   ``deleted_at`` is excluded.
 - Documents: the table has no ``deleted_at`` column, so ``forms_this_month``
@@ -44,6 +44,7 @@ from app.schemas.dashboard import (
     DashboardTotals,
     DashboardUpcomingLeaveItem,
 )
+from app.schemas.employee import WORKING_STATUSES
 from app.services import book_service, email_service
 from app.services.ledger_service import DRAFT_TAG
 
@@ -52,9 +53,6 @@ RECENT_LIMIT = 5
 
 # Upcoming-window length in days (exclusive of today, inclusive of today+N).
 UPCOMING_WINDOW_DAYS = 7
-
-# Canonical "active" employee status — must match ``employee_service``.
-_ACTIVE_STATUS = "Active"
 
 # Only Approved leaves are considered real absences.
 _APPROVED_STATUS = "Approved"
@@ -142,7 +140,7 @@ def get_summary(
 def _compute_totals(db: Session, *, today: date, user: User | None = None) -> DashboardTotals:
     employees_active = int(
         db.execute(
-            select(func.count()).select_from(Employee).where(Employee.status == _ACTIVE_STATUS)
+            select(func.count()).select_from(Employee).where(Employee.status.in_(WORKING_STATUSES))
         ).scalar_one()
     )
 

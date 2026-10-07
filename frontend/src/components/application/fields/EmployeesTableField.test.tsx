@@ -1,8 +1,8 @@
 /**
  * EmployeesTableField — passport list picker tests.
  *
- * Drives the shared EmployeePicker combobox: focus opens the list (listEmployees),
- * clicking a row resolves the employee (getEmployee) and appends a table row.
+ * Drives the shared EmployeePicker combobox: focus opens the list (lookupEmployees),
+ * clicking a row resolves the employee (getEmployeeLookup) and appends a table row.
  * Mocks `@/lib/api`; i18n comes from the global test/setup.ts.
  */
 
@@ -13,8 +13,8 @@ import { useForm, FormProvider } from 'react-hook-form'
 
 vi.mock('@/lib/api', () => ({
   api: {
-    listEmployees: vi.fn(),
-    getEmployee: vi.fn(),
+    lookupEmployees: vi.fn(),
+    getEmployeeLookup: vi.fn(),
   },
   ApiError: class ApiError extends Error {
     code?: string
@@ -64,8 +64,8 @@ async function pickFirstEmployee() {
 
 beforeEach(() => {
   vi.clearAllMocks()
-  vi.mocked(api.listEmployees).mockResolvedValue({ items: [EMP] } as never)
-  vi.mocked(api.getEmployee).mockResolvedValue(EMP as never)
+  vi.mocked(api.lookupEmployees).mockResolvedValue({ items: [EMP] } as never)
+  vi.mocked(api.getEmployeeLookup).mockResolvedValue(EMP as never)
 })
 
 describe('EmployeesTableField', () => {
@@ -75,6 +75,8 @@ describe('EmployeesTableField', () => {
     await waitFor(() => expect(screen.getByText('G1234')).toBeInTheDocument())
     expect(screen.getByText('علي حسن')).toBeInTheDocument()
     expect(screen.getByDisplayValue('A1112223')).toBeInTheDocument()
+    expect(screen.getByDisplayValue('Egyptian')).toBeInTheDocument()
+    expect(api.getEmployeeLookup).toHaveBeenCalledWith('G1234')
   })
 
   it('rejects a duplicate employee (no second row)', async () => {

@@ -332,31 +332,42 @@ def _letter_dicts(row: Permit) -> tuple[list[dict[str, Any]], list[dict[str, Any
     return people, vehicles
 
 
+def submit_letter_book(db: Session, book_id: int, *, actor: str | None) -> None:
+    """Send a permit-style letter into the book approval chain (shared by the
+    security- and item-permit services). Raises ``ValidationFailedError`` when
+    the submitter can't be resolved or the chain refuses (e.g. the manager has
+    no login account); the auto paths catch it, the manual path surfaces it."""
+    from app.services import book_service
+
+    submitter = db.scalar(select(User).where(User.email == actor)) if actor else None
+    if submitter is None:
+        raise ValidationFailedError(
+            "SUBMITTER_UNRESOLVED", "Could not resolve the submitting user account."
+        )
+    # Sessions run expire_on_commit=False. Refresh the collection defensively so
+    # submission always resolves the just-generated current revision.
+    book = db.get(Book, book_id)
+    if book is not None:
+        db.expire(book, ["versions"])
+    book_service.submit_for_approval(
+        db,
+        book_id,
+        priority="Normal",
+        approver_user_id=None,
+        reviewer_user_ids=[],
+        submitted_by_user_id=submitter.id,
+    )
+
+
 def _submit_book(db: Session, permit: Permit, *, actor: str | None) -> None:
     """Send the permit's letter into the book approval chain. Best-effort on the
     auto paths: a failure (e.g. the manager has no login account) leaves the
     book a draft and audits why — the permit mutation itself stands."""
-    from app.services import book_service
-
-    submitter = db.scalar(select(User).where(User.email == actor)) if actor else None
-    if permit.book_id is None or submitter is None:
-        reason = "NO_BOOK" if permit.book_id is None else "NO_SUBMITTER"
-        _audit(db, "permit.book_submit_failed", permit.id, actor, {"error": reason})
+    if permit.book_id is None:
+        _audit(db, "permit.book_submit_failed", permit.id, actor, {"error": "NO_BOOK"})
         return
-    # Sessions run expire_on_commit=False. Refresh the collection defensively so
-    # submission always resolves the just-generated current revision.
-    book = db.get(Book, permit.book_id)
-    if book is not None:
-        db.expire(book, ["versions"])
     try:
-        book_service.submit_for_approval(
-            db,
-            permit.book_id,
-            priority="Normal",
-            approver_user_id=None,
-            reviewer_user_ids=[],
-            submitted_by_user_id=submitter.id,
-        )
+        submit_letter_book(db, permit.book_id, actor=actor)
     except ValidationFailedError as exc:
         log.warning("permit %s: book submit failed: %s", permit.id, exc.message)
         _audit(db, "permit.book_submit_failed", permit.id, actor, {"error": exc.code})
@@ -364,31 +375,34 @@ def _submit_book(db: Session, permit: Permit, *, actor: str | None) -> None:
     _audit(db, "permit.book_submitted", permit.id, actor, {"book_id": permit.book_id})
 
 
-def regenerate_permit_book(
-    db: Session, permit: Permit, *, actor: str | None = None, submit: bool = False
-) -> None:
-    """Generate (or re-version) the permit's 1/5 General Book from its current
-    roster. Reuses document_service.generate_document — ref allocation, Arabic
-    letterhead, PDF. Resilient: a PDF failure still commits
-    the Book (pdf_path NULL), same as the rest of the app.
+def regenerate_letter_book(
+    db: Session,
+    *,
+    book_id: int | None,
+    manager_id: int | None,
+    subject: str,
+    body: str,
+    recipient: str,
+    actor: str | None,
+) -> tuple[int | None, str | None]:
+    """Generate (or re-version) a 1/5 letter on the Security Permit paper and
+    return ``(book_id, prior_approval_state)``. Shared by the security- and
+    item-permit services; the caller stores a new ``book_id``, audits, and
+    resubmits when ``prior_approval_state`` is pending/approved.
 
-    The letter is generated UNSIGNED — the manager signature is applied by the
-    book approval chain at sign time. A regeneration withdraws + auto-resubmits
-    when the book was already pending/approved; rejected/returned/never-sent
-    land as a fresh draft for the operator to resend manually.
-
-    ponytail: re-renders docx->PDF on each roster change (Word COM). Fine for
-    infrequent admin edits; switch to regenerate-on-print if throughput matters.
+    A letter already in the approval loop needs the manager's signature again
+    after any content change: a pending request is withdrawn and an approved
+    (signed) letter is marked revisable BEFORE regenerating, because
+    generate_document refuses to revise a pending/approved book. A completed
+    Word-authored version is treated as a revision too, so its immutable
+    DOCX/PDF stays in history. The letter is generated UNSIGNED — the manager
+    signature is applied by the approval chain at sign time.
     """
-    from app.services import book_service
+    from app.services import book_service, document_service
 
-    # A letter already in the approval loop needs the manager's signature again
-    # after any content change — void the stale submission BEFORE regenerating
-    # (generate_document refuses to revise a pending/approved book), remember
-    # the prior state, and resubmit the regenerated letter below.
     prior_state: str | None = None
-    if permit.book_id is not None:
-        prior = db.get(Book, permit.book_id)
+    if book_id is not None:
+        prior = db.get(Book, book_id)
         prior_state = prior.approval_state if prior is not None else None
         if prior is not None and prior_state == "pending":
             # Withdraw the stale request. Freeze its revision metadata before
@@ -437,7 +451,7 @@ def regenerate_permit_book(
         elif prior is not None and prior_state == "approved":
             # A signed letter is never edited in place — mark it revisable so
             # generate_document appends a fresh version (the signed one stays
-            # in history); the fresh version is resubmitted below.
+            # in history); the fresh version is resubmitted by the caller.
             prior.approval_state = "returned"
             db.flush()
 
@@ -455,8 +469,48 @@ def regenerate_permit_book(
             prior.approval_state = "returned"
             db.flush()
 
+    # The issuing operator's G-number goes in the footer ({{ submitter_g }}),
+    # resolved from the audit actor's User row (employee_id = G-number).
+    submitter = db.scalar(select(User).where(User.email == actor)) if actor else None
+    result = document_service.generate_document(
+        db,
+        employee_id=None,
+        # The permit's own paper — a General Book clone on a separate .docx, so
+        # the permit form can be edited without touching every other 1/x letter.
+        # It renders through the identical pipeline (see
+        # document_service.CLASSIFIED_BOOK_FORMS) and files under the General
+        # Book rail (form_kind.SERVICE_ALIASES).
+        template_id="Security Permit",
+        fields={"subject": subject, "body": body, "recipient_name": recipient},
+        classification_code="5/1",
+        commit=True,
+        manager_id=manager_id,
+        revise_of_book_id=book_id,  # None on first gen → fresh 1/5 ref
+        current_user=submitter,
+    )
+    if book_id is not None:
+        current_book = db.get(Book, book_id)
+        if current_book is not None:
+            db.expire(current_book, ["versions"])
+    return (book_id if book_id is not None else result.book_id), prior_state
+
+
+def regenerate_permit_book(
+    db: Session, permit: Permit, *, actor: str | None = None, submit: bool = False
+) -> None:
+    """Generate (or re-version) the permit's 1/5 General Book from its current
+    roster. Reuses document_service.generate_document — ref allocation, Arabic
+    letterhead, PDF. Resilient: a PDF failure still commits
+    the Book (pdf_path NULL), same as the rest of the app.
+
+    A regeneration withdraws + auto-resubmits when the book was already
+    pending/approved; rejected/returned/never-sent land as a fresh draft for
+    the operator to resend manually (see ``regenerate_letter_book``).
+
+    ponytail: re-renders docx->PDF on each roster change (Word COM). Fine for
+    infrequent admin edits; switch to regenerate-on-print if throughput matters.
+    """
     from app.core.permit_letter import PERMIT_RECIPIENT, build_permit_letter_html
-    from app.services import document_service
 
     people, vehicles = _letter_dicts(permit)
     body = build_permit_letter_html(
@@ -473,32 +527,17 @@ def regenerate_permit_book(
     # Clean الموضوع line; the company renders as a header line under it (see
     # build_permit_letter_html). The book stays identifiable by its 1/5 ref and
     # its body text (company) is in the search index.
-    subject = "التصاريح الأمنية"
-    # The issuing operator's G-number goes in the footer ({{ submitter_g }}),
-    # resolved from the audit actor's User row (employee_id = G-number).
-    submitter = db.scalar(select(User).where(User.email == actor)) if actor else None
-    result = document_service.generate_document(
+    book_id, prior_state = regenerate_letter_book(
         db,
-        employee_id=None,
-        # The permit's own paper — a General Book clone on a separate .docx, so
-        # the permit form can be edited without touching every other 1/x letter.
-        # It renders through the identical pipeline (see
-        # document_service.CLASSIFIED_BOOK_FORMS) and files under the General
-        # Book rail (form_kind.SERVICE_ALIASES).
-        template_id="Security Permit",
-        fields={"subject": subject, "body": body, "recipient_name": PERMIT_RECIPIENT},
-        classification_code="5/1",
-        commit=True,
+        book_id=permit.book_id,
         manager_id=permit.manager_id,
-        revise_of_book_id=permit.book_id,  # None on first gen → fresh 1/5 ref
-        current_user=submitter,
+        subject="التصاريح الأمنية",
+        body=body,
+        recipient=PERMIT_RECIPIENT,
+        actor=actor,
     )
-    if permit.book_id is not None:
-        current_book = db.get(Book, permit.book_id)
-        if current_book is not None:
-            db.expire(current_book, ["versions"])
     if permit.book_id is None:
-        permit.book_id = result.book_id
+        permit.book_id = book_id
         db.commit()
     _audit(db, "permit.book_generated", permit.id, actor, {"book_id": permit.book_id})
     if submit or prior_state in ("pending", "approved"):
@@ -509,8 +548,6 @@ def submit_permit_book(db: Session, permit_id: int, *, actor: str | None = None)
     """Manual "Send for approval". Unlike the auto paths this does NOT swallow
     chain errors — the operator sees exactly why it can't be sent (e.g. the
     manager needs a login account in Settings → Managers)."""
-    from app.services import book_service
-
     row = get_permit(db, permit_id)
     if row.status == "revoked":
         raise ValidationFailedError(
@@ -520,19 +557,7 @@ def submit_permit_book(db: Session, permit_id: int, *, actor: str | None = None)
         raise ValidationFailedError(
             "PERMIT_NO_BOOK", "This permit has no generated letter to submit.", id=permit_id
         )
-    submitter = db.scalar(select(User).where(User.email == actor)) if actor else None
-    if submitter is None:
-        raise ValidationFailedError(
-            "SUBMITTER_UNRESOLVED", "Could not resolve the submitting user account."
-        )
-    book_service.submit_for_approval(
-        db,
-        row.book_id,
-        priority="Normal",
-        approver_user_id=None,
-        reviewer_user_ids=[],
-        submitted_by_user_id=submitter.id,
-    )
+    submit_letter_book(db, row.book_id, actor=actor)
     _audit(db, "permit.book_submitted", permit_id, actor, {"book_id": row.book_id})
     return get_permit(db, permit_id)
 

@@ -78,9 +78,11 @@ export function EmployeesSectionTabs({ attentionCount = null }: Props): React.JS
         </NavLink>
       )}
 
-      <NavLink to="/duty-locations" className={tabClass}>
-        {t('employees.sectionTabs.dutyLocations')}
-      </NavLink>
+      {has('documents.generate') && has('documents.duty_transfer') && (
+        <NavLink to="/duty-locations" className={tabClass}>
+          {t('employees.sectionTabs.dutyLocations')}
+        </NavLink>
+      )}
 
       {has('timesheet.view') && (
         <NavLink to="/employees/timesheet" className={tabClass}>

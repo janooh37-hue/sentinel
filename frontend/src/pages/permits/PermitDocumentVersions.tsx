@@ -2,7 +2,7 @@ import { useTranslation } from 'react-i18next'
 import { useQuery } from '@tanstack/react-query'
 
 import { WordReopenButton, WordSessionActions } from '@/components/books/BookWordActions'
-import { api } from '@/lib/api'
+import { permitBookQuery } from './permitUtils'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { useIsMobile } from '@/lib/useIsMobile'
 
@@ -10,10 +10,7 @@ export function PermitDocumentVersions({ bookId }: { bookId: number }): React.JS
   const { t } = useTranslation()
   const { has } = useCapabilities()
   const isMobile = useIsMobile()
-  const { data: book, isLoading } = useQuery({
-    queryKey: ['books', 'permit', bookId],
-    queryFn: () => api.getBook(bookId),
-  })
+  const { data: book, isLoading } = useQuery(permitBookQuery(bookId))
 
   if (isLoading) return <p className="text-xs text-muted-foreground">{t('common.loading')}</p>
   if (!book) return null
@@ -44,7 +41,11 @@ export function PermitDocumentVersions({ bookId }: { bookId: number }): React.JS
               <span className="font-mono text-xs">v{version.version_no}</span>
               <span className="flex items-center gap-2">
                 {!signed && version.docx_url && (
-                  <a className={linkClass} href={version.docx_url}>
+                  <a
+                    className={linkClass}
+                    href={version.docx_url}
+                    aria-label={t('permits.versionDocxLabel', { n: version.version_no })}
+                  >
                     {t('permits.documentVersions.docx')}
                   </a>
                 )}
@@ -54,6 +55,7 @@ export function PermitDocumentVersions({ bookId }: { bookId: number }): React.JS
                     href={pdfUrl}
                     target="_blank"
                     rel="noopener noreferrer"
+                    aria-label={t('permits.versionPdfLabel', { n: version.version_no })}
                   >
                     {t('permits.documentVersions.pdf')}
                   </a>

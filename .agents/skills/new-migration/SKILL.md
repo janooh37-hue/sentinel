@@ -10,23 +10,27 @@ a **single linear head** (a split history forced the emergency `0048` merge
 once) and **SQLite's batch-ALTER limits**. Revision IDs are hand-numbered with a
 zero-padded `NNNN_` prefix — NOT Alembic's default hashes.
 
-All commands use the project venv from the repo root.
+All commands use the project venv from the repo root. Write paths with forward
+slashes; bash strips backslashes.
 
 ## Steps
 
 ### 1. Confirm a single head and get the next number
 ```
-venv\Scripts\alembic.exe heads
-venv\Scripts\alembic.exe current
+git fetch origin
+venv/Scripts/python.exe scripts/check_numbering.py
+git ls-tree --name-only origin/main backend/app/db/migrations/versions/
 ```
-There must be exactly **one** head. If there are two, STOP and merge first (see
-"Merging heads" below) — do not stack a new revision on a fork. Note the head's
-number `NNNN`; the new revision is `NNNN+1`, same zero-padding (e.g. head
-`0048_...` → new `0049_...`).
+Local `heads` only sees your branch. If `origin/main` has a higher `NNNN` than
+your branch, merge `origin/main` first: numbering off a stale base forks the
+history the moment both land. There must be exactly **one** head. If there are
+two, STOP and merge first (see "Merging heads" below) — do not stack a new
+revision on a fork. Note the head's number `NNNN`; the new revision is
+`NNNN+1`, same zero-padding (e.g. head `0048_...` → new `0049_...`).
 
 ### 2. Create the revision with an explicit id chained onto the tip
 ```
-powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "venv\Scripts\alembic.exe revision --rev-id 0049_short_slug --head 0048_merge_sms_scaninbox -m 'short slug'"
+powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "venv/Scripts/alembic.exe revision --rev-id 0049_short_slug --head 0048_merge_sms_scaninbox -m 'short slug'"
 ```
 - `--rev-id 0049_short_slug` sets both the revision id and the filename prefix.
 - `--head <current tip>` makes `down_revision` point at the tip (no fork).
@@ -50,13 +54,13 @@ comments. Follow the house rules:
 
 ### 4. Verify it applies both ways
 ```
-venv\Scripts\alembic.exe upgrade head
-venv\Scripts\alembic.exe downgrade -1
-venv\Scripts\alembic.exe upgrade head
-venv\Scripts\alembic.exe heads
+venv/Scripts/alembic.exe upgrade head
+venv/Scripts/alembic.exe downgrade -1
+venv/Scripts/alembic.exe upgrade head
+venv/Scripts/alembic.exe heads
 ```
 `heads` must again show exactly one head. Back up first if pointing at real data
-(`scripts\backup-db.ps1`).
+(`scripts/backup-db.ps1`).
 
 ### 5. Review and commit
 Ask the **alembic-migration-reviewer** agent to review the diff, then commit the
@@ -66,13 +70,13 @@ new `versions/NNNN_*.py`. If the migration changes the API surface, also run
 ## Merging heads
 If step 1 shows two heads, create a merge revision instead of a new feature one:
 ```
-venv\Scripts\alembic.exe merge --rev-id 00NN_merge_short -m "merge heads" <rev_a> <rev_b>
+venv/Scripts/alembic.exe merge --rev-id 00NN_merge_short -m "merge heads" <rev_a> <rev_b>
 ```
 Then continue from step 4.
 
 ## Notes
-- The `alembic-heads-guard` PostToolUse hook warns automatically if an edit
-  leaves the history with more than one head — treat that warning as blocking.
+- CI (`.github/workflows/checks.yml`) runs `scripts/check_numbering.py` on the
+  pull request's merge ref, so a number reused from a stale base fails there.
 - `alembic.ini` resolves the DB URL at runtime via `app.config`; the placeholder
   URL in the file is intentional, leave it.
 

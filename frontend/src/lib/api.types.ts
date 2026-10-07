@@ -764,6 +764,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/employees/lookup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Lookup Employees
+         * @description Search employee identities for services without granting profile access.
+         */
+        get: operations["lookup_employees_api_v1_employees_lookup_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/employees/lookup/{employee_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Employee Lookup
+         * @description Resolve a selection; passport fields only for the Passport Release service.
+         */
+        get: operations["get_employee_lookup_api_v1_employees_lookup__employee_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/employees/completeness": {
         parameters: {
             query?: never;
@@ -4881,6 +4921,63 @@ export interface paths {
         put?: never;
         /** Record Visit */
         post: operations["record_visit_api_v1_permits__permit_id__visits_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/item-permits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Item Permits */
+        get: operations["list_item_permits_api_v1_item_permits_get"];
+        put?: never;
+        /** Create Item Permit */
+        post: operations["create_item_permit_api_v1_item_permits_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/item-permits/{permit_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Item Permit */
+        get: operations["get_item_permit_api_v1_item_permits__permit_id__get"];
+        put?: never;
+        post?: never;
+        /** Delete Item Permit */
+        delete: operations["delete_item_permit_api_v1_item_permits__permit_id__delete"];
+        options?: never;
+        head?: never;
+        /** Update Item Permit */
+        patch: operations["update_item_permit_api_v1_item_permits__permit_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/item-permits/{permit_id}/submit-approval": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Submit Item Permit Approval
+         * @description Send the permit's 1/5 letter into the book approval chain.
+         */
+        post: operations["submit_item_permit_approval_api_v1_item_permits__permit_id__submit_approval_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -9689,7 +9786,7 @@ export interface components {
              * @default Active
              * @enum {string}
              */
-            status: "Active" | "Resigned" | "Terminated" | "Transferred";
+            status: "Active" | "Resigned" | "Terminated" | "Transferred" | "Loaned";
             /** End Date */
             end_date?: string | null;
             /** Transfer Site */
@@ -9768,7 +9865,7 @@ export interface components {
              * Status
              * @enum {string}
              */
-            status: "Active" | "Resigned" | "Terminated" | "Transferred";
+            status: "Active" | "Resigned" | "Terminated" | "Transferred" | "Loaned";
             /** Department */
             department: string | null;
             /** Position */
@@ -9789,7 +9886,7 @@ export interface components {
             /** End Date */
             end_date?: string | null;
             /** Pending Status */
-            pending_status?: ("Active" | "Resigned" | "Terminated" | "Transferred") | null;
+            pending_status?: ("Active" | "Resigned" | "Terminated" | "Transferred" | "Loaned") | null;
             /** Transfer Site */
             transfer_site?: string | null;
             /** Transfer Return Date */
@@ -9799,6 +9896,70 @@ export interface components {
         EmployeeListResponse: {
             /** Items */
             items: components["schemas"]["EmployeeListItem"][];
+            /** Total */
+            total: number;
+            /** Limit */
+            limit: number;
+            /** Offset */
+            offset: number;
+        };
+        /**
+         * EmployeeLookupItem
+         * @description Service picker identity/display fields, without employee profile data.
+         */
+        EmployeeLookupItem: {
+            /** Id */
+            id: string;
+            /** Name En */
+            name_en: string;
+            /** Name Ar */
+            name_ar: string | null;
+            /** Department */
+            department?: string | null;
+            /** Position */
+            position?: string | null;
+            /** Position Ar */
+            position_ar?: string | null;
+            /** Duty Unit */
+            duty_unit?: string | null;
+            /** Duty Post */
+            duty_post?: string | null;
+        };
+        /**
+         * EmployeeLookupRead
+         * @description Selected employee prefill for the Passport Release table.
+         */
+        EmployeeLookupRead: {
+            /** Id */
+            id: string;
+            /** Name En */
+            name_en: string;
+            /** Name Ar */
+            name_ar: string | null;
+            /** Department */
+            department?: string | null;
+            /** Position */
+            position?: string | null;
+            /** Position Ar */
+            position_ar?: string | null;
+            /** Duty Unit */
+            duty_unit?: string | null;
+            /** Duty Post */
+            duty_post?: string | null;
+            /** Nationality */
+            nationality: string | null;
+            /** Passport No */
+            passport_no: string | null;
+            /**
+             * Has Photo
+             * @default false
+             */
+            has_photo: boolean;
+        };
+        /** EmployeeLookupResponse */
+        EmployeeLookupResponse: {
+            /** Items */
+            items: components["schemas"]["EmployeeLookupItem"][];
             /** Total */
             total: number;
             /** Limit */
@@ -9824,11 +9985,11 @@ export interface components {
              * Status
              * @enum {string}
              */
-            status: "Active" | "Resigned" | "Terminated" | "Transferred";
+            status: "Active" | "Resigned" | "Terminated" | "Transferred" | "Loaned";
             /** End Date */
             end_date: string | null;
             /** Pending Status */
-            pending_status: ("Active" | "Resigned" | "Terminated" | "Transferred") | null;
+            pending_status: ("Active" | "Resigned" | "Terminated" | "Transferred" | "Loaned") | null;
             /** Transfer Site */
             transfer_site?: string | null;
             /** Transfer Return Date */
@@ -9921,7 +10082,7 @@ export interface components {
             /** Doj Company */
             doj_company?: string | null;
             /** Status */
-            status?: ("Active" | "Resigned" | "Terminated" | "Transferred") | null;
+            status?: ("Active" | "Resigned" | "Terminated" | "Transferred" | "Loaned") | null;
             /** End Date */
             end_date?: string | null;
             /** Transfer Site */
@@ -10539,6 +10700,110 @@ export interface components {
             };
             /** Sync Running */
             sync_running: boolean;
+        };
+        /**
+         * ItemPermitCreate
+         * @description POST /item-permits — issue a new item-entry permit.
+         */
+        ItemPermitCreate: {
+            /** Employee Id */
+            employee_id: string;
+            /**
+             * Recipient
+             * @default مسؤول وحدة التفتيش
+             */
+            recipient: string;
+            /**
+             * Zones
+             * @default [
+             *       "red"
+             *     ]
+             */
+            zones: ("red" | "green" | "work_residence")[];
+            /**
+             * Site
+             * @default مبنى مركز الإصلاح والتأهيل الوثبة - 2
+             */
+            site: string;
+            /** Items */
+            items: components["schemas"]["ItemPermitItem"][];
+            /** Manager Id */
+            manager_id?: number | null;
+            /**
+             * Send For Approval
+             * @default true
+             */
+            send_for_approval: boolean;
+        };
+        /** ItemPermitItem */
+        ItemPermitItem: {
+            /** Name */
+            name: string;
+            /** Quantity */
+            quantity: number;
+        };
+        /** ItemPermitListResponse */
+        ItemPermitListResponse: {
+            /** Items */
+            items: components["schemas"]["ItemPermitRead"][];
+            /** Total */
+            total: number;
+            /** Limit */
+            limit: number;
+        };
+        /** ItemPermitRead */
+        ItemPermitRead: {
+            /** Id */
+            id: number;
+            /** Employee Id */
+            employee_id: string;
+            /** Employee Name */
+            employee_name: string;
+            /** Employee Name En */
+            employee_name_en: string;
+            /** Employee Title */
+            employee_title: string | null;
+            /** Recipient */
+            recipient: string;
+            /** Zones */
+            zones: ("red" | "green" | "work_residence")[];
+            /** Site */
+            site: string;
+            /** Items */
+            items: components["schemas"]["ItemPermitItem"][];
+            /** Manager Id */
+            manager_id: number | null;
+            /** Book Id */
+            book_id: number | null;
+            /** Book Ref */
+            book_ref: string | null;
+            /** Approval State */
+            approval_state: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Updated At */
+            updated_at: string | null;
+        };
+        /**
+         * ItemPermitUpdate
+         * @description PATCH /item-permits/{id} — every field optional; omitted = unchanged.
+         */
+        ItemPermitUpdate: {
+            /** Employee Id */
+            employee_id?: string | null;
+            /** Recipient */
+            recipient?: string | null;
+            /** Zones */
+            zones?: ("red" | "green" | "work_residence")[] | null;
+            /** Site */
+            site?: string | null;
+            /** Items */
+            items?: components["schemas"]["ItemPermitItem"][] | null;
+            /** Manager Id */
+            manager_id?: number | null;
         };
         /**
          * JobDocumentItem
@@ -11723,6 +11988,8 @@ export interface components {
              * @default false
              */
             has_document: boolean;
+            /** Book Id */
+            book_id?: number | null;
         };
         /** PermitListResponse */
         PermitListResponse: {
@@ -16816,6 +17083,74 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EmployeeRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    lookup_employees_api_v1_employees_lookup_get: {
+        parameters: {
+            query?: {
+                q?: string | null;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmployeeLookupResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_employee_lookup_api_v1_employees_lookup__employee_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                employee_id: string;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmployeeLookupRead"];
                 };
             };
             /** @description Validation Error */
@@ -26249,6 +26584,210 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PermitVisitRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_item_permits_api_v1_item_permits_get: {
+        parameters: {
+            query?: {
+                q?: string | null;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ItemPermitListResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_item_permit_api_v1_item_permits_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ItemPermitCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ItemPermitRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_item_permit_api_v1_item_permits__permit_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                permit_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ItemPermitRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_item_permit_api_v1_item_permits__permit_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                permit_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_item_permit_api_v1_item_permits__permit_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                permit_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ItemPermitUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ItemPermitRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    submit_item_permit_approval_api_v1_item_permits__permit_id__submit_approval_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                permit_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ItemPermitRead"];
                 };
             };
             /** @description Validation Error */

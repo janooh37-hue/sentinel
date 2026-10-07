@@ -4,6 +4,8 @@ from dataclasses import dataclass
 from datetime import date
 from typing import Literal, Protocol
 
+from app.schemas.employee import WORKING_STATUSES
+
 DocType = Literal["uae_id", "passport"]
 Bucket = Literal["expired", "critical", "soon"]
 
@@ -43,7 +45,7 @@ def compute_expiry(
     within: int = 90,
     doc_type: DocType | Literal["all"] = "all",
 ) -> list[ExpiryItem]:
-    """Active employees with a non-null expiry whose days_remaining <= within
+    """Working (Active/Loaned) employees with a non-null expiry whose days_remaining <= within
     (expired always included). Sorted soonest-first."""
     out: list[ExpiryItem] = []
     fields: tuple[tuple[DocType, str], ...] = (
@@ -51,7 +53,7 @@ def compute_expiry(
         ("passport", "passport_expiry"),
     )
     for emp in employees:
-        if emp.status != "Active":
+        if emp.status not in WORKING_STATUSES:
             continue
         for dt, attr in fields:
             if doc_type != "all" and dt != doc_type:
