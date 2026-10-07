@@ -51,14 +51,19 @@ const STATE_OPTIONS = ['', 'valid', 'active', 'expiring', 'expired', 'revoked'] 
 const ZONE_OPTIONS: ('' | PermitZone)[] = ['', 'green', 'red', 'work_residence']
 
 const fieldCls =
-  'h-10 rounded-md border border-input bg-surface px-2.5 text-sm text-foreground transition-colors hover:border-border-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background motion-reduce:transition-none md:h-9'
+  'h-11 rounded-md border border-input bg-surface px-2.5 text-sm text-foreground transition-colors hover:border-border-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background motion-reduce:transition-none md:h-9'
 const selectCls = `${fieldCls} min-w-0 flex-1 sm:flex-none`
+/** Toolbar buttons: 44px touch target below md, shared `sm` size from md up. */
+const actionCls = 'h-11 md:h-8'
 
 /** Segmented tab: the shared underline trigger reshaped into a pill inside the track. */
 const tabCls =
-  'h-9 flex-1 justify-center rounded-md border border-transparent px-4 text-[0.86em] md:flex-none md:px-6 ' +
-  'mb-0 hover:bg-surface/60 focus-visible:ring-offset-0 motion-reduce:transition-none ' +
-  'data-[state=active]:border-border data-[state=active]:bg-surface data-[state=active]:font-semibold data-[state=active]:text-primary data-[state=active]:shadow-sm'
+  'h-auto min-h-11 flex-1 justify-center whitespace-normal rounded-md border-0 px-2 py-1.5 text-center leading-tight ' +
+  'md:h-9 md:min-h-0 md:flex-none md:whitespace-nowrap md:px-6 md:py-0 md:text-[0.86em] ' +
+  'mb-0 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-0 motion-reduce:transition-none ' +
+  'data-[state=inactive]:hover:bg-surface/60 ' +
+  'data-[state=active]:bg-surface data-[state=active]:font-semibold data-[state=active]:text-primary data-[state=active]:shadow-sm ' +
+  '[[data-theme=dark]_&]:data-[state=active]:bg-surface-tinted [[data-theme=dark]_&]:data-[state=active]:text-foreground [[data-theme=dark]_&]:data-[state=active]:shadow-none'
 
 /** Validity text + remaining-days text, shared by the table cell, the mobile card and the quick view. */
 function permitWindow(
@@ -286,7 +291,7 @@ export function PermitsPage(): React.JSX.Element {
             </div>
             <RefreshButton />
           </div>
-          <TabsList className="mt-3 flex w-full gap-1 rounded-lg border border-border bg-surface-tinted p-1 md:mt-4 md:inline-flex md:w-auto">
+          <TabsList className="mt-3 flex w-full items-stretch gap-1 rounded-lg border border-border bg-surface-tinted p-1 md:mt-4 md:inline-flex md:w-auto [[data-theme=dark]_&]:bg-background">
             <TabsTrigger value="security" className={tabCls}>
               {t('permits.tabs.security')}
             </TabsTrigger>
@@ -297,7 +302,7 @@ export function PermitsPage(): React.JSX.Element {
         </header>
 
         <div className="flex-1 overflow-y-auto px-4 pb-24 pt-4 md:px-6 md:pt-5" data-print-hide>
-          <TabsContent value="security">
+          <TabsContent value="security" className="mt-0">
             {/* Quick filters: count tiles bound to ?state= / ?zone= */}
             <div className="mb-4 grid gap-2 lg:grid-cols-[4fr_3fr]">
               <PermitFilterBar
@@ -341,7 +346,7 @@ export function PermitsPage(): React.JSX.Element {
                 onChange={(e) => setQ(e.target.value || null)}
               />
               {filtersActive && (
-                <Button type="button" variant="ghost" size="sm" onClick={clearFilters}>
+                <Button type="button" variant="ghost" size="sm" className={actionCls} onClick={clearFilters}>
                   <X className="me-1.5 h-4 w-4" aria-hidden />
                   {t('permits.filters.clear')}
                 </Button>
@@ -360,12 +365,12 @@ export function PermitsPage(): React.JSX.Element {
                     </button>
                   </span>
                 )}
-                <Button type="button" variant="outline" size="sm" onClick={() => setPrinting(true)}>
+                <Button type="button" variant="outline" size="sm" className={actionCls} onClick={() => setPrinting(true)}>
                   <Printer className="me-1.5 h-4 w-4" aria-hidden />
                   {selected.size ? t('permits.printSelected', { count: selected.size }) : t('permits.print')}
                 </Button>
                 {canCreate && (
-                  <Button type="button" size="sm" onClick={openNew}>
+                  <Button type="button" size="sm" className={actionCls} onClick={openNew}>
                     <Plus className="me-1.5 h-4 w-4" aria-hidden />
                     {t('permits.new')}
                   </Button>
@@ -461,7 +466,7 @@ export function PermitsPage(): React.JSX.Element {
               </div>
             )}
           </TabsContent>
-          <TabsContent value="items">
+          <TabsContent value="items" className="mt-0">
             <ItemPermitsTab />
           </TabsContent>
         </div>

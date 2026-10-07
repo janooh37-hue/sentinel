@@ -44,7 +44,7 @@ import {
 import { usePrefetchLetter, type PrefetchHandlers } from './usePrefetchLetter'
 
 const searchCls =
-  'h-10 min-w-full rounded-md border border-input bg-surface px-2.5 text-sm text-foreground transition-colors hover:border-border-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background motion-reduce:transition-none sm:min-w-[12rem] sm:flex-1 md:h-9'
+  'h-11 min-w-full rounded-md border border-input bg-surface px-2.5 text-sm text-foreground transition-colors hover:border-border-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background motion-reduce:transition-none sm:min-w-[12rem] sm:flex-1 md:h-9'
 
 const APPROVAL_TILES: { key: PermitApprovalState; tone: FilterTile['tone'] }[] = [
   { key: 'none', tone: 'neutral' },
@@ -182,13 +182,13 @@ export function ItemPermitsTab(): React.JSX.Element {
           onChange={(e) => setQ(e.target.value || null)}
         />
         {filtered && (
-          <Button type="button" variant="ghost" size="sm" onClick={clearFilters}>
+          <Button type="button" variant="ghost" size="sm" className="h-11 md:h-8" onClick={clearFilters}>
             <X className="me-1.5 h-4 w-4" aria-hidden />
             {t('permits.filters.clear')}
           </Button>
         )}
         {canCreate && (
-          <Button type="button" size="sm" className="ms-auto" onClick={openNew}>
+          <Button type="button" size="sm" className="ms-auto h-11 md:h-8" onClick={openNew}>
             <Plus className="me-1.5 h-4 w-4" aria-hidden />
             {t('permits.items.new')}
           </Button>
