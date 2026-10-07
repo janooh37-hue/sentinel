@@ -29,7 +29,7 @@ import {
   type TemplateMeta,
   type UserPermissionRead,
 } from '@/lib/api'
-import { QUICK_ACTION_IDS, type QuickActionId } from '@/lib/dashboardLayout'
+import { QUICK_ACTION_IDS } from '@/lib/dashboardLayout'
 import {
   localizeCapability,
   type CapabilityCatalog,
@@ -708,9 +708,15 @@ export function PermissionsPage(): React.JSX.Element {
       })),
     [t],
   )
-  const serviceItems = useMemo<BlueprintItem[]>(
-    () => [
-      ...QUICK_ACTION_IDS.map((id: QuickActionId) => {
+  // Every manually created service, most-used first; feature-minted forms
+  // (vehicle fines/accidents) have no Services tile and stay in Advanced.
+  const serviceItems = useMemo<BlueprintItem[]>(() => {
+    const ids: string[] = [...QUICK_ACTION_IDS]
+    for (const template of templatesQuery.data?.items ?? []) {
+      if (!template.feature_minted && !ids.includes(template.id)) ids.push(template.id)
+    }
+    return [
+      ...ids.map((id) => {
         const template = templatesById[id]
         return {
           id,
@@ -727,8 +733,11 @@ export function PermissionsPage(): React.JSX.Element {
         label: t('access.permissions.mirror.serviceOther'),
         kind: 'service',
       },
-    ],
-    [isAr, t, templatesById],
+    ]
+  }, [isAr, t, templatesById, templatesQuery.data?.items])
+  const mirroredServiceIds = useMemo(
+    () => new Set(serviceItems.map((item) => item.id)),
+    [serviceItems],
   )
   const categoryItems = useMemo<BlueprintItem[]>(
     () =>
@@ -1387,6 +1396,7 @@ export function PermissionsPage(): React.JSX.Element {
                 user={selectedUser}
                 perms={permissions}
                 capabilities={capabilityCatalog.entries}
+                mirroredServiceIds={mirroredServiceIds}
               />
             </aside>
           ) : null}

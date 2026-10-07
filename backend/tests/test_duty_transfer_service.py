@@ -3,10 +3,11 @@ import types
 
 import pytest
 
-from app.api.errors import ValidationFailedError
-from app.db.models import Employee
+from app.api.errors import AppError, ValidationFailedError
+from app.db.models import BookCategory, Employee
 from app.schemas.duty import DutyTransferMove
-from app.services import duty_service
+from app.services import duty_service, perm_service
+from tests.conftest import make_user
 
 
 def _seed(db, **kw):
@@ -21,6 +22,8 @@ def _seed(db, **kw):
     base.update(kw)
     emp = Employee(**base)
     db.add(emp)
+    if db.get(BookCategory, "GS") is None:
+        db.add(BookCategory(id="GS", prefix="GS"))
     db.commit()
     return emp
 
@@ -98,10 +101,7 @@ def test_transfer_all_unassigned_skips_book(db_session, admin_user, monkeypatch)
 
 def test_transfer_mixed_assignment_mints_book(db_session, admin_user, monkeypatch):
     db_session.add(Employee(id="G100", name_en="a", name_ar="a", duty_unit=None, duty_post=None))
-    db_session.add(
-        Employee(id="G300", name_en="b", name_ar="b", duty_unit="السرية الثالثة", duty_post="تفتيش")
-    )
-    db_session.commit()
+    _seed(db_session, id="G300", name_en="b", name_ar="b", duty_unit="السرية الثالثة")
 
     captured = {}
 
@@ -130,13 +130,8 @@ def test_transfer_mixed_assignment_mints_book(db_session, admin_user, monkeypatc
 
 def test_transfer_moves_each_employee_to_its_own_destination(db_session, admin_user, monkeypatch):
     """A swap in one letter: two employees exchange units."""
-    db_session.add(
-        Employee(id="G500", name_en="a", name_ar="أ", duty_unit="السرية الأولى", duty_post="ليوان")
-    )
-    db_session.add(
-        Employee(id="G600", name_en="b", name_ar="ب", duty_unit="السرية الثانية", duty_post="تفتيش")
-    )
-    db_session.commit()
+    _seed(db_session, id="G500", name_ar="أ", duty_unit="السرية الأولى", duty_post="ليوان")
+    _seed(db_session, id="G600", name_ar="ب", duty_unit="السرية الثانية", duty_post="تفتيش")
 
     captured = {}
 
@@ -190,3 +185,25 @@ def test_transfer_rejects_a_duplicate_employee(db_session, admin_user, monkeypat
     assert err.value.code == "DUTY_DUPLICATE_EMPLOYEE"
     # Nothing moved.
     assert db_session.get(Employee, "G700").duty_unit == "السرية الخامسة"
+
+
+def test_transfer_refuses_a_user_denied_the_general_book(db_session, monkeypatch):
+    """The letter is a General Book: a denied user moves nobody and mints nothing."""
+    _seed(db_session, id="G800")
+    operator = make_user(db_session, email="denied@test.ae")
+    perm_service.set_user_override(db_session, operator.id, "books.service.General Book", "deny")
+
+    def fake_generate(*a, **k):
+        raise AssertionError("generate_document must NOT be called for a denied user")
+
+    monkeypatch.setattr(duty_service.document_service, "generate_document", fake_generate)
+
+    with pytest.raises(AppError) as err:
+        duty_service.transfer(
+            db_session,
+            moves=[DutyTransferMove(employee_id="G800", to_unit="السرية الأولى", to_post=None)],
+            current_user=operator,
+        )
+
+    assert err.value.code == "RECORD_TYPE_FORBIDDEN"
+    assert db_session.get(Employee, "G800").duty_unit == "السرية الخامسة"

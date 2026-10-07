@@ -13,7 +13,6 @@ import {
   type PermissionEffect,
   type UserPermissionRead,
 } from '@/lib/api'
-import { isQuickActionId } from '@/lib/dashboardLayout'
 import { localizeCapability } from '@/lib/useCapabilityCatalog'
 import { cn } from '@/lib/utils'
 
@@ -237,10 +236,13 @@ export function AdvancedPermissionsPanel({
   user,
   perms,
   capabilities,
+  mirroredServiceIds,
 }: {
   user: AdminUserRead
   perms: UserPermissionRead
   capabilities: readonly CapabilityRead[]
+  /** Services the Mirror's Services section already controls. */
+  mirroredServiceIds: ReadonlySet<string>
 }): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const queryClient = useQueryClient()
@@ -255,10 +257,9 @@ export function AdvancedPermissionsPanel({
         if (capability.id.startsWith('books.servicerecords.')) return false
         if (capability.id.startsWith('books.category.')) return false
         if (!capability.id.startsWith('books.service.')) return true
-        const serviceId = capability.id.slice('books.service.'.length)
-        return serviceId !== 'other' && !isQuickActionId(serviceId)
+        return !mirroredServiceIds.has(capability.id.slice('books.service.'.length))
       }),
-    [capabilities],
+    [capabilities, mirroredServiceIds],
   )
   const grouped = useMemo(() => {
     const order: string[] = []

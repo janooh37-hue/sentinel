@@ -76,7 +76,7 @@ import { ApiError } from '@/lib/api'
 import { clearAllDrafts, clearDraft, loadDraft, saveDraft } from '@/lib/formDrafts'
 import { addToBasket, basketLabel, countByFormKind, type EmailBasketItem } from '@/lib/emailBasket'
 import { useEmailBasket } from '@/hooks/useEmailBasket'
-import { isQuickActionAllowed, isQuickActionId } from '@/lib/dashboardLayout'
+import { isQuickActionAllowed } from '@/lib/dashboardLayout'
 import { useCapabilities } from '@/lib/useCapabilities'
 
 import { useShortcutAction } from '@/lib/useKeyboardShortcuts'
@@ -260,8 +260,7 @@ function StandardApplicationPage(): React.JSX.Element {
     () =>
       allTemplates.filter(
         (template) =>
-          !template.feature_minted &&
-          (!isQuickActionId(template.id) || isQuickActionAllowed(template.id, has)),
+          !template.feature_minted && isQuickActionAllowed(template.id, has),
       ),
     [allTemplates, has],
   )
@@ -912,19 +911,25 @@ function StandardApplicationPage(): React.JSX.Element {
     )
   }, [templates, query])
 
-  // National Service synthetic tile — record shortcut (no DOCX form).
+  // Synthetic tiles show only when their destination would let the user act.
+  // National Service — record shortcut (no DOCX form).
   const nsTitle = t('leaves.type.National Service')
-  const nsMatchesQuery =
-    !query.trim() || nsTitle.toLowerCase().includes(query.trim().toLowerCase())
+  const nsShown =
+    has('leaves.view') &&
+    has('leaves.create') &&
+    (!query.trim() || nsTitle.toLowerCase().includes(query.trim().toLowerCase()))
 
-  // Duty Locations synthetic tile — generates a General Book transfer letter.
+  // Duty Locations — generates a General Book transfer letter.
   const dlTitle = t('dutyLocations.tile.name')
-  const dlMatchesQuery =
-    !query.trim() || dlTitle.toLowerCase().includes(query.trim().toLowerCase())
-  // Employee Absence synthetic tile — record-only service (no DOCX form).
+  const dlShown =
+    isQuickActionAllowed('General Book', has) &&
+    (!query.trim() || dlTitle.toLowerCase().includes(query.trim().toLowerCase()))
+  // Employee Absence — record-only service (no DOCX form).
   const absTitle = t('absences.tile.name')
-  const absMatchesQuery =
-    !query.trim() || absTitle.toLowerCase().includes(query.trim().toLowerCase())
+  const absShown =
+    has('leaves.view') &&
+    has('leaves.edit') &&
+    (!query.trim() || absTitle.toLowerCase().includes(query.trim().toLowerCase()))
 
   return (
     <div className="flex flex-1 flex-col overflow-auto bg-background">
@@ -977,13 +982,13 @@ function StandardApplicationPage(): React.JSX.Element {
                     <Skeleton key={i} className="h-[120px] w-full rounded-2xl" />
                   ))}
                 </div>
-              ) : galleryItems.length === 0 && !nsMatchesQuery && !dlMatchesQuery && !absMatchesQuery ? (
+              ) : galleryItems.length === 0 && !nsShown && !dlShown && !absShown ? (
                 <p className="py-12 text-center text-[0.86em] text-muted-foreground">
                   {t('application.noServicesMatch')}
                 </p>
               ) : (
                 <div className="grid grid-cols-2 gap-3 [grid-auto-rows:1fr] sm:grid-cols-3 lg:grid-cols-4">
-                  {nsMatchesQuery && (
+                  {nsShown && (
                     <ServiceCell
                       key="national-service-record"
                       name={nsTitle}
@@ -993,7 +998,7 @@ function StandardApplicationPage(): React.JSX.Element {
                       onSelect={() => navigate('/leaves?action=ns-new')}
                     />
                   )}
-                  {dlMatchesQuery && (
+                  {dlShown && (
                     <ServiceCell
                       key="duty-locations"
                       name={dlTitle}
@@ -1003,7 +1008,7 @@ function StandardApplicationPage(): React.JSX.Element {
                       onSelect={() => navigate('/duty-locations')}
                     />
                   )}
-                  {absMatchesQuery && (
+                  {absShown && (
                     <ServiceCell
                       key="employee-absence"
                       name={absTitle}
