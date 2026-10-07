@@ -29,6 +29,7 @@ import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { EmptyState } from '@/components/ui/empty-state'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useCapabilities } from '@/lib/useCapabilities'
+import { currentVersionOf, paperUrl } from '@/pages/books/recordPapers'
 import { PermitAccessBadge } from './PermitAccessBadge'
 import {
   approvalTone,
@@ -319,9 +320,10 @@ export function PermitDetailDialog({ permitId, open, onOpenChange, onEdit, onNot
     if (!permit?.book_id) return
     try {
       const book = await qc.fetchQuery(permitBookQuery(permit.book_id))
-      const versions = book.versions ?? []
-      const latest = [...versions].sort((a, b) => b.version_no - a.version_no)[0] ?? null
-      const pdfUrl = latest?.signed_pdf_url ?? latest?.pdf_url ?? null
+      const latest = currentVersionOf(book)
+      const pdfUrl = latest?.document_id
+        ? paperUrl({ documentId: latest.document_id, signed: Boolean(latest.signed_pdf_url) })
+        : null
       if (pdfUrl) {
         window.open(pdfUrl, '_blank', 'noopener')
       } else {

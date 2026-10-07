@@ -12,7 +12,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import type { TFunction } from 'i18next'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { Car, Plus, Printer, ShieldCheck, Paperclip, Users, X } from 'lucide-react'
 import { toast } from 'sonner'
@@ -44,7 +44,8 @@ import { PermitQuickView } from './PermitQuickView'
 import { ItemPermitsTab } from './ItemPermitsTab'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useSearchParam, useUrlOverlay } from '@/lib/urlState'
-import { fmtDate, fmtLongDate, permitBookQuery, statusTone } from './permitUtils'
+import { fmtDate, fmtLongDate, statusTone } from './permitUtils'
+import { usePrefetchLetter, type PrefetchHandlers } from './usePrefetchLetter'
 
 const STATE_OPTIONS = ['', 'valid', 'active', 'expiring', 'expired', 'revoked'] as const
 const ZONE_OPTIONS: ('' | PermitZone)[] = ['', 'green', 'red', 'work_residence']
@@ -90,7 +91,6 @@ export function PermitsPage(): React.JSX.Element {
 
   const navigate = useNavigate()
   const location = useLocation()
-  const qc = useQueryClient()
   const isMobile = useIsMobile()
   const reducedMotion = useReducedMotion()
   const previewOverlay = useUrlOverlay('preview')
@@ -99,6 +99,7 @@ export function PermitsPage(): React.JSX.Element {
   const [highlightedId, setHighlightedId] = useState<number | null>(null)
   // Set by onSaved when a permit was just issued; consumed when the form closes.
   const createdRef = useRef<PermitRead | null>(null)
+  const [lastCreated, setLastCreated] = useState<PermitRead | null>(null)
   // A deep-linked preview of a permit the list doesn't contain falls back to the full dialog once.
   const fallbackRef = useRef<number | null>(null)
   const [selected, setSelected] = useState<Set<number>>(new Set())
@@ -144,11 +145,16 @@ export function PermitsPage(): React.JSX.Element {
 
   const rows = listQuery.data?.items ?? []
   const summary = summaryQuery.data
-  const previewRow = previewId === null ? undefined : rows.find((r) => r.id === previewId)
+  // Right after create the list may not have refetched yet: preview the record the form returned.
+  const previewRow =
+    previewId === null
+      ? undefined
+      : (rows.find((r) => r.id === previewId) ??
+        (lastCreated?.id === previewId ? toListItem(lastCreated) : undefined))
 
   useEffect(() => {
     // `debouncedQ !== q`: right after a landing that cleared the search, the list still reflects the old query.
-    if (previewId === null || previewRow || !listQuery.isSuccess || listQuery.isFetching || debouncedQ !== q) return
+    if (previewId === null || !Number.isFinite(previewId) || previewRow || !listQuery.isSuccess || listQuery.isFetching || debouncedQ !== q) return
     if (fallbackRef.current === previewId) return
     fallbackRef.current = previewId
     const next = new URLSearchParams(location.search)
@@ -167,9 +173,7 @@ export function PermitsPage(): React.JSX.Element {
     return () => window.clearTimeout(handle)
   }, [highlightedId, previewId, listQuery.isFetching, reducedMotion])
 
-  const prefetchLetter = (row: PermitListItem): void => {
-    if (row.book_id) void qc.prefetchQuery({ ...permitBookQuery(row.book_id), staleTime: 30_000 })
-  }
+  const letterPrefetch = usePrefetchLetter()
 
   // Selection drives Print. When the filter changes the visible set changes,
   // so clear the selection to avoid acting on now-hidden rows.
@@ -397,7 +401,7 @@ export function PermitsPage(): React.JSX.Element {
                     row={row}
                     highlighted={highlightedId === row.id}
                     onOpen={() => previewOverlay.open(String(row.id))}
-                    onPrefetch={() => prefetchLetter(row)}
+                    prefetch={letterPrefetch(row.book_id)}
                   />
                 ))}
               </div>
@@ -434,7 +438,7 @@ export function PermitsPage(): React.JSX.Element {
                         highlighted={highlightedId === row.id}
                         onToggle={() => toggleOne(row.id)}
                         onOpen={() => previewOverlay.open(String(row.id))}
-                        onPrefetch={() => prefetchLetter(row)}
+                        prefetch={letterPrefetch(row.book_id)}
                       />
                     ))}
                   </TableBody>
@@ -478,6 +482,7 @@ export function PermitsPage(): React.JSX.Element {
         onSaved={(p) => {
           if (!editing) {
             createdRef.current = p
+            setLastCreated(p)
             setHighlightedId(p.id)
             toast.success(t('permits.createdToast', { no: p.permit_no ?? `#${p.id}` }))
             return
@@ -511,20 +516,25 @@ export function PermitsPage(): React.JSX.Element {
   )
 }
 
+/** A just-created permit as a register row, until the list refetch includes it. */
+function toListItem(p: PermitRead): PermitListItem {
+  return { ...p, has_document: Boolean(p.document_name) }
+}
+
 function PermitRowView({
   row,
   selected,
   highlighted,
   onToggle,
   onOpen,
-  onPrefetch,
+  prefetch,
 }: {
   row: PermitListItem
   selected: boolean
   highlighted: boolean
   onToggle: () => void
   onOpen: () => void
-  onPrefetch: () => void
+  prefetch: PrefetchHandlers
 }): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const { validity, remaining } = permitWindow(t, i18n.language, row)
@@ -535,7 +545,8 @@ function PermitRowView({
       tabIndex={-1}
       className={cn('cursor-pointer', selected && 'bg-primary-soft/40', highlighted && 'bg-accent-soft')}
       onClick={onOpen}
-      onPointerEnter={onPrefetch}
+      onPointerEnter={prefetch.onPointerEnter}
+      onPointerLeave={prefetch.onPointerLeave}
     >
       <TableCell className="w-10" onClick={(e) => e.stopPropagation()}>
         <input
@@ -569,7 +580,7 @@ function PermitRowView({
       </TableCell>
       {/* Keyboard-reachable open (the row's onClick is mouse-only). */}
       <TableCell className="w-16 text-end" onClick={(e) => e.stopPropagation()}>
-        <Button type="button" variant="ghost" size="sm" onClick={onOpen} onFocus={onPrefetch}>
+        <Button type="button" variant="ghost" size="sm" onClick={onOpen} onFocus={prefetch.onFocus}>
           {t('permits.actions.view')}
         </Button>
       </TableCell>
@@ -582,12 +593,12 @@ function PermitCard({
   row,
   highlighted,
   onOpen,
-  onPrefetch,
+  prefetch,
 }: {
   row: PermitListItem
   highlighted: boolean
   onOpen: () => void
-  onPrefetch: () => void
+  prefetch: PrefetchHandlers
 }): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const { validity, remaining } = permitWindow(t, i18n.language, row)
@@ -597,8 +608,7 @@ function PermitCard({
       type="button"
       data-permit-id={row.id}
       onClick={onOpen}
-      onPointerEnter={onPrefetch}
-      onFocus={onPrefetch}
+      {...prefetch}
       className={cn(
         'flex min-h-11 w-full flex-col gap-2 rounded-xl border border-border bg-surface p-3.5 text-start transition-colors',
         'hover:border-border-strong motion-reduce:transition-none',

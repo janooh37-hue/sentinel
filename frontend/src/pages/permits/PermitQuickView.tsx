@@ -9,7 +9,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { ExternalLink, Loader2, X } from 'lucide-react'
 
-import { paperUrl } from '@/pages/books/recordPapers'
+import { currentVersionOf, paperUrl } from '@/pages/books/recordPapers'
 import { cn } from '@/lib/utils'
 import { permitBookQuery } from './permitUtils'
 
@@ -60,9 +60,7 @@ export function PermitQuickView({
     refetch,
   } = useQuery({ ...permitBookQuery(bookId ?? 0), enabled: open && bookId !== null })
 
-  const versions = book?.versions ?? []
-  const current =
-    versions.length > 0 ? versions.reduce((a, b) => (b.version_no >= a.version_no ? b : a)) : undefined
+  const current = book ? currentVersionOf(book) : undefined
   const pdfUrl = current?.document_id
     ? paperUrl({ documentId: current.document_id, signed: Boolean(current.signed_pdf_url) })
     : null

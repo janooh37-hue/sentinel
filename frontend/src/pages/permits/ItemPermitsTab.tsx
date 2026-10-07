@@ -7,7 +7,7 @@
  */
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useQuery } from '@tanstack/react-query'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { PackagePlus, Plus, X } from 'lucide-react'
 import { toast } from 'sonner'
@@ -38,10 +38,10 @@ import { PermitQuickView } from './PermitQuickView'
 import {
   approvalTone,
   fmtLongDate,
-  permitBookQuery,
   zoneTone,
   type PermitApprovalState,
 } from './permitUtils'
+import { usePrefetchLetter, type PrefetchHandlers } from './usePrefetchLetter'
 
 const searchCls =
   'h-9 min-w-[12rem] flex-1 rounded-md border border-input bg-surface px-2.5 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
@@ -66,7 +66,6 @@ export function ItemPermitsTab(): React.JSX.Element {
   const canCreate = has('permits.create')
   const navigate = useNavigate()
   const location = useLocation()
-  const qc = useQueryClient()
   const isMobile = useIsMobile()
   const reducedMotion = useReducedMotion()
 
@@ -159,9 +158,7 @@ export function ItemPermitsTab(): React.JSX.Element {
     actionOverlay.open('new')
   }
   const clearFilters = (): void => replaceSearch(['iq', 'istatus'])
-  const prefetchLetter = (row: ItemPermitRead): void => {
-    if (row.book_id) void qc.prefetchQuery(permitBookQuery(row.book_id))
-  }
+  const letterPrefetch = usePrefetchLetter()
   const openPreview = (row: ItemPermitRead): void => previewOverlay.open(String(row.id))
   const filtered = Boolean(q || status)
 
@@ -241,7 +238,7 @@ export function ItemPermitsTab(): React.JSX.Element {
               row={row}
               highlighted={row.id === highlightedId}
               onOpen={() => openPreview(row)}
-              onPrefetch={() => prefetchLetter(row)}
+              prefetch={letterPrefetch(row.book_id)}
             />
           ))}
         </div>
@@ -266,7 +263,7 @@ export function ItemPermitsTab(): React.JSX.Element {
                   row={row}
                   highlighted={row.id === highlightedId}
                   onOpen={() => openPreview(row)}
-                  onPrefetch={() => prefetchLetter(row)}
+                  prefetch={letterPrefetch(row.book_id)}
                 />
               ))}
             </TableBody>
@@ -397,12 +394,12 @@ function ItemPermitRow({
   row,
   highlighted,
   onOpen,
-  onPrefetch,
+  prefetch,
 }: {
   row: ItemPermitRead
   highlighted: boolean
   onOpen: () => void
-  onPrefetch: () => void
+  prefetch: PrefetchHandlers
 }): React.JSX.Element {
   const { t, i18n } = useTranslation()
   return (
@@ -414,8 +411,7 @@ function ItemPermitRow({
       data-item-permit-id={row.id}
       tabIndex={-1}
       onClick={onOpen}
-      onPointerEnter={onPrefetch}
-      onFocus={onPrefetch}
+      {...prefetch}
     >
       <TableCell className="whitespace-nowrap font-mono text-xs">
         <bdi dir="ltr">{row.book_ref ?? '—'}</bdi>
@@ -453,12 +449,12 @@ function ItemPermitCard({
   row,
   highlighted,
   onOpen,
-  onPrefetch,
+  prefetch,
 }: {
   row: ItemPermitRead
   highlighted: boolean
   onOpen: () => void
-  onPrefetch: () => void
+  prefetch: PrefetchHandlers
 }): React.JSX.Element {
   const { i18n } = useTranslation()
   return (
@@ -466,8 +462,7 @@ function ItemPermitCard({
       type="button"
       data-item-permit-id={row.id}
       onClick={onOpen}
-      onPointerEnter={onPrefetch}
-      onFocus={onPrefetch}
+      {...prefetch}
       className={cn(
         'flex w-full flex-col gap-2 rounded-xl border border-border bg-surface p-3.5 text-start transition-colors duration-700',
         'hover:bg-surface-tinted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none',

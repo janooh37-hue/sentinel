@@ -211,6 +211,7 @@ describe('PermitDetailDialog', () => {
         {
           id: 1,
           version_no: 1,
+          document_id: 42,
           pdf_url: '/api/v1/documents/42/download?format=pdf',
           manager_sig_embedded: false,
           status: 'none',

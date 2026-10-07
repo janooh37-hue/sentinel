@@ -5,12 +5,18 @@ import { MemoryRouter, useLocation, useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import i18n from '@/lib/i18n'
-import { api } from '@/lib/api'
 
 import { statusTone, zoneTone, fmtDate } from './permitUtils'
 import { PermitsPage } from './PermitsPage'
 
 const mobileState = vi.hoisted(() => ({ value: false }))
+// What the mocked form reports as just issued (a full PermitRead, as the real form returns).
+const createdPermit = vi.hoisted(() => ({
+  id: 9, permit_no: 'PMT-0009', company: 'Brand New Co', zones: ['green'], access_areas: null,
+  start_date: '2026-07-01', validity: { value: 1, unit: 'month' }, end_date: '2026-07-30', status: 'active',
+  created_at: '2026-07-01T00:00:00', derived_status: 'active', duration_days: 30, days_remaining: 9,
+  people_count: 1, vehicle_count: 0, book_id: null, document_name: null, people: [], vehicles: [],
+}))
 
 vi.mock('@/lib/useIsMobile', () => ({ useIsMobile: () => mobileState.value }))
 vi.mock('@/pages/application/DocPdfCanvas', () => ({ default: () => <div data-testid="pdf" /> }))
@@ -23,13 +29,13 @@ vi.mock('./PermitFormDialog', () => ({
   }: {
     open: boolean
     onOpenChange: (open: boolean) => void
-    onSaved: (p: { id: number; permit_no: string }) => void
+    onSaved: (p: typeof createdPermit) => void
   }) =>
     open ? (
       <button
         type="button"
         onClick={() => {
-          onSaved({ id: 9, permit_no: 'PMT-0009' })
+          onSaved(createdPermit)
           onOpenChange(false)
         }}
       >
@@ -331,23 +337,23 @@ describe('PermitsPage', () => {
     expect(await screen.findByRole('dialog', { name: /PMT-0001/ })).toBeInTheDocument()
   })
 
-  it('after issuing a permit, lands on its preview with the filters cleared', async () => {
+  it('after issuing a permit, lands on its preview with the filters cleared, before the list has it', async () => {
     const user = userEvent.setup()
-    const base = await api.listPermits({})
-    const created = { ...base.items[0], id: 9, permit_no: 'PMT-0009', company: 'Brand New Co', book_id: null }
     const success = vi.spyOn(toast, 'success').mockImplementation(() => 1)
     try {
+      // The list mock never includes PMT-0009: the preview must come from the record the form returned.
       renderPage(['/permits?state=active&q=acme'])
       await screen.findByText('Acme Contracting')
-      vi.mocked(api.listPermits).mockResolvedValue({ ...base, items: [...base.items, created], total: 4 })
       await user.click(screen.getByRole('button', { name: /new permit/i }))
       await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent('action=new'))
       await user.click(screen.getByRole('button', { name: 'Mock issue' }))
       await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent(/^\/permits\?preview=9$/))
       expect(await screen.findByRole('dialog', { name: /PMT-0009/ }, { timeout: 3000 })).toBeInTheDocument()
+      expect(screen.getByText('Brand New Co')).toBeInTheDocument()
+      // Not bounced to the full dialog as a "missing" permit.
+      expect(screen.getByTestId('location')).not.toHaveTextContent('open=')
       expect(success).toHaveBeenCalledWith('Permit PMT-0009 issued')
     } finally {
-      vi.mocked(api.listPermits).mockResolvedValue(base)
       success.mockRestore()
     }
   })

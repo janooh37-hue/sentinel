@@ -13,8 +13,6 @@ export interface FilterTile {
   /** `null` while the counts load — rendered as an em dash. */
   count: number | null
   tone?: 'success' | 'warning' | 'destructive' | 'info' | 'neutral'
-  /** Spoken name when the visible label alone is ambiguous. */
-  ariaLabel?: string
 }
 
 const toneCls: Record<NonNullable<FilterTile['tone']>, string> = {
@@ -47,7 +45,6 @@ export function PermitFilterBar({
             key={tile.key}
             type="button"
             aria-pressed={active}
-            aria-label={tile.ariaLabel}
             onClick={() => onSelect(active ? null : tile.key)}
             className={cn(
               'relative flex min-w-0 flex-col items-start rounded-xl border px-2.5 py-2 text-start transition-colors md:px-3 md:py-2.5',
