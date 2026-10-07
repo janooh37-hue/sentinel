@@ -38,6 +38,7 @@ from app.api.v1 import extractions as extractions_v1
 from app.api.v1 import identity as identity_v1
 from app.api.v1 import inmate_statistics as inmate_statistics_v1
 from app.api.v1 import intake as intake_v1
+from app.api.v1 import item_permits as item_permits_v1
 from app.api.v1 import leaves as leaves_v1
 from app.api.v1 import ledger as ledger_v1
 from app.api.v1 import managers as managers_v1
@@ -319,6 +320,7 @@ def create_app() -> FastAPI:
     app.include_router(push_v1.router, prefix="/api/v1", dependencies=auth_gate)
     app.include_router(permissions_v1.router, prefix="/api/v1", dependencies=auth_gate)
     app.include_router(permits_v1.router, prefix="/api/v1", dependencies=auth_gate)
+    app.include_router(item_permits_v1.router, prefix="/api/v1", dependencies=auth_gate)
     app.include_router(vehicles_v1.router, prefix="/api/v1", dependencies=auth_gate)
     app.include_router(debug_v1.router, prefix="/api/v1", dependencies=auth_gate)
     # Workforce depends on the optional attendance persistence surface.  Import

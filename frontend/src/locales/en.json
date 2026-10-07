@@ -639,6 +639,74 @@
     }
   },
   "permits": {
+    "tabs": {
+      "security": "Security permits",
+      "items": "Item permits"
+    },
+    "items": {
+      "title": "Item entry permits",
+      "subtitle": "Materials brought into a zone — the responsible employee, items and quantities, and manager approval",
+      "search": "Search by employee, recipient, site or item…",
+      "new": "New item permit",
+      "empty": "No item permits match these filters.",
+      "emptyRegister": "No item permits issued yet.",
+      "createdToast": "Item permit {{ref}} issued",
+      "createdToastNoRef": "Item permit issued",
+      "approvalFilters": "Filter item permits by approval",
+      "loadError": "Could not load item permits.",
+      "columns": {
+        "ref": "Ref.",
+        "employee": "Employee",
+        "zone": "Zones",
+        "items": "Items",
+        "approval": "Approval",
+        "created": "Created"
+      },
+      "count_one": "{{count}} item",
+      "count_other": "{{count}} items",
+      "more": "and {{count}} more",
+      "form": {
+        "newTitle": "New item entry permit",
+        "editTitle": "Edit item entry permit",
+        "help": "Authorize materials to be brought into a zone by an employee. A 1/5 letter is generated for approval.",
+        "employee": "Employee",
+        "employeeRequired": "Choose the employee.",
+        "recipient": "Addressed to",
+        "site": "Site",
+        "zone": "Zones",
+        "zoneRequired": "Select at least one zone.",
+        "items": "Items",
+        "itemName": "Item",
+        "quantity": "Qty",
+        "addItem": "Add item",
+        "removeItem": "Remove item",
+        "itemNameRequired": "Enter the item name.",
+        "quantityInvalid": "Enter a whole number of 1 or more.",
+        "required": "This field is required.",
+        "create": "Create permit",
+        "save": "Save changes"
+      },
+      "detail": {
+        "title": "Item permit {{ref}}",
+        "createdAt": "Created {{date}}",
+        "ref": "Permit ref (1/5)",
+        "recipient": "Addressed to",
+        "zone": "Zones",
+        "site": "Site",
+        "employee": "Employee",
+        "employeeNo": "Employee no.",
+        "jobTitle": "Job title",
+        "name": "Name",
+        "items": "Items",
+        "no": "#",
+        "item": "Item",
+        "quantity": "Qty"
+      },
+      "delete": {
+        "title": "Delete item permit",
+        "help": "This removes the item permit from the register. This cannot be undone from the app."
+      }
+    },
     "title": "Security Permits",
     "eyebrow": "Access control",
     "subtitle": "Zone entry permits — who is authorized, for which zone, and until when",
@@ -765,6 +833,29 @@
       "printPermit": "Print permit (1/5)"
     },
     "printNoPdf": "No PDF available for this permit yet.",
+    "createdToast": "Permit {{no}} issued",
+    "resultCount_one": "{{count}} permit",
+    "resultCount_other": "{{count}} permits",
+    "resultCapped": "Showing the latest {{shown}} of {{total}}",
+    "statusFilters": "Filter permits by status",
+    "zoneFilters": "Filter permits by zone access",
+    "attachFailed_one": "Permit saved, but {{count}} scan could not be attached. Open the permit to attach it again.",
+    "attachFailed_other": "Permit saved, but {{count}} scans could not be attached. Open the permit to attach them again.",
+    "quickView": {
+      "description": "Permit summary and its 1/5 letter",
+      "letter": "Permit letter (1/5)",
+      "noLetter": "No letter has been generated for this permit yet.",
+      "letterError": "Could not load the letter.",
+      "openPdf": "Open PDF",
+      "openFull": "Open full details"
+    },
+    "confirmRemove": {
+      "person": "Remove {{name}} from this permit?",
+      "vehicle": "Remove vehicle {{plate}} from this permit?",
+      "paper": "Remove the attached permit paper?"
+    },
+    "versionPdfLabel": "Version {{n}} PDF",
+    "versionDocxLabel": "Version {{n}} DOCX",
     "documentVersions": {
       "title": "Generated permit documents",
       "docx": "DOCX",

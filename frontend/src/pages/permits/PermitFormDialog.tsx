@@ -220,34 +220,41 @@ export function PermitFormDialog({ open, permit, onOpenChange, onSaved }: Props)
       }
       let created = await api.createPermit(body)
 
-      // Attach the permit-paper scan once we have an id (mirrors existing pattern)
-      if (docFile) {
-        try { created = await api.uploadPermitDocument(created.id, docFile) } catch { /* scan attach is best-effort */ }
+      // Scan attachments are best-effort (the permit already exists) but a
+      // failure must not be silent — count and warn once below.
+      let failed = 0
+      const attach = async (upload: () => Promise<PermitRead>): Promise<void> => {
+        try {
+          created = await upload()
+        } catch {
+          failed += 1
+        }
       }
+
+      // Attach the permit-paper scan once we have an id (mirrors existing pattern)
+      if (docFile) await attach(() => api.uploadPermitDocument(created.id, docFile))
 
       // Attach per-person UAE ID scans by index order
       // created.people[] is in insertion order, matching submittedPeople order
       for (let i = 0; i < submittedPeople.length; i++) {
         const file = personScanFiles.current.get(submittedPeople[i].key)
-        if (file && created.people[i]) {
-          try { created = await api.uploadPersonDocument(created.id, created.people[i].id, file) } catch { /* best-effort */ }
-        }
+        if (file && created.people[i]) await attach(() => api.uploadPersonDocument(created.id, created.people[i].id, file))
       }
 
       // Attach per-vehicle licence scans by index order
       for (let i = 0; i < submittedVehicles.length; i++) {
         const file = vehicleScanFiles.current.get(submittedVehicles[i].key)
-        if (file && created.vehicles[i]) {
-          try { created = await api.uploadVehicleDocument(created.id, created.vehicles[i].id, file) } catch { /* best-effort */ }
-        }
+        if (file && created.vehicles[i]) await attach(() => api.uploadVehicleDocument(created.id, created.vehicles[i].id, file))
       }
 
+      if (failed > 0) toast.warning(t('permits.attachFailed', { count: failed }))
       return created
     },
     onSuccess: (data) => {
       void qc.invalidateQueries({ queryKey: ['permits-list'] })
       void qc.invalidateQueries({ queryKey: ['permits-summary'] })
-      toast.success(t('common.savedToast'))
+      // Create: the page owns the "issued" toast (it knows the new permit_no).
+      if (isEdit) toast.success(t('common.savedToast'))
       onSaved(data)
       onOpenChange(false)
     },

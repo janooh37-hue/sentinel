@@ -305,6 +305,9 @@ class PermitListItem(ORMBase):
     people_count: int = 0
     vehicle_count: int = 0
     has_document: bool = False
+    # The 1/5 letter's book, so the register can preview the letter without
+    # first fetching the full permit.
+    book_id: int | None = None
 
 
 class PermitListResponse(BaseModel):
