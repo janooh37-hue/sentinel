@@ -107,7 +107,12 @@ def awaiting_return_count(
     return LeaveAwaitingReturnCount(count=leave_service.awaiting_return_count(db))
 
 
-@router.post("", response_model=LeaveRead, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "",
+    response_model=LeaveRead,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_capability("services.national_service"))],
+)
 def create_leave(
     payload: LeaveCreate,
     db: Annotated[Session, Depends(get_db)],

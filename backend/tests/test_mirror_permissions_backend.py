@@ -24,6 +24,8 @@ from app.db.models import (
     BookRevisionAccess,
     BookVersion,
     Document,
+    Employee,
+    Leave,
     RolePermission,
     User,
     UserPermission,
@@ -35,6 +37,7 @@ from app.schemas.permit import PermitCreate
 from app.services import (
     book_service,
     document_service,
+    duty_service,
     notification_service,
     perm_service,
     permit_service,
@@ -204,6 +207,135 @@ def test_expiry_capability_is_static_and_operator_default() -> None:
     assert "expiry.view" in permissions.ROLE_DEFAULTS["manager"]
 
 
+@pytest.mark.parametrize(
+    "capability",
+    [
+        "services.national_service",
+        "services.duty_locations",
+        "services.employee_absence",
+    ],
+)
+def test_synthetic_services_seed_existing_roles_without_widening_reporters(
+    db_session: Session, capability: str
+) -> None:
+    operator = _user(db_session, role="operator", email="synthetic-seed-op@test.ae")
+    perm_service.set_user_override(db_session, operator.id, capability, "deny")
+    for role in ("operator", "manager", "admin"):
+        assert capability in permissions.ROLE_DEFAULTS[role]
+        seeded = db_session.scalar(
+            select(RolePermission).where(
+                RolePermission.role == role, RolePermission.capability == capability
+            )
+        )
+        assert seeded is not None
+        db_session.delete(seeded)
+    db_session.commit()
+
+    # Startup reconciliation reaches installed databases, so no migration is needed.
+    perm_service.seed_role_defaults(db_session)
+    perm_service.seed_role_defaults(db_session)
+    assert (
+        len(
+            db_session.scalars(
+                select(RolePermission).where(RolePermission.capability == capability)
+            ).all()
+        )
+        == 3
+    )
+    assert capability not in perm_service.effective_caps(db_session, operator)
+    reporter = _user(db_session, role=INMATE_REPORTER_ROLE, email="synthetic-reporter@test.ae")
+    assert capability not in perm_service.effective_caps(db_session, reporter)
+
+
+@pytest.mark.parametrize(
+    ("capability", "destination_capability", "action", "initial_placement"),
+    [
+        ("services.national_service", "leaves.create", "national_service", False),
+        ("services.employee_absence", "leaves.edit", "absence", False),
+        ("services.duty_locations", "documents.generate", "duty", False),
+        ("services.duty_locations", "documents.generate", "duty", True),
+    ],
+)
+def test_synthetic_service_override_denies_action_and_grant_restores_it(
+    mirror_api: ApiHarness,
+    monkeypatch: pytest.MonkeyPatch,
+    capability: str,
+    destination_capability: str,
+    action: str,
+    initial_placement: bool,
+) -> None:
+    db = mirror_api.db
+    admin = mirror_api.actor
+    operator = _user(db, role="operator", email="synthetic-op@test.ae")
+    db.add(
+        Employee(
+            id="SYN100",
+            name_en="Synthetic service",
+            name_ar="خدمة",
+            duty_unit=None if initial_placement else "Original unit",
+        )
+    )
+    db.commit()
+    _category(db, "GS")
+    if destination_capability not in permissions.ROLE_DEFAULTS["operator"]:
+        perm_service.set_user_override(db, operator.id, destination_capability, "grant")
+
+    def generate(db: Session, **_kwargs: object) -> SimpleNamespace:
+        db.commit()
+        return SimpleNamespace(book_id=7, ref_number="SYN-7", document_id=9)
+
+    monkeypatch.setattr(duty_service.document_service, "generate_document", generate)
+
+    def set_override(effect: str) -> None:
+        mirror_api.as_user(admin)
+        response = mirror_api.client.put(
+            f"/api/v1/auth/users/{operator.id}/permissions",
+            json={"capability": capability, "effect": effect},
+        )
+        assert response.status_code == 200
+        assert response.json()["overrides"][capability] == effect
+        assert (capability in response.json()["effective"]) == (effect == "grant")
+        mirror_api.as_user(operator)
+
+    def perform(day: int):
+        if action == "duty":
+            return mirror_api.client.post(
+                "/api/v1/duty/transfer",
+                json={"moves": [{"employee_id": "SYN100", "to_unit": f"Unit {day}"}]},
+            )
+        payload = {"start_date": f"2026-07-{day:02d}", "end_date": f"2026-07-{day:02d}"}
+        if action == "national_service":
+            return mirror_api.client.post(
+                "/api/v1/leaves",
+                json={**payload, "employee_id": "SYN100", "leave_type": "National Service"},
+            )
+        return mirror_api.client.post("/api/v1/employees/SYN100/absences", json=payload)
+
+    mirror_api.as_user(operator)
+    assert capability in perm_service.effective_caps(db, operator)
+    # Deny before the first action also exercises duty's no-letter placement branch.
+    before_leaves = db.query(Leave).count()
+    before_unit = db.get(Employee, "SYN100").duty_unit
+    set_override("deny")
+    denied = perform(9)
+    assert denied.status_code == 403
+    assert denied.json()["error"]["code"] == "FORBIDDEN"
+    assert denied.json()["error"]["details"]["capability"] == capability
+    assert db.query(Leave).count() == before_leaves
+    assert db.get(Employee, "SYN100").duty_unit == before_unit
+    assert mirror_api.client.get("/api/v1/employees/SYN100/absences").json() == []
+
+    set_override("grant")
+    allowed = perform(10)
+    assert allowed.status_code == (200 if action == "duty" else 201)
+    if action == "duty":
+        assert db.get(Employee, "SYN100").duty_unit == "Unit 10"
+        assert (allowed.json()["book_id"] is None) == initial_placement
+
+    perm_service.set_user_override(db, operator.id, destination_capability, "deny")
+    assert perform(11).status_code == 403
+
+
 def test_dynamic_capabilities_are_implicit_defaults_and_never_seeded(
     db_session: Session,
 ) -> None:
@@ -356,7 +488,13 @@ def test_auth_catalog_and_user_defaults_include_dynamic_capabilities(
     assert response.status_code == 200, response.text
     catalog = {item["id"]: item for item in response.json()}
     service_items = [item for item in catalog.values() if item["domain"] == "services"]
-    assert len(service_items) == len(SERVICE_IDS) + 1
+    assert len(service_items) == len(SERVICE_IDS) + 4
+    for capability in (
+        "services.national_service",
+        "services.duty_locations",
+        "services.employee_absence",
+    ):
+        assert catalog[capability]["default_roles"] == ["operator", "manager", "admin"]
     assert catalog["books.approve"] == {
         "id": "books.approve",
         "domain": "books",
@@ -390,7 +528,7 @@ def test_auth_catalog_and_user_defaults_include_dynamic_capabilities(
             "domain": "books",
             "default_roles": (
                 ["operator", "manager", "admin", "inmate_reporter"]
-                if service_id == "Inmate Conduct Violations"
+                if service_id in {"Inmate Conduct Violations", "Report"}
                 else ["admin"]
                 if service_id in permissions.OPT_IN_SERVICE_IDS
                 else ["operator", "manager", "admin"]

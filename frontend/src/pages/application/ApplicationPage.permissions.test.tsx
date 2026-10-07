@@ -69,6 +69,22 @@ const templates = {
   ],
 }
 
+const syntheticTiles = [
+  ['National Service', 'services.national_service'],
+  ['Duty Locations & Transfers', 'services.duty_locations'],
+  ['Employee Absence', 'services.employee_absence'],
+] as const
+
+const allTileCapabilities = [
+  'documents.generate',
+  'books.view',
+  'books.service.General Book',
+  'leaves.view',
+  'leaves.create',
+  'leaves.edit',
+  ...syntheticTiles.map(([, capability]) => capability),
+]
+
 function renderPage(entry = '/services') {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
@@ -116,7 +132,11 @@ describe('ApplicationPage service permissions', () => {
   })
 
   it('hides synthetic tiles whose destination capability is missing', async () => {
-    capabilityState.allowed = new Set(['documents.generate', 'books.view'])
+    capabilityState.allowed = new Set([
+      'documents.generate',
+      'books.view',
+      ...syntheticTiles.map(([, capability]) => capability),
+    ])
     renderPage()
 
     expect(await screen.findByText('No forms match your search.')).toBeVisible()
@@ -134,6 +154,7 @@ describe('ApplicationPage service permissions', () => {
       'leaves.create',
       'leaves.edit',
     ])
+    for (const [, capability] of syntheticTiles) capabilityState.allowed.add(capability)
     renderPage()
 
     for (const [label, artwork] of [
@@ -149,12 +170,47 @@ describe('ApplicationPage service permissions', () => {
     }
   })
 
+  it.each(syntheticTiles)('denies and restores the %s tile independently', async (label, capability) => {
+    capabilityState.allowed = new Set(allTileCapabilities)
+    const initial = renderPage()
+    expect(await screen.findByText(label)).toBeVisible()
+    initial.unmount()
+
+    capabilityState.allowed.delete(capability)
+    const denied = renderPage()
+    expect(await screen.findByText('General Book')).toBeVisible()
+    expect(screen.queryByText(label)).not.toBeInTheDocument()
+    for (const [otherLabel, otherCapability] of syntheticTiles) {
+      if (otherCapability !== capability) expect(screen.getByText(otherLabel)).toBeVisible()
+    }
+    denied.unmount()
+
+    capabilityState.allowed.add(capability)
+    renderPage()
+    expect(await screen.findByText(label)).toBeVisible()
+  })
+
+  it.each([
+    ['National Service', 'leaves.view'],
+    ['National Service', 'leaves.create'],
+    ['Duty Locations & Transfers', 'documents.generate'],
+    ['Duty Locations & Transfers', 'books.view'],
+    ['Duty Locations & Transfers', 'books.service.General Book'],
+    ['Employee Absence', 'leaves.view'],
+    ['Employee Absence', 'leaves.edit'],
+  ])('keeps %s hidden when destination gate %s is denied', async (label, missing) => {
+    capabilityState.allowed = new Set(allTileCapabilities.filter((capability) => capability !== missing))
+    renderPage()
+    await screen.findByText(label === 'Duty Locations & Transfers' ? 'National Service' : 'Duty Locations & Transfers')
+    expect(screen.queryByText(label)).not.toBeInTheDocument()
+  })
+
   it.each([
     ['documents.generate', ['books.view', 'books.service.General Book']],
     ['books.view', ['documents.generate', 'books.service.General Book']],
     ['service access', ['documents.generate', 'books.view']],
   ])('does not show or deep-link a service missing %s', async (_missing, allowed) => {
-    capabilityState.allowed = new Set([...allowed, 'leaves.view', 'leaves.create'])
+    capabilityState.allowed = new Set([...allowed, 'leaves.view', 'leaves.create', 'services.national_service'])
     renderPage('/services/general_book')
 
     expect(await screen.findByText('National Service')).toBeVisible()

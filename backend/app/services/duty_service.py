@@ -33,11 +33,11 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
-from app.api.errors import ValidationFailedError
+from app.api.errors import AppError, ValidationFailedError
 from app.db.models import Employee, User
 from app.db.workforce_models import DutyAssignmentEvent
 from app.schemas.duty import DutyTransferMove, DutyTransferResult
-from app.services import book_service, document_service, workforce_schedule_service
+from app.services import book_service, document_service, perm_service, workforce_schedule_service
 
 _UNSPECIFIED = "غير محدد"
 _SUBJECT = "النقل"
@@ -185,6 +185,13 @@ def transfer(
     Raises ``ValidationFailedError`` (422) on an empty move list, a blank
     ``to_unit``, a repeated employee, or an unknown employee id.
     """
+    if not perm_service.has_capability(db, current_user, "services.duty_locations"):
+        raise AppError(
+            "FORBIDDEN",
+            "Missing capability: services.duty_locations",
+            http_status=403,
+            details={"capability": "services.duty_locations"},
+        )
     if not moves:
         raise ValidationFailedError("DUTY_NO_EMPLOYEES", "At least one employee is required")
 
@@ -229,9 +236,7 @@ def transfer(
                 current_user=current_user,
                 effective_at=effective_at,
             )
-            _enqueue_assignment_reevaluation(
-                db, employee_id=emp.id, effective_at=effective_at
-            )
+            _enqueue_assignment_reevaluation(db, employee_id=emp.id, effective_at=effective_at)
             emp.duty_unit = to_unit
             emp.duty_post = to_post
             workforce_schedule_service.reconcile_duty_crew_membership(

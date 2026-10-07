@@ -915,6 +915,7 @@ function StandardApplicationPage(): React.JSX.Element {
   // National Service — record shortcut (no DOCX form).
   const nsTitle = t('leaves.type.National Service')
   const nsShown =
+    has('services.national_service') &&
     has('leaves.view') &&
     has('leaves.create') &&
     (!query.trim() || nsTitle.toLowerCase().includes(query.trim().toLowerCase()))
@@ -922,11 +923,13 @@ function StandardApplicationPage(): React.JSX.Element {
   // Duty Locations — generates a General Book transfer letter.
   const dlTitle = t('dutyLocations.tile.name')
   const dlShown =
+    has('services.duty_locations') &&
     isQuickActionAllowed('General Book', has) &&
     (!query.trim() || dlTitle.toLowerCase().includes(query.trim().toLowerCase()))
   // Employee Absence — record-only service (no DOCX form).
   const absTitle = t('absences.tile.name')
   const absShown =
+    has('services.employee_absence') &&
     has('leaves.view') &&
     has('leaves.edit') &&
     (!query.trim() || absTitle.toLowerCase().includes(query.trim().toLowerCase()))

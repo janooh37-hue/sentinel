@@ -68,6 +68,12 @@ const capabilities = [
   cap('books.service.other', 'services', 'Other'),
 ]
 
+const syntheticCapabilities = [
+  cap('services.national_service', 'services', 'National Service'),
+  cap('services.duty_locations', 'services', 'Duty Locations & Transfers'),
+  cap('services.employee_absence', 'services', 'Employee Absence'),
+]
+
 function perms(overrides: UserPermissionRead['overrides'] = {}): UserPermissionRead {
   return {
     user_id: user.id,
@@ -161,6 +167,23 @@ describe('AdvancedPermissionsPanel', () => {
     expect(screen.queryByText('Incoming')).not.toBeInTheDocument()
     expect(screen.queryByText('Other')).not.toBeInTheDocument()
     expect(api.setUserPermission).not.toHaveBeenCalled()
+  })
+
+  it('excludes synthetic shortcuts from rows, search and domain bulk writes', async () => {
+    renderPanel(perms(), [...capabilities, ...syntheticCapabilities, cap('services.custom', 'services', 'Custom action')])
+
+    for (const capability of syntheticCapabilities) {
+      expect(screen.queryByText(capability.id)).not.toBeInTheDocument()
+      expect(screen.queryByRole('group', { name: capability.label_en! })).not.toBeInTheDocument()
+    }
+    const bulk = screen.getByRole('group', { name: 'Apply to all Services' })
+    await userEvent.click(within(bulk).getByRole('button', { name: 'Deny' }))
+    await waitFor(() => expect(api.setUserPermissionsBulk).toHaveBeenCalledWith(user.id, [
+      { capability: 'services.custom', effect: 'deny' },
+    ]))
+
+    await userEvent.type(screen.getByPlaceholderText('Search permissions…'), 'services.national_service')
+    expect(screen.getByText('No permissions match')).toBeVisible()
   })
 
   it('filters by raw capability id and clears an empty result', async () => {

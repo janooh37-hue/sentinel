@@ -41,7 +41,7 @@ import { artworkForTemplate, emojiForTemplate } from '@/pages/application/formEm
 type BlueprintKind = 'page' | 'service' | 'category'
 
 /**
- * A service is gated by a pair of capabilities: `books.service.<id>` decides
+ * A document service is gated by a pair of capabilities: `books.service.<id>` decides
  * whether it can be created, `books.servicerecords.<id>` whether its records
  * stay readable. The three states are the only combinations worth offering.
  */
@@ -83,6 +83,8 @@ interface PageBlueprintItem {
 interface BlueprintItem {
   id: string
   capability: string | null
+  recordsCapability?: string
+  destinationCapabilities?: readonly string[]
   label: string
   kind: BlueprintKind
   locked?: boolean
@@ -366,6 +368,7 @@ function MirrorDevice({
   onExpandedChange: (expanded: boolean) => void
 }): React.JSX.Element {
   const { t } = useTranslation()
+  const quickActions = services.filter((service) => service.recordsCapability).slice(0, 6)
   const content = (
     <aside
       data-testid="mirror-device"
@@ -442,7 +445,7 @@ function MirrorDevice({
             </div>
           </section>
 
-          {showCreation ? (
+          {showCreation || services.length > 0 ? (
             <section data-mirror-region="service">
               <div className="mb-2 flex items-center justify-between gap-3 text-[0.68em] font-semibold uppercase tracking-[0.08em] text-primary-foreground">
                 <h3>{t('access.permissions.mirror.blueprintServices')}</h3>
@@ -502,13 +505,13 @@ function MirrorDevice({
               <h3 className="mb-2 text-[0.68em] font-semibold uppercase tracking-[0.08em] text-primary-foreground">
                 {t('access.permissions.mirror.quickActions')}
               </h3>
-              {services.length === 0 ? (
+              {quickActions.length === 0 ? (
                 <p className="text-[0.7em] text-primary-foreground">
                   {t('access.permissions.mirror.nothingVisible')}
                 </p>
               ) : (
                 <div className="grid grid-cols-3 gap-1.5">
-                  {services.slice(0, 6).map((service) => (
+                  {quickActions.map((service) => (
                     <span key={service.id} className="rounded-md bg-primary-foreground/10 px-2 py-1.5 text-center text-[0.64em]">
                       {service.artwork ? (
                         <ServiceArtwork
@@ -721,6 +724,7 @@ export function PermissionsPage(): React.JSX.Element {
         return {
           id,
           capability: `books.service.${id}`,
+          recordsCapability: `books.servicerecords.${id}`,
           label: (isAr ? template?.name_ar : template?.name_en) || id,
           kind: 'service' as const,
           glyph: emojiForTemplate(id),
@@ -728,8 +732,33 @@ export function PermissionsPage(): React.JSX.Element {
         }
       }),
       {
+        id: 'national-service',
+        capability: 'services.national_service',
+        destinationCapabilities: ['leaves.view', 'leaves.create'],
+        label: t('access.permissions.mirror.serviceNationalService'),
+        kind: 'service',
+        artwork: 'national-service',
+      },
+      {
+        id: 'duty-locations',
+        capability: 'services.duty_locations',
+        destinationCapabilities: ['documents.generate', 'books.view', 'books.service.General Book'],
+        label: t('access.permissions.mirror.serviceDutyLocations'),
+        kind: 'service',
+        artwork: 'duty-locations',
+      },
+      {
+        id: 'employee-absence',
+        capability: 'services.employee_absence',
+        destinationCapabilities: ['leaves.view', 'leaves.edit'],
+        label: t('access.permissions.mirror.serviceEmployeeAbsence'),
+        kind: 'service',
+        artwork: 'employee-absence',
+      },
+      {
         id: 'other',
         capability: 'books.service.other',
+        recordsCapability: 'books.servicerecords.other',
         label: t('access.permissions.mirror.serviceOther'),
         kind: 'service',
       },
@@ -756,7 +785,8 @@ export function PermissionsPage(): React.JSX.Element {
   const serviceStates = useMemo(() => {
     const states: Record<string, ServiceAccessState> = {}
     for (const item of serviceItems) {
-      const recordsDenied = !effective.has(`books.servicerecords.${item.id}`)
+      if (!item.recordsCapability) continue
+      const recordsDenied = !effective.has(item.recordsCapability)
       const createDenied = item.capability == null || !effective.has(item.capability)
       states[item.id] = recordsDenied ? 'hidden' : createDenied ? 'records' : 'full'
     }
@@ -781,12 +811,15 @@ export function PermissionsPage(): React.JSX.Element {
   const visiblePages = pageItems.filter(
     (item) => item.locked || (item.capability != null && effective.has(item.capability)),
   )
-  const visibleServices = canCreateRecords
-    ? serviceItems.filter(
-        (item) =>
-          item.id !== 'other' && item.capability != null && effective.has(item.capability),
-      )
-    : []
+  const visibleServices = serviceItems.filter(
+    (item) =>
+      item.id !== 'other' &&
+      item.capability != null &&
+      effective.has(item.capability) &&
+      (item.destinationCapabilities
+        ? item.destinationCapabilities.every((capability) => effective.has(capability))
+        : canCreateRecords),
+  )
   const visibleCategories = canViewRecords
     ? categoryItems.filter(
         (item) => item.capability != null && effective.has(item.capability),
@@ -942,9 +975,9 @@ export function PermissionsPage(): React.JSX.Element {
     event: React.MouseEvent<HTMLButtonElement>,
   ): void => {
     setCaptionItem(item)
-    if (!permissions || !selectedUser || !item.capability) return
+    if (!permissions || !selectedUser || !item.capability || !item.recordsCapability) return
     flashBeam(event.currentTarget, item.kind)
-    const recordsCapability = `books.servicerecords.${item.id}`
+    const recordsCapability = item.recordsCapability
     const isOptIn =
       (capabilityCatalog.byId.get(item.capability)?.default_roles.length ?? 0) === 1
     serviceTriMutation.mutate({
@@ -967,7 +1000,7 @@ export function PermissionsPage(): React.JSX.Element {
     if (!captionItem || !permissions) return t('access.permissions.mirror.hint')
     if (captionItem.locked) return t('access.permissions.mirror.always')
     if (!captionItem.capability) return t('access.permissions.mirror.always')
-    if (captionItem.kind === 'service') {
+    if (captionItem.recordsCapability) {
       const state = serviceStates[captionItem.id] ?? 'full'
       return t(`access.permissions.mirror.${SERVICE_CAPTION_KEY[state]}`, {
         name: captionItem.label,
@@ -1249,7 +1282,7 @@ export function PermissionsPage(): React.JSX.Element {
                             {t('access.permissions.mirror.blueprintServices')}
                           </h3>
                           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                            {serviceItems.map((item) => (
+                            {serviceItems.map((item) => item.recordsCapability ? (
                               <ServiceTriState
                                 key={item.id}
                                 item={item}
@@ -1258,6 +1291,15 @@ export function PermissionsPage(): React.JSX.Element {
                                 saving={permissionWritesPending}
                                 onFocus={() => setCaptionItem(item)}
                                 onSelect={(next, event) => selectServiceState(item, next, event)}
+                              />
+                            ) : (
+                              <BlueprintButton
+                                key={item.id}
+                                item={item}
+                                denied={item.capability != null && !effective.has(item.capability)}
+                                saving={permissionWritesPending}
+                                onFocus={() => setCaptionItem(item)}
+                                onToggle={(event) => toggleItem(item, event)}
                               />
                             ))}
                           </div>

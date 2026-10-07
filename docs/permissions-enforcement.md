@@ -74,6 +74,30 @@ everyone else    -> role_defaults + grants - denies
   check. `_invalidate_caps_cache()` clears it through the session identity map when
   permissions change mid-request.
 
+### Services Mirror: non-template actions
+
+The Mirror's Services section includes three binary controls, not the
+create/records/hidden tri-state used for document templates:
+
+| Tile | Capability | Existing destination prerequisites | Action enforcement |
+| --- | --- | --- | --- |
+| National Service | `services.national_service` | `leaves.view` + `leaves.create` | `POST /api/v1/leaves` also requires the tile capability |
+| Duty Locations & Transfers | `services.duty_locations` | General Book service access (`documents.generate` + `books.view` + `books.service.General Book`) | `duty_service.transfer` requires the tile capability before either initial placement or letter generation; existing General Book service/category checks remain on letter generation |
+| Employee Absence | `services.employee_absence` | `leaves.view` + `leaves.edit` | `POST /api/v1/employees/{employee_id}/absences` also requires the tile capability |
+
+These capabilities are granted by default to operator, manager, and admin, never
+to inmate_reporter. Existing destination prerequisites are unchanged, so an
+operator without overrides sees the same tiles as before. Startup reconciliation
+adds the new role defaults to installed databases; no migration is required.
+Per-user denies survive that reconciliation.
+
+Both desktop and mobile Mirror surfaces toggle one capability per tile. The
+preview applies the destination prerequisites as well as the tile capability;
+the hidden count includes tile denies. Advanced excludes these Mirror-owned
+capabilities, and no synthetic records-half capability is introduced. Denying
+one tile does not revoke access to Leaves or General Book elsewhere.
+
+
 ## 3. The four enforcement tiers on a request
 
 Measured over all 323 `/api/v1` routes (2026-08-24 audit, §5):

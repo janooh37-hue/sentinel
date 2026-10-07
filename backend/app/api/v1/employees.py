@@ -359,6 +359,7 @@ def list_employee_absence_episodes(
     "/{employee_id}/absences",
     response_model=AbsenceCreateResult,
     status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_capability("services.employee_absence"))],
 )
 def create_employee_absences(
     employee_id: str,

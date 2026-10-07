@@ -5,7 +5,7 @@ from app.db.models import BookCategory
 
 
 def test_static_catalog_has_complete_bilingual_request_policy_metadata():
-    assert len(CAPABILITIES) == 58
+    assert len(CAPABILITIES) == 61
     for cap in CAPABILITIES:
         assert cap.label_en.strip(), cap.id
         assert cap.label_ar.strip(), cap.id
@@ -34,9 +34,9 @@ def test_static_role_default_counts_are_preserved():
     assert {
         role: len(caps) for role, caps in ROLE_DEFAULTS.items() if role != "inmate_reporter"
     } == {
-        "operator": 18,
-        "manager": 42,
-        "admin": 58,
+        "operator": 21,
+        "manager": 45,
+        "admin": 61,
     }
 
 
@@ -55,6 +55,9 @@ def test_inmate_reporter_preset_is_exactly_its_fixed_ceiling():
             "books.service.Inmate Conduct Violations",
             "books.servicerecords.Inmate Conduct Violations",
             "books.category.NAT",
+            "books.service.Report",
+            "books.servicerecords.Report",
+            "books.category.GS",
         }
     )
 
@@ -76,7 +79,7 @@ def test_catalog_composes_bilingual_dynamic_entries_in_stable_order(db_session):
     db_session.commit()
 
     catalog = capability_catalog_service.list_catalog(db_session)
-    assert len(catalog) == 58 + (2 * (len(SERVICE_IDS) + 1)) + 2
+    assert len(catalog) == 61 + (2 * (len(SERVICE_IDS) + 1)) + 2
     assert len({entry.id for entry in catalog}) == len(catalog)
 
     dynamic = catalog[len(CAPABILITIES) :]
@@ -120,6 +123,8 @@ def test_catalog_composes_bilingual_dynamic_entries_in_stable_order(db_session):
     inmate_dynamic_ids = {
         "books.service.Inmate Conduct Violations",
         "books.servicerecords.Inmate Conduct Violations",
+        "books.service.Report",
+        "books.servicerecords.Report",
     }
     for entry in dynamic:
         assert entry.requestable and not entry.sensitive

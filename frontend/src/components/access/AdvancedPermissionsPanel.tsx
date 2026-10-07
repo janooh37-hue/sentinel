@@ -254,6 +254,11 @@ export function AdvancedPermissionsPanel({
   const catalog = useMemo(
     () =>
       capabilities.filter((capability) => {
+        if (
+          capability.id === 'services.national_service' ||
+          capability.id === 'services.duty_locations' ||
+          capability.id === 'services.employee_absence'
+        ) return false
         if (capability.id.startsWith('books.servicerecords.')) return false
         if (capability.id.startsWith('books.category.')) return false
         if (!capability.id.startsWith('books.service.')) return true

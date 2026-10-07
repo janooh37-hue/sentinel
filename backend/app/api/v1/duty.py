@@ -2,7 +2,8 @@
 
 ``POST /api/v1/duty/transfer`` — move employee(s), each to its own destination
 unit/post, and mint one General Book transfer letter. Gated on
-``documents.generate`` (the action produces a document).
+``documents.generate`` and, in the service, ``services.duty_locations`` for
+both initial placement and transfers.
 """
 
 from __future__ import annotations

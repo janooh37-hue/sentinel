@@ -98,6 +98,30 @@ class Capability:
 
 CAPABILITIES: Final[tuple[Capability, ...]] = (
     Capability(
+        "services.national_service",
+        "services",
+        "National Service",
+        "الخدمة الوطنية",
+        "Show the National Service tile and create National Service records.",
+        "عرض الخدمة الوطنية وإنشاء سجلاتها.",
+    ),
+    Capability(
+        "services.duty_locations",
+        "services",
+        "Duty Locations & Transfers",
+        "أماكن العمل والنقل الداخلي",
+        "Show Duty Locations & Transfers and place or transfer employees.",
+        "عرض أماكن العمل والنقل الداخلي وتعيين مواقع عمل الموظفين أو نقلهم.",
+    ),
+    Capability(
+        "services.employee_absence",
+        "services",
+        "Employee Absence",
+        "غياب موظف",
+        "Show Employee Absence and create employee absence records.",
+        "عرض خدمة غياب الموظفين وإنشاء سجلات غياب الموظفين.",
+    ),
+    Capability(
         "inmate_statistics.review",
         "inmate_statistics",
         "Review inmate monthly reports",
@@ -586,6 +610,9 @@ ALL_CAPABILITIES: Final[frozenset[str]] = CAPABILITY_IDS
 _OPERATOR_CAPS: Final[frozenset[str]] = frozenset(
     {
         "app.access",
+        "services.national_service",
+        "services.duty_locations",
+        "services.employee_absence",
         "employees.view",
         "expiry.view",
         "leaves.view",

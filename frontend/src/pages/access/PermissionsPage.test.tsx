@@ -39,6 +39,7 @@ import {
   type PermissionRequestRead,
   type UserPermissionRead,
 } from '@/lib/api'
+import i18n from '@/lib/i18n'
 
 function createDeferred<T>() {
   let resolve!: (value: T | PromiseLike<T>) => void
@@ -94,11 +95,21 @@ const secondOperator: AdminUserRead = {
   name_en: 'Second User',
 }
 
+const syntheticServices = [
+  { capability: 'services.national_service', label: 'National Service', ar: 'الخدمة الوطنية', artwork: 'national-service' },
+  { capability: 'services.duty_locations', label: 'Duty Locations & Transfers', ar: 'أماكن العمل والنقل الداخلي', artwork: 'duty-locations' },
+  { capability: 'services.employee_absence', label: 'Employee Absence', ar: 'غياب موظف', artwork: 'employee-absence' },
+] as const
+
+const syntheticCaps = syntheticServices.map((service) => service.capability)
+const destinationCaps = ['leaves.create', 'leaves.edit']
+
 function permissionFixture(over: Partial<UserPermissionRead> = {}): UserPermissionRead {
   // A service on "Full" holds both halves of its capability pair: creation
   // (`books.service.*`) and record visibility (`books.servicerecords.*`).
   const defaults = [
     ...pageCaps,
+    ...syntheticCaps,
     'books.service.General Book',
     'books.servicerecords.General Book',
     'books.category.incoming',
@@ -129,7 +140,7 @@ const allServiceCaps = [
 
 /** Every service on Full — nothing hidden, every tri-state control canonical. */
 function allVisibleFixture(): UserPermissionRead {
-  const caps = [...pageCaps, ...allServiceCaps, 'books.category.incoming']
+  const caps = [...pageCaps, ...allServiceCaps, ...syntheticCaps, ...destinationCaps, 'books.category.incoming']
   return permissionFixture({ effective: caps, role_defaults: caps, overrides: {} })
 }
 
@@ -166,6 +177,10 @@ const capabilities: CapabilityRead[] = [
   catalogEntry('books.view', 'books', 'View records', 'Browse record books.'),
   catalogEntry('employees.view', 'employees', 'View employees', 'Browse employee profiles.'),
   catalogEntry('books.service.other', 'books', 'Other records', 'Create other records.'),
+  ...syntheticServices.map((service) => ({
+    ...catalogEntry(service.capability, 'services', service.label, 'Control the Services shortcut.'),
+    label_ar: service.ar,
+  })),
 ]
 
 function configure(
@@ -269,6 +284,22 @@ async function openDesktopPreview(): Promise<HTMLElement> {
   return screen.getByTestId('mirror-device')
 }
 
+function mockMobileMirror(): void {
+  vi.spyOn(window, 'matchMedia').mockImplementation(
+    (query) =>
+      ({
+        matches: query === '(max-width: 759px)',
+        media: query,
+        onchange: null,
+        addEventListener: vi.fn(),
+        removeEventListener: vi.fn(),
+        addListener: vi.fn(),
+        removeListener: vi.fn(),
+        dispatchEvent: vi.fn(),
+      }) as unknown as MediaQueryList,
+  )
+}
+
 async function findPeopleRail(): Promise<HTMLElement> {
   return await screen.findByRole('complementary', { name: 'People' })
 }
@@ -329,7 +360,10 @@ function hiddenTotal(): number {
 }
 
 describe('PermissionsPage Mirror editor', () => {
-  beforeEach(() => vi.clearAllMocks())
+  beforeEach(async () => {
+    vi.clearAllMocks()
+    await i18n.changeLanguage('en')
+  })
   afterEach(() => vi.restoreAllMocks())
 
   it('announces truthful blueprint and chip state on the approved paper/device surfaces', async () => {
@@ -436,6 +470,112 @@ describe('PermissionsPage Mirror editor', () => {
     renderPage(permissionFixture(), { users: [] })
     expect(await screen.findByText('No users to manage yet.')).toBeVisible()
     expect(screen.queryByText('Always full access')).not.toBeInTheDocument()
+  })
+
+  it.each(syntheticServices.flatMap((service) => [
+    { ...service, mobile: false },
+    { ...service, mobile: true },
+  ]))('denies and restores $label with only its dedicated override (mobile: $mobile)', async ({ capability, label, artwork, mobile }) => {
+    if (mobile) mockMobileMirror()
+    const base = allVisibleFixture()
+    const denied = { ...base, effective: base.effective.filter((cap) => cap !== capability), overrides: { [capability]: 'deny' as const } }
+    renderPage(base, { requests: [] })
+    vi.mocked(api.setUserPermission).mockResolvedValueOnce(denied).mockResolvedValueOnce(base)
+
+    const blueprint = await screen.findByRole('region', { name: 'Permission blueprint' })
+    const toggle = within(blueprint).getByRole('button', { name: `${label} Grant` })
+    expect(toggle).toHaveAttribute('aria-pressed', 'true')
+    expect(toggle.querySelector(`[data-service-artwork="${artwork}"]`)).toBeInTheDocument()
+    expect(within(blueprint).queryByRole('radiogroup', { name: label })).not.toBeInTheDocument()
+    const mirror = mobile ? await screen.findByTestId('mirror-device') : await openDesktopPreview()
+    if (mobile) await userEvent.click(within(mirror).getByRole('button', { name: /Viewing as/ }))
+    expect(within(mirror).getByText(label)).toBeVisible()
+    expect(hiddenTotal()).toBe(0)
+
+    await userEvent.click(toggle)
+    await waitFor(() => expect(toggle).toHaveAttribute('aria-busy', 'false'))
+    expect(api.setUserPermission).toHaveBeenLastCalledWith(operator.id, capability, 'deny')
+    expect(within(mirror).queryByText(label)).not.toBeInTheDocument()
+    expect(hiddenTotal()).toBe(1)
+    expect(toggle).toHaveAttribute('aria-pressed', 'false')
+    expect(screen.getByText('Denied for this user')).toBeVisible()
+    for (const service of syntheticServices) {
+      if (service.capability !== capability) expect(within(mirror).getByText(service.label)).toBeVisible()
+    }
+
+    await userEvent.click(toggle)
+    await waitFor(() => expect(toggle).toHaveAttribute('aria-busy', 'false'))
+    expect(api.setUserPermission).toHaveBeenLastCalledWith(operator.id, capability, null)
+    expect(toggle).toHaveAttribute('aria-pressed', 'true')
+    expect(within(mirror).getByText(label)).toBeVisible()
+    expect(hiddenTotal()).toBe(0)
+    expect(api.setUserPermission).toHaveBeenCalledTimes(2)
+    expect(api.setUserPermissionsBulk).not.toHaveBeenCalled()
+  })
+
+  it.each(syntheticServices)('grants $label explicitly when the role does not include it', async ({ capability, label }) => {
+    const base = allVisibleFixture()
+    const initial = { ...base, effective: base.effective.filter((cap) => cap !== capability), role_defaults: base.role_defaults.filter((cap) => cap !== capability) }
+    renderPage(initial, { requests: [] })
+    vi.mocked(api.setUserPermission).mockResolvedValue({ ...initial, effective: base.effective, overrides: { [capability]: 'grant' } })
+
+    await userEvent.click(await screen.findByRole('button', { name: `${label} Deny` }))
+    await waitFor(() => expect(api.setUserPermission).toHaveBeenCalledWith(operator.id, capability, 'grant'))
+    expect(api.setUserPermissionsBulk).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['National Service', 'leaves.view'],
+    ['National Service', 'leaves.create'],
+    ['Duty Locations & Transfers', 'documents.generate'],
+    ['Duty Locations & Transfers', 'books.view'],
+    ['Duty Locations & Transfers', 'books.service.General Book'],
+    ['Employee Absence', 'leaves.view'],
+    ['Employee Absence', 'leaves.edit'],
+  ].flatMap(([label, missing]) => [
+    { label, missing, mobile: false },
+    { label, missing, mobile: true },
+  ]))('keeps $label out of preview without $missing (mobile: $mobile)', async ({ label, missing, mobile }) => {
+    if (mobile) mockMobileMirror()
+    const base = allVisibleFixture()
+    renderPage({ ...base, effective: base.effective.filter((cap) => cap !== missing) }, { requests: [] })
+    const mirror = mobile ? await screen.findByTestId('mirror-device') : await openDesktopPreview()
+    if (mobile) await userEvent.click(within(mirror).getByRole('button', { name: /Viewing as/ }))
+    expect(screen.getByRole('button', { name: `${label} Grant` })).toHaveAttribute('aria-pressed', 'true')
+    expect(within(mirror).queryByText(label)).not.toBeInTheDocument()
+  })
+
+  it('counts all three denied shortcuts and leaves them out of Advanced permissions', async () => {
+    const base = allVisibleFixture()
+    renderPage({
+      ...base,
+      effective: base.effective.filter((cap) => !syntheticCaps.some((synthetic) => synthetic === cap)),
+      overrides: Object.fromEntries(syntheticCaps.map((capability) => [capability, 'deny'])),
+    }, { requests: [] })
+    await screen.findByRole('region', { name: 'Permission blueprint' })
+    expect(hiddenTotal()).toBe(3)
+    const advanced = screen.getByText('Advanced permissions').closest('section')!
+    for (const service of syntheticServices) {
+      expect(screen.getByRole('button', { name: `${service.label} Deny` })).toHaveAttribute('aria-pressed', 'false')
+      expect(within(advanced).queryByText(service.label)).not.toBeInTheDocument()
+      expect(within(advanced).queryByText(service.capability)).not.toBeInTheDocument()
+    }
+  })
+
+  it('renders bilingual shortcut controls and preview artwork in Arabic', async () => {
+    await i18n.changeLanguage('ar')
+    renderPage(allVisibleFixture(), { requests: [] })
+    const blueprint = await screen.findByRole('region', { name: 'مخطط الصلاحيات' })
+    await userEvent.click(screen.getByRole('button', { name: 'فتح المعاينة' }))
+    const mirror = screen.getByTestId('mirror-device')
+    for (const service of syntheticServices) {
+      const toggle = within(blueprint).getByRole('button', { name: `${service.ar} منح` })
+      expect(toggle).toHaveAttribute('aria-pressed', 'true')
+      expect(within(toggle).getByText(service.ar)).toHaveAttribute('dir', 'auto')
+      expect(within(mirror).getByText(service.ar)).toBeVisible()
+      expect(within(mirror).queryByText(service.label)).not.toBeInTheDocument()
+      expect(toggle.querySelector(`[data-service-artwork="${service.artwork}"]`)).toBeInTheDocument()
+    }
   })
 
   it('denies a page with the single-capability write and hides it from the preview', async () => {
@@ -816,19 +956,7 @@ describe('PermissionsPage Mirror editor', () => {
   })
 
   it('uses a capped flex-column mobile mirror and a 44px request link target', async () => {
-    vi.spyOn(window, 'matchMedia').mockImplementation(
-      (query) =>
-        ({
-          matches: query === '(max-width: 759px)',
-          media: query,
-          onchange: null,
-          addEventListener: vi.fn(),
-          removeEventListener: vi.fn(),
-          addListener: vi.fn(),
-          removeListener: vi.fn(),
-          dispatchEvent: vi.fn(),
-        }) as unknown as MediaQueryList,
-    )
+    mockMobileMirror()
     renderPage()
 
     const mirror = await screen.findByTestId('mirror-device')
@@ -869,8 +997,8 @@ describe('PermissionsPage Mirror editor', () => {
     expect(warning).toHaveClass('bg-warning-soft')
   })
 
-  it('removes creation and record previews when books.view is the only missing prerequisite', async () => {
-    const base = permissionFixture()
+  it('removes record creation previews without hiding eligible leave shortcuts when books.view is missing', async () => {
+    const base = allVisibleFixture()
     const noRecordsView = permissionFixture({
       effective: base.effective.filter((capability) => capability !== 'books.view'),
       overrides: { ...base.overrides, 'books.view': 'deny' },
@@ -878,7 +1006,10 @@ describe('PermissionsPage Mirror editor', () => {
     renderPage(noRecordsView, { requests: [] })
 
     const mirror = await openDesktopPreview()
-    expect(within(mirror).queryByRole('heading', { name: 'Services' })).not.toBeInTheDocument()
+    expect(within(mirror).getByRole('heading', { name: 'Services' })).toBeVisible()
+    expect(within(mirror).getByText('National Service')).toBeVisible()
+    expect(within(mirror).getByText('Employee Absence')).toBeVisible()
+    expect(within(mirror).queryByText('Duty Locations & Transfers')).not.toBeInTheDocument()
     expect(within(mirror).queryByRole('heading', { name: 'Quick actions' })).not.toBeInTheDocument()
     expect(
       within(mirror).queryByRole('heading', { name: 'Record categories' }),
