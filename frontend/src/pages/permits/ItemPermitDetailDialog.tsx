@@ -39,7 +39,7 @@ export function ItemPermitDetailDialog({
   onEdit,
   onNotFound,
 }: Props): React.JSX.Element {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const qc = useQueryClient()
   const { has } = useCapabilities()
   const canEdit = has('permits.edit')
@@ -110,7 +110,11 @@ export function ItemPermitDetailDialog({
           {permit && (
             <>
               <div className="flex flex-wrap items-center gap-2">
-                <Badge tone={zoneTone(permit.zone)}>{t(`permits.zone.${permit.zone}`)}</Badge>
+                {permit.zones.map((z) => (
+                  <Badge key={z} tone={zoneTone(z)}>
+                    {t(`permits.zone.${z}`)}
+                  </Badge>
+                ))}
                 {permit.book_id && (
                   <Badge tone={approvalTone(approvalState)}>
                     {t(`permits.approval.${approvalState}`)}
@@ -123,7 +127,12 @@ export function ItemPermitDetailDialog({
                   <Fact label={t('permits.items.detail.ref')} value={permit.book_ref} mono ltr />
                 )}
                 <Fact label={t('permits.items.detail.recipient')} value={permit.recipient} />
-                <Fact label={t('permits.items.detail.zone')} value={t(`permits.zone.${permit.zone}`)} />
+                <Fact
+                  label={t('permits.items.detail.zone')}
+                  value={permit.zones
+                    .map((z) => t(`permits.zone.${z}`))
+                    .join(i18n.language.startsWith('ar') ? '، ' : ', ')}
+                />
                 <Fact label={t('permits.items.detail.site')} value={permit.site} />
                 <Fact label={t('permits.items.detail.employeeNo')} value={permit.employee_id} mono ltr />
                 <Fact label={t('permits.items.detail.name')} value={permit.employee_name} />

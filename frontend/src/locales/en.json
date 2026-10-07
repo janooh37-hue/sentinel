@@ -654,7 +654,7 @@
       "columns": {
         "ref": "Ref.",
         "employee": "Employee",
-        "zone": "Zone",
+        "zone": "Zones",
         "items": "Items",
         "approval": "Approval",
         "created": "Created"
@@ -670,7 +670,8 @@
         "employeeRequired": "Choose the employee.",
         "recipient": "Addressed to",
         "site": "Site",
-        "zone": "Zone",
+        "zone": "Zones",
+        "zoneRequired": "Select at least one zone.",
         "items": "Items",
         "itemName": "Item",
         "quantity": "Qty",
@@ -687,7 +688,7 @@
         "createdAt": "Created {{date}}",
         "ref": "Permit ref (1/5)",
         "recipient": "Addressed to",
-        "zone": "Zone",
+        "zone": "Zones",
         "site": "Site",
         "employee": "Employee",
         "employeeNo": "Employee no.",

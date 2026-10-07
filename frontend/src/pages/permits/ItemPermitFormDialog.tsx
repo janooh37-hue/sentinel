@@ -8,7 +8,7 @@ import { useTranslation } from 'react-i18next'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { Controller, useFieldArray, useForm, useWatch } from 'react-hook-form'
-import { Plus, Trash2 } from 'lucide-react'
+import { Check, Plus, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { z } from 'zod'
 
@@ -26,7 +26,13 @@ import { EmployeePicker } from '@/pages/application/EmployeePicker'
 
 const DEFAULT_RECIPIENT = 'مسؤول وحدة التفتيش'
 const DEFAULT_SITE = 'مبنى مركز الإصلاح والتأهيل الوثبة - 2'
-const ZONES: ItemPermitZone[] = ['red', 'green']
+// Canonical order: red, green, work_residence (also the order sent to the API).
+const ZONES: ItemPermitZone[] = ['red', 'green', 'work_residence']
+const ZONE_DOT: Record<ItemPermitZone, string> = {
+  red: 'bg-destructive',
+  green: 'bg-success',
+  work_residence: 'bg-info',
+}
 
 const inputCls =
   'h-9 rounded-md border border-input bg-surface px-3 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
@@ -36,7 +42,9 @@ const REQUIRED = 'permits.items.form.required'
 const schema = z.object({
   employee_id: z.string().min(1, 'permits.items.form.employeeRequired'),
   recipient: z.string().trim().min(1, REQUIRED).max(255),
-  zone: z.enum(['red', 'green']),
+  zones: z
+    .array(z.enum(['red', 'green', 'work_residence']))
+    .min(1, 'permits.items.form.zoneRequired'),
   site: z.string().trim().min(1, REQUIRED).max(255),
   items: z
     .array(
@@ -60,7 +68,7 @@ type Values = z.output<typeof schema>
 const defaults = (permit?: ItemPermitRead | null): FormInput => ({
   employee_id: permit?.employee_id ?? '',
   recipient: permit?.recipient ?? DEFAULT_RECIPIENT,
-  zone: permit?.zone ?? 'red',
+  zones: permit?.zones ?? ['red'],
   site: permit?.site ?? DEFAULT_SITE,
   items: permit?.items.map((i) => ({ name: i.name, quantity: i.quantity })) ?? [
     { name: '', quantity: 1 },
@@ -123,7 +131,7 @@ export function ItemPermitFormDialog({
       const body = {
         employee_id: v.employee_id,
         recipient: v.recipient,
-        zone: v.zone,
+        zones: v.zones,
         site: v.site,
         items: v.items,
       }
@@ -188,27 +196,44 @@ export function ItemPermitFormDialog({
               {err(errors.recipient?.message)}
             </label>
 
-            {/* Zone */}
+            {/* Zones */}
             <fieldset className="flex min-w-0 flex-col gap-1.5">
               <legend className="mb-1.5 text-xs text-muted-foreground">
                 {t('permits.items.form.zone')}
               </legend>
-              <div className="grid grid-cols-2 gap-2">
-                {ZONES.map((z) => (
-                  <label key={z} className="cursor-pointer">
-                    <input type="radio" value={z} className="peer sr-only" {...register('zone')} />
-                    <span
-                      className={`flex h-9 items-center justify-center rounded-md border border-input bg-surface text-sm font-medium peer-focus-visible:ring-2 peer-focus-visible:ring-ring ${
-                        z === 'red'
-                          ? 'peer-checked:border-destructive peer-checked:bg-destructive/10 peer-checked:text-destructive'
-                          : 'peer-checked:border-success peer-checked:bg-success/10 peer-checked:text-success'
-                      }`}
-                    >
-                      {t(`permits.zone.${z}`)}
-                    </span>
-                  </label>
-                ))}
-              </div>
+              <Controller
+                control={control}
+                name="zones"
+                render={({ field }) => (
+                  <div className="grid grid-cols-3 gap-2">
+                    {ZONES.map((z) => {
+                      const selected = field.value.includes(z)
+                      return (
+                        <button
+                          key={z}
+                          type="button"
+                          aria-pressed={selected}
+                          onClick={() =>
+                            field.onChange(
+                              ZONES.filter((k) => (k === z ? !selected : field.value.includes(k))),
+                            )
+                          }
+                          className={`inline-flex items-center justify-center gap-1.5 rounded-lg border px-2 py-1.5 text-sm font-medium text-start transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                            selected
+                              ? 'border-primary bg-primary-soft text-primary'
+                              : 'border-border text-muted-foreground hover:bg-surface-tinted'
+                          }`}
+                        >
+                          <span className={`h-2.5 w-2.5 rounded-full ${ZONE_DOT[z]}`} aria-hidden />
+                          {t(`permits.zone.${z}`)}
+                          {selected && <Check className="ms-auto h-3.5 w-3.5" aria-hidden />}
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
+              />
+              {err(errors.zones?.message)}
             </fieldset>
 
             <label className="flex flex-col gap-1.5">

@@ -99,6 +99,7 @@ const KEYS = [
   'permits.items.columns.employee',
   'permits.items.form.newTitle',
   'permits.items.form.itemNameRequired',
+  'permits.items.form.zoneRequired',
   'permits.items.detail.title',
   'permits.items.delete.title',
 ]

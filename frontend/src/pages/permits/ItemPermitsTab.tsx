@@ -172,9 +172,13 @@ function ItemPermitRow({
         </div>
       </TableCell>
       <TableCell>
-        <Badge tone={zoneTone(row.zone)} shape="square">
-          {t(`permits.zone.${row.zone}`)}
-        </Badge>
+        <div className="flex flex-wrap gap-1">
+          {row.zones.map((z) => (
+            <Badge key={z} tone={zoneTone(z)} shape="square">
+              {t(`permits.zone.${z}`)}
+            </Badge>
+          ))}
+        </div>
       </TableCell>
       <TableCell>
         <div className="text-xs font-medium">{t('permits.items.count', { count: row.items.length })}</div>
