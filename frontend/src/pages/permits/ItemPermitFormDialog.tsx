@@ -139,7 +139,7 @@ export function ItemPermitFormDialog({
       void qc.invalidateQueries({ queryKey: ['item-permits-list'] })
       void qc.invalidateQueries({ queryKey: ['item-permit', data.id] })
       void qc.invalidateQueries({ queryKey: ['books', 'permit'] })
-      toast.success(t('common.savedToast'))
+      if (permit) toast.success(t('common.savedToast'))
       onSaved?.(data)
       onOpenChange(false)
     },
