@@ -26,9 +26,18 @@ import {
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
+import { EmptyState } from '@/components/ui/empty-state'
+import { Skeleton } from '@/components/ui/skeleton'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { PermitAccessBadge } from './PermitAccessBadge'
-import { approvalTone, fmtDate, statusTone, type PermitApprovalState } from './permitUtils'
+import {
+  approvalTone,
+  fmtDate,
+  fmtLongDate,
+  permitBookQuery,
+  statusTone,
+  type PermitApprovalState,
+} from './permitUtils'
 import { EMIRATES } from './emirates'
 
 const inputCls =
@@ -42,14 +51,6 @@ const PRESETS: Array<{ label: string; value: number; unit: Validity['unit'] }> =
   { label: 'sixMonths', value: 6, unit: 'month' },
   { label: 'oneYear', value: 1, unit: 'year' },
 ]
-
-const fmtLongDate = (iso: string, language: string): string =>
-  new Intl.DateTimeFormat(language.startsWith('ar') ? language : 'en-GB', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-    timeZone: 'UTC',
-  }).format(new Date(`${iso.slice(0, 10)}T00:00:00Z`))
 
 interface Props {
   permitId: number
@@ -83,6 +84,13 @@ export function PermitDetailDialog({ permitId, open, onOpenChange, onEdit, onNot
   const [renewOpen, setRenewOpen] = useState(false)
   const [revokeOpen, setRevokeOpen] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
+  // One confirm for every "remove" icon — they all fire a mutation immediately otherwise.
+  const [pendingRemove, setPendingRemove] = useState<
+    | { kind: 'person'; id: number; name: string }
+    | { kind: 'vehicle'; id: number; plate: string }
+    | { kind: 'paper' }
+    | null
+  >(null)
   const [renewValidity, setRenewValidity] = useState<Validity>({ value: 1, unit: 'month' })
   const [renewCustomOpen, setRenewCustomOpen] = useState(false)
   const [renewReason, setRenewReason] = useState('')
@@ -310,10 +318,10 @@ export function PermitDetailDialog({ permitId, open, onOpenChange, onEdit, onNot
   const openBookPdf = async (): Promise<void> => {
     if (!permit?.book_id) return
     try {
-      const book = await api.getBook(permit.book_id)
+      const book = await qc.fetchQuery(permitBookQuery(permit.book_id))
       const versions = book.versions ?? []
       const latest = [...versions].sort((a, b) => b.version_no - a.version_no)[0] ?? null
-      const pdfUrl = latest?.pdf_url ?? null
+      const pdfUrl = latest?.signed_pdf_url ?? latest?.pdf_url ?? null
       if (pdfUrl) {
         window.open(pdfUrl, '_blank', 'noopener')
       } else {
@@ -337,10 +345,14 @@ export function PermitDetailDialog({ permitId, open, onOpenChange, onEdit, onNot
 
   return (
     <DialogRoot open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl">
+      <DialogContent className="max-w-4xl max-h-[calc(100dvh-3.5rem)]">
         <DialogHeader>
-          <DialogTitle>
-            {permit ? t('permits.detail.title', { no: permit.permit_no ?? permit.id }) : t('common.loading')}
+          <DialogTitle className={permit ? undefined : 'sr-only'}>
+            {permit
+              ? t('permits.detail.title', { no: permit.permit_no ?? permit.id })
+              : query.isError
+                ? t('permits.loadError')
+                : t('common.loading')}
           </DialogTitle>
           {permit && (
             <DialogDescription>
@@ -350,7 +362,28 @@ export function PermitDetailDialog({ permitId, open, onOpenChange, onEdit, onNot
         </DialogHeader>
 
         <div className="flex flex-col gap-4 overflow-y-auto px-4 py-4 text-sm">
-          {query.isError && <p className="text-destructive">{t('permits.loadError')}</p>}
+          {!permit && !query.isError && (
+            <div className="flex flex-col gap-4" aria-busy="true">
+              <Skeleton className="h-6 w-1/3" />
+              <div className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2">
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <div key={i} className="flex flex-col gap-1.5">
+                    <Skeleton className="h-3 w-1/4" />
+                    <Skeleton className="h-4 w-2/3" />
+                  </div>
+                ))}
+              </div>
+              <Skeleton className="h-24 w-full" />
+            </div>
+          )}
+          {!permit && query.isError && (
+            <EmptyState
+              className="py-8"
+              message={t('permits.loadError')}
+              actionLabel={t('common.retry')}
+              onAction={() => void query.refetch()}
+            />
+          )}
           {permit && (
             <>
               {/* Badges */}
@@ -366,7 +399,7 @@ export function PermitDetailDialog({ permitId, open, onOpenChange, onEdit, onNot
               </div>
 
               {/* Facts grid */}
-              <dl className="grid grid-cols-2 gap-x-4 gap-y-3">
+              <dl className="grid grid-cols-1 gap-x-4 gap-y-3 sm:grid-cols-2">
                 <Fact label={t('permits.detail.company')} value={permit.company} />
                 <Fact
                   label={t('permits.detail.window')}
@@ -416,7 +449,7 @@ export function PermitDetailDialog({ permitId, open, onOpenChange, onEdit, onNot
                   />
                 )}
                 {isRevoked && permit.revoke_reason && (
-                  <div className="col-span-2 rounded-md bg-destructive/10 px-3 py-2 text-xs text-destructive">
+                  <div className="rounded-md bg-destructive/10 px-3 py-2 text-xs text-destructive sm:col-span-2">
                     {t('permits.detail.revokedReason', { reason: permit.revoke_reason })}
                   </div>
                 )}
@@ -462,7 +495,7 @@ export function PermitDetailDialog({ permitId, open, onOpenChange, onEdit, onNot
                             type="button"
                             aria-label={t('permits.paper.remove')}
                             className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-surface-tinted hover:text-destructive"
-                            onClick={() => removeDoc.mutate()}
+                            onClick={() => setPendingRemove({ kind: 'paper' })}
                           >
                             <Trash2 className="h-4 w-4" aria-hidden />
                           </button>
@@ -528,7 +561,7 @@ export function PermitDetailDialog({ permitId, open, onOpenChange, onEdit, onNot
                               type="button"
                               aria-label={t('permits.actions.removePerson')}
                               className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-surface-tinted hover:text-destructive"
-                              onClick={() => removePerson.mutate(p.id)}
+                              onClick={() => setPendingRemove({ kind: 'person', id: p.id, name: p.name })}
                             >
                               <Trash2 className="h-4 w-4" aria-hidden />
                             </button>
@@ -682,7 +715,13 @@ export function PermitDetailDialog({ permitId, open, onOpenChange, onEdit, onNot
                               type="button"
                               aria-label={t('permits.vehicle.remove')}
                               className="inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-surface-tinted hover:text-destructive"
-                              onClick={() => removeVehicle.mutate(v.id)}
+                              onClick={() =>
+                                setPendingRemove({
+                                  kind: 'vehicle',
+                                  id: v.id,
+                                  plate: v.plate_no || v.make_model || `#${v.id}`,
+                                })
+                              }
                             >
                               <Trash2 className="h-4 w-4" aria-hidden />
                             </button>
@@ -1005,6 +1044,33 @@ export function PermitDetailDialog({ permitId, open, onOpenChange, onEdit, onNot
           destructive
           onConfirm={() => del.mutate()}
         />
+
+        <ConfirmDialog
+          open={pendingRemove !== null}
+          onOpenChange={(o) => {
+            if (!o) setPendingRemove(null)
+          }}
+          title={
+            pendingRemove?.kind === 'person'
+              ? t('permits.confirmRemove.person', { name: pendingRemove.name })
+              : pendingRemove?.kind === 'vehicle'
+                ? t('permits.confirmRemove.vehicle', { plate: pendingRemove.plate })
+                : t('permits.confirmRemove.paper')
+          }
+          confirmLabel={
+            pendingRemove?.kind === 'person'
+              ? t('permits.actions.removePerson')
+              : pendingRemove?.kind === 'vehicle'
+                ? t('permits.vehicle.remove')
+                : t('permits.paper.remove')
+          }
+          destructive
+          onConfirm={() => {
+            if (pendingRemove?.kind === 'person') removePerson.mutate(pendingRemove.id)
+            else if (pendingRemove?.kind === 'vehicle') removeVehicle.mutate(pendingRemove.id)
+            else removeDoc.mutate()
+          }}
+        />
       </DialogContent>
     </DialogRoot>
   )
@@ -1025,7 +1091,7 @@ function Fact({
   ltr?: boolean
 }): React.JSX.Element {
   return (
-    <div className={`flex flex-col gap-0.5 ${span ? 'col-span-2' : ''}`}>
+    <div className={`flex flex-col gap-0.5 ${span ? 'sm:col-span-2' : ''}`}>
       <dt className="text-xs text-muted-foreground">{label}</dt>
       <dd className={`text-foreground ${mono ? 'font-mono' : ''}`} dir={ltr ? 'ltr' : 'auto'}>
         {value}
