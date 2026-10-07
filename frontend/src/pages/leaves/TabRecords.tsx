@@ -651,11 +651,12 @@ export function TabRecords(): React.JSX.Element {
     if (detailValue !== null && desktopOpenId === null) closeDetail()
   }, [closeDetail, detailValue, desktopOpenId])
 
+  const canCreateNationalService = has('leaves.create') && has('services.national_service')
   useEffect(() => {
-    if (actionValue === 'ns-new' && !capabilitiesLoading && !has('leaves.create')) {
+    if (actionValue === 'ns-new' && !capabilitiesLoading && !canCreateNationalService) {
       closeAction()
     }
-  }, [actionValue, capabilitiesLoading, closeAction, has])
+  }, [actionValue, capabilitiesLoading, closeAction, canCreateNationalService])
 
   // Build query params. Text search (`q`) is resolved server-side now — see
   // leave_service.list_leaves. The `q` key isn't yet in the generated
@@ -774,7 +775,7 @@ export function TabRecords(): React.JSX.Element {
       )}
 
       <NationalServiceDialog
-        open={actionValue === 'ns-new' && !capabilitiesLoading && has('leaves.create')}
+        open={actionValue === 'ns-new' && !capabilitiesLoading && canCreateNationalService}
         onClose={closeAction}
         onCreated={(id) => {
           setSearchParams((prev) => {

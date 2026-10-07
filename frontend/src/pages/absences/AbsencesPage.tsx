@@ -176,7 +176,13 @@ export function AbsencesPage(): React.JSX.Element {
   })
 
   const canSubmit =
-    !!employeeId && !!start && !!end && start <= end && canEdit && !createMutation.isPending
+    !!employeeId &&
+    !!start &&
+    !!end &&
+    start <= end &&
+    canEdit &&
+    has('services.employee_absence') &&
+    !createMutation.isPending
   const rows = registerQuery.data?.rows ?? []
   const editKey = searchParams.get('open')
   const editing = rows.find((row) => rowKey(row) === editKey) ?? null
