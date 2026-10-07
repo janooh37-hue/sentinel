@@ -13,9 +13,9 @@
  * (a11y contract).
  */
 import type { ComponentType } from 'react'
-import { ArrowLeftRight, Ban, Check, Clock, Eye, Pencil, PenLine, Printer, X } from 'lucide-react'
+import { ArrowLeftRight, Ban, Check, CheckCheck, Clock, Eye, Pencil, PenLine, Printer, X } from 'lucide-react'
 
-import type { BookOverridableState } from '@/lib/api'
+import type { BookApprovalStepRead, BookOverridableState } from '@/lib/api'
 
 export type SealTone = 'neutral' | 'warning' | 'info' | 'success' | 'accent'
 
@@ -88,8 +88,10 @@ export function recordStateOf(book: {
 
 export function sealDescriptor(
   state: string,
-  opts?: { signingPath?: string | null; signedSource?: string | null },
+  opts?: { signingPath?: string | null; signedSource?: string | null; review?: ReportReview | null },
 ): SealDescriptor {
+  if (opts?.review === 'pending') return make('books.approval.stateAwaitingReview', Clock, 'warning')
+  if (opts?.review === 'reviewed') return make('books.approval.stateReviewed', CheckCheck, 'success')
   if (state === 'pending' && opts?.signingPath === 'in_app') {
     return make('books.approval.stateAwaitingSignature', PenLine, 'warning')
   }
@@ -97,6 +99,34 @@ export function sealDescriptor(
     return make('books.approval.signedScanned', Check, 'success')
   }
   return BASE[state] ?? make(state, Pencil, 'neutral')
+}
+
+/** Where a Report stands with its manager. A Report carries its author's
+ * signature, so sending it asks the manager to review it, never to sign it.
+ * `null` = not a Report, or a returned / rejected one (plain state flow). */
+export type ReportReview = 'unsent' | 'pending' | 'reviewed'
+
+export function reportReviewOf(book: {
+  service_id?: string
+  approval_state?: string | null
+  approval_steps?: BookApprovalStepRead[] | null
+  versions?: { version_no: number; approval_steps?: BookApprovalStepRead[] | null }[] | null
+}): ReportReview | null {
+  if (book.service_id !== 'Report') return null
+  const versions = book.versions ?? []
+  const current = versions.length
+    ? versions.reduce((a, b) => (b.version_no >= a.version_no ? b : a))
+    : undefined
+  const steps = current?.approval_steps ?? book.approval_steps ?? []
+  switch (book.approval_state) {
+    case 'pending':
+      return 'pending'
+    case 'none':
+    case 'approved':
+      return steps.some((s) => s.kind !== 'reviewer' && s.state === 'approved') ? 'reviewed' : 'unsent'
+    default:
+      return null
+  }
 }
 
 /** Reviewer-step state descriptors (shown in ReviewerList rows). */

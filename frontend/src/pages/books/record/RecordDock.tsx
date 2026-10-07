@@ -15,6 +15,7 @@
 import * as Dialog from '@radix-ui/react-dialog'
 import {
   Check,
+  CheckCheck,
   CornerUpLeft,
   Download,
   Loader2,
@@ -159,7 +160,7 @@ function RequestChangesSheet({
 
 export function RecordDock({ book, caps, view, actions }: RecordPieceProps): React.JSX.Element {
   const { t } = useTranslation()
-  const { isMobile, isAr, busy, dockHidden, bookId, current, nextStep, pendingAct } = view
+  const { isMobile, isAr, busy, dockHidden, bookId, current, nextStep, pendingAct, review } = view
   const [sheetOpen, setSheetOpen] = useState(false)
   const [changesOpen, setChangesOpen] = useState(false)
   const verdict = useReviewVerdict(bookId, current?.id)
@@ -175,8 +176,10 @@ export function RecordDock({ book, caps, view, actions }: RecordPieceProps): Rea
         return {
           id,
           tone: 'sign',
-          icon: pendingAct === 'sign' ? <Spinner /> : <PenLine className={ICON} aria-hidden="true" />,
-          label: pendingAct === 'sign' ? t('books.approval.signing') : t('books.approval.signApprove'),
+          icon: pendingAct === 'sign' ? <Spinner /> : review ? <CheckCheck className={ICON} aria-hidden="true" /> : <PenLine className={ICON} aria-hidden="true" />,
+          label: pendingAct === 'sign'
+            ? t(review ? 'books.approval.markingReviewed' : 'books.approval.signing')
+            : t(review ? 'books.approval.markReviewed' : 'books.approval.signApprove'),
           disabled: busy,
           pending: pendingAct === 'sign',
           buttonRef: actions.mobileDockSignRef,
@@ -208,7 +211,7 @@ export function RecordDock({ book, caps, view, actions }: RecordPieceProps): Rea
           id,
           tone: 'primary',
           icon: <Send className={ICON} aria-hidden="true" />,
-          label: t('books.approval.submitForApproval'),
+          label: t(review ? 'books.approval.sendForReview' : 'books.approval.submitForApproval'),
           onClick: () => {
             if (caps.isInmateReporter) actions.submitReport(bookId)
             else actions.openOverlay('submit')

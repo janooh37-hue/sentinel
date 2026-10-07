@@ -23,6 +23,7 @@ import { useTranslation } from 'react-i18next'
 import {
   ArrowLeft,
   Check,
+  CheckCheck,
   Copy,
   CornerUpLeft,
   Download,
@@ -37,7 +38,7 @@ import {
 import { HeaderBtn, headerBtnClass } from '../HeaderBtn'
 import { MarkToggle } from '../MarkToggle'
 import { QueueNav } from '../QueueNav'
-import { recordStateOf, sealDescriptor } from '../bookStateLabel'
+import { recordStateOf, sealDescriptor, type ReportReview } from '../bookStateLabel'
 import type { ActionId, NextStep } from '../recordNextStep'
 import { RAIL_BREAKPOINT, useRecordChrome } from './RecordChrome'
 import { TONE, SEAL_TO_STATION_TONE } from './recordTones'
@@ -58,13 +59,15 @@ function StatePill({
   state,
   signingPath,
   signedSource,
+  review,
 }: {
   state: string
   signingPath?: string | null
   signedSource?: string | null
+  review?: ReportReview | null
 }): React.JSX.Element {
   const { t } = useTranslation()
-  const d = sealDescriptor(state, { signingPath, signedSource })
+  const d = sealDescriptor(state, { signingPath, signedSource, review })
   const c = TONE[SEAL_TO_STATION_TONE[d.tone]]
   return (
     <span
@@ -257,6 +260,7 @@ function RecordHeaderBar({ book, caps, view, actions }: RecordPieceProps): React
     busy,
     pendingAct,
     signedSource,
+    review,
     current,
     backLabel,
     queue,
@@ -287,7 +291,7 @@ function RecordHeaderBar({ book, caps, view, actions }: RecordPieceProps): React
   const railLabel = railExpanded ? t('books.record.hideProgress') : t('books.record.showProgress')
 
   const pill = book ? (
-    <StatePill state={shownState} signingPath={book.signing_path} signedSource={signedSource} />
+    <StatePill state={shownState} signingPath={book.signing_path} signedSource={signedSource} review={review} />
   ) : null
 
   const onPrev = (): void => {
@@ -363,12 +367,12 @@ function RecordHeaderBar({ book, caps, view, actions }: RecordPieceProps): React
           <HeaderBtn
             key={id}
             ref={desktopSignRef}
-            icon={<PenLine className="h-3.5 w-3.5" aria-hidden="true" />}
-            label={t('books.approval.signApprove')}
+            icon={review ? <CheckCheck className="h-3.5 w-3.5" aria-hidden="true" /> : <PenLine className="h-3.5 w-3.5" aria-hidden="true" />}
+            label={t(review ? 'books.approval.markReviewed' : 'books.approval.signApprove')}
             tone="green-solid"
             shortcut="S"
             pending={pendingAct === 'sign'}
-            pendingLabel={t('books.approval.signing')}
+            pendingLabel={t(review ? 'books.approval.markingReviewed' : 'books.approval.signing')}
             disabled={busy && pendingAct !== 'sign'}
             onClick={() => requestSignConfirm(desktopSignRef)}
           />
@@ -420,7 +424,7 @@ function RecordHeaderBar({ book, caps, view, actions }: RecordPieceProps): React
           <HeaderBtn
             key={id}
             icon={<Send className="h-3.5 w-3.5" aria-hidden="true" />}
-            label={t('books.approval.submitForApproval')}
+            label={t(review ? 'books.approval.sendForReview' : 'books.approval.submitForApproval')}
             tone="navy-solid"
             onClick={() => {
               if (isInmateReporter) submitReport(bookId)
@@ -506,7 +510,7 @@ function RecordHeaderBar({ book, caps, view, actions }: RecordPieceProps): React
     })
   }
 
-  const descriptor = book ? sealDescriptor(shownState, { signingPath: book.signing_path, signedSource }) : null
+  const descriptor = book ? sealDescriptor(shownState, { signingPath: book.signing_path, signedSource, review }) : null
   const statusTone = descriptor ? TONE[SEAL_TO_STATION_TONE[descriptor.tone]] : null
 
   // ── Focus mode: one compact bar ────────────────────────────────────────────

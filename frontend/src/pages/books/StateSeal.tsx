@@ -9,19 +9,21 @@ import { useTranslation } from 'react-i18next'
 
 import { cn } from '@/lib/utils'
 
-import { sealDescriptor } from './bookStateLabel'
+import { sealDescriptor, type ReportReview } from './bookStateLabel'
 
 export function StateSeal({
   state,
   signingPath,
   signedSource,
+  review,
 }: {
   state: string
   signingPath?: string | null
   signedSource?: string | null
+  review?: ReportReview | null
 }): React.JSX.Element {
   const { t } = useTranslation()
-  const d = sealDescriptor(state, { signingPath, signedSource })
+  const d = sealDescriptor(state, { signingPath, signedSource, review })
   return (
     <span
       className={cn(

@@ -1,4 +1,4 @@
-import { CornerUpLeft, Loader2, PenLine, X } from 'lucide-react'
+import { CheckCheck, CornerUpLeft, Loader2, PenLine, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 export type DecisionPending = 'sign' | 'return' | 'reject'
@@ -8,6 +8,8 @@ export interface RecordDecisionActionsProps {
   /** The act whose request is in flight: that button swaps to its pending
    *  label ("Signing…" / "Returning…" / "Rejecting…") with a spinner. */
   pending?: DecisionPending | null
+  /** A Report: the primary records the manager's review instead of signing. */
+  review?: boolean
   onReturn: () => void
   onReject: () => void
   onSign: () => void
@@ -19,6 +21,7 @@ export interface RecordDecisionActionsProps {
 export function RecordDecisionActions({
   busy,
   pending = null,
+  review = false,
   onReturn,
   onReject,
   onSign,
@@ -65,8 +68,12 @@ export function RecordDecisionActions({
         onClick={onSign}
         className={`${buttonClass} border-success bg-success text-background hover:bg-success/90`}
       >
-        {pending === 'sign' ? spinner : <PenLine className="h-4 w-4 shrink-0" aria-hidden />}
-        <span>{pending === 'sign' ? t('books.approval.signing') : t('books.approval.signApprove')}</span>
+        {pending === 'sign' ? spinner : review ? <CheckCheck className="h-4 w-4 shrink-0" aria-hidden /> : <PenLine className="h-4 w-4 shrink-0" aria-hidden />}
+        <span>
+          {pending === 'sign'
+            ? t(review ? 'books.approval.markingReviewed' : 'books.approval.signing')
+            : t(review ? 'books.approval.markReviewed' : 'books.approval.signApprove')}
+        </span>
       </button>
     </div>
   )

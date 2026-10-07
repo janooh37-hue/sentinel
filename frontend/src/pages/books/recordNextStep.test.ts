@@ -85,6 +85,37 @@ function bookOf(state: string, over: Record<string, unknown> = {}): BookRead {
   } as unknown as BookRead
 }
 
+describe('recordNextStep — Report review', () => {
+  const report = (state: string, over: Record<string, unknown> = {}): BookRead =>
+    bookOf(state, { service_id: 'Report', ref_number: 'REPORT-9', ...over })
+
+  it('an unsent signed Report offers Send for review over the signed download', () => {
+    const r = recordNextStep(report('approved', { signedPdfUrl: '/signed' }), ctxOf())
+    expect(r.status.key).toBe('reportUnsent')
+    expect(r.primary).toBe('sendForApproval')
+    expect(r.secondary).toEqual(['downloadSigned'])
+  })
+
+  it('pending: the assignee reviews; others see whether it was seen', () => {
+    const pending = stepOf({})
+    expect(recordNextStep(report('pending', { steps: [pending] }), ctxOf({ isAssignee: true })).status.key)
+      .toBe('reportReviewMine')
+    expect(recordNextStep(report('pending', { steps: [pending] }), ctxOf()).status.key).toBe('reportPending')
+    const seen = stepOf({ seen_at: '2026-10-04T08:00:00' })
+    expect(recordNextStep(report('pending', { steps: [seen] }), ctxOf()).status).toEqual({
+      key: 'reportSeen',
+      vars: expect.objectContaining({ name: 'Khalid' }),
+    })
+  })
+
+  it('reviewed: names the manager and can no longer be sent', () => {
+    const done = stepOf({ state: 'approved', decided_at: '2026-10-04T09:00:00' })
+    const r = recordNextStep(report('approved', { steps: [done], signedPdfUrl: '/signed' }), ctxOf())
+    expect(r.status).toEqual({ key: 'reportReviewed', vars: { name: 'Khalid', date: '2026-10-04' } })
+    expect(r.primary).toBe('downloadSigned')
+  })
+})
+
 describe('recordNextStep rows', () => {
   it('draft: send is primary, continue is secondary, overflow lists the document tools', () => {
     const r = recordNextStep(bookOf('none'), ctxOf())

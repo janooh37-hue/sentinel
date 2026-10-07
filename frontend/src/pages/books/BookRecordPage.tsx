@@ -23,6 +23,7 @@ import { toast } from 'sonner'
 import {
   Check,
   ChevronRight,
+  Clock,
   CornerUpLeft,
   PenLine,
   Printer,
@@ -43,6 +44,7 @@ import {
 import { useAuth } from '@/lib/authContext'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { canFileSignedCopy, canSendForApproval, footerActionFor, inmateReporterActionFor } from '@/components/books/book-detail-drawer-utils'
+import { reportReviewOf, signedSourceOf, type ReportReview } from './bookStateLabel'
 import { changesRequestedCount, isApproverAssignee, myPendingReviewerStep } from '@/components/books/reviewers'
 import { SubmitForApprovalDialog } from '@/components/books/SubmitForApprovalDialog'
 import { RecordStateOverrideDialog } from '@/components/books/RecordStateOverrideDialog'
@@ -71,7 +73,6 @@ import { getRecentRecipientsForForm } from '@/lib/recentRecipients'
 import { basketKey } from '@/lib/emailBasket'
 
 import { useIsMobile } from '@/lib/useIsMobile'
-import { signedSourceOf } from './bookStateLabel'
 import { useAddScan } from './useAddScan'
 import { useManagePaper } from './useManagePaper'
 import { paperUrl, type Paper } from './recordPapers'
@@ -131,13 +132,15 @@ function parseApprovalContext(params: URLSearchParams): ApprovalContext | null {
 
 /** Derive the "life of the document" from versions + approval state.
  * `signedSource` nuances the terminal stations: a scan-path book waits at the
- * printer (awaiting_scan), and a scan-back approval reads "Signed · scanned". */
+ * printer (awaiting_scan), and a scan-back approval reads "Signed · scanned".
+ * `review` swaps signing for a Report's manager review. */
 function buildTimeline(
   versions: BookVersionRead[],
   approvalState: string,
   creator: string,
   t: TFn,
   signedSource?: 'in_app' | 'scan' | null,
+  review?: ReportReview | null,
 ): Station[] {
   const out: Station[] = []
   const sorted = [...versions].sort((a, b) => a.version_no - b.version_no)
@@ -163,7 +166,9 @@ function buildTimeline(
       })
     }
     const note = [...v.approval_steps].reverse().find((s) => s.note)?.note ?? null
-    if (v.status === 'returned') {
+    // A Report's version status stays its author's signature; the verdict lives on the step.
+    const verdict = v.approval_steps.find((s) => s.kind !== 'reviewer' && s.state !== 'pending')?.state
+    if (v.status === 'returned' || verdict === 'returned') {
       out.push({
         key: `ret-${v.id}`,
         icon: <CornerUpLeft className="h-[15px] w-[15px]" strokeWidth={2} />,
@@ -173,7 +178,7 @@ function buildTimeline(
         state: 'done',
         tone: 'amber',
       })
-    } else if (v.status === 'rejected') {
+    } else if (v.status === 'rejected' || verdict === 'rejected') {
       out.push({
         key: `rej-${v.id}`,
         icon: <X className="h-[15px] w-[15px]" strokeWidth={2.4} />,
@@ -193,8 +198,8 @@ function buildTimeline(
   if (approvalState === 'pending') {
     out.push({
       key: 'await',
-      icon: <PenLine className="h-[15px] w-[15px]" strokeWidth={2} />,
-      label: t('books.record.stationAwaiting'),
+      icon: review ? <Clock className="h-[15px] w-[15px]" strokeWidth={2} /> : <PenLine className="h-[15px] w-[15px]" strokeWidth={2} />,
+      label: t(review ? 'books.record.stationAwaitingReview' : 'books.record.stationAwaiting'),
       meta: t('books.record.metaManager'),
       state: 'live',
       tone: 'amber',
@@ -202,7 +207,7 @@ function buildTimeline(
     out.push({
       key: 'signed-future',
       icon: <Check className="h-[15px] w-[15px]" strokeWidth={2.6} />,
-      label: t('books.record.stationSigned'),
+      label: t(review ? 'books.record.stationReviewed' : 'books.record.stationSigned'),
       meta: t('books.record.metaPending'),
       state: 'future',
       tone: 'green',
@@ -224,14 +229,25 @@ function buildTimeline(
       state: 'future',
       tone: 'green',
     })
+  } else if (approvalState === 'approved' && review === 'unsent') {
+    out.push({
+      key: 'unsent',
+      icon: <Send className="h-[15px] w-[15px]" strokeWidth={2} />,
+      label: t('books.record.stationNotSent'),
+      meta: creator,
+      state: 'live',
+      tone: 'navy',
+    })
   } else if (approvalState === 'approved') {
     const scanned = signedSource === 'scan'
     out.push({
       key: 'signed',
       icon: <Check className="h-[15px] w-[15px]" strokeWidth={2.6} />,
-      label: scanned
-        ? t('books.record.stationSignedScanned')
-        : t('books.record.stationSigned'),
+      label: review
+        ? t('books.record.stationReviewed')
+        : scanned
+          ? t('books.record.stationSignedScanned')
+          : t('books.record.stationSigned'),
       meta: scanned
         ? t('books.record.metaScanned')
         : signedAt
@@ -424,6 +440,9 @@ function BookRecordPageBody(): React.JSX.Element {
   const creator = book?.created_by_name ?? t('books.record.creatorUnknown')
   const state = book?.approval_state ?? 'none'
   const signedSource = book ? signedSourceOf(book) : null
+  // A Report carries its author's signature; its manager reviews instead of signing.
+  const isReport = book?.service_id === 'Report'
+  const review = book ? reportReviewOf(book) : null
 
   // Admin "file the signed scan back" — available regardless of who the
   // assigned approver is, so an operator handling requests for others can
@@ -451,11 +470,11 @@ function BookRecordPageBody(): React.JSX.Element {
       ? state === 'none' && book?.edit_session?.state !== 'active'
       : isInmateReporter
         ? reporterAction === 'edit-submit'
-        : canSendForApproval(state, { canSubmitBook }))
+        : canSendForApproval(state, { canSubmitBook }, review))
 
   const stations = useMemo(
     () =>
-      book ? buildTimeline(versions, book.approval_state, creator, t, signedSource) : [],
+      book ? buildTimeline(versions, book.approval_state, creator, t, signedSource, reportReviewOf(book)) : [],
     [book, versions, creator, t, signedSource],
   )
 
@@ -628,6 +647,7 @@ function BookRecordPageBody(): React.JSX.Element {
   const { decideMutation, signMutation } = useBookApprovalActions({
     bookId: book?.id,
     versionId: current?.id,
+    isReport,
     onDecided: () => {
       overlay.close()
       setReason('')
@@ -949,6 +969,7 @@ function BookRecordPageBody(): React.JSX.Element {
     busy,
     submitter,
     signedSource,
+    review,
     current,
     liveVersion,
     currentSteps,
@@ -1155,10 +1176,10 @@ function BookRecordPageBody(): React.JSX.Element {
         onOpenChange={(open) => {
           if (!open) setSignConfirm(null)
         }}
-        title={t('books.approval.signConfirmTitle')}
+        title={t(isReport ? 'books.approval.reviewConfirmTitle' : 'books.approval.signConfirmTitle')}
         description={
           signConfirm
-            ? t('books.approval.signConfirmBody', {
+            ? t(isReport ? 'books.approval.reviewConfirmBody' : 'books.approval.signConfirmBody', {
                 // Isolate the LTR ref/subject runs so they can't scramble the
                 // surrounding Arabic sentence (same `bidi()` idiom BookWordActions
                 // uses for the same "ref token inside a plain translated string"
@@ -1169,7 +1190,7 @@ function BookRecordPageBody(): React.JSX.Element {
               })
             : undefined
         }
-        confirmLabel={t('books.approval.signApprove')}
+        confirmLabel={t(isReport ? 'books.approval.markReviewed' : 'books.approval.signApprove')}
         onConfirm={confirmSign}
         returnFocusRef={lastSignTriggerRef}
       />
@@ -1183,7 +1204,7 @@ function BookRecordPageBody(): React.JSX.Element {
         >
           <span className="flex min-w-0 flex-1 items-center gap-2 font-semibold text-success">
             <Check className="h-4 w-4 shrink-0" strokeWidth={2.4} aria-hidden />
-            {t('books.approval.signed')}
+            {t(isReport ? 'books.approval.reviewedToast' : 'books.approval.signed')}
           </span>
           {nextWaiting ? (
             <button

@@ -28,7 +28,7 @@ import { cn } from '@/lib/utils'
 import { BookStatusChips } from '@/components/books/BookStatusChips'
 import { bidi } from '@/lib/bidi'
 import { ServiceArtwork } from '@/components/ui/service-artwork'
-import { signedSourceOf } from './bookStateLabel'
+import { reportReviewOf, signedSourceOf } from './bookStateLabel'
 import { subjectEmployeePart } from './formKind'
 import { paperCountOf } from './recordPapers'
 import { openRecord, recordLinkProps, type RecordNavState } from './useRecordNavContext'
@@ -256,6 +256,7 @@ export function RecordsList({
                   state={row.approval_state}
                   signingPath={row.signing_path}
                   signedSource={signedSourceOf(row)}
+                  review={reportReviewOf(row)}
                 />
               </div>
             )

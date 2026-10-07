@@ -29,7 +29,7 @@ import { inmateReporterActionFor } from '@/components/books/book-detail-drawer-u
 import { addToBasket } from '@/lib/emailBasket'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { cn } from '@/lib/utils'
-import { sealDescriptor, signedSourceOf } from './bookStateLabel'
+import { reportReviewOf, sealDescriptor, signedSourceOf, type ReportReview } from './bookStateLabel'
 import { newRecordHref } from './newRecordHref'
 import { deleteBlockReason } from './recordDelete'
 import { useRecordDelete } from './RecordDeleteProvider'
@@ -320,11 +320,13 @@ function ApprovalStatePill({
   state,
   signingPath,
   signedSource,
+  review,
   t,
 }: {
   state: string
   signingPath?: string | null
   signedSource?: string | null
+  review?: ReportReview | null
   t: (key: string) => string
 }): React.JSX.Element {
   // Mobile keeps its own (amber-draft) chip palette for now — known deferral
@@ -339,7 +341,7 @@ function ApprovalStatePill({
   }
   const cls = variants[state] ?? 'bg-surface-tinted text-muted-foreground'
   // sealDescriptor falls back to the raw state string for unknown states.
-  const label = t(sealDescriptor(state, { signingPath, signedSource }).labelKey)
+  const label = t(sealDescriptor(state, { signingPath, signedSource, review }).labelKey)
   return (
     <span
       className={cn(
@@ -455,6 +457,7 @@ function BookMobileCard({
               state={row.approval_state}
               signingPath={row.signing_path}
               signedSource={signedSourceOf(row)}
+              review={reportReviewOf(row)}
               t={t}
             />
           ) : (

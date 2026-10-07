@@ -82,6 +82,7 @@ export function uiKindOf(kind: ApprovalKindParam): ApprovalKind {
 export function isLateAdvisory(item: ApprovalLogItem): boolean {
   return (
     item.status === 'pending' &&
+    item.assigned_signer_user_id != null &&
     item.record_status != null &&
     item.record_status !== 'pending' &&
     item.record_status !== 'none'

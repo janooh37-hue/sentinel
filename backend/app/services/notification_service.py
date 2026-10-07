@@ -120,7 +120,8 @@ def actionable_items(db: Session, user: User) -> list[ActionableItem]:
     # Approval chain — books whose current pending step is assigned to this user.
     for book in book_service.list_awaiting(db, user_id=user.id):
         role = book_service.your_step_kind(book, user.id)
-        kind = "review" if role == "reviewer" else "approval"
+        # A Report's manager only reviews it — never "Signature needed".
+        kind = "review" if role == "reviewer" or book_service.is_report(book) else "approval"
         label = book.ref_number or book.subject or f"#{book.id}"
         items.append(
             ActionableItem(

@@ -447,6 +447,47 @@ def test_approval_summary_reports_actionable_counts(api_db: Session):
     assert "approver" in summary["available_received_kinds"]
 
 
+@pytest.mark.parametrize(
+    ("ref", "template_id", "expected_kind"),
+    [("REPORT-0001", "Report", "reviewer"), ("GS-0001", "general_book", "approver")],
+)
+def test_report_manager_worklist_is_review_not_signature(
+    api_db: Session, ref: str, template_id: str, expected_kind: str
+):
+    from app.services import book_service
+
+    manager = _user(api_db, "report-manager@x.ae", "manager")
+    submitter = _user(api_db, "report-author@x.ae", "operator")
+    api_db.add(BookCategory(id="GS", name_en="General", name_ar="عام", prefix="GS"))
+    book = _submitted_book(api_db, book_id=1, ref=ref, submitter=submitter, approver=manager)
+    book.category_id = "GS"
+    book.versions[0].template_id = template_id
+    api_db.commit()
+
+    assert book_service.your_step_kind(book, manager.id) == expected_kind
+    assert book_service.awaiting_count(api_db, user_id=manager.id, reviewer_only=True) == (
+        1 if expected_kind == "reviewer" else 0
+    )
+    client = _client(api_db, manager)
+    summary = client.get("/api/v1/books/approval-summary").json()
+    assert summary["review"]["count"] == (1 if expected_kind == "reviewer" else 0)
+    assert summary["signature"]["count"] == (1 if expected_kind == "approver" else 0)
+    assert expected_kind in summary["available_received_kinds"]
+    detail = client.get(f"/api/v1/books/{book.id}").json()
+    assert detail["your_step_kind"] == expected_kind
+    assert detail["can_sign"] is True
+    for kind in ("approver", "reviewer"):
+        rows = client.get("/api/v1/books/approval-log", params={"kind": kind}).json()["items"]
+        assert [row["book_id"] for row in rows] == ([book.id] if kind == expected_kind else [])
+    sent = (
+        _client(api_db, submitter)
+        .get("/api/v1/books/approval-log", params={"scope": "sent"})
+        .json()["items"][0]
+    )
+    assert sent["approver_name"] == (manager.email if expected_kind == "approver" else None)
+    assert sent["reviewer_names"] == ([manager.email] if expected_kind == "reviewer" else [])
+
+
 def test_approval_summary_empty_for_uninvolved_user(api_db: Session):
     bystander = _user(api_db, "bystander@x.ae", "operator")
     summary = _client(api_db, bystander).get("/api/v1/books/approval-summary").json()

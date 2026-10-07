@@ -1139,7 +1139,7 @@ def _action_flags(
     can_review = (
         row.approval_state in ("pending", "approved", "returned", "rejected") and reviewer_pending
     )
-    your_step_kind = "approver" if approver_pending else "reviewer" if reviewer_pending else None
+    your_step_kind = book_service.your_step_kind(row, user.id)
     return can_sign, can_review, your_step_kind
 
 

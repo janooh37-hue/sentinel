@@ -2,6 +2,20 @@
 
 One feature worktree at a time uses the shared, throwaway `C:\Users\GSSG\gssg-dev-data` snapshot. Never run this on GSSGAPP or point `GSSG_DATA_DIR` at production. See [ADR 0004](adr/0004-dev-channel-on-laptop-with-production-snapshot.md).
 
+## Daily channel
+
+The worktree `.worktrees\160-laptop-dev` holds branch `dev`, whose upstream is `origin/main`, so `git status -sb` shows unpromoted work (ahead) and new main commits (behind). `scripts\dev-channel.ps1` drives it:
+
+| Verb | Effect |
+| --- | --- |
+| `open` (default) | Sync if behind and clean, start the server if down, launch the agent (`-Agent omp`, `claude`, or `codex`) in the worktree. |
+| `sync` | Rebase `dev` on `origin/main`; reinstall deps if `requirements.txt`/lockfile changed; rebuild the frontend if `frontend/` changed; `alembic upgrade head`; restart. Refuses on uncommitted changes and aborts on conflicts. |
+| `publish` | Build the frontend, migrate, restart. Use after local edits. |
+| `restart` / `status` | Restart the detached `backend\serve.py` on 8765 / show branch and server health. |
+| `promote` | Push `dev` commits to `origin/main` after confirmation. Refuses if main moved since the last sync. Then run `scripts\mng.ps1 update` on GSSGAPP. |
+
+The server log is `.tmp\dev-server.log.err`. The `tailscale serve` proxy below should point at `http://127.0.0.1:8765`.
+
 ## Restore a backup
 
 1. On GSSGLT, confirm **C:** is protected with BitLocker in an **elevated** PowerShell window: `manage-bde -status C:`. Require `Protection Status: Protection On` and `Percentage Encrypted: 100.0%`. Stop if this cannot be confirmed. Do not transfer HR data before this check.
