@@ -194,14 +194,16 @@ export function papersOf(book: BookLike, opts: { inmateReporter: boolean }): Pap
 }
 
 /**
- * Which paper a record opens on: the signed copy once approved and filed;
- * otherwise the first non-signed paper (generated or imported).
+ * Which paper a record opens on: the signed copy once approved and filed (a
+ * Report's author-signed copy, also while its manager reviews it); otherwise
+ * the first non-signed paper (generated or imported).
  */
 export function defaultPaperKey(
-  book: Pick<BookLike, 'approval_state'>,
+  book: Pick<BookLike, 'approval_state'> & { service_id?: string },
   papers: Paper[],
 ): PaperKey | null {
-  if (book.approval_state === 'approved' && papers.some((p) => p.kind === 'signed')) return 'signed'
+  const signedFirst = book.approval_state === 'approved' || book.service_id === 'Report'
+  if (signedFirst && papers.some((p) => p.kind === 'signed')) return 'signed'
   const first = papers.find((p) => p.kind !== 'signed') ?? papers[0]
   return first ? paperKey(first) : null
 }

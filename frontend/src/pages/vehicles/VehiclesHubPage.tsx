@@ -473,7 +473,7 @@ export function VehiclesHubPage(): React.JSX.Element {
             title={t('vehicles.finesService')}
             description={t('vehicles.finesServiceDesc')}
             count={finesFigure}
-            countLabel={t('vehicles.fines')}
+            countLabel={t('vehicles.tabFines')}
           />
           <ServiceCard
             artwork="vehicle-licence-renewal"
@@ -781,7 +781,7 @@ export function VehiclesHubPage(): React.JSX.Element {
                     </div>
                     {group.finesAmount > 0 && (
                       <span className="text-[0.68rem] text-muted-foreground">
-                        {`${t('vehicles.fines')} · `}
+                        {`${t('vehicles.tabFines')} · `}
                         <bdi>{formatFilsAed(group.finesAmount, lang)}</bdi>
                       </span>
                     )}
@@ -826,7 +826,7 @@ export function VehiclesHubPage(): React.JSX.Element {
                             <TableHead>{t('vehicles.class')}</TableHead>
                             <TableHead>{t('vehicles.trafficCode')}</TableHead>
                             <TableHead>{t('vehicles.licenseExpiry')}</TableHead>
-                            <TableHead>{t('vehicles.fines')}</TableHead>
+                            <TableHead>{t('vehicles.tabFines')}</TableHead>
                             <TableHead className="text-end">{t('vehicles.action')}</TableHead>
                           </TableRow>
                         </TableHeader>
@@ -1300,7 +1300,7 @@ function VehicleCard({
         </div>
         <div className="min-w-0">
           <dt className="text-[0.63rem] uppercase tracking-[0.06em] text-muted-foreground">
-            {t('vehicles.fines')}
+            {t('vehicles.tabFines')}
           </dt>
           <dd className="mt-0.5">
             <FinesFigure vehicle={vehicle} />

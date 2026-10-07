@@ -125,7 +125,7 @@ export function RecordDesk({ book, caps, view, actions }: RecordPieceProps): Rea
   const [searchParams, setSearchParams] = useSearchParams()
   const location = useLocation()
   const { isInmateReporter, canRevise } = caps
-  const { isMobile, isAr, isPending, action, decision, busy, current, liveVersion, pdfUrl, userId, armed, annotatable, annMode, annotations, markBusy, decisionReasonFormProps } = view
+  const { isMobile, isAr, isPending, action, decision, busy, current, liveVersion, pdfUrl, userId, armed, annotatable, annMode, annotations, markBusy, decisionReasonFormProps, review } = view
   const { setArmedFor, handleRevise, requestSignConfirm, openMobileDecision, createMark, deleteMark, onPdfReady, mobileInlineSignRef, decisionPanelRef, panelReturnButtonRef, panelRejectButtonRef } = actions
   const dir = isAr ? 'rtl' : 'ltr'
   const bookId = book?.id
@@ -237,7 +237,10 @@ export function RecordDesk({ book, caps, view, actions }: RecordPieceProps): Rea
   const page = pageInfo && pageInfo.url === deskUrl ? pageInfo : null
 
   // --- caption ------------------------------------------------------------
-  const signedDate = signedDateLabel(view.currentSteps.find((s) => s.state === 'approved')?.decided_at)
+  // A Report is signed by its author when finished, not when its manager reviews it.
+  const signedDate = signedDateLabel(
+    view.review ? view.current?.created_at : view.currentSteps.find((s) => s.state === 'approved')?.decided_at,
+  )
   let caption: PaperCaption | null = null
   if (liveActive) caption = { text: t('books.paper.live'), ok: false }
   else if (selectedPaper?.kind === 'signed') {
@@ -257,7 +260,7 @@ export function RecordDesk({ book, caps, view, actions }: RecordPieceProps): Rea
     }
   } else if (selectedPaper && selectedPaper.kind !== 'scan') {
     if (view.state === 'awaiting_scan') caption = { text: t('books.paper.captionAwaitingScan'), ok: false }
-    else if (view.state === 'pending') caption = { text: t('books.paper.captionPending'), ok: false }
+    else if (view.state === 'pending' && !view.review) caption = { text: t('books.paper.captionPending'), ok: false }
     else if (view.state === 'none') caption = { text: t('books.paper.captionDraft'), ok: false }
   }
 
@@ -471,6 +474,7 @@ export function RecordDesk({ book, caps, view, actions }: RecordPieceProps): Rea
               signButtonRef={mobileInlineSignRef}
               busy={busy}
               pending={view.pendingAct}
+              review={review != null}
               onSign={() => requestSignConfirm(mobileInlineSignRef)}
               onReturn={() => openMobileDecision('return')}
               onReject={() => openMobileDecision('reject')}
