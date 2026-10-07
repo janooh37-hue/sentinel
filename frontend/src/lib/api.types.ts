@@ -11886,6 +11886,8 @@ export interface components {
              * @default false
              */
             has_document: boolean;
+            /** Book Id */
+            book_id?: number | null;
         };
         /** PermitListResponse */
         PermitListResponse: {

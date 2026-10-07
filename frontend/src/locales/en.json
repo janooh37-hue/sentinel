@@ -648,8 +648,11 @@
       "subtitle": "Materials brought into a zone — the responsible employee, items and quantities, and manager approval",
       "search": "Search by employee, recipient, site or item…",
       "new": "New item permit",
-      "empty": "No item permits match this search.",
+      "empty": "No item permits match these filters.",
       "emptyRegister": "No item permits issued yet.",
+      "createdToast": "Item permit {{ref}} issued",
+      "createdToastNoRef": "Item permit issued",
+      "approvalFilters": "Filter item permits by approval",
       "loadError": "Could not load item permits.",
       "columns": {
         "ref": "Ref.",
@@ -829,6 +832,29 @@
       "printPermit": "Print permit (1/5)"
     },
     "printNoPdf": "No PDF available for this permit yet.",
+    "createdToast": "Permit {{no}} issued",
+    "resultCount_one": "{{count}} permit",
+    "resultCount_other": "{{count}} permits",
+    "resultCapped": "Showing the latest {{shown}} of {{total}}",
+    "statusFilters": "Filter permits by status",
+    "zoneFilters": "Filter permits by zone access",
+    "attachFailed_one": "Permit saved, but {{count}} scan could not be attached. Open the permit to attach it again.",
+    "attachFailed_other": "Permit saved, but {{count}} scans could not be attached. Open the permit to attach them again.",
+    "quickView": {
+      "description": "Permit summary and its 1/5 letter",
+      "letter": "Permit letter (1/5)",
+      "noLetter": "No letter has been generated for this permit yet.",
+      "letterError": "Could not load the letter.",
+      "openPdf": "Open PDF",
+      "openFull": "Open full details"
+    },
+    "confirmRemove": {
+      "person": "Remove {{name}} from this permit?",
+      "vehicle": "Remove vehicle {{plate}} from this permit?",
+      "paper": "Remove the attached permit paper?"
+    },
+    "versionPdfLabel": "Version {{n}} PDF",
+    "versionDocxLabel": "Version {{n}} DOCX",
     "documentVersions": {
       "title": "Generated permit documents",
       "docx": "DOCX",
