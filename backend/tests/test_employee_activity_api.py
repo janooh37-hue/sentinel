@@ -204,7 +204,11 @@ def test_service_employee_lookup_does_not_grant_profile_access(
 
     selected = operator_client.get("/api/v1/employees/lookup/G100")
     assert selected.status_code == 200
-    assert set(selected.json()) == set(body["items"][0]) | {"nationality", "passport_no"}
+    assert set(selected.json()) == set(body["items"][0]) | {
+        "nationality",
+        "passport_no",
+        "has_photo",
+    }
     assert selected.json()["passport_no"] == "PASSPORT100"
     assert selected.json()["nationality"] == "Egyptian"
     assert operator_client.get("/api/v1/employees").status_code == 403

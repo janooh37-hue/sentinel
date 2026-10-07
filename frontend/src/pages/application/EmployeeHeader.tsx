@@ -17,7 +17,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Pencil, User } from 'lucide-react'
 
 import { api } from '@/lib/api'
-import { Avatar, AvatarFallback } from '@/components/ui/avatar'
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { pickEmployeeName } from '@/lib/employeeName'
 
 import { EmployeePicker } from './EmployeePicker'
@@ -85,6 +85,12 @@ export function EmployeeHeader({ selectedId, onSelect }: EmployeeHeaderProps): R
       </label>
       <div className="flex items-center gap-3 rounded-lg border border-hairline px-3.5 py-2.5">
         <Avatar className="h-7 w-7 bg-primary/10 text-primary">
+          {selectedId && detail?.has_photo && (
+            <AvatarImage
+              src={`/api/v1/employees/${encodeURIComponent(selectedId)}/photo`}
+              alt=""
+            />
+          )}
           <AvatarFallback className="text-[0.7em] font-semibold">
             {detail ? initials(detail.name_en) : <User className="h-3.5 w-3.5" />}
           </AvatarFallback>

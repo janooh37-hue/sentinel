@@ -32,7 +32,7 @@ export function EmployeeSuggestionBanner({
   const qc = useQueryClient()
 
   const employeeQuery = useQuery({
-    queryKey: ['employee', gnumber],
+    queryKey: ['employee-lookup', gnumber],
     queryFn: () => api.getEmployeeLookup(gnumber),
     retry: false,
     staleTime: 60_000,

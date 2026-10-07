@@ -170,10 +170,15 @@ def lookup_employees(
 def get_employee_lookup(
     employee_id: str,
     db: Annotated[Session, Depends(get_db)],
-    _user: Annotated[User, Depends(_require_employee_lookup)],
+    user: Annotated[User, Depends(_require_employee_lookup)],
 ) -> EmployeeLookupRead:
     """Resolve a selection and prefill only the Passport Release identity fields."""
-    return EmployeeLookupRead.model_validate(employee_service.get_employee(db, employee_id))
+    row = employee_service.get_employee(db, employee_id)
+    out = EmployeeLookupRead.model_validate(row)
+    # The photo route needs employees.view; don't advertise a photo the caller can't load.
+    if perm_service.has_capability(db, user, "employees.view"):
+        out.has_photo = _photo_fields(db, row.id)["has_photo"] is True
+    return out
 
 
 @router.post("", response_model=EmployeeRead, status_code=status.HTTP_201_CREATED)

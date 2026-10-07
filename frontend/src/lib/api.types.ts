@@ -9950,6 +9950,11 @@ export interface components {
             nationality: string | null;
             /** Passport No */
             passport_no: string | null;
+            /**
+             * Has Photo
+             * @default false
+             */
+            has_photo: boolean;
         };
         /** EmployeeLookupResponse */
         EmployeeLookupResponse: {

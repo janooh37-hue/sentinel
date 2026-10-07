@@ -224,6 +224,7 @@ class EmployeeLookupRead(EmployeeLookupItem):
 
     nationality: str | None
     passport_no: str | None
+    has_photo: bool = False
 
 
 class EmployeeLookupResponse(BaseModel):
