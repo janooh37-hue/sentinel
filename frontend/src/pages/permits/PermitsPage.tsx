@@ -50,8 +50,15 @@ import { usePrefetchLetter, type PrefetchHandlers } from './usePrefetchLetter'
 const STATE_OPTIONS = ['', 'valid', 'active', 'expiring', 'expired', 'revoked'] as const
 const ZONE_OPTIONS: ('' | PermitZone)[] = ['', 'green', 'red', 'work_residence']
 
-const selectCls =
-  'h-9 rounded-md border border-input bg-surface px-2.5 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
+const fieldCls =
+  'h-10 rounded-md border border-input bg-surface px-2.5 text-sm text-foreground transition-colors hover:border-border-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background motion-reduce:transition-none md:h-9'
+const selectCls = `${fieldCls} min-w-0 flex-1 sm:flex-none`
+
+/** Segmented tab: the shared underline trigger reshaped into a pill inside the track. */
+const tabCls =
+  'h-9 flex-1 justify-center rounded-md border border-transparent px-4 text-[0.86em] md:flex-none md:px-6 ' +
+  'mb-0 hover:bg-surface/60 focus-visible:ring-offset-0 motion-reduce:transition-none ' +
+  'data-[state=active]:border-border data-[state=active]:bg-surface data-[state=active]:font-semibold data-[state=active]:text-primary data-[state=active]:shadow-sm'
 
 /** Validity text + remaining-days text, shared by the table cell, the mobile card and the quick view. */
 function permitWindow(
@@ -258,31 +265,39 @@ export function PermitsPage(): React.JSX.Element {
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden bg-background">
-      {/* Header */}
-      <header className="px-4 pb-2 pt-3 md:px-6 md:pb-3 md:pt-5">
-        <div className="flex items-start justify-between gap-2">
-          <div className="min-w-0">
-            <div className="text-[0.75em] font-medium uppercase tracking-[0.18em] text-muted-foreground">
-              {t('permits.eyebrow')}
+      <Tabs
+        value={tab}
+        onValueChange={(v) => setTab(v === 'items' ? v : null)}
+        className="flex min-h-0 flex-1 flex-col"
+      >
+        {/* Header + tabs: one band on the raised surface */}
+        <header className="border-b border-border bg-surface px-4 pb-3 pt-3 md:px-6 md:pb-4 md:pt-5">
+          <div className="flex items-start justify-between gap-2">
+            <div className="min-w-0">
+              <div className="text-[0.75em] font-medium uppercase tracking-[0.18em] text-muted-foreground">
+                {t('permits.eyebrow')}
+              </div>
+              <h1 className="mt-1 text-xl font-bold tracking-tight text-foreground md:text-[1.7em]">
+                {t(tab === 'items' ? 'permits.items.title' : 'permits.title')}
+              </h1>
+              <div className="mt-1 hidden text-[0.86em] text-muted-foreground md:block">
+                {t(tab === 'items' ? 'permits.items.subtitle' : 'permits.subtitle')}
+              </div>
             </div>
-            <h1 className="mt-1 text-xl font-bold tracking-tight text-foreground md:text-[1.7em]">
-              {t(tab === 'items' ? 'permits.items.title' : 'permits.title')}
-            </h1>
-            <div className="mt-1 hidden text-[0.86em] text-muted-foreground md:block">
-              {t(tab === 'items' ? 'permits.items.subtitle' : 'permits.subtitle')}
-            </div>
+            <RefreshButton />
           </div>
-          <RefreshButton />
-        </div>
-      </header>
-
-      <div className="flex-1 overflow-y-auto px-4 pb-24 md:px-6" data-print-hide>
-        <Tabs value={tab} onValueChange={(v) => setTab(v === 'items' ? v : null)}>
-          <TabsList>
-            <TabsTrigger value="security">{t('permits.tabs.security')}</TabsTrigger>
-            <TabsTrigger value="items">{t('permits.tabs.items')}</TabsTrigger>
+          <TabsList className="mt-3 flex w-full gap-1 rounded-lg border border-border bg-surface-tinted p-1 md:mt-4 md:inline-flex md:w-auto">
+            <TabsTrigger value="security" className={tabCls}>
+              {t('permits.tabs.security')}
+            </TabsTrigger>
+            <TabsTrigger value="items" className={tabCls}>
+              {t('permits.tabs.items')}
+            </TabsTrigger>
           </TabsList>
-          <TabsContent value="security" className="mt-4">
+        </header>
+
+        <div className="flex-1 overflow-y-auto px-4 pb-24 pt-4 md:px-6 md:pt-5" data-print-hide>
+          <TabsContent value="security">
             {/* Quick filters: count tiles bound to ?state= / ?zone= */}
             <div className="mb-4 grid gap-2 lg:grid-cols-[4fr_3fr]">
               <PermitFilterBar
@@ -318,7 +333,7 @@ export function PermitsPage(): React.JSX.Element {
                 ))}
               </select>
               <input
-                className={`${selectCls} min-w-[12rem] flex-1`}
+                className={`${fieldCls} min-w-full sm:min-w-[12rem] sm:flex-1`}
                 placeholder={t('permits.filters.search')}
                 aria-label={t('permits.filters.search')}
                 value={q}
@@ -446,11 +461,11 @@ export function PermitsPage(): React.JSX.Element {
               </div>
             )}
           </TabsContent>
-          <TabsContent value="items" className="mt-4">
+          <TabsContent value="items">
             <ItemPermitsTab />
           </TabsContent>
-        </Tabs>
-      </div>
+        </div>
+      </Tabs>
 
       {/* Print-only view — mounted once the detailed records load, hidden on
           screen. The selected rows, or the whole filtered set when none ticked. */}

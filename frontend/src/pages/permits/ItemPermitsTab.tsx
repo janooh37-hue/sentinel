@@ -44,7 +44,7 @@ import {
 import { usePrefetchLetter, type PrefetchHandlers } from './usePrefetchLetter'
 
 const searchCls =
-  'h-9 min-w-[12rem] flex-1 rounded-md border border-input bg-surface px-2.5 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
+  'h-10 min-w-full rounded-md border border-input bg-surface px-2.5 text-sm text-foreground transition-colors hover:border-border-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background motion-reduce:transition-none sm:min-w-[12rem] sm:flex-1 md:h-9'
 
 const APPROVAL_TILES: { key: PermitApprovalState; tone: FilterTile['tone'] }[] = [
   { key: 'none', tone: 'neutral' },
