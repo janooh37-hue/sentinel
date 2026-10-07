@@ -37,7 +37,7 @@ from app.api.errors import ValidationFailedError
 from app.db.models import Employee, User
 from app.db.workforce_models import DutyAssignmentEvent
 from app.schemas.duty import DutyTransferMove, DutyTransferResult
-from app.services import document_service, workforce_schedule_service
+from app.services import book_service, document_service, workforce_schedule_service
 
 _UNSPECIFIED = "غير محدد"
 _SUBJECT = "النقل"
@@ -239,6 +239,15 @@ def transfer(
             )
         db.commit()
         return DutyTransferResult(moved=[emp.id for emp, _, _ in rows])
+
+    # The letter is a General Book: honour that service's capability exactly as
+    # /documents/generate does, before any employee is moved.
+    book_service.require_record_type_access(
+        db,
+        current_user,
+        category_id=document_service.record_category_for_template("General Book"),
+        service_id="General Book",
+    )
 
     # Otherwise mint the transfer letter. Build the body from CURRENT (FROM)
     # locations BEFORE mutating.
