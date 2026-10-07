@@ -9,10 +9,12 @@
  * Whether a permit is expired / expiring is decided server-side from its end
  * date, so the badges here are always correct without any client clock logic.
  */
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useQuery } from '@tanstack/react-query'
-import { Plus, Printer, ShieldCheck, Paperclip } from 'lucide-react'
+import type { TFunction } from 'i18next'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useLocation, useNavigate } from 'react-router-dom'
+import { Car, Plus, Printer, ShieldCheck, Paperclip, Users, X } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { api, type PermitListItem, type PermitRead, type PermitZone } from '@/lib/api'
@@ -29,15 +31,20 @@ import {
 import { EmptyState } from '@/components/ui/empty-state'
 import { SkeletonRow } from '@/components/ui/skeleton'
 import { RefreshButton } from '@/components/refresh/RefreshButton'
+import { cn } from '@/lib/utils'
+import { useIsMobile } from '@/lib/useIsMobile'
+import { useReducedMotion } from '@/lib/useFakeProgress'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { useDebouncedValue } from '@/lib/useDebouncedValue'
 import { PermitFormDialog } from './PermitFormDialog'
 import { PermitDetailDialog } from './PermitDetailDialog'
 import { PermitAccessBadge } from './PermitAccessBadge'
+import { PermitFilterBar, type FilterTile } from './PermitFilterBar'
+import { PermitQuickView } from './PermitQuickView'
 import { ItemPermitsTab } from './ItemPermitsTab'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useSearchParam, useUrlOverlay } from '@/lib/urlState'
-import { fmtDate, statusTone } from './permitUtils'
+import { fmtDate, fmtLongDate, permitBookQuery, statusTone } from './permitUtils'
 
 const STATE_OPTIONS = ['', 'valid', 'active', 'expiring', 'expired', 'revoked'] as const
 const ZONE_OPTIONS: ('' | PermitZone)[] = ['', 'green', 'red', 'work_residence']
@@ -45,16 +52,31 @@ const ZONE_OPTIONS: ('' | PermitZone)[] = ['', 'green', 'red', 'work_residence']
 const selectCls =
   'h-9 rounded-md border border-input bg-surface px-2.5 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
 
-const fmtLongDate = (iso: string, language: string): string =>
-  new Intl.DateTimeFormat(language.startsWith('ar') ? language : 'en-GB', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-    timeZone: 'UTC',
-  }).format(new Date(`${iso.slice(0, 10)}T00:00:00Z`))
+/** Validity text + remaining-days text, shared by the table cell, the mobile card and the quick view. */
+function permitWindow(
+  t: TFunction,
+  language: string,
+  row: PermitListItem,
+): { validity: string; remaining: string | null } {
+  const remaining =
+    row.derived_status === 'revoked' || row.days_remaining === null
+      ? null
+      : row.days_remaining < 0
+        ? t('permits.expired')
+        : row.days_remaining === 0
+          ? t('permits.endsToday')
+          : t('permits.daysLeft', { count: row.days_remaining })
+  return {
+    validity: t('permits.validityFrom', {
+      period: t(`permits.validityPeriod.${row.validity.unit}`, { count: row.validity.value }),
+      date: fmtLongDate(row.start_date, language),
+    }),
+    remaining,
+  }
+}
 
 export function PermitsPage(): React.JSX.Element {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const { has, isLoading: capabilitiesLoading } = useCapabilities()
   const canCreate = has('permits.create')
 
@@ -66,7 +88,19 @@ export function PermitsPage(): React.JSX.Element {
   const detailOverlay = useUrlOverlay('open')
   const actionOverlay = useUrlOverlay('action')
 
+  const navigate = useNavigate()
+  const location = useLocation()
+  const qc = useQueryClient()
+  const isMobile = useIsMobile()
+  const reducedMotion = useReducedMotion()
+  const previewOverlay = useUrlOverlay('preview')
+
   const [editing, setEditing] = useState<PermitRead | null>(null)
+  const [highlightedId, setHighlightedId] = useState<number | null>(null)
+  // Set by onSaved when a permit was just issued; consumed when the form closes.
+  const createdRef = useRef<PermitRead | null>(null)
+  // A deep-linked preview of a permit the list doesn't contain falls back to the full dialog once.
+  const fallbackRef = useRef<number | null>(null)
   const [selected, setSelected] = useState<Set<number>>(new Set())
   const [printing, setPrinting] = useState(false)
 
@@ -83,7 +117,16 @@ export function PermitsPage(): React.JSX.Element {
   )
   const filtersActive = Boolean(state || zone || q)
   const detailId = detailOverlay.value === null ? null : Number(detailOverlay.value)
+  const previewId = previewOverlay.value === null ? null : Number(previewOverlay.value)
   const formOpen = actionOverlay.value === 'new' || editing !== null
+
+  // One replace-navigation, so no stale param survives (three setters would race on the same search string).
+  const clearFilters = (): void => {
+    const next = new URLSearchParams(location.search)
+    for (const key of ['state', 'zone', 'q']) next.delete(key)
+    const search = next.toString()
+    navigate({ search: search ? `?${search}` : '' }, { replace: true, state: location.state })
+  }
 
   useEffect(() => {
     if (capabilitiesLoading || actionOverlay.value !== 'new' || canCreate) return
@@ -101,6 +144,32 @@ export function PermitsPage(): React.JSX.Element {
 
   const rows = listQuery.data?.items ?? []
   const summary = summaryQuery.data
+  const previewRow = previewId === null ? undefined : rows.find((r) => r.id === previewId)
+
+  useEffect(() => {
+    // `debouncedQ !== q`: right after a landing that cleared the search, the list still reflects the old query.
+    if (previewId === null || previewRow || !listQuery.isSuccess || listQuery.isFetching || debouncedQ !== q) return
+    if (fallbackRef.current === previewId) return
+    fallbackRef.current = previewId
+    const next = new URLSearchParams(location.search)
+    next.delete('preview')
+    next.set('open', String(previewId))
+    navigate({ search: `?${next}` }, { replace: true, state: location.state })
+  }, [previewId, previewRow, listQuery.isSuccess, listQuery.isFetching, debouncedQ, q, location.search, location.state, navigate])
+
+  // Scroll the just-issued permit into view once its preview is closed, then fade the highlight.
+  useEffect(() => {
+    if (highlightedId === null || previewId !== null || listQuery.isFetching) return
+    document
+      .querySelector<HTMLElement>(`[data-permit-id="${highlightedId}"]`)
+      ?.scrollIntoView({ block: 'center', behavior: reducedMotion ? 'auto' : 'smooth' })
+    const handle = window.setTimeout(() => setHighlightedId(null), 1800)
+    return () => window.clearTimeout(handle)
+  }, [highlightedId, previewId, listQuery.isFetching, reducedMotion])
+
+  const prefetchLetter = (row: PermitListItem): void => {
+    if (row.book_id) void qc.prefetchQuery({ ...permitBookQuery(row.book_id), staleTime: 30_000 })
+  }
 
   // Selection drives Print. When the filter changes the visible set changes,
   // so clear the selection to avoid acting on now-hidden rows.
@@ -152,16 +221,36 @@ export function PermitsPage(): React.JSX.Element {
     actionOverlay.open('new')
   }
 
-  const tiles: { key: string; label: string; value: number; tone: string }[] = summary
-    ? [
-        { key: 'active', label: t('permits.summary.active'), value: summary.active, tone: 'text-success' },
-        { key: 'expiring', label: t('permits.summary.expiring'), value: summary.expiring, tone: 'text-warning' },
-        { key: 'expired', label: t('permits.summary.expired'), value: summary.expired, tone: 'text-destructive' },
-        { key: 'green', label: t('permits.summary.peopleGreen'), value: summary.people_green, tone: 'text-success' },
-        { key: 'red', label: t('permits.summary.peopleRed'), value: summary.people_red, tone: 'text-destructive' },
-        { key: 'work', label: t('permits.summary.peopleWork'), value: summary.people_work_residence, tone: 'text-info' },
-      ]
-    : []
+  const statusTiles: FilterTile[] = [
+    { key: 'active', label: t('permits.summary.active'), count: summary?.active ?? null, tone: 'success' },
+    { key: 'expiring', label: t('permits.summary.expiring'), count: summary?.expiring ?? null, tone: 'warning' },
+    { key: 'expired', label: t('permits.summary.expired'), count: summary?.expired ?? null, tone: 'destructive' },
+    { key: 'revoked', label: t('permits.summary.revoked'), count: summary?.revoked ?? null, tone: 'neutral' },
+  ]
+  const zoneTiles: FilterTile[] = [
+    { key: 'green', label: t('permits.summary.peopleGreen'), count: summary?.people_green ?? null, tone: 'success' },
+    { key: 'red', label: t('permits.summary.peopleRed'), count: summary?.people_red ?? null, tone: 'destructive' },
+    {
+      key: 'work_residence',
+      label: t('permits.summary.peopleWork'),
+      count: summary?.people_work_residence ?? null,
+      tone: 'info',
+    },
+  ]
+
+  const quickFacts = (row: PermitListItem): { label: string; value: React.ReactNode }[] => {
+    const w = permitWindow(t, i18n.language, row)
+    return [
+      {
+        label: t('permits.columns.zone'),
+        value: <PermitAccessBadge accessAreas={row.access_areas} zones={row.zones} square />,
+      },
+      { label: t('permits.columns.window'), value: `${w.validity}${w.remaining ? ` · ${w.remaining}` : ''}` },
+      { label: t('permits.columns.people'), value: row.people_count },
+      { label: t('permits.columns.vehicles'), value: row.vehicle_count },
+      ...(row.has_document ? [{ label: t('permits.paper.title'), value: t('permits.paper.attached') }] : []),
+    ]
+  }
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden bg-background">
@@ -190,17 +279,23 @@ export function PermitsPage(): React.JSX.Element {
             <TabsTrigger value="items">{t('permits.tabs.items')}</TabsTrigger>
           </TabsList>
           <TabsContent value="security" className="mt-4">
-            {/* Summary tiles */}
-            {tiles.length > 0 && (
-              <div className="mb-4 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
-                {tiles.map((tile) => (
-                  <div key={tile.key} className="rounded-xl border border-border bg-surface px-3 py-2.5">
-                    <div className={`text-2xl font-bold ${tile.tone}`}>{tile.value}</div>
-                    <div className="text-[0.72rem] leading-tight text-muted-foreground">{tile.label}</div>
-                  </div>
-                ))}
-              </div>
-            )}
+            {/* Quick filters: count tiles bound to ?state= / ?zone= */}
+            <div className="mb-4 grid gap-2 lg:grid-cols-[4fr_3fr]">
+              <PermitFilterBar
+                label={t('permits.statusFilters')}
+                tiles={statusTiles}
+                value={state}
+                onSelect={setState}
+                className="grid-cols-4"
+              />
+              <PermitFilterBar
+                label={t('permits.zoneFilters')}
+                tiles={zoneTiles}
+                value={zone}
+                onSelect={setZone}
+                className="grid-cols-3"
+              />
+            </div>
 
             {/* Toolbar */}
             <div className="mb-3 flex flex-wrap items-center gap-2">
@@ -221,10 +316,17 @@ export function PermitsPage(): React.JSX.Element {
               <input
                 className={`${selectCls} min-w-[12rem] flex-1`}
                 placeholder={t('permits.filters.search')}
+                aria-label={t('permits.filters.search')}
                 value={q}
                 dir="auto"
                 onChange={(e) => setQ(e.target.value || null)}
               />
+              {filtersActive && (
+                <Button type="button" variant="ghost" size="sm" onClick={clearFilters}>
+                  <X className="me-1.5 h-4 w-4" aria-hidden />
+                  {t('permits.filters.clear')}
+                </Button>
+              )}
 
               <div className="flex items-center gap-2 ms-auto">
                 {selected.size > 0 && (
@@ -252,23 +354,53 @@ export function PermitsPage(): React.JSX.Element {
               </div>
             </div>
 
-            {/* Table / states */}
+            <p aria-live="polite" className="mb-2 min-h-4 text-xs text-muted-foreground">
+              {listQuery.isSuccess && (
+                <>
+                  {t('permits.resultCount', { count: rows.length })}
+                  {listQuery.data.total > rows.length &&
+                    ` · ${t('permits.resultCapped', { shown: rows.length, total: listQuery.data.total })}`}
+                </>
+              )}
+            </p>
+
+            {/* Table / cards / states */}
             {listQuery.isError ? (
-              <p className="py-8 text-center text-sm text-destructive">{t('permits.loadError')}</p>
+              <div className="rounded-xl border border-border bg-surface">
+                <EmptyState
+                  message={t('permits.loadError')}
+                  actionLabel={t('common.retry')}
+                  onAction={() => void listQuery.refetch()}
+                />
+              </div>
             ) : listQuery.isLoading ? (
               <div className="overflow-hidden rounded-xl border border-border">
                 {Array.from({ length: 6 }).map((_, i) => (
-                  <SkeletonRow key={i} cols={7} />
+                  <SkeletonRow key={i} cols={9} />
                 ))}
               </div>
             ) : rows.length === 0 ? (
               <EmptyState
                 icon={ShieldCheck}
                 message={filtersActive ? t('permits.empty') : t('permits.emptyRegister')}
-                {...(!filtersActive && canCreate
-                  ? { actionLabel: t('permits.new'), onAction: openNew }
-                  : {})}
+                {...(filtersActive
+                  ? { actionLabel: t('permits.filters.clear'), onAction: clearFilters }
+                  : canCreate
+                    ? { actionLabel: t('permits.new'), onAction: openNew }
+                    : {})}
               />
+            ) : isMobile ? (
+              <div className="flex flex-col gap-2.5">
+                {rows.map((row) => (
+                  <PermitCard
+                    key={row.id}
+                    row={row}
+                    highlighted={highlightedId === row.id}
+                    onOpen={() => previewOverlay.open(String(row.id))}
+                    onPrefetch={() => prefetchLetter(row)}
+                  />
+                ))}
+              </div>
             ) : (
               <div className="overflow-x-auto rounded-xl border border-border">
                 <Table>
@@ -299,8 +431,10 @@ export function PermitsPage(): React.JSX.Element {
                         key={row.id}
                         row={row}
                         selected={selected.has(row.id)}
+                        highlighted={highlightedId === row.id}
                         onToggle={() => toggleOne(row.id)}
-                        onOpen={() => detailOverlay.open(String(row.id))}
+                        onOpen={() => previewOverlay.open(String(row.id))}
+                        onPrefetch={() => prefetchLetter(row)}
                       />
                     ))}
                   </TableBody>
@@ -327,13 +461,43 @@ export function PermitsPage(): React.JSX.Element {
         onOpenChange={(open) => {
           if (open) return
           setEditing(null)
+          const created = createdRef.current
+          if (created) {
+            // Land on the new permit: ONE replace (not close + open, which would race
+            // navigate(-1)). Dropping the overlay marker makes closing the preview stay
+            // on the cleared register with the new row highlighted.
+            createdRef.current = null
+            const next = new URLSearchParams(location.search)
+            for (const key of ['action', 'state', 'zone', 'q']) next.delete(key)
+            next.set('preview', String(created.id))
+            navigate({ search: `?${next}` }, { replace: true, state: { ...(location.state as object | null), overlay: false } })
+            return
+          }
           if (actionOverlay.value === 'new') actionOverlay.close()
         }}
         onSaved={(p) => {
+          if (!editing) {
+            createdRef.current = p
+            setHighlightedId(p.id)
+            toast.success(t('permits.createdToast', { no: p.permit_no ?? `#${p.id}` }))
+            return
+          }
           // After editing from the detail dialog, keep the detail open on it.
-          if (editing && String(p.id) !== detailOverlay.value) detailOverlay.open(String(p.id))
+          if (String(p.id) !== detailOverlay.value) detailOverlay.open(String(p.id))
         }}
       />
+      {previewRow && (
+        <PermitQuickView
+          open
+          onClose={previewOverlay.close}
+          reference={previewRow.permit_no ?? `#${previewRow.id}`}
+          title={previewRow.company}
+          status={<Badge tone={statusTone(previewRow.derived_status)}>{t(`permits.status.${previewRow.derived_status}`)}</Badge>}
+          facts={quickFacts(previewRow)}
+          bookId={previewRow.book_id ?? null}
+          onOpenFull={() => detailOverlay.open(String(previewRow.id), { preview: null })}
+        />
+      )}
       {detailId !== null && Number.isFinite(detailId) && (
         <PermitDetailDialog
           permitId={detailId}
@@ -350,26 +514,29 @@ export function PermitsPage(): React.JSX.Element {
 function PermitRowView({
   row,
   selected,
+  highlighted,
   onToggle,
   onOpen,
+  onPrefetch,
 }: {
   row: PermitListItem
   selected: boolean
+  highlighted: boolean
   onToggle: () => void
   onOpen: () => void
+  onPrefetch: () => void
 }): React.JSX.Element {
   const { t, i18n } = useTranslation()
-  const remaining =
-    row.derived_status === 'revoked' || row.days_remaining === null
-      ? null
-      : row.days_remaining < 0
-        ? t('permits.expired')
-        : row.days_remaining === 0
-          ? t('permits.endsToday')
-          : t('permits.daysLeft', { count: row.days_remaining })
+  const { validity, remaining } = permitWindow(t, i18n.language, row)
 
   return (
-    <TableRow className={`cursor-pointer ${selected ? 'bg-primary-soft/40' : ''}`} onClick={onOpen}>
+    <TableRow
+      data-permit-id={row.id}
+      tabIndex={-1}
+      className={cn('cursor-pointer', selected && 'bg-primary-soft/40', highlighted && 'bg-accent-soft')}
+      onClick={onOpen}
+      onPointerEnter={onPrefetch}
+    >
       <TableCell className="w-10" onClick={(e) => e.stopPropagation()}>
         <input
           type="checkbox"
@@ -379,7 +546,7 @@ function PermitRowView({
           className="h-4 w-4 cursor-pointer accent-primary"
         />
       </TableCell>
-      <TableCell className="whitespace-nowrap font-mono text-xs">
+      <TableCell className="whitespace-nowrap font-mono text-xs" dir="ltr">
         {row.permit_no ?? `#${row.id}`}
         {row.has_document && (
           <Paperclip className="ms-1.5 inline h-3 w-3 align-middle text-muted-foreground" aria-label={t('permits.paper.attached')} />
@@ -392,12 +559,7 @@ function PermitRowView({
         <PermitAccessBadge accessAreas={row.access_areas} zones={row.zones} square />
       </TableCell>
       <TableCell className="whitespace-nowrap font-mono text-xs text-muted-foreground">
-        <span>
-          {t('permits.validityFrom', {
-            period: t(`permits.validityPeriod.${row.validity.unit}`, { count: row.validity.value }),
-            date: fmtLongDate(row.start_date, i18n.language),
-          })}
-        </span>
+        <span>{validity}</span>
         {remaining && <span className="ms-2 not-italic">· {remaining}</span>}
       </TableCell>
       <TableCell className="text-end tabular-nums">{row.people_count}</TableCell>
@@ -407,11 +569,73 @@ function PermitRowView({
       </TableCell>
       {/* Keyboard-reachable open (the row's onClick is mouse-only). */}
       <TableCell className="w-16 text-end" onClick={(e) => e.stopPropagation()}>
-        <Button type="button" variant="ghost" size="sm" onClick={onOpen}>
+        <Button type="button" variant="ghost" size="sm" onClick={onOpen} onFocus={onPrefetch}>
           {t('permits.actions.view')}
         </Button>
       </TableCell>
     </TableRow>
+  )
+}
+
+/** Mobile register row: the whole card is one button that opens the quick view. */
+function PermitCard({
+  row,
+  highlighted,
+  onOpen,
+  onPrefetch,
+}: {
+  row: PermitListItem
+  highlighted: boolean
+  onOpen: () => void
+  onPrefetch: () => void
+}): React.JSX.Element {
+  const { t, i18n } = useTranslation()
+  const { validity, remaining } = permitWindow(t, i18n.language, row)
+
+  return (
+    <button
+      type="button"
+      data-permit-id={row.id}
+      onClick={onOpen}
+      onPointerEnter={onPrefetch}
+      onFocus={onPrefetch}
+      className={cn(
+        'flex min-h-11 w-full flex-col gap-2 rounded-xl border border-border bg-surface p-3.5 text-start transition-colors',
+        'hover:border-border-strong motion-reduce:transition-none',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background',
+        highlighted && 'bg-accent-soft',
+      )}
+    >
+      <span className="flex items-center justify-between gap-2">
+        <span dir="ltr" className="font-mono text-xs">
+          {row.permit_no ?? `#${row.id}`}
+          {row.has_document && (
+            <Paperclip className="ms-1.5 inline h-3 w-3 align-middle text-muted-foreground" aria-label={t('permits.paper.attached')} />
+          )}
+        </span>
+        <Badge tone={statusTone(row.derived_status)}>{t(`permits.status.${row.derived_status}`)}</Badge>
+      </span>
+      <span className="truncate font-medium">
+        <bdi>{row.company}</bdi>
+      </span>
+      <PermitAccessBadge accessAreas={row.access_areas} zones={row.zones} square />
+      <span className="text-[0.78em] text-muted-foreground">
+        <span className="font-mono">{validity}</span>
+        {remaining && <span className="ms-2">· {remaining}</span>}
+      </span>
+      <span className="flex items-center gap-4 text-xs text-muted-foreground">
+        <span className="inline-flex items-center gap-1.5">
+          <Users className="h-3.5 w-3.5" aria-hidden />
+          <span className="sr-only">{t('permits.columns.people')}</span>
+          <bdi className="tabular-nums">{row.people_count}</bdi>
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <Car className="h-3.5 w-3.5" aria-hidden />
+          <span className="sr-only">{t('permits.columns.vehicles')}</span>
+          <bdi className="tabular-nums">{row.vehicle_count}</bdi>
+        </span>
+      </span>
+    </button>
   )
 }
 

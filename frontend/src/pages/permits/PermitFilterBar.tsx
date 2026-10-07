@@ -50,13 +50,13 @@ export function PermitFilterBar({
             aria-label={tile.ariaLabel}
             onClick={() => onSelect(active ? null : tile.key)}
             className={cn(
-              'relative flex min-w-0 flex-col items-start rounded-xl border px-3 py-2.5 text-start transition-colors',
+              'relative flex min-w-0 flex-col items-start rounded-xl border px-2.5 py-2 text-start transition-colors md:px-3 md:py-2.5',
               'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background',
               'motion-reduce:transition-none',
               active ? 'border-primary bg-primary-soft' : 'border-border bg-surface hover:border-border-strong',
             )}
           >
-            <span className={cn('font-mono text-2xl font-bold tabular-nums', toneCls[tile.tone ?? 'neutral'])}>
+            <span className={cn('font-mono text-xl font-bold tabular-nums md:text-2xl', toneCls[tile.tone ?? 'neutral'])}>
               <bdi>{tile.count ?? '—'}</bdi>
             </span>
             <span className="text-[0.72rem] leading-tight text-muted-foreground">{tile.label}</span>
