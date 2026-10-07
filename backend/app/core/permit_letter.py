@@ -39,16 +39,17 @@ _ZONES: dict[str, tuple[str, str, str]] = {
 _NBSP = "\u00a0"
 
 
+def _zone_chip(zone: object) -> str:
+    key = str(zone)
+    label, bg, ink = _ZONES.get(key, (key, "#eef2f6", "#334155"))
+    return (
+        f'<span style="background-color:{bg}; color:{ink}; font-weight:bold">'
+        f"{_NBSP}{escape(label)}{_NBSP}</span>"
+    )
+
+
 def _access_chips(zones: list[object]) -> str:
-    chips = []
-    for zone in zones:
-        key = str(zone)
-        label, bg, ink = _ZONES.get(key, (key, "#eef2f6", "#334155"))
-        chips.append(
-            f'<span style="background-color:{bg}; color:{ink}; font-weight:bold">'
-            f"{_NBSP}{escape(label)}{_NBSP}</span>"
-        )
-    return (_NBSP * 2).join(chips)
+    return (_NBSP * 2).join(_zone_chip(zone) for zone in zones)
 
 
 def _access_rows(access_areas: dict[str, object] | None, zones: list[str]) -> str:
@@ -191,7 +192,14 @@ def build_permit_letter_html(
     return html
 
 
+_CELL = ' style="text-align:center"'
+
+
 def _table(header: str, rows: str) -> str:
+    # Explicit text-align on every cell: html_to_docx maps it to each cell
+    # paragraph's jc, so header and body content are centered, not just the table.
+    header = header.replace("<th>", f"<th{_CELL}>")
+    rows = rows.replace("<td>", f"<td{_CELL}>")
     return (
         '<table style="font-size:11pt; text-align:center; width:auto">'
         f'<thead><tr style="background-color:#eef2f6">{header}</tr></thead>'
@@ -201,19 +209,20 @@ def _table(header: str, rows: str) -> str:
 
 def build_item_permit_letter_html(
     *,
-    zone: str,
+    zones: list[str],
     site: str,
     items: list[dict[str, object]],
     employee: dict[str, str],
 ) -> str:
-    """Body for the item-entry (إدخال مواد) letter: authorization paragraph, a
-    numbered items table, and the bringing employee's row. ``employee`` carries
-    ``id`` / ``title`` / ``name``. No «الإعتماد» line — the template's manager
+    """Body for the item-entry (إدخال مواد) letter: authorization paragraph (one
+    colored chip per zone, same markup as the security letter), a numbered items
+    table, and the bringing employee's row. ``employee`` carries ``id`` /
+    ``title`` / ``name``. No «الإعتماد» line — the template's manager
     e-signature is the only approval."""
+    chips = " و ".join(_zone_chip(zone) for zone in zones)
     para = (
         '<p style="text-align:justify; line-height:1.45"><b>'
-        "لا مانع من إدخال المواد المبينة بالجدول أدناه إلى داخل "
-        f"{_ZONES[zone][0]} في {escape(site)}</b></p>"
+        f"لا مانع من إدخال المواد المبينة بالجدول أدناه إلى داخل {chips} في {escape(site)}</b></p>"
     )
     item_rows = "".join(
         f"<tr><td>{i}</td><td>{escape(str(it['name']))}</td><td>{it['quantity']}</td></tr>"
@@ -226,6 +235,7 @@ def build_item_permit_letter_html(
     spacer = "<p></p>"
     return (
         para
+        + spacer
         + _table("<th>م</th><th>المادة</th><th>العدد</th>", item_rows)
         + spacer
         + _table("<th>الرقم الوظيفي</th><th>المسمى الوظيفي</th><th>الإسم</th>", employee_row)
