@@ -5,13 +5,17 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
+from docx import Document
+from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.oxml.ns import qn
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
 from app.api.errors import NotFoundError, ValidationFailedError
-from app.core.permit_letter import build_item_permit_letter_html
+from app.core.arabic_rtl import html_to_docx
+from app.core.permit_letter import _access_chips, build_item_permit_letter_html
 from app.db.models import Book, BookCategory, Employee, Manager, User, UserPermission
 from app.db.session import get_db
 from app.main import create_app
@@ -64,7 +68,7 @@ def test_create_generates_1_5_letter_on_security_permit_paper(env: Session) -> N
     book, latest = _latest_version(env, row.book_id)
     assert book.ref_number.startswith("1/5/")
     assert latest.template_id == "Security Permit"
-    assert latest.fields["subject"] == "التصاريح"
+    assert latest.fields["subject"] == "تصريح إدخال مواد"
     assert latest.fields["recipient_name"] == "مسؤول وحدة التفتيش"
     body = latest.fields["body"]
     assert "المنطقة الحمراء" in body and "مبنى مركز الإصلاح والتأهيل الوثبة - 2" in body
@@ -80,7 +84,7 @@ def test_update_regenerates_letter(env: Session) -> None:
     row = item_permit_service.update_item_permit(
         env,
         row.id,
-        ItemPermitUpdate(zone="green", items=[{"name": "طابعة", "quantity": 2}]),
+        ItemPermitUpdate(zones=["green"], items=[{"name": "طابعة", "quantity": 2}]),
         actor="op@x.ae",
     )
     book, latest = _latest_version(env, row.book_id)
@@ -120,7 +124,12 @@ def test_manual_submit_surfaces_chain_errors(env: Session) -> None:
 
 @pytest.mark.parametrize(
     "bad",
-    [{"items": []}, {"items": [{"name": "x", "quantity": 0}]}, {"zone": "blue"}],
+    [
+        {"items": []},
+        {"items": [{"name": "x", "quantity": 0}]},
+        {"zones": ["blue"]},
+        {"zones": []},
+    ],
 )
 def test_schema_rejects_invalid_payload(bad: dict[str, Any]) -> None:
     with pytest.raises(ValidationError):
@@ -156,7 +165,7 @@ def test_api_create_list_search_get_delete(env: Session) -> None:
     )
     assert r.status_code == 201, r.text
     created = r.json()
-    assert created["zone"] == "red" and created["employee_name"] == "علي"
+    assert created["zones"] == ["red"] and created["employee_name"] == "علي"
     assert c.get("/api/v1/item-permits", params={"q": "كابل"}).json()["total"] == 1
     assert c.get("/api/v1/item-permits", params={"q": "nomatch"}).json()["total"] == 0
     assert c.get(f"/api/v1/item-permits/{created['id']}").status_code == 200
@@ -184,28 +193,102 @@ def test_api_requires_permits_capabilities(env: Session) -> None:
 _EMP = {"id": "G1", "title": "فني", "name": "سالم"}
 
 
+def _td(*cells: str) -> str:
+    return "".join(f'<td style="text-align:center">{c}</td>' for c in cells)
+
+
 def test_letter_zone_mapping_numbering_and_no_approval_line() -> None:
     items: list[dict[str, object]] = [
         {"name": "أ", "quantity": 2},
         {"name": "ب", "quantity": 5},
     ]
-    red = build_item_permit_letter_html(zone="red", site="الموقع", items=items, employee=_EMP)
-    green = build_item_permit_letter_html(zone="green", site="الموقع", items=items, employee=_EMP)
-    assert "داخل المنطقة الحمراء في الموقع" in red and "المنطقة الخضراء" not in red
-    assert "داخل المنطقة الخضراء في الموقع" in green and "المنطقة الحمراء" not in green
-    assert "<td>1</td><td>أ</td><td>2</td>" in red
-    assert "<td>2</td><td>ب</td><td>5</td>" in red
-    assert "<th>م</th><th>المادة</th><th>العدد</th>" in red
-    assert "<td>G1</td><td>فني</td><td>سالم</td>" in red
+    red = build_item_permit_letter_html(zones=["red"], site="الموقع", items=items, employee=_EMP)
+    green = build_item_permit_letter_html(
+        zones=["green"], site="الموقع", items=items, employee=_EMP
+    )
+    assert _access_chips(["red"]) + " في الموقع" in red and "المنطقة الخضراء" not in red
+    assert _access_chips(["green"]) + " في الموقع" in green and "المنطقة الحمراء" not in green
+    assert _td("1", "أ", "2") in red
+    assert _td("2", "ب", "5") in red
+    assert '<th style="text-align:center">م</th>' in red
+    assert _td("G1", "فني", "سالم") in red
     assert "الإعتماد" not in red
 
 
 def test_letter_escapes_user_text() -> None:
     html = build_item_permit_letter_html(
-        zone="red",
+        zones=["red"],
         site="<i>s</i>",
         items=[{"name": "<script>x</script>", "quantity": 1}],
         employee={"id": "G1", "title": "<b>t</b>", "name": "a&b"},
     )
     assert "<script>" not in html and "<i>s" not in html and "<b>t" not in html
     assert "&lt;script&gt;" in html and "a&amp;b" in html
+
+
+def test_zones_default_normalize_and_letter_chips(env: Session) -> None:
+    assert _payload().zones == ["red"]
+    assert _payload(zones=["work_residence", "red", "red"]).zones == ["red", "work_residence"]
+    row = item_permit_service.create_item_permit(
+        env, _payload(zones=["work_residence", "green"]), actor="op@x.ae"
+    )
+    assert row.zones == ["green", "work_residence"]
+    _, latest = _latest_version(env, row.book_id)
+    body = latest.fields["body"]
+    assert f"{_access_chips(['green'])} و {_access_chips(['work_residence'])} في" in body
+    assert "المنطقة الحمراء" not in body
+
+
+def test_update_zones_regenerates_letter_and_null_is_unchanged(env: Session) -> None:
+    row = item_permit_service.create_item_permit(env, _payload(), actor="op@x.ae")
+    row = item_permit_service.update_item_permit(
+        env, row.id, ItemPermitUpdate(zones=["green", "red"]), actor="op@x.ae"
+    )
+    assert row.zones == ["red", "green"]
+    _, latest = _latest_version(env, row.book_id)
+    assert " و ".join(_access_chips([z]) for z in ("red", "green")) in latest.fields["body"]
+    row = item_permit_service.update_item_permit(env, row.id, ItemPermitUpdate(zones=None))
+    assert row.zones == ["red", "green"]
+
+
+def test_api_zones_validation(env: Session) -> None:
+    c = _client(env, env.query(User).filter_by(email="op@x.ae").one())
+    items = [{"name": "كابل", "quantity": 1}]
+    for bad in ([], ["blue"]):
+        r = c.post(
+            "/api/v1/item-permits", json={"employee_id": "G3082", "items": items, "zones": bad}
+        )
+        assert r.status_code == 422, r.text
+    r = c.post(
+        "/api/v1/item-permits",
+        json={"employee_id": "G3082", "items": items, "zones": ["work_residence", "red", "red"]},
+    )
+    assert r.status_code == 201, r.text
+    assert r.json()["zones"] == ["red", "work_residence"]
+    r = c.patch(f"/api/v1/item-permits/{r.json()['id']}", json={"zones": []})
+    assert r.status_code == 422
+
+
+def test_letter_spacers_and_shared_chip_markup() -> None:
+    html = build_item_permit_letter_html(
+        zones=["red", "green"], site="s", items=[{"name": "a", "quantity": 1}], employee=_EMP
+    )
+    assert html.count("<p></p>") == 2
+    sentence, rest = html.split("</p>", 1)
+    assert rest.startswith("<p></p><table")
+    assert _access_chips(["red"]) in sentence and _access_chips(["green"]) in sentence
+
+
+def test_letter_tables_and_cells_centered_in_docx() -> None:
+    doc = Document()
+    html_to_docx(
+        build_item_permit_letter_html(
+            zones=["red"], site="s", items=[{"name": "a", "quantity": 1}], employee=_EMP
+        ),
+        doc.add_paragraph(),
+    )
+    assert len(doc.tables) == 2
+    for table in doc.tables:
+        assert table._tbl.tblPr.find(qn("w:jc")).get(qn("w:val")) == "center"
+        paragraphs = [p for row in table.rows for cell in row.cells for p in cell.paragraphs]
+        assert paragraphs and all(p.alignment == WD_ALIGN_PARAGRAPH.CENTER for p in paragraphs)

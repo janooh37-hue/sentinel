@@ -286,7 +286,7 @@ export type ItemPermitItem = components['schemas']['ItemPermitItem']
 export type ItemPermitCreate = components['schemas']['ItemPermitCreate']
 export type ItemPermitUpdate = components['schemas']['ItemPermitUpdate']
 export type ItemPermitListResponse = components['schemas']['ItemPermitListResponse']
-export type ItemPermitZone = ItemPermitRead['zone']
+export type ItemPermitZone = ItemPermitRead['zones'][number]
 
 // ─── Fleet vehicles ──────────────────────────────────────────────────────────
 export type VehicleListItem = components['schemas']['VehicleListItem']

@@ -1036,7 +1036,8 @@ class ItemPermit(Base):
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
     employee_id: Mapped[str] = mapped_column(String(16), ForeignKey("employees.id"))
     recipient: Mapped[str] = mapped_column(String(255))
-    zone: Mapped[str] = mapped_column(String(8))  # 'red' | 'green'
+    # ordered, distinct subset of 'red' | 'green' | 'work_residence' (min 1)
+    zones: Mapped[list[str]] = mapped_column(JSON)
     site: Mapped[str] = mapped_column(String(255))
     # list of {"name": str, "quantity": int}
     items: Mapped[list[dict[str, Any]]] = mapped_column(JSON)
@@ -1048,10 +1049,7 @@ class ItemPermit(Base):
 
     employee: Mapped[Employee] = relationship()
 
-    __table_args__ = (
-        CheckConstraint("zone IN ('red', 'green')", name="ck_item_permits_zone"),
-        Index("ix_item_permits_employee", "employee_id"),
-    )
+    __table_args__ = (Index("ix_item_permits_employee", "employee_id"),)
 
 
 class WhatsAppMessage(Base):

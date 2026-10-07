@@ -142,7 +142,7 @@ def _regenerate_book(
 ) -> None:
     emp = row.employee
     body = build_item_permit_letter_html(
-        zone=row.zone,
+        zones=row.zones,
         site=row.site,
         items=row.items,
         employee={
@@ -155,7 +155,7 @@ def _regenerate_book(
         db,
         book_id=row.book_id,
         manager_id=row.manager_id,
-        subject="التصاريح",
+        subject="تصريح إدخال مواد",
         body=body,
         recipient=row.recipient,
         actor=actor,
@@ -178,7 +178,7 @@ def create_item_permit(
     row = ItemPermit(
         employee_id=payload.employee_id,
         recipient=payload.recipient,
-        zone=payload.zone,
+        zones=payload.zones,
         site=payload.site,
         items=[i.model_dump() for i in payload.items],
         manager_id=payload.manager_id,

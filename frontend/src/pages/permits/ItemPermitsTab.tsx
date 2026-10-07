@@ -347,13 +347,17 @@ export function ItemPermitsTab(): React.JSX.Element {
   )
 }
 
-/** The permit's zone badge — the one place zone rendering lives. */
+/** The permit's zone badges, one per zone — the one place zone rendering lives. */
 function ItemZone({ row }: { row: ItemPermitRead }): React.JSX.Element {
   const { t } = useTranslation()
   return (
-    <Badge tone={zoneTone(row.zone)} shape="square">
-      {t(`permits.zone.${row.zone}`)}
-    </Badge>
+    <div className="flex flex-wrap gap-1">
+      {row.zones.map((z) => (
+        <Badge key={z} tone={zoneTone(z)} shape="square">
+          {t(`permits.zone.${z}`)}
+        </Badge>
+      ))}
+    </div>
   )
 }
 

@@ -29,7 +29,7 @@ vi.mock('@/lib/api', async (importOriginal) => {
     employee_name_en: name,
     employee_title: null,
     recipient: 'Security',
-    zone: 'red',
+    zones: ['red'],
     site: 'Al Wathba',
     items: [{ name: 'Laptop', quantity: 1 }],
     manager_id: null,
