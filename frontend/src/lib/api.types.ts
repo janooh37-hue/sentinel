@@ -10610,11 +10610,12 @@ export interface components {
              */
             recipient: string;
             /**
-             * Zone
-             * @default red
-             * @enum {string}
+             * Zones
+             * @default [
+             *       "red"
+             *     ]
              */
-            zone: "red" | "green";
+            zones: ("red" | "green" | "work_residence")[];
             /**
              * Site
              * @default مبنى مركز الإصلاح والتأهيل الوثبة - 2
@@ -10660,11 +10661,8 @@ export interface components {
             employee_title: string | null;
             /** Recipient */
             recipient: string;
-            /**
-             * Zone
-             * @enum {string}
-             */
-            zone: "red" | "green";
+            /** Zones */
+            zones: ("red" | "green" | "work_residence")[];
             /** Site */
             site: string;
             /** Items */
@@ -10694,8 +10692,8 @@ export interface components {
             employee_id?: string | null;
             /** Recipient */
             recipient?: string | null;
-            /** Zone */
-            zone?: ("red" | "green") | null;
+            /** Zones */
+            zones?: ("red" | "green" | "work_residence")[] | null;
             /** Site */
             site?: string | null;
             /** Items */
