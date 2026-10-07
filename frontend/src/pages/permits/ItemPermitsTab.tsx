@@ -413,15 +413,15 @@ function ItemPermitRow({
       onPointerEnter={onPrefetch}
       onFocus={onPrefetch}
     >
-      <TableCell className="whitespace-nowrap font-mono text-xs" dir="ltr">
-        {row.book_ref ?? '—'}
+      <TableCell className="whitespace-nowrap font-mono text-xs">
+        <bdi dir="ltr">{row.book_ref ?? '—'}</bdi>
       </TableCell>
       <TableCell>
         <div className="max-w-[14rem] truncate font-medium" dir="auto">
           {employeeName(row, i18n.language)}
         </div>
-        <div className="font-mono text-xs text-muted-foreground" dir="ltr">
-          {row.employee_id}
+        <div className="font-mono text-xs text-muted-foreground">
+          <bdi dir="ltr">{row.employee_id}</bdi>
         </div>
       </TableCell>
       <TableCell>

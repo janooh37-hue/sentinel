@@ -546,8 +546,8 @@ function PermitRowView({
           className="h-4 w-4 cursor-pointer accent-primary"
         />
       </TableCell>
-      <TableCell className="whitespace-nowrap font-mono text-xs" dir="ltr">
-        {row.permit_no ?? `#${row.id}`}
+      <TableCell className="whitespace-nowrap font-mono text-xs">
+        <bdi dir="ltr">{row.permit_no ?? `#${row.id}`}</bdi>
         {row.has_document && (
           <Paperclip className="ms-1.5 inline h-3 w-3 align-middle text-muted-foreground" aria-label={t('permits.paper.attached')} />
         )}
@@ -620,7 +620,7 @@ function PermitCard({
       </span>
       <PermitAccessBadge accessAreas={row.access_areas} zones={row.zones} square />
       <span className="text-[0.78em] text-muted-foreground">
-        <span className="font-mono">{validity}</span>
+        <span className="tabular-nums">{validity}</span>
         {remaining && <span className="ms-2">· {remaining}</span>}
       </span>
       <span className="flex items-center gap-4 text-xs text-muted-foreground">
