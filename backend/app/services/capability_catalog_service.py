@@ -8,6 +8,7 @@ from typing import Final
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.classifications import CLASSIFICATIONS, get_classification
 from app.core.form_kind import OTHER_SERVICE_ID, SERVICE_IDS
 from app.core.permissions import (
     CAPABILITIES,
@@ -118,10 +119,12 @@ def _service_entries(service_id: str) -> tuple[CapabilityCatalogEntry, ...]:
     )
 
 
-def _category_entry(category: BookCategory) -> CapabilityCatalogEntry:
-    capability_id = f"{CATEGORY_CAP_PREFIX}{category.id}"
-    label_en = (category.name_en or "").strip() or capability_id
-    label_ar = (category.name_ar or "").strip() or None
+def _category_entry(
+    category_id: str, name_en: str | None, name_ar: str | None
+) -> CapabilityCatalogEntry:
+    capability_id = f"{CATEGORY_CAP_PREFIX}{category_id}"
+    label_en = (name_en or "").strip() or capability_id
+    label_ar = (name_ar or "").strip() or None
     return CapabilityCatalogEntry(
         id=capability_id,
         domain="categories",
@@ -139,11 +142,16 @@ def list_catalog(db: Session) -> tuple[CapabilityCatalogEntry, ...]:
     """Return the complete catalog in stable presentation order."""
     static = tuple(_STATIC_BY_ID[capability.id] for capability in CAPABILITIES)
     services = tuple(entry for service_id in _SERVICE_IDS for entry in _service_entries(service_id))
-    categories = tuple(
-        _category_entry(category)
-        for category in db.scalars(select(BookCategory).order_by(BookCategory.id)).all()
+    classifications = tuple(
+        _category_entry(classification.code, classification.name_en, classification.name_ar)
+        for classification in CLASSIFICATIONS
     )
-    return (*static, *services, *categories)
+    categories = tuple(
+        _category_entry(category.id, category.name_en, category.name_ar)
+        for category in db.scalars(select(BookCategory).order_by(BookCategory.id)).all()
+        if get_classification(category.id) is None
+    )
+    return (*static, *services, *classifications, *categories)
 
 
 def get_catalog_entry(db: Session, capability_id: str) -> CapabilityCatalogEntry | None:
@@ -166,8 +174,17 @@ def get_catalog_entry(db: Session, capability_id: str) -> CapabilityCatalogEntry
 
     if capability_id.startswith(CATEGORY_CAP_PREFIX):
         category_id = capability_id.removeprefix(CATEGORY_CAP_PREFIX)
+        classification = get_classification(category_id)
+        if classification is not None:
+            return _category_entry(
+                classification.code, classification.name_en, classification.name_ar
+            )
         category = db.get(BookCategory, category_id)
-        return _category_entry(category) if category is not None else None
+        return (
+            _category_entry(category.id, category.name_en, category.name_ar)
+            if category is not None
+            else None
+        )
 
     return None
 

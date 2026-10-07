@@ -4,8 +4,8 @@
  * generates a General Book transfer letter.
  *
  * Reached from the Services gallery (🚚 tile) and gated on `documents.generate`
- * (the route + the server). Fetches `listEmployees({ limit: 500 })` once and
- * groups client-side via `lib/dutyUnits`.
+ * and `documents.duty_transfer` (the route + the server). Groups the employee
+ * roster client-side via `lib/dutyUnits`.
  *
  * The supervisor hierarchy over this same rail is a separate page under
  * Employees (`/employees/org-tree`): it is a fact about people rather than part
@@ -21,7 +21,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { Search } from 'lucide-react'
 
-import { api, type DutyTransferResult, type EmployeeListItem } from '@/lib/api'
+import { api, type DutyTransferResult, type EmployeeLookupItem } from '@/lib/api'
 import { UNASSIGNED, groupByUnit, postsForUnit, unitTallies } from '@/lib/dutyUnits'
 import { Skeleton } from '@/components/ui/skeleton'
 import { UnitRail, type UnitRailItem } from './UnitRail'
@@ -37,11 +37,11 @@ export function DutyLocationsPage(): React.JSX.Element {
   const { t } = useTranslation()
 
   const employeesQuery = useQuery({
-    queryKey: ['employees', { limit: 500 }],
-    queryFn: () => api.listEmployees({ limit: 500 }),
+    queryKey: ['employees', 'lookup', { limit: 500 }],
+    queryFn: () => api.lookupEmployees({ limit: 500 }),
   })
 
-  const employees = useMemo<EmployeeListItem[]>(
+  const employees = useMemo<EmployeeLookupItem[]>(
     () => employeesQuery.data?.items ?? [],
     [employeesQuery.data],
   )
@@ -52,7 +52,7 @@ export function DutyLocationsPage(): React.JSX.Element {
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [search, setSearch] = useState('')
 
-  const [assignTarget, setAssignTarget] = useState<EmployeeListItem | null>(null)
+  const [assignTarget, setAssignTarget] = useState<EmployeeLookupItem | null>(null)
   const [transferOpen, setTransferOpen] = useState(false)
   const [completedTransfer, setCompletedTransfer] = useState<DutyTransferResult | null>(null)
 
@@ -82,7 +82,7 @@ export function DutyLocationsPage(): React.JSX.Element {
   // Active unit roster, post-grouped + search-filtered.
   const activePosts = resolvedActiveKey ? grouped.get(resolvedActiveKey) : undefined
   const filteredByPost = useMemo(() => {
-    const out = new Map<string, EmployeeListItem[]>()
+    const out = new Map<string, EmployeeLookupItem[]>()
     if (!activePosts) return out
     const q = search.trim().toLowerCase()
     for (const [post, list] of activePosts) {

@@ -11,7 +11,6 @@ vi.mock('@/lib/api', () => ({
     listCapabilities: vi.fn(),
     getUserPermissions: vi.fn(),
     listTemplates: vi.fn(),
-    listBookCategories: vi.fn(),
     listPermissionRequests: vi.fn(),
     setUserPermission: vi.fn(),
     setUserPermissionsBulk: vi.fn(),
@@ -102,6 +101,7 @@ function permissionFixture(over: Partial<UserPermissionRead> = {}): UserPermissi
     'books.service.General Book',
     'books.servicerecords.General Book',
     'books.category.incoming',
+    'documents.duty_transfer',
   ]
   return {
     user_id: operator.id,
@@ -129,7 +129,12 @@ const allServiceCaps = [
 
 /** Every service on Full — nothing hidden, every tri-state control canonical. */
 function allVisibleFixture(): UserPermissionRead {
-  const caps = [...pageCaps, ...allServiceCaps, 'books.category.incoming']
+  const caps = [
+    ...pageCaps,
+    ...allServiceCaps,
+    'documents.duty_transfer',
+    ...categoryCapabilities.map((entry) => entry.id),
+  ]
   return permissionFixture({ effective: caps, role_defaults: caps, overrides: {} })
 }
 
@@ -162,10 +167,24 @@ function catalogEntry(
   }
 }
 
+const categoryCapabilities = [
+  ...Array.from({ length: 15 }, (_, index) =>
+    catalogEntry(
+      `books.category.${index + 1}/1`,
+      'books',
+      `Classification ${index + 1}`,
+      'General Book classification',
+    ),
+  ),
+  catalogEntry('books.category.incoming', 'books', 'Incoming', 'Incoming records'),
+]
+
 const capabilities: CapabilityRead[] = [
   catalogEntry('books.view', 'books', 'View records', 'Browse record books.'),
   catalogEntry('employees.view', 'employees', 'View employees', 'Browse employee profiles.'),
-  catalogEntry('books.service.other', 'books', 'Other records', 'Create other records.'),
+  catalogEntry('books.service.other', 'books', 'Records without a service', 'Create other records.'),
+  catalogEntry('documents.duty_transfer', 'documents', 'Transfer duty locations', 'Move employees.'),
+  ...categoryCapabilities,
 ]
 
 function configure(
@@ -220,15 +239,6 @@ function configure(
       })),
     ],
   })
-  vi.mocked(api.listBookCategories).mockResolvedValue([
-    {
-      id: 'incoming',
-      name_en: 'Incoming',
-      name_ar: 'وارد',
-      prefix: 'IN',
-      requires_approval: false,
-    },
-  ])
   vi.mocked(api.listPermissionRequests).mockResolvedValue(options.requests ?? [pendingRequest])
   vi.mocked(api.setUserPermissionsBulk).mockResolvedValue(perms)
   vi.mocked(api.decidePermissionRequest).mockResolvedValue(undefined)
@@ -402,6 +412,47 @@ describe('PermissionsPage Mirror editor', () => {
     expect(mirror.querySelectorAll('img[src*="service-icons"]').length).toBeGreaterThan(0)
     expect(within(mirror).queryByText('Report')).not.toBeInTheDocument()
     expect(within(mirror).getByText('Incoming')).toBeVisible()
+  })
+
+  it('lists every catalog category in catalog order, including all General Book classifications', async () => {
+    renderPage()
+    const blueprint = await screen.findByRole('region', { name: 'Permission blueprint' })
+    await within(blueprint).findByRole('button', { name: /Classification 15 Deny/ })
+    const categories = within(blueprint).getAllByRole('button').filter(
+      (button) => /Classification \d+ Deny|Incoming Grant/.test(button.textContent ?? ''),
+    )
+    expect(categories.map((button) => button.querySelector('bdi')?.textContent)).toEqual(
+      categoryCapabilities.map((entry) => entry.label_en),
+    )
+  })
+
+  it('toggles duty transfer as one capability and updates its preview and hidden count', async () => {
+    const base = allVisibleFixture()
+    const deferred = createDeferred<UserPermissionRead>()
+    renderPage(base, { requests: [] })
+    vi.mocked(api.setUserPermission).mockReturnValue(deferred.promise)
+    const button = await screen.findByRole('button', { name: /Transfer duty locations Grant/ })
+    expect(button.querySelector('[data-service-artwork="duty-locations"]')).toBeInTheDocument()
+    const mirror = await openDesktopPreview()
+    expect(within(mirror).getByText('Transfer duty locations')).toBeVisible()
+    expect(hiddenTotal()).toBe(0)
+
+    await userEvent.click(button)
+    expect(api.setUserPermission).toHaveBeenCalledWith(
+      operator.id,
+      'documents.duty_transfer',
+      'deny',
+    )
+    expect(api.setUserPermissionsBulk).not.toHaveBeenCalled()
+    await waitFor(() => expect(hiddenTotal()).toBe(1))
+    expect(within(mirror).queryByText('Transfer duty locations')).not.toBeInTheDocument()
+    expect(button).toHaveAttribute('aria-pressed', 'false')
+    deferred.resolve({
+      ...base,
+      effective: base.effective.filter((cap) => cap !== 'documents.duty_transfer'),
+      overrides: { 'documents.duty_transfer': 'deny' },
+    })
+    await waitFor(() => expect(button).toHaveAttribute('aria-busy', 'false'))
   })
 
   it('shows the admin explanation without falling back to another user', async () => {
@@ -754,7 +805,7 @@ describe('PermissionsPage Mirror editor', () => {
     await userEvent.click(recordsOnly)
 
     await waitFor(() => {
-      for (const name of ['General Book', 'Report', 'Other records']) {
+      for (const name of ['General Book', 'Report', 'Records without a service']) {
         for (const state of SERVICE_STATES) {
           const radio = serviceRadio(name, state)
           expect(radio).not.toBeDisabled()
@@ -912,7 +963,7 @@ describe('PermissionsPage Mirror editor', () => {
     expect(within(requestStrip!).getByText('Download the case register.')).toBeVisible()
   })
 
-  it('edits Other records with the tri-state control and never previews it as creatable', async () => {
+  it('explains records without a service and keeps its tri-state capability pair', async () => {
     const allVisible = allVisibleFixture()
     renderPage(allVisible, { requests: [] })
     vi.mocked(api.setUserPermissionsBulk).mockResolvedValue({
@@ -929,22 +980,29 @@ describe('PermissionsPage Mirror editor', () => {
     })
 
     const blueprint = await screen.findByRole('region', { name: 'Permission blueprint' })
-    expect(within(blueprint).getByRole('radiogroup', { name: 'Other records' })).toBeVisible()
-    expect(serviceState('Other records')).toBe('Full')
+    expect(within(blueprint).getByRole('radiogroup', { name: 'Records without a service' })).toBeVisible()
+    expect(serviceState('Records without a service')).toBe('Full')
+    expect(within(blueprint).getByText('Manual register entries')).toBeVisible()
+    expect(within(blueprint).getByText('Unfinished Word drafts and legacy records with no matching service')).toBeVisible()
+    expect(within(blueprint).getByText('Records from retired forms')).toBeVisible()
+    expect(within(blueprint).getByRole('link', { name: 'View these records' })).toHaveAttribute(
+      'href',
+      '/books?service=other',
+    )
     const mirror = await openDesktopPreview()
-    expect(within(mirror).queryByText('Other records')).not.toBeInTheDocument()
+    expect(within(mirror).queryByText('Records without a service')).not.toBeInTheDocument()
     expect(hiddenTotal()).toBe(0)
 
-    await userEvent.click(serviceRadio('Other records', 'Hidden'))
+    await userEvent.click(serviceRadio('Records without a service', 'Hidden'))
 
     expect(api.setUserPermissionsBulk).toHaveBeenCalledWith(operator.id, [
       { capability: 'books.service.other', effect: 'deny' },
       { capability: 'books.servicerecords.other', effect: 'deny' },
     ])
-    await waitFor(() => expect(serviceState('Other records')).toBe('Hidden'))
+    await waitFor(() => expect(serviceState('Records without a service')).toBe('Hidden'))
     expect(hiddenTotal()).toBe(1)
-    // Other records is never creatable, so the Services preview never listed it.
-    expect(within(mirror).queryByText('Other records')).not.toBeInTheDocument()
+    // This bucket has no Services tile, so the preview never lists it.
+    expect(within(mirror).queryByText('Records without a service')).not.toBeInTheDocument()
   })
 
   it('treats a disabled admin deep-link as unavailable instead of full access', async () => {

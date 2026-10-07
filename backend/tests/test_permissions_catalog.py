@@ -5,7 +5,7 @@ from app.db.models import BookCategory
 
 
 def test_static_catalog_has_complete_bilingual_request_policy_metadata():
-    assert len(CAPABILITIES) == 58
+    assert len(CAPABILITIES) == 59
     for cap in CAPABILITIES:
         assert cap.label_en.strip(), cap.id
         assert cap.label_ar.strip(), cap.id
@@ -34,9 +34,9 @@ def test_static_role_default_counts_are_preserved():
     assert {
         role: len(caps) for role, caps in ROLE_DEFAULTS.items() if role != "inmate_reporter"
     } == {
-        "operator": 18,
-        "manager": 42,
-        "admin": 58,
+        "operator": 19,
+        "manager": 43,
+        "admin": 59,
     }
 
 
@@ -55,6 +55,9 @@ def test_inmate_reporter_preset_is_exactly_its_fixed_ceiling():
             "books.service.Inmate Conduct Violations",
             "books.servicerecords.Inmate Conduct Violations",
             "books.category.NAT",
+            "books.service.Report",
+            "books.servicerecords.Report",
+            "books.category.GS",
         }
     )
 
@@ -65,6 +68,7 @@ def test_catalog_composes_bilingual_dynamic_entries_in_stable_order(db_session):
     db_session.add_all(
         [
             BookCategory(id="Z", name_en=None, name_ar=None, prefix="Z"),
+            BookCategory(id="9/1", name_en="Cat 9/1", name_ar=None, prefix="9"),
             BookCategory(
                 id="A",
                 name_en="Operations",
@@ -76,7 +80,7 @@ def test_catalog_composes_bilingual_dynamic_entries_in_stable_order(db_session):
     db_session.commit()
 
     catalog = capability_catalog_service.list_catalog(db_session)
-    assert len(catalog) == 58 + (2 * (len(SERVICE_IDS) + 1)) + 2
+    assert len(catalog) == 59 + (2 * (len(SERVICE_IDS) + 1)) + 15 + 2
     assert len({entry.id for entry in catalog}) == len(catalog)
 
     dynamic = catalog[len(CAPABILITIES) :]
@@ -91,6 +95,7 @@ def test_catalog_composes_bilingual_dynamic_entries_in_stable_order(db_session):
     n_service_pairs = len(expected_pair_ids)
     assert [entry.id for entry in dynamic[:n_service_pairs]] == expected_pair_ids
     assert [entry.id for entry in dynamic[n_service_pairs:]] == [
+        *[f"books.category.{tab}/1" for tab in range(1, 16)],
         "books.category.A",
         "books.category.Z",
     ]
@@ -116,10 +121,21 @@ def test_catalog_composes_bilingual_dynamic_entries_in_stable_order(db_session):
     assert unnamed.label_ar is None
     assert unnamed.description_en == "View records in books.category.Z."
     assert unnamed.description_ar is None
+    assert (by_id["books.category.9/1"].label_en, by_id["books.category.9/1"].label_ar) == (
+        "Custody, clothing & ID cards",
+        "العهدة والملابس والبطاقات التعريفية",
+    )
+    assert by_id["books.category.5/1"].label_en == "Security permits"
+    for tab in range(1, 16):
+        entry = by_id[f"books.category.{tab}/1"]
+        assert entry.label_ar
+        assert capability_catalog_service.get_catalog_entry(db_session, entry.id) == entry
 
     inmate_dynamic_ids = {
         "books.service.Inmate Conduct Violations",
         "books.servicerecords.Inmate Conduct Violations",
+        "books.service.Report",
+        "books.servicerecords.Report",
     }
     for entry in dynamic:
         assert entry.requestable and not entry.sensitive

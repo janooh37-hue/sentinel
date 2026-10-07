@@ -449,6 +449,9 @@ def generate_document(
         user,
         category_id=category_id,
         service_id=effective_service,
+        classification_code=(
+            payload.classification_code if effective_service == "General Book" else None
+        ),
     )
     if payload.revise_of_book_id is not None:
         revise_book = db.get(Book, payload.revise_of_book_id)

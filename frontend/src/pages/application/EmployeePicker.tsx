@@ -1,8 +1,8 @@
 /**
  * EmployeePicker — searchable combobox for the form-card Employee field.
  *
- * Calls GET /api/v1/employees?q=... on each keystroke (debounced by TanStack
- * Query's staleTime).  On select, propagates the employee id upward.
+ * Calls GET /api/v1/employees/lookup?q=... for restricted service lookup.
+ * On select, propagates the employee id upward.
  *
  * Visual vocabulary is TAMM (spec §6.8): 10px×14px input padding, 10px
  * radius, hairline border, primary-soft focus ring.
@@ -21,7 +21,7 @@ import { useTranslation } from 'react-i18next'
 import { User } from 'lucide-react'
 
 import { api } from '@/lib/api'
-import type { EmployeeListItem } from '@/lib/api'
+import type { EmployeeLookupItem } from '@/lib/api'
 import { Skeleton } from '@/components/ui/skeleton'
 import { pickEmployeeName } from '@/lib/employeeName'
 import { cn } from '@/lib/utils'
@@ -60,21 +60,21 @@ export function EmployeePicker({
     refetch,
   } = useQuery({
     queryKey: ['employees-picker', query],
-    queryFn: () => api.listEmployees({ q: query.trim() || undefined, limit: 50 }),
+    queryFn: () => api.lookupEmployees({ q: query.trim() || undefined, limit: 50 }),
     enabled: open,
     staleTime: 15_000,
   })
 
   const { data: selectedData, isError: selectedError } = useQuery({
-    queryKey: ['employee', selectedId],
-    queryFn: () => api.getEmployee(selectedId!),
+    queryKey: ['employee-lookup', selectedId],
+    queryFn: () => api.getEmployeeLookup(selectedId!),
     enabled: !!selectedId,
     staleTime: 30_000,
   })
 
-  const rows: EmployeeListItem[] = data?.items ?? []
+  const rows: EmployeeLookupItem[] = data?.items ?? []
 
-  function displayName(item: EmployeeListItem): string {
+  function displayName(item: EmployeeLookupItem): string {
     return pickEmployeeName(item, i18n.language)
   }
 

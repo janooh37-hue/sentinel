@@ -23,7 +23,6 @@ import {
   api,
   apiErrorMessage,
   type AdminUserRead,
-  type BookCategoryRead,
   type PermissionEffect,
   type PermissionRequestRead,
   type TemplateMeta,
@@ -645,10 +644,6 @@ export function PermissionsPage(): React.JSX.Element {
     queryFn: api.listTemplates,
     staleTime: Infinity,
   })
-  const categoriesQuery = useQuery({
-    queryKey: ['book-categories'],
-    queryFn: api.listBookCategories,
-  })
   const requestsQuery = useQuery({
     queryKey: ['permission-requests'],
     queryFn: api.listPermissionRequests,
@@ -735,19 +730,28 @@ export function PermissionsPage(): React.JSX.Element {
       },
     ]
   }, [isAr, t, templatesById, templatesQuery.data?.items])
+  const dutyTransferItem: BlueprintItem = {
+    id: 'duty-transfer',
+    capability: 'documents.duty_transfer',
+    label: t('access.permissions.mirror.dutyTransfer'),
+    kind: 'service',
+    artwork: 'duty-locations',
+  }
   const mirroredServiceIds = useMemo(
     () => new Set(serviceItems.map((item) => item.id)),
     [serviceItems],
   )
   const categoryItems = useMemo<BlueprintItem[]>(
     () =>
-      (categoriesQuery.data ?? []).map((category: BookCategoryRead) => ({
-        id: category.id,
-        capability: `books.category.${category.id}`,
-        label: (isAr ? category.name_ar : category.name_en) || category.id,
-        kind: 'category',
-      })),
-    [categoriesQuery.data, isAr],
+      capabilityCatalog.entries
+        .filter((entry) => entry.id.startsWith('books.category.'))
+        .map((entry) => ({
+          id: entry.id.slice('books.category.'.length),
+          capability: entry.id,
+          label: localizeCapability(entry, entry.id, i18n.language).label,
+          kind: 'category',
+        })),
+    [capabilityCatalog.entries, i18n.language],
   )
 
   // Records visibility is the stronger gate: without it the service is gone
@@ -763,10 +767,12 @@ export function PermissionsPage(): React.JSX.Element {
     return states
   }, [effective, serviceItems])
 
-  const editableItems = useMemo(
-    () => [...pageItems.filter((item) => !item.locked), ...serviceItems, ...categoryItems],
-    [categoryItems, pageItems, serviceItems],
-  )
+  const editableItems = [
+    ...pageItems.filter((item) => !item.locked),
+    ...serviceItems,
+    dutyTransferItem,
+    ...categoryItems,
+  ]
   const hiddenCount = permissions
     ? editableItems.reduce(
         (count, item) => count + (item.capability && !effective.has(item.capability) ? 1 : 0),
@@ -782,10 +788,15 @@ export function PermissionsPage(): React.JSX.Element {
     (item) => item.locked || (item.capability != null && effective.has(item.capability)),
   )
   const visibleServices = canCreateRecords
-    ? serviceItems.filter(
-        (item) =>
-          item.id !== 'other' && item.capability != null && effective.has(item.capability),
-      )
+    ? [
+        ...serviceItems.filter(
+          (item) =>
+            item.id !== 'other' && item.capability != null && effective.has(item.capability),
+        ),
+        ...(effective.has('documents.duty_transfer') && effective.has('books.service.General Book')
+          ? [dutyTransferItem]
+          : []),
+      ]
     : []
   const visibleCategories = canViewRecords
     ? categoryItems.filter(
@@ -967,7 +978,7 @@ export function PermissionsPage(): React.JSX.Element {
     if (!captionItem || !permissions) return t('access.permissions.mirror.hint')
     if (captionItem.locked) return t('access.permissions.mirror.always')
     if (!captionItem.capability) return t('access.permissions.mirror.always')
-    if (captionItem.kind === 'service') {
+    if (captionItem.capability.startsWith('books.service.')) {
       const state = serviceStates[captionItem.id] ?? 'full'
       return t(`access.permissions.mirror.${SERVICE_CAPTION_KEY[state]}`, {
         name: captionItem.label,
@@ -1158,9 +1169,7 @@ export function PermissionsPage(): React.JSX.Element {
               ) : (
                 <EmptyState icon={ShieldCheck} message={t('access.permissions.empty')} />
               )
-            ) : permissionsQuery.isError ||
-              capabilityCatalog.status === 'error' ||
-              categoriesQuery.isError ? (
+            ) : permissionsQuery.isError || capabilityCatalog.status === 'error' ? (
               <EmptyState message={t('access.permissions.loadError')} />
             ) : permissionsQuery.isLoading || !permissions ? (
               <Skeleton className="h-[520px] w-full rounded-2xl" />
@@ -1250,16 +1259,41 @@ export function PermissionsPage(): React.JSX.Element {
                           </h3>
                           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                             {serviceItems.map((item) => (
-                              <ServiceTriState
-                                key={item.id}
-                                item={item}
-                                state={serviceStates[item.id] ?? 'full'}
-                                legendId={SERVICE_LEGEND_ID}
-                                saving={permissionWritesPending}
-                                onFocus={() => setCaptionItem(item)}
-                                onSelect={(next, event) => selectServiceState(item, next, event)}
-                              />
+                              <div key={item.id}>
+                                <ServiceTriState
+                                  item={item}
+                                  state={serviceStates[item.id] ?? 'full'}
+                                  legendId={SERVICE_LEGEND_ID}
+                                  saving={permissionWritesPending}
+                                  onFocus={() => setCaptionItem(item)}
+                                  onSelect={(next, event) => selectServiceState(item, next, event)}
+                                />
+                                {item.id === 'other' ? (
+                                  <div className="mt-2 space-y-2 text-[0.72em] leading-relaxed text-muted-foreground">
+                                    <ul className="list-disc space-y-1 ps-5">
+                                      <li>{t('access.permissions.mirror.otherManual')}</li>
+                                      <li>{t('access.permissions.mirror.otherDrafts')}</li>
+                                      <li>{t('access.permissions.mirror.otherRetired')}</li>
+                                    </ul>
+                                    <Link
+                                      to="/books?service=other"
+                                      className="inline-flex min-h-9 items-center text-primary underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                    >
+                                      {t('access.permissions.mirror.viewOtherRecords')}
+                                    </Link>
+                                  </div>
+                                ) : null}
+                              </div>
                             ))}
+                            <div className="grid self-start">
+                              <BlueprintButton
+                                item={dutyTransferItem}
+                                denied={!effective.has('documents.duty_transfer')}
+                                saving={permissionWritesPending}
+                                onFocus={() => setCaptionItem(dutyTransferItem)}
+                                onToggle={(event) => toggleItem(dutyTransferItem, event)}
+                              />
+                            </div>
                           </div>
                           <p
                             id={SERVICE_LEGEND_ID}
@@ -1273,6 +1307,9 @@ export function PermissionsPage(): React.JSX.Element {
                           <h3 className="mb-3 text-[0.7em] font-semibold uppercase tracking-[0.08em] rtl:tracking-normal text-primary">
                             {t('access.permissions.mirror.blueprintCategories')}
                           </h3>
+                          <p className="mb-3 text-[0.72em] text-muted-foreground">
+                            {t('access.permissions.mirror.categoryHint')}
+                          </p>
                           <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
                             {categoryItems.map((item) => (
                               <BlueprintButton
@@ -1389,8 +1426,7 @@ export function PermissionsPage(): React.JSX.Element {
           {selectedUser != null &&
           permissions != null &&
           !permissionsQuery.isError &&
-          capabilityCatalog.status !== 'error' &&
-          !categoriesQuery.isError ? (
+          capabilityCatalog.status !== 'error' ? (
             <aside className="min-w-0 min-[1100px]:sticky min-[1100px]:top-4 min-[1100px]:self-start">
               <AdvancedPermissionsPanel
                 user={selectedUser}

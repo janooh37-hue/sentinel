@@ -30,7 +30,7 @@ vi.mock('sonner', () => ({
 vi.mock('@/lib/api', () => ({
   api: {
     listTemplates: vi.fn(),
-    getEmployee: vi.fn(),
+    getEmployeeLookup: vi.fn(),
     getSettings: vi.fn(),
     getTemplateFields: vi.fn(),
     generateDocument: vi.fn(),
@@ -145,7 +145,7 @@ beforeEach(async () => {
       },
     ],
   } as never)
-  mockedApi.getEmployee.mockResolvedValue({
+  mockedApi.getEmployeeLookup.mockResolvedValue({
     id: 'G1',
     name_en: 'Employee One',
     name_ar: null,

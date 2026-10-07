@@ -96,6 +96,16 @@ describe('EmployeesSectionTabs', () => {
     expect(linkTo('/duty-locations')).toBeDefined()
   })
 
+  it.each(['documents.generate', 'documents.duty_transfer'])(
+    'hides Duty Locations without %s',
+    (denied) => {
+      hasCapability.mockImplementation((cap) => cap !== denied)
+      renderTabs()
+      expect(linkTo('/duty-locations')).toBeUndefined()
+      expect(linkTo('/employees')).toBeDefined()
+    },
+  )
+
   it('hides ORG-tree without employees.view', () => {
     hasCapability.mockImplementation((cap) => cap !== 'employees.view')
 
@@ -130,7 +140,7 @@ describe('EmployeesSectionTabs', () => {
     renderTabs({}, '/employees')
 
     expect(linkTo('/employees/timesheet')).toBeUndefined()
-    // Its ungated neighbour still renders, so this is the gate and not a
+    // Its allowed neighbour still renders, so this is the gate and not a
     // switcher that failed to mount.
     expect(linkTo('/duty-locations')).toBeDefined()
   })

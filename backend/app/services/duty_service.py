@@ -245,6 +245,7 @@ def transfer(
         current_user,
         category_id=document_service.record_category_for_template("General Book"),
         service_id="General Book",
+        classification_code="12/1",
     )
 
     # Otherwise mint the transfer letter. Build the body from CURRENT (FROM)

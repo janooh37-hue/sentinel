@@ -340,6 +340,12 @@ def user_visibility_clause(db: Session, user: User) -> ColumnElement[bool] | Non
     clauses: list[ColumnElement[bool]] = []
     if denied_categories:
         clauses.append(Book.category_id.not_in(denied_categories))
+        clauses.append(
+            or_(
+                Book.classification_code.is_(None),
+                Book.classification_code.not_in(denied_categories),
+            )
+        )
     if denied_services:
         clauses.append(
             not_(or_(*[service_clause(service_id) for service_id in sorted(denied_services)]))
@@ -377,7 +383,10 @@ def document_visibility_clause(db: Session, user: User) -> ColumnElement[bool] |
             .join(Book, Book.id == BookVersion.book_id)
             .join(linked_document, linked_document.id == BookVersion.document_id)
             .where(
-                Book.category_id.in_(sorted(denied_categories)),
+                or_(
+                    Book.category_id.in_(sorted(denied_categories)),
+                    Book.classification_code.in_(sorted(denied_categories)),
+                ),
                 or_(
                     linked_document.id == Document.id,
                     and_(
@@ -419,6 +428,7 @@ def require_record_type_access(
     *,
     category_id: str | None = None,
     service_id: str | None = None,
+    classification_code: str | None = None,
 ) -> None:
     """Require the user's effective dynamic caps for a record type."""
     if category_id is not None and db.get(BookCategory, category_id) is None:
@@ -430,7 +440,10 @@ def require_record_type_access(
     caps = perm_service.effective_caps(db, user)
     category_denied = category_id is not None and f"books.category.{category_id}" not in caps
     service_denied = service_id is not None and f"books.service.{service_id}" not in caps
-    if category_denied or service_denied:
+    classification_denied = (
+        classification_code is not None and f"books.category.{classification_code}" not in caps
+    )
+    if category_denied or service_denied or classification_denied:
         raise AppError(
             "RECORD_TYPE_FORBIDDEN",
             "You don't have access to this record type.",
@@ -455,7 +468,11 @@ def assert_record_type_visible(db: Session, user: User, row: Book) -> None:
             newest.template_id if newest is not None else None,
             versioned=newest is not None,
         )
-    if row.category_id in denied_categories or service_id in denied_services:
+    if (
+        row.category_id in denied_categories
+        or row.classification_code in denied_categories
+        or service_id in denied_services
+    ):
         raise AppError(
             "RECORD_TYPE_FORBIDDEN",
             "You don't have access to this record type.",

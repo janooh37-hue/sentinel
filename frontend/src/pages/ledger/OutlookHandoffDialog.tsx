@@ -40,7 +40,7 @@ import {
 } from 'lucide-react'
 
 import { api, ApiError } from '@/lib/api'
-import type { EmployeeListItem, LedgerEntryRead } from '@/lib/api'
+import type { EmployeeLookupItem, LedgerEntryRead } from '@/lib/api'
 import { cn } from '@/lib/utils'
 import { base64PdfToFile, desiredRefPdfDocIds, mergeFiles } from '@/lib/refPdfAttachments'
 import { useIdentity } from '@/lib/useIdentity'
@@ -291,7 +291,7 @@ export function OutlookHandoffDialog({
   }, [])
   const employeesQuery = useQuery({
     queryKey: ['compose-employees', empQuery],
-    queryFn: () => api.listEmployees({ q: empQuery, limit: 6 }),
+    queryFn: () => api.lookupEmployees({ q: empQuery, limit: 6 }),
     enabled: empQuery.length > 0,
     staleTime: 30_000,
   })
@@ -300,7 +300,7 @@ export function OutlookHandoffDialog({
     [employeesQuery.data],
   )
   const employeeLookup = useCallback(
-    (q: string): EmployeeListItem[] => {
+    (q: string): EmployeeLookupItem[] => {
       requestEmployees(q)
       return q.trim().length === 0 ? [] : employeeResults
     },
@@ -390,7 +390,7 @@ export function OutlookHandoffDialog({
   const allFiles = useMemo(() => mergeFiles(files, refPdfList), [files, refPdfList])
 
   const handlePickEmployee = useCallback(
-    (emp: EmployeeListItem) => {
+    (emp: EmployeeLookupItem) => {
       addReference({
         kind: 'employee',
         id: emp.id,

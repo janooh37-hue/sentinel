@@ -764,6 +764,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/employees/lookup": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Lookup Employees
+         * @description Search employee identities for services without granting profile access.
+         */
+        get: operations["lookup_employees_api_v1_employees_lookup_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/employees/lookup/{employee_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Employee Lookup
+         * @description Resolve a selection and prefill only the Passport Release identity fields.
+         */
+        get: operations["get_employee_lookup_api_v1_employees_lookup__employee_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/employees/completeness": {
         parameters: {
             query?: never;
@@ -9863,6 +9903,65 @@ export interface components {
             /** Offset */
             offset: number;
         };
+        /**
+         * EmployeeLookupItem
+         * @description Service picker identity/display fields, without employee profile data.
+         */
+        EmployeeLookupItem: {
+            /** Id */
+            id: string;
+            /** Name En */
+            name_en: string;
+            /** Name Ar */
+            name_ar: string | null;
+            /** Department */
+            department?: string | null;
+            /** Position */
+            position?: string | null;
+            /** Position Ar */
+            position_ar?: string | null;
+            /** Duty Unit */
+            duty_unit?: string | null;
+            /** Duty Post */
+            duty_post?: string | null;
+        };
+        /**
+         * EmployeeLookupRead
+         * @description Selected employee prefill for the Passport Release table.
+         */
+        EmployeeLookupRead: {
+            /** Id */
+            id: string;
+            /** Name En */
+            name_en: string;
+            /** Name Ar */
+            name_ar: string | null;
+            /** Department */
+            department?: string | null;
+            /** Position */
+            position?: string | null;
+            /** Position Ar */
+            position_ar?: string | null;
+            /** Duty Unit */
+            duty_unit?: string | null;
+            /** Duty Post */
+            duty_post?: string | null;
+            /** Nationality */
+            nationality: string | null;
+            /** Passport No */
+            passport_no: string | null;
+        };
+        /** EmployeeLookupResponse */
+        EmployeeLookupResponse: {
+            /** Items */
+            items: components["schemas"]["EmployeeLookupItem"][];
+            /** Total */
+            total: number;
+            /** Limit */
+            limit: number;
+            /** Offset */
+            offset: number;
+        };
         /** EmployeeRead */
         EmployeeRead: {
             /** Id */
@@ -16979,6 +17078,74 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EmployeeRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    lookup_employees_api_v1_employees_lookup_get: {
+        parameters: {
+            query?: {
+                q?: string | null;
+                limit?: number;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmployeeLookupResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_employee_lookup_api_v1_employees_lookup__employee_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                employee_id: string;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmployeeLookupRead"];
                 };
             };
             /** @description Validation Error */

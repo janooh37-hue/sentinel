@@ -218,7 +218,12 @@ def test_dynamic_capabilities_are_implicit_defaults_and_never_seeded(
         f"books.servicerecords.{service_id}" for service_id in (*SERVICE_IDS, OTHER_SERVICE_ID)
     }
     category_cap = f"books.category.{category.id}"
-    expected_dynamic = service_caps | service_record_caps | {category_cap}
+    expected_dynamic = (
+        service_caps
+        | service_record_caps
+        | {category_cap}
+        | {f"books.category.{tab}/1" for tab in range(1, 16)}
+    )
 
     # 2026-09-21 HR intake additions (permissions.OPT_IN_SERVICE_IDS) are
     # RECOGNIZED dynamic capabilities but not part of a non-admin's implicit
@@ -233,6 +238,10 @@ def test_dynamic_capabilities_are_implicit_defaults_and_never_seeded(
     assert opt_in_caps.isdisjoint(perm_service.effective_caps(db_session, operator))
     assert expected_dynamic <= perm_service.effective_caps(db_session, admin)
     assert perm_service.denied_record_types(db_session, admin) == (set(), set())
+    reporter = _user(db_session, role=INMATE_REPORTER_ROLE, email="dynamic-reporter@test.ae")
+    assert {f"books.category.{tab}/1" for tab in range(1, 16)}.isdisjoint(
+        perm_service.effective_caps(db_session, reporter)
+    )
     assert expected_dynamic.isdisjoint(permissions.ALL_CAPABILITIES)
 
     # inmate_reporter is the one deliberate exception: its fixed-scope
@@ -390,7 +399,7 @@ def test_auth_catalog_and_user_defaults_include_dynamic_capabilities(
             "domain": "books",
             "default_roles": (
                 ["operator", "manager", "admin", "inmate_reporter"]
-                if service_id == "Inmate Conduct Violations"
+                if service_id in {"Inmate Conduct Violations", "Report"}
                 else ["admin"]
                 if service_id in permissions.OPT_IN_SERVICE_IDS
                 else ["operator", "manager", "admin"]
@@ -2515,3 +2524,136 @@ def test_catalog_dynamic_capability_labels_use_category_and_template_names(
     assert category is not None and category.label_en == "Operations"
     assert service is not None and service.label_en == "General Book"
     assert records is not None and records.label_en == "Records: General Book"
+
+
+def test_classification_denial_hides_records_and_linked_documents(
+    mirror_api: ApiHarness,
+) -> None:
+    _category(mirror_api.db, "GS", name_en="General Services")
+    _category(mirror_api.db, "5/1", name_en="Cat 5/1")
+    hidden = _book(mirror_api.db, ref_number="1/5/1", category_id="GS", service_id="General Book")
+    hidden.classification_code = "5/1"
+    legacy = _book(
+        mirror_api.db, ref_number="LEGACY-5", category_id="5/1", service_id="General Book"
+    )
+    visible = _book(mirror_api.db, ref_number="1/12/2", category_id="GS", service_id="General Book")
+    visible.classification_code = "12/1"
+    unclassified = _book(
+        mirror_api.db, ref_number="REPORT-3", category_id="GS", service_id="Report"
+    )
+    primary = Document(
+        template_id="General Book",
+        ref_number=hidden.ref_number,
+        submission_id="classified",
+        role="primary",
+        created_at=datetime.now(),
+    )
+    companion = Document(
+        template_id="Leave Undertaking",
+        ref_number=hidden.ref_number,
+        submission_id="classified",
+        role="companion",
+        created_at=datetime.now(),
+    )
+    mirror_api.db.add_all([primary, companion])
+    mirror_api.db.flush()
+    hidden.versions[0].document_id = primary.id
+    mirror_api.db.commit()
+    operator = _user(mirror_api.db, role="operator", email="classified-visibility@test.ae")
+    admin = mirror_api.actor
+    perm_service.set_user_override(
+        mirror_api.db, operator.id, "books.category.5/1", "deny", actor=admin
+    )
+    mirror_api.as_user(operator)
+
+    listed = mirror_api.client.get("/api/v1/books")
+    assert listed.status_code == 200, listed.text
+    assert {item["id"] for item in listed.json()["items"]} == {visible.id, unclassified.id}
+    assert listed.json()["total"] == 2
+    facets = mirror_api.client.get("/api/v1/books/facets")
+    assert facets.status_code == 200, facets.text
+    assert facets.json()["total"] == 2
+    assert {item["id"]: item["count"] for item in facets.json()["services"]} == {
+        "General Book": 1,
+        "Report": 1,
+    }
+    for row in (hidden, legacy):
+        detail = mirror_api.client.get(f"/api/v1/books/{row.id}")
+        assert detail.status_code == 403, detail.text
+        assert _error_code(detail) == "RECORD_TYPE_FORBIDDEN"
+    document_clause = book_service.document_visibility_clause(mirror_api.db, operator)
+    assert document_clause is not None
+    assert list(mirror_api.db.scalars(select(Document.id).where(document_clause))) == []
+
+    mirror_api.as_user(admin)
+    assert mirror_api.client.get("/api/v1/books").json()["total"] == 4
+    assert mirror_api.client.get(f"/api/v1/books/{hidden.id}").status_code == 200
+    assert book_service.document_visibility_clause(mirror_api.db, admin) is None
+
+
+def test_classification_denial_blocks_general_book_generation_and_word_creation(
+    mirror_api: ApiHarness, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from app.api.v1 import documents as documents_api
+
+    _category(mirror_api.db, "GS", name_en="General Services")
+    manager = _user(mirror_api.db, role="manager", email="classified-create@test.ae")
+    admin = mirror_api.actor
+    perm_service.set_user_override(
+        mirror_api.db, manager.id, "books.category.5/1", "deny", actor=admin
+    )
+    mirror_api.as_user(manager)
+    payload = {"template_id": "General Book", "fields": {}, "classification_code": "5/1"}
+    generated = mirror_api.client.post("/api/v1/documents/generate", json=payload)
+    assert generated.status_code == 403, generated.text
+    assert _error_code(generated) == "RECORD_TYPE_FORBIDDEN"
+    word = mirror_api.client.post(
+        "/api/v1/books/word-sessions",
+        json={"subject": "Denied classification", "classification_code": "5/1"},
+    )
+    assert word.status_code == 403, word.text
+    assert _error_code(word) == "RECORD_TYPE_FORBIDDEN"
+
+    queued: list[str | None] = []
+    monkeypatch.setattr(
+        documents_api,
+        "_run_generation",
+        lambda job_id, request, user: queued.append(request.classification_code),
+    )
+    allowed = mirror_api.client.post(
+        "/api/v1/documents/generate", json={**payload, "classification_code": "12/1"}
+    )
+    assert allowed.status_code == 202, allowed.text
+    mirror_api.as_user(admin)
+    admin_allowed = mirror_api.client.post("/api/v1/documents/generate", json=payload)
+    assert admin_allowed.status_code == 202, admin_allowed.text
+    assert queued == ["12/1", "5/1"]
+
+
+@pytest.mark.parametrize("denied_capability", ["documents.duty_transfer", "documents.generate"])
+def test_duty_transfer_requires_both_capabilities(
+    mirror_api: ApiHarness, monkeypatch: pytest.MonkeyPatch, denied_capability: str
+) -> None:
+    from app.api.v1 import duty as duty_api
+    from app.schemas.duty import DutyTransferResult
+
+    operator = _user(mirror_api.db, role="operator", email=f"{denied_capability}@test.ae")
+    admin = mirror_api.actor
+    calls: list[int] = []
+
+    def transfer(db, **kwargs):
+        calls.append(kwargs["current_user"].id)
+        return DutyTransferResult(moved=["G100"])
+
+    monkeypatch.setattr(duty_api.duty_service, "transfer", transfer)
+    mirror_api.as_user(operator)
+    payload = {"moves": [{"employee_id": "G100", "to_unit": "Unit 2"}]}
+    allowed = mirror_api.client.post("/api/v1/duty/transfer", json=payload)
+    assert allowed.status_code == 200, allowed.text
+    assert allowed.json()["moved"] == ["G100"]
+    perm_service.set_user_override(
+        mirror_api.db, operator.id, denied_capability, "deny", actor=admin
+    )
+    denied = mirror_api.client.post("/api/v1/duty/transfer", json=payload)
+    assert denied.status_code == 403, denied.text
+    assert calls == [operator.id]

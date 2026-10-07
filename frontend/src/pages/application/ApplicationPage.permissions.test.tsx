@@ -125,11 +125,24 @@ describe('ApplicationPage service permissions', () => {
     }
   })
 
+  it('hides Duty Locations when duty transfer is denied even with General Book access', async () => {
+    capabilityState.allowed = new Set([
+      'documents.generate',
+      'books.view',
+      'books.service.General Book',
+    ])
+    renderPage()
+
+    expect(await screen.findByText('General Book')).toBeVisible()
+    expect(screen.queryByText('Duty Locations & Transfers')).not.toBeInTheDocument()
+  })
+
   it('uses calibrated artwork for synthetic and supported template tiles', async () => {
     capabilityState.allowed = new Set([
       'documents.generate',
       'books.view',
       'books.service.General Book',
+      'documents.duty_transfer',
       'leaves.view',
       'leaves.create',
       'leaves.edit',

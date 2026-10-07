@@ -15,6 +15,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { vi, test, expect, beforeEach } from 'vitest'
 
 const updateEmployee = vi.fn().mockResolvedValue({})
+const hasCapability = vi.fn<(cap: string) => boolean>()
 
 vi.mock('@tanstack/react-query', () => ({
   useQuery: () => ({ data: undefined, isError: false }),
@@ -42,7 +43,7 @@ vi.mock('@/lib/api', () => ({
   apiErrorMessage: (e: unknown) => String(e),
 }))
 vi.mock('@/lib/useCapabilities', () => ({
-  useCapabilities: () => ({ has: () => true }),
+  useCapabilities: () => ({ has: hasCapability }),
 }))
 vi.mock('@/components/employees/SignaturePad', () => ({ SignaturePad: () => null }))
 // ProfileTab imports './PassportField' — mock the same specifier (test lives in the same dir).
@@ -55,6 +56,7 @@ import type { EmployeeRead } from '@/lib/api'
 
 beforeEach(() => {
   updateEmployee.mockClear()
+  hasCapability.mockReturnValue(true)
 })
 
 const baseEmployee = {
@@ -98,6 +100,12 @@ test('shows Transfer button for editors', () => {
   const employee = { id: 'G100', name_en: 'John', status: 'Active' } as unknown as EmployeeRead
   render(<ProfileTab employee={employee} missing={[]} />)
   expect(screen.getByText('employee.profile.transfer')).toBeInTheDocument()
+})
+
+test('hides Transfer when duty transfer is denied but employee editing is allowed', () => {
+  hasCapability.mockImplementation((cap) => cap !== 'documents.duty_transfer')
+  render(<ProfileTab employee={baseEmployee} missing={[]} />)
+  expect(screen.queryByText('employee.profile.transfer')).not.toBeInTheDocument()
 })
 
 test('nationality row shows notSetF text and add button when nationality is missing', () => {
