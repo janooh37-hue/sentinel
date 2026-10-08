@@ -667,7 +667,7 @@ INMATE_REPORTER_CAPS: Final[frozenset[str]] = frozenset(
         "books.submit",
         f"{SERVICE_CAP_PREFIX}Inmate Conduct Violations",
         f"{SERVICE_RECORDS_CAP_PREFIX}Inmate Conduct Violations",
-        f"{CATEGORY_CAP_PREFIX}NAT",
+        f"{CATEGORY_CAP_PREFIX}INV",
         f"{SERVICE_CAP_PREFIX}Report",
         f"{SERVICE_RECORDS_CAP_PREFIX}Report",
         f"{CATEGORY_CAP_PREFIX}GS",

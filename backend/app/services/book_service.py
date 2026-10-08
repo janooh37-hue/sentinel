@@ -105,13 +105,15 @@ def count_my_generated_documents(db: Session, *, user_id: int) -> dict[str, int]
 
 
 def list_book_categories(db: Session, user: User | None = None) -> list[BookCategory]:
-    """Return visible categories in natural numeric order ("1", "2", …)."""
+    """Return classifications in numeric order first, then the other categories."""
     stmt = select(BookCategory)
     if user is not None:
         _denied_services, denied_categories = perm_service.denied_record_types(db, user)
         if denied_categories:
             stmt = stmt.where(BookCategory.id.not_in(denied_categories))
-    stmt = stmt.order_by(func.cast(BookCategory.id, Integer), BookCategory.id)
+    stmt = stmt.order_by(
+        BookCategory.id.like("%/%").desc(), func.cast(BookCategory.id, Integer), BookCategory.id
+    )
     return list(db.execute(stmt).scalars().all())
 
 
@@ -334,9 +336,9 @@ def _inmate_reporter_book_visible(book: Book, user_id: int) -> bool:
     return False
 
 
-def _classification_denied_clause(denied_categories: set[str]) -> ColumnElement[bool]:
+def _classified_under_clause(category_ids: set[str]) -> ColumnElement[bool]:
     """A classified-register book (General Book / Security Permit, or version-less
-    or template-less) filed under a denied classification. Auto-classified papers
+    or template-less) filed under one of these classifications. Auto-classified papers
     from other forms (leave, resignation) carry a code too but are never matched."""
     newest_template_id = (
         select(BookVersion.template_id)
@@ -347,7 +349,7 @@ def _classification_denied_clause(denied_categories: set[str]) -> ColumnElement[
     )
     return and_(
         Book.classification_code.is_not(None),
-        Book.classification_code.in_(sorted(denied_categories)),
+        Book.classification_code.in_(sorted(category_ids)),
         or_(
             newest_template_id.is_(None),
             newest_template_id.in_(sorted(CLASSIFIED_BOOK_FORMS)),
@@ -361,7 +363,7 @@ def user_visibility_clause(db: Session, user: User) -> ColumnElement[bool] | Non
     clauses: list[ColumnElement[bool]] = []
     if denied_categories:
         clauses.append(Book.category_id.not_in(denied_categories))
-        clauses.append(not_(_classification_denied_clause(denied_categories)))
+        clauses.append(not_(_classified_under_clause(denied_categories)))
     if denied_services:
         clauses.append(
             not_(or_(*[service_clause(service_id) for service_id in sorted(denied_services)]))
@@ -890,8 +892,11 @@ def list_books(
         count_stmt = count_stmt.where(mine)
 
     if category_id is not None:
-        stmt = stmt.where(Book.category_id == category_id)
-        count_stmt = count_stmt.where(Book.category_id == category_id)
+        category_clause = or_(
+            Book.category_id == category_id, _classified_under_clause({category_id})
+        )
+        stmt = stmt.where(category_clause)
+        count_stmt = count_stmt.where(category_clause)
 
     if service_id is not None:
         svc_clause = service_clause(service_id)

@@ -36,7 +36,7 @@ def api_db(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Session:
     monkeypatch.setattr(session_mod, "SessionLocal", factory)
     db = factory()
     perm_service.seed_role_defaults(db)
-    db.add(BookCategory(id="NAT", prefix="NAT"))
+    db.add(BookCategory(id="INV", prefix="INV"))
     db.commit()
     monkeypatch.setattr(
         approved_import_service,
@@ -152,7 +152,7 @@ def test_commit_returns_approved_records_handoff(api_db: Session) -> None:
     assert response.json() == {
         "book_id": 1,
         "document_id": 1,
-        "ref_number": "NAT-0001",
+        "ref_number": "INV-0001",
         "approval_state": "approved",
     }
 

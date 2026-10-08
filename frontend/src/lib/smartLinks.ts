@@ -3,7 +3,7 @@
  *
  * Walks the text nodes of a container and replaces:
  *   - `G\d{3,4}`                       → employee link (e.g. G2838, G3082)
- *   - `(GS|HR|NAT|SC|VF|VA|\d{1,2})-\d{3,4}` → book reference link. Matches
+ *   - `(GS|HR|NAT|INV|SC|VF|VA|\d{1,2})-\d{3,4}` → book reference link. Matches
  *     lettered refs (GS-0005, HR-0003, VF-0231, VA-0232) AND the real numeric
  *     refs the allocator emits as `{category-id}-{NNNN}` (e.g. 1-0042, 9-0007).
  *
@@ -20,7 +20,7 @@
 
 import { gNumberRegex } from './gnumber'
 
-const BOOK_REF_SOURCE = String.raw`\b(?:GS|HR|NAT|SC|VF|VA|\d{1,2})-\d{3,4}\b`
+const BOOK_REF_SOURCE = String.raw`\b(?:GS|HR|NAT|INV|SC|VF|VA|\d{1,2})-\d{3,4}\b`
 
 const MAX_BOOK_REFS = 5
 

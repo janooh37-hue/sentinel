@@ -54,7 +54,7 @@ def test_inmate_reporter_preset_is_exactly_its_fixed_ceiling():
             "books.submit",
             "books.service.Inmate Conduct Violations",
             "books.servicerecords.Inmate Conduct Violations",
-            "books.category.NAT",
+            "books.category.INV",
             "books.service.Report",
             "books.servicerecords.Report",
             "books.category.GS",
@@ -159,7 +159,7 @@ def test_legacy_categories_name_the_services_a_deny_blocks(db_session):
     db_session.add_all(
         [
             BookCategory(id=category_id, name_en=None, name_ar=None, prefix=category_id)
-            for category_id in ("GS", "HR", "NAT", "SC", "VA", "VF")
+            for category_id in ("GS", "HR", "NAT", "INV", "SC", "VA", "VF")
         ]
     )
     db_session.commit()
@@ -173,7 +173,10 @@ def test_legacy_categories_name_the_services_a_deny_blocks(db_session):
     assert gs.description_en == "Covers records from: Acknowledgment Form, General Book, Report."
     assert gs.description_ar == "يشمل سجلات: استلام المواد، كتاب عام، تقرير."
     assert by_id["books.category.NAT"].description_en == (
-        "Covers records from: Violation Form, Warning Form, Inmate Conduct Violations."
+        "Covers records from: Violation Form, Warning Form."
+    )
+    assert by_id["books.category.INV"].description_en == (
+        "Covers records from: Inmate Conduct Violations."
     )
     assert (
         by_id["books.category.SC"].description_en == "Covers records from: Material Request Form."

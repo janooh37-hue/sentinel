@@ -1741,13 +1741,13 @@ def test_generate_checks_target_category_and_companion_as_other(
 
 @pytest.mark.parametrize(
     "denied_capability",
-    ["books.category.NAT", "books.service.Inmate Conduct Violations"],
+    ["books.category.INV", "books.service.Inmate Conduct Violations"],
 )
 def test_approved_violation_commit_checks_record_type(
     mirror_api: ApiHarness,
     denied_capability: str,
 ) -> None:
-    _category(mirror_api.db, "NAT", name_en="Naturalization")
+    _category(mirror_api.db, "INV", name_en="Inmate violations")
     manager = _user(
         mirror_api.db,
         role="manager",
@@ -2524,6 +2524,29 @@ def test_catalog_dynamic_capability_labels_use_category_and_template_names(
     assert category is not None and category.label_en == "Operations"
     assert service is not None and service.label_en == "General Book"
     assert records is not None and records.label_en == "Records: General Book"
+
+
+def test_classification_category_filter_excludes_auto_classified_leave(
+    mirror_api: ApiHarness,
+) -> None:
+    _category(mirror_api.db, "GS", name_en="General Services")
+    _category(mirror_api.db, "HR", name_en="HR")
+    _category(mirror_api.db, "3/1", name_en="Leave")
+    general_book = _book(
+        mirror_api.db, ref_number="GS-0001", category_id="GS", service_id="General Book"
+    )
+    general_book.classification_code = "3/1"
+    leave = _book(
+        mirror_api.db, ref_number="HR-0002", category_id="HR", service_id="Leave Application Form"
+    )
+    leave.classification_code = "3/1"
+    mirror_api.db.commit()
+
+    response = mirror_api.client.get("/api/v1/books", params={"category_id": "3/1"})
+
+    assert response.status_code == 200, response.text
+    assert [item["id"] for item in response.json()["items"]] == [general_book.id]
+    assert response.json()["total"] == 1
 
 
 def test_classification_denial_hides_records_and_linked_documents(

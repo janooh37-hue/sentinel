@@ -54,8 +54,8 @@ from app.schemas.signature_placement import (
     SignatureIdentifyRequest,
     SignaturePageRead,
     SignaturePositionRequest,
-    SignatureReassignRequest,
     SignatureRead,
+    SignatureReassignRequest,
 )
 from app.services import (
     approved_import_service,
@@ -535,7 +535,7 @@ def commit_approved_violation(
     book_service.require_record_type_access(
         db,
         user,
-        category_id="NAT",
+        category_id="INV",
         service_id="Inmate Conduct Violations",
     )
     result = approved_import_service.commit_approved_import(

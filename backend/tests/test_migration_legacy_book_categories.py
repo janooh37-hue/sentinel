@@ -99,7 +99,7 @@ def test_0098_removes_only_unreferenced_seeds_and_restores_them(
                 text("SELECT * FROM book_categories WHERE id IN ('9/1', 'VA', 'VF') ORDER BY id")
             ).fetchall()
 
-        command.upgrade(config, "head")
+        command.upgrade(config, "0098_legacy_book_categories")
 
         with engine.connect() as connection:
             categories = {

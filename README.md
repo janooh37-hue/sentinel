@@ -65,6 +65,19 @@ deny there also blocks creating and viewing those services' records. Categories
 no service writes to are marked "Old records only". Migration `0098` removes the
 unused seed categories `1`–`12` that no record references.
 
+Inmate Conduct Violations file under their own category `INV` (Inmate
+violations); `NAT` keeps the employee Violation and Warning forms. Migration
+`0099` moves existing inmate violation records to `INV` without changing their
+ref numbers, and copies every `books.category.NAT` grant/deny, role row, and
+`NAT` auto-log rule to `INV`, so access and correspondence filing stay the same.
+New inmate violation refs read `INV-NNNN` (same shared counter as other refs).
+
+The 15 classifications (`1/1`–`15/1`) are also real record categories, so they
+appear in the Records category filter. Picking one lists the General Books filed
+under that classification (`classification_code`), plus any old records whose
+category is that code. Leave and resignation papers carry a classification code
+too but are not matched, the same as for a classification deny.
+
 ## Vehicle photo library
 
 Choose an existing main photo from **Add vehicle**, **Edit vehicle**, or the
