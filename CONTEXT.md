@@ -43,6 +43,26 @@ One committed version of a Record's generated artifact, ordered within that
 Record and carrying its own review or signing state.
 _Avoid_: Edit, draft, file version
 
+**Send state**:
+A three-value lifecycle (`unsent` → `sent` → `confirmed`) tracked on a Record
+independently of its approval state. `unsent` is the default for every Record
+and never advances on its own. `sent` is set automatically when the Record's
+Outlook handoff is reconciled against the mailbox's Sent folder. `confirmed`
+is set automatically by either a Scan-back match or a Threaded reply
+confirmation, whichever happens first.
+_Avoid_: Book status, delivery status, read receipt
+
+**Threaded reply confirmation**:
+An incoming email whose In-Reply-To/References chain names the Message-ID of
+the Record's own Outlook handoff, carrying at least one file attachment. It
+is strong evidence and sets Send state to `confirmed` automatically. An
+incoming email that only matches by subject or reference number, with no
+thread chain, is not a Threaded reply confirmation — it is weak evidence that
+needs a person's confirmation, the same standard a Scan-back match applies to
+a mismatched Paper date.
+_Avoid_: Scan-back match (reserved for the barcode path), auto-reply, email
+reply
+
 **Approval worklist**:
 A person's approval-related Records grouped by responsibility, with one entry
 per Record rather than separate entries for each submission attempt. It shows
@@ -283,6 +303,8 @@ the domain language above.
 | General Book | `template_id = "General Book"` |
 | Generated artifact | `Document` |
 | Revision | `BookVersion` |
+| Send state | `Book.send_state` |
+| Threaded reply confirmation | `ScanInbox.source = "email_reply_match"` |
 | Attendance case | `AttendanceCase` |
 | Automatic verdict | `AttendanceEvaluation` |
 | Attendance correction | `AttendanceAdjustment`; API path `/adjustments` |
