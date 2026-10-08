@@ -1,14 +1,20 @@
 from __future__ import annotations
 
+from rapidfuzz import fuzz
+
 from app.core.extraction.passport_mrz import find_mrz_lines
 from app.core.extraction.types import DocType
 
-# (DocType, [keyword anchors], weight) — anchors are lowercased substring tests.
+# (DocType, [keyword anchors], weight) — anchors are lowercased fuzzy-substring tests.
 _ANCHORS: list[tuple[DocType, list[str]]] = [
     (DocType.EMIRATES_ID, ["resident identity card", "بطاقة هوية", "784-", "federal authority for identity"]),
     (DocType.BANK_IBAN, ["iban", "account number", "swift"]),
     (DocType.SICK_LEAVE, ["sick leave", "medical certificate", "إجازة مرضية", "number of days"]),
 ]
+
+# ponytail: single fixed threshold tuned by eyeball, not per-anchor; revisit if a
+# short anchor (e.g. "iban") starts false-positiving on unrelated OCR noise.
+_FUZZY_THRESHOLD = 85
 
 
 def classify(text: str) -> tuple[DocType, float, list[DocType]]:
@@ -21,7 +27,7 @@ def classify(text: str) -> tuple[DocType, float, list[DocType]]:
         scores[DocType.PASSPORT] = 3
 
     for doc_type, anchors in _ANCHORS:
-        hits = sum(1 for a in anchors if a in lowered)
+        hits = sum(1 for a in anchors if fuzz.partial_ratio(a, lowered) >= _FUZZY_THRESHOLD)
         if hits:
             scores[doc_type] = scores.get(doc_type, 0) + hits
 
