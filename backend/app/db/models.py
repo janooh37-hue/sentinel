@@ -205,6 +205,10 @@ class Book(Base):
     approval_state: Mapped[str] = mapped_column(
         String(16), nullable=False, default="none", server_default="none"
     )
+    # unsent | sent | confirmed — parallel to approval_state; neither gates the other.
+    send_state: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="unsent", server_default="unsent"
+    )
     # Government classification (التبويب) code, e.g. "5/1"; NULL = plain book.
     classification_code: Mapped[str | None] = mapped_column(String(16), nullable=True)
     # Discarded draft: the reserved ref stays in the register, struck through.
@@ -1719,7 +1723,9 @@ class ScanInbox(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=_utcnow, server_default=func.current_timestamp()
     )
-    source: Mapped[str] = mapped_column(String(32))  # email_attachment | upload | scan_back | batch
+    source: Mapped[str] = mapped_column(
+        String(32)
+    )  # email_attachment | upload | scan_back | batch | email_reply_match
     owner_user_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     ledger_entry_id: Mapped[int | None] = mapped_column(
         ForeignKey("ledger_entries.id", ondelete="SET NULL"), nullable=True

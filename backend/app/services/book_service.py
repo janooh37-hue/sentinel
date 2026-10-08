@@ -2986,6 +2986,7 @@ def add_attachment(
                     retain_revision_access(db, version, step)
         version.status = "approved"
         book.approval_state = "approved"
+        book.send_state = "confirmed"
         # The flip is a signing, so it files like one in the Correspondence Log.
         try:
             from app.services import correspondence_service
