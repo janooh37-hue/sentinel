@@ -2,14 +2,14 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Final
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.classifications import CLASSIFICATIONS, get_classification
-from app.core.form_kind import OTHER_SERVICE_ID, SERVICE_IDS
+from app.core.form_kind import OTHER_SERVICE_ID, SERVICE_IDS, service_template_ids
 from app.core.permissions import (
     CAPABILITIES,
     CATEGORY_CAP_PREFIX,
@@ -138,6 +138,34 @@ def _category_entry(
     )
 
 
+def _book_category_entry(category: BookCategory) -> CapabilityCatalogEntry:
+    """A legacy category, described by the services whose new records it files,
+    so an admin can see what a deny blocks."""
+    from app.services.document_service import record_category_for_template
+
+    entry = _category_entry(category.id, category.name_en, category.name_ar)
+    names = [
+        _service_names(service_id)
+        for service_id in SERVICE_IDS
+        if any(
+            record_category_for_template(template_id) == category.id
+            for template_id in service_template_ids(service_id)
+        )
+    ]
+    if not names:
+        return replace(
+            entry,
+            description_en="Old records only; no service files new records here.",
+            description_ar="سجلات قديمة فقط؛ لا تُنشئ أي خدمة سجلات جديدة هنا.",
+        )
+    names_ar = [name_ar for _, name_ar in names]
+    return replace(
+        entry,
+        description_en=f"Covers records from: {', '.join(name_en for name_en, _ in names)}.",
+        description_ar=f"يشمل سجلات: {'، '.join(names_ar)}." if all(names_ar) else None,
+    )
+
+
 def list_catalog(db: Session) -> tuple[CapabilityCatalogEntry, ...]:
     """Return the complete catalog in stable presentation order."""
     static = tuple(_STATIC_BY_ID[capability.id] for capability in CAPABILITIES)
@@ -147,7 +175,7 @@ def list_catalog(db: Session) -> tuple[CapabilityCatalogEntry, ...]:
         for classification in CLASSIFICATIONS
     )
     categories = tuple(
-        _category_entry(category.id, category.name_en, category.name_ar)
+        _book_category_entry(category)
         for category in db.scalars(select(BookCategory).order_by(BookCategory.id)).all()
         if get_classification(category.id) is None
     )
@@ -180,11 +208,7 @@ def get_catalog_entry(db: Session, capability_id: str) -> CapabilityCatalogEntry
                 classification.code, classification.name_en, classification.name_ar
             )
         category = db.get(BookCategory, category_id)
-        return (
-            _category_entry(category.id, category.name_en, category.name_ar)
-            if category is not None
-            else None
-        )
+        return _book_category_entry(category) if category is not None else None
 
     return None
 

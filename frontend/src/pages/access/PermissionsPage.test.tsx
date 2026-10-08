@@ -446,7 +446,12 @@ describe('PermissionsPage Mirror editor', () => {
     renderPage(perms, {
       requests: [],
       capabilities: [
-        catalogEntry(legacyCapability, 'books', 'Human Resources', 'Legacy category'),
+        catalogEntry(
+          legacyCapability,
+          'books',
+          'Human Resources',
+          'Covers records from: Leave Application Form, Passport Request.',
+        ),
         catalogEntry('books.category.5/1', 'books', 'Finance classification', 'Classification'),
         // This code also exists in legacy rows; the catalog emits it only once.
         catalogEntry('books.category.9/1', 'books', 'Shared classification', 'Classification'),
@@ -474,12 +479,14 @@ describe('PermissionsPage Mirror editor', () => {
     expect(legacyHeading.compareDocumentPosition(legacyButton) & Node.DOCUMENT_POSITION_FOLLOWING)
       .toBeTruthy()
     expect(legacyHeading).toHaveClass('rtl:tracking-normal')
-    for (const button of [
-      within(blueprint).getByRole('button', { name: 'Finance classification Deny' }),
-      legacyButton,
-    ]) {
-      expect(button.parentElement).toHaveClass('grid', 'grid-cols-2', 'sm:grid-cols-3')
-    }
+    const financeButton = within(blueprint).getByRole('button', { name: 'Finance classification Deny' })
+    expect(financeButton.parentElement).toHaveClass('grid', 'grid-cols-2', 'sm:grid-cols-3')
+    expect(financeButton).not.toHaveAccessibleDescription()
+    // A legacy category says which services a deny blocks.
+    expect(legacyButton).toHaveAccessibleDescription(
+      'Covers records from: Leave Application Form, Passport Request.',
+    )
+    expect(legacyButton.parentElement?.parentElement).toHaveClass('grid', 'grid-cols-1', 'sm:grid-cols-2')
 
     await userEvent.click(legacyButton)
     expect(api.setUserPermission).toHaveBeenCalledExactlyOnceWith(
@@ -969,10 +976,10 @@ describe('PermissionsPage Mirror editor', () => {
       name: 'Legacy categories',
     })
     expect(legacyHeading).toBeVisible()
-    for (const name of ['Classification 15 Deny', 'Incoming Grant']) {
-      expect(within(blueprint).getByRole('button', { name }).parentElement)
-        .toHaveClass('grid', 'grid-cols-2', 'sm:grid-cols-3')
-    }
+    expect(within(blueprint).getByRole('button', { name: 'Classification 15 Deny' }).parentElement)
+      .toHaveClass('grid', 'grid-cols-2', 'sm:grid-cols-3')
+    expect(within(blueprint).getByRole('button', { name: 'Incoming Grant' }).parentElement?.parentElement)
+      .toHaveClass('grid', 'grid-cols-1', 'sm:grid-cols-2')
   })
 
   it('warns when Records is denied and books.approve is the only warning trigger', async () => {

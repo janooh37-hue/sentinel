@@ -87,6 +87,8 @@ interface BlueprintItem {
   locked?: boolean
   glyph?: string
   artwork?: ServiceArtworkId
+  /** Legacy categories: which services file records into it. */
+  description?: string
 }
 
 interface Beam {
@@ -174,12 +176,14 @@ function BlueprintButton({
   item,
   denied,
   saving,
+  describedBy,
   onFocus,
   onToggle,
 }: {
   item: BlueprintItem
   denied: boolean
   saving: boolean
+  describedBy?: string
   onFocus: () => void
   onToggle: (event: React.MouseEvent<HTMLButtonElement>) => void
 }): React.JSX.Element {
@@ -193,6 +197,7 @@ function BlueprintButton({
         if (item.locked || saving) event.preventDefault()
       }}
       aria-pressed={!denied}
+      aria-describedby={describedBy}
       onFocus={onFocus}
       onClick={(event) => {
         if (!item.locked && !saving) onToggle(event)
@@ -750,12 +755,16 @@ export function PermissionsPage(): React.JSX.Element {
     () =>
       capabilityCatalog.entries
         .filter((entry) => entry.id.startsWith('books.category.'))
-        .map((entry) => ({
-          id: entry.id.slice('books.category.'.length),
-          capability: entry.id,
-          label: localizeCapability(entry, entry.id, i18n.language).label,
-          kind: 'category',
-        })),
+        .map((entry) => {
+          const { label, description } = localizeCapability(entry, entry.id, i18n.language)
+          return {
+            id: entry.id.slice('books.category.'.length),
+            capability: entry.id,
+            label,
+            kind: 'category',
+            description,
+          }
+        }),
     [capabilityCatalog.entries, i18n.language],
   )
   const categoryGroups = useMemo(() => {
@@ -768,6 +777,7 @@ export function PermissionsPage(): React.JSX.Element {
     }
     return legacy.length > 0 ? [classifications, legacy] : [classifications]
   }, [categoryItems, classificationsQuery.data, classificationsQuery.isSuccess])
+  const coverageIdPrefix = useId()
 
   // Records visibility is the stronger gate: without it the service is gone
   // from Records too, so a stray create-allowed/records-denied pair reads as
@@ -1332,17 +1342,40 @@ export function PermissionsPage(): React.JSX.Element {
                                   {t('access.permissions.mirror.legacyCategories')}
                                 </h4>
                               ) : null}
-                              <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
-                                {items.map((item) => (
-                                  <BlueprintButton
-                                    key={item.id}
-                                    item={item}
-                                    denied={item.capability != null && !effective.has(item.capability)}
-                                    saving={permissionWritesPending}
-                                    onFocus={() => setCaptionItem(item)}
-                                    onToggle={(event) => toggleItem(item, event)}
-                                  />
-                                ))}
+                              <div
+                                className={cn(
+                                  'grid gap-2.5',
+                                  index === 1 ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-2 sm:grid-cols-3',
+                                )}
+                              >
+                                {items.map((item, itemIndex) => {
+                                  const coverageId = `${coverageIdPrefix}-${itemIndex}`
+                                  const showCoverage = index === 1 && Boolean(item.description)
+                                  const button = (
+                                    <BlueprintButton
+                                      key={item.id}
+                                      item={item}
+                                      denied={item.capability != null && !effective.has(item.capability)}
+                                      saving={permissionWritesPending}
+                                      describedBy={showCoverage ? coverageId : undefined}
+                                      onFocus={() => setCaptionItem(item)}
+                                      onToggle={(event) => toggleItem(item, event)}
+                                    />
+                                  )
+                                  return showCoverage ? (
+                                    <div key={item.id} className="grid content-start gap-1">
+                                      {button}
+                                      <p
+                                        id={coverageId}
+                                        className="px-1 text-[0.7em] leading-snug text-muted-foreground"
+                                      >
+                                        <bdi dir="auto">{item.description}</bdi>
+                                      </p>
+                                    </div>
+                                  ) : (
+                                    button
+                                  )
+                                })}
                               </div>
                             </div>
                           ))}

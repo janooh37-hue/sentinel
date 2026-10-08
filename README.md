@@ -56,6 +56,15 @@ and HR pages keep their existing permission gates. Announcement recipient and
 WhatsApp-mention searches still require `employees.view` because they use
 contact numbers rather than only employee identities.
 
+## Record category permissions
+
+The Permissions page lists the 15 General Book classifications, then the legacy
+record categories. Each legacy category shows the services whose new records it
+files (from the form-to-category map in `document_service._FORM_CATEGORY`), so a
+deny there also blocks creating and viewing those services' records. Categories
+no service writes to are marked "Old records only". Migration `0098` removes the
+unused seed categories `1`–`12` that no record references.
+
 ## Vehicle photo library
 
 Choose an existing main photo from **Add vehicle**, **Edit vehicle**, or the

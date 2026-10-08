@@ -114,13 +114,12 @@ def test_catalog_composes_bilingual_dynamic_entries_in_stable_order(db_session):
     category = by_id["books.category.A"]
     assert category.label_en == "Operations"
     assert category.label_ar is None
-    assert category.description_en == "View records in Operations."
-    assert category.description_ar is None
+    assert category.description_en == "Old records only; no service files new records here."
+    assert category.description_ar == "سجلات قديمة فقط؛ لا تُنشئ أي خدمة سجلات جديدة هنا."
     unnamed = by_id["books.category.Z"]
     assert unnamed.label_en == unnamed.id
     assert unnamed.label_ar is None
-    assert unnamed.description_en == "View records in books.category.Z."
-    assert unnamed.description_ar is None
+    assert unnamed.description_en == category.description_en
     assert (by_id["books.category.9/1"].label_en, by_id["books.category.9/1"].label_ar) == (
         "Custody, clothing & ID cards",
         "العهدة والملابس والبطاقات التعريفية",
@@ -152,6 +151,41 @@ def test_catalog_composes_bilingual_dynamic_entries_in_stable_order(db_session):
     assert capability_catalog_service.get_catalog_entry(db_session, passport.id) == passport
     assert capability_catalog_service.get_catalog_entry(db_session, category.id) == category
     assert capability_catalog_service.get_catalog_entry(db_session, "missing.cap") is None
+
+
+def test_legacy_categories_name_the_services_a_deny_blocks(db_session):
+    from app.services import capability_catalog_service
+
+    db_session.add_all(
+        [
+            BookCategory(id=category_id, name_en=None, name_ar=None, prefix=category_id)
+            for category_id in ("GS", "HR", "NAT", "SC", "VA", "VF")
+        ]
+    )
+    db_session.commit()
+    by_id = {
+        entry.id: entry
+        for entry in capability_catalog_service.list_catalog(db_session)
+        if entry.domain == "categories"
+    }
+
+    gs = by_id["books.category.GS"]
+    assert gs.description_en == "Covers records from: Acknowledgment Form, General Book, Report."
+    assert gs.description_ar == "يشمل سجلات: استلام المواد، كتاب عام، تقرير."
+    assert by_id["books.category.NAT"].description_en == (
+        "Covers records from: Violation Form, Warning Form, Inmate Conduct Violations."
+    )
+    assert (
+        by_id["books.category.SC"].description_en == "Covers records from: Material Request Form."
+    )
+    assert by_id["books.category.VA"].description_ar == "يشمل سجلات: بلاغ حادث مركبة."
+    hr = by_id["books.category.HR"].description_en
+    # Mapped HR forms and the unmapped (default-HR) opt-in forms alike.
+    for label in ("Leave Application Form", "Passport Request", "Loan Request"):
+        assert label in hr
+    for label in ("General Book", "Report", "Warning Form", "Vehicle Fines"):
+        assert label not in hr
+    assert capability_catalog_service.get_catalog_entry(db_session, gs.id) == gs
 
 
 def test_every_capability_has_a_nonempty_description():
