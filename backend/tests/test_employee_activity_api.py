@@ -216,6 +216,27 @@ def test_service_employee_lookup_does_not_grant_profile_access(
     assert operator_client.get("/api/v1/employees/G100/detail").status_code == 403
 
 
+def test_lookup_hides_passport_fields_without_passport_release_service(api_db: Session):
+    employee = api_db.get(Employee, "G100")
+    assert employee is not None
+    employee.passport_no = "PASSPORT100"
+    employee.nationality = "Egyptian"
+    user = User(email="no-passport@x.ae", password_hash="x", role="operator", status="active")
+    api_db.add(user)
+    api_db.flush()
+    api_db.add(
+        UserPermission(
+            user_id=user.id, capability="books.service.Passport Release List", effect="deny"
+        )
+    )
+    api_db.commit()
+    selected = _client(api_db, user).get("/api/v1/employees/lookup/G100")
+    assert selected.status_code == 200
+    assert selected.json()["id"] == "G100"
+    assert selected.json()["passport_no"] is None
+    assert selected.json()["nationality"] is None
+
+
 def test_employee_lookup_forbids_user_without_either_capability(api_db: Session):
     user = User(email="no-picker@x.ae", password_hash="x", role="operator", status="active")
     api_db.add(user)

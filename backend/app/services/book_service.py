@@ -25,7 +25,7 @@ from sqlalchemy.sql.elements import ColumnElement
 
 from app.api.errors import AppError, NotFoundError, ValidationFailedError
 from app.config import get_settings
-from app.core.constants import ALLOWED_DOC_EXTS, STAMP_STYLES
+from app.core.constants import ALLOWED_DOC_EXTS, CLASSIFIED_BOOK_FORMS, STAMP_STYLES
 from app.core.form_kind import (
     OTHER_SERVICE_ID,
     SERVICE_IDS,
@@ -334,18 +334,34 @@ def _inmate_reporter_book_visible(book: Book, user_id: int) -> bool:
     return False
 
 
+def _classification_denied_clause(denied_categories: set[str]) -> ColumnElement[bool]:
+    """A classified-register book (General Book / Security Permit, or version-less
+    or template-less) filed under a denied classification. Auto-classified papers
+    from other forms (leave, resignation) carry a code too but are never matched."""
+    newest_template_id = (
+        select(BookVersion.template_id)
+        .where(BookVersion.book_id == Book.id)
+        .order_by(BookVersion.version_no.desc())
+        .limit(1)
+        .scalar_subquery()
+    )
+    return and_(
+        Book.classification_code.is_not(None),
+        Book.classification_code.in_(sorted(denied_categories)),
+        or_(
+            newest_template_id.is_(None),
+            newest_template_id.in_(sorted(CLASSIFIED_BOOK_FORMS)),
+        ),
+    )
+
+
 def user_visibility_clause(db: Session, user: User) -> ColumnElement[bool] | None:
     """SQL clause hiding every service/category explicitly denied to ``user``."""
     denied_services, denied_categories = perm_service.denied_record_types(db, user)
     clauses: list[ColumnElement[bool]] = []
     if denied_categories:
         clauses.append(Book.category_id.not_in(denied_categories))
-        clauses.append(
-            or_(
-                Book.classification_code.is_(None),
-                Book.classification_code.not_in(denied_categories),
-            )
-        )
+        clauses.append(not_(_classification_denied_clause(denied_categories)))
     if denied_services:
         clauses.append(
             not_(or_(*[service_clause(service_id) for service_id in sorted(denied_services)]))
@@ -385,7 +401,10 @@ def document_visibility_clause(db: Session, user: User) -> ColumnElement[bool] |
             .where(
                 or_(
                     Book.category_id.in_(sorted(denied_categories)),
-                    Book.classification_code.in_(sorted(denied_categories)),
+                    and_(
+                        Book.classification_code.in_(sorted(denied_categories)),
+                        linked_document.template_id.in_(sorted(CLASSIFIED_BOOK_FORMS)),
+                    ),
                 ),
                 or_(
                     linked_document.id == Document.id,
@@ -468,9 +487,13 @@ def assert_record_type_visible(db: Session, user: User, row: Book) -> None:
             newest.template_id if newest is not None else None,
             versioned=newest is not None,
         )
+    newest_template_id = newest.template_id if newest is not None else None
+    classification_denied = row.classification_code in denied_categories and (
+        newest_template_id is None or newest_template_id in CLASSIFIED_BOOK_FORMS
+    )
     if (
         row.category_id in denied_categories
-        or row.classification_code in denied_categories
+        or classification_denied
         or service_id in denied_services
     ):
         raise AppError(

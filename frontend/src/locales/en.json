@@ -4712,6 +4712,7 @@
         "dutyTransfer": "Transfer duty locations",
         "categoryHint": "Includes every General Book classification.",
         "blueprintCategories": "Record categories",
+        "legacyCategories": "Legacy categories",
         "quickActions": "Quick actions",
         "availableCount_one": "{{count}} available",
         "availableCount_other": "{{count}} available",

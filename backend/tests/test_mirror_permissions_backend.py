@@ -2591,6 +2591,50 @@ def test_classification_denial_hides_records_and_linked_documents(
     assert book_service.document_visibility_clause(mirror_api.db, admin) is None
 
 
+def test_classification_denial_spares_auto_classified_papers_from_other_forms(
+    mirror_api: ApiHarness,
+) -> None:
+    """12/1 deny hides the classified-register General Book, not a resignation paper
+    that document_service auto-filed under 12/1."""
+    _category(mirror_api.db, "GS", name_en="General Services")
+    _category(mirror_api.db, "HR", name_en="HR")
+    general_book = _book(
+        mirror_api.db, ref_number="1/12/9", category_id="GS", service_id="General Book"
+    )
+    general_book.classification_code = "12/1"
+    resignation = _book(
+        mirror_api.db, ref_number="HR-0009", category_id="HR", service_id="Resignation Letter"
+    )
+    resignation.classification_code = "12/1"
+    paper = Document(
+        template_id="Resignation Letter",
+        ref_number=resignation.ref_number,
+        submission_id="resignation",
+        role="primary",
+        created_at=datetime.now(),
+    )
+    mirror_api.db.add(paper)
+    mirror_api.db.flush()
+    resignation.versions[0].document_id = paper.id
+    mirror_api.db.commit()
+    operator = _user(mirror_api.db, role="operator", email="classified-boundary@test.ae")
+    perm_service.set_user_override(
+        mirror_api.db, operator.id, "books.category.12/1", "deny", actor=mirror_api.actor
+    )
+    mirror_api.as_user(operator)
+
+    listed = mirror_api.client.get("/api/v1/books")
+    assert listed.status_code == 200, listed.text
+    assert {item["id"] for item in listed.json()["items"]} == {resignation.id}
+    assert mirror_api.client.get(f"/api/v1/books/{resignation.id}").status_code == 200
+    assert _error_code(mirror_api.client.get(f"/api/v1/books/{general_book.id}")) == (
+        "RECORD_TYPE_FORBIDDEN"
+    )
+    document_clause = book_service.document_visibility_clause(mirror_api.db, operator)
+    assert document_clause is not None
+    assert list(mirror_api.db.scalars(select(Document.id).where(document_clause))) == [paper.id]
+
+
 def test_classification_denial_blocks_general_book_generation_and_word_creation(
     mirror_api: ApiHarness, monkeypatch: pytest.MonkeyPatch
 ) -> None:

@@ -103,6 +103,7 @@ describe('Mirror editor bilingual copy', () => {
       'access.permissions.mirror.viewOtherRecords',
       'access.permissions.mirror.dutyTransfer',
       'access.permissions.mirror.categoryHint',
+      'access.permissions.mirror.legacyCategories',
       'access.permissions.mirror.people',
       'access.permissions.mirror.searchPeople',
       'access.permissions.mirror.openPreview',

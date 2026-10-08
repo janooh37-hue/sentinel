@@ -644,6 +644,11 @@ export function PermissionsPage(): React.JSX.Element {
     queryFn: api.listTemplates,
     staleTime: Infinity,
   })
+  const classificationsQuery = useQuery({
+    queryKey: ['books', 'classifications'],
+    queryFn: () => api.listBookClassifications(),
+    staleTime: Infinity,
+  })
   const requestsQuery = useQuery({
     queryKey: ['permission-requests'],
     queryFn: api.listPermissionRequests,
@@ -753,6 +758,16 @@ export function PermissionsPage(): React.JSX.Element {
         })),
     [capabilityCatalog.entries, i18n.language],
   )
+  const categoryGroups = useMemo(() => {
+    if (!classificationsQuery.isSuccess) return [categoryItems]
+    const codes = new Set(classificationsQuery.data.items.map((item) => item.code))
+    const classifications: BlueprintItem[] = []
+    const legacy: BlueprintItem[] = []
+    for (const item of categoryItems) {
+      (codes.has(item.id) ? classifications : legacy).push(item)
+    }
+    return legacy.length > 0 ? [classifications, legacy] : [classifications]
+  }, [categoryItems, classificationsQuery.data, classificationsQuery.isSuccess])
 
   // Records visibility is the stronger gate: without it the service is gone
   // from Records too, so a stray create-allowed/records-denied pair reads as
@@ -1310,18 +1325,27 @@ export function PermissionsPage(): React.JSX.Element {
                           <p className="mb-3 text-[0.72em] text-muted-foreground">
                             {t('access.permissions.mirror.categoryHint')}
                           </p>
-                          <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
-                            {categoryItems.map((item) => (
-                              <BlueprintButton
-                                key={item.id}
-                                item={item}
-                                denied={item.capability != null && !effective.has(item.capability)}
-                                saving={permissionWritesPending}
-                                onFocus={() => setCaptionItem(item)}
-                                onToggle={(event) => toggleItem(item, event)}
-                              />
-                            ))}
-                          </div>
+                          {categoryGroups.map((items, index) => (
+                            <div key={index === 0 ? 'classifications' : 'legacy'}>
+                              {index === 1 ? (
+                                <h4 className="mb-3 mt-6 text-[0.7em] font-semibold uppercase tracking-[0.08em] rtl:tracking-normal text-primary">
+                                  {t('access.permissions.mirror.legacyCategories')}
+                                </h4>
+                              ) : null}
+                              <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
+                                {items.map((item) => (
+                                  <BlueprintButton
+                                    key={item.id}
+                                    item={item}
+                                    denied={item.capability != null && !effective.has(item.capability)}
+                                    saving={permissionWritesPending}
+                                    onFocus={() => setCaptionItem(item)}
+                                    onToggle={(event) => toggleItem(item, event)}
+                                  />
+                                ))}
+                              </div>
+                            </div>
+                          ))}
                         </div>
                       </div>
 

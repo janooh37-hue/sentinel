@@ -793,7 +793,7 @@ export interface paths {
         };
         /**
          * Get Employee Lookup
-         * @description Resolve a selection and prefill only the Passport Release identity fields.
+         * @description Resolve a selection; passport fields only for the Passport Release service.
          */
         get: operations["get_employee_lookup_api_v1_employees_lookup__employee_id__get"];
         put?: never;
