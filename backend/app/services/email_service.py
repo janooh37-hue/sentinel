@@ -913,7 +913,7 @@ def _thread_matched_book(db: Session, entry: LedgerEntry) -> Book | None:
     """The Book whose own outgoing handoff Message-ID this reply's thread names.
 
     Subject/ref-number heuristics are deliberately NOT consulted — see
-    docs/adr/0004-send-state-confirms-only-on-thread-match.md.
+    docs/adr/0005-send-state-confirms-only-on-thread-match.md.
     """
     parents = _parent_message_ids(entry)
     if not parents:

@@ -1,7 +1,7 @@
 """book send state
 
-Revision ID: 0094_book_send_state
-Revises: 0093_password_setup
+Revision ID: 0098_book_send_state
+Revises: 0097_item_permit_zones
 Create Date: 2026-10-09 00:00:00.000000
 """
 
@@ -12,8 +12,8 @@ from collections.abc import Sequence
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "0094_book_send_state"
-down_revision: str | Sequence[str] | None = "0093_password_setup"
+revision: str = "0098_book_send_state"
+down_revision: str | Sequence[str] | None = "0097_item_permit_zones"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
