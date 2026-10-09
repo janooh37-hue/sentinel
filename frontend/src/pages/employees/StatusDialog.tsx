@@ -2,11 +2,12 @@
  * StatusDialog — quick status change from the employee hero pill.
  *
  * Status select + end-date input; the end date appears and is required when
- * status ≠ Active (same invariant the backend enforces). Saving as Active
- * sends end_date: null so re-activating clears a stale end date.
- * Transferred adds a required destination site; Loaned adds an optional party.
- * Both allow an expected return date. Reactivating a non-Active employee asks
- * for the return date (today by default), sent as the write-only `effective_date`.
+ * status is not Active/Loaned (same invariant the backend enforces). Saving as
+ * the same working status sends end_date: null so it clears a stale end date;
+ * switching Active ↔ Loaned sends only the status, so a pending departure survives.
+ * Transferred adds a required destination site + optional expected return
+ * date; reactivating a non-working employee (to Active/Loaned) asks for the
+ * return date (today by default), sent as the write-only `effective_date`.
  */
 import { useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
@@ -14,7 +15,7 @@ import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
 import { api, apiErrorMessage, type EmployeeRead, type EmployeeStatus } from '@/lib/api'
-import { EMPLOYEE_STATUSES, hasSiteFields } from '@/components/employees/schema'
+import { EMPLOYEE_STATUSES, isWorkingStatus } from '@/components/employees/schema'
 import { pickEmployeeName } from '@/lib/employeeName'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -57,38 +58,45 @@ export function StatusDialog({ open, employee, onOpenChange }: Props): React.JSX
   const [returnDate, setReturnDate] = useState(employee.transfer_return_date ?? '')
   const [reactivationDate, setReactivationDate] = useState(todayIso)
 
-  const endDateRequired = status !== 'Active'
-  const showSiteFields = hasSiteFields(status)
-  const isReactivation = employee.status !== 'Active' && status === 'Active'
+  const endDateRequired = !isWorkingStatus(status)
+  const isTransferred = status === 'Transferred'
+  const isReactivation = !isWorkingStatus(employee.status) && isWorkingStatus(status)
+  const isWorkingSwitch =
+    isWorkingStatus(employee.status) && isWorkingStatus(status) && status !== employee.status
   const returnBeforeEffective =
-    showSiteFields && returnDate !== '' && endDate !== '' && returnDate <= endDate
+    isTransferred && returnDate !== '' && endDate !== '' && returnDate <= endDate
   const canSave =
     (!endDateRequired || endDate.trim().length > 0) &&
-    (status !== 'Transferred' || site.trim().length > 0) &&
+    (!isTransferred || site.trim().length > 0) &&
     !returnBeforeEffective &&
     (!isReactivation || reactivationDate.trim().length > 0)
 
   const mutation = useMutation({
     mutationFn: () =>
-      api.updateEmployee(employee.id, {
-        status,
-        end_date: status === 'Active' ? null : endDate,
-        ...(showSiteFields
-          ? {
-              transfer_site: site.trim() || null,
-              transfer_return_date: returnDate.trim() || null,
-            }
-          : {}),
-        ...(isReactivation
-          ? {
-              effective_date: reactivationDate,
-              // Reactivation clears the site/return fields.
-              ...(hasSiteFields(employee.status)
-                ? { transfer_site: null, transfer_return_date: null }
+      api.updateEmployee(
+        employee.id,
+        isWorkingSwitch
+          ? { status }
+          : {
+              status,
+              end_date: isWorkingStatus(status) ? null : endDate,
+              ...(isTransferred
+                ? {
+                    transfer_site: site.trim(),
+                    transfer_return_date: returnDate.trim() || null,
+                  }
                 : {}),
-            }
-          : {}),
-      }),
+              ...(isReactivation
+                ? {
+                    effective_date: reactivationDate,
+                    // Reactivation clears the transfer fields.
+                    ...(employee.status === 'Transferred'
+                      ? { transfer_site: null, transfer_return_date: null }
+                      : {}),
+                  }
+                : {}),
+            },
+      ),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['employee-detail', employee.id] })
       void qc.invalidateQueries({ queryKey: ['employees'] })
@@ -129,7 +137,7 @@ export function StatusDialog({ open, employee, onOpenChange }: Props): React.JSX
 
           {endDateRequired && (
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="status-dialog-end-date">{`${t(showSiteFields ? 'employees.fields.effective_date' : 'employees.fields.end_date')} *`}</Label>
+              <Label htmlFor="status-dialog-end-date">{`${t(isTransferred ? 'employees.fields.effective_date' : 'employees.fields.end_date')} *`}</Label>
               <Input
                 id="status-dialog-end-date"
                 type="date"
@@ -145,12 +153,10 @@ export function StatusDialog({ open, employee, onOpenChange }: Props): React.JSX
             </div>
           )}
 
-          {showSiteFields && (
+          {isTransferred && (
             <>
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="status-dialog-site">
-                  {status === 'Loaned' ? t('employees.fields.loaned_to') : `${t('employees.fields.transfer_site')} *`}
-                </Label>
+                <Label htmlFor="status-dialog-site">{`${t('employees.fields.transfer_site')} *`}</Label>
                 <Input
                   id="status-dialog-site"
                   dir="auto"
@@ -158,7 +164,7 @@ export function StatusDialog({ open, employee, onOpenChange }: Props): React.JSX
                   value={site}
                   onChange={(e) => setSite(e.target.value)}
                 />
-                {status === 'Transferred' && !site.trim() && (
+                {!site.trim() && (
                   <span role="alert" className="text-xs text-destructive">
                     {t('employees.validation.transferSiteRequired')}
                   </span>

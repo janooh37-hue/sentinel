@@ -19,7 +19,7 @@ import { pickPosition } from '@/lib/employeePosition'
 import { useDebouncedValue } from '@/lib/useDebouncedValue'
 import { PendingDepartureBadge } from '@/components/employees/PendingDepartureBadge'
 import { statusDetailText } from '@/components/employees/statusDetail'
-import { hasSiteFields } from '@/components/employees/schema'
+import { isWorkingStatus } from '@/components/employees/schema'
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 interface Props {
@@ -147,7 +147,7 @@ export function EmployeeSearchHero({
               <div className="max-h-[min(55vh,480px)] overflow-y-auto">
               {items.length > 0
                 ? items.map((row, idx) => {
-                    // Status pill uses the shared site-status detail wording.
+                    // Status pill — mirrors EmployeeMobileCard logic
                     const onLeave = onLeaveIds.has(row.id)
                     let pillBg: string
                     let pillFg: string
@@ -156,11 +156,11 @@ export function EmployeeSearchHero({
                       pillBg = 'var(--warning-soft)'
                       pillFg = 'var(--warning)'
                       pillLabel = t('employees.statusPill.onLeave')
-                    } else if (row.status === 'Active') {
+                    } else if (isWorkingStatus(row.status)) {
                       pillBg = 'var(--success-soft)'
                       pillFg = 'var(--success)'
-                      pillLabel = t('employees.status.Active')
-                    } else if (hasSiteFields(row.status)) {
+                      pillLabel = t(`employees.status.${row.status}`)
+                    } else if (row.status === 'Transferred') {
                       pillBg = 'var(--info-soft)'
                       pillFg = 'var(--info)'
                       pillLabel = statusDetailText(t, row)

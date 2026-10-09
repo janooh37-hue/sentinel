@@ -15,7 +15,7 @@ const TONE_BY_STATUS: Record<EmployeeStatus, 'active' | 'warning' | 'danger' | '
   Resigned: 'warning',
   Terminated: 'danger',
   Transferred: 'info',
-  Loaned: 'info',
+  Loaned: 'active',
 }
 
 export function StatusPill({ status }: { status: EmployeeStatus }): React.JSX.Element {

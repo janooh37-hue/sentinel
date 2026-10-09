@@ -369,7 +369,6 @@
       "end_date": "End date",
       "effective_date": "Effective date",
       "transfer_site": "Destination site",
-      "loaned_to": "Loaned to",
       "transfer_return_date": "Expected return date",
       "return_date": "Return date",
       "passport_no": "Passport No.",
@@ -401,7 +400,7 @@
       "title": "Change status"
     },
     "validation": {
-      "endDateRequired": "End date is required when status is not Active",
+      "endDateRequired": "End date is required when status is not Active or Loaned",
       "transferSiteRequired": "Destination site is required for a transfer",
       "returnAfterEffective": "Expected return date must be after the effective date",
       "idRequired": "Employee ID is required",
@@ -513,7 +512,7 @@
       "statusEvent": {
         "change": "{{from}} → {{to}}",
         "initial": "Recorded as {{to}}",
-        "returned": "Returned to Active",
+        "returned": "Returned to service",
         "scheduled": "Scheduled: {{from}} → {{to}}",
         "scheduledCancelled": "Scheduled {{to}} cancelled",
         "effective": "Effective {{date}}",

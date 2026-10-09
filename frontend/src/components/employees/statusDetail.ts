@@ -4,7 +4,6 @@
  *   Resigned    · 15/08/2026
  *   Transferred · <site> · 15/08/2026
  *   Transferred · <site> · 15/08/2026 → 15/11/2026   (expected return known)
- *   Loaned      · <party> · 15/08/2026 → 15/11/2026   (party optional)
  *
  * Wording lives in `employees.statusDetail.*` (both locales). Dates and the
  * free-text site are bidi-isolated so they cannot scramble inside Arabic.
@@ -14,7 +13,8 @@ import type { TFunction } from 'i18next'
 import type { EmployeeStatus } from '@/lib/api'
 import { bidi } from '@/lib/bidi'
 import { formatDmy } from '@/lib/formatDmy'
-import { hasSiteFields } from './schema'
+
+import { isWorkingStatus } from './schema'
 
 export interface StatusDetailSource {
   status: EmployeeStatus
@@ -25,9 +25,9 @@ export interface StatusDetailSource {
 
 export function statusDetailText(t: TFunction, emp: StatusDetailSource): string {
   const label = t(`employees.status.${emp.status}`, emp.status) as string
-  if (emp.status === 'Active' || !emp.end_date) return label
+  if (isWorkingStatus(emp.status) || !emp.end_date) return label
   const date = bidi(formatDmy(emp.end_date))
-  if (!hasSiteFields(emp.status)) {
+  if (emp.status !== 'Transferred') {
     return t('employees.statusDetail.dated', { status: label, date }) as string
   }
   const site = emp.transfer_site ? bidi(emp.transfer_site) : null

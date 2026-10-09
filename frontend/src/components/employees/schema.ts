@@ -4,21 +4,22 @@
  * Front-of-mind invariants:
  *   * Canonical statuses ("Active" | "Resigned" | "Terminated" | "Transferred" | "Loaned") — UI shows
  *     bilingual labels via i18n, but the wire/DB value is the English key.
- *   * status ≠ Active ⇒ end_date is required (mirrors the Pydantic validator
+ *   * status ∉ {Active, Loaned} ⇒ end_date is required (mirrors the Pydantic validator
  *     and v3.5.4's `_emp_sync_end_date_widget`). Failing this client-side
  *     gives an instant error while the server still validates.
- *   * status = Transferred ⇒ transfer_site is required; Loaned makes it optional.
- *     Both allow transfer_return_date, which must be after end_date (the effective date).
- *   * effective_date is the RETURN date recorded when a non-Active employee
- *     is reactivated (write-only; the form clears it otherwise).
+ *   * status = Transferred ⇒ transfer_site is required; transfer_return_date
+ *     is optional but must be after end_date (the effective date).
+ *   * effective_date is the RETURN date recorded when a non-working employee
+ *     is reactivated to Active/Loaned (write-only; the form clears it otherwise).
  */
 
 import { z } from 'zod'
 
 export const EMPLOYEE_STATUSES = ['Active', 'Resigned', 'Terminated', 'Transferred', 'Loaned'] as const
 export type EmployeeStatusKey = (typeof EMPLOYEE_STATUSES)[number]
-export const hasSiteFields = (status: string | null | undefined): boolean =>
-  status === 'Transferred' || status === 'Loaned'
+
+/** Working statuses: Loaned behaves exactly like Active. */
+export const isWorkingStatus = (s: string | null | undefined): boolean => s === 'Active' || s === 'Loaned'
 
 // Strings come in as either ISO yyyy-MM-dd (HTML date input) or empty; we
 // normalise empties to null so the API gets a clean shape.
@@ -64,15 +65,15 @@ export const employeeFormSchema = z
     uae_id_expiry: optionalDate,
   })
   .superRefine((data, ctx) => {
-    if (data.status !== 'Active' && !data.end_date) {
+    if (!isWorkingStatus(data.status) && !data.end_date) {
       ctx.addIssue({
         code: 'custom',
         path: ['end_date'],
         message: 'endDateRequired',
       })
     }
-    if (hasSiteFields(data.status)) {
-      if (data.status === 'Transferred' && !data.transfer_site) {
+    if (data.status === 'Transferred') {
+      if (!data.transfer_site) {
         ctx.addIssue({ code: 'custom', path: ['transfer_site'], message: 'transferSiteRequired' })
       }
       // ISO yyyy-MM-dd strings compare correctly as text.

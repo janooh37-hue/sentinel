@@ -398,7 +398,6 @@
       "end_date": "تاريخ نهاية الخدمة",
       "effective_date": "تاريخ السريان",
       "transfer_site": "موقع النقل",
-      "loaned_to": "الجهة المُعار إليها",
       "transfer_return_date": "تاريخ العودة المتوقع",
       "return_date": "تاريخ العودة",
       "passport_no": "رقم الجواز",
@@ -418,7 +417,7 @@
       "Resigned": "مستقيل",
       "Terminated": "مفصول",
       "Transferred": "منقول",
-      "Loaned": "معار"
+      "Loaned": "ملحق"
     },
     "statusDetail": {
       "dated": "{{status}} · {{date}}",
@@ -430,7 +429,7 @@
       "title": "تغيير الحالة"
     },
     "validation": {
-      "endDateRequired": "تاريخ نهاية الخدمة مطلوب عند تغيير الحالة عن نشط",
+      "endDateRequired": "تاريخ نهاية الخدمة مطلوب عند تغيير الحالة عن نشط أو ملحق",
       "transferSiteRequired": "موقع النقل مطلوب عند النقل",
       "returnAfterEffective": "يجب أن يكون تاريخ العودة المتوقع بعد تاريخ السريان",
       "idRequired": "رقم الموظف مطلوب",
