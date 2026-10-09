@@ -26,7 +26,7 @@ from app.schemas.employee import (
     EMPLOYEE_STATUS_ACTIVE,
     EMPLOYEE_STATUS_RESIGNED,
     EMPLOYEE_STATUS_TERMINATED,
-    EMPLOYEE_STATUS_TRANSFERRED,
+    SITE_STATUSES,
     EmployeeCreate,
     EmployeeUpdate,
     validate_status_end_date,
@@ -181,9 +181,9 @@ def create_employee(
     data = payload.model_dump()
     target: str = payload.status
     end = payload.end_date
-    # Only Transferred keeps a site / return date.
-    if target == EMPLOYEE_STATUS_TRANSFERRED:
-        data["transfer_site"] = (payload.transfer_site or "").strip()
+    # Transfers and loans keep a site / return date.
+    if target in SITE_STATUSES:
+        data["transfer_site"] = (payload.transfer_site or "").strip() or None
     else:
         data["transfer_site"] = None
         data["transfer_return_date"] = None
@@ -235,7 +235,7 @@ def update_employee(
       today) with the old transfer site;
     * no-op edits (the form re-sending the same status/end_date) and edits that
       only touch ``transfer_site`` / ``transfer_return_date`` of an
-      already-Transferred employee record nothing.
+      already-Transferred or Loaned employee record nothing.
 
     ``effective_date`` is write-only: it never reaches the row.
     """
@@ -259,10 +259,10 @@ def update_employee(
     requested_status = merged_status
 
     # Validate the REQUESTED target (before a future date becomes a scheduled
-    # change). Only a Transferred target inherits the row's site / return date;
-    # for any other target only an explicit payload return date is checked, so
-    # Transferred -> Resigned is not rejected for the row's stale return date.
-    if requested_status == EMPLOYEE_STATUS_TRANSFERRED:
+    # change). Transfers and loans inherit the row's site / return date; for
+    # any other target only an explicit payload return date is checked, so
+    # leaving either status is not rejected for the row's stale return date.
+    if requested_status in SITE_STATUSES:
         req_site = data.get("transfer_site", old_site)
         req_return = data.get("transfer_return_date", old_return)
     else:
@@ -278,14 +278,14 @@ def update_employee(
     #
     # This lives in the service, not in StatusDialog, so the full EmployeeForm
     # gets the same rule and there is one place to be correct.
-    # A Transferred employee is already off this roster, so a later departure
+    # A Transferred or Loaned employee is already off this roster, so a later departure
     # (e.g. resigning from the new site) applies at once instead of putting them
     # back to Active for a notice period they are not serving here.
     is_scheduled_departure = (
         merged_status != EMPLOYEE_STATUS_ACTIVE
         and merged_end is not None
         and merged_end > date.today()
-        and row.status != EMPLOYEE_STATUS_TRANSFERRED
+        and row.status not in SITE_STATUSES
     )
     # A REAL reactivation, not merely a payload that happens to carry the
     # employee's current status. EmployeeForm submits every field it renders,
@@ -321,20 +321,18 @@ def update_employee(
             end_date=str(merged_end) if merged_end else None,
         ) from exc
 
-    # Transfer fields live on the row only while Transferred, or while a
-    # transfer is pending. Any other outcome (including leaving Transferred and
-    # reactivation) clears both.
+    # Site fields live on the row only while Transferred or Loaned, or while
+    # either status is pending. Leaving them (including reactivation) clears both.
     final_status = data.get("status", row.status)
     final_pending = data.get("pending_status", row.pending_status)
-    if final_status == EMPLOYEE_STATUS_TRANSFERRED or final_pending == EMPLOYEE_STATUS_TRANSFERRED:
-        if requested_status == EMPLOYEE_STATUS_TRANSFERRED:
-            data["transfer_site"] = (req_site or "").strip()
+    if final_status in SITE_STATUSES or final_pending in SITE_STATUSES:
+        if requested_status in SITE_STATUSES:
+            data["transfer_site"] = (req_site or "").strip() or None
             data["transfer_return_date"] = req_return
         else:
             # e.g. a full EmployeeForm save (status still 'Active') on a row
-            # with a PENDING transfer: its transfer fields arrive as nulls but
-            # the transfer is still pending, so keep the stored site/return or
-            # the flip would land a site-less transfer with no auto-return.
+            # with a PENDING transfer or loan: its site fields arrive as nulls,
+            # but the departure is still pending, so keep the stored site/return.
             data.pop("transfer_site", None)
             data.pop("transfer_return_date", None)
     else:
@@ -435,8 +433,8 @@ def update_employee(
 
 # Only these may be promoted out of `pending_status` into `status`.
 _PENDING_TARGETS: Final[frozenset[str]] = frozenset(
-    {EMPLOYEE_STATUS_RESIGNED, EMPLOYEE_STATUS_TERMINATED, EMPLOYEE_STATUS_TRANSFERRED}
-)
+    {EMPLOYEE_STATUS_RESIGNED, EMPLOYEE_STATUS_TERMINATED}
+) | SITE_STATUSES
 
 
 def apply_due_departures(db: Session, *, today: date | None = None) -> list[Employee]:
@@ -491,34 +489,35 @@ def apply_due_departures(db: Session, *, today: date | None = None) -> list[Empl
 
 def apply_due_transfer_returns(
     db: Session, *, today: date | None = None
-) -> list[tuple[Employee, date, str | None]]:
-    """Return Transferred employees whose expected return date has come.
+) -> list[tuple[Employee, date, str | None, str]]:
+    """Return Transferred or Loaned employees whose expected return date has come.
 
-    Each employee with ``status == 'Transferred'`` and
+    Each employee with a status in ``SITE_STATUSES`` and
     ``transfer_return_date <= today`` becomes Active again; ``end_date``,
     ``transfer_site``, ``transfer_return_date`` and ``pending_status`` are
-    cleared and an ``applied`` Transferred -> Active event is recorded dated the
-    return date. Returns ``(employee, return_date, old_site)`` per row moved.
-    Idempotent (the return date is cleared) and catches up missed runs.
+    cleared and an ``applied`` event from the prior status to Active is recorded
+    dated the return date. Returns ``(employee, return_date, old_site, old_status)``
+    per row moved. Idempotent (the return date is cleared) and catches up missed runs.
     """
     cutoff = today or date.today()
     rows = list(
         db.scalars(
             select(Employee).where(
-                Employee.status == EMPLOYEE_STATUS_TRANSFERRED,
+                Employee.status.in_(SITE_STATUSES),
                 Employee.transfer_return_date.is_not(None),
                 Employee.transfer_return_date <= cutoff,
             )
         )
     )
-    moved: list[tuple[Employee, date, str | None]] = []
+    moved: list[tuple[Employee, date, str | None, str]] = []
     for row in rows:
         returned_on = cast(date, row.transfer_return_date)
         site = row.transfer_site
+        old_status = row.status
         history.record_status_event(
             db,
             row.id,
-            from_status=EMPLOYEE_STATUS_TRANSFERRED,
+            from_status=row.status,
             to_status=EMPLOYEE_STATUS_ACTIVE,
             effective_date=returned_on,
             kind=history.KIND_APPLIED,
@@ -530,7 +529,7 @@ def apply_due_transfer_returns(
         row.pending_status = None
         row.transfer_site = None
         row.transfer_return_date = None
-        moved.append((row, returned_on, site))
+        moved.append((row, returned_on, site, old_status))
     if rows:
         db.commit()
     return moved

@@ -246,7 +246,9 @@ def test_scheduled_transfer_full_lifecycle(db_session):
     assert row.status == "Transferred"
 
     moved = employee_service.apply_due_transfer_returns(db_session, today=LATER)
-    assert [(e.id, d, s) for e, d, s in moved] == [("G8001", LATER, "Dubai")]
+    assert [(e.id, d, s, status) for e, d, s, status in moved] == [
+        ("G8001", LATER, "Dubai", "Transferred")
+    ]
     db_session.refresh(row)
     assert row.status == "Active"
     assert row.end_date is None and row.transfer_site is None

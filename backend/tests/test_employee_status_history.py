@@ -350,7 +350,7 @@ def test_full_form_save_keeps_pending_transfer_fields_through_flip(db_session):
         LATER,
     )
     (moved,) = employee_service.apply_due_transfer_returns(db_session, today=LATER)
-    assert moved[1:] == (LATER, "Abu Dhabi")
+    assert moved[1:] == (LATER, "Abu Dhabi", "Transferred")
     assert db_session.get(Employee, "G7001").status == "Active"
 
 
@@ -455,7 +455,9 @@ def test_apply_due_transfer_returns(db_session):
     )
     _emp(db_session, "G7003", status="Transferred", end_date=TODAY, transfer_site="Open")
     moved = employee_service.apply_due_transfer_returns(db_session)
-    assert [(e.id, d, s) for e, d, s in moved] == [("G7001", TODAY, "Dubai Branch")]
+    assert [(e.id, d, s, status) for e, d, s, status in moved] == [
+        ("G7001", TODAY, "Dubai Branch", "Transferred")
+    ]
     row = db_session.get(Employee, "G7001")
     assert row.status == "Active"
     assert row.end_date is None and row.transfer_site is None
@@ -511,7 +513,7 @@ def test_job_pushes_transfer_applied_with_isolated_site(monkeypatch):
 
 def test_job_pushes_transfer_ended(monkeypatch):
     emp = SimpleNamespace(id="G7001", name_en="Ali", name_ar=None, status="Active")
-    sent = _job_harness(monkeypatch, [], [(emp, TODAY, "Dubai Branch")])
+    sent = _job_harness(monkeypatch, [], [(emp, TODAY, "Dubai Branch", "Transferred")])
     sched._run_pending_departure_flip()
     (msg,) = sent
     assert msg["en"][1] == "Transfer ended\nAli (G7001) returned to Active"

@@ -35,6 +35,7 @@ from app.db.models import User
 from app.db.session import SessionLocal
 from app.db.workforce_models import WorkCrewMembership, WorkCrewSchedule
 from app.schemas.employee import (
+    EMPLOYEE_STATUS_LOANED,
     EMPLOYEE_STATUS_RESIGNED,
     EMPLOYEE_STATUS_TERMINATED,
     EMPLOYEE_STATUS_TRANSFERRED,
@@ -766,6 +767,7 @@ _DEPARTURE_LABELS: Final[dict[str, tuple[str, str]]] = {
     EMPLOYEE_STATUS_RESIGNED: ("Resigned", "مستقيل"),
     EMPLOYEE_STATUS_TERMINATED: ("Terminated", "مفصول"),
     EMPLOYEE_STATUS_TRANSFERRED: ("Transferred", "منقول"),
+    EMPLOYEE_STATUS_LOANED: ("Loaned", "معار"),
 }
 
 
@@ -788,11 +790,11 @@ def _isolate(s: str) -> str:
 def _run_pending_departure_flip() -> None:
     """Daily 09:05 Asia/Dubai — apply scheduled departures that have come due.
 
-    An employee whose resignation, termination or transfer was dated in the
-    future stayed Active through their notice period; today they become what
-    ``pending_status`` says. Admins get one in-app notification per flip.
-    Afterwards, temporary transfers whose return date has come are returned to
-    Active (its own try/except) with an "ended" notice.
+    An employee whose resignation, termination, transfer or loan was dated in
+    the future stayed Active through their notice period; today they become
+    what ``pending_status`` says. Admins get one in-app notification per flip.
+    Afterwards, temporary transfers and loans whose return date has come are
+    returned to Active (its own try/except) with an "ended" notice.
 
     Employees are never messaged by this job.
     """
@@ -805,12 +807,12 @@ def _run_pending_departure_flip() -> None:
         try:
             returned = employee_service.apply_due_transfer_returns(session)
         except Exception:
-            log.exception("scheduler: transfer-return job failed")
+            log.exception("scheduler: transfer/loan-return job failed")
             returned = []
         if not moved and not returned:
             return
         log.info(
-            "scheduler: %d scheduled departure(s) applied, %d transfer(s) ended",
+            "scheduler: %d scheduled departure(s) applied, %d transfer(s)/loan(s) ended",
             len(moved),
             len(returned),
         )
@@ -847,6 +849,19 @@ def _run_pending_departure_flip() -> None:
                         f"تم تطبيق النقل\n{_isolate(name_ar)} {ref} نُقل{site_ar}",
                     ),
                 }
+            elif emp.status == EMPLOYEE_STATUS_LOANED:
+                site_en = f" to {emp.transfer_site}" if emp.transfer_site else ""
+                site_ar = f" إلى {_isolate(emp.transfer_site)}" if emp.transfer_site else ""
+                messages = {
+                    "en": (
+                        "GSSG Manager",
+                        f"Loan applied\n{emp.name_en} ({emp.id}) loaned{site_en}",
+                    ),
+                    "ar": (
+                        "GSSG Manager",
+                        f"تم تطبيق الإعارة\n{_isolate(name_ar)} {ref} أُعير{site_ar}",
+                    ),
+                }
             else:
                 messages = {
                     "en": (
@@ -864,17 +879,19 @@ def _run_pending_departure_flip() -> None:
                     push_service.send_to_user(session, admin.id, messages, url)
                 except Exception:
                     log.exception("scheduler: departure notice failed for admin %s", admin.id)
-        for emp, _returned_on, _site in returned:
+        for emp, _returned_on, _site, old_status in returned:
             name_ar = emp.name_ar or emp.name_en
             ref = _isolate(f"({emp.id})")
+            ended_en = "Loan ended" if old_status == EMPLOYEE_STATUS_LOANED else "Transfer ended"
+            ended_ar = "انتهت الإعارة" if old_status == EMPLOYEE_STATUS_LOANED else "انتهى النقل"
             messages = {
                 "en": (
                     "GSSG Manager",
-                    f"Transfer ended\n{emp.name_en} ({emp.id}) returned to Active",
+                    f"{ended_en}\n{emp.name_en} ({emp.id}) returned to Active",
                 ),
                 "ar": (
                     "GSSG Manager",
-                    f"انتهى النقل\n{_isolate(name_ar)} {ref} عاد إلى الخدمة",
+                    f"{ended_ar}\n{_isolate(name_ar)} {ref} عاد إلى الخدمة",
                 ),
             }
             url = f"/employees/{emp.id}"
@@ -882,7 +899,7 @@ def _run_pending_departure_flip() -> None:
                 try:
                     push_service.send_to_user(session, admin.id, messages, url)
                 except Exception:
-                    log.exception("scheduler: transfer-end notice failed for admin %s", admin.id)
+                    log.exception("scheduler: transfer/loan-end notice failed for admin %s", admin.id)
 
 
 def _disabled_in_environment() -> bool:

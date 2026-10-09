@@ -5,8 +5,8 @@ Two non-obvious rules enforced here so the route layer stays thin:
 * **Canonical status.** v3 stored bilingual labels like ``"Active - نشط"`` in
   the spreadsheet, but Phase 02's importer collapsed them to the English half
   before insert. Phase 03 locks that in: the API only accepts and returns
-  ``Active``, ``Resigned``, ``Terminated``, ``Transferred``. Frontend renders the bilingual
-  label from i18n.
+  ``Active``, ``Resigned``, ``Terminated``, ``Transferred``, ``Loaned``.
+  Frontend renders the bilingual label from i18n.
 * **status / end_date invariant.** Mirrors v3.5.4's
   ``_emp_sync_end_date_widget`` (line 3282): once an employee is no longer
   Active, an ``end_date`` is required. We enforce it on Create and on Update
@@ -31,13 +31,18 @@ EMPLOYEE_STATUS_TERMINATED: Final = "Terminated"
 # employee off rosters/timesheets/shifts, but it can be temporary: an optional
 # `transfer_return_date` brings them back to Active via the daily job.
 EMPLOYEE_STATUS_TRANSFERRED: Final = "Transferred"
+EMPLOYEE_STATUS_LOANED: Final = "Loaned"
 
-EmployeeStatus = Literal["Active", "Resigned", "Terminated", "Transferred"]
+EmployeeStatus = Literal["Active", "Resigned", "Terminated", "Transferred", "Loaned"]
 EMPLOYEE_STATUSES: Final[tuple[EmployeeStatus, ...]] = (
     EMPLOYEE_STATUS_ACTIVE,
     EMPLOYEE_STATUS_RESIGNED,
     EMPLOYEE_STATUS_TERMINATED,
     EMPLOYEE_STATUS_TRANSFERRED,
+    EMPLOYEE_STATUS_LOANED,
+)
+SITE_STATUSES: Final[frozenset[str]] = frozenset(
+    {EMPLOYEE_STATUS_TRANSFERRED, EMPLOYEE_STATUS_LOANED}
 )
 
 MsgLanguage = Literal["ar", "en"]
@@ -69,13 +74,15 @@ def validate_transfer_fields(
     """Raise ``ValueError`` when the transfer fields don't fit ``status``.
 
     ``status`` is the *requested* target (before a future date is turned into a
-    scheduled change). Transferred needs a non-blank destination site; the
-    optional expected return date must fall after the effective date and is
-    meaningless for any other status.
+    scheduled change). Transferred needs a non-blank destination site; Loaned
+    allows an optional party. Both allow an expected return date after the
+    effective date; other statuses do not.
     """
-    if status == EMPLOYEE_STATUS_TRANSFERRED:
-        if transfer_site is None or not transfer_site.strip():
-            raise ValueError("transfer_site is required when status is 'Transferred'")
+    if status == EMPLOYEE_STATUS_TRANSFERRED and (
+        transfer_site is None or not transfer_site.strip()
+    ):
+        raise ValueError("transfer_site is required when status is 'Transferred'")
+    if status in SITE_STATUSES:
         if (
             transfer_return_date is not None
             and end_date is not None
@@ -83,7 +90,9 @@ def validate_transfer_fields(
         ):
             raise ValueError("transfer_return_date must be after end_date")
     elif transfer_return_date is not None:
-        raise ValueError("transfer_return_date is only valid when status is 'Transferred'")
+        raise ValueError(
+            "transfer_return_date is only valid when status is 'Transferred' or 'Loaned'"
+        )
 
 
 class EmployeeCreate(BaseModel):
@@ -95,7 +104,7 @@ class EmployeeCreate(BaseModel):
     doj_company: date | None = None
     status: EmployeeStatus = EMPLOYEE_STATUS_ACTIVE
     end_date: date | None = None
-    # Destination site — required when status is Transferred, else ignored.
+    # Destination site: required for Transferred, optional party for Loaned.
     transfer_site: str | None = Field(default=None, max_length=_FIELD_TEXT_MAX)
     # Optional expected return; the daily job reactivates on this date.
     transfer_return_date: date | None = None
@@ -135,7 +144,7 @@ class EmployeeUpdate(BaseModel):
     transfer_site: str | None = Field(default=None, max_length=_FIELD_TEXT_MAX)
     transfer_return_date: date | None = None
     # Write-only: the return date recorded in status history when this patch
-    # reactivates a departed/transferred employee (defaults to today). Never
+    # reactivates a non-Active employee (defaults to today). Never
     # stored on the employee row; `end_date` still clears on reactivation.
     effective_date: date | None = None
     department: str | None = Field(default=None, max_length=_SHORT_TEXT_MAX)
