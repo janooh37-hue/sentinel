@@ -61,8 +61,8 @@ def gen_env(db_session, tmp_path, monkeypatch):
     # would only be correct by real-clock coincidence, not by construction.
     monkeypatch.setattr(document_service, "datetime", _FixedNow)
     monkeypatch.setattr(docx_render, "datetime", _FixedNow)
-    if db_session.get(BookCategory, "NAT") is None:
-        db_session.add(BookCategory(id="NAT", prefix="NAT"))
+    if db_session.get(BookCategory, "INV") is None:
+        db_session.add(BookCategory(id="INV", prefix="INV"))
     db_session.commit()
     return db_session
 

@@ -31,7 +31,7 @@ vi.mock('@/lib/api', async (orig) => {
       getEmailAccount: vi.fn(),
       listLedgerContacts: vi.fn().mockResolvedValue([]),
       listRecipientLists: vi.fn().mockResolvedValue([]),
-      listEmployees: vi.fn().mockResolvedValue({ items: [], total: 0 }),
+      lookupEmployees: vi.fn().mockResolvedValue({ items: [], total: 0 }),
       emailHandoff: vi.fn(),
     },
   }
@@ -89,7 +89,7 @@ beforeEach(() => {
   vi.mocked(api.emailHandoff).mockResolvedValue({ ledger_entry_id: 77, mode: 'mailto' })
   vi.mocked(api.listLedgerContacts).mockResolvedValue([])
   vi.mocked(api.listRecipientLists).mockResolvedValue([])
-  vi.mocked(api.listEmployees).mockResolvedValue({ items: [], total: 0 } as never)
+  vi.mocked(api.lookupEmployees).mockResolvedValue({ items: [], total: 0 } as never)
   // The reference-PDF prefetch is a real `fetch`; keep every test offline
   // unless it opts in.
   vi.stubGlobal('fetch', vi.fn().mockRejectedValue(new Error('offline')))

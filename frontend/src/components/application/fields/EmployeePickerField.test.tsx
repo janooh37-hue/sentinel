@@ -14,8 +14,8 @@ import i18n from 'i18next'
 
 vi.mock('@/lib/api', () => ({
   api: {
-    listEmployees: vi.fn(),
-    getEmployee: vi.fn(),
+    lookupEmployees: vi.fn(),
+    getEmployeeLookup: vi.fn(),
   },
 }))
 
@@ -53,8 +53,8 @@ const EMP = {
 
 beforeEach(() => {
   vi.clearAllMocks()
-  vi.mocked(api.listEmployees).mockResolvedValue({ items: [EMP] } as never)
-  vi.mocked(api.getEmployee).mockResolvedValue(EMP as never)
+  vi.mocked(api.lookupEmployees).mockResolvedValue({ items: [EMP] } as never)
+  vi.mocked(api.getEmployeeLookup).mockResolvedValue(EMP as never)
 })
 
 describe('EmployeePickerField (English)', () => {
@@ -76,10 +76,12 @@ describe('EmployeePickerField (English)', () => {
     fireEvent.keyDown(combo, { key: 'ArrowDown' })
     fireEvent.keyDown(combo, { key: 'Enter' })
     await waitFor(() => expect(combo).toHaveValue('Ali Hassan — G1234'))
+    expect(api.lookupEmployees).toHaveBeenCalledWith({ q: undefined, limit: 50 })
+    expect(api.getEmployeeLookup).toHaveBeenCalledWith('G1234')
   })
 
   it('shows a search error, not "no results", when the lookup fails', async () => {
-    vi.mocked(api.listEmployees).mockRejectedValue(new Error('network down'))
+    vi.mocked(api.lookupEmployees).mockRejectedValue(new Error('network down'))
     render(<Host />)
     const combo = screen.getByRole('combobox')
     fireEvent.focus(combo)

@@ -43,7 +43,7 @@ export function ScanMatchDialog({
   })
   const employees = useQuery({
     queryKey: ['scan-match-employees', q],
-    queryFn: () => api.listEmployees({ q, limit: 8 }),
+    queryFn: () => api.lookupEmployees({ q, limit: 8 }),
     enabled: q.length > 0,
     staleTime: 30_000,
   })

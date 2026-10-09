@@ -36,7 +36,7 @@ const REPLACEMENT_RESULT = {
 
 vi.mock('@/lib/api', () => ({
   api: {
-    listEmployees: vi.fn(),
+    lookupEmployees: vi.fn(),
   },
 }))
 vi.mock('./UnitRail', () => ({ UnitRail: () => <div data-testid="unit-rail" /> }))
@@ -119,7 +119,7 @@ async function openTransfer(): Promise<void> {
 beforeEach(async () => {
   await i18n.addResourceBundle('ar', 'translation', ar, true, true)
   await i18n.changeLanguage('en')
-  mockedApi.listEmployees.mockResolvedValue({
+  mockedApi.lookupEmployees.mockResolvedValue({
     items: [{ id: 'G3309', name_en: 'Employee One', name_ar: null, duty_unit: 'GSSG', duty_post: null }],
     total: 1,
   } as never)

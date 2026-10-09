@@ -187,11 +187,12 @@ def test_transfer_rejects_a_duplicate_employee(db_session, admin_user, monkeypat
     assert db_session.get(Employee, "G700").duty_unit == "السرية الخامسة"
 
 
-def test_transfer_refuses_a_user_denied_the_general_book(db_session, monkeypatch):
+@pytest.mark.parametrize("capability", ["books.service.General Book", "books.category.12/1"])
+def test_transfer_refuses_a_user_denied_the_letter_record_type(db_session, monkeypatch, capability):
     """The letter is a General Book: a denied user moves nobody and mints nothing."""
     _seed(db_session, id="G800")
     operator = make_user(db_session, email="denied@test.ae")
-    perm_service.set_user_override(db_session, operator.id, "books.service.General Book", "deny")
+    perm_service.set_user_override(db_session, operator.id, capability, "deny")
 
     def fake_generate(*a, **k):
         raise AssertionError("generate_document must NOT be called for a denied user")

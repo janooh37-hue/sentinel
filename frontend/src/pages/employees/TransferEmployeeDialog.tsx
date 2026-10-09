@@ -48,8 +48,8 @@ export function TransferEmployeeDialog({ open, employee, onOpenChange }: Props):
 
   // Roster fetch only feeds the unit/post combobox suggestions.
   const { data: roster } = useQuery({
-    queryKey: ['employees', { limit: 500 }],
-    queryFn: () => api.listEmployees({ limit: 500 }),
+    queryKey: ['employees', 'lookup', { limit: 500 }],
+    queryFn: () => api.lookupEmployees({ limit: 500 }),
     enabled: open,
   })
   const all = roster?.items ?? []

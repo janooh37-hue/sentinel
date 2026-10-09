@@ -206,6 +206,34 @@ class EmployeeRead(ORMBase):
     has_passport_scan: bool = False
 
 
+class EmployeeLookupItem(ORMBase):
+    """Service picker identity/display fields, without employee profile data."""
+
+    id: str
+    name_en: str
+    name_ar: str | None
+    department: str | None = None
+    position: str | None = None
+    position_ar: str | None = None
+    duty_unit: str | None = None
+    duty_post: str | None = None
+
+
+class EmployeeLookupRead(EmployeeLookupItem):
+    """Selected employee prefill for the Passport Release table."""
+
+    nationality: str | None
+    passport_no: str | None
+    has_photo: bool = False
+
+
+class EmployeeLookupResponse(BaseModel):
+    items: list[EmployeeLookupItem]
+    total: int
+    limit: int
+    offset: int
+
+
 class EmployeeListItem(ORMBase):
     """Minimal projection for the list endpoint — keep the wire small."""
 

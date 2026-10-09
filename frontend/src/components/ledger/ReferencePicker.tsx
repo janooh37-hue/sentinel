@@ -1,7 +1,7 @@
 /**
  * ReferencePicker — body-portaled popover for the Ledger → Outlook compose
  * (Phase 6, Task 3). A search box over **Books / records** (`listBooks({ q })`,
- * 📕 `ref_number` + subject) and **Employees** (`listEmployees({ q })`, 👤
+ * 📕 `ref_number` + subject) and **Employees** (`lookupEmployees({ q })`, 👤
  * `id` + name), grouped. Selecting a result calls `onPick(ComposeReference)`.
  *
  * Two-pane document browser (impeccable overdrive): the panel widens to ~600px
@@ -29,7 +29,7 @@ import { useTranslation } from 'react-i18next'
 import { FileText, ExternalLink } from 'lucide-react'
 
 import { api } from '@/lib/api'
-import type { BookRead, EmployeeListItem } from '@/lib/api'
+import type { BookRead, EmployeeLookupItem } from '@/lib/api'
 import { currentBookDocId } from '@/lib/bookDocument'
 import { pickEmployeeName } from '@/lib/employeeName'
 import { cn } from '@/lib/utils'
@@ -58,7 +58,7 @@ export interface ReferencePickerProps {
 /** The record currently shown in the preview pane (driven by hover / focus). */
 type PreviewTarget =
   | { kind: 'book'; b: BookRead }
-  | { kind: 'employee'; e: EmployeeListItem }
+  | { kind: 'employee'; e: EmployeeLookupItem }
 
 /** First-letters initials for the employee preview avatar. */
 function initials(name: string): string {
@@ -102,7 +102,7 @@ export function ReferencePicker({
   })
   const employeesQuery = useQuery({
     queryKey: ['refpick-employees', q],
-    queryFn: () => api.listEmployees({ q, limit: 6 }),
+    queryFn: () => api.lookupEmployees({ q, limit: 6 }),
     enabled: q.length > 0,
     staleTime: 30_000,
   })

@@ -43,6 +43,41 @@ venv/Scripts/python backend/serve.py
 
 Then open `http://<server>/` from any device on the network.
 
+## Employee picker permissions
+
+Service forms can look up employee names with `documents.generate` even when
+the Employees page (`employees.view`) is blocked. `GET /api/v1/employees/lookup`
+returns only the employee ID, English/Arabic names, department, designation, and
+duty unit/post. The selected-employee lookup (`/employees/lookup/{id}`) also
+returns nationality and passport number, only to users who can use the Passport
+Release service (`books.service.Passport Release List`), for its prefill; those
+fields are never included in search results. Employee profiles, photos, vaults, activity,
+and HR pages keep their existing permission gates. Announcement recipient and
+WhatsApp-mention searches still require `employees.view` because they use
+contact numbers rather than only employee identities.
+
+## Record category permissions
+
+The Permissions page lists the 15 General Book classifications, then the legacy
+record categories. Each legacy category shows the services whose new records it
+files (from the form-to-category map in `document_service._FORM_CATEGORY`), so a
+deny there also blocks creating and viewing those services' records. Categories
+no service writes to are marked "Old records only". Migration `0098` removes the
+unused seed categories `1`–`12` that no record references.
+
+Inmate Conduct Violations file under their own category `INV` (Inmate
+violations); `NAT` keeps the employee Violation and Warning forms. Migration
+`0099` moves existing inmate violation records to `INV` without changing their
+ref numbers, and copies every `books.category.NAT` grant/deny, role row, and
+`NAT` auto-log rule to `INV`, so access and correspondence filing stay the same.
+New inmate violation refs read `INV-NNNN` (same shared counter as other refs).
+
+The 15 classifications (`1/1`–`15/1`) are also real record categories, so they
+appear in the Records category filter. Picking one lists the General Books filed
+under that classification (`classification_code`), plus any old records whose
+category is that code. Leave and resignation papers carry a classification code
+too but are not matched, the same as for a classification deny.
+
 ## Vehicle photo library
 
 Choose an existing main photo from **Add vehicle**, **Edit vehicle**, or the

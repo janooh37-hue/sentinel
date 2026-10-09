@@ -38,8 +38,8 @@ vi.mock('@/lib/api', () => ({
     listManagers: vi.fn().mockResolvedValue([]),
     listRecipients: vi.fn().mockResolvedValue([]),
     getWordTemplateTable: vi.fn().mockResolvedValue({ has_table: false, columns: [] }),
-    listEmployees: vi.fn().mockResolvedValue({ items: [] }),
-    getEmployee: vi.fn().mockResolvedValue(null),
+    lookupEmployees: vi.fn().mockResolvedValue({ items: [] }),
+    getEmployeeLookup: vi.fn().mockResolvedValue(null),
     listInmateNationalities: vi.fn().mockResolvedValue({ items: [], aliases: {} }),
   },
 }))
@@ -176,8 +176,8 @@ describe('Inmate Conduct Violations form', () => {
     expect(screen.getByText('A conduct violation was written against the inmate')).toBeInTheDocument()
     expect(screen.getByText('Inmate moved to section B and restrained')).toBeInTheDocument()
     expect(screen.getByLabelText('Other action')).toBeInTheDocument()
-    // Employee picker (reporter_id) — hits the mocked api.listEmployees /
-    // api.getEmployee (both disabled at mount, but the module must resolve).
+    // Employee picker (reporter_id) — hits the mocked api.lookupEmployees /
+    // api.getEmployeeLookup (both disabled at mount, but the module must resolve).
     expect(screen.getByPlaceholderText('Pick an employee…')).toBeInTheDocument()
     // Manager picker (manager_id) — real ManagerPickerField hitting the
     // mocked api.listManagers().
