@@ -68,14 +68,14 @@ class Employee(Base):
     end_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     # Scheduled departure — the status this employee flips to on `end_date`,
     # while `status` stays 'Active' through the notice period. NULL means no
-    # pending departure: Resigned, Terminated, Transferred or Loaned. Written by
-    # employee create/update or the Resignation Letter, cleared on flip or cancel.
+    # pending departure. Only ever 'Resigned' or 'Terminated': written by the
+    # Resignation Letter and by update_employee, cleared on flip or cancel.
     pending_status: Mapped[str | None] = mapped_column(String(32), nullable=True)
-    # Destination site for Transferred, optional party for Loaned, including
-    # pending departures. Cleared on leaving these statuses.
+    # Destination site while Transferred, or while a transfer is pending
+    # (`pending_status == 'Transferred'`). Cleared on leaving Transferred.
     transfer_site: Mapped[str | None] = mapped_column(String(128), nullable=True)
-    # Expected return of a temporary transfer or loan: the daily job reactivates
-    # the employee on this date. NULL = open-ended transfer or loan.
+    # Expected return of a temporary transfer: the daily job reactivates the
+    # employee on this date. NULL = open-ended transfer.
     transfer_return_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     department: Mapped[str | None] = mapped_column(String(128), nullable=True)
     position: Mapped[str | None] = mapped_column(String(128), nullable=True)
