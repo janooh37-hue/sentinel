@@ -1,3 +1,5 @@
+import pytest
+
 from app.db.models import Employee
 from app.services import duty_supervisor_service as svc
 
@@ -34,10 +36,16 @@ def test_remove_mapping(db_session):
     assert svc.list_mappings(db_session) == []
 
 
-def test_resolve_supervisors_by_designation(db_session):
+@pytest.mark.parametrize("status", ["Active", "Loaned"])
+def test_resolve_supervisors_by_designation(db_session, status):
     svc.add_mapping(db_session, "السرية الأولى", "مسؤول سرية")
     match = _emp(
-        db_session, id="G1", duty_unit="السرية الأولى", duty_post="مسؤول سرية", contact="0501234567"
+        db_session,
+        id="G1",
+        duty_unit="السرية الأولى",
+        duty_post="مسؤول سرية",
+        contact="0501234567",
+        status=status,
     )
     _emp(
         db_session, id="G2", duty_unit="السرية الأولى", duty_post="جندي", contact="0502223333"

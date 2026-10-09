@@ -1,14 +1,15 @@
 """A Resignation Letter records where the employee is headed.
 
-Future date → pending (Active through the notice period). Today-or-past →
+Future date → pending (Active or Loaned through the notice period). Today-or-past →
 applied now. Never overwrites someone who has already departed.
 """
 
 from datetime import date, timedelta
 
 import pytest
+from sqlalchemy import select
 
-from app.db.models import Employee
+from app.db.models import Employee, EmployeeStatusEvent
 from app.services.document_service import _record_pending_resignation
 
 
@@ -20,22 +21,41 @@ def _emp(db_session, employee_id: str, **kw) -> Employee:
     return row
 
 
-def test_future_resignation_date_schedules(db_session):
-    emp = _emp(db_session, "G9200")
+@pytest.mark.parametrize("status", ["Active", "Loaned"])
+def test_future_resignation_date_schedules(db_session, status):
+    emp = _emp(db_session, "G9200", status=status)
     future = date.today() + timedelta(days=16)
     _record_pending_resignation(db_session, emp, {"resignation_date": future.isoformat()})
     db_session.commit()  # exercise the actual write path for this novel state
-    assert emp.status == "Active"
+    assert emp.status == status
     assert emp.pending_status == "Resigned"
     assert emp.end_date == future
+    (event,) = db_session.scalars(select(EmployeeStatusEvent)).all()
+    assert (event.from_status, event.to_status, event.kind, event.source) == (
+        status,
+        "Resigned",
+        "scheduled",
+        "resignation_letter",
+    )
+    assert event.effective_date == future
 
 
-def test_today_resignation_date_applies_now(db_session):
-    emp = _emp(db_session, "G9201")
+@pytest.mark.parametrize("status", ["Active", "Loaned"])
+def test_today_resignation_date_applies_now(db_session, status):
+    emp = _emp(db_session, "G9201", status=status)
     _record_pending_resignation(db_session, emp, {"resignation_date": date.today().isoformat()})
+    db_session.commit()
     assert emp.status == "Resigned"
     assert emp.pending_status is None
     assert emp.end_date == date.today()
+    (event,) = db_session.scalars(select(EmployeeStatusEvent)).all()
+    assert (event.from_status, event.to_status, event.kind, event.source) == (
+        status,
+        "Resigned",
+        "changed",
+        "resignation_letter",
+    )
+    assert event.effective_date == date.today()
 
 
 def test_past_resignation_date_applies_now(db_session):

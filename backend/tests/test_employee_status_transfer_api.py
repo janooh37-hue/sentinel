@@ -1,4 +1,4 @@
-"""HTTP-level tests for transfer/loan statuses, status events and the lifecycle."""
+"""HTTP-level tests for Transferred status, status events and the transfer lifecycle."""
 
 from __future__ import annotations
 
@@ -58,20 +58,64 @@ def _events(db, employee_id: str = "G8001") -> list[EmployeeStatusEvent]:
     )
 
 
-@pytest.mark.parametrize("status", ["Transferred", "Loaned"])
-def test_patch_site_status_with_party_records_actor(client, api_db, hr_user, status):
+def test_patch_transfer_with_site_records_actor(client, api_db, hr_user):
     _emp(api_db)
     r = client.patch(
         "/api/v1/employees/G8001",
-        json={"status": status, "end_date": TODAY.isoformat(), "transfer_site": "Dubai"},
+        json={"status": "Transferred", "end_date": TODAY.isoformat(), "transfer_site": "Dubai"},
     )
     assert r.status_code == 200, r.text
     body = r.json()
-    assert body["status"] == status
+    assert body["status"] == "Transferred"
     assert body["transfer_site"] == "Dubai"
     (ev,) = _events(api_db)
     assert ev.actor_user_id == hr_user.id
-    assert (ev.to_status, ev.site, ev.kind) == (status, "Dubai", "changed")
+    assert (ev.to_status, ev.site, ev.kind) == ("Transferred", "Dubai", "changed")
+
+
+def test_patch_loaned_without_end_date_records_activity(client, api_db, hr_user):
+    _emp(api_db)
+    response = client.patch("/api/v1/employees/G8001", json={"status": "Loaned"})
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert (body["status"], body["end_date"], body["pending_status"]) == ("Loaned", None, None)
+    assert body["transfer_site"] is None and body["transfer_return_date"] is None
+    (event,) = _events(api_db)
+    assert event.actor_user_id == hr_user.id
+    assert (event.from_status, event.to_status, event.kind) == ("Active", "Loaned", "changed")
+    response = client.get(
+        "/api/v1/employees/activity", params={"kind": "status", "employee_id": "G8001"}
+    )
+    assert response.status_code == 200, response.text
+    (activity,) = response.json()["items"]
+    assert (activity["from_status"], activity["to_status"], activity["actor_name"]) == (
+        "Active",
+        "Loaned",
+        "HR Admin",
+    )
+
+
+def test_create_loaned_without_end_date(client, api_db):
+    response = client.post(
+        "/api/v1/employees",
+        json={"id": "G8030", "name_en": "Loaned employee", "status": "Loaned"},
+    )
+    assert response.status_code == 201, response.text
+    assert response.json()["status"] == "Loaned"
+    assert response.json()["end_date"] is None
+    assert api_db.get(Employee, "G8030").end_date is None
+
+
+def test_patch_loaned_return_date_rejected(client, api_db):
+    _emp(api_db)
+    response = client.patch(
+        "/api/v1/employees/G8001",
+        json={"status": "Loaned", "transfer_return_date": FUTURE.isoformat()},
+    )
+    assert response.status_code == 422, response.text
+    assert "EMPLOYEE_INVALID_TRANSFER" in response.text
+    assert api_db.get(Employee, "G8001").status == "Active"
+    assert _events(api_db) == []
 
 
 def test_patch_transfer_missing_site_rejected(client, api_db):
@@ -247,9 +291,7 @@ def test_scheduled_transfer_full_lifecycle(db_session):
     assert row.status == "Transferred"
 
     moved = employee_service.apply_due_transfer_returns(db_session, today=LATER)
-    assert [(e.id, d, s, status) for e, d, s, status in moved] == [
-        ("G8001", LATER, "Dubai", "Transferred")
-    ]
+    assert [(e.id, d, s) for e, d, s in moved] == [("G8001", LATER, "Dubai")]
     db_session.refresh(row)
     assert row.status == "Active"
     assert row.end_date is None and row.transfer_site is None

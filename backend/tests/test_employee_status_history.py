@@ -1,4 +1,4 @@
-"""Employee status history: every writer logs, no-ops don't, transfer/loan rules."""
+"""Employee status history: writer logs, no-ops, transfers and working-status parity."""
 
 from __future__ import annotations
 
@@ -57,6 +57,112 @@ def _user(db) -> User:
     return user
 
 
+@pytest.mark.parametrize("status", ["Active", "Loaned"])
+def test_create_working_employee_without_end_date(db_session, status):
+    employee_service.create_employee(
+        db_session, EmployeeCreate(id="G7030", name_en="Working employee", status=status)
+    )
+    row = db_session.get(Employee, "G7030")
+    assert (row.status, row.end_date, row.pending_status) == (status, None, None)
+    assert row.transfer_site is None and row.transfer_return_date is None
+    assert _events(db_session, "G7030") == []
+
+
+def test_loaned_return_date_is_rejected(db_session):
+    _emp(db_session)
+    with pytest.raises(ValidationFailedError) as exc:
+        employee_service.update_employee(
+            db_session, "G7001", EmployeeUpdate(status="Loaned", transfer_return_date=FUTURE)
+        )
+    assert exc.value.code == "EMPLOYEE_INVALID_TRANSFER"
+    assert db_session.get(Employee, "G7001").status == "Active"
+    assert _events(db_session) == []
+
+
+@pytest.mark.parametrize("pending", [False, True])
+def test_working_status_swaps_are_immediate_and_preserve_departure(db_session, pending):
+    end = FUTURE if pending else None
+    target = "Resigned" if pending else None
+    _emp(db_session, end_date=end, pending_status=target)
+    for index, (old_status, new_status) in enumerate(
+        [("Active", "Loaned"), ("Loaned", "Active")], start=1
+    ):
+        row = employee_service.update_employee(
+            db_session, "G7001", EmployeeUpdate(status=new_status)
+        )
+        assert (row.status, row.end_date, row.pending_status) == (new_status, end, target)
+        events = _events(db_session)
+        assert len(events) == index
+        ev = events[-1]
+        assert (ev.from_status, ev.to_status, ev.kind, ev.source) == (
+            old_status,
+            new_status,
+            "changed",
+            "manual",
+        )
+        assert ev.effective_date == TODAY
+        assert ev.site is None and ev.return_date is None
+        employee_service.update_employee(
+            db_session, "G7001", EmployeeUpdate(status=new_status, end_date=end)
+        )
+        assert len(_events(db_session)) == index, "resending an unchanged form is a no-op"
+
+
+@pytest.mark.parametrize("previous", ["Resigned", "Transferred"])
+def test_reactivation_to_loaned_clears_departure_and_transfer_fields(db_session, previous):
+    _emp(
+        db_session,
+        status=previous,
+        end_date=TODAY - timedelta(days=5),
+        transfer_site="Dubai" if previous == "Transferred" else None,
+        transfer_return_date=LATER if previous == "Transferred" else None,
+    )
+    row = employee_service.update_employee(db_session, "G7001", EmployeeUpdate(status="Loaned"))
+    assert (row.status, row.end_date, row.pending_status) == ("Loaned", None, None)
+    assert row.transfer_site is None and row.transfer_return_date is None
+    (ev,) = _events(db_session)
+    assert (ev.from_status, ev.to_status, ev.kind, ev.effective_date) == (
+        previous,
+        "Loaned",
+        "changed",
+        TODAY,
+    )
+
+
+@pytest.mark.parametrize("cancel", [False, True])
+def test_loaned_scheduled_resignation_applies_or_cancels_with_history(db_session, cancel):
+    _emp(db_session, status="Loaned")
+    row = employee_service.update_employee(
+        db_session, "G7001", EmployeeUpdate(status="Resigned", end_date=FUTURE)
+    )
+    assert (row.status, row.pending_status, row.end_date) == ("Loaned", "Resigned", FUTURE)
+    (scheduled,) = _events(db_session)
+    assert (scheduled.from_status, scheduled.to_status, scheduled.kind) == (
+        "Loaned",
+        "Resigned",
+        "scheduled",
+    )
+    assert employee_service.apply_due_departures(db_session, today=TODAY) == []
+    if cancel:
+        row = employee_service.update_employee(db_session, "G7001", EmployeeUpdate(end_date=None))
+        assert (row.status, row.pending_status, row.end_date) == ("Loaned", None, None)
+        assert employee_service.apply_due_departures(db_session, today=FUTURE) == []
+        expected_kind = "scheduled_cancelled"
+    else:
+        moved = employee_service.apply_due_departures(db_session, today=FUTURE)
+        assert [employee.id for employee in moved] == ["G7001"]
+        assert (row.status, row.pending_status, row.end_date) == ("Resigned", None, FUTURE)
+        assert employee_service.apply_due_departures(db_session, today=FUTURE) == []
+        expected_kind = "applied"
+    scheduled, final = _events(db_session)
+    assert (final.from_status, final.to_status, final.kind, final.effective_date) == (
+        "Loaned",
+        "Resigned",
+        expected_kind,
+        FUTURE,
+    )
+
+
 # --- validation ---------------------------------------------------------------
 
 
@@ -75,52 +181,30 @@ def test_transfer_requires_site(db_session):
     assert _events(db_session) == []
 
 
-@pytest.mark.parametrize("party", [None, "  "])
-def test_loan_without_party_is_accepted(db_session, party):
-    _emp(db_session)
-    employee_service.update_employee(
-        db_session,
-        "G7001",
-        EmployeeUpdate(status="Loaned", end_date=TODAY, transfer_site=party),
-    )
-    row = db_session.get(Employee, "G7001")
-    assert (row.status, row.end_date, row.transfer_site) == ("Loaned", TODAY, None)
-    (ev,) = _events(db_session)
-    assert (ev.from_status, ev.to_status, ev.kind, ev.site) == (
-        "Active",
-        "Loaned",
-        "changed",
-        None,
-    )
-
-
-@pytest.mark.parametrize("status", ["Transferred", "Loaned"])
-def test_site_status_requires_date(db_session, status):
+def test_transfer_requires_date(db_session):
     _emp(db_session)
     with pytest.raises(ValidationFailedError):
         employee_service.update_employee(
-            db_session, "G7001", EmployeeUpdate(status=status, transfer_site="Dubai")
+            db_session, "G7001", EmployeeUpdate(status="Transferred", transfer_site="Dubai")
         )
 
 
-@pytest.mark.parametrize("status", ["Transferred", "Loaned"])
-@pytest.mark.parametrize("return_date", [TODAY - timedelta(days=1), TODAY])
-def test_return_date_must_be_after_effective_date(db_session, status, return_date):
+def test_return_date_must_be_after_effective_date(db_session):
     _emp(db_session)
     with pytest.raises(ValidationFailedError):
         employee_service.update_employee(
             db_session,
             "G7001",
             EmployeeUpdate(
-                status=status,
+                status="Transferred",
                 end_date=TODAY,
                 transfer_site="Dubai",
-                transfer_return_date=return_date,
+                transfer_return_date=TODAY,
             ),
         )
 
 
-def test_return_date_rejected_for_resigned(db_session):
+def test_return_date_only_valid_for_transferred(db_session):
     _emp(db_session)
     with pytest.raises(ValidationFailedError):
         employee_service.update_employee(
@@ -163,35 +247,19 @@ def test_immediate_transfer_logs_changed_with_actor_and_site(db_session):
     assert ev.actor_user_id == user.id
 
 
-@pytest.mark.parametrize("status", ["Transferred", "Loaned"])
-def test_future_site_status_schedules_and_flips_when_due(db_session, status):
+def test_future_transfer_schedules(db_session):
     _emp(db_session)
     employee_service.update_employee(
         db_session,
         "G7001",
-        EmployeeUpdate(status=status, end_date=FUTURE, transfer_site="Abu Dhabi"),
+        EmployeeUpdate(status="Transferred", end_date=FUTURE, transfer_site="Abu Dhabi"),
     )
     row = db_session.get(Employee, "G7001")
     assert row.status == "Active"
-    assert row.pending_status == status
+    assert row.pending_status == "Transferred"
     assert row.transfer_site == "Abu Dhabi"
     (ev,) = _events(db_session)
-    assert (ev.kind, ev.to_status, ev.effective_date) == ("scheduled", status, FUTURE)
-    assert employee_service.apply_due_departures(db_session, today=FUTURE - timedelta(days=1)) == []
-    assert (row.status, row.pending_status) == ("Active", status)
-    moved = employee_service.apply_due_departures(db_session, today=FUTURE)
-    assert [e.id for e in moved] == ["G7001"]
-    assert (row.status, row.pending_status, row.end_date) == (status, None, FUTURE)
-    assert row.transfer_site == "Abu Dhabi"
-    ev = _events(db_session)[-1]
-    assert (ev.kind, ev.from_status, ev.to_status, ev.effective_date, ev.site) == (
-        "applied",
-        "Active",
-        status,
-        FUTURE,
-        "Abu Dhabi",
-    )
-    assert employee_service.apply_due_departures(db_session, today=FUTURE) == []
+    assert (ev.kind, ev.to_status, ev.effective_date) == ("scheduled", "Transferred", FUTURE)
 
 
 def test_rescheduling_records_again_but_resending_same_does_not(db_session):
@@ -282,29 +350,22 @@ def test_leaving_transferred_clears_transfer_fields(db_session):
     assert (ev.from_status, ev.to_status, ev.kind) == ("Transferred", "Terminated", "changed")
 
 
-@pytest.mark.parametrize("status", ["Transferred", "Loaned"])
-def test_future_departure_from_site_status_applies_immediately(db_session, status):
+def test_future_departure_from_transferred_applies_immediately(db_session):
     # Already off this roster: no Active notice period, no pending marker.
     _emp(
         db_session,
-        status=status,
+        status="Transferred",
         end_date=TODAY - timedelta(days=3),
         transfer_site="Dubai Branch",
-        transfer_return_date=LATER,
     )
     employee_service.update_employee(
         db_session, "G7001", EmployeeUpdate(status="Resigned", end_date=FUTURE)
     )
     row = db_session.get(Employee, "G7001")
     assert (row.status, row.pending_status, row.end_date) == ("Resigned", None, FUTURE)
-    assert row.transfer_site is None and row.transfer_return_date is None
+    assert row.transfer_site is None
     (ev,) = _events(db_session)
-    assert (ev.from_status, ev.to_status, ev.kind, ev.effective_date) == (
-        status,
-        "Resigned",
-        "changed",
-        FUTURE,
-    )
+    assert (ev.from_status, ev.to_status, ev.kind) == ("Transferred", "Resigned", "changed")
 
 
 def test_noop_form_resend_logs_nothing(db_session):
@@ -395,7 +456,7 @@ def test_full_form_save_keeps_pending_transfer_fields_through_flip(db_session):
         LATER,
     )
     (moved,) = employee_service.apply_due_transfer_returns(db_session, today=LATER)
-    assert moved[1:] == (LATER, "Abu Dhabi", "Transferred")
+    assert moved[1:] == (LATER, "Abu Dhabi")
     assert db_session.get(Employee, "G7001").status == "Active"
 
 
@@ -482,45 +543,39 @@ def test_apply_due_departures_logs_applied_with_site(db_session):
     assert (ev.effective_date, ev.site, ev.return_date) == (TODAY, "Dubai Branch", LATER)
 
 
-@pytest.mark.parametrize(
-    ("status", "site"),
-    [("Transferred", "Dubai Branch"), ("Loaned", "Dubai Branch"), ("Loaned", None)],
-)
-def test_apply_due_transfer_returns(db_session, status, site):
+def test_apply_due_transfer_returns(db_session):
     _emp(
         db_session,
-        status=status,
+        status="Transferred",
         end_date=TODAY - timedelta(days=30),
-        transfer_site=site,
+        transfer_site="Dubai Branch",
         transfer_return_date=TODAY,
     )
     _emp(
         db_session,
         "G7002",
-        status=status,
+        status="Transferred",
         end_date=TODAY - timedelta(days=30),
         transfer_site="X",
         transfer_return_date=FUTURE,
     )
-    _emp(db_session, "G7003", status=status, end_date=TODAY, transfer_site="Open")
+    _emp(db_session, "G7003", status="Transferred", end_date=TODAY, transfer_site="Open")
     moved = employee_service.apply_due_transfer_returns(db_session)
-    assert [(e.id, d, s, old_status) for e, d, s, old_status in moved] == [
-        ("G7001", TODAY, site, status)
-    ]
+    assert [(e.id, d, s) for e, d, s in moved] == [("G7001", TODAY, "Dubai Branch")]
     row = db_session.get(Employee, "G7001")
     assert row.status == "Active"
     assert row.end_date is None and row.transfer_site is None
     assert row.transfer_return_date is None and row.pending_status is None
-    assert db_session.get(Employee, "G7002").status == status
-    assert db_session.get(Employee, "G7003").status == status
+    assert db_session.get(Employee, "G7002").status == "Transferred"
+    assert db_session.get(Employee, "G7003").status == "Transferred"
     (ev,) = _events(db_session)
     assert (ev.kind, ev.source, ev.from_status, ev.to_status) == (
         "applied",
         "scheduler",
-        status,
+        "Transferred",
         "Active",
     )
-    assert (ev.effective_date, ev.site) == (TODAY, site)
+    assert (ev.effective_date, ev.site) == (TODAY, "Dubai Branch")
     assert employee_service.apply_due_transfer_returns(db_session) == []
 
 
@@ -562,7 +617,7 @@ def test_job_pushes_transfer_applied_with_isolated_site(monkeypatch):
 
 def test_job_pushes_transfer_ended(monkeypatch):
     emp = SimpleNamespace(id="G7001", name_en="Ali", name_ar=None, status="Active")
-    sent = _job_harness(monkeypatch, [], [(emp, TODAY, "Dubai Branch", "Transferred")])
+    sent = _job_harness(monkeypatch, [], [(emp, TODAY, "Dubai Branch")])
     sched._run_pending_departure_flip()
     (msg,) = sent
     assert msg["en"][1] == "Transfer ended\nAli (G7001) returned to Active"

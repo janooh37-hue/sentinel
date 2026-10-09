@@ -6,10 +6,7 @@ tests assert delegation and error containment, not the flip logic itself
 """
 
 import contextlib
-from datetime import date
 from types import SimpleNamespace
-
-import pytest
 
 from app.services import scheduler_service as sched
 
@@ -127,82 +124,6 @@ def test_arabic_body_isolates_the_latin_id(monkeypatch):
     assert "⁦" not in ar, "LRI would force LTR on an unknown-direction value"
     # The English body is pure LTR and needs no isolates.
     assert fsi not in sent[0]["en"][1]
-
-
-@pytest.mark.parametrize(
-    ("party", "body_en", "body_ar"),
-    [
-        (
-            "Dubai Branch",
-            "Loan applied\nAli (G9406) is now on loan to Dubai Branch",
-            "تم تطبيق الإعارة\n\u2068علي\u2069 \u2068(G9406)\u2069 أُعير إلى \u2068Dubai Branch\u2069",
-        ),
-        (
-            None,
-            "Loan applied\nAli (G9406) is now on loan",
-            "تم تطبيق الإعارة\n\u2068علي\u2069 \u2068(G9406)\u2069 أُعير",
-        ),
-    ],
-)
-def test_flip_job_notifies_loan_applied(monkeypatch, party, body_en, body_ar):
-    _fake_session(monkeypatch)
-    emp = SimpleNamespace(
-        id="G9406", name_en="Ali", name_ar="علي", status="Loaned", transfer_site=party
-    )
-    monkeypatch.setattr(sched.employee_service, "apply_due_departures", lambda db, **kw: [emp])
-    monkeypatch.setattr(sched.employee_service, "apply_due_transfer_returns", lambda db, **kw: [])
-    monkeypatch.setattr(sched.admin_notify, "active_admins", lambda db: [SimpleNamespace(id=1)])
-    sent: list[tuple[int, dict, str]] = []
-    monkeypatch.setattr(
-        sched.push_service,
-        "send_to_user",
-        lambda db, uid, messages, url: sent.append((uid, messages, url)),
-    )
-
-    sched._run_pending_departure_flip()
-
-    assert sent == [
-        (1, {"en": ("GSSG Manager", body_en), "ar": ("GSSG Manager", body_ar)}, "/employees/G9406")
-    ]
-
-
-@pytest.mark.parametrize(
-    ("old_status", "body_en", "body_ar"),
-    [
-        (
-            "Transferred",
-            "Transfer ended\nAli (G9406) returned to Active",
-            "انتهى النقل\n\u2068Ali\u2069 \u2068(G9406)\u2069 عاد إلى الخدمة",
-        ),
-        (
-            "Loaned",
-            "Loan ended\nAli (G9406) returned to Active",
-            "انتهت الإعارة\n\u2068Ali\u2069 \u2068(G9406)\u2069 عاد إلى الخدمة",
-        ),
-    ],
-)
-def test_flip_job_notifies_return_using_previous_status(monkeypatch, old_status, body_en, body_ar):
-    _fake_session(monkeypatch)
-    emp = SimpleNamespace(id="G9406", name_en="Ali", name_ar=None, status="Active")
-    monkeypatch.setattr(sched.employee_service, "apply_due_departures", lambda db, **kw: [])
-    monkeypatch.setattr(
-        sched.employee_service,
-        "apply_due_transfer_returns",
-        lambda db, **kw: [(emp, date.today(), "Dubai Branch", old_status)],
-    )
-    monkeypatch.setattr(sched.admin_notify, "active_admins", lambda db: [SimpleNamespace(id=1)])
-    sent: list[tuple[int, dict, str]] = []
-    monkeypatch.setattr(
-        sched.push_service,
-        "send_to_user",
-        lambda db, uid, messages, url: sent.append((uid, messages, url)),
-    )
-
-    sched._run_pending_departure_flip()
-
-    assert sent == [
-        (1, {"en": ("GSSG Manager", body_en), "ar": ("GSSG Manager", body_ar)}, "/employees/G9406")
-    ]
 
 
 def test_flip_job_swallows_service_errors(monkeypatch):

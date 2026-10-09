@@ -183,6 +183,23 @@ def test_a_quiet_guard_is_present_all_month(db_session, guards):
     assert grid.days_in_month == 31
 
 
+@pytest.mark.parametrize("status", ["Active", "Loaned"])
+def test_working_employee_without_end_date_stays_on_roster_not_removed(db_session, guards, status):
+    employee = db_session.get(Employee, "G1001")
+    employee.status = status
+    employee.end_date = None
+    db_session.commit()
+    for month in (7, 8):
+        grid = svc.build_month(db_session, 2026, month)
+        row = next(row for row in grid.rows if row.employee_id == "G1001")
+        assert row.codes == [CODE_PRESENT] * 31
+        assert "G1001" not in [removed.employee_id for removed in grid.removed]
+        assert not any(
+            warning.kind == "departed_but_active" and warning.employee_id == "G1001"
+            for warning in grid.warnings
+        )
+
+
 def test_main_statistics_compensates_by_rank_then_groups_codes():
     assert svc._compensated_day(
         [CODE_SICK, CODE_ANNUAL, CODE_PRESENT, CODE_PRESENT, CODE_PRESENT], 3
@@ -317,11 +334,12 @@ def test_an_unmapped_nationality_blocks_the_download(db_session, guards):
     assert {i.kind for i in svc.build_month(db_session, 2026, 7).blocking} == {"no_nationality"}
 
 
-def test_warnings_are_reported_without_blocking(db_session, guards):
+@pytest.mark.parametrize("status", ["Active", "Loaned"])
+def test_warnings_are_reported_without_blocking(db_session, guards, status):
     db_session.get(Employee, "G1001").name_en = "Name G1002"  # duplicate_name
     employee = db_session.get(Employee, "G0999")
     employee.end_date = date(2026, 6, 1)  # departed_but_active
-    employee.status = "Active"
+    employee.status = status
     db_session.add(
         Leave(
             employee_id="G1002",

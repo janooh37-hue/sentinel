@@ -2,7 +2,7 @@
 
 Tests for Task 2:
   - EmployeeDetailRead includes missing_fields and completeness
-  - GET /api/v1/employees/completeness returns aggregate stats (Active only)
+  - GET /api/v1/employees/completeness returns aggregate stats (working employees only)
 
 Auth pattern: override get_db + get_current_user so require_capability can
 resolve a real manager user (managers have employees.view by default).
@@ -92,10 +92,11 @@ def test_detail_includes_missing_fields(
     assert body["completeness"]["tracked"] == 14
 
 
-def test_completeness_summary_counts_active_only(
-    client: TestClient, db_employee_factory: Callable[..., Employee]
+@pytest.mark.parametrize("status", ["Active", "Loaned"])
+def test_completeness_summary_counts_working_only(
+    client: TestClient, db_employee_factory: Callable[..., Employee], status: str
 ) -> None:
-    db_employee_factory(id="G9002", status="Active", nationality=None)
+    db_employee_factory(id="G9002", status=status, nationality=None)
     db_employee_factory(id="G9003", status="Resigned", nationality=None)
     res = client.get("/api/v1/employees/completeness")
     assert res.status_code == 200
