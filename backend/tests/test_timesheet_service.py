@@ -230,10 +230,18 @@ def test_status_change_to_loaned_does_not_rewrite_sealed_salary_rows(db_session,
     assert "G1001" not in {row.employee_id for row in svc.build_month(db_session, 2026, 8).rows}
 
 
-@pytest.mark.parametrize("status", ["Resigned", "Terminated", "Transferred"])
+@pytest.mark.parametrize(
+    ("status", "later_status"),
+    [
+        ("Resigned", None),
+        ("Terminated", None),
+        ("Transferred", None),
+        pytest.param("Transferred", "Resigned", id="Transferred-to-Resigned"),
+    ],
+)
 @pytest.mark.parametrize("scheduled", [False, True])
 def test_departed_loaned_employee_stays_off_live_salary_sheet_and_removed(
-    db_session, guards, monkeypatch, status, scheduled
+    db_session, guards, monkeypatch, status, later_status, scheduled
 ):
     class FixedDate(date):
         @classmethod
@@ -258,21 +266,27 @@ def test_departed_loaned_employee_stays_off_live_salary_sheet_and_removed(
             for row in employee_service.apply_due_departures(db_session, today=date(2026, 7, 20))
         ] == ["G1001"]
     assert employee.status == status
+    if later_status:
+        employee_service.update_employee(
+            db_session, "G1001", EmployeeUpdate(status=later_status, end_date=date(2026, 7, 20))
+        )
+        assert employee.status == later_status
 
     for month in (7, 8):
         grid = svc.build_month(db_session, 2026, month)
         assert "G1001" not in {row.employee_id for row in grid.rows}
         assert "G1001" not in {row.employee_id for row in grid.removed}
 
-    # Only the latest transition into the current status determines who paid him.
+    # Returning to Active replaces the last exit from a working status.
     employee_service.update_employee(db_session, "G1001", EmployeeUpdate(status="Active"))
+    departure_status = later_status or status
     employee_service.update_employee(
         db_session,
         "G1001",
         EmployeeUpdate(
-            status=status,
+            status=departure_status,
             end_date=date(2026, 7, 20),
-            transfer_site="Other site" if status == "Transferred" else None,
+            transfer_site="Other site" if departure_status == "Transferred" else None,
         ),
     )
     if scheduled:

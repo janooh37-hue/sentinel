@@ -398,21 +398,17 @@ def _period(db: Session, year: int, month: int) -> TimesheetPeriod | None:
 
 
 def _departed_from_loaned(db: Session) -> set[str]:
-    """Non-working employees whose latest transition into their status was from Loaned."""
+    """Non-working employees whose latest exit from a working status was from Loaned."""
     latest = (
         select(
             EmployeeStatusEvent.employee_id,
             func.max(EmployeeStatusEvent.id).label("event_id"),
         )
-        .join(
-            Employee,
-            and_(
-                Employee.id == EmployeeStatusEvent.employee_id,
-                Employee.status == EmployeeStatusEvent.to_status,
-            ),
-        )
+        .join(Employee, Employee.id == EmployeeStatusEvent.employee_id)
         .where(
             Employee.status.not_in(WORKING_STATUSES),
+            EmployeeStatusEvent.from_status.in_(WORKING_STATUSES),
+            EmployeeStatusEvent.to_status.not_in(WORKING_STATUSES),
             EmployeeStatusEvent.kind.in_((KIND_CHANGED, KIND_APPLIED, KIND_IMPORTED)),
         )
         .group_by(EmployeeStatusEvent.employee_id)
@@ -428,7 +424,7 @@ def _departed_from_loaned(db: Session) -> set[str]:
 
 
 def _paid_on_timesheet(employee: Employee, departed_from_loaned: set[str]) -> bool:
-    # ponytail: regenerated unsealed historical months follow current status/last transition;
+    # ponytail: regenerated unsealed historical months follow current status/last working exit;
     # resolve EmployeeStatusEvent history per month if historical eligibility is needed.
     return employee.status != EMPLOYEE_STATUS_LOANED and employee.id not in departed_from_loaned
 

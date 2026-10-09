@@ -282,15 +282,18 @@ Roster edges:
 
 Monthly salary-sheet eligibility excludes employees whose **current** status is
 `Loaned` (`ملحق`): their salary is paid on another organisation's sheet. It also
-excludes non-working employees whose most recent applied or immediate status
-transition into their current status was **from Loaned**, so applying a scheduled
-departure or recording an immediate resignation, termination or transfer does not
-put them onto our departure-month salary sheet. This applies to live list rows
+excludes non-working employees whose most recent applied or immediate departure
+**from a working status** was **from Loaned**, so applying a scheduled departure
+or recording an immediate resignation, termination or transfer does not put them
+onto our departure-month salary sheet. Later non-working status changes (such as
+Loaned → Transferred → Resigned) preserve that exclusion; a return to Active
+followed by another departure restores salary-sheet eligibility for that
+departure. This applies to live list rows
 and attendance/statistics exports. Neither group is reported as removed since
 last month; a current Loaned employee with an old departure date also has no
 `departed_but_active` warning. Regenerated unsealed historical months follow
-current status and the latest transition, not status eligibility as of that
-month; reactivation to Active restores eligibility. Sealed payroll snapshots
+current status and the latest exit from a working status, not status eligibility
+as of that month; reactivation to Active restores eligibility. Sealed payroll snapshots
 remain immutable. Workforce rosters, shifts, attendance, counts and employee
 absence records continue to treat Loaned as a working status.
 
