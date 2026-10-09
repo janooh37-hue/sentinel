@@ -548,7 +548,7 @@ def test_reassign_signature_non_admin_is_forbidden(
 ) -> None:
     settings = Settings(data_dir=tmp_path, templates_dir=tmp_path)
     monkeypatch.setattr(sps, "get_settings", lambda: settings)
-    book, version, document = _record(db_session, tmp_path)
+    _book, version, document = _record(db_session, tmp_path)
     _active_row(db_session, version, tmp_path, signer_user_id=7)
     non_admin = User(id=7, email="signer5@x.ae", password_hash="x", role="manager", status="active")
     db_session.add(non_admin)
@@ -651,7 +651,7 @@ def test_reassign_signature_unknown_employee_not_found(
 ) -> None:
     settings = Settings(data_dir=tmp_path, templates_dir=tmp_path)
     monkeypatch.setattr(sps, "get_settings", lambda: settings)
-    book, version, document = _record(db_session, tmp_path)
+    _book, version, document = _record(db_session, tmp_path)
     _active_row(db_session, version, tmp_path, signer_user_id=7)
     admin = User(id=9, email="admin2@x.ae", password_hash="x", role="admin", status="active")
     db_session.add(admin)

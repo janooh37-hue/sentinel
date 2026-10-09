@@ -78,9 +78,9 @@ def test_read_document_carries_general_book_reference_barcode(
     import zxingcpp
     from PIL import Image
 
-    barcode = zxingcpp.create_barcode(
-        "1/5/141+20260921", zxingcpp.BarcodeFormat.Code39
-    ).to_image(scale=4)
+    barcode = zxingcpp.create_barcode("1/5/141+20260921", zxingcpp.BarcodeFormat.Code39).to_image(
+        scale=4
+    )
     buffer = io.BytesIO()
     Image.fromarray(barcode).save(buffer, format="PNG")
     monkeypatch.setattr(ocr, "extract_text", lambda _image: ocr.OcrResult("", 0.0))
@@ -96,9 +96,7 @@ def test_barcode_pdf_uses_300_dpi_decode_pass() -> None:
     from PIL import Image
 
     barcode = Image.fromarray(
-        zxingcpp.create_barcode(
-            "1/5/141+20260921", zxingcpp.BarcodeFormat.Code39
-        ).to_image()
+        zxingcpp.create_barcode("1/5/141+20260921", zxingcpp.BarcodeFormat.Code39).to_image()
     )
     buffer = io.BytesIO()
     barcode.save(buffer, format="PNG")
@@ -114,9 +112,7 @@ def test_barcode_pdf_uses_300_dpi_decode_pass() -> None:
     ]
 
     assert at_200 == []
-    assert ocr.decode_codes_from_bytes(raw) == [
-        Decoded("1/5/141", date(2026, 9, 21), "code39")
-    ]
+    assert ocr.decode_codes_from_bytes(raw) == [Decoded("1/5/141", date(2026, 9, 21), "code39")]
 
 
 def test_blank_ocr_success_retains_page_evidence(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -168,7 +164,7 @@ def test_image_only_pdf_preserves_ordered_raw_page_evidence(
     )
     monkeypatch.setattr(ocr, "extract_text", lambda _image: next(outputs))
     assert read_document(raw) == DocumentRead(
-        text="First page\n\nالصفحة الثانية\n",  # noqa: RUF001 - literal mixed Arabic/Latin evidence
+        text="First page\n\nالصفحة الثانية\n",
         text_source="ocr",
         ocr_pages=(
             OcrPageEvidence(0, "First page\n", 0.81, "eng"),
@@ -234,7 +230,7 @@ def test_searchable_arabic_pdf_preserves_logical_label_and_ignores_date() -> Non
 
     result = read_document((FIXTURE_DIR / "classified-ref-ar.pdf").read_bytes())
     assert result == DocumentRead(
-        text="وثيقة اختبار اصطناعية\nالرقم: 1/5/141\nالتاريخ: 05/09/2026\n",  # noqa: RUF001 - literal Arabic
+        text="وثيقة اختبار اصطناعية\nالرقم: 1/5/141\nالتاريخ: 05/09/2026\n",
         text_source="pdf_text",
     )
     assert candidate_refs(result.text) == ["1/5/141"]

@@ -51,7 +51,7 @@ _TOKEN_RE = re.compile(r"^[0-9a-f]{32}$")
 _STAGING_DIR_RE = re.compile(r"^(?:[0-9a-f]{32}(?:\.claimed)?|\.[0-9a-f]{32}\.tmp)$")
 _DATE_RE = re.compile(r"\b(\d{1,4}[./-]\d{1,2}[./-]\d{1,4})\b")
 _TABLE_HEADER_RE = re.compile(
-    r"(?:inmate\s+name|(?:إ|ا)?سم\s+النزيل)",  # noqa: RUF001 — intentional Arabic OCR variants
+    r"(?:inmate\s+name|(?:إ|ا)?سم\s+النزيل)",
     re.IGNORECASE,
 )
 _NUMBERED_ROW_RE = re.compile(

@@ -60,3 +60,4 @@ if ($failures.Count) {
     [Console]::Error.WriteLine(($failures -join "`n"))
     exit 2
 }
+exit 0

@@ -46,6 +46,7 @@ select = [
     "RUF", # ruff-specific
 ]
 ignore = ["E501"]  # line length is enforced by formatter
+allowed-confusables = ["ا"]  # Arabic alef: Arabic is a peer UI language, not a spoofed `l`
 
 [tool.ruff.lint.per-file-ignores]
 "backend/tests/**" = ["B011"]

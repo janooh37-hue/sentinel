@@ -18,7 +18,7 @@ refresh the types, then commit the result.
 ### 1. Dump the OpenAPI schema from the backend
 Uses the project venv and the app factory (no need to hit the running service):
 ```
-venv\Scripts\python.exe -X utf8 scripts\dump_openapi.py
+venv/Scripts/python.exe -X utf8 scripts/dump_openapi.py
 ```
 Expect output like `Wrote ...\backend\openapi.json (N paths)`. If the import
 fails, the backend has a load-time error — fix that first; the schema can't be

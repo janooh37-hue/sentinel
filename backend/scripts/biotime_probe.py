@@ -302,7 +302,7 @@ def _roll_up_param_verdicts(
             {"value": row["value"], "status": row["status"], "count": row["filtered_count"]}
         )
 
-    for param, bucket in per_param.items():
+    for _param, bucket in per_param.items():
         observations = bucket["observations"]
         statuses = {obs["status"] for obs in observations}
         counts = [obs["count"] for obs in observations if obs["status"] == 200]
@@ -401,7 +401,9 @@ class Probe:
             try:
                 response = self.client.post(path, json={"username": username, "password": password})
             except httpx.HTTPError as exc:
-                attempts.append({"path": path, "scheme": scheme, "status": None, "error": type(exc).__name__})
+                attempts.append(
+                    {"path": path, "scheme": scheme, "status": None, "error": type(exc).__name__}
+                )
                 continue
             token: str | None = None
             token_field: str | None = None
@@ -428,7 +430,10 @@ class Probe:
                 self.auth_scheme = scheme
                 self.auth_path = path
                 self.auth_header = {"Authorization": f"{scheme} {token}"}
-        return {"attempts": attempts, "selected": {"path": self.auth_path, "scheme": self.auth_scheme}}
+        return {
+            "attempts": attempts,
+            "selected": {"path": self.auth_path, "scheme": self.auth_scheme},
+        }
 
     # -- facts 5, 6, 8: endpoints, envelope, fields ------------------------
 
@@ -451,7 +456,9 @@ class Probe:
             entry["soft_404"] = call.status == 200 and call.payload_kind == "none"
             entry["usable"] = call.status == 200 and call.payload_kind in {"dict", "list"}
             if entry["soft_404"]:
-                entry["detail"] = "HTTP 200 with HTML body — no permission, or the path does not exist"
+                entry["detail"] = (
+                    "HTTP 200 with HTML body — no permission, or the path does not exist"
+                )
             if entry["usable"]:
                 entry["envelope_keys"] = call.envelope_keys
                 entry["count"] = call.count
@@ -461,7 +468,8 @@ class Probe:
                     next_link = payload.get("next")
                     entry["pagination"] = {
                         "style": "drf-page" if "next" in payload else "unknown",
-                        "next_is_absolute_url": isinstance(next_link, str) and next_link.startswith("http"),
+                        "next_is_absolute_url": isinstance(next_link, str)
+                        and next_link.startswith("http"),
                     }
             found[label] = entry
         return found
@@ -519,7 +527,17 @@ class Probe:
                 rows.append(
                     {
                         key: item.get(key)
-                        for key in ("id", "area_code", "area_name", "dept_code", "dept_name", "sn", "alias", "ip_address", "state")
+                        for key in (
+                            "id",
+                            "area_code",
+                            "area_name",
+                            "dept_code",
+                            "dept_name",
+                            "sn",
+                            "alias",
+                            "ip_address",
+                            "state",
+                        )
                         if key in item
                     }
                 )
@@ -674,12 +692,16 @@ class Probe:
         default_stamps = _stamps(default_payload)
         ordered_stamps = _stamps(ordered_payload)
         return {
-            "default_is_ascending": default_stamps == sorted(default_stamps) if default_stamps else None,
+            "default_is_ascending": default_stamps == sorted(default_stamps)
+            if default_stamps
+            else None,
             "default_is_descending": (
                 default_stamps == sorted(default_stamps, reverse=True) if default_stamps else None
             ),
             "ordering_param_changed_result": (
-                None if not default_stamps or not ordered_stamps else default_stamps != ordered_stamps
+                None
+                if not default_stamps or not ordered_stamps
+                else default_stamps != ordered_stamps
             ),
             "ordering_param_ascending": (
                 ordered_stamps == sorted(ordered_stamps) if ordered_stamps else None
@@ -793,10 +815,14 @@ def _print_summary(report: dict[str, Any]) -> None:
             for name, url in (entry.get("routes") or {}).items():
                 out(f"      {name:28} {url}\n")
             if entry.get("list_length") is not None:
-                out(f"      list of {entry['list_length']}, item keys={entry.get('first_item_keys')}\n")
+                out(
+                    f"      list of {entry['list_length']}, item keys={entry.get('first_item_keys')}\n"
+                )
     else:
         reachable_roots = [p for p, e in roots.items() if e.get("status") == 200]
-        out(f"  self-described routes: none readable (probed {len(roots)}, 200s: {reachable_roots})\n")
+        out(
+            f"  self-described routes: none readable (probed {len(roots)}, 200s: {reachable_roots})\n"
+        )
     for label, rows in report["site_inventory"].items():
         out(f"  {label} ({len(rows)}):\n")
         for row in rows[:20]:
@@ -825,9 +851,13 @@ def _print_summary(report: dict[str, Any]) -> None:
         if census:
             out(f"    vocabulary census over {census.get('rows_examined')} rows:\n")
             for key, values in census.get("distinct_values", {}).items():
-                rendered = ", ".join(f"{token}={n}" for token, n in sorted(values.items(), key=lambda kv: -kv[1])[:6])
+                rendered = ", ".join(
+                    f"{token}={n}" for token, n in sorted(values.items(), key=lambda kv: -kv[1])[:6]
+                )
                 out(f"      {key:22} {rendered}\n")
-            out(f"      punch_time range      {census.get('punch_time_min')} .. {census.get('punch_time_max')}\n")
+            out(
+                f"      punch_time range      {census.get('punch_time_min')} .. {census.get('punch_time_max')}\n"
+            )
         ordering = semantics.get("ordering", {})
         if ordering:
             out(
@@ -839,7 +869,9 @@ def _print_summary(report: dict[str, Any]) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     parser.add_argument(
         "--env-file",
         default=str(_PROJECT_ROOT / ".env"),
@@ -859,7 +891,9 @@ def main(argv: list[str] | None = None) -> int:
         default=1.0,
         help="punch window used for probing; fractions allowed (0.25 = 6 hours)",
     )
-    parser.add_argument("--ca-bundle", default=None, help="path to the CA bundle trusting the server")
+    parser.add_argument(
+        "--ca-bundle", default=None, help="path to the CA bundle trusting the server"
+    )
     parser.add_argument("--insecure", action="store_true", help="skip TLS verification (lab only)")
     parser.add_argument("--timeout", type=float, default=20.0)
     # A full sweep is ~2 auth + 9 discovery + inventory + 5 semantics +
@@ -872,8 +906,12 @@ def main(argv: list[str] | None = None) -> int:
     env = _load_env_file(Path(args.env_file))
     _warn_about_stray_env_files(Path(args.env_file))
 
-    base_url = args.base_url or env.get("GSSG_BIOTIME_BASE_URL") or os.environ.get("GSSG_BIOTIME_BASE_URL")
-    username = args.username or env.get("GSSG_BIOTIME_USERNAME") or os.environ.get("GSSG_BIOTIME_USERNAME")
+    base_url = (
+        args.base_url or env.get("GSSG_BIOTIME_BASE_URL") or os.environ.get("GSSG_BIOTIME_BASE_URL")
+    )
+    username = (
+        args.username or env.get("GSSG_BIOTIME_USERNAME") or os.environ.get("GSSG_BIOTIME_USERNAME")
+    )
     if not base_url or not username:
         print(
             f"no base URL/username: pass --base-url/--username or set "
@@ -916,7 +954,9 @@ def main(argv: list[str] | None = None) -> int:
         auth = probe.discover_auth(username, password)
         if probe.auth_scheme is None:
             print(json.dumps({"authentication": auth}, indent=2))
-            print("\nNo auth endpoint returned a usable token. Record this and stop.", file=sys.stderr)
+            print(
+                "\nNo auth endpoint returned a usable token. Record this and stop.", file=sys.stderr
+            )
             return 1
         report = _build_report(probe, args, auth)
     finally:

@@ -17,15 +17,18 @@ to `main` when ready.
 
 ## Commands
 
-All Python runs through the repo venv (`venv\Scripts\...`); frontend uses pnpm.
+All Python runs through the repo venv (`venv/Scripts/...`, forward slashes: bash
+strips backslashes); frontend uses pnpm. Cut feature worktrees from a freshly
+fetched `origin/main`; a stale base reuses migration and ADR numbers.
 
 ```bash
 # Backend
-venv\Scripts\python.exe -m pytest                      # all backend tests
-venv\Scripts\python.exe -m pytest backend/tests/test_x.py::test_name   # one test
-venv\Scripts\ruff.exe check . && venv\Scripts\ruff.exe format --check . # lint/format
-venv\Scripts\mypy.exe                                  # strict typecheck (config in pyproject)
-venv\Scripts\alembic.exe upgrade head                  # apply migrations
+venv/Scripts/python.exe -m pytest                      # all backend tests (~25 min on GSSGLT: run once, in background)
+venv/Scripts/python.exe -m pytest backend/tests/test_x.py::test_name   # one test
+venv/Scripts/ruff.exe check . && venv/Scripts/ruff.exe format <changed files>  # main is not format-clean
+venv/Scripts/mypy.exe                                  # strict typecheck (config in pyproject)
+venv/Scripts/python.exe scripts/check_numbering.py     # single Alembic head, unique ADR numbers (CI runs it)
+venv/Scripts/alembic.exe upgrade head                  # apply migrations
 
 # Frontend (from repo root)
 pnpm -C frontend test                                  # vitest (all)
@@ -36,10 +39,10 @@ pnpm -C frontend run build                             # tsc + vite build -> bac
 pnpm -C frontend run e2e                               # playwright
 
 # Run / operate the service (scripts/mng.ps1; deploy/update auto-elevate via UAC)
-scripts\mng.ps1 status        # service state, health, version, RAM, URL
-scripts\mng.ps1 deploy        # build + restart (apply local code changes)
-scripts\mng.ps1 update        # git pull; if changed -> build + restart
-scripts\mng.ps1 logs          # tail service log (-Stderr for the error log)
+scripts/mng.ps1 status        # service state, health, version, RAM, URL
+scripts/mng.ps1 deploy        # build + restart (apply local code changes)
+scripts/mng.ps1 update        # git pull; if changed -> build + restart
+scripts/mng.ps1 logs          # tail service log (-Stderr for the error log)
 ```
 
 ## Architecture
@@ -97,16 +100,16 @@ SQLite can't `ALTER` most constraints in place: wrap alters in
 `op.batch_alter_table`, omit named FKs to existing tables (enforce integrity
 app-side), and give NOT-NULL-on-populated-table columns a `server_default`. Use
 the `/new-migration` skill to scaffold safely and the `alembic-migration-reviewer`
-agent to review; the `alembic-heads-guard` hook warns on a split head.
+agent to review; CI's `scripts/check_numbering.py` fails a split head.
 
 ## Gotchas
 
 - **Template churn:** `backend/templates/*.docx` get re-saved by the live service
   / Word during operation. Revert that churn before committing — it can break
   Jinja tokens. Only commit intentional template edits.
-- **Local `.claude/` tooling** (hooks: ruff/mypy-on-edit, heads-guard; reviewer
-  agents; `/deploy`, `/sync-api-types`, `/new-migration` skills) is local-only /
-  gitignored. Hooks load at session start — reload after editing them.
+- **Agent tooling** is committed: reviewer agents in `.codex/agents/`, skills in
+  `.agents/skills/`, hook scripts in `.claude/hooks/` and `.codex/hooks/`.
+  Hooks load at session start — reload after editing them.
 - Strict gates are real: mypy is `strict`, pytest runs with `filterwarnings=error`.
 
 ## Planning artifacts
