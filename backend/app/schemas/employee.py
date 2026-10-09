@@ -5,11 +5,11 @@ Two non-obvious rules enforced here so the route layer stays thin:
 * **Canonical status.** v3 stored bilingual labels like ``"Active - نشط"`` in
   the spreadsheet, but Phase 02's importer collapsed them to the English half
   before insert. Phase 03 locks that in: the API only accepts and returns
-  ``Active``, ``Resigned``, ``Terminated``, ``Transferred``. Frontend renders the bilingual
-  label from i18n.
+  ``Active``, ``Resigned``, ``Terminated``, ``Transferred``, ``Loaned``. Frontend renders the
+  bilingual label from i18n.
 * **status / end_date invariant.** Mirrors v3.5.4's
   ``_emp_sync_end_date_widget`` (line 3282): once an employee is no longer
-  Active, an ``end_date`` is required. We enforce it on Create and on Update
+  working (Active or Loaned), an ``end_date`` is required. We enforce it on Create and on Update
   (where the validator has to merge the patch against the current row, hence
   :func:`validate_status_end_date` exposed for the service layer to call).
 """
@@ -31,13 +31,21 @@ EMPLOYEE_STATUS_TERMINATED: Final = "Terminated"
 # employee off rosters/timesheets/shifts, but it can be temporary: an optional
 # `transfer_return_date` brings them back to Active via the daily job.
 EMPLOYEE_STATUS_TRANSFERRED: Final = "Transferred"
+# Working with us on loan (ملحق). Behaves exactly like Active.
+EMPLOYEE_STATUS_LOANED: Final = "Loaned"
 
-EmployeeStatus = Literal["Active", "Resigned", "Terminated", "Transferred"]
+EmployeeStatus = Literal["Active", "Resigned", "Terminated", "Transferred", "Loaned"]
 EMPLOYEE_STATUSES: Final[tuple[EmployeeStatus, ...]] = (
     EMPLOYEE_STATUS_ACTIVE,
     EMPLOYEE_STATUS_RESIGNED,
     EMPLOYEE_STATUS_TERMINATED,
     EMPLOYEE_STATUS_TRANSFERRED,
+    EMPLOYEE_STATUS_LOANED,
+)
+# Statuses that keep the employee on rosters/timesheets/shifts: every
+# "is this employee active?" gate uses this set.
+WORKING_STATUSES: Final[frozenset[str]] = frozenset(
+    {EMPLOYEE_STATUS_ACTIVE, EMPLOYEE_STATUS_LOANED}
 )
 
 MsgLanguage = Literal["ar", "en"]
@@ -56,7 +64,7 @@ def validate_status_end_date(status: str, end_date: date | None) -> None:
     Exposed at module level so the service layer can re-run it after merging
     a partial PATCH against the current DB row.
     """
-    if status != EMPLOYEE_STATUS_ACTIVE and end_date is None:
+    if status not in WORKING_STATUSES and end_date is None:
         raise ValueError(f"end_date is required when status is {status!r}")
 
 
@@ -134,9 +142,9 @@ class EmployeeUpdate(BaseModel):
     end_date: date | None = None
     transfer_site: str | None = Field(default=None, max_length=_FIELD_TEXT_MAX)
     transfer_return_date: date | None = None
-    # Write-only: the return date recorded in status history when this patch
-    # reactivates a departed/transferred employee (defaults to today). Never
-    # stored on the employee row; `end_date` still clears on reactivation.
+    # Write-only: the date recorded in status history when this patch moves a
+    # non-working employee back to work or swaps Active <-> Loaned (defaults to
+    # today). Never stored on the employee row; `end_date` still clears on reactivation.
     effective_date: date | None = None
     department: str | None = Field(default=None, max_length=_SHORT_TEXT_MAX)
     position: str | None = Field(default=None, max_length=_SHORT_TEXT_MAX)
@@ -169,11 +177,12 @@ class EmployeeRead(ORMBase):
     doj_company: date | None
     status: EmployeeStatus
     end_date: date | None
-    # Where a scheduled departure is headed, while `status` is still 'Active'.
-    # None = no pending departure. Read-only: EmployeeUpdate deliberately has no
-    # counterpart, because cancelling rides an `{end_date: null}` patch — which
-    # is only valid while they are still Active, so it cannot resurrect someone
-    # the flip job already departed (see update_employee).
+    # Where a scheduled departure is headed, while `status` is still working
+    # (Active or Loaned). None = no pending departure. Read-only: EmployeeUpdate
+    # deliberately has no counterpart, because cancelling rides an
+    # `{end_date: null}` patch — which is only valid while they are still
+    # working, so it cannot resurrect someone the flip job already departed
+    # (see update_employee).
     pending_status: EmployeeStatus | None
     # Destination site while Transferred (or while a transfer is pending).
     transfer_site: str | None = None

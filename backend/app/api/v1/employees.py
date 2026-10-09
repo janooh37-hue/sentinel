@@ -43,6 +43,7 @@ from app.schemas.absence import (
     AbsenceRecordRead,
 )
 from app.schemas.employee import (
+    WORKING_STATUSES,
     EmployeeCreate,
     EmployeeListItem,
     EmployeeListResponse,
@@ -200,8 +201,8 @@ def employees_completeness(
     db: Annotated[Session, Depends(get_db)],
     _user: Annotated[User, Depends(require_capability("employees.view"))],
 ) -> CompletenessSummaryOut:
-    """Aggregate profile gaps over Active employees (lookup-page hero card)."""
-    rows = db.query(Employee).filter(Employee.status == "Active").all()
+    """Aggregate profile gaps over working (Active/Loaned) employees (lookup-page hero card)."""
+    rows = db.query(Employee).filter(Employee.status.in_(WORKING_STATUSES)).all()
     counter: Counter[str] = Counter()
     worst: tuple[int, str] | None = None
     incomplete = 0

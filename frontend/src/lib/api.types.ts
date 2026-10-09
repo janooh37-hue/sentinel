@@ -9786,7 +9786,7 @@ export interface components {
              * @default Active
              * @enum {string}
              */
-            status: "Active" | "Resigned" | "Terminated" | "Transferred";
+            status: "Active" | "Resigned" | "Terminated" | "Transferred" | "Loaned";
             /** End Date */
             end_date?: string | null;
             /** Transfer Site */
@@ -9865,7 +9865,7 @@ export interface components {
              * Status
              * @enum {string}
              */
-            status: "Active" | "Resigned" | "Terminated" | "Transferred";
+            status: "Active" | "Resigned" | "Terminated" | "Transferred" | "Loaned";
             /** Department */
             department: string | null;
             /** Position */
@@ -9886,7 +9886,7 @@ export interface components {
             /** End Date */
             end_date?: string | null;
             /** Pending Status */
-            pending_status?: ("Active" | "Resigned" | "Terminated" | "Transferred") | null;
+            pending_status?: ("Active" | "Resigned" | "Terminated" | "Transferred" | "Loaned") | null;
             /** Transfer Site */
             transfer_site?: string | null;
             /** Transfer Return Date */
@@ -9985,11 +9985,11 @@ export interface components {
              * Status
              * @enum {string}
              */
-            status: "Active" | "Resigned" | "Terminated" | "Transferred";
+            status: "Active" | "Resigned" | "Terminated" | "Transferred" | "Loaned";
             /** End Date */
             end_date: string | null;
             /** Pending Status */
-            pending_status: ("Active" | "Resigned" | "Terminated" | "Transferred") | null;
+            pending_status: ("Active" | "Resigned" | "Terminated" | "Transferred" | "Loaned") | null;
             /** Transfer Site */
             transfer_site?: string | null;
             /** Transfer Return Date */
@@ -10082,7 +10082,7 @@ export interface components {
             /** Doj Company */
             doj_company?: string | null;
             /** Status */
-            status?: ("Active" | "Resigned" | "Terminated" | "Transferred") | null;
+            status?: ("Active" | "Resigned" | "Terminated" | "Transferred" | "Loaned") | null;
             /** End Date */
             end_date?: string | null;
             /** Transfer Site */

@@ -1,6 +1,6 @@
 /**
  * PendingDeparturesWidget — employees with a scheduled resignation or
- * termination: still Active, but leaving on `end_date`.
+ * termination: still Active or Loaned, but leaving on `end_date`.
  *
  * Cancel sends `{status: 'Active', end_date: null}`, which update_employee
  * treats as cancelling the pending departure — the letter can be refused via
@@ -49,7 +49,7 @@ export function PendingDeparturesWidget(): React.JSX.Element | null {
     // REACTIVATE an employee the flip job already departed while this list sat
     // stale — "cancel a scheduled departure" must not become "undo a completed
     // one". Clearing the end date alone is meaningful only while they are still
-    // Active, so the server's existing status/end-date invariant refuses it.
+    // Active/Loaned, so the server's existing status/end-date invariant refuses it.
     mutationFn: (id: string) => api.updateEmployee(id, { end_date: null }),
     onSuccess: () => {
       void qc.invalidateQueries({ queryKey: ['employees'] })

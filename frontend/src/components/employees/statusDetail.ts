@@ -14,6 +14,8 @@ import type { EmployeeStatus } from '@/lib/api'
 import { bidi } from '@/lib/bidi'
 import { formatDmy } from '@/lib/formatDmy'
 
+import { isWorkingStatus } from './schema'
+
 export interface StatusDetailSource {
   status: EmployeeStatus
   end_date?: string | null
@@ -23,7 +25,7 @@ export interface StatusDetailSource {
 
 export function statusDetailText(t: TFunction, emp: StatusDetailSource): string {
   const label = t(`employees.status.${emp.status}`, emp.status) as string
-  if (emp.status === 'Active' || !emp.end_date) return label
+  if (isWorkingStatus(emp.status) || !emp.end_date) return label
   const date = bidi(formatDmy(emp.end_date))
   if (emp.status !== 'Transferred') {
     return t('employees.statusDetail.dated', { status: label, date }) as string

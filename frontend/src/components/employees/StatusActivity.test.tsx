@@ -40,17 +40,29 @@ describe('StatusActivity', () => {
     expect(detail).toContain('Ahmed')
   })
 
-  it('EN: return to Active shows the return date', async () => {
+  it.each(['Active', 'Loaned'] as const)('EN: return from Transferred to %s shows the return date', async (status) => {
     await i18n.changeLanguage('en')
     render(
       <StatusActivity
-        item={{ ...base, from_status: 'Transferred', to_status: 'Active', site: null, effective_date: '2026-09-20', actor_name: null }}
+        item={{ ...base, from_status: 'Transferred', to_status: status, site: null, effective_date: '2026-09-20', actor_name: null }}
       />,
     )
     const { title, detail } = text()
-    expect(title).toBe('Returned to Active')
+    expect(title).toBe('Returned to service')
     expect(detail).toContain('Returned')
     expect(detail).toContain('20/09/2026')
+  })
+
+  it.each([
+    ['Active', 'Loaned', 'Active → Loaned'],
+    ['Loaned', 'Active', 'Loaned → Active'],
+  ] as const)('EN: %s → %s is a change, not a return', async (from, to, expectedTitle) => {
+    await i18n.changeLanguage('en')
+    render(<StatusActivity item={{ ...base, from_status: from, to_status: to, site: null }} />)
+    const { title, detail } = text()
+    expect(title).toBe(expectedTitle)
+    expect(detail).toContain('Effective')
+    expect(detail).not.toContain('Returned')
   })
 
   it('EN: scheduler-applied, scheduled, cancelled and imported variants', async () => {

@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 from app.config import get_settings
 from app.core.phone import normalize_phone
 from app.db.models import DutySupervisor, Employee
+from app.schemas.employee import WORKING_STATUSES
 
 
 def list_mappings(db: Session) -> list[DutySupervisor]:
@@ -54,7 +55,7 @@ def remove_mapping(db: Session, mapping_id: int) -> bool:
 
 
 def resolve_supervisors(db: Session, duty_unit: str) -> list[Employee]:
-    """Active employees in ``duty_unit`` whose duty_post is a configured
+    """Working (Active/Loaned) employees in ``duty_unit`` whose duty_post is a configured
     designation AND whose contact normalizes to a mobile. Empty if unmapped."""
     posts = list(
         db.scalars(
@@ -69,7 +70,7 @@ def resolve_supervisors(db: Session, duty_unit: str) -> list[Employee]:
             select(Employee).where(
                 Employee.duty_unit == duty_unit,
                 Employee.duty_post.in_(posts),
-                Employee.status == "Active",
+                Employee.status.in_(WORKING_STATUSES),
             )
         )
     )

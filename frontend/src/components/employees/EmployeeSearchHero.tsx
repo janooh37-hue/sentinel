@@ -19,6 +19,7 @@ import { pickPosition } from '@/lib/employeePosition'
 import { useDebouncedValue } from '@/lib/useDebouncedValue'
 import { PendingDepartureBadge } from '@/components/employees/PendingDepartureBadge'
 import { statusDetailText } from '@/components/employees/statusDetail'
+import { isWorkingStatus } from '@/components/employees/schema'
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 interface Props {
@@ -155,10 +156,10 @@ export function EmployeeSearchHero({
                       pillBg = 'var(--warning-soft)'
                       pillFg = 'var(--warning)'
                       pillLabel = t('employees.statusPill.onLeave')
-                    } else if (row.status === 'Active') {
+                    } else if (isWorkingStatus(row.status)) {
                       pillBg = 'var(--success-soft)'
                       pillFg = 'var(--success)'
-                      pillLabel = t('employees.status.Active')
+                      pillLabel = t(`employees.status.${row.status}`)
                     } else if (row.status === 'Transferred') {
                       pillBg = 'var(--info-soft)'
                       pillFg = 'var(--info)'

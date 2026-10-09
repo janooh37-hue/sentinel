@@ -37,6 +37,7 @@ from app.db.workforce_models import (
     WorkShiftDefinition,
     WorkShiftOccurrence,
 )
+from app.schemas.employee import WORKING_STATUSES
 from app.services import attendance_policy, attendance_profile_service
 from app.services.workforce_leave import resolve_excusing_leave
 
@@ -47,7 +48,7 @@ from app.services.workforce_leave import resolve_excusing_leave
 # habit, and reads a lone punch in a closed window as an arrival or a departure
 # from that habit rather than assuming an arrival and timing lateness against it.
 ALGORITHM_VERSION = "workforce-attendance-v4"
-_ACTIVE_EMPLOYEE_STATUS = "active"
+_WORKING_EMPLOYEE_STATUSES = frozenset(s.lower() for s in WORKING_STATUSES)
 
 
 def _as_utc(value: datetime) -> datetime:
@@ -252,7 +253,7 @@ def _derive_result(
     if leave_reason is not None:
         result.update(presence_state="excused_leave", reason_code=leave_reason)
         return result
-    if case.employee_status_snapshot.lower() != _ACTIVE_EMPLOYEE_STATUS:
+    if case.employee_status_snapshot.lower() not in _WORKING_EMPLOYEE_STATUSES:
         result.update(presence_state="unknown", reason_code="EMPLOYMENT_STATUS_UNKNOWN")
         return result
     if policy is None:
@@ -525,7 +526,7 @@ def materialize_scheduled_cases(
     window closes - so materializing early informs the roster without judging it.
     """
     employee = db.get(Employee, employee_id)
-    if employee is None or employee.status.lower() != _ACTIVE_EMPLOYEE_STATUS:
+    if employee is None or employee.status.lower() not in _WORKING_EMPLOYEE_STATUSES:
         return []
     horizon_db = _as_db_utc(horizon)
     cutoff = _as_db_utc(evaluation_start_at) if evaluation_start_at is not None else None

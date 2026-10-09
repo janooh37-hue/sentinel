@@ -73,7 +73,7 @@ from app.db.models import (
 )
 from app.db.repos.classified_refs_repo import allocate_classified_serial
 from app.db.repos.refs_repo import allocate_ref_with_retry
-from app.schemas.employee import EMPLOYEE_STATUS_ACTIVE, EMPLOYEE_STATUS_RESIGNED
+from app.schemas.employee import EMPLOYEE_STATUS_RESIGNED, WORKING_STATUSES
 from app.schemas.linked_document import LinkedDocumentRead
 from app.services import (
     absence_service,
@@ -677,8 +677,8 @@ def _record_pending_resignation(
 ) -> None:
     """Record where a Resignation Letter's subject is headed.
 
-    A resignation dated in the FUTURE keeps the employee Active through their
-    notice period — they are still on duty — and stores the target in
+    A resignation dated in the FUTURE keeps the employee working (Active or
+    Loaned) through their notice period — they are still on duty — and stores the target in
     ``pending_status`` for the daily flip job. Dated today or earlier, it is
     applied immediately.
 
@@ -690,8 +690,9 @@ def _record_pending_resignation(
     before the terminal commit, so the employee change is atomic with the
     Document insert.
     """
-    if employee is None or employee.status != EMPLOYEE_STATUS_ACTIVE:
+    if employee is None or employee.status not in WORKING_STATUSES:
         return
+    from_status = employee.status
     parsed = excel_date_to_datetime(fields.get("resignation_date"))
     if parsed is None:
         return
@@ -703,14 +704,14 @@ def _record_pending_resignation(
     else:
         employee.status = EMPLOYEE_STATUS_RESIGNED
         employee.pending_status = None
-    # An Active employee carries no transfer fields, but a pending Transferred
+    # A working employee carries no transfer fields, but a pending Transferred
     # being superseded by the letter must not leave its site behind.
     employee.transfer_site = None
     employee.transfer_return_date = None
     record_status_event(
         db,
         employee.id,
-        from_status=EMPLOYEE_STATUS_ACTIVE,
+        from_status=from_status,
         to_status=EMPLOYEE_STATUS_RESIGNED,
         effective_date=effective,
         kind=KIND_SCHEDULED if scheduled else KIND_CHANGED,

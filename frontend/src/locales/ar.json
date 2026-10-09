@@ -416,7 +416,8 @@
       "Active": "نشط",
       "Resigned": "مستقيل",
       "Terminated": "مفصول",
-      "Transferred": "منقول"
+      "Transferred": "منقول",
+      "Loaned": "ملحق"
     },
     "statusDetail": {
       "dated": "{{status}} · {{date}}",
@@ -428,9 +429,9 @@
       "title": "تغيير الحالة"
     },
     "validation": {
-      "endDateRequired": "تاريخ نهاية الخدمة مطلوب عند تغيير الحالة عن نشط",
+      "endDateRequired": "تاريخ نهاية الخدمة مطلوب عند تغيير الحالة عن نشط أو ملحق",
       "transferSiteRequired": "موقع النقل مطلوب عند النقل",
-      "returnAfterEffective": "يجب أن يكون تاريخ العودة المتوقع بعد تاريخ سريان النقل",
+      "returnAfterEffective": "يجب أن يكون تاريخ العودة المتوقع بعد تاريخ السريان",
       "idRequired": "رقم الموظف مطلوب",
       "nameEnRequired": "الاسم بالإنجليزية مطلوب"
     },

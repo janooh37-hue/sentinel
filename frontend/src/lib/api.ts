@@ -1309,7 +1309,7 @@ export interface ListEmployeesParams {
   q?: string
   status?: EmployeeStatus
   department?: string
-  /** Only scheduled departures — Active employees with a pending_status. */
+  /** Only scheduled departures — Active or Loaned employees with a pending_status. */
   pending?: boolean
   limit?: number
   offset?: number

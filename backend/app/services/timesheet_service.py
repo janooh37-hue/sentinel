@@ -56,6 +56,7 @@ from app.db.models import (
     Absence,
     AuditLog,
     Employee,
+    EmployeeStatusEvent,
     Leave,
     TimesheetDesignation,
     TimesheetOverride,
@@ -66,7 +67,9 @@ from app.db.models import (
     TimesheetStatFiller,
     User,
 )
+from app.schemas.employee import EMPLOYEE_STATUS_LOANED, WORKING_STATUSES
 from app.schemas.timesheet import TimesheetRosterAssignmentWrite
+from app.services.employee_status_history import KIND_APPLIED, KIND_CHANGED, KIND_IMPORTED
 
 #: The manual red block: a day the operator declares outside the billing window.
 #: Derived by nothing — the engine never emits it — and kept by both statistics
@@ -394,11 +397,45 @@ def _period(db: Session, year: int, month: int) -> TimesheetPeriod | None:
     ).scalar_one_or_none()
 
 
-def _roster(db: Session, month_start: date, month_end: date) -> list[Employee]:
-    """Everyone employed for at least one day of the month.
+def _departed_from_loaned(db: Session) -> set[str]:
+    """Non-working employees whose latest exit from a working status was from Loaned."""
+    latest = (
+        select(
+            EmployeeStatusEvent.employee_id,
+            func.max(EmployeeStatusEvent.id).label("event_id"),
+        )
+        .join(Employee, Employee.id == EmployeeStatusEvent.employee_id)
+        .where(
+            Employee.status.not_in(WORKING_STATUSES),
+            EmployeeStatusEvent.from_status.in_(WORKING_STATUSES),
+            EmployeeStatusEvent.to_status.not_in(WORKING_STATUSES),
+            EmployeeStatusEvent.kind.in_((KIND_CHANGED, KIND_APPLIED, KIND_IMPORTED)),
+        )
+        .group_by(EmployeeStatusEvent.employee_id)
+        .subquery()
+    )
+    return set(
+        db.scalars(
+            select(EmployeeStatusEvent.employee_id)
+            .join(latest, EmployeeStatusEvent.id == latest.c.event_id)
+            .where(EmployeeStatusEvent.from_status == EMPLOYEE_STATUS_LOANED)
+        )
+    )
 
-    A departure keeps the employee on the sheet for the month he left — that is
-    the copy HR receives on termination — and drops him the month after.
+
+def _paid_on_timesheet(employee: Employee, departed_from_loaned: set[str]) -> bool:
+    # ponytail: regenerated unsealed historical months follow current status/last working exit;
+    # resolve EmployeeStatusEvent history per month if historical eligibility is needed.
+    return employee.status != EMPLOYEE_STATUS_LOANED and employee.id not in departed_from_loaned
+
+
+def _roster(
+    db: Session, month_start: date, month_end: date, departed_from_loaned: set[str]
+) -> list[Employee]:
+    """Everyone paid here and employed for at least one day of the month.
+
+    A departure from Active keeps the employee on the sheet for the month he
+    left — the copy HR receives on termination — and drops him the month after.
 
     The predicate is deliberately not pushed into the WHERE clause.
     :func:`in_roster` is the one place the two roster edges are decided, and the
@@ -411,7 +448,8 @@ def _roster(db: Session, month_start: date, month_end: date) -> list[Employee]:
     return [
         employee
         for employee in db.execute(select(Employee)).scalars()
-        if in_roster(
+        if _paid_on_timesheet(employee, departed_from_loaned)
+        and in_roster(
             doj=employee.doj,
             end_date=employee.end_date,
             month_start=month_start,
@@ -712,6 +750,7 @@ def _warning_issues(
     leaves_by_employee: Mapping[str, list[Leave]],
     assignments: Mapping[str, TimesheetRosterAssignment],
     designations: Mapping[int, TimesheetDesignation],
+    departed_from_loaned: set[str],
     month_start: date,
     month_end: date,
     sheet: str,
@@ -757,23 +796,25 @@ def _warning_issues(
                 for employee in sharers
             )
 
-    # Off the roster but still marked Active: the departure explains a row the
+    # Off the roster but still working: the departure explains a row the
     # operator expected to see, so it is reported even though there is no row.
     departed = db.execute(
         select(Employee).where(
             Employee.end_date.is_not(None),
             Employee.end_date < month_start,
-            Employee.status == "Active",
+            Employee.status.in_(WORKING_STATUSES),
         )
     ).scalars()
     issues.extend(
         Issue(
             employee.id,
             "departed_but_active",
-            f"{employee.name_en} finished on {employee.end_date:%Y-%m-%d} but is still Active.",
+            f"{employee.name_en} finished on {employee.end_date:%Y-%m-%d} but is still "
+            f"{employee.status}.",
         )
         for employee in departed
         if employee.end_date is not None
+        and _paid_on_timesheet(employee, departed_from_loaned)
         and _lists_on(_designation_for(employee.id, assignments, designations), sheet)
     )
     return issues
@@ -814,6 +855,7 @@ def _removed(
     month: int,
     *,
     designations: Mapping[int, TimesheetDesignation],
+    departed_from_loaned: set[str],
     sheet: str,
 ) -> list[Removed]:
     """Who was on last month's workbook and is deliberately absent from this one."""
@@ -827,7 +869,7 @@ def _removed(
 
     out: list[Removed] = []
     for employee in candidates:
-        if employee.end_date is None:
+        if not _paid_on_timesheet(employee, departed_from_loaned) or employee.end_date is None:
             continue
         if not _routes_to(_designation_for(employee.id, assignments, designations), sheet):
             continue
@@ -857,6 +899,7 @@ def _members(
     month_end: date,
     assignments: Mapping[str, TimesheetRosterAssignment],
     designations: Mapping[int, TimesheetDesignation],
+    departed_from_loaned: set[str],
     sheet: str,
 ) -> list[tuple[Employee, TimesheetDesignation | None]]:
     """The sheet's roster in printed order, each member with its designation.
@@ -873,7 +916,7 @@ def _members(
                 employee,
                 _designation_for(employee.id, assignments, designations),
             )
-            for employee in _roster(db, month_start, month_end)
+            for employee in _roster(db, month_start, month_end, departed_from_loaned)
         )
         if _lists_on(designation, sheet)
     ]
@@ -1035,6 +1078,7 @@ def build_month(db: Session, year: int, month: int, *, sheet: str = "main") -> M
     days_in_month, month_start, month_end = _month_bounds(year, month)
     designations = _designations_by_id(db)
     assignments = _roster_assignments_on(db, month_start)
+    departed_from_loaned = _departed_from_loaned(db)
     period = _period(db, year, month)
     post_count = DEFAULT_POST_COUNT if period is None else period.post_count
 
@@ -1062,6 +1106,7 @@ def build_month(db: Session, year: int, month: int, *, sheet: str = "main") -> M
         month_end=month_end,
         assignments=assignments,
         designations=designations,
+        departed_from_loaned=departed_from_loaned,
         sheet=sheet,
     )
     leaves_by_employee = _leaves_by_employee(db, month_start, month_end)
@@ -1103,6 +1148,7 @@ def build_month(db: Session, year: int, month: int, *, sheet: str = "main") -> M
         leaves_by_employee=leaves_by_employee,
         assignments=assignments,
         designations=designations,
+        departed_from_loaned=departed_from_loaned,
         month_start=month_start,
         month_end=month_end,
         sheet=sheet,
@@ -1122,6 +1168,7 @@ def build_month(db: Session, year: int, month: int, *, sheet: str = "main") -> M
             year,
             month,
             designations=designations,
+            departed_from_loaned=departed_from_loaned,
             sheet=sheet,
         ),
         closed_at=closed_at,

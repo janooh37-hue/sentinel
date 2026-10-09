@@ -387,7 +387,8 @@
       "Active": "Active",
       "Resigned": "Resigned",
       "Terminated": "Terminated",
-      "Transferred": "Transferred"
+      "Transferred": "Transferred",
+      "Loaned": "Loaned"
     },
     "statusDetail": {
       "dated": "{{status}} · {{date}}",
@@ -399,7 +400,7 @@
       "title": "Change status"
     },
     "validation": {
-      "endDateRequired": "End date is required when status is not Active",
+      "endDateRequired": "End date is required when status is not Active or Loaned",
       "transferSiteRequired": "Destination site is required for a transfer",
       "returnAfterEffective": "Expected return date must be after the effective date",
       "idRequired": "Employee ID is required",
@@ -511,7 +512,7 @@
       "statusEvent": {
         "change": "{{from}} → {{to}}",
         "initial": "Recorded as {{to}}",
-        "returned": "Returned to Active",
+        "returned": "Returned to service",
         "scheduled": "Scheduled: {{from}} → {{to}}",
         "scheduledCancelled": "Scheduled {{to}} cancelled",
         "effective": "Effective {{date}}",

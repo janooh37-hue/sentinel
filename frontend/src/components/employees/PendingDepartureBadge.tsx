@@ -2,13 +2,13 @@
  * Scheduled-departure chip — "Resigned — effective 15/08/2026" (a pending transfer
  * also names the site: "Transferred · Site X — effective 15/08/2026").
  *
- * Shown beside the employee's status pill while they are still Active but have
+ * Shown beside the employee's status pill while they are still working (Active/Loaned) but have
  * a departure booked for `endDate`. Composes the canonical
  * `employees.status.*` translation with a date wrapper so the Arabic wording
  * stays in one place (مستقيل / مفصول), never duplicated here.
  *
- * `status` is gated to `'Active'` defensively: a stale `pending_status`
- * should never surface on a non-Active row (e.g. an immediate departure
+ * `status` is gated to working statuses defensively: a stale `pending_status`
+ * should never surface on a non-working row (e.g. an immediate departure
  * that superseded a scheduled one) even though the write path is expected
  * to clear it.
  */
@@ -19,6 +19,8 @@ import { Badge } from '@/components/ui/badge'
 import type { EmployeeStatus } from '@/lib/api'
 import { bidi } from '@/lib/bidi'
 import { formatDmy } from '@/lib/formatDmy'
+
+import { isWorkingStatus } from './schema'
 
 interface Props {
   status: EmployeeStatus
@@ -36,7 +38,7 @@ export function PendingDepartureBadge({
   transferSite,
 }: Props): React.JSX.Element | null {
   const { t } = useTranslation()
-  if (status !== 'Active' || !pendingStatus || !endDate) return null
+  if (!isWorkingStatus(status) || !pendingStatus || !endDate) return null
   const date = formatDmy(endDate)
   const label = t(`employees.status.${pendingStatus}`)
   const statusText =

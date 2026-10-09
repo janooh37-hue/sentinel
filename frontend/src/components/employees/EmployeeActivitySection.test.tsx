@@ -90,7 +90,7 @@ vi.mock('react-i18next', () => ({
         'employees.activity.duty_location': 'Duty location',
         'employees.activity.status': 'Status changes',
         'employees.activity.statusEvent.openProfile': 'Open employee profile',
-        'employees.activity.statusEvent.returned': 'Returned to Active',
+        'employees.activity.statusEvent.returned': 'Returned to service',
         'employees.activity.dutyLocation.transfer': 'Transferred',
         'employees.activity.dutyLocation.initial_placement': 'Initial placement',
         'employees.activity.dutyLocation.unassigned': 'Unassigned',
@@ -195,7 +195,7 @@ describe('EmployeeActivitySection', () => {
     await waitFor(() => expect(api.listEmployeeActivity).toHaveBeenLastCalledWith(
       expect.objectContaining({ kind: 'status' }),
     ))
-    expect(await screen.findByText('Returned to Active')).toBeInTheDocument()
+    expect(await screen.findByText('Returned to service')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: /open employee profile/i })).toHaveAttribute('href', '/employees/G600')
   })
 
