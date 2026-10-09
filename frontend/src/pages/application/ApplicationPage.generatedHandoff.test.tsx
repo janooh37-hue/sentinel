@@ -2,7 +2,7 @@ import { act, cleanup, render, screen, waitFor } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import i18n from 'i18next'
 import { z } from 'zod'
 
@@ -96,8 +96,10 @@ function renderPage() {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
     <QueryClientProvider client={queryClient}>
-      <MemoryRouter initialEntries={['/application?form=Demo&employee_id=G1']}>
-        <ApplicationPage />
+      <MemoryRouter initialEntries={['/services/demo?employee_id=G1']}>
+        <Routes>
+          <Route path="/services/:slug?" element={<ApplicationPage />} />
+        </Routes>
       </MemoryRouter>
     </QueryClientProvider>,
   )

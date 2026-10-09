@@ -18,7 +18,6 @@ import { useApprovalSummary } from '@/lib/useApprovalSummary'
 import type { WaitingSignalId } from './navCustomization'
 
 const STALE_TIME = 30_000
-const REFRESH_INTERVAL = 60_000
 
 export function useWaitingSignals(enabled: boolean): Partial<Record<WaitingSignalId, number>> {
   const { status } = useAuth()
@@ -43,14 +42,12 @@ export function useWaitingSignals(enabled: boolean): Partial<Record<WaitingSigna
     queryFn: () => api.listAwaitingScanBooks('mine'),
     enabled: authenticated && canViewBooks && canEditBooks,
     staleTime: STALE_TIME,
-    refetchInterval: REFRESH_INTERVAL,
   })
   const ledgerUnreadQuery = useQuery({
     queryKey: ['ledger', 'unread-recent'],
     queryFn: () => api.getLedgerUnreadRecent(5),
     enabled: authenticated && canViewLedger,
     staleTime: STALE_TIME,
-    refetchInterval: REFRESH_INTERVAL,
   })
 
   const signals: Partial<Record<WaitingSignalId, number>> = {}

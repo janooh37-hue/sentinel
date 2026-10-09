@@ -45,6 +45,8 @@ import { useApprovalSummary } from '@/lib/useApprovalSummary'
 import { useAuth } from '@/lib/authContext'
 import { cn } from '@/lib/utils'
 import { ApprovalPreviewDialog, StatusChip } from './ApprovalPreviewDialog'
+import { useRecordDelete } from './RecordDeleteProvider'
+import type { RecordNavState } from './useRecordNavContext'
 
 const ScanPdfCanvas = lazy(() => import('@/pages/scanInbox/ScanPdfCanvas'))
 
@@ -153,8 +155,13 @@ function ApprovalRow({ item, tab, dfLocale, onOpen, onPreview }: RowProps): Reac
   const { t } = useTranslation()
   const late = isLateAdvisory(item)
   const restricted = item.access_scope === 'assigned_revision'
-  const counterpartyLabel = tab === 'sent' ? t('books.approvals.assignedSigner') : t('books.approval.submitter')
-  const counterpartyName = tab === 'sent' ? item.approver_name : item.submitted_by_name
+  const reviewOnly = !item.approver_name && item.reviewer_names.length > 0
+  const counterpartyLabel = tab === 'sent'
+    ? t(reviewOnly ? 'books.approval.reviewManager' : 'books.approvals.assignedSigner')
+    : t('books.approval.submitter')
+  const counterpartyName = tab === 'sent'
+    ? item.approver_name ?? item.reviewer_names.join(', ')
+    : item.submitted_by_name
 
   return (
     <article
@@ -249,6 +256,7 @@ export function ApprovalsPage(): React.JSX.Element {
   const dfLocale = isAr ? arLocale : undefined
   const [searchParams, setSearchParams] = useSearchParams()
   const listRef = useRef<HTMLDivElement | null>(null)
+  const { pendingIds } = useRecordDelete()
   const [preview, setPreview] = useState<ApprovalLogItem | null>(null)
   const previewTriggerRef = useRef<HTMLButtonElement | null>(null)
 
@@ -281,14 +289,16 @@ export function ApprovalsPage(): React.JSX.Element {
       }),
     enabled: context != null,
   })
-  const rows: ApprovalLogItem[] = logQuery.data?.items ?? []
+  const logRows: ApprovalLogItem[] = logQuery.data?.items ?? []
+  // Records inside their 6 s delete-Undo window are hidden from the worklist.
+  const rows = logRows.filter((row) => !pendingIds.has(row.book_id))
   const total = logQuery.data?.total ?? 0
   const pageCount = Math.max(1, Math.ceil(total / APPROVALS_PAGE_SIZE))
 
   // An emptied final page (a decision moved the last row off it) normalizes
   // back to the last available page.
   useEffect(() => {
-    if (context && logQuery.data && rows.length === 0 && context.page > 1 && context.page > pageCount) {
+    if (context && logQuery.data && logRows.length === 0 && context.page > 1 && context.page > pageCount) {
       updateContext({ ...context, page: pageCount })
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -315,13 +325,22 @@ export function ApprovalsPage(): React.JSX.Element {
 
   function openRow(item: ApprovalLogItem): void {
     if (!context) return
+    const scrollY = listRef.current?.scrollTop ?? 0
     // Stash scroll + focus on THIS history entry before navigating away, so
     // browser-back restores them.
     navigate(location.pathname + location.search, {
       replace: true,
-      state: { scrollY: listRef.current?.scrollTop ?? 0, focusBookId: item.book_id },
+      state: { scrollY, focusBookId: item.book_id },
     })
-    navigate(approvalRecordUrl(item.book_id, item.version_id, context))
+    // The record page keeps its approval-queue URL context (version + tab/kind/
+    // status/sort/page) and gets the list it came from, so Back returns here
+    // focused on this row (the restore effect above reads the same state shape).
+    const nav: RecordNavState = {
+      from: location.pathname + location.search,
+      queue: rows.map((row) => row.book_id),
+      scrollY,
+    }
+    navigate(approvalRecordUrl(item.book_id, item.version_id, context), { state: nav })
   }
 
   if (summaryQuery.isPending) {

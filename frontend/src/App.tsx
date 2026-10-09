@@ -14,7 +14,10 @@ import { ErrorBoundary } from '@/components/ui/error-boundary'
 import { ShortcutsHelpDialog } from '@/components/ui/shortcuts-help'
 import { EmployeeLookupPage } from '@/pages/employees/EmployeeLookupPage'
 import { LoginPage } from '@/pages/auth/LoginPage'
+import { NotFoundPage } from '@/pages/NotFoundPage'
 import { MigrationGate } from '@/pages/system/MigrationWizard'
+import { RecordDeleteProvider } from '@/pages/books/RecordDeleteProvider'
+import { TooltipProvider } from '@/components/ui/tooltip'
 import { KeyboardShortcutsProvider } from '@/lib/keyboardShortcuts'
 import { AuthProvider } from '@/lib/AuthProvider'
 import { useAuth } from '@/lib/authContext'
@@ -22,6 +25,7 @@ import { AppLockContext } from '@/lib/appLockContext'
 import { useIsMobile } from '@/lib/useIsMobile'
 import { DEFAULT_IDLE_LOCK_SECONDS, useLockState } from '@/lib/useLockState'
 import { type Page, PAGE_PATHS, buildPagePath } from '@/lib/pageNav'
+import { serviceHref } from '@/lib/quickActions'
 import { INMATE_REPORTER_ALLOWED_DESTINATIONS } from '@/components/shell/navItems'
 import {
   loadAccessRequestsPage,
@@ -33,6 +37,7 @@ import {
   loadDashboardPage,
   loadDutyLocationsPage,
   loadEmployeeDetailPage,
+  loadDebugConsolePage,
   loadEmployeesOrgTreePage,
   loadExpiryPage,
   loadPermissionsPage,
@@ -58,8 +63,8 @@ import {
   loadTimesheetPage,
 } from '@/lib/routeLoaders'
 import { useNotificationStream } from '@/hooks/useNotificationStream'
+import { useReportClientErrors } from '@/lib/reportClientErrors'
 import { TopProgressBar } from './components/refresh/TopProgressBar'
-import { useRefreshHeartbeat } from './hooks/useRefreshHeartbeat'
 import { useRefreshHotkeys } from './hooks/useRefreshHotkeys'
 import { ScanBackDock } from './pages/scanBack/ScanBackDock'
 import { ScanBackGate } from './pages/scanBack/ScanBackGate'
@@ -99,6 +104,7 @@ const EmployeeDetailPage = lazy(loadEmployeeDetailPage)
 const TimesheetPage = lazy(loadTimesheetPage)
 const AccessRequestsPage = lazy(loadAccessRequestsPage)
 const PermissionsPage = lazy(loadPermissionsPage)
+const DebugConsolePage = lazy(loadDebugConsolePage)
 const ExpiryPage = lazy(loadExpiryPage)
 const IntakePage = lazy(loadIntakePage)
 const DutyLocationsPage = lazy(loadDutyLocationsPage)
@@ -111,9 +117,9 @@ const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       retry: 1,
-      refetchOnWindowFocus: true,   // return-to-app => silently fresh
-      refetchOnReconnect: 'always', // after a gap, age unknown => refetch
-      staleTime: 15_000,            // gate focus-refetch storms
+      refetchOnWindowFocus: true,   // return-to-app => silently fresh (if stale)
+      refetchOnReconnect: true,     // after a gap, refetch only what is stale
+      staleTime: 60_000,            // SSE + mutations keep data fresh; gates focus/remount refetches
       gcTime: 5 * 60_000,
     },
   },
@@ -128,7 +134,6 @@ function PageSuspenseFallback(): React.JSX.Element {
 }
 
 function RefreshShellHost() {
-  useRefreshHeartbeat()
   useRefreshHotkeys()
   return null
 }
@@ -152,6 +157,17 @@ function LedgerRoute(): React.JSX.Element {
   return <LedgerPage onNavigate={navigatePage} />
 }
 
+/** `/application?form=x&…` links already went out by SMS/push/bookmark. */
+function LegacyApplicationRedirect(): React.JSX.Element {
+  const params = new URLSearchParams(useLocation().search)
+  const form = params.get('form')
+  params.delete('form')
+  const search = params.toString()
+  return (
+    <Navigate replace to={{ pathname: form ? serviceHref(form) : '/services', search: search ? `?${search}` : '' }} />
+  )
+}
+
 function Shell(): React.JSX.Element {
   const { t } = useTranslation()
   const { status, logout, user } = useAuth()
@@ -165,11 +181,14 @@ function Shell(): React.JSX.Element {
   const normalizedPath = location.pathname.replace(/\/+$/, '') || '/'
   const inmateReporterRouteAllowed =
     INMATE_REPORTER_ALLOWED_DESTINATIONS.includes(normalizedPath as typeof INMATE_REPORTER_ALLOWED_DESTINATIONS[number]) ||
-    /^\/books\/\d+$/.test(normalizedPath)
+    /^\/books\/\d+$/.test(normalizedPath) ||
+    normalizedPath === serviceHref('inmate_conduct_violations') ||
+    normalizedPath === '/application'
 
   // Phase 4 LAN — SSE notification stream. Enabled only when the session is
   // resolved so it doesn't open a connection that 401s immediately.
   useNotificationStream(status === 'authed' && !isInmateReporter)
+  useReportClientErrors(status === 'authed' && !isInmateReporter)
 
   // Web Push deep-link: the service worker postMessages the target path when a
   // notification is clicked; route client-side (React Router) so an already-open
@@ -236,8 +255,9 @@ function Shell(): React.JSX.Element {
           <Suspense fallback={<PageSuspenseFallback />}>
             {/* Route-keyed entrance: remounting on pathname change replays the
                 shared fade-up so every page gets a consistent enter motion
-                (reduced-motion guarded in index.css). */}
-            <main id="main-content" tabIndex={-1} key={location.pathname} className="anim-fade-up flex flex-1 overflow-hidden pb-[calc(5rem+var(--safe-bottom))] md:pb-0">
+                (reduced-motion guarded in index.css). /services/* shares one key
+                so the catalog stays mounted under its forms. */}
+            <main id="main-content" tabIndex={-1} key={normalizedPath.startsWith('/services/') ? '/services' : location.pathname} className="anim-fade-up flex flex-1 overflow-hidden pb-[calc(5rem+var(--safe-bottom))] md:pb-0">
             {isInmateReporter && !inmateReporterRouteAllowed ? (
               <Navigate to="/" replace />
             ) : (
@@ -287,8 +307,10 @@ function Shell(): React.JSX.Element {
                   </RequireCapability>
                 }
               />
+              {/* One URL per service; the catalog and its forms share one
+                  mounted page (see the <main> key above). */}
               <Route
-                path="/application"
+                path="/services/:slug?"
                 element={
                   <RequireCapability cap="documents.generate">
                     <RequireCapability cap="books.view">
@@ -297,6 +319,7 @@ function Shell(): React.JSX.Element {
                   </RequireCapability>
                 }
               />
+              <Route path="/application" element={<LegacyApplicationRedirect />} />
               <Route
                 path="/books"
                 element={
@@ -466,6 +489,14 @@ function Shell(): React.JSX.Element {
                 }
               />
               <Route
+                path="/debug"
+                element={
+                  <RequireCapability cap="system.admin">
+                    <DebugConsolePage />
+                  </RequireCapability>
+                }
+              />
+              <Route
                 path="/expiry"
                 element={
                   <RequireCapability cap="expiry.view">
@@ -521,7 +552,7 @@ function Shell(): React.JSX.Element {
                   </RequireCapability>
                 }
               />
-              <Route path="*" element={<Navigate to="/" replace />} />
+              <Route path="*" element={<NotFoundPage />} />
               </Routes>
             )}
             </main>
@@ -563,9 +594,13 @@ function App(): React.JSX.Element {
         <AuthProvider>
           <BrowserRouter>
             <KeyboardShortcutsProvider>
-              <MigrationGate>
-                <Shell />
-              </MigrationGate>
+              <TooltipProvider delayDuration={400} skipDelayDuration={150}>
+                <RecordDeleteProvider>
+                  <MigrationGate>
+                    <Shell />
+                  </MigrationGate>
+                </RecordDeleteProvider>
+              </TooltipProvider>
             </KeyboardShortcutsProvider>
           </BrowserRouter>
         </AuthProvider>

@@ -2,23 +2,28 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useForm } from 'react-hook-form'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
+import { useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { ExternalLink, Loader2, Send } from 'lucide-react'
 import { toast } from 'sonner'
 
 import { TemplateForm } from '@/components/application/TemplateForm'
 import type { TemplateDetailResponse, TemplateField } from '@/components/application/types'
+import { SignatureDrawPanel } from '@/components/signature/SignatureDrawPanel'
 import { Button } from '@/components/ui/button'
-import { api, ApiError } from '@/lib/api'
+import { DialogContent, DialogHeader, DialogRoot, DialogTitle } from '@/components/ui/dialog'
+import { api, ApiError, apiErrorMessage } from '@/lib/api'
 import type {
   DocumentGenerateRequest,
   JobStatusResponse,
   SessionUser,
+  WordSessionRead,
 } from '@/lib/api'
 import { nowHM, todayIso } from './resignationDate'
 import { savedGenerationFromJob, type SavedGeneration } from './savedGeneration'
 
 import { useInmateReportSubmit, inmateReportSubmitErrorMessage } from '@/components/books/useInmateReportSubmit'
+import { WordHandoffDialog } from '@/pages/books/WordHandoffDialog'
+import { useIsMobile } from '@/lib/useIsMobile'
 import { JobStatus } from './JobStatus'
 const TEMPLATE_ID = 'Inmate Conduct Violations'
 const TEMPLATE_SLUG = 'inmate_conduct_violations'
@@ -89,14 +94,18 @@ function restrictedSchema(raw: RestrictedSchemaSource | undefined): TemplateDeta
 export function InmateReporterApplication({ user }: { user: SessionUser }): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const isAr = i18n.language.startsWith('ar')
+  const isMobile = useIsMobile()
   const location = useLocation()
   const navigate = useNavigate()
-  const [searchParams, setSearchParams] = useSearchParams()
+  const { slug } = useParams<{ slug?: string }>()
+  const [searchParams] = useSearchParams()
   const qc = useQueryClient()
-  const [initialBookId] = useState(
-    () => ((location.state as { reviseBookId?: number } | null)?.reviseBookId ?? null),
-  )
+  const [initialBookId] = useState(() => {
+    const revise = searchParams.get('revise') ?? ''
+    return /^\d+$/.test(revise) ? Number(revise) : null
+  })
   const [editingBookId, setEditingBookId] = useState<number | null>(initialBookId)
+  const [serviceChoice, setServiceChoice] = useState<'choose' | 'violations' | 'report'>(initialBookId === null ? 'choose' : 'violations')
   const [activeTab, setActiveTab] = useState<'fields' | 'preview'>('fields')
   const [activeJobId, setActiveJobId] = useState<string | null>(null)
   const [lastSaved, setLastSaved] = useState<SavedGeneration | null>(null)
@@ -107,14 +116,12 @@ export function InmateReporterApplication({ user }: { user: SessionUser }): Reac
   const newFormSeededRef = useRef(false)
   const form = useForm<Record<string, unknown>>({ defaultValues: {} })
 
+  // The reporter has exactly one service; keep its URL canonical.
   useEffect(() => {
-    if (
-      searchParams.get('form') === TEMPLATE_SLUG &&
-      !searchParams.has('mode') &&
-      !searchParams.has('employee_id')
-    ) return
-    setSearchParams({ form: TEMPLATE_SLUG }, { replace: true })
-  }, [searchParams, setSearchParams])
+    const search = initialBookId === null ? '' : `?revise=${initialBookId}`
+    if (slug === TEMPLATE_SLUG && location.search === search) return
+    navigate({ pathname: `/services/${TEMPLATE_SLUG}`, search }, { replace: true })
+  }, [initialBookId, location.search, navigate, slug])
 
   const schemaQuery = useQuery({
     queryKey: ['template-fields', TEMPLATE_ID],
@@ -243,6 +250,39 @@ export function InmateReporterApplication({ user }: { user: SessionUser }): Reac
       submitMutation.mutate(saved.bookId)
     }
   }, [qc, submitMutation, t])
+  if (serviceChoice === 'report') {
+    return <WordReportForm user={user} onBack={() => setServiceChoice('choose')} />
+  }
+  if (serviceChoice === 'choose') {
+    return (
+      <div className="flex flex-1 flex-col overflow-auto bg-background">
+        <div className="mx-auto w-full max-w-5xl flex-1 px-4 pb-10 pt-6 sm:px-8">
+          <header className="mb-5">
+            <div className="text-[0.75em] font-medium uppercase tracking-[0.18em] text-muted-foreground">{t('application.eyebrow')}</div>
+            <h1 className="mt-1 text-[1.7em] font-bold tracking-tight text-foreground">{t('application.inmateReporter.servicesTitle')}</h1>
+            <p className="mt-1 text-[0.86em] text-muted-foreground">{t('application.inmateReporter.servicesDescription')}</p>
+          </header>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <button type="button" onClick={() => setServiceChoice('violations')} className="rounded-2xl border border-hairline bg-surface p-5 text-start hover:border-primary">
+              <span className="block text-lg font-semibold">{t('application.inmateReporter.title')}</span>
+              <span className="mt-1 block text-sm text-muted-foreground">{t('application.inmateReporter.description')}</span>
+            </button>
+            {isMobile ? (
+              <button type="button" disabled className="w-full cursor-not-allowed rounded-2xl border border-hairline bg-surface p-5 text-start opacity-60">
+                <span className="block text-lg font-semibold">{t('application.inmateReporter.reportTitle')}</span>
+                <span className="mt-1 block text-sm text-muted-foreground">{t('books.word.needsPc')}</span>
+              </button>
+            ) : (
+              <button type="button" onClick={() => setServiceChoice('report')} className="rounded-2xl border border-hairline bg-surface p-5 text-start hover:border-primary">
+                <span className="block text-lg font-semibold">{t('application.inmateReporter.reportTitle')}</span>
+                <span className="mt-1 block text-sm text-muted-foreground">{t('application.inmateReporter.reportDescription')}</span>
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   const displayName = (
     isAr ? user.name_ar || user.name_en : user.name_en || user.name_ar
@@ -252,6 +292,11 @@ export function InmateReporterApplication({ user }: { user: SessionUser }): Reac
   return (
     <div className="flex flex-1 flex-col overflow-auto bg-background">
       <div className="mx-auto w-full max-w-5xl flex-1 px-4 pb-10 pt-6 sm:px-8">
+        {initialBookId === null && (
+          <Button type="button" variant="ghost" className="mb-3" disabled={busy} onClick={() => setServiceChoice('choose')}>
+            {t('application.inmateReporter.backToServices')}
+          </Button>
+        )}
         <header className="mb-5">
           <div className="text-[0.75em] font-medium uppercase tracking-[0.18em] text-muted-foreground">
             {t('application.eyebrow')}
@@ -363,6 +408,7 @@ export function InmateReporterApplication({ user }: { user: SessionUser }): Reac
                             ? t('application.inmateReporter.correctReport')
                             : t('application.inmateReporter.sendToManager')}
                       </Button>
+
                     )}
                     <Button
                       type="button"
@@ -451,3 +497,128 @@ function SubmissionIssuePanel({
   )
 }
 
+export function WordReportForm({ user, onBack }: { user: SessionUser; onBack: () => void }): React.JSX.Element {
+  const { t, i18n } = useTranslation()
+  const qc = useQueryClient()
+  const [session, setSession] = useState<WordSessionRead | null>(null)
+  const [signatureOpen, setSignatureOpen] = useState(false)
+  const [signatureBusy, setSignatureBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [subject, setSubject] = useState('')
+  const [date, setDate] = useState(todayIso())
+  const isMobile = useIsMobile()
+  const submit = useInmateReportSubmit({
+    onError: (_error, message) => toast.error(message),
+    onSuccess: () => toast.success(t('application.inmateReporter.sent')),
+  })
+  const create = useMutation({
+    mutationFn: () => api.createWordBook({
+      subject: subject.trim(),
+      date,
+      signer_employee_id: user.employee_id,
+      sign: true,
+    }),
+    onSuccess: (value) => {
+      setError(null)
+      setSession(value)
+    },
+    onError: (cause) => {
+      if (cause instanceof ApiError && cause.code === 'SIGNATURE_REQUIRED') {
+        setSignatureOpen(true)
+      } else {
+        setError(apiErrorMessage(cause))
+      }
+    },
+  })
+
+  const begin = async (): Promise<void> => {
+    if (!subject.trim() || !date || !user.employee_id || create.isPending) return
+    setError(null)
+    try {
+      if (!(await api.getSavedSignature())) {
+        setSignatureOpen(true)
+        return
+      }
+      create.mutate()
+    } catch (cause) {
+      setError(apiErrorMessage(cause))
+    }
+  }
+  const saveSignature = async (dataUrl: string): Promise<void> => {
+    setSignatureBusy(true)
+    try {
+      await api.uploadMySignature(await (await fetch(dataUrl)).blob())
+      setSignatureOpen(false)
+      create.mutate()
+    } catch (cause) {
+      setError(apiErrorMessage(cause))
+    } finally {
+      setSignatureBusy(false)
+    }
+  }
+  const displayName = (i18n.language.startsWith('ar') ? user.name_ar || user.name_en : user.name_en || user.name_ar) || user.email
+
+  return (
+    <div className="flex flex-1 flex-col overflow-auto bg-background">
+      <div className="mx-auto w-full max-w-5xl flex-1 px-4 pb-10 pt-6 sm:px-8">
+        <Button type="button" variant="ghost" onClick={onBack}>{t('application.inmateReporter.backToServices')}</Button>
+        <header className="mb-5 mt-3">
+          <div className="text-[0.75em] font-medium uppercase tracking-[0.18em] text-muted-foreground">{t('application.eyebrow')}</div>
+          <h1 className="mt-1 text-[1.7em] font-bold tracking-tight text-foreground">{t('application.inmateReporter.reportTitle')}</h1>
+          <p className="mt-1 text-[0.86em] text-muted-foreground">{t('application.inmateReporter.reportDescription')}</p>
+        </header>
+        {!user.employee_id ? (
+          <p role="alert" className="rounded-xl border border-warning/30 bg-warning-soft px-4 py-3 text-sm text-warning">{t('application.inmateReporter.unlinked')}</p>
+        ) : (
+          <section className="space-y-5 rounded-2xl bg-surface px-4 py-6 sm:px-7">
+            <div className="rounded-xl border border-hairline bg-surface-tinted px-4 py-3">
+              <div className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{t('application.inmateReporter.reportedBy')}</div>
+              <div className="mt-1 flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                <span className="font-semibold text-foreground" dir="auto">{displayName}</span>
+                <span className="font-mono text-sm text-muted-foreground" dir="ltr">{user.employee_id}</span>
+              </div>
+            </div>
+            <label className="block space-y-1.5 text-sm font-medium">
+              <span>{t('application.inmateReporter.reportSubject')}</span>
+              <input required dir="auto" value={subject} onChange={(event) => setSubject(event.target.value)} className="w-full rounded-lg border border-hairline bg-background px-3 py-2" />
+            </label>
+            <label className="block space-y-1.5 text-sm font-medium">
+              <span>{t('application.inmateReporter.reportDate')}</span>
+              <input required type="date" value={date} onChange={(event) => setDate(event.target.value)} className="w-full rounded-lg border border-hairline bg-background px-3 py-2" />
+            </label>
+            {error && <p role="alert" className="text-sm text-destructive">{error}</p>}
+            {isMobile ? (
+              <div className="space-y-1">
+                <Button type="button" disabled>{t('books.word.openInWord')}</Button>
+                <p className="text-xs text-muted-foreground">{t('books.word.needsPc')}</p>
+              </div>
+            ) : (
+              <Button type="button" disabled={!subject.trim() || !date || create.isPending} onClick={() => void begin()}>
+                {create.isPending ? t('application.inmateReporter.creatingReport') : t('application.inmateReporter.continueToWord')}
+              </Button>
+            )}
+          </section>
+        )}
+      </div>
+      <DialogRoot open={signatureOpen} onOpenChange={(open) => { if (!signatureBusy) setSignatureOpen(open) }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t('application.inmateReporter.signatureRequired')}</DialogTitle>
+          </DialogHeader>
+          <div className="px-4 pb-4">
+            <SignatureDrawPanel showSaveToProfile={false} busy={signatureBusy} onUse={(dataUrl) => void saveSignature(dataUrl)} />
+          </div>
+        </DialogContent>
+      </DialogRoot>
+      <WordHandoffDialog
+        session={session}
+        open={session != null}
+        onClose={() => {
+          setSession(null)
+          void qc.invalidateQueries({ queryKey: ['books'] })
+        }}
+        onFinished={(book) => submit.mutate(book.id)}
+      />
+    </div>
+  )
+}

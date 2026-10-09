@@ -108,7 +108,7 @@ export function WaitingApprovalsCard({
        *  distinct review-bucket count when signing is their primary work. */}
       {secondaryReviewCount > 0 && (
         <Link
-          to={approvalQueueUrl({ tab: 'received', kind: 'review', status: 'pending', sort: 'oldest', page: 1 })}
+          to={approvalQueueUrl({ tab: 'received', kind: 'review', status: 'pending', sort: 'newest', page: 1 })}
           className="relative z-10 mt-2 flex items-center gap-1 text-[0.74em] font-medium text-info hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:rounded-sm"
         >
           {t('books.approvals.subTabReview')} · {secondaryReviewCount}

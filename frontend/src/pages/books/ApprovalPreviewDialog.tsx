@@ -1,17 +1,18 @@
-import { lazy, Suspense } from 'react'
+import { lazy, Suspense, useMemo, useState } from 'react'
 import type { RefObject } from 'react'
 import { useNavigate } from 'react-router-dom'
 import * as Dialog from '@radix-ui/react-dialog'
 import { useTranslation } from 'react-i18next'
-import { Loader2, X } from 'lucide-react'
+import { X } from 'lucide-react'
 
-import { api } from '@/lib/api'
+import { DocumentState } from '@/components/books/DocumentState'
 import type { ApprovalLogItem } from '@/lib/api'
 import { approvalRecordUrl } from '@/lib/approvals'
 import type { ApprovalContext } from '@/lib/approvals'
+import { useAuth } from '@/lib/authContext'
 import { cn } from '@/lib/utils'
 
-import type { Paper } from './recordPapers'
+import { approvalItemPapers, defaultPaperKey, paperKey, type PaperKey } from './recordPapers'
 
 const RecordPaperViewer = lazy(() => import('@/pages/books/RecordPaperViewer'))
 
@@ -59,24 +60,30 @@ export function StatusChip({ item }: { item: ApprovalLogItem }): React.JSX.Eleme
 export function ApprovalPreviewDialog({ item, triggerRef, onClose, context }: Props): React.JSX.Element {
   const { t } = useTranslation()
   const navigate = useNavigate()
-  const signed = item?.status === 'approved' && item.version_id != null
-  const pdfUrl = item
-    ? signed
-      ? api.signedDocumentUrl(item.book_id, item.version_id!)
-      : item.document_id != null
-        ? api.documentDownloadUrl(item.document_id, 'pdf', item.version_id ?? undefined)
-        : null
-    : null
-  const papers: Paper[] =
-    item && pdfUrl
-      ? [{
-          kind: signed ? 'signed' : 'generated',
-          url: pdfUrl,
-          downloadUrl: pdfUrl,
-          filename: `${item.ref_number}${signed ? '-signed' : ''}.pdf`,
-          isPdf: true,
-        }]
-      : []
+  const { user } = useAuth()
+  const inmateReporter = user?.role === 'inmate_reporter'
+  // Rebuilt only when the record, its pinned version or its state changes — not
+  // on every refetch of the log (a fresh `item` object each poll would reset the viewer).
+  const bookId = item?.book_id
+  const versionId = item?.version_id
+  const status = item?.status
+  const papers = useMemo(
+    () => (item ? approvalItemPapers(item, { inmateReporter }) : []),
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- `item` is read through its identity fields above
+    [bookId, versionId, status, inmateReporter],
+  )
+  // Open on the signed copy once approved; an explicit pick is kept by key.
+  const [pickedKey, setPickedKey] = useState<PaperKey | null>(null)
+  const [prevItemKey, setPrevItemKey] = useState(item ? `${item.book_id}:${item.version_id}` : null)
+  const itemKey = item ? `${item.book_id}:${item.version_id}` : null
+  if (prevItemKey !== itemKey) {
+    setPrevItemKey(itemKey)
+    setPickedKey(null)
+  }
+  const selectedKey =
+    pickedKey !== null && papers.some((p) => paperKey(p) === pickedKey)
+      ? pickedKey
+      : defaultPaperKey({ approval_state: status }, papers)
 
   return (
     <Dialog.Root open={item !== null} onOpenChange={(open) => !open && onClose()}>
@@ -121,35 +128,27 @@ export function ApprovalPreviewDialog({ item, triggerRef, onClose, context }: Pr
                   <button
                     type="button"
                     aria-label={t('common.close')}
-                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-surface-tinted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-surface-tinted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none md:h-8 md:w-8"
                   >
                     <X className="h-4 w-4" strokeWidth={2} aria-hidden />
                   </button>
                 </Dialog.Close>
               </header>
 
-              <div className="h-[70dvh] min-h-0 flex-1 overflow-hidden bg-[rgba(10,14,24,0.78)] px-5 py-5">
+              <div className="h-[70dvh] min-h-0 flex-1 overflow-hidden bg-[rgba(10,14,24,0.78)] px-2 py-3 md:px-5 md:py-5">
                 <div className="relative mx-auto h-full w-full max-w-[760px]">
-                  {pdfUrl ? (
-                    <Suspense
-                      fallback={
-                        <div className="flex min-h-[300px] items-center justify-center text-muted-foreground">
-                          <Loader2 className="h-6 w-6 animate-spin" aria-hidden />
-                        </div>
-                      }
-                    >
+                  {papers.length > 0 ? (
+                    <Suspense fallback={<DocumentState kind="loading" className="text-white/80" />}>
+                      {/* The viewer opens at Fit (its container width), so the paper fills a phone screen. */}
                       <RecordPaperViewer
                         papers={papers}
-                        paperIndex={0}
-                        onPaperIndexChange={() => undefined}
-                        baseWidth={620}
-                        isOverlay
+                        selectedKey={selectedKey}
+                        onSelectKey={setPickedKey}
+                        mode="dialog"
                       />
                     </Suspense>
                   ) : (
-                    <div className="flex min-h-[300px] items-center justify-center text-[0.85em] text-muted-foreground">
-                      {t('books.record.noDocument')}
-                    </div>
+                    <DocumentState kind="empty" title={t('books.record.noDocument')} body="" className="text-white/80" />
                   )}
                 </div>
               </div>
@@ -158,7 +157,7 @@ export function ApprovalPreviewDialog({ item, triggerRef, onClose, context }: Pr
                 <Dialog.Close asChild>
                   <button
                     type="button"
-                    className="inline-flex h-9 items-center rounded-lg border border-hairline px-3 text-[0.82em] font-medium text-muted-foreground transition-colors hover:bg-surface-tinted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    className="inline-flex min-h-11 items-center rounded-lg border border-hairline px-3 text-[0.82em] font-medium text-muted-foreground transition-colors hover:bg-surface-tinted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none md:h-9 md:min-h-0"
                   >
                     {t('common.close')}
                   </button>
@@ -169,7 +168,7 @@ export function ApprovalPreviewDialog({ item, triggerRef, onClose, context }: Pr
                     onClose()
                     navigate(approvalRecordUrl(item.book_id, item.version_id ?? null, context))
                   }}
-                  className="inline-flex h-9 items-center rounded-lg bg-primary px-4 text-[0.82em] font-semibold text-primary-foreground transition-colors hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="inline-flex min-h-11 items-center rounded-lg bg-primary px-4 text-[0.82em] font-semibold text-primary-foreground transition-colors hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none md:h-9 md:min-h-0"
                 >
                   {t('books.approvals.openRecord')}
                 </button>

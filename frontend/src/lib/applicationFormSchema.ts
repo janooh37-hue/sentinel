@@ -11,7 +11,7 @@
  *   checkbox / hand_sign → z.boolean()
  *   number               → z.number() (finite; NaN rejected)
  *   manager_picker       → z.number() if required, else .nullable().optional()
- *   submitter_picker     → z.string().optional()
+ *   submitter/interviewer_picker → z.string().optional()
  *   signature / arabic_rich → z.string().optional()
  */
 
@@ -110,6 +110,7 @@ function buildShape(fields: TemplateField[], t: TFunction): Record<string, AnyZo
         break
 
       case 'submitter_picker':
+      case 'interviewer_picker':
         shape[id] = emptyToUndefined(z.string())
         break
 
@@ -136,18 +137,29 @@ function buildShape(fields: TemplateField[], t: TFunction): Record<string, AnyZo
         break
 
       case 'items_table': {
-        const row = z.object({
-          sno: z.string().optional(),
-          code: z.string().optional(),
-          description: z.string().optional(),
-          unit: z.string().optional(),
-          qty: z.string().optional(),
-          quantity: z.string().optional(),
-          remarks: z.string().optional(),
-        })
+        // Configurable grid (field.columns present): permissive string-keyed
+        // row, keys come from the field's own column config, not a fixed
+        // legacy shape. Legacy Material Request / Acknowledgment forms carry
+        // no `columns` and keep their original fixed row shape.
+        const row = field.columns
+          ? z.record(z.string(), z.string().optional())
+          : z.object({
+              sno: z.string().optional(),
+              code: z.string().optional(),
+              description: z.string().optional(),
+              unit: z.string().optional(),
+              qty: z.string().optional(),
+              quantity: z.string().optional(),
+              remarks: z.string().optional(),
+            })
+        const rows = field.max_rows
+          ? z.array(row).max(field.max_rows, {
+              message: t('application.itemsTable.maxRows', { max: field.max_rows }),
+            })
+          : z.array(row)
         shape[id] = required
-          ? z.array(row).min(1, { message: t('application.validation.required') })
-          : z.array(row).optional()
+          ? rows.min(1, { message: t('application.validation.required') })
+          : rows.optional()
         break
       }
 

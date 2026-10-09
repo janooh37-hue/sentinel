@@ -238,6 +238,7 @@ export type LeaveListItem = components['schemas']['LeaveListItem'] & {
   employee_name_ar?: string | null
 }
 export type LeaveListResponse = components['schemas']['LeaveListResponse']
+export type LeaveAwaitingReturnCount = components['schemas']['LeaveAwaitingReturnCount']
 export type LeaveCreate = components['schemas']['LeaveCreate']
 // notify_employee is server-defaulted (True) and openapi-typescript emits it as
 // required; make it optional for the client so status/date-only callers needn't
@@ -279,6 +280,13 @@ export type PersonIdScan = components['schemas']['PersonIdScan']
 
 export type PermitUpdate = components['schemas']['PermitUpdate']
 export type PermitSummary = components['schemas']['PermitSummary']
+
+export type ItemPermitRead = components['schemas']['ItemPermitRead']
+export type ItemPermitItem = components['schemas']['ItemPermitItem']
+export type ItemPermitCreate = components['schemas']['ItemPermitCreate']
+export type ItemPermitUpdate = components['schemas']['ItemPermitUpdate']
+export type ItemPermitListResponse = components['schemas']['ItemPermitListResponse']
+export type ItemPermitZone = ItemPermitRead['zones'][number]
 
 // ─── Fleet vehicles ──────────────────────────────────────────────────────────
 export type VehicleListItem = components['schemas']['VehicleListItem']
@@ -340,6 +348,7 @@ export type LegacyCandidateRead = components['schemas']['LegacyCandidateRead']
 export type SignatureEditorRead = components['schemas']['SignatureEditorRead']
 export type SignaturePositionRequest = components['schemas']['SignaturePositionRequest']
 export type SignatureIdentifyRequest = components['schemas']['SignatureIdentifyRequest']
+export type SignatureReassignRequest = components['schemas']['SignatureReassignRequest']
 export type SignatureHistoryItemRead = components['schemas']['SignatureHistoryItemRead']
 export type SignatureHistoryRead = components['schemas']['SignatureHistoryRead']
 
@@ -873,6 +882,7 @@ export type AnnouncementOut = components['schemas']['AnnouncementOut']
 export type GatewayStatusOut = components['schemas']['GatewayStatusOut']
 export type GatewayQrOut = components['schemas']['GatewayQrOut']
 export type GatewayUnlinkOut = components['schemas']['GatewayUnlinkOut']
+export type InmateViolationGroupOut = components['schemas']['InmateViolationGroupOut']
 
 // Phase 2a — OpenWA digest API (Task 10/11)
 export type DigestPreview = components['schemas']['DigestPreview']
@@ -1439,6 +1449,8 @@ export const api = {
     limit?: number
     offset?: number
   } = {}) => request<LeaveListResponse>('GET', `/leaves${qs({ ...params })}`),
+  getLeaveAwaitingReturnCount: () =>
+    request<LeaveAwaitingReturnCount>('GET', '/leaves/awaiting-return/count'),
   getLeave: (id: number) => request<LeaveRead>('GET', `/leaves/${id}`),
   updateLeave: (id: number, body: LeaveUpdate) =>
     request<LeaveRead>('PATCH', `/leaves/${id}`, body),
@@ -1496,6 +1508,18 @@ export const api = {
   /** Fetch any permit attachment IDM-safely (base64 → Blob) for inline preview. */
   fetchPermitDocumentBlob: (id: number): Promise<Blob> =>
     fetchPermitBlob(`/permits/${id}/document`),
+
+  // --- item permits (إدخال مواد) ---
+  listItemPermits: (params: { q?: string; limit?: number; offset?: number } = {}) =>
+    request<ItemPermitListResponse>('GET', `/item-permits${qs({ ...params })}`),
+  getItemPermit: (id: number) => request<ItemPermitRead>('GET', `/item-permits/${id}`),
+  createItemPermit: (body: ItemPermitCreate) =>
+    request<ItemPermitRead>('POST', '/item-permits', body),
+  updateItemPermit: (id: number, body: ItemPermitUpdate) =>
+    request<ItemPermitRead>('PATCH', `/item-permits/${id}`, body),
+  submitItemPermitApproval: (id: number) =>
+    request<ItemPermitRead>('POST', `/item-permits/${id}/submit-approval`),
+  deleteItemPermit: (id: number) => request<void>('DELETE', `/item-permits/${id}`),
 
   // Per-person UAE ID scan.
   uploadPersonDocument: (id: number, personId: number, file: File) => {
@@ -1941,6 +1965,12 @@ export const api = {
   unlinkGateway: () => request<GatewayUnlinkOut>('POST', '/announcements/unlink'),
   listGroups: () => request<GroupOut[]>('GET', '/announcements/groups'),
   sendAnnouncement: (form: FormData) => multipart<AnnouncementOut>('/announcements/send', form),
+  getInmateViolationGroup: () =>
+    request<InmateViolationGroupOut>('GET', '/announcements/inmate-violation-group'),
+  setInmateViolationGroup: (groupId: string | null) =>
+    request<InmateViolationGroupOut>('PUT', '/announcements/inmate-violation-group', {
+      group_id: groupId,
+    }),
 
   // --- leave digests (Phase 2a OpenWA — Task 10/11) ---
   previewLeaveDigest: (dutyUnit: string) =>
@@ -1970,6 +2000,8 @@ export const api = {
       options?: string[] | null
       default?: string | null
       group?: string | null
+      columns?: { key: string; label_en: string; label_ar: string }[] | null
+      max_rows?: number | null
     }>
   }> => {
     const raw = await request<{
@@ -1979,7 +2011,7 @@ export const api = {
       // signing_path too — the top-level one is the contract).
       signing_path: SigningPath
       attachment_slots: AttachmentSlotRead[]
-      fields: Array<{ key: string; label_en: string; label_ar: string; type: string; required: boolean; options?: string[] | null; default?: string | null; group?: string | null }>
+      fields: Array<{ key: string; label_en: string; label_ar: string; type: string; required: boolean; options?: string[] | null; default?: string | null; group?: string | null; columns?: { key: string; label_en: string; label_ar: string }[] | null; max_rows?: number | null }>
     }>('GET', `/templates/${encodeURIComponent(templateId)}/fields`)
     return {
       meta: raw.meta,
@@ -2006,6 +2038,7 @@ export const api = {
     include_deleted?: boolean
     limit?: number
     offset?: number
+    created_by_me?: boolean
   } = {}) => request<BookListResponse>('GET', `/books${qs({ ...params })}`),
   getBook: (id: number, versionId?: number) =>
     request<BookRead>('GET', `/books/${id}${qs({ version_id: versionId })}`),
@@ -2070,7 +2103,8 @@ export const api = {
   /** GET /books/facets — per-service counts + per-service approval-state
    *  counts, over every record (not a page window). Backs the Records rail
    *  and the status spine. */
-  getBookFacets: () => request<BookFacetsResponse>('GET', '/books/facets'),
+  getBookFacets: (params: { created_by_me?: boolean } = {}) =>
+    request<BookFacetsResponse>('GET', `/books/facets${qs({ ...params })}`),
 
   // --- books approval worklist (#31, revision-scoped) ---
   /** GET /books/awaiting — the caller's actionable signing and advisory
@@ -2655,8 +2689,17 @@ export const api = {
   getJob: (jobId: string) => request<JobStatusResponse>('GET', `/jobs/${jobId}`),
   getDocument: (docId: number, versionId?: number) =>
     request<DocumentRead>('GET', `/documents/${docId}${qs({ version_id: versionId })}`),
-  documentDownloadUrl: (docId: number, format: 'docx' | 'pdf', versionId?: number) =>
-    `${BASE}/documents/${docId}/download${qs({ format, version_id: versionId })}`,
+  documentDownloadUrl: (
+    docId: number,
+    format: 'docx' | 'pdf',
+    versionId?: number,
+    original?: boolean,
+  ) =>
+    `${BASE}/documents/${docId}/download${qs({
+      format,
+      version_id: versionId,
+      original: original ? true : undefined,
+    })}`,
   /** Park an attachment upload for a later generate call; the returned token
    * is echoed back inside `DocumentGenerateRequest.attachments`
    * (`source: 'staged'`). Forms signing paths & attachments, 2026-06-11. */
@@ -2730,6 +2773,12 @@ export const api = {
     request<SignatureEditorRead>(
       'PUT',
       `/documents/${documentId}/signatures/${encodeURIComponent(signatureId)}/position`,
+      body,
+    ),
+  reassignSignature: (documentId: number, signatureId: string, body: SignatureReassignRequest) =>
+    request<SignatureEditorRead>(
+      'PUT',
+      `/documents/${documentId}/signatures/${encodeURIComponent(signatureId)}/identity`,
       body,
     ),
   getSignatureHistory: (documentId: number) =>
@@ -2969,4 +3018,53 @@ export function getNotifyStatus(
 
 export function refreshNotifyDelivery(notifyId: number): Promise<NotifyMessageRead> {
   return request<NotifyMessageRead>('POST', `/notify/${notifyId}/refresh-delivery`)
+}
+
+// ── Debug console (system.admin) ─────────────────────────────────────────────
+export type DebugStatus = 'ok' | 'warn' | 'fail'
+export interface DebugCheck { id: string; label: string; status: DebugStatus; detail: string; hint: string }
+export interface DebugFile { path: string; exists: boolean; size_bytes: number; modified: string | null }
+export interface DebugOverview {
+  checks: DebugCheck[]
+  stats: Record<string, string | number | boolean | null>
+  files: Record<string, DebugFile>
+  crash_reports: { count: number; latest: string | null }
+  scheduler: { running: boolean; disabled_by_env: boolean; jobs: { id: string; name: string; next_run: string | null }[] }
+  machine: DebugMachine
+}
+export interface DebugMachine {
+  cpu_percent: number | null; cpu_count: number | null
+  ram_total_bytes: number | null; ram_available_bytes: number | null
+  boot_uptime_seconds: number | null
+  net_received_bytes: number | null; net_sent_bytes: number | null
+  services: Record<string, string>
+}
+export type DebugLogEntry = { ts: string | null; level: string; logger: string; msg: string; exc?: string } & Record<string, unknown>
+export type DebugLogSource = 'app' | 'stdout' | 'stderr'
+export interface DebugIssue {
+  id: string; source: string; level: string; logger: string; title: string
+  count: number; first_seen: string | null; last_seen: string | null; sample: DebugLogEntry
+}
+export interface DebugRequest { ts: string; method: string; path: string; status: number; ms: number }
+export interface DebugDiagnosis {
+  id: string; engine: string; issue_id: string | null; status: 'running' | 'done' | 'failed'; at: string
+  output?: string; error?: string; seconds?: number
+}
+export interface DebugAskBody { issue_id?: string | null; note?: string; engine?: 'claude' | 'codex' | null }
+
+export const debugApi = {
+  overview: () => request<DebugOverview>('GET', '/debug/overview'),
+  issues: () => request<DebugIssue[]>('GET', '/debug/issues'),
+  requests: () => request<DebugRequest[]>('GET', '/debug/requests'),
+  logs: (p: { source: DebugLogSource; level: string; q: string; limit: number }) =>
+    request<{ source: string; path: string; size_bytes: number; entries: DebugLogEntry[] }>(
+      'GET',
+      `/debug/logs?${new URLSearchParams({ ...p, limit: String(p.limit) }).toString()}`,
+    ),
+  ai: () => request<{ engines: ('claude' | 'codex')[]; runs_as: string | null }>('GET', '/debug/ai'),
+  prompt: (body: DebugAskBody) => request<{ prompt: string }>('POST', '/debug/prompt', body),
+  diagnose: (body: DebugAskBody) => request<DebugDiagnosis>('POST', '/debug/diagnose', body),
+  diagnosis: (id: string) => request<DebugDiagnosis>('GET', `/debug/diagnose/${id}`),
+  clientError: (body: { message: string; stack?: string; url?: string; kind?: string }) =>
+    request<void>('POST', '/debug/client-error', body),
 }

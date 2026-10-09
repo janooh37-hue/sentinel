@@ -5,7 +5,7 @@ Two non-obvious rules enforced here so the route layer stays thin:
 * **Canonical status.** v3 stored bilingual labels like ``"Active - نشط"`` in
   the spreadsheet, but Phase 02's importer collapsed them to the English half
   before insert. Phase 03 locks that in: the API only accepts and returns
-  ``Active``, ``Resigned``, ``Terminated``. Frontend renders the bilingual
+  ``Active``, ``Resigned``, ``Terminated``, ``Transferred``. Frontend renders the bilingual
   label from i18n.
 * **status / end_date invariant.** Mirrors v3.5.4's
   ``_emp_sync_end_date_widget`` (line 3282): once an employee is no longer
@@ -27,12 +27,17 @@ from app.schemas._base import ORMBase
 EMPLOYEE_STATUS_ACTIVE: Final = "Active"
 EMPLOYEE_STATUS_RESIGNED: Final = "Resigned"
 EMPLOYEE_STATUS_TERMINATED: Final = "Terminated"
+# Moved to another site. Like the other non-Active statuses it takes the
+# employee off rosters/timesheets/shifts, but it can be temporary: an optional
+# `transfer_return_date` brings them back to Active via the daily job.
+EMPLOYEE_STATUS_TRANSFERRED: Final = "Transferred"
 
-EmployeeStatus = Literal["Active", "Resigned", "Terminated"]
+EmployeeStatus = Literal["Active", "Resigned", "Terminated", "Transferred"]
 EMPLOYEE_STATUSES: Final[tuple[EmployeeStatus, ...]] = (
     EMPLOYEE_STATUS_ACTIVE,
     EMPLOYEE_STATUS_RESIGNED,
     EMPLOYEE_STATUS_TERMINATED,
+    EMPLOYEE_STATUS_TRANSFERRED,
 )
 
 MsgLanguage = Literal["ar", "en"]
@@ -55,6 +60,32 @@ def validate_status_end_date(status: str, end_date: date | None) -> None:
         raise ValueError(f"end_date is required when status is {status!r}")
 
 
+def validate_transfer_fields(
+    status: str,
+    end_date: date | None,
+    transfer_site: str | None,
+    transfer_return_date: date | None,
+) -> None:
+    """Raise ``ValueError`` when the transfer fields don't fit ``status``.
+
+    ``status`` is the *requested* target (before a future date is turned into a
+    scheduled change). Transferred needs a non-blank destination site; the
+    optional expected return date must fall after the effective date and is
+    meaningless for any other status.
+    """
+    if status == EMPLOYEE_STATUS_TRANSFERRED:
+        if transfer_site is None or not transfer_site.strip():
+            raise ValueError("transfer_site is required when status is 'Transferred'")
+        if (
+            transfer_return_date is not None
+            and end_date is not None
+            and transfer_return_date <= end_date
+        ):
+            raise ValueError("transfer_return_date must be after end_date")
+    elif transfer_return_date is not None:
+        raise ValueError("transfer_return_date is only valid when status is 'Transferred'")
+
+
 class EmployeeCreate(BaseModel):
     id: str = Field(min_length=1, max_length=16)
     name_en: str = Field(min_length=1, max_length=256)
@@ -64,6 +95,10 @@ class EmployeeCreate(BaseModel):
     doj_company: date | None = None
     status: EmployeeStatus = EMPLOYEE_STATUS_ACTIVE
     end_date: date | None = None
+    # Destination site — required when status is Transferred, else ignored.
+    transfer_site: str | None = Field(default=None, max_length=_FIELD_TEXT_MAX)
+    # Optional expected return; the daily job reactivates on this date.
+    transfer_return_date: date | None = None
     department: str | None = Field(default=None, max_length=_SHORT_TEXT_MAX)
     position: str | None = Field(default=None, max_length=_SHORT_TEXT_MAX)
     position_ar: str | None = Field(default=None, max_length=_SHORT_TEXT_MAX)
@@ -83,6 +118,9 @@ class EmployeeCreate(BaseModel):
     @model_validator(mode="after")
     def _check_status_end_date(self) -> EmployeeCreate:
         validate_status_end_date(self.status, self.end_date)
+        validate_transfer_fields(
+            self.status, self.end_date, self.transfer_site, self.transfer_return_date
+        )
         return self
 
 
@@ -94,6 +132,12 @@ class EmployeeUpdate(BaseModel):
     doj_company: date | None = None
     status: EmployeeStatus | None = None
     end_date: date | None = None
+    transfer_site: str | None = Field(default=None, max_length=_FIELD_TEXT_MAX)
+    transfer_return_date: date | None = None
+    # Write-only: the return date recorded in status history when this patch
+    # reactivates a departed/transferred employee (defaults to today). Never
+    # stored on the employee row; `end_date` still clears on reactivation.
+    effective_date: date | None = None
     department: str | None = Field(default=None, max_length=_SHORT_TEXT_MAX)
     position: str | None = Field(default=None, max_length=_SHORT_TEXT_MAX)
     position_ar: str | None = Field(default=None, max_length=_SHORT_TEXT_MAX)
@@ -112,7 +156,8 @@ class EmployeeUpdate(BaseModel):
 
     # Note: the status / end_date invariant on PATCH requires the current
     # row, so the service layer (`update_employee`) runs
-    # `validate_status_end_date` on the merged values instead.
+    # `validate_status_end_date` / `validate_transfer_fields` on the merged
+    # values instead.
 
 
 class EmployeeRead(ORMBase):
@@ -130,6 +175,10 @@ class EmployeeRead(ORMBase):
     # is only valid while they are still Active, so it cannot resurrect someone
     # the flip job already departed (see update_employee).
     pending_status: EmployeeStatus | None
+    # Destination site while Transferred (or while a transfer is pending).
+    transfer_site: str | None = None
+    # Expected return date of a temporary transfer; NULL = open-ended.
+    transfer_return_date: date | None = None
     department: str | None
     position: str | None
     position_ar: str | None
@@ -177,6 +226,8 @@ class EmployeeListItem(ORMBase):
     # target and the date, so this minimal projection carries both.
     end_date: date | None = None
     pending_status: EmployeeStatus | None = None
+    transfer_site: str | None = None
+    transfer_return_date: date | None = None
 
 
 class EmployeeListResponse(BaseModel):

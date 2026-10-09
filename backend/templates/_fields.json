@@ -5,11 +5,42 @@
     "name_ar": "تقرير",
     "form_number": "300-004",
     "fields": [
-      { "key": "signer_id", "type": "employee_picker", "label_en": "Signer", "label_ar": "الموقّع", "required": true },
-      { "key": "recipient_id", "type": "recipient_picker", "label_en": "To (Recipient)", "label_ar": "إلى (المستلم)", "required": false },
-      { "key": "subject", "type": "text", "label_en": "Subject", "label_ar": "الموضوع", "required": true },
-      { "key": "report_date", "type": "date", "label_en": "Date", "label_ar": "التاريخ", "required": true },
-      { "key": "sign", "type": "checkbox", "label_en": "Sign now", "label_ar": "توقيع الآن", "required": false, "default": "true" }
+      {
+        "key": "signer_id",
+        "type": "employee_picker",
+        "label_en": "Signer",
+        "label_ar": "الموقّع",
+        "required": true
+      },
+      {
+        "key": "recipient_id",
+        "type": "recipient_picker",
+        "label_en": "To (Recipient)",
+        "label_ar": "إلى (المستلم)",
+        "required": false
+      },
+      {
+        "key": "subject",
+        "type": "text",
+        "label_en": "Subject",
+        "label_ar": "الموضوع",
+        "required": true
+      },
+      {
+        "key": "report_date",
+        "type": "date",
+        "label_en": "Date",
+        "label_ar": "التاريخ",
+        "required": true
+      },
+      {
+        "key": "sign",
+        "type": "checkbox",
+        "label_en": "Sign now",
+        "label_ar": "توقيع الآن",
+        "required": false,
+        "default": "true"
+      }
     ]
   },
   "Leave Application Form": {
@@ -861,17 +892,84 @@
     "name_ar": "المخالفات المسلكية",
     "form_number": "300-005",
     "fields": [
-      {"key": "report_date", "type": "date", "label_en": "Date", "label_ar": "التاريخ", "required": true},
-      {"key": "report_time", "type": "time", "label_en": "Time", "label_ar": "الوقت", "required": true},
-      {"key": "inmates", "type": "inmates_table", "label_en": "Inmates", "label_ar": "النزلاء", "required": true},
-      {"key": "violation_details", "type": "arabic_rich", "label_en": "Violation details", "label_ar": "تفاصيل المخالفة", "required": true},
-      {"key": "action_notified", "type": "checkbox", "label_en": "Branch manager of Inmate Affairs was notified", "label_ar": "تم إبلاغ مدير فرع شؤون النزلاء", "required": false},
-      {"key": "action_written", "type": "checkbox", "label_en": "A conduct violation was written against the inmate", "label_ar": "تم كتابة مخالفة مسلكية في حق النزلاء", "required": false},
-      {"key": "action_transferred", "type": "checkbox", "label_en": "Inmate moved to section B and restrained", "label_ar": "تم نقل النزيل إلى قسم B وتقييده", "required": false},
-      {"key": "action_other", "type": "text", "label_en": "Other action", "label_ar": "إجراء آخر", "required": false},
-      {"key": "reporter_id", "type": "employee_picker", "label_en": "Reported by", "label_ar": "مقدم التقرير", "required": true},
-      {"key": "manager_id", "type": "manager_picker", "label_en": "Signing manager", "label_ar": "المُوقِّع", "required": false},
-      {"key": "hand_sign_manager", "type": "hand_sign_checkbox", "label_en": "Embed manager's saved signature", "label_ar": "تضمين توقيع المدير المحفوظ", "required": false, "default": "true"}
+      {
+        "key": "report_date",
+        "type": "date",
+        "label_en": "Date",
+        "label_ar": "التاريخ",
+        "required": true
+      },
+      {
+        "key": "report_time",
+        "type": "time",
+        "label_en": "Time",
+        "label_ar": "الوقت",
+        "required": true
+      },
+      {
+        "key": "inmates",
+        "type": "inmates_table",
+        "label_en": "Inmates",
+        "label_ar": "النزلاء",
+        "required": true
+      },
+      {
+        "key": "violation_details",
+        "type": "arabic_rich",
+        "label_en": "Violation details",
+        "label_ar": "تفاصيل المخالفة",
+        "required": true
+      },
+      {
+        "key": "action_notified",
+        "type": "checkbox",
+        "label_en": "Branch manager of Inmate Affairs was notified",
+        "label_ar": "تم إبلاغ مدير فرع شؤون النزلاء",
+        "required": false
+      },
+      {
+        "key": "action_written",
+        "type": "checkbox",
+        "label_en": "A conduct violation was written against the inmate",
+        "label_ar": "تم كتابة مخالفة مسلكية في حق النزلاء",
+        "required": false
+      },
+      {
+        "key": "action_transferred",
+        "type": "checkbox",
+        "label_en": "Inmate moved to section B and restrained",
+        "label_ar": "تم نقل النزيل إلى قسم B وتقييده",
+        "required": false
+      },
+      {
+        "key": "action_other",
+        "type": "text",
+        "label_en": "Other action",
+        "label_ar": "إجراء آخر",
+        "required": false
+      },
+      {
+        "key": "reporter_id",
+        "type": "employee_picker",
+        "label_en": "Reported by",
+        "label_ar": "مقدم التقرير",
+        "required": true
+      },
+      {
+        "key": "manager_id",
+        "type": "manager_picker",
+        "label_en": "Signing manager",
+        "label_ar": "المُوقِّع",
+        "required": false
+      },
+      {
+        "key": "hand_sign_manager",
+        "type": "hand_sign_checkbox",
+        "label_en": "Embed manager's saved signature",
+        "label_ar": "تضمين توقيع المدير المحفوظ",
+        "required": false,
+        "default": "true"
+      }
     ]
   },
   "Vehicle Fines": {
@@ -887,5 +985,2160 @@
     "name_ar": "بلاغ حادث مركبة",
     "form_number": "300-001",
     "fields": []
+  },
+  "Manpower Requisition Form": {
+    "category": "personnel",
+    "name_en": "Manpower Requisition",
+    "name_ar": "طلب احتياج موظفين",
+    "form_number": "300-001",
+    "fields": [
+      {
+        "key": "job_title",
+        "type": "text",
+        "label_en": "Job Title / Designation",
+        "label_ar": "المسمى الوظيفي",
+        "required": true
+      },
+      {
+        "key": "req_department",
+        "type": "text",
+        "label_en": "Department",
+        "label_ar": "القسم",
+        "required": true
+      },
+      {
+        "key": "req_location",
+        "type": "text",
+        "label_en": "Location",
+        "label_ar": "الموقع",
+        "required": true
+      },
+      {
+        "key": "vacancy_nature",
+        "type": "select",
+        "label_en": "Nature of Vacancy",
+        "label_ar": "طبيعة الشاغر",
+        "required": true,
+        "options": [
+          "Permanent",
+          "Contract"
+        ]
+      },
+      {
+        "key": "positions_required",
+        "type": "text",
+        "label_en": "Number of Employees Required",
+        "label_ar": "عدد الموظفين المطلوب",
+        "required": true
+      },
+      {
+        "key": "hiring_reason",
+        "type": "select",
+        "label_en": "New Hire or Replacement",
+        "label_ar": "توظيف جديد أم إحلال",
+        "required": true,
+        "options": [
+          "New Hire",
+          "Replacement"
+        ]
+      },
+      {
+        "key": "vacating_employee_name",
+        "type": "text",
+        "label_en": "Name of Vacating Employee",
+        "label_ar": "اسم الموظف المغادر",
+        "required": false
+      },
+      {
+        "key": "vacating_employee_id",
+        "type": "text",
+        "label_en": "ID of Vacating Employee",
+        "label_ar": "رقم الموظف المغادر",
+        "required": false
+      },
+      {
+        "key": "last_working_day",
+        "type": "date",
+        "label_en": "Last Working Day",
+        "label_ar": "آخر يوم عمل",
+        "required": false
+      },
+      {
+        "key": "replacement_reason",
+        "type": "textarea",
+        "label_en": "Reason for Replacement",
+        "label_ar": "سبب الإحلال",
+        "required": false
+      },
+      {
+        "key": "essential_functions",
+        "type": "textarea",
+        "label_en": "Essential Job Functions",
+        "label_ar": "المهام الوظيفية الأساسية",
+        "required": true
+      },
+      {
+        "key": "education_qualification",
+        "type": "textarea",
+        "label_en": "Educational Qualification",
+        "label_ar": "المؤهل العلمي",
+        "required": false
+      },
+      {
+        "key": "skills_required",
+        "type": "textarea",
+        "label_en": "Skills Required",
+        "label_ar": "المهارات المطلوبة",
+        "required": false
+      },
+      {
+        "key": "experience_years",
+        "type": "text",
+        "label_en": "Experience (in Years)",
+        "label_ar": "الخبرة (بالسنوات)",
+        "required": false
+      },
+      {
+        "key": "gender_preference",
+        "type": "select",
+        "label_en": "Gender Preference",
+        "label_ar": "الجنس المفضل",
+        "required": false,
+        "options": [
+          "Male",
+          "Female"
+        ]
+      },
+      {
+        "key": "expected_joining_date",
+        "type": "date",
+        "label_en": "Expected Joining Date",
+        "label_ar": "تاريخ الالتحاق المتوقع",
+        "required": false
+      },
+      {
+        "key": "salary",
+        "type": "text",
+        "label_en": "Salary",
+        "label_ar": "الراتب",
+        "required": false
+      },
+      {
+        "key": "accommodation",
+        "type": "checkbox",
+        "label_en": "Accommodation Provided",
+        "label_ar": "توفير السكن",
+        "required": false
+      },
+      {
+        "key": "food",
+        "type": "checkbox",
+        "label_en": "Food Provided",
+        "label_ar": "توفير الطعام",
+        "required": false
+      },
+      {
+        "key": "additional_info",
+        "type": "textarea",
+        "label_en": "Additional Job Information (Mental / Physical Demands)",
+        "label_ar": "معلومات وظيفية إضافية",
+        "required": false
+      },
+      {
+        "key": "manager_id",
+        "type": "manager_picker",
+        "label_en": "Line Manager",
+        "label_ar": "المدير المباشر",
+        "required": false
+      },
+      {
+        "key": "hand_sign_manager",
+        "type": "hand_sign_checkbox",
+        "label_en": "Embed manager's saved signature",
+        "label_ar": "تضمين توقيع المدير المحفوظ",
+        "required": false
+      }
+    ]
+  },
+  "Employment Application Form": {
+    "category": "personnel",
+    "name_en": "Employment Application",
+    "name_ar": "طلب توظيف",
+    "form_number": "300-002",
+    "fields": [
+      {
+        "key": "applicant_name",
+        "type": "text",
+        "label_en": "Name (As in Passport)",
+        "label_ar": "الاسم (كما في جواز السفر)",
+        "required": true
+      },
+      {
+        "key": "position_applied",
+        "type": "text",
+        "label_en": "Position Applied For",
+        "label_ar": "الوظيفة المتقدم لها",
+        "required": true
+      },
+      {
+        "key": "available_date",
+        "type": "date",
+        "label_en": "Available Date to Take Employment",
+        "label_ar": "تاريخ الجاهزية للعمل",
+        "required": false
+      },
+      {
+        "key": "expected_salary",
+        "type": "text",
+        "label_en": "Expected Gross Salary",
+        "label_ar": "الراتب الإجمالي المتوقع",
+        "required": false
+      },
+      {
+        "key": "expected_benefits",
+        "type": "textarea",
+        "label_en": "Expected Benefits",
+        "label_ar": "المزايا المتوقعة",
+        "required": false
+      },
+      {
+        "key": "father_husband_name",
+        "type": "text",
+        "label_en": "Father's / Husband's Name",
+        "label_ar": "اسم الأب / الزوج",
+        "required": false
+      },
+      {
+        "key": "nationality",
+        "type": "text",
+        "label_en": "Nationality",
+        "label_ar": "الجنسية",
+        "required": true
+      },
+      {
+        "key": "gender",
+        "type": "select",
+        "label_en": "Gender",
+        "label_ar": "الجنس",
+        "required": true,
+        "options": [
+          "Male",
+          "Female"
+        ]
+      },
+      {
+        "key": "dob",
+        "type": "date",
+        "label_en": "Date of Birth",
+        "label_ar": "تاريخ الميلاد",
+        "required": true
+      },
+      {
+        "key": "place_of_birth",
+        "type": "text",
+        "label_en": "Place of Birth",
+        "label_ar": "مكان الميلاد",
+        "required": false
+      },
+      {
+        "key": "religion",
+        "type": "text",
+        "label_en": "Religion",
+        "label_ar": "الديانة",
+        "required": false
+      },
+      {
+        "key": "blood_group",
+        "type": "text",
+        "label_en": "Blood Group",
+        "label_ar": "فصيلة الدم",
+        "required": false
+      },
+      {
+        "key": "marital_status",
+        "type": "select",
+        "label_en": "Marital Status",
+        "label_ar": "الحالة الاجتماعية",
+        "required": false,
+        "options": [
+          "Married",
+          "Single",
+          "Divorced"
+        ]
+      },
+      {
+        "key": "family_in_uae",
+        "type": "checkbox",
+        "label_en": "Family Residing in UAE",
+        "label_ar": "الأسرة مقيمة في الإمارات",
+        "required": false
+      },
+      {
+        "key": "dependents_count",
+        "type": "text",
+        "label_en": "No. of Dependents",
+        "label_ar": "عدد المعالين",
+        "required": false
+      },
+      {
+        "key": "uae_license",
+        "type": "checkbox",
+        "label_en": "UAE Driving License",
+        "label_ar": "رخصة قيادة إماراتية",
+        "required": false
+      },
+      {
+        "key": "license_valid_until",
+        "type": "date",
+        "label_en": "License Valid Up To",
+        "label_ar": "الرخصة سارية حتى",
+        "required": false
+      },
+      {
+        "key": "address_uae",
+        "type": "textarea",
+        "label_en": "Address in UAE",
+        "label_ar": "العنوان في الإمارات",
+        "required": false
+      },
+      {
+        "key": "email",
+        "type": "text",
+        "label_en": "Email Address",
+        "label_ar": "البريد الإلكتروني",
+        "required": false
+      },
+      {
+        "key": "phone_uae",
+        "type": "text",
+        "label_en": "Phone Number (UAE)",
+        "label_ar": "رقم الهاتف (الإمارات)",
+        "required": false
+      },
+      {
+        "key": "mobile_uae",
+        "type": "text",
+        "label_en": "Mobile Number (UAE)",
+        "label_ar": "رقم الجوال (الإمارات)",
+        "required": false
+      },
+      {
+        "key": "address_home",
+        "type": "textarea",
+        "label_en": "Address in Home Country",
+        "label_ar": "العنوان في بلد الإقامة الأصلي",
+        "required": false
+      },
+      {
+        "key": "phone_home",
+        "type": "text",
+        "label_en": "Phone Number (Home Country)",
+        "label_ar": "رقم الهاتف (بلد الإقامة)",
+        "required": false
+      },
+      {
+        "key": "mobile_home",
+        "type": "text",
+        "label_en": "Mobile Number (Home Country)",
+        "label_ar": "رقم الجوال (بلد الإقامة)",
+        "required": false
+      },
+      {
+        "key": "passport_no",
+        "type": "text",
+        "label_en": "Passport Number",
+        "label_ar": "رقم جواز السفر",
+        "required": true
+      },
+      {
+        "key": "passport_issue_date",
+        "type": "date",
+        "label_en": "Passport Issue Date",
+        "label_ar": "تاريخ إصدار الجواز",
+        "required": false
+      },
+      {
+        "key": "passport_issue_place",
+        "type": "text",
+        "label_en": "Passport Place of Issue",
+        "label_ar": "مكان إصدار الجواز",
+        "required": false
+      },
+      {
+        "key": "passport_expiry_date",
+        "type": "date",
+        "label_en": "Passport Expiry Date",
+        "label_ar": "تاريخ انتهاء الجواز",
+        "required": false
+      },
+      {
+        "key": "visa_status",
+        "type": "select",
+        "label_en": "Visa Status",
+        "label_ar": "حالة التأشيرة",
+        "required": false,
+        "options": [
+          "Employment",
+          "Visit",
+          "Family",
+          "Transit"
+        ]
+      },
+      {
+        "key": "visa_expiry",
+        "type": "date",
+        "label_en": "Visa Expiry Date",
+        "label_ar": "تاريخ انتهاء التأشيرة",
+        "required": false
+      },
+      {
+        "key": "visa_sponsor",
+        "type": "text",
+        "label_en": "Name of Visa Sponsor",
+        "label_ar": "اسم كفيل التأشيرة",
+        "required": false
+      },
+      {
+        "key": "visa_designation",
+        "type": "text",
+        "label_en": "Designation as per Employment Visa",
+        "label_ar": "المسمى الوظيفي في التأشيرة",
+        "required": false
+      },
+      {
+        "key": "emirate",
+        "type": "text",
+        "label_en": "Emirate",
+        "label_ar": "الإمارة",
+        "required": false
+      },
+      {
+        "key": "noc_available",
+        "type": "checkbox",
+        "label_en": "Able to Get NOC from Employer/Sponsor",
+        "label_ar": "إمكانية الحصول على عدم ممانعة",
+        "required": false
+      },
+      {
+        "key": "education_experience",
+        "type": "textarea",
+        "label_en": "Education, Training & Experience Summary (dates, institutions, roles)",
+        "label_ar": "ملخص التعليم والتدريب والخبرة",
+        "required": false
+      },
+      {
+        "key": "applicant_sig_path",
+        "type": "signature",
+        "label_en": "Applicant Signature",
+        "label_ar": "توقيع المتقدم",
+        "required": false
+      }
+    ]
+  },
+  "Interview Assessment Form": {
+    "category": "personnel",
+    "name_en": "Interview Assessment",
+    "name_ar": "تقييم مقابلة",
+    "form_number": "300-005",
+    "fields": [
+      {
+        "key": "applicant_name",
+        "type": "text",
+        "label_en": "Applicant's Name",
+        "label_ar": "اسم المتقدم",
+        "required": true
+      },
+      {
+        "key": "interview_date",
+        "type": "date",
+        "label_en": "Date of Interview",
+        "label_ar": "تاريخ المقابلة",
+        "required": true
+      },
+      {
+        "key": "position_applied",
+        "type": "text",
+        "label_en": "Position Applied For",
+        "label_ar": "الوظيفة المتقدم لها",
+        "required": true
+      },
+      {
+        "key": "interviewer_name",
+        "type": "text",
+        "label_en": "Interviewer Name",
+        "label_ar": "اسم القائم بالمقابلة",
+        "required": true
+      },
+      {
+        "key": "section_a_score",
+        "type": "text",
+        "label_en": "Section A Score (Qualification)",
+        "label_ar": "درجة القسم أ (المؤهل)",
+        "required": false
+      },
+      {
+        "key": "section_b_score",
+        "type": "text",
+        "label_en": "Section B Score (Experience)",
+        "label_ar": "درجة القسم ب (الخبرة)",
+        "required": false
+      },
+      {
+        "key": "section_c_score",
+        "type": "text",
+        "label_en": "Section C Score",
+        "label_ar": "درجة القسم ج",
+        "required": false
+      },
+      {
+        "key": "section_d_score",
+        "type": "text",
+        "label_en": "Section D Score",
+        "label_ar": "درجة القسم د",
+        "required": false
+      },
+      {
+        "key": "total_score",
+        "type": "text",
+        "label_en": "Total Score",
+        "label_ar": "الدرجة الإجمالية",
+        "required": false
+      },
+      {
+        "key": "assessment_notes",
+        "type": "textarea",
+        "label_en": "Assessment Notes (qualifications, experience, presentation, skills)",
+        "label_ar": "ملاحظات التقييم",
+        "required": false
+      },
+      {
+        "key": "interviewer_sig_path",
+        "type": "signature",
+        "label_en": "Interviewer Signature",
+        "label_ar": "توقيع القائم بالمقابلة",
+        "required": false
+      }
+    ]
+  },
+  "Employment Offer Letter": {
+    "category": "personnel",
+    "name_en": "Employment Offer",
+    "name_ar": "عرض عمل",
+    "form_number": "300-006",
+    "fields": [
+      {
+        "key": "candidate_name",
+        "type": "text",
+        "label_en": "Employee Name",
+        "label_ar": "اسم الموظف",
+        "required": true
+      },
+      {
+        "key": "passport_no",
+        "type": "text",
+        "label_en": "Passport No",
+        "label_ar": "رقم جواز السفر",
+        "required": false
+      },
+      {
+        "key": "offer_designation",
+        "type": "text",
+        "label_en": "Designation",
+        "label_ar": "المسمى الوظيفي",
+        "required": true
+      },
+      {
+        "key": "offer_department",
+        "type": "text",
+        "label_en": "Department / Project",
+        "label_ar": "القسم / المشروع",
+        "required": true
+      },
+      {
+        "key": "basic_salary",
+        "type": "text",
+        "label_en": "Basic Salary",
+        "label_ar": "الراتب الأساسي",
+        "required": true
+      },
+      {
+        "key": "hra",
+        "type": "text",
+        "label_en": "HRA",
+        "label_ar": "بدل السكن",
+        "required": false
+      },
+      {
+        "key": "other_allowances",
+        "type": "text",
+        "label_en": "Other Allowances",
+        "label_ar": "بدلات أخرى",
+        "required": false
+      },
+      {
+        "key": "benefits",
+        "type": "textarea",
+        "label_en": "Benefits",
+        "label_ar": "المزايا",
+        "required": false
+      },
+      {
+        "key": "total_salary",
+        "type": "text",
+        "label_en": "Total",
+        "label_ar": "الإجمالي",
+        "required": false
+      },
+      {
+        "key": "annual_leave",
+        "type": "text",
+        "label_en": "Annual Leave",
+        "label_ar": "الإجازة السنوية",
+        "required": false
+      },
+      {
+        "key": "working_hours",
+        "type": "text",
+        "label_en": "Working Hours",
+        "label_ar": "ساعات العمل",
+        "required": false
+      },
+      {
+        "key": "work_location",
+        "type": "text",
+        "label_en": "Work Location",
+        "label_ar": "موقع العمل",
+        "required": false
+      },
+      {
+        "key": "airfare",
+        "type": "text",
+        "label_en": "Air-fare",
+        "label_ar": "تذكرة السفر",
+        "required": false
+      },
+      {
+        "key": "probationary_period",
+        "type": "text",
+        "label_en": "Probationary Period",
+        "label_ar": "فترة التجربة",
+        "required": false
+      },
+      {
+        "key": "health_insurance",
+        "type": "text",
+        "label_en": "Health Insurance",
+        "label_ar": "التأمين الصحي",
+        "required": false
+      },
+      {
+        "key": "eos_benefits",
+        "type": "text",
+        "label_en": "End of Service Benefits",
+        "label_ar": "مكافأة نهاية الخدمة",
+        "required": false
+      },
+      {
+        "key": "other_terms",
+        "type": "textarea",
+        "label_en": "Other Terms",
+        "label_ar": "شروط أخرى",
+        "required": false
+      },
+      {
+        "key": "candidate_sig_path",
+        "type": "signature",
+        "label_en": "Candidate Acceptance Signature",
+        "label_ar": "توقيع قبول المرشح",
+        "required": false
+      }
+    ]
+  },
+  "Employee Performance Appraisal Form": {
+    "category": "personnel",
+    "name_en": "Performance Appraisal",
+    "name_ar": "تقييم الأداء",
+    "form_number": "300-007",
+    "fields": [
+      {
+        "key": "reviewer_name",
+        "type": "text",
+        "label_en": "Reviewed By",
+        "label_ar": "تمت المراجعة بواسطة",
+        "required": false
+      },
+      {
+        "key": "period_from",
+        "type": "date",
+        "label_en": "Period Covered — From",
+        "label_ar": "الفترة المشمولة - من",
+        "required": false
+      },
+      {
+        "key": "period_to",
+        "type": "date",
+        "label_en": "Period Covered — To",
+        "label_ar": "الفترة المشمولة - إلى",
+        "required": false
+      },
+      {
+        "key": "kpa_summary",
+        "type": "textarea",
+        "label_en": "Key Performance Areas, Ratings & Justification",
+        "label_ar": "مجالات الأداء الرئيسية والتقييم والمبررات",
+        "required": true
+      },
+      {
+        "key": "manager_comment",
+        "type": "textarea",
+        "label_en": "Line Manager Comment on Overall Performance",
+        "label_ar": "ملاحظات المدير المباشر على الأداء العام",
+        "required": false
+      },
+      {
+        "key": "development_needs",
+        "type": "textarea",
+        "label_en": "Development & Training Needs",
+        "label_ar": "احتياجات التطوير والتدريب",
+        "required": false
+      },
+      {
+        "key": "employee_comment",
+        "type": "textarea",
+        "label_en": "Employee Comments",
+        "label_ar": "ملاحظات الموظف",
+        "required": false
+      },
+      {
+        "key": "manager_id",
+        "type": "manager_picker",
+        "label_en": "Line Manager",
+        "label_ar": "المدير المباشر",
+        "required": false
+      },
+      {
+        "key": "hand_sign_manager",
+        "type": "hand_sign_checkbox",
+        "label_en": "Embed manager's saved signature",
+        "label_ar": "تضمين توقيع المدير المحفوظ",
+        "required": false
+      },
+      {
+        "key": "submitter_id",
+        "type": "submitter_picker",
+        "label_en": "Submitter",
+        "label_ar": "مقدم الطلب",
+        "required": false
+      },
+      {
+        "key": "hand_sign_employee",
+        "type": "hand_sign_checkbox",
+        "label_en": "Embed my saved signature",
+        "label_ar": "تضمين توقيعي المحفوظ",
+        "required": false
+      },
+      {
+        "key": "employee_sig_path",
+        "type": "signature",
+        "label_en": "Employee Signature",
+        "label_ar": "توقيع الموظف",
+        "required": false
+      }
+    ]
+  },
+  "Employee Job Description": {
+    "category": "personnel",
+    "name_en": "Job Description",
+    "name_ar": "الوصف الوظيفي",
+    "form_number": "300-010",
+    "fields": [
+      {
+        "key": "reporting_line",
+        "type": "text",
+        "label_en": "Reporting Line",
+        "label_ar": "التسلسل الإداري",
+        "required": true
+      },
+      {
+        "key": "job_summary",
+        "type": "textarea",
+        "label_en": "Job Summary",
+        "label_ar": "ملخص الوظيفة",
+        "required": true
+      },
+      {
+        "key": "operational_kpas",
+        "type": "textarea",
+        "label_en": "Operational Key Performance Areas (KPAs)",
+        "label_ar": "مجالات الأداء الرئيسية التشغيلية",
+        "required": true
+      },
+      {
+        "key": "kpis",
+        "type": "textarea",
+        "label_en": "Key Performance Indicators (KPIs)",
+        "label_ar": "مؤشرات الأداء الرئيسية",
+        "required": false
+      },
+      {
+        "key": "qualifications_experience",
+        "type": "textarea",
+        "label_en": "Qualifications & Experience",
+        "label_ar": "المؤهلات والخبرة",
+        "required": false
+      },
+      {
+        "key": "specific_competencies",
+        "type": "textarea",
+        "label_en": "Specific Competencies",
+        "label_ar": "الكفاءات المحددة",
+        "required": false
+      }
+    ]
+  },
+  "Leave Encashment Form": {
+    "category": "personnel",
+    "name_en": "Leave Encashment",
+    "name_ar": "صرف بدل رصيد الإجازة",
+    "form_number": "300-017",
+    "fields": [
+      {
+        "key": "encashment_days",
+        "type": "text",
+        "label_en": "No. of Days Availed for Leave Encashment",
+        "label_ar": "عدد أيام صرف بدل الإجازة",
+        "required": true
+      },
+      {
+        "key": "manager_id",
+        "type": "manager_picker",
+        "label_en": "Line Manager",
+        "label_ar": "المدير المباشر",
+        "required": false
+      },
+      {
+        "key": "hand_sign_manager",
+        "type": "hand_sign_checkbox",
+        "label_en": "Embed manager's saved signature",
+        "label_ar": "تضمين توقيع المدير المحفوظ",
+        "required": false
+      },
+      {
+        "key": "submitter_id",
+        "type": "submitter_picker",
+        "label_en": "Submitter",
+        "label_ar": "مقدم الطلب",
+        "required": false
+      },
+      {
+        "key": "hand_sign_employee",
+        "type": "hand_sign_checkbox",
+        "label_en": "Embed my saved signature",
+        "label_ar": "تضمين توقيعي المحفوظ",
+        "required": false
+      },
+      {
+        "key": "employee_sig_path",
+        "type": "signature",
+        "label_en": "Employee Signature",
+        "label_ar": "توقيع الموظف",
+        "required": false
+      }
+    ]
+  },
+  "Loan Request Form": {
+    "category": "personnel",
+    "name_en": "Loan Request",
+    "name_ar": "طلب قرض",
+    "form_number": "300-018",
+    "fields": [
+      {
+        "key": "loan_amount",
+        "type": "text",
+        "label_en": "Requested Loan Amount",
+        "label_ar": "مبلغ القرض المطلوب",
+        "required": true
+      },
+      {
+        "key": "loan_duration",
+        "type": "text",
+        "label_en": "Loan Payment Duration",
+        "label_ar": "مدة سداد القرض",
+        "required": true
+      },
+      {
+        "key": "loan_purpose",
+        "type": "textarea",
+        "label_en": "Purpose of Loan",
+        "label_ar": "الغرض من القرض",
+        "required": true
+      },
+      {
+        "key": "manager_id",
+        "type": "manager_picker",
+        "label_en": "Line Manager",
+        "label_ar": "المدير المباشر",
+        "required": false
+      },
+      {
+        "key": "hand_sign_manager",
+        "type": "hand_sign_checkbox",
+        "label_en": "Embed manager's saved signature",
+        "label_ar": "تضمين توقيع المدير المحفوظ",
+        "required": false
+      },
+      {
+        "key": "submitter_id",
+        "type": "submitter_picker",
+        "label_en": "Submitter",
+        "label_ar": "مقدم الطلب",
+        "required": false
+      },
+      {
+        "key": "hand_sign_employee",
+        "type": "hand_sign_checkbox",
+        "label_en": "Embed my saved signature",
+        "label_ar": "تضمين توقيعي المحفوظ",
+        "required": false
+      },
+      {
+        "key": "employee_sig_path",
+        "type": "signature",
+        "label_en": "Employee Signature",
+        "label_ar": "توقيع الموظف",
+        "required": false
+      }
+    ]
+  },
+  "Employee Information Form": {
+    "category": "personnel",
+    "name_en": "Employee Information",
+    "name_ar": "بيانات الموظف",
+    "form_number": "300-019",
+    "fields": [
+      {
+        "key": "given_name",
+        "type": "text",
+        "label_en": "Given Name",
+        "label_ar": "الاسم الأول",
+        "required": true
+      },
+      {
+        "key": "middle_name",
+        "type": "text",
+        "label_en": "Middle Name",
+        "label_ar": "الاسم الأوسط",
+        "required": false
+      },
+      {
+        "key": "surname",
+        "type": "text",
+        "label_en": "Surname",
+        "label_ar": "اسم العائلة",
+        "required": true
+      },
+      {
+        "key": "dob",
+        "type": "date",
+        "label_en": "Date of Birth",
+        "label_ar": "تاريخ الميلاد",
+        "required": true
+      },
+      {
+        "key": "place_of_birth",
+        "type": "text",
+        "label_en": "Place of Birth",
+        "label_ar": "مكان الميلاد",
+        "required": false
+      },
+      {
+        "key": "religion",
+        "type": "text",
+        "label_en": "Religion",
+        "label_ar": "الديانة",
+        "required": false
+      },
+      {
+        "key": "current_nationality",
+        "type": "text",
+        "label_en": "Current Nationality",
+        "label_ar": "الجنسية الحالية",
+        "required": false
+      },
+      {
+        "key": "previous_nationality",
+        "type": "text",
+        "label_en": "Previous Nationality",
+        "label_ar": "الجنسية السابقة",
+        "required": false
+      },
+      {
+        "key": "passport_no",
+        "type": "text",
+        "label_en": "Passport No",
+        "label_ar": "رقم جواز السفر",
+        "required": false
+      },
+      {
+        "key": "passport_place_of_issue",
+        "type": "text",
+        "label_en": "Passport Place of Issue",
+        "label_ar": "مكان إصدار الجواز",
+        "required": false
+      },
+      {
+        "key": "passport_issue_date",
+        "type": "date",
+        "label_en": "Passport Issue Date",
+        "label_ar": "تاريخ إصدار الجواز",
+        "required": false
+      },
+      {
+        "key": "passport_expiry_date",
+        "type": "date",
+        "label_en": "Passport Expiry Date",
+        "label_ar": "تاريخ انتهاء الجواز",
+        "required": false
+      },
+      {
+        "key": "uae_entry_date",
+        "type": "date",
+        "label_en": "Date of Entry to UAE",
+        "label_ar": "تاريخ الدخول إلى الإمارات",
+        "required": false
+      },
+      {
+        "key": "current_workplace",
+        "type": "text",
+        "label_en": "Current Workplace",
+        "label_ar": "جهة العمل الحالية",
+        "required": false
+      },
+      {
+        "key": "current_sponsor",
+        "type": "text",
+        "label_en": "Current Sponsor",
+        "label_ar": "الكفيل الحالي",
+        "required": false
+      },
+      {
+        "key": "current_position",
+        "type": "text",
+        "label_en": "Current Position",
+        "label_ar": "المنصب الحالي",
+        "required": false
+      },
+      {
+        "key": "resident_visa_no",
+        "type": "text",
+        "label_en": "Resident Visa No",
+        "label_ar": "رقم تأشيرة الإقامة",
+        "required": false
+      },
+      {
+        "key": "visa_issue_date",
+        "type": "date",
+        "label_en": "Visa Issue Date",
+        "label_ar": "تاريخ إصدار التأشيرة",
+        "required": false
+      },
+      {
+        "key": "visa_expiry_date",
+        "type": "date",
+        "label_en": "Visa Expiry Date",
+        "label_ar": "تاريخ انتهاء التأشيرة",
+        "required": false
+      },
+      {
+        "key": "visa_place_of_issue",
+        "type": "text",
+        "label_en": "Visa Place of Issue",
+        "label_ar": "مكان إصدار التأشيرة",
+        "required": false
+      },
+      {
+        "key": "education_level",
+        "type": "text",
+        "label_en": "Education Level",
+        "label_ar": "المستوى التعليمي",
+        "required": false
+      },
+      {
+        "key": "speciality",
+        "type": "text",
+        "label_en": "Speciality",
+        "label_ar": "التخصص",
+        "required": false
+      },
+      {
+        "key": "graduation_date",
+        "type": "date",
+        "label_en": "Graduated Date",
+        "label_ar": "تاريخ التخرج",
+        "required": false
+      },
+      {
+        "key": "school_university",
+        "type": "text",
+        "label_en": "School / University",
+        "label_ar": "المدرسة / الجامعة",
+        "required": false
+      },
+      {
+        "key": "spoken_languages",
+        "type": "text",
+        "label_en": "Spoken Languages",
+        "label_ar": "اللغات المحكية",
+        "required": false
+      },
+      {
+        "key": "marital_status",
+        "type": "select",
+        "label_en": "Marital Status",
+        "label_ar": "الحالة الاجتماعية",
+        "required": false,
+        "options": [
+          "Married",
+          "Single",
+          "Divorced",
+          "Widowed"
+        ]
+      },
+      {
+        "key": "spouse_name",
+        "type": "text",
+        "label_en": "Husband's / Spouse's Name",
+        "label_ar": "اسم الزوج / الزوجة",
+        "required": false
+      },
+      {
+        "key": "spouse_nationality",
+        "type": "text",
+        "label_en": "Husband's / Spouse's Nationality",
+        "label_ar": "جنسية الزوج / الزوجة",
+        "required": false
+      },
+      {
+        "key": "spouse_dob",
+        "type": "date",
+        "label_en": "Husband's / Spouse's Date of Birth",
+        "label_ar": "تاريخ ميلاد الزوج / الزوجة",
+        "required": false
+      },
+      {
+        "key": "father_name",
+        "type": "text",
+        "label_en": "Father's Name",
+        "label_ar": "اسم الأب",
+        "required": false
+      },
+      {
+        "key": "father_nationality",
+        "type": "text",
+        "label_en": "Father's Nationality",
+        "label_ar": "جنسية الأب",
+        "required": false
+      },
+      {
+        "key": "father_dob",
+        "type": "date",
+        "label_en": "Father's Date of Birth",
+        "label_ar": "تاريخ ميلاد الأب",
+        "required": false
+      },
+      {
+        "key": "mother_name",
+        "type": "text",
+        "label_en": "Mother's Name",
+        "label_ar": "اسم الأم",
+        "required": false
+      },
+      {
+        "key": "mother_nationality",
+        "type": "text",
+        "label_en": "Mother's Nationality",
+        "label_ar": "جنسية الأم",
+        "required": false
+      },
+      {
+        "key": "mother_dob",
+        "type": "date",
+        "label_en": "Mother's Date of Birth",
+        "label_ar": "تاريخ ميلاد الأم",
+        "required": false
+      },
+      {
+        "key": "children_names",
+        "type": "textarea",
+        "label_en": "Children's Names",
+        "label_ar": "أسماء الأبناء",
+        "required": false
+      },
+      {
+        "key": "emirate",
+        "type": "text",
+        "label_en": "Emirate",
+        "label_ar": "الإمارة",
+        "required": false
+      },
+      {
+        "key": "city",
+        "type": "text",
+        "label_en": "City",
+        "label_ar": "المدينة",
+        "required": false
+      },
+      {
+        "key": "area",
+        "type": "text",
+        "label_en": "Area",
+        "label_ar": "المنطقة",
+        "required": false
+      },
+      {
+        "key": "street",
+        "type": "text",
+        "label_en": "Street",
+        "label_ar": "الشارع",
+        "required": false
+      },
+      {
+        "key": "building_villa_no",
+        "type": "text",
+        "label_en": "Building / Villa No",
+        "label_ar": "رقم المبنى / الفيلا",
+        "required": false
+      },
+      {
+        "key": "flat_no",
+        "type": "text",
+        "label_en": "Flat No",
+        "label_ar": "رقم الشقة",
+        "required": false
+      },
+      {
+        "key": "mobile_no",
+        "type": "text",
+        "label_en": "Mobile No",
+        "label_ar": "رقم الجوال",
+        "required": false
+      },
+      {
+        "key": "alt_mobile_no",
+        "type": "text",
+        "label_en": "Alternative Mobile No",
+        "label_ar": "رقم جوال بديل",
+        "required": false
+      },
+      {
+        "key": "landline_no",
+        "type": "text",
+        "label_en": "Land Line No",
+        "label_ar": "الهاتف الأرضي",
+        "required": false
+      },
+      {
+        "key": "email",
+        "type": "text",
+        "label_en": "Email Address",
+        "label_ar": "البريد الإلكتروني",
+        "required": false
+      },
+      {
+        "key": "relatives_uae",
+        "type": "textarea",
+        "label_en": "Relatives in UAE (name, nationality, relation, workplace, contact)",
+        "label_ar": "الأقارب في الإمارات",
+        "required": false
+      },
+      {
+        "key": "relatives_home",
+        "type": "textarea",
+        "label_en": "Relatives in Home Country (name, nationality, relation, workplace, contact)",
+        "label_ar": "الأقارب في بلد الإقامة الأصلي",
+        "required": false
+      }
+    ]
+  },
+  "Promotion and Salary Increment Request Form": {
+    "category": "personnel",
+    "name_en": "Promotion & Salary Increment",
+    "name_ar": "طلب ترقية وزيادة راتب",
+    "form_number": "300-025",
+    "fields": [
+      {
+        "key": "current_salary",
+        "type": "text",
+        "label_en": "Current Salary",
+        "label_ar": "الراتب الحالي",
+        "required": true
+      },
+      {
+        "key": "contract_type",
+        "type": "text",
+        "label_en": "Contract Type",
+        "label_ar": "نوع العقد",
+        "required": false
+      },
+      {
+        "key": "recommend_promotion",
+        "type": "checkbox",
+        "label_en": "Recommending for Promotion",
+        "label_ar": "التوصية بالترقية",
+        "required": false
+      },
+      {
+        "key": "recommend_salary_increment",
+        "type": "checkbox",
+        "label_en": "Recommending for Salary Increment",
+        "label_ar": "التوصية بزيادة الراتب",
+        "required": false
+      },
+      {
+        "key": "recommend_internal_transfer",
+        "type": "checkbox",
+        "label_en": "Recommending for Internal Transfer",
+        "label_ar": "التوصية بالنقل الداخلي",
+        "required": false
+      },
+      {
+        "key": "recommended_designation",
+        "type": "text",
+        "label_en": "Recommended Designation",
+        "label_ar": "المسمى الوظيفي الموصى به",
+        "required": false
+      },
+      {
+        "key": "recommended_department",
+        "type": "text",
+        "label_en": "Recommended Department",
+        "label_ar": "القسم الموصى به",
+        "required": false
+      },
+      {
+        "key": "new_salary",
+        "type": "text",
+        "label_en": "New Salary",
+        "label_ar": "الراتب الجديد",
+        "required": false
+      },
+      {
+        "key": "effective_date",
+        "type": "date",
+        "label_en": "Effective Date",
+        "label_ar": "تاريخ السريان",
+        "required": false
+      },
+      {
+        "key": "performance_rating_year",
+        "type": "text",
+        "label_en": "Performance Rating Year",
+        "label_ar": "سنة تقييم الأداء",
+        "required": false
+      },
+      {
+        "key": "average_rating",
+        "type": "text",
+        "label_en": "Average Rating",
+        "label_ar": "متوسط التقييم",
+        "required": false
+      },
+      {
+        "key": "dept_head_comment",
+        "type": "textarea",
+        "label_en": "Department Head Comment and Recommendation",
+        "label_ar": "ملاحظات وتوصية رئيس القسم",
+        "required": false
+      },
+      {
+        "key": "manager_id",
+        "type": "manager_picker",
+        "label_en": "Line Manager",
+        "label_ar": "المدير المباشر",
+        "required": false
+      },
+      {
+        "key": "hand_sign_manager",
+        "type": "hand_sign_checkbox",
+        "label_en": "Embed manager's saved signature",
+        "label_ar": "تضمين توقيع المدير المحفوظ",
+        "required": false
+      }
+    ]
+  },
+  "Salary Advance Request Form": {
+    "category": "personnel",
+    "name_en": "Salary Advance",
+    "name_ar": "طلب سلفة راتب",
+    "form_number": "300-022",
+    "fields": [
+      {
+        "key": "requested_amount",
+        "type": "text",
+        "label_en": "Requested Amount",
+        "label_ar": "المبلغ المطلوب",
+        "required": true
+      },
+      {
+        "key": "advance_purpose",
+        "type": "textarea",
+        "label_en": "Purpose of Salary Advance",
+        "label_ar": "الغرض من السلفة",
+        "required": true
+      },
+      {
+        "key": "manager_id",
+        "type": "manager_picker",
+        "label_en": "Line Manager",
+        "label_ar": "المدير المباشر",
+        "required": false
+      },
+      {
+        "key": "hand_sign_manager",
+        "type": "hand_sign_checkbox",
+        "label_en": "Embed manager's saved signature",
+        "label_ar": "تضمين توقيع المدير المحفوظ",
+        "required": false
+      },
+      {
+        "key": "submitter_id",
+        "type": "submitter_picker",
+        "label_en": "Submitter",
+        "label_ar": "مقدم الطلب",
+        "required": false
+      },
+      {
+        "key": "hand_sign_employee",
+        "type": "hand_sign_checkbox",
+        "label_en": "Embed my saved signature",
+        "label_ar": "تضمين توقيعي المحفوظ",
+        "required": false
+      },
+      {
+        "key": "employee_sig_path",
+        "type": "signature",
+        "label_en": "Employee Signature",
+        "label_ar": "توقيع الموظف",
+        "required": false
+      }
+    ]
+  },
+  "Breach of Discipline Form": {
+    "category": "personnel",
+    "name_en": "Breach of Discipline",
+    "name_ar": "إخلال بالانضباط",
+    "form_number": "300-023",
+    "fields": [
+      {
+        "key": "bd_department_project",
+        "type": "text",
+        "label_en": "Department / Project",
+        "label_ar": "القسم / المشروع",
+        "required": false
+      },
+      {
+        "key": "supervisor_name",
+        "type": "text",
+        "label_en": "Name of the Supervisor",
+        "label_ar": "اسم المشرف",
+        "required": true
+      },
+      {
+        "key": "incident_when",
+        "type": "text",
+        "label_en": "Incident When",
+        "label_ar": "وقت الحادثة",
+        "required": true
+      },
+      {
+        "key": "incident_where",
+        "type": "text",
+        "label_en": "Incident Where",
+        "label_ar": "مكان الحادثة",
+        "required": true
+      },
+      {
+        "key": "breach_description",
+        "type": "textarea",
+        "label_en": "Describe How the Breach of Discipline Occurred",
+        "label_ar": "وصف كيفية وقوع الإخلال بالانضباط",
+        "required": true
+      },
+      {
+        "key": "supporting_docs_attached",
+        "type": "checkbox",
+        "label_en": "Supporting Documents Attached",
+        "label_ar": "المستندات الداعمة مرفقة",
+        "required": false
+      },
+      {
+        "key": "previous_action_notes",
+        "type": "textarea",
+        "label_en": "Previous Recorded Disciplinary Action (if any)",
+        "label_ar": "الإجراءات التأديبية السابقة المسجلة (إن وجدت)",
+        "required": false
+      },
+      {
+        "key": "recommended_penalty",
+        "type": "textarea",
+        "label_en": "Recommended Penalty / Action",
+        "label_ar": "العقوبة / الإجراء الموصى به",
+        "required": false
+      },
+      {
+        "key": "manager_id",
+        "type": "manager_picker",
+        "label_en": "Line Manager",
+        "label_ar": "المدير المباشر",
+        "required": false
+      },
+      {
+        "key": "hand_sign_manager",
+        "type": "hand_sign_checkbox",
+        "label_en": "Embed manager's saved signature",
+        "label_ar": "تضمين توقيع المدير المحفوظ",
+        "required": false
+      },
+      {
+        "key": "submitter_id",
+        "type": "submitter_picker",
+        "label_en": "Submitter",
+        "label_ar": "مقدم الطلب",
+        "required": false
+      },
+      {
+        "key": "hand_sign_employee",
+        "type": "hand_sign_checkbox",
+        "label_en": "Embed my saved signature",
+        "label_ar": "تضمين توقيعي المحفوظ",
+        "required": false
+      },
+      {
+        "key": "employee_sig_path",
+        "type": "signature",
+        "label_en": "Employee Signature",
+        "label_ar": "توقيع الموظف",
+        "required": false
+      }
+    ]
+  },
+  "Expense Claim Form": {
+    "category": "personnel",
+    "name_en": "Expense Claim",
+    "name_ar": "طلب استرداد مصروفات",
+    "form_number": "300-028",
+    "fields": [
+      {
+        "key": "total_amount",
+        "type": "text",
+        "label_en": "Total Amount",
+        "label_ar": "المبلغ الإجمالي",
+        "required": true
+      },
+      {
+        "key": "supporting_docs_attached",
+        "type": "checkbox",
+        "label_en": "Supporting Documents Attached",
+        "label_ar": "المستندات الداعمة مرفقة",
+        "required": false
+      },
+      {
+        "key": "claim_remarks",
+        "type": "textarea",
+        "label_en": "Remarks",
+        "label_ar": "ملاحظات",
+        "required": false
+      },
+      {
+        "key": "items",
+        "type": "items_table",
+        "label_en": "Claim Details",
+        "label_ar": "تفاصيل المطالبة",
+        "required": false,
+        "columns": [
+          {
+            "key": "particulars",
+            "label_en": "Particulars",
+            "label_ar": "البيان"
+          },
+          {
+            "key": "amount",
+            "label_en": "Amount",
+            "label_ar": "المبلغ"
+          }
+        ],
+        "max_rows": 2
+      },
+      {
+        "key": "submitter_id",
+        "type": "submitter_picker",
+        "label_en": "Submitter",
+        "label_ar": "مقدم الطلب",
+        "required": false
+      },
+      {
+        "key": "hand_sign_employee",
+        "type": "hand_sign_checkbox",
+        "label_en": "Embed my saved signature",
+        "label_ar": "تضمين توقيعي المحفوظ",
+        "required": false
+      },
+      {
+        "key": "employee_sig_path",
+        "type": "signature",
+        "label_en": "Employee Signature",
+        "label_ar": "توقيع الموظف",
+        "required": false
+      }
+    ]
+  },
+  "Employee Exit Form": {
+    "category": "personnel",
+    "name_en": "Employee Exit Interview",
+    "name_ar": "مقابلة مغادرة الموظف",
+    "form_number": "300-011",
+    "fields": [
+      {
+        "key": "supervisor_name",
+        "type": "text",
+        "label_en": "Supervisor",
+        "label_ar": "المشرف المباشر",
+        "required": true
+      },
+      {
+        "key": "starting_position",
+        "type": "text",
+        "label_en": "Starting Position",
+        "label_ar": "المنصب عند التعيين",
+        "required": false
+      },
+      {
+        "key": "ending_position",
+        "type": "text",
+        "label_en": "Ending Position",
+        "label_ar": "المنصب عند المغادرة",
+        "required": false
+      },
+      {
+        "key": "starting_salary",
+        "type": "text",
+        "label_en": "Starting Salary",
+        "label_ar": "الراتب عند التعيين",
+        "required": false
+      },
+      {
+        "key": "ending_salary",
+        "type": "text",
+        "label_en": "Ending Salary",
+        "label_ar": "الراتب عند المغادرة",
+        "required": false
+      },
+      {
+        "key": "reason_primary",
+        "type": "select",
+        "label_en": "Primary Reason for Leaving",
+        "label_ar": "السبب الرئيسي للمغادرة",
+        "required": true,
+        "options": [
+          "Resignation - Took another position",
+          "Resignation - Dissatisfaction with salary",
+          "Resignation - Pregnancy / Home / Family needs",
+          "Resignation - Dissatisfaction with the type of work",
+          "Resignation - Poor Health / Physical Disability",
+          "Resignation - Dissatisfaction with supervisor",
+          "Resignation - Relocation to another city",
+          "Resignation - Dissatisfaction with co-workers",
+          "Resignation - Travel difficulties",
+          "Resignation - Dissatisfaction with working conditions",
+          "Resignation - To attend school",
+          "Resignation - Dissatisfaction with benefits",
+          "Laid Off - Lack of work",
+          "Laid Off - Lack of funds",
+          "Laid Off - Abolition of position",
+          "Retirement - Voluntary Retirement",
+          "Retirement - Disability Retirement",
+          "Retirement - Regular Retirement",
+          "Others"
+        ]
+      },
+      {
+        "key": "reason_other",
+        "type": "text",
+        "label_en": "Other Reason (if selected)",
+        "label_ar": "سبب آخر (إن وجد)",
+        "required": false
+      },
+      {
+        "key": "plans_after_leaving",
+        "type": "textarea",
+        "label_en": "Plans After Leaving",
+        "label_ar": "الخطط بعد المغادرة",
+        "required": false
+      },
+      {
+        "key": "pay_benefits_feedback",
+        "type": "textarea",
+        "label_en": "Feedback on Pay & Benefits",
+        "label_ar": "ملاحظات حول الراتب والمزايا",
+        "required": false
+      },
+      {
+        "key": "satisfaction_feedback",
+        "type": "textarea",
+        "label_en": "General Satisfaction Feedback (supervisor, training, policies, conditions)",
+        "label_ar": "ملاحظات عامة عن الرضا الوظيفي",
+        "required": false
+      },
+      {
+        "key": "other_remarks",
+        "type": "textarea",
+        "label_en": "Other Remarks (optional)",
+        "label_ar": "ملاحظات أخرى (اختياري)",
+        "required": false
+      },
+      {
+        "key": "interviewer_comments",
+        "type": "textarea",
+        "label_en": "Interviewer Comments and Actions Taken",
+        "label_ar": "ملاحظات القائم بالمقابلة والإجراءات المتخذة",
+        "required": false
+      },
+      {
+        "key": "interviewer_id",
+        "type": "interviewer_picker",
+        "label_en": "Interviewer",
+        "label_ar": "القائم بالمقابلة",
+        "required": false
+      },
+      {
+        "key": "hand_sign_interviewer",
+        "type": "hand_sign_checkbox",
+        "label_en": "Embed interviewer's saved signature",
+        "label_ar": "تضمين توقيع القائم بالمقابلة المحفوظ",
+        "required": false
+      },
+      {
+        "key": "submitter_id",
+        "type": "submitter_picker",
+        "label_en": "Submitter",
+        "label_ar": "مقدم الطلب",
+        "required": false
+      },
+      {
+        "key": "hand_sign_employee",
+        "type": "hand_sign_checkbox",
+        "label_en": "Embed my saved signature",
+        "label_ar": "تضمين توقيعي المحفوظ",
+        "required": false
+      },
+      {
+        "key": "employee_sig_path",
+        "type": "signature",
+        "label_en": "Employee Signature",
+        "label_ar": "توقيع الموظف",
+        "required": false
+      }
+    ]
+  },
+  "Employee Exit Form – Project or Contract": {
+    "category": "personnel",
+    "name_en": "Project / Contract Exit Interview",
+    "name_ar": "مقابلة مغادرة المشروع أو العقد",
+    "form_number": "300-021",
+    "fields": [
+      {
+        "key": "supervisor_name",
+        "type": "text",
+        "label_en": "Supervisor",
+        "label_ar": "المشرف المباشر",
+        "required": true
+      },
+      {
+        "key": "reason_primary",
+        "type": "select",
+        "label_en": "Primary Reason for Leaving",
+        "label_ar": "السبب الرئيسي للمغادرة",
+        "required": true,
+        "options": [
+          "Took another position",
+          "Dissatisfaction with salary",
+          "Pregnancy / Home / Family needs",
+          "Dissatisfaction with the type of work",
+          "Poor Health / Physical Disability",
+          "Dissatisfaction with supervisor",
+          "Relocation to another city",
+          "Dissatisfaction with co-workers",
+          "Travel difficulties",
+          "Dissatisfaction with working conditions",
+          "To attend school",
+          "Dissatisfaction with benefits",
+          "Others"
+        ]
+      },
+      {
+        "key": "reason_other",
+        "type": "text",
+        "label_en": "Other Reason (if selected)",
+        "label_ar": "سبب آخر (إن وجد)",
+        "required": false
+      },
+      {
+        "key": "pay_benefits_feedback",
+        "type": "textarea",
+        "label_en": "Feedback on Pay & Benefits",
+        "label_ar": "ملاحظات حول الراتب والمزايا",
+        "required": false
+      },
+      {
+        "key": "satisfaction_feedback",
+        "type": "textarea",
+        "label_en": "General Satisfaction Feedback (training, supervisor, policies, discipline, conditions)",
+        "label_ar": "ملاحظات عامة عن الرضا الوظيفي",
+        "required": false
+      },
+      {
+        "key": "other_remarks",
+        "type": "textarea",
+        "label_en": "Other Remarks (optional)",
+        "label_ar": "ملاحظات أخرى (اختياري)",
+        "required": false
+      },
+      {
+        "key": "interviewer_comments",
+        "type": "textarea",
+        "label_en": "Interviewer Comments and Actions Taken",
+        "label_ar": "ملاحظات القائم بالمقابلة والإجراءات المتخذة",
+        "required": false
+      },
+      {
+        "key": "interviewer_id",
+        "type": "interviewer_picker",
+        "label_en": "Interviewer",
+        "label_ar": "القائم بالمقابلة",
+        "required": false
+      },
+      {
+        "key": "hand_sign_interviewer",
+        "type": "hand_sign_checkbox",
+        "label_en": "Embed interviewer's saved signature",
+        "label_ar": "تضمين توقيع القائم بالمقابلة المحفوظ",
+        "required": false
+      },
+      {
+        "key": "submitter_id",
+        "type": "submitter_picker",
+        "label_en": "Submitter",
+        "label_ar": "مقدم الطلب",
+        "required": false
+      },
+      {
+        "key": "hand_sign_employee",
+        "type": "hand_sign_checkbox",
+        "label_en": "Embed my saved signature",
+        "label_ar": "تضمين توقيعي المحفوظ",
+        "required": false
+      },
+      {
+        "key": "employee_sig_path",
+        "type": "signature",
+        "label_en": "Employee Signature",
+        "label_ar": "توقيع الموظف",
+        "required": false
+      }
+    ]
+  },
+  "Interview Scores Form": {
+    "category": "personnel",
+    "name_en": "Interview Scores",
+    "name_ar": "درجات المقابلات",
+    "form_number": "300-012",
+    "fields": [
+      {
+        "key": "items",
+        "type": "items_table",
+        "label_en": "Individual Scores: Interviews",
+        "label_ar": "الدرجات الفردية للمقابلات",
+        "required": false,
+        "columns": [
+          {
+            "key": "applicant",
+            "label_en": "Applicant",
+            "label_ar": "المتقدم"
+          },
+          {
+            "key": "position",
+            "label_en": "Position",
+            "label_ar": "الوظيفة"
+          },
+          {
+            "key": "interviewer",
+            "label_en": "Interviewer",
+            "label_ar": "القائم بالمقابلة"
+          },
+          {
+            "key": "section_a",
+            "label_en": "Section A",
+            "label_ar": "القسم أ"
+          },
+          {
+            "key": "section_b",
+            "label_en": "Section B",
+            "label_ar": "القسم ب"
+          },
+          {
+            "key": "section_c",
+            "label_en": "Section C",
+            "label_ar": "القسم ج"
+          },
+          {
+            "key": "section_d",
+            "label_en": "Section D",
+            "label_ar": "القسم د"
+          },
+          {
+            "key": "total",
+            "label_en": "Total",
+            "label_ar": "الإجمالي"
+          }
+        ],
+        "max_rows": 5
+      }
+    ]
+  },
+  "Staff Attendance Form": {
+    "category": "personnel",
+    "name_en": "Staff Attendance",
+    "name_ar": "كشف حضور الموظفين",
+    "form_number": "300-015",
+    "fields": [
+      {
+        "key": "site_name",
+        "type": "text",
+        "label_en": "Site Name",
+        "label_ar": "اسم الموقع",
+        "required": true
+      },
+      {
+        "key": "site_code",
+        "type": "text",
+        "label_en": "Code",
+        "label_ar": "الرمز",
+        "required": false
+      },
+      {
+        "key": "att_month",
+        "type": "text",
+        "label_en": "Month",
+        "label_ar": "الشهر",
+        "required": true
+      },
+      {
+        "key": "att_year",
+        "type": "text",
+        "label_en": "Year",
+        "label_ar": "السنة",
+        "required": true
+      },
+      {
+        "key": "shift",
+        "type": "select",
+        "label_en": "Shift",
+        "label_ar": "الوردية",
+        "required": true,
+        "options": [
+          "Day",
+          "Night"
+        ]
+      },
+      {
+        "key": "time_from",
+        "type": "time",
+        "label_en": "Time (From)",
+        "label_ar": "الوقت (من)",
+        "required": false
+      },
+      {
+        "key": "time_to",
+        "type": "time",
+        "label_en": "Time (To)",
+        "label_ar": "الوقت (إلى)",
+        "required": false
+      },
+      {
+        "key": "items",
+        "type": "items_table",
+        "label_en": "Roster",
+        "label_ar": "قائمة الحضور",
+        "required": false,
+        "columns": [
+          {
+            "key": "emp_id",
+            "label_en": "Employee ID",
+            "label_ar": "رقم الموظف"
+          },
+          {
+            "key": "emp_name",
+            "label_en": "Name",
+            "label_ar": "الاسم"
+          },
+          {
+            "key": "designation",
+            "label_en": "Designation",
+            "label_ar": "المسمى الوظيفي"
+          },
+          {
+            "key": "shift_day_night",
+            "label_en": "Shift (Day/Night)",
+            "label_ar": "الوردية (نهار/ليل)"
+          },
+          {
+            "key": "time_in",
+            "label_en": "Time In",
+            "label_ar": "وقت الحضور"
+          },
+          {
+            "key": "time_out",
+            "label_en": "Time Out",
+            "label_ar": "وقت الانصراف"
+          }
+        ],
+        "max_rows": 36
+      }
+    ]
+  },
+  "Allowance Request Form": {
+    "category": "personnel",
+    "name_en": "Allowance Request",
+    "name_ar": "طلب بدل",
+    "form_number": "300-026",
+    "fields": [
+      {
+        "key": "project_site",
+        "type": "text",
+        "label_en": "Project / Site",
+        "label_ar": "المشروع / الموقع",
+        "required": true
+      },
+      {
+        "key": "items",
+        "type": "items_table",
+        "label_en": "Requested Allowances",
+        "label_ar": "البدلات المطلوبة",
+        "required": false,
+        "columns": [
+          {
+            "key": "employee_id",
+            "label_en": "Employee ID",
+            "label_ar": "رقم الموظف"
+          },
+          {
+            "key": "employee_name",
+            "label_en": "Employee Name",
+            "label_ar": "اسم الموظف"
+          },
+          {
+            "key": "allowance_type",
+            "label_en": "Allowance Type",
+            "label_ar": "نوع البدل"
+          },
+          {
+            "key": "amount",
+            "label_en": "Amount",
+            "label_ar": "المبلغ"
+          }
+        ],
+        "max_rows": 6
+      },
+      {
+        "key": "manager_id",
+        "type": "manager_picker",
+        "label_en": "Line Manager",
+        "label_ar": "المدير المباشر",
+        "required": false
+      },
+      {
+        "key": "hand_sign_manager",
+        "type": "hand_sign_checkbox",
+        "label_en": "Embed manager's saved signature",
+        "label_ar": "تضمين توقيع المدير المحفوظ",
+        "required": false
+      }
+    ]
+  },
+  "Employee Overtime Form": {
+    "category": "personnel",
+    "name_en": "Employee Overtime",
+    "name_ar": "العمل الإضافي",
+    "form_number": "300-027",
+    "fields": [
+      {
+        "key": "ot_branch",
+        "type": "text",
+        "label_en": "Branch",
+        "label_ar": "الفرع",
+        "required": false
+      },
+      {
+        "key": "ot_month",
+        "type": "text",
+        "label_en": "Overtime Summary for the Month of",
+        "label_ar": "ملخص العمل الإضافي لشهر",
+        "required": true
+      },
+      {
+        "key": "items",
+        "type": "items_table",
+        "label_en": "Overtime Summary",
+        "label_ar": "ملخص العمل الإضافي",
+        "required": false,
+        "columns": [
+          {
+            "key": "ot_date",
+            "label_en": "Date",
+            "label_ar": "التاريخ"
+          },
+          {
+            "key": "emp_id",
+            "label_en": "Emp. ID",
+            "label_ar": "رقم الموظف"
+          },
+          {
+            "key": "employee_name",
+            "label_en": "Employee Name",
+            "label_ar": "اسم الموظف"
+          },
+          {
+            "key": "code1",
+            "label_en": "Code 1",
+            "label_ar": "الرمز 1"
+          },
+          {
+            "key": "code2",
+            "label_en": "Code 2",
+            "label_ar": "الرمز 2"
+          },
+          {
+            "key": "remarks",
+            "label_en": "Remarks",
+            "label_ar": "ملاحظات"
+          }
+        ],
+        "max_rows": 15
+      },
+      {
+        "key": "manager_id",
+        "type": "manager_picker",
+        "label_en": "Line Manager",
+        "label_ar": "المدير المباشر",
+        "required": false
+      },
+      {
+        "key": "hand_sign_manager",
+        "type": "hand_sign_checkbox",
+        "label_en": "Embed manager's saved signature",
+        "label_ar": "تضمين توقيع المدير المحفوظ",
+        "required": false
+      }
+    ]
   }
 }

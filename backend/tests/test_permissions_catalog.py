@@ -88,8 +88,9 @@ def test_catalog_composes_bilingual_dynamic_entries_in_stable_order(db_session):
             f"books.servicerecords.{service_id}",
         )
     ]
-    assert [entry.id for entry in dynamic[:42]] == expected_pair_ids
-    assert [entry.id for entry in dynamic[42:]] == [
+    n_service_pairs = len(expected_pair_ids)
+    assert [entry.id for entry in dynamic[:n_service_pairs]] == expected_pair_ids
+    assert [entry.id for entry in dynamic[n_service_pairs:]] == [
         "books.category.A",
         "books.category.Z",
     ]
@@ -121,13 +122,16 @@ def test_catalog_composes_bilingual_dynamic_entries_in_stable_order(db_session):
         "books.servicerecords.Inmate Conduct Violations",
     }
     for entry in dynamic:
-        assert entry.requestable
-        assert not entry.sensitive
-        expected_roles = (
-            ("operator", "manager", "admin", "inmate_reporter")
-            if entry.id in inmate_dynamic_ids
-            else ("operator", "manager", "admin")
+        assert entry.requestable and not entry.sensitive
+        service_id = entry.id.removeprefix(permissions.SERVICE_CAP_PREFIX).removeprefix(
+            permissions.SERVICE_RECORDS_CAP_PREFIX
         )
+        if service_id in permissions.OPT_IN_SERVICE_IDS:
+            expected_roles = ("admin",)
+        elif entry.id in inmate_dynamic_ids:
+            expected_roles = ("operator", "manager", "admin", "inmate_reporter")
+        else:
+            expected_roles = ("operator", "manager", "admin")
         assert entry.default_roles == expected_roles, entry.id
     assert capability_catalog_service.get_catalog_entry(db_session, passport.id) == passport
     assert capability_catalog_service.get_catalog_entry(db_session, category.id) == category

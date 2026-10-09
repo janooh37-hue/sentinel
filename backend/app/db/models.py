@@ -41,7 +41,7 @@ from sqlalchemy import (
     func,
     text,
 )
-from sqlalchemy.orm import Mapped, foreign, mapped_column, relationship
+from sqlalchemy.orm import Mapped, foreign, mapped_column, query_expression, relationship
 
 from app.db.base import Base
 
@@ -71,6 +71,12 @@ class Employee(Base):
     # pending departure. Only ever 'Resigned' or 'Terminated': written by the
     # Resignation Letter and by update_employee, cleared on flip or cancel.
     pending_status: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    # Destination site while Transferred, or while a transfer is pending
+    # (`pending_status == 'Transferred'`). Cleared on leaving Transferred.
+    transfer_site: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    # Expected return of a temporary transfer: the daily job reactivates the
+    # employee on this date. NULL = open-ended transfer.
+    transfer_return_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     department: Mapped[str | None] = mapped_column(String(128), nullable=True)
     position: Mapped[str | None] = mapped_column(String(128), nullable=True)
     position_ar: Mapped[str | None] = mapped_column(String(128), nullable=True)
@@ -111,6 +117,42 @@ class Employee(Base):
     __table_args__ = (
         Index("ix_employees_status", "status"),
         Index("ix_employees_supervisor_id", "supervisor_id"),
+    )
+
+
+class EmployeeStatusEvent(Base):
+    """Append-only history of an employee's status (migration 0094).
+
+    One row per real change from any writer — the status dialog / form, the
+    Resignation Letter, the daily scheduler — plus one ``imported`` row per
+    employee who was already non-Active when history began. Surfaced as the
+    ``status`` kind in the employee Activity tab.
+
+    ``kind``: changed | scheduled | scheduled_cancelled | applied | imported.
+    ``source``: manual | resignation_letter | scheduler | backfill.
+    ``effective_date`` is the business date (departure / return); ``created_at``
+    is when it was saved.
+    """
+
+    __tablename__ = "employee_status_events"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    employee_id: Mapped[str] = mapped_column(
+        String(16), ForeignKey("employees.id", ondelete="CASCADE"), nullable=False
+    )
+    from_status: Mapped[str] = mapped_column(String(32), nullable=False)
+    to_status: Mapped[str] = mapped_column(String(32), nullable=False)
+    effective_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    site: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    # Expected return date of a temporary transfer, as known when recorded.
+    return_date: Mapped[date | None] = mapped_column(Date, nullable=True)
+    kind: Mapped[str] = mapped_column(String(32), nullable=False)
+    source: Mapped[str] = mapped_column(String(32), nullable=False)
+    actor_user_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow, nullable=False)
+
+    __table_args__ = (
+        Index("ix_employee_status_events_employee_created", "employee_id", "created_at"),
     )
 
 
@@ -216,6 +258,9 @@ class Book(Base):
     # FK to users.id omitted — SQLite batch ALTER cannot add a named FK constraint
     # to an existing table; referential integrity is enforced at the app layer.
     submitted_by_user_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Original creator (users.id): immutable; set once at creation. No FK, same
+    # SQLite batch-ALTER reason as submitted_by_user_id.
+    created_by_user_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
     # The Manager directory row actually printed on the doc (reviewer/manager-
     # routed approvals, 2026-06-23). Submit-for-approval follows its `user_id`
     # link to auto-route. FK omitted (SQLite batch ALTER) — integrity app-side.
@@ -252,6 +297,7 @@ class Book(Base):
         UniqueConstraint("ref_number", name="uq_books_ref_number"),
         Index("ix_books_employee_id", "employee_id"),
         Index("ix_books_created_at", "created_at"),
+        Index("ix_books_created_by_user_id", "created_by_user_id"),
     )
 
 
@@ -491,7 +537,7 @@ class SignatureArtifactRevision(Base):
     manifest: Mapped[list[dict[str, object]]] = mapped_column(
         JSON, nullable=False, default=list, server_default="[]"
     )
-    # initial | identify | move
+    # initial | identify | move | reassign
     action: Mapped[str] = mapped_column(String(16), nullable=False)
     signature_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
     before_geometry: Mapped[dict[str, object] | None] = mapped_column(JSON, nullable=True)
@@ -644,6 +690,9 @@ class Vehicle(Base):
     expiry_reminder_sent_for: Mapped[date | None] = mapped_column(Date, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_utcnow)
     updated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    _list_fines_count: Mapped[int | None] = query_expression()
+    _list_fines_amount_fils: Mapped[int | None] = query_expression()
+    _list_black_points: Mapped[int | None] = query_expression()
 
     site: Mapped[VehicleSite] = relationship(back_populates="vehicles")
     photo_asset: Mapped[VehiclePhotoAsset | None] = relationship(
@@ -978,6 +1027,33 @@ class PermitVisit(Base):
     permit: Mapped[Permit] = relationship(back_populates="visits")
 
     __table_args__ = (Index("ix_permit_visits_permit_occurred", "permit_id", "occurred_at"),)
+
+
+class ItemPermit(Base):
+    """An item-entry permit (إدخال مواد) — a 1/5 letter authorizing materials
+    into a facility zone, naming the employee who brings them. Shares the
+    Security Permit paper and book approval chain; no validity window.
+    """
+
+    __tablename__ = "item_permits"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    employee_id: Mapped[str] = mapped_column(String(16), ForeignKey("employees.id"))
+    recipient: Mapped[str] = mapped_column(String(255))
+    # ordered, distinct subset of 'red' | 'green' | 'work_residence' (min 1)
+    zones: Mapped[list[str]] = mapped_column(JSON)
+    site: Mapped[str] = mapped_column(String(255))
+    # list of {"name": str, "quantity": int}
+    items: Mapped[list[dict[str, Any]]] = mapped_column(JSON)
+    manager_id: Mapped[int | None] = mapped_column(Integer)
+    book_id: Mapped[int | None] = mapped_column(Integer)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    employee: Mapped[Employee] = relationship()
+
+    __table_args__ = (Index("ix_item_permits_employee", "employee_id"),)
 
 
 class WhatsAppMessage(Base):

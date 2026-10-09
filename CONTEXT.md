@@ -68,6 +68,8 @@ A person's approval-related Records grouped by responsibility, with one entry
 per Record rather than separate entries for each submission attempt. It shows
 current information where authorized, otherwise only information from
 assigned Revisions the person may read.
+A Report's author signs the artifact; its manager is assigned review work,
+not signing work. Ordinary Records keep their approver/signing responsibility.
 _Avoid_: Submission-history ledger, decision audit log
 
 **Late advisory feedback**:

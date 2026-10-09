@@ -61,8 +61,8 @@ from app.schemas.book import (
     BookUpdate,
     ImportedDocRead,
 )
+from app.services import inmate_violation_whatsapp, perm_service, user_signature_service
 from app.services import notify_format as nf
-from app.services import perm_service, user_signature_service
 
 log = logging.getLogger(__name__)
 
@@ -279,28 +279,52 @@ def _inmate_reporter_original_creator_subquery() -> Any:
 
 
 def _inmate_reporter_visibility_clause(user: User) -> ColumnElement[bool]:
-    """SQL: the reporter-role read boundary (spec table) — nondeleted/nonvoided,
-    shared while pending/approved, owner-only while none/returned/rejected,
-    hidden otherwise (awaiting_scan, or any book with no version at all)."""
+    """SQL: Report books are private; violation visibility retains its old rules."""
+    report_clause = and_(Book.category_id == "GS", Book.ref_number.like("REPORT-%"))
+    report_owner = or_(
+        _inmate_reporter_original_creator_subquery() == user.id,
+        Book.submitted_by_user_id == user.id,
+    )
     return and_(
         Book.deleted_at.is_(None),
         Book.voided_at.is_(None),
         or_(
-            Book.approval_state.in_(_INMATE_REPORTER_SHARED_STATES),
             and_(
-                Book.approval_state.in_(_INMATE_REPORTER_OWNER_ONLY_STATES),
-                _inmate_reporter_original_creator_subquery() == user.id,
+                report_clause,
+                Book.approval_state.in_(
+                    (*_INMATE_REPORTER_OWNER_ONLY_STATES, *_INMATE_REPORTER_SHARED_STATES)
+                ),
+                report_owner,
+            ),
+            and_(
+                not_(report_clause),
+                or_(
+                    Book.approval_state.in_(_INMATE_REPORTER_SHARED_STATES),
+                    and_(
+                        Book.approval_state.in_(_INMATE_REPORTER_OWNER_ONLY_STATES),
+                        _inmate_reporter_original_creator_subquery() == user.id,
+                    ),
+                ),
             ),
         ),
     )
 
 
 def _inmate_reporter_book_visible(book: Book, user_id: int) -> bool:
-    """Python-side mirror of ``_inmate_reporter_visibility_clause`` for an
-    already-loaded ``Book`` (``resolve_book_read_access`` / write-access
-    guards operate on ORM objects, not a fresh query)."""
+    """Python-side mirror of ``_inmate_reporter_visibility_clause``."""
     if book.deleted_at is not None or book.voided_at is not None:
         return False
+    is_report = book.category_id == "GS" and book.ref_number.startswith("REPORT-")
+    if is_report:
+        if book.approval_state not in (
+            *_INMATE_REPORTER_OWNER_ONLY_STATES,
+            *_INMATE_REPORTER_SHARED_STATES,
+        ):
+            return False
+        from app.services import included_papers_service
+
+        creator_id = included_papers_service.original_creator_user_id(book)
+        return (creator_id if creator_id is not None else book.submitted_by_user_id) == user_id
     if book.approval_state in _INMATE_REPORTER_SHARED_STATES:
         return True
     if book.approval_state in _INMATE_REPORTER_OWNER_ONLY_STATES:
@@ -423,11 +447,7 @@ def assert_record_type_visible(db: Session, user: User, row: Book) -> None:
         if newest is None
         else None
     )
-    if draft_service is not None and db.scalar(
-        select(BookEditSession.id)
-        .where(BookEditSession.book_id == row.id, BookEditSession.state == "active")
-        .limit(1)
-    ):
+    if draft_service is not None and has_active_edit_session(db, row.id):
         service_id = draft_service
     else:
         service_id = resolve_service(
@@ -597,13 +617,7 @@ def resolve_inmate_report_manager(db: Session) -> tuple[User, Manager]:
 def require_inmate_report_write_access(
     db: Session, user: User, book: Book, *, action: Literal["revise", "submit"]
 ) -> BookVersion:
-    """Gate an ``inmate_reporter`` write: revise-into-a-new-draft/resubmit, or
-    submit. Requires a linked actor, an actual current Inmate Conduct
-    Violations version, original-author match, and a state that permits
-    ``action`` — ``revise`` accepts ``none``/``returned``, ``submit`` only
-    ``none``. Returns the current version (the caller's revise/submit
-    target).
-    """
+    """Gate the reporter's own Inmate Violations or Word-authored Report."""
     from app.services import included_papers_service
 
     if user.employee_id is None:
@@ -615,10 +629,20 @@ def require_inmate_report_write_access(
     if book.deleted_at is not None or book.voided_at is not None:
         raise NotFoundError("BOOK_NOT_FOUND", "Record not found")
     version = _current_version(book)
-    if version is None or version.template_id != "Inmate Conduct Violations":
+    is_report = (
+        book.category_id == "GS"
+        and book.ref_number.startswith("REPORT-")
+        and (version is None or version.template_id == "Report")
+    )
+    is_violation = (
+        version is not None
+        and version.template_id == "Inmate Conduct Violations"
+        and not book.ref_number.startswith("REPORT-")
+    )
+    if not is_report and not is_violation:
         raise AppError(
             "INMATE_REPORTER_NOT_OWNER",
-            "This record is not an inmate violation report.",
+            "This record is not an inmate report.",
             http_status=403,
         )
     if included_papers_service.original_creator_user_id(book) != user.id:
@@ -634,13 +658,30 @@ def require_inmate_report_write_access(
             "This record can no longer be edited.",
             http_status=409,
         )
-    stored_reporter_g = str((version.fields or {}).get("reporter_id") or "").strip().upper()
-    if stored_reporter_g and stored_reporter_g != user.employee_id:
+    if version is None:
         raise AppError(
-            "INMATE_REPORTER_IDENTITY_CHANGED",
-            "Your linked employee record changed since this draft was created.",
-            http_status=409,
+            "INMATE_REPORTER_NOT_OWNER", "This report has no finished version.", http_status=403
         )
+    if is_violation:
+        stored_reporter_g = str((version.fields or {}).get("reporter_id") or "").strip().upper()
+        if stored_reporter_g and stored_reporter_g != user.employee_id:
+            raise AppError(
+                "INMATE_REPORTER_IDENTITY_CHANGED",
+                "Your linked employee record changed since this draft was created.",
+                http_status=409,
+            )
+    else:
+        signer_employee_id = (version.fields or {}).get("signer_employee_id")
+        if signer_employee_id != user.employee_id:
+            raise AppError(
+                "INMATE_REPORTER_IDENTITY_CHANGED",
+                "Your linked employee record changed since this Report was created.",
+                http_status=409,
+            )
+        if action == "submit" and (
+            not (version.fields or {}).get("signed") or version.status != "approved"
+        ):
+            raise AppError("SIGNATURE_REQUIRED", "A signed Report is required.", http_status=409)
     return version
 
 
@@ -670,8 +711,13 @@ class ServiceCount(NamedTuple):
     states: dict[str, int]
 
 
+def _created_by_clause(user: User | None) -> ColumnElement[bool]:
+    """Records created by the caller (immutable creator). No caller = no rows."""
+    return false() if user is None else Book.created_by_user_id == user.id
+
+
 def service_facets(
-    db: Session, user: User | None = None
+    db: Session, user: User | None = None, *, created_by_me: bool = False
 ) -> tuple[ServiceCount, list[ServiceCount]]:
     """`(all_records, per_service)` over EVERY non-deleted book.
 
@@ -720,6 +766,8 @@ def service_facets(
         visibility = user_visibility_clause(db, user)
         if visibility is not None:
             stmt = stmt.where(visibility)
+    if created_by_me:
+        stmt = stmt.where(_created_by_clause(user))
 
     all_states: Counter[str] = Counter()
     per_service: dict[str, Counter[str]] = {}
@@ -766,6 +814,7 @@ def list_books(
     limit: int = LIST_DEFAULT_LIMIT,
     offset: int = 0,
     include_deleted: bool = False,
+    created_by_me: bool = False,
 ) -> tuple[list[Book], int, dict[int, str]]:
     """Paginated list with optional filters.
 
@@ -794,6 +843,11 @@ def list_books(
     if not include_deleted:
         stmt = stmt.where(Book.deleted_at.is_(None))
         count_stmt = count_stmt.where(Book.deleted_at.is_(None))
+
+    if created_by_me:
+        mine = _created_by_clause(user)
+        stmt = stmt.where(mine)
+        count_stmt = count_stmt.where(mine)
 
     if category_id is not None:
         stmt = stmt.where(Book.category_id == category_id)
@@ -840,7 +894,7 @@ def list_books(
             selectinload(Book.category),
             selectinload(Book.versions).selectinload(BookVersion.approval_steps),
         )
-        .order_by(Book.created_at.desc())
+        .order_by(Book.created_at.desc(), Book.id.desc())
         .limit(limit)
         .offset(offset)
     )
@@ -926,7 +980,7 @@ def _get_book_with_versions(db: Session, book_id: int) -> Book:
 # ---------------------------------------------------------------------------
 
 
-def create_book(db: Session, payload: BookCreate) -> Book:
+def create_book(db: Session, payload: BookCreate, *, created_by_user_id: int | None = None) -> Book:
     """Atomically allocate a ref number and insert the book row.
 
     Uses SQLite's ``BEGIN IMMEDIATE`` to serialise concurrent writers.
@@ -966,6 +1020,7 @@ def create_book(db: Session, payload: BookCreate) -> Book:
         direction=payload.direction,
         stamp_style=payload.stamp_style,
         created_at=datetime.now(UTC).replace(tzinfo=None),
+        created_by_user_id=created_by_user_id,
         deleted_at=None,
     )
     db.add(row)
@@ -995,9 +1050,51 @@ def update_book(db: Session, book_id: int, payload: BookUpdate) -> Book:
     return row
 
 
+_DELETABLE_APPROVAL_STATES: Final[frozenset[str]] = frozenset({"none", "returned", "rejected"})
+
+
+def is_deletable(book: Book, has_active_session: bool) -> bool:
+    """A record may be deleted only when it is not voided, has no approval in
+    flight or completed (none/returned/rejected), and has no live Word session
+    (deleting under a WebDAV session would orphan it)."""
+    return (
+        book.voided_at is None
+        and book.approval_state in _DELETABLE_APPROVAL_STATES
+        and not has_active_session
+    )
+
+
+def has_active_edit_session(db: Session, book_id: int) -> bool:
+    """True when ``book_id`` has an active Word edit session."""
+    return (
+        db.scalar(
+            select(BookEditSession.id)
+            .where(BookEditSession.book_id == book_id, BookEditSession.state == "active")
+            .limit(1)
+        )
+        is not None
+    )
+
+
 def delete_book(db: Session, book_id: int) -> None:
-    """Soft-delete: set deleted_at.  Ref number is NOT released."""
+    """Soft-delete: set deleted_at.  Ref number is NOT released.
+
+    Raises ``BOOK_NOT_DELETABLE`` (409) when the record is voided, pending or
+    approved (or awaiting a scan), or has an active Word edit session.
+    """
     row = get_book(db, book_id)
+    has_active_session = has_active_edit_session(db, row.id)
+    if not is_deletable(row, has_active_session):
+        raise AppError(
+            "BOOK_NOT_DELETABLE",
+            "This record cannot be deleted in its current state.",
+            http_status=409,
+            details={
+                "approval_state": row.approval_state,
+                "voided": row.voided_at is not None,
+                "active_session": has_active_session,
+            },
+        )
     row.deleted_at = datetime.now(UTC).replace(tzinfo=None)
     db.commit()
 
@@ -1018,6 +1115,23 @@ def _current_version(book: Book) -> BookVersion | None:
     Relies on Book.versions being mapped with order_by=version_no (ascending).
     """
     return book.versions[-1] if book.versions else None
+
+
+def is_report(book: Book) -> bool:
+    """A Word-authored Report: its author signs it, the manager only reviews it."""
+    version = _current_version(book)
+    return (
+        book.category_id == "GS"
+        and book.ref_number.startswith("REPORT-")
+        and version is not None
+        and version.template_id == "Report"
+    )
+
+
+def _received_step_kind(book: Book, kind: str | None) -> str:
+    """Worklist responsibility, without changing the step's decision semantics."""
+    kind = kind or "approver"
+    return "reviewer" if kind == "approver" and is_report(book) else kind
 
 
 def _approver_steps(version: BookVersion | None) -> list[BookApprovalStep]:
@@ -1048,7 +1162,8 @@ def _recompute_approval_state(book: Book) -> None:
         state = "approved"
     else:
         state = "pending"
-    if version is not None:
+    # A Report's version status is its author's signature, never the review.
+    if version is not None and not is_report(book):
         version.status = state
     book.approval_state = state
 
@@ -1186,29 +1301,32 @@ def submit_for_approval(
     version = _current_version(book)
     if version is None:
         raise ValidationFailedError("NO_VERSION", "Book has no version to submit")
+    caller = db.get(User, submitted_by_user_id)
+    report = is_report(book)
+    inmate_report = bool(caller is not None and caller.role == INMATE_REPORTER_ROLE and report)
     if version.status == "awaiting_scan":
         raise ValidationFailedError(
             "AWAITING_SCAN",
             "This form awaits its signed scanned copy; file the scan instead of "
             "submitting for approval.",
         )
-    if version.manager_sig_embedded:
+    if version.manager_sig_embedded and not report:
         raise ValidationFailedError(
             "SIGNATURE_ALREADY_PRESENT",
             "This form already carries the manager signature; it can't be sent for approval.",
         )
-    if version.status == "approved" or version.signed_pdf_path:
+    if (version.status == "approved" or version.signed_pdf_path) and not report:
         raise ValidationFailedError(
             "ALREADY_SIGNED",
             "This version is already signed/approved; it can't be re-submitted for approval.",
         )
+    if report and any(s.state == "approved" for s in _approver_steps(version)):
+        raise ValidationFailedError(
+            "ALREADY_REVIEWED", "This Report revision has already been reviewed."
+        )
 
-    if (caller := db.get(User, submitted_by_user_id)) is not None and (
-        caller.role == INMATE_REPORTER_ROLE
-    ):
-        # Deriving the caller from submitted_by_user_id (not trusting the
-        # request payload) means a direct service call can't bypass routing
-        # either — the endpoint always passes the original null/empty payload.
+    if caller is not None and caller.role == INMATE_REPORTER_ROLE:
+        # Derive the caller from submitted_by_user_id; never trust request routing.
         if priority != "Normal" or approver_user_id is not None or reviewer_user_ids:
             raise AppError(
                 "INMATE_REPORTER_INPUT_FORBIDDEN",
@@ -1216,14 +1334,15 @@ def submit_for_approval(
                 http_status=403,
             )
         require_inmate_report_write_access(db, caller, book, action="submit")
-        from app.services import document_service
+        if not inmate_report:
+            from app.services import document_service
 
-        editable_fields = {
-            k: v
-            for k, v in (version.fields or {}).items()
-            if k not in ("reporter_id", "submitter_g")
-        }
-        document_service.validate_inmate_report_fields(editable_fields, complete=True)
+            editable_fields = {
+                k: v
+                for k, v in (version.fields or {}).items()
+                if k not in ("reporter_id", "submitter_g")
+            }
+            document_service.validate_inmate_report_fields(editable_fields, complete=True)
         manager_user, manager_row = resolve_inmate_report_manager(db)
         book.doc_manager_id = manager_row.id
         approver_user_id = manager_user.id
@@ -1587,6 +1706,9 @@ def sign_book(db: Session, book_id: int, *, user_id: int, version_id: int) -> Bo
     Mirrors ``decide_step``'s authorization + state machine, but instead of
     merely advancing the step it physically signs: ``render_signed_artifact``
     re-renders the version's document with the signer's signature injected.
+
+    A Report carries its author's signature, so its manager only records the
+    review: the step is approved and the paper is left untouched.
     """
     from app.services import document_service, included_papers_service, signature_placement_service
 
@@ -1598,6 +1720,15 @@ def sign_book(db: Session, book_id: int, *, user_id: int, version_id: int) -> Bo
         raise ValidationFailedError("NO_PENDING_STEP", "Book has no step awaiting a signature")
     if current.assignee_user_id != user_id:
         raise ValidationFailedError("NOT_YOUR_STEP", "This signature is assigned to another user")
+    report_version = _current_version(book)
+    if report_version is not None and is_report(book):
+        current.state = "approved"
+        current.decided_at = datetime.now(UTC).replace(tzinfo=None)
+        retain_revision_access(db, report_version, current)
+        _recompute_approval_state(book)
+        db.commit()
+        db.refresh(book)
+        return book
     signer = db.get(User, user_id)
     if signer is None:
         raise ValidationFailedError("NO_SIGNATURE", "لا يوجد توقيع محفوظ لحسابك")
@@ -1703,6 +1834,7 @@ def sign_book(db: Session, book_id: int, *, user_id: int, version_id: int) -> Bo
         )
     except Exception:
         log.warning("correspondence auto-log failed on sign for book %s", book.id, exc_info=True)
+    inmate_violation_whatsapp.queue_send(db, version)
     db.commit()
     db.refresh(book)
     return book
@@ -1886,6 +2018,55 @@ def list_awaiting(db: Session, *, user_id: int) -> list[Book]:
     return out
 
 
+def awaiting_count(db: Session, *, user_id: int, reviewer_only: bool) -> int:
+    """COUNT twin of ``list_awaiting`` for badges: live books whose current
+    version has a pending step assigned to ``user_id``.
+
+    ``reviewer_only`` includes Report managers: their approver step requests
+    review, not a signature.
+    """
+    # Per version: does this user hold a pending approver / reviewer step?
+    # Mirrors `(s.kind or "approver") == "approver"` in your_step_kind.
+    is_approver = func.coalesce(func.nullif(BookApprovalStep.kind, ""), "approver") == "approver"
+    mine = (
+        select(
+            BookApprovalStep.version_id,
+            func.max(is_approver.cast(Integer)).label("approver"),
+            func.max((BookApprovalStep.kind == "reviewer").cast(Integer)).label("reviewer"),
+        )
+        .where(
+            BookApprovalStep.assignee_user_id == user_id,
+            BookApprovalStep.state == "pending",
+        )
+        .group_by(BookApprovalStep.version_id)
+        .subquery()
+    )
+    newer = aliased(BookVersion)
+    is_current = ~exists().where(
+        newer.book_id == BookVersion.book_id, newer.version_no > BookVersion.version_no
+    )
+    counted = (
+        and_(mine.c.reviewer == 1, mine.c.approver == 0)
+        if reviewer_only
+        else or_(mine.c.approver == 1, mine.c.reviewer == 1)
+    )
+    if reviewer_only:
+        report = and_(
+            Book.category_id == "GS",
+            Book.ref_number.startswith("REPORT-"),
+            BookVersion.template_id == "Report",
+        )
+        counted = or_(counted, and_(report, mine.c.approver == 1))
+    stmt = (
+        select(func.count())
+        .select_from(mine)
+        .join(BookVersion, BookVersion.id == mine.c.version_id)
+        .join(Book, Book.id == BookVersion.book_id)
+        .where(Book.deleted_at.is_(None), is_current, counted)
+    )
+    return db.execute(stmt).scalar_one()
+
+
 # Hours a record may sit at `awaiting_scan` before it starts nagging its owner.
 # Normal turnaround is same-day, so 24h means "genuinely forgotten", not "in
 # transit". Raise this if papers legitimately sit with a manager overnight.
@@ -1941,9 +2122,15 @@ def your_step_kind(book: Book, user_id: int) -> str | None:
     if version is None:
         return None
     pending = [s for s in version.approval_steps if s.state == "pending"]
-    if any((s.kind or "approver") == "approver" and s.assignee_user_id == user_id for s in pending):
+    if any(
+        _received_step_kind(book, s.kind) == "approver" and s.assignee_user_id == user_id
+        for s in pending
+    ):
         return "approver"
-    if any(s.kind == "reviewer" and s.assignee_user_id == user_id for s in pending):
+    if any(
+        _received_step_kind(book, s.kind) == "reviewer" and s.assignee_user_id == user_id
+        for s in pending
+    ):
         return "reviewer"
     return None
 
@@ -1978,7 +2165,11 @@ def _current_pending_step_of_kind(
     if version is None:
         return None
     for step in version.approval_steps:
-        if step.kind == kind and step.assignee_user_id == user_id and step.state == "pending":
+        if (
+            _received_step_kind(book, step.kind) == kind
+            and step.assignee_user_id == user_id
+            and step.state == "pending"
+        ):
             return step
     return None
 
@@ -1990,14 +2181,14 @@ def _history_assignment_version_no(book: Book, user_id: int, kind: str) -> int |
     for version in book.versions:
         for step in version.approval_steps:
             if (
-                step.kind == kind
+                _received_step_kind(book, step.kind) == kind
                 and step.assignee_user_id == user_id
                 and step.decided_at is not None
                 and step.state != "pending"
             ):
                 candidates.append((version.version_no, step.decided_at, step.id))
         for grant in version.revision_access:
-            if grant.kind == kind and grant.user_id == user_id:
+            if _received_step_kind(book, grant.kind) == kind and grant.user_id == user_id:
                 candidates.append((version.version_no, grant.decided_at, grant.id))
     if not candidates:
         return None
@@ -2006,6 +2197,8 @@ def _history_assignment_version_no(book: Book, user_id: int, kind: str) -> int |
 
 
 def _worklist_candidate_book_ids(db: Session, *, user_id: int, kind: str) -> set[int]:
+    # Report managers retain approver steps, but belong in the review worklist.
+    candidate_kinds = ("approver", "reviewer") if kind == "reviewer" else ("approver",)
     current_version_no = (
         select(func.max(BookVersion.version_no))
         .where(BookVersion.book_id == Book.id)
@@ -2021,7 +2214,7 @@ def _worklist_candidate_book_ids(db: Session, *, user_id: int, kind: str) -> set
                 Book.deleted_at.is_(None),
                 BookVersion.version_no == current_version_no,
                 BookApprovalStep.assignee_user_id == user_id,
-                BookApprovalStep.kind == kind,
+                BookApprovalStep.kind.in_(candidate_kinds),
                 BookApprovalStep.state == "pending",
             )
         )
@@ -2033,7 +2226,7 @@ def _worklist_candidate_book_ids(db: Session, *, user_id: int, kind: str) -> set
             .where(
                 Book.deleted_at.is_(None),
                 BookApprovalStep.assignee_user_id == user_id,
-                BookApprovalStep.kind == kind,
+                BookApprovalStep.kind.in_(candidate_kinds),
                 BookApprovalStep.state != "pending",
                 BookApprovalStep.decided_at.is_not(None),
             )
@@ -2047,7 +2240,7 @@ def _worklist_candidate_book_ids(db: Session, *, user_id: int, kind: str) -> set
             .where(
                 Book.deleted_at.is_(None),
                 BookRevisionAccess.user_id == user_id,
-                BookRevisionAccess.kind == kind,
+                BookRevisionAccess.kind.in_(candidate_kinds),
             )
         )
     )
@@ -2188,7 +2381,9 @@ def _build_worklist_item(
     names_by_id: dict[int, str],
 ) -> ApprovalLogItem:
     book, version, full = row.book, row.version, row.access_scope == "full"
-    approver_steps = [s for s in version.approval_steps if (s.kind or "approver") == "approver"]
+    approver_steps = [
+        s for s in version.approval_steps if _received_step_kind(book, s.kind) == "approver"
+    ]
     signer_step = next((s for s in approver_steps if s.state == "pending"), None) or (
         approver_steps[-1] if approver_steps else None
     )
@@ -2217,7 +2412,7 @@ def _build_worklist_item(
         else (book.category.name_en if full and book.category is not None else None)
     )
     verdict = row.status if row.status in _APPROVAL_VERDICTS else None
-    decided_stamps = [s.decided_at for s in approver_steps if s.decided_at is not None]
+    decided_stamps = [s.decided_at for s in _approver_steps(version) if s.decided_at is not None]
     return ApprovalLogItem(
         book_id=book.id,
         ref_number=book.ref_number,
@@ -2235,7 +2430,7 @@ def _build_worklist_item(
         reviewer_names=[
             names_by_id.get(s.assignee_user_id, "")
             for s in version.approval_steps
-            if s.kind == "reviewer"
+            if _received_step_kind(book, s.kind) == "reviewer"
         ],
         submitted_at=_worklist_submitted_at(row),
         decided_at=(
@@ -2305,7 +2500,7 @@ def approval_log_sent(
     limit: int,
     offset: int,
     status: str = "all",
-    sort: str = "oldest",
+    sort: str = "newest",
 ) -> tuple[list[ApprovalLogItem], int]:
     """Books the caller submitted for approval — their outbox. Current
     pending submissions unless ``status`` narrows to one aggregate state."""
@@ -2335,7 +2530,7 @@ def approval_log_received(
     user: User,
     kind: str = "approver",
     status: str = "pending",
-    sort: str = "oldest",
+    sort: str = "newest",
     limit: int,
     offset: int,
 ) -> tuple[list[ApprovalLogItem], int]:
@@ -2400,7 +2595,7 @@ def approval_summary(db: Session, user: User) -> ApprovalSummaryResponse:
     reviewer_history = _approval_worklist(db, user, kind="reviewer", status="all")
     can_view_sent = perm_service.has_capability(db, user, "books.view")
     sent_items, sent_total = (
-        approval_log_sent(db, user=user, limit=1, offset=0, status="pending")
+        approval_log_sent(db, user=user, limit=1, offset=0, status="pending", sort="oldest")
         if can_view_sent
         else ([], 0)
     )
@@ -2437,6 +2632,11 @@ def approval_summary(db: Session, user: User) -> ApprovalSummaryResponse:
         returned_count=returned_total,
         actionable_count=len(actionable_books),
     )
+
+
+def user_display_name(db: Session, user: User) -> str:
+    """Public form of the display-name resolution for an already-fetched user."""
+    return _resolve_user_name(db, user)
 
 
 def _resolve_user_name(db: Session, user: User) -> str:
@@ -2987,6 +3187,7 @@ def add_attachment(
         version.status = "approved"
         book.approval_state = "approved"
         book.send_state = "confirmed"
+        inmate_violation_whatsapp.queue_send(db, version)
         # The flip is a signing, so it files like one in the Correspondence Log.
         try:
             from app.services import correspondence_service
@@ -3391,7 +3592,9 @@ __all__ = [
     "get_book",
     "get_book_by_ref",
     "get_book_detail",
+    "is_deletable",
     "is_document_signed_locked",
+    "is_report",
     "list_approver_candidates",
     "list_awaiting",
     "list_book_categories",

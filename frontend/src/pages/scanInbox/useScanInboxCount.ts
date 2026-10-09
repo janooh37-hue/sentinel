@@ -6,8 +6,7 @@ export function useScanInboxCount(enabled: boolean): number {
     queryKey: ['scan-inbox', 'count'],
     queryFn: () => api.getScanInboxCount(),
     enabled,
-    // Phase 4 LAN: SSE stream drives live invalidation; this is a safety-poll fallback.
-    refetchInterval: 120_000,
+    // Freshness comes from useNotificationStream's `scans` count diff.
     staleTime: 15_000,
   })
   return enabled ? (data?.total ?? 0) : 0

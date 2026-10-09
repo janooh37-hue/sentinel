@@ -5,7 +5,8 @@ from __future__ import annotations
 import hashlib
 import io
 import warnings
-from contextlib import ExitStack
+from collections.abc import Iterator
+from contextlib import ExitStack, contextmanager
 from dataclasses import dataclass
 from typing import Final
 
@@ -214,12 +215,10 @@ def _metadata_free_webp(data: bytes, width: int, height: int) -> bool:
     return offset == len(data) and image_chunks == 1 and extended_chunks <= 1
 
 
-def process_photo(data: bytes) -> ProcessedPhoto:
-    """Decode and validate one upload, then produce normalized WebP variants.
-
-    The content hash covers the normalized mode, dimensions, and every decoded
-    pixel. It is an exact identity for deduplication, not a perceptual hash.
-    """
+@contextmanager
+def _normalized_photo(
+    data: bytes,
+) -> Iterator[tuple[Image.Image, Image.Image, str, int, bytes | None]]:
     if not data:
         raise ValidationFailedError(
             "VEHICLE_PHOTO_EMPTY",
@@ -245,6 +244,7 @@ def process_photo(data: bytes) -> ProcessedPhoto:
                         format=image_format or "unknown",
                         allowed=sorted(_ALLOWED_FORMATS),
                     )
+                assert image_format is not None
 
                 width, height = source.size
                 _validate_dimensions(width, height)
@@ -272,33 +272,8 @@ def process_photo(data: bytes) -> ProcessedPhoto:
                     icc_profile=icc_profile,
                     stack=stack,
                 )
-                normalized_width, normalized_height = normalized.size
-                _validate_dimensions(normalized_width, normalized_height)
-
-                content_hash = _pixel_hash(normalized)
-                generated_full = _encode_webp(normalized, lossless=True)
-                can_keep_source = (
-                    image_format == "WEBP"
-                    and orientation == 1
-                    and icc_profile is None
-                    and source.mode == normalized.mode
-                    and source.size == normalized.size
-                    and _metadata_free_webp(data, normalized_width, normalized_height)
-                )
-                full = (
-                    data if can_keep_source and len(data) < len(generated_full) else generated_full
-                )
-                preview = _encode_resized(normalized, PREVIEW_LONGEST_EDGE)
-                thumbnail = _encode_resized(normalized, THUMBNAIL_LONGEST_EDGE)
-
-                return ProcessedPhoto(
-                    content_hash=content_hash,
-                    width=normalized_width,
-                    height=normalized_height,
-                    thumbnail=thumbnail,
-                    preview=preview,
-                    full=full,
-                )
+                _validate_dimensions(*normalized.size)
+                yield source, normalized, image_format, orientation, icc_profile
     except ValidationFailedError:
         raise
     except (
@@ -314,6 +289,50 @@ def process_photo(data: bytes) -> ProcessedPhoto:
         raise _invalid_photo() from exc
 
 
+def photo_content_hash(data: bytes) -> str:
+    """Return the exact normalized-pixel identity without encoding variants."""
+    with _normalized_photo(data) as (_, normalized, _, _, _):
+        return _pixel_hash(normalized)
+
+
+def process_photo(data: bytes) -> ProcessedPhoto:
+    """Decode and validate one upload, then produce normalized WebP variants.
+
+    The content hash covers the normalized mode, dimensions, and every decoded
+    pixel. It is an exact identity for deduplication, not a perceptual hash.
+    """
+    with _normalized_photo(data) as (
+        source,
+        normalized,
+        image_format,
+        orientation,
+        icc_profile,
+    ):
+        normalized_width, normalized_height = normalized.size
+        content_hash = _pixel_hash(normalized)
+        generated_full = _encode_webp(normalized, lossless=True)
+        can_keep_source = (
+            image_format == "WEBP"
+            and orientation == 1
+            and icc_profile is None
+            and source.mode == normalized.mode
+            and source.size == normalized.size
+            and _metadata_free_webp(data, normalized_width, normalized_height)
+        )
+        full = data if can_keep_source and len(data) < len(generated_full) else generated_full
+        preview = _encode_resized(normalized, PREVIEW_LONGEST_EDGE)
+        thumbnail = _encode_resized(normalized, THUMBNAIL_LONGEST_EDGE)
+
+        return ProcessedPhoto(
+            content_hash=content_hash,
+            width=normalized_width,
+            height=normalized_height,
+            thumbnail=thumbnail,
+            preview=preview,
+            full=full,
+        )
+
+
 __all__ = [
     "MAX_DIMENSION",
     "MAX_PIXELS",
@@ -321,5 +340,6 @@ __all__ = [
     "PREVIEW_LONGEST_EDGE",
     "THUMBNAIL_LONGEST_EDGE",
     "ProcessedPhoto",
+    "photo_content_hash",
     "process_photo",
 ]

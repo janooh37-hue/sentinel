@@ -39,7 +39,6 @@ vi.mock('@/lib/useLockState', () => ({
   useLockState: () => ({ locked: false, lock: vi.fn(), unlock: vi.fn() }),
 }))
 vi.mock('@/hooks/useNotificationStream', () => ({ useNotificationStream: vi.fn() }))
-vi.mock('@/hooks/useRefreshHeartbeat', () => ({ useRefreshHeartbeat: vi.fn() }))
 vi.mock('@/hooks/useRefreshHotkeys', () => ({ useRefreshHotkeys: vi.fn() }))
 vi.mock('@/components/shell/BottomTabBar', () => ({ BottomTabBar: () => null }))
 vi.mock('@/components/shell/LockOverlay', () => ({ LockOverlay: () => null }))
@@ -60,6 +59,7 @@ vi.mock('@/lib/routeLoaders', () => ({
   loadApplicationPage: () => Promise.resolve({ default: () => <div>application-page</div> }),
   loadApprovalsPage: () => Promise.resolve({ default: () => <div>approvals-page</div> }),
   loadAttendancePage: () => Promise.resolve({ default: () => <div>attendance-page</div> }),
+  loadDebugConsolePage: () => Promise.resolve({ default: () => <div>debug-console-page</div> }),
   loadBookRecordPage: () => Promise.resolve({ default: () => <div>book-record-page</div> }),
   loadBooksPage: () => Promise.resolve({ default: () => <div>books-page</div> }),
   loadDashboardPage: () => Promise.resolve({ default: () => <div>dashboard-page</div> }),
@@ -96,7 +96,8 @@ import App from './App'
 const routes = [
   ['/employees', ['employees.view'], 'employees-page'],
   ['/employees/G-1', ['employees.view'], 'employee-detail-page'],
-  ['/application', ['documents.generate', 'books.view'], 'application-page'],
+  ['/services', ['documents.generate', 'books.view'], 'application-page'],
+  ['/services/general_book', ['documents.generate', 'books.view'], 'application-page'],
   ['/books', ['books.view'], 'books-page'],
   ['/scan-back', ['books.view', 'books.edit'], 'scanback-page'],
   ['/leaves', ['leaves.view'], 'leaves-page'],
@@ -158,10 +159,10 @@ describe('App route capability gates', () => {
   })
 
   it.each(['documents.generate', 'books.view'])(
-    'denies /application when %s is the only granted capability',
+    'denies /services when %s is the only granted capability',
     async (capability) => {
       capabilityState.allowed = new Set([capability])
-      window.history.pushState({}, '', '/application')
+      window.history.pushState({}, '', '/services')
       render(<App />)
 
       expect(await screen.findByText("You don't have access to this page")).toBeVisible()
@@ -223,5 +224,35 @@ describe('App route capability gates', () => {
 
     expect(await screen.findByText("You don't have access to this page")).toBeVisible()
     expect(screen.queryByText('books-page')).not.toBeInTheDocument()
+  })
+})
+
+describe('App legacy links', () => {
+  it.each([
+    ['/application', '/services', ''],
+    [
+      '/application?form=Inmate%20Conduct%20Violations&mode=stats&stats_month=2026-08',
+      '/services/inmate_conduct_violations',
+      '?mode=stats&stats_month=2026-08',
+    ],
+  ] as const)('sends the delivered link %s to its service URL', async (legacy, pathname, search) => {
+    capabilityState.allowed = new Set(['documents.generate', 'books.view'])
+    window.history.pushState({}, '', legacy)
+    render(<App />)
+
+    expect(await screen.findByText('application-page')).toBeVisible()
+    expect(window.location.pathname).toBe(pathname)
+    expect(window.location.search).toBe(search)
+  })
+})
+
+describe('App unknown paths', () => {
+  it('shows Not found at the requested URL instead of the dashboard', async () => {
+    window.history.pushState({}, '', '/nope')
+    render(<App />)
+
+    expect(await screen.findByRole('heading', { level: 1, name: /page not found/i })).toBeVisible()
+    expect(screen.queryByText('dashboard-page')).not.toBeInTheDocument()
+    expect(window.location.pathname).toBe('/nope')
   })
 })

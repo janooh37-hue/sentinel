@@ -13,7 +13,7 @@ def test_monthly_push_names_report_stage_and_links_to_month():
         ("monthly_review", "review", "مراجعتك"),
         ("monthly_approval", "approval", "اعتمادك"),
     ]:
-        target = "/application?form=inmate_conduct_violations&mode=stats&stats_month=2026-08"
+        target = "/services/inmate_conduct_violations?mode=stats&stats_month=2026-08"
         messages, url = ss._build_push(kind, [_item(kind, label="2026-08", url=target)], "/section")
         assert "Monthly inmate violations report" in messages["en"][1]
         assert en in messages["en"][1]

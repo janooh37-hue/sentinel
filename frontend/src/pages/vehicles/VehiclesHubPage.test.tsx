@@ -1,8 +1,8 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { I18nextProvider } from 'react-i18next'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, useLocation, useNavigate } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { copyTable } from '@/lib/copyTable'
@@ -168,7 +168,7 @@ const VEHICLES: VehicleListItem[] = [
   },
 ]
 
-function renderPage() {
+function renderPage(initialEntry = '/vehicles', onLocation?: (location: string) => void) {
   const client = new QueryClient({
     defaultOptions: {
       queries: { retry: false },
@@ -179,13 +179,22 @@ function renderPage() {
   return render(
     <QueryClientProvider client={client}>
       <I18nextProvider i18n={i18n}>
-        <MemoryRouter initialEntries={['/vehicles']}>
+        <MemoryRouter initialEntries={[initialEntry]}>
           <VehiclesHubPage />
+          <LocationProbe onLocation={onLocation} />
         </MemoryRouter>
       </I18nextProvider>
     </QueryClientProvider>,
   )
 }
+
+function LocationProbe({ onLocation }: { onLocation?: (location: string) => void }) {
+  const location = useLocation()
+  const navigate = useNavigate()
+  onLocation?.(`${location.pathname}${location.search}`)
+  return <button type="button" onClick={() => navigate(-1)}>History back</button>
+}
+
 
 function liveView(): HTMLElement {
   const view = document.querySelector<HTMLElement>('[data-print-hide]')
@@ -518,5 +527,24 @@ describe('VehiclesHubPage', () => {
     await user.click(within(dialog).getByRole('button', { name: 'Archive vehicle' }))
 
     await waitFor(() => expect(api.archiveVehicle).toHaveBeenCalledWith(101))
+  })
+  it('Back closes Add and preserves the hub filters', async () => {
+    const user = userEvent.setup()
+    let current = ''
+    renderPage('/vehicles?q=Coaster&site=1&expiry=attention&state=active', (location) => {
+      current = location
+    })
+
+    await user.click(await screen.findByRole('button', { name: /Add Vehicle/ }))
+    const historyBack = Array.from(document.querySelectorAll('button')).find(
+      (button) => button.textContent === 'History back',
+    )
+    expect(historyBack).toBeDefined()
+    fireEvent.click(historyBack as HTMLButtonElement)
+
+    await waitFor(() =>
+      expect(current).toBe('/vehicles?q=Coaster&site=1&expiry=attention&state=active'),
+    )
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
   })
 })

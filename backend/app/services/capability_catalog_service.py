@@ -12,6 +12,7 @@ from app.core.form_kind import OTHER_SERVICE_ID, SERVICE_IDS
 from app.core.permissions import (
     CAPABILITIES,
     CATEGORY_CAP_PREFIX,
+    OPT_IN_SERVICE_IDS,
     ROLE_DEFAULTS,
     SERVICE_CAP_PREFIX,
     SERVICE_RECORDS_CAP_PREFIX,
@@ -74,13 +75,14 @@ def _service_names(service_id: str) -> tuple[str, str | None]:
 
 
 def _dynamic_default_roles(capability_id: str) -> tuple[str, ...]:
-    """operator/manager/admin implicitly get every dynamic (service/category)
-    capability by default — perm_service's all-roles union grant, unrelated
-    to ``ROLE_DEFAULTS`` content for those three. ``inmate_reporter`` is NOT
-    part of that implicit union (its dynamic caps are narrowed to its fixed
-    ceiling — see ``perm_service._role_and_dynamic_caps``); it only appears
-    here for the couple ids its ceiling actually names."""
-    roles: tuple[str, ...] = ("operator", "manager", "admin")
+    """Mirror implicit service/category grants, including opt-in HR forms and
+    the inmate reporter's fixed service ceiling."""
+    service_id = capability_id.removeprefix(SERVICE_CAP_PREFIX).removeprefix(
+        SERVICE_RECORDS_CAP_PREFIX
+    )
+    roles: tuple[str, ...] = (
+        ("admin",) if service_id in OPT_IN_SERVICE_IDS else ("operator", "manager", "admin")
+    )
     if capability_id in ROLE_DEFAULTS.get(INMATE_REPORTER_ROLE, frozenset()):
         roles = (*roles, INMATE_REPORTER_ROLE)
     return roles

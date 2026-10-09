@@ -126,7 +126,7 @@ function InmateReporterBottomTabBar(): React.JSX.Element {
   const { t } = useTranslation()
   const entryByDestination = {
     '/': { labelKey: 'nav.dashboard', Icon: LayoutDashboard },
-    '/application': { labelKey: 'nav.inmateReport', Icon: FilePlus2 },
+    '/services': { labelKey: 'nav.inmateReport', Icon: FilePlus2 },
     '/books': { labelKey: 'nav.records', Icon: BookText },
   }
   const entries = INMATE_REPORTER_ALLOWED_DESTINATIONS.map((to) => ({

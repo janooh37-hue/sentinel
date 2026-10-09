@@ -72,6 +72,24 @@ describe('railItemsFrom', () => {
   it('renders nothing before the payload arrives', () => {
     expect(railItemsFrom(undefined, 'All forms', label)).toEqual([])
   })
+
+  it('keeps the active service as a zero-count row when the facets omit it', () => {
+    const items = railItemsFrom(FACETS, 'All forms', label, 'Warning Form')
+    expect(items.map((i) => i.serviceId)).toEqual([
+      'all',
+      'Leave Application Form',
+      'Report',
+      'other',
+      'Warning Form',
+    ])
+    expect(items[items.length - 1]).toMatchObject({ label: 'L:Warning Form', count: 0, states: [] })
+  })
+
+  it('does not duplicate the active service when the facets already list it', () => {
+    const items = railItemsFrom(FACETS, 'All forms', label, 'Report')
+    expect(items.filter((i) => i.serviceId === 'Report')).toHaveLength(1)
+    expect(railItemsFrom(FACETS, 'All forms', label, 'all')).toHaveLength(4)
+  })
 })
 
 describe('spineCountsFrom', () => {

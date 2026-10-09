@@ -125,5 +125,7 @@ export function activityEmoji(kind: ActivityItemRead['kind']): string {
       return '🚫'
     case 'duty_location':
       return '📍'
+    case 'status':
+      return '🔁'
   }
 }

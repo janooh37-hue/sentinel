@@ -2,10 +2,10 @@
  * Quick-action deep-link contract.
  *
  * Every tile must open a pre-selected form. Two ways that has broken before:
- * a tile whose `href` pointed at a section list instead of `/application`, and
+ * a tile whose `href` pointed at a section list instead of a service, and
  * an `href` built from the raw template name ("Acknowledgment Form") which the
- * `?form=` resolver — comparing slugs — never matched, so the tile silently
- * landed on the gallery. The URL is produced by `quickActions.formHref`; the
+ * `:slug` resolver — comparing slugs — never matched, so the tile silently
+ * landed on the gallery. The URL is produced by `quickActions.serviceHref`; the
  * lookup is done independently by `resolveTemplateIdFromSlug`. This asserts
  * the two still agree for every id in the catalog.
  */
@@ -35,7 +35,7 @@ describe('quick actions', () => {
   it('deep-links every tile to its own template, never to a section list', () => {
     for (const id of QUICK_ACTION_IDS) {
       const { href } = QUICK_ACTION_META[id]
-      const match = /^\/application\?form=([^&]+)$/.exec(href)
+      const match = /^\/services\/([^/?]+)$/.exec(href)
       expect(match, `${id} -> ${href}`).not.toBeNull()
 
       const slug = decodeURIComponent(match![1]!)

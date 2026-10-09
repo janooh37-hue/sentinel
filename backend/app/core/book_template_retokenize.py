@@ -31,7 +31,9 @@ _JINJA_DELIM = re.compile(r"\{\{|\}\}|\{%|%\}|\{#|#\}")
 
 _REF_LABEL = re.compile(r"^\s*الرقم\s*[:：]")  # noqa: RUF001 — full-width colon is a legitimate Arabic-text variant
 _DATE_LABEL = re.compile(r"^\s*التاريخ\s*[:：]")  # noqa: RUF001 — full-width colon is a legitimate Arabic-text variant
-_BARCODE_VALUE = re.compile(r"^[A-Z0-9/-]+\+\d{8}$")
+# Legacy ``REF+YYYYMMDD`` or current ``*GSSG+DD/MM/YYYY+REF*`` (qr.barcode_payload).
+_BARCODE_VALUE = re.compile(r"^(?:[A-Z0-9/-]+\+\d{8}|\*GSSG\+\d{2}/\d{2}/\d{4}\+[A-Z0-9/-]+\*)$")
+_BARCODE_FONT = "Libre Barcode 39"  # the run docx_engine._format_letterhead_barcode rewrites
 _SUBJECT_LABEL = re.compile(r"^\s*الموضوع\s*[:：]")  # noqa: RUF001 — full-width colon is a legitimate Arabic-text variant
 # The paper's addressee line: «السيد \ {name} المحترم» (the separator is a
 # backslash on the current template, a slash on the older hand-typed books).
@@ -106,9 +108,7 @@ def _header_copies(doc: Any) -> list[list[Paragraph]]:
         seen_parts.add(id(header.part))
         grouped: dict[tuple[int, str], list[Paragraph]] = {}
         for element in header.part.element.findall(".//" + qn("w:p")):
-            if not any(
-                text.text for text in element.findall("./" + qn("w:r") + "/" + qn("w:t"))
-            ):
+            if not any(text.text for text in element.findall("./" + qn("w:r") + "/" + qn("w:t"))):
                 continue
             ancestor = element.getparent()
             branch = "Header"
@@ -123,9 +123,7 @@ def _header_copies(doc: Any) -> list[list[Paragraph]]:
     return copies
 
 
-def _write_header_block(
-    ref_para: Paragraph, date_para: Paragraph, barcode_para: Paragraph
-) -> None:
+def _write_header_block(ref_para: Paragraph, date_para: Paragraph, barcode_para: Paragraph) -> None:
     """Restore the guarded ref/date/barcode token block in one header copy."""
     src = _first_run_style(date_para)
     _clear_runs(ref_para)
@@ -166,7 +164,6 @@ def _strip_header_artifacts(doc: Any) -> None:
                     _clear_runs(para)
 
 
-
 def retokenize_general_book(docx_path: Path, *, submitter_g: str | None = None) -> None:
     doc = Document(str(docx_path))
 
@@ -199,7 +196,8 @@ def retokenize_general_book(docx_path: Path, *, submitter_g: str | None = None) 
             (
                 p
                 for p in paragraphs
-                if _BARCODE_VALUE.fullmatch(p.text.strip())
+                if any(r.font.name == _BARCODE_FONT for r in p.runs)
+                or _BARCODE_VALUE.fullmatch(p.text.strip())
                 or p.text.replace(_ZWSP, "").strip() == "{{ barcode }}"
             ),
             None,
@@ -236,7 +234,6 @@ def retokenize_general_book(docx_path: Path, *, submitter_g: str | None = None) 
         _guard_para(cc_para, "{%p if cc %}", after=False)
         _retokenize_labeled_line(cc_para, "نسخة إلى: ", "{{ cc }}")
         _guard_para(cc_para, "{%p endif %}", after=True)
-
 
     # 5. Legacy English header stamp out.
     _strip_header_artifacts(doc)

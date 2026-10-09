@@ -21,6 +21,8 @@ from sqlalchemy.orm import Session
 from app.api.errors import AppError
 from app.core.permissions import (
     ALL_CAPABILITIES,
+    AUTO_GRANTED_SERVICE_CAPABILITY_IDS,
+    AUTO_GRANTED_SERVICE_RECORDS_CAPABILITY_IDS,
     CAPABILITY_IDS,
     CATEGORY_CAP_PREFIX,
     INMATE_REPORTER_CAPS,
@@ -65,8 +67,10 @@ def _role_and_dynamic_caps(db: Session, role: str) -> tuple[set[str], set[str]]:
             literal(True).label("is_dynamic"),
         ),
     )
-    role_caps = set[str]()
-    dynamic_caps = set(SERVICE_CAPABILITY_IDS) | set(SERVICE_RECORDS_CAPABILITY_IDS)
+    role_caps: set[str] = set()
+    dynamic_caps = set(AUTO_GRANTED_SERVICE_CAPABILITY_IDS) | set(
+        AUTO_GRANTED_SERVICE_RECORDS_CAPABILITY_IDS
+    )
     for capability, is_dynamic in db.execute(tagged_caps):
         if is_dynamic:
             dynamic_caps.add(capability)
@@ -121,7 +125,10 @@ def effective_caps(db: Session, user: User) -> set[str]:
 
     role_caps, dynamic_caps = _role_and_dynamic_caps(db, user.role)
     if user.role == ADMIN_ROLE:
-        caps = set(ALL_CAPABILITIES) | dynamic_caps
+        # Admin gets every recognized dynamic capability (including opt-in
+        # new-form services), not just the auto-granted subset — lockout
+        # protection must never depend on an opt-in rollout.
+        caps = set(ALL_CAPABILITIES) | dynamic_capability_ids(db)
     else:
         caps = role_caps | dynamic_caps
         overrides = (

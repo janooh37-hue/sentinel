@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { I18nextProvider } from 'react-i18next'
-import { MemoryRouter, Route, Routes } from 'react-router-dom'
+import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
 import { toast } from 'sonner'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -144,7 +144,11 @@ const PHOTO_ASSET: VehiclePhotoRead = {
   usage_count: 0,
 }
 
-function renderPage(tab?: 'renewals' | 'photos' | 'certificates') {
+function renderPage(
+  tab?: 'renewals' | 'photos' | 'certificates',
+  initialEntry?: string,
+  onLocation?: (search: string) => void,
+) {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   })
@@ -152,15 +156,30 @@ function renderPage(tab?: 'renewals' | 'photos' | 'certificates') {
   return render(
     <QueryClientProvider client={client}>
       <I18nextProvider i18n={i18n}>
-        <MemoryRouter initialEntries={[`/vehicles/101${suffix}`]}>
+        <MemoryRouter initialEntries={[initialEntry ?? `/vehicles/101${suffix}`]}>
           <Routes>
-            <Route path="/vehicles/:id" element={<VehicleDetailPage />} />
+            <Route
+              path="/vehicles/:id"
+              element={
+                <>
+                  <VehicleDetailPage />
+                  <LocationProbe onLocation={onLocation} />
+                </>
+              }
+            />
           </Routes>
         </MemoryRouter>
       </I18nextProvider>
     </QueryClientProvider>,
   )
 }
+
+function LocationProbe({ onLocation }: { onLocation?: (search: string) => void }) {
+  const location = useLocation()
+  onLocation?.(`${location.pathname}${location.search}`)
+  return null
+}
+
 
 beforeEach(async () => {
   vi.clearAllMocks()
@@ -402,5 +421,17 @@ describe('VehicleDetailPage', () => {
       await waitFor(() => expect(api.deleteVehicleFile).toHaveBeenCalledWith(101, 501))
       expect(api.deleteVehicleFile).not.toHaveBeenCalledWith(101, 502)
     })
+  })
+  it('opens a renew overlay from the URL and closes it without leaving the vehicle', async () => {
+    const user = userEvent.setup()
+    let current = ''
+    renderPage(undefined, '/vehicles/101?action=renew', (location) => {
+      current = location
+    })
+
+    expect(await screen.findByRole('dialog')).toBeInTheDocument()
+    await user.keyboard('{Escape}')
+
+    await waitFor(() => expect(current).toBe('/vehicles/101'))
   })
 })

@@ -11,7 +11,7 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom'
+import { MemoryRouter, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
@@ -113,13 +113,25 @@ function makeClient(): QueryClient {
   return new QueryClient({ defaultOptions: { queries: { retry: false } } })
 }
 
-function renderPage() {
+function renderPage(initialEntries = ['/absences']) {
   return render(
     <QueryClientProvider client={makeClient()}>
-      <MemoryRouter>
+      <MemoryRouter initialEntries={initialEntries}>
         <AbsencesPage />
+        <NavigationProbe />
       </MemoryRouter>
     </QueryClientProvider>,
+  )
+}
+
+function NavigationProbe(): React.JSX.Element {
+  const location = useLocation()
+  const navigate = useNavigate()
+  return (
+    <>
+      <output data-testid="location">{location.pathname + location.search}</output>
+      <button data-testid="back" type="button" onClick={() => navigate(-1)}>Back</button>
+    </>
   )
 }
 
@@ -475,3 +487,23 @@ describe('AbsencesPage', () => {
     expect(screen.queryByRole('button', { name: 'Delete' })).not.toBeInTheDocument()
   })
 })
+  it('reads absence date and search filters from the URL', async () => {
+    renderPage(['/absences?from=2026-09-01&to=2026-09-30&q=x'])
+    await userEvent.setup().click(screen.getByTestId('pick-employee'))
+    expect(screen.getByLabelText('First day')).toHaveValue('2026-09-01')
+    expect(screen.getByLabelText('Last day')).toHaveValue('2026-09-30')
+    expect(screen.getByRole('searchbox', { name: 'Search by ID or name' })).toHaveValue('x')
+  })
+
+  it('Back closes an edited absence and preserves its date and search filters', async () => {
+    listAbsenceRegister.mockResolvedValue(REGISTER)
+    renderPage(['/absences', '/absences?from=2026-09-01&to=2026-09-30&q=John'])
+    const user = userEvent.setup()
+    await user.click((await screen.findAllByRole('button', { name: 'Edit absence' }))[0])
+    expect(await screen.findByRole('dialog')).toBeInTheDocument()
+    fireEvent.click(screen.getByTestId('back'))
+    await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent(
+      '/absences?from=2026-09-01&to=2026-09-30&q=John',
+    ))
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })

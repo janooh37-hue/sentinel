@@ -133,4 +133,64 @@ def test_future_generation_places_automatic_companion_inside_fixed_base(
     assert document.pdf_path is not None
     assert _texts(settings.data_dir / document.base_pdf_path) == ["FORM", "COMPANION"]
     assert _texts(settings.data_dir / document.pdf_path) == ["FORM", "COMPANION"]
+    primary, companion = result.documents
+    book = db.get(Book, result.book_id)
+    assert primary.ref_number == companion.ref_number
+    assert primary.ref_number.startswith("1/3/")
+    assert book is not None
+    assert book.ref_number == primary.ref_number
+    assert book.classification_code == "3/1"
     get_settings.cache_clear()
+
+
+def test_resignation_pair_shares_force_affairs_ref(
+    generation_env: tuple[Session, Settings, User],
+) -> None:
+    db, _settings, creator = generation_env
+
+    result = document_service.generate_document(
+        db,
+        employee_id="G-1001",
+        template_id="Resignation Letter",
+        fields={"reason": "Family responsibilities after long service."},
+        commit=True,
+        current_user=creator,
+    )
+
+    assert len(result.documents) == 2
+    primary, companion = result.documents
+    book = db.get(Book, result.book_id)
+    assert primary.ref_number == companion.ref_number
+    assert primary.ref_number.startswith("1/12/")
+    assert book is not None
+    assert book.ref_number == primary.ref_number
+    assert book.classification_code == "12/1"
+    get_settings.cache_clear()
+
+
+def test_sick_leave_application_uses_sick_classified_ref(
+    generation_env: tuple[Session, Settings, User],
+) -> None:
+    db, _settings, creator = generation_env
+
+    result = document_service.generate_document(
+        db,
+        employee_id="G-1001",
+        template_id="Leave Application Form",
+        fields={
+            "leave_type": "Sick Leave",
+            "start_date": "10/08/2026",
+            "end_date": "11/08/2026",
+            "total_days": 2,
+        },
+        commit=True,
+        current_user=creator,
+    )
+
+    assert len(result.documents) == 1
+    document = result.documents[0]
+    book = db.get(Book, result.book_id)
+    assert document.ref_number.startswith("1/4/")
+    assert book is not None
+    assert book.ref_number == document.ref_number
+    assert book.classification_code == "4/1"

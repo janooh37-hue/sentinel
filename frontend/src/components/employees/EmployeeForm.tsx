@@ -95,6 +95,13 @@ interface Props {
   submitting?: boolean
 }
 
+function todayIso(): string {
+  const d = new Date()
+  const mm = String(d.getMonth() + 1).padStart(2, '0')
+  const dd = String(d.getDate()).padStart(2, '0')
+  return `${d.getFullYear()}-${mm}-${dd}`
+}
+
 function blankDefaults(): EmployeeFormValues {
   return {
     id: '',
@@ -105,6 +112,9 @@ function blankDefaults(): EmployeeFormValues {
     doj_company: '',
     status: 'Active',
     end_date: '',
+    transfer_site: '',
+    transfer_return_date: '',
+    effective_date: todayIso(),
     department: '',
     position: '',
     position_ar: '',
@@ -132,6 +142,9 @@ function fromInitial(initial: Partial<EmployeeRead>): EmployeeFormValues {
     doj_company: initial.doj_company ?? '',
     status: initial.status ?? 'Active',
     end_date: initial.end_date ?? '',
+    transfer_site: initial.transfer_site ?? '',
+    transfer_return_date: initial.transfer_return_date ?? '',
+    effective_date: todayIso(),
     department: initial.department ?? '',
     position: initial.position ?? '',
     position_ar: initial.position_ar ?? '',
@@ -172,6 +185,9 @@ export function EmployeeForm({
 
   const status = watch('status')
   const endDateRequired = status !== 'Active'
+  const isTransferred = status === 'Transferred'
+  // Reactivating a departed/transferred employee asks for the return date.
+  const isReactivation = mode === 'edit' && initial?.status != null && initial.status !== 'Active' && status === 'Active'
 
   // Seed the extraction panel from an injected extraction (intake flow).
   const [extractionResult, setExtractionResult] = useState<ExtractionResponse | null>(
@@ -219,7 +235,28 @@ export function EmployeeForm({
   return (
     <form
       onSubmit={handleSubmit(async (vals) => {
-        await onSubmit(vals)
+        // Only send what applies to the chosen status: transfer fields for
+        // Transferred, the return date only when reactivating. A still-Active
+        // employee with a PENDING transfer keeps its stored site/return date —
+        // sending nulls would make the flip land a site-less transfer.
+        const keepPendingTransfer =
+          vals.status === 'Active' && initial?.pending_status === 'Transferred'
+        await onSubmit({
+          ...vals,
+          transfer_site:
+            vals.status === 'Transferred'
+              ? vals.transfer_site
+              : keepPendingTransfer
+                ? (initial?.transfer_site ?? null)
+                : null,
+          transfer_return_date:
+            vals.status === 'Transferred'
+              ? vals.transfer_return_date
+              : keepPendingTransfer
+                ? (initial?.transfer_return_date ?? null)
+                : null,
+          effective_date: isReactivation ? vals.effective_date : null,
+        })
       })}
       className="space-y-4 pb-20"
       aria-label={t(`employees.${mode === 'create' ? 'newEmployee' : 'tabs.profile'}`)}
@@ -314,7 +351,7 @@ export function EmployeeForm({
           </Field>
           <Field
             id="end_date"
-            label={`${fld('end_date')}${endDateRequired ? ' *' : ''}`}
+            label={`${fld(isTransferred ? 'effective_date' : 'end_date')}${endDateRequired ? ' *' : ''}`}
             error={errFor('end_date')}
           >
             <Input
@@ -324,6 +361,39 @@ export function EmployeeForm({
               className="font-mono"
             />
           </Field>
+          {isTransferred && (
+            <>
+              <Field
+                id="transfer_site"
+                label={`${fld('transfer_site')} *`}
+                error={errFor('transfer_site')}
+              >
+                <Input id="transfer_site" dir="auto" maxLength={128} {...register('transfer_site')} />
+              </Field>
+              <Field
+                id="transfer_return_date"
+                label={fld('transfer_return_date')}
+                error={errFor('transfer_return_date')}
+              >
+                <Input
+                  id="transfer_return_date"
+                  type="date"
+                  {...register('transfer_return_date')}
+                  className="font-mono"
+                />
+              </Field>
+            </>
+          )}
+          {isReactivation && (
+            <Field id="effective_date" label={fld('return_date')}>
+              <Input
+                id="effective_date"
+                type="date"
+                {...register('effective_date')}
+                className="font-mono"
+              />
+            </Field>
+          )}
         </CardContent>
       </Card>
 

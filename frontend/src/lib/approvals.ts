@@ -82,6 +82,7 @@ export function uiKindOf(kind: ApprovalKindParam): ApprovalKind {
 export function isLateAdvisory(item: ApprovalLogItem): boolean {
   return (
     item.status === 'pending' &&
+    item.assigned_signer_user_id != null &&
     item.record_status != null &&
     item.record_status !== 'pending' &&
     item.record_status !== 'none'
@@ -94,20 +95,20 @@ export function isLateAdvisory(item: ApprovalLogItem): boolean {
  *  render the no-assigned-work empty state). */
 export function defaultApprovalContext(summary: ApprovalSummaryResponse): ApprovalContext | null {
   if (summary.signature.count > 0) {
-    return { tab: 'received', kind: 'sign', status: 'pending', sort: 'oldest', page: 1 }
+    return { tab: 'received', kind: 'sign', status: 'pending', sort: 'newest', page: 1 }
   }
   if (summary.review.count > 0) {
-    return { tab: 'received', kind: 'review', status: 'pending', sort: 'oldest', page: 1 }
+    return { tab: 'received', kind: 'review', status: 'pending', sort: 'newest', page: 1 }
   }
   if (summary.can_view_sent) {
-    return { tab: 'sent', status: 'pending', sort: 'oldest', page: 1 }
+    return { tab: 'sent', status: 'pending', sort: 'newest', page: 1 }
   }
   const kinds = summary.available_received_kinds ?? []
   if (kinds.includes('reviewer')) {
-    return { tab: 'received', kind: 'review', status: 'all', sort: 'oldest', page: 1 }
+    return { tab: 'received', kind: 'review', status: 'all', sort: 'newest', page: 1 }
   }
   if (kinds.includes('approver')) {
-    return { tab: 'received', kind: 'sign', status: 'all', sort: 'oldest', page: 1 }
+    return { tab: 'received', kind: 'sign', status: 'all', sort: 'newest', page: 1 }
   }
   return null
 }
@@ -122,7 +123,7 @@ export function normalizeApprovalContext(
 ): ApprovalContext | null {
   const tabParam = params.get('tab')
   const tab = isApprovalScope(tabParam) ? tabParam : null
-  const sort = isApprovalSort(params.get('sort')) ? (params.get('sort') as ApprovalSort) : 'oldest'
+  const sort = isApprovalSort(params.get('sort')) ? (params.get('sort') as ApprovalSort) : 'newest'
   const pageValue = Number.parseInt(params.get('page') ?? '', 10)
   const page = Number.isInteger(pageValue) && pageValue >= 1 ? pageValue : 1
   if (tab === 'sent') {

@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session, joinedload
 
 from app.api.errors import NotFoundError, ValidationFailedError
@@ -229,6 +229,27 @@ def list_leaves(
     )
     rows = list(db.execute(rows_stmt).scalars().all())
     return rows, total
+
+
+def awaiting_return_count(db: Session) -> int:
+    """Live leaves in lifecycle.ts's ``AwaitingReturn`` display state.
+
+    That state is "overdue AND a return form may be filed now". SQL narrows to
+    overdue live rows and counts them per (type, status, has-certificate);
+    ``can_file_return`` then judges each of the few distinct groups.
+    """
+    today = datetime.now(_WORKFORCE_TIMEZONE).date()
+    has_cert = and_(Leave.certificate_path.is_not(None), Leave.certificate_path != "")
+    groups = db.execute(
+        select(Leave.leave_type, Leave.status, has_cert, func.count())
+        .where(Leave.deleted_at.is_(None), Leave.end_date < today)
+        .group_by(Leave.leave_type, Leave.status, has_cert)
+    ).all()
+    return sum(
+        n
+        for leave_type, status, cert, n in groups
+        if leave_lifecycle.can_file_return(leave_type, status, has_certificate=bool(cert))
+    )
 
 
 def get_leave(db: Session, leave_id: int, *, include_deleted: bool = False) -> Leave:

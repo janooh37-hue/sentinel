@@ -84,7 +84,7 @@
     "ledger": "Ledger",
     "leaves": "Leaves",
     "services": "Services",
-    "inmateReport": "New inmate-violation report",
+    "inmateReport": "New report",
     "records": "Records",
     "permits": "Permits",
     "settings": "Settings",
@@ -136,7 +136,21 @@
     "subtitle": "Available shortcuts on this page.",
     "focusSearch": "Focus search",
     "newItem": "New item on current page",
-    "showHelp": "Show this help"
+    "showHelp": "Show this help",
+    "records": {
+      "group": "Records",
+      "next": "Next record",
+      "prev": "Previous record",
+      "open": "Open record",
+      "openNewTab": "Open in new tab",
+      "copyRef": "Copy reference",
+      "focus": "Focus on document",
+      "sign": "Sign & approve (opens confirm)",
+      "mark": "Mark up",
+      "zoom": "Zoom in / out / fit",
+      "back": "Back · close · exit focus",
+      "help": "This help"
+    }
   },
   "appBar": {
     "account": "Account",
@@ -267,10 +281,15 @@
     "errorToast": "Something went wrong",
     "loadError": "Couldn't load this. Check your connection and try again.",
     "copyFailed": "Could not copy to clipboard. Try again.",
-    "retry": "Retry"
+    "retry": "Retry",
+    "done": "Done"
   },
   "a11y": {
     "skipToContent": "Skip to main content"
+  },
+  "notFound": {
+    "title": "Page not found",
+    "body": "This link may be old or mistyped, or the record was removed."
   },
   "editor": {
     "loadFailed": "Rich text editor could not load — using a plain text box.",
@@ -309,7 +328,8 @@
       "active": "Active",
       "onLeave": "On leave",
       "resigned": "Resigned",
-      "terminated": "Terminated"
+      "terminated": "Terminated",
+      "transferred": "Transferred"
     },
     "statusPill": {
       "onLeave": "On leave",
@@ -347,6 +367,10 @@
       "position_ar": "Position (Arabic)",
       "status": "Status",
       "end_date": "End date",
+      "effective_date": "Effective date",
+      "transfer_site": "Destination site",
+      "transfer_return_date": "Expected return date",
+      "return_date": "Return date",
       "passport_no": "Passport No.",
       "passport_expiry": "Passport Expiry",
       "uae_id_no": "UAE ID No.",
@@ -362,13 +386,22 @@
     "status": {
       "Active": "Active",
       "Resigned": "Resigned",
-      "Terminated": "Terminated"
+      "Terminated": "Terminated",
+      "Transferred": "Transferred"
+    },
+    "statusDetail": {
+      "dated": "{{status}} · {{date}}",
+      "transferredSite": "{{status}} · {{site}} · {{date}}",
+      "transferredReturn": "{{status}} · {{date}} → {{returnDate}}",
+      "transferredSiteReturn": "{{status}} · {{site}} · {{date}} → {{returnDate}}"
     },
     "statusDialog": {
       "title": "Change status"
     },
     "validation": {
       "endDateRequired": "End date is required when status is not Active",
+      "transferSiteRequired": "Destination site is required for a transfer",
+      "returnAfterEffective": "Expected return date must be after the effective date",
       "idRequired": "Employee ID is required",
       "nameEnRequired": "Name (English) is required"
     },
@@ -376,7 +409,8 @@
       "total": "Total workforce",
       "active": "Active",
       "resigned": "Resigned",
-      "terminated": "Terminated"
+      "terminated": "Terminated",
+      "transferred": "Transferred"
     },
     "list": {
       "empty": "No employees found",
@@ -455,6 +489,7 @@
       "violation": "Violations",
       "ledger": "Correspondence",
       "duty_location": "Duty location",
+      "status": "Status changes",
       "employee": "Employee",
       "activity": "Activity",
       "type": "Type",
@@ -472,6 +507,21 @@
         "unassigned": "Unassigned",
         "openEmployeeActivity": "Open employee activity",
         "historyBegins": "History begins at"
+      },
+      "statusEvent": {
+        "change": "{{from}} → {{to}}",
+        "initial": "Recorded as {{to}}",
+        "returned": "Returned to Active",
+        "scheduled": "Scheduled: {{from}} → {{to}}",
+        "scheduledCancelled": "Scheduled {{to}} cancelled",
+        "effective": "Effective {{date}}",
+        "returnedOn": "Returned {{date}}",
+        "expectedReturn": "Expected return {{date}}",
+        "imported": "Existing record",
+        "bySchedulerAuto": "Applied automatically",
+        "fromResignationLetter": "From resignation letter",
+        "by": "By {{name}}",
+        "openProfile": "Open employee profile"
       },
       "loadMore": "Load more activity",
       "loading": "Loading recent activity",
@@ -589,6 +639,74 @@
     }
   },
   "permits": {
+    "tabs": {
+      "security": "Security permits",
+      "items": "Item permits"
+    },
+    "items": {
+      "title": "Item entry permits",
+      "subtitle": "Materials brought into a zone — the responsible employee, items and quantities, and manager approval",
+      "search": "Search by employee, recipient, site or item…",
+      "new": "New item permit",
+      "empty": "No item permits match these filters.",
+      "emptyRegister": "No item permits issued yet.",
+      "createdToast": "Item permit {{ref}} issued",
+      "createdToastNoRef": "Item permit issued",
+      "approvalFilters": "Filter item permits by approval",
+      "loadError": "Could not load item permits.",
+      "columns": {
+        "ref": "Ref.",
+        "employee": "Employee",
+        "zone": "Zones",
+        "items": "Items",
+        "approval": "Approval",
+        "created": "Created"
+      },
+      "count_one": "{{count}} item",
+      "count_other": "{{count}} items",
+      "more": "and {{count}} more",
+      "form": {
+        "newTitle": "New item entry permit",
+        "editTitle": "Edit item entry permit",
+        "help": "Authorize materials to be brought into a zone by an employee. A 1/5 letter is generated for approval.",
+        "employee": "Employee",
+        "employeeRequired": "Choose the employee.",
+        "recipient": "Addressed to",
+        "site": "Site",
+        "zone": "Zones",
+        "zoneRequired": "Select at least one zone.",
+        "items": "Items",
+        "itemName": "Item",
+        "quantity": "Qty",
+        "addItem": "Add item",
+        "removeItem": "Remove item",
+        "itemNameRequired": "Enter the item name.",
+        "quantityInvalid": "Enter a whole number of 1 or more.",
+        "required": "This field is required.",
+        "create": "Create permit",
+        "save": "Save changes"
+      },
+      "detail": {
+        "title": "Item permit {{ref}}",
+        "createdAt": "Created {{date}}",
+        "ref": "Permit ref (1/5)",
+        "recipient": "Addressed to",
+        "zone": "Zones",
+        "site": "Site",
+        "employee": "Employee",
+        "employeeNo": "Employee no.",
+        "jobTitle": "Job title",
+        "name": "Name",
+        "items": "Items",
+        "no": "#",
+        "item": "Item",
+        "quantity": "Qty"
+      },
+      "delete": {
+        "title": "Delete item permit",
+        "help": "This removes the item permit from the register. This cannot be undone from the app."
+      }
+    },
     "title": "Security Permits",
     "eyebrow": "Access control",
     "subtitle": "Zone entry permits — who is authorized, for which zone, and until when",
@@ -715,6 +833,29 @@
       "printPermit": "Print permit (1/5)"
     },
     "printNoPdf": "No PDF available for this permit yet.",
+    "createdToast": "Permit {{no}} issued",
+    "resultCount_one": "{{count}} permit",
+    "resultCount_other": "{{count}} permits",
+    "resultCapped": "Showing the latest {{shown}} of {{total}}",
+    "statusFilters": "Filter permits by status",
+    "zoneFilters": "Filter permits by zone access",
+    "attachFailed_one": "Permit saved, but {{count}} scan could not be attached. Open the permit to attach it again.",
+    "attachFailed_other": "Permit saved, but {{count}} scans could not be attached. Open the permit to attach them again.",
+    "quickView": {
+      "description": "Permit summary and its 1/5 letter",
+      "letter": "Permit letter (1/5)",
+      "noLetter": "No letter has been generated for this permit yet.",
+      "letterError": "Could not load the letter.",
+      "openPdf": "Open PDF",
+      "openFull": "Open full details"
+    },
+    "confirmRemove": {
+      "person": "Remove {{name}} from this permit?",
+      "vehicle": "Remove vehicle {{plate}} from this permit?",
+      "paper": "Remove the attached permit paper?"
+    },
+    "versionPdfLabel": "Version {{n}} PDF",
+    "versionDocxLabel": "Version {{n}} DOCX",
     "documentVersions": {
       "title": "Generated permit documents",
       "docx": "DOCX",
@@ -914,7 +1055,6 @@
     "trafficCode": "Traffic code",
     "licenseStart": "License start",
     "licenseExpiry": "License expiry",
-    "fines": "Fines",
     "licenseScan": "License scan",
     "action": "Action",
     "open": "Open",
@@ -1806,14 +1946,9 @@
     "eyebrow": "Operations",
     "pageMeta": "{{total}} entries · ref-number log",
     "stampPreview": "Stamp preview",
-    "empty": "No book entries match these filters.",
     "confirmDelete": "Soft-delete this entry? It stays in records; ref number is not reused.",
     "bulk": {
-      "delete": "Delete",
-      "deleteTitle": "Delete {{count}} selected record(s)?",
-      "deleteBody": "Soft-delete the selected entries? They stay in records and ref numbers are not reused.",
-      "deleted": "Deleted {{count}} record(s)",
-      "deleteError": "Couldn't delete {{count}} record(s)"
+      "delete": "Delete"
     },
     "filters": {
       "category": "Category",
@@ -1836,7 +1971,6 @@
     },
     "columns": {
       "ref": "Ref",
-      "subject": "Subject",
       "category": "Category",
       "direction": "Direction",
       "date": "Date",
@@ -1857,7 +1991,8 @@
     },
     "toast": {
       "created": "Book entry created",
-      "deleted": "Draft discarded"
+      "voided": "Draft discarded — record voided",
+      "wordSessionDiscarded": "Word editing session discarded"
     },
     "completion": {
       "savedToRecords": "Saved to Records",
@@ -1868,6 +2003,7 @@
       "printUnavailable": "PDF unavailable — open the record for the DOCX fallback."
     },
     "emptyUnfiltered": "No book entries yet",
+    "newRecord": "New record",
     "approvals": {
       "title": "Approvals",
       "tabSent": "Sent by me",
@@ -1915,7 +2051,8 @@
       "selectApprover": "Select a signing manager…",
       "singleSignerHint": "One manager signs and approves this book.",
       "reject": "Reject",
-      "return": "Return",
+      "return": "Return for changes",
+      "returnShort": "Return",
       "addNote": "Add note",
       "priority": "Priority",
       "high": "High",
@@ -1971,7 +2108,22 @@
       "reviewers": "Reviewers",
       "reviewersHint": "Reviewers can comment and request changes before approval.",
       "signConfirmTitle": "Sign & approve this record?",
-      "signConfirmBody": "This applies your signature to {{ref}} · v{{version}} · {{subject}}."
+      "signConfirmBody": "This applies your signature to {{ref}} · v{{version}} · {{subject}}.",
+      "reroute": "Change approver…",
+      "markReviewed": "Mark as reviewed",
+      "markingReviewed": "Marking as reviewed…",
+      "reviewedToast": "Report marked as reviewed",
+      "reviewConfirmTitle": "Mark this report as reviewed?",
+      "reviewConfirmBody": "This records that you reviewed {{ref}} · v{{version}} · {{subject}}. Your signature is not added to the report.",
+      "sendForReview": "Send for review",
+      "sentForReview": "Sent for review",
+      "reviewManager": "Reviewing manager",
+      "selectReviewManager": "Select a reviewing manager…",
+      "reviewHint": "The report keeps its author's signature. The manager only confirms they reviewed it.",
+      "stateAwaitingReview": "Awaiting review",
+      "signing": "Signing…",
+      "returning": "Returning…",
+      "rejecting": "Rejecting…"
     },
     "annotations": {
       "pin": "Pin",
@@ -1983,26 +2135,22 @@
       "save": "Save",
       "cancel": "Cancel",
       "viewHint": "Fix here, then revise & resubmit.",
-      "mark": "Mark",
-      "markingOn": "Marking on — tap to cancel"
+      "mark": "Mark up",
+      "markingOn": "Marking on — tap to cancel",
+      "deleted": "Mark deleted",
+      "undoTooLate": "Too late to undo — the mark was already deleted."
     },
     "versions": {
       "title": "Version history",
-      "current": "current",
       "revise": "Revise & regenerate",
-      "reviseHint": "Returned — you can revise & resubmit",
       "prefillFailed": "Couldn't load the saved form data to revise.",
-      "signedPdf": "Signed PDF",
       "trigger": {
         "initial": "Initial",
         "revision": "Revision"
       }
     },
-    "executedCopy": {
-      "title": "Executed copy"
-    },
     "stateOverride": {
-      "trigger": "State",
+      "trigger": "Change state (admin)…",
       "title": "Force record state",
       "blurb": "Bypasses the approval flow and is written to the audit log.",
       "pickState": "New state",
@@ -2016,6 +2164,94 @@
       "warnVoided": "This marks the record a discarded draft. Its reference stays reserved in the register.",
       "warnLeaveApproved": "The signed copy stays on file, but stops being served for view or download while the state isn't Approved."
     },
+    "status": {
+      "draft": "Draft — not sent yet.",
+      "noDoc": "Draft — the PDF failed to render.",
+      "wordActive": "Being edited in Word by {{name}}.",
+      "pendingMine": "Waiting for your signature.",
+      "pendingOther": "Waiting on {{name}} · {{ago}}",
+      "reviewMine": "Your review is requested.",
+      "awaitingScan": "Printed for signature — scan the signed copy back.",
+      "approved": "Signed by {{name}} · {{date}}",
+      "returned": "Returned by {{name}}:",
+      "rejected": "Rejected by {{name}}:",
+      "pendingOtherNoName": "Waiting for approval · {{ago}}",
+      "approvedNoName": "Signed · {{date}}",
+      "returnedNoName": "Returned:",
+      "rejectedNoName": "Rejected:",
+      "approvedNoDate": "Signed by {{name}}",
+      "approvedNoNameNoDate": "Signed",
+      "wordActiveNoName": "Being edited in Word.",
+      "reportUnsent": "Not sent for review yet.",
+      "reportPending": "Sent to {{name}} for review · {{ago}}",
+      "reportSeen": "Seen by {{name}} · not reviewed yet",
+      "reportReviewMine": "Sent to you for review.",
+      "reportReviewed": "Reviewed by {{name}} · {{date}}",
+      "voided": "Voided — kept for the record only."
+    },
+    "paper": {
+      "signed": "Signed copy",
+      "original": "Original (unsigned)",
+      "imported": "Imported document",
+      "scan": "Scan {{n}}",
+      "captionSigned": "Signed copy · {{date}}",
+      "captionAwaitingScan": "Print, sign, then scan the signed copy",
+      "captionPending": "Unsigned — awaiting signature",
+      "captionDraft": "Draft preview",
+      "live": "Live draft",
+      "pageOf": "Page {{i}} of {{n}}",
+      "fitWidth": "Fit width",
+      "actualSize": "100%",
+      "download": "Download",
+      "openNewTab": "Open in new tab",
+      "wordBanner": "The preview shows the last saved version ({{t}}), not the live Word edits.",
+      "showLive": "Show live draft",
+      "showSaved": "Show saved version",
+      "errorTitle": "Couldn’t render this PDF",
+      "errorBody": "The file may still be generating, or the connection dropped.",
+      "errorForbidden": "You don’t have access to this file",
+      "outOfDate": "Preview is out of date — Review PDF",
+      "captionReturned_one": "Returned with {{count}} mark",
+      "captionReturned_other": "Returned with {{count}} marks",
+      "pages_one": "{{count}} page",
+      "pages_other": "{{count}} pages",
+      "marksFrom_one": "{{count}} mark from {{name}}",
+      "marksFrom_other": "{{count}} marks from {{name}}"
+    },
+    "list": {
+      "select": "Select",
+      "selectRef": "Select {{ref}}",
+      "createdByMe": "Created by me",
+      "myRecords": "My records",
+      "noMatch": "No records match these filters.",
+      "filters": "Filters",
+      "selected_one": "{{count}} selected",
+      "selected_other": "{{count}} selected",
+      "deleteMany_one": "Delete {{count}}",
+      "deleteMany_other": "Delete {{count}}",
+      "skippedMany_one": "{{count}} signed/in-flight skipped",
+      "skippedMany_other": "{{count}} signed/in-flight skipped",
+      "deletedMany_one": "{{count}} record deleted",
+      "deletedMany_other": "{{count}} records deleted",
+      "restoredMany_one": "{{count}} record restored",
+      "restoredMany_other": "{{count}} records restored",
+      "undoTooLateMany_one": "Too late to undo — {{count}} record was already deleted.",
+      "undoTooLateMany_other": "Too late to undo — {{count}} records were already deleted.",
+      "deleteFailedMany_one": "{{count}} record wasn’t deleted: {{refs}}",
+      "deleteFailedMany_other": "{{count}} records weren’t deleted: {{refs}}"
+    },
+    "reason": {
+      "inFlight": "In-flight or signed records can’t be deleted. Use “{{action}}” to void it.",
+      "wordSession": "Finish or discard the Word session first.",
+      "reviseNoTemplate": "Can’t revise: not made from a form template.",
+      "reviseNoPermission": "Needs document-generation permission.",
+      "reviseNotCurrent": "Open the current version to revise.",
+      "reviseReporterLocked": "You can revise it only after it is returned to you.",
+      "emailNoDoc": "No document to attach yet.",
+      "submitNoApprover": "Choose an approver first.",
+      "noteEmpty": "Write a note first.",
+      "noChanges": "No changes to review."
+    },
     "record": {
       "submittedBy": "Submitted by",
       "loading": "Loading…",
@@ -2025,7 +2261,6 @@
       "print": "Print",
       "emailViaOutlook": "Email via Outlook",
       "downloadSigned": "Download signed PDF",
-      "viewOriginal": "Original form",
       "noDocument": "No document on this record.",
       "importedNoPreview": "This imported record's file isn't a PDF, so it can't be previewed here.",
       "downloadImported": "Download original ({{format}})",
@@ -2048,10 +2283,49 @@
       "metaPending": "pending",
       "metaDraft": "draft",
       "metaAwaitingScan": "out for signing",
+      "stationAwaitingReview": "Awaiting review",
+      "stationReviewed": "Reviewed",
+      "stationNotSent": "Not sent for review",
       "metaScanned": "signed copy filed",
-      "prevAwaiting": "Previous awaiting record",
-      "nextAwaiting": "Next awaiting record",
-      "queuePosition": "{{n}} of {{total}}"
+      "queuePosition": "{{n}} of {{total}}",
+      "title": "Record",
+      "more": "More",
+      "delete": "Delete record",
+      "deleteDraft": "Delete draft",
+      "deleteTitle": "Delete record {{ref}}?",
+      "deleteBody": "It leaves the records list. Its reference number stays reserved.",
+      "deleted": "Record {{ref}} deleted",
+      "pendingDelete": "This record is being deleted. Press Undo in the notification to keep it.",
+      "restored": "Record {{ref}} restored",
+      "undoTooLate": "Too late to undo — record {{ref}} was already deleted.",
+      "deleteFailed": "Record {{ref}} wasn’t deleted: {{reason}}",
+      "copyRef": "Copy reference number",
+      "copiedRef": "Copied {{ref}}",
+      "prevRecord": "Previous record",
+      "nextRecord": "Next record",
+      "backFrom": "Back to records · {{filter}}",
+      "hideProgress": "Hide progress",
+      "showProgress": "Show progress",
+      "createdBy": "Created by",
+      "creatorUnknown": "Not recorded",
+      "focus": "Focus on document",
+      "exitFocus": "Exit focus",
+      "expand": "Expand",
+      "reviewNext": "Review next: {{ref}}",
+      "hint": {
+        "print": "Prints the paper you are viewing",
+        "email": "Opens a new Outlook message with the PDF",
+        "pdf": "Bundle extra papers into this PDF",
+        "basket": "Collect for one email with other records",
+        "word": "Opens the DOCX on this PC; saving makes v{{v}}",
+        "adjust": "Move or resize the stamped signature",
+        "replace": "Swap in a better scan",
+        "state": "Override the workflow state — logged",
+        "access": "Who can still open older versions",
+        "unfile": "Returns the record to awaiting scan",
+        "delete": "Leaves the list; reference stays reserved",
+        "reroute": "Send it to a different signer"
+      }
     },
     "preview": {
       "description": "Draft document preview",
@@ -2060,7 +2334,7 @@
       "draftBadge": "Draft — not submitted",
       "editContinue": "Edit / Continue",
       "editUnavailable": "This draft has no saved fields and can't be edited.",
-      "discard": "Discard",
+      "discard": "Delete draft",
       "discardConfirmTitle": "Discard this draft?",
       "discardConfirmBody": "This permanently removes the unsubmitted record."
     },
@@ -2080,10 +2354,6 @@
     "pane": {
       "noPapersTitle": "No papers yet",
       "noPapersBody": "Generate the document to see its pages here.",
-      "generated": "Generated PDF",
-      "signedCopy": "Signed copy",
-      "scan": "Scan",
-      "imported": "Imported document",
       "addScan": "Add scan",
       "addScanHint": "Scan or drop a returned paper — OCR matches the stamped ref and files it here",
       "scanReading": "Reading scan (OCR)…",
@@ -2105,6 +2375,7 @@
       "approveSignedCopy": "Approve — signed copy",
       "justAttach": "Just attach",
       "deletePaper": "Delete this document",
+      "deleteScan": "Delete this scan",
       "replacePaper": "Replace this document",
       "deletePaperTitle": "Delete this document?",
       "deletePaperBody": "This permanently removes the attached document from the record. This cannot be undone.",
@@ -2115,8 +2386,15 @@
       "unfileSignedBtn": "Remove signed copy",
       "unfileSignedConfirm": "Remove & revert",
       "signedCopyUnfiled": "Signed copy removed — record reverted",
-      "papers": "{{count}} papers",
-      "searchPlaceholder": "Search ref, form, employee…"
+      "papers_one": "{{count}} paper",
+      "papers_other": "{{count}} papers",
+      "searchPlaceholder": "Search ref, form, employee…",
+      "collapse": "Collapse preview",
+      "wider": "Wider preview",
+      "normal": "Normal width",
+      "selectToPreview": "Select a record to preview it.",
+      "more": "More",
+      "replaceSigned": "Replace signed copy"
     },
     "includedPapers": {
       "title": "Included papers",
@@ -2182,9 +2460,10 @@
       "reserved": "Book created — number reserved",
       "finish": "Finish editing",
       "openAgain": "Open in Word again",
-      "discard": "Discard",
+      "discard": "Discard draft…",
       "noSavesYet": "No save from Word yet",
       "discardConfirm": "The book will be voided; its number stays in the register. Continue?",
+      "discardConfirmLabel": "Discard draft",
       "finished": "Version saved — {{ref}}",
       "step1": "Press «Open in Word», then allow the browser's confirmation",
       "step2": "Save from inside Word (Ctrl+S)",
@@ -3146,6 +3425,16 @@
     "inmateReporter": {
       "title": "Inmate Conduct Violations",
       "description": "Save an unfinished report, then send it to the configured approval manager.",
+      "servicesTitle": "Choose a service",
+      "servicesDescription": "Choose the report type you need.",
+      "reportTitle": "Report",
+      "reportDescription": "Create a report in Word and send it to the configured approval manager.",
+      "reportSubject": "Subject",
+      "reportDate": "Date",
+      "backToServices": "Back to services",
+      "continueToWord": "Continue to Word",
+      "creatingReport": "Preparing report…",
+      "signatureRequired": "Save your signature to continue.",
       "reportedBy": "Reported by",
       "notLinked": "No employee record linked",
       "unlinked": "Ask an administrator to link your employee record",
@@ -3214,6 +3503,16 @@
     "violationOthers": {
       "label": "Others",
       "placeholder": "Describe the violation…"
+    },
+    "violationWhatsApp": {
+      "label": "WhatsApp group for approved violations",
+      "hint": "Each approved violation's signed PDF is posted to this group.",
+      "notConnected": "WhatsApp isn't connected, so approved violations aren't posted. Ask an administrator to connect it.",
+      "groupsLoadError": "Couldn't load the WhatsApp groups. Try again later.",
+      "off": "Off — don't post",
+      "saved": "Approved violations will be posted to {{name}}.",
+      "turnedOff": "Approved violations won't be posted to WhatsApp.",
+      "saveFailed": "Couldn't save the WhatsApp group."
     },
     "approvedViolation": {
       "createForm": "Create form",
@@ -3304,7 +3603,8 @@
       "unit": "Unit",
       "qty": "Qty",
       "remarks": "Remarks",
-      "empty": "No items — add a row to begin."
+      "empty": "No items — add a row to begin.",
+      "maxRows": "Up to {{max}} rows."
     },
     "clearance": {
       "department": "Department",
@@ -3378,7 +3678,7 @@
     "downloadPdf": "Download PDF",
     "downloadDocx": "Download DOCX",
     "pdfUnavailable": "PDF not available; download DOCX instead",
-    "pdfUnavailableNoDocx": "PDF not available for this report",
+    "pdfUnavailableNoDocx": "PDF not available for this document",
     "noDocuments": "No documents generated",
     "prevDoc": "Previous document",
     "nextDoc": "Next document",
@@ -3444,7 +3744,8 @@
       "wing": "Wing",
       "uid": "Unified number",
       "holdingNo": "Property number"
-    }
+    },
+    "pdfNotGenerated": "No PDF was generated for this document — download the DOCX instead."
   },
   "dashboard": {
     "title": "Dashboard",
@@ -4092,7 +4393,6 @@
     "autoDropHint": "Drop a General Book scan here. Its barcode will route it.",
     "autoFiled": "Filed — barcode matched {{ref}}",
     "parked": "{{ref}} needs review in the Scan Inbox",
-    "rejected": "Could not route {{ref}}",
     "viewInbox": "Open Scan Inbox",
     "filed": "Filed — {{ref}} is closed",
     "uploadError": "Could not file that scan",
@@ -4692,12 +4992,18 @@
     "identifyConfirmTitle": "Confirm this signature?",
     "identifyConfirmDesc": "This marks the selected image as the manager/approver signature. It changes no pixels — positioning becomes available afterward.",
     "identified": "Signature identified.",
+    "reassign": "Assign a different signer",
+    "reassignHint": "Admin only: replace this signature slot's image with another employee's saved signature, at the same position.",
+    "reassignConfirmTitle": "Reassign this signature?",
+    "reassignConfirmDesc": "This replaces the image with the selected employee's saved signature. Position and size stay the same.",
+    "reassigned": "Signature reassigned.",
     "candidateSize": "{{w}}×{{h}} mm",
     "history": "Placement history",
     "historyAction": {
       "initial": "Signed",
       "identify": "Signature identified",
-      "move": "Position corrected"
+      "move": "Position corrected",
+      "reassign": "Signer reassigned"
     },
     "historyPages": "page {{from}} → {{to}}",
     "role": {
@@ -5470,6 +5776,92 @@
       "loadError": "The nationality list could not be loaded.",
       "unresolved": "The filed nationality does not match the list — pick the correct value.",
       "clear": "Clear the selection"
+    }
+  },
+  "debug": {
+    "title": "Debug console",
+    "subtitle": "Live server health, hidden errors and logs — with AI help to explain and fix them.",
+    "loading": "Loading…",
+    "loadFailed": "Could not load",
+    "refresh": "Refresh",
+    "copy": "Copy",
+    "copied": "Copied",
+    "close": "Close",
+    "missing": "missing",
+    "checks": {
+      "cpu": "CPU",
+      "ram": "Memory (RAM)",
+      "svc_gssgmanager": "Service: GSSGManager",
+      "svc_caddy": "Service: Caddy",
+      "svc_cloudflared": "Service: Cloudflared (tunnel)",
+      "db": "Database",
+      "migrations": "Database schema",
+      "scheduler": "Background jobs",
+      "word": "Microsoft Word (PDF export)",
+      "disk": "Disk space",
+      "errors": "Logged errors",
+      "requests": "API requests"
+    },
+    "machine": {
+      "title": "Server",
+      "cpu": "CPU",
+      "ram": "Memory (RAM)",
+      "uptime": "Machine on for",
+      "network": "Network",
+      "sinceBoot": "since boot",
+      "services": "Windows services"
+    },
+    "tabs": {
+      "health": "Health",
+      "issues": "Issues",
+      "logs": "Logs",
+      "requests": "Requests"
+    },
+    "health": {
+      "allGood": "Everything looks healthy",
+      "attention_one": "{{count}} check needs attention",
+      "attention_other": "{{count}} checks need attention",
+      "autoRefresh": "Refreshes every 5 seconds.",
+      "stats": "Server stats",
+      "files": "Files",
+      "jobs": "Background jobs",
+      "stopped": "stopped"
+    },
+    "issues": {
+      "explain": "Warnings and errors from the server and users' browsers, grouped so repeats count once. Most of these never show up on screen — that is why they matter.",
+      "none": "No warnings or errors in the recent logs.",
+      "first": "First seen",
+      "last": "last",
+      "copyRaw": "Copy raw"
+    },
+    "logs": {
+      "source": "Log source",
+      "level": "Minimum level",
+      "app": "App log",
+      "search": "Search logs…",
+      "live": "Live",
+      "paused": "Paused",
+      "copyVisible": "Copy visible",
+      "empty": "No matching lines."
+    },
+    "requests": {
+      "onlyBad": "Only errors and slow",
+      "explain": "The last 500 API calls since the server started. Red status = the server failed; red time = slower than 3 seconds."
+    },
+    "ai": {
+      "ask": "Diagnose with AI",
+      "copy": "Copy for AI",
+      "thinking": "AI is thinking… (up to 10 min)",
+      "copied": "Prompt copied — paste it into Claude or ChatGPT",
+      "failed": "AI diagnosis failed",
+      "noEngine": "No logged-in claude or codex CLI on the server. Use “Copy for AI” and paste into any AI chat.",
+      "askHint": "Runs {{engine}} on the server, read-only",
+      "engineReady": "Ready: {{engines}} (logged in as {{user}}). Read-only — it can look at the code but not change it.",
+      "wholeApp": "Ask AI about the whole app",
+      "running": "Running on the server. You can switch tabs; the answer appears here when ready.",
+      "engine": "AI engine",
+      "notePlaceholder": "Optional: describe what you noticed (e.g. “PDF export slow since yesterday”)",
+      "result": "AI diagnosis ({{engine}}, {{seconds}} s)"
     }
   }
 }

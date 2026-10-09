@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 from docx import Document
+from docx.oxml.ns import qn
 
 from app.core.constants import TEMPLATE_FILES
 from app.core.docx_render import render
@@ -29,9 +30,9 @@ def _table_texts(doc: Document) -> list[list[str]]:
 
 
 def _footer_text(doc: Document) -> str:
-    """Join every cell of the first-page footer (word/footer3.xml)."""
+    """Every text run of the first-page footer (word/footer3.xml), text boxes included."""
     footer = doc.sections[0].first_page_footer
-    return "\n".join(c.text for t in footer.tables for r in t.rows for c in r.cells)
+    return "".join(t.text or "" for t in footer._element.iter(qn("w:t")))
 
 
 @pytest.fixture

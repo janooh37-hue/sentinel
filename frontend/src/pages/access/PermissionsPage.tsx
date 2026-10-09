@@ -29,7 +29,7 @@ import {
   type TemplateMeta,
   type UserPermissionRead,
 } from '@/lib/api'
-import { QUICK_ACTION_IDS, type QuickActionId } from '@/lib/dashboardLayout'
+import { QUICK_ACTION_IDS } from '@/lib/dashboardLayout'
 import {
   localizeCapability,
   type CapabilityCatalog,
@@ -708,9 +708,15 @@ export function PermissionsPage(): React.JSX.Element {
       })),
     [t],
   )
-  const serviceItems = useMemo<BlueprintItem[]>(
-    () => [
-      ...QUICK_ACTION_IDS.map((id: QuickActionId) => {
+  // Every manually created service, most-used first; feature-minted forms
+  // (vehicle fines/accidents) have no Services tile and stay in Advanced.
+  const serviceItems = useMemo<BlueprintItem[]>(() => {
+    const ids: string[] = [...QUICK_ACTION_IDS]
+    for (const template of templatesQuery.data?.items ?? []) {
+      if (!template.feature_minted && !ids.includes(template.id)) ids.push(template.id)
+    }
+    return [
+      ...ids.map((id) => {
         const template = templatesById[id]
         return {
           id,
@@ -727,8 +733,11 @@ export function PermissionsPage(): React.JSX.Element {
         label: t('access.permissions.mirror.serviceOther'),
         kind: 'service',
       },
-    ],
-    [isAr, t, templatesById],
+    ]
+  }, [isAr, t, templatesById, templatesQuery.data?.items])
+  const mirroredServiceIds = useMemo(
+    () => new Set(serviceItems.map((item) => item.id)),
+    [serviceItems],
   )
   const categoryItems = useMemo<BlueprintItem[]>(
     () =>
@@ -920,6 +929,13 @@ export function PermissionsPage(): React.JSX.Element {
 
   // One atomic write per choice: creation first, records second, so a partial
   // failure can never leave the person with records they cannot reach.
+  //
+  // "Clear the override" (effect: null) only reproduces the intended state
+  // for a LEGACY service, whose default is granted. A 2026-09-21 opt-in
+  // service (catalog default_roles === ["admin"] — see
+  // capability_catalog_service._service_entries) defaults to DENIED, so
+  // "Full"/"Records only" must write an explicit grant there instead, or
+  // clearing the override would silently leave the form denied.
   const selectServiceState = (
     item: BlueprintItem,
     next: ServiceAccessState,
@@ -928,13 +944,20 @@ export function PermissionsPage(): React.JSX.Element {
     setCaptionItem(item)
     if (!permissions || !selectedUser || !item.capability) return
     flashBeam(event.currentTarget, item.kind)
+    const recordsCapability = `books.servicerecords.${item.id}`
+    const isOptIn =
+      (capabilityCatalog.byId.get(item.capability)?.default_roles.length ?? 0) === 1
     serviceTriMutation.mutate({
       userId: selectedUser.id,
       items: [
-        { capability: item.capability, effect: next === 'full' ? null : 'deny' },
         {
-          capability: `books.servicerecords.${item.id}`,
-          effect: next === 'hidden' ? 'deny' : null,
+          capability: item.capability,
+          effect: next === 'full' ? (isOptIn ? 'grant' : null) : 'deny',
+        },
+        {
+          capability: recordsCapability,
+          effect:
+            next === 'hidden' ? 'deny' : isOptIn ? 'grant' : null,
         },
       ],
     })
@@ -1373,6 +1396,7 @@ export function PermissionsPage(): React.JSX.Element {
                 user={selectedUser}
                 perms={permissions}
                 capabilities={capabilityCatalog.entries}
+                mirroredServiceIds={mirroredServiceIds}
               />
             </aside>
           ) : null}

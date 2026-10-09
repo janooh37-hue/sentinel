@@ -1,10 +1,48 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor } from '@testing-library/react'
-import { describe, expect, it, vi } from 'vitest'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { MemoryRouter, useLocation, useNavigate } from 'react-router-dom'
+import { toast } from 'sonner'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 import i18n from '@/lib/i18n'
 
 import { statusTone, zoneTone, fmtDate } from './permitUtils'
 import { PermitsPage } from './PermitsPage'
+
+const mobileState = vi.hoisted(() => ({ value: false }))
+// What the mocked form reports as just issued (a full PermitRead, as the real form returns).
+const createdPermit = vi.hoisted(() => ({
+  id: 9, permit_no: 'PMT-0009', company: 'Brand New Co', zones: ['green'], access_areas: null,
+  start_date: '2026-07-01', validity: { value: 1, unit: 'month' }, end_date: '2026-07-30', status: 'active',
+  created_at: '2026-07-01T00:00:00', derived_status: 'active', duration_days: 30, days_remaining: 9,
+  people_count: 1, vehicle_count: 0, book_id: null, document_name: null, people: [], vehicles: [],
+}))
+
+vi.mock('@/lib/useIsMobile', () => ({ useIsMobile: () => mobileState.value }))
+vi.mock('@/pages/application/DocPdfCanvas', () => ({ default: () => <div data-testid="pdf" /> }))
+// The real form is covered by PermitFormDialog.test.tsx; here it just reports a created permit.
+vi.mock('./PermitFormDialog', () => ({
+  PermitFormDialog: ({
+    open,
+    onOpenChange,
+    onSaved,
+  }: {
+    open: boolean
+    onOpenChange: (open: boolean) => void
+    onSaved: (p: typeof createdPermit) => void
+  }) =>
+    open ? (
+      <button
+        type="button"
+        onClick={() => {
+          onSaved(createdPermit)
+          onOpenChange(false)
+        }}
+      >
+        Mock issue
+      </button>
+    ) : null,
+}))
 
 vi.mock('@/lib/useCapabilities', () => ({
   useCapabilities: () => ({
@@ -20,6 +58,17 @@ vi.mock('@/lib/api', async (importOriginal) => {
     ...mod,
     api: {
       ...mod.api,
+      getPermit: vi.fn().mockImplementation(async (id: number) => ({
+        id, permit_no: `PMT-${String(id).padStart(4, '0')}`, company: 'Acme Contracting',
+        zones: ['green'], access_areas: null, start_date: '2026-07-01',
+        validity: { value: 1, unit: 'month' }, end_date: '2026-07-30', status: 'active',
+        created_at: '2026-07-01T00:00:00', derived_status: 'active', duration_days: 30,
+        days_remaining: 9, people_count: 0, vehicle_count: 0, people: [], vehicles: [],
+      })),
+      getBook: vi.fn().mockResolvedValue({
+        id: 7,
+        versions: [{ id: 1, version_no: 1, document_id: 11, signed_pdf_url: null }],
+      }),
       permitsSummary: vi.fn().mockResolvedValue({
         active: 3, expiring: 1, expired: 0, revoked: 0,
         people_active: 7, people_green: 5, people_red: 4, people_work_residence: 2,
@@ -32,7 +81,7 @@ vi.mock('@/lib/api', async (importOriginal) => {
             start_date: '2026-07-01', validity: { value: 1, unit: 'month' }, end_date: '2026-07-30', status: 'active',
             created_at: '2026-07-01T00:00:00', derived_status: 'active',
             duration_days: 30, days_remaining: 9, people_count: 4, vehicle_count: 2,
-            has_document: true,
+            has_document: true, book_id: 7,
           },
           {
             id: 2, permit_no: 'PMT-0002', company: 'Descon Engineering', zones: ['green', 'work_residence'],
@@ -83,12 +132,30 @@ vi.mock('@/lib/api', async (importOriginal) => {
   }
 })
 
-function renderPage() {
+beforeEach(() => {
+  mobileState.value = false
+})
+
+function renderPage(initialEntries = ['/permits']) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
     <QueryClientProvider client={qc}>
-      <PermitsPage />
+      <MemoryRouter initialEntries={initialEntries}>
+        <PermitsPage />
+        <NavigationProbe />
+      </MemoryRouter>
     </QueryClientProvider>,
+  )
+}
+
+function NavigationProbe(): React.JSX.Element {
+  const location = useLocation()
+  const navigate = useNavigate()
+  return (
+    <>
+      <output data-testid="location">{location.pathname + location.search}</output>
+      <button data-testid="back" type="button" onClick={() => navigate(-1)}>Back</button>
+    </>
   )
 }
 
@@ -188,6 +255,106 @@ describe('PermitsPage', () => {
       expect(screen.queryByText(/month from/i)).not.toBeInTheDocument()
     } finally {
       await i18n.changeLanguage('en')
+    }
+  })
+  it('opens a directly linked permit and Close stays on the permits list', async () => {
+    renderPage(['/permits?open=1'])
+    expect(await screen.findByRole('dialog')).toBeInTheDocument()
+    expect(await screen.findByText('Acme Contracting')).toBeInTheDocument()
+    await screen.getByRole('button', { name: /close/i }).click()
+    await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent(/^\/permits$/))
+  })
+
+  it('Back from the full detail returns to the quick view, then to the list with filters intact', async () => {
+    const user = userEvent.setup()
+    renderPage(['/permits', '/permits?state=active&zone=green&q=acme'])
+    await screen.findByText('Acme Contracting')
+    await user.click(screen.getAllByRole('button', { name: /^view$/i })[0])
+    expect(await screen.findByRole('dialog', { name: /PMT-0001/ })).toBeInTheDocument()
+    expect(screen.getByTestId('location')).toHaveTextContent('preview=1')
+    await user.click(screen.getByRole('button', { name: /open full details/i }))
+    await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent('open=1'))
+    expect(screen.getByTestId('location')).not.toHaveTextContent('preview=')
+    fireEvent.click(screen.getByTestId('back')) // a modal blocks real pointer events on the probe
+    await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent('preview=1'))
+    expect(await screen.findByRole('dialog', { name: /PMT-0001/ })).toBeInTheDocument()
+    fireEvent.click(screen.getByTestId('back'))
+    await waitFor(() =>
+      expect(screen.getByTestId('location')).toHaveTextContent(/^\/permits\?state=active&zone=green&q=acme$/),
+    )
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+  })
+
+  it('a deep-linked preview of a permit the list does not contain opens the full detail instead', async () => {
+    renderPage(['/permits?preview=99'])
+    await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent(/^\/permits\?open=99$/))
+  })
+
+  it('status tiles are aria-pressed toggles bound to ?state=', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await screen.findByText('Acme Contracting')
+    expect(screen.getByText('3 permits')).toBeInTheDocument()
+    const group = screen.getByRole('group', { name: /filter permits by status/i })
+    const tile = within(group).getByRole('button', { name: /expired/i })
+    expect(tile).toHaveAttribute('aria-pressed', 'false')
+    await user.click(tile)
+    await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent('/permits?state=expired'))
+    expect(tile).toHaveAttribute('aria-pressed', 'true')
+    await user.click(tile)
+    await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent(/^\/permits$/))
+    expect(tile).toHaveAttribute('aria-pressed', 'false')
+  })
+
+  it('zone tiles bind to ?zone=', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await screen.findByText('Acme Contracting')
+    const group = screen.getByRole('group', { name: /filter permits by zone/i })
+    await user.click(within(group).getByRole('button', { name: /work residence/i }))
+    await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent('zone=work_residence'))
+  })
+
+  it('Clear filters removes state, zone and q but keeps other params', async () => {
+    const user = userEvent.setup()
+    renderPage(['/permits?tab=security&state=expired&zone=red&q=acme'])
+    await screen.findByText('Acme Contracting')
+    await user.click(screen.getByRole('button', { name: /clear filters/i }))
+    await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent(/^\/permits\?tab=security$/))
+    expect(screen.queryByRole('button', { name: /clear filters/i })).not.toBeInTheDocument()
+  })
+
+  it('renders tappable cards instead of the table on mobile', async () => {
+    mobileState.value = true
+    const user = userEvent.setup()
+    renderPage()
+    const card = await screen.findByRole('button', { name: /PMT-0001/ })
+    expect(screen.queryByRole('table')).not.toBeInTheDocument()
+    expect(screen.queryByLabelText(/select permit/i)).not.toBeInTheDocument()
+    expect(screen.getAllByText('Acme Contracting')).toHaveLength(1)
+    await user.click(card)
+    await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent('preview=1'))
+    expect(await screen.findByRole('dialog', { name: /PMT-0001/ })).toBeInTheDocument()
+  })
+
+  it('after issuing a permit, lands on its preview with the filters cleared, before the list has it', async () => {
+    const user = userEvent.setup()
+    const success = vi.spyOn(toast, 'success').mockImplementation(() => 1)
+    try {
+      // The list mock never includes PMT-0009: the preview must come from the record the form returned.
+      renderPage(['/permits?state=active&q=acme'])
+      await screen.findByText('Acme Contracting')
+      await user.click(screen.getByRole('button', { name: /new permit/i }))
+      await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent('action=new'))
+      await user.click(screen.getByRole('button', { name: 'Mock issue' }))
+      await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent(/^\/permits\?preview=9$/))
+      expect(await screen.findByRole('dialog', { name: /PMT-0009/ }, { timeout: 3000 })).toBeInTheDocument()
+      expect(screen.getByText('Brand New Co')).toBeInTheDocument()
+      // Not bounced to the full dialog as a "missing" permit.
+      expect(screen.getByTestId('location')).not.toHaveTextContent('open=')
+      expect(success).toHaveBeenCalledWith('Permit PMT-0009 issued')
+    } finally {
+      success.mockRestore()
     }
   })
 })

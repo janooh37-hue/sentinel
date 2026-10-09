@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { render, screen } from '@testing-library/react'
-import { MemoryRouter } from 'react-router-dom'
+import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 
@@ -69,12 +69,14 @@ const templates = {
   ],
 }
 
-function renderPage(entry = '/application') {
+function renderPage(entry = '/services') {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
     <QueryClientProvider client={client}>
       <MemoryRouter initialEntries={[entry]}>
-        <ApplicationPage />
+        <Routes>
+          <Route path="/services/:slug?" element={<ApplicationPage />} />
+        </Routes>
       </MemoryRouter>
     </QueryClientProvider>,
   )
@@ -93,6 +95,7 @@ describe('ApplicationPage service permissions', () => {
       'documents.generate',
       'books.view',
       'books.service.General Book',
+      'books.service.Demo companion',
     ])
     renderPage()
 
@@ -100,11 +103,36 @@ describe('ApplicationPage service permissions', () => {
     expect(screen.getByText('Demo companion')).toBeVisible()
   })
 
+  it('hides a non-dashboard service whose capability is denied', async () => {
+    capabilityState.allowed = new Set([
+      'documents.generate',
+      'books.view',
+      'books.service.General Book',
+    ])
+    renderPage('/services/demo_companion')
+
+    expect(await screen.findByText('General Book')).toBeVisible()
+    expect(screen.queryByText('Demo companion')).not.toBeInTheDocument()
+  })
+
+  it('hides synthetic tiles whose destination capability is missing', async () => {
+    capabilityState.allowed = new Set(['documents.generate', 'books.view'])
+    renderPage()
+
+    expect(await screen.findByText('No forms match your search.')).toBeVisible()
+    for (const label of ['National Service', 'Duty Locations & Transfers', 'Employee Absence']) {
+      expect(screen.queryByText(label)).not.toBeInTheDocument()
+    }
+  })
+
   it('uses calibrated artwork for synthetic and supported template tiles', async () => {
     capabilityState.allowed = new Set([
       'documents.generate',
       'books.view',
       'books.service.General Book',
+      'leaves.view',
+      'leaves.create',
+      'leaves.edit',
     ])
     renderPage()
 
@@ -126,10 +154,10 @@ describe('ApplicationPage service permissions', () => {
     ['books.view', ['documents.generate', 'books.service.General Book']],
     ['service access', ['documents.generate', 'books.view']],
   ])('does not show or deep-link a service missing %s', async (_missing, allowed) => {
-    capabilityState.allowed = new Set(allowed)
-    renderPage('/application?form=General%20Book')
+    capabilityState.allowed = new Set([...allowed, 'leaves.view', 'leaves.create'])
+    renderPage('/services/general_book')
 
-    expect(await screen.findByText('Demo companion')).toBeVisible()
+    expect(await screen.findByText('National Service')).toBeVisible()
     expect(screen.queryByText('General Book')).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /Services/i })).not.toBeInTheDocument()
   })

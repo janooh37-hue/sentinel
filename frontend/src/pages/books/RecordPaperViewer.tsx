@@ -2,110 +2,224 @@
  * Film-strip paper viewer for the Records pane (design locked off
  * docs/prototypes/records-redesign-2026-06-10/final-records.html).
  *
- * - One strip frame per Paper (generated / signed / scan) + an "Add scan"
- *   frame (caps-gated by the parent via addScanSlot).
- * - PDF bytes fetched as ?encoding=base64 text (IDM bypass — DocPdfCanvas
- *   pattern); images load as plain <img>.
- * - Zoom 60–240% re-renders pdf.js pages at baseWidth×zoom so the scroll
- *   container overflows naturally; grab-to-pan via pointer capture.
- * - Full preview = the parent renders this same component with isOverlay +
- *   a larger baseWidth inside a fixed overlay.
+ * - One strip frame per Paper (signed / original / imported / scan) with a
+ *   cached first-page thumbnail and a page-count badge, + an "Add scan" frame
+ *   (caps-gated by the parent via addScanSlot). The strip is hidden when there
+ *   is one paper and nothing to add.
+ * - PDF documents come from `lib/pdfDocCache` (zoom and paper switches never
+ *   refetch); pages are lazy aspect-correct placeholders (`PdfPages`) painted
+ *   at the displayed width — a CSS scale first, then a debounced re-raster.
+ *   Images load as plain <img>.
+ * - Fit = the viewer's own container width minus padding (ResizeObserver);
+ *   zoom 60–240% scales that, so the scroll container overflows naturally;
+ *   grab-to-pan via pointer capture.
+ * - `mode` picks the chrome: 'pane' (strip + light toolbar), 'overlay'
+ *   (full preview, dark toolbar with the paper switcher) or 'dialog'
+ *   (approvals preview, dark toolbar; the strip appears only when there is more
+ *   than one paper).
  *
  * Lazy-loaded by the page (default export) so pdf.js ships in its own chunk.
  */
-import { useCallback, useEffect, useRef, useState } from 'react'
-import { Download, Loader2, Maximize2, Minus, Plus, RefreshCw, Trash2, X } from 'lucide-react'
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
+import type { PDFDocumentProxy } from 'pdfjs-dist'
+import { Download, FileText, Maximize2, MoreHorizontal, Minus, Plus, RefreshCw, Trash2, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
-import * as pdfjsLib from 'pdfjs-dist'
-import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
 
-import { base64ToBytes, toBase64Url } from '@/lib/pdf'
+import { DocumentState } from '@/components/books/DocumentState'
+import { documentErrorKind } from '@/components/books/documentError'
+import { PdfPages } from '@/components/books/PdfPages'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
+import { Hint } from '@/components/ui/hint'
+import { leasePdfUrl, type PdfDocLease } from '@/lib/pdfDocCache'
 import { cn } from '@/lib/utils'
 
-import type { Paper } from './recordPapers'
+import { cachedThumb, loadThumb, type ThumbInfo } from './recordPaperThumbs'
+import { paperKey, type Paper, type PaperKey } from './recordPapers'
+import { paperLabels } from './recordPaperLabels'
 
-pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl
+/** Horizontal padding (px) around the page inside the scroll container (`p-4` × 2). */
+const PAPER_PADDING = 32
+/** Below this container width Replace / Delete collapse into a ⋯ menu. */
+const NARROW_TOOLBAR = 420
+
+export type RecordPaperViewerMode = 'pane' | 'overlay' | 'dialog'
+
+type DocState =
+  | { kind: 'loading' }
+  | { kind: 'loaded'; doc: PDFDocumentProxy }
+  | { kind: 'error'; error: unknown }
 
 /** Renders one paper (PDF pages stacked, or an image) at `width` px. */
 function PaperCanvas({ paper, width }: { paper: Paper; width: number }): React.JSX.Element {
-  const hostRef = useRef<HTMLDivElement | null>(null)
-  const [status, setStatus] = useState<'loading' | 'ready' | 'error'>('loading')
-
-  useEffect(() => {
-    if (!paper.isPdf) {
-      queueMicrotask(() => setStatus('ready'))
-      return
-    }
-    let cancelled = false
-    const host = hostRef.current
-    void (async () => {
-      try {
-        setStatus('loading')
-        const res = await fetch(toBase64Url(paper.url), { credentials: 'same-origin' })
-        if (!res.ok) throw new Error(`HTTP ${res.status}`)
-        const data = base64ToBytes(await res.text())
-        if (cancelled || !host) return
-        const pdf = await pdfjsLib.getDocument({ data, disableFontFace: true }).promise
-        if (cancelled) return
-        host.replaceChildren()
-        for (let n = 1; n <= pdf.numPages; n += 1) {
-          const page = await pdf.getPage(n)
-          if (cancelled) return
-          const base = page.getViewport({ scale: 1 })
-          const dpr = window.devicePixelRatio || 1
-          const scale = (width / base.width) * dpr
-          const viewport = page.getViewport({ scale })
-          const canvas = document.createElement('canvas')
-          canvas.width = viewport.width
-          canvas.height = viewport.height
-          canvas.style.width = `${width}px`
-          canvas.style.display = 'block'
-          canvas.style.marginBottom = '12px'
-          canvas.style.boxShadow = '0 2px 8px rgba(13,40,69,.18)'
-          const ctx = canvas.getContext('2d')
-          if (!ctx) continue
-          await page.render({
-            canvas,
-            canvasContext: ctx,
-            viewport,
-          }).promise
-          if (cancelled) return
-          host.appendChild(canvas)
-        }
-        setStatus('ready')
-      } catch {
-        if (!cancelled) setStatus('error')
-      }
-    })()
-    return () => {
-      cancelled = true
-    }
-  }, [paper, width])
-
   if (!paper.isPdf) {
     return <img src={paper.url} alt={paper.filename} style={{ width }} className="block shadow-md" draggable={false} />
   }
+  return <PdfPaper key={paper.url} url={paper.url} width={width} />
+}
+
+function PdfPaper({ url, width }: { url: string; width: number }): React.JSX.Element {
+  const [state, setState] = useState<DocState>({ kind: 'loading' })
+  // Retry bumps this; a failed load is never cached, so the effect refetches.
+  const [nonce, setNonce] = useState(0)
+
+  useEffect(() => {
+    const controller = new AbortController()
+    let lease: PdfDocLease | null = null
+    leasePdfUrl(url, controller.signal).then(
+      (l) => {
+        // Cleanup ran between the lease resolving and this callback: nobody
+        // will release it, so do it here (else the cache slot is pinned forever).
+        if (controller.signal.aborted) {
+          l.release()
+          return
+        }
+        lease = l
+        setState({ kind: 'loaded', doc: l.doc })
+      },
+      (error: unknown) => {
+        if (!controller.signal.aborted) setState({ kind: 'error', error })
+      },
+    )
+    return () => {
+      controller.abort()
+      lease?.release()
+    }
+  }, [url, nonce])
+
+  if (state.kind === 'loading') {
+    return <DocumentState kind="loading" className="min-h-[160px]" />
+  }
+  if (state.kind === 'error') {
+    const kind = documentErrorKind(state.error)
+    return (
+      <DocumentState
+        kind={kind}
+        className="min-h-[200px]"
+        openUrl={url}
+        onRetry={
+          kind === 'error'
+            ? () => {
+                setState({ kind: 'loading' })
+                setNonce((n) => n + 1)
+              }
+            : undefined
+        }
+      />
+    )
+  }
   return (
-    <div>
-      {status === 'loading' && (
-        <div className="grid place-items-center py-10 text-muted-foreground">
-          <Loader2 className="h-5 w-5 animate-spin" aria-hidden />
-        </div>
-      )}
-      {status === 'error' && (
-        <div className="py-10 text-center text-[0.78em] text-accent">{paper.filename}</div>
-      )}
-      <div ref={hostRef} />
-    </div>
+    <PdfPages
+      doc={state.doc}
+      sizing={{ kind: 'width', px: width }}
+      pageClassName="shadow-[0_2px_8px_rgba(13,40,69,.18)]"
+      onError={(error) => setState({ kind: 'error', error })}
+    />
   )
 }
 
+// ---------------------------------------------------------------------------
+// Thumbnails (cached first page + page count; built lazily, one at a time)
+
+function useThumb(paper: Paper, visible: boolean): ThumbInfo | null {
+  const [, force] = useState(0)
+  const url = paper.url
+  const isPdf = paper.isPdf
+  const cached = cachedThumb(url)
+  useEffect(() => {
+    if (!isPdf || !visible || cachedThumb(url)) return
+    const controller = new AbortController()
+    loadThumb(url, controller.signal).then(
+      () => {
+        if (!controller.signal.aborted) force((n) => n + 1)
+      },
+      () => {
+        // A thumbnail is decoration: fall back to the file icon.
+      },
+    )
+    return () => controller.abort()
+  }, [url, isPdf, visible])
+  return isPdf ? (cached ?? null) : { src: url, pages: null }
+}
+
+function PaperThumb({
+  paper,
+  label,
+  active,
+  onSelect,
+}: {
+  paper: Paper
+  label: string
+  active: boolean
+  onSelect: () => void
+}): React.JSX.Element {
+  const { t } = useTranslation()
+  const buttonRef = useRef<HTMLButtonElement>(null)
+  const [visible, setVisible] = useState(false)
+  // Only a frame that scrolled into view builds its thumbnail (a PDF is fetched
+  // in full for it); once seen it stays eligible.
+  useEffect(() => {
+    const el = buttonRef.current
+    if (!el || visible) return
+    const io = new IntersectionObserver((entries) => {
+      if (entries.some((e) => e.isIntersecting)) setVisible(true)
+    })
+    io.observe(el)
+    return () => io.disconnect()
+  }, [visible])
+  const thumb = useThumb(paper, visible)
+  const button = (
+    <button
+      ref={buttonRef}
+      type="button"
+      aria-pressed={active}
+      onClick={onSelect}
+      className="flex w-16 shrink-0 flex-col items-center gap-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none"
+    >
+      <span
+        className={cn(
+          'relative grid aspect-[210/297] w-full place-items-center overflow-hidden rounded-[3px] border-2 bg-surface text-faint transition-colors motion-reduce:transition-none',
+          active ? 'border-primary' : 'border-border',
+        )}
+      >
+        {thumb?.src ? (
+          <img src={thumb.src} alt="" draggable={false} className="h-full w-full object-cover object-top" />
+        ) : (
+          <FileText className="h-5 w-5" strokeWidth={1.6} aria-hidden />
+        )}
+        {thumb?.pages != null && thumb.pages > 1 ? (
+          <span className="absolute bottom-0.5 end-0.5 rounded bg-foreground/80 px-1 text-[0.6875rem] font-semibold leading-tight text-background">
+            <bdi dir="ltr" className="tabular-nums">
+              {t('books.paper.pages', { count: thumb.pages })}
+            </bdi>
+          </span>
+        ) : null}
+      </span>
+      <span
+        className={cn(
+          'w-full truncate text-center text-[0.6875rem] leading-tight',
+          active ? 'font-bold text-primary' : 'text-muted-foreground',
+        )}
+      >
+        {label}
+      </span>
+    </button>
+  )
+  // A scan's own filename is the only way to tell two scans apart.
+  return paper.kind === 'scan' ? <Hint label={paper.filename}>{button}</Hint> : button
+}
+
+// ---------------------------------------------------------------------------
+
 export function RecordPaperViewer({
   papers,
-  paperIndex,
-  onPaperIndexChange,
-  baseWidth,
-  isOverlay = false,
+  selectedKey,
+  onSelectKey,
+  mode,
   onOpenFull,
   onClose,
   addScanSlot,
@@ -114,11 +228,10 @@ export function RecordPaperViewer({
   onReplacePaper,
 }: {
   papers: Paper[]
-  paperIndex: number
-  onPaperIndexChange: (i: number) => void
-  /** page width in px at 100% zoom */
-  baseWidth: number
-  isOverlay?: boolean
+  /** key of the selected paper; falls back to the first paper when absent */
+  selectedKey: PaperKey | null
+  onSelectKey: (key: PaperKey) => void
+  mode: RecordPaperViewerMode
   onOpenFull?: () => void
   onClose?: () => void
   /** parent-provided "＋ Add scan" strip frame (caps-gated) */
@@ -131,19 +244,42 @@ export function RecordPaperViewer({
   onReplacePaper?: (paper: Paper) => void
 }): React.JSX.Element {
   const { t } = useTranslation()
+  const isOverlay = mode !== 'pane'
   const [zoom, setZoom] = useState(1)
   const canvasRef = useRef<HTMLDivElement | null>(null)
+  const [containerWidth, setContainerWidth] = useState(0)
   const panState = useRef<{ x: number; y: number; active: boolean }>({ x: 0, y: 0, active: false })
   const [canPan, setCanPan] = useState(false)
   const [grabbing, setGrabbing] = useState(false)
 
-  const paper = papers[paperIndex] as Paper | undefined
-  const paperKey = paper?.url
-  const [prevPaperKey, setPrevPaperKey] = useState(paperKey)
-  if (prevPaperKey !== paperKey) {
-    setPrevPaperKey(paperKey)
+  const paper = papers.find((p) => paperKey(p) === selectedKey) ?? papers[0]
+  const activeKey = paper ? paperKey(paper) : null
+  const [prevActiveKey, setPrevActiveKey] = useState(activeKey)
+  if (prevActiveKey !== activeKey) {
+    setPrevActiveKey(activeKey)
     setZoom(1)
   }
+
+  // Fit width = this container's own width minus padding.
+  useLayoutEffect(() => {
+    const el = canvasRef.current
+    if (!el) return
+    setContainerWidth(Math.round(el.clientWidth))
+    if (typeof ResizeObserver === 'undefined') return
+    const ro = new ResizeObserver((entries) => {
+      const w = entries[0]?.contentRect.width ?? el.clientWidth
+      setContainerWidth(Math.round(w))
+    })
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
+  const fitWidth = Math.max(0, containerWidth - PAPER_PADDING)
+  const narrow = containerWidth > 0 && containerWidth < NARROW_TOOLBAR
+  const showStrip =
+    (mode === 'pane' && (papers.length > 1 || !!addScanSlot)) ||
+    (mode === 'dialog' && papers.length > 1)
+  const labels = paperLabels(t, papers)
+  const labelOf = (p: Paper): string => labels[papers.indexOf(p)] ?? ''
 
   const minZoom = isOverlay ? 0.5 : 0.6
   const maxZoom = isOverlay ? 3 : 2.4
@@ -158,7 +294,7 @@ export function RecordPaperViewer({
     measureOverflow()
     const id = window.setTimeout(measureOverflow, 450) // after pdf render settles
     return () => window.clearTimeout(id)
-  }, [zoom, paperIndex, papers, measureOverflow])
+  }, [zoom, activeKey, papers, containerWidth, measureOverflow])
 
   const onPointerDown = (e: React.PointerEvent<HTMLDivElement>): void => {
     const cv = canvasRef.current
@@ -180,44 +316,22 @@ export function RecordPaperViewer({
     setGrabbing(false)
   }
 
-  const kindLabel = (p: Paper): string =>
-    p.kind === 'generated'
-      ? t('books.pane.generated')
-      : p.kind === 'signed'
-        ? t('books.pane.signedCopy')
-        : p.kind === 'imported'
-          ? t('books.pane.imported')
-          : t('books.pane.scan')
+  const manageable = paper && (paper.kind === 'scan' || paper.kind === 'signed')
+  const canReplace = !!onReplacePaper && manageable
+  const canDelete = !!onDeletePaper && manageable
 
   return (
     <div className={cn('flex min-h-0 flex-1 flex-col', isOverlay && 'h-full')}>
-      {!isOverlay && (papers.length > 0 || addScanSlot) && (
+      {showStrip && (
         <div className="flex shrink-0 gap-2 overflow-x-auto border-b border-hairline bg-surface-raised px-3 py-2.5">
-          {papers.map((p, i) => (
-            <button
-              key={`${p.kind}-${p.url}`}
-              type="button"
-              aria-pressed={i === paperIndex}
-              onClick={() => onPaperIndexChange(i)}
-              className="flex w-14 shrink-0 flex-col items-center gap-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            >
-              <span
-                className={cn(
-                  'grid aspect-[210/297] w-full place-items-center overflow-hidden rounded-[3px] border-2 bg-surface font-mono text-[0.56em] text-faint transition-colors',
-                  i === paperIndex ? 'border-primary' : 'border-border',
-                )}
-              >
-                {p.isPdf ? 'PDF' : 'IMG'}
-              </span>
-              <span
-                className={cn(
-                  'w-full truncate text-center text-[0.56em] leading-tight',
-                  i === paperIndex ? 'font-bold text-primary' : 'text-muted-foreground',
-                )}
-              >
-                {kindLabel(p)}
-              </span>
-            </button>
+          {papers.map((p) => (
+            <PaperThumb
+              key={paperKey(p)}
+              paper={p}
+              label={labelOf(p)}
+              active={paperKey(p) === activeKey}
+              onSelect={() => onSelectKey(paperKey(p))}
+            />
           ))}
           {addScanSlot}
         </div>
@@ -226,13 +340,31 @@ export function RecordPaperViewer({
       {paper && (
         <div
           className={cn(
-            'flex shrink-0 items-center gap-1 px-3 py-1.5',
+            'flex shrink-0 flex-wrap items-center gap-1 px-3 py-1.5',
             isOverlay ? 'justify-center' : 'border-b border-hairline bg-surface-raised',
           )}
         >
+          {mode === 'overlay' && papers.length > 1 && (
+            <div role="group" aria-label={t('books.pane.papers', { count: papers.length })} className="flex flex-wrap gap-1">
+              {papers.map((p) => (
+                <button
+                  key={paperKey(p)}
+                  type="button"
+                  aria-pressed={paperKey(p) === activeKey}
+                  onClick={() => onSelectKey(paperKey(p))}
+                  className={cn(
+                    'inline-flex min-h-8 items-center rounded-sm px-2 text-[0.75em] font-semibold transition-colors motion-reduce:transition-none',
+                    paperKey(p) === activeKey ? 'bg-white text-black' : 'bg-white/15 text-white hover:bg-white/25',
+                  )}
+                >
+                  {labelOf(p)}
+                </button>
+              ))}
+            </div>
+          )}
           <span
             className={cn(
-              'truncate font-mono text-[0.66em]',
+              'truncate font-mono text-[0.75em]',
               isOverlay ? 'max-w-[18rem] text-white/90' : 'min-w-0 flex-1 text-muted-foreground',
             )}
           >
@@ -246,8 +378,9 @@ export function RecordPaperViewer({
             <Minus className="h-3 w-3" aria-hidden />
           </ToolbarBtn>
           <span
+            aria-live="polite"
             className={cn(
-              'min-w-[3rem] text-center font-mono text-[0.66em] tabular-nums',
+              'min-w-[3rem] text-center font-mono text-[0.75em] tabular-nums',
               isOverlay ? 'text-white' : 'text-muted-foreground',
             )}
           >
@@ -270,7 +403,7 @@ export function RecordPaperViewer({
             href={paper.downloadUrl}
             download={paper.filename}
             className={cn(
-              'inline-flex items-center gap-1 rounded-sm px-2 py-1 text-[0.66em] font-semibold transition-colors',
+              'inline-flex items-center gap-1 rounded-sm px-2 py-1 text-[0.75em] font-semibold transition-colors motion-reduce:transition-none',
               isOverlay
                 ? 'bg-white/15 text-white hover:bg-white/25'
                 : 'border border-hairline bg-surface text-muted-foreground hover:border-primary hover:text-primary',
@@ -279,23 +412,59 @@ export function RecordPaperViewer({
             <Download className="h-3 w-3" aria-hidden />
             {t('common.download')}
           </a>
-          {onReplacePaper && (paper.kind === 'scan' || paper.kind === 'signed') && (
-            <ToolbarBtn
-              isOverlay={isOverlay}
-              label={t('books.pane.replacePaper')}
-              onClick={() => onReplacePaper(paper)}
-            >
-              <RefreshCw className="h-3 w-3" aria-hidden />
-            </ToolbarBtn>
-          )}
-          {onDeletePaper && (paper.kind === 'scan' || paper.kind === 'signed') && (
-            <ToolbarBtn
-              isOverlay={isOverlay}
-              label={t('books.pane.deletePaper')}
-              onClick={() => onDeletePaper(paper)}
-            >
-              <Trash2 className="h-3 w-3" aria-hidden />
-            </ToolbarBtn>
+          {narrow && (canReplace || canDelete) ? (
+            <DropdownMenu modal={false}>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  aria-label={t('books.pane.more')}
+                  className={cn(
+                    'inline-flex items-center rounded-sm px-2 py-1 transition-colors motion-reduce:transition-none',
+                    isOverlay
+                      ? 'bg-white/15 text-white hover:bg-white/25'
+                      : 'border border-hairline bg-surface text-muted-foreground hover:border-primary hover:text-primary',
+                  )}
+                >
+                  <MoreHorizontal className="h-3.5 w-3.5" aria-hidden />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                {canReplace && (
+                  <DropdownMenuItem onSelect={() => onReplacePaper(paper)}>
+                    <RefreshCw className="h-4 w-4" aria-hidden />
+                    {t('books.pane.replacePaper')}
+                  </DropdownMenuItem>
+                )}
+                {canDelete && (
+                  <DropdownMenuItem variant="danger" onSelect={() => onDeletePaper(paper)}>
+                    <Trash2 className="h-4 w-4" aria-hidden />
+                    {t('books.pane.deletePaper')}
+                  </DropdownMenuItem>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : (
+            <>
+              {canReplace && (
+                <ToolbarBtn
+                  isOverlay={isOverlay}
+                  label={t('books.pane.replacePaper')}
+                  onClick={() => onReplacePaper(paper)}
+                >
+                  <RefreshCw className="h-3 w-3" aria-hidden />
+                </ToolbarBtn>
+              )}
+              {canDelete && (
+                <ToolbarBtn
+                  isOverlay={isOverlay}
+                  danger
+                  label={t('books.pane.deleteScan')}
+                  onClick={() => onDeletePaper(paper)}
+                >
+                  <Trash2 className="h-3 w-3" aria-hidden />
+                </ToolbarBtn>
+              )}
+            </>
           )}
           {!isOverlay && onOpenFull && (
             <ToolbarBtn isOverlay={false} label={t('books.pane.fullPreview')} onClick={onOpenFull}>
@@ -323,7 +492,13 @@ export function RecordPaperViewer({
         )}
       >
         <div className="m-auto shrink-0 p-4">
-          {paper ? <PaperCanvas paper={paper} width={Math.round(baseWidth * zoom)} /> : (emptySlot ?? null)}
+          {paper ? (
+            fitWidth > 0 ? (
+              <PaperCanvas paper={paper} width={Math.round(fitWidth * zoom)} />
+            ) : null
+          ) : (
+            (emptySlot ?? null)
+          )}
         </div>
       </div>
     </div>
@@ -335,30 +510,38 @@ function ToolbarBtn({
   label,
   onClick,
   text,
+  danger = false,
   children,
 }: {
   isOverlay: boolean
   label: string
   onClick: () => void
   text?: string
+  /** destructive action: red, with its label as the hint */
+  danger?: boolean
   children?: React.ReactNode
 }): React.JSX.Element {
   return (
-    <button
-      type="button"
-      title={label}
-      aria-label={label}
-      onClick={onClick}
-      className={cn(
-        'inline-flex items-center gap-1 rounded-sm px-2 py-1 text-[0.66em] font-semibold transition-colors',
-        isOverlay
-          ? 'bg-white/15 text-white hover:bg-white/25'
-          : 'border border-hairline bg-surface text-muted-foreground hover:border-primary hover:text-primary',
-      )}
-    >
-      {children}
-      {text}
-    </button>
+    <Hint label={label}>
+      <button
+        type="button"
+        aria-label={label}
+        onClick={onClick}
+        className={cn(
+          'inline-flex items-center gap-1 rounded-sm px-2 py-1 text-[0.75em] font-semibold transition-colors motion-reduce:transition-none',
+          danger
+            ? isOverlay
+              ? 'bg-accent/80 text-white hover:bg-accent'
+              : 'border border-accent/40 bg-surface text-accent hover:bg-accent/10'
+            : isOverlay
+              ? 'bg-white/15 text-white hover:bg-white/25'
+              : 'border border-hairline bg-surface text-muted-foreground hover:border-primary hover:text-primary',
+        )}
+      >
+        {children}
+        {text}
+      </button>
+    </Hint>
   )
 }
 

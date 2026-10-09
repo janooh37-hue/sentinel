@@ -8,9 +8,8 @@
  * STATE MACHINE
  *   - activeView: MailboxView      — default Inbox (rail's onSelectView).
  *   - tab: 'all' | 'unread'        — All/Unread tab on the list.
- *   - selectedId: number | null    — set by MessageList.onSelect; the reading
- *                                    pane consuming it is Phase 5 (for now a
- *                                    click just marks the row selected).
+ *   - selectedId: number | null    — `?mail=<id>`; set by MessageList.onSelect,
+ *                                    drives the reading pane.
  *   - search: string               — FTS input; results bubble up to swap items.
  *
  * DATA WIRING (one list query off activeView):
@@ -53,7 +52,7 @@ import { ReviewSuggestionsSheet } from './ReviewSuggestionsSheet'
 import { CreateSmartFolderDialog } from './CreateSmartFolderDialog'
 import type { SmartFolder, SmartFolderSuggestion } from '@/lib/api'
 import { toast } from 'sonner'
-import { useDeferredDelete, type PendingDelete } from './useDeferredDelete'
+import { useDeferredDelete, type PendingDelete } from '@/lib/useDeferredDelete'
 import {
   DEFAULT_MAILBOX_VIEW,
   type MailboxView,
@@ -64,12 +63,13 @@ import {
   EMPTY_QUICK_FILTERS,
   type QuickFilters,
 } from './mailboxQuery'
+import { useSearchParam, useUrlOverlay } from '@/lib/urlState'
 
 type NavigatePage =
   | 'employees'
   | 'books'
   | 'settings'
-  | 'application'
+  | 'services'
   | 'leaves'
   | 'dashboard'
   | 'ledger'
@@ -116,9 +116,25 @@ export function LedgerOutlookShell({ onNavigate }: LedgerOutlookShellProps = {})
   const [tab, setTab] = useState<MessageListTab>('all')
   // Phase 2 (D1) — quick-filter chips (reset when the folder/view changes).
   const [filters, setFilters] = useState<QuickFilters>(EMPTY_QUICK_FILTERS)
-  const [selectedId, setSelectedId] = useState<number | null>(null)
-  const consumedOpen = useRef<string | null>(null)
+  // The open mail is `?mail=<id>`: a list selection (replace) on desktop, a
+  // full-screen page on mobile (push, so Back returns to the list).
+  const [mailParam, setMailParam] = useSearchParam('mail')
+  const mailPage = useUrlOverlay('mail')
+  const selectedId = /^\d+$/.test(mailParam) && Number(mailParam) > 0 ? Number(mailParam) : null
+  const setSelectedId = useCallback(
+    (id: number | null) => {
+      if (!isMobile) setMailParam(id === null ? null : String(id))
+      else if (id === null) mailPage.close()
+      else mailPage.open(String(id))
+    },
+    [isMobile, mailPage.close, mailPage.open, setMailParam],
+  )
+  // Compose is `?action=compose` (push, so Back closes it). Its payload
+  // (source mail, prefill) stays in state; a bare URL opens a blank compose.
   const [compose, setCompose] = useState<ComposeState | null>(null)
+  const composePage = useUrlOverlay('action')
+  const activeCompose: ComposeState | null =
+    composePage.value === 'compose' ? compose ?? { mode: 'new' } : null
   const [search, setSearch] = useState('')
   const [searchResponse, setSearchResponse] = useState<LedgerSearchResponse | null>(null)
   const [searchPending, setSearchPending] = useState(false)
@@ -139,12 +155,8 @@ export function LedgerOutlookShell({ onNavigate }: LedgerOutlookShellProps = {})
   const [createSuggestion, setCreateSuggestion] = useState<SmartFolderSuggestion | null>(null)
 
   const isSearching = search.trim().length > 0
-  const requestedOpenId = (() => {
-    const raw = new URLSearchParams(location.search).get('open')
-    if (raw == null || !/^\d+$/.test(raw)) return null
-    const id = Number(raw)
-    return Number.isSafeInteger(id) && id > 0 ? id : null
-  })()
+  // Hydrates the open mail even when it is outside the current list window.
+  const requestedOpenId = selectedId
   // Suggestions only need surfacing on a normal folder view (not inside a smart
   // folder, not mid-search). Fetched once; drives the rail pill + list banner.
   const smartSuggestions = useQuery({
@@ -224,29 +236,6 @@ export function LedgerOutlookShell({ onNavigate }: LedgerOutlookShellProps = {})
   const mailItems: LedgerListItem[] = isSearching
     ? searchItems
     : (ledgerQuery.data?.items ?? [])
-  useEffect(() => {
-    if (
-      requestedOpenId == null ||
-      isSearching ||
-      requestedEntryQuery.isPending ||
-      requestedEntryQuery.isError ||
-      requestedEntryQuery.data == null ||
-      consumedOpen.current === String(requestedOpenId)
-    ) return
-
-    consumedOpen.current = String(requestedOpenId)
-    setSelectedId(requestedOpenId)
-    const nextParams = new URLSearchParams(location.search)
-    nextParams.delete('open')
-    navigate(
-      {
-        pathname: location.pathname,
-        search: nextParams.toString() ? `?${nextParams.toString()}` : '',
-        hash: location.hash,
-      },
-      { replace: true, state: location.state },
-    )
-  }, [isSearching, location, navigate, requestedEntryQuery.data, requestedEntryQuery.isError, requestedEntryQuery.isPending, requestedOpenId])
 
   const isLoading = isSearching ? searchPending : ledgerQuery.isPending
 
@@ -260,7 +249,7 @@ export function LedgerOutlookShell({ onNavigate }: LedgerOutlookShellProps = {})
     // Picking a folder/category from the mobile drawer dismisses it so the
     // list comes back full-bleed. No-op on desktop (drawer stays closed).
     setFolderDrawerOpen(false)
-  }, [])
+  }, [setSelectedId])
 
   // Phase 3 — review → create flow. Opening the create dialog closes the sheet
   // so the modal isn't stacked under it.
@@ -273,7 +262,7 @@ export function LedgerOutlookShell({ onNavigate }: LedgerOutlookShellProps = {})
     setActiveView({ kind: 'smart', folderId: folder.id })
     setSelectedId(null)
     setFilters(EMPTY_QUICK_FILTERS)
-  }, [])
+  }, [setSelectedId])
 
   const handleSearchResults = useCallback(
     (response: LedgerSearchResponse | null, pending: boolean) => {
@@ -294,7 +283,7 @@ export function LedgerOutlookShell({ onNavigate }: LedgerOutlookShellProps = {})
   // fresh (these are user-event callbacks, never batched render-phase calls).
   const openCompose = useCallback(
     (next: ComposeState) => {
-      if (compose) {
+      if (activeCompose) {
         toast(
           t('ledger.outlook.composeBusy', {
             defaultValue: 'Finish or close your current draft first.',
@@ -303,9 +292,10 @@ export function LedgerOutlookShell({ onNavigate }: LedgerOutlookShellProps = {})
         return
       }
       setCompose(next)
+      composePage.open('compose')
       setFolderDrawerOpen(false)
     },
-    [compose, t],
+    [activeCompose, composePage.open, t],
   )
 
   // Reply / Reply All / Forward open the compose over the pane.
@@ -340,9 +330,18 @@ export function LedgerOutlookShell({ onNavigate }: LedgerOutlookShellProps = {})
     if (!prefill) return
     consumedPrefill.current = true
     // eslint-disable-next-line react-hooks/set-state-in-effect -- one-shot navigation-state hydration (the BooksPage pattern)
-    openCompose({ mode: 'new', prefill })
-    navigate(location.pathname, { replace: true, state: null })
-  }, [location, navigate, openCompose])
+    setCompose({ mode: 'new', prefill })
+    // Swap the state for the URL in place: refresh keeps the compose open
+    // (blank — the prefill is not shareable) and Close stays on the ledger.
+    const params = new URLSearchParams(location.search)
+    params.set('action', 'compose')
+    navigate({ search: `?${params}` }, { replace: true, state: null })
+  }, [location, navigate])
+
+  // A URL may open compose, nothing else.
+  useEffect(() => {
+    if (composePage.value !== null && composePage.value !== 'compose') composePage.close()
+  }, [composePage.close, composePage.value])
 
   // Deep-link the Follow-ups view from `location.state.ledgerView` (the bell's
   // Follow-ups row). One-shot, then clear the state so Back/F5 don't re-trigger.
@@ -354,7 +353,7 @@ export function LedgerOutlookShell({ onNavigate }: LedgerOutlookShellProps = {})
     consumedView.current = true
     // eslint-disable-next-line react-hooks/set-state-in-effect -- one-shot navigation-state hydration
     handleSelectView({ kind: 'followups' })
-    navigate(location.pathname, { replace: true, state: null })
+    navigate({ search: location.search }, { replace: true, state: null })
   }, [location, navigate, handleSelectView])
 
   // Row click opens the entry read-only in the reading pane. Plain fn —
@@ -385,7 +384,7 @@ export function LedgerOutlookShell({ onNavigate }: LedgerOutlookShellProps = {})
 
   // Context-panel "Open record" → the specific employee; "Generate" stays coarse.
   const handleContextNavigate = useCallback(
-    (page: 'employees' | 'application', id?: string) => onNavigate?.(page, id),
+    (page: 'employees' | 'services', id?: string) => onNavigate?.(page, id),
     [onNavigate],
   )
   const handleContextEmail = useCallback(
@@ -405,14 +404,16 @@ export function LedgerOutlookShell({ onNavigate }: LedgerOutlookShellProps = {})
   const handleComposeSent = useCallback(() => {
     void queryClient.invalidateQueries({ queryKey: ['ledger'] })
     setCompose(null)
-  }, [queryClient])
+    composePage.close()
+  }, [composePage.close, queryClient])
 
   // Closing may follow a handoff that already wrote a pending row — refresh so
   // the list shows it without waiting for the next poll.
   const handleComposeClose = useCallback(() => {
     void queryClient.invalidateQueries({ queryKey: ['ledger'] })
     setCompose(null)
-  }, [queryClient])
+    composePage.close()
+  }, [composePage.close, queryClient])
 
   const { pendingIds, scheduleDelete } = useDeferredDelete({
     delayMs: UNDO_DELAY_MS,
@@ -435,9 +436,9 @@ export function LedgerOutlookShell({ onNavigate }: LedgerOutlookShellProps = {})
     (entry: { id: number }) => {
       scheduleDelete({ id: entry.id })
       // If the deleted entry is the one open in the pane, clear the selection.
-      setSelectedId((cur) => (cur === entry.id ? null : cur))
+      if (selectedId === entry.id) setSelectedId(null)
     },
-    [scheduleDelete],
+    [scheduleDelete, selectedId, setSelectedId],
   )
 
   // Bulk Trash (D4) — schedule each id through the same deferred-delete so every
@@ -445,9 +446,9 @@ export function LedgerOutlookShell({ onNavigate }: LedgerOutlookShellProps = {})
   const handleBulkTrash = useCallback(
     (ids: number[]) => {
       ids.forEach((id) => scheduleDelete({ id }))
-      setSelectedId((cur) => (cur != null && ids.includes(cur) ? null : cur))
+      if (selectedId != null && ids.includes(selectedId)) setSelectedId(null)
     },
-    [scheduleDelete],
+    [scheduleDelete, selectedId, setSelectedId],
   )
 
   // Hide optimistically-deleted rows from the list until the timer commits.
@@ -520,13 +521,13 @@ export function LedgerOutlookShell({ onNavigate }: LedgerOutlookShellProps = {})
   // Desktop: a non-modal Outlook-style window docked bottom-right (the mailbox
   // behind stays clickable); the render-prop hands min/max/restore controls to
   // the handoff surface. Mobile: full-screen page chrome (header + Back).
-  const composeOverlay = compose && (
+  const composeOverlay = activeCompose && (
     <ComposeWindow fullScreen={isMobile}>
       {(win) => (
         <OutlookHandoffDialog
-          mode={compose.mode}
-          source={compose.source}
-          prefill={compose.prefill}
+          mode={activeCompose.mode}
+          source={activeCompose.source}
+          prefill={activeCompose.prefill}
           chrome={isMobile ? 'page' : 'window'}
           windowControls={win}
           onClose={handleComposeClose}

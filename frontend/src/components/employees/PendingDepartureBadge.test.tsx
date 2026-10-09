@@ -69,4 +69,19 @@ describe('PendingDepartureBadge', () => {
     expect(screen.getByText(/مفصول/)).toBeInTheDocument()
     expect(screen.queryByText(/Terminated/)).not.toBeInTheDocument()
   })
+
+  it('names the destination site for a pending transfer (EN and AR)', () => {
+    const props = {
+      status: 'Active',
+      pendingStatus: 'Transferred',
+      endDate: '2026-08-15',
+      transferSite: 'Port A',
+    } as const
+    const { unmount } = renderBadge(props)
+    expect(screen.getByText(/Transferred · .*Port A.* — effective 15\/08\/2026/)).toBeInTheDocument()
+    unmount()
+    renderBadge(props, 'ar')
+    expect(screen.getByText(/منقول · .*Port A/)).toBeInTheDocument()
+    expect(screen.queryByText(/Transferred/)).not.toBeInTheDocument()
+  })
 })

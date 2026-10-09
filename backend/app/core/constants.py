@@ -71,6 +71,32 @@ TEMPLATE_FILES: Final[Mapping[str, str]] = MappingProxyType(
         "Inmate Conduct Violations": "GSSG-NAT_300-005_Inmate_Conduct_Violations.docx",
         "Vehicle Fines": "GSSG-VF_300-001_Vehicle_Fines.docx",
         "Vehicle Accident Report": "GSSG-VA_300-001_Vehicle_Accident_Report.docx",
+        # --- 2026-09-21 HR intake additions (19 new forms, built from PDF
+        # exports pending native Word originals — see the intake review
+        # package for source/disposition notes) -----------------------------
+        "Manpower Requisition Form": "GSSG-HR_300-001_Manpower_Requisition_Form.docx",
+        "Employment Application Form": "GSSG-HR_300-002_Employment_Application_Form.docx",
+        "Interview Assessment Form": "GSSG-HR_300-005_Interview_Assessment_Form.docx",
+        "Employment Offer Letter": "GSSG-HR_300-006_Employment_Offer_Letter.docx",
+        "Employee Performance Appraisal Form": "GSSG-HR_300-007_Employee_Performance_Appraisal_Form.docx",
+        "Employee Job Description": "GSSG-HR_300-010B_Employee_Job_Description.docx",
+        "Interview Scores Form": "GSSG-HR_300-012_Interview_Scores_Form.docx",
+        "Staff Attendance Form": "GSSG-HR_300-015_Staff_Attendance_Form.docx",
+        "Leave Encashment Form": "GSSG-HR_300-017_Leave_Encashment_Form.docx",
+        "Loan Request Form": "GSSG-HR_300-018_Loan_Request_Form.docx",
+        "Employee Information Form": "GSSG-HR_300-019_Employee_Information_Form.docx",
+        "Employee Exit Form": "GSSG-HR_300-011_Employee_Exit_Form.docx",
+        "Employee Exit Form – Project or Contract": (  # noqa: RUF001
+            "GSSG-HR_300-021_Employee_Exit_Form_Project_Contract.docx"
+        ),
+        "Salary Advance Request Form": "GSSG-HR_300-022_Salary_Advance_Request_Form.docx",
+        "Breach of Discipline Form": "GSSG-HR_300-023_Breach_of_Discipline_Form.docx",
+        "Promotion and Salary Increment Request Form": (
+            "GSSG-HR_300-025_Promotion_Salary_Increment_Form.docx"
+        ),
+        "Allowance Request Form": "GSSG-HR_300-026_Allowance_Request_Form.docx",
+        "Employee Overtime Form": "GSSG-HR_300-027_Employee_Overtime_Form.docx",
+        "Expense Claim Form": "GSSG-HR_300-028_Expense_Claim_Form.docx",
     }
 )
 
@@ -144,10 +170,12 @@ STAMP_STYLES: Final[tuple[str, ...]] = (
 EMPLOYEE_STATUS_ACTIVE: Final[str] = "Active - نشط"
 EMPLOYEE_STATUS_RESIGNED: Final[str] = "Resigned - مستقيل"
 EMPLOYEE_STATUS_TERMINATED: Final[str] = "Terminated - مفصول"
+EMPLOYEE_STATUS_TRANSFERRED: Final[str] = "Transferred - منقول"
 EMPLOYEE_STATUS_LIST: Final[tuple[str, ...]] = (
     EMPLOYEE_STATUS_ACTIVE,
     EMPLOYEE_STATUS_RESIGNED,
     EMPLOYEE_STATUS_TERMINATED,
+    EMPLOYEE_STATUS_TRANSFERRED,
 )
 
 

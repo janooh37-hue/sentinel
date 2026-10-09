@@ -14,6 +14,7 @@ import { useCapabilities } from '@/lib/useCapabilities'
 import { useIsMobile } from '@/lib/useIsMobile'
 import { cn } from '@/lib/utils'
 import { AuthContext } from '@/lib/authContext'
+import { serviceHref } from '@/lib/quickActions'
 
 export type NotificationChoice = 'enabled' | 'skipped'
 
@@ -63,9 +64,7 @@ export function SavedRecordActions({
           action: {
             label: t('books.pane.continueDraft'),
             onClick: () =>
-              navigate('/application?form=Inmate%20Conduct%20Violations', {
-                state: { reviseBookId: bookId },
-              }),
+              navigate(`${serviceHref('Inmate Conduct Violations')}?revise=${bookId}`),
           },
         })
       } else {

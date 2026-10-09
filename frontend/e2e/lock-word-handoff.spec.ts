@@ -18,7 +18,8 @@ const COPY = {
   en: {
     classification: 'Classification*',
     create: 'Create & open in Word',
-    discard: 'Discard',
+    discard: 'Discard draft…',
+    discardConfirm: 'Discard draft',
     finish: 'Finish editing',
     finishedPrefix: 'Book saved',
     lock: 'App locked',
@@ -32,7 +33,7 @@ const COPY = {
   ar: {
     classification: 'التبويب*',
     create: 'إنشاء وفتح في Word',
-    discard: 'تجاهل',
+    discard: 'إلغاء المسودة…',
     finish: 'إنهاء التحرير',
     finishedPrefix: 'تم حفظ الكتاب',
     lock: 'التطبيق مقفل',
@@ -756,7 +757,7 @@ async function prepareApp(
     window.sessionStorage.clear()
     window.localStorage.setItem('gssg.lang', language)
   }, locale)
-  await page.goto(options.path ?? '/application?form=general_book')
+  await page.goto(options.path ?? '/services/general_book')
   await expect(page.locator('html')).toHaveAttribute('lang', new RegExp(`^${locale}`))
   await expect(page.locator('html')).toHaveAttribute('dir', locale === 'ar' ? 'rtl' : 'ltr')
   await expect(page.locator('#main-content')).toBeVisible()
@@ -945,7 +946,7 @@ test('main reported path: password input works above an existing Word handoff an
 
   await unlockWithKeyboard(page, locale)
   await expectHandoff(page, locale, book.ref_number)
-  await expect(page).toHaveURL(/\/application(?:\?|$)/)
+  await expect(page).toHaveURL(/\/services\/general_book/)
   await expectHeapMarker(page)
   await expect(waiting.getByText(COPY.en.noSave, { exact: true })).toBeVisible()
   await expect(waiting.getByRole('button', { name: COPY.en.finish, exact: true })).toBeDisabled()
@@ -1059,7 +1060,7 @@ test('nested discard confirmation survives Escape, focus traversal, and applicat
   const book = await createHandoff(page, backend, locale, 'Nested confirmation retained')
   const handoff = handoffDialog(page, locale)
   await handoff.getByRole('button', { name: COPY.en.discard, exact: true }).click()
-  const confirmation = page.getByRole('dialog', { name: COPY.en.discard, exact: true })
+  const confirmation = page.getByRole('dialog', { name: COPY.en.discardConfirm, exact: true })
   await expect(confirmation).toBeVisible()
   const confirmationText = 'The book will be voided; its number stays in the register. Continue?'
   await expect(confirmation).toContainText(confirmationText)
@@ -1149,8 +1150,8 @@ test('late create response replaces the prior token only after unlock and does n
   const first = await createHandoff(page, backend, locale, 'First token')
   const firstDialog = handoffDialog(page, locale)
   await firstDialog.getByRole('button', { name: COPY.en.discard, exact: true }).click()
-  const confirmation = page.getByRole('dialog', { name: COPY.en.discard, exact: true })
-  await confirmation.getByRole('button', { name: 'Confirm', exact: true }).click()
+  const confirmation = page.getByRole('dialog', { name: COPY.en.discardConfirm, exact: true })
+  await confirmation.getByRole('button', { name: COPY.en.discardConfirm, exact: true }).click()
   await expect(firstDialog).toBeHidden()
   expect(backend.discardedBookIds).toEqual([first.id])
 
@@ -1189,8 +1190,10 @@ test('late Records reopen response stays behind the lock and presents once after
   await expect(page.getByText(existing.ref_number, { exact: true }).first()).toBeVisible()
 
   const releaseReopen = backend.deferNextReopen()
+  // "Edit in Word" lives in the record pane's More menu (not a footer button).
+  await page.getByRole('button', { name: 'More', exact: true }).click()
   await page
-    .getByRole('button', { name: 'Edit in Word (creates a new version)', exact: true })
+    .getByRole('menuitem', { name: 'Edit in Word (creates a new version)', exact: true })
     .click()
   await expect.poll(() => backend.reopenedBookIds).toEqual([existing.id])
   await idleLock(page, locale, 'band')

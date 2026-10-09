@@ -31,7 +31,7 @@ export const WINGS: readonly string[] = [1, 2, 3, 4, 5, 6].flatMap((floor) => [
 ])
 
 /** Where the register lives: the third mode tab of the Records service. */
-const REGISTER_HREF = '/application?form=inmate_conduct_violations&mode=stats'
+const REGISTER_HREF = '/services/inmate_conduct_violations?mode=stats'
 
 /** Deep-link into one month of the register — the reminder's only action. */
 export function inmateRegisterHref(year: number, month: number): string {

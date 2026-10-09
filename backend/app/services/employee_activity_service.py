@@ -5,7 +5,16 @@ from itertools import chain
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
-from app.db.models import Book, Document, Employee, Leave, LedgerEntry, Violation
+from app.db.models import (
+    Book,
+    Document,
+    Employee,
+    EmployeeStatusEvent,
+    Leave,
+    LedgerEntry,
+    User,
+    Violation,
+)
 from app.db.workforce_models import DutyAssignmentEvent
 from app.schemas.employee_activity import (
     EmployeeActivityItemRead,
@@ -262,6 +271,61 @@ def _duty_locations(
     ], total
 
 
+def _status_events(
+    db: Session, *, employee_id: str | None, requested: int
+) -> tuple[list[EmployeeActivityItemRead], int]:
+    stmt = (
+        select(
+            EmployeeStatusEvent.id.label("source_id"),
+            EmployeeStatusEvent.created_at.label("occurred_at"),
+            EmployeeStatusEvent.from_status,
+            EmployeeStatusEvent.to_status,
+            EmployeeStatusEvent.effective_date,
+            EmployeeStatusEvent.site,
+            EmployeeStatusEvent.return_date,
+            EmployeeStatusEvent.kind.label("event_kind"),
+            EmployeeStatusEvent.source.label("event_source"),
+            func.coalesce(func.nullif(User.display_name, ""), User.email).label("actor_name"),
+            Employee.id.label("employee_id"),
+            Employee.name_en.label("employee_name_en"),
+            Employee.name_ar.label("employee_name_ar"),
+            func.count().over().label("source_total"),
+        )
+        .join(Employee, EmployeeStatusEvent.employee_id == Employee.id)
+        .outerjoin(User, EmployeeStatusEvent.actor_user_id == User.id)
+    )
+    if employee_id is not None:
+        stmt = stmt.where(EmployeeStatusEvent.employee_id == employee_id)
+    rows = db.execute(
+        stmt.order_by(EmployeeStatusEvent.created_at.desc(), EmployeeStatusEvent.id.desc()).limit(
+            requested
+        )
+    ).all()
+    total = int(rows[0].source_total) if rows else 0
+    return [
+        EmployeeActivityItemRead(
+            kind="status",
+            source_id=row.source_id,
+            target_id=row.source_id,
+            occurred_at=row.occurred_at,
+            employee_id=row.employee_id,
+            employee_name_en=row.employee_name_en,
+            employee_name_ar=row.employee_name_ar,
+            title=row.to_status,
+            reference=f"#{row.source_id}",
+            from_status=row.from_status,
+            to_status=row.to_status,
+            effective_date=row.effective_date,
+            site=row.site,
+            return_date=row.return_date,
+            status_event_kind=row.event_kind,
+            status_source=row.event_source,
+            actor_name=row.actor_name,
+        )
+        for row in rows
+    ], total
+
+
 def list_employee_activity(
     db: Session,
     *,
@@ -290,6 +354,8 @@ def list_employee_activity(
         )
     if kind in (None, "duty_location"):
         sources.append(_duty_locations(db, employee_id=employee_id, requested=requested))
+    if kind in (None, "status"):
+        sources.append(_status_events(db, employee_id=employee_id, requested=requested))
     merged = sorted(chain.from_iterable(rows for rows, _ in sources), key=_sort_key)
     return EmployeeActivityListRead(
         items=merged[offset : offset + limit],

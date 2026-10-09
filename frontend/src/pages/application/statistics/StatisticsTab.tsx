@@ -1,5 +1,4 @@
 import { useState } from 'react'
-import { useLocation, useSearchParams } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { Columns3, UserRoundPlus } from 'lucide-react'
 
@@ -15,28 +14,24 @@ import { ExportWorkspace } from './ExportWorkspace'
 import { MonthSwitcher } from './MonthSwitcher'
 import { RegisterIndex } from './RegisterIndex'
 import { WarningsStrip } from './WarningsStrip'
-import { groupEntries, parseMonthKey, visibleGroups } from './registerModel'
+import { groupEntries, monthKey, parseMonthKey, visibleGroups } from './registerModel'
+import { useSearchParam } from '@/lib/urlState'
 import { useInmateRegister } from './useInmateRegister'
 
 type ViewMode = 'register' | 'export'
 
-function initialCoordinate(raw: string | null): { year: number; month: number } {
-  const parsed = raw ? parseMonthKey(raw) : null
+function coordinateFrom(raw: string): { year: number; month: number } {
+  const parsed = parseMonthKey(raw)
   if (parsed) return parsed
   const now = new Date()
   return { year: now.getFullYear(), month: now.getMonth() + 1 }
 }
 
 export function StatisticsTab(): React.JSX.Element {
-  const location = useLocation()
-  const [searchParams] = useSearchParams()
-  const statsMonth = searchParams.get('stats_month')
-  return <StatisticsMonth key={`${location.key}:${statsMonth ?? ''}`} initialMonth={statsMonth} />
-}
-
-function StatisticsMonth({ initialMonth }: { initialMonth: string | null }): React.JSX.Element {
   const { t } = useTranslation()
-  const [coordinate, setCoordinate] = useState(() => initialCoordinate(initialMonth))
+  // `stats_month` is the shown month (replace), so refresh and shared links reopen it.
+  const [statsMonth, setStatsMonth] = useSearchParam('stats_month')
+  const coordinate = coordinateFrom(statsMonth)
   const [view, setView] = useState<ViewMode>('register')
   const [population, setPopulation] = useState<InmatePopulation>('citizens')
   const [expandedColumns, setExpandedColumns] = useState(false)
@@ -88,7 +83,7 @@ function StatisticsMonth({ initialMonth }: { initialMonth: string | null }): Rea
   }
 
   const changeMonth = (next: { year: number; month: number }): void => {
-    setCoordinate(next)
+    setStatsMonth(monthKey(next.year, next.month))
     setPopulation('citizens')
     setSelectedId(null)
     setInspectorMode('view')

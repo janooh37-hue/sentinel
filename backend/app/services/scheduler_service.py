@@ -16,13 +16,13 @@ Settings takes effect on the next tick without a process restart.
 from __future__ import annotations
 
 import logging
-import os
 import sys
 from datetime import UTC, date, datetime, time, timedelta
 from threading import Lock
 from typing import Final
 from zoneinfo import ZoneInfo
 
+from apscheduler.events import EVENT_JOB_ERROR, EVENT_JOB_EXECUTED, JobExecutionEvent
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 from apscheduler.triggers.interval import IntervalTrigger
@@ -37,6 +37,7 @@ from app.db.workforce_models import WorkCrewMembership, WorkCrewSchedule
 from app.schemas.employee import (
     EMPLOYEE_STATUS_RESIGNED,
     EMPLOYEE_STATUS_TERMINATED,
+    EMPLOYEE_STATUS_TRANSFERRED,
 )
 from app.schemas.workforce import WorkforceConfiguration
 from app.services import (
@@ -764,6 +765,7 @@ def _run_vehicle_reminders() -> None:
 _DEPARTURE_LABELS: Final[dict[str, tuple[str, str]]] = {
     EMPLOYEE_STATUS_RESIGNED: ("Resigned", "مستقيل"),
     EMPLOYEE_STATUS_TERMINATED: ("Terminated", "مفصول"),
+    EMPLOYEE_STATUS_TRANSFERRED: ("Transferred", "منقول"),
 }
 
 
@@ -786,9 +788,11 @@ def _isolate(s: str) -> str:
 def _run_pending_departure_flip() -> None:
     """Daily 09:05 Asia/Dubai — apply scheduled departures that have come due.
 
-    An employee whose resignation or termination was dated in the future stayed
-    Active through their notice period; today they become what
+    An employee whose resignation, termination or transfer was dated in the
+    future stayed Active through their notice period; today they become what
     ``pending_status`` says. Admins get one in-app notification per flip.
+    Afterwards, temporary transfers whose return date has come are returned to
+    Active (its own try/except) with an "ended" notice.
 
     Employees are never messaged by this job.
     """
@@ -797,10 +801,19 @@ def _run_pending_departure_flip() -> None:
             moved = employee_service.apply_due_departures(session)
         except Exception:
             log.exception("scheduler: pending-departure flip failed")
+            moved = []
+        try:
+            returned = employee_service.apply_due_transfer_returns(session)
+        except Exception:
+            log.exception("scheduler: transfer-return job failed")
+            returned = []
+        if not moved and not returned:
             return
-        if not moved:
-            return
-        log.info("scheduler: %d scheduled departure(s) applied", len(moved))
+        log.info(
+            "scheduler: %d scheduled departure(s) applied, %d transfer(s) ended",
+            len(moved),
+            len(returned),
+        )
         try:
             admins = admin_notify.active_admins(session)
         except Exception:
@@ -819,14 +832,49 @@ def _run_pending_departure_flip() -> None:
             status_en, status_ar = labels
             name_ar = emp.name_ar or emp.name_en
             ref = _isolate(f"({emp.id})")
+            if emp.status == EMPLOYEE_STATUS_TRANSFERRED:
+                # The site is required on entry; a hand-edited row without one
+                # still reads as a transfer, just without the destination.
+                site_en = f" to {emp.transfer_site}" if emp.transfer_site else ""
+                site_ar = f" إلى {_isolate(emp.transfer_site)}" if emp.transfer_site else ""
+                messages = {
+                    "en": (
+                        "GSSG Manager",
+                        f"Transfer applied\n{emp.name_en} ({emp.id}) transferred{site_en}",
+                    ),
+                    "ar": (
+                        "GSSG Manager",
+                        f"تم تطبيق النقل\n{_isolate(name_ar)} {ref} نُقل{site_ar}",
+                    ),
+                }
+            else:
+                messages = {
+                    "en": (
+                        "GSSG Manager",
+                        f"Departure applied\n{emp.name_en} ({emp.id}) is now {status_en}",
+                    ),
+                    "ar": (
+                        "GSSG Manager",
+                        f"تم تطبيق المغادرة\n{_isolate(name_ar)} {ref} الآن {status_ar}",
+                    ),
+                }
+            url = f"/employees/{emp.id}"
+            for admin in admins:
+                try:
+                    push_service.send_to_user(session, admin.id, messages, url)
+                except Exception:
+                    log.exception("scheduler: departure notice failed for admin %s", admin.id)
+        for emp, _returned_on, _site in returned:
+            name_ar = emp.name_ar or emp.name_en
+            ref = _isolate(f"({emp.id})")
             messages = {
                 "en": (
                     "GSSG Manager",
-                    f"Departure applied\n{emp.name_en} ({emp.id}) is now {status_en}",
+                    f"Transfer ended\n{emp.name_en} ({emp.id}) returned to Active",
                 ),
                 "ar": (
                     "GSSG Manager",
-                    f"تم تطبيق المغادرة\n{_isolate(name_ar)} {ref} الآن {status_ar}",
+                    f"انتهى النقل\n{_isolate(name_ar)} {ref} عاد إلى الخدمة",
                 ),
             }
             url = f"/employees/{emp.id}"
@@ -834,19 +882,30 @@ def _run_pending_departure_flip() -> None:
                 try:
                     push_service.send_to_user(session, admin.id, messages, url)
                 except Exception:
-                    log.exception("scheduler: departure notice failed for admin %s", admin.id)
+                    log.exception("scheduler: transfer-end notice failed for admin %s", admin.id)
 
 
 def _disabled_in_environment() -> bool:
-    """Skip startup under pytest or when explicitly disabled via env var.
+    """Tests trigger lifespan via TestClient; dev .env can disable jobs too."""
+    return "pytest" in sys.modules or get_settings().disable_scheduler
 
-    Tests reuse ``create_app()`` via ``TestClient(app)``, which triggers the
-    FastAPI lifespan. Without this guard each test run would spin up a real
-    scheduler thread that hammers IMAP and pollutes test logs.
-    """
-    if "pytest" in sys.modules:
-        return True
-    return os.environ.get("GSSG_DISABLE_SCHEDULER") == "1"
+
+def _log_job_timing(event: JobExecutionEvent) -> None:
+    """One ``scheduler_job_timing`` line per job run (performance plan, Phase 0).
+
+    Measured from the scheduled fire time, so it includes the (normally
+    millisecond) dispatch delay. APScheduler dispatches its "submitted" event
+    after the job may already have finished, so that is not a usable start."""
+    log.info(
+        "scheduler_job_timing",
+        extra={
+            "job": event.job_id,
+            "ok": event.exception is None,
+            "run_ms": round(
+                (datetime.now(UTC) - event.scheduled_run_time).total_seconds() * 1000, 1
+            ),
+        },
+    )
 
 
 def start() -> None:
@@ -863,6 +922,7 @@ def start() -> None:
             timezone="UTC",
             job_defaults={"coalesce": True, "max_instances": 1, "misfire_grace_time": 60},
         )
+        _scheduler.add_listener(_log_job_timing, EVENT_JOB_EXECUTED | EVENT_JOB_ERROR)
         _scheduler.start()
         log.info("scheduler started")
     reschedule_email_sync()

@@ -63,7 +63,7 @@ function renderDetail(permitOverrides: object = {}) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   return render(
     <QueryClientProvider client={qc}>
-      <PermitDetailDialog permitId={99} open onOpenChange={vi.fn()} onEdit={vi.fn()} />
+      <PermitDetailDialog permitId={99} open onOpenChange={vi.fn()} onEdit={vi.fn()} onNotFound={vi.fn()} />
     </QueryClientProvider>,
   )
 }
@@ -211,6 +211,7 @@ describe('PermitDetailDialog', () => {
         {
           id: 1,
           version_no: 1,
+          document_id: 42,
           pdf_url: '/api/v1/documents/42/download?format=pdf',
           manager_sig_embedded: false,
           status: 'none',
@@ -387,4 +388,46 @@ describe('PermitDetailDialog', () => {
       validity: { value: 2, unit: 'month' },
       reason: 'Extended works',
     }))
+  })
+
+  it('asks before removing a person and only calls the API after confirm', async () => {
+    const removeSpy = vi.spyOn(api, 'removePermitPerson').mockResolvedValue({ ...basePermit } as never)
+    renderDetail({
+      people: [
+        {
+          id: 5,
+          permit_id: 99,
+          name: 'Ali Khan',
+          uae_id: '784-1',
+          nationality: null,
+          role: 'Electrician',
+          id_doc_name: null,
+          created_at: '2026-07-01T00:00:00',
+          removed_at: null,
+        },
+      ],
+    })
+    await waitFor(() => expect(screen.getByText('Ali Khan')).toBeInTheDocument())
+
+    await userEvent.click(screen.getByRole('button', { name: 'Remove' }))
+    const title = await screen.findByText('Remove Ali Khan from this permit?')
+    const confirm = title.closest('[role="dialog"]') as HTMLElement
+    expect(confirm).not.toBeNull()
+    expect(removeSpy).not.toHaveBeenCalled()
+
+    await userEvent.click(within(confirm).getByRole('button', { name: 'Remove' }))
+    await waitFor(() => expect(removeSpy).toHaveBeenCalledWith(99, 5))
+  })
+
+  it('shows a retry action when the permit fails to load', async () => {
+    const getSpy = vi.spyOn(api, 'getPermit').mockRejectedValueOnce(new Error('down'))
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+    render(
+      <QueryClientProvider client={qc}>
+        <PermitDetailDialog permitId={99} open onOpenChange={vi.fn()} onEdit={vi.fn()} onNotFound={vi.fn()} />
+      </QueryClientProvider>,
+    )
+    getSpy.mockResolvedValue({ ...basePermit } as never)
+    await userEvent.click(await screen.findByRole('button', { name: /retry/i }))
+    await waitFor(() => expect(screen.getByText('Test Corp')).toBeInTheDocument())
   })

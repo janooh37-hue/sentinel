@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -12,18 +13,19 @@ from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.responses import Response
-from starlette.types import Scope
+from starlette.types import Receive, Scope, Send
 
 from app import __version__
 from app.api import dav
 from app.api.deps import get_current_user
-from app.api.errors import install_handlers
+from app.api.errors import NotFoundError, install_handlers
 from app.api.v1 import absences as absences_v1
 from app.api.v1 import announcements as announcements_v1
 from app.api.v1 import auth as auth_v1
 from app.api.v1 import books as books_v1
 from app.api.v1 import correspondence as correspondence_v1
 from app.api.v1 import dashboard as dashboard_v1
+from app.api.v1 import debug as debug_v1
 from app.api.v1 import digests as digests_v1
 from app.api.v1 import documents as documents_v1
 from app.api.v1 import duty as duty_v1
@@ -36,6 +38,7 @@ from app.api.v1 import extractions as extractions_v1
 from app.api.v1 import identity as identity_v1
 from app.api.v1 import inmate_statistics as inmate_statistics_v1
 from app.api.v1 import intake as intake_v1
+from app.api.v1 import item_permits as item_permits_v1
 from app.api.v1 import leaves as leaves_v1
 from app.api.v1 import ledger as ledger_v1
 from app.api.v1 import managers as managers_v1
@@ -57,7 +60,7 @@ from app.api.v1 import timesheet as timesheet_v1
 from app.api.v1 import vehicles as vehicles_v1
 from app.config import get_settings
 from app.logging import configure_logging
-from app.services import scheduler_service, vehicle_evg_jobs
+from app.services import _certificate_executor, scheduler_service, vehicle_evg_jobs
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 
@@ -82,7 +85,26 @@ class _ImmutableStaticFiles(StaticFiles):
         response = await super().get_response(path, scope)
         if response.status_code == 200:
             response.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+            if path.endswith(".mjs"):
+                response.headers["Content-Type"] = "application/javascript"
         return response
+
+
+class _GZipExceptEventStream(GZipMiddleware):
+    """GZip that leaves Server-Sent Events alone.
+
+    Starlette 0.41 writes streamed chunks into a ``GzipFile`` without flushing,
+    so a gzipped SSE stream delivers nothing past the gzip header until it ends.
+    Starlette 0.46 skips ``text/event-stream`` itself; drop this on upgrade.
+    """
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] == "http":
+            for name, value in scope["headers"]:
+                if name == b"accept" and b"text/event-stream" in value:
+                    await self.app(scope, receive, send)
+                    return
+        await super().__call__(scope, receive, send)
 
 
 class BodySizeLimitMiddleware:
@@ -142,6 +164,48 @@ class BodySizeLimitMiddleware:
         await send({"type": "http.response.body", "body": body})
 
 
+class RequestTimingMiddleware:
+    """Log one ``request_timing`` line per ``/api/`` request.
+
+    ``handler_ms`` runs to the response headers (the endpoint's work);
+    ``total_ms`` runs to the last body byte (includes streaming). The path is
+    the route template, never the raw URL, so ids and tokens stay out of logs.
+    """
+
+    def __init__(self, app: object) -> None:
+        self.app = app
+
+    async def __call__(self, scope, receive, send):  # type: ignore[no-untyped-def]
+        if scope["type"] != "http" or not scope["path"].startswith("/api/"):
+            await self.app(scope, receive, send)  # type: ignore[operator]
+            return
+        start = time.perf_counter()
+        status = 500
+        handler_ms: float | None = None
+
+        async def _send(message):  # type: ignore[no-untyped-def]
+            nonlocal status, handler_ms
+            if message["type"] == "http.response.start":
+                status = message["status"]
+                handler_ms = round((time.perf_counter() - start) * 1000, 1)
+            await send(message)
+
+        try:
+            await self.app(scope, receive, _send)  # type: ignore[operator]
+        finally:
+            route = scope.get("route")
+            log.info(
+                "request_timing",
+                extra={
+                    "method": scope["method"],
+                    "route": getattr(route, "path", "unmatched"),
+                    "status": status,
+                    "handler_ms": handler_ms,
+                    "total_ms": round((time.perf_counter() - start) * 1000, 1),
+                },
+            )
+
+
 @asynccontextmanager
 async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
     """Boot the scheduler on startup; drain it and the EVG worker on exit."""
@@ -168,7 +232,10 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
         try:
             scheduler_service.shutdown()
         finally:
-            vehicle_evg_jobs.shutdown()
+            try:
+                vehicle_evg_jobs.shutdown()
+            finally:
+                _certificate_executor.shutdown()
 
 
 def create_app() -> FastAPI:
@@ -190,9 +257,14 @@ def create_app() -> FastAPI:
     # Cap request bodies before they are buffered into RAM (API-01).
     app.add_middleware(BodySizeLimitMiddleware, max_bytes=MAX_BODY_BYTES)
     # Compress JSON/list payloads above 1 KB for clients that ask for it.
-    # Outermost middleware so it wraps error responses too. Clients that omit
-    # ``Accept-Encoding: gzip`` (Word's DAV stack) get identity bytes.
-    app.add_middleware(GZipMiddleware, minimum_size=1024)
+    # Wraps the app's error responses too. Clients that omit
+    # ``Accept-Encoding: gzip`` (Word's DAV stack) get identity bytes. Level 6:
+    # same size as 9 on the entry bundle (measured), less event-loop CPU.
+    app.add_middleware(_GZipExceptEventStream, minimum_size=1024, compresslevel=6)
+    # Ring buffer of recent /api request timings for the admin debug console.
+    app.middleware("http")(debug_v1.record_request)
+    # Outermost: per-request timings for the performance plan (Phase 0).
+    app.add_middleware(RequestTimingMiddleware)
 
     # Baseline authentication: every data router requires a valid session.
     # Public surfaces (login/register/me/logout + the system probes the launcher
@@ -248,7 +320,9 @@ def create_app() -> FastAPI:
     app.include_router(push_v1.router, prefix="/api/v1", dependencies=auth_gate)
     app.include_router(permissions_v1.router, prefix="/api/v1", dependencies=auth_gate)
     app.include_router(permits_v1.router, prefix="/api/v1", dependencies=auth_gate)
+    app.include_router(item_permits_v1.router, prefix="/api/v1", dependencies=auth_gate)
     app.include_router(vehicles_v1.router, prefix="/api/v1", dependencies=auth_gate)
+    app.include_router(debug_v1.router, prefix="/api/v1", dependencies=auth_gate)
     # Workforce depends on the optional attendance persistence surface.  Import
     # it only while constructing the application so routine module imports
     # (including migration tooling) do not eagerly initialize that surface.
@@ -284,8 +358,13 @@ def create_app() -> FastAPI:
         @app.get("/{full_path:path}", include_in_schema=False)
         def spa_fallback(full_path: str) -> FileResponse:
             # Any non-API GET falls back to index.html so React Router works.
-            candidate = STATIC_DIR / full_path
-            if candidate.is_file():
+            # An unmatched API path is a real 404, not the SPA shell.
+            if full_path == "api" or full_path.startswith("api/"):
+                raise NotFoundError("ROUTE_NOT_FOUND", f"No API route for /{full_path}")
+            # Resolve and contain: an absolute ("C:/...") or "../" path must
+            # never escape the build folder (arbitrary file read).
+            candidate = (STATIC_DIR / full_path).resolve()
+            if candidate.is_relative_to(STATIC_DIR.resolve()) and candidate.is_file():
                 headers = _NO_CACHE if candidate.name in _ALWAYS_REVALIDATE else None
                 return FileResponse(candidate, headers=headers)
             return _index()

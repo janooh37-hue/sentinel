@@ -13,7 +13,7 @@ import type { ApprovalContext } from '@/lib/approvals'
 import type { ApprovalLogItem, ApprovalLogNeighborsResponse } from '@/lib/api'
 import * as apiMod from '@/lib/api'
 
-const CONTEXT: ApprovalContext = { tab: 'received', kind: 'sign', status: 'pending', sort: 'oldest', page: 1 }
+const CONTEXT: ApprovalContext = { tab: 'received', kind: 'sign', status: 'pending', sort: 'newest', page: 1 }
 
 function wrapper({ children }: { children: ReactNode }) {
   const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } })
@@ -61,7 +61,7 @@ describe('useAwaitingQueue', () => {
     expect(result.current.nextId).toBe(30)
     expect(result.current.nextVersionId).toBe(301)
     expect(apiMod.api.approvalLogNeighbors).toHaveBeenCalledWith(20, {
-      scope: 'received', kind: 'approver', status: 'pending', sort: 'oldest', version_id: 201,
+      scope: 'received', kind: 'approver', status: 'pending', sort: 'newest', version_id: 201,
     })
   })
 
@@ -81,6 +81,23 @@ describe('useAwaitingQueue', () => {
     expect(result.current.position).toBeNull()
     expect(result.current.prevId).toBeNull()
     expect(result.current.nextId).toBeNull()
+  })
+
+  it('never offers a neighbour whose delete is pending', async () => {
+    vi.spyOn(apiMod.api, 'approvalLogNeighbors').mockResolvedValue(
+      neighborsResult({
+        position: 2, total: 3,
+        previous: neighborRow(10, 101),
+        next: neighborRow(30, 301),
+      }),
+    )
+    const hidden = new Set([30])
+    const { result } = renderHook(() => useAwaitingQueue(20, 201, CONTEXT, true, hidden), { wrapper })
+    await waitFor(() => expect(result.current.total).toBe(3))
+    expect(result.current.prevId).toBe(10)
+    expect(result.current.prevVersionId).toBe(101)
+    expect(result.current.nextId).toBeNull()
+    expect(result.current.nextVersionId).toBeNull()
   })
 
   it('does not fetch when disabled', async () => {

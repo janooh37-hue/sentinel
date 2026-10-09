@@ -37,6 +37,9 @@ except Exception:  # pragma: no cover - import-time host guard
 
 _PREFIX = "GSSG:"
 _BARCODE_RE = re.compile(r"^([A-Z0-9/-]+)\+(\d{8})$")
+_GSSG_BARCODE_RE = re.compile(
+    r"^\*?GSSG\+(\d{2}/\d{2}/\d{4})\+([A-Z0-9/-]+)\*?$"
+)
 
 
 @dataclass(frozen=True, slots=True)
@@ -47,16 +50,28 @@ class Decoded:
 
 
 def barcode_payload(ref: str, paper_date: date) -> str:
-    return f"{ref.upper()}+{paper_date:%Y%m%d}"
+    return f"*GSSG+{paper_date:%d/%m/%Y}+{ref.upper()}*"
 
 
 def parse_barcode(text: str) -> tuple[str, date] | None:
+    match = _GSSG_BARCODE_RE.fullmatch(text)
+    if match is not None:
+        try:
+            date_text = match.group(1)
+            paper_date = date.fromisoformat(
+                f"{date_text[6:10]}-{date_text[3:5]}-{date_text[:2]}"
+            )
+        except ValueError:
+            return None
+        return match.group(2), paper_date
+
     match = _BARCODE_RE.fullmatch(text)
     if match is None:
         return None
     try:
+        date_text = match.group(2)
         paper_date = date.fromisoformat(
-            f"{match.group(2)[:4]}-{match.group(2)[4:6]}-{match.group(2)[6:]}"
+            f"{date_text[:4]}-{date_text[4:6]}-{date_text[6:]}"
         )
     except ValueError:
         return None

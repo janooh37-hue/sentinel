@@ -37,18 +37,15 @@ from app.api.errors import ValidationFailedError
 from app.db.models import Employee, User
 from app.db.workforce_models import DutyAssignmentEvent
 from app.schemas.duty import DutyTransferMove, DutyTransferResult
-from app.services import document_service, workforce_schedule_service
+from app.services import book_service, document_service, workforce_schedule_service
 
 _UNSPECIFIED = "غير محدد"
 _SUBJECT = "النقل"
 
 _INTRO = (
-    "يطيب لنا أن نتقدم لسيادتكم بخالص التحية و التقدير , يرجى العلم أنه "
     "ولغايات تنظيمية في العمل تم نقل المذكورين بالجدول المرفق إلى الجهات "
     "المبينة بجانب أسمائهم إعتباراً من تاريخه ."
 )
-_CLOSING_1 = "للتفضل بالعلم وأمركم حول تعديل الكشوفات لديكم ولإجراءاتكم لطفاً."
-_CLOSING_2 = "هذا وتفضلوا بقبول فائق الإحترام والتقدير."
 
 _COLS = ["الرقم الوظيفي", "المسمى الوظيفي", "الاسم", "من", "إلى"]
 _TH = (
@@ -144,7 +141,11 @@ def _employee_display_name(emp: Employee) -> str:
 
 
 def _build_body_html(rows: list[tuple[Employee, str, str | None]]) -> str:
-    """Formal intro + a red-header from→to ``<table>`` + the two closing lines.
+    """Intro sentence + a red-header from→to ``<table>``; nothing else.
+
+    The General Book paper already prints the greeting (…أعلاه انه) before the
+    body and the closing (للتفضل بالعلم وإجراءاتكم) after it, so neither is
+    repeated here.
 
     Each row is ``(employee, to_unit, to_post)``. The ``من`` column reads the
     employee's CURRENT unit/post, so callers must build the body BEFORE staging
@@ -167,8 +168,7 @@ def _build_body_html(rows: list[tuple[Employee, str, str | None]]) -> str:
     table = '<table dir="rtl" style="border-collapse:collapse">' + "".join(out) + "</table>"
 
     intro = f"<p>{html.escape(_INTRO)}</p>"
-    closing = f"<p>{html.escape(_CLOSING_1)}</p><p>{html.escape(_CLOSING_2)}</p>"
-    return intro + _SPACER + table + _SPACER + closing
+    return intro + _SPACER + table + _SPACER
 
 
 def transfer(
@@ -229,9 +229,7 @@ def transfer(
                 current_user=current_user,
                 effective_at=effective_at,
             )
-            _enqueue_assignment_reevaluation(
-                db, employee_id=emp.id, effective_at=effective_at
-            )
+            _enqueue_assignment_reevaluation(db, employee_id=emp.id, effective_at=effective_at)
             emp.duty_unit = to_unit
             emp.duty_post = to_post
             workforce_schedule_service.reconcile_duty_crew_membership(
@@ -239,6 +237,15 @@ def transfer(
             )
         db.commit()
         return DutyTransferResult(moved=[emp.id for emp, _, _ in rows])
+
+    # The letter is a General Book: honour that service's capability exactly as
+    # /documents/generate does, before any employee is moved.
+    book_service.require_record_type_access(
+        db,
+        current_user,
+        category_id=document_service.record_category_for_template("General Book"),
+        service_id="General Book",
+    )
 
     # Otherwise mint the transfer letter. Build the body from CURRENT (FROM)
     # locations BEFORE mutating.

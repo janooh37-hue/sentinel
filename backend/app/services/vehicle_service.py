@@ -13,11 +13,11 @@ from typing import Any, Literal, cast
 from sqlalchemy import func, inspect, select, text, update
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session, object_session, selectinload
+from sqlalchemy.orm import Session, object_session, selectinload, with_expression
 
 from app.api.errors import ConflictError, NotFoundError, ValidationFailedError
 from app.config import get_settings
-from app.core.vehicle_certificates import Profile, optimize_certificate
+from app.core.vehicle_certificates import Profile
 from app.db.models import (
     AuditLog,
     Employee,
@@ -246,6 +246,19 @@ def to_list_item(
     days_to_insurance_expiry = (
         (row.insurance_expiry - current_day).days if row.insurance_expiry is not None else None
     )
+    fine_totals = (
+        (
+            row._list_fines_count,
+            row._list_fines_amount_fils,
+            row._list_black_points,
+        )
+        if row._list_fines_count is not None
+        else (
+            len(row.fines),
+            sum(item.amount_fils for item in row.fines),
+            sum(item.black_points for item in row.fines),
+        )
+    )
     return VehicleListItem.model_validate(row).model_copy(
         update={
             "plate_label": plate_label(row),
@@ -253,9 +266,9 @@ def to_list_item(
                 row.license_expiry, today=current_day, notify_days=window
             ),
             "days_to_expiry": (row.license_expiry - current_day).days,
-            "fines_count": len(row.fines),
-            "fines_amount_fils": sum(item.amount_fils for item in row.fines),
-            "black_points": sum(item.black_points for item in row.fines),
+            "fines_count": fine_totals[0],
+            "fines_amount_fils": fine_totals[1],
+            "black_points": fine_totals[2],
             **photo_urls,
             "insurance_status": insurance_status,
             "days_to_insurance_expiry": days_to_insurance_expiry,
@@ -362,15 +375,15 @@ def site_read(row: VehicleSite) -> VehicleSiteRead:
 def _list_options() -> tuple[Any, ...]:
     return (
         selectinload(Vehicle.site),
-        selectinload(Vehicle.files),
         selectinload(Vehicle.photo_asset),
-        selectinload(Vehicle.fines).selectinload(VehicleFine.employee),
     )
 
 
 def _detail_options() -> tuple[Any, ...]:
     return (
         *_list_options(),
+        selectinload(Vehicle.files),
+        selectinload(Vehicle.fines).selectinload(VehicleFine.employee),
         selectinload(Vehicle.renewals),
         selectinload(Vehicle.accidents).selectinload(VehicleAccident.employee),
         selectinload(Vehicle.maintenance),
@@ -393,7 +406,32 @@ def list_vehicles(
             f"Unknown vehicle expiry filter: {expiry}",
             expiry=expiry,
         )
-    stmt = select(Vehicle).options(*_list_options()).execution_options(populate_existing=True)
+    fine_totals = (
+        select(
+            VehicleFine.vehicle_id.label("vehicle_id"),
+            func.count(VehicleFine.id).label("fines_count"),
+            func.sum(VehicleFine.amount_fils).label("fines_amount_fils"),
+            func.sum(VehicleFine.black_points).label("black_points"),
+        )
+        .group_by(VehicleFine.vehicle_id)
+        .subquery()
+    )
+    stmt = (
+        select(Vehicle)
+        .outerjoin(fine_totals, fine_totals.c.vehicle_id == Vehicle.id)
+        .options(
+            *_list_options(),
+            with_expression(Vehicle._list_fines_count, func.coalesce(fine_totals.c.fines_count, 0)),
+            with_expression(
+                Vehicle._list_fines_amount_fils,
+                func.coalesce(fine_totals.c.fines_amount_fils, 0),
+            ),
+            with_expression(
+                Vehicle._list_black_points, func.coalesce(fine_totals.c.black_points, 0)
+            ),
+        )
+        .execution_options(populate_existing=True)
+    )
     if state == "active":
         stmt = stmt.where(Vehicle.archived_at.is_(None))
     else:
@@ -409,7 +447,6 @@ def list_vehicles(
             )
         )
         .scalars()
-        .unique()
         .all()
     )
     if q and (needle := q.strip().casefold()):
@@ -1745,27 +1782,19 @@ def _store_file_record(
     return row, destination
 
 
-def _optimize_certificate_worker(data: bytes, media_type: str, profile: str) -> bytes:
-    """Top-level so ``ProcessPoolExecutor`` can pickle it for submission —
-    matches ``_pdf_executor._convert_in_subprocess``'s convention."""
-    return optimize_certificate(data, media_type, profile=cast("Profile", profile))
-
-
 def _optimize_certificate(data: bytes, media_type: str, *, profile: Profile = "current") -> bytes:
-    """Compress a certificate's bytes in the shared single-worker process pool.
+    """Compress certificate bytes outside the Word COM process.
 
-    Native PyMuPDF/Pillow work never runs on the event loop or shares a
-    process with Word COM. A worker ``ValueError`` (see
-    ``app.core.vehicle_certificates``) carries a ``VEHICLE_CERTIFICATE_*``
-    code and is translated to ``ValidationFailedError``; a timeout or any
-    other worker failure becomes ``VEHICLE_CERTIFICATE_PROCESSING_FAILED`` —
-    no file is created and the client can retry explicitly.
+    A worker ``ValueError`` (see ``app.core.vehicle_certificates``) carries a
+    ``VEHICLE_CERTIFICATE_*`` code and is translated to
+    ``ValidationFailedError``; a timeout or any other worker failure becomes
+    ``VEHICLE_CERTIFICATE_PROCESSING_FAILED`` — no file is created and the
+    client can retry explicitly.
     """
-    from app.services._pdf_executor import run_in_worker
+    from app.services import _certificate_executor
 
     try:
-        return run_in_worker(
-            _optimize_certificate_worker,
+        return _certificate_executor.optimize(
             data,
             media_type,
             profile,

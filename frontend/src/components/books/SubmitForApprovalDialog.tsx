@@ -17,7 +17,7 @@
  *  - Gated behind books.submit (caller already gates the trigger)
  */
 
-import { useState } from 'react'
+import { useId, useState } from 'react'
 import * as RadixDialog from '@radix-ui/react-dialog'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
@@ -35,6 +35,7 @@ interface Props {
 }
 
 export function SubmitForApprovalDialog({ bookId, onClose }: Props): React.JSX.Element {
+  const submitReasonId = useId()
   const { t } = useTranslation()
   const navigate = useNavigate()
   const qc = useQueryClient()
@@ -63,6 +64,10 @@ export function SubmitForApprovalDialog({ bookId, onClose }: Props): React.JSX.E
   const docManagerUserId: number | null = book?.doc_manager_user_id ?? null
   const docManagerName: string | null = book?.doc_manager_name ?? null
   const docManagerHasSignature: boolean = book?.doc_manager_has_signature ?? true
+  // A Report already carries its author's signature: the manager only reviews it.
+  const isReport = book?.service_id === 'Report'
+  const sendLabel = t(isReport ? 'books.approval.sendForReview' : 'books.approval.submitForApproval')
+  const managerLabel = t(isReport ? 'books.approval.reviewManager' : 'books.approval.signingManager')
 
   // --- approver candidates (for the <select> fallback) ---
   const approversQuery = useQuery({
@@ -128,7 +133,7 @@ export function SubmitForApprovalDialog({ bookId, onClose }: Props): React.JSX.E
       void qc.invalidateQueries({ queryKey: ['dashboard'] })
       // Rare milestone — mark it with a one-shot settling check (frequency
       // gate; reduced-motion guarded by .anim-check-settle in index.css).
-      toast.success(t('books.approval.submitted'), {
+      toast.success(t(isReport ? 'books.approval.sentForReview' : 'books.approval.submitted'), {
         icon: <CheckCircle2 className="anim-check-settle h-4 w-4 text-success" strokeWidth={2} />,
       })
       onClose()
@@ -153,6 +158,10 @@ export function SubmitForApprovalDialog({ bookId, onClose }: Props): React.JSX.E
 
   // Loading: both book + approvers need to be ready before we show anything.
   const isLoading = bookQuery.isPending || (showApproverSelect && approversQuery.isPending)
+
+  // The "pick an approver" reason explains a visible-but-disabled Submit — not
+  // the loading skeleton, and not the no-approvers state (which has no button).
+  const showSubmitReason = !isLoading && (showLinkedChip || approvers.length > 0) && !canSubmit
 
   return (
     <RadixDialog.Root open onOpenChange={(open) => { if (!open) onClose() }}>
@@ -186,7 +195,7 @@ export function SubmitForApprovalDialog({ bookId, onClose }: Props): React.JSX.E
           {/* header */}
           <header className="flex items-center justify-between gap-3 border-b border-hairline px-5 py-3.5">
             <RadixDialog.Title className="text-[0.9em] font-semibold text-foreground">
-              {t('books.approval.submitForApproval')}
+              {sendLabel}
             </RadixDialog.Title>
             <RadixDialog.Close asChild>
               <button
@@ -230,7 +239,7 @@ export function SubmitForApprovalDialog({ bookId, onClose }: Props): React.JSX.E
             {/* Signing manager — exactly one (the backend rejects more). */}
             <div>
               <p className="mb-2 text-[0.78em] font-semibold uppercase tracking-wider text-muted-foreground">
-                {t('books.approval.signingManager')}
+                {managerLabel}
               </p>
 
               {isLoading ? (
@@ -254,7 +263,7 @@ export function SubmitForApprovalDialog({ bookId, onClose }: Props): React.JSX.E
                     </button>
                   </div>
                   {/* No-signature warning — submit stays enabled (lenient) */}
-                  {!docManagerHasSignature && (
+                  {!docManagerHasSignature && !isReport && (
                     <div
                       className="mt-2 rounded-lg border border-warning/40 bg-warning-soft/50 px-3 py-2"
                       data-testid="no-signature-warning"
@@ -295,14 +304,14 @@ export function SubmitForApprovalDialog({ bookId, onClose }: Props): React.JSX.E
                     value={selectedUserId}
                     onChange={(e) => setPickedUserId(e.target.value)}
                     className="w-full rounded-lg border border-hairline bg-background px-3 py-2 text-[0.84em] text-foreground focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/30"
-                    aria-label={t('books.approval.signingManager')}
+                    aria-label={managerLabel}
                   >
-                    <option value="">{t('books.approval.selectApprover')}</option>
+                    <option value="">{t(isReport ? 'books.approval.selectReviewManager' : 'books.approval.selectApprover')}</option>
                     {approvers.map((a) => (
                       <option key={a.id} value={a.id}>{a.name}</option>
                     ))}
                   </select>
-                  <p className="mt-2 text-[0.76em] text-muted-foreground">{t('books.approval.singleSignerHint')}</p>
+                  <p className="mt-2 text-[0.76em] text-muted-foreground">{t(isReport ? 'books.approval.reviewHint' : 'books.approval.singleSignerHint')}</p>
                 </>
               )}
             </div>
@@ -341,7 +350,15 @@ export function SubmitForApprovalDialog({ bookId, onClose }: Props): React.JSX.E
 
           {/* footer */}
           <footer className="border-t border-hairline px-5 py-4">
-            <div className="flex items-center justify-end gap-2.5">
+            <div className="flex flex-wrap items-center justify-end gap-2.5">
+              {showSubmitReason && (
+                <span
+                  id={submitReasonId}
+                  className="me-auto text-[0.78em] leading-snug text-muted-foreground"
+                >
+                  {t('books.reason.submitNoApprover')}
+                </span>
+              )}
               <button
                 type="button"
                 onClick={onClose}
@@ -352,18 +369,23 @@ export function SubmitForApprovalDialog({ bookId, onClose }: Props): React.JSX.E
               {(showLinkedChip || approvers.length > 0) && (
                 <button
                   type="button"
-                  disabled={!canSubmit || submitMutation.isPending}
-                  onClick={() => submitMutation.mutate()}
-                  className="rounded-lg bg-primary px-4 py-2 text-[0.84em] font-semibold text-primary-foreground transition-colors hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-40"
+                  aria-disabled={!canSubmit || submitMutation.isPending ? true : undefined}
+                  aria-describedby={showSubmitReason ? submitReasonId : undefined}
+                  aria-busy={submitMutation.isPending ? true : undefined}
+                  onClick={() => {
+                    if (!canSubmit || submitMutation.isPending) return
+                    submitMutation.mutate()
+                  }}
+                  className="rounded-lg bg-primary px-4 py-2 text-[0.84em] font-semibold text-primary-foreground transition-colors hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring aria-disabled:opacity-40"
                 >
-                  {t('books.approval.submitForApproval')}
+                  {sendLabel}
                 </button>
               )}
             </div>
           </footer>
 
           <RadixDialog.Description className="sr-only">
-            {t('books.approval.submitForApproval')}
+            {sendLabel}
           </RadixDialog.Description>
         </RadixDialog.Content>
       </RadixDialog.Portal>

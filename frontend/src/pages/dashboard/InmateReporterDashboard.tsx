@@ -6,6 +6,7 @@ import { Link } from 'react-router-dom'
 
 import { EmptyState } from '@/components/ui/empty-state'
 import { api, type BookRead } from '@/lib/api'
+import { useRecordDelete } from '@/pages/books/RecordDeleteProvider'
 import { StateSeal } from '@/pages/books/StateSeal'
 
 const PAGE_SIZE = 4
@@ -15,11 +16,12 @@ type ReportState = 'pending' | 'approved'
 function ReportSection({ state }: { state: ReportState }): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const [offset, setOffset] = useState(0)
+  const { pendingIds } = useRecordDelete()
   const query = useQuery({
     queryKey: ['books', 'inmate-reporter-dashboard', state, offset],
     queryFn: () => api.listBooks({ approval_state: state, limit: PAGE_SIZE, offset }),
   })
-  const items = query.data?.items ?? []
+  const items = (query.data?.items ?? []).filter((book) => !pendingIds.has(book.id))
   const total = query.data?.total ?? 0
   const titleKey = state === 'pending' ? 'pending' : 'approved'
 
@@ -122,7 +124,7 @@ export function InmateReporterDashboard(): React.JSX.Element {
   const { t } = useTranslation()
   const facetsQuery = useQuery({
     queryKey: ['books', 'facets'],
-    queryFn: api.getBookFacets,
+    queryFn: () => api.getBookFacets(),
   })
   const states = facetsQuery.data?.states ?? {}
   const recordLinks = [
@@ -146,7 +148,7 @@ export function InmateReporterDashboard(): React.JSX.Element {
           </p>
           <div className="mt-6 flex flex-wrap gap-3">
             <Link
-              to="/application"
+              to="/services"
               className="inline-flex min-h-11 items-center gap-2 rounded-xl bg-surface px-4 py-2.5 text-sm font-semibold text-primary shadow-sm transition-transform hover:-translate-y-0.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white motion-reduce:transform-none"
             >
               <FilePlus2 className="h-4 w-4" aria-hidden />

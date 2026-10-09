@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
 import { QueryClient } from '@tanstack/react-query'
-import { refreshAll, editingRegistry } from '../globalRefresh'
+import { refreshAll } from '../globalRefresh'
 
 describe('refreshAll', () => {
   it('invalidates active queries and honors the min-spin floor', async () => {
@@ -18,14 +18,5 @@ describe('refreshAll', () => {
     const t0 = performance.now()
     await refreshAll(qc, { minSpinMs: 0, ceilingMs: 150 })
     expect(performance.now() - t0).toBeLessThan(400)
-  })
-})
-
-describe('editingRegistry', () => {
-  it('reports editing when any registered form is dirty', () => {
-    editingRegistry.setEditing('a', true)
-    expect(editingRegistry.isAnyEditing()).toBe(true)
-    editingRegistry.setEditing('a', false)
-    expect(editingRegistry.isAnyEditing()).toBe(false)
   })
 })

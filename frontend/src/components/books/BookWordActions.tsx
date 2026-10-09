@@ -14,6 +14,7 @@ import { WordHandoffDialog } from '@/pages/books/WordHandoffDialog'
 interface WordActionProps {
   book: BookRead
   isMobile?: boolean
+  onFinished?: (book: BookRead) => void
 }
 
 /** Trigger data for a menu-hosted rendering of `WordReopenButton` (record
@@ -40,10 +41,10 @@ interface WordReopenButtonProps extends WordActionProps {
    *  never discards a pending reopen or an already-open handoff dialog. */
   onTriggerChange?: (trigger: WordReopenTrigger | null) => void
 }
-
 export function WordSessionActions({
   book,
   isMobile,
+  onFinished,
 }: WordActionProps): React.JSX.Element | null {
   const { t } = useTranslation()
   const qc = useQueryClient()
@@ -52,18 +53,23 @@ export function WordSessionActions({
 
   const finishMutation = useMutation({
     mutationFn: () => api.finishWordSession(book.id),
-    onSuccess: () => {
+    onSuccess: (finishedBook) => {
       invalidate()
       toast.success(t('books.word.finished', { ref: bidi(book.ref_number) }))
+      onFinished?.(finishedBook)
     },
     onError: (err) => toast.error(apiErrorMessage(err)),
   })
 
   const discardMutation = useMutation({
     mutationFn: () => api.discardWordSession(book.id),
-    onSuccess: () => {
+    onSuccess: (discardedBook) => {
       invalidate()
-      toast.success(t('books.toast.deleted'))
+      // The backend voids only a book with no committed versions; discarding a
+      // re-opened session leaves the record intact.
+      toast.success(
+        t(discardedBook.voided_at ? 'books.toast.voided' : 'books.toast.wordSessionDiscarded'),
+      )
     },
     onError: (err) => toast.error(apiErrorMessage(err)),
   })
@@ -94,30 +100,28 @@ export function WordSessionActions({
         type="button"
         disabled={busy}
         onClick={() => finishMutation.mutate()}
-        className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-transparent bg-primary p-0 text-[0.82em] font-semibold text-primary-foreground transition-colors hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
-        aria-label={t('books.word.finish')}
-        title={t('books.word.finish')}
+        className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-lg border border-transparent bg-primary px-3 py-1.5 text-[0.82em] font-semibold text-primary-foreground transition-colors hover:bg-primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 motion-reduce:transition-none md:min-h-9"
       >
-        <Check className="h-3.5 w-3.5" />
+        <Check className="h-3.5 w-3.5" aria-hidden />
+        {t('books.word.finish')}
       </button>
 
       <button
         type="button"
         disabled={busy}
         onClick={() => setDiscardOpen(true)}
-        className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-accent/40 p-0 text-[0.82em] font-semibold text-accent transition-colors hover:bg-accent/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50"
-        aria-label={t('books.word.discard')}
-        title={t('books.word.discard')}
+        className="inline-flex min-h-11 items-center justify-center gap-1.5 rounded-lg border border-destructive/50 bg-transparent px-3 py-1.5 text-[0.82em] font-semibold text-destructive transition-colors hover:bg-destructive/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 motion-reduce:transition-none md:min-h-9"
       >
-        <Trash2 className="h-3.5 w-3.5" />
+        <Trash2 className="h-3.5 w-3.5" aria-hidden />
+        {t('books.word.discard')}
       </button>
 
       <ConfirmDialog
         open={discardOpen}
         onOpenChange={setDiscardOpen}
-        title={t('books.word.discard')}
+        title={t('books.word.discardConfirmLabel')}
         description={t('books.word.discardConfirm')}
-        confirmLabel={t('books.word.discard')}
+        confirmLabel={t('books.word.discardConfirmLabel')}
         onConfirm={() => discardMutation.mutate()}
         destructive
       />
@@ -131,6 +135,7 @@ export function WordReopenButton({
   iconOnly,
   hideTrigger,
   onTriggerChange,
+  onFinished,
 }: WordReopenButtonProps): React.JSX.Element | null {
   const { t } = useTranslation()
   const qc = useQueryClient()
@@ -153,9 +158,8 @@ export function WordReopenButton({
     },
     onError: (err) => toast.error(apiErrorMessage(err)),
   })
-
   const hasActiveSession = book.edit_session?.state === 'active'
-  const isFinished = (book.versions?.length ?? 0) > 0 && !hasActiveSession
+  const isFinished = ((book.versions?.length ?? 0) > 0 || book.is_word_book) && !hasActiveSession
   const eligible = isFinished && !book.voided_at
   const label = t('books.word.editNewVersion')
   const title = isMobile ? t('books.word.needsPc') : label
@@ -215,6 +219,7 @@ export function WordReopenButton({
           setReopenSession(null)
           invalidate()
         }}
+        onFinished={onFinished}
       />
     </>
   )

@@ -103,7 +103,7 @@ class BookStateOverrideRequest(BaseModel):
 class ScanBackResult(BaseModel):
     book_id: int | None
     ref_number: str
-    outcome: Literal["filed", "parked", "rejected"]
+    outcome: Literal["filed", "parked"]
 
 
 class RevokeRevisionAccessRequest(BaseModel):
@@ -377,6 +377,11 @@ class BookRead(ORMBase):
     submitted_by_user_id: int | None = None
     submitted_by_name: str | None = None
     submitted_by_g: str | None = None
+    # Immutable original creator (books.created_by_user_id); distinct from the
+    # submitter, who is only set on submit and reset on revision.
+    created_by_user_id: int | None = None
+    created_by_name: str | None = None
+    created_by_g: str | None = None
     # Captured submission instant for the selected revision, when trustworthy.
     submitted_at: datetime | None = None
     # The doc's named manager resolved to a login account (auto-route target).

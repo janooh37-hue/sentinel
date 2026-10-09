@@ -16,7 +16,7 @@ interface LedgerPageProps {
       | 'employees'
       | 'books'
       | 'settings'
-      | 'application'
+      | 'services'
       | 'leaves'
       | 'dashboard'
       | 'ledger',

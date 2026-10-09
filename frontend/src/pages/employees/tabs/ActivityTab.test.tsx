@@ -168,7 +168,7 @@ describe('ActivityTab', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Ledger entry' }))
 
-    expect(screen.getByTestId('location')).toHaveTextContent('/ledger?open=44')
+    expect(screen.getByTestId('location')).toHaveTextContent('/ledger?mail=44')
   })
 
   it('opens the absences tab for an absence activity', () => {
@@ -200,5 +200,27 @@ describe('ActivityTab', () => {
     expect(screen.getByText('Operations / Control Room')).toBeInTheDocument()
     expect(screen.getByText('Operational coverage')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'Transferred' })).not.toBeInTheDocument()
+  })
+
+  it('renders status history items non-interactively', () => {
+    const activity: ActivityItemRead[] = [{
+      kind: 'status',
+      ref_id: 19,
+      when: '2026-08-10T09:00:00Z',
+      summary: 'Status',
+      from_status: 'Active',
+      to_status: 'Transferred',
+      site: 'Port A',
+      effective_date: '2026-08-15',
+      status_event_kind: 'changed',
+      status_source: 'manual',
+      actor_name: 'Ahmed',
+    }]
+
+    renderActivity(activity)
+
+    expect(screen.getByTestId('status-activity-title')).toHaveTextContent('employees.activity.statusEvent.change')
+    expect(screen.getByTestId('status-activity-detail')).toHaveTextContent('Port A')
+    expect(screen.queryByRole('button')).not.toBeInTheDocument()
   })
 })

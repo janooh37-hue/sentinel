@@ -6,7 +6,7 @@
  */
 
 import { useEffect, useEffectEvent, useRef, useState } from 'react'
-import { ChevronDown, X } from 'lucide-react'
+import { ChevronDown, UserRound, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import type { BookCategoryRead, ServiceFacetRead } from '@/lib/api'
@@ -17,17 +17,10 @@ import { cn } from '@/lib/utils'
 import { serviceArtwork, serviceGlyph, useServiceLabel } from './serviceLabels'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { hasServiceRecordsCap } from '@/lib/dashboardLayout'
-
-export interface BooksFilters {
-  categoryIds: string[]
-  direction: 'all' | 'incoming' | 'outgoing'
-  status: 'all' | 'none' | 'pending' | 'approved' | 'returned' | 'rejected'
-  fromDate: string
-  toDate: string
-  q: string
-  drafts?: boolean
-  serviceId: string
-}
+import { CategoryChecklist, DateRangeFields, DirectionChips } from './BooksFilterFields'
+import { DEFAULT_BOOKS_FILTERS, hasActiveFilters, type BooksFilters } from './booksFiltersUtils'
+import { useMyRecordsCount } from './useMyRecordsCount'
+import { useAuth } from '@/lib/authContext'
 
 interface BooksFilterBarProps {
   filters: BooksFilters
@@ -42,14 +35,21 @@ export function BooksFilterBar({
   services,
   onChange,
 }: BooksFilterBarProps): React.JSX.Element {
-  const { t, i18n } = useTranslation()
-  const isAr = i18n.language.startsWith('ar')
+  const { t } = useTranslation()
   const serviceLabel = useServiceLabel()
   const { has } = useCapabilities()
+  const { user } = useAuth()
+  const isInmateReporter = user?.role === 'inmate_reporter'
+  const { count: myCount } = useMyRecordsCount({ enabled: !isInmateReporter })
   const visibleServices = services.filter((service) => hasServiceRecordsCap(service.id, has))
   const selectedServiceAllowed =
     filters.serviceId === 'all' || hasServiceRecordsCap(filters.serviceId, has)
   const selectedServiceId = selectedServiceAllowed ? filters.serviceId : 'all'
+  // The selected service stays an option even when the (mine-scoped) facets omit it.
+  const serviceOptions: Pick<ServiceFacetRead, 'id'>[] =
+    selectedServiceId === 'all' || visibleServices.some((s) => s.id === selectedServiceId)
+      ? visibleServices
+      : [...visibleServices, { id: selectedServiceId }]
   const resetDeniedServiceRef = useRef<string | null>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [catOpen, setCatOpen] = useState(false)
@@ -60,15 +60,7 @@ export function BooksFilterBar({
   const [svcOpen, setSvcOpen] = useState(false)
   const svcRootRef = useRef<HTMLDivElement>(null)
 
-  const isAnyFilterActive =
-    filters.categoryIds.length > 0 ||
-    filters.direction !== 'all' ||
-    filters.status !== 'all' ||
-    filters.fromDate !== '' ||
-    filters.toDate !== '' ||
-    filters.q !== '' ||
-    !!filters.drafts ||
-    selectedServiceId !== 'all'
+  const isAnyFilterActive = hasActiveFilters({ ...filters, serviceId: selectedServiceId })
 
   useEffect(() => {
     if (selectedServiceAllowed) {
@@ -81,14 +73,7 @@ export function BooksFilterBar({
   }, [filters.serviceId, selectedServiceAllowed])
 
   const clear = (): void => {
-    onChange({ categoryIds: [], direction: 'all', status: 'all', fromDate: '', toDate: '', q: '', drafts: false, serviceId: 'all' })
-  }
-
-  const toggleCategory = (id: string): void => {
-    const next = filters.categoryIds.includes(id)
-      ? filters.categoryIds.filter((c) => c !== id)
-      : [...filters.categoryIds, id]
-    onChange({ ...filters, categoryIds: next })
+    onChange({ ...DEFAULT_BOOKS_FILTERS })
   }
 
   // Debounce the search box — onChange is called immediately for other fields
@@ -157,7 +142,7 @@ export function BooksFilterBar({
         <button
           type="button"
           data-testid="category-filter"
-          aria-haspopup="listbox"
+          aria-haspopup="dialog"
           aria-expanded={catOpen}
           onClick={() => setCatOpen((v) => !v)}
           className={cn(
@@ -173,7 +158,7 @@ export function BooksFilterBar({
               {filters.categoryIds.length}
             </span>
           ) : (
-            <span className="text-muted-foreground/70">{t('books.filters.categoryAll', { defaultValue: 'All' })}</span>
+            <span className="text-muted-foreground/70">{t('books.filters.categoryAll')}</span>
           )}
           <ChevronDown
             className={cn('h-3.5 w-3.5 shrink-0 transition-transform', catOpen && 'rotate-180')}
@@ -183,51 +168,11 @@ export function BooksFilterBar({
 
         {catOpen && (
           <div
-            role="listbox"
-            aria-multiselectable="true"
+            role="dialog"
             aria-label={t('books.filters.category')}
             className="absolute start-0 top-full z-50 mt-1.5 min-w-[200px] overflow-hidden rounded-xl border border-hairline bg-surface shadow-lg"
           >
-            <ul className="max-h-64 overflow-y-auto py-1">
-              {categories.map((cat) => {
-                const label = isAr ? (cat.name_ar ?? cat.name_en) : (cat.name_en ?? cat.name_ar)
-                const checked = filters.categoryIds.includes(cat.id)
-                return (
-                  <li key={cat.id}>
-                    <button
-                      type="button"
-                      role="option"
-                      aria-selected={checked}
-                      onClick={() => toggleCategory(cat.id)}
-                      className={cn(
-                        'flex w-full items-center gap-2.5 px-3 py-2 text-[0.82em] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
-                        checked
-                          ? 'bg-primary-soft font-semibold text-primary'
-                          : 'text-foreground hover:bg-surface-tinted',
-                      )}
-                    >
-                      {/* Visible checkbox indicator */}
-                      <span
-                        aria-hidden="true"
-                        className={cn(
-                          'inline-flex h-4 w-4 shrink-0 items-center justify-center rounded border',
-                          checked
-                            ? 'border-primary bg-primary text-primary-foreground'
-                            : 'border-hairline bg-surface',
-                        )}
-                      >
-                        {checked && (
-                          <svg viewBox="0 0 10 8" className="h-2.5 w-2.5 fill-current" aria-hidden="true">
-                            <path d="M1 4l3 3 5-6" stroke="currentColor" strokeWidth="1.5" fill="none" strokeLinecap="round" strokeLinejoin="round" />
-                          </svg>
-                        )}
-                      </span>
-                      <span dir="auto">{label}</span>
-                    </button>
-                  </li>
-                )
-              })}
-            </ul>
+            <CategoryChecklist filters={filters} categories={categories} onChange={onChange} className="max-h-64" />
             {filters.categoryIds.length > 0 && (
               <div className="border-t border-hairline px-3 py-1.5">
                 <button
@@ -296,7 +241,7 @@ export function BooksFilterBar({
                   <span dir="auto">{t('books.filters.serviceAll')}</span>
                 </button>
               </li>
-              {visibleServices.map((s) => {
+              {serviceOptions.map((s) => {
                 const checked = selectedServiceId === s.id
                 const artwork = serviceArtwork(s.id)
                 return (
@@ -333,30 +278,55 @@ export function BooksFilterBar({
 
       <div className="hidden h-5 w-px bg-hairline md:block" />
 
-      {/* Direction chips + date + search row (scrollable on mobile) */}
-      <div className="flex items-center gap-2 overflow-x-auto pb-0.5 md:flex-wrap md:pb-0">
-        {/* Direction chips */}
-        <div className="flex shrink-0 items-center gap-1.5" data-testid="direction-toggle">
-          {(['all', 'incoming', 'outgoing'] as const).map((dir) => {
-            const active = filters.direction === dir
-            return (
-              <button
-                key={dir}
-                type="button"
-                onClick={() => onChange({ ...filters, direction: dir })}
-                aria-pressed={active}
-                className={cn(
-                  'inline-flex items-center rounded-full px-3 py-1 text-[0.78em] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background max-md:min-h-[36px] max-md:py-1.5',
-                  active
-                    ? 'bg-primary-soft font-semibold text-primary'
-                    : 'bg-surface-tinted text-muted-foreground hover:bg-border hover:text-foreground',
-                )}
-              >
-                {t(`books.direction.${dir}`)}
-              </button>
-            )
-          })}
-        </div>
+      {/* "Created by me" — hidden for inmate reporters (they only ever see their own) */}
+      {!isInmateReporter && (
+        <button
+          type="button"
+          data-testid="mine-filter"
+          aria-pressed={filters.mine}
+          onClick={() => onChange({ ...filters, mine: !filters.mine })}
+          className={cn(
+            'inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1 text-[0.78em] transition-colors motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background max-md:min-h-[36px] max-md:py-1.5',
+            filters.mine
+              ? 'bg-primary-soft font-semibold text-primary'
+              : 'bg-surface-tinted text-muted-foreground hover:bg-border hover:text-foreground',
+          )}
+        >
+          <UserRound className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
+          {t('books.list.createdByMe')}
+          {myCount !== null ? (
+            <bdi
+              dir="ltr"
+              className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-surface px-1 text-[0.85em] font-bold tabular-nums"
+            >
+              {myCount}
+            </bdi>
+          ) : null}
+        </button>
+      )}
+      <div className="hidden h-5 w-px shrink-0 bg-hairline md:block" />
+
+      {/* Drafts pill */}
+      <button
+        type="button"
+        aria-pressed={!!filters.drafts}
+        onClick={() => onChange({ ...filters, drafts: !filters.drafts })}
+        className={cn(
+          'inline-flex shrink-0 items-center rounded-full px-3 py-1 text-[0.78em] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background max-md:min-h-[36px] max-md:py-1.5',
+          filters.drafts
+            ? 'bg-warning-soft font-semibold text-warning'
+            : 'bg-surface-tinted text-muted-foreground hover:bg-border hover:text-foreground',
+        )}
+      >
+        {t('books.filters.drafts')}
+      </button>
+
+      {/* Direction chips + status + date + search row. On the phone it scrolls
+          sideways under a fade at the inline-end edge (the cue that more chips
+          follow); "Drafts" and "Created by me" are pinned in the row above so
+          they never need a scroll to reach. */}
+      <div className="flex items-center gap-2 overflow-x-auto pb-0.5 max-md:w-full max-md:[mask-image:linear-gradient(to_right,#000_calc(100%-28px),transparent)] max-md:rtl:[mask-image:linear-gradient(to_left,#000_calc(100%-28px),transparent)] md:flex-wrap md:pb-0">
+        <DirectionChips filters={filters} onChange={onChange} testId="direction-toggle" className="shrink-0 flex-nowrap" />
 
         <div className="hidden h-5 w-px shrink-0 bg-hairline md:block" />
         <div className="flex shrink-0 items-center gap-1.5" data-testid="status-toggle">
@@ -364,6 +334,9 @@ export function BooksFilterBar({
             ['all', t('books.filters.statusAll')],
             ['none', t('books.approval.stateDraft')],
             ['pending', t('books.approval.statePending')],
+            ...(isInmateReporter
+              ? []
+              : ([['awaiting_scan', t('books.approval.stateAwaitingScan')]] as const)),
             ['approved', t('books.approval.stateApproved')],
             ['returned', t('books.approval.stateReturned')],
             ['rejected', t('books.approval.stateRejected')],
@@ -384,43 +357,7 @@ export function BooksFilterBar({
 
         <div className="hidden h-5 w-px shrink-0 bg-hairline md:block" />
 
-        {/* Drafts pill */}
-        <button
-          type="button"
-          aria-pressed={!!filters.drafts}
-          onClick={() => onChange({ ...filters, drafts: !filters.drafts })}
-          className={cn(
-            'inline-flex shrink-0 items-center rounded-full px-3 py-1 text-[0.78em] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background max-md:min-h-[36px] max-md:py-1.5',
-            filters.drafts
-              ? 'bg-warning-soft font-semibold text-warning'
-              : 'bg-surface-tinted text-muted-foreground hover:bg-border hover:text-foreground',
-          )}
-        >
-          {t('books.filters.drafts')}
-        </button>
-
-        <div className="hidden h-5 w-px shrink-0 bg-hairline md:block" />
-
-        {/* Date range */}
-        <div className="flex shrink-0 items-center gap-2">
-          <input
-            type="date"
-            value={filters.fromDate}
-            onChange={(e) => onChange({ ...filters, fromDate: e.target.value })}
-            aria-label={t('books.filters.dateFrom')}
-            className="h-8 rounded-full border border-hairline bg-surface px-3 font-mono text-[0.78em] text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-            data-testid="date-from"
-          />
-          <span className="text-xs text-muted-foreground">—</span>
-          <input
-            type="date"
-            value={filters.toDate}
-            onChange={(e) => onChange({ ...filters, toDate: e.target.value })}
-            aria-label={t('books.filters.dateTo')}
-            className="h-8 rounded-full border border-hairline bg-surface px-3 font-mono text-[0.78em] text-foreground focus:outline-none focus:ring-2 focus:ring-ring"
-            data-testid="date-to"
-          />
-        </div>
+        <DateRangeFields filters={filters} onChange={onChange} className="shrink-0" />
 
         <div className="hidden h-5 w-px shrink-0 bg-hairline md:block" />
 

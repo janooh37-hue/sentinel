@@ -68,9 +68,12 @@ export function railItemsFrom(
   facets: BookFacetsResponse | undefined,
   allLabel: string,
   label: (serviceId: string) => string,
+  /** Selected service: kept as a zero-count row even when the facets omit it
+   *  (e.g. "Created by me" with none of my records in it). */
+  activeId?: string,
 ): RailItem[] {
   if (!facets) return []
-  return [
+  const items: RailItem[] = [
     { serviceId: 'all', glyph: '🗂', label: allLabel, count: facets.total, states: [] },
     ...facets.services.map((s) => ({
       serviceId: s.id,
@@ -84,6 +87,17 @@ export function railItemsFrom(
         .map(([state]) => state),
     })),
   ]
+  if (activeId && activeId !== 'all' && !facets.services.some((s) => s.id === activeId)) {
+    items.push({
+      serviceId: activeId,
+      glyph: serviceGlyph(activeId),
+      artwork: serviceArtwork(activeId),
+      label: label(activeId),
+      count: 0,
+      states: [],
+    })
+  }
+  return items
 }
 
 /**

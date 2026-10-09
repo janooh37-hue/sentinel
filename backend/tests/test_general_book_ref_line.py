@@ -4,6 +4,8 @@ when it is not. Asserts the ARABIC string per the i18n lesson."""
 
 from pathlib import Path
 
+import pytest
+
 from app.core.docx_engine import DocxEngine, aztec_corner_for
 from app.services.document_service import GENERAL_BOOK_BODY_SENTINEL
 
@@ -17,6 +19,7 @@ _BASE_DATA = {
     "cc": [],
     "submitter_g": "G-1234",
 }
+
 
 def _header_copies(docx_path):
     from docx import Document
@@ -53,22 +56,26 @@ def test_ref_line_and_barcode_render_in_both_header_copies(tmp_path):
         text = "\n".join(p.text for p in paragraphs)
         assert "الرقم: 1/5/141" in text
         assert "التاريخ: 21-09-2026" in text
-        assert "1/5/141+20260921" in text
+        assert "*GSSG+21/09/2026+1/5/141*" in text
         assert text.index("الرقم:") < text.index("التاريخ:")
 
 
 def test_ref_line_absent_without_ref(tmp_path):
     out = tmp_path / "out.docx"
-    DocxEngine(TEMPLATES_DIR).fill("General Book", dict(_BASE_DATA), out)
+    DocxEngine(TEMPLATES_DIR).fill("General Book", {**_BASE_DATA, "date": "2026-09-30"}, out)
     text = _header_text(out)
-    assert "الرقم" not in text
-    assert "+20" not in text
+    assert "الرقم:  " in text
+    assert "*GSSG+30/09/2026+*" in text
 
 
 def test_ref_run_marked_ltr_in_both_header_copies(tmp_path):
     """The dynamic reference stays in stored order in an explicit LTR run."""
     out = tmp_path / "out.docx"
-    DocxEngine(TEMPLATES_DIR).fill("General Book", {**_BASE_DATA, "ref": "1/5/141"}, out)
+    DocxEngine(TEMPLATES_DIR).fill(
+        "General Book",
+        {**_BASE_DATA, "ref": "1/5/141", "date": "2026-09-30"},
+        out,
+    )
     for paragraphs in _header_copies(out).values():
         ref_para = next(p for p in paragraphs if "1/5/141" in p.text)
         ref_runs = [r for r in ref_para.runs if r.text.startswith("1/")]
@@ -76,6 +83,35 @@ def test_ref_run_marked_ltr_in_both_header_copies(tmp_path):
         assert all(r.font.rtl is False for r in ref_runs)
 
 
+@pytest.mark.parametrize(
+    "template_id",
+    ("General Book", "Resignation Declaration", "Resignation Letter", "Leave Undertaking"),
+)
+def test_letterhead_barcode_formula_for_every_template(template_id, tmp_path):
+    from docx import Document
+    from docx.oxml.ns import qn
+
+    expected = "*GSSG+30/09/2026+1/12/351*"
+    out = tmp_path / f"{template_id}.docx"
+    DocxEngine(TEMPLATES_DIR).fill(
+        template_id,
+        {**_BASE_DATA, "date": "30-09-2026", "ref": "1/12/351"},
+        out,
+    )
+    doc = Document(str(out))
+    texts = []
+    seen = set()
+    for section in doc.sections:
+        for reference in section._sectPr.headerReference_lst:
+            part = doc.part.rels[reference.get(qn("r:id"))].target_part
+            if id(part) in seen:
+                continue
+            seen.add(id(part))
+            for run in part.element.findall(".//" + qn("w:r")):
+                fonts = run.find("./" + qn("w:rPr") + "/" + qn("w:rFonts"))
+                if fonts is not None and fonts.get(qn("w:ascii")) == "Libre Barcode 39":
+                    texts.append("".join(t.text or "" for t in run.findall("./" + qn("w:t"))))
+    assert texts and set(texts) == {expected}
 
 
 def test_ref_renders_ltr_segment_order_directly_after_label(tmp_path):
@@ -110,6 +146,7 @@ def test_ref_line_preserves_canonical_template_size_with_rtl_label(tmp_path):
         assert date_size is not None and date_size.pt == 10
         assert all(r.font.size == date_size for r in runs)
         assert all(not r.font.italic for r in runs)
+
 
 def test_library_template_preserves_header_ref_run_format(tmp_path):
     from docx import Document
@@ -148,8 +185,7 @@ def test_word_template_keeps_intro_without_large_blank_gap(tmp_path):
 
     subject_idx = next(i for i, text in enumerate(paragraphs) if text.startswith("الموضوع:"))
     intro_idx = paragraphs.index(
-        "يطيب لنا أن نتقدم لكم بأطيب التحيات والتقدير، "
-        "ننوه على الموضوع أعلاه انه"
+        "يطيب لنا أن نتقدم لكم بأطيب التحيات والتقدير، ننوه على الموضوع أعلاه انه"
     )
     closing_idx = paragraphs.index("للتفضل بالعلم وإجراءاتكم")
 
@@ -188,8 +224,13 @@ def test_word_book_has_header_ref_barcode_and_no_header_stamp(
     session = db_session.query(BookEditSession).filter_by(book_id=info.book_id).one()
     text = _header_text(session.working_path)
     assert f"الرقم: {info.ref_number}" in text
-    assert f"{info.ref_number}+" in text
-    assert "Ref:" not in text
+    import re
+
+    assert re.search(
+        rf"\*GSSG\+\d{{2}}/\d{{2}}/\d{{4}}\+{re.escape(info.ref_number)}\*",
+        text,
+    )
+
 
 def test_general_book_does_not_render_submitter_g_number(tmp_path):
     from docx import Document
@@ -207,7 +248,11 @@ def test_general_book_does_not_render_submitter_g_number(tmp_path):
     assert "G-1234" not in footer_text
 
 
-
 def test_general_book_is_the_only_top_right_form_without_aztec() -> None:
     assert aztec_corner_for("General Book") is None
     assert aztec_corner_for("Security Permit") == "top-right"
+
+
+def test_letter_forms_use_footer_corner_for_aztec() -> None:
+    for template_id in ("Resignation Letter", "Resignation Declaration", "Leave Undertaking"):
+        assert aztec_corner_for(template_id) == "bottom-right"

@@ -11,14 +11,36 @@
  */
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { MemoryRouter, Route, Routes } from 'react-router-dom'
+import { MemoryRouter, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import { afterEach, beforeEach, vi, test, expect } from 'vitest'
+
+const { mockHasCapability } = vi.hoisted(() => ({ mockHasCapability: vi.fn(() => true) }))
+vi.mock('@/lib/useCapabilities', () => ({
+  useCapabilities: () => ({ has: mockHasCapability }),
+}))
+
+function LocationProbe() {
+  const location = useLocation()
+  const navigate = useNavigate()
+  return (
+    <>
+      <output data-testid="location">{location.pathname}{location.search}</output>
+      <button type="button" onClick={() => navigate(-1)}>back</button>
+    </>
+  )
+}
+ 
+
+
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({ t: (k: string) => k, i18n: { language: 'en' } }),
 }))
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
 vi.mock('@/lib/api', () => ({
+  ApiError: class ApiError extends Error {
+    status = 0
+  },
   api: {
     getEmployeeDetail: vi.fn(),
     updateEmployee: vi.fn(),
@@ -37,17 +59,17 @@ vi.mock('@/lib/employeeRecents', () => ({
 vi.mock('./EmployeeIdCard', () => ({
   EmployeeIdCard: ({
     onEdit,
+    onChangeStatus,
     onTimesheet,
   }: {
     onEdit: () => void
+    onChangeStatus?: () => void
     onTimesheet: (args: { year: number; month: number; months: 1 | 2 }) => void
   }) => (
     <>
       <button onClick={onEdit}>employee.card.edit</button>
-      {/* The card owns the span — the page only sends what it is handed. */}
-      <button onClick={() => onTimesheet({ year: 2026, month: 3, months: 2 })}>
-        card-timesheet
-      </button>
+      <button onClick={onChangeStatus}>employee.status</button>
+      <button onClick={() => onTimesheet({ year: 2026, month: 3, months: 2 })}>card-timesheet</button>
     </>
   ),
 }))
@@ -57,8 +79,11 @@ vi.mock('./EmployeeGapsCard', () => ({
   ),
 }))
 vi.mock('./EmployeeTabChips', () => ({
-  EmployeeTabChips: ({ active }: any) => (
-    <div data-testid="tab-chips" data-active={active} />
+  EmployeeTabChips: ({ active, onChange }: { active: string; onChange: (tab: string) => void }) => (
+    <>
+      <div data-testid="tab-chips" data-active={active} />
+      <button type="button" onClick={() => onChange('documents')}>change-tab</button>
+    </>
   ),
 }))
 vi.mock('./tabs/DocumentsTab', () => ({
@@ -122,7 +147,12 @@ vi.mock('@/components/ui/document-viewer-dialog', () => ({
 }))
 vi.mock('./tabs/MessagesTab', () => ({ MessagesTab: () => null }))
 vi.mock('@/components/employees/EmployeeForm', () => ({
-  EmployeeForm: ({ mode }: any) => <div data-testid="employee-form" data-mode={mode} />,
+  EmployeeForm: ({ mode, onCancel }: { mode: string; onCancel: () => void }) => (
+    <div>
+      <div data-testid="employee-form" data-mode={mode} />
+      <button type="button" onClick={onCancel}>close-edit</button>
+    </div>
+  ),
 }))
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
@@ -141,16 +171,17 @@ const detail = {
   completeness: { filled: 10, tracked: 14 },
 }
 
-function renderPage(initialEntry = '/employees/G100') {
+function renderPage(initialEntry = '/employees/G100', previous: string[] = []) {
   return render(
     <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
-      <MemoryRouter initialEntries={[initialEntry]}>
+      <MemoryRouter initialEntries={[...previous, initialEntry]} initialIndex={previous.length}>
         <Routes>
           <Route path="/employees/:id" element={<EmployeeDetailPage />} />
           <Route path="/employees" element={<div>lookup-page</div>} />
         </Routes>
+        <LocationProbe />
       </MemoryRouter>
-    </QueryClientProvider>,
+    </QueryClientProvider>
   )
 }
 
@@ -161,11 +192,43 @@ function renderPage(initialEntry = '/employees/G100') {
 // The save-as path builds an object URL and clicks a real anchor; jsdom has
 // neither, and a real anchor click navigates.
 beforeEach(() => {
+  mockHasCapability.mockReturnValue(true)
+
   URL.createObjectURL = vi.fn(() => 'blob:sheet') as unknown as typeof URL.createObjectURL
   URL.revokeObjectURL = vi.fn()
   vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {})
 })
 afterEach(() => vi.restoreAllMocks())
+
+test('direct edit link opens the form and Close stays on the employee page', async () => {
+  vi.mocked(api.getEmployeeDetail).mockResolvedValue(detail as never)
+  renderPage('/employees/G100?action=edit')
+
+  expect(await screen.findByTestId('employee-form')).toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: 'close-edit' }))
+  expect(screen.queryByTestId('employee-form')).not.toBeInTheDocument()
+  expect(screen.getByTestId('location')).toHaveTextContent(/^\/employees\/G100$/)
+})
+
+test('edit link without capability is removed without opening the form', async () => {
+  mockHasCapability.mockReturnValue(false)
+  vi.mocked(api.getEmployeeDetail).mockResolvedValue(detail as never)
+  renderPage('/employees/G100?action=edit')
+
+  await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent(/^\/employees\/G100$/))
+  expect(screen.queryByTestId('employee-form')).not.toBeInTheDocument()
+})
+
+test('changing tabs replaces history instead of adding an entry', async () => {
+  vi.mocked(api.getEmployeeDetail).mockResolvedValue(detail as never)
+  renderPage('/employees/G100', ['/employees'])
+  await screen.findByTestId('tab-chips')
+
+  fireEvent.click(screen.getByRole('button', { name: 'change-tab' }))
+  expect(screen.getByTestId('location')).toHaveTextContent('/employees/G100?tab=documents')
+  fireEvent.click(screen.getByRole('button', { name: 'back' }))
+  expect(await screen.findByText('lookup-page')).toBeInTheDocument()
+})
 
 test('clicking Edit renders EmployeeForm in edit mode', async () => {
   vi.mocked(api.getEmployeeDetail).mockResolvedValue(detail as never)

@@ -175,6 +175,7 @@ function configure(
     requests?: PermissionRequestRead[]
     usersError?: Error
     capabilities?: CapabilityRead[]
+    extraTemplates?: Array<{ id: string; name_en: string; name_ar: string }>
   } = {},
 ) {
   if (options.usersError) {
@@ -208,6 +209,15 @@ function configure(
         notifies_employee: false,
         feature_minted: false,
       },
+      ...(options.extraTemplates ?? []).map((template) => ({
+        ...template,
+        form_number: '',
+        category: 'personnel' as const,
+        signing_path: 'auto' as const,
+        has_code: false,
+        notifies_employee: false,
+        feature_minted: false,
+      })),
     ],
   })
   vi.mocked(api.listBookCategories).mockResolvedValue([
@@ -232,6 +242,7 @@ function renderPage(
     usersError?: Error
     entry?: string
     capabilities?: CapabilityRead[]
+    extraTemplates?: Array<{ id: string; name_en: string; name_ar: string }>
   } = {},
 ) {
   configure(perms, options)
@@ -600,6 +611,28 @@ describe('PermissionsPage Mirror editor', () => {
         overrides: {},
       }),
     )
+  })
+
+  it('lists an opt-in service beyond the dashboard tiles and grants it explicitly', async () => {
+    const optIn: CapabilityRead = {
+      ...catalogEntry('books.service.Loan Request Form', 'services', 'Loan Request', ''),
+      default_roles: ['admin'],
+    }
+    renderPage(permissionFixture(), {
+      capabilities: [...capabilities, optIn],
+      extraTemplates: [{ id: 'Loan Request Form', name_en: 'Loan Request', name_ar: 'طلب قرض' }],
+    })
+
+    await screen.findByRole('region', { name: 'Permission blueprint' })
+    expect(await screen.findByRole('radiogroup', { name: 'Loan Request' })).toBeVisible()
+    expect(serviceState('Loan Request')).toBe('Hidden')
+
+    await userEvent.click(serviceRadio('Loan Request', 'Full'))
+
+    expect(api.setUserPermissionsBulk).toHaveBeenCalledWith(operator.id, [
+      { capability: 'books.service.Loan Request Form', effect: 'grant' },
+      { capability: 'books.servicerecords.Loan Request Form', effect: 'grant' },
+    ])
   })
 
   it('shows a create-allowed, records-denied pair as Hidden and heals it on the next choice', async () => {

@@ -7,17 +7,18 @@
  * for all three page sign controls.
  */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { MemoryRouter, Route, Routes, useLocation, useNavigate } from 'react-router-dom'
 import userEvent from '@testing-library/user-event'
-import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { describe, it, expect, vi, beforeEach, beforeAll, afterAll } from 'vitest'
 import i18n from 'i18next'
 
 import ar from '@/locales/ar.json'
 import type * as ApiModule from '@/lib/api'
 import type * as AuthContextModule from '@/lib/authContext'
-import { api } from '@/lib/api'
+import { api, ApiError } from '@/lib/api'
 import { BookRecordPage } from './BookRecordPage'
+import { RecordDeleteProvider } from './RecordDeleteProvider'
 
 const mockHas = vi.fn<(cap: string) => boolean>(() => false)
 
@@ -30,6 +31,9 @@ vi.mock('@/lib/api', async (orig) => {
       listAwaitingBooks: vi.fn().mockResolvedValue([]),
       getBook: vi.fn(),
       signBook: vi.fn(),
+      submitBook: vi.fn(),
+      listApprovers: vi.fn().mockResolvedValue([]),
+      listReviewerCandidates: vi.fn().mockResolvedValue([]),
       getBookVersionFields: vi.fn().mockResolvedValue({ fields: {} }),
       getEmployee: vi.fn().mockResolvedValue({ name_en: 'SAEED ALYAHYAEE', name_ar: 'سعيد' }),
       listBookAnnotations: vi.fn().mockResolvedValue([]),
@@ -63,6 +67,32 @@ vi.mock('sonner', () => ({
 vi.mock('@/pages/application/DocPdfCanvas', () => ({
   default: () => <div data-testid="doc-pdf-canvas" />,
 }))
+
+function LocationProbe(): React.JSX.Element {
+  const location = useLocation()
+  const navigate = useNavigate()
+  return (
+    <>
+      <output data-testid="location">{location.pathname + location.search}</output>
+      <button onClick={() => navigate(-1)}>Back</button>
+    </>
+  )
+}
+
+function renderOverlayRecord(initialEntry: string): void {
+  render(
+    <QueryClientProvider client={makeQc()}>
+      <MemoryRouter initialEntries={[initialEntry]}>
+        <LocationProbe />
+        <RecordDeleteProvider>
+          <Routes>
+            <Route path="/books/:id" element={<BookRecordPage />} />
+          </Routes>
+        </RecordDeleteProvider>
+      </MemoryRouter>
+    </QueryClientProvider>,
+  )
+}
 
 /** A record pending signature, assigned to the current test user (id 7). */
 function pendingFixture(overrides: Record<string, unknown> = {}): unknown {
@@ -111,9 +141,11 @@ function renderRecord(qc: QueryClient): void {
   render(
     <QueryClientProvider client={qc}>
       <MemoryRouter initialEntries={['/books/48']}>
-        <Routes>
-          <Route path="/books/:id" element={<BookRecordPage />} />
-        </Routes>
+        <RecordDeleteProvider>
+          <Routes>
+            <Route path="/books/:id" element={<BookRecordPage />} />
+          </Routes>
+        </RecordDeleteProvider>
       </MemoryRouter>
     </QueryClientProvider>,
   )
@@ -284,5 +316,48 @@ describe('BookRecordPage — sign confirmation, Arabic wording', () => {
     expect(within(dialog).getByText(/GS-0048/)).toBeVisible()
     expect(within(dialog).getByText(/Test book subject/)).toBeVisible()
     expect(screen.queryByText(/لا يمكن التراجع/)).not.toBeInTheDocument()
+  })
+})
+describe('BookRecordPage — URL-backed actions', () => {
+  beforeEach(() => {
+    vi.mocked(api.getBook).mockResolvedValue(pendingFixture() as never)
+    mockHas.mockImplementation((cap) => cap === 'books.submit')
+  })
+
+  it('opens submit from a shared URL and Close keeps the record route', async () => {
+    renderOverlayRecord('/books/5?action=submit')
+
+    expect(await screen.findByRole('dialog')).toBeVisible()
+    await userEvent.click(screen.getByRole('button', { name: 'Close' }))
+    await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent(/^\/books\/5$/))
+  })
+
+  it('pushes submit into history and Back closes it without leaving the record', async () => {
+    renderOverlayRecord('/books/5')
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Change approver…' }))
+    expect(screen.getByTestId('location')).toHaveTextContent('/books/5?action=submit')
+    // The modal hides the rest of the page; the probe stands in for browser Back.
+    fireEvent.click(screen.getByText('Back', { selector: 'button' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument())
+    expect(screen.getByTestId('location')).toHaveTextContent(/^\/books\/5$/)
+  })
+
+  it('drops a directly linked override when the user cannot override state', async () => {
+    renderOverlayRecord('/books/5?action=override')
+
+    await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent(/^\/books\/5$/))
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+})
+
+describe('BookRecordPage — missing record', () => {
+  it('shows Not found in place for a record the API reports missing', async () => {
+    vi.mocked(api.getBook).mockRejectedValue(new ApiError(404, 'BOOK_NOT_FOUND', 'Book not found'))
+    renderOverlayRecord('/books/99999999')
+
+    expect(await screen.findByRole('link', { name: i18n.t('nav.dashboard') })).toHaveAttribute('href', '/')
+    expect(screen.getByRole('heading', { level: 1, name: i18n.t('notFound.title') })).toBeVisible()
+    expect(screen.getByTestId('location')).toHaveTextContent(/^\/books\/99999999$/)
   })
 })

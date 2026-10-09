@@ -90,7 +90,7 @@ import { InmateReporterDashboard } from './InmateReporterDashboard'
 
 export type DashboardPage =
   | 'employees'
-  | 'application'
+  | 'services'
   | 'books'
   | 'leaves'
   | 'ledger'
@@ -323,14 +323,7 @@ function GenericDashboardPage({ onNavigate }: DashboardPageProps): React.JSX.Ele
             footnote={t('dashboard.pending.footnote', {
               count: summary?.totals.forms_this_month ?? 0,
             })}
-            onClick={() => {
-              try {
-                localStorage.setItem('gssg.books.filter', 'recent')
-              } catch {
-                /* ignore */
-              }
-              onNavigate('books')
-            }}
+            onClick={() => onNavigate('books')}
             isLoading={summaryQuery.isPending}
           />
         )
@@ -355,7 +348,7 @@ function GenericDashboardPage({ onNavigate }: DashboardPageProps): React.JSX.Ele
           <WaitingApprovalsCard
             onReview={() =>
               navigate(
-                approvalSummary ? approvalQueueUrl(defaultApprovalContext(approvalSummary) ?? { tab: 'received', kind: 'sign', status: 'all', sort: 'oldest', page: 1 }) : APPROVALS_LOG_PATH,
+                approvalSummary ? approvalQueueUrl(defaultApprovalContext(approvalSummary) ?? { tab: 'received', kind: 'sign', status: 'all', sort: 'newest', page: 1 }) : APPROVALS_LOG_PATH,
               )
             }
           />
@@ -624,7 +617,7 @@ function GenericDashboardPage({ onNavigate }: DashboardPageProps): React.JSX.Ele
             Drives order + visibility from `layout.quick_actions`. Capped at
             MAX_VISIBLE_QUICK_ACTIONS (8) — fills up to two 4-col rows.
             Each tile's emoji + href + slug come from QUICK_ACTION_META; every
-            one deep-links via `navigate('/application?form=...')` which
+            one deep-links via `navigate('/services/<slug>')` which
             ApplicationPage hydrates into a pre-selected template. Empty state
             surfaces a hint pointing operators at the edit dialog. */}
         {visibleQuickActions.length === 0 ? (

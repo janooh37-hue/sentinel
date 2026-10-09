@@ -49,6 +49,7 @@ import { useCapabilities } from '@/lib/useCapabilities'
 import { useDebouncedValue } from '@/lib/useDebouncedValue'
 import { useReducedMotion } from '@/lib/useFakeProgress'
 import { useIsMobile } from '@/lib/useIsMobile'
+import { useSearchParam, useUrlOverlay } from '@/lib/urlState'
 import { cn } from '@/lib/utils'
 
 import {
@@ -113,26 +114,32 @@ export function VehiclesHubPage(): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const lang = i18n.language
   const queryClient = useQueryClient()
-  const { has } = useCapabilities()
+  const { has, isLoading: capabilityLoading } = useCapabilities()
   const canEdit = has('vehicles.edit')
   const isMobile = useIsMobile()
   const reducedMotion = useReducedMotion()
 
-  const [query, setQuery] = useState('')
-  const [siteId, setSiteId] = useState<number | null>(null)
-  const [expiry, setExpiry] = useState<ExpiryFilter>('all')
-  const [state, setState] = useState<StateFilter>('active')
+  const [query, setQuery] = useSearchParam('q')
+  const [site, setSite] = useSearchParam('site')
+  const [expiryValue, setExpiryValue] = useSearchParam('expiry', { fallback: 'all' })
+  const [stateValue, setStateValue] = useSearchParam('state', { fallback: 'active' })
+  const expiry: ExpiryFilter = EXPIRY_FILTERS.includes(expiryValue as ExpiryFilter)
+    ? (expiryValue as ExpiryFilter)
+    : 'all'
+  const state: StateFilter = STATE_FILTERS.includes(stateValue as StateFilter)
+    ? (stateValue as StateFilter)
+    : 'active'
+  const siteId = site && Number.isInteger(Number(site)) ? Number(site) : null
+  const actionOverlay = useUrlOverlay('action')
+  const setExpiry = (value: ExpiryFilter): void => setExpiryValue(value)
+  const setState = (value: StateFilter): void => setStateValue(value)
+  const renewOverlay = useUrlOverlay('renew')
   const [selectedIds, setSelectedIds] = useState<Set<number>>(() => new Set())
   const [copyPending, setCopyPending] = useState(false)
   const [printPending, setPrintPending] = useState(false)
   const [printOutput, setPrintOutput] = useState<VehiclePrintOutput | null>(null)
   /** `null` = follow the server; a string while the operator is typing. */
   const [notifyDraft, setNotifyDraft] = useState<string | null>(null)
-
-  const [addOpen, setAddOpen] = useState(false)
-  const [sitesOpen, setSitesOpen] = useState(false)
-  const [evgOpen, setEvgOpen] = useState(false)
-  const [renewTarget, setRenewTarget] = useState<VehicleListItem | null>(null)
   const [archiveTarget, setArchiveTarget] = useState<VehicleListItem | null>(null)
   const [restoreTarget, setRestoreTarget] = useState<VehicleListItem | null>(null)
 
@@ -172,6 +179,18 @@ export function VehiclesHubPage(): React.JSX.Element {
   const summary = summaryQuery.data
   const sites = sitesQuery.data
   const rows = listQuery.data ?? NO_VEHICLES
+  const renewTarget = rows.find((vehicle) => String(vehicle.id) === renewOverlay.value) ?? null
+
+  useEffect(() => {
+    const action = actionOverlay.value
+    if (!action || capabilityLoading) return
+    if (!canEdit || !['add', 'sites', 'evg'].includes(action)) actionOverlay.close()
+  }, [actionOverlay.close, actionOverlay.value, canEdit, capabilityLoading])
+
+  useEffect(() => {
+    if (!renewOverlay.value || capabilityLoading || listQuery.isFetching) return
+    if (!canEdit || !renewTarget) renewOverlay.close()
+  }, [canEdit, capabilityLoading, listQuery.isFetching, renewOverlay.close, renewOverlay.value, renewTarget])
 
   // A refetch can remove vehicles independently of the visible filters (for
   // example, after another operator archives one). Keep only ids present in
@@ -454,7 +473,7 @@ export function VehiclesHubPage(): React.JSX.Element {
             title={t('vehicles.finesService')}
             description={t('vehicles.finesServiceDesc')}
             count={finesFigure}
-            countLabel={t('vehicles.fines')}
+            countLabel={t('vehicles.tabFines')}
           />
           <ServiceCard
             artwork="vehicle-licence-renewal"
@@ -493,7 +512,7 @@ export function VehiclesHubPage(): React.JSX.Element {
           {canEdit && (
             <ServiceCard
               artwork="vehicle-register"
-              onClick={() => setAddOpen(true)}
+              onClick={() => actionOverlay.open('add')}
               title={t('vehicles.addVehicleService')}
               description={t('vehicles.addVehicleServiceDesc')}
               count={figure(summary?.vehicles)}
@@ -503,7 +522,7 @@ export function VehiclesHubPage(): React.JSX.Element {
           {canEdit && (
             <ServiceCard
               artwork="vehicle-sites"
-              onClick={() => setSitesOpen(true)}
+              onClick={() => actionOverlay.open('sites')}
               title={t('vehicles.sitesService')}
               description={t('vehicles.sitesServiceDesc')}
               count={figure(summary?.active_sites)}
@@ -605,7 +624,7 @@ export function VehiclesHubPage(): React.JSX.Element {
                 {t('vehicles.output.copy')}
               </Button>
               {canEdit && (
-                <Button type="button" size="sm" onClick={() => setEvgOpen(true)}>
+                <Button type="button" size="sm" onClick={() => actionOverlay.open('evg')}>
                   <DownloadCloud className="h-3.5 w-3.5" aria-hidden />
                   {t('vehicles.importFines')}
                 </Button>
@@ -698,14 +717,14 @@ export function VehiclesHubPage(): React.JSX.Element {
               role="group"
               aria-label={t('vehicles.site')}
             >
-              <SiteChip active={siteId === null} onClick={() => setSiteId(null)}>
+              <SiteChip active={siteId === null} onClick={() => setSite(null)}>
                 {t('vehicles.allSites')}
               </SiteChip>
               {activeSites.map((site) => (
                 <SiteChip
                   key={site.id}
+                  onClick={() => setSite(siteId === site.id ? null : String(site.id))}
                   active={siteId === site.id}
-                  onClick={() => setSiteId(siteId === site.id ? null : site.id)}
                 >
                   {localized(site.name_ar, site.name_en, lang)}
                 </SiteChip>
@@ -762,7 +781,7 @@ export function VehiclesHubPage(): React.JSX.Element {
                     </div>
                     {group.finesAmount > 0 && (
                       <span className="text-[0.68rem] text-muted-foreground">
-                        {`${t('vehicles.fines')} · `}
+                        {`${t('vehicles.tabFines')} · `}
                         <bdi>{formatFilsAed(group.finesAmount, lang)}</bdi>
                       </span>
                     )}
@@ -779,7 +798,7 @@ export function VehiclesHubPage(): React.JSX.Element {
                           canEdit={canEdit}
                           canDelete={canDelete}
                           state={state}
-                          onRenew={() => setRenewTarget(vehicle)}
+                          onRenew={() => renewOverlay.open(String(vehicle.id))}
                           onArchive={() => setArchiveTarget(vehicle)}
                           onRestore={() => setRestoreTarget(vehicle)}
                         />
@@ -807,7 +826,7 @@ export function VehiclesHubPage(): React.JSX.Element {
                             <TableHead>{t('vehicles.class')}</TableHead>
                             <TableHead>{t('vehicles.trafficCode')}</TableHead>
                             <TableHead>{t('vehicles.licenseExpiry')}</TableHead>
-                            <TableHead>{t('vehicles.fines')}</TableHead>
+                            <TableHead>{t('vehicles.tabFines')}</TableHead>
                             <TableHead className="text-end">{t('vehicles.action')}</TableHead>
                           </TableRow>
                         </TableHeader>
@@ -821,7 +840,7 @@ export function VehiclesHubPage(): React.JSX.Element {
                               canEdit={canEdit}
                               canDelete={canDelete}
                               state={state}
-                              onRenew={() => setRenewTarget(vehicle)}
+                              onRenew={() => renewOverlay.open(String(vehicle.id))}
                               onArchive={() => setArchiveTarget(vehicle)}
                               onRestore={() => setRestoreTarget(vehicle)}
                             />
@@ -841,15 +860,30 @@ export function VehiclesHubPage(): React.JSX.Element {
           invalidation; the hub only owns whether it is open. */}
       {canEdit && (
         <>
-          <AddVehicleDialog open={addOpen} onOpenChange={setAddOpen} />
-          <SitesDialog open={sitesOpen} onOpenChange={setSitesOpen} />
-          <EvgFetchDialog open={evgOpen} onOpenChange={setEvgOpen} />
+          <AddVehicleDialog
+            open={actionOverlay.value === 'add'}
+            onOpenChange={(open) => {
+              if (!open) actionOverlay.close()
+            }}
+          />
+          <SitesDialog
+            open={actionOverlay.value === 'sites'}
+            onOpenChange={(open) => {
+              if (!open) actionOverlay.close()
+            }}
+          />
+          <EvgFetchDialog
+            open={actionOverlay.value === 'evg'}
+            onOpenChange={(open) => {
+              if (!open) actionOverlay.close()
+            }}
+          />
           {renewTarget && (
             <RenewLicenseDialog
               open
               vehicle={renewTarget}
               onOpenChange={(open) => {
-                if (!open) setRenewTarget(null)
+                if (!open) renewOverlay.close()
               }}
             />
           )}
@@ -1266,7 +1300,7 @@ function VehicleCard({
         </div>
         <div className="min-w-0">
           <dt className="text-[0.63rem] uppercase tracking-[0.06em] text-muted-foreground">
-            {t('vehicles.fines')}
+            {t('vehicles.tabFines')}
           </dt>
           <dd className="mt-0.5">
             <FinesFigure vehicle={vehicle} />

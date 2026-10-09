@@ -36,13 +36,14 @@ vi.mock('@/lib/useIdentity', () => ({
 vi.mock('@/components/ui/rich-editor', () => ({
   RichEditor: ({ name }: { name: string }) => <div data-testid={`rich-editor-${name}`} />,
 }))
-vi.mock('@/lib/useIsMobile', () => ({ useIsMobile: () => false }))
+const { isMobile } = vi.hoisted(() => ({ isMobile: { value: false } }))
+vi.mock('@/lib/useIsMobile', () => ({ useIsMobile: () => isMobile.value }))
 vi.mock('sonner', () => ({
   toast: Object.assign(vi.fn(), { success: vi.fn(), error: vi.fn() }),
 }))
 vi.mock('./useSyncStatus', () => ({ useSyncStatus: () => ({ status: null }) }))
 vi.mock('./useContextSource', () => ({ useContextSource: () => ({ peopleCount: 0, entry: null }) }))
-vi.mock('./useDeferredDelete', () => ({ useDeferredDelete: () => ({ pendingIds: new Set(), scheduleDelete: vi.fn() }) }))
+vi.mock('@/lib/useDeferredDelete', () => ({ useDeferredDelete: () => ({ pendingIds: new Set(), scheduleDelete: vi.fn() }) }))
 // Stubbed down to the one shell-relevant affordance: the ＋New email button.
 // The stub reproduces the real rail's accessible name (`aria-label` →
 // `ledger.outlook.newEmail`) so the click target is the same one users hit.
@@ -117,6 +118,34 @@ function renderShell(initialEntry: string, state?: Record<string, unknown>): voi
   )
 }
 
+describe('LedgerOutlookShell mail URLs', () => {
+  beforeEach(() => {
+    vi.mocked(api.listLedger).mockResolvedValue({ items: [entry(42)], total: 1, limit: 500, offset: 0 })
+    vi.mocked(api.getSmartFolderSuggestions).mockResolvedValue([])
+    vi.mocked(api.getLedgerEntry).mockResolvedValue(entry(42) as unknown as LedgerEntryRead)
+  })
+
+  it('opens mail from the shareable mail parameter', async () => {
+    renderShell('/ledger?mail=42')
+    await waitFor(() => expect(screen.getByTestId('reading-pane')).toHaveTextContent('42'))
+    expect(screen.getByTestId('location')).toHaveTextContent('?mail=42')
+  })
+
+  it('mobile mail Back returns to the mailbox list URL', async () => {
+    isMobile.value = true
+    try {
+      renderShell('/ledger')
+      await userEvent.click(await screen.findByRole('button', { name: '42' }))
+      await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent('?mail=42'))
+      await userEvent.click(screen.getByRole('button', { name: 'ledger.outlook.back' }))
+      await waitFor(() => expect(screen.getByTestId('location').textContent).toBe(''))
+      expect(screen.getByTestId('message-list')).toBeInTheDocument()
+    } finally {
+      isMobile.value = false
+    }
+  })
+})
+
 describe('LedgerOutlookShell activity deep links', () => {
   beforeEach(() => {
     vi.mocked(api.listLedger).mockReset()
@@ -124,38 +153,35 @@ describe('LedgerOutlookShell activity deep links', () => {
     vi.mocked(api.getLedgerEntry).mockReset()
   })
 
-  it('opens the exact ledger entry, preserves unrelated params, and consumes open', async () => {
+  it('opens the exact ledger entry and keeps it in the URL', async () => {
     vi.mocked(api.listLedger).mockResolvedValue({ items: [entry(42), entry(7)], total: 2, limit: 500, offset: 0 })
     vi.mocked(api.getLedgerEntry).mockResolvedValue(entry(42) as unknown as LedgerEntryRead)
-    renderShell('/ledger?open=42&keep=1')
+    renderShell('/ledger?mail=42&keep=1')
     await waitFor(() => expect(screen.getByTestId('reading-pane')).toHaveTextContent('42'))
-    // `open` is consumed by an effect that lands on a later commit than the
-    // reading pane's render, so this needs its own wait — asserted immediately
-    // it passes only while the machine is fast enough.
-    await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent('?keep=1'))
+    await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent('?mail=42&keep=1'))
   })
 
   it('hydrates an off-list outgoing target independently of the current list', async () => {
     vi.mocked(api.listLedger).mockResolvedValue({ items: [entry(7)], total: 1, limit: 500, offset: 0 })
     vi.mocked(api.getLedgerEntry).mockResolvedValue(entry(42) as unknown as LedgerEntryRead)
-    renderShell('/ledger?open=42&keep=1')
+    renderShell('/ledger?mail=42&keep=1')
     await waitFor(() => expect(screen.getByTestId('reading-pane')).toHaveTextContent('42'))
     expect(api.getLedgerEntry).toHaveBeenCalledWith(42)
-    await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent('?keep=1'))
+    await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent('?mail=42&keep=1'))
   })
 
-  it('renders an exact-target error and retries without consuming open', async () => {
+  it('renders an exact-target error and retries without dropping the mail link', async () => {
     vi.mocked(api.listLedger).mockResolvedValue({ items: [entry(7)], total: 1, limit: 500, offset: 0 })
     vi.mocked(api.getLedgerEntry)
       .mockRejectedValueOnce(new Error('not found'))
       .mockResolvedValueOnce(entry(42) as unknown as LedgerEntryRead)
-    renderShell('/ledger?open=42&keep=1')
+    renderShell('/ledger?mail=42&keep=1')
     const retry = await screen.findByRole('button', { name: 'common.retry' })
     expect(screen.getByRole('alert')).toHaveTextContent('common.loadError')
-    expect(screen.getByTestId('location')).toHaveTextContent('?open=42&keep=1')
+    expect(screen.getByTestId('location')).toHaveTextContent('?mail=42&keep=1')
     await userEvent.click(retry)
     await waitFor(() => expect(screen.getByTestId('reading-pane')).toHaveTextContent('42'))
-    await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent('?keep=1'))
+    await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent('?mail=42&keep=1'))
   })
 })
 
@@ -197,6 +223,14 @@ describe('LedgerOutlookShell Outlook handoff surface', () => {
     ).toBeInTheDocument()
     // This surface hands off; it never sends. The composer's Send must be gone.
     expect(screen.queryByRole('button', { name: 'compose.send' })).not.toBeInTheDocument()
+  })
+
+  it('opens compose from ?action=compose and keeps one compose window', async () => {
+    renderShell('/ledger?action=compose')
+    expect(await screen.findByTestId('compose-window')).toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('button', { name: 'ledger.outlook.newEmail' }))
+    expect(screen.getAllByTestId('compose-window')).toHaveLength(1)
   })
 
   it('consumes a route-state basket prefill into the handoff surface', async () => {

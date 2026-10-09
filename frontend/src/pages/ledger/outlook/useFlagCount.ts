@@ -15,7 +15,6 @@ export function useFlagCount(enabled = true): number {
     queryFn: () => api.getLedgerFlagCount(),
     enabled,
     staleTime: 30_000,
-    refetchInterval: 120_000,
   })
   return enabled ? (data?.count ?? 0) : 0
 }

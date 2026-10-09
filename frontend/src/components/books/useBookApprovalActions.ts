@@ -1,13 +1,12 @@
 /**
  * Shared book approval mutations (decide = reject/return/note, sign = approve)
- * for the two book-decision surfaces — `BookRecordPage` and `BookDetailDrawer`,
- * which hand-rolled identical mutations (incl. the NO_SIGNATURE hint on sign)
- * and the same 3-key invalidation.
+ * for the book-decision surface (`BookRecordPage`): the mutations (incl. the
+ * NO_SIGNATURE hint on sign) and the shared 3-key invalidation.
  *
  * The post-success behaviour differs on purpose and is left to the caller via
- * `onDecided` / `onSigned`: the drawer closes after either; the record page
- * navigates back to /books after a decision but deliberately STAYS after a sign
- * (so the signer watches their signature land on the document).
+ * `onDecided` / `onSigned`: the record page stays on the record after a
+ * decision and after a sign (so the signer watches their signature land on the
+ * document).
  */
 
 import { useMutation, useQueryClient, type UseMutationResult } from '@tanstack/react-query'
@@ -19,6 +18,8 @@ import { api, ApiError, apiErrorMessage, type BookDecideAction, type BookRead } 
 interface Params {
   bookId: number | undefined
   versionId: number | undefined
+  /** A Report's "sign" only records the manager's review. */
+  isReport?: boolean
   onDecided: (act: BookDecideAction) => void
   onSigned: () => void
 }
@@ -28,7 +29,7 @@ interface Actions {
   signMutation: UseMutationResult<BookRead, unknown, void>
 }
 
-export function useBookApprovalActions({ bookId, versionId, onDecided, onSigned }: Params): Actions {
+export function useBookApprovalActions({ bookId, versionId, isReport = false, onDecided, onSigned }: Params): Actions {
   const { t } = useTranslation()
   const qc = useQueryClient()
 
@@ -72,7 +73,7 @@ export function useBookApprovalActions({ bookId, versionId, onDecided, onSigned 
     mutationFn: () => api.signBook(bookId!, versionId!),
     onSuccess: () => {
       invalidateAll()
-      toast.success(t('books.approval.signed'))
+      toast.success(t(isReport ? 'books.approval.reviewedToast' : 'books.approval.signed'))
       onSigned()
     },
     onError: (err) => {

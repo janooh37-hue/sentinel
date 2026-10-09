@@ -14,7 +14,7 @@ import { MarkToggle } from './MarkToggle'
 describe('MarkToggle (English)', () => {
   it('disarmed renders the Mark label', () => {
     render(<MarkToggle armed={false} onToggle={vi.fn()} />)
-    expect(screen.getByTestId('mark-toggle')).toHaveTextContent('Mark')
+    expect(screen.getByTestId('mark-toggle')).toHaveTextContent('Mark up')
   })
 
   it('armed renders the Marking-on label', () => {
@@ -42,7 +42,7 @@ describe('MarkToggle (Arabic)', () => {
 
   it('disarmed renders the Arabic label, not English or the key', () => {
     render(<MarkToggle armed={false} onToggle={vi.fn()} />)
-    expect(screen.getByTestId('mark-toggle')).toHaveTextContent('تحديد')
+    expect(screen.getByTestId('mark-toggle')).toHaveTextContent('ملاحظات على المستند')
   })
 
   it('armed renders the Arabic label, not English or the key', () => {

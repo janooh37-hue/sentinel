@@ -44,7 +44,7 @@ export function StatusSpine({
     <div
       role="group"
       aria-label={t('books.spine.all')}
-      className="mb-3 flex overflow-hidden rounded-2xl border border-hairline bg-surface"
+      className="mb-3 flex snap-x snap-proximity overflow-x-auto overflow-y-hidden rounded-2xl border border-hairline bg-surface"
     >
       {SEGMENTS.map(({ state, dotClass }) => {
         if (!showAwaitingScan && state === 'awaiting_scan') return null
@@ -56,7 +56,7 @@ export function StatusSpine({
             aria-pressed={isActive}
             onClick={() => onChange(state)}
             className={cn(
-              'flex flex-1 flex-col items-start gap-0.5 border-e border-hairline px-3.5 py-2 text-start transition-colors last:border-e-0',
+              'flex min-w-[6.75rem] flex-1 shrink-0 snap-start flex-col items-start gap-0.5 border-e border-hairline px-3.5 py-2 text-start transition-colors motion-reduce:transition-none last:border-e-0',
               'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset',
               isActive ? 'bg-primary-soft shadow-[inset_0_-2px_0_var(--primary)]' : 'hover:bg-surface-tinted',
             )}

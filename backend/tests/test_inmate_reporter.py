@@ -764,7 +764,6 @@ def test_route_allowlist_blocks_unrelated_authenticated_routes(api_db: Session) 
         ("GET", "/api/v1/employees"),
         ("GET", "/api/v1/managers"),
         ("GET", "/api/v1/permits"),
-        ("POST", "/api/v1/auth/me/signature"),
     ):
         resp = client.request(method, path)
         assert resp.status_code == 403, f"{method} {path} leaked past the allowlist"
@@ -835,3 +834,271 @@ def test_job_polling_is_owner_scoped(api_db: Session) -> None:
     client_b = _client(api_db, b)
     denied = client_b.get(f"/api/v1/jobs/{job_id}")
     assert denied.status_code == 404
+
+
+def test_inmate_reporter_report_create_forces_linked_signer(
+    api_db: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from app.services import report_service, word_book_service
+
+    reporter_employee = _employee(api_db, "G-REPORTER", "Reporter")
+    reporter = _user(
+        api_db,
+        email="reporter-report@x.ae",
+        role=INMATE_REPORTER_ROLE,
+        employee_id=reporter_employee.id,
+    )
+    api_db.add(BookCategory(id="GS", prefix="GS"))
+    api_db.commit()
+    monkeypatch.setattr(
+        report_service,
+        "_resolve_signer",
+        lambda _db, _emp: ("Reporter", "Officer", "signature.png"),
+    )
+    created: dict[str, Any] = {}
+
+    def create_report(_db, **kwargs):
+        created.update(kwargs)
+        return word_book_service.WordSessionInfo(
+            book_id=20,
+            ref_number="REPORT-20",
+            token="token",
+            filename="REPORT-20.docx",
+            word_url="ms-word:ofe|u|https://example.test/dav/token/REPORT-20.docx",
+            dav_url="https://example.test/dav/token/REPORT-20.docx",
+        )
+
+    monkeypatch.setattr(word_book_service, "create_report_word_book", create_report)
+    client = _client(api_db, reporter)
+
+    mismatch = client.post(
+        "/api/v1/books/word-sessions",
+        json={"subject": "Report", "signer_employee_id": "G-OTHER"},
+    )
+    assert mismatch.status_code == 403
+    assert mismatch.json()["error"]["code"] == "INMATE_REPORTER_IDENTITY_MISMATCH"
+
+    created_report = client.post(
+        "/api/v1/books/word-sessions", json={"subject": "Report", "sign": False}
+    )
+    assert created_report.status_code == 201, created_report.text
+    assert created["signer_employee_id"] == reporter_employee.id
+    assert created["sign"] is True
+    assert created["recipient_id"] is None
+
+
+def test_inmate_reporter_report_create_requires_linked_employee(api_db: Session) -> None:
+    reporter = _user(api_db, email="reporter-unlinked@x.ae", role=INMATE_REPORTER_ROLE)
+    response = _client(api_db, reporter).post(
+        "/api/v1/books/word-sessions", json={"subject": "Report"}
+    )
+    assert response.status_code == 409
+    assert response.json()["error"]["code"] == "INMATE_REPORTER_EMPLOYEE_REQUIRED"
+
+
+def test_inmate_reporter_requires_signature_and_cannot_create_general_book(
+    api_db: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from app.services import report_service
+
+    employee = _employee(api_db, "G-REPORTER", "Reporter")
+    reporter = _user(
+        api_db, email="reporter-no-sig@x.ae", role=INMATE_REPORTER_ROLE, employee_id=employee.id
+    )
+    api_db.add(BookCategory(id="GS", prefix="GS"))
+    api_db.commit()
+    monkeypatch.setattr(report_service, "_resolve_signer", lambda _db, _emp: ("Reporter", "", None))
+    client = _client(api_db, reporter)
+
+    missing_signature = client.post("/api/v1/books/word-sessions", json={"subject": "Report"})
+    assert missing_signature.status_code == 409
+    assert missing_signature.json()["error"]["code"] == "SIGNATURE_REQUIRED"
+
+    general_book = client.post(
+        "/api/v1/books/word-sessions",
+        json={"subject": "General", "classification_code": "1"},
+    )
+    assert general_book.status_code == 422
+    assert general_book.json()["error"]["code"] == "INMATE_REPORTER_INPUT_FORBIDDEN"
+    assert not perm_service.has_capability(api_db, reporter, "books.create")
+    assert not perm_service.has_capability(api_db, reporter, "books.edit")
+
+
+def test_inmate_reporter_signature_routes_are_allowed(api_db: Session, monkeypatch) -> None:
+    from app.services import user_signature_service
+
+    reporter = _user(api_db, email="reporter-signature@x.ae", role=INMATE_REPORTER_ROLE)
+    monkeypatch.setattr(user_signature_service, "resolve_signature", lambda _user: None)
+    monkeypatch.setattr(
+        user_signature_service, "save_signature", lambda _db, user, _name, _data: user
+    )
+    client = _client(api_db, reporter)
+
+    missing = client.get("/api/v1/signatures/me")
+    assert missing.status_code == 404
+    assert missing.json()["error"]["code"] == "SIGNATURE_NOT_FOUND"
+
+    saved = client.post(
+        "/api/v1/auth/me/signature",
+        files={"file": ("signature.png", b"signature", "image/png")},
+    )
+    assert saved.status_code == 200, saved.text
+
+
+def test_signed_report_submit_routes_to_manager_pending_worklist(api_db: Session) -> None:
+    from app.db.models import BookVersion
+
+    employee = _employee(api_db, "G-REPORTER", "Reporter")
+    reporter = _user(
+        api_db, email="reporter-submit@x.ae", role=INMATE_REPORTER_ROLE, employee_id=employee.id
+    )
+    manager_user = _configured_manager(api_db, email="report-manager@x.ae")
+    api_db.add(BookCategory(id="GS", prefix="GS"))
+    api_db.flush()
+    book = Book(
+        category_id="GS",
+        ref_number="REPORT-501",
+        subject="A report",
+        approval_state="none",
+        submitted_by_user_id=reporter.id,
+    )
+    api_db.add(book)
+    api_db.flush()
+    version = BookVersion(
+        book_id=book.id,
+        version_no=1,
+        trigger="initial",
+        status="approved",
+        template_id="Report",
+        fields={"signer_employee_id": employee.id, "signed": True},
+        created_by_user_id=reporter.id,
+        signed_pdf_path="signed/report.pdf",
+        signed_by_user_id=reporter.id,
+        manager_sig_embedded=True,
+    )
+    api_db.add(version)
+    api_db.commit()
+
+    response = _client(api_db, reporter).post(
+        f"/api/v1/books/{book.id}/submit",
+        json={"priority": "Normal", "approver_user_id": None, "reviewer_user_ids": []},
+    )
+    assert response.status_code == 200, response.text
+    api_db.refresh(book)
+    assert book.approval_state == "pending"
+    assert book.doc_manager_id is not None
+    assert book.versions[-1].approval_steps[0].assignee_user_id == manager_user.id
+
+    pending = _client(api_db, manager_user).get(
+        "/api/v1/books/approval-log", params={"scope": "received", "status": "pending"}
+    )
+    assert pending.status_code == 200, pending.text
+    assert book.id in {item["book_id"] for item in pending.json()["items"]}
+
+
+def test_inmate_reporter_cannot_edit_another_report_or_general_book(api_db: Session) -> None:
+    from app.db.models import BookVersion
+
+    _employee(api_db, "G-REPORTER", "Reporter")
+    owner = _user(
+        api_db,
+        email="report-owner@x.ae",
+        role=INMATE_REPORTER_ROLE,
+        employee_id="G-REPORTER",
+    )
+    other = _user(
+        api_db,
+        email="report-other@x.ae",
+        role=INMATE_REPORTER_ROLE,
+        employee_id="G-REPORTER",
+    )
+    api_db.add(BookCategory(id="GS", prefix="GS"))
+    api_db.flush()
+    report = Book(
+        category_id="GS",
+        ref_number="REPORT-502",
+        approval_state="none",
+        submitted_by_user_id=owner.id,
+    )
+    pending_report = Book(
+        category_id="GS",
+        ref_number="REPORT-503",
+        approval_state="pending",
+        submitted_by_user_id=owner.id,
+    )
+    general = Book(category_id="GS", ref_number="GS/1/2026", approval_state="none")
+    api_db.add_all([report, pending_report, general])
+    api_db.flush()
+    api_db.add_all(
+        [
+            BookVersion(
+                book_id=report.id,
+                version_no=1,
+                trigger="initial",
+                status="none",
+                template_id="Report",
+                created_by_user_id=owner.id,
+            ),
+            BookVersion(
+                book_id=pending_report.id,
+                version_no=1,
+                trigger="initial",
+                status="pending",
+                template_id="Report",
+                created_by_user_id=owner.id,
+            ),
+            BookVersion(
+                book_id=general.id,
+                version_no=1,
+                trigger="initial",
+                status="none",
+                template_id="General Book",
+                created_by_user_id=owner.id,
+            ),
+        ]
+    )
+    api_db.commit()
+    client = _client(api_db, other)
+    assert client.get(f"/api/v1/books/{report.id}/word-sessions/status").status_code == 403
+    assert client.get(f"/api/v1/books/{general.id}/word-sessions/status").status_code == 403
+    assert client.get(f"/api/v1/books/{pending_report.id}").status_code == 404
+
+
+def test_reporter_can_list_and_read_own_active_word_report(api_db: Session) -> None:
+    from app.db.models import BookEditSession
+
+    _employee(api_db, "G-REPORTER", "Reporter")
+    reporter = _user(
+        api_db, email="report-active@x.ae", role=INMATE_REPORTER_ROLE, employee_id="G-REPORTER"
+    )
+    api_db.add(BookCategory(id="GS", prefix="GS"))
+    api_db.flush()
+    book = Book(
+        category_id="GS",
+        ref_number="REPORT-700",
+        subject="Active Report",
+        approval_state="none",
+        submitted_by_user_id=reporter.id,
+    )
+    api_db.add(book)
+    api_db.flush()
+    api_db.add(
+        BookEditSession(
+            book_id=book.id,
+            user_id=reporter.id,
+            token="active-report-token",
+            working_path="working.docx",
+            state="active",
+        )
+    )
+    api_db.commit()
+    client = _client(api_db, reporter)
+
+    listed = client.get("/api/v1/books", params={"service_id": "Report"})
+    assert listed.status_code == 200, listed.text
+    item = next(entry for entry in listed.json()["items"] if entry["id"] == book.id)
+    assert item["edit_session"] is not None
+
+    detail = client.get(f"/api/v1/books/{book.id}")
+    assert detail.status_code == 200, detail.text
+    assert detail.json()["edit_session"] is not None

@@ -48,7 +48,7 @@ from app.core.constants import (
     VEHICLE_LETTER_FORMS,
 )
 from app.core.dateutils import excel_date_to_datetime
-from app.core.docx_engine import aztec_corner_for
+from app.core.docx_engine import aztec_corner_for, syncs_general_book_footer
 from app.core.docx_render import _arabic_clock, _arabic_weekday
 from app.core.html_text import html_to_text
 from app.core.inmate_wings import normalize_wing
@@ -75,8 +75,19 @@ from app.db.repos.classified_refs_repo import allocate_classified_serial
 from app.db.repos.refs_repo import allocate_ref_with_retry
 from app.schemas.employee import EMPLOYEE_STATUS_ACTIVE, EMPLOYEE_STATUS_RESIGNED
 from app.schemas.linked_document import LinkedDocumentRead
-from app.services import absence_service, artifact_service, manager_service
+from app.services import (
+    absence_service,
+    artifact_service,
+    inmate_violation_whatsapp,
+    manager_service,
+)
 from app.services._pdf_executor import convert_docx_to_pdf as convert_docx_to_pdf
+from app.services.employee_status_history import (
+    KIND_CHANGED,
+    KIND_SCHEDULED,
+    SOURCE_RESIGNATION_LETTER,
+    record_status_event,
+)
 
 _build_docx_filename = artifact_service.build_docx_filename
 _output_dir_for_admin = artifact_service.output_dir_for_admin
@@ -88,6 +99,9 @@ if TYPE_CHECKING:
     from app.api.v1.documents import GenerateAttachmentSpec
 
 log = logging.getLogger(__name__)
+_INTERVIEWER_FORMS: Final[frozenset[str]] = frozenset(
+    {"Employee Exit Form", "Employee Exit Form – Project or Contract"}  # noqa: RUF001
+)
 
 # ---------------------------------------------------------------------------
 # Category map — mirrors v3 _stamp_and_record (gssg_manager.pyw line 7778)
@@ -658,6 +672,7 @@ def _record_pending_resignation(
     fields: dict[str, Any],
     *,
     today: date | None = None,
+    actor_user_id: int | None = None,
 ) -> None:
     """Record where a Resignation Letter's subject is headed.
 
@@ -681,11 +696,26 @@ def _record_pending_resignation(
         return
     effective = parsed.date()
     employee.end_date = effective
-    if effective > (today or date.today()):
+    scheduled = effective > (today or date.today())
+    if scheduled:
         employee.pending_status = EMPLOYEE_STATUS_RESIGNED
     else:
         employee.status = EMPLOYEE_STATUS_RESIGNED
         employee.pending_status = None
+    # An Active employee carries no transfer fields, but a pending Transferred
+    # being superseded by the letter must not leave its site behind.
+    employee.transfer_site = None
+    employee.transfer_return_date = None
+    record_status_event(
+        db,
+        employee.id,
+        from_status=EMPLOYEE_STATUS_ACTIVE,
+        to_status=EMPLOYEE_STATUS_RESIGNED,
+        effective_date=effective,
+        kind=KIND_SCHEDULED if scheduled else KIND_CHANGED,
+        source=SOURCE_RESIGNATION_LETTER,
+        actor_user_id=actor_user_id,
+    )
 
 
 @functools.cache
@@ -1086,6 +1116,31 @@ def _build_template_data(
     # HugeRTE HTML — flatten to plain text so the Jinja {{ token }} render
     # doesn't emit literal <p>/<span> markup into the DOCX.
     data.update(_flatten_rich_fields(template_id, fields))
+
+    # The exit forms use an independent interviewer selection. The UI sends
+    # picker IDs as strings; resolve to a Submitter without affecting the
+    # employee's separate submitter selection above.
+    if template_id in _INTERVIEWER_FORMS:
+        raw_interviewer_id = fields.get("interviewer_id")
+        data.pop("interviewer_name", None)
+        data.pop("interviewer_sig_path", None)
+        if raw_interviewer_id not in (None, ""):
+            try:
+                interviewer_id = int(str(raw_interviewer_id))
+            except (TypeError, ValueError):
+                interviewer_id = None
+            interviewer = db.get(Submitter, interviewer_id) if interviewer_id is not None else None
+            if interviewer is None:
+                raise NotFoundError(
+                    "INTERVIEWER_NOT_FOUND",
+                    f"Submitter {raw_interviewer_id} does not exist",
+                    id=raw_interviewer_id,
+                )
+            data["interviewer_name"] = interviewer.name
+            if embed_signature.get("interviewer"):
+                interviewer_sig = _submitter_sign_path(db, interviewer.id)
+                if interviewer_sig is not None:
+                    data["interviewer_sig_path"] = interviewer_sig
 
     # Explicit manager_id is validated; absence falls through to identity-aware
     # resolver (linked employee → default_manager_id). resolve_manager may
@@ -1545,6 +1600,16 @@ def generate_document(
 
     fields_meta = load_fields_meta()
     form_meta = fields_meta.get(template_id, {})
+    for field_meta in form_meta.get("fields", []):
+        if field_meta.get("type") != "items_table" or not field_meta.get("max_rows"):
+            continue
+        items = fields.get(field_meta["key"])
+        if isinstance(items, list) and len(items) > field_meta["max_rows"]:
+            raise ValidationFailedError(
+                "TOO_MANY_ITEMS",
+                f"{template_id} allows at most {field_meta['max_rows']} rows",
+                field=field_meta["key"],
+            )
 
     # Forms with an explicit manager-signature checkbox honor the operator's
     # choice; all other forms keep their server-enforced signing policy.
@@ -1759,10 +1824,9 @@ def generate_document(
     # counter is untouched, so concurrent previews don't burn ref numbers.
     # ------------------------------------------------------------------
     cat_code = record_category_for_template(template_id)
-    # Classified-paper refs come exclusively from the classified register
-    # (1/{tab}/GSSG/{serial}) — the legacy GS-#### counter is retired for these
-    # forms regardless of authoring surface (rich editor OR Word). Validate the
-    # classification up-front so a bad code fails before any file is written.
+    # Classified-paper refs come exclusively from the classified register.
+    # Validate a classification up-front so a bad code fails before any file
+    # is written.
     _classification = None
     if template_id in CLASSIFIED_BOOK_FORMS:
         if classification_code is not None:
@@ -1778,6 +1842,19 @@ def generate_document(
                 f"{template_id} requires a classification (التبويب) — every book "
                 "takes its ref from the classified register",
             )
+    else:
+        leave_type = str(fields.get("leave_type") or "")
+        is_leave_form = template_id in {"Leave Application Form", "Leave Undertaking"}
+        if template_id in {"Resignation Letter", "Resignation Declaration"}:
+            code = "12/1"
+        elif is_leave_form and leave_type.startswith("Annual"):
+            code = "3/1"
+        elif is_leave_form and leave_type.startswith("Sick"):
+            code = "4/1"
+        else:
+            code = None
+        if code is not None:
+            _classification = get_classification(code)
     if commit and revise_book is not None:
         # Revise reuses the existing book's ref — no allocation.
         raw_ref = revise_book.ref_number
@@ -1811,10 +1888,8 @@ def generate_document(
         current_user=current_user,
     )
 
-    # Classified and vehicle letterhead papers render the ref in the Arabic
-    # body line (الرقم: …) — commit-only, so previews stay serial-free. This
-    # replaces the English header stamp for these forms.
-    if commit and (template_id in CLASSIFIED_BOOK_FORMS or template_id in VEHICLE_LETTER_FORMS):
+    # Classified and vehicle papers carry their shared ref in template data.
+    if commit and (_classification is not None or template_id in VEHICLE_LETTER_FORMS):
         data["ref"] = raw_ref
 
     # Truthful embed flag: ``sig1_path`` survives _build_template_data only
@@ -1871,12 +1946,11 @@ def generate_document(
         stamps=artifact_service.StampPlan(
             reference=raw_ref if commit else None,
             header_reference=commit
+            and _classification is None
             and template_id not in CLASSIFIED_BOOK_FORMS
             and template_id not in VEHICLE_LETTER_FORMS,
             aztec_corner=aztec_corner_for(template_id) if commit else None,
-            sync_general_book_footer=(
-                template_id in CLASSIFIED_BOOK_FORMS and template_id != "General Book"
-            ),
+            sync_general_book_footer=syncs_general_book_footer(template_id),
         ),
         converter=pdf_converter,
     )
@@ -2054,6 +2128,7 @@ def generate_document(
                 doc_path=_rel(docx_path) or str(docx_path),
                 created_at=ts.replace(tzinfo=None),
                 deleted_at=None,
+                created_by_user_id=current_user.id if current_user is not None else None,
                 search_text=build_search_text(subject=_subject, ref=raw_ref, body=_body_text),
             )
             db.add(book_row)
@@ -2112,6 +2187,7 @@ def generate_document(
         if signing_path == "auto" and embed_mgr:
             _logged_book.approval_state = "approved"
             _state_version.status = "approved"
+            inmate_violation_whatsapp.queue_send(db, _state_version)
             # WF-02 (by-design auto path): the manager's signature is embedded
             # at generation with no per-document sign action. Leave a trail of
             # consent-by-policy — attribute the embed to the generating user AND
@@ -2396,8 +2472,8 @@ def generate_document(
                 destination=out_dir / comp_filename,
                 stamps=artifact_service.StampPlan(
                     reference=raw_ref if commit else None,
-                    header_reference=commit,
-                    aztec_corner=aztec_corner_for(companion_template_id) if commit else None,
+                    header_reference=commit and _classification is None,
+                    aztec_corner=(aztec_corner_for(companion_template_id) if commit else None),
                 ),
                 converter=pdf_converter,
             )
@@ -2461,7 +2537,12 @@ def generate_document(
     # inside this transaction, so it is atomic with the Document insert. Preview
     # (commit=False) must not touch the employee record.
     if commit and template_id == "Resignation Letter":
-        _record_pending_resignation(db, employee, fields)
+        _record_pending_resignation(
+            db,
+            employee,
+            fields,
+            actor_user_id=current_user.id if current_user is not None else None,
+        )
     db.commit()
     db.refresh(doc_row)
 
@@ -2751,9 +2832,7 @@ def render_signed_artifact(
             header_reference=template_id not in CLASSIFIED_BOOK_FORMS
             and template_id not in VEHICLE_LETTER_FORMS,
             aztec_corner=aztec_corner_for(template_id),
-            sync_general_book_footer=(
-                template_id in CLASSIFIED_BOOK_FORMS and template_id != "General Book"
-            ),
+            sync_general_book_footer=syncs_general_book_footer(template_id),
         ),
         converter=converter or convert_docx_to_pdf,
     )

@@ -33,22 +33,6 @@ export function invalidateSignatures(qc: QueryClient): void {
   })
 }
 
-// NOTE (Milestone A): scaffolding only — nothing calls `setEditing` yet, so
-// `isAnyEditing()` is always false and the heartbeat's "pause while editing"
-// guard is currently inert. Editable forms hold drafts in react-hook-form
-// (independent of the query cache), so a background refetch can't clobber them.
-// Wire `setEditing` into dirty controlled-form surfaces in Milestone B.
-const dirty = new Map<string, boolean>()
-export const editingRegistry = {
-  setEditing(id: string, isDirty: boolean): void {
-    if (isDirty) dirty.set(id, true)
-    else dirty.delete(id)
-  },
-  isAnyEditing(): boolean {
-    return dirty.size > 0
-  },
-}
-
 /** True while any query is fetching, latched for at least minVisibleMs so the top
  *  bar is always perceptible even on instant LAN fetches. */
 export function useIsRefreshing(minVisibleMs = 450): boolean {

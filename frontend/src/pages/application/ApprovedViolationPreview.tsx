@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { AlertCircle, Loader2 } from 'lucide-react'
 import * as pdfjsLib from 'pdfjs-dist'
-import pdfWorkerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url'
+import { pdfWorkerUrl } from '@/lib/pdf'
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl
 

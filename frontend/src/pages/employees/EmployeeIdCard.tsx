@@ -26,6 +26,7 @@ import { pickEmployeeName } from '@/lib/employeeName'
 import { pickPosition } from '@/lib/employeePosition'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { PendingDepartureBadge } from '@/components/employees/PendingDepartureBadge'
+import { statusDetailText } from '@/components/employees/statusDetail'
 import { useEmployeePhoto } from '@/components/employees/useEmployeePhoto'
 import { lastCompletedMonth, spanMonthLabels } from '@/pages/timesheet/useTimesheet'
 
@@ -33,6 +34,7 @@ const STATUS_DOT_CLS: Record<EmployeeStatus, string> = {
   Active: 'bg-success',
   Resigned: 'bg-warning',
   Terminated: 'bg-destructive',
+  Transferred: 'bg-info',
 }
 
 /** First letters of the first two space-separated name parts — avatar fallback. */
@@ -103,6 +105,7 @@ export function EmployeeIdCard({
   // Alt-language name for bilingual subtitle
   const altName = i18n.language === 'ar' ? employee.name_en : (employee.name_ar ?? null)
   const positionLabel = pickPosition(employee, i18n.language)
+  const statusText = statusDetailText(t, employee)
   const { has } = useCapabilities()
   const canEdit = has('employees.edit')
   // The per-employee export freezes nothing, so an operator holding only
@@ -222,28 +225,29 @@ export function EmployeeIdCard({
                   type="button"
                   onClick={onChangeStatus}
                   aria-label={t('employees.statusDialog.title')}
-                  className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-2.5 py-0.5 text-[0.75em] font-semibold transition-colors hover:bg-white/25"
+                  className="inline-flex max-w-full items-center gap-1.5 rounded-full bg-white/15 px-2.5 py-0.5 text-start text-[0.75em] font-semibold transition-colors hover:bg-white/25"
                 >
                   <span
                     className={`h-1.5 w-1.5 rounded-full ${STATUS_DOT_CLS[employee.status] ?? 'bg-muted'}`}
                     aria-hidden
                   />
-                  {t(`employees.status.${employee.status}`, employee.status)}
+                  {statusText}
                   <Pencil className="h-2.5 w-2.5 opacity-70" aria-hidden />
                 </button>
               ) : (
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-white/15 px-2.5 py-0.5 text-[0.75em] font-semibold">
+                <span className="inline-flex max-w-full items-center gap-1.5 rounded-full bg-white/15 px-2.5 py-0.5 text-start text-[0.75em] font-semibold">
                   <span
                     className={`h-1.5 w-1.5 rounded-full ${STATUS_DOT_CLS[employee.status] ?? 'bg-muted'}`}
                     aria-hidden
                   />
-                  {t(`employees.status.${employee.status}`, employee.status)}
+                  {statusText}
                 </span>
               )}
               <PendingDepartureBadge
                 status={employee.status}
                 pendingStatus={employee.pending_status}
                 endDate={employee.end_date}
+                transferSite={employee.transfer_site}
               />
             </div>
           </div>

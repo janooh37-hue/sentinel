@@ -18,6 +18,7 @@ import { pickEmployeeName } from '@/lib/employeeName'
 import { pickPosition } from '@/lib/employeePosition'
 import { useDebouncedValue } from '@/lib/useDebouncedValue'
 import { PendingDepartureBadge } from '@/components/employees/PendingDepartureBadge'
+import { statusDetailText } from '@/components/employees/statusDetail'
 
 // ─── Props ────────────────────────────────────────────────────────────────────
 interface Props {
@@ -158,10 +159,14 @@ export function EmployeeSearchHero({
                       pillBg = 'var(--success-soft)'
                       pillFg = 'var(--success)'
                       pillLabel = t('employees.status.Active')
+                    } else if (row.status === 'Transferred') {
+                      pillBg = 'var(--info-soft)'
+                      pillFg = 'var(--info)'
+                      pillLabel = statusDetailText(t, row)
                     } else {
                       pillBg = 'var(--surface-tinted)'
                       pillFg = 'var(--text-muted)'
-                      pillLabel = t(`employees.status.${row.status}`)
+                      pillLabel = statusDetailText(t, row)
                     }
 
                     // Avatar initials: first 2 chars after 'G-' / 'G'
@@ -213,7 +218,7 @@ export function EmployeeSearchHero({
 
                         {/* Status pill */}
                         <span
-                          className="inline-flex shrink-0 items-center gap-1.5 rounded-full px-[10px] py-[3px] text-[11.5px] font-bold"
+                          className="inline-flex max-w-[45%] shrink-0 items-center gap-1.5 rounded-full px-[10px] py-[3px] text-[11.5px] font-bold"
                           style={{ background: pillBg, color: pillFg }}
                         >
                           <span
@@ -221,12 +226,13 @@ export function EmployeeSearchHero({
                             className="h-1.5 w-1.5 rounded-full"
                             style={{ background: pillFg }}
                           />
-                          {pillLabel}
+                          <span className="truncate" title={pillLabel}>{pillLabel}</span>
                         </span>
                         <PendingDepartureBadge
                           status={row.status}
                           pendingStatus={row.pending_status}
                           endDate={row.end_date}
+                          transferSite={row.transfer_site}
                         />
                       </button>
                     )

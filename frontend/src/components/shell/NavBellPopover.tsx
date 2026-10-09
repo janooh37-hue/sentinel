@@ -6,7 +6,7 @@
  *   - `GET /api/v1/ledger/unread-recent?limit=5` returns `{ items, total_unread }`.
  *   - The trigger button keeps the existing numeric badge (driven by
  *     `total_unread` here so the count and the preview can't drift).
- *   - Each row navigates to `/ledger?open=ID` and closes the popover so the
+ *   - Each row navigates to `/ledger?mail=ID` and closes the popover so the
  *     destination page can auto-open the entry in its detail drawer.
  *   - The "Mark all read" affordance uses the existing POST endpoint and
  *     invalidates both the unread-count and unread-recent queries.
@@ -99,8 +99,7 @@ function DefaultNavBellPopover(): React.JSX.Element {
     queryKey: ['ledger', 'unread-recent'],
     queryFn: () => api.getLedgerUnreadRecent(5),
     enabled: canViewLedger,
-    // Phase 4: SSE stream drives live invalidation; this is a safety-poll fallback.
-    refetchInterval: 120_000,
+    // Freshness comes from useNotificationStream's `emails` count diff.
     staleTime: 15_000,
   })
 
@@ -110,7 +109,7 @@ function DefaultNavBellPopover(): React.JSX.Element {
     queryFn: () => api.listAuthUsers(),
     enabled: isAdmin,
     staleTime: 30_000,
-    refetchInterval: 60_000,
+    refetchInterval: 5 * 60_000, // not covered by the SSE counts
   })
   const pendingRequests = isAdmin
     ? (pendingQuery.data ?? []).filter((u) => u.status === 'pending').length
@@ -126,7 +125,7 @@ function DefaultNavBellPopover(): React.JSX.Element {
     queryFn: api.getExpirySummary,
     enabled: canViewExpiry,
     staleTime: 60_000,
-    refetchInterval: 60_000,
+    refetchInterval: 15 * 60_000, // expiry moves daily
   })
   const expiryUrgent = canViewExpiry ? (expiryQuery.data?.urgent ?? 0) : 0
 
@@ -221,6 +220,7 @@ function DefaultNavBellPopover(): React.JSX.Element {
         <div
           ref={panelRef}
           role="dialog"
+          data-state="open"
           tabIndex={-1}
           aria-label={t('appBar.notifications', { defaultValue: 'Notifications' })}
           className="anim-pop-in anim-pop-in-end absolute end-0 top-full z-50 mt-2 w-[calc(100vw-2rem)] max-w-[380px] overflow-hidden rounded-2xl border border-hairline bg-surface shadow-xl focus-visible:outline-none"
@@ -506,7 +506,7 @@ function DefaultNavBellPopover(): React.JSX.Element {
                       type="button"
                       onClick={() => {
                         setOpen(false)
-                        navigate(`/ledger?open=${item.id}`)
+                        navigate(`/ledger?mail=${item.id}`)
                       }}
                       className="flex w-full items-start gap-3 px-4 py-3 text-start transition-colors hover:bg-surface-tinted focus-visible:bg-surface-tinted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
                     >

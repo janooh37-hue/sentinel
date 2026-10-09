@@ -1,5 +1,5 @@
 /**
- * Status pill for the canonical Active/Resigned/Terminated values.
+ * Status pill for the canonical Active/Resigned/Terminated/Transferred values.
  *
  * Centralised so the colour mapping is consistent between the list pane,
  * detail header, and any future surfaces (audit log, reports).
@@ -10,10 +10,11 @@ import { useTranslation } from 'react-i18next'
 import { Badge } from '@/components/ui/badge'
 import type { EmployeeStatus } from '@/lib/api'
 
-const TONE_BY_STATUS: Record<EmployeeStatus, 'active' | 'warning' | 'danger'> = {
+const TONE_BY_STATUS: Record<EmployeeStatus, 'active' | 'warning' | 'danger' | 'info'> = {
   Active: 'active',
   Resigned: 'warning',
   Terminated: 'danger',
+  Transferred: 'info',
 }
 
 export function StatusPill({ status }: { status: EmployeeStatus }): React.JSX.Element {

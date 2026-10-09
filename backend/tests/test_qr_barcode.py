@@ -21,17 +21,25 @@ pytestmark = pytest.mark.skipif(not qr_decode_available(), reason="zxing-cpp is 
 def test_barcode_payload_round_trip_and_shape_validation() -> None:
     payload = barcode_payload("gs-1/Ab", date(2026, 9, 21))
 
-    assert payload == "GS-1/AB+20260921"
+    assert payload == "*GSSG+21/09/2026+GS-1/AB*"
     assert parse_barcode(payload) == ("GS-1/AB", date(2026, 9, 21))
+    assert parse_barcode("GSSG+21/09/2026+GS-1/AB") == (
+        "GS-1/AB",
+        date(2026, 9, 21),
+    )
+    assert parse_barcode("*GSSG+30/02/2026+GS-1/AB*") is None
     assert parse_barcode("GSSG:GS-1/AB+20260921") is None
-    assert parse_barcode("GS-1/AB+2026921") is None
     assert parse_barcode("GS-1/AB+20260230") is None
 
+
+def test_legacy_barcode_still_parses() -> None:
+    assert parse_barcode("GS-1/AB+20260921") == ("GS-1/AB", date(2026, 9, 21))
+    assert parse_barcode("GS-1/AB+2026921") is None
 
 def test_decode_codes_reads_real_code39() -> None:
     import zxingcpp
 
-    payload = "1/5/141+20260921"
+    payload = "GSSG+21/09/2026+1/5/141"
     image = zxingcpp.create_barcode(payload, zxingcpp.BarcodeFormat.Code39).to_image()
 
     assert decode_codes(image) == [Decoded("1/5/141", date(2026, 9, 21), "code39")]

@@ -230,6 +230,55 @@ def test_invalidate_revision_resets_to_zero_keeps_history_row(
     assert version.signature_revision == 0
 
 
+def test_measurement_cache_key_and_forced_refresh(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    first = tmp_path / "first.docx"
+    duplicate = tmp_path / "duplicate.docx"
+    first.write_bytes(b"same-docx")
+    duplicate.write_bytes(b"same-docx")
+    version = ["16.0"]
+    conversions = 0
+
+    def _fake_measure(
+        docx_path: Path, *, converter: object, source_sha256: str | None = None
+    ) -> SignatureLayout:
+        del docx_path, converter
+        nonlocal conversions
+        conversions += 1
+        assert source_sha256 is not None
+        return _fake_layout(page=1, x=0.2, y=0.3, sha=source_sha256, signature_id="sig")
+
+    monkeypatch.setattr("app.services._pdf_executor.word_pdf.word_version", lambda: version[0])
+    monkeypatch.setattr(
+        "app.services._pdf_executor.word_pdf.convert",
+        lambda _path: pytest.fail("unexpected conversion"),
+    )
+    monkeypatch.setattr("app.core.signature_layout.measure_signature_layout", _fake_measure)
+    _pdf_executor._measurement_cache.clear()
+    try:
+        assert _pdf_executor._measure_in_subprocess(str(first)).source_sha256
+        assert _pdf_executor._measure_in_subprocess(str(duplicate)).source_sha256
+        assert conversions == 1
+
+        _pdf_executor._measure_in_subprocess(str(first), force=True)
+        assert conversions == 2
+
+        version[0] = "16.1"
+        _pdf_executor._measure_in_subprocess(str(first))
+        assert conversions == 3
+
+        monkeypatch.setattr("app.core.signature_layout.SIGNATURE_LAYOUT_SCHEMA_VERSION", 2)
+        _pdf_executor._measure_in_subprocess(str(first))
+        assert conversions == 4
+
+        duplicate.write_bytes(b"different-docx")
+        _pdf_executor._measure_in_subprocess(str(duplicate))
+        assert conversions == 5
+    finally:
+        _pdf_executor._measurement_cache.clear()
+
+
 # ---------------------------------------------------------------------------
 # move_signature — authorization, CAS, and the publish transaction
 # ---------------------------------------------------------------------------
@@ -487,3 +536,135 @@ def test_move_signature_layout_unsupported_page_rejected(
     assert not any(
         p.name.startswith("2-") for p in (retained_root.iterdir() if retained_root.is_dir() else [])
     )
+
+
+# ---------------------------------------------------------------------------
+# reassign_signature — admin-only employee picker (SignaturePlacementPage)
+# ---------------------------------------------------------------------------
+
+
+def test_reassign_signature_non_admin_is_forbidden(
+    db_session: Session, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    settings = Settings(data_dir=tmp_path, templates_dir=tmp_path)
+    monkeypatch.setattr(sps, "get_settings", lambda: settings)
+    book, version, document = _record(db_session, tmp_path)
+    _active_row(db_session, version, tmp_path, signer_user_id=7)
+    non_admin = User(id=7, email="signer5@x.ae", password_hash="x", role="manager", status="active")
+    db_session.add(non_admin)
+    db_session.commit()
+
+    with pytest.raises(AppError):
+        sps.reassign_signature(
+            db_session,
+            document.id,
+            user=non_admin,
+            signature_id="sig-x",
+            signature_revision=1,
+            package_revision=0,
+            source_sha256="whatever",
+            employee_id="G1042",
+        )
+    db_session.refresh(version)
+    assert version.signature_revision == 1  # untouched
+
+
+def test_reassign_signature_success_swaps_image_and_appends_revision(
+    db_session: Session, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    from app.db.models import Employee
+
+    settings = Settings(data_dir=tmp_path, templates_dir=tmp_path)
+    monkeypatch.setattr(sps, "get_settings", lambda: settings)
+    monkeypatch.setattr("app.services.included_papers_service.get_settings", lambda: settings)
+    book, version, document = _record(db_session, tmp_path)
+    active = _active_row(db_session, version, tmp_path, signer_user_id=7)
+    admin = User(id=9, email="admin1@x.ae", password_hash="x", role="admin", status="active")
+    other_employee = Employee(id="G1042", name_en="Muhannad", name_ar="مهند", position="Head")
+    db_session.add_all([admin, other_employee])
+    db_session.commit()
+
+    sig_file = tmp_path / "vault" / "G1042.png"
+    sig_file.parent.mkdir(parents=True, exist_ok=True)
+    sig_file.write_bytes(b"other-employee-signature-bytes")
+    monkeypatch.setattr(
+        "app.core.signature.employee_signature_str", lambda _vault, _emp_id: str(sig_file)
+    )
+
+    signature_id = "sig-under-test"
+    layout = _fake_layout(page=1, x=0.2, y=0.2, sha=active.docx_sha256, signature_id=signature_id)
+    reassigned_pdf = _pdf(tmp_path / "reassigned-output.pdf", ["REASSIGNED-FORM"])
+
+    def _fake_reassign(
+        source: Path,
+        destination: Path,
+        *,
+        signature_id: str,
+        image_bytes: bytes,
+        layout: SignatureLayout,
+        before_pdf: Path,
+    ) -> tuple[SignatureLayout, Path]:
+        assert image_bytes == b"other-employee-signature-bytes"
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_bytes(b"reassigned-docx-bytes")
+        return layout, reassigned_pdf
+
+    monkeypatch.setattr(_pdf_executor, "measure_signature_position", lambda _p: layout)
+    monkeypatch.setattr(_pdf_executor, "reassign_signature_image", _fake_reassign)
+
+    description = sps.reassign_signature(
+        db_session,
+        document.id,
+        user=admin,
+        signature_id=signature_id,
+        signature_revision=1,
+        package_revision=0,
+        source_sha256=active.docx_sha256,
+        employee_id="G1042",
+    )
+
+    db_session.refresh(version)
+    db_session.refresh(book)
+    assert version.signature_revision == 2
+    assert book.included_papers_revision == 1
+    assert description.signature_revision == 2
+
+    rows = (
+        db_session.query(SignatureArtifactRevision)
+        .filter(SignatureArtifactRevision.version_id == version.id)
+        .order_by(SignatureArtifactRevision.revision)
+        .all()
+    )
+    new_row = rows[-1]
+    assert new_row.action == sps.ACTION_REASSIGN
+    assert new_row.signer_user_id is None  # G1042 has no linked User row in this test
+    assert (settings.data_dir / new_row.docx_path).is_file()
+
+    from app.db.models import AuditLog
+
+    audit = db_session.query(AuditLog).filter(AuditLog.action == "signature.reassigned").one()
+    assert audit.entity_id == str(document.id)
+
+
+def test_reassign_signature_unknown_employee_not_found(
+    db_session: Session, monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    settings = Settings(data_dir=tmp_path, templates_dir=tmp_path)
+    monkeypatch.setattr(sps, "get_settings", lambda: settings)
+    book, version, document = _record(db_session, tmp_path)
+    _active_row(db_session, version, tmp_path, signer_user_id=7)
+    admin = User(id=9, email="admin2@x.ae", password_hash="x", role="admin", status="active")
+    db_session.add(admin)
+    db_session.commit()
+
+    with pytest.raises(NotFoundError):
+        sps.reassign_signature(
+            db_session,
+            document.id,
+            user=admin,
+            signature_id="sig-x",
+            signature_revision=1,
+            package_revision=0,
+            source_sha256="whatever",
+            employee_id="NO-SUCH-EMPLOYEE",
+        )

@@ -6,6 +6,7 @@
 
 import {
   loadAccessRequestsPage,
+  loadDebugConsolePage,
   loadApplicationPage,
   loadApprovalsPage,
   loadAttendancePage,
@@ -44,7 +45,7 @@ const ROUTE_LOADERS: ReadonlyArray<readonly [string, () => Promise<unknown>]> = 
   ['/employees/timesheet', loadTimesheetPage],
   ['/employees/', loadEmployeeDetailPage],
   // /employees itself is eagerly bundled (EmployeeLookupPage) — no prefetch.
-  ['/application', loadApplicationPage],
+  ['/services', loadApplicationPage],
   ['/books/approvals', loadApprovalsPage],
   ['/books/', loadBookRecordPage],
   ['/books', loadBooksPage],
@@ -66,6 +67,7 @@ const ROUTE_LOADERS: ReadonlyArray<readonly [string, () => Promise<unknown>]> = 
   ['/intake', loadIntakePage],
   ['/scan-inbox', loadScanInboxPage],
   ['/access-requests', loadAccessRequestsPage],
+  ['/debug', loadDebugConsolePage],
   ['/messages/broadcast', loadSendToGroupPage],
 ]
 

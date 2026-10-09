@@ -3,11 +3,12 @@
  * violations, absences, and ledger entries.
  */
 
-import { AlertTriangle, FileText, MailIcon, MapPin, Plane, UserX } from 'lucide-react'
+import { AlertTriangle, ArrowLeftRight, FileText, MailIcon, MapPin, Plane, UserX } from 'lucide-react'
 import { useMemo, type ComponentType } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import { DutyLocationActivity } from '@/components/employees/DutyLocationActivity'
+import { StatusActivity } from '@/components/employees/StatusActivity'
 import type {
   ActivityItemRead,
   RecentLeaveRead,
@@ -25,6 +26,7 @@ const ICONS: Record<Kind, ComponentType<{ className?: string }>> = {
   ledger: MailIcon,
   absence: UserX,
   duty_location: MapPin,
+  status: ArrowLeftRight,
 }
 const COLORS: Record<Kind, string> = {
   document: 'bg-primary',
@@ -33,6 +35,7 @@ const COLORS: Record<Kind, string> = {
   ledger: 'bg-primary',
   absence: 'bg-destructive',
   duty_location: 'bg-primary',
+  status: 'bg-info',
 }
 
 interface Props {
@@ -101,12 +104,13 @@ export function ActivityTab({
         return
       }
       case 'ledger':
-        navigate(`/ledger?open=${item.ref_id}`)
+        navigate(`/ledger?mail=${item.ref_id}`)
         return
       case 'absence':
         onOpenTab('absences')
         return
       case 'duty_location':
+      case 'status':
         return
     }
   }
@@ -133,6 +137,8 @@ export function ActivityTab({
             </span>
             {a.kind === 'duty_location' ? (
               <DutyLocationActivity item={a} />
+            ) : a.kind === 'status' ? (
+              <StatusActivity item={a} />
             ) : (
               <button
                 type="button"

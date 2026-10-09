@@ -11,6 +11,7 @@ from app.core.vehicle_photos import (
     MAX_DIMENSION,
     PREVIEW_LONGEST_EDGE,
     THUMBNAIL_LONGEST_EDGE,
+    photo_content_hash,
     process_photo,
 )
 
@@ -96,6 +97,35 @@ def test_content_hash_is_exact_normalized_pixel_identity() -> None:
 
     opaque_alpha = source.convert("RGBA")
     assert process_photo(_encode(opaque_alpha, "PNG")).content_hash != from_png.content_hash
+
+
+def test_photo_content_hash_matches_full_processing_and_validation() -> None:
+    oriented = Image.new("RGB", (3, 2), "red")
+    exif = Image.Exif()
+    exif[274] = 6
+    rgba = Image.new("RGBA", (2, 2))
+    rgba.putdata([(255, 0, 0, 0), (0, 255, 0, 64), (0, 0, 255, 128), (12, 34, 56, 255)])
+    valid = [
+        _encode(oriented, "PNG", exif=exif),
+        _encode(rgba, "PNG"),
+        _encode(Image.new("RGB", (5, 4), (12, 34, 56)), "WEBP", lossless=True, exact=True),
+    ]
+    assert [photo_content_hash(data) for data in valid] == [
+        process_photo(data).content_hash for data in valid
+    ]
+
+    invalid = [
+        b"",
+        b"not an image",
+        _encode(Image.new("RGB", (4, 4), "red"), "GIF"),
+        b"x" * (vehicle_photos.MAX_UPLOAD_BYTES + 1),
+    ]
+    for data in invalid:
+        with pytest.raises(ValidationFailedError) as hash_error:
+            photo_content_hash(data)
+        with pytest.raises(ValidationFailedError) as process_error:
+            process_photo(data)
+        assert hash_error.value.code == process_error.value.code
 
 
 def test_variants_preserve_complete_frame_dimensions_without_upscaling() -> None:

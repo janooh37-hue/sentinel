@@ -134,15 +134,11 @@ export function VehicleFinesReportPage(): React.JSX.Element {
   const toFieldId = useId()
   const paperHeadingId = useId()
 
-  const [searchParams] = useSearchParams()
-  // One-shot seed from the ledger's Report link (`?site_id=&date_from=&date_to=`);
-  // this page's own toolbar owns the filters from here on, same as before.
-  const [siteId, setSiteId] = useState<number | null>(() => {
-    const raw = searchParams.get('site_id')
-    return raw && /^\d+$/.test(raw) ? Number(raw) : null
-  })
-  const [from, setFrom] = useState(() => searchParams.get('date_from') ?? '')
-  const [to, setTo] = useState(() => searchParams.get('date_to') ?? '')
+  const [searchParams, setSearchParams] = useSearchParams()
+  const rawSiteId = searchParams.get('site_id')
+  const siteId = rawSiteId && /^\d+$/.test(rawSiteId) ? Number(rawSiteId) : null
+  const from = searchParams.get('date_from') ?? ''
+  const to = searchParams.get('date_to') ?? ''
   // ON by default: the fleet-wide copy exists for investigations.
   const [hideNames, setHideNames] = useState(true)
 
@@ -279,7 +275,14 @@ export function VehicleFinesReportPage(): React.JSX.Element {
                 className="h-9 w-full rounded-md border border-input bg-surface px-2.5 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background"
                 value={siteId == null ? '' : String(siteId)}
                 onChange={(event) =>
-                  setSiteId(event.target.value ? Number(event.target.value) : null)
+                  setSearchParams(
+                    (prev) => {
+                      if (event.target.value) prev.set('site_id', event.target.value)
+                      else prev.delete('site_id')
+                      return prev
+                    },
+                    { replace: true },
+                  )
                 }
               >
                 <option value="">{t('vehicles.allSites')}</option>
@@ -306,7 +309,16 @@ export function VehicleFinesReportPage(): React.JSX.Element {
                 className="h-9 font-mono tabular-nums"
                 value={from}
                 max={to || undefined}
-                onChange={(event) => setFrom(event.target.value)}
+                onChange={(event) =>
+                  setSearchParams(
+                    (prev) => {
+                      if (event.target.value) prev.set('date_from', event.target.value)
+                      else prev.delete('date_from')
+                      return prev
+                    },
+                    { replace: true },
+                  )
+                }
               />
             </div>
             <div className="min-w-[9rem]">
@@ -322,7 +334,16 @@ export function VehicleFinesReportPage(): React.JSX.Element {
                 className="h-9 font-mono tabular-nums"
                 value={to}
                 min={from || undefined}
-                onChange={(event) => setTo(event.target.value)}
+                onChange={(event) =>
+                  setSearchParams(
+                    (prev) => {
+                      if (event.target.value) prev.set('date_to', event.target.value)
+                      else prev.delete('date_to')
+                      return prev
+                    },
+                    { replace: true },
+                  )
+                }
               />
             </div>
 

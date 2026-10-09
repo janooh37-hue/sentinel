@@ -60,3 +60,42 @@ test('Active: saves with end_date null (clears stale end date)', async () => {
     }),
   )
 })
+
+test('Transferred without a site: save disabled and site requirement shown', () => {
+  renderDialog({ id: 'G100', name_en: 'John', status: 'Transferred', end_date: '2026-08-15', transfer_site: null })
+  expect(screen.getByText('employees.validation.transferSiteRequired')).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'common.save' })).toBeDisabled()
+})
+
+test('Transferred: saves site + effective date + optional expected return', async () => {
+  vi.mocked(api.updateEmployee).mockResolvedValue({} as never)
+  renderDialog({ id: 'G100', name_en: 'John', status: 'Transferred', end_date: '2026-08-15', transfer_site: null })
+  fireEvent.change(screen.getByLabelText(/employees\.fields\.transfer_site/), {
+    target: { value: 'Abu Dhabi Port' },
+  })
+  fireEvent.change(screen.getByLabelText(/employees\.fields\.transfer_return_date/), {
+    target: { value: '2026-11-15' },
+  })
+  fireEvent.click(screen.getByRole('button', { name: 'common.save' }))
+  await waitFor(() =>
+    expect(api.updateEmployee).toHaveBeenLastCalledWith('G100', {
+      status: 'Transferred',
+      end_date: '2026-08-15',
+      transfer_site: 'Abu Dhabi Port',
+      transfer_return_date: '2026-11-15',
+    }),
+  )
+})
+
+test('Transferred: expected return not after the effective date blocks save', () => {
+  renderDialog({
+    id: 'G100',
+    name_en: 'John',
+    status: 'Transferred',
+    end_date: '2026-08-15',
+    transfer_site: 'Site X',
+    transfer_return_date: '2026-08-15',
+  })
+  expect(screen.getByText('employees.validation.returnAfterEffective')).toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'common.save' })).toBeDisabled()
+})
