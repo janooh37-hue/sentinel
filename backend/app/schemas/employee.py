@@ -184,9 +184,11 @@ class EmployeeRead(ORMBase):
     # is only valid while they are still Active, so it cannot resurrect someone
     # the flip job already departed (see update_employee).
     pending_status: EmployeeStatus | None
-    # Destination site while Transferred (or while a transfer is pending).
+    # Destination site for Transferred, optional party for Loaned, including
+    # pending departures. Cleared on leaving these statuses.
     transfer_site: str | None = None
-    # Expected return date of a temporary transfer; NULL = open-ended.
+    # Expected return of a temporary transfer or loan: the daily job reactivates
+    # the employee on this date. NULL = open-ended transfer or loan.
     transfer_return_date: date | None = None
     department: str | None
     position: str | None

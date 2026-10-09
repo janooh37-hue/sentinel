@@ -134,12 +134,12 @@ def test_arabic_body_isolates_the_latin_id(monkeypatch):
     [
         (
             "Dubai Branch",
-            "Loan applied\nAli (G9406) loaned to Dubai Branch",
+            "Loan applied\nAli (G9406) is now on loan to Dubai Branch",
             "تم تطبيق الإعارة\n\u2068علي\u2069 \u2068(G9406)\u2069 أُعير إلى \u2068Dubai Branch\u2069",
         ),
         (
             None,
-            "Loan applied\nAli (G9406) loaned",
+            "Loan applied\nAli (G9406) is now on loan",
             "تم تطبيق الإعارة\n\u2068علي\u2069 \u2068(G9406)\u2069 أُعير",
         ),
     ],

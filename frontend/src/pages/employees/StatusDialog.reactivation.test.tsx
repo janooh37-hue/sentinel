@@ -60,6 +60,9 @@ test.each(['Transferred', 'Loaned'] as const)('reactivating a %s employee sends 
   })
   fireEvent.change(screen.getByTestId('status-select'), { target: { value: 'Active' } })
   const input = screen.getByLabelText(/employees\.fields\.return_date/) as HTMLInputElement
+  const today = new Date()
+  const iso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
+  expect(input.value).toBe(iso)
   fireEvent.change(input, { target: { value: '2026-09-20' } })
   fireEvent.click(screen.getByRole('button', { name: 'common.save' }))
   await waitFor(() =>

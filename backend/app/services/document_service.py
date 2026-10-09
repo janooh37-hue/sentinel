@@ -702,7 +702,7 @@ def _record_pending_resignation(
     else:
         employee.status = EMPLOYEE_STATUS_RESIGNED
         employee.pending_status = None
-    # An Active employee carries no transfer fields, but a pending Transferred
+    # An Active employee carries no transfer fields, but a pending Transferred/Loaned
     # being superseded by the letter must not leave its site behind.
     employee.transfer_site = None
     employee.transfer_return_date = None

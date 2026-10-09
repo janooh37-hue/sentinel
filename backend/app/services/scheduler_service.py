@@ -855,7 +855,7 @@ def _run_pending_departure_flip() -> None:
                 messages = {
                     "en": (
                         "GSSG Manager",
-                        f"Loan applied\n{emp.name_en} ({emp.id}) loaned{site_en}",
+                        f"Loan applied\n{emp.name_en} ({emp.id}) is now on loan{site_en}",
                     ),
                     "ar": (
                         "GSSG Manager",
