@@ -87,11 +87,68 @@ test('Transferred: saves site + effective date + optional expected return', asyn
   )
 })
 
-test('Transferred: expected return not after the effective date blocks save', () => {
+test('Loaned without a party: requires an effective date but saves with an optional expected return', async () => {
+  vi.mocked(api.updateEmployee).mockResolvedValue({} as never)
   renderDialog({
     id: 'G100',
     name_en: 'John',
-    status: 'Transferred',
+    status: 'Loaned',
+    end_date: null,
+    transfer_site: null,
+  })
+  expect(screen.getByLabelText('employees.fields.loaned_to')).toBeInTheDocument()
+  expect(screen.getByLabelText(/employees\.fields\.transfer_return_date/)).toBeInTheDocument()
+  expect(screen.queryByText('employees.validation.transferSiteRequired')).not.toBeInTheDocument()
+  expect(screen.getByRole('button', { name: 'common.save' })).toBeDisabled()
+  fireEvent.change(screen.getByLabelText(/employees\.fields\.effective_date/), {
+    target: { value: '2026-08-15' },
+  })
+  fireEvent.change(screen.getByLabelText(/employees\.fields\.transfer_return_date/), {
+    target: { value: '2026-11-15' },
+  })
+  expect(screen.getByRole('button', { name: 'common.save' })).toBeEnabled()
+  fireEvent.click(screen.getByRole('button', { name: 'common.save' }))
+  await waitFor(() =>
+    expect(api.updateEmployee).toHaveBeenLastCalledWith('G100', {
+      status: 'Loaned',
+      end_date: '2026-08-15',
+      transfer_site: null,
+      transfer_return_date: '2026-11-15',
+    }),
+  )
+})
+
+test('Loaned: saves party + effective date + optional expected return', async () => {
+  vi.mocked(api.updateEmployee).mockResolvedValue({} as never)
+  renderDialog({
+    id: 'G100',
+    name_en: 'John',
+    status: 'Loaned',
+    end_date: '2026-08-15',
+    transfer_site: null,
+  })
+  fireEvent.change(screen.getByLabelText('employees.fields.loaned_to'), {
+    target: { value: 'Abu Dhabi Port' },
+  })
+  fireEvent.change(screen.getByLabelText(/employees\.fields\.transfer_return_date/), {
+    target: { value: '2026-11-15' },
+  })
+  fireEvent.click(screen.getByRole('button', { name: 'common.save' }))
+  await waitFor(() =>
+    expect(api.updateEmployee).toHaveBeenLastCalledWith('G100', {
+      status: 'Loaned',
+      end_date: '2026-08-15',
+      transfer_site: 'Abu Dhabi Port',
+      transfer_return_date: '2026-11-15',
+    }),
+  )
+})
+
+test.each(['Transferred', 'Loaned'] as const)('%s: expected return not after the effective date blocks save', (status) => {
+  renderDialog({
+    id: 'G100',
+    name_en: 'John',
+    status,
     end_date: '2026-08-15',
     transfer_site: 'Site X',
     transfer_return_date: '2026-08-15',

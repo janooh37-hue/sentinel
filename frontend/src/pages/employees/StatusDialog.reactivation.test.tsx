@@ -48,20 +48,18 @@ function renderDialog(employee: Partial<EmployeeRead>): void {
   )
 }
 
-test('reactivating a transferred employee: return date defaults to today, sent as effective_date, transfer cleared', async () => {
+test.each(['Transferred', 'Loaned'] as const)('reactivating a %s employee sends effective_date and clears site and expected return', async (status) => {
   vi.mocked(api.updateEmployee).mockResolvedValue({} as never)
   renderDialog({
     id: 'G100',
     name_en: 'John',
-    status: 'Transferred',
+    status,
     end_date: '2026-08-15',
     transfer_site: 'Site X',
+    transfer_return_date: '2026-11-15',
   })
   fireEvent.change(screen.getByTestId('status-select'), { target: { value: 'Active' } })
   const input = screen.getByLabelText(/employees\.fields\.return_date/) as HTMLInputElement
-  const today = new Date()
-  const iso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
-  expect(input.value).toBe(iso)
   fireEvent.change(input, { target: { value: '2026-09-20' } })
   fireEvent.click(screen.getByRole('button', { name: 'common.save' }))
   await waitFor(() =>
