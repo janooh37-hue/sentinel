@@ -23,7 +23,7 @@ from app.db.workforce_models import (
     WorkShiftDefinition,
     WorkShiftOccurrence,
 )
-from app.services import attendance_correction_service
+from app.services import attendance_correction_service, workforce_read_service
 from app.services.attendance_evaluation_service import evaluate_case, materialize_scheduled_cases
 from app.services.workforce_access_service import organization_scope
 
@@ -233,6 +233,10 @@ def test_working_employee_materializes_attendance_case(db_session, status):
     (case,) = materialize_scheduled_cases(db_session, employee_id=seed.employee_id, horizon=UTC_NOW)
     assert case.employee_status_snapshot == status
     assert case.shift_occurrence_id == occurrence.id
+    roster = workforce_read_service.list_roster(
+        db_session, scope=organization_scope(), operational_date=case.operational_date
+    )
+    assert [row["employee_id"] for row in roster] == [case.employee_id]
     _punch(db_session, case, event_id="working-in", at=SHIFT_START, direction="in")
     evaluation = evaluate_case(
         db_session, case.id, evaluated_at=SHIFT_START + timedelta(minutes=20)

@@ -280,6 +280,14 @@ Roster edges:
   The hand files are inconsistent by ±1 (`-` starts on `end_date` for G3636 and
   G4532, the day after for G3105, G3804 and G4011). One rule replaces both.
 
+Monthly salary-sheet eligibility excludes employees whose **current** status is
+`Loaned` (`ملحق`): their salary is paid on another organisation's sheet. This
+applies to live list rows and attendance/statistics exports, including regenerated
+unsealed historical months. Loaned employees are not reported as removed since
+last month, even if an old departure date remains on their record. Sealed payroll
+snapshots remain immutable. Workforce rosters, shifts, attendance, counts and
+employee absence records continue to treat Loaned as a working status.
+
 Nationality is mapped Arabic → English for column `D` (`الإمارات`/`الامارات` →
 `U.A.E`, `سلطنة عُمان`/`سلطنة عمان`/`عمان` → `Oman`, and so on for Nepal, Sudan,
 Jordan, Yemen, Comoros, Mauritania, Egypt, Syria, Morocco). An unmapped

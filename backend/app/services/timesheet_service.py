@@ -66,7 +66,7 @@ from app.db.models import (
     TimesheetStatFiller,
     User,
 )
-from app.schemas.employee import WORKING_STATUSES
+from app.schemas.employee import EMPLOYEE_STATUS_LOANED, WORKING_STATUSES
 from app.schemas.timesheet import TimesheetRosterAssignmentWrite
 
 #: The manual red block: a day the operator declares outside the billing window.
@@ -395,8 +395,14 @@ def _period(db: Session, year: int, month: int) -> TimesheetPeriod | None:
     ).scalar_one_or_none()
 
 
+def _paid_on_timesheet(employee: Employee) -> bool:
+    # ponytail: regenerated unsealed historical months follow current status;
+    # use EmployeeStatusEvent history per month if historical eligibility is needed.
+    return employee.status != EMPLOYEE_STATUS_LOANED
+
+
 def _roster(db: Session, month_start: date, month_end: date) -> list[Employee]:
-    """Everyone employed for at least one day of the month.
+    """Everyone paid here and employed for at least one day of the month.
 
     A departure keeps the employee on the sheet for the month he left — that is
     the copy HR receives on termination — and drops him the month after.
@@ -412,7 +418,8 @@ def _roster(db: Session, month_start: date, month_end: date) -> list[Employee]:
     return [
         employee
         for employee in db.execute(select(Employee)).scalars()
-        if in_roster(
+        if _paid_on_timesheet(employee)
+        and in_roster(
             doj=employee.doj,
             end_date=employee.end_date,
             month_start=month_start,
@@ -829,7 +836,7 @@ def _removed(
 
     out: list[Removed] = []
     for employee in candidates:
-        if employee.end_date is None:
+        if not _paid_on_timesheet(employee) or employee.end_date is None:
             continue
         if not _routes_to(_designation_for(employee.id, assignments, designations), sheet):
             continue

@@ -183,10 +183,9 @@ def test_a_quiet_guard_is_present_all_month(db_session, guards):
     assert grid.days_in_month == 31
 
 
-@pytest.mark.parametrize("status", ["Active", "Loaned"])
-def test_working_employee_without_end_date_stays_on_roster_not_removed(db_session, guards, status):
+def test_active_employee_without_end_date_stays_on_roster_not_removed(db_session, guards):
     employee = db_session.get(Employee, "G1001")
-    employee.status = status
+    employee.status = "Active"
     employee.end_date = None
     db_session.commit()
     for month in (7, 8):
@@ -198,6 +197,32 @@ def test_working_employee_without_end_date_stays_on_roster_not_removed(db_sessio
             warning.kind == "departed_but_active" and warning.employee_id == "G1001"
             for warning in grid.warnings
         )
+
+
+@pytest.mark.parametrize("end_date", [None, date(2026, 7, 20)])
+def test_current_loaned_status_excludes_live_months_without_reporting_removal(
+    db_session, guards, end_date
+):
+    employee = db_session.get(Employee, "G1001")
+    assert employee.id in {row.employee_id for row in svc.build_month(db_session, 2026, 7).rows}
+    employee.status = "Loaned"
+    employee.end_date = end_date
+    db_session.commit()
+
+    for month in (6, 7, 8):
+        grid = svc.build_month(db_session, 2026, month)
+        assert "G1001" not in {row.employee_id for row in grid.rows}
+        assert "G1001" not in {row.employee_id for row in grid.removed}
+        assert "G1002" in {row.employee_id for row in grid.rows}
+
+
+def test_status_change_to_loaned_does_not_rewrite_sealed_salary_rows(db_session, guards):
+    svc.close_month(db_session, 2026, 7)
+    db_session.get(Employee, "G1001").status = "Loaned"
+    db_session.commit()
+
+    assert "G1001" in {row.employee_id for row in svc.build_month(db_session, 2026, 7).rows}
+    assert "G1001" not in {row.employee_id for row in svc.build_month(db_session, 2026, 8).rows}
 
 
 def test_main_statistics_compensates_by_rank_then_groups_codes():
