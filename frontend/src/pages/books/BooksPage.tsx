@@ -57,6 +57,7 @@ import { RefreshButton } from '@/components/refresh/RefreshButton'
 import {
   DEFAULT_BOOKS_FILTERS,
   hasActiveFilters,
+  inCategories,
   matchesBookFilters,
   matchesDesktopSearchRow,
   type BooksFilters,
@@ -380,7 +381,7 @@ export function BooksPage(): React.JSX.Element {
     // Category / direction / date come from the Filters popover (the phone's
     // BooksFilterBar writes the same URL params).
     const passesAdvanced = (row: BookRead): boolean => {
-      if (filters.categoryIds.length > 0 && !filters.categoryIds.includes(row.category_id)) return false
+      if (filters.categoryIds.length > 0 && !inCategories(row, filters.categoryIds)) return false
       if (filters.direction !== 'all' && row.direction !== filters.direction) return false
       const day = row.created_at.slice(0, 10)
       if (filters.fromDate && day < filters.fromDate) return false

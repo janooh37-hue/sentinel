@@ -63,6 +63,16 @@ function makeBook(overrides: Partial<BookRead>): BookRead {
 }
 
 describe('matchesBookFilters (mobile)', () => {
+  it('matches classification categories for General Books, not auto-classified HR forms', () => {
+    const filters = { ...DEFAULT_BOOKS_FILTERS, categoryIds: ['3/1'] }
+    const generalBook = makeBook({ service_id: 'General Book', classification_code: '3/1' })
+    const leaveForm = makeBook({ service_id: 'Leave', classification_code: '3/1' })
+    const categoryBook = makeBook({ category_id: '3/1' })
+    expect(matchesBookFilters(generalBook, filters)).toBe(true)
+    expect(matchesBookFilters(leaveForm, filters)).toBe(false)
+    expect(matchesBookFilters(categoryBook, filters)).toBe(true)
+  })
+
   it('service + drafts: only the selected service survives, not every service', () => {
     const filters = { ...DEFAULT_BOOKS_FILTERS, serviceId: 'Report', drafts: true }
     const reportDraft = makeBook({ service_id: 'Report', is_draft: true })

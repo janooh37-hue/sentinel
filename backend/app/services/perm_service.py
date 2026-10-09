@@ -25,6 +25,7 @@ from app.core.permissions import (
     AUTO_GRANTED_SERVICE_RECORDS_CAPABILITY_IDS,
     CAPABILITY_IDS,
     CATEGORY_CAP_PREFIX,
+    CLASSIFICATION_CATEGORY_CAPABILITY_IDS,
     INMATE_REPORTER_CAPS,
     ROLE_DEFAULTS,
     SENSITIVE_CAPABILITY_IDS,
@@ -48,7 +49,7 @@ def _role_and_dynamic_caps(db: Session, role: str) -> tuple[set[str], set[str]]:
     ceiling names; every other service/category is denied by omission.
     """
     if role == INMATE_REPORTER_ROLE:
-        role_caps = set(
+        role_caps: set[str] = set(
             db.scalars(select(RolePermission.capability).where(RolePermission.role == role))
         ) or set(default_caps_for_role(role))
         dynamic_caps = {
@@ -67,9 +68,11 @@ def _role_and_dynamic_caps(db: Session, role: str) -> tuple[set[str], set[str]]:
             literal(True).label("is_dynamic"),
         ),
     )
-    role_caps: set[str] = set()
-    dynamic_caps = set(AUTO_GRANTED_SERVICE_CAPABILITY_IDS) | set(
-        AUTO_GRANTED_SERVICE_RECORDS_CAPABILITY_IDS
+    role_caps = set()
+    dynamic_caps = (
+        set(AUTO_GRANTED_SERVICE_CAPABILITY_IDS)
+        | set(AUTO_GRANTED_SERVICE_RECORDS_CAPABILITY_IDS)
+        | set(CLASSIFICATION_CATEGORY_CAPABILITY_IDS)
     )
     for capability, is_dynamic in db.execute(tagged_caps):
         if is_dynamic:
@@ -97,7 +100,7 @@ def category_capability_ids(db: Session) -> set[str]:
     return {
         f"{CATEGORY_CAP_PREFIX}{category_id}"
         for category_id in db.scalars(select(BookCategory.id)).all()
-    }
+    } | set(CLASSIFICATION_CATEGORY_CAPABILITY_IDS)
 
 
 def dynamic_capability_ids(db: Session) -> set[str]:

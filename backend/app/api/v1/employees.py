@@ -46,6 +46,9 @@ from app.schemas.employee import (
     EmployeeCreate,
     EmployeeListItem,
     EmployeeListResponse,
+    EmployeeLookupItem,
+    EmployeeLookupRead,
+    EmployeeLookupResponse,
     EmployeeRead,
     EmployeeUpdate,
 )
@@ -85,6 +88,22 @@ def _passport_scan_field(employee_id: str) -> dict[str, object]:
 
     tree = vault_service.list_tree(employee_id)
     return {"has_passport_scan": bool(tree.folders.get("passport"))}
+
+
+def _require_employee_lookup(
+    user: Annotated[User, Depends(get_current_user)],
+    db: Annotated[Session, Depends(get_db)],
+) -> User:
+    if not (
+        perm_service.has_capability(db, user, "documents.generate")
+        or perm_service.has_capability(db, user, "employees.view")
+    ):
+        raise AppError(
+            "FORBIDDEN",
+            "Employee lookup requires document generation or employee viewing.",
+            http_status=403,
+        )
+    return user
 
 
 # --- Employees ---------------------------------------------------------------
@@ -127,6 +146,43 @@ def list_employees(
         limit=limit,
         offset=offset,
     )
+
+
+@router.get("/lookup", response_model=EmployeeLookupResponse)
+def lookup_employees(
+    db: Annotated[Session, Depends(get_db)],
+    _user: Annotated[User, Depends(_require_employee_lookup)],
+    q: str | None = None,
+    limit: int = Query(LIST_DEFAULT_LIMIT, ge=1, le=LIST_MAX_LIMIT),
+    offset: int = Query(0, ge=0),
+) -> EmployeeLookupResponse:
+    """Search employee identities for services without granting profile access."""
+    rows, total = employee_service.list_employees(db, q=q, limit=limit, offset=offset)
+    return EmployeeLookupResponse(
+        items=[EmployeeLookupItem.model_validate(row) for row in rows],
+        total=total,
+        limit=limit,
+        offset=offset,
+    )
+
+
+@router.get("/lookup/{employee_id}", response_model=EmployeeLookupRead)
+def get_employee_lookup(
+    employee_id: str,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(_require_employee_lookup)],
+) -> EmployeeLookupRead:
+    """Resolve a selection; passport fields only for the Passport Release service."""
+    row = employee_service.get_employee(db, employee_id)
+    out = EmployeeLookupRead.model_validate(row)
+    # Only the Passport Release List prefills these; nobody else gets them.
+    if not perm_service.has_capability(db, user, "books.service.Passport Release List"):
+        out.nationality = None
+        out.passport_no = None
+    # The photo route needs employees.view; don't advertise a photo the caller can't load.
+    if perm_service.has_capability(db, user, "employees.view"):
+        out.has_photo = _photo_fields(db, row.id)["has_photo"] is True
+    return out
 
 
 @router.post("", response_model=EmployeeRead, status_code=status.HTTP_201_CREATED)

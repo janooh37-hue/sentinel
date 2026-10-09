@@ -267,8 +267,8 @@ function StandardApplicationPage(): React.JSX.Element {
 
   // Employee data for basket item — dedupes with EmployeeHeader's query.
   const employeeQuery = useQuery({
-    queryKey: ['employee', selectedEmployee],
-    queryFn: () => api.getEmployee(selectedEmployee as string),
+    queryKey: ['employee-lookup', selectedEmployee],
+    queryFn: () => api.getEmployeeLookup(selectedEmployee as string),
     enabled: !!selectedEmployee,
     staleTime: 5 * 60 * 1000,
   })
@@ -923,6 +923,7 @@ function StandardApplicationPage(): React.JSX.Element {
   const dlTitle = t('dutyLocations.tile.name')
   const dlShown =
     isQuickActionAllowed('General Book', has) &&
+    has('documents.duty_transfer') &&
     (!query.trim() || dlTitle.toLowerCase().includes(query.trim().toLowerCase()))
   // Employee Absence — record-only service (no DOCX form).
   const absTitle = t('absences.tile.name')

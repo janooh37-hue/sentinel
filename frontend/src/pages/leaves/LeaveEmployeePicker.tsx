@@ -13,7 +13,7 @@ import { useTranslation } from 'react-i18next'
 import { User } from 'lucide-react'
 
 import { api } from '@/lib/api'
-import type { EmployeeListItem } from '@/lib/api'
+import type { EmployeeLookupItem } from '@/lib/api'
 import { pickEmployeeName } from '@/lib/employeeName'
 import { cn } from '@/lib/utils'
 
@@ -42,21 +42,21 @@ export function LeaveEmployeePicker({
 
   const { data, isLoading } = useQuery({
     queryKey: ['employees-leaves-picker', query],
-    queryFn: () => api.listEmployees({ q: query.trim() || undefined, limit: 50 }),
+    queryFn: () => api.lookupEmployees({ q: query.trim() || undefined, limit: 50 }),
     enabled: open,
     staleTime: 15_000,
   })
 
   const { data: selectedData } = useQuery({
-    queryKey: ['employee', selectedId],
-    queryFn: () => api.getEmployee(selectedId!),
+    queryKey: ['employee-lookup', selectedId],
+    queryFn: () => api.getEmployeeLookup(selectedId!),
     enabled: !!selectedId,
     staleTime: 30_000,
   })
 
-  const rows: EmployeeListItem[] = data?.items ?? []
+  const rows: EmployeeLookupItem[] = data?.items ?? []
 
-  function displayName(item: EmployeeListItem): string {
+  function displayName(item: EmployeeLookupItem): string {
     return pickEmployeeName(item, i18n.language)
   }
 

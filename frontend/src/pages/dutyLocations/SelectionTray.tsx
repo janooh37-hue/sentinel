@@ -15,14 +15,14 @@ import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { ChevronUp, X } from 'lucide-react'
 
-import type { EmployeeListItem } from '@/lib/api'
+import type { EmployeeLookupItem } from '@/lib/api'
 import { UNASSIGNED, groupByUnit } from '@/lib/dutyUnits'
 import { pickEmployeeName } from '@/lib/employeeName'
 import { cn } from '@/lib/utils'
 
 export interface SelectionTrayProps {
   /** The resolved selection — may span any number of duty units. */
-  employees: readonly EmployeeListItem[]
+  employees: readonly EmployeeLookupItem[]
   onRemove: (id: string) => void
   onClear: () => void
   onTransfer: () => void

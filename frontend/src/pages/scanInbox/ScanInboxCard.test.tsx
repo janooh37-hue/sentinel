@@ -65,7 +65,7 @@ describe('ScanInboxCard', () => {
 
   it('re-match: undo is called then ScanMatchDialog opens', async () => {
     const undo = vi.spyOn(apiMod.api, 'undoScanItem').mockResolvedValue({} as never)
-    vi.spyOn(apiMod.api, 'listEmployees').mockResolvedValue({ items: [], total: 0 } as never)
+    vi.spyOn(apiMod.api, 'lookupEmployees').mockResolvedValue({ items: [], total: 0 } as never)
     vi.spyOn(apiMod.api, 'listBooks').mockResolvedValue({ items: [], total: 0 } as never)
     renderCard(base({
       state: 'auto_filed', proposed_route: 'employee_doc',

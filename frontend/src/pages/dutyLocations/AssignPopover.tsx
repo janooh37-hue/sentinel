@@ -12,7 +12,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
-import { api, type EmployeeListItem, apiErrorMessage } from '@/lib/api'
+import { api, type EmployeeLookupItem, apiErrorMessage } from '@/lib/api'
 import { unitOptions, postsForUnit } from '@/lib/dutyUnits'
 import {
   DialogRoot,
@@ -26,9 +26,9 @@ import { pickEmployeeName } from '@/lib/employeeName'
 
 export interface AssignPopoverProps {
   open: boolean
-  employee: EmployeeListItem
+  employee: EmployeeLookupItem
   /** All roster employees — used to derive unit/post suggestions. */
-  allEmployees: readonly EmployeeListItem[]
+  allEmployees: readonly EmployeeLookupItem[]
   onOpenChange: (open: boolean) => void
 }
 

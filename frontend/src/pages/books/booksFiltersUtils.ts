@@ -48,6 +48,15 @@ export function hasActiveFilters(
   )
 }
 
+export function inCategories(row: BookRead, ids: string[]): boolean {
+  return (
+    (row.category_id != null && ids.includes(row.category_id)) ||
+    (row.service_id === 'General Book' &&
+      row.classification_code != null &&
+      ids.includes(row.classification_code))
+  )
+}
+
 /**
  * Mobile's client-side row predicate (BooksPage's `mobileRows`, unscoped
  * `allRows`). Service MUST gate before the drafts early-return: otherwise
@@ -59,7 +68,7 @@ export function hasActiveFilters(
 export function matchesBookFilters(row: BookRead, filters: BooksFilters): boolean {
   if (filters.serviceId !== 'all' && row.service_id !== filters.serviceId) return false
   if (filters.drafts) return row.is_draft && !row.voided_at
-  if (filters.categoryIds.length > 0 && !filters.categoryIds.includes(row.category_id)) return false
+  if (filters.categoryIds.length > 0 && !inCategories(row, filters.categoryIds)) return false
   if (filters.direction !== 'all' && row.direction !== filters.direction) return false
   if (filters.status !== 'all' && row.approval_state !== filters.status) return false
   const day = row.created_at.slice(0, 10)

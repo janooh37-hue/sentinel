@@ -186,6 +186,9 @@ export type EmployeeListResponse = Omit<
   components['schemas']['EmployeeListResponse'],
   'items'
 > & { items: EmployeeListItem[] }
+export type EmployeeLookupItem = components['schemas']['EmployeeLookupItem']
+export type EmployeeLookupRead = components['schemas']['EmployeeLookupRead']
+export type EmployeeLookupResponse = components['schemas']['EmployeeLookupResponse']
 export type EmployeeCreate = components['schemas']['EmployeeCreate']
 export type EmployeeUpdate = components['schemas']['EmployeeUpdate'] & {
   // Duty-location columns — accepted by PATCH ahead of `gen:api`.
@@ -1334,6 +1337,10 @@ export const api = {
   // --- employees ---
   listEmployees: (params: ListEmployeesParams = {}) =>
     request<EmployeeListResponse>('GET', `/employees${qs({ ...params })}`),
+  lookupEmployees: (params: { q?: string; limit?: number; offset?: number } = {}) =>
+    request<EmployeeLookupResponse>('GET', `/employees/lookup${qs({ ...params })}`),
+  getEmployeeLookup: (id: string) =>
+    request<EmployeeLookupRead>('GET', `/employees/lookup/${encodeURIComponent(id)}`),
   listEmployeeActivity: (params: ListEmployeeActivityParams = {}) =>
     request<EmployeeActivityListRead>('GET', `/employees/activity${qs({ ...params })}`),
   getEmployee: (id: string) => request<EmployeeRead>('GET', `/employees/${encodeURIComponent(id)}`),

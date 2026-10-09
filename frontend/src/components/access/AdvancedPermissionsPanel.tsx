@@ -254,6 +254,7 @@ export function AdvancedPermissionsPanel({
   const catalog = useMemo(
     () =>
       capabilities.filter((capability) => {
+        if (capability.id === 'documents.duty_transfer') return false
         if (capability.id.startsWith('books.servicerecords.')) return false
         if (capability.id.startsWith('books.category.')) return false
         if (!capability.id.startsWith('books.service.')) return true

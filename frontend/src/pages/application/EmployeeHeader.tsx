@@ -41,8 +41,8 @@ export function EmployeeHeader({ selectedId, onSelect }: EmployeeHeaderProps): R
   const [editing, setEditing] = useState(false)
 
   const detailQuery = useQuery({
-    queryKey: ['employee', selectedId],
-    queryFn: () => api.getEmployee(selectedId!),
+    queryKey: ['employee-lookup', selectedId],
+    queryFn: () => api.getEmployeeLookup(selectedId!),
     enabled: !!selectedId,
     staleTime: 60_000,
   })

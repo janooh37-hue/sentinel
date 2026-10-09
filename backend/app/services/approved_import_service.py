@@ -392,7 +392,7 @@ def commit_approved_import(
     inmate_names: list[str],
     subject: str,
 ) -> ApprovedImportResult:
-    """File one staged report as an approved, versioned NAT record."""
+    """File one staged report as an approved, versioned INV record."""
     cleaned_subject = subject.strip()
     cleaned_names = [name.strip() for name in inmate_names if name.strip()]
     if not cleaned_subject or not cleaned_names:
@@ -406,19 +406,19 @@ def commit_approved_import(
     final_path_created = False
     temporary_path: Path | None = None
     try:
-        if db.get(BookCategory, "NAT") is None:
+        if db.get(BookCategory, "INV") is None:
             raise StagedApprovedImportError(
                 "APPROVED_IMPORT_CATEGORY_MISSING",
-                "The NAT Records category is not configured",
+                "The INV Records category is not configured",
             )
         source_pdf = claim.source_pdf.read_bytes()
-        ref_number = allocate_ref_with_retry(db, "NAT")
+        ref_number = allocate_ref_with_retry(db, "INV")
         stamped_pdf = stamp_approved_pdf(source_pdf, ref_number)
         created_at = datetime.now(UTC).replace(tzinfo=None)
         relative_pdf = Path("book_attachments")
 
         book = Book(
-            category_id="NAT",
+            category_id="INV",
             ref_number=ref_number,
             subject=cleaned_subject,
             direction="outgoing",
@@ -498,7 +498,7 @@ def commit_approved_import(
             submitter=owner.display_name or owner.email,
             entry_date=report_date,
             condition_fields={
-                "category": "NAT",
+                "category": "INV",
                 "template_id": "Inmate Conduct Violations",
             },
         )

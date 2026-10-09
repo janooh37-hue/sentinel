@@ -45,7 +45,7 @@ def gen_env(db_session, tmp_path, monkeypatch):
     settings = Settings(data_dir=tmp_path / "data")
     monkeypatch.setattr(document_service, "get_settings", lambda: settings)
     monkeypatch.setattr(document_service, "convert_docx_to_pdf", lambda p: None)
-    for cat in ("NAT", "HR"):
+    for cat in ("INV", "HR"):
         if db_session.get(BookCategory, cat) is None:
             db_session.add(BookCategory(id=cat, prefix=cat))
     db_session.commit()

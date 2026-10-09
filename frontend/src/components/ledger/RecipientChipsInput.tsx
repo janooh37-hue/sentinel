@@ -7,7 +7,7 @@
  * Typing (non-empty query) opens an autocomplete dropdown: the **Address book**
  * group (saved `contacts`, real addresses → chip on pick) renders FIRST, then
  * the **Employees** group. Employees carry NO email in the schema
- * (`EmployeeListItem` has only `contact`/phone), so an employee row is a
+ * (`EmployeeLookupItem` exposes no email or contact), so an employee row is a
  * *reference* affordance, not an address: picking it calls `onPickEmployee`
  * (the parent routes it to the Ref row) and does NOT add a To/Cc chip. We never
  * synthesise a fake `g-number@…` address.
@@ -23,7 +23,7 @@ import { createPortal } from 'react-dom'
 import { useTranslation } from 'react-i18next'
 import { X } from 'lucide-react'
 
-import type { AddressBookContactRead, EmployeeListItem } from '@/lib/api'
+import type { AddressBookContactRead, EmployeeLookupItem } from '@/lib/api'
 import { pickEmployeeName } from '@/lib/employeeName'
 import { rankContacts } from '@/lib/recipientMatch'
 
@@ -36,9 +36,9 @@ export interface RecipientChipsInputProps {
   /** Saved address-book contacts — the address path for the autocomplete. */
   contacts: AddressBookContactRead[]
   /** Filtered employees for the current query (parent owns the debounce). */
-  employeeQuery: (q: string) => EmployeeListItem[]
+  employeeQuery: (q: string) => EmployeeLookupItem[]
   /** Picking an employee row routes here (Ref row), never a To/Cc chip. */
-  onPickEmployee: (emp: EmployeeListItem) => void
+  onPickEmployee: (emp: EmployeeLookupItem) => void
   label: string
   placeholder?: string
   id?: string
@@ -127,7 +127,7 @@ export function RecipientChipsInput({
     inputRef.current?.focus()
   }
 
-  function pickEmployee(emp: EmployeeListItem): void {
+  function pickEmployee(emp: EmployeeLookupItem): void {
     onPickEmployee(emp)
     setDraft('')
     setError(null)
@@ -221,10 +221,10 @@ function AutocompleteDropdown({
   anchorRef: React.RefObject<HTMLDivElement | null>
   onClose: () => void
   contacts: AddressBookContactRead[]
-  employees: EmployeeListItem[]
+  employees: EmployeeLookupItem[]
   lang: string
   onPickContact: (c: AddressBookContactRead) => void
-  onPickEmployee: (e: EmployeeListItem) => void
+  onPickEmployee: (e: EmployeeLookupItem) => void
 }): React.JSX.Element {
   const { t } = useTranslation()
   const panelRef = useRef<HTMLDivElement>(null)

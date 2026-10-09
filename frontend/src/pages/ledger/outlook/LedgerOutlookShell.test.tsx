@@ -20,7 +20,7 @@ vi.mock('@/lib/api', async (orig) => {
       // Reached through the hosted handoff dialog.
       listLedgerContacts: vi.fn().mockResolvedValue([]),
       listRecipientLists: vi.fn().mockResolvedValue([]),
-      listEmployees: vi.fn().mockResolvedValue({ items: [], total: 0 }),
+      lookupEmployees: vi.fn().mockResolvedValue({ items: [], total: 0 }),
       getEmailAccount: vi.fn().mockResolvedValue({ enabled: true }),
       emailHandoff: vi.fn(),
     },
