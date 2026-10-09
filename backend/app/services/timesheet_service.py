@@ -66,6 +66,7 @@ from app.db.models import (
     TimesheetStatFiller,
     User,
 )
+from app.schemas.employee import WORKING_STATUSES
 from app.schemas.timesheet import TimesheetRosterAssignmentWrite
 
 #: The manual red block: a day the operator declares outside the billing window.
@@ -757,20 +758,21 @@ def _warning_issues(
                 for employee in sharers
             )
 
-    # Off the roster but still marked Active: the departure explains a row the
+    # Off the roster but still working: the departure explains a row the
     # operator expected to see, so it is reported even though there is no row.
     departed = db.execute(
         select(Employee).where(
             Employee.end_date.is_not(None),
             Employee.end_date < month_start,
-            Employee.status == "Active",
+            Employee.status.in_(WORKING_STATUSES),
         )
     ).scalars()
     issues.extend(
         Issue(
             employee.id,
             "departed_but_active",
-            f"{employee.name_en} finished on {employee.end_date:%Y-%m-%d} but is still Active.",
+            f"{employee.name_en} finished on {employee.end_date:%Y-%m-%d} but is still "
+            f"{employee.status}.",
         )
         for employee in departed
         if employee.end_date is not None
