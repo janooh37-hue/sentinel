@@ -19,7 +19,7 @@ function setDate(id: string, value: string) {
 }
 
 describe('EmployeeForm transfer fields', () => {
-  it('shows transfer fields when Transferred is selected and blocks submit without a site', async () => {
+  it('shows site + return date only for Transferred and blocks submit without a site', async () => {
     const onSubmit = vi.fn()
     render(<EmployeeForm mode="edit" initial={BASE} onSubmit={onSubmit} />)
     expect(document.getElementById('transfer_site')).toBeNull()
@@ -38,10 +38,10 @@ describe('EmployeeForm transfer fields', () => {
     expect(onSubmit).not.toHaveBeenCalled()
   })
 
-  it.each(['Transferred', 'Loaned'])('%s rejects a return date that is not after the effective date', async (status) => {
+  it('rejects a return date that is not after the effective date', async () => {
     const onSubmit = vi.fn()
     render(<EmployeeForm mode="edit" initial={BASE} onSubmit={onSubmit} />)
-    await chooseStatus(status)
+    await chooseStatus('Transferred')
     await setDate('end_date', '2026-08-15')
     await userEvent.type(document.getElementById('transfer_site') as HTMLElement, 'Dubai')
     await setDate('transfer_return_date', '2026-08-15')
@@ -52,10 +52,10 @@ describe('EmployeeForm transfer fields', () => {
     expect(onSubmit).not.toHaveBeenCalled()
   })
 
-  it.each(['Transferred', 'Loaned'])('submits transfer_site and transfer_return_date for %s', async (status) => {
+  it('submits transfer_site and transfer_return_date for Transferred', async () => {
     const onSubmit = vi.fn()
     render(<EmployeeForm mode="edit" initial={BASE} onSubmit={onSubmit} />)
-    await chooseStatus(status)
+    await chooseStatus('Transferred')
     await setDate('end_date', '2026-08-15')
     await userEvent.type(document.getElementById('transfer_site') as HTMLElement, 'Dubai')
     await setDate('transfer_return_date', '2026-11-15')
@@ -63,7 +63,7 @@ describe('EmployeeForm transfer fields', () => {
     await waitFor(() => expect(onSubmit).toHaveBeenCalled())
     const payload = onSubmit.mock.calls[0][0]
     expect(payload).toMatchObject({
-      status,
+      status: 'Transferred',
       end_date: '2026-08-15',
       transfer_site: 'Dubai',
       transfer_return_date: '2026-11-15',
@@ -71,27 +71,26 @@ describe('EmployeeForm transfer fields', () => {
     })
   })
 
-  it('shows optional Loaned to party and return date, and submits without a party', async () => {
+  it('switches Active to Loaned without transfer fields or a required end/return date', async () => {
     const onSubmit = vi.fn()
     render(<EmployeeForm mode="edit" initial={BASE} onSubmit={onSubmit} />)
     await chooseStatus('Loaned')
-    expect(screen.getByLabelText('Loaned to')).toBeInTheDocument()
-    expect(document.getElementById('transfer_return_date')).not.toBeNull()
-
-    await setDate('end_date', '2026-08-15')
-    await setDate('transfer_return_date', '2026-11-15')
+    expect(document.getElementById('transfer_site')).toBeNull()
+    expect(document.getElementById('transfer_return_date')).toBeNull()
+    expect(document.getElementById('effective_date')).toBeNull()
+    expect(document.querySelector('label[for="end_date"]')).not.toHaveTextContent('*')
     await userEvent.click(screen.getByRole('button', { name: /save/i }))
-    await waitFor(() => expect(onSubmit).toHaveBeenCalled())
+    await waitFor(() => expect(onSubmit).toHaveBeenCalledOnce())
     expect(onSubmit.mock.calls[0][0]).toMatchObject({
       status: 'Loaned',
-      end_date: '2026-08-15',
+      end_date: null,
       transfer_site: null,
-      transfer_return_date: '2026-11-15',
+      transfer_return_date: null,
       effective_date: null,
     })
   })
 
-  it('omits transfer fields and effective_date for a status without site fields', async () => {
+  it('omits transfer fields and effective_date for a non-Transferred status', async () => {
     const onSubmit = vi.fn()
     render(
       <EmployeeForm
@@ -108,7 +107,34 @@ describe('EmployeeForm transfer fields', () => {
     expect(payload.effective_date).toBeNull()
   })
 
-  it.each(['Transferred', 'Loaned'] as const)('includes effective_date and clears site fields when reactivating from %s', async (status) => {
+  it.each(['Active', 'Loaned'] as const)('includes effective_date when reactivating Transferred to %s', async (status) => {
+    const onSubmit = vi.fn()
+    render(
+      <EmployeeForm
+        mode="edit"
+        initial={{
+          ...BASE,
+          status: 'Transferred',
+          end_date: '2026-08-15',
+          transfer_site: 'Dubai',
+        }}
+        onSubmit={onSubmit}
+      />,
+    )
+    await chooseStatus(status)
+    expect(document.getElementById('effective_date')).not.toBeNull()
+    await setDate('effective_date', '2026-09-01')
+    await userEvent.click(screen.getByRole('button', { name: /save/i }))
+    await waitFor(() => expect(onSubmit).toHaveBeenCalled())
+    const payload = onSubmit.mock.calls[0][0]
+    expect(payload.status).toBe(status)
+    expect(payload.effective_date).toBe('2026-09-01')
+    expect(payload.transfer_site).toBeNull()
+  })
+
+  it.each(['Active', 'Loaned'] as const)('keeps a pending transfer\'s site and return date on a full %s save', async (status) => {
+    // Regression: a still-working employee with pending_status=Transferred must
+    // not send nulls, or the flip lands a site-less transfer.
     const onSubmit = vi.fn()
     render(
       <EmployeeForm
@@ -116,35 +142,8 @@ describe('EmployeeForm transfer fields', () => {
         initial={{
           ...BASE,
           status,
-          end_date: '2026-08-15',
-          transfer_site: 'Dubai',
-          transfer_return_date: '2026-11-15',
-        }}
-        onSubmit={onSubmit}
-      />,
-    )
-    await chooseStatus('Active')
-    expect(document.getElementById('effective_date')).not.toBeNull()
-    await setDate('effective_date', '2026-09-01')
-    await userEvent.click(screen.getByRole('button', { name: /save/i }))
-    await waitFor(() => expect(onSubmit).toHaveBeenCalled())
-    const payload = onSubmit.mock.calls[0][0]
-    expect(payload.status).toBe('Active')
-    expect(payload.effective_date).toBe('2026-09-01')
-    expect(payload.transfer_site).toBeNull()
-    expect(payload.transfer_return_date).toBeNull()
-  })
-
-  it.each(['Transferred', 'Loaned'] as const)('keeps a pending %s departure\'s site and return date on a full save', async (pendingStatus) => {
-    // Still-Active employees must retain pending site fields until the scheduled flip.
-    const onSubmit = vi.fn()
-    render(
-      <EmployeeForm
-        mode="edit"
-        initial={{
-          ...BASE,
           end_date: '2099-08-15',
-          pending_status: pendingStatus,
+          pending_status: 'Transferred',
           transfer_site: 'Abu Dhabi',
           transfer_return_date: '2099-11-15',
         }}
@@ -154,7 +153,7 @@ describe('EmployeeForm transfer fields', () => {
     await userEvent.click(screen.getByRole('button', { name: /save/i }))
     await waitFor(() => expect(onSubmit).toHaveBeenCalled())
     const payload = onSubmit.mock.calls[0][0]
-    expect(payload.status).toBe('Active')
+    expect(payload.status).toBe(status)
     expect(payload.transfer_site).toBe('Abu Dhabi')
     expect(payload.transfer_return_date).toBe('2099-11-15')
     expect(payload.effective_date).toBeNull()
