@@ -54,8 +54,8 @@ from app.schemas.signature_placement import (
     SignatureIdentifyRequest,
     SignaturePageRead,
     SignaturePositionRequest,
-    SignatureReassignRequest,
     SignatureRead,
+    SignatureReassignRequest,
 )
 from app.services import (
     approved_import_service,

@@ -225,7 +225,7 @@ def _build(output: Path) -> None:
             "sha256": hashlib.sha256(raw).hexdigest(),
         }
 
-    arabic_text = "وثيقة اختبار اصطناعية\nالرقم: 1/5/141\nالتاريخ: 05/09/2026\n"  # noqa: RUF001 - literal mixed Arabic/Latin evidence
+    arabic_text = "وثيقة اختبار اصطناعية\nالرقم: 1/5/141\nالتاريخ: 05/09/2026\n"
     arabic_pdf = _scan_pdf(_reference_scan(tuple(arabic_text.splitlines())), arabic_text)
     if pdf_text_layer(arabic_pdf) != arabic_text or candidate_refs(arabic_text) != ["1/5/141"]:
         raise RuntimeError("Arabic fixture logical reference/date evidence differs")

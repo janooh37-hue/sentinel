@@ -7,7 +7,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\Amh\\Documents\\projects\\sentinel\\.codex\\hooks\\pre-deploy.ps1\"",
+            "command": "powershell -NoProfile -ExecutionPolicy Bypass -Command \"& (Join-Path (git rev-parse --show-toplevel) '.codex/hooks/pre-deploy.ps1'); exit (Get-Variable LASTEXITCODE -ValueOnly)\"",
             "timeout": 15,
             "statusMessage": "Checking production deploy safety"
           }
@@ -19,7 +19,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\Amh\\Documents\\projects\\sentinel\\.herdr\\hooks\\notify-plan-stop.ps1\"",
+            "command": "powershell -NoProfile -ExecutionPolicy Bypass -Command \"& (Join-Path (git rev-parse --show-toplevel) '.herdr/hooks/notify-plan-stop.ps1'); exit (Get-Variable LASTEXITCODE -ValueOnly)\"",
             "timeout": 20,
             "statusMessage": "Notifying pipeline orchestrator"
           }
@@ -32,7 +32,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "powershell -NoProfile -ExecutionPolicy Bypass -File \"C:\\Users\\Amh\\Documents\\projects\\sentinel\\.codex\\hooks\\post-edit.ps1\"",
+            "command": "powershell -NoProfile -ExecutionPolicy Bypass -Command \"& (Join-Path (git rev-parse --show-toplevel) '.codex/hooks/post-edit.ps1'); exit (Get-Variable LASTEXITCODE -ValueOnly)\"",
             "timeout": 90,
             "statusMessage": "Checking edited files"
           }

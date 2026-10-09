@@ -45,7 +45,7 @@ def test_notify_uses_catalog_labels_and_request_link(db_session, monkeypatch):
                 "ar": (
                     "GSSG Manager",
                     "طلب صلاحية جديد\n\u2068Requester\u2069 يطلب الوصول إلى "
-                    "”\u2068اعتماد / رفض السجلات\u2069“",  # noqa: RUF001
+                    "”\u2068اعتماد / رفض السجلات\u2069“",
                 ),
             },
             "/access-requests?tab=permission-requests",
