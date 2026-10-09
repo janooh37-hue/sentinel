@@ -899,7 +899,9 @@ def _run_pending_departure_flip() -> None:
                 try:
                     push_service.send_to_user(session, admin.id, messages, url)
                 except Exception:
-                    log.exception("scheduler: transfer/loan-end notice failed for admin %s", admin.id)
+                    log.exception(
+                        "scheduler: transfer/loan-end notice failed for admin %s", admin.id
+                    )
 
 
 def _disabled_in_environment() -> bool:

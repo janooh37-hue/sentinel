@@ -432,9 +432,9 @@ def update_employee(
 
 
 # Only these may be promoted out of `pending_status` into `status`.
-_PENDING_TARGETS: Final[frozenset[str]] = frozenset(
-    {EMPLOYEE_STATUS_RESIGNED, EMPLOYEE_STATUS_TERMINATED}
-) | SITE_STATUSES
+_PENDING_TARGETS: Final[frozenset[str]] = (
+    frozenset({EMPLOYEE_STATUS_RESIGNED, EMPLOYEE_STATUS_TERMINATED}) | SITE_STATUSES
+)
 
 
 def apply_due_departures(db: Session, *, today: date | None = None) -> list[Employee]:

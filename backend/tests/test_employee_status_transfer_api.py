@@ -1,4 +1,4 @@
-"""HTTP-level tests for Transferred status, status events and the transfer lifecycle."""
+"""HTTP-level tests for transfer/loan statuses, status events and the lifecycle."""
 
 from __future__ import annotations
 
@@ -58,19 +58,20 @@ def _events(db, employee_id: str = "G8001") -> list[EmployeeStatusEvent]:
     )
 
 
-def test_patch_transfer_with_site_records_actor(client, api_db, hr_user):
+@pytest.mark.parametrize("status", ["Transferred", "Loaned"])
+def test_patch_site_status_with_party_records_actor(client, api_db, hr_user, status):
     _emp(api_db)
     r = client.patch(
         "/api/v1/employees/G8001",
-        json={"status": "Transferred", "end_date": TODAY.isoformat(), "transfer_site": "Dubai"},
+        json={"status": status, "end_date": TODAY.isoformat(), "transfer_site": "Dubai"},
     )
     assert r.status_code == 200, r.text
     body = r.json()
-    assert body["status"] == "Transferred"
+    assert body["status"] == status
     assert body["transfer_site"] == "Dubai"
     (ev,) = _events(api_db)
     assert ev.actor_user_id == hr_user.id
-    assert (ev.to_status, ev.site, ev.kind) == ("Transferred", "Dubai", "changed")
+    assert (ev.to_status, ev.site, ev.kind) == (status, "Dubai", "changed")
 
 
 def test_patch_transfer_missing_site_rejected(client, api_db):
