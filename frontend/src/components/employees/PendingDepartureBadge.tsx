@@ -1,6 +1,6 @@
 /**
- * Scheduled-departure chip — "Resigned — effective 15/08/2026" (a pending transfer
- * also names the site: "Transferred · Site X — effective 15/08/2026").
+ * Scheduled-departure chip. Pending transfers and loans also name the
+ * site/party when supplied: "Loaned · Party X — effective 15/08/2026".
  *
  * Shown beside the employee's status pill while they are still Active but have
  * a departure booked for `endDate`. Composes the canonical
@@ -19,12 +19,13 @@ import { Badge } from '@/components/ui/badge'
 import type { EmployeeStatus } from '@/lib/api'
 import { bidi } from '@/lib/bidi'
 import { formatDmy } from '@/lib/formatDmy'
+import { hasSiteFields } from './schema'
 
 interface Props {
   status: EmployeeStatus
   pendingStatus: EmployeeStatus | null | undefined
   endDate: string | null | undefined
-  /** Destination site — shown for a pending Transferred. */
+  /** Destination site/party — shown for a pending Transferred or Loaned. */
   transferSite?: string | null | undefined
 }
 
@@ -40,7 +41,7 @@ export function PendingDepartureBadge({
   const date = formatDmy(endDate)
   const label = t(`employees.status.${pendingStatus}`)
   const statusText =
-    pendingStatus === 'Transferred' && transferSite ? `${label} · ${bidi(transferSite)}` : label
+    hasSiteFields(pendingStatus) && transferSite ? `${label} · ${bidi(transferSite)}` : label
   return (
     <Badge tone="warning" className="ms-2" title={t('employees.pendingDepartureTitle', { date })}>
       {t('employees.pendingDeparture', {

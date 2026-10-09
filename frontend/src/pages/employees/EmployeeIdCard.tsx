@@ -35,6 +35,7 @@ const STATUS_DOT_CLS: Record<EmployeeStatus, string> = {
   Resigned: 'bg-warning',
   Terminated: 'bg-destructive',
   Transferred: 'bg-info',
+  Loaned: 'bg-info',
 }
 
 /** First letters of the first two space-separated name parts — avatar fallback. */

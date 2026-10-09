@@ -41,6 +41,7 @@ import { pickEmployeeName } from '@/lib/employeeName'
 import {
   EMPLOYEE_STATUSES,
   employeeFormSchema,
+  hasSiteFields,
   type EmployeeFormOutput,
   type EmployeeFormValues,
 } from './schema'
@@ -185,8 +186,8 @@ export function EmployeeForm({
 
   const status = watch('status')
   const endDateRequired = status !== 'Active'
-  const isTransferred = status === 'Transferred'
-  // Reactivating a departed/transferred employee asks for the return date.
+  const showSiteFields = hasSiteFields(status)
+  // Reactivating a non-Active employee asks for the return date.
   const isReactivation = mode === 'edit' && initial?.status != null && initial.status !== 'Active' && status === 'Active'
 
   // Seed the extraction panel from an injected extraction (intake flow).
@@ -235,22 +236,21 @@ export function EmployeeForm({
   return (
     <form
       onSubmit={handleSubmit(async (vals) => {
-        // Only send what applies to the chosen status: transfer fields for
-        // Transferred, the return date only when reactivating. A still-Active
-        // employee with a PENDING transfer keeps its stored site/return date —
-        // sending nulls would make the flip land a site-less transfer.
+        // Site/return fields apply to Transferred and Loaned. A still-Active
+        // employee with a pending transfer or loan keeps its stored fields.
+        // The actual return date is sent only when reactivating.
         const keepPendingTransfer =
-          vals.status === 'Active' && initial?.pending_status === 'Transferred'
+          vals.status === 'Active' && hasSiteFields(initial?.pending_status)
         await onSubmit({
           ...vals,
           transfer_site:
-            vals.status === 'Transferred'
+            hasSiteFields(vals.status)
               ? vals.transfer_site
               : keepPendingTransfer
                 ? (initial?.transfer_site ?? null)
                 : null,
           transfer_return_date:
-            vals.status === 'Transferred'
+            hasSiteFields(vals.status)
               ? vals.transfer_return_date
               : keepPendingTransfer
                 ? (initial?.transfer_return_date ?? null)
@@ -351,7 +351,7 @@ export function EmployeeForm({
           </Field>
           <Field
             id="end_date"
-            label={`${fld(isTransferred ? 'effective_date' : 'end_date')}${endDateRequired ? ' *' : ''}`}
+            label={`${fld(showSiteFields ? 'effective_date' : 'end_date')}${endDateRequired ? ' *' : ''}`}
             error={errFor('end_date')}
           >
             <Input
@@ -361,11 +361,11 @@ export function EmployeeForm({
               className="font-mono"
             />
           </Field>
-          {isTransferred && (
+          {showSiteFields && (
             <>
               <Field
                 id="transfer_site"
-                label={`${fld('transfer_site')} *`}
+                label={status === 'Loaned' ? fld('loaned_to') : `${fld('transfer_site')} *`}
                 error={errFor('transfer_site')}
               >
                 <Input id="transfer_site" dir="auto" maxLength={128} {...register('transfer_site')} />

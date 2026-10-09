@@ -369,6 +369,7 @@
       "end_date": "End date",
       "effective_date": "Effective date",
       "transfer_site": "Destination site",
+      "loaned_to": "Loaned to",
       "transfer_return_date": "Expected return date",
       "return_date": "Return date",
       "passport_no": "Passport No.",
@@ -387,7 +388,8 @@
       "Active": "Active",
       "Resigned": "Resigned",
       "Terminated": "Terminated",
-      "Transferred": "Transferred"
+      "Transferred": "Transferred",
+      "Loaned": "Loaned"
     },
     "statusDetail": {
       "dated": "{{status}} · {{date}}",

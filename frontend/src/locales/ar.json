@@ -398,6 +398,7 @@
       "end_date": "تاريخ نهاية الخدمة",
       "effective_date": "تاريخ السريان",
       "transfer_site": "موقع النقل",
+      "loaned_to": "الجهة المُعار إليها",
       "transfer_return_date": "تاريخ العودة المتوقع",
       "return_date": "تاريخ العودة",
       "passport_no": "رقم الجواز",
@@ -416,7 +417,8 @@
       "Active": "نشط",
       "Resigned": "مستقيل",
       "Terminated": "مفصول",
-      "Transferred": "منقول"
+      "Transferred": "منقول",
+      "Loaned": "معار"
     },
     "statusDetail": {
       "dated": "{{status}} · {{date}}",

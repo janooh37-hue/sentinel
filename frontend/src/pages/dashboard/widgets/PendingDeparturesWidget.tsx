@@ -1,10 +1,9 @@
 /**
- * PendingDeparturesWidget — employees with a scheduled resignation or
- * termination: still Active, but leaving on `end_date`.
+ * PendingDeparturesWidget — employees with a scheduled departure (including
+ * transfers and loans): still Active, but leaving on `end_date`.
  *
- * Cancel sends `{status: 'Active', end_date: null}`, which update_employee
- * treats as cancelling the pending departure — the letter can be refused via
- * the paper's مشروحات مدير المشروع block, so this is a first-class action.
+ * Cancel sends only `{end_date: null}`, cancelling a scheduled departure
+ * without reactivating an employee whose departure has already applied.
  *
  * Self-gating: renders nothing when the user lacks `employees.view`.
  * Query key: ['employees', 'pending']
@@ -22,6 +21,7 @@ import { pickEmployeeName } from '@/lib/employeeName'
 import { Button } from '@/components/ui/button'
 import { EmptyState } from '@/components/ui/empty-state'
 import { Skeleton } from '@/components/ui/skeleton'
+import { hasSiteFields } from '@/components/employees/schema'
 
 /** Whole days from today to `iso`, negative when already past. */
 function daysUntil(iso: string, now: Date = new Date()): number {
@@ -137,7 +137,7 @@ export function PendingDeparturesWidget(): React.JSX.Element | null {
 
                 <span className="shrink-0 rounded-md bg-surface-tinted px-1.5 py-0.5 text-[0.68em] font-semibold text-foreground">
                   {pendingStatus ? t(`employees.status.${pendingStatus}`) : ''}
-                  {pendingStatus === 'Transferred' && emp.transfer_site ? (
+                  {hasSiteFields(pendingStatus) && emp.transfer_site ? (
                     <> · <bdi>{emp.transfer_site}</bdi></>
                   ) : null}
                 </span>
