@@ -281,12 +281,18 @@ Roster edges:
   G4532, the day after for G3105, G3804 and G4011). One rule replaces both.
 
 Monthly salary-sheet eligibility excludes employees whose **current** status is
-`Loaned` (`ملحق`): their salary is paid on another organisation's sheet. This
-applies to live list rows and attendance/statistics exports, including regenerated
-unsealed historical months. Loaned employees are not reported as removed since
-last month, even if an old departure date remains on their record. Sealed payroll
-snapshots remain immutable. Workforce rosters, shifts, attendance, counts and
-employee absence records continue to treat Loaned as a working status.
+`Loaned` (`ملحق`): their salary is paid on another organisation's sheet. It also
+excludes non-working employees whose most recent applied or immediate status
+transition into their current status was **from Loaned**, so applying a scheduled
+departure or recording an immediate resignation, termination or transfer does not
+put them onto our departure-month salary sheet. This applies to live list rows
+and attendance/statistics exports. Neither group is reported as removed since
+last month; a current Loaned employee with an old departure date also has no
+`departed_but_active` warning. Regenerated unsealed historical months follow
+current status and the latest transition, not status eligibility as of that
+month; reactivation to Active restores eligibility. Sealed payroll snapshots
+remain immutable. Workforce rosters, shifts, attendance, counts and employee
+absence records continue to treat Loaned as a working status.
 
 Nationality is mapped Arabic → English for column `D` (`الإمارات`/`الامارات` →
 `U.A.E`, `سلطنة عُمان`/`سلطنة عمان`/`عمان` → `Oman`, and so on for Nepal, Sudan,

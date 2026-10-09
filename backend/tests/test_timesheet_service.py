@@ -37,8 +37,9 @@ from app.db.models import (
     TimesheetStartAck,
     TimesheetStatFiller,
 )
+from app.schemas.employee import EmployeeUpdate
 from app.schemas.timesheet import TimesheetRosterAssignmentWrite
-from app.services import absence_service, leave_service
+from app.services import absence_service, employee_service, leave_service
 from app.services import timesheet_service as svc
 from tests.conftest import make_user
 
@@ -214,6 +215,10 @@ def test_current_loaned_status_excludes_live_months_without_reporting_removal(
         assert "G1001" not in {row.employee_id for row in grid.rows}
         assert "G1001" not in {row.employee_id for row in grid.removed}
         assert "G1002" in {row.employee_id for row in grid.rows}
+        assert not any(
+            warning.kind == "departed_but_active" and warning.employee_id == "G1001"
+            for warning in grid.warnings
+        )
 
 
 def test_status_change_to_loaned_does_not_rewrite_sealed_salary_rows(db_session, guards):
@@ -223,6 +228,57 @@ def test_status_change_to_loaned_does_not_rewrite_sealed_salary_rows(db_session,
 
     assert "G1001" in {row.employee_id for row in svc.build_month(db_session, 2026, 7).rows}
     assert "G1001" not in {row.employee_id for row in svc.build_month(db_session, 2026, 8).rows}
+
+
+@pytest.mark.parametrize("status", ["Resigned", "Terminated", "Transferred"])
+@pytest.mark.parametrize("scheduled", [False, True])
+def test_departed_loaned_employee_stays_off_live_salary_sheet_and_removed(
+    db_session, guards, monkeypatch, status, scheduled
+):
+    class FixedDate(date):
+        @classmethod
+        def today(cls):
+            return date(2026, 7, 1 if scheduled else 21)
+
+    monkeypatch.setattr(employee_service, "date", FixedDate)
+    employee_service.update_employee(db_session, "G1001", EmployeeUpdate(status="Loaned"))
+    employee = employee_service.update_employee(
+        db_session,
+        "G1001",
+        EmployeeUpdate(
+            status=status,
+            end_date=date(2026, 7, 20),
+            transfer_site="Other site" if status == "Transferred" else None,
+        ),
+    )
+    if scheduled:
+        assert employee.status == "Loaned"
+        assert [
+            row.id
+            for row in employee_service.apply_due_departures(db_session, today=date(2026, 7, 20))
+        ] == ["G1001"]
+    assert employee.status == status
+
+    for month in (7, 8):
+        grid = svc.build_month(db_session, 2026, month)
+        assert "G1001" not in {row.employee_id for row in grid.rows}
+        assert "G1001" not in {row.employee_id for row in grid.removed}
+
+    # Only the latest transition into the current status determines who paid him.
+    employee_service.update_employee(db_session, "G1001", EmployeeUpdate(status="Active"))
+    employee_service.update_employee(
+        db_session,
+        "G1001",
+        EmployeeUpdate(
+            status=status,
+            end_date=date(2026, 7, 20),
+            transfer_site="Other site" if status == "Transferred" else None,
+        ),
+    )
+    if scheduled:
+        employee_service.apply_due_departures(db_session, today=date(2026, 7, 20))
+    assert "G1001" in {row.employee_id for row in svc.build_month(db_session, 2026, 7).rows}
+    assert "G1001" in {row.employee_id for row in svc.build_month(db_session, 2026, 8).removed}
 
 
 def test_main_statistics_compensates_by_rank_then_groups_codes():
@@ -377,9 +433,8 @@ def test_warnings_are_reported_without_blocking(db_session, guards, status):
     )
     db_session.commit()
     grid = svc.build_month(db_session, 2026, 7)
-    assert {"duplicate_name", "departed_but_active", "unknown_leave"} <= {
-        i.kind for i in grid.warnings
-    }
+    assert {"duplicate_name", "unknown_leave"} <= {i.kind for i in grid.warnings}
+    assert any(i.kind == "departed_but_active" for i in grid.warnings) == (status == "Active")
     assert grid.blocking == []
 
 
@@ -1214,7 +1269,7 @@ def test_a_certificate_may_still_be_filed_against_a_closed_month(db_session, gua
 
 
 def test_build_month_does_not_query_once_per_row(db_session, guards, count_queries):
-    """275 rows must not become 1,100 round trips — the filler lookback included."""
+    """275 rows must not become 1,100 round trips, including fillers and status history."""
     svc.set_post_count(db_session, 2026, 7, 1)  # everyone but row 1 falls into block 2
     with count_queries() as small:
         svc.build_month(db_session, 2026, 7)
@@ -1231,7 +1286,7 @@ def test_build_month_does_not_query_once_per_row(db_session, guards, count_queri
     assert len(grid.rows) == 33
     assert grid.rows[-1].stat_filler == CODE_SICK  # the batched lookback really ran
     assert large.count == small.count
-    assert large.count <= 13
+    assert large.count <= 14  # one batched query for the latest departures from Loaned
 
 
 # --- fix round 1: the three writers agree, and the seal's two halves ---------
