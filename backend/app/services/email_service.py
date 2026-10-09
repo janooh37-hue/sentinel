@@ -861,6 +861,8 @@ def reconcile_sent_entry(
 
     book = _resolve_book(db, entry)
     if book is not None:
+        if book.send_state == "unsent":
+            book.send_state = "sent"
         if entry.related_book_id is None:
             entry.related_book_id = book.id
         if entry.related_employee_id is None:
@@ -889,6 +891,93 @@ def reconcile_sent_entry(
             )
 
     db.commit()
+
+
+def _parent_message_ids(entry: LedgerEntry) -> list[str]:
+    """Every Message-ID this entry's In-Reply-To/References chain names.
+
+    Both spellings are returned because ``LedgerEntry.message_id`` stores the raw
+    header — ``draft_outgoing`` writes ``make_msgid()`` output (bracketed) and
+    ``_build_entry`` writes the stripped ``Message-ID`` header as received.
+    """
+    chain = f"{entry.in_reply_to or ''} {entry.email_references or ''}"
+    out: list[str] = []
+    for token in _THREAD_MSG_ID_RE.findall(chain):
+        out.append(token)
+        out.append(token.strip("<>"))
+    return list(dict.fromkeys(out))
+
+
+def _thread_matched_book(db: Session, entry: LedgerEntry) -> Book | None:
+    """The Book whose own outgoing handoff Message-ID this reply's thread names.
+
+    Subject/ref-number heuristics are deliberately NOT consulted — see
+    docs/adr/0005-send-state-confirms-only-on-thread-match.md.
+    """
+    parents = _parent_message_ids(entry)
+    if not parents:
+        return None
+    parent = (
+        db.execute(
+            select(LedgerEntry)
+            .where(
+                LedgerEntry.message_id.in_(parents),
+                LedgerEntry.direction.in_(("outgoing", "internal")),
+                LedgerEntry.related_book_id.is_not(None),
+            )
+            .order_by(LedgerEntry.id.desc())
+            .limit(1)
+        )
+        .scalars()
+        .first()
+    )
+    if parent is None or parent.related_book_id is None:
+        return None
+    try:
+        return book_service.get_book(db, parent.related_book_id)
+    except NotFoundError:
+        return None
+
+
+def _has_real_attachment(msg: Message) -> bool:
+    """True when the message carries a non-inline, scannable file attachment."""
+    from app.services import scan_inbox_service
+
+    return any(
+        cid is None and Path(fname).suffix.lower() in scan_inbox_service.SCANNABLE_EXTS
+        for fname, _blob, cid in _extract_attachments(msg)
+    )
+
+
+def reconcile_incoming_reply(
+    db: Session,
+    *,
+    entry: LedgerEntry,
+    msg: Message,
+    account: EmailAccount,
+) -> None:
+    """Confirm a Book's send state from a Threaded reply confirmation.
+
+    Only a reply whose thread chain names one of our own outgoing Book handoffs AND
+    that carries a real file attachment confirms. Weaker evidence (subject or
+    ref-number only, or a thread match with no attachment) is left to the ordinary
+    Scan Inbox triage, which parks it for a person.
+    """
+    if (
+        entry.channel != "email"
+        or entry.direction not in {"incoming", "internal"}
+        or entry.deleted_at is not None
+    ):
+        return
+    book = _thread_matched_book(db, entry)
+    if book is None or not _has_real_attachment(msg):
+        return
+    book.send_state = "confirmed"
+    db.commit()
+
+    from app.services import scan_inbox_service
+
+    scan_inbox_service.auto_file_email_reply(db, ledger_entry_id=entry.id, book_id=book.id)
 
 
 def flag_stale_handoffs(db: Session, *, account: EmailAccount) -> None:
@@ -1498,6 +1587,13 @@ def _sync_account_locked(
 
                     if direction != "incoming":
                         reconcile_sent_entry(
+                            db,
+                            entry=entry,
+                            msg=msg,
+                            account=account,
+                        )
+                    else:
+                        reconcile_incoming_reply(
                             db,
                             entry=entry,
                             msg=msg,

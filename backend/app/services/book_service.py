@@ -3231,6 +3231,7 @@ def add_attachment(
                     retain_revision_access(db, version, step)
         version.status = "approved"
         book.approval_state = "approved"
+        book.send_state = "confirmed"
         inmate_violation_whatsapp.queue_send(db, version)
         # The flip is a signing, so it files like one in the Correspondence Log.
         try:
