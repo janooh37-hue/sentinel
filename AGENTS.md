@@ -66,4 +66,6 @@ scripts/mng.ps1 logs
 
 Keep plans in `mockups/plan/`. New planning documents belong there instead of a top-level `Plans/` directory.
 
+For Sentinel quality-campaign work, first read `mockups/plan/sentinel-quality-campaign.md` and its linked issue/PR progress. Follow the current priority phase and approved TDD checks; append related evidence, blockers, and handoff updates to that plan. Keep unrelated notes out. Work in isolated branches; only the user approves merges and deployments. If the plan is missing, stop and retrieve the canonical plan from campaign issue #203 before proceeding.
+
 Read `PRODUCT.md` for product voice and accessibility requirements, and `DESIGN.md` for UI tokens and interaction conventions when those files are present.
