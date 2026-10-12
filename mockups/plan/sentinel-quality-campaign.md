@@ -264,16 +264,16 @@ committed to its PR:
 
 ### Preferred milestones (not hard calendar commitments — priority order wins)
 
-| Week | Date (Mon 09:00 Asia/Dubai) | Primary focus |
+| Week | Date (Friday 02:00 Asia/Dubai, except historical W1) | Primary focus |
 |------|------------------------------|----------------|
-| W1 | 2026-10-12 | Q01 — authorization, Research→RED→GREEN |
-| W2 | 2026-10-19 | Q02 — email regex, Research→RED→GREEN |
-| W3 | 2026-10-26 | Q03 — backup/restore, Research→RED→GREEN |
-| W4 | 2026-11-02 | Q04 — CI tests/types baseline |
-| W5 | 2026-11-09 | Q05 — deploy exit/readiness + bounded logs |
-| W6 | 2026-11-16 | Q06 — timeouts/executor saturation |
-| W7 | 2026-11-23 | Q07/Q08/Q09/Q10 — P2 research (+ RED/GREEN for whichever has capacity; a P2 item not reaching GREEN by W7 is **blocked, not failed** — it stays prioritized into any post-campaign continuation) |
-| W8 | 2026-11-30 | Full 12-category re-audit against current `origin/main` HEAD + Windows operator checklist (Word COM/NSSM/ACL items this Linux workstation cannot execute, listed for a human operator to run) |
+| W1 | 2026-10-12 (historical attempt; consumed) | Q01 — authorization, Research→RED→GREEN |
+| W2 | 2026-10-16 | Q02 — email regex, Research→RED→GREEN |
+| W3 | 2026-10-23 | Q03 — backup/restore, Research→RED→GREEN |
+| W4 | 2026-10-30 | Q04 — CI tests/types baseline |
+| W5 | 2026-11-06 | Q05 — deploy exit/readiness + bounded logs |
+| W6 | 2026-11-13 | Q06 — timeouts/executor saturation |
+| W7 | 2026-11-20 | Q07/Q08/Q09/Q10 — P2 research (+ RED/GREEN for whichever has capacity; a P2 item not reaching GREEN by W7 is **blocked, not failed** — it stays prioritized into any post-campaign continuation) |
+| W8 | 2026-11-27 | Full 12-category re-audit against current `origin/main` HEAD + Windows operator checklist (Word COM/NSSM/ACL items this Linux workstation cannot execute, listed for a human operator to run) |
 
 A blocked task is never silently dropped from the priority table to make the
 calendar look clean — it is reported as blocked with a reason, every week,
@@ -531,7 +531,7 @@ reinterpret a legacy `completed` receipt as supervisor acceptance.
 
 ### Weekly build: complete the current phase, not a timed attempt
 
-Monday 09:00 Asia/Dubai weekly triggers remain. There is **no aggregate build
+Friday 02:00 Asia/Dubai weekly triggers apply (see overriding §10). There is **no aggregate build
 runtime cap**, no default lead/worker kill timer, and no `--max-time` on real
 weekly implementation/review sessions. Finish the current priority task phase
 through tests, mandatory independent worker review and PR/doc handoff, or stop
@@ -652,3 +652,69 @@ readiness only and carries zero productive-time credit. Future daily runs
 publish deduplicated primary-source references here; detailed evidence remains
 in the private checkpoint, feeding the weekly phase.
 <!-- /daily-research-inventory -->
+
+## 10. Friday schedule and recovery-first override — 2026-10-12
+
+This user correction overrides earlier scheduling and phase-advance instructions.
+Historical schedule: “Monday 09:00 Asia/Dubai.” The W1 attempt on 2026-10-12
+is already consumed. Its append-only progress entry, receipt and logs remain
+unchanged; a legacy `completed` status is not acceptance under the newer policy.
+Do not renumber it, reset its receipt, or create another W1 attempt automatically.
+
+**Remaining weekly occurrences: Friday 02:00 Asia/Dubai only.**
+
+| Occurrence | Local date/time |
+|---|---|
+| W2 | 2026-10-16 02:00 +04:00 |
+| W3 | 2026-10-23 02:00 +04:00 |
+| W4 | 2026-10-30 02:00 +04:00 |
+| W5 | 2026-11-06 02:00 +04:00 |
+| W6 | 2026-11-13 02:00 +04:00 |
+| W7 | 2026-11-20 02:00 +04:00 |
+| W8 | 2026-11-27 02:00 +04:00 |
+
+Seven scheduled occurrences remain, not eight fresh weeks. The milestone task
+names are tentative priorities, never permission to skip an unfinished phase.
+Before the first Friday the plain weekly launcher is a no-op, not a W1 retry.
+A later Friday resumes the oldest due, unaccepted weekly occurrence rather than
+opening a new week's worktree. This never extends the finite campaign calendar.
+
+**Finish the prior Q01 / PR #215 phase before ANY new build or new phase.**
+The current one-off recovery is an explicitly supervised continuation of
+`fix/q01-scan-target-authz` in the existing W1 worktree, not a new weekly build.
+Read existing PR #215 and issue #204 state before resuming; do not create a
+replacement branch or PR. The old W1 receipt records its initial launcher
+branch, not the task branch now checked out. Never reset/delete/recreate that
+worktree or overwrite historical W1 evidence to resolve this difference.
+
+The mechanical new-build gate is the separate private
+`/home/amh/.hermes/cron/sentinel-quality/recovery.json`. Missing, malformed,
+in-progress or insufficiently evidenced recovery blocks weekly execution with
+a nonzero result **before git/model execution or new weekly receipt writes**.
+The launcher does not start recovery by itself or interrupt an active recovery;
+the supervising task resumes only that existing phase. A held campaign lock
+also defers the scheduled build with a nonzero result, without killing its owner.
+Recovery must hold the same campaign lock while modifying campaign work.
+
+Only the supervisor may mark recovery `accepted`, with nonempty
+`supervisor_evidence.tests`, `.review`, `.doc`, `.pr_readback`, after checking
+actual tests, independent worker identity/review, canonical handoff and exact
+remote PR/issue state. This policy update is not that acceptance. The same
+prior-phase acceptance rule applies to every later weekly phase: stop at its
+handoff, obtain supervisor acceptance, then advance. A normal session exit is
+never permission to move to another task.
+
+**Today's recovery research has no aggregate time limit.** That exception is
+only for the explicit 2026-10-12 recovery task, not the regular `--research`
+mode. Daily research remains 06:00 Dubai, 2026-10-13 through 2026-11-30 inclusive,
+with at least one productive hour and at most two wall-clock hours, preserving
+all §8 checkpoint/cleanup rules. Weekly build/review remains uncapped; no new
+aggregate timeout, default kill timer or global model/runtime change is allowed.
+
+**Maintenance overlap addressed with user approval.** Job `e254f45c1470`
+now runs Saturday 03:00 UAE time, away from Friday's build start. A delay alone
+cannot guarantee safety for an uncapped build: its explicit active-work guard
+requires HOLD if Sentinel recovery is not accepted, the campaign lock is held,
+or a build/review/research process is active or ownership cannot be verified.
+It must recheck before restart, never terminate work to clear the guard. All
+other maintenance instructions and approval boundaries remain unchanged.
