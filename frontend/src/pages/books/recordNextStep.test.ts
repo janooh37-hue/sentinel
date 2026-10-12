@@ -65,6 +65,7 @@ function bookOf(state: string, over: Record<string, unknown> = {}): BookRead {
     ref_number: 'HR-1',
     approval_state: state,
     access_scope: 'full',
+    can_write: true,
     voided_at: null,
     edit_session: null,
     submitted_at: '2026-10-03T12:00:00',
@@ -461,5 +462,32 @@ describe('relativeAgo', () => {
     expect(relativeAgo('2026-10-03T12:00:00', NOW, 'en')).toBe('2 days ago')
     expect(relativeAgo('2026-10-05T09:00:00Z', NOW, 'en')).toBe('3 hours ago')
     expect(relativeAgo(null, NOW, 'en')).toBe('')
+  })
+})
+
+describe('recordNextStep — read-only recipients', () => {
+  it.each(['none', 'pending', 'awaiting_scan', 'approved', 'returned', 'rejected'])(
+    'keeps read tools but hides write actions in %s despite all capabilities',
+    (state) => {
+      const r = recordNextStep(bookOf(state, { can_write: false, signedPdfUrl: '/signed' }), ctxOf())
+      const actions = [r.primary, ...r.secondary, ...r.overflow]
+      expect(actions).not.toEqual(expect.arrayContaining([
+        'sendForApproval', 'continueEditing', 'revise', 'scanSigned',
+      ]))
+      for (const action of actions) {
+        expect(['print', 'email', 'downloadSigned', undefined]).toContain(action)
+      }
+      expect(r.overflow).toContain('print')
+    },
+  )
+
+  it('does not offer Finish or Discard for another user’s active Word session', () => {
+    const r = recordNextStep(bookOf('none', {
+      can_write: false,
+      edit_session: { state: 'active', user_id: 3, user_name: 'Mariam' },
+    }), ctxOf())
+    expect(r.primary).toBeUndefined()
+    expect(r.secondary).toEqual([])
+    expect(r.overflow).toEqual(['print'])
   })
 })

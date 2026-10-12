@@ -1403,6 +1403,12 @@ def _build_book_response(
         item.can_review = can_review
         item.your_step_kind = your_step_kind
         item.can_send = user.role != INMATE_REPORTER_ROLE
+        try:
+            book_service.require_full_book_access(db, user, row, write=True)
+        except AppError:
+            item.can_write = False
+        else:
+            item.can_write = True
         item.can_change_confidentiality = book_send_service.can_change_confidentiality(user, row)
         if detail:
             item.my_inbox = book_send_service.my_inbox(db, user.id, [row.id]).get(row.id)

@@ -26,7 +26,7 @@ export function PermitDocumentVersions({ bookId }: { bookId: number }): React.JS
       <h3 id={headingId} className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
         {t('permits.documentVersions.title')}
       </h3>
-      {has('books.edit') && (
+      {has('books.edit') && book.can_write && (
         <div className="flex flex-wrap items-center gap-2">
           <WordSessionActions book={book} isMobile={isMobile} />
           <WordReopenButton book={book} isMobile={isMobile} />

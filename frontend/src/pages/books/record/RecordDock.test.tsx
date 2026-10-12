@@ -58,6 +58,7 @@ function bookOf(state: string, over: Record<string, unknown> = {}): BookRead {
     subject: 'Subject',
     approval_state: state,
     access_scope: 'full',
+    can_write: true,
     voided_at: null,
     edit_session: null,
     submitted_at: '2026-10-03T12:00:00',

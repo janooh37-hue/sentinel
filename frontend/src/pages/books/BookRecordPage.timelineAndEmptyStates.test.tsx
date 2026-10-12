@@ -74,6 +74,7 @@ function baseFixture(overrides: Record<string, unknown> = {}): unknown {
     submitted_by_g: null,
     created_at: '2026-08-01T09:00:00Z',
     access_scope: 'full',
+    can_write: true,
     approval_steps: [],
     sms: [],
     imported_doc: null,

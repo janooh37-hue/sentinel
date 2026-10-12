@@ -329,16 +329,6 @@ function BookRecordPageBody(): React.JSX.Element {
   const effectiveApprovalContext = isInmateReporter ? null : approvalContext
   const { has, isLoading: capabilitiesLoading } = useCapabilities()
   const canApprove = has('books.approve')
-  const canEdit = has('books.edit')
-  const canSubmitBook = has('books.submit')
-  // Filing a physically-signed scan back uses the same gate as the Records
-  // pane's ＋Add-scan (books.edit + documents.scan).
-  const canScan = has('documents.scan')
-  // Revise regenerates via POST /documents/generate, which requires this cap;
-  // without it the committed Save would 403.
-  const canGenerate = has('documents.generate')
-  // Admin-grade: rewrite the record's state outside the approval flow.
-  const canOverrideState = has('books.override_state')
   const canManageRevisionAccess = has('users.manage')
   const overlay = useUrlOverlay('action', ['decision'])
 
@@ -388,6 +378,13 @@ function BookRecordPageBody(): React.JSX.Element {
     queryFn: () => api.getBook(bookId, effectiveVersionId),
     enabled: Number.isFinite(bookId),
   })
+  const canEdit = has('books.edit') && !!book?.can_write
+  const canSubmitBook = has('books.submit') && !!book?.can_write
+  // Filing a physically-signed scan back requires books.edit + documents.scan.
+  const canScan = has('documents.scan') && !!book?.can_write
+  // Revise regenerates via POST /documents/generate.
+  const canGenerate = has('documents.generate') && !!book?.can_write
+  const canOverrideState = has('books.override_state') && !!book?.can_write
   const reporterSubmitMutation = useInmateReportSubmit({
     onSuccess: () => toast.success(t('books.approval.submitted')),
     onError: (err, message) => {
@@ -422,7 +419,7 @@ function BookRecordPageBody(): React.JSX.Element {
   // management, state override, notifications, …) require full access AND
   // the live revision — never a retained/assigned-revision grant, and never
   // an explicit older revision a full-access reader is browsing.
-  const canMutateCurrent = isFullAccess && isLiveCurrentVersion
+  const canMutateCurrent = !!book?.can_write && isFullAccess && isLiveCurrentVersion
   // Prefer the generated document; fall back to a v3-imported record's PDF
   // (served from the employee vault) when the book has no generated version.
   // The download URL is identical before and after signing (the backend swaps

@@ -701,3 +701,23 @@ def test_relabel_discards_inaccessible_word_session(
     assert response.status_code == 200, response.text
     assert session.state == "discarded"
     assert api.client.get(f"/dav/{session.token}/relabel-session.docx").status_code == 404
+
+
+def test_directed_recipient_write_flag_and_forwarding(confidentiality_api: ApiHarness) -> None:
+    api = confidentiality_api
+    _send(api, "directed", ["M"])
+    record_id = api.records["directed"].id
+
+    for actor, can_write in (("M", False), ("A", True)):
+        api.as_user(actor)
+        assert perm_service.has_capability(api.db, api.actor, "books.edit")
+        detail = api.client.get(f"{API}/books/{record_id}")
+        assert detail.status_code == 200, detail.text
+        assert detail.json()["can_write"] is can_write
+        assert detail.json()["can_send"] is True
+
+        listing = api.client.get(f"{API}/books")
+        assert listing.status_code == 200, listing.text
+        row = next(item for item in listing.json()["items"] if item["id"] == record_id)
+        assert row["can_write"] is can_write
+        assert row["can_send"] is True

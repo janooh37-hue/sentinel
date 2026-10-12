@@ -8373,6 +8373,11 @@ export interface components {
              */
             confidentiality: "general" | "personal" | "secret" | "directed";
             /**
+             * Can Write
+             * @default false
+             */
+            can_write: boolean;
+            /**
              * Can Send
              * @default false
              */

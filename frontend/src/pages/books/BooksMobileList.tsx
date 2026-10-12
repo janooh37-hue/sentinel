@@ -227,9 +227,9 @@ export function BooksMobileList({
                     row={row}
                     isAr={isAr}
                     canSubmit={
-                      isInmateReporter
+                      row.can_write && (isInmateReporter
                         ? inmateReporterActionFor(row, userId) === 'edit-submit'
-                        : canSubmit
+                        : canSubmit)
                     }
                     highlighted={row.id === highlightedId || row.id === flashId}
                     selectMode={selectMode}

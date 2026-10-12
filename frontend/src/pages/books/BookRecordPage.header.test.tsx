@@ -64,6 +64,7 @@ function fixture(overrides: Record<string, unknown> = {}): unknown {
     subject: 'Leave request — SAEED',
     approval_state: 'returned',
     access_scope: 'full',
+    can_write: true,
     signing_path: null,
     is_word_book: false,
     is_draft: false,

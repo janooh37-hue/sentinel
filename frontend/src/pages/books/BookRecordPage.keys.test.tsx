@@ -101,6 +101,7 @@ function fixture(overrides: Record<string, unknown> = {}): unknown {
     subject: 'Leave request',
     approval_state: 'pending',
     access_scope: 'full',
+    can_write: true,
     signing_path: null,
     is_word_book: false,
     is_draft: false,

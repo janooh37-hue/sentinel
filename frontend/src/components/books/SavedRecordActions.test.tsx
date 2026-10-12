@@ -27,6 +27,7 @@ function makeBook(overrides: Partial<BookRead> = {}): BookRead {
     id: 42,
     ref_number: 'REF-42',
     approval_state: 'none',
+    can_write: true,
     versions: [{ pdf_url: '/current.pdf' }],
     ...overrides,
   } as BookRead

@@ -56,6 +56,7 @@ function makeBook(overrides: Partial<BookRead>): BookRead {
     included_papers_fixed_page_count: 0,
     included_papers_total_page_count: 0,
     access_scope: 'full',
+    can_write: true,
     can_sign: false,
     can_review: false,
     confidentiality: 'general',

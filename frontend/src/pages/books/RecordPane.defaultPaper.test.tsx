@@ -57,6 +57,7 @@ function makeBook(over: Record<string, unknown> = {}): BookRead {
     edit_session: null,
     signing_path: 'in_app',
     access_scope: 'full',
+    can_write: true,
     created_by_name: 'Sara',
     approval_steps: [],
     attachment_paths: ['scans/a.pdf'],

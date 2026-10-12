@@ -46,6 +46,7 @@ function makeBook(over: Record<string, unknown> = {}): BookRead {
     edit_session: null,
     signing_path: null,
     access_scope: 'full',
+    can_write: true,
     created_by_name: 'Sara',
     created_by_g: null,
     approval_steps: [],

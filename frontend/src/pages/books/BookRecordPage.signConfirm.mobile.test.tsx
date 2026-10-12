@@ -79,6 +79,7 @@ function pendingFixture(overrides: Record<string, unknown> = {}): unknown {
     submitted_by_g: null,
     created_at: '2026-08-01T09:00:00Z',
     access_scope: 'full',
+    can_write: true,
     approval_steps: [
       { id: 1, step_order: 1, stage_label: 'Manager', assignee_user_id: 7, state: 'pending', note: null, decided_at: null, kind: 'approver' },
     ],

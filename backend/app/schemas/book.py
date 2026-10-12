@@ -461,6 +461,8 @@ class BookRead(ORMBase):
     approval_state: str
     access_scope: Literal["full", "assigned_revision"] = "full"
     confidentiality: BookConfidentiality = "general"
+    # Full record write access; clients must also check the action's capability.
+    can_write: bool = False
     # Caller may direct-send / forward this record (full access).
     can_send: bool = False
     # Caller may relabel the level (creator, manager, or admin with full access).

@@ -70,6 +70,7 @@ function fixture(overrides: Record<string, unknown> = {}): unknown {
     subject: 'Transfer letter',
     approval_state: 'none',
     access_scope: 'full',
+    can_write: true,
     signing_path: null,
     is_word_book: false,
     is_draft: true,

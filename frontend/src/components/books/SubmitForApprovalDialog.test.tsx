@@ -19,6 +19,7 @@ vi.mock('@/lib/api', async (orig) => {
       ...real.api,
       getBook: vi.fn().mockResolvedValue({
         id: 48,
+        can_write: true,
         doc_manager_user_id: null,
         doc_manager_name: null,
         doc_manager_has_signature: true,

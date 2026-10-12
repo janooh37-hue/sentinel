@@ -162,8 +162,8 @@ export function RecordPane({
   const serviceLabel = useServiceLabel()
   const { has } = useCapabilities()
   const { scheduleDelete } = useRecordDelete()
-  const canEdit = has('books.edit')
-  const canScanCap = has('documents.scan')
+  const canEdit = has('books.edit') && !!book?.can_write
+  const canScanCap = has('documents.scan') && !!book?.can_write
   const canScan = canScanCap && canEdit
   // State (not a ref): the workflow buttons built during render click it.
   const [fileInput, setFileInput] = useState<HTMLInputElement | null>(null)
@@ -320,7 +320,7 @@ export function RecordPane({
       ? versions.find((v) => v.id === book.selected_version_id)
       : undefined) ?? liveVersion
   const isLiveCurrent = currentVersion != null && currentVersion.version_no === liveVersion?.version_no
-  const canMutateCurrent = book.access_scope !== 'assigned_revision' && isLiveCurrent
+  const canMutateCurrent = book.can_write && book.access_scope !== 'assigned_revision' && isLiveCurrent
   const reporterAction = inmateReporterActionFor(book, user?.id)
   const isInmateReport =
     isInmateReporter && book.ref_number.startsWith('REPORT-') && reporterAction !== 'read-only'
@@ -334,7 +334,7 @@ export function RecordPane({
   const ns: NextStep = recordNextStep(statusDetail.data?.id === book.id ? { ...book, ...statusDetail.data } : book, {
     has,
     canEdit,
-    canGenerate: has('documents.generate'),
+    canGenerate: has('documents.generate') && book.can_write,
     canMutateCurrent,
     isInmateReporter,
     inmateAction: reporterAction,

@@ -88,6 +88,7 @@ function record(id: number, overrides: Record<string, unknown> = {}, signed = fa
     submitted_by_g: null,
     created_at: '2026-08-01T09:00:00Z',
     access_scope: 'full',
+    can_write: true,
     approval_steps: signed ? [] : [STEP],
     sms: [],
     imported_doc: null,

@@ -56,9 +56,9 @@ export function SavedRecordActions({
   const reporterAction = bookQuery.data
     ? inmateReporterActionFor(bookQuery.data, user?.id)
     : 'read-only'
-  const canSubmit = isInmateReporter
+  const canSubmit = !!bookQuery.data?.can_write && (isInmateReporter
     ? reporterAction === 'edit-submit'
-    : state === 'none' && canSendForApproval(state, { canSubmitBook: has('books.submit') })
+    : state === 'none' && canSendForApproval(state, { canSubmitBook: has('books.submit') }))
   const reporterSubmitMutation = useInmateReportSubmit({
     onSuccess: () => toast.success(t('books.approval.submitted')),
     onError: (err, message) => {

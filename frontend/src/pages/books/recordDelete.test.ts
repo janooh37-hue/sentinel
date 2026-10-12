@@ -9,6 +9,7 @@ function book(over: Partial<DeletableBook> = {}): DeletableBook {
   return {
     approval_state: 'none',
     access_scope: 'full',
+    can_write: true,
     voided_at: null,
     edit_session: null,
     ...over,
@@ -58,6 +59,10 @@ describe('deleteBlockReason', () => {
   it('assigned_revision access or an inmate reporter → restricted', () => {
     expect(deleteBlockReason(book({ access_scope: 'assigned_revision' }), ok)).toBe('restricted')
     expect(deleteBlockReason(book(), { has: allow, isInmateReporter: true })).toBe('restricted')
+  })
+
+  it('a read-only recipient cannot delete even with books.delete', () => {
+    expect(deleteBlockReason(book({ can_write: false }), ok)).toBe('restricted')
   })
 
   it('precedence: noCapability > restricted > inFlight > wordSession', () => {

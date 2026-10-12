@@ -40,7 +40,7 @@ export function SubmitForApprovalDialog({ bookId, onClose }: Props): React.JSX.E
   const navigate = useNavigate()
   const qc = useQueryClient()
   const { has } = useCapabilities()
-  const canManage = has('books.submit')
+  const canSubmitCap = has('books.submit')
   const canApprove = has('books.approve')
 
   const [priority, setPriority] = useState<'Normal' | 'High'>('Normal')
@@ -57,10 +57,11 @@ export function SubmitForApprovalDialog({ bookId, onClose }: Props): React.JSX.E
   const bookQuery = useQuery({
     queryKey: ['books', 'detail', bookId],
     queryFn: () => api.getBook(bookId),
-    enabled: canManage,
+    enabled: canSubmitCap,
     staleTime: 60_000,
   })
   const book = bookQuery.data
+  const canManage = canSubmitCap && !!book?.can_write
   const docManagerUserId: number | null = book?.doc_manager_user_id ?? null
   const docManagerName: string | null = book?.doc_manager_name ?? null
   const docManagerHasSignature: boolean = book?.doc_manager_has_signature ?? true
@@ -149,9 +150,9 @@ export function SubmitForApprovalDialog({ bookId, onClose }: Props): React.JSX.E
 
   // submit is enabled as soon as a valid approver id is chosen or the linked
   // manager is in place. No-signature warning does NOT disable submit (lenient).
-  const canSubmit = Number.isFinite(Number.parseInt(selectedUserId, 10))
+  const canSubmit = canManage && Number.isFinite(Number.parseInt(selectedUserId, 10))
 
-  if (!canManage) return <></>
+  if (!canSubmitCap || (book != null && !book.can_write)) return <></>
 
   // Whether we should show the approver <select> (no linked manager, or user clicked "Change")
   const showApproverSelect = !showLinkedChip
