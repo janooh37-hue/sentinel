@@ -191,6 +191,7 @@ function RecordHeaderHosts({ book, caps, view, actions }: RecordPieceProps): Rea
   const { canMutateCurrent, isInmateReporter, isInmateReport } = caps
   const { isMobile, current } = view
   const {
+    submitReport,
     fileSignedCopy,
     replaceSignedPaper,
     setWordReopenTrigger,
@@ -206,6 +207,7 @@ function RecordHeaderHosts({ book, caps, view, actions }: RecordPieceProps): Rea
           isMobile={isMobile}
           hideTrigger
           onTriggerChange={setWordReopenTrigger}
+          onFinished={isInmateReport ? () => submitReport(book.id) : undefined}
         />
       )}
       {!isInmateReporter && canMutateCurrent && current?.document_id != null && (

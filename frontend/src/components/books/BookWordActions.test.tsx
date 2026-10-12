@@ -53,6 +53,16 @@ vi.mock('react-router-dom', async () => ({
   useNavigate: () => navigate,
 }))
 
+// The inmate-reporter reopen path keeps its handoff and template gate.
+vi.mock('@/lib/useCapabilities', () => ({
+  useCapabilities: () => ({
+    capabilities: new Set(['books.templates']),
+    isLoading: false,
+    has: () => true,
+  }),
+}))
+vi.mock('@/pages/application/DocPdfCanvas', () => ({ default: () => null }))
+
 
 // Base book fixture
 const BASE_BOOK: BookRead = {
@@ -287,6 +297,47 @@ describe('Word action components', () => {
     await waitFor(() => expect(navigate).toHaveBeenCalledWith('/books/1/word'))
   })
 
+
+  it('(j) keeps the inmate-reporter handoff mounted after edit_session flips active and auto-submits on Finish', async () => {
+    const onFinished = vi.fn()
+    vi.spyOn(apiMod.api, 'reopenWordSession').mockResolvedValue(MOCK_SESSION)
+    vi.spyOn(apiMod.api, 'getBook').mockResolvedValue(FINISHED_BOOK)
+    vi.spyOn(apiMod.api, 'getWordSaveStatus').mockResolvedValue({ last_put_at: '2026-07-01T10:05:00Z' })
+    vi.spyOn(apiMod.api, 'finishWordSession').mockResolvedValue(FINISHED_BOOK)
+    const qc = makeQc()
+    const view = render(createElement(WordReopenButton, { book: FINISHED_BOOK, onFinished }), { wrapper: wrapper(qc) })
+    await userEvent.click(screen.getByRole('button', { name: /تعديل في Word/ }))
+    const dialog = await screen.findByRole('dialog', { name: 'تم إنشاء الكتاب وحجز الرقم' })
+
+    view.rerender(
+      createElement(WordReopenButton, {
+        book: { ...FINISHED_BOOK, edit_session: { user_id: 1, user_name: 'x', state: 'active', last_put_at: null, created_at: '2026-07-01T00:00:00Z' } },
+        onFinished,
+      }),
+    )
+    expect(screen.getByRole('dialog', { name: 'تم إنشاء الكتاب وحجز الرقم' })).toBe(dialog)
+    expect(screen.queryByRole('button', { name: /تعديل في Word/ })).toBeNull()
+    expect(navigate).not.toHaveBeenCalled()
+    const finish = screen.getByRole('button', { name: 'إنهاء التحرير' })
+    await waitFor(() => expect(finish).toBeEnabled())
+    await userEvent.click(finish)
+    await waitFor(() => expect(onFinished).toHaveBeenCalledWith(FINISHED_BOOK))
+  })
+
+  it('(k) drops the retained inmate-reporter handoff when the record changes', async () => {
+    const onFinished = vi.fn()
+    vi.spyOn(apiMod.api, 'reopenWordSession').mockResolvedValue(MOCK_SESSION)
+    vi.spyOn(apiMod.api, 'getBook').mockResolvedValue(FINISHED_BOOK)
+    vi.spyOn(apiMod.api, 'getWordSaveStatus').mockResolvedValue({ last_put_at: null })
+    const qc = makeQc()
+    const view = render(createElement(WordReopenButton, { book: FINISHED_BOOK, onFinished }), { wrapper: wrapper(qc) })
+    await userEvent.click(screen.getByRole('button', { name: /تعديل في Word/ }))
+    await screen.findByRole('dialog', { name: 'تم إنشاء الكتاب وحجز الرقم' })
+
+    view.rerender(createElement(WordReopenButton, { book: { ...BASE_BOOK, id: 2 }, onFinished }))
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(navigate).not.toHaveBeenCalled()
+  })
 
   it('(l) clears a lifted onTriggerChange trigger when eligibility is lost (queue navigation)', () => {
     // Regression: the Tools-dropdown trigger must not survive a record swap

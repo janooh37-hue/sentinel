@@ -25,7 +25,7 @@ const session: WordSessionDetailRead = {
 }
 const book = {
   id: 42, ref_number: session.ref_number, subject: session.subject, service_id: 'General Book',
-  created_at: session.created_at, submitted_by_name: 'G-1', classification_code: '1/5', versions: [],
+  created_at: session.created_at, submitted_by_name: 'سعيد', classification_code: '1/5', versions: [],
 } as BookRead
 
 function setup() {
@@ -49,6 +49,7 @@ describe('WordSessionPage in Arabic', () => {
     const ref = await screen.findByText(session.ref_number)
     expect(ref.tagName).toBe('BDI')
     expect(ref).toHaveAttribute('dir', 'ltr')
+    expect(screen.getByText('سعيد')).toHaveAttribute('dir', 'auto')
     expect(screen.getByRole('link', { name: 'فتح في Word' })).toHaveAttribute('href', session.word_url)
     expect(screen.getByRole('button', { name: 'إنهاء التحرير' })).toBeDisabled()
     expect(screen.getByRole('button', { name: 'حفظ المسودة كقالب' })).toBeDisabled()
