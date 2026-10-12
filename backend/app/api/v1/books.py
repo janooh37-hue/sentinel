@@ -81,8 +81,10 @@ from app.schemas.book import (
     SaveAsTemplateRequest,
     ScanBackResult,
     ServiceFacetRead,
+    TemplateSessionRead,
     WordBookCreate,
     WordSaveStatusRead,
+    WordSessionDetailRead,
     WordSessionRead,
     WordTemplateRead,
     WordTemplateTableRead,
@@ -265,6 +267,70 @@ def list_word_templates(
     ]
 
 
+@router.post(
+    "/word-templates/sessions",
+    response_model=TemplateSessionRead,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_template_session(
+    payload: SaveAsTemplateRequest,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(require_capability("books.templates"))],
+) -> TemplateSessionRead:
+    """Open an empty General Book letterhead in Word without reserving a book/ref."""
+    return word_book_service.create_template_session(db, user=user, name=payload.name)
+
+
+@router.get("/word-templates/sessions/{session_id}", response_model=TemplateSessionRead)
+def get_template_session(
+    session_id: int,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(require_capability("books.templates"))],
+) -> TemplateSessionRead:
+    session = word_book_service.get_template_session(db, user=user, session_id=session_id)
+    return word_book_service.template_session_info(session)
+
+
+@router.get("/word-templates/sessions/{session_id}/preview")
+def template_session_preview(
+    session_id: int,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(require_capability("books.templates"))],
+    encoding: Annotated[str | None, Query(pattern="^base64$")] = None,
+) -> Response:
+    session = word_book_service.get_template_session(db, user=user, session_id=session_id)
+    pdf = word_book_service.render_edit_session_preview(session)
+    if (b64 := maybe_base64(pdf.read_bytes(), encoding)) is not None:
+        return b64
+    return FileResponse(
+        str(pdf), media_type="application/pdf", headers={"Cache-Control": "no-store"}
+    )
+
+
+@router.post(
+    "/word-templates/sessions/{session_id}/finish",
+    response_model=WordTemplateRead,
+    status_code=status.HTTP_201_CREATED,
+)
+def finish_template_session(
+    session_id: int,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(require_capability("books.templates"))],
+) -> WordTemplateRead:
+    info = word_book_service.finish_template_session(db, user=user, session_id=session_id)
+    return WordTemplateRead(name=info.name, modified_at=info.modified_at)
+
+
+@router.delete("/word-templates/sessions/{session_id}", status_code=status.HTTP_204_NO_CONTENT)
+def discard_template_session(
+    session_id: int,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(require_capability("books.templates"))],
+) -> Response:
+    word_book_service.discard_template_session(db, user=user, session_id=session_id)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
 @router.patch("/word-templates/{name}", response_model=WordTemplateRead)
 def rename_word_template(
     name: str,
@@ -413,6 +479,20 @@ def finish_word_session(
     return _build_book_response(db, row, user)
 
 
+@router.get("/{book_id}/word-sessions", response_model=WordSessionDetailRead)
+def get_word_session(
+    book_id: int,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(get_current_user)],
+) -> WordSessionDetailRead:
+    if user.role == INMATE_REPORTER_ROLE:
+        _inmate_report_word_access(db, user, book_id)
+    else:
+        _require_word_capability(db, user, "books.edit")
+        _require_full_book(db, user, book_id)
+    return word_book_service.get_word_session_detail(db, book_id=book_id)
+
+
 @router.get("/{book_id}/word-sessions/status", response_model=WordSaveStatusRead)
 def word_session_status(
     book_id: int,
@@ -517,8 +597,7 @@ def save_book_as_template(
     db: Annotated[Session, Depends(get_db)],
     user: Annotated[User, Depends(require_capability("books.templates"))],
 ) -> WordTemplateRead:
-    """Copy a finished General Book into the shared template library
-    (retokenized + validated; content becomes visible to all books.templates users)."""
+    """Copy a saved draft or finished General Book into the shared template library."""
     _require_full_book(db, user, book_id)
     info = book_template_service.save_book_as_template(db, book_id=book_id, name=payload.name)
     return WordTemplateRead(name=info.name, modified_at=info.modified_at)
@@ -600,7 +679,7 @@ def list_books(
             )
             .all()
         )
-        by_book = {s.book_id: s for s in sessions}
+        by_book = {s.book_id: s for s in sessions if s.book_id is not None}
     items: list[BookRead] = []
     for row in rows:
         item = _build_book_response(db, row, user, detail=False)

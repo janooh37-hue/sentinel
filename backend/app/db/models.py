@@ -198,18 +198,26 @@ class ClassifiedRefSequence(Base):
 
 
 class BookEditSession(Base):
-    """One Word-editing session over a book's working docx (WebDAV target)."""
+    """Word-editing session over a working docx (WebDAV target).
+
+    For a book, template_name is the library template the draft started from
+    (NULL for none or reopen). With book_id NULL, it is the library name the
+    template session will be saved as.
+    """
 
     __tablename__ = "book_edit_sessions"
 
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
-    book_id: Mapped[int] = mapped_column(ForeignKey("books.id", ondelete="CASCADE"), nullable=False)
+    book_id: Mapped[int | None] = mapped_column(
+        ForeignKey("books.id", ondelete="CASCADE"), nullable=True
+    )
     user_id: Mapped[int] = mapped_column(Integer, nullable=False)
     token: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
     working_path: Mapped[str] = mapped_column(Text, nullable=False)
     state: Mapped[str] = mapped_column(String(16), default="active")  # active|finished|discarded
     created_at: Mapped[datetime] = mapped_column(default=_utcnow)
     last_put_at: Mapped[datetime | None] = mapped_column(nullable=True)
+    template_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     # Report-only: the picked signer employee + whether to embed their signature
     # at Finish. Set by create_report_word_book; read by finish_word_session.
     signer_employee_id: Mapped[str | None] = mapped_column(String(16), nullable=True)
