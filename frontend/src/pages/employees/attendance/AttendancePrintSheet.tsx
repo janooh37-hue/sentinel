@@ -951,7 +951,12 @@ function ShiftSheet({
         </div>
       </div>
 
-      <PostColumns section={section} input={input} withInOut columns={3} />
+      {/* A plain block between the flex column and the multicol: as a direct
+          flex item, a list too long for one sheet continues on the next with
+          an extra column past the paper edge instead of the three it has. */}
+      <div>
+        <PostColumns section={section} input={input} withInOut columns={3} />
+      </div>
 
       {/* This is the sheet a supervisor signs and hands over, which is the whole
           reason it costs its own page. */}
