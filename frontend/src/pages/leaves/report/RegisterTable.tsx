@@ -35,30 +35,16 @@ import { RecordExpansion } from './RecordExpansion'
 import { dateLocale, fmtMonthYear } from './fmt'
 import { CANONICAL_KINDS, classifyLeaveType, kindMeta, type KindId } from './kinds'
 import {
+  CHIP_BASE, CHIP_OFF, CHIP_ON, GROUP_LABEL_KEYS, SEGMENT_BUTTON, SEGMENT_GROUP, SEGMENT_OFF,
+  SEGMENT_ON, WORKFLOW_STATUSES, toggleItem,
+} from './controls'
+import {
   groupRows, tableTotals, REGISTER_COLUMNS,
   type GroupMode, type ReportScope, type SortSpec,
 } from './reportData'
 
 /** Shared row/header grid (plan-locked template). */
 const GRID = 'grid grid-cols-[1.6fr_1.2fr_1.1fr_0.5fr_0.9fr_44px] items-center gap-4 px-4'
-
-/** Canonical workflow statuses for the status chip row. */
-const WORKFLOW_STATUSES: LeaveStatus[] = ['Pending', 'Approved', 'Rejected', 'Cancelled', 'Completed']
-
-const GROUP_LABEL_KEYS: Record<GroupMode, string> = {
-  none: 'leaves.report.groupNone',
-  kind: 'leaves.report.groupKind',
-  month: 'leaves.report.groupMonth',
-}
-
-const CHIP_BASE =
-  'inline-flex items-center rounded-full px-3 py-1 text-[0.78em] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background motion-reduce:transition-none'
-const CHIP_ON = 'bg-primary-soft font-semibold text-primary'
-const CHIP_OFF = 'bg-surface-tinted text-muted-foreground hover:bg-border hover:text-foreground'
-
-function toggleItem<T>(list: T[], item: T): T[] {
-  return list.includes(item) ? list.filter((x) => x !== item) : [...list, item]
-}
 
 interface RegisterTableProps {
   /** Scoped + sorted rows (the hook's `tableRows`). */
@@ -248,7 +234,7 @@ export function RegisterTable({
           <div
             role="group"
             aria-labelledby={groupLabelId}
-            className="flex overflow-hidden rounded-lg border border-border bg-surface-raised"
+            className={SEGMENT_GROUP}
           >
             {(['none', 'kind', 'month'] as const).map((m) => (
               <button
@@ -256,14 +242,7 @@ export function RegisterTable({
                 type="button"
                 aria-pressed={group === m}
                 onClick={() => onGroup(m)}
-                className={cn(
-                  'border-e border-hairline px-3 py-1.5 text-[0.78em] transition-colors last:border-e-0',
-                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring',
-                  'motion-reduce:transition-none',
-                  group === m
-                    ? 'bg-primary-soft font-semibold text-primary'
-                    : 'font-medium text-muted-foreground hover:text-foreground',
-                )}
+                className={cn(SEGMENT_BUTTON, group === m ? SEGMENT_ON : SEGMENT_OFF)}
               >
                 {t(GROUP_LABEL_KEYS[m])}
               </button>

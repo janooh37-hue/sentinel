@@ -1,6 +1,7 @@
 /**
  * LeavesReport — the desktop "Annual Report" assembly: masthead → scope chips
- * → figure folio (Fig. 2 is the controller) → insight line → register table.
+ * → figure folio (Fig. 2 is the controller) → insight line → the Register |
+ * Report switch → register table, or the printable report (ReportView).
  *
  * One state owner: the scope lives in `useLeaveReport`; this component adds
  * the table-presentation state (group / expandedId / profileEmployeeId) and
@@ -14,9 +15,10 @@ import { flushSync } from 'react-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { useLocation, useNavigate } from 'react-router-dom'
-import { Printer } from 'lucide-react'
+import { FileText, List } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
+import { cn } from '@/lib/utils'
 import { Skeleton, SkeletonRow } from '@/components/ui/skeleton'
 
 import { actionsFor, displayState } from '../lifecycle'
@@ -26,9 +28,11 @@ import { FigKindBars } from './FigKindBars'
 import { FigMonthColumns } from './FigMonthColumns'
 import { FigOutcomes } from './FigOutcomes'
 import { InsightLine } from './InsightLine'
-import { RegisterPrintSheet } from './RegisterPrintSheet'
 import { RegisterTable } from './RegisterTable'
 import { ReportMasthead } from './ReportMasthead'
+import { ReportPaper } from './ReportPaper'
+import { ReportView } from './ReportView'
+import { SEGMENT_BUTTON, SEGMENT_GROUP, SEGMENT_OFF, SEGMENT_ON } from './controls'
 import { dateLocale, fmtMonthYear } from './fmt'
 import { kindMeta } from './kinds'
 import type { GroupMode } from './reportData'
@@ -62,6 +66,7 @@ export function LeavesReport({
   const [expandedId, setExpandedId] = useState<number | null>(null)
   const [profileEmployeeId, setProfileEmployeeId] = useState<string | null>(null)
   const [printing, setPrinting] = useState(false)
+  const [view, setView] = useState<'register' | 'report'>('register')
   // Pre-activate the awaiting-return filter when navigating from the bell /
   // dashboard attention area (they pass `{ state: { awaitingReturn: true } }`).
   const [awaitingReturnOnly, setAwaitingReturnOnly] = useState(
@@ -233,9 +238,16 @@ export function LeavesReport({
     )
   }
 
+  // The masthead chips are register filters: using one from the report brings
+  // the register back, where its effect is visible.
+  const inRegister = (apply: () => void) => () => {
+    setView('register')
+    apply()
+  }
+
   return (
-    <>
-      <div className="mx-auto flex w-full max-w-[1180px] flex-col gap-4" data-print-hide>
+    <div className="mx-auto flex w-full max-w-[1180px] flex-col gap-4">
+      <div className="flex flex-col gap-4" data-print-hide>
         <div className="flex flex-wrap items-start justify-between gap-2">
           <ReportMasthead
             year={report.year}
@@ -243,104 +255,140 @@ export function LeavesReport({
             onLeaveTodayCount={report.onLeaveTodayCount}
             pendingCount={report.pendingCount}
             pendingActive={pendingActive}
-            onPendingClick={() => setStatuses(pendingActive ? [] : ['Pending'])}
+            onPendingClick={inRegister(() => setStatuses(pendingActive ? [] : ['Pending']))}
             awaitingReturnCount={report.awaitingReturnCount}
             awaitingReturnActive={awaitingReturnActive}
-            onAwaitingReturnClick={() => setAwaitingReturnOnly(!awaitingReturnOnly)}
+            onAwaitingReturnClick={inRegister(() => setAwaitingReturnOnly(!awaitingReturnOnly))}
             endingSoonCount={report.endingSoonCount}
           />
-          <div className="flex flex-wrap items-center gap-2">
-            {pendingRequests.length > 0 && (
-              <Button variant="secondary" size="sm" onClick={openConfirmCompose}>
-                ✉{' '}{t('leaves.report.confirmEmail.button', { n: pendingRequests.length })}
-              </Button>
-            )}
-            <Button variant="secondary" size="sm" onClick={() => window.print()} disabled={visibleRows.length === 0}>
-              <Printer className="me-1.5 h-4 w-4" aria-hidden />
-              {t('leaves.report.print')}
+          {pendingRequests.length > 0 && (
+            <Button variant="secondary" size="sm" onClick={openConfirmCompose}>
+              ✉{' '}{t('leaves.report.confirmEmail.button', { n: pendingRequests.length })}
             </Button>
-          </div>
+          )}
         </div>
 
-        {/* active-scope chips (dismiss = clear that facet) */}
-        {(scope.month !== null || scope.employeeId !== null) && (
-          <div className="flex flex-wrap items-center gap-2">
-            {scope.month !== null && (
-              <button type="button" onClick={() => setMonth(null)} className={SCOPE_CHIP}>
-                {t('leaves.report.scopedToMonth', { month: monthChipLabel })}
-                <span aria-hidden="true" className="text-[0.9em]">
-                  ✕
-                </span>
-              </button>
+        {view === 'register' && (
+          <>
+            {/* active-scope chips (dismiss = clear that facet) */}
+            {(scope.month !== null || scope.employeeId !== null) && (
+              <div className="flex flex-wrap items-center gap-2">
+                {scope.month !== null && (
+                  <button type="button" onClick={() => setMonth(null)} className={SCOPE_CHIP}>
+                    {t('leaves.report.scopedToMonth', { month: monthChipLabel })}
+                    <span aria-hidden="true" className="text-[0.9em]">
+                      ✕
+                    </span>
+                  </button>
+                )}
+                {scope.employeeId !== null && (
+                  <button type="button" onClick={() => setEmployeeId(null)} className={SCOPE_CHIP}>
+                    {t('leaves.report.scopedToEmployee', { name: employeeChipName })}
+                    <span aria-hidden="true" className="text-[0.9em]">
+                      ✕
+                    </span>
+                  </button>
+                )}
+              </div>
             )}
-            {scope.employeeId !== null && (
-              <button type="button" onClick={() => setEmployeeId(null)} className={SCOPE_CHIP}>
-                {t('leaves.report.scopedToEmployee', { name: employeeChipName })}
-                <span aria-hidden="true" className="text-[0.9em]">
-                  ✕
-                </span>
-              </button>
-            )}
-          </div>
+
+            {/* figure folio — Fig. 2 controls the report scope */}
+            <div className="grid grid-cols-3 gap-3.5 max-xl:grid-cols-1">
+              <FigKindBars data={figKinds} scopeLabel={scopeLabel} yearToDate={scope.month === null} />
+              <FigMonthColumns
+                data={figMonths}
+                selected={scope.month}
+                currentMonthIndex={currentMonthIndex}
+                year={report.year}
+                onSelect={setMonth}
+              />
+              <FigOutcomes data={figOutcomes} scopeLabel={scopeLabel} />
+            </div>
+
+            <InsightLine
+              insights={insights}
+              monthLabel={busiestMonthLabel}
+              sickActive={sickActive}
+              onSickClick={() =>
+                setKinds(
+                  sickActive
+                    ? scope.kinds.filter((k) => k !== 'Sick Leave')
+                    : [...scope.kinds, 'Sick Leave'],
+                )
+              }
+            />
+          </>
         )}
 
-        {/* figure folio — Fig. 2 controls the report scope */}
-        <div className="grid grid-cols-3 gap-3.5 max-xl:grid-cols-1">
-          <FigKindBars data={figKinds} scopeLabel={scopeLabel} yearToDate={scope.month === null} />
-          <FigMonthColumns
-            data={figMonths}
-            selected={scope.month}
-            currentMonthIndex={currentMonthIndex}
-            year={report.year}
-            onSelect={setMonth}
-          />
-          <FigOutcomes data={figOutcomes} scopeLabel={scopeLabel} />
+        <div role="group" aria-label={t('leaves.report.viewLabel')} className={cn(SEGMENT_GROUP, 'self-start')}>
+          {(
+            [
+              ['register', List],
+              ['report', FileText],
+            ] as const
+          ).map(([v, Icon]) => (
+            <button
+              key={v}
+              type="button"
+              aria-pressed={view === v}
+              onClick={() => setView(v)}
+              className={cn(SEGMENT_BUTTON, 'px-4 py-2 text-[0.85em]', view === v ? SEGMENT_ON : SEGMENT_OFF)}
+            >
+              <Icon className="h-4 w-4" aria-hidden />
+              {t(`leaves.report.view_${v}`)}
+            </button>
+          ))}
         </div>
 
-        <InsightLine
-          insights={insights}
-          monthLabel={busiestMonthLabel}
-          sickActive={sickActive}
-          onSickClick={() =>
-            setKinds(
-              sickActive
-                ? scope.kinds.filter((k) => k !== 'Sick Leave')
-                : [...scope.kinds, 'Sick Leave'],
-            )
-          }
-        />
-
-        <RegisterTable
-          rows={visibleRows}
-          allRows={report.all}
-          today={report.today}
-          sort={sort}
-          onSort={setSort}
-          group={group}
-          onGroup={setGroup}
-          scope={scope}
-          onKindsChange={setKinds}
-          onStatusesChange={setStatuses}
-          onQChange={setQ}
-          onClearScope={clearScope}
-          expandedId={expandedId}
-          onExpand={setExpandedId}
-          profileEmployeeId={profileEmployeeId}
-          onProfile={setProfileEmployeeId}
-          onFilterEmployee={setEmployeeId}
-          onMutated={handleMutated}
-        />
+        {view === 'register' && (
+          <RegisterTable
+            rows={visibleRows}
+            allRows={report.all}
+            today={report.today}
+            sort={sort}
+            onSort={setSort}
+            group={group}
+            onGroup={setGroup}
+            scope={scope}
+            onKindsChange={setKinds}
+            onStatusesChange={setStatuses}
+            onQChange={setQ}
+            onClearScope={clearScope}
+            expandedId={expandedId}
+            onExpand={setExpandedId}
+            profileEmployeeId={profileEmployeeId}
+            onProfile={setProfileEmployeeId}
+            onFilterEmployee={setEmployeeId}
+            onMutated={handleMutated}
+          />
+        )}
       </div>
-      {printing && (
-        <RegisterPrintSheet
-          rows={visibleRows}
-          group={group}
-          sort={sort}
-          year={report.year}
+
+      {view === 'report' && (
+        <ReportView
+          all={report.all}
           today={report.today}
-          filters={printFilters}
+          seed={{
+            kinds: scope.kinds,
+            statuses: scope.statuses,
+            employeeId: scope.employeeId,
+            month: scope.month,
+            sort,
+            group,
+          }}
         />
       )}
-    </>
+      {/* Ctrl+P from the register prints the register as it stands. */}
+      {view === 'register' && printing && (
+        <ReportPaper
+          rows={visibleRows}
+          group={group}
+          sort={sort}
+          today={report.today}
+          title={t('leaves.report.printTitle', { year: report.year })}
+          facts={printFilters}
+        />
+      )}
+    </div>
   )
 }

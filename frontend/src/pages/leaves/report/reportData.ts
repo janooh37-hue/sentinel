@@ -84,6 +84,42 @@ export function yearToDateWindow(year: number, todayIso: string): DayWindow {
   return { start: `${year}-01-01`, end: todayIso.slice(0, 10) }
 }
 
+/** The printable report's period: a whole year, one month (`YYYY-MM`), or a
+ * date range whose empty bound is open. */
+export type ReportPeriod =
+  | { mode: 'year'; year: number }
+  | { mode: 'month'; month: string }
+  | { mode: 'range'; from: string; to: string }
+
+const OPEN_WINDOW: DayWindow = { start: '0000-01-01', end: '9999-12-31' }
+
+export function periodWindow(p: ReportPeriod): DayWindow {
+  if (p.mode === 'year') return { start: `${p.year}-01-01`, end: `${p.year}-12-31` }
+  if (p.mode === 'month') {
+    if (!p.month) return OPEN_WINDOW
+    const [y, m] = p.month.split('-').map(Number)
+    return monthWindow(y, m - 1)
+  }
+  return { start: p.from || OPEN_WINDOW.start, end: p.to || OPEN_WINDOW.end }
+}
+
+/** A record belongs to a period when any of its days falls inside it. */
+export function recordOverlapsWindow(r: LeaveListItem, w: DayWindow): boolean {
+  return r.start_date.slice(0, 10) <= w.end && r.end_date.slice(0, 10) >= w.start
+}
+
+export type StaffFilter = 'all' | 'ours' | 'loaned'
+
+/** "Our staff" is everyone not on loan (ملحق), former employees included: they
+ * were ours when they took the leave.
+ * ponytail: reads the employee's CURRENT status; a leave taken before a move to
+ * Loaned counts as loaned. Needs status history if that ever matters. */
+export function matchesStaff(r: LeaveListItem, staff: StaffFilter): boolean {
+  if (staff === 'all') return true
+  const loaned = englishPart(r.employee_status ?? '').trim() === 'Loaned'
+  return staff === 'loaned' ? loaned : !loaned
+}
+
 /** A record's day contribution to a window (the prototype's per-day
  * attribution, done arithmetically): stored `days` when the record lies fully
  * inside; otherwise the calendar-day overlap, capped at the stored count
@@ -275,10 +311,10 @@ export function sortRows(
   return [...rows].sort((a, b) => dir * cmp(a, b)) // Array.sort is stable
 }
 
-export type GroupMode = 'none' | 'kind' | 'month'
+export type GroupMode = 'none' | 'kind' | 'month' | 'employee'
 
 export interface RowGroup {
-  /** Stable render key: `'all'` | kind id | `'YYYY-MM'`. */
+  /** Stable render key: `'all'` | kind id | `'YYYY-MM'` | employee id. */
   key: string
   kind: KindId | null
   /** `YYYY-MM` of `start_date` for month groups. */
@@ -297,6 +333,16 @@ export function groupRows(rows: LeaveListItem[], mode: GroupMode, sort: SortSpec
   const sum = (rs: LeaveListItem[]): number => rs.reduce((s, r) => s + r.days, 0)
   if (mode === 'none') {
     return [{ key: 'all', kind: null, month: null, rows, days: sum(rows) }]
+  }
+  if (mode === 'employee') {
+    // Map keeps first-appearance order, so the groups follow the sort.
+    const byEmployee = new Map<string, LeaveListItem[]>()
+    for (const r of rows) {
+      const bucket = byEmployee.get(r.employee_id)
+      if (bucket) bucket.push(r)
+      else byEmployee.set(r.employee_id, [r])
+    }
+    return [...byEmployee].map(([id, rs]) => ({ key: id, kind: null, month: null, rows: rs, days: sum(rs) }))
   }
   if (mode === 'month') {
     const byMonth = new Map<string, LeaveListItem[]>()
@@ -337,6 +383,22 @@ export function tableTotals(rows: LeaveListItem[]): TableTotals {
     days: rows.reduce((s, r) => s + r.days, 0),
     employees: new Set(rows.map((r) => r.employee_id)).size,
   }
+}
+
+export interface EmployeeTotal { row: LeaveListItem; records: number; days: number }
+
+/** One line per employee (`row` = their first record, for name + G-number),
+ * most days first. */
+export function employeeTotals(rows: LeaveListItem[]): EmployeeTotal[] {
+  const byEmployee = new Map<string, EmployeeTotal>()
+  for (const r of rows) {
+    const t = byEmployee.get(r.employee_id)
+    if (t) {
+      t.records += 1
+      t.days += r.days
+    } else byEmployee.set(r.employee_id, { row: r, records: 1, days: r.days })
+  }
+  return [...byEmployee.values()].sort((a, b) => b.days - a.days)
 }
 
 export interface Insights { sickDays: number; totalDays: number; sickSharePct: number; busiestMonthIndex: number | null }
