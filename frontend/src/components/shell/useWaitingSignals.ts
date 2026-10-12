@@ -14,6 +14,7 @@ import { useQuery } from '@tanstack/react-query'
 import { api } from '@/lib/api'
 import { useAuth } from '@/lib/authContext'
 import { useApprovalSummary } from '@/lib/useApprovalSummary'
+import { useInboxSummary } from '@/pages/books/useInboxCount'
 
 import type { WaitingSignalId } from './navCustomization'
 
@@ -49,6 +50,7 @@ export function useWaitingSignals(enabled: boolean): Partial<Record<WaitingSigna
     enabled: authenticated && canViewLedger,
     staleTime: STALE_TIME,
   })
+  const inboxQuery = useInboxSummary(authenticated && canViewBooks)
 
   const signals: Partial<Record<WaitingSignalId, number>> = {}
   if (approvalSummaryQuery.isSuccess && !approvalSummaryQuery.isError) {
@@ -59,6 +61,9 @@ export function useWaitingSignals(enabled: boolean): Partial<Record<WaitingSigna
   }
   if (ledgerUnreadQuery.isSuccess && !ledgerUnreadQuery.isError) {
     signals.ledgerUnread = ledgerUnreadQuery.data.total_unread
+  }
+  if (inboxQuery.isSuccess && !inboxQuery.isError) {
+    signals.inbox = inboxQuery.data.unread
   }
 
   return signals

@@ -560,6 +560,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/secret-clearance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Secret Clearance */
+        get: operations["list_secret_clearance_api_v1_auth_secret_clearance_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/users/{user_id}/secret-clearance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Set Secret Clearance */
+        put: operations["set_secret_clearance_api_v1_auth_users__user_id__secret_clearance_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/users/{user_id}/permissions": {
         parameters: {
             query?: never;
@@ -2924,6 +2958,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/books/recipient-candidates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Recipient Candidates */
+        get: operations["list_recipient_candidates_api_v1_books_recipient_candidates_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/books/inbox/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Inbox Summary */
+        get: operations["get_inbox_summary_api_v1_books_inbox_summary_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/books/{book_id}/included-papers/preview": {
         parameters: {
             query?: never;
@@ -3034,6 +3102,74 @@ export interface paths {
         post?: never;
         /** Delete Annotation */
         delete: operations["delete_annotation_api_v1_books__book_id__versions__version_id__annotations__annotation_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/books/{book_id}/confidentiality": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Set Book Confidentiality */
+        put: operations["set_book_confidentiality_api_v1_books__book_id__confidentiality_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/books/{book_id}/send": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Send Book */
+        post: operations["send_book_api_v1_books__book_id__send_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/books/{book_id}/recipients": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Book Recipients */
+        get: operations["list_book_recipients_api_v1_books__book_id__recipients_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/books/{book_id}/recipients/{recipient_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Recall Book Recipient */
+        delete: operations["recall_book_recipient_api_v1_books__book_id__recipients__recipient_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -8071,6 +8207,14 @@ export interface components {
             /** Requires Approval */
             requires_approval: boolean;
         };
+        /** BookConfidentialityUpdate */
+        BookConfidentialityUpdate: {
+            /**
+             * Confidentiality
+             * @enum {string}
+             */
+            confidentiality: "general" | "personal" | "secret" | "directed";
+        };
         /**
          * BookCreate
          * @description Caller-supplied fields for a new book entry.
@@ -8096,6 +8240,12 @@ export interface components {
             stamp_style: "Header Text (Ref: XX-0000)" | "Bold Top-Right Corner" | "Watermark Style";
             /** Doc Id */
             doc_id?: number | null;
+            /**
+             * Confidentiality
+             * @default general
+             * @enum {string}
+             */
+            confidentiality: "general" | "personal" | "secret" | "directed";
         };
         /** BookDecisionRequest */
         BookDecisionRequest: {
@@ -8139,6 +8289,32 @@ export interface components {
             };
             /** Services */
             services: components["schemas"]["ServiceFacetRead"][];
+        };
+        /**
+         * BookInboxRead
+         * @description The caller's own received send of a record (BookRead.my_inbox).
+         */
+        BookInboxRead: {
+            /** Id */
+            id: number;
+            /**
+             * Purpose
+             * @enum {string}
+             */
+            purpose: "info" | "action" | "reply" | "sign";
+            /** Note */
+            note?: string | null;
+            /** Sent By User Id */
+            sent_by_user_id: number;
+            /** Sent By Name */
+            sent_by_name?: string | null;
+            /**
+             * Sent At
+             * Format: date-time
+             */
+            sent_at: string;
+            /** Read At */
+            read_at?: string | null;
         };
         /** BookListResponse */
         BookListResponse: {
@@ -8190,6 +8366,23 @@ export interface components {
              * @enum {string}
              */
             access_scope: "full" | "assigned_revision";
+            /**
+             * Confidentiality
+             * @default general
+             * @enum {string}
+             */
+            confidentiality: "general" | "personal" | "secret" | "directed";
+            /**
+             * Can Send
+             * @default false
+             */
+            can_send: boolean;
+            /**
+             * Can Change Confidentiality
+             * @default false
+             */
+            can_change_confidentiality: boolean;
+            my_inbox?: components["schemas"]["BookInboxRead"] | null;
             /** Selected Version Id */
             selected_version_id?: number | null;
             /**
@@ -8286,6 +8479,40 @@ export interface components {
              */
             readonly service_id: string;
         };
+        /** BookRecipientRead */
+        BookRecipientRead: {
+            /** Id */
+            id: number;
+            /** User Id */
+            user_id: number;
+            /** User Name */
+            user_name?: string | null;
+            /** Sent By User Id */
+            sent_by_user_id: number;
+            /** Sent By Name */
+            sent_by_name?: string | null;
+            /**
+             * Purpose
+             * @enum {string}
+             */
+            purpose: "info" | "action" | "reply" | "sign";
+            /** Note */
+            note?: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Read At */
+            read_at?: string | null;
+            /** Revoked At */
+            revoked_at?: string | null;
+            /**
+             * Can Recall
+             * @default false
+             */
+            can_recall: boolean;
+        };
         /** BookRevisionAccessRead */
         BookRevisionAccessRead: {
             /** Id */
@@ -8317,6 +8544,40 @@ export interface components {
             revoked_by_user_id: number | null;
             /** Revocation Reason */
             revocation_reason: string | null;
+        };
+        /** BookSendRequest */
+        BookSendRequest: {
+            /** User Ids */
+            user_ids: number[];
+            /**
+             * Purpose
+             * @enum {string}
+             */
+            purpose: "info" | "action" | "reply" | "sign";
+            /** Note */
+            note?: string | null;
+            /**
+             * Make Directed
+             * @default false
+             */
+            make_directed: boolean;
+        };
+        /** BookSendResponse */
+        BookSendResponse: {
+            /** Sent */
+            sent: components["schemas"]["BookRecipientRead"][];
+            /** Skipped */
+            skipped: components["schemas"]["BookSendSkipped"][];
+        };
+        /** BookSendSkipped */
+        BookSendSkipped: {
+            /** User Id */
+            user_id: number;
+            /**
+             * Reason
+             * @enum {string}
+             */
+            reason: "already_recipient" | "self";
         };
         /** BookSignRequest */
         BookSignRequest: {
@@ -9240,7 +9501,7 @@ export interface components {
              * Id
              * @enum {string}
              */
-            id: "pending" | "workspace" | "violations" | "drafts" | "ledger" | "on_leave_today" | "upcoming_leave" | "recent_docs" | "email_sync_status" | "waiting_approvals" | "sent_approvals" | "expiring_soon" | "recent_ledger" | "pending_departures" | "workforce_pulse" | "violation_months";
+            id: "pending" | "workspace" | "violations" | "drafts" | "ledger" | "on_leave_today" | "upcoming_leave" | "recent_docs" | "email_sync_status" | "waiting_approvals" | "sent_approvals" | "expiring_soon" | "recent_ledger" | "pending_departures" | "workforce_pulse" | "violation_months" | "inbox";
             /**
              * Visible
              * @default true
@@ -9371,6 +9632,12 @@ export interface components {
             attachments?: components["schemas"]["GenerateAttachmentSpec"][] | null;
             /** Classification Code */
             classification_code?: string | null;
+            /**
+             * Confidentiality
+             * @default general
+             * @enum {string}
+             */
+            confidentiality: "general" | "personal" | "secret" | "directed";
             /**
              * Notify Employee
              * @default true
@@ -10782,6 +11049,42 @@ export interface components {
             /** Format */
             format: string;
         };
+        /** InboxPurposeCounts */
+        InboxPurposeCounts: {
+            /**
+             * Info
+             * @default 0
+             */
+            info: number;
+            /**
+             * Action
+             * @default 0
+             */
+            action: number;
+            /**
+             * Reply
+             * @default 0
+             */
+            reply: number;
+            /**
+             * Sign
+             * @default 0
+             */
+            sign: number;
+        };
+        /**
+         * InboxSummaryRead
+         * @description Received counts are active rows on records the caller can open.
+         */
+        InboxSummaryRead: {
+            /** Unread */
+            unread: number;
+            /** Received */
+            received: number;
+            /** Sent */
+            sent: number;
+            by_purpose: components["schemas"]["InboxPurposeCounts"];
+        };
         /** IncludedPaperProposal */
         IncludedPaperProposal: {
             /**
@@ -11966,6 +12269,8 @@ export interface components {
             monthly_reviews: number;
             /** Monthly Approvals */
             monthly_approvals: number;
+            /** Inbox */
+            inbox: number;
         };
         /** NotifyDaysUpdate */
         NotifyDaysUpdate: {
@@ -12812,6 +13117,21 @@ export interface components {
             /** Linked Documents */
             linked_documents?: components["schemas"]["LinkedDocumentRead"][];
         };
+        /** RecipientCandidateRead */
+        RecipientCandidateRead: {
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+            /** Name Ar */
+            name_ar?: string | null;
+            /** G Number */
+            g_number?: string | null;
+            /** Role */
+            role: string;
+            /** Has Secret Clearance */
+            has_secret_clearance: boolean;
+        };
         /** RecipientCreate */
         RecipientCreate: {
             /** Name */
@@ -13203,6 +13523,28 @@ export interface components {
             hits: components["schemas"]["SearchHit"][];
             /** Total */
             total: number;
+        };
+        /** SecretClearanceRead */
+        SecretClearanceRead: {
+            /** User Id */
+            user_id: number;
+            /** Name */
+            name: string;
+            /** Name Ar */
+            name_ar: string | null;
+            /** G Number */
+            g_number: string | null;
+            /** Role */
+            role: string;
+            /** Cleared */
+            cleared: boolean;
+            /** Locked */
+            locked: boolean;
+        };
+        /** SecretClearanceUpdate */
+        SecretClearanceUpdate: {
+            /** Enabled */
+            enabled: boolean;
         };
         /** SelfShiftRead */
         SelfShiftRead: {
@@ -15468,6 +15810,12 @@ export interface components {
             table_rows?: {
                 [key: string]: string;
             }[] | null;
+            /**
+             * Confidentiality
+             * @default general
+             * @enum {string}
+             */
+            confidentiality: "general" | "personal" | "secret" | "directed";
             /** Signer Employee Id */
             signer_employee_id?: string | null;
             /**
@@ -17044,6 +17392,72 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["CapabilityRead"][];
                 };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_secret_clearance_api_v1_auth_secret_clearance_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SecretClearanceRead"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_secret_clearance_api_v1_auth_users__user_id__secret_clearance_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                user_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SecretClearanceUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Validation Error */
             422: {
@@ -21366,6 +21780,7 @@ export interface operations {
         parameters: {
             query?: {
                 created_by_me?: boolean;
+                inbox?: ("received" | "sent") | null;
             };
             header?: never;
             path?: never;
@@ -21978,6 +22393,7 @@ export interface operations {
                 to_date?: string | null;
                 include_deleted?: boolean;
                 created_by_me?: boolean;
+                inbox?: ("received" | "sent") | null;
                 limit?: number;
                 offset?: number;
             };
@@ -22313,6 +22729,70 @@ export interface operations {
             };
         };
     };
+    list_recipient_candidates_api_v1_books_recipient_candidates_get: {
+        parameters: {
+            query?: {
+                confidentiality?: ("general" | "personal" | "secret" | "directed") | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RecipientCandidateRead"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_inbox_summary_api_v1_books_inbox_summary_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InboxSummaryRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     preview_included_papers_api_v1_books__book_id__included_papers_preview_post: {
         parameters: {
             query?: never;
@@ -22607,6 +23087,145 @@ export interface operations {
                 book_id: number;
                 version_id: number;
                 annotation_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    set_book_confidentiality_api_v1_books__book_id__confidentiality_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                book_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BookConfidentialityUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BookRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    send_book_api_v1_books__book_id__send_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                book_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BookSendRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BookSendResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_book_recipients_api_v1_books__book_id__recipients_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                book_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BookRecipientRead"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    recall_book_recipient_api_v1_books__book_id__recipients__recipient_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                book_id: number;
+                recipient_id: number;
             };
             cookie?: {
                 gssg_session?: string | null;

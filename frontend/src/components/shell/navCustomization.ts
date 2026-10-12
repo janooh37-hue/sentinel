@@ -1,9 +1,9 @@
-import { Hourglass, Inbox, ScanLine, Settings } from 'lucide-react'
+import { FileInput, Hourglass, Inbox, ScanLine, Settings } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 
 import { NAV_ITEMS } from './navItems'
 
-export type WaitingSignalId = 'approvals' | 'scanback' | 'ledgerUnread'
+export type WaitingSignalId = 'approvals' | 'scanback' | 'ledgerUnread' | 'inbox'
 
 export interface DockEntry {
   id: string
@@ -66,6 +66,15 @@ export const SIGNAL_ENTRIES: readonly DockEntry[] = [
     to: '/ledger',
     cap: 'ledger.view',
     signal: 'ledgerUnread',
+  },
+  {
+    id: 'sig:inbox',
+    kind: 'signal',
+    labelKey: 'books.inbox.sentToMe',
+    Icon: FileInput,
+    to: '/books?inbox=received',
+    cap: 'books.view',
+    signal: 'inbox',
   },
 ]
 

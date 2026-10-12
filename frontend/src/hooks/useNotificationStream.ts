@@ -36,6 +36,7 @@ const QUERIES_BY_COUNT: Record<Key, readonly (readonly string[])[]> = {
   emails: [['ledger', 'unread-recent'], ['ledger-unread-count']],
   monthly_reviews: [['inmate-register', 'awaiting-close']],
   monthly_approvals: [['inmate-register', 'awaiting-close']],
+  inbox: [['books', 'inbox-summary']],
 }
 
 export function useNotificationStream(enabled = true): void {
@@ -111,6 +112,8 @@ export function useNotificationStream(enabled = true): void {
       }),
       monthly_reviews: t('nav.bell.notify.monthlyReview'),
       monthly_approvals: t('nav.bell.notify.monthlyApproval'),
+      // Neutral on purpose: a lock-screen toast must not leak a record's subject.
+      inbox: t('books.inbox.notify'),
     }
     changed.forEach((k) => {
       if (counts[k] <= prev[k]) return

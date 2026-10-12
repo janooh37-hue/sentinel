@@ -30,6 +30,8 @@ import { addToBasket } from '@/lib/emailBasket'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { cn } from '@/lib/utils'
 import { reportReviewOf, sealDescriptor, signedSourceOf, type ReportReview } from './bookStateLabel'
+import { InboxUnreadDot } from './InboxUnreadDot'
+import { ConfidentialityChip } from '@/components/books/ConfidentialityChip'
 import { newRecordHref } from './newRecordHref'
 import { deleteBlockReason } from './recordDelete'
 import { useRecordDelete } from './RecordDeleteProvider'
@@ -439,7 +441,8 @@ function BookMobileCard({
       <div className="flex min-w-0 flex-1 flex-col gap-2">
         {/* ref + approval action */}
         <div className="flex items-center justify-between gap-2">
-          <span className="font-mono text-[0.85em] font-semibold text-primary">
+          <span className="inline-flex items-center font-mono text-[0.85em] font-semibold text-primary">
+            <InboxUnreadDot book={row} />
             {selectMode ? (
               <bdi dir="ltr">{row.ref_number}</bdi>
             ) : (
@@ -497,6 +500,7 @@ function BookMobileCard({
             {catLabel}
           </span>
           {row.direction && <DirectionPill direction={row.direction} t={t} />}
+          <ConfidentialityChip level={row.confidentiality} />
         </div>
 
         {/* creator · date · papers */}

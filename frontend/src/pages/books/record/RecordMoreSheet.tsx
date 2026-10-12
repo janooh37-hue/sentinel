@@ -13,11 +13,13 @@ import {
   Check,
   FileStack,
   Loader2,
+  Lock,
   type LucideIcon,
   Mail,
   MessageSquare,
   Printer,
   RefreshCw,
+  Send,
   ShieldAlert,
   ShieldCheck,
   Trash2,
@@ -177,6 +179,26 @@ export function RecordMoreSheet({
       label: t('books.includedPapers.addToPdf'),
       hint: t('books.record.hint.pdf'),
       onSelect: () => openOverlay('papers'),
+    })
+  }
+  if (book.can_send) {
+    documentRows.push({
+      id: 'send',
+      icon: iconOf(Send),
+      label: t('books.send.menu'),
+      hint: t('books.send.hint'),
+      testId: 'record-more-send',
+      onSelect: () => openOverlay('send'),
+    })
+  }
+  if (book.can_change_confidentiality) {
+    documentRows.push({
+      id: 'level',
+      icon: iconOf(Lock),
+      label: t('books.confidentiality.menu'),
+      hint: t(`books.confidentiality.levels.${book.confidentiality}`),
+      testId: 'record-more-level',
+      onSelect: () => openOverlay('level'),
     })
   }
   if (hasSignedCopy && current?.signed_pdf_url) {

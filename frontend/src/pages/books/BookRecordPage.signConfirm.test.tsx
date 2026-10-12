@@ -38,6 +38,7 @@ vi.mock('@/lib/api', async (orig) => {
       getEmployee: vi.fn().mockResolvedValue({ name_en: 'SAEED ALYAHYAEE', name_ar: 'سعيد' }),
       listBookAnnotations: vi.fn().mockResolvedValue([]),
       listBookClassifications: vi.fn().mockResolvedValue([]),
+      listBookRecipients: vi.fn().mockResolvedValue([]),
       markBookSeen: vi.fn().mockResolvedValue(undefined),
       listApprovalLog: vi.fn().mockResolvedValue({ items: [], total: 0 }),
     },

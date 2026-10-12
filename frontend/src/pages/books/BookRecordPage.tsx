@@ -49,6 +49,9 @@ import { changesRequestedCount, isApproverAssignee, myPendingReviewerStep } from
 import { SubmitForApprovalDialog } from '@/components/books/SubmitForApprovalDialog'
 import { RecordStateOverrideDialog } from '@/components/books/RecordStateOverrideDialog'
 import { RevisionAccessPanel } from '@/components/books/RevisionAccessPanel'
+import { SendRecordDialog } from '@/components/books/SendRecordDialog'
+import { ChangeConfidentialityDialog } from '@/components/books/ChangeConfidentialityDialog'
+import { RecordInboxStrip, RecordRecipientsPanel } from '@/components/books/RecordRecipientsPanel'
 import { useBookApprovalActions } from '@/components/books/useBookApprovalActions'
 import { useInmateReportSubmit } from '@/components/books/useInmateReportSubmit'
 import { hasCommentBearingMark } from '@/components/books/annotation-utils'
@@ -517,7 +520,9 @@ function BookRecordPageBody(): React.JSX.Element {
         !isInmateReporter &&
         canOverrideState &&
         canMutateCurrent) ||
-      (value === 'decision' && action === 'decide')
+      (value === 'decision' && action === 'decide') ||
+      (value === 'send' && book.can_send) ||
+      (value === 'level' && book.can_change_confidentiality)
     if (!allowed) overlay.close()
   }, [
     action,
@@ -1250,6 +1255,9 @@ function BookRecordPageBody(): React.JSX.Element {
         </div>
       )}
 
+      {book && <RecordInboxStrip inbox={book.my_inbox} />}
+      {book && <RecordRecipientsPanel bookId={book.id} />}
+
       <RecordPhoneProgress book={book} view={view} />
 
       {/* body: desk + vertical timeline.
@@ -1276,6 +1284,22 @@ function BookRecordPageBody(): React.JSX.Element {
 
       {!isInmateReporter && overlay.value === 'revision-access' && book && canManageRevisionAccess && !isPending && !capabilitiesLoading && (
         <RevisionAccessPanel bookId={book.id} onClose={overlay.close} />
+      )}
+
+      {book && (
+        <SendRecordDialog
+          book={book}
+          open={overlay.value === 'send' && book.can_send}
+          onOpenChange={(open) => { if (!open) overlay.close() }}
+        />
+      )}
+
+      {book && (
+        <ChangeConfidentialityDialog
+          book={book}
+          open={overlay.value === 'level' && book.can_change_confidentiality}
+          onOpenChange={(open) => { if (!open) overlay.close() }}
+        />
       )}
     </div>
   )

@@ -1,8 +1,10 @@
 import { FileText } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
+import { ConfidentialitySelect } from '@/components/books/ConfidentialitySelect'
 import { NotifyEmployeeToggle } from '@/components/notify/NotifyEmployeeToggle'
 import { Button } from '@/components/ui/button'
+import type { Confidentiality } from '@/lib/api'
 
 export interface GeneratedSaveActionsProps {
   showNotify: boolean
@@ -13,6 +15,9 @@ export interface GeneratedSaveActionsProps {
   hint: string
   onNotifyChange: (checked: boolean) => void
   onSave: () => void
+  /** Record level picker; omitted (e.g. revise mode) when the level is fixed. */
+  confidentiality?: Confidentiality
+  onConfidentialityChange?: (level: Confidentiality) => void
 }
 
 export function GeneratedSaveActions({
@@ -24,6 +29,8 @@ export function GeneratedSaveActions({
   hint,
   onNotifyChange,
   onSave,
+  confidentiality,
+  onConfidentialityChange,
 }: GeneratedSaveActionsProps): React.JSX.Element {
   const { t } = useTranslation()
   const notificationHint = notifyEmployee
@@ -50,6 +57,11 @@ export function GeneratedSaveActions({
               label={t('application.notify.label')}
               hint={notificationHint}
             />
+          )}
+          {confidentiality && onConfidentialityChange && (
+            <div className="mt-3">
+              <ConfidentialitySelect value={confidentiality} onChange={onConfidentialityChange} />
+            </div>
           )}
         </div>
         <Button

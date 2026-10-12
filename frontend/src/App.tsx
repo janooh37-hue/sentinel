@@ -106,6 +106,7 @@ const EmployeeDetailPage = lazy(loadEmployeeDetailPage)
 const TimesheetPage = lazy(loadTimesheetPage)
 const AccessRequestsPage = lazy(loadAccessRequestsPage)
 const PermissionsPage = lazy(loadPermissionsPage)
+const SecretClearancePage = lazy(() => import('@/pages/access/SecretClearancePage').then((m) => ({ default: m.SecretClearancePage })))
 const DebugConsolePage = lazy(loadDebugConsolePage)
 const ExpiryPage = lazy(loadExpiryPage)
 const IntakePage = lazy(loadIntakePage)
@@ -562,6 +563,16 @@ function Shell(): React.JSX.Element {
                   <RequireCapability cap="users.manage">
                     <PermissionsPage />
                   </RequireCapability>
+                }
+              />
+              {/* Role-gated (admin or manager), not capability-gated: the API
+                  allows exactly these roles to grant/remove Secret clearance. */}
+              <Route
+                path="/secret-clearance"
+                element={
+                  user?.role === 'admin' || user?.role === 'manager'
+                    ? <SecretClearancePage />
+                    : <NotFoundPage />
                 }
               />
               <Route path="*" element={<NotFoundPage />} />

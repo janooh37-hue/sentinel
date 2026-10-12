@@ -2217,6 +2217,102 @@
     "addError": "تعذّر الإضافة إلى السلة — السجل غير موجود"
   },
   "books": {
+    "confidentiality": {
+      "label": "مستوى السرية",
+      "chipTitle": "مستوى المعاملة: {{level}}",
+      "levels": {
+        "general": "عام",
+        "personal": "شخصي",
+        "secret": "سري",
+        "directed": "موجه"
+      },
+      "hints": {
+        "general": "يطّلع عليها كل من لديه صلاحية هذا النوع من المعاملات.",
+        "personal": "لا يطّلع عليها غيرك.",
+        "secret": "لا يطّلع عليها إلا من لديه تصريح الاطلاع على السري.",
+        "directed": "لا يطّلع عليها إلا أنت ومن ترسلها إليهم."
+      },
+      "menu": "تغيير مستوى السرية…",
+      "changeTitle": "تغيير مستوى المعاملة",
+      "save": "حفظ المستوى",
+      "changed": "تم تغيير المستوى إلى {{level}}"
+    },
+    "send": {
+      "menu": "إرسال إلى…",
+      "hint": "أرسل هذه المعاملة إلى مستخدمين في النظام",
+      "title": "إرسال المعاملة",
+      "recipients": "المرسل إليهم",
+      "selected_zero": "تم تحديد {{count}}",
+      "selected_one": "تم تحديد {{count}}",
+      "selected_two": "تم تحديد {{count}}",
+      "selected_few": "تم تحديد {{count}}",
+      "selected_many": "تم تحديد {{count}}",
+      "selected_other": "تم تحديد {{count}}",
+      "searchPlaceholder": "ابحث بالاسم أو الرقم الوظيفي",
+      "noCandidates": "لا يوجد من يمكنه استلام هذه المعاملة.",
+      "noMatches": "لا توجد نتائج.",
+      "purpose": "الغرض",
+      "purposes": {
+        "info": "للاطلاع",
+        "action": "للتنفيذ",
+        "reply": "للإفادة",
+        "sign": "للتوقيع"
+      },
+      "note": "ملاحظة (اختياري)",
+      "notePlaceholder": "أضف ملاحظة قصيرة للمرسل إليهم",
+      "send": "إرسال",
+      "switchAndSend": "تحويل إلى موجه وإرسال",
+      "personalNotice": "هذه المعاملة شخصية. إرسالها يحوّلها إلى موجهة: لا يطّلع عليها إلا أنت ومن ترسلها إليهم.",
+      "secretNotice": "معاملة سرية: تظهر فقط أسماء من لديهم تصريح الاطلاع على السري.",
+      "sent_zero": "أُرسلت إلى {{count}} شخص",
+      "sent_one": "أُرسلت إلى {{count}} شخص",
+      "sent_two": "أُرسلت إلى {{count}} شخصين",
+      "sent_few": "أُرسلت إلى {{count}} أشخاص",
+      "sent_many": "أُرسلت إلى {{count}} شخصًا",
+      "sent_other": "أُرسلت إلى {{count}} شخص",
+      "nothingSent": "لم يُرسل شيء جديد",
+      "skipped": "تم التخطي: {{list}}",
+      "skippedSelf": "أنت",
+      "skippedAlready": "{{name}} (لديه المعاملة مسبقًا)",
+      "errors": {
+        "notCleared": "بعض المرسل إليهم ليس لديهم تصريح الاطلاع على السري.",
+        "invalid": "بعض المرسل إليهم لا يمكنهم استلام المعاملات.",
+        "personal": "يجب تحويل المعاملة الشخصية إلى موجهة قبل إرسالها."
+      },
+      "sentTo_zero": "مرسلة إلى {{count}} شخص",
+      "sentTo_one": "مرسلة إلى {{count}} شخص",
+      "sentTo_two": "مرسلة إلى {{count}} شخصين",
+      "sentTo_few": "مرسلة إلى {{count}} أشخاص",
+      "sentTo_many": "مرسلة إلى {{count}} شخصًا",
+      "sentTo_other": "مرسلة إلى {{count}} شخص",
+      "openedCount_zero": "فتحها {{count}}",
+      "openedCount_one": "فتحها {{count}}",
+      "openedCount_two": "فتحها {{count}}",
+      "openedCount_few": "فتحها {{count}}",
+      "openedCount_many": "فتحها {{count}}",
+      "openedCount_other": "فتحها {{count}}",
+      "sentByOn": "أرسلها {{name}} في {{date}}",
+      "openedOn": "فُتحت في {{date}}",
+      "notOpened": "لم تُفتح بعد",
+      "sentToYou": "أرسلها إليك {{name}}",
+      "recall": "استرجاع",
+      "recallTitle": "استرجاع المعاملة من {{name}}؟",
+      "recallBody": "لن يتمكن من فتح هذه المعاملة عبر هذا الإرسال.",
+      "recalled": "تم استرجاع الإرسال",
+      "recalledChip": "مسترجعة"
+    },
+    "inbox": {
+      "sentToMe": "المرسلة إليّ",
+      "sentByMe": "المرسلة مني",
+      "unread_zero": "لا توجد معاملات غير مقروءة",
+      "unread_one": "معاملة واحدة غير مقروءة",
+      "unread_two": "معاملتان غير مقروءتين",
+      "unread_few": "{{count}} معاملات غير مقروءة",
+      "unread_many": "{{count}} معاملة غير مقروءة",
+      "unread_other": "{{count}} غير مقروءة",
+      "unreadRow": "غير مقروءة",
+      "notify": "لديك معاملة جديدة"
+    },
     "search": {
       "bodyMatch": "تطابق في نص الكتاب"
     },
@@ -4352,6 +4448,7 @@
       }
     },
     "widgetLabels": {
+      "inbox": "المرسلة إليّ",
       "pending": "المستندات المنجزة",
       "workspace": "بيئة عملي",
       "violations": "المخالفات المفتوحة",
@@ -4443,6 +4540,13 @@
       "onLeave": "في إجازة"
     },
     "widgets": {
+      "inbox": {
+        "unread": "غير مقروءة",
+        "received": "الواردة",
+        "sent": "المرسلة",
+        "byPurpose": "الواردة حسب الغرض",
+        "open": "فتح المعاملات المرسلة إليّ"
+      },
       "violations": {
         "header": "المخالفات المفتوحة",
         "action": "مراجعة",
@@ -5016,6 +5120,14 @@
     "bellCount_other": "{{count}} للفرز"
   },
   "access": {
+    "secretClearance": {
+      "title": "تصريح الاطلاع على السري",
+      "description": "المستخدمون الحاصلون على التصريح يمكنهم فتح المعاملات السرية وإنشاؤها. يسري التغيير فورًا ويُسجَّل.",
+      "search": "ابحث بالاسم أو رقم G",
+      "empty": "لا يوجد مستخدمون مطابقون.",
+      "lockedAdmin": "مسؤول النظام — مصرّح دائمًا",
+      "self": "لا يمكنك تغيير تصريحك بنفسك"
+    },
     "eyebrow": "الإدارة",
     "title": "طلبات الوصول",
     "meta": "{{pending}} قيد المراجعة · {{active}} نشط · {{suspended}} موقوف",

@@ -44,6 +44,7 @@ vi.mock('@/lib/authContext', () => ({
 vi.mock('./useMyRecordsCount', () => ({
   useMyRecordsCount: () => ({ count: state.count }),
 }))
+vi.mock('./useInboxCount', () => ({ useInboxCount: () => 0 }))
 
 function setup(filters: Partial<BooksFilters> = {}) {
   const onChange = vi.fn()
@@ -96,6 +97,19 @@ describe('BooksFilterBar — Created by me', () => {
 
   it('Clear appears when only mine is on and resets it', async () => {
     const { onChange } = setup({ mine: true })
+    await userEvent.click(screen.getByRole('button', { name: /مسح المرشحات/ }))
+    expect(onChange).toHaveBeenLastCalledWith(DEFAULT_BOOKS_FILTERS)
+  })
+})
+
+describe('BooksFilterBar — Sent to me / Sent by me', () => {
+  it('switches between the two inbox scopes, clears on the active one, and counts for Clear', async () => {
+    const { onChange } = setup({ inbox: 'received' })
+    expect(screen.getByTestId('inbox-received-filter')).toHaveAttribute('aria-pressed', 'true')
+    await userEvent.click(screen.getByTestId('inbox-sent-filter'))
+    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ inbox: 'sent' }))
+    await userEvent.click(screen.getByTestId('inbox-received-filter'))
+    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ inbox: undefined }))
     await userEvent.click(screen.getByRole('button', { name: /مسح المرشحات/ }))
     expect(onChange).toHaveBeenLastCalledWith(DEFAULT_BOOKS_FILTERS)
   })

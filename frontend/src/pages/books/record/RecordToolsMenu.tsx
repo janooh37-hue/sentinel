@@ -12,9 +12,11 @@ import { useTranslation } from 'react-i18next'
 import {
   Download,
   FileStack,
+  Lock,
   Mail,
   Printer,
   RefreshCw,
+  Send,
   ShieldAlert,
   ShieldCheck,
   Trash2,
@@ -128,6 +130,18 @@ export function RecordToolsMenu({ book, caps, view, actions }: RecordPieceProps)
           <DropdownMenuItem onSelect={() => openOverlay('papers')}>
             <FileStack className="h-3.5 w-3.5" aria-hidden="true" />
             {t('books.includedPapers.addToPdf')}
+          </DropdownMenuItem>
+        )}
+        {book.can_send && (
+          <DropdownMenuItem data-testid="record-send-trigger" onSelect={() => openOverlay('send')}>
+            <Send className="h-3.5 w-3.5" aria-hidden="true" />
+            {t('books.send.menu')}
+          </DropdownMenuItem>
+        )}
+        {book.can_change_confidentiality && (
+          <DropdownMenuItem data-testid="record-level-trigger" onSelect={() => openOverlay('level')}>
+            <Lock className="h-3.5 w-3.5" aria-hidden="true" />
+            {t('books.confidentiality.menu')}
           </DropdownMenuItem>
         )}
         {state === 'approved' && current?.signed_pdf_url && (

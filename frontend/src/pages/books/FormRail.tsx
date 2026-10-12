@@ -7,11 +7,12 @@
  * Two tiers (the page picks one from its container width, never both):
  *   full   the 15rem rail: artwork · label · state dots · count
  *   icons  the `w-14` rail: artwork + count badge, label in a `Hint`
- * The "Created by me" toggle sits at the top of either tier; the page hides it
- * (passes no `mine`) for inmate reporters, and renders `MineChip` itself in the
+ * The "Created by me" toggle sits at the top of either tier, followed by the
+ * "Sent to me" / "Sent by me" inbox toggles; the page hides them (passes no
+ * `mine`/`inbox`) for inmate reporters, and renders `MineChip` itself in the
  * drawer tier where there is no rail.
  */
-import { UserRound } from 'lucide-react'
+import { UserRound, type LucideIcon } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import { Hint } from '@/components/ui/hint'
@@ -42,6 +43,13 @@ export interface MineToggleState {
   onToggle: () => void
 }
 
+/** A MineChip-shaped toggle with its own label and icon (the inbox filters). */
+export interface ChipToggleState extends MineToggleState {
+  label: string
+  icon: LucideIcon
+  testId?: string
+}
+
 const DOT: Record<string, string> = {
   pending: 'bg-warning',
   awaiting_scan: 'bg-info',
@@ -54,7 +62,8 @@ const FOCUS =
   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset'
 
 /**
- * "Created by me": `aria-pressed`, `UserRound`, label + count badge.
+ * "Created by me" (or, given `label`/`icon`, any toggle of the same shape):
+ * `aria-pressed`, icon, label + count badge.
  * `row` = full-rail row, `icon` = icon-rail cell (label in a Hint),
  * `chip` = pill for the drawer tier's toolbar, next to Drafts.
  */
@@ -63,9 +72,15 @@ export function MineChip({
   count,
   onToggle,
   variant,
-}: MineToggleState & { variant: 'row' | 'icon' | 'chip' }): React.JSX.Element {
+  label: labelProp,
+  icon: Icon = UserRound,
+  testId,
+}: MineToggleState &
+  Partial<Omit<ChipToggleState, keyof MineToggleState>> & {
+    variant: 'row' | 'icon' | 'chip'
+  }): React.JSX.Element {
   const { t } = useTranslation()
-  const label = t('books.list.createdByMe')
+  const label = labelProp ?? t('books.list.createdByMe')
   const badge = count !== null && (
     <span
       className={cn(
@@ -87,6 +102,7 @@ export function MineChip({
         <button
           type="button"
           aria-pressed={pressed}
+          data-testid={testId}
           onClick={onToggle}
           className={cn(
             'relative grid min-h-11 w-full place-items-center rounded-sm transition-colors motion-reduce:transition-none',
@@ -94,7 +110,7 @@ export function MineChip({
             pressed ? 'bg-primary-soft text-primary' : 'text-muted-foreground hover:bg-surface-tinted',
           )}
         >
-          <UserRound className="h-4 w-4" aria-hidden />
+          <Icon className="h-4 w-4" aria-hidden />
           <span className="sr-only">{label}</span>
           {badge}
         </button>
@@ -107,6 +123,7 @@ export function MineChip({
       <button
         type="button"
         aria-pressed={pressed}
+        data-testid={testId}
         onClick={onToggle}
         className={cn(
           'inline-flex min-h-8 shrink-0 items-center gap-1.5 rounded-full border px-2.5 py-1 text-[0.75em] font-semibold transition-colors motion-reduce:transition-none',
@@ -116,7 +133,7 @@ export function MineChip({
             : 'border-hairline bg-surface-tinted text-muted-foreground hover:bg-border hover:text-foreground',
         )}
       >
-        <UserRound className="h-3.5 w-3.5" aria-hidden />
+        <Icon className="h-3.5 w-3.5" aria-hidden />
         {label}
         {badge}
       </button>
@@ -127,6 +144,7 @@ export function MineChip({
     <button
       type="button"
       aria-pressed={pressed}
+      data-testid={testId}
       onClick={onToggle}
       className={cn(
         'flex min-h-11 w-full items-center gap-2.5 rounded-sm px-2.5 py-2 text-start transition-colors motion-reduce:transition-none',
@@ -138,7 +156,7 @@ export function MineChip({
         aria-hidden
         className="grid h-8 w-8 shrink-0 place-items-center rounded-sm border border-hairline bg-surface-raised"
       >
-        <UserRound className="h-4 w-4" />
+        <Icon className="h-4 w-4" />
       </span>
       <span className={cn('min-w-0 flex-1 truncate text-[0.8em] font-semibold', pressed && 'text-primary')}>
         {label}
@@ -154,6 +172,7 @@ export function FormRail({
   onChange,
   tier = 'full',
   mine,
+  inbox,
 }: {
   items: RailItem[]
   active: string
@@ -161,6 +180,8 @@ export function FormRail({
   tier?: RailTier
   /** Omit to hide the "Created by me" toggle (inmate reporters). */
   mine?: MineToggleState
+  /** "Sent to me" / "Sent by me"; omit to hide (inmate reporters). */
+  inbox?: ChipToggleState[]
 }): React.JSX.Element {
   const { t } = useTranslation()
   const { has } = useCapabilities()
@@ -178,9 +199,12 @@ export function FormRail({
         icons ? 'p-1.5' : 'p-2',
       )}
     >
-      {mine && (
+      {(mine || inbox) && (
         <div className="mb-1.5 border-b border-hairline pb-1.5">
-          <MineChip {...mine} variant={icons ? 'icon' : 'row'} />
+          {mine && <MineChip {...mine} variant={icons ? 'icon' : 'row'} />}
+          {inbox?.map((toggle) => (
+            <MineChip key={toggle.label} {...toggle} variant={icons ? 'icon' : 'row'} />
+          ))}
         </div>
       )}
       {visibleItems.map((item) => {

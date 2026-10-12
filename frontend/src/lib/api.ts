@@ -464,6 +464,9 @@ export interface RegisterResult {
   user: SessionUser | null
 }
 
+/** One row of the Secret clearance page (`locked` = admin, always cleared). */
+export type SecretClearanceRead = components['schemas']['SecretClearanceRead']
+
 export interface AdminUserRead {
   id: number
   email: string
@@ -833,6 +836,16 @@ export type ApprovalStatusParam = 'pending' | 'returned' | 'approved' | 'rejecte
 export type ApprovalSortParam = 'oldest' | 'newest'
 export type RetainedDecisionRead = components['schemas']['RetainedDecisionRead']
 export type BookRevisionAccessRead = components['schemas']['BookRevisionAccessRead']
+// Record levels + direct send (record classification, Phase 1).
+export type Confidentiality = components['schemas']['BookConfidentialityUpdate']['confidentiality']
+export const CONFIDENTIALITY_LEVELS = ['general', 'personal', 'secret', 'directed'] as const satisfies readonly Confidentiality[]
+export type BookSendRequest = components['schemas']['BookSendRequest']
+export type SendPurpose = BookSendRequest['purpose']
+export const SEND_PURPOSES = ['info', 'action', 'reply', 'sign'] as const satisfies readonly SendPurpose[]
+export type BookSendResult = components['schemas']['BookSendResponse']
+export type BookRecipientRead = components['schemas']['BookRecipientRead']
+export type BookInboxRead = components['schemas']['BookInboxRead']
+export type RecipientCandidateRead = components['schemas']['RecipientCandidateRead']
 
 // Annotation overlay (Slice 3). Hand-typed mirror of schemas.book.BookAnnotationRead
 // until gen:api folds it into the generated schema.
@@ -2091,6 +2104,7 @@ export const api = {
     limit?: number
     offset?: number
     created_by_me?: boolean
+    inbox?: 'received' | 'sent'
   } = {}) => request<BookListResponse>('GET', `/books${qs({ ...params })}`),
   getBook: (id: number, versionId?: number) =>
     request<BookRead>('GET', `/books/${id}${qs({ version_id: versionId })}`),
@@ -2167,7 +2181,7 @@ export const api = {
   /** GET /books/facets — per-service counts + per-service approval-state
    *  counts, over every record (not a page window). Backs the Records rail
    *  and the status spine. */
-  getBookFacets: (params: { created_by_me?: boolean } = {}) =>
+  getBookFacets: (params: { created_by_me?: boolean; inbox?: 'received' | 'sent' } = {}) =>
     request<BookFacetsResponse>('GET', `/books/facets${qs({ ...params })}`),
 
   // --- books approval worklist (#31, revision-scoped) ---
@@ -2288,6 +2302,27 @@ export const api = {
       'DELETE',
       `/books/${bookId}/versions/${versionId}/annotations/${annotationId}`,
     ),
+  /** PUT /books/{id}/confidentiality — relabel the record's level (creator,
+   *  manager, or admin). Secret needs `books.secret` (SECRET_CLEARANCE_REQUIRED). */
+  setBookConfidentiality: (id: number, confidentiality: Confidentiality) =>
+    request<BookRead>('PUT', `/books/${id}/confidentiality`, { confidentiality }),
+  /** POST /books/{id}/send — send or forward the record. Repeat or self
+   *  recipients come back in `skipped`. Errors: PERSONAL_REQUIRES_DIRECTED (409),
+   *  RECIPIENT_NOT_CLEARED / RECIPIENT_INVALID (422). */
+  sendBook: (id: number, body: BookSendRequest) =>
+    request<BookSendResult>('POST', `/books/${id}/send`, body),
+  /** GET /books/{id}/recipients — the send rows the caller may see. */
+  listBookRecipients: (id: number) =>
+    request<BookRecipientRead[]>('GET', `/books/${id}/recipients`),
+  /** DELETE /books/{id}/recipients/{recipientId} — recall a send (sender, manager, admin). */
+  recallBookRecipient: (id: number, recipientId: number) =>
+    request<void>('DELETE', `/books/${id}/recipients/${recipientId}`),
+  /** GET /books/recipient-candidates — active users to send to; Secret → cleared only. */
+  listRecipientCandidates: (confidentiality?: Confidentiality) =>
+    request<RecipientCandidateRead[]>('GET', `/books/recipient-candidates${qs({ confidentiality })}`),
+  /** GET /books/inbox/summary — my received sends (unread, by purpose) and my sent count (B2). */
+  getInboxSummary: () =>
+    request<components['schemas']['InboxSummaryRead']>('GET', '/books/inbox/summary'),
 
   // --- intake (Phase C — Universal Intake Drop-zone) ---
   /** POST /api/v1/intake — classify a scanned file. Returns a discriminated
@@ -2705,6 +2740,10 @@ export const api = {
     request<AdminUserRead>('POST', `/auth/users/${userId}/default-manager`, { enabled }),
   listAuthAudit: (limit = 50) =>
     request<AuditEntryRead[]>('GET', `/auth/audit?limit=${limit}`),
+  // Secret clearance (`books.secret`) — admin or manager.
+  listSecretClearance: () => request<SecretClearanceRead[]>('GET', '/auth/secret-clearance'),
+  setSecretClearance: (userId: number, enabled: boolean) =>
+    request<void>('PUT', `/auth/users/${userId}/secret-clearance`, { enabled }),
 
   // --- permissions (granular capability matrix, 2026-05-26) ---
   /** The signed-in user's own effective capabilities — drives the UI gates. */

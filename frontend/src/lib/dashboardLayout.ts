@@ -40,12 +40,13 @@ export const DEFAULT_CANVAS_WIDTH: CanvasWidth = 'compact'
 export type WidgetSource = 'employees' | 'leaves' | 'records' | 'ledger' | 'workforce'
 export const WIDGET_SOURCES = ['employees', 'leaves', 'records', 'ledger', 'workforce'] as const
 
-/** All 15 canonical widget ids (order = catalog order in the editor). */
+/** All canonical widget ids (order = catalog order in the editor). */
 export const WIDGET_IDS = [
   'pending',
   'workspace',
   'waiting_approvals',
   'sent_approvals',
+  'inbox',
   'violations',
   'drafts',
   'ledger',
@@ -63,7 +64,7 @@ export const WIDGET_IDS = [
 export type WidgetId = (typeof WIDGET_IDS)[number]
 
 /** Only these may occupy a Top slot (rendered as big cards). */
-export const TOP_ELIGIBLE_IDS = ['pending', 'workspace', 'waiting_approvals'] as const
+export const TOP_ELIGIBLE_IDS = ['pending', 'workspace', 'waiting_approvals', 'inbox'] as const
 export const TOP_ELIGIBLE_SET = new Set<string>(TOP_ELIGIBLE_IDS)
 
 /** Grid sizing: metric = 1 column, panel = full row. */
@@ -74,6 +75,7 @@ export const WIDGET_SIZE: Record<WidgetId, WidgetSize> = {
   // spans the full row when showing the BooksAwaitingWidget list.
   waiting_approvals: 'panel',
   sent_approvals: 'metric',
+  inbox: 'metric',
   violations: 'metric',
   drafts: 'metric',
   ledger: 'metric',
@@ -106,6 +108,7 @@ export const WIDGET_SOURCE: Record<WidgetId, WidgetSource> = {
   workspace: 'employees',
   waiting_approvals: 'records',
   sent_approvals: 'records',
+  inbox: 'records',
   violations: 'employees',
   drafts: 'records',
   ledger: 'ledger',

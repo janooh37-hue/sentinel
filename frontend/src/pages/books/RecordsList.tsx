@@ -29,6 +29,7 @@ import { BookStatusChips } from '@/components/books/BookStatusChips'
 import { bidi } from '@/lib/bidi'
 import { ServiceArtwork } from '@/components/ui/service-artwork'
 import { reportReviewOf, signedSourceOf } from './bookStateLabel'
+import { InboxUnreadDot } from './InboxUnreadDot'
 import { subjectEmployeePart } from './formKind'
 import { paperCountOf } from './recordPapers'
 import { openRecord, recordLinkProps, type RecordNavState } from './useRecordNavContext'
@@ -207,6 +208,7 @@ export function RecordsList({
                         row.voided_at && 'line-through',
                       )}
                     >
+                      <InboxUnreadDot book={row} />
                       {label}
                     </span>
                     <span className="block truncate text-[0.68em] text-muted-foreground">
@@ -234,8 +236,9 @@ export function RecordsList({
                         <SnippetLine text={snippet} />
                       </span>
                     )}
-                    {/* Draft / editing / voided / classification chips */}
-                    {(row.is_draft ||
+                    {/* Level / draft / editing / voided / classification chips */}
+                    {(row.confidentiality !== 'general' ||
+                      row.is_draft ||
                       row.edit_session?.state === 'active' ||
                       row.voided_at ||
                       row.classification_code) && (

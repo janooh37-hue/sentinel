@@ -2042,6 +2042,82 @@
     "addError": "Could not add to basket — record not found"
   },
   "books": {
+    "confidentiality": {
+      "label": "Level",
+      "chipTitle": "Record level: {{level}}",
+      "levels": {
+        "general": "General",
+        "personal": "Personal",
+        "secret": "Secret",
+        "directed": "Directed"
+      },
+      "hints": {
+        "general": "Everyone with access to this record type can open it.",
+        "personal": "Only you can open it.",
+        "secret": "Only people with Secret clearance can open it.",
+        "directed": "Only you and the people you send it to can open it."
+      },
+      "menu": "Change level…",
+      "changeTitle": "Change record level",
+      "save": "Save level",
+      "changed": "Level changed to {{level}}"
+    },
+    "send": {
+      "menu": "Send to…",
+      "hint": "Send this record to people in the system",
+      "title": "Send record",
+      "recipients": "Recipients",
+      "selected_one": "{{count}} selected",
+      "selected_other": "{{count}} selected",
+      "searchPlaceholder": "Search by name or G-number",
+      "noCandidates": "No one is available to receive this record.",
+      "noMatches": "No matches.",
+      "purpose": "Purpose",
+      "purposes": {
+        "info": "For information",
+        "action": "For action",
+        "reply": "For reply",
+        "sign": "For signature"
+      },
+      "note": "Note (optional)",
+      "notePlaceholder": "Add a short note for the recipients",
+      "send": "Send",
+      "switchAndSend": "Switch to Directed and send",
+      "personalNotice": "This record is Personal. Sending it switches it to Directed: only you and the people you send it to can open it.",
+      "secretNotice": "Secret record: only people with Secret clearance are listed.",
+      "sent_one": "Sent to {{count}} person",
+      "sent_other": "Sent to {{count}} people",
+      "nothingSent": "Nothing new was sent",
+      "skipped": "Skipped: {{list}}",
+      "skippedSelf": "you",
+      "skippedAlready": "{{name}} (already has it)",
+      "errors": {
+        "notCleared": "Some recipients don't have Secret clearance.",
+        "invalid": "Some recipients can't receive records.",
+        "personal": "A Personal record must be switched to Directed before sending."
+      },
+      "sentTo_one": "Sent to {{count}} person",
+      "sentTo_other": "Sent to {{count}} people",
+      "openedCount_one": "{{count}} opened",
+      "openedCount_other": "{{count}} opened",
+      "sentByOn": "Sent by {{name}} on {{date}}",
+      "openedOn": "Opened {{date}}",
+      "notOpened": "Not opened yet",
+      "sentToYou": "Sent to you by {{name}}",
+      "recall": "Recall",
+      "recallTitle": "Recall from {{name}}?",
+      "recallBody": "They will no longer be able to open this record through this send.",
+      "recalled": "Send recalled",
+      "recalledChip": "Recalled"
+    },
+    "inbox": {
+      "sentToMe": "Sent to me",
+      "sentByMe": "Sent by me",
+      "unread_one": "{{count}} unread",
+      "unread_other": "{{count}} unread",
+      "unreadRow": "Unread",
+      "notify": "New record sent to you"
+    },
     "search": {
       "bodyMatch": "Match in book body"
     },
@@ -4046,6 +4122,7 @@
       }
     },
     "widgetLabels": {
+      "inbox": "Sent to Me",
       "pending": "Documents Completed",
       "workspace": "My Workspace",
       "violations": "Open Violations",
@@ -4125,6 +4202,13 @@
       "onLeave": "on leave"
     },
     "widgets": {
+      "inbox": {
+        "unread": "unread",
+        "received": "Received",
+        "sent": "Sent",
+        "byPurpose": "Received by purpose",
+        "open": "Open records sent to me"
+      },
       "violations": {
         "header": "Open Violations",
         "action": "Review",
@@ -4615,6 +4699,14 @@
     "bellCount_other": "{{count}} documents to triage"
   },
   "access": {
+    "secretClearance": {
+      "title": "Secret clearance",
+      "description": "Users with Secret clearance can open and create Secret records. Changes apply immediately and are logged.",
+      "search": "Search by name or G number",
+      "empty": "No users match.",
+      "lockedAdmin": "Admin — always cleared",
+      "self": "You can't change your own clearance"
+    },
     "eyebrow": "Administration",
     "title": "Access requests",
     "meta": "{{pending}} pending · {{active}} active · {{suspended}} suspended",

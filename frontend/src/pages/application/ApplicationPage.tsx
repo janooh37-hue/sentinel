@@ -44,10 +44,12 @@ import { InmateViolationGroupPicker } from './InmateViolationGroupPicker'
 import { StatisticsTab } from './statistics/StatisticsTab'
 import { InmateReporterApplication } from './InmateReporterApplication'
 import { SavedRecordActions, type NotificationChoice } from '@/components/books/SavedRecordActions'
+import { ConfidentialitySelect } from '@/components/books/ConfidentialitySelect'
 import { api, apiErrorMessage } from '@/lib/api'
 import { AuthContext } from '@/lib/authContext'
 import type {
   ApprovedViolationImportRead,
+  Confidentiality,
   DocumentGenerateRequest,
   JobStatusResponse,
   StagedAttachmentRead,
@@ -205,6 +207,9 @@ function StandardApplicationPage(): React.JSX.Element {
   // General Book: classification code selected by the picker. Required for
   // every ref-allocating submit (both body modes); null only while unpicked.
   const [classificationCode, setClassificationCode] = useState<string | null>(null)
+  // Record level (عام/شخصي/سري/موجه) picked at creation; a revision keeps the
+  // book's level, so revise mode neither shows nor sends it.
+  const [confidentiality, setConfidentiality] = useState<Confidentiality>('general')
   // General Book plain-path body-mode toggle (M5-1: editor hidden, word-only).
   // 'word' = body written in Word; kept typed so revert is one char change.
   const [bodyMode, setBodyMode] = useState<'editor' | 'word'>('word')
@@ -499,6 +504,8 @@ function StandardApplicationPage(): React.JSX.Element {
       // Revise mode: only the committed save regenerates a new version under
       // the existing book's ref (the backend requires commit=True for it).
       revise_of_book_id: commit ? reviseBookId ?? undefined : undefined,
+      // Revise mode keeps the book's level server-side; state stays 'general' there.
+      confidentiality,
       // General Book: the classification drives the classified-register ref.
       classification_code: isGeneralBookForm ? classificationCode ?? undefined : undefined,
     }
@@ -538,6 +545,7 @@ function StandardApplicationPage(): React.JSX.Element {
           template_name: templateName ?? undefined,
           table_rows,
           sign: true,
+          confidentiality,
         })
       }
     }
@@ -552,6 +560,7 @@ function StandardApplicationPage(): React.JSX.Element {
           sign: values.sign !== false,
           date: (values.report_date as string | undefined) ?? null,
           cc: [],
+          confidentiality,
         })
       })
     }
@@ -667,6 +676,7 @@ function StandardApplicationPage(): React.JSX.Element {
     setNotifyEmployee(true)
     setSubmitError(null)
     setClassificationCode(null)
+    setConfidentiality('general')
     // M5: General Book is Word-only; the editor toggle is hidden. Reset to
     // 'word' (not 'editor') or the form flips back to HugeRTE on every re-pick.
     setBodyMode('word')
@@ -838,6 +848,7 @@ function StandardApplicationPage(): React.JSX.Element {
     setActiveTab('fields')
     setSubmitError(null)
     setClassificationCode(null)
+    setConfidentiality('general')
     // M5: General Book is Word-only — reset to 'word', not 'editor' (see above).
     setBodyMode('word')
     setTemplateName(null)
@@ -1275,6 +1286,7 @@ function StandardApplicationPage(): React.JSX.Element {
                           // Word mode — single action: create the book and open it in Word.
                           // Word-brand blue (#185abd) is reserved for open-in-Word actions.
                           <>
+                            <ConfidentialitySelect value={confidentiality} onChange={setConfidentiality} className="w-full sm:w-60" />
                             <p className="text-[0.78em] text-muted-foreground">
                               {t('books.word.bodyInWord')}
                             </p>
@@ -1301,6 +1313,7 @@ function StandardApplicationPage(): React.JSX.Element {
                         ) : isReportForm ? (
                           // Report form: author body in Word — same Word handoff as General Book.
                           <>
+                            <ConfidentialitySelect value={confidentiality} onChange={setConfidentiality} className="w-full sm:w-60" />
                             <p className="text-[0.78em] text-muted-foreground">
                               {t('books.word.bodyInWord')}
                             </p>
@@ -1378,6 +1391,8 @@ function StandardApplicationPage(): React.JSX.Element {
                       }
                       onNotifyChange={setNotifyEmployee}
                       onSave={() => void handleSave()}
+                      confidentiality={reviseBookId == null ? confidentiality : undefined}
+                      onConfidentialityChange={setConfidentiality}
                     />
                   )}
 

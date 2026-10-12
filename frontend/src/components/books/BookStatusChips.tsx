@@ -1,5 +1,5 @@
 /**
- * BookStatusChips — inline classification / draft / editing / voided chips.
+ * BookStatusChips — inline level / classification / draft / editing / voided chips.
  * Used in both the record surfaces (RecordPane, BookRecordPage) and BooksPage rows.
  */
 import { useTranslation } from 'react-i18next'
@@ -7,6 +7,7 @@ import { useQuery } from '@tanstack/react-query'
 import type { BookRead } from '@/lib/api'
 import { api } from '@/lib/api'
 import { bidi } from '@/lib/bidi'
+import { ConfidentialityChip } from './ConfidentialityChip'
 
 interface Props {
   book: BookRead
@@ -25,6 +26,11 @@ export function BookStatusChips({ book, noClassification }: Props): React.JSX.El
   })
 
   const chips: React.ReactNode[] = []
+
+  // Level chip (Personal / Secret / Directed; General renders nothing)
+  if (book.confidentiality !== 'general') {
+    chips.push(<ConfidentialityChip key="level" level={book.confidentiality} />)
+  }
 
   // Classification chip — navy
   if (!noClassification && book.classification_code) {
