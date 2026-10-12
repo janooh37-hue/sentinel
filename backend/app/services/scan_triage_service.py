@@ -12,7 +12,7 @@ from dataclasses import dataclass, field, replace
 from datetime import date, datetime
 from typing import Literal
 
-from sqlalchemy import func, select
+from sqlalchemy import ColumnElement, func, select
 from sqlalchemy.orm import Session
 
 from app.core.extraction.form_ref import (
@@ -22,9 +22,10 @@ from app.core.extraction.form_ref import (
     stamped_tokens,
 )
 from app.core.extraction.types import Extraction
-from app.db.models import Book
+from app.db.models import Book, User
 from app.schemas.extraction import ExtractedFieldOut
 from app.schemas.intake import ExternalOut, ReturnedFormOut, route_for_doc_type
+from app.services import book_service
 from app.services.document_reader import DocumentRead, DocumentReader, read_document
 from app.services.extraction_service import EmployeeLike, run_pipeline
 
@@ -156,9 +157,7 @@ def _paper_date(book: Book) -> date | None:
         return None
 
 
-def _barcode_date_mismatch(
-    candidate: ReferenceCandidate, book: BookMatchEvidence
-) -> bool:
+def _barcode_date_mismatch(candidate: ReferenceCandidate, book: BookMatchEvidence) -> bool:
     expected = book.paper_date or book.created_at.date()
     return candidate.date is not None and candidate.date != expected
 
@@ -181,6 +180,7 @@ def _exact_reference_candidates(
     read: DocumentRead,
     *,
     db: Session,
+    visible: ColumnElement[bool] | None = None,
 ) -> tuple[ReferenceCandidate, ...]:
     observations: list[tuple[str, ReferenceSource, date | None]] = [
         (ref.strip(), "qr", None) for ref in read.qr_refs if ref.strip()
@@ -198,14 +198,15 @@ def _exact_reference_candidates(
     candidates: list[ReferenceCandidate] = []
     for observed, source, observed_date in observations:
         normalized = observed.upper()
-        books = list(
-            db.scalars(
-                select(Book)
-                .where(func.lower(Book.ref_number) == normalized.lower())
-                .where(Book.deleted_at.is_(None))
-                .order_by(Book.id)
-            )
+        stmt = (
+            select(Book)
+            .where(func.lower(Book.ref_number) == normalized.lower())
+            .where(Book.deleted_at.is_(None))
+            .order_by(Book.id)
         )
+        if visible is not None:
+            stmt = stmt.where(visible)
+        books = list(db.scalars(stmt))
         live_matches = tuple(_book_evidence(book) for book in books)
         candidates.append(
             ReferenceCandidate(
@@ -271,8 +272,9 @@ def classify(
     db: Session,
     employees: Sequence[EmployeeLike],
     reader: DocumentReader = read_document,
+    user: User | None = None,
 ) -> ClassificationResult:
-    return classify_text(reader(raw), db=db, employees=employees)
+    return classify_text(reader(raw), db=db, employees=employees, user=user)
 
 
 def classify_text(
@@ -280,8 +282,12 @@ def classify_text(
     *,
     db: Session,
     employees: Sequence[EmployeeLike],
+    user: User | None = None,
 ) -> ClassificationResult:
-    candidates = _exact_reference_candidates(read, db=db)
+    """``user`` limits Record matches to Records they can open; ``None`` is the
+    system view (background drain) and matches every live Record."""
+    visible = book_service.user_visibility_clause(db, user) if user is not None else None
+    candidates = _exact_reference_candidates(read, db=db, visible=visible)
     selected: ReferenceCandidate | None = None
     ambiguities: tuple[ClassificationAmbiguity, ...] = ()
     for source in ("qr", "ocr_stamped", "ocr_bare"):
@@ -308,9 +314,10 @@ def classify_text(
             break
     fuzzy_tokens = set(stamped_tokens(read.text))
     if selected is None and not ambiguities and fuzzy_tokens:
-        live_books = list(
-            db.scalars(select(Book).where(Book.deleted_at.is_(None)).order_by(Book.id))
-        )
+        live_stmt = select(Book).where(Book.deleted_at.is_(None)).order_by(Book.id)
+        if visible is not None:
+            live_stmt = live_stmt.where(visible)
+        live_books = list(db.scalars(live_stmt))
         canonical_candidates: list[ReferenceCandidate] = []
         for candidate in candidates:
             matches = tuple(

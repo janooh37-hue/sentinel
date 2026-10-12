@@ -22,7 +22,9 @@ from app.db.models import (
     CorrespondenceCategory,
     CorrespondenceRule,
     LedgerEntry,
+    User,
 )
+from app.services import ledger_service
 
 log = logging.getLogger(__name__)
 
@@ -52,20 +54,16 @@ def seed_defaults(db: Session) -> None:
     category ``key`` + a rule's (trigger, category_id)). Used by tests and as a
     safety net; production seeds via migration 0032."""
     by_key: dict[str, CorrespondenceCategory] = {
-        c.key: c
-        for c in db.execute(select(CorrespondenceCategory)).scalars()
+        c.key: c for c in db.execute(select(CorrespondenceCategory)).scalars()
     }
     for key, en, ar, sort in DEFAULT_CATEGORIES:
         if key not in by_key:
-            cat = CorrespondenceCategory(
-                key=key, name_en=en, name_ar=ar, sort=sort, system=True
-            )
+            cat = CorrespondenceCategory(key=key, name_en=en, name_ar=ar, sort=sort, system=True)
             db.add(cat)
             db.flush()
             by_key[key] = cat
     existing = {
-        (r.trigger, r.category_id)
-        for r in db.execute(select(CorrespondenceRule)).scalars()
+        (r.trigger, r.category_id) for r in db.execute(select(CorrespondenceRule)).scalars()
     }
     for trigger, cond, cat_key, enabled, sort in DEFAULT_RULES:
         cat_id = by_key[cat_key].id
@@ -129,21 +127,23 @@ def log_event(
     category. Idempotency key: (source_kind, related_book_id). Returns the row,
     or ``None`` when no rule matched. Commits within the caller's transaction.
     """
-    category_id = _matching_category_id(
-        db, trigger=trigger, condition_fields=condition_fields
-    )
+    category_id = _matching_category_id(db, trigger=trigger, condition_fields=condition_fields)
     if category_id is None:
         return None
 
     existing: LedgerEntry | None = None
     if source_book_id is not None:
-        existing = db.execute(
-            select(LedgerEntry).where(
-                LedgerEntry.source_kind == source_kind,
-                LedgerEntry.related_book_id == source_book_id,
-                LedgerEntry.deleted_at.is_(None),
+        existing = (
+            db.execute(
+                select(LedgerEntry).where(
+                    LedgerEntry.source_kind == source_kind,
+                    LedgerEntry.related_book_id == source_book_id,
+                    LedgerEntry.deleted_at.is_(None),
+                )
             )
-        ).scalars().first()
+            .scalars()
+            .first()
+        )
 
     if existing is not None:
         existing.subject = subject[:255]
@@ -161,7 +161,7 @@ def log_event(
         channel=LOG_CHANNEL,
         counterparty=(submitter or "system")[:255],
         subject=subject[:255],
-        owner_user_id=None,            # shared — visible to everyone
+        owner_user_id=None,  # shared — visible to everyone
         source_kind=source_kind,
         category_id=category_id,
         related_book_id=source_book_id,
@@ -178,10 +178,16 @@ def log_event(
 
 
 def list_log(
-    db: Session, *, category_id: int | None = None, limit: int = 50, offset: int = 0
+    db: Session,
+    *,
+    user: User | None = None,
+    category_id: int | None = None,
+    limit: int = 50,
+    offset: int = 0,
 ) -> list[LedgerEntry]:
     """The shared auto-log rows (owner_user_id IS NULL, has a source_kind),
-    newest first, optionally filtered by category."""
+    newest first, optionally filtered by category. Rows about a Record
+    ``user`` cannot open are left out."""
     limit = max(1, min(limit, 200))
     stmt = (
         select(LedgerEntry)
@@ -194,18 +200,27 @@ def list_log(
     )
     if category_id is not None:
         stmt = stmt.where(LedgerEntry.category_id == category_id)
+    visible = ledger_service.related_book_visible(db, user)
+    if visible is not None:
+        stmt = stmt.where(visible)
     return list(db.execute(stmt.limit(limit).offset(offset)).scalars())
 
 
-def get_log_record(db: Session, entry_id: int) -> LedgerEntry:
+def get_log_record(db: Session, entry_id: int, *, user: User | None = None) -> LedgerEntry:
     """A single shared log row for the record view. 404 if not a shared
-    auto-log row (so email entries can't be fetched through this path)."""
+    auto-log row (so email entries can't be fetched through this path) or if
+    it is about a Record ``user`` cannot open."""
     row = db.get(LedgerEntry, entry_id)
+    visible = ledger_service.related_book_visible(db, user)
     if (
         row is None
         or row.deleted_at is not None
         or row.owner_user_id is not None
         or row.source_kind is None
+        or (
+            visible is not None
+            and db.scalar(select(LedgerEntry.id).where(LedgerEntry.id == entry_id, visible)) is None
+        )
     ):
         raise NotFoundError(
             "LOG_RECORD_NOT_FOUND",
@@ -231,18 +246,14 @@ def list_categories(db: Session) -> list[CorrespondenceCategory]:
 def create_category(
     db: Session, *, key: str, name_en: str, name_ar: str, sort: int
 ) -> CorrespondenceCategory:
-    row = CorrespondenceCategory(
-        key=key, name_en=name_en, name_ar=name_ar, sort=sort, system=False
-    )
+    row = CorrespondenceCategory(key=key, name_en=name_en, name_ar=name_ar, sort=sort, system=False)
     db.add(row)
     db.commit()
     db.refresh(row)
     return row
 
 
-def update_category(
-    db: Session, category_id: int, **fields: object
-) -> CorrespondenceCategory:
+def update_category(db: Session, category_id: int, **fields: object) -> CorrespondenceCategory:
     row = db.get(CorrespondenceCategory, category_id)
     if row is None:
         raise NotFoundError(
@@ -311,9 +322,7 @@ def create_rule(
 def update_rule(db: Session, rule_id: int, **fields: object) -> CorrespondenceRule:
     row = db.get(CorrespondenceRule, rule_id)
     if row is None:
-        raise NotFoundError(
-            "RULE_NOT_FOUND", f"Rule {rule_id} does not exist", id=rule_id
-        )
+        raise NotFoundError("RULE_NOT_FOUND", f"Rule {rule_id} does not exist", id=rule_id)
     for k, v in fields.items():
         if v is not None:
             setattr(row, k, v)
@@ -325,27 +334,15 @@ def update_rule(db: Session, rule_id: int, **fields: object) -> CorrespondenceRu
 def delete_rule(db: Session, rule_id: int) -> None:
     row = db.get(CorrespondenceRule, rule_id)
     if row is None:
-        raise NotFoundError(
-            "RULE_NOT_FOUND", f"Rule {rule_id} does not exist", id=rule_id
-        )
+        raise NotFoundError("RULE_NOT_FOUND", f"Rule {rule_id} does not exist", id=rule_id)
     db.delete(row)
     db.commit()
 
 
-def resolve_record_extras(
-    db: Session, row: LedgerEntry
-) -> dict[str, str | None]:
+def resolve_record_extras(db: Session, row: LedgerEntry) -> dict[str, str | None]:
     """Category + linked-Book fields for the record view (used by the route)."""
-    cat = (
-        db.get(CorrespondenceCategory, row.category_id)
-        if row.category_id is not None
-        else None
-    )
-    book = (
-        db.get(Book, row.related_book_id)
-        if row.related_book_id is not None
-        else None
-    )
+    cat = db.get(CorrespondenceCategory, row.category_id) if row.category_id is not None else None
+    book = db.get(Book, row.related_book_id) if row.related_book_id is not None else None
     return {
         "category_key": cat.key if cat else None,
         "category_name_en": cat.name_en if cat else None,

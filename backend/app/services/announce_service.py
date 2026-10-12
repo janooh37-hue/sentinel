@@ -36,8 +36,9 @@ def resolve_book_pdf(db: Session, book_id: int) -> tuple[str, bytes]:
     """Return ``(filename, pdf_bytes)`` for the book's currently-served PDF.
 
     Authorization is enforced at the route boundary (``/announcements`` routes
-    are ``messages.broadcast``-gated, admin-only); this resolver performs no
-    per-book permission check by design.
+    are ``messages.broadcast``-gated and the send route requires the sender to
+    open the book via ``book_service.resolve_book_read_access``); this resolver
+    performs no per-book permission check itself.
 
     Delegates the artifact selection itself to
     ``document_service.resolve_document_artifact`` — the same

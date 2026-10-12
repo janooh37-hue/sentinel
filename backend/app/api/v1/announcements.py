@@ -24,6 +24,7 @@ from app.schemas.announcement import (
 )
 from app.services import (
     announce_service,
+    book_service,
     inmate_violation_whatsapp,
     notify_dispatch,
     openwa_client,
@@ -132,6 +133,8 @@ async def send_announcement(
             data=await file.read(),
         )
     elif book_id is not None:
+        # Only a Record the sender can open; hidden or missing → the same 404.
+        book_service.resolve_book_read_access(db, user, book_service.get_book(db, book_id))
         try:
             filename, data = announce_service.resolve_book_pdf(db, book_id)
         except announce_service.BookPdfError as exc:

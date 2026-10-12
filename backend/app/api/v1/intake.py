@@ -18,7 +18,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import require_capability
 from app.api.errors import ValidationFailedError
 from app.core.extraction.ocr import InvalidImageError
-from app.db.models import Employee
+from app.db.models import Employee, User
 from app.db.session import get_db
 from app.schemas.intake import ExternalOut, IntakeResponse, ReturnedFormOut
 from app.services.scan_triage_service import classify, project_intake
@@ -30,7 +30,7 @@ router = APIRouter(prefix="/intake", tags=["intake"])
 @router.post("", response_model=IntakeResponse)
 def intake_document(
     db: Annotated[Session, Depends(get_db)],
-    _: Annotated[object, Depends(require_capability("documents.scan"))],
+    user: Annotated[User, Depends(require_capability("documents.scan"))],
     file: Annotated[UploadFile, File()],
 ) -> ReturnedFormOut | ExternalOut:
     raw = file.file.read(MAX_UPLOAD_BYTES + 1)
@@ -42,7 +42,7 @@ def intake_document(
         )
     employees = list(db.execute(select(Employee)).scalars())
     try:
-        result = classify(raw, db=db, employees=employees)
+        result = classify(raw, db=db, employees=employees, user=user)
     except InvalidImageError as exc:
         raise ValidationFailedError("INVALID_IMAGE", str(exc)) from exc
     if result.read.text_source == "unavailable" and not result.read.qr_refs:

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from itertools import chain
 
-from sqlalchemy import func, or_, select
+from sqlalchemy import ColumnElement, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.db.models import (
@@ -22,6 +22,7 @@ from app.schemas.employee_activity import (
     EmployeeActivityListRead,
 )
 from app.services import ledger_service
+from app.services.employee_detail_service import document_book_visible
 
 DEFAULT_LIMIT = 25
 MAX_LIMIT = 100
@@ -32,7 +33,11 @@ def _sort_key(item: EmployeeActivityItemRead) -> tuple[float, str, int]:
 
 
 def _documents(
-    db: Session, *, employee_id: str | None, requested: int
+    db: Session,
+    *,
+    employee_id: str | None,
+    requested: int,
+    visible: ColumnElement[bool] | None = None,
 ) -> tuple[list[EmployeeActivityItemRead], int]:
     book_id = (
         select(Book.id)
@@ -63,7 +68,11 @@ def _documents(
     )
     if employee_id is not None:
         stmt = stmt.where(Document.employee_id == employee_id)
-    rows = db.execute(stmt.order_by(Document.created_at.desc(), Document.id.desc()).limit(requested)).all()
+    if visible is not None:
+        stmt = stmt.where(visible)
+    rows = db.execute(
+        stmt.order_by(Document.created_at.desc(), Document.id.desc()).limit(requested)
+    ).all()
     total = int(rows[0].source_total) if rows else 0
     return [
         EmployeeActivityItemRead(
@@ -102,7 +111,9 @@ def _leaves(
     )
     if employee_id is not None:
         stmt = stmt.where(Leave.employee_id == employee_id)
-    rows = db.execute(stmt.order_by(Leave.created_at.desc(), Leave.id.desc()).limit(requested)).all()
+    rows = db.execute(
+        stmt.order_by(Leave.created_at.desc(), Leave.id.desc()).limit(requested)
+    ).all()
     total = int(rows[0].source_total) if rows else 0
     return [
         EmployeeActivityItemRead(
@@ -125,24 +136,23 @@ def _leaves(
 def _violations(
     db: Session, *, employee_id: str | None, requested: int
 ) -> tuple[list[EmployeeActivityItemRead], int]:
-    stmt = (
-        select(
-            Violation.id.label("source_id"),
-            Violation.id.label("target_id"),
-            Violation.created_at.label("occurred_at"),
-            Violation.violation_type.label("title"),
-            Violation.description.label("detail"),
-            Violation.status,
-            Employee.id.label("employee_id"),
-            Employee.name_en.label("employee_name_en"),
-            Employee.name_ar.label("employee_name_ar"),
-            func.count().over().label("source_total"),
-        )
-        .join(Employee, Violation.employee_id == Employee.id)
-    )
+    stmt = select(
+        Violation.id.label("source_id"),
+        Violation.id.label("target_id"),
+        Violation.created_at.label("occurred_at"),
+        Violation.violation_type.label("title"),
+        Violation.description.label("detail"),
+        Violation.status,
+        Employee.id.label("employee_id"),
+        Employee.name_en.label("employee_name_en"),
+        Employee.name_ar.label("employee_name_ar"),
+        func.count().over().label("source_total"),
+    ).join(Employee, Violation.employee_id == Employee.id)
     if employee_id is not None:
         stmt = stmt.where(Violation.employee_id == employee_id)
-    rows = db.execute(stmt.order_by(Violation.created_at.desc(), Violation.id.desc()).limit(requested)).all()
+    rows = db.execute(
+        stmt.order_by(Violation.created_at.desc(), Violation.id.desc()).limit(requested)
+    ).all()
     total = int(rows[0].source_total) if rows else 0
     return [
         EmployeeActivityItemRead(
@@ -168,6 +178,7 @@ def _ledger(
     owner_user_id: int,
     employee_id: str | None,
     requested: int,
+    visible: ColumnElement[bool] | None = None,
 ) -> tuple[list[EmployeeActivityItemRead], int]:
     stmt = (
         select(
@@ -193,6 +204,8 @@ def _ledger(
     )
     if employee_id is not None:
         stmt = stmt.where(LedgerEntry.related_employee_id == employee_id)
+    if visible is not None:
+        stmt = stmt.where(visible)
     rows = db.execute(
         stmt.order_by(LedgerEntry.created_at.desc(), LedgerEntry.id.desc()).limit(requested)
     ).all()
@@ -242,8 +255,9 @@ def _duty_locations(
     if employee_id is not None:
         stmt = stmt.where(DutyAssignmentEvent.employee_id == employee_id)
     rows = db.execute(
-        stmt.order_by(DutyAssignmentEvent.effective_at.desc(), DutyAssignmentEvent.id.desc())
-        .limit(requested)
+        stmt.order_by(DutyAssignmentEvent.effective_at.desc(), DutyAssignmentEvent.id.desc()).limit(
+            requested
+        )
     ).all()
     total = int(rows[0].source_total) if rows else 0
     return [
@@ -336,9 +350,18 @@ def list_employee_activity(
     offset: int = 0,
 ) -> EmployeeActivityListRead:
     requested = offset + limit
+    # owner_user_id is the caller: rows about Records they cannot open are hidden.
+    caller = db.get(User, owner_user_id)
     sources: list[tuple[list[EmployeeActivityItemRead], int]] = []
     if kind in (None, "document"):
-        sources.append(_documents(db, employee_id=employee_id, requested=requested))
+        sources.append(
+            _documents(
+                db,
+                employee_id=employee_id,
+                requested=requested,
+                visible=document_book_visible(db, caller),
+            )
+        )
     if kind in (None, "leave"):
         sources.append(_leaves(db, employee_id=employee_id, requested=requested))
     if kind in (None, "violation"):
@@ -350,6 +373,7 @@ def list_employee_activity(
                 owner_user_id=owner_user_id,
                 employee_id=employee_id,
                 requested=requested,
+                visible=ledger_service.related_book_visible(db, caller),
             )
         )
     if kind in (None, "duty_location"):

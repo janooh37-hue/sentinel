@@ -157,9 +157,7 @@ def list_contacts(
     q: str | None = None,
     limit: int = Query(20, ge=1, le=100),
 ) -> list[AddressBookContactRead]:
-    rows = contacts_service.list_contacts(
-        db, owner_user_id=current_user.id, q=q, limit=limit
-    )
+    rows = contacts_service.list_contacts(db, owner_user_id=current_user.id, q=q, limit=limit)
     return [AddressBookContactRead.model_validate(r) for r in rows]
 
 
@@ -188,9 +186,7 @@ def delete_contact(
     current_user: Annotated[User, Depends(require_capability("ledger.delete"))],
     contact_id: int,
 ) -> Response:
-    contacts_service.delete_contact(
-        db, owner_user_id=current_user.id, contact_id=contact_id
-    )
+    contacts_service.delete_contact(db, owner_user_id=current_user.id, contact_id=contact_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
@@ -218,9 +214,7 @@ def create_recipient_list(
     current_user: Annotated[User, Depends(require_capability("ledger.create"))],
     payload: RecipientListCreate,
 ) -> RecipientListRead:
-    row = recipient_lists_service.create_list(
-        db, owner_user_id=current_user.id, payload=payload
-    )
+    row = recipient_lists_service.create_list(db, owner_user_id=current_user.id, payload=payload)
     return RecipientListRead.model_validate(row)
 
 
@@ -237,17 +231,13 @@ def update_recipient_list(
     return RecipientListRead.model_validate(row)
 
 
-@router.delete(
-    "/recipient-lists/{list_id}", status_code=status.HTTP_204_NO_CONTENT
-)
+@router.delete("/recipient-lists/{list_id}", status_code=status.HTTP_204_NO_CONTENT)
 def delete_recipient_list(
     db: Annotated[Session, Depends(get_db)],
     current_user: Annotated[User, Depends(require_capability("ledger.delete"))],
     list_id: int,
 ) -> Response:
-    recipient_lists_service.delete_list(
-        db, owner_user_id=current_user.id, list_id=list_id
-    )
+    recipient_lists_service.delete_list(db, owner_user_id=current_user.id, list_id=list_id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
@@ -261,7 +251,19 @@ def search_entries(
 ) -> SearchResponse:
     if not q or not q.strip():
         raise HTTPException(status_code=400, detail="q must not be empty")
-    hits = search_service.search(db, q, limit=limit, owner_user_id=resolve_mail_scope(current_user, scope))
+    hits = search_service.search(
+        db, q, limit=limit, owner_user_id=resolve_mail_scope(current_user, scope)
+    )
+    visible = ledger_service.related_book_visible(db, current_user)
+    if visible is not None and hits:
+        keep = set(
+            db.scalars(
+                select(LedgerEntry.id).where(
+                    LedgerEntry.id.in_([hit.entry.id for hit in hits]), visible
+                )
+            )
+        )
+        hits = [hit for hit in hits if hit.entry.id in keep]
     return SearchResponse(hits=hits, total=len(hits))
 
 
@@ -284,7 +286,7 @@ def list_correspondence_log(
     offset: int = Query(0, ge=0),
 ) -> CorrespondenceLogResponse:
     rows = correspondence_service.list_log(
-        db, category_id=category_id, limit=limit, offset=offset
+        db, user=current_user, category_id=category_id, limit=limit, offset=offset
     )
     items = [CorrespondenceLogItem.model_validate(r) for r in rows]
     return CorrespondenceLogResponse(items=items, total=len(items))
@@ -296,7 +298,7 @@ def get_correspondence_log_record(
     db: Annotated[Session, Depends(get_db)],
     current_user: Annotated[User, Depends(require_capability("ledger.view"))],
 ) -> CorrespondenceLogRecord:
-    row = correspondence_service.get_log_record(db, entry_id)
+    row = correspondence_service.get_log_record(db, entry_id, user=current_user)
     extras = correspondence_service.resolve_record_extras(db, row)
     return CorrespondenceLogRecord.model_validate(row).model_copy(update=extras)
 
@@ -326,7 +328,9 @@ def get_unread_count(
     admins may widen with scope=all to see the whole-office count.
     """
     return UnreadCountResponse(
-        count=ledger_service.unread_email_count(db, owner_user_id=resolve_mail_scope(current_user, scope))
+        count=ledger_service.unread_email_count(
+            db, owner_user_id=resolve_mail_scope(current_user, scope)
+        )
     )
 
 
@@ -471,7 +475,9 @@ def mark_read(
     scope: str = Query("mine", description="mine (default) | all (admin only)"),
 ) -> LedgerEntryRead:
     """Set ``read_at=utcnow()`` if currently NULL. Idempotent."""
-    row = ledger_service.mark_entry_read(db, entry_id, owner_user_id=resolve_mail_scope(current_user, scope))
+    row = ledger_service.mark_entry_read(
+        db, entry_id, owner_user_id=resolve_mail_scope(current_user, scope)
+    )
     return _flagged_read(db, row, current_user.id)
 
 
@@ -488,8 +494,6 @@ def mark_unread(
         db, entry_id, owner_user_id=resolve_mail_scope(current_user, scope)
     )
     return _flagged_read(db, row, current_user.id)
-
-
 
 
 # ---------------------------------------------------------------------------
@@ -532,9 +536,7 @@ def set_flag(
 ) -> LedgerEntryRead:
     """Upsert the caller's follow-up flag for an entry (optional ``due`` date)."""
     due = payload.due if payload is not None else None
-    row = ledger_service.set_flag(
-        db, entry_id=entry_id, user_id=current_user.id, due=due
-    )
+    row = ledger_service.set_flag(db, entry_id=entry_id, user_id=current_user.id, due=due)
     return _flagged_read(db, row, current_user.id)
 
 
@@ -545,9 +547,7 @@ def clear_flag(
     current_user: Annotated[User, Depends(require_capability("ledger.edit"))],
 ) -> LedgerEntryRead:
     """Delete the caller's follow-up flag for an entry."""
-    row = ledger_service.clear_flag(
-        db, entry_id=entry_id, user_id=current_user.id
-    )
+    row = ledger_service.clear_flag(db, entry_id=entry_id, user_id=current_user.id)
     return _flagged_read(db, row, current_user.id)
 
 
@@ -590,7 +590,11 @@ def get_entry(
         LedgerAttachmentMeta(
             index=i,
             name=rel.split("/")[-1],
-            size=(abs_path.stat().st_size if (abs_path := ledger_service.resolve_attachment_path(rel)) else 0),
+            size=(
+                abs_path.stat().st_size
+                if (abs_path := ledger_service.resolve_attachment_path(rel))
+                else 0
+            ),
         )
         for i, rel in enumerate(row.attachment_paths or [])
         if rel not in inline_paths
@@ -629,7 +633,9 @@ def get_thread(
     Match key = (channel='email', same counterparty, normalised subject). The
     seed entry is excluded; returned oldest-first.
     """
-    rows = ledger_service.list_thread(db, entry_id, limit=limit, owner_user_id=resolve_mail_scope(current_user, scope))
+    rows = ledger_service.list_thread(
+        db, entry_id, limit=limit, owner_user_id=resolve_mail_scope(current_user, scope)
+    )
     return [
         LedgerListItem.model_validate(r).model_copy(
             update={"attachment_count": len(r.attachment_paths or [])}
@@ -658,9 +664,9 @@ def update_entry(
     entry_id: int,
     payload: LedgerEntryUpdate,
     db: Annotated[Session, Depends(get_db)],
-    _user: Annotated[User, Depends(require_capability("ledger.edit"))],
+    current_user: Annotated[User, Depends(require_capability("ledger.edit"))],
 ) -> LedgerEntryRead:
-    row = ledger_service.update_entry(db, entry_id, payload)
+    row = ledger_service.update_entry(db, entry_id, payload, owner_user_id=current_user.id)
     return LedgerEntryRead.model_validate(row)
 
 
@@ -668,9 +674,9 @@ def update_entry(
 def delete_entry(
     entry_id: int,
     db: Annotated[Session, Depends(get_db)],
-    _user: Annotated[User, Depends(require_capability("ledger.delete"))],
+    current_user: Annotated[User, Depends(require_capability("ledger.delete"))],
 ) -> Response:
-    ledger_service.soft_delete_entry(db, entry_id)
+    ledger_service.soft_delete_entry(db, entry_id, owner_user_id=current_user.id)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
@@ -683,7 +689,7 @@ def delete_entry(
 async def add_attachment(
     entry_id: int,
     db: Annotated[Session, Depends(get_db)],
-    _user: Annotated[User, Depends(require_capability("ledger.edit"))],
+    current_user: Annotated[User, Depends(require_capability("ledger.edit"))],
     upload: Annotated[UploadFile, File(alias="file")],
 ) -> LedgerEntryRead:
     data = await upload.read()
@@ -692,6 +698,7 @@ async def add_attachment(
         entry_id,
         data=data,
         original_filename=upload.filename or "upload",
+        owner_user_id=current_user.id,
     )
     return LedgerEntryRead.model_validate(row)
 
@@ -740,19 +747,17 @@ def send_attachment_to_vault(
 def download_attachments_zip(
     entry_id: int,
     db: Annotated[Session, Depends(get_db)],
-    _user: Annotated[User, Depends(require_capability("ledger.view"))],
+    current_user: Annotated[User, Depends(require_capability("ledger.view"))],
 ) -> StreamingResponse:
     """Bundle every attachment for an entry into a single zip stream."""
-    row = ledger_service.get_entry(db, entry_id)
+    row = ledger_service.get_entry(db, entry_id, owner_user_id=current_user.id)
     data_dir = get_settings().data_dir.resolve()
 
     # Skip inline/signature images — "save all attachments" excludes them.
     inline_map = ledger_service.derive_inline_map(
         row.notes_html, row.attachment_paths or [], row.inline_images or {}
     )
-    real_paths = ledger_service.non_inline_attachments(
-        row.attachment_paths or [], inline_map
-    )
+    real_paths = ledger_service.non_inline_attachments(row.attachment_paths or [], inline_map)
 
     buf = io.BytesIO()
     used_names: set[str] = set()
@@ -780,9 +785,7 @@ def download_attachments_zip(
     if written == 0:
         raise HTTPException(status_code=404, detail="no attachments to download")
     buf.seek(0)
-    headers = {
-        "Content-Disposition": f'attachment; filename="ledger-{entry_id}-attachments.zip"'
-    }
+    headers = {"Content-Disposition": f'attachment; filename="ledger-{entry_id}-attachments.zip"'}
     return StreamingResponse(buf, media_type="application/zip", headers=headers)
 
 
@@ -791,7 +794,7 @@ def download_attachment_by_index(
     entry_id: int,
     index: int,
     db: Annotated[Session, Depends(get_db)],
-    _user: Annotated[User, Depends(require_capability("ledger.view"))],
+    current_user: Annotated[User, Depends(require_capability("ledger.view"))],
     disposition: Annotated[str, Query(pattern="^(attachment|inline)$")] = "attachment",
     encoding: Annotated[str | None, Query(pattern="^base64$")] = None,
 ) -> Response:
@@ -806,7 +809,7 @@ def download_attachment_by_index(
     body (Chrome's PDF stream handler otherwise claims it and the JS ``fetch``
     receives an empty 204). pdf.js decodes + renders the bytes itself.
     """
-    row = ledger_service.get_entry(db, entry_id)
+    row = ledger_service.get_entry(db, entry_id, owner_user_id=current_user.id)
     paths = row.attachment_paths or []
     if index < 0 or index >= len(paths):
         raise HTTPException(status_code=404, detail="attachment not found")
@@ -821,11 +824,15 @@ def download_attachment_by_index(
     guessed = mimetypes.guess_type(name)[0] or "application/octet-stream"
     if guessed.startswith("image/"):
         return FileResponse(
-            abs_path, filename=name, media_type=guessed,
+            abs_path,
+            filename=name,
+            media_type=guessed,
             content_disposition_type=disposition,
         )
     return FileResponse(
-        abs_path, filename=name, media_type="application/octet-stream",
+        abs_path,
+        filename=name,
+        media_type="application/octet-stream",
         content_disposition_type=disposition,
         headers={"X-Content-Type-Options": "nosniff"},
     )
@@ -836,7 +843,7 @@ def download_attachment(
     entry_id: int,
     filename: str,
     db: Annotated[Session, Depends(get_db)],
-    _user: Annotated[User, Depends(require_capability("ledger.view"))],
+    current_user: Annotated[User, Depends(require_capability("ledger.view"))],
     disposition: Annotated[str, Query(pattern="^(attachment|inline)$")] = "attachment",
 ) -> FileResponse:
     """Stream an attachment file back to the client.
@@ -847,24 +854,20 @@ def download_attachment(
     ``disposition=inline`` lets the browser render PDFs/images in place (the
     in-app preview); the default ``attachment`` forces a download.
     """
-    row = ledger_service.get_entry(db, entry_id)
+    row = ledger_service.get_entry(db, entry_id, owner_user_id=current_user.id)
     # Match on the exact basename. Two attachments can share a basename under
     # different stored paths; a basename here can't disambiguate them, so when
     # the match is ambiguous we 404 and require the index-based route
     # (/attachments/by-index/{index}) — serving an arbitrary one risks the
     # wrong file.
-    candidates = [
-        p for p in (row.attachment_paths or []) if p.split("/")[-1] == filename
-    ]
+    candidates = [p for p in (row.attachment_paths or []) if p.split("/")[-1] == filename]
     if len(candidates) != 1:
         raise HTTPException(status_code=404, detail="attachment not found")
     matching = candidates[0]
     abs_path = ledger_service.resolve_attachment_path(matching)
     if abs_path is None:
         raise HTTPException(status_code=404, detail="attachment file missing")
-    return FileResponse(
-        abs_path, filename=filename, content_disposition_type=disposition
-    )
+    return FileResponse(abs_path, filename=filename, content_disposition_type=disposition)
 
 
 __all__ = ["router"]
