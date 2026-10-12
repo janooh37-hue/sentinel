@@ -465,6 +465,52 @@ Next step: <single most important next action>
 _No weeks run yet as of this document's creation (2026-10-10). The first
 entry is added by the first real weekly run._
 
+### W1 — 2026-10-12 (lead `anthropic/claude-opus-5-5`, no workers spawned)
+
+- **origin/main HEAD:** `18f84360`. This is the first measured week, so there is no week-over-week delta.
+- **Q01:** PR https://github.com/janooh37-hue/sentinel/pull/215 (`fix/q01-scan-target-authz` @ `c97d4625`).
+  - **RED, on main:** `pytest tests/test_scan_inbox_target_authz.py` exited 1 with 10 failed, 1 passed.
+  - **GREEN:** the 5 scan suites exited 0 with 70 passed.
+  - **Gates on the PR branch only:** Auth G1; Security G1 partial.
+  - **Next step:** the `/books/scan-back` exact-match path lacks a per-book access check (noted on #204).
+- **Shallow gate sweep on main.** Each gate is P (pass), F (fail) or U (unmeasured). The score counts measured passes only; U gates are not scored as zero.
+
+| # | Category | Gates G1–G5 | Measured |
+|---|---|---|---|
+| 1 | Frontend | F U F U F | 0/6 measured, 2 U |
+| 2 | APIs & Backend | F U U F F | 0/6, 2 U |
+| 3 | Database & Storage | P U U U F | 2/4, 3 U |
+| 4 | Auth & Permissions | F U F U F | 0/6, 2 U |
+| 5 | Hosting & Deployment | U U F F F | 0/6, 2 U |
+| 6 | Cloud & Compute | U U U U F | 0/2, 4 U |
+| 7 | CI/CD & VCS | F F F F F | 0/10 |
+| 8 | Security & RLS | F F F F U | 0/8, 1 U |
+| 9 | Rate Limiting | F U U F F | 0/6, 2 U |
+| 10 | Caching & CDN | U U U U U | unmeasured |
+| 11 | Load Balancing & Scaling | U U U U U | unmeasured |
+| 12 | Error Tracking & Logs | F U U F U | 0/4, 3 U |
+
+- **Evidence for each measured gate:**
+  - **CI and checks:**
+    - `checks.yml` has no pytest, frontend or mypy job.
+    - The CI ruff pin is `0.16.6`. pyproject has no ruff pin, requirements has the range `>=0.7,<1.0`, and the local venv runs 0.16.8.
+    - `ruff check .` reports F821 `_THREAD_MSG_ID_RE` (Q02).
+    - `check_numbering.py` exits 0 and runs in CI. However, its revision `set()` silently drops duplicate revision ids.
+  - **Build, env and dependencies:**
+    - `scripts/build.ps1` references the missing `GSSG_Manager.spec` and `scripts/post_build.py`.
+    - `.env.example` has `GSSG_DEV_MODE=1`.
+    - No script sets an NSSM `AppRotate*` option.
+    - pyproject and requirements disagree on pytesseract, mrz, rapidfuzz and pywebpush.
+  - **Security and auth:**
+    - `secure_key_acls.ps1` has no caller.
+    - The tunnel config has no debug/dav deny rule.
+    - The Q01 RED test proves Auth G1 and Security G1 fail on main.
+    - No test covers 429, Retry-After, verify-password, HttpOnly, CSP/XFO, crash-report caps or `derive_role` (`derive_role` is still live in `core/roles.py`).
+  - **Frontend:**
+    - Vite has `sourcemap: false`.
+    - 42 non-test frontend files match the physical-direction class grep, and no enforcing script exists.
+- **Not run this week:** the full backend suite and the frontend suites. All Windows-only gates are deferred to the operator checklist in W8.
+
 ---
 
 *Durable artifacts this doc depends on:* `/home/amh/.hermes/scripts/sentinel-quality-weekly.py`
