@@ -54,6 +54,8 @@ vi.mock('./pages/scanBack/ScanBackDock', () => ({ ScanBackDock: () => null }))
 vi.mock('./pages/scanBack/ScanBackGate', () => ({ ScanBackGate: () => null }))
 vi.mock('@/lib/keyboardShortcuts', () => ({ KeyboardShortcutsProvider: ({ children }: { children: React.ReactNode }) => children }))
 
+vi.mock('@/pages/books/WordSessionPage', () => ({ WordSessionPage: () => <div>word-session-page</div> }))
+vi.mock('@/pages/books/WordTemplateSessionPage', () => ({ WordTemplateSessionPage: () => <div>word-template-session-page</div> }))
 vi.mock('@/lib/routeLoaders', () => ({
   loadAccessRequestsPage: () => Promise.resolve({ default: () => <div>access-page</div> }),
   loadApplicationPage: () => Promise.resolve({ default: () => <div>application-page</div> }),
@@ -99,6 +101,8 @@ const routes = [
   ['/services', ['documents.generate', 'books.view'], 'application-page'],
   ['/services/general_book', ['documents.generate', 'books.view'], 'application-page'],
   ['/books', ['books.view'], 'books-page'],
+  ['/books/42/word', ['books.edit'], 'word-session-page'],
+  ['/books/word-templates/17', ['books.templates'], 'word-template-session-page'],
   ['/scan-back', ['books.view', 'books.edit'], 'scanback-page'],
   ['/leaves', ['leaves.view'], 'leaves-page'],
   ['/ledger', ['ledger.view'], 'ledger-page'],

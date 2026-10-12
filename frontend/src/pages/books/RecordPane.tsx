@@ -385,10 +385,8 @@ export function RecordPane({
   const scanSignedShown = workflow.some((a) => a.id === 'scanSigned')
 
   // ── More ▾ ────────────────────────────────────────────────────────────────
-  // WordReopenButton gates its own trigger (finished, not voided, no active session) but
-  // must stay mounted for the whole record: the reopen response flips `edit_session`
-  // active, and unmounting then would drop the retained handoff session (a late
-  // response behind the lock screen would never present after unlock).
+  // WordReopenButton gates the lifted trigger and owns the reopen mutation;
+  // a successful reopen navigates to the dedicated Word session page.
   const hasWordReopen = !isInmateReporter || isInmateReport
   const showScanSignedInMenu = ns.overflow.includes('scanSigned') && !scanSignedShown
   const showAddToPdf = canManageIncludedPapers
@@ -705,13 +703,12 @@ export function RecordPane({
         )}
       </div>
 
-      {/* Owns the "Edit in Word" mutation + handoff dialog; the trigger renders in More. */}
+      {/* Owns the "Edit in Word" mutation; the trigger renders in More. */}
       {hasWordReopen && (
         <WordReopenButton
           book={book}
           hideTrigger
           onTriggerChange={setWordTrigger}
-          onFinished={isInmateReport ? () => onSubmit(book.id) : undefined}
         />
       )}
 

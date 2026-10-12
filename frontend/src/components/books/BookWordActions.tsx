@@ -2,14 +2,14 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Check, FilePenLine, Trash2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { api, apiErrorMessage } from '@/lib/api'
-import type { BookRead, WordSessionRead } from '@/lib/api'
+import type { BookRead } from '@/lib/api'
 import { bidi } from '@/lib/bidi'
 import { cn } from '@/lib/utils'
-import { WordHandoffDialog } from '@/pages/books/WordHandoffDialog'
 
 interface WordActionProps {
   book: BookRead
@@ -26,19 +26,16 @@ export interface WordReopenTrigger {
   onClick: () => void
 }
 
-interface WordReopenButtonProps extends WordActionProps {
+interface WordReopenButtonProps extends Omit<WordActionProps, 'onFinished'> {
   iconOnly?: boolean
   /** Suppress the default standalone `<button>` — used when a caller renders
    *  the trigger itself (e.g. inside a dropdown menu item) via `onTriggerChange`.
-   *  The mutation, session state, and `WordHandoffDialog` stay owned and mounted
-   *  here regardless — only the visible trigger markup moves. */
+   *  The mutation stays owned here; reopening navigates to the Word page. */
   hideTrigger?: boolean
   /** Called with the current trigger affordance (or null when not applicable)
    *  on every change. Lets a caller (e.g. a Tools dropdown) render its own
    *  menu-item markup for this action while `WordReopenButton` keeps owning
-   *  the mutation and `WordHandoffDialog` — mounted independently of whatever
-   *  container the caller puts the rendered trigger in, so closing a dropdown
-   *  never discards a pending reopen or an already-open handoff dialog. */
+   *  the mutation, independently of the trigger's container. */
   onTriggerChange?: (trigger: WordReopenTrigger | null) => void
 }
 export function WordSessionActions({
@@ -135,26 +132,17 @@ export function WordReopenButton({
   iconOnly,
   hideTrigger,
   onTriggerChange,
-  onFinished,
 }: WordReopenButtonProps): React.JSX.Element | null {
   const { t } = useTranslation()
   const qc = useQueryClient()
-  const [reopenSession, setReopenSession] = useState<WordSessionRead | null>(null)
-  // The same instance is reused across records (BookRecordPage QueueNav,
-  // RecordPane selection). A session retained for record A must not present
-  // over record B.
-  const [sessionBookId, setSessionBookId] = useState(book.id)
-  if (sessionBookId !== book.id) {
-    setSessionBookId(book.id)
-    setReopenSession(null)
-  }
+  const navigate = useNavigate()
   const invalidate = () => void qc.invalidateQueries({ queryKey: ['books'] })
 
   const reopenMutation = useMutation({
     mutationFn: () => api.reopenWordSession(book.id),
     onSuccess: (session) => {
       invalidate()
-      setReopenSession(session)
+      navigate(`/books/${session.book_id}/word`)
     },
     onError: (err) => toast.error(apiErrorMessage(err)),
   })
@@ -181,10 +169,7 @@ export function WordReopenButton({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [eligible, label, disabled, onTriggerChange])
 
-  // Reopen flips `book.edit_session` active via the `invalidate()` refetch,
-  // often before the user sees the dialog (always when a lock defers it):
-  // keep the retained session mounted instead of reading that as "nothing to show".
-  if (book.voided_at || (!isFinished && reopenSession == null)) return null
+  if (!eligible) return null
 
   return (
     <>
@@ -212,15 +197,6 @@ export function WordReopenButton({
         </div>
       )}
 
-      <WordHandoffDialog
-        session={reopenSession}
-        open={reopenSession != null}
-        onClose={() => {
-          setReopenSession(null)
-          invalidate()
-        }}
-        onFinished={onFinished}
-      />
     </>
   )
 }

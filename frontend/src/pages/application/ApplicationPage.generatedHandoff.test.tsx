@@ -48,9 +48,6 @@ vi.mock('@/components/application/AttachmentsBlock', () => ({
 vi.mock('./EmployeeHeader', () => ({
   EmployeeHeader: () => <div data-testid="employee-header" />,
 }))
-vi.mock('@/pages/books/WordHandoffDialog', () => ({
-  WordHandoffDialog: () => null,
-}))
 vi.mock('@/lib/formDrafts', () => ({
   clearAllDrafts: vi.fn(),
   clearDraft: vi.fn(),

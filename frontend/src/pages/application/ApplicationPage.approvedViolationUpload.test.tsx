@@ -36,9 +36,6 @@ vi.mock('./EmployeeHeader', () => ({
 vi.mock('./JobStatus', () => ({
   JobStatus: () => null,
 }))
-vi.mock('@/pages/books/WordHandoffDialog', () => ({
-  WordHandoffDialog: () => null,
-}))
 vi.mock('@/lib/formDrafts', () => ({
   clearAllDrafts: vi.fn(),
   clearDraft: vi.fn(),

@@ -9,6 +9,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { createElement, type ReactNode } from 'react'
 import i18n from 'i18next'
 import { initReactI18next } from 'react-i18next'
+import { MemoryRouter } from 'react-router-dom'
 
 import { toast } from 'sonner'
 import { WordReopenButton, WordSessionActions } from './BookWordActions'
@@ -46,16 +47,12 @@ void i18n.use(initReactI18next).init({
 })
 
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn() } }))
-
-// WordHandoffDialog calls useCapabilities (books.templates gate) — grant it so
-// these tests exercise the actions surface, not the template affordance.
-vi.mock('@/lib/useCapabilities', () => ({
-  useCapabilities: () => ({
-    capabilities: new Set(['books.templates']),
-    isLoading: false,
-    has: () => true,
-  }),
+const navigate = vi.fn()
+vi.mock('react-router-dom', async () => ({
+  ...await vi.importActual('react-router-dom'),
+  useNavigate: () => navigate,
 }))
+
 
 // Base book fixture
 const BASE_BOOK: BookRead = {
@@ -146,7 +143,7 @@ const MOCK_SESSION: WordSessionRead = {
 
 function wrapper(qc: QueryClient) {
   return ({ children }: { children: ReactNode }) =>
-    createElement(QueryClientProvider, { client: qc }, children)
+    createElement(MemoryRouter, null, createElement(QueryClientProvider, { client: qc }, children))
 }
 
 function makeQc() {
@@ -157,6 +154,7 @@ function makeQc() {
 describe('Word action components', () => {
   beforeEach(() => {
     vi.restoreAllMocks()
+    navigate.mockClear()
   })
 
   it('(a) renders labelled Finish (solid) and Discard (red outline) buttons with visible text in Arabic', () => {
@@ -278,9 +276,6 @@ describe('Word action components', () => {
   })
 
   it('(g) clicking editNewVersion calls api.reopenWordSession', async () => {
-    const locationSpy = vi.spyOn(window, 'location', 'get')
-    const mockLocation = { href: '' } as Location
-    locationSpy.mockReturnValue(mockLocation)
     vi.spyOn(apiMod.api, 'reopenWordSession').mockResolvedValue(MOCK_SESSION)
 
     render(
@@ -289,36 +284,9 @@ describe('Word action components', () => {
     )
     await userEvent.click(screen.getByRole('button', { name: /تعديل في Word/ }))
     await waitFor(() => expect(apiMod.api.reopenWordSession).toHaveBeenCalledWith(1))
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith('/books/1/word'))
   })
 
-  it('(j) keeps the reopened handoff mounted after edit_session flips active', async () => {
-    vi.spyOn(apiMod.api, 'reopenWordSession').mockResolvedValue(MOCK_SESSION)
-    vi.spyOn(apiMod.api, 'getBook').mockResolvedValue(FINISHED_BOOK)
-    const qc = makeQc()
-    const view = render(createElement(WordReopenButton, { book: FINISHED_BOOK }), { wrapper: wrapper(qc) })
-    await userEvent.click(screen.getByRole('button', { name: /تعديل في Word/ }))
-    const dialog = await screen.findByRole('dialog', { name: 'تم إنشاء الكتاب وحجز الرقم' })
-
-    view.rerender(
-      createElement(WordReopenButton, {
-        book: { ...FINISHED_BOOK, edit_session: { user_id: 1, user_name: 'x', state: 'active', last_put_at: null, created_at: '2026-07-01T00:00:00Z' } },
-      }),
-    )
-    expect(screen.getByRole('dialog', { name: 'تم إنشاء الكتاب وحجز الرقم' })).toBe(dialog)
-    expect(screen.queryByRole('button', { name: /تعديل في Word/ })).toBeNull()
-  })
-
-  it('(k) drops the retained handoff when the record changes', async () => {
-    vi.spyOn(apiMod.api, 'reopenWordSession').mockResolvedValue(MOCK_SESSION)
-    vi.spyOn(apiMod.api, 'getBook').mockResolvedValue(FINISHED_BOOK)
-    const qc = makeQc()
-    const view = render(createElement(WordReopenButton, { book: FINISHED_BOOK }), { wrapper: wrapper(qc) })
-    await userEvent.click(screen.getByRole('button', { name: /تعديل في Word/ }))
-    await screen.findByRole('dialog', { name: 'تم إنشاء الكتاب وحجز الرقم' })
-
-    view.rerender(createElement(WordReopenButton, { book: { ...BASE_BOOK, id: 2 } }))
-    expect(screen.queryByRole('dialog')).toBeNull()
-  })
 
   it('(l) clears a lifted onTriggerChange trigger when eligibility is lost (queue navigation)', () => {
     // Regression: the Tools-dropdown trigger must not survive a record swap
@@ -360,8 +328,7 @@ describe('Word action components', () => {
   })
 
   it('(i) save-as-template is GONE from Records — it lives in the Word flow now', () => {
-    // Moved to WordHandoffDialog's finished view (the General Book side, per
-    // the 2026-07-19 template-ops relocation). Records only re-opens in Word.
+    // Save-as-template lives on the Word session page, not in Records.
     render(
       createElement(WordReopenButton, { book: FINISHED_BOOK_WITH_SUBJECT }),
       { wrapper: wrapper(makeQc()) },

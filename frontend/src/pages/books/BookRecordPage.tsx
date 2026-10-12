@@ -785,8 +785,8 @@ function BookRecordPageBody(): React.JSX.Element {
   // Discard (never re-fire) the confirmation the instant the captured
   // record/version stops being the one on screen, or decide eligibility is
   // lost — queue navigation, a newer version landing, or someone else
-  // deciding it first. A render-time correction (mirrors the `sessionBookId`
-  // pattern in WordReopenButton) rather than an effect: it stabilizes after
+  // deciding it first. A render-time correction rather than an effect:
+  // it stabilizes after
   // one extra render since the condition is false again once cleared, with
   // no separate effect pass and no risk of a stale confirm painting first.
   if (
