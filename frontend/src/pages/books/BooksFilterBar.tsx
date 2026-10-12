@@ -6,7 +6,7 @@
  */
 
 import { useEffect, useEffectEvent, useRef, useState } from 'react'
-import { ChevronDown, FileInput, Send, UserRound, X, type LucideIcon } from 'lucide-react'
+import { Archive, ChevronDown, FileInput, Send, UserRound, X, type LucideIcon } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import type { BookCategoryRead, ServiceFacetRead } from '@/lib/api'
@@ -20,7 +20,7 @@ import { hasServiceRecordsCap } from '@/lib/dashboardLayout'
 import { CategoryChecklist, DateRangeFields, DirectionChips } from './BooksFilterFields'
 import { DEFAULT_BOOKS_FILTERS, hasActiveFilters, type BooksFilters, type InboxFilter } from './booksFiltersUtils'
 import { useMyRecordsCount } from './useMyRecordsCount'
-import { useInboxCount } from './useInboxCount'
+import { useInboxSummary } from './useInboxCount'
 import { useAuth } from '@/lib/authContext'
 
 interface BooksFilterBarProps {
@@ -42,7 +42,8 @@ export function BooksFilterBar({
   const { user } = useAuth()
   const isInmateReporter = user?.role === 'inmate_reporter'
   const { count: myCount } = useMyRecordsCount({ enabled: !isInmateReporter })
-  const inboxUnread = useInboxCount(!isInmateReporter)
+  const { data: inboxSummary } = useInboxSummary(!isInmateReporter)
+  const inboxUnread = inboxSummary?.unread ?? 0
   const visibleServices = services.filter((service) => hasServiceRecordsCap(service.id, has))
   const selectedServiceAllowed =
     filters.serviceId === 'all' || hasServiceRecordsCap(filters.serviceId, has)
@@ -306,14 +307,15 @@ export function BooksFilterBar({
           ) : null}
         </button>
       )}
-      {/* "Sent to me" / "Sent by me" (direct send) — same rule as "Created by me" */}
+      {/* Direct-send scopes follow the same visibility rule as "Created by me". */}
       {!isInmateReporter &&
         (
           [
             ['received', FileInput, t('books.inbox.sentToMe'), inboxUnread],
             ['sent', Send, t('books.inbox.sentByMe'), 0],
+            ['archived', Archive, t('books.inbox.archived'), inboxSummary?.archived ?? 0],
           ] satisfies [InboxFilter, LucideIcon, string, number][]
-        ).map(([value, Icon, label, unread]) => (
+        ).map(([value, Icon, label, count]) => (
           <button
             key={value}
             type="button"
@@ -329,12 +331,12 @@ export function BooksFilterBar({
           >
             <Icon className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
             {label}
-            {unread > 0 ? (
+            {count > 0 || value === 'archived' ? (
               <bdi
                 dir="ltr"
                 className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-surface px-1 text-[0.85em] font-bold tabular-nums"
               >
-                {unread}
+                {count}
               </bdi>
             ) : null}
           </button>

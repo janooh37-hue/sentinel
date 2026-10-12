@@ -841,11 +841,16 @@ export type Confidentiality = components['schemas']['BookConfidentialityUpdate']
 export const CONFIDENTIALITY_LEVELS = ['general', 'personal', 'secret', 'directed'] as const satisfies readonly Confidentiality[]
 export type BookSendRequest = components['schemas']['BookSendRequest']
 export type SendPurpose = BookSendRequest['purpose']
-export const SEND_PURPOSES = ['info', 'action', 'reply', 'sign'] as const satisfies readonly SendPurpose[]
+export const SEND_PURPOSES = ['info', 'action', 'reply', 'circulate'] as const satisfies readonly SendPurpose[]
 export type BookSendResult = components['schemas']['BookSendResponse']
 export type BookRecipientRead = components['schemas']['BookRecipientRead']
 export type BookInboxRead = components['schemas']['BookInboxRead']
 export type RecipientCandidateRead = components['schemas']['RecipientCandidateRead']
+export type BookDeriveRequest = components['schemas']['BookDeriveRequest']
+export type BookThreadItem = components['schemas']['BookThreadItem']
+export type BookLinkCreate = components['schemas']['BookLinkCreate']
+export type BookReferenceSendResult = components['schemas']['BookReferenceSendResult']
+export type BookReferenceSkipped = components['schemas']['BookReferenceSkipped']
 
 // Annotation overlay (Slice 3). Hand-typed mirror of schemas.book.BookAnnotationRead
 // until gen:api folds it into the generated schema.
@@ -858,6 +863,7 @@ export interface BookAnnotationRead {
   comment: string | null
   author_user_id: number | null
   author_name: string | null
+  author_name_ar?: string | null
   created_at: string
 }
 
@@ -2104,10 +2110,10 @@ export const api = {
     limit?: number
     offset?: number
     created_by_me?: boolean
-    inbox?: 'received' | 'sent'
+    inbox?: 'received' | 'sent' | 'archived'
   } = {}) => request<BookListResponse>('GET', `/books${qs({ ...params })}`),
-  getBook: (id: number, versionId?: number) =>
-    request<BookRead>('GET', `/books/${id}${qs({ version_id: versionId })}`),
+  getBook: (id: number, versionId?: number, options: { markRead?: boolean } = {}) =>
+    request<BookRead>('GET', `/books/${id}${qs({ version_id: versionId, mark_read: options.markRead })}`),
   /** Resolve a book by its ref_number (e.g. "GS-0005") — backs the ledger
    * book-chip deep-link. 404s when no live book carries the ref. */
   getBookByRef: (ref: string) =>
@@ -2117,6 +2123,14 @@ export const api = {
   getBookVersionFields: (bookId: number, versionId: number): Promise<{ fields: Record<string, unknown> }> =>
     request<{ fields: Record<string, unknown> }>('GET', `/books/${bookId}/versions/${versionId}/fields`),
   createBook: (body: BookCreate) => request<BookRead>('POST', '/books', body),
+  deriveBook: (id: number, body: BookDeriveRequest) =>
+    request<WordSessionRead>('POST', `/books/${id}/derive`, body),
+  getBookThread: (id: number) =>
+    request<BookThreadItem[]>('GET', `/books/${id}/thread`),
+  linkBook: (id: number, body: BookLinkCreate) =>
+    request<BookThreadItem>('POST', `/books/${id}/links`, body),
+  unlinkBook: (id: number, targetId: number) =>
+    request<void>('DELETE', `/books/${id}/links/${targetId}`),
 
   // --- word-session endpoints (feature/word-books) ---
   /** GET /books/classifications — full government classification list. */
@@ -2181,7 +2195,7 @@ export const api = {
   /** GET /books/facets — per-service counts + per-service approval-state
    *  counts, over every record (not a page window). Backs the Records rail
    *  and the status spine. */
-  getBookFacets: (params: { created_by_me?: boolean; inbox?: 'received' | 'sent' } = {}) =>
+  getBookFacets: (params: { created_by_me?: boolean; inbox?: 'received' | 'sent' | 'archived' } = {}) =>
     request<BookFacetsResponse>('GET', `/books/facets${qs({ ...params })}`),
 
   // --- books approval worklist (#31, revision-scoped) ---
@@ -2317,6 +2331,14 @@ export const api = {
   /** DELETE /books/{id}/recipients/{recipientId} — recall a send (sender, manager, admin). */
   recallBookRecipient: (id: number, recipientId: number) =>
     request<void>('DELETE', `/books/${id}/recipients/${recipientId}`),
+  markBookInboxDone: (id: number) =>
+    request<BookInboxRead>('POST', `/books/${id}/inbox/done`),
+  undoBookInboxDone: (id: number) =>
+    request<BookInboxRead>('DELETE', `/books/${id}/inbox/done`),
+  archiveBookInbox: (id: number) =>
+    request<BookInboxRead>('POST', `/books/${id}/inbox/archive`),
+  unarchiveBookInbox: (id: number) =>
+    request<BookInboxRead>('DELETE', `/books/${id}/inbox/archive`),
   /** GET /books/recipient-candidates — active users to send to; Secret → cleared only. */
   listRecipientCandidates: (confidentiality?: Confidentiality) =>
     request<RecipientCandidateRead[]>('GET', `/books/recipient-candidates${qs({ confidentiality })}`),

@@ -26,6 +26,7 @@ vi.mock('@/lib/api', async (orig) => {
       ...real.api,
       listAwaitingBooks: vi.fn().mockResolvedValue([]),
       getBook: vi.fn(),
+      getBookThread: vi.fn().mockResolvedValue([]),
       signBook: vi.fn(),
       listApprovers: vi.fn().mockResolvedValue([]),
       listReviewerCandidates: vi.fn().mockResolvedValue([]),

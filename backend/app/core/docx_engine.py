@@ -352,6 +352,7 @@ def _adapt_general_book(data: dict[str, Any]) -> dict[str, Any]:
     ref = str(out.get("ref") or "").strip()
     out["barcode"] = qr.barcode_payload(ref, parsed_date.date()) if ref else ""
     out.setdefault("subject", "")
+    out.setdefault("reference_line", "")
     out.setdefault("body", "")
     # Preserve raw body HTML (when the service layer threaded it through) for
     # the post-process that rebuilds real Word tables from <table> elements.
@@ -1031,6 +1032,28 @@ def _pp_general_book(doc: Any, ctx: dict[str, Any]) -> None:
     _pp_general_book_cc(doc, ctx)
     _format_letterhead_barcode(doc, ctx)
     _format_general_book_ref_line(doc)
+
+    reference_line = ctx.get("reference_line") or ""
+    if reference_line:
+        from copy import deepcopy
+
+        # Preserve the template's Arabic font; numbers/date need their own LTR
+        # runs, just like the reference value in the letterhead.
+        for paragraph in doc.paragraphs:
+            if paragraph.text != reference_line:
+                continue
+            source = next((run for run in paragraph.runs if run.text), None)
+            source_rpr = deepcopy(source._element.rPr) if source is not None else None
+            for run in list(paragraph.runs):
+                run._element.getparent().remove(run._element)
+            for text in re.split(r"(\d+(?:[/-]\d+)+)", reference_line):
+                if not text:
+                    continue
+                run = paragraph.add_run(text)
+                if source_rpr is not None:
+                    run._element.insert(0, deepcopy(source_rpr))
+                run.font.rtl = not text[0].isdigit()
+            break
 
     anchor = _find_general_book_body_anchor(doc)
     if anchor is None:

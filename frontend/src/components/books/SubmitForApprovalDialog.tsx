@@ -28,6 +28,7 @@ import { CheckCircle2, X } from 'lucide-react'
 import { api, ApiError, type ApproverOptionRead, apiErrorMessage } from '@/lib/api'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { cn } from '@/lib/utils'
+import { pickEmployeeName } from '@/lib/employeeName'
 
 interface Props {
   bookId: number
@@ -36,7 +37,7 @@ interface Props {
 
 export function SubmitForApprovalDialog({ bookId, onClose }: Props): React.JSX.Element {
   const submitReasonId = useId()
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const navigate = useNavigate()
   const qc = useQueryClient()
   const { has } = useCapabilities()
@@ -63,7 +64,7 @@ export function SubmitForApprovalDialog({ bookId, onClose }: Props): React.JSX.E
   const book = bookQuery.data
   const canManage = canSubmitCap && !!book?.can_write
   const docManagerUserId: number | null = book?.doc_manager_user_id ?? null
-  const docManagerName: string | null = book?.doc_manager_name ?? null
+  const docManagerName = pickEmployeeName({ name_en: book?.doc_manager_name ?? '', name_ar: book?.doc_manager_name_ar }, i18n.language)
   const docManagerHasSignature: boolean = book?.doc_manager_has_signature ?? true
   // A Report already carries its author's signature: the manager only reviews it.
   const isReport = book?.service_id === 'Report'
@@ -309,7 +310,7 @@ export function SubmitForApprovalDialog({ bookId, onClose }: Props): React.JSX.E
                   >
                     <option value="">{t(isReport ? 'books.approval.selectReviewManager' : 'books.approval.selectApprover')}</option>
                     {approvers.map((a) => (
-                      <option key={a.id} value={a.id}>{a.name}</option>
+                      <option key={a.id} value={a.id}>{pickEmployeeName({ name_en: a.name ?? '', name_ar: a.name_ar }, i18n.language)}</option>
                     ))}
                   </select>
                   <p className="mt-2 text-[0.76em] text-muted-foreground">{t(isReport ? 'books.approval.reviewHint' : 'books.approval.singleSignerHint')}</p>
@@ -341,7 +342,7 @@ export function SubmitForApprovalDialog({ bookId, onClose }: Props): React.JSX.E
                         onChange={() => toggleReviewer(r.id)}
                         className="h-4 w-4 rounded border-hairline accent-primary"
                       />
-                      <span className="text-[0.84em] text-foreground">{r.name}</span>
+                      <span className="text-[0.84em] text-foreground">{pickEmployeeName({ name_en: r.name ?? '', name_ar: r.name_ar }, i18n.language)}</span>
                     </label>
                   ))}
                 </div>

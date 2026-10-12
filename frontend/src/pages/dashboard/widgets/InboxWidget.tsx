@@ -13,7 +13,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { useInboxSummary } from '@/pages/books/useInboxCount'
 
-const PURPOSES = ['info', 'action', 'reply', 'sign'] as const
+const PURPOSES = ['info', 'action', 'reply', 'circulate'] as const
 const RECEIVED_URL = '/books?inbox=received'
 const SENT_URL = '/books?inbox=sent'
 

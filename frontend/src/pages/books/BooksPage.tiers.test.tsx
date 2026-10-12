@@ -39,7 +39,7 @@ vi.mock('@/lib/api', () => ({
   api: {
     getBookFacets: vi.fn().mockResolvedValue({ total: 3, services: [] }),
     getInboxSummary: vi.fn().mockResolvedValue({
-      unread: 0, received: 0, sent: 0, by_purpose: { info: 0, action: 0, reply: 0, sign: 0 },
+      unread: 0, received: 0, sent: 0, archived: 0, by_purpose: { info: 0, action: 0, reply: 0, circulate: 0 },
     }),
     listBooks: vi.fn().mockResolvedValue({ items: rows }),
     listBookCategories: vi.fn().mockResolvedValue([]),
@@ -200,7 +200,7 @@ describe('Records page list keys inside the drawer', () => {
     renderPage()
     await waitFor(() => expect(document.querySelectorAll('[data-book-id]')).toHaveLength(3))
     await userEvent.click(document.querySelector('[data-book-id="3"] button') as HTMLElement)
-    expect(screen.getByRole('dialog', { name: 'GS-0003' })).toBeInTheDocument()
+    expect(await screen.findByRole('dialog', { name: 'GS-0003' })).toBeInTheDocument()
 
     await userEvent.keyboard('j')
     await waitFor(() => expect(openParam()).toBe('2'))

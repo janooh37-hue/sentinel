@@ -7,6 +7,7 @@ import { useQuery } from '@tanstack/react-query'
 import type { BookRead } from '@/lib/api'
 import { api } from '@/lib/api'
 import { bidi } from '@/lib/bidi'
+import { pickEmployeeName } from '@/lib/employeeName'
 import { ConfidentialityChip } from './ConfidentialityChip'
 
 interface Props {
@@ -16,7 +17,7 @@ interface Props {
 }
 
 export function BookStatusChips({ book, noClassification }: Props): React.JSX.Element | null {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
 
   const { data: classificationData } = useQuery({
     queryKey: ['books', 'classifications'],
@@ -62,7 +63,7 @@ export function BookStatusChips({ book, noClassification }: Props): React.JSX.El
 
   // Editing chip — info (active session, shown alongside draft chip)
   if (book.edit_session?.state === 'active') {
-    const holderName = book.edit_session.user_name
+    const holderName = pickEmployeeName({ name_en: book.edit_session.user_name ?? '', name_ar: book.edit_session.user_name_ar }, i18n.language)
     chips.push(
       <span
         key="editing"

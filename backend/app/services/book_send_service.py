@@ -9,23 +9,45 @@ from __future__ import annotations
 
 import json
 import logging
+import uuid
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Literal, NamedTuple
 
-from sqlalchemy import func, select
-from sqlalchemy.orm import Session
+from sqlalchemy import event, func, select
+from sqlalchemy.orm import Session, SessionTransaction
 
 from app.api.errors import AppError, NotFoundError
 from app.core.roles import ADMIN_ROLE, INMATE_REPORTER_ROLE, MANAGER_ROLE
-from app.db.models import AuditLog, Book, BookEditSession, BookRecipient, Employee, User
+from app.db.models import (
+    AuditLog,
+    Book,
+    BookEditSession,
+    BookLink,
+    BookRecipient,
+    Document,
+    Employee,
+    User,
+)
 from app.schemas.book import (
     BookInboxRead,
     BookRecipientRead,
+    BookReferenceSendResult,
+    BookReferenceSkipped,
     BookSendSkipped,
     InboxPurposeCounts,
     InboxSummaryRead,
+    SendPurpose,
 )
-from app.services import book_service, perm_service, word_book_service
+from app.services import (
+    artifact_service,
+    book_link_service,
+    book_service,
+    document_service,
+    included_papers_service,
+    perm_service,
+    word_book_service,
+)
 
 log = logging.getLogger(__name__)
 
@@ -68,9 +90,129 @@ def can_change_confidentiality(user: User, book: Book) -> bool:
 
 def _change_level(db: Session, user: User, book: Book, level: str) -> None:
     """Stage a level change + its audit row (caller commits)."""
+    book_link_service.require_level_floor(db, book, level)
     old = book.confidentiality
     book.confidentiality = level
     _audit(db, user, "book_confidentiality_changed", book, {"old": old, "new": level})
+    _restamp_level(db, book)
+
+
+_LEVEL_RESTAMP_PATHS = "book_level_restamp_paths"
+
+
+@event.listens_for(Session, "after_commit")
+def _keep_level_restamp_files(db: Session) -> None:
+    if not db.in_nested_transaction():
+        db.info.pop(_LEVEL_RESTAMP_PATHS, None)
+
+
+@event.listens_for(Session, "after_transaction_end")
+def _cleanup_rolled_back_level_restamp(db: Session, transaction: SessionTransaction) -> None:
+    # Session.close() ends an uncommitted transaction without after_rollback.
+    if transaction.parent is not None:
+        return
+    for path in reversed(db.info.pop(_LEVEL_RESTAMP_PATHS, [])):
+        try:
+            path.unlink(missing_ok=True)
+        except OSError:
+            log.warning("Could not clean rolled-back level artifact %s", path, exc_info=True)
+
+
+def _restamp_level(db: Session, book: Book) -> None:
+    """Publish new editable artifacts without touching the previous committed files."""
+    version = book_service._current_version(book)
+    if (
+        version is None
+        or version.status == "approved"
+        or version.signed_pdf_path
+        or version.manager_sig_embedded
+    ):
+        log.info("Skipping level mark for record %s: no editable version", book.id)
+        return
+    source = document_service._authored_docx_of(db, version)
+    if source is None or not source.is_file():
+        log.info("Skipping level mark for record %s: no source DOCX", book.id)
+        return
+    working_path = db.scalar(
+        select(BookEditSession.working_path).where(
+            BookEditSession.book_id == book.id, BookEditSession.state == "active"
+        )
+    )
+    if working_path is not None:
+        working = Path(working_path)
+        if not working.is_absolute():
+            working = document_service.get_settings().data_dir / working
+        if working.resolve() == source.resolve():
+            log.info("Skipping level mark for record %s: source is active Word file", book.id)
+            return
+    document = db.get(Document, version.document_id)
+    assert document is not None
+    documents = [document]
+    if document.submission_id is not None and document.role != "companion":
+        documents.extend(
+            db.scalars(
+                select(Document)
+                .where(
+                    Document.submission_id == document.submission_id,
+                    Document.role == "companion",
+                )
+                .order_by(Document.id)
+            ).all()
+        )
+    data_dir = document_service.get_settings().data_dir.resolve()
+    converted: dict[int, Path] = {}
+    pending_paths = db.info.setdefault(_LEVEL_RESTAMP_PATHS, [])
+    for target in documents:
+        target_source = Path(target.docx_path) if target.docx_path else None
+        if target_source is not None and not target_source.is_absolute():
+            target_source = data_dir / target_source
+        if target_source is None or not target_source.is_file():
+            log.warning("Skipping level mark for document %s: no source DOCX", target.id)
+            continue
+        if working_path is not None and working.resolve() == target_source.resolve():
+            log.info("Skipping level mark for document %s: active Word file", target.id)
+            continue
+        try:
+            rebuilt = artifact_service.produce_from_docx(
+                source_path=target_source,
+                destination=data_dir
+                / "book_packages"
+                / str(book.id)
+                / f"level-{target.id}-{uuid.uuid4().hex[:10]}.docx",
+                collision="exact",
+                stamps=artifact_service.StampPlan(level=book.confidentiality),
+                converter=document_service.convert_docx_to_pdf,
+            )
+            pending_paths.extend(rebuilt.created_paths)
+            target.docx_path = str(rebuilt.docx_path)
+            pdf = rebuilt.conversion.pdf_path
+            if rebuilt.conversion.status == "success" and pdf is not None:
+                converted[target.id] = pdf
+            else:
+                log.warning(
+                    "Could not refresh level PDF for document %s: %s", target.id, rebuilt.conversion
+                )
+        except Exception:
+            log.warning("Could not restamp document %s", target.id, exc_info=True)
+    if len(converted) != len(documents):
+        return
+    old_companion_pdfs = [(target, target.pdf_path) for target in documents[1:]]
+    try:
+        for companion, _old_path in old_companion_pdfs:
+            companion.pdf_path = converted[companion.id].relative_to(data_dir).as_posix()
+        published = included_papers_service.publish_generated_package(
+            db,
+            book,
+            version,
+            document,
+            converted[document.id],
+            invalidate_revision=False,
+        )
+        pending_paths.extend(published.created_paths)
+    except Exception:
+        for companion, old_path in old_companion_pdfs:
+            companion.pdf_path = old_path
+        log.warning("Could not refresh level PDF for record %s", book.id, exc_info=True)
 
 
 def _discard_inaccessible_word_session(db: Session, book: Book) -> None:
@@ -105,6 +247,8 @@ def set_confidentiality(db: Session, user: User, book: Book, level: str) -> Book
         db.flush()
         _discard_inaccessible_word_session(db, book)
         db.commit()
+    else:
+        book_link_service.require_level_floor(db, book, level)
     return book
 
 
@@ -173,17 +317,24 @@ def _recipient_reads(db: Session, user: User, rows: list[BookRecipient]) -> list
     names = book_service.resolve_names_by_ids(
         db, {r.user_id for r in rows} | {r.sent_by_user_id for r in rows}
     )
+    names_ar = book_service.resolve_names_ar_by_ids(
+        db, {r.user_id for r in rows} | {r.sent_by_user_id for r in rows}
+    )
     return [
         BookRecipientRead(
             id=r.id,
             user_id=r.user_id,
             user_name=names.get(r.user_id),
+            user_name_ar=names_ar.get(r.user_id),
             sent_by_user_id=r.sent_by_user_id,
             sent_by_name=names.get(r.sent_by_user_id),
+            sent_by_name_ar=names_ar.get(r.sent_by_user_id),
             purpose=r.purpose,
             note=r.note,
             created_at=r.created_at,
             read_at=r.read_at,
+            done_at=r.done_at,
+            archived_at=r.archived_at,
             revoked_at=r.revoked_at,
             can_recall=r.revoked_at is None
             and (r.sent_by_user_id == user.id or _is_manager_or_admin(user)),
@@ -198,10 +349,11 @@ def send(
     book: Book,
     *,
     user_ids: list[int],
-    purpose: Literal["info", "action", "reply", "sign"],
+    purpose: SendPurpose,
     note: str | None,
     make_directed: bool,
-) -> tuple[list[BookRecipientRead], list[BookSendSkipped]]:
+    include_references: bool = True,
+) -> tuple[list[BookRecipientRead], list[BookSendSkipped], list[BookReferenceSendResult]]:
     """Send (or forward) ``book`` to users. Anyone with full access may send."""
     if user.role == INMATE_REPORTER_ROLE:
         raise AppError("FORBIDDEN", "Inmate reporters cannot send records.", http_status=403)
@@ -285,7 +437,74 @@ def send(
         _audit(db, user, "book_sent", book, {"user_ids": new_ids, "purpose": purpose})
     db.commit()
     _push_new(db, book, rows, user)
-    return _recipient_reads(db, user, rows), skipped
+    references = (
+        _send_references(db, user, book, wanted, purpose=purpose, note=note)
+        if include_references
+        else []
+    )
+    return _recipient_reads(db, user, rows), skipped, references
+
+
+def _send_references(
+    db: Session,
+    user: User,
+    book: Book,
+    user_ids: list[int],
+    *,
+    purpose: SendPurpose,
+    note: str | None,
+) -> list[BookReferenceSendResult]:
+    references = db.scalars(
+        select(Book)
+        .join(BookLink, BookLink.target_book_id == Book.id)
+        .where(BookLink.book_id == book.id, BookLink.attached.is_(True), Book.deleted_at.is_(None))
+        .order_by(Book.created_at, Book.id)
+    ).all()
+    results = []
+    for reference in references:
+        try:
+            book_service.require_full_book_access(db, user, reference)
+        except AppError:
+            continue
+        skipped: list[BookReferenceSkipped] = []
+        eligible = []
+        for uid in user_ids:
+            reason = None
+            if uid == user.id:
+                reason = "self"
+            elif reference.confidentiality == "personal":
+                reason = "personal"
+            elif reference.confidentiality == "secret" and not perm_service.has_capability(
+                db, db.get(User, uid), "books.secret"
+            ):
+                reason = "not_cleared"
+            elif book_service.is_active_recipient(db, uid, reference.id):
+                reason = "already_recipient"
+            if reason is None:
+                eligible.append(uid)
+            else:
+                skipped.append(BookReferenceSkipped(user_id=uid, reason=reason))
+        sent = []
+        if eligible:
+            sent, _, _ = send(
+                db,
+                user,
+                reference,
+                user_ids=eligible,
+                purpose=purpose,
+                note=note,
+                make_directed=False,
+                include_references=False,
+            )
+        results.append(
+            BookReferenceSendResult(
+                book_id=reference.id,
+                ref_number=reference.ref_number,
+                sent_user_ids=[row.user_id for row in sent],
+                skipped=skipped,
+            )
+        )
+    return results
 
 
 def _push_new(db: Session, book: Book, rows: list[BookRecipient], sender: User) -> None:
@@ -296,9 +515,10 @@ def _push_new(db: Session, book: Book, rows: list[BookRecipient], sender: User) 
     from app.services import notification_service, push_service, scheduler_service
 
     sender_name = book_service.user_display_name(db, sender)
+    sender_name_ar = book_service.resolve_names_ar_by_ids(db, {sender.id}).get(sender.id)
     for row in rows:
         try:
-            item = notification_service.inbox_item(book, row, sender_name)
+            item = notification_service.inbox_item(book, row, sender_name, sender_name_ar)
             messages, url = scheduler_service._build_push("inbox", [item], INBOX_SECTION_URL)
             push_service.send_to_user(db, row.user_id, messages, url)
             push_service.mark_sent(db, row.user_id, "inbox", [item.ref])
@@ -365,6 +585,7 @@ def my_inbox(db: Session, user_id: int, book_ids: list[int]) -> dict[int, BookIn
         .order_by(BookRecipient.created_at, BookRecipient.id)
     ).all()
     names = book_service.resolve_names_by_ids(db, {r.sent_by_user_id for r in rows})
+    names_ar = book_service.resolve_names_ar_by_ids(db, {r.sent_by_user_id for r in rows})
     return {
         r.book_id: BookInboxRead(
             id=r.id,
@@ -372,11 +593,42 @@ def my_inbox(db: Session, user_id: int, book_ids: list[int]) -> dict[int, BookIn
             note=r.note,
             sent_by_user_id=r.sent_by_user_id,
             sent_by_name=names.get(r.sent_by_user_id),
+            sent_by_name_ar=names_ar.get(r.sent_by_user_id),
             sent_at=r.created_at,
             read_at=r.read_at,
+            done_at=r.done_at,
+            archived_at=r.archived_at,
         )
         for r in rows
     }
+
+
+def set_inbox_state(
+    db: Session,
+    user: User,
+    book: Book,
+    *,
+    field: Literal["done_at", "archived_at"],
+    enabled: bool,
+) -> BookInboxRead:
+    """Change only the caller's active sends, without changing record access."""
+    book_service.require_full_book_access(db, user, book)
+    rows = db.scalars(
+        select(BookRecipient).where(
+            BookRecipient.book_id == book.id,
+            BookRecipient.user_id == user.id,
+            BookRecipient.revoked_at.is_(None),
+        )
+    ).all()
+    if not rows:
+        raise NotFoundError("RECIPIENT_NOT_FOUND", "Recipient not found")
+    now = _now()
+    for row in rows:
+        setattr(row, field, now if enabled else None)
+        if field == "done_at" and enabled and row.read_at is None:
+            row.read_at = now
+    db.commit()
+    return my_inbox(db, user.id, [book.id])[book.id]
 
 
 def mark_read(db: Session, user_id: int, book_id: int) -> datetime | None:
@@ -405,6 +657,7 @@ def _received_stmt(db: Session, user: User):  # type: ignore[no-untyped-def]
         .where(
             BookRecipient.user_id == user.id,
             BookRecipient.revoked_at.is_(None),
+            BookRecipient.archived_at.is_(None),
             Book.deleted_at.is_(None),
         )
     )
@@ -435,9 +688,17 @@ def inbox_summary(db: Session, user: User) -> InboxSummaryRead:
     visibility = book_service.user_visibility_clause(db, user)
     if visibility is not None:
         sent_stmt = sent_stmt.where(visibility)
+    archived_stmt = (
+        select(func.count())
+        .select_from(Book)
+        .where(Book.deleted_at.is_(None), book_service.inbox_clause(user, "archived"))
+    )
+    if visibility is not None:
+        archived_stmt = archived_stmt.where(visibility)
     return InboxSummaryRead(
         unread=sum(row.read_at is None for row in received),
         received=len(received),
         sent=int(db.scalar(sent_stmt) or 0),
+        archived=int(db.scalar(archived_stmt) or 0),
         by_purpose=by_purpose,
     )

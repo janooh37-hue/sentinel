@@ -7,14 +7,16 @@
  *                     state (middle-click / Ctrl-click / "open in new tab" work)
  *   · select button   form name · who · creator · snippet · chips, stretched over
  *                     the whole row (`after:inset-0`) so a click anywhere selects
- * Click = select (the pane shows the record); Enter on a focused row or its ref
- * opens the record; Ctrl/⌘+Enter and J/K are page-level shortcuts (BooksPage).
+ * Click = select (the pane shows the record); double-click, or Enter on a focused
+ * row or its ref, opens the record; Ctrl/⌘+Enter and J/K are page-level shortcuts
+ * (BooksPage). With `rowMenu` (preview collapsed) each row gets a ⋯ menu, also
+ * opened by right-click / Shift+F10 / the ContextMenu key on the row.
  *
  * The scroller is a container (`@container`): below `@[26rem]` the glyph tile and
  * the paper-count chip drop out and the ref stacks over the label, so the list
  * stays legible beside a wide pane or in the narrow desktop tiers.
  */
-import { useRef } from 'react'
+import { useRef, useState } from 'react'
 import { FileText } from 'lucide-react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
@@ -27,6 +29,7 @@ import { cn } from '@/lib/utils'
 
 import { BookStatusChips } from '@/components/books/BookStatusChips'
 import { bidi } from '@/lib/bidi'
+import { pickEmployeeName } from '@/lib/employeeName'
 import { ServiceArtwork } from '@/components/ui/service-artwork'
 import { reportReviewOf, signedSourceOf } from './bookStateLabel'
 import { InboxUnreadDot } from './InboxUnreadDot'
@@ -35,6 +38,7 @@ import { paperCountOf } from './recordPapers'
 import { openRecord, recordLinkProps, type RecordNavState } from './useRecordNavContext'
 import { serviceArtwork, serviceGlyph, useServiceLabel } from './serviceLabels'
 import { StateSeal } from './StateSeal'
+import { RecordRowMenu, type RowMenuItem } from './RecordRowMenu'
 
 /** Parse `[token]` FTS snippet markers into React nodes with <mark>. */
 function SnippetLine({ text }: { text: string }): React.JSX.Element {
@@ -65,6 +69,8 @@ export function RecordsList({
   scrollerRef,
   empty,
   isInmateReporter,
+  rowMenu,
+  onRowMenuOpen,
 }: {
   rows: BookRead[]
   selectedId: number | null
@@ -80,6 +86,10 @@ export function RecordsList({
   empty?: React.ReactNode
   /** Inmate reporters see fewer papers per record; the count must match the pane. */
   isInmateReporter: boolean
+  /** Items for a row's ⋯ / context menu; omit to hide the menu (preview open). */
+  rowMenu?: (book: BookRead) => RowMenuItem[]
+  /** Called as a row's menu opens (before its items render). */
+  onRowMenuOpen?: (book: BookRead) => void
 }): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const navigate = useNavigate()
@@ -88,6 +98,8 @@ export function RecordsList({
   const internalRef = useRef<HTMLDivElement | null>(null)
   const scroller = scrollerRef ?? internalRef
   const linkNav = nav(0)
+  const [menuRowId, setMenuRowId] = useState<number | null>(null)
+  const menuReturnFocus = useRef<HTMLElement | null>(null)
 
   const days: { date: string; items: BookRead[] }[] = []
   for (const row of rows) {
@@ -129,14 +141,27 @@ export function RecordsList({
             const isChecked = selected?.has(row.id) ?? false
             const selectable = onToggleSelect != null
             const isSelected = row.id === selectedId
-            const creator = row.created_by_name
+            const creator = pickEmployeeName({ name_en: row.created_by_name ?? '', name_ar: row.created_by_name_ar }, i18n.language)
             const open = (): void => openRecord(navigate, row.id, nav())
             return (
               <div
                 key={row.id}
                 data-book-id={row.id}
+                onContextMenu={(e) => {
+                  // The ref link keeps the browser's own link menu.
+                  if (!rowMenu || (e.target as Element).closest('a')) return
+                  e.preventDefault()
+                  e.stopPropagation()
+                  // Right-click need not focus its target; Escape should return to this row.
+                  const target = (e.target as Element).closest<HTMLElement>('button, input')
+                    ?? e.currentTarget.querySelector<HTMLButtonElement>('button')
+                  target?.focus()
+                  menuReturnFocus.current = target
+                  onRowMenuOpen?.(row)
+                  setMenuRowId(row.id)
+                }}
                 className={cn(
-                  'relative flex items-center gap-2.5 border-b border-hairline px-3.5 py-2 transition-colors motion-reduce:transition-none',
+                  'group relative flex items-center gap-2.5 border-b border-hairline px-3.5 py-2 transition-colors motion-reduce:transition-none',
                   isSelected ? 'bg-primary-soft' : 'hover:bg-surface-tinted',
                   row.id === highlightedId && 'bg-accent-soft',
                   isChecked && 'bg-primary-soft/60',
@@ -190,8 +215,18 @@ export function RecordsList({
                   <button
                     type="button"
                     aria-current={isSelected ? 'true' : undefined}
+                    aria-keyshortcuts={rowMenu ? 'Shift+F10 ContextMenu' : undefined}
                     onClick={() => onSelect(row.id)}
+                    onDoubleClick={open}
                     onKeyDown={(e) => {
+                      if (rowMenu && (e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10'))) {
+                        e.preventDefault()
+                        e.stopPropagation()
+                        menuReturnFocus.current = e.currentTarget
+                        onRowMenuOpen?.(row)
+                        setMenuRowId(row.id)
+                        return
+                      }
                       if (e.key !== 'Enter' || e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return
                       e.preventDefault()
                       open()
@@ -261,6 +296,22 @@ export function RecordsList({
                   signedSource={signedSourceOf(row)}
                   review={reportReviewOf(row)}
                 />
+                {rowMenu && (
+                  <RecordRowMenu
+                    book={row}
+                    itemsFor={rowMenu}
+                    open={menuRowId === row.id}
+                    returnFocusRef={menuReturnFocus}
+                    onOpenChange={(o) => {
+                      if (o) {
+                        // Trigger entry uses Radix's own restoration, not a previous row's origin.
+                        menuReturnFocus.current = null
+                        onRowMenuOpen?.(row)
+                      }
+                      setMenuRowId(o ? row.id : null)
+                    }}
+                  />
+                )}
               </div>
             )
           })}

@@ -8,7 +8,7 @@
  */
 import { useId, useState } from 'react'
 import * as RadixDialog from '@radix-ui/react-dialog'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 import { Search, X } from 'lucide-react'
@@ -24,6 +24,7 @@ import {
   type SendPurpose,
 } from '@/lib/api'
 import { bidi } from '@/lib/bidi'
+import { pickEmployeeName } from '@/lib/employeeName'
 import { cn } from '@/lib/utils'
 
 const MAX_RECIPIENTS = 50
@@ -41,31 +42,44 @@ interface Props {
 }
 
 export function SendRecordDialog({ book, open, onOpenChange }: Props): React.JSX.Element | null {
-  // Mount the body only while open, so every opening starts clean.
-  if (!open) return null
-  return <SendBody book={book} close={() => onOpenChange(false)} />
+  const thread = useQuery({
+    queryKey: ['books', 'thread', book.id],
+    queryFn: () => api.getBookThread(book.id),
+    enabled: open,
+  })
+  const candidatesQuery = useQuery({
+    queryKey: ['books', 'recipient-candidates', book.confidentiality],
+    queryFn: () => api.listRecipientCandidates(book.confidentiality),
+    staleTime: 5 * 60_000,
+    enabled: open,
+  })
+  // Resolve reply defaults before mounting; every opening starts clean.
+  if (!open || thread.isPending || candidatesQuery.isPending) return null
+  const replyTo = thread.data?.find((item) => item.direction === 'outgoing' && item.kind === 'reply')?.addressee_user_id
+  const referenceCount = thread.data?.filter((item) => item.direction === 'outgoing' && item.attached).length ?? 0
+  return <SendBody key={book.id} book={book} replyTo={replyTo} referenceCount={referenceCount} candidatesQuery={candidatesQuery} close={() => onOpenChange(false)} />
 }
 
-function SendBody({ book, close }: { book: BookRead; close: () => void }): React.JSX.Element {
+function SendBody({ book, close, replyTo, referenceCount, candidatesQuery }: Pick<Props, 'book'> & { close: () => void; replyTo?: number | null; referenceCount: number; candidatesQuery: UseQueryResult<RecipientCandidateRead[]> }): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const isAr = i18n.language.startsWith('ar')
   const qc = useQueryClient()
   const noteId = useId()
   const searchId = useId()
   const [query, setQuery] = useState('')
-  const [picked, setPicked] = useState<number[]>([])
-  const [purpose, setPurpose] = useState<SendPurpose>('info')
+  const [picked, setPicked] = useState<number[]>(() =>
+    replyTo != null && candidatesQuery.data?.some((candidate) =>
+      candidate.id === replyTo && (book.confidentiality !== 'secret' || candidate.has_secret_clearance),
+    ) ? [replyTo] : [],
+  )
+  const [purpose, setPurpose] = useState<SendPurpose>(replyTo != null ? 'reply' : 'info')
   const [note, setNote] = useState('')
   const isPersonal = book.confidentiality === 'personal'
   const isSecret = book.confidentiality === 'secret'
+  const [includeReferences, setIncludeReferences] = useState(true)
 
-  const candidatesQuery = useQuery({
-    queryKey: ['books', 'recipient-candidates', book.confidentiality],
-    queryFn: () => api.listRecipientCandidates(book.confidentiality),
-    staleTime: 5 * 60_000,
-  })
   const candidates = (candidatesQuery.data ?? []).filter((c) => !isSecret || c.has_secret_clearance)
-  const nameOf = (c: RecipientCandidateRead): string => (isAr && c.name_ar ? c.name_ar : c.name)
+  const nameOf = (c: RecipientCandidateRead): string => pickEmployeeName({ name_en: c.name, name_ar: c.name_ar }, i18n.language)
   const needle = query.trim().toLowerCase()
   const shown = needle
     ? candidates.filter((c) =>
@@ -83,6 +97,7 @@ function SendBody({ book, close }: { book: BookRead; close: () => void }): React
         purpose,
         note: note.trim() || null,
         make_directed: isPersonal,
+        include_references: includeReferences,
       }),
     onSuccess: (res) => {
       void qc.invalidateQueries({ queryKey: ['books'] })
@@ -104,7 +119,16 @@ function SendBody({ book, close }: { book: BookRead; close: () => void }): React
           : t('books.send.skippedAlready', { name: bidi(byId.get(s.user_id) ?? `#${s.user_id}`) }),
       )
       .join(isAr ? '، ' : ', ')
-    const description = skipped ? t('books.send.skipped', { list: skipped }) : undefined
+    const references = res.references ?? []
+    const referenceSent = references.reduce((count, item) => count + item.sent_user_ids.length, 0)
+    const referenceSkipped = references.flatMap((item) => item.skipped.map((skip) =>
+      t(`books.thread.skipped.${skip.reason}`, { ref: bidi(item.ref_number), name: bidi(byId.get(skip.user_id) ?? `#${skip.user_id}`) }),
+    ))
+    const description = [
+      skipped ? t('books.send.skipped', { list: skipped }) : '',
+      references.length ? t('books.thread.sendSummary', { sent: referenceSent, skipped: referenceSkipped.length }) : '',
+      referenceSkipped.join(isAr ? '، ' : ', '),
+    ].filter(Boolean).join(' · ') || undefined
     if (res.sent.length > 0) toast.success(t('books.send.sent', { count: res.sent.length }), { description })
     else toast.info(t('books.send.nothingSent'), { description })
   }
@@ -127,8 +151,8 @@ function SendBody({ book, close }: { book: BookRead; close: () => void }): React
           className={cn(
             'bottom-sheet fixed inset-x-0 bottom-0 z-50 flex max-h-[92dvh] flex-col rounded-t-2xl bg-surface shadow-2xl',
             'focus-visible:outline-none',
-            'md:inset-auto md:left-1/2 md:top-1/2 md:max-h-[80dvh] md:w-full md:max-w-lg',
-            'md:-translate-x-1/2 md:-translate-y-1/2 md:rounded-2xl',
+            'md:inset-auto md:start-1/2 md:top-1/2 md:max-h-[80dvh] md:w-full md:max-w-lg',
+            'md:-translate-x-1/2 rtl:md:translate-x-1/2 md:-translate-y-1/2 md:rounded-2xl',
           )}
         >
           <span aria-hidden className="mx-auto mt-2.5 h-1 w-10 shrink-0 rounded-full bg-hairline md:hidden" />
@@ -167,6 +191,12 @@ function SendBody({ book, close }: { book: BookRead; close: () => void }): React
             {isSecret && (
               <p className="text-[0.78em] text-muted-foreground">{t('books.send.secretNotice')}</p>
             )}
+            {referenceCount > 0 && (
+              <label className="flex min-h-10 items-center gap-2 text-[0.84em]">
+                <input type="checkbox" checked={includeReferences} disabled={mutation.isPending} onChange={(e) => setIncludeReferences(e.target.checked)} className="h-4 w-4 accent-primary" />
+                {t('books.thread.alsoSend', { count: referenceCount })}
+              </label>
+            )}
 
             {/* Recipients */}
             <div>
@@ -191,9 +221,7 @@ function SendBody({ book, close }: { book: BookRead; close: () => void }): React
                   className="min-h-10 w-full rounded-lg border border-hairline bg-background py-2 pe-3 ps-9 text-[0.84em] text-foreground focus:border-ring focus:outline-none focus:ring-2 focus:ring-ring/30"
                 />
               </div>
-              {candidatesQuery.isPending ? (
-                <div className="h-40 w-full animate-pulse rounded-lg bg-surface-tinted" />
-              ) : candidatesQuery.isError ? (
+              {candidatesQuery.isError ? (
                 <p className="text-[0.8em] text-destructive">{apiErrorMessage(candidatesQuery.error)}</p>
               ) : shown.length === 0 ? (
                 <p className="rounded-lg border border-hairline px-3 py-4 text-center text-[0.8em] text-muted-foreground">

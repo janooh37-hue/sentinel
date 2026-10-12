@@ -1555,6 +1555,9 @@ def generate_document(
     callers separately pass ``record_access_user`` to enforce revision and source
     record authorization. Trusted system workflows leave that identity unset.
 
+    ``confidentiality`` sets the header level mark on primary and companion
+    DOCX files. Revisions retain the existing book's level instead.
+
     Round 2 — Fix E: ``embed_signature`` replaces the old ``hand_sign`` kwarg
     with inverted semantics. ``embed_signature[entity]=True`` opts INTO
     embedding the signature image; the default behaviour is no embed.
@@ -1956,6 +1959,7 @@ def generate_document(
         data=primary_data,
         destination=destination,
         stamps=artifact_service.StampPlan(
+            level=revise_book.confidentiality if revise_book is not None else confidentiality,
             reference=raw_ref if commit else None,
             header_reference=commit
             and _classification is None
@@ -2484,6 +2488,9 @@ def generate_document(
                 data=data,
                 destination=out_dir / comp_filename,
                 stamps=artifact_service.StampPlan(
+                    level=(
+                        revise_book.confidentiality if revise_book is not None else confidentiality
+                    ),
                     reference=raw_ref if commit else None,
                     header_reference=commit and _classification is None,
                     aztec_corner=(aztec_corner_for(companion_template_id) if commit else None),
@@ -2690,6 +2697,7 @@ def _sign_authored_docx(
             source_path=source,
             destination=destination,
             stamps=artifact_service.StampPlan(
+                level=book.confidentiality,
                 signature=artifact_service.SignatureStamp(
                     image_path=Path(signer_signature_path),
                     anchor_names=tuple(names),
@@ -2700,7 +2708,7 @@ def _sign_authored_docx(
                     ),
                     keep_manager_block_together=keep_together,
                     manager_title=manager_title,
-                )
+                ),
             ),
             converter=converter or convert_docx_to_pdf,
         )
@@ -2844,6 +2852,7 @@ def render_signed_artifact(
         data=data,
         destination=out_dir / docx_name.replace(".docx", "_signed.docx"),
         stamps=artifact_service.StampPlan(
+            level=book.confidentiality,
             reference=book.ref_number,
             header_reference=template_id not in CLASSIFIED_BOOK_FORMS
             and template_id not in VEHICLE_LETTER_FORMS,

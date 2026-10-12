@@ -22,6 +22,7 @@ import { cn } from '@/lib/utils'
 import { useDeferredDelete } from '@/lib/useDeferredDelete'
 import { useIsMobile } from '@/lib/useIsMobile'
 import { useKeyboardInset } from '@/lib/useKeyboardInset'
+import { pickEmployeeName } from '@/lib/employeeName'
 import {
   normalizePoint,
   pageAtPoint,
@@ -81,7 +82,7 @@ export function BookAnnotationLayer({
   openId?: number | null
   onOpenIdChange?: (id: number | null) => void
 }): React.JSX.Element {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
 
   // Interaction is live only when the decider has explicitly armed marking.
   // Disarmed, the overlay must not intercept a single touch: the paper below
@@ -307,7 +308,7 @@ export function BookAnnotationLayer({
                     {n}
                   </span>
                   <span className="truncate text-[0.72em] font-semibold text-foreground">
-                    {a.author_name ?? '—'}
+                    {pickEmployeeName({ name_en: a.author_name ?? '', name_ar: a.author_name_ar }, i18n.language) || '—'}
                   </span>
                   {canDelete && (
                     <button
@@ -617,7 +618,7 @@ export function MarksStepper({
   openId: number | null
   onOpenIdChange: (id: number | null) => void
 }): React.JSX.Element | null {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   if (annotations.length === 0) return null
   const index = annotations.findIndex((a) => a.id === openId)
   const step = (dir: 1 | -1): void => {
@@ -625,7 +626,7 @@ export function MarksStepper({
     onOpenIdChange(annotations[next].id)
   }
   // Isolate the name so an Arabic name inside an English sentence (and vice versa) keeps its order.
-  const name = `\u2068${annotations[0].author_name ?? '—'}\u2069`
+  const name = `\u2068${pickEmployeeName({ name_en: annotations[0].author_name ?? '', name_ar: annotations[0].author_name_ar }, i18n.language) || '—'}\u2069`
   return (
     <span className="inline-flex items-center gap-1 rounded-full bg-accent-soft py-0.5 ps-3 pe-0.5 text-[0.75em] font-semibold text-accent">
       <MessageSquare className="h-3.5 w-3.5" aria-hidden />

@@ -19,6 +19,10 @@ const { toastFn } = vi.hoisted(() => ({ toastFn: vi.fn() }))
 vi.mock('sonner', () => ({
   toast: Object.assign(toastFn, { success: vi.fn(), error: vi.fn() }),
 }))
+vi.mock('@/lib/authContext', () => ({ useAuth: () => ({ user: { id: 7, role: 'admin' } }) }))
+vi.mock('@/lib/useCapabilities', () => ({
+  useCapabilities: () => ({ has: (cap: string) => ADMIN_CAPS.includes(cap) }),
+}))
 
 const ADMIN_CAPS = [
   'books.edit',

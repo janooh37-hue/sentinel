@@ -496,11 +496,13 @@ class BookRecipient(Base):
     book_id: Mapped[int] = mapped_column(ForeignKey("books.id", ondelete="CASCADE"), nullable=False)
     user_id: Mapped[int] = mapped_column(Integer, nullable=False)
     sent_by_user_id: Mapped[int] = mapped_column(Integer, nullable=False)
-    # info | action | reply | sign (للاطلاع / للتنفيذ / للإفادة / للتوقيع)
+    # info | action | reply | circulate (للاطلاع / للتنفيذ / للإفادة / للتعميم)
     purpose: Mapped[str] = mapped_column(String(16), nullable=False)
     note: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
     read_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    done_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    archived_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     revoked_by_user_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
@@ -515,9 +517,33 @@ class BookRecipient(Base):
             sqlite_where=text("revoked_at IS NULL"),
         ),
         CheckConstraint(
-            "purpose IN ('info', 'action', 'reply', 'sign')",
+            "purpose IN ('info', 'action', 'reply', 'circulate')",
             name="ck_book_recipients_purpose",
         ),
+    )
+
+
+class BookLink(Base):
+    """An outgoing reply, derivation or live reference to another record."""
+
+    __tablename__ = "book_links"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    book_id: Mapped[int] = mapped_column(ForeignKey("books.id", ondelete="CASCADE"), nullable=False)
+    target_book_id: Mapped[int] = mapped_column(
+        ForeignKey("books.id", ondelete="CASCADE"), nullable=False
+    )
+    kind: Mapped[str] = mapped_column(String(16), nullable=False)
+    attached: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
+    created_by_user_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_utcnow)
+
+    __table_args__ = (
+        CheckConstraint("kind IN ('reply', 'based_on', 'reference')", name="ck_book_links_kind"),
+        UniqueConstraint("book_id", "target_book_id", name="uq_book_links_pair"),
+        Index("ix_book_links_target", "target_book_id"),
     )
 
 

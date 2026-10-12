@@ -31,6 +31,7 @@ import { apiErrorMessage } from '@/lib/api'
 import type { IncludedPaperRead, IncludedPapersHistoryRead } from '@/lib/api'
 import { formatBytes } from '@/lib/fileTypes'
 import { cn } from '@/lib/utils'
+import { pickEmployeeName } from '@/lib/employeeName'
 
 import type { EditableIncludedPaper } from './includedPapersState'
 import { useIncludedPapersEditor } from './useIncludedPapersEditor'
@@ -452,7 +453,7 @@ function IncludedPapersWorkspace({
                     >
                       <div className="flex items-center justify-between gap-2">
                         <strong className="truncate text-[0.72em] text-foreground" dir="auto">
-                          {entry.actor_name}
+                          {pickEmployeeName({ name_en: entry.actor_name ?? '', name_ar: entry.actor_name_ar }, i18n.language)}
                         </strong>
                         <time
                           dateTime={entry.created_at}

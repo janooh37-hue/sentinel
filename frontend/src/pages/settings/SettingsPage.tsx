@@ -17,6 +17,7 @@ import { CapabilityGate } from '@/components/shell/CapabilityGate'
 import { useAuth } from '@/lib/authContext'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { copyToClipboard } from '@/lib/clipboard'
+import { pickEmployeeName } from '@/lib/employeeName'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { EmailSection } from './EmailSection'
 import { ManagersSection } from './ManagersSection'
@@ -247,7 +248,7 @@ function DefaultsSection({
   settings: AppSettingsRead
   onUpdate: (u: AppSettingsUpdate) => void
 }): React.JSX.Element {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const { user } = useAuth()
   const isAdmin = user?.role === 'admin'
   const { data: approvers } = useQuery({
@@ -328,7 +329,7 @@ function DefaultsSection({
                 <SelectItem value="none">—</SelectItem>
                 {eligibleApprovers.map((approver) => (
                   <SelectItem key={approver.id} value={String(approver.id)}>
-                    {approver.name}
+                    {pickEmployeeName({ name_en: approver.name ?? '', name_ar: approver.name_ar }, i18n.language)}
                   </SelectItem>
                 ))}
               </SelectContent>

@@ -58,8 +58,11 @@ from app.schemas.book import (
     BookConfidentialityUpdate,
     BookCreate,
     BookDecisionRequest,
+    BookDeriveRequest,
     BookEditSessionRead,
     BookFacetsResponse,
+    BookInboxRead,
+    BookLinkCreate,
     BookListResponse,
     BookRead,
     BookRecipientRead,
@@ -69,6 +72,7 @@ from app.schemas.book import (
     BookSignRequest,
     BookStateOverrideRequest,
     BookSubmitRequest,
+    BookThreadItem,
     BookUpdate,
     BookVersionRead,
     ClassificationListResponse,
@@ -98,6 +102,7 @@ from app.schemas.book import (
 )
 from app.schemas.notify import NotifyMessageRead as NotifyMessageRead
 from app.services import (
+    book_link_service,
     book_send_service,
     book_service,
     book_template_service,
@@ -249,7 +254,7 @@ def book_facets(
     db: Annotated[Session, Depends(get_db)],
     user: Annotated[User, Depends(require_capability("books.view"))],
     created_by_me: bool = False,
-    inbox: Literal["received", "sent"] | None = None,
+    inbox: book_service.InboxFilter | None = None,
 ) -> BookFacetsResponse:
     """Per-service counts for the Records rail + per-service approval-state
     counts for the status spine. Global, unpaginated; ``created_by_me`` narrows
@@ -476,6 +481,78 @@ def create_word_session(
 
 
 @router.post(
+    "/{book_id}/derive", response_model=WordSessionRead, status_code=status.HTTP_201_CREATED
+)
+def derive_book(
+    book_id: int,
+    payload: BookDeriveRequest,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(get_current_user)],
+) -> WordSessionRead:
+    if user.role == INMATE_REPORTER_ROLE:
+        raise AppError("FORBIDDEN", "Inmate reporters cannot derive records.", http_status=403)
+    original = _require_full_book(db, user, book_id)
+    level = payload.confidentiality or original.confidentiality
+    book_service.require_confidentiality_clearance(db, user, level)
+    _require_word_capability(db, user, "books.create")
+    _require_word_capability(db, user, "books.view")
+    _require_record_type_access(
+        db,
+        user,
+        category_id="GS",
+        service_id="General Book",
+        classification_code=(
+            payload.classification_code
+            if payload.classification_code is not None
+            else original.classification_code
+        ),
+    )
+    info = book_link_service.derive(db, user, original, payload)
+    return WordSessionRead(
+        book_id=info.book_id,
+        ref_number=info.ref_number,
+        token=info.token,
+        filename=info.filename,
+        word_url=info.word_url,
+        dav_url=info.dav_url,
+    )
+
+
+@router.get("/{book_id}/thread", response_model=list[BookThreadItem])
+def get_book_thread(
+    book_id: int,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(get_current_user)],
+) -> list[BookThreadItem]:
+    return book_link_service.thread(db, user, _require_full_book(db, user, book_id))
+
+
+@router.post("/{book_id}/links", response_model=BookThreadItem, status_code=status.HTTP_201_CREATED)
+def link_book(
+    book_id: int,
+    payload: BookLinkCreate,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(require_capability("books.edit"))],
+) -> BookThreadItem:
+    return book_link_service.link(
+        db, user, _require_full_book(db, user, book_id, write=True), payload.target_book_id
+    )
+
+
+@router.delete("/{book_id}/links/{target_book_id}", status_code=status.HTTP_204_NO_CONTENT)
+def unlink_book(
+    book_id: int,
+    target_book_id: int,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(require_capability("books.edit"))],
+) -> Response:
+    book_link_service.unlink(
+        db, user, _require_full_book(db, user, book_id, write=True), target_book_id
+    )
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post(
     "/{book_id}/word-sessions/finish",
     response_model=BookRead,
 )
@@ -665,7 +742,7 @@ def list_books(
     to_date: date | None = None,
     include_deleted: bool = False,
     created_by_me: bool = False,
-    inbox: Literal["received", "sent"] | None = None,
+    inbox: book_service.InboxFilter | None = None,
     limit: int = Query(LIST_DEFAULT_LIMIT, ge=1, le=LIST_MAX_LIMIT),
     offset: int = Query(0, ge=0),
 ) -> BookListResponse:
@@ -721,10 +798,16 @@ def _attach_creator_names(db: Session, rows: Sequence[Book], items: Sequence[Boo
     names = book_service.resolve_names_by_ids(
         db, {r.created_by_user_id for r in rows if r.created_by_user_id is not None}
     )
+    user_ids = {r.created_by_user_id for r in rows if r.created_by_user_id is not None}
+    user_ids.update(item.edit_session.user_id for item in items if item.edit_session is not None)
+    names_ar = book_service.resolve_names_ar_by_ids(db, user_ids)
     for row, item in zip(rows, items, strict=True):
         item.created_by_name = (
             names.get(row.created_by_user_id) if row.created_by_user_id is not None else None
         )
+        item.created_by_name_ar = names_ar.get(row.created_by_user_id)
+        if item.edit_session is not None:
+            item.edit_session.user_name_ar = names_ar.get(item.edit_session.user_id)
 
 
 def _enrich_path_fields(
@@ -999,6 +1082,7 @@ def _build_versions(
     row: Book,
     *,
     version_ids: frozenset[int] | None = None,
+    names_ar_by_id: dict[int, str | None] | None = None,
 ) -> list[BookVersionRead]:
     versions = [
         version
@@ -1033,6 +1117,11 @@ def _build_versions(
         user_ids.update(step.assignee_user_id for step in version.approval_steps)
     user_ids.update(access.user_id for access in revision_access)
     names_by_id = book_service.resolve_names_by_ids(db, user_ids)
+    if names_ar_by_id is None:
+        names_ar_by_id = {}
+    names_ar_by_id.update(
+        book_service.resolve_names_ar_by_ids(db, user_ids | names_ar_by_id.keys())
+    )
     for access in revision_access:
         access_by_version.setdefault(access.version_id, []).append(access)
 
@@ -1060,6 +1149,7 @@ def _build_versions(
         for step in version.approval_steps:
             item = BookApprovalStepRead.model_validate(step)
             item.assignee_name = names_by_id.get(step.assignee_user_id)
+            item.assignee_name_ar = names_ar_by_id.get(step.assignee_user_id)
             step_reads.append(item)
             if step.decided_at is not None and step.state != "pending":
                 source_decisions.add(
@@ -1079,6 +1169,7 @@ def _build_versions(
                 decided_at=access.decided_at,
                 assignee_user_id=access.user_id,
                 assignee_name=names_by_id.get(access.user_id),
+                assignee_name_ar=names_ar_by_id.get(access.user_id),
             )
             for access in access_by_version.get(version.id, [])
             if (
@@ -1110,6 +1201,7 @@ def _build_versions(
                     if version.created_by_user_id is not None
                     else None
                 ),
+                created_by_name_ar=names_ar_by_id.get(version.created_by_user_id),
                 docx_url=docx_url,
                 pdf_url=pdf_url,
                 manager_sig_embedded=version.manager_sig_embedded,
@@ -1169,7 +1261,29 @@ def _build_book_detail(db: Session, row: Book) -> BookRead:
     item.doc_manager_user_id, item.doc_manager_name, item.doc_manager_has_signature = (
         book_service.resolve_doc_manager_user(db, row)
     )
-    item.versions = _build_versions(db, row)
+    _populate_included_papers(item, row, db)
+    _fill_draft_fields(item, row, db)
+    user_ids = {
+        uid
+        for uid in (row.created_by_user_id, row.submitted_by_user_id, item.doc_manager_user_id)
+        if uid is not None
+    }
+    if item.edit_session is not None:
+        user_ids.add(item.edit_session.user_id)
+    user_ids.update(
+        event.actor_user_id
+        for event in item.included_papers_history
+        if event.actor_user_id is not None
+    )
+    names_ar = dict.fromkeys(user_ids)
+    item.versions = _build_versions(db, row, names_ar_by_id=names_ar)
+    item.created_by_name_ar = names_ar.get(row.created_by_user_id)
+    item.submitted_by_name_ar = names_ar.get(row.submitted_by_user_id)
+    item.doc_manager_name_ar = names_ar.get(item.doc_manager_user_id)
+    if item.edit_session is not None:
+        item.edit_session.user_name_ar = names_ar.get(item.edit_session.user_id)
+    for event in item.included_papers_history:
+        event.actor_name_ar = names_ar.get(event.actor_user_id)
     current = row.versions[-1] if row.versions else None
     current_read = item.versions[-1] if item.versions else None
     item.approval_steps = current_read.approval_steps if current_read is not None else []
@@ -1185,8 +1299,6 @@ def _build_book_detail(db: Session, row: Book) -> BookRead:
         NotifyMessageRead.model_validate(message)
         for message in book_service.messages_for_book(db, row)
     ]
-    _populate_included_papers(item, row, db)
-    _fill_draft_fields(item, row, db)
     return item
 
 
@@ -1290,7 +1402,16 @@ def _build_scoped_book_response(
 ) -> BookRead:
     context = selected.approval_context if isinstance(selected.approval_context, dict) else {}
     category_id = _context_string(context, "category_id")
-    versions = _build_versions(db, row, version_ids=allowed_version_ids)
+    names_ar = dict.fromkeys(
+        uid
+        for uid in (
+            row.created_by_user_id if resolve_creator_name else None,
+            _context_user_id(context, "submitted_by_user_id"),
+            _context_user_id(context, "doc_manager_user_id"),
+        )
+        if uid is not None
+    )
+    versions = _build_versions(db, row, version_ids=allowed_version_ids, names_ar_by_id=names_ar)
     selected_read = next(version for version in versions if version.id == selected.id)
     can_sign, can_review, your_step_kind = _action_flags(db, row, user, selected)
     return BookRead(
@@ -1319,6 +1440,10 @@ def _build_scoped_book_response(
         signing_path=form_policy.signing_path_of(selected.template_id),
         submitted_by_user_id=_context_user_id(context, "submitted_by_user_id"),
         submitted_by_name=_context_string(context, "submitted_by_name"),
+        submitted_by_name_ar=context.get(
+            "submitted_by_name_ar",
+            names_ar.get(_context_user_id(context, "submitted_by_user_id")),
+        ),
         submitted_by_g=None,
         created_by_user_id=row.created_by_user_id,
         created_by_name=(
@@ -1326,10 +1451,15 @@ def _build_scoped_book_response(
             if resolve_creator_name and row.created_by_user_id is not None
             else None
         ),
+        created_by_name_ar=names_ar.get(row.created_by_user_id) if resolve_creator_name else None,
         created_by_g=None,
         submitted_at=selected_read.submitted_at,
         doc_manager_user_id=_context_user_id(context, "doc_manager_user_id"),
         doc_manager_name=_context_string(context, "doc_manager_name"),
+        doc_manager_name_ar=context.get(
+            "doc_manager_name_ar",
+            names_ar.get(_context_user_id(context, "doc_manager_user_id")),
+        ),
         doc_manager_has_signature=False,
         is_word_book=not selected.fields and selected.document_id is not None,
         your_step_kind=your_step_kind,
@@ -1542,11 +1672,14 @@ def get_book(
     user: Annotated[User, Depends(get_current_user)],
     include_deleted: bool = False,
     version_id: Annotated[int | None, Query(gt=0)] = None,
+    mark_read: bool = True,
 ) -> BookRead:
     row = book_service.get_book_detail(db, book_id, include_deleted=include_deleted)
     item = _build_book_response(db, row, user, version_id=version_id)
-    if item.my_inbox is not None and item.my_inbox.read_at is None:
-        item.my_inbox.read_at = book_send_service.mark_read(db, user.id, row.id)
+    if mark_read and item.my_inbox is not None:
+        first_read = book_send_service.mark_read(db, user.id, row.id)
+        if item.my_inbox.read_at is None:
+            item.my_inbox.read_at = first_read
     return item
 
 
@@ -1589,14 +1722,14 @@ def list_annotations(
     row = book_service.get_book_detail(db, book_id)
     book_service.resolve_book_read_access(db, user, row, version_id=version_id)
     rows = book_service.list_annotations(db, book_id, version_id)
+    user_ids = {a.author_user_id for a in rows if a.author_user_id is not None}
+    names = book_service.resolve_names_by_ids(db, user_ids)
+    names_ar = book_service.resolve_names_ar_by_ids(db, user_ids)
     out: list[BookAnnotationRead] = []
     for a in rows:
         item = BookAnnotationRead.model_validate(a)
-        item.author_name = (
-            book_service.resolve_user_name_by_id(db, a.author_user_id)
-            if a.author_user_id is not None
-            else None
-        )
+        item.author_name = names.get(a.author_user_id)
+        item.author_name_ar = names_ar.get(a.author_user_id)
         out.append(item)
     return out
 
@@ -1626,6 +1759,7 @@ def create_annotation(
     )
     item = BookAnnotationRead.model_validate(a)
     item.author_name = book_service.resolve_user_name_by_id(db, user.id)
+    item.author_name_ar = book_service.resolve_names_ar_by_ids(db, {user.id}).get(user.id)
     return item
 
 
@@ -1665,6 +1799,46 @@ def create_book(
     return _build_book_response(db, row, user)
 
 
+@router.post("/{book_id}/inbox/done", response_model=BookInboxRead)
+def mark_book_inbox_done(
+    book_id: int,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(get_current_user)],
+) -> BookInboxRead:
+    row = book_service.get_book(db, book_id)
+    return book_send_service.set_inbox_state(db, user, row, field="done_at", enabled=True)
+
+
+@router.delete("/{book_id}/inbox/done", response_model=BookInboxRead)
+def undo_book_inbox_done(
+    book_id: int,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(get_current_user)],
+) -> BookInboxRead:
+    row = book_service.get_book(db, book_id)
+    return book_send_service.set_inbox_state(db, user, row, field="done_at", enabled=False)
+
+
+@router.post("/{book_id}/inbox/archive", response_model=BookInboxRead)
+def archive_book_inbox(
+    book_id: int,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(get_current_user)],
+) -> BookInboxRead:
+    row = book_service.get_book(db, book_id)
+    return book_send_service.set_inbox_state(db, user, row, field="archived_at", enabled=True)
+
+
+@router.delete("/{book_id}/inbox/archive", response_model=BookInboxRead)
+def unarchive_book_inbox(
+    book_id: int,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(get_current_user)],
+) -> BookInboxRead:
+    row = book_service.get_book(db, book_id)
+    return book_send_service.set_inbox_state(db, user, row, field="archived_at", enabled=False)
+
+
 @router.put("/{book_id}/confidentiality", response_model=BookRead)
 def set_book_confidentiality(
     book_id: int,
@@ -1690,7 +1864,7 @@ def send_book(
     user: Annotated[User, Depends(get_current_user)],
 ) -> BookSendResponse:
     row = book_service.get_book(db, book_id)
-    sent, skipped = book_send_service.send(
+    sent, skipped, references = book_send_service.send(
         db,
         user,
         row,
@@ -1698,8 +1872,9 @@ def send_book(
         purpose=payload.purpose,
         note=payload.note,
         make_directed=payload.make_directed,
+        include_references=payload.include_references,
     )
-    return BookSendResponse(sent=sent, skipped=skipped)
+    return BookSendResponse(sent=sent, skipped=skipped, references=references)
 
 
 @router.get("/{book_id}/recipients", response_model=list[BookRecipientRead])
@@ -2194,6 +2369,7 @@ def list_revision_access(
     book_service.get_book(db, book_id)
     grants = book_service.list_revision_access(db, book_id)
     names = book_service.resolve_names_by_ids(db, {grant.user_id for grant in grants})
+    names_ar = book_service.resolve_names_ar_by_ids(db, {grant.user_id for grant in grants})
     version_nos = {grant.version_id: grant.version.version_no for grant in grants}
     return [
         BookRevisionAccessRead(
@@ -2202,6 +2378,7 @@ def list_revision_access(
             version_no=version_nos[grant.version_id],
             user_id=grant.user_id,
             user_name=names.get(grant.user_id),
+            user_name_ar=names_ar.get(grant.user_id),
             kind=grant.kind,
             state=grant.state,
             note=grant.note,
@@ -2236,6 +2413,7 @@ def revoke_revision_access(
         actor=user,
     )
     names = book_service.resolve_names_by_ids(db, {grant.user_id for grant in grants})
+    names_ar = book_service.resolve_names_ar_by_ids(db, {grant.user_id for grant in grants})
     return [
         BookRevisionAccessRead(
             id=grant.id,
@@ -2243,6 +2421,7 @@ def revoke_revision_access(
             version_no=grant.version.version_no,
             user_id=grant.user_id,
             user_name=names.get(grant.user_id),
+            user_name_ar=names_ar.get(grant.user_id),
             kind=grant.kind,
             state=grant.state,
             note=grant.note,

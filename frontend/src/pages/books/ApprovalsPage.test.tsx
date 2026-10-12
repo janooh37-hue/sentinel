@@ -353,6 +353,18 @@ describe('ApprovalsPage rows', () => {
     vi.mocked(api.getApprovalSummary).mockResolvedValue(summary())
   })
 
+  it.each(['received', 'sent'] as const)('shows a placeholder for a missing %s counterparty', async (scope) => {
+    vi.mocked(api.getApprovalSummary).mockResolvedValue(summary({ can_view_sent: true }))
+    vi.mocked(api.listApprovalLog).mockResolvedValue({
+      items: [row({ submitted_by_name: null, submitted_by_name_ar: null })],
+      total: 1, limit: 100, offset: 0,
+    })
+    renderPage(`/books/approvals?tab=${scope}`)
+    const article = await screen.findByTestId('approval-row')
+    const label = scope === 'received' ? 'Submitter' : 'Assigned signer'
+    expect(article).toHaveTextContent(`${label}: —`)
+  })
+
   it('renders ref chips, subjects, and the submitter line', async () => {
     vi.mocked(api.listApprovalLog).mockResolvedValue({
       items: [row({ book_id: 1, ref_number: 'HR-0001', subject: 'Pending one' })],

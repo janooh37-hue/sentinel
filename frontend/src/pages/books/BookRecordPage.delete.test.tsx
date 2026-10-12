@@ -28,6 +28,7 @@ vi.mock('@/lib/api', async (orig) => {
     api: {
       ...real.api,
       getBook: vi.fn(),
+      getBookThread: vi.fn().mockResolvedValue([]),
       deleteBook: vi.fn().mockResolvedValue(undefined),
       getBookVersionFields: vi.fn().mockResolvedValue({ fields: {} }),
       getEmployee: vi.fn().mockResolvedValue({ name_en: 'SAEED', name_ar: 'سعيد' }),

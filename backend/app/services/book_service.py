@@ -908,15 +908,25 @@ def _created_by_clause(user: User | None) -> ColumnElement[bool]:
     return false() if user is None else Book.created_by_user_id == user.id
 
 
-InboxFilter = Literal["received", "sent"]
+InboxFilter = Literal["received", "sent", "archived"]
 
 
 def inbox_clause(user: User | None, inbox: InboxFilter) -> ColumnElement[bool]:
-    """Records with an active direct send to (received) or from (sent) the caller."""
+    """Received has an unarchived send; archived has active sends but none unarchived."""
     if user is None:
         return false()
-    if inbox == "received":
-        return active_recipient_clause(user.id)
+    if inbox in ("received", "archived"):
+        unarchived = exists(
+            select(BookRecipient.id)
+            .where(
+                BookRecipient.book_id == Book.id,
+                BookRecipient.user_id == user.id,
+                BookRecipient.revoked_at.is_(None),
+                BookRecipient.archived_at.is_(None),
+            )
+            .correlate_except(BookRecipient)
+        )
+        return unarchived if inbox == "received" else active_recipient_clause(user.id) & ~unarchived
     return exists(
         select(BookRecipient.id)
         .where(
@@ -1425,6 +1435,9 @@ def _approval_context(
     names = resolve_names_by_ids(
         db, {uid for uid in (submitted_by_user_id, manager_user_id) if uid is not None}
     )
+    names_ar = resolve_names_ar_by_ids(
+        db, {uid for uid in (submitted_by_user_id, manager_user_id) if uid is not None}
+    )
     fields = version.fields or {}
     subject = fields.get("subject")
     subject = subject.strip() if isinstance(subject, str) and subject.strip() else book.subject
@@ -1445,8 +1458,10 @@ def _approval_context(
         "employee_name_snapshot": book.employee_name_snapshot,
         "submitted_by_user_id": submitted_by_user_id,
         "submitted_by_name": names.get(submitted_by_user_id) if submitted_by_user_id else None,
+        "submitted_by_name_ar": names_ar.get(submitted_by_user_id),
         "doc_manager_user_id": manager_user_id,
         "doc_manager_name": names.get(manager_user_id) if manager_user_id else None,
+        "doc_manager_name_ar": names_ar.get(manager_user_id),
         "submitted_at": instant.isoformat() if instant else None,
     }
 
@@ -2606,8 +2621,9 @@ def _build_worklist_item(
     db: Session,
     row: _WorklistRow,
     *,
-    names_by_id: dict[int, str],
+    names_by_id: tuple[dict[int, str], dict[int, str | None]],
 ) -> ApprovalLogItem:
+    names_by_id, names_ar_by_id = names_by_id
     book, version, full = row.book, row.version, row.access_scope == "full"
     approver_steps = [
         s for s in version.approval_steps if _received_step_kind(book, s.kind) == "approver"
@@ -2652,11 +2668,28 @@ def _build_worklist_item(
         priority=priority,
         submitted_by_user_id=book.submitted_by_user_id if full else None,
         submitted_by_name=submitted_by_name,
+        submitted_by_name_ar=context.get(
+            "submitted_by_name_ar",
+            names_ar_by_id.get(
+                context.get("submitted_by_user_id") or (book.submitted_by_user_id if full else None)
+            ),
+        ),
         doc_manager_user_id=doc_manager_user_id,
         doc_manager_name=doc_manager_name,
+        doc_manager_name_ar=context.get(
+            "doc_manager_name_ar", names_ar_by_id.get(doc_manager_user_id)
+        ),
         approver_name=names_by_id.get(signer_step.assignee_user_id) if signer_step else None,
+        approver_name_ar=(
+            names_ar_by_id.get(signer_step.assignee_user_id) if signer_step else None
+        ),
         reviewer_names=[
             names_by_id.get(s.assignee_user_id, "")
+            for s in version.approval_steps
+            if _received_step_kind(book, s.kind) == "reviewer"
+        ],
+        reviewer_names_ar=[
+            names_ar_by_id.get(s.assignee_user_id)
             for s in version.approval_steps
             if _received_step_kind(book, s.kind) == "reviewer"
         ],
@@ -2674,7 +2707,9 @@ def _build_worklist_item(
     )
 
 
-def _worklist_names(db: Session, rows: list[_WorklistRow]) -> dict[int, str]:
+def _worklist_names(
+    db: Session, rows: list[_WorklistRow]
+) -> tuple[dict[int, str], dict[int, str | None]]:
     user_ids: set[int] = set()
     for row in rows:
         if row.access_scope == "full" and row.book.submitted_by_user_id is not None:
@@ -2683,10 +2718,24 @@ def _worklist_names(db: Session, rows: list[_WorklistRow]) -> dict[int, str]:
         context = (
             row.version.approval_context if isinstance(row.version.approval_context, dict) else {}
         )
-        raw = context.get("submitted_by_user_id")
-        if isinstance(raw, int) and not isinstance(raw, bool):
-            user_ids.add(raw)
-    return resolve_names_by_ids(db, user_ids)
+        for key in ("submitted_by_user_id", "doc_manager_user_id"):
+            raw = context.get(key)
+            if isinstance(raw, int) and not isinstance(raw, bool):
+                user_ids.add(raw)
+    manager_ids = {
+        row.book.doc_manager_id
+        for row in rows
+        if row.access_scope == "full" and row.book.doc_manager_id is not None
+    }
+    if manager_ids:
+        user_ids.update(
+            db.scalars(
+                select(Manager.user_id).where(
+                    Manager.id.in_(manager_ids), Manager.user_id.is_not(None)
+                )
+            )
+        )
+    return resolve_names_by_ids(db, user_ids), resolve_names_ar_by_ids(db, user_ids)
 
 
 def _sent_worklist_rows(
@@ -2898,6 +2947,19 @@ def resolve_names_by_ids(db: Session, user_ids: set[int]) -> dict[int, str]:
     return out
 
 
+def resolve_names_ar_by_ids(db: Session, user_ids: set[int]) -> dict[int, str | None]:
+    """Linked employee Arabic names in one batch; missing names stay null."""
+    if not user_ids:
+        return {}
+    return dict(
+        db.execute(
+            select(User.id, Employee.name_ar)
+            .outerjoin(Employee, User.employee_id == Employee.id)
+            .where(User.id.in_(user_ids))
+        ).all()
+    )
+
+
 def submitter_name(db: Session, book: Book) -> str | None:
     """Resolve the display name of the user who submitted ``book`` for approval."""
     if book.submitted_by_user_id is None:
@@ -2934,6 +2996,8 @@ def list_approver_candidates(db: Session) -> list[ApproverOptionRead]:
     users = (
         db.execute(select(User).where(User.status == "active").order_by(User.id)).scalars().all()
     )
+    names = resolve_names_by_ids(db, {user.id for user in users})
+    names_ar = resolve_names_ar_by_ids(db, {user.id for user in users})
 
     out: list[ApproverOptionRead] = []
     for user in users:
@@ -2947,7 +3011,8 @@ def list_approver_candidates(db: Session) -> list[ApproverOptionRead]:
         out.append(
             ApproverOptionRead(
                 id=user.id,
-                name=_resolve_user_name(db, user),
+                name=names[user.id],
+                name_ar=names_ar.get(user.id),
                 is_default=user.is_default_manager,
             )
         )
@@ -3081,8 +3146,11 @@ def list_reviewer_candidates(db: Session) -> list[ApproverOptionRead]:
     users = (
         db.execute(select(User).where(User.status == "active").order_by(User.id)).scalars().all()
     )
+    names = resolve_names_by_ids(db, {user.id for user in users})
+    names_ar = resolve_names_ar_by_ids(db, {user.id for user in users})
     return [
-        ApproverOptionRead(id=u.id, name=_resolve_user_name(db, u), is_default=False) for u in users
+        ApproverOptionRead(id=u.id, name=names[u.id], name_ar=names_ar.get(u.id), is_default=False)
+        for u in users
     ]
 
 
@@ -3106,6 +3174,9 @@ def build_step_read(db: Session, step: BookApprovalStep) -> BookApprovalStepRead
     """Serialize a step with the assignee's resolved display name."""
     item = BookApprovalStepRead.model_validate(step)
     item.assignee_name = resolve_user_name_by_id(db, step.assignee_user_id)
+    item.assignee_name_ar = resolve_names_ar_by_ids(db, {step.assignee_user_id}).get(
+        step.assignee_user_id
+    )
     return item
 
 

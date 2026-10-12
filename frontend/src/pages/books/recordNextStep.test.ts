@@ -86,6 +86,26 @@ function bookOf(state: string, over: Record<string, unknown> = {}): BookRead {
   } as unknown as BookRead
 }
 
+describe('recordNextStep — screen-language names', () => {
+  it('uses Arabic assignee, manager fallback and editor names, while English keeps English', () => {
+    const assignee = bookOf('pending', { steps: [stepOf({ assignee_name: 'Khalid', assignee_name_ar: 'خالد' })] })
+    const ar = ctxOf({ locale: 'ar-AE' })
+    expect(recordNextStep(assignee, ar).status.vars.name).toBe('خالد')
+    expect(recordNextStep(assignee, ctxOf()).status.vars.name).toBe('Khalid')
+    const manager = bookOf('pending', {
+      steps: [stepOf({ assignee_name: null })],
+      doc_manager_name: 'Manager',
+      doc_manager_name_ar: 'المدير',
+    })
+    expect(recordNextStep(manager, ar).status.vars.name).toBe('المدير')
+    const editor = bookOf('none', {
+      edit_session: { state: 'active', user_id: 3, user_name: 'Mariam', user_name_ar: 'مريم' },
+    })
+    expect(recordNextStep(editor, ar).status.vars.name).toBe('مريم')
+    expect(recordNextStep(bookOf('pending', { steps: [stepOf({})] }), ar).status.vars.name).toBe('Khalid')
+  })
+})
+
 describe('recordNextStep — Report review', () => {
   const report = (state: string, over: Record<string, unknown> = {}): BookRead =>
     bookOf(state, { service_id: 'Report', ref_number: 'REPORT-9', ...over })

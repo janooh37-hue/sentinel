@@ -53,6 +53,7 @@ import { Hint } from '@/components/ui/hint'
 import { IconAction } from '@/components/ui/icon-action'
 import { bidi } from '@/lib/bidi'
 import { cn } from '@/lib/utils'
+import { pickEmployeeName } from '@/lib/employeeName'
 import type { RecordPieceProps } from './recordActions'
 
 function StatePill({
@@ -246,7 +247,7 @@ function RecordHeaderHosts({ book, caps, view, actions }: RecordPieceProps): Rea
 }
 
 function RecordHeaderBar({ book, caps, view, actions }: RecordPieceProps): React.JSX.Element {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const chrome = useRecordChrome()
   const railDocked = useRailDocked()
   const [subjectOpen, setSubjectOpen] = useState(false)
@@ -307,7 +308,7 @@ function RecordHeaderBar({ book, caps, view, actions }: RecordPieceProps): React
 
   /** Created by <creator> · G · date, then Submitted by <submitter> only when it differs. */
   const createdDate = book?.created_at?.slice(0, 10)
-  const submitterName = book?.submitted_by_name
+  const submitterName = pickEmployeeName({ name_en: book?.submitted_by_name ?? '', name_ar: book?.submitted_by_name_ar }, i18n.language)
   const submitterDiffers =
     book?.submitted_by_user_id != null &&
     book.submitted_by_user_id !== book.created_by_user_id &&
@@ -320,7 +321,7 @@ function RecordHeaderBar({ book, caps, view, actions }: RecordPieceProps): React
       <span className="shrink-0">{t('books.record.createdBy')}</span>
       <bdi
         data-testid="record-creator"
-        className={cn('min-w-0 truncate font-semibold', book.created_by_name ? 'text-foreground' : 'font-normal italic')}
+        className={cn('min-w-0 truncate font-semibold', book.created_by_name || book.created_by_name_ar ? 'text-foreground' : 'font-normal italic')}
       >
         {creator}
       </bdi>

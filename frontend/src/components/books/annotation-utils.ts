@@ -27,6 +27,7 @@ export interface BookAnnotation {
   comment: string | null
   author_user_id: number | null
   author_name: string | null
+  author_name_ar?: string | null
   created_at: string
 }
 

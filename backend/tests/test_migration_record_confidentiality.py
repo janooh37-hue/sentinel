@@ -62,7 +62,9 @@ def _fts_hits(engine: Engine, term: str) -> list[int]:
 
 def test_head_follows_parent() -> None:
     script = ScriptDirectory.from_config(Config(str(ROOT / "alembic.ini")))
-    assert script.get_heads() == [HEAD]
+    heads = script.get_heads()
+    assert len(heads) == 1
+    assert HEAD in {revision.revision for revision in script.walk_revisions("base", heads[0])}
     assert script.get_revision(HEAD).down_revision == PARENT
 
 
@@ -83,8 +85,9 @@ def test_upgrade_defaults_existing_rows_and_enforces_the_level(tmp_path: Path) -
     assert _fts_hits(engine, "giraffe") == [1]
 
     insert = text(
-        "INSERT INTO book_recipients (book_id, user_id, sent_by_user_id, purpose, revoked_at) "
-        "VALUES (1, 7, 3, :purpose, :revoked)"
+        "INSERT INTO book_recipients "
+        "(book_id, user_id, sent_by_user_id, purpose, revoked_at, created_at) "
+        "VALUES (1, 7, 3, :purpose, :revoked, '2026-10-01 00:00:00')"
     )
     with engine.begin() as c:
         c.execute(insert, {"purpose": "info", "revoked": "2026-10-01 00:00:00"})

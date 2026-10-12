@@ -23,6 +23,7 @@ import {
   Download,
   ExternalLink,
   FileStack,
+  Link2,
   Loader2,
   Lock,
   Mail,
@@ -64,6 +65,7 @@ import { ariaKeyShortcut } from '@/components/ui/keyshortcut'
 import { IconAction } from '@/components/ui/icon-action'
 import { useAuth } from '@/lib/authContext'
 import { bidi } from '@/lib/bidi'
+import { pickEmployeeName } from '@/lib/employeeName'
 import { currentBookDocId } from '@/lib/bookDocument'
 import { copyToClipboard } from '@/lib/clipboard'
 import { serviceHref } from '@/lib/quickActions'
@@ -78,6 +80,8 @@ import { BookStatusChips } from '@/components/books/BookStatusChips'
 import { ChangeConfidentialityDialog } from '@/components/books/ChangeConfidentialityDialog'
 import { RecordInboxStrip, RecordRecipientsPanel } from '@/components/books/RecordRecipientsPanel'
 import { SendRecordDialog } from '@/components/books/SendRecordDialog'
+import { useReplyActions } from '@/components/books/useReplyActions'
+import { LinkRecordDialog } from '@/components/books/LinkRecordDialog'
 import { DocumentState } from '@/components/books/DocumentState'
 import { ServiceArtwork } from '@/components/ui/service-artwork'
 import { WordReopenButton, WordSessionActions } from '@/components/books/BookWordActions'
@@ -97,6 +101,7 @@ import {
 } from './recordNextStep'
 import {
   defaultPaperKey,
+  downloadPaper,
   paperKey,
   paperResetSignature,
   papersOf,
@@ -176,6 +181,8 @@ export function RecordPane({
   const [deleteRecordOpen, setDeleteRecordOpen] = useState(false)
   const [sendOpen, setSendOpen] = useState(false)
   const [levelOpen, setLevelOpen] = useState(false)
+  const [linkOpen, setLinkOpen] = useState(false)
+  const reply = useReplyActions(book)
   const [wordTrigger, setWordTrigger] = useState<WordReopenTrigger | null>(null)
   // Relative times ("2 days ago") are computed once per mounted pane; they need no ticking.
   const [now] = useState(() => Date.now())
@@ -407,7 +414,7 @@ export function RecordPane({
   const deleteReason = deleteId ? reasonOf(deleteId) : undefined
   const deleteLabel = state === 'none' ? t('books.record.deleteDraft') : t('books.record.delete')
   const hasMoreItems =
-    book.can_send || book.can_change_confidentiality ||
+    reply.actions.length > 0 || (canEdit && book.access_scope === 'full') || book.can_send || book.can_change_confidentiality ||
     wordTrigger !== null || showScanSignedInMenu || showAddToPdf || showEmail || showDelete
 
   const includedDocumentId = includedDetail.data ? currentBookDocId(includedDetail.data) : undefined
@@ -553,7 +560,7 @@ export function RecordPane({
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto">
-        <RecordInboxStrip inbox={book.my_inbox} />
+        <RecordInboxStrip book={book} />
         {/* Identity: form · who · creator · date */}
         <div className="px-3.5 pt-3">
           <h2 className="flex items-center gap-1.5 text-[0.9em] font-bold">
@@ -571,8 +578,8 @@ export function RecordPane({
           )}
           <p className="mt-0.5 text-[0.7em] text-muted-foreground">
             {t('books.record.createdBy')}{' '}
-            {book.created_by_name ? (
-              <bdi>{book.created_by_name}</bdi>
+            {book.created_by_name || book.created_by_name_ar ? (
+              <bdi>{pickEmployeeName({ name_en: book.created_by_name ?? '', name_ar: book.created_by_name_ar }, i18n.language)}</bdi>
             ) : (
               <span className="italic">{t('books.record.creatorUnknown')}</span>
             )}
@@ -676,6 +683,14 @@ export function RecordPane({
                     {t('books.send.menu')}
                   </DropdownMenuItem>
                 )}
+                {reply.actions.map((item) => (
+                  <DropdownMenuItem key={item.key} onSelect={item.onSelect}>{item.icon}{item.label}</DropdownMenuItem>
+                ))}
+                {canEdit && book.access_scope === 'full' && (
+                  <DropdownMenuItem onSelect={() => { if (canEdit && book.access_scope === 'full') setLinkOpen(true) }}>
+                    <Link2 className="h-3.5 w-3.5" aria-hidden />{t('books.thread.linkRecord')}
+                  </DropdownMenuItem>
+                )}
                 {book.can_change_confidentiality && (
                   <DropdownMenuItem onSelect={() => setLevelOpen(true)}>
                     <Lock className="h-3.5 w-3.5" aria-hidden />
@@ -729,6 +744,8 @@ export function RecordPane({
       </div>
 
       <SendRecordDialog book={book} open={sendOpen} onOpenChange={setSendOpen} />
+      {reply.dialog}
+      <LinkRecordDialog book={book} open={linkOpen && canEdit && book.access_scope === 'full'} onOpenChange={setLinkOpen} />
       <ChangeConfidentialityDialog book={book} open={levelOpen} onOpenChange={setLevelOpen} />
 
       {/* Owns the "Edit in Word" mutation + inmate-reporter handoff dialog; the trigger renders in More. */}
@@ -908,16 +925,6 @@ export function RecordPane({
         : null}
     </aside>
   )
-}
-
-/** Saves a paper through a transient anchor (the same `download` the viewer uses). */
-function downloadPaper(paper: Paper): void {
-  const a = document.createElement('a')
-  a.href = paper.downloadUrl
-  a.download = paper.filename
-  document.body.appendChild(a)
-  a.click()
-  a.remove()
 }
 
 function paneBtnClass({

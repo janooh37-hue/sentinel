@@ -532,7 +532,8 @@ def test_inbox_summary_and_notification_counts_follow_first_open(
             "unread": unread,
             "received": 1,
             "sent": 0,
-            "by_purpose": {"info": 0, "action": 1, "reply": 0, "sign": 0},
+            "archived": 0,
+            "by_purpose": {"info": 0, "action": 1, "reply": 0, "circulate": 0},
         }
         counts = api.client.get(f"{API}/notifications/counts")
         assert counts.status_code == 200, counts.text

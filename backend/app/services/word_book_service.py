@@ -12,6 +12,7 @@ import secrets
 import shutil
 import threading
 import uuid
+from copy import deepcopy
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -67,6 +68,11 @@ def create_word_book(
     template_name: str | None = None,
     table_rows: list[dict[str, str]] | None = None,
     confidentiality: BookConfidentiality = "general",
+    recipient_name: str | None = None,
+    body_html: str = "",
+    body_docx: Path | None = None,
+    reference_line: str = "",
+    commit: bool = True,
 ) -> WordSessionInfo:
     """Create a General Book with a working docx for Word.
 
@@ -148,8 +154,11 @@ def create_word_book(
         "ref": ref,
         "subject": subject,
         "body": GENERAL_BOOK_BODY_SENTINEL,
-        "body_html": "",
-        "recipient_name": _resolve_recipient(db, recipient_id),
+        "body_html": body_html,
+        "recipient_name": (
+            recipient_name if recipient_name is not None else _resolve_recipient(db, recipient_id)
+        ),
+        "reference_line": reference_line,
         "cc": cc,
         "submitter_g": user.employee_id or "",
     }
@@ -185,6 +194,7 @@ def create_word_book(
             destination=output_path,
             template_path=library_template,
             stamps=artifact_service.StampPlan(
+                level=book.confidentiality,
                 reference=ref,
                 aztec_corner=aztec_corner_for(_TEMPLATE_ID),
             ),
@@ -215,7 +225,12 @@ def create_word_book(
     )
     db.add(session)
     try:
-        db.commit()
+        if body_docx is not None:
+            _copy_general_book_body(body_docx, output_path)
+        if commit:
+            db.commit()
+        else:
+            db.flush()
     except Exception:
         db.rollback()
         artifact_service.cleanup_created(artifact, allowed_root=output_path.parent)
@@ -236,6 +251,170 @@ def create_word_book(
         word_url=word_url,
         dav_url=dav_url,
     )
+
+
+def _copy_general_book_body(source_path: Path, destination_path: Path) -> None:
+    """Copy only the authored body between the canonical introduction and closing.
+
+    Splice after rendering: literal Jinja in Word content is not a template.
+    Keep the new letterhead, addressee, reference and unsigned manager block.
+    """
+    from docx import Document as WordDocument
+    from docx.opc.constants import CONTENT_TYPE as CT
+    from docx.opc.constants import RELATIONSHIP_TYPE as RT
+    from docx.opc.packuri import PackURI
+    from docx.oxml import OxmlElement
+    from docx.oxml.ns import qn
+    from docx.parts.numbering import NumberingPart
+
+    source = WordDocument(source_path)
+    destination = WordDocument(destination_path)
+
+    def bounds(doc: Any) -> tuple[Any, Any] | None:
+        intro = next((p for p in doc.paragraphs if p.text.startswith("يطيب لنا")), None)
+        if intro is None:
+            return None
+        for sibling in intro._p.itersiblings():
+            text = "".join(t.text or "" for t in sibling.iter(qn("w:t")))
+            if text.strip() == "للتفضل بالعلم وإجراءاتكم":
+                return intro._p, sibling
+        return None
+
+    source_bounds, destination_bounds = bounds(source), bounds(destination)
+    if source_bounds is None or destination_bounds is None:
+        # ponytail: canonical labels bound body copying; use stored bookmarks for arbitrary layouts.
+        return
+    intro, closing = source_bounds
+    fragments = []
+    for sibling in intro.itersiblings():
+        if sibling is closing:
+            break
+        fragments.append(deepcopy(sibling))
+
+    package = destination.part.package
+    parts: dict[Any, Any] = {}
+
+    def copy_part(part: Any) -> Any:
+        if part not in parts:
+            name = part.partname
+            new_name = package.next_partname(f"{name.rsplit('/', 1)[0]}/derived%d_{name.filename}")
+            copied = type(part).load(new_name, part.content_type, part.blob, package)
+            parts[part] = copied
+            for rel in part.rels.values():
+                target = rel.target_ref if rel.is_external else copy_part(rel.target_part)
+                copied.rels.add_relationship(rel.reltype, target, rel.rId, rel.is_external)
+        return parts[part]
+
+    relationship_ids: dict[str, str] = {}
+    style_ids: dict[str, str] = {}
+    numbering_ids: dict[str, str] = {}
+    abstract_ids: dict[str, str] = {}
+    numbering = next(
+        (
+            rel.target_part.element
+            for rel in destination.part.rels.values()
+            if rel.reltype == RT.NUMBERING
+        ),
+        None,
+    )
+    source_numbering = next(
+        (
+            rel.target_part.element
+            for rel in source.part.rels.values()
+            if rel.reltype == RT.NUMBERING
+        ),
+        None,
+    )
+
+    def copy_number(value: str, *, abstract: bool = False) -> str:
+        nonlocal numbering
+        if source_numbering is None:
+            return value
+        mapping = abstract_ids if abstract else numbering_ids
+        if value not in mapping:
+            tag, attribute = (
+                ("w:abstractNum", "w:abstractNumId") if abstract else ("w:num", "w:numId")
+            )
+            original = source_numbering.find(f"./{qn(tag)}[@{qn(attribute)}='{value}']")
+            if original is None:
+                return value
+            if numbering is None:
+                part = NumberingPart(
+                    PackURI("/word/numbering.xml"),
+                    CT.WML_NUMBERING,
+                    OxmlElement("w:numbering"),
+                    destination.part.package,
+                )
+                destination.part.relate_to(part, RT.NUMBERING)
+                numbering = part.element
+            new_id = str(
+                max((int(n.get(qn(attribute))) for n in numbering.findall(qn(tag))), default=-1) + 1
+            )
+            mapping[value] = new_id
+            copied = deepcopy(original)
+            copied.set(qn(attribute), new_id)
+            numbering.append(copied)
+            if not abstract:
+                ref = copied.find(qn("w:abstractNumId"))
+                ref.set(qn("w:val"), copy_number(ref.get(qn("w:val")), abstract=True))
+            remap(copied)
+        return mapping[value]
+
+    def copy_style(value: str) -> str:
+        if value not in style_ids:
+            original = source.styles.element.find(
+                f"./{qn('w:style')}[@{qn('w:styleId')}='{value}']"
+            )
+            if original is None:
+                return value
+            new_id = f"Derived_{value}"
+            style_ids[value] = new_id
+            copied = deepcopy(original)
+            copied.set(qn("w:styleId"), new_id)
+            copied.attrib.pop(qn("w:default"), None)
+            destination.styles.element.append(copied)
+            remap(copied)
+        return style_ids[value]
+
+    def remap(element: Any) -> None:
+        for node in element.iter():
+            if node.tag in {
+                qn(f"w:{tag}")
+                for tag in (
+                    "pStyle",
+                    "rStyle",
+                    "tblStyle",
+                    "basedOn",
+                    "next",
+                    "link",
+                    "styleLink",
+                    "numStyleLink",
+                )
+            }:
+                node.set(qn("w:val"), copy_style(node.get(qn("w:val"))))
+            elif node.tag == qn("w:numId"):
+                node.set(qn("w:val"), copy_number(node.get(qn("w:val"))))
+            for attribute in ("r:id", "r:embed", "r:link"):
+                old_id = node.get(qn(attribute))
+                if old_id is None:
+                    continue
+                if old_id not in relationship_ids:
+                    rel = source.part.rels[old_id]
+                    target = rel.target_ref if rel.is_external else copy_part(rel.target_part)
+                    relationship_ids[old_id] = destination.part.relate_to(
+                        target, rel.reltype, rel.is_external
+                    )
+                node.set(qn(attribute), relationship_ids[old_id])
+
+    new_intro, new_closing = destination_bounds
+    for sibling in list(new_intro.itersiblings()):
+        if sibling is new_closing:
+            break
+        sibling.getparent().remove(sibling)
+    for fragment in fragments:
+        remap(fragment)
+        new_closing.addprevious(fragment)
+    destination.save(destination_path)
 
 
 def get_word_session_detail(db: Session, *, user: User, book_id: int) -> WordSessionDetailRead:
@@ -434,7 +613,9 @@ def create_report_word_book(
         template_id="Report",
         data=data,
         destination=output_path,
-        stamps=artifact_service.StampPlan(sync_general_book_footer=True),
+        stamps=artifact_service.StampPlan(
+            level=book.confidentiality, sync_general_book_footer=True
+        ),
         convert_pdf=False,
         collision="exact",
     )
@@ -592,6 +773,7 @@ def finish_word_session(
     artifact = artifact_service.produce_from_docx(
         source_path=src,
         destination=dest,
+        stamps=artifact_service.StampPlan(level=book.confidentiality),
         converter=convert_or_reuse_preview,
     )
     dest = artifact.docx_path
@@ -827,6 +1009,7 @@ def reopen_word_session(db: Session, *, user: User, book_id: int) -> WordSession
     reopened_artifact = artifact_service.produce_from_docx(
         source_path=source_path,
         destination=output_path,
+        stamps=artifact_service.StampPlan(level=book.confidentiality),
         convert_pdf=False,
         collision="exact",
     )

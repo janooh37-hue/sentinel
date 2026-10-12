@@ -137,6 +137,19 @@ describe('RecordPane footer', () => {
     expect(onDeleted).toHaveBeenCalledWith(1)
   })
 
+  it('hides Link in More without books.edit even when the record allows writes', async () => {
+    gates.caps.clear()
+    gates.caps.add('books.create')
+    gates.caps.add('books.view')
+    gates.role = 'operator'
+    renderPane(makeBook())
+    await userEvent.click(await screen.findByRole('button', { name: /More/ }))
+    const menu = await screen.findByRole('menu')
+    expect(within(menu).queryByRole('menuitem', { name: 'Link a record' })).toBeNull()
+    expect(within(menu).getByRole('menuitem', { name: 'Reply' })).toBeVisible()
+    expect(within(menu).getByRole('menuitem', { name: 'Create from' })).toBeVisible()
+  })
+
   it('keeps Delete visible but disabled, with the reason, once the record is signed', async () => {
     renderPane(
       makeBook({

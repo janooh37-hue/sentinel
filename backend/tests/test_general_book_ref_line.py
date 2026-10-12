@@ -175,6 +175,49 @@ def test_library_template_preserves_header_ref_run_format(tmp_path):
     assert all(r.font.name == "Arial" and r.font.size.pt == 9 and r.font.bold for r in runs)
 
 
+def test_body_reference_follows_subject_with_rtl_arabic_and_ltr_values(tmp_path):
+    from docx import Document
+    from docx.oxml.ns import qn
+
+    out = tmp_path / "reference.docx"
+    reference_line = "المرجع: 1/5/141 في 21-09-2026"
+    DocxEngine(TEMPLATES_DIR).fill(
+        "General Book", {**_BASE_DATA, "reference_line": reference_line}, out
+    )
+    paragraphs = Document(out).paragraphs
+    subject_idx = next(i for i, p in enumerate(paragraphs) if p.text.startswith("الموضوع:"))
+    reference = paragraphs[subject_idx + 1]
+    intro = next(p for p in paragraphs if p.text.startswith("يطيب لنا"))
+    intro_run = next(r for r in intro.runs if r.text)
+    runs = [r for r in reference.runs if r.text]
+
+    assert reference.text == reference_line
+    assert [r.text for r in runs] == ["المرجع: ", "1/5/141", " في ", "21-09-2026"]
+    assert [r.font.rtl for r in runs] == [True, False, True, False]
+    assert reference._p.pPr.find(qn("w:bidi")) is not None
+    assert all(r.font.size == intro_run.font.size for r in runs)
+    assert all(
+        r._element.rPr.find(qn("w:rFonts")).attrib
+        == intro_run._element.rPr.find(qn("w:rFonts")).attrib
+        for r in runs
+    )
+
+
+@pytest.mark.parametrize("reference_data", ({}, {"reference_line": ""}))
+def test_body_reference_omitted_without_adding_blank_paragraphs(reference_data, tmp_path):
+    from docx import Document
+
+    out = tmp_path / "no-reference.docx"
+    DocxEngine(TEMPLATES_DIR).fill("General Book", {**_BASE_DATA, **reference_data}, out)
+    paragraphs = Document(out).paragraphs
+    subject_idx = next(i for i, p in enumerate(paragraphs) if p.text.startswith("الموضوع:"))
+    intro_idx = next(i for i, p in enumerate(paragraphs) if p.text.startswith("يطيب لنا"))
+
+    assert not any("المرجع:" in p.text for p in paragraphs)
+    assert intro_idx - subject_idx == 2
+    assert paragraphs[subject_idx + 1].text == ""
+
+
 def test_word_template_keeps_intro_without_large_blank_gap(tmp_path):
     from docx import Document
 

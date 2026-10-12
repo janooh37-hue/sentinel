@@ -11,6 +11,7 @@ import type { BookRead } from '@/lib/api'
 import { bidi } from '@/lib/bidi'
 import { parseUtcMs } from '@/lib/time'
 import { cn } from '@/lib/utils'
+import { pickEmployeeName } from '@/lib/employeeName'
 
 export function WordSessionBanner({
   book,
@@ -48,7 +49,7 @@ export function WordSessionBanner({
       <span className="min-w-0 flex-1">
         {!compact && (
           <b className="block">
-            {t('books.status.wordActive', { name: bidi(session.user_name ?? '') })}
+            {t('books.status.wordActive', { name: bidi(pickEmployeeName({ name_en: session.user_name ?? '', name_ar: session.user_name_ar }, i18n.language)) })}
           </b>
         )}
         {t('books.paper.wordBanner', { t: time })}

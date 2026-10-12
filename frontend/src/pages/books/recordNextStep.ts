@@ -20,6 +20,7 @@ import {
 } from '@/components/books/book-detail-drawer-utils'
 import { approverStep } from '@/components/books/reviewers'
 import { parseUtcMs } from '@/lib/time'
+import { pickEmployeeName } from '@/lib/employeeName'
 
 import { deleteBlockReason, deleteReasonKey } from './recordDelete'
 import { reportReviewOf } from './bookStateLabel'
@@ -302,8 +303,10 @@ function buildNextStep(book: BookRead, ctx: NextStepContext): NextStep {
   const deleteDisabled = (id: ActionId): Partial<Record<ActionId, ReasonKey>> =>
     deleteDisabledKey ? { [id]: deleteDisabledKey } : {}
 
+  const language = ctx.locale.split('-')[0]
   const name = (s: BookApprovalStepRead | undefined): string =>
-    s?.assignee_name ?? book.doc_manager_name ?? ''
+    pickEmployeeName({ name_en: s?.assignee_name ?? '', name_ar: s?.assignee_name_ar }, language) ||
+    pickEmployeeName({ name_en: book.doc_manager_name ?? '', name_ar: book.doc_manager_name_ar }, language)
 
   // A voided record (discarded draft) is read-only; its ref stays in the register.
   if (book.voided_at) {
@@ -315,7 +318,7 @@ function buildNextStep(book: BookRead, ctx: NextStepContext): NextStep {
   // returned / rejected / approved record (backend leaves approval_state alone).
   if (wordActive && (canWord || state === 'none')) {
     return step(
-      { key: 'wordActive', vars: { name: book.edit_session?.user_name ?? '' } },
+      { key: 'wordActive', vars: { name: pickEmployeeName({ name_en: book.edit_session?.user_name ?? '', name_ar: book.edit_session?.user_name_ar }, language) } },
       canWord
         ? { primary: 'finishEditing', secondary: ['discardDraft'], overflow: ['print'] }
         : { overflow: ['print'] },

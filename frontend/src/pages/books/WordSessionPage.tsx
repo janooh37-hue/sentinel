@@ -185,7 +185,7 @@ export function WordSessionPage(): React.JSX.Element {
               <div className="contents"><dt>{t('books.word.templateUsed')}</dt><dd><bdi dir="auto">{session?.template_name?.replace(/\.docx$/i, '') ?? t('books.word.templateNone')}</bdi></dd></div>
             </>}
             <div className="contents"><dt>{t('books.word.preparedBy')}</dt><dd>
-              <bdi dir="auto" className="font-medium">{preparer ? pickEmployeeName(preparer, isAr ? 'ar' : 'en') : book.submitted_by_name || '—'}</bdi>
+              <bdi dir="auto" className="font-medium">{preparer ? pickEmployeeName(preparer, i18n.language) : pickEmployeeName({ name_en: book.submitted_by_name ?? '', name_ar: book.submitted_by_name_ar }, i18n.language) || '—'}</bdi>
               {(preparerG || preparerPosition) && <span className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-xs text-muted-foreground">
                 {preparerG && <bdi dir="ltr" className="font-mono tabular-nums text-primary">{preparerG}</bdi>}
                 {preparerG && preparerPosition && <span aria-hidden>·</span>}

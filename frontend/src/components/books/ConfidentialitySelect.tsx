@@ -14,14 +14,16 @@ interface Props {
   onChange: (value: Confidentiality) => void
   disabled?: boolean
   className?: string
+  allowedLevels?: readonly Confidentiality[]
 }
 
-export function ConfidentialitySelect({ value, onChange, disabled, className }: Props): React.JSX.Element {
+export function ConfidentialitySelect({ value, onChange, disabled, className, allowedLevels }: Props): React.JSX.Element {
   const { t } = useTranslation()
   const { has } = useCapabilities()
   const id = useId()
   const levels = CONFIDENTIALITY_LEVELS.filter(
-    (level) => level !== 'secret' || value === 'secret' || has('books.secret'),
+    (level) => (allowedLevels == null || allowedLevels.includes(level))
+      && (level !== 'secret' || value === 'secret' || has('books.secret')),
   )
   return (
     <div className={cn('flex flex-col gap-1', className)}>

@@ -24,7 +24,7 @@ BookStampStyle = Literal[
 
 # Record level (Book.confidentiality) and direct-send purpose.
 BookConfidentiality = Literal["general", "personal", "secret", "directed"]
-SendPurpose = Literal["info", "action", "reply", "sign"]
+SendPurpose = Literal["info", "action", "reply", "circulate"]
 
 
 # ---------------------------------------------------------------------------
@@ -128,6 +128,7 @@ class BookApprovalStepRead(ORMBase):
     kind: str = "approver"
     seen_at: datetime | None = None
     assignee_name: str | None = None
+    assignee_name_ar: str | None = None
 
 
 class RetainedDecisionRead(ORMBase):
@@ -137,6 +138,7 @@ class RetainedDecisionRead(ORMBase):
     decided_at: datetime
     assignee_user_id: int
     assignee_name: str | None = None
+    assignee_name_ar: str | None = None
 
 
 class BookRevisionAccessRead(ORMBase):
@@ -145,6 +147,7 @@ class BookRevisionAccessRead(ORMBase):
     version_no: int
     user_id: int
     user_name: str | None = None
+    user_name_ar: str | None = None
     kind: str
     state: str
     note: str | None
@@ -169,6 +172,7 @@ class BookVersionRead(ORMBase):
     # Real assignment submission time; never inferred from revision creation.
     submitted_at: datetime | None = None
     created_by_name: str | None = None
+    created_by_name_ar: str | None = None
     docx_url: str | None = None
     pdf_url: str | None = None
     manager_sig_embedded: bool = False
@@ -202,6 +206,7 @@ class BookAnnotationRead(ORMBase):
     comment: str | None
     author_user_id: int | None = None
     author_name: str | None = None
+    author_name_ar: str | None = None
     created_at: datetime
 
 
@@ -229,6 +234,7 @@ class BookEditSessionRead(ORMBase):
 
     user_id: int
     user_name: str | None = None
+    user_name_ar: str | None = None
     state: str
     last_put_at: datetime | None = None
     created_at: datetime
@@ -347,6 +353,7 @@ class IncludedPaperReplacementRead(BaseModel):
 class IncludedPapersHistoryRead(ORMBase):
     actor_user_id: int | None = None
     actor_name: str
+    actor_name_ar: str | None = None
     revision_before: int
     revision_after: int
     added: list[str] = Field(default_factory=list)
@@ -372,20 +379,27 @@ class BookInboxRead(ORMBase):
     note: str | None = None
     sent_by_user_id: int
     sent_by_name: str | None = None
+    sent_by_name_ar: str | None = None
     sent_at: datetime
     read_at: datetime | None = None
+    done_at: datetime | None = None
+    archived_at: datetime | None = None
 
 
 class BookRecipientRead(ORMBase):
     id: int
     user_id: int
     user_name: str | None = None
+    user_name_ar: str | None = None
     sent_by_user_id: int
     sent_by_name: str | None = None
+    sent_by_name_ar: str | None = None
     purpose: SendPurpose
     note: str | None = None
     created_at: datetime
     read_at: datetime | None = None
+    done_at: datetime | None = None
+    archived_at: datetime | None = None
     revoked_at: datetime | None = None
     can_recall: bool = False
 
@@ -396,6 +410,7 @@ class BookSendRequest(BaseModel):
     note: str | None = Field(default=None, max_length=500)
     # Personal records only: switch the level to directed in the same send.
     make_directed: bool = False
+    include_references: bool = True
 
 
 class BookSendSkipped(BaseModel):
@@ -403,9 +418,48 @@ class BookSendSkipped(BaseModel):
     reason: Literal["already_recipient", "self"]
 
 
+class BookReferenceSkipped(BaseModel):
+    user_id: int
+    reason: Literal["not_cleared", "personal", "already_recipient", "self"]
+
+
+class BookReferenceSendResult(BaseModel):
+    book_id: int
+    ref_number: str
+    sent_user_ids: list[int]
+    skipped: list[BookReferenceSkipped]
+
+
 class BookSendResponse(BaseModel):
     sent: list[BookRecipientRead]
     skipped: list[BookSendSkipped]
+    references: list[BookReferenceSendResult] = Field(default_factory=list)
+
+
+class BookDeriveRequest(BaseModel):
+    kind: Literal["reply", "based_on"]
+    confidentiality: BookConfidentiality | None = None
+    attach_reference: bool = True
+    classification_code: str | None = None
+
+
+class BookLinkCreate(BaseModel):
+    target_book_id: int
+
+
+class BookThreadItem(BaseModel):
+    book_id: int
+    ref_number: str
+    subject: str | None
+    confidentiality: BookConfidentiality
+    created_at: datetime
+    approval_state: str
+    direction: Literal["outgoing", "incoming"]
+    kind: Literal["reply", "based_on", "reference"]
+    attached: bool
+    can_unlink: bool
+    addressee_user_id: int | None = None
+    current_document_id: int | None = None
 
 
 class BookConfidentialityUpdate(BaseModel):
@@ -425,15 +479,16 @@ class InboxPurposeCounts(BaseModel):
     info: int = 0
     action: int = 0
     reply: int = 0
-    sign: int = 0
+    circulate: int = 0
 
 
 class InboxSummaryRead(BaseModel):
-    """Received counts are active rows on records the caller can open."""
+    """Received counts exclude archived sends; archived counts whole records."""
 
     unread: int
     received: int
     sent: int
+    archived: int = 0
     by_purpose: InboxPurposeCounts
 
 
@@ -484,17 +539,20 @@ class BookRead(ORMBase):
     signing_path: str | None = None
     submitted_by_user_id: int | None = None
     submitted_by_name: str | None = None
+    submitted_by_name_ar: str | None = None
     submitted_by_g: str | None = None
     # Immutable original creator (books.created_by_user_id); distinct from the
     # submitter, who is only set on submit and reset on revision.
     created_by_user_id: int | None = None
     created_by_name: str | None = None
+    created_by_name_ar: str | None = None
     created_by_g: str | None = None
     # Captured submission instant for the selected revision, when trustworthy.
     submitted_at: datetime | None = None
     # The doc's named manager resolved to a login account (auto-route target).
     doc_manager_user_id: int | None = None
     doc_manager_name: str | None = None
+    doc_manager_name_ar: str | None = None
     # Whether that linked account has a signature on file — drives the submit
     # dialog's "manager has no signature, add one" warning (lenient submit).
     doc_manager_has_signature: bool = False
@@ -589,6 +647,7 @@ class ApproverOptionRead(BaseModel):
 
     id: int
     name: str
+    name_ar: str | None = None
     # True for the admin-set default manager — the picker preselects them.
     is_default: bool = False
 
@@ -625,11 +684,15 @@ class ApprovalLogItem(ORMBase):
     priority: str | None = "Normal"
     submitted_by_user_id: int | None = None
     submitted_by_name: str | None = None
+    submitted_by_name_ar: str | None = None
     doc_manager_user_id: int | None = None
     doc_manager_name: str | None = None
+    doc_manager_name_ar: str | None = None
     # The assigned signer's display name (never a doc manager/scan filer by default).
     approver_name: str | None = None
+    approver_name_ar: str | None = None
     reviewer_names: list[str] = Field(default_factory=list)
+    reviewer_names_ar: list[str | None] = Field(default_factory=list)
     # The selected revision's real submission instant, or null — never record
     # creation time.
     submitted_at: datetime | None = None

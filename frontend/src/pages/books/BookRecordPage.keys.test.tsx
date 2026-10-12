@@ -33,6 +33,7 @@ vi.mock('@/lib/api', async (orig) => {
     api: {
       ...real.api,
       getBook: vi.fn(),
+      getBookThread: vi.fn().mockResolvedValue([]),
       signBook: vi.fn(),
       createBookAnnotation: vi.fn(),
       listBookAnnotations: vi.fn(),

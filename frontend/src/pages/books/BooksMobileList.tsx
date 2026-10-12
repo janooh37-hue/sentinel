@@ -22,6 +22,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog'
 import { bidi } from '@/lib/bidi'
+import { pickEmployeeName } from '@/lib/employeeName'
 import { EmptyState } from '@/components/ui/empty-state'
 import { SkeletonRow } from '@/components/ui/skeleton'
 import { PullToRefresh } from '@/components/refresh/PullToRefresh'
@@ -414,7 +415,7 @@ function BookMobileCard({
   onTogglePick,
   onSubmit,
 }: BookMobileCardProps): React.JSX.Element {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const catLabel = isAr
     ? (row.category.name_ar ?? row.category.name_en)
     : (row.category.name_en ?? row.category.name_ar)
@@ -507,8 +508,8 @@ function BookMobileCard({
         <p className="text-[0.72em] text-muted-foreground">
           <span>
             {t('books.record.createdBy')}{' '}
-            {row.created_by_name ? (
-              <bdi>{row.created_by_name}</bdi>
+            {row.created_by_name || row.created_by_name_ar ? (
+              <bdi>{pickEmployeeName({ name_en: row.created_by_name ?? '', name_ar: row.created_by_name_ar }, i18n.language)}</bdi>
             ) : (
               t('books.record.creatorUnknown')
             )}

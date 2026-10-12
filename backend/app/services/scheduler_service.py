@@ -566,7 +566,8 @@ def _doc_push(
         it = new_items[0]
         subj = f" — {it.subject}" if it.subject else ""
         from_en = f"\nFrom {it.requester}" if it.requester else ""
-        from_ar = f"\nمن {it.requester}" if it.requester else ""
+        requester_ar = it.requester_ar or it.requester
+        from_ar = f"\nمن {requester_ar}" if requester_ar else ""
         head_en = "Signature needed" if is_sign else "Review needed"
         head_ar = "بانتظار توقيعك" if is_sign else "بانتظار مراجعتك"
         return (
@@ -592,7 +593,8 @@ def _inbox_push(
             return _localized("New record sent to you", "لديك معاملة جديدة"), it.url
         subject = f" — {it.subject}" if it.subject else ""
         from_en = f"\nFrom {it.requester}" if it.requester else ""
-        from_ar = f"\nمن {it.requester}" if it.requester else ""
+        requester_ar = it.requester_ar or it.requester
+        from_ar = f"\nمن {requester_ar}" if requester_ar else ""
         return (
             _localized(
                 f"New record sent to you · {it.label}{subject}{from_en}",

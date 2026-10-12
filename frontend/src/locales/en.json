@@ -2042,6 +2042,44 @@
     "addError": "Could not add to basket — record not found"
   },
   "books": {
+    "thread": {
+      "reply": "Reply",
+      "createFrom": "Create from",
+      "attachOriginal": "Attach the original as reference",
+      "classification": "Classification",
+      "linkRecord": "Link a record",
+      "linkTitle": "Link a record",
+      "linkDescription": "Select a record to attach as a reference.",
+      "linkSearch": "Search by reference or subject",
+      "linkEmpty": "No records found. Try another reference or subject.",
+      "linking": "Adding reference…",
+      "references": "References",
+      "title": "Thread",
+      "pdf": "Open PDF",
+      "unlink": "Remove reference",
+      "alsoSend": "Also send referenced records ({{count}})",
+      "sendSummary": "Reference deliveries: {{sent}} sent, {{skipped}} skipped.",
+      "skipped": {
+        "not_cleared": "{{ref}}: {{name}} does not have Secret clearance",
+        "personal": "{{ref}}: Personal records cannot be sent",
+        "already_recipient": "{{ref}}: {{name}} already received this record",
+        "self": "{{ref}}: sending to yourself was skipped"
+      },
+      "relations": {
+        "outgoing": { "reply": "Reply to", "based_on": "Created from", "reference": "References" },
+        "incoming": { "reply": "Replied by", "based_on": "Used to create", "reference": "Referenced by" }
+      },
+      "errors": {
+        "levelFloor": "The level cannot be below the original's minimum level.",
+        "classificationRequired": "Select a classification before creating the record.",
+        "secretClearance": "Secret clearance is required to create this record.",
+        "forbidden": "You do not have permission to create this record.",
+        "linkExists": "This record is already attached as a reference.",
+        "linkSelf": "A record cannot reference itself.",
+        "levelBelowFloor": "Raise this record's level before attaching this reference.",
+        "bookNotFound": "This record is unavailable or you do not have access to it."
+      }
+    },
     "confidentiality": {
       "label": "Level",
       "chipTitle": "Record level: {{level}}",
@@ -2077,7 +2115,7 @@
         "info": "For information",
         "action": "For action",
         "reply": "For reply",
-        "sign": "For signature"
+        "circulate": "For circulation"
       },
       "note": "Note (optional)",
       "notePlaceholder": "Add a short note for the recipients",
@@ -2113,6 +2151,20 @@
     "inbox": {
       "sentToMe": "Sent to me",
       "sentByMe": "Sent by me",
+      "done": "Mark as done",
+      "undoDone": "Undo done",
+      "doneState": "Done",
+      "doneOn": "Done {{date}}",
+      "archive": "Archive",
+      "unarchive": "Unarchive",
+      "archived": "Archived",
+      "archivedState": "Archived",
+      "toast": {
+        "done": "Marked as done",
+        "undoDone": "Done status undone",
+        "archive": "Archived from your inbox",
+        "unarchive": "Returned to your inbox"
+      },
       "unread_one": "{{count}} unread",
       "unread_other": "{{count}} unread",
       "unreadRow": "Unread",
@@ -2418,7 +2470,10 @@
       "undoTooLateMany_one": "Too late to undo — {{count}} record was already deleted.",
       "undoTooLateMany_other": "Too late to undo — {{count}} records were already deleted.",
       "deleteFailedMany_one": "{{count}} record wasn’t deleted: {{refs}}",
-      "deleteFailedMany_other": "{{count}} records weren’t deleted: {{refs}}"
+      "deleteFailedMany_other": "{{count}} records weren’t deleted: {{refs}}",
+      "rowMenu": "Actions for {{ref}}",
+      "openNewTab": "Open in new tab",
+      "downloadPdf": "Download PDF"
     },
     "reason": {
       "inFlight": "In-flight or signed records can’t be deleted. Use “{{action}}” to void it.",

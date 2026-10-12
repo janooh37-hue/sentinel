@@ -29,6 +29,7 @@ import { EmptyState } from '@/components/ui/empty-state'
 import { SkeletonRow } from '@/components/ui/skeleton'
 import { api } from '@/lib/api'
 import type { ApprovalLogItem } from '@/lib/api'
+import { pickEmployeeName } from '@/lib/employeeName'
 import {
   APPROVALS_PAGE_SIZE,
   RECEIVED_STATUSES,
@@ -152,16 +153,17 @@ interface RowProps {
 }
 
 function ApprovalRow({ item, tab, dfLocale, onOpen, onPreview }: RowProps): React.JSX.Element {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const late = isLateAdvisory(item)
   const restricted = item.access_scope === 'assigned_revision'
-  const reviewOnly = !item.approver_name && item.reviewer_names.length > 0
+  const reviewOnly = !item.approver_name && !item.approver_name_ar && item.reviewer_names.length > 0
   const counterpartyLabel = tab === 'sent'
     ? t(reviewOnly ? 'books.approval.reviewManager' : 'books.approvals.assignedSigner')
     : t('books.approval.submitter')
   const counterpartyName = tab === 'sent'
-    ? item.approver_name ?? item.reviewer_names.join(', ')
-    : item.submitted_by_name
+    ? pickEmployeeName({ name_en: item.approver_name ?? '', name_ar: item.approver_name_ar }, i18n.language) ||
+      item.reviewer_names.map((name, index) => pickEmployeeName({ name_en: name, name_ar: item.reviewer_names_ar?.[index] }, i18n.language)).join(i18n.language.startsWith('ar') ? '، ' : ', ')
+    : pickEmployeeName({ name_en: item.submitted_by_name ?? '', name_ar: item.submitted_by_name_ar }, i18n.language)
 
   return (
     <article
@@ -221,7 +223,7 @@ function ApprovalRow({ item, tab, dfLocale, onOpen, onPreview }: RowProps): Reac
 
       <p className="col-start-2 row-start-3 truncate text-[0.72em] text-muted-foreground md:col-start-4 md:row-start-1">
         {counterpartyLabel}:{' '}
-        <span className="text-foreground">{counterpartyName ?? '—'}</span>
+        <span className="text-foreground">{counterpartyName || '—'}</span>
       </p>
 
       <div className="col-start-2 row-start-4 flex flex-wrap items-center gap-x-3 gap-y-0.5 font-mono text-[0.7em] text-muted-foreground md:col-start-5 md:row-start-1 md:flex-col md:items-start md:gap-0.5">

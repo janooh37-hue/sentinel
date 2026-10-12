@@ -52,10 +52,14 @@ import { RevisionAccessPanel } from '@/components/books/RevisionAccessPanel'
 import { SendRecordDialog } from '@/components/books/SendRecordDialog'
 import { ChangeConfidentialityDialog } from '@/components/books/ChangeConfidentialityDialog'
 import { RecordInboxStrip, RecordRecipientsPanel } from '@/components/books/RecordRecipientsPanel'
+import { DeriveRecordDialog } from '@/components/books/DeriveRecordDialog'
+import { LinkRecordDialog } from '@/components/books/LinkRecordDialog'
+import { RecordThreadSection } from '@/components/books/RecordThreadSection'
 import { useBookApprovalActions } from '@/components/books/useBookApprovalActions'
 import { useInmateReportSubmit } from '@/components/books/useInmateReportSubmit'
 import { hasCommentBearingMark } from '@/components/books/annotation-utils'
 import { bidi } from '@/lib/bidi'
+import { pickEmployeeName } from '@/lib/employeeName'
 import { useUrlOverlay } from '@/lib/urlState'
 import { NotFoundPage } from '@/pages/NotFoundPage'
 import { RECEIVED_STATUSES, SENT_STATUSES, approvalRecordUrl, isApprovalScope } from '@/lib/approvals'
@@ -142,6 +146,7 @@ function buildTimeline(
   approvalState: string,
   creator: string,
   t: TFn,
+  language: string,
   signedSource?: 'in_app' | 'scan' | null,
   review?: ReportReview | null,
 ): Station[] {
@@ -163,7 +168,7 @@ function buildTimeline(
         key: `rev-${v.id}`,
         icon: <CornerUpLeft className="h-[15px] w-[15px] -scale-x-100" strokeWidth={2} />,
         label: t('books.record.stationRevised'),
-        meta: `${v.created_by_name ?? creator} · v${v.version_no}`,
+        meta: `${pickEmployeeName({ name_en: v.created_by_name ?? '', name_ar: v.created_by_name_ar }, language) || creator} · v${v.version_no}`,
         state: 'done',
         tone: 'blue',
       })
@@ -331,6 +336,7 @@ function BookRecordPageBody(): React.JSX.Element {
   const canApprove = has('books.approve')
   const canManageRevisionAccess = has('users.manage')
   const overlay = useUrlOverlay('action', ['decision'])
+  const { value: overlayValue, open: openOverlay, close: closeOverlay } = overlay
 
   const fileSignedRef = useRef<HTMLInputElement | null>(null)
   const replaceSignedRef = useRef<HTMLInputElement | null>(null)
@@ -378,6 +384,7 @@ function BookRecordPageBody(): React.JSX.Element {
     queryFn: () => api.getBook(bookId, effectiveVersionId),
     enabled: Number.isFinite(bookId),
   })
+  const canDerive = !isInmateReporter && book?.access_scope === 'full' && has('books.create') && has('books.view')
   const canEdit = has('books.edit') && !!book?.can_write
   const canSubmitBook = has('books.submit') && !!book?.can_write
   // Filing a physically-signed scan back requires books.edit + documents.scan.
@@ -436,8 +443,8 @@ function BookRecordPageBody(): React.JSX.Element {
     current?.document_id != null &&
     isIncludedPapersOwner(book, user?.id)
 
-  const submitter = book?.submitted_by_name ?? '—'
-  const creator = book?.created_by_name ?? t('books.record.creatorUnknown')
+  const submitter = pickEmployeeName({ name_en: book?.submitted_by_name ?? '', name_ar: book?.submitted_by_name_ar }, i18n.language) || '—'
+  const creator = pickEmployeeName({ name_en: book?.created_by_name ?? '', name_ar: book?.created_by_name_ar }, i18n.language) || t('books.record.creatorUnknown')
   const state = book?.approval_state ?? 'none'
   const signedSource = book ? signedSourceOf(book) : null
   // A Report carries its author's signature; its manager reviews instead of signing.
@@ -474,8 +481,8 @@ function BookRecordPageBody(): React.JSX.Element {
 
   const stations = useMemo(
     () =>
-      book ? buildTimeline(versions, book.approval_state, creator, t, signedSource, reportReviewOf(book)) : [],
-    [book, versions, creator, t, signedSource],
+      book ? buildTimeline(versions, book.approval_state, creator, t, i18n.language, signedSource, reportReviewOf(book)) : [],
+    [book, versions, creator, t, i18n.language, signedSource],
   )
 
   // Assignee/footer derivation (with reviewer support).
@@ -507,7 +514,7 @@ function BookRecordPageBody(): React.JSX.Element {
       : null
 
   useEffect(() => {
-    const value = overlay.value
+    const value = overlayValue
     if (isPending || capabilitiesLoading || !book || !value) return
     const allowed =
       (value === 'submit' && !isInmateReporter && showSendForApproval) ||
@@ -519,11 +526,15 @@ function BookRecordPageBody(): React.JSX.Element {
         canMutateCurrent) ||
       (value === 'decision' && action === 'decide') ||
       (value === 'send' && book.can_send) ||
-      (value === 'level' && book.can_change_confidentiality)
-    if (!allowed) overlay.close()
+      (value === 'level' && book.can_change_confidentiality) ||
+      ((value === 'reply' || value === 'createFrom') && canDerive) ||
+      (value === 'link' && canEdit && book.access_scope === 'full')
+    if (!allowed) closeOverlay()
   }, [
     action,
     book,
+    canDerive,
+    canEdit,
     canManageIncludedPapers,
     canManageRevisionAccess,
     canMutateCurrent,
@@ -531,8 +542,8 @@ function BookRecordPageBody(): React.JSX.Element {
     capabilitiesLoading,
     isInmateReporter,
     isPending,
-    overlay.value,
-    overlay.close,
+    overlayValue,
+    closeOverlay,
     showSendForApproval,
   ])
 
@@ -752,7 +763,7 @@ function BookRecordPageBody(): React.JSX.Element {
 
   const openMobileDecision = useCallback((nextDecision: 'return' | 'reject'): void => {
     setReason('')
-    overlay.open('decision', { decision: nextDecision })
+    openOverlay('decision', { decision: nextDecision })
     requestAnimationFrame(() => {
       decisionPanelRef.current?.scrollIntoView({
         behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
@@ -760,7 +771,7 @@ function BookRecordPageBody(): React.JSX.Element {
       })
       decisionReasonRef.current?.focus({ preventScroll: true })
     })
-  }, [overlay.open])
+  }, [openOverlay, setReason])
 
   // Every page sign control (desktop header, mobile inline panel, mobile
   // dock) requests through here instead of calling `signMutation.mutate()`
@@ -1003,7 +1014,6 @@ function BookRecordPageBody(): React.JSX.Element {
   const reporterSubmit = reporterSubmitMutation.mutate
   const createMarkMutate = createMark.mutate
   const deleteMarkAsync = deleteMark.mutateAsync
-  const openOverlay = overlay.open
   const requestDelete = useCallback((): void => setDeleteOpen(true), [setDeleteOpen])
   const actions: RecordActions = useMemo(
     () => ({
@@ -1252,8 +1262,9 @@ function BookRecordPageBody(): React.JSX.Element {
         </div>
       )}
 
-      {book && <RecordInboxStrip inbox={book.my_inbox} />}
+      {book && <RecordInboxStrip book={book} />}
       {book && <RecordRecipientsPanel bookId={book.id} />}
+      {book && <RecordThreadSection book={book} />}
 
       <RecordPhoneProgress book={book} view={view} />
 
@@ -1297,6 +1308,12 @@ function BookRecordPageBody(): React.JSX.Element {
           open={overlay.value === 'level' && book.can_change_confidentiality}
           onOpenChange={(open) => { if (!open) overlay.close() }}
         />
+      )}
+      {book && canDerive && (
+        <DeriveRecordDialog book={book} kind={overlay.value === 'reply' ? 'reply' : 'based_on'} open={overlay.value === 'reply' || overlay.value === 'createFrom'} onOpenChange={(open) => { if (!open) overlay.close() }} />
+      )}
+      {book && (
+        <LinkRecordDialog book={book} open={overlay.value === 'link' && canEdit && book.access_scope === 'full'} onOpenChange={(open) => { if (!open) overlay.close() }} />
       )}
     </div>
   )

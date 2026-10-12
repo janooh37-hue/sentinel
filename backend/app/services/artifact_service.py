@@ -19,6 +19,7 @@ import fitz
 from app.config import get_settings
 from app.core.constants import STAMP_STYLE_HEADER
 from app.core.docx_engine import DocxEngine
+from app.core.level_mark import apply_level_mark
 
 _FORM_SHORT_NAME: dict[str, str] = {
     "Leave Application Form": "LeaveApp",
@@ -98,13 +99,15 @@ class StampPlan:
     aztec_margin_cm: float = 0.3
     sync_general_book_footer: bool = False
     signature: SignatureStamp | None = None
+    # Record level for the printed mark; None leaves any existing mark untouched.
+    level: str | None = None
 
 
 EMPTY_STAMP_PLAN = StampPlan()
 
 
 class ArtifactStampError(RuntimeError):
-    def __init__(self, operation: Literal["reference", "aztec", "signature"]) -> None:
+    def __init__(self, operation: Literal["reference", "aztec", "signature", "level"]) -> None:
         self.operation = operation
         super().__init__(f"Artifact {operation} stamp failed")
 
@@ -210,6 +213,8 @@ def _apply_stamps(target: Path, stamps: StampPlan) -> None:
         )
     ):
         raise ArtifactStampError("aztec")
+    if stamps.level is not None and not apply_level_mark(target, stamps.level):
+        raise ArtifactStampError("level")
     if stamps.signature is not None:
         from app.core import docx_engine
 

@@ -2648,6 +2648,74 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/books/{book_id}/derive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Derive Book */
+        post: operations["derive_book_api_v1_books__book_id__derive_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/books/{book_id}/thread": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Book Thread */
+        get: operations["get_book_thread_api_v1_books__book_id__thread_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/books/{book_id}/links": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Link Book */
+        post: operations["link_book_api_v1_books__book_id__links_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/books/{book_id}/links/{target_book_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Unlink Book */
+        delete: operations["unlink_book_api_v1_books__book_id__links__target_book_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/books/{book_id}/word-sessions/finish": {
         parameters: {
             query?: never;
@@ -3102,6 +3170,42 @@ export interface paths {
         post?: never;
         /** Delete Annotation */
         delete: operations["delete_annotation_api_v1_books__book_id__versions__version_id__annotations__annotation_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/books/{book_id}/inbox/done": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Mark Book Inbox Done */
+        post: operations["mark_book_inbox_done_api_v1_books__book_id__inbox_done_post"];
+        /** Undo Book Inbox Done */
+        delete: operations["undo_book_inbox_done_api_v1_books__book_id__inbox_done_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/books/{book_id}/inbox/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Archive Book Inbox */
+        post: operations["archive_book_inbox_api_v1_books__book_id__inbox_archive_post"];
+        /** Unarchive Book Inbox */
+        delete: operations["unarchive_book_inbox_api_v1_books__book_id__inbox_archive_delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -7298,14 +7402,22 @@ export interface components {
             submitted_by_user_id?: number | null;
             /** Submitted By Name */
             submitted_by_name?: string | null;
+            /** Submitted By Name Ar */
+            submitted_by_name_ar?: string | null;
             /** Doc Manager User Id */
             doc_manager_user_id?: number | null;
             /** Doc Manager Name */
             doc_manager_name?: string | null;
+            /** Doc Manager Name Ar */
+            doc_manager_name_ar?: string | null;
             /** Approver Name */
             approver_name?: string | null;
+            /** Approver Name Ar */
+            approver_name_ar?: string | null;
             /** Reviewer Names */
             reviewer_names?: string[];
+            /** Reviewer Names Ar */
+            reviewer_names_ar?: (string | null)[];
             /** Submitted At */
             submitted_at?: string | null;
             /** Decided At */
@@ -7458,6 +7570,8 @@ export interface components {
             id: number;
             /** Name */
             name: string;
+            /** Name Ar */
+            name_ar?: string | null;
             /**
              * Is Default
              * @default false
@@ -8162,6 +8276,8 @@ export interface components {
             author_user_id?: number | null;
             /** Author Name */
             author_name?: string | null;
+            /** Author Name Ar */
+            author_name_ar?: string | null;
             /**
              * Created At
              * Format: date-time
@@ -8193,6 +8309,8 @@ export interface components {
             seen_at?: string | null;
             /** Assignee Name */
             assignee_name?: string | null;
+            /** Assignee Name Ar */
+            assignee_name_ar?: string | null;
         };
         /** BookCategoryRead */
         BookCategoryRead: {
@@ -8254,6 +8372,23 @@ export interface components {
             /** Note */
             note?: string | null;
         };
+        /** BookDeriveRequest */
+        BookDeriveRequest: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "reply" | "based_on";
+            /** Confidentiality */
+            confidentiality?: ("general" | "personal" | "secret" | "directed") | null;
+            /**
+             * Attach Reference
+             * @default true
+             */
+            attach_reference: boolean;
+            /** Classification Code */
+            classification_code?: string | null;
+        };
         /**
          * BookEditSessionRead
          * @description Active Word-editing session on a Book — only present when state='active'.
@@ -8263,6 +8398,8 @@ export interface components {
             user_id: number;
             /** User Name */
             user_name?: string | null;
+            /** User Name Ar */
+            user_name_ar?: string | null;
             /** State */
             state: string;
             /** Last Put At */
@@ -8301,13 +8438,15 @@ export interface components {
              * Purpose
              * @enum {string}
              */
-            purpose: "info" | "action" | "reply" | "sign";
+            purpose: "info" | "action" | "reply" | "circulate";
             /** Note */
             note?: string | null;
             /** Sent By User Id */
             sent_by_user_id: number;
             /** Sent By Name */
             sent_by_name?: string | null;
+            /** Sent By Name Ar */
+            sent_by_name_ar?: string | null;
             /**
              * Sent At
              * Format: date-time
@@ -8315,6 +8454,15 @@ export interface components {
             sent_at: string;
             /** Read At */
             read_at?: string | null;
+            /** Done At */
+            done_at?: string | null;
+            /** Archived At */
+            archived_at?: string | null;
+        };
+        /** BookLinkCreate */
+        BookLinkCreate: {
+            /** Target Book Id */
+            target_book_id: number;
         };
         /** BookListResponse */
         BookListResponse: {
@@ -8416,12 +8564,16 @@ export interface components {
             submitted_by_user_id?: number | null;
             /** Submitted By Name */
             submitted_by_name?: string | null;
+            /** Submitted By Name Ar */
+            submitted_by_name_ar?: string | null;
             /** Submitted By G */
             submitted_by_g?: string | null;
             /** Created By User Id */
             created_by_user_id?: number | null;
             /** Created By Name */
             created_by_name?: string | null;
+            /** Created By Name Ar */
+            created_by_name_ar?: string | null;
             /** Created By G */
             created_by_g?: string | null;
             /** Submitted At */
@@ -8430,6 +8582,8 @@ export interface components {
             doc_manager_user_id?: number | null;
             /** Doc Manager Name */
             doc_manager_name?: string | null;
+            /** Doc Manager Name Ar */
+            doc_manager_name_ar?: string | null;
             /**
              * Doc Manager Has Signature
              * @default false
@@ -8492,15 +8646,19 @@ export interface components {
             user_id: number;
             /** User Name */
             user_name?: string | null;
+            /** User Name Ar */
+            user_name_ar?: string | null;
             /** Sent By User Id */
             sent_by_user_id: number;
             /** Sent By Name */
             sent_by_name?: string | null;
+            /** Sent By Name Ar */
+            sent_by_name_ar?: string | null;
             /**
              * Purpose
              * @enum {string}
              */
-            purpose: "info" | "action" | "reply" | "sign";
+            purpose: "info" | "action" | "reply" | "circulate";
             /** Note */
             note?: string | null;
             /**
@@ -8510,6 +8668,10 @@ export interface components {
             created_at: string;
             /** Read At */
             read_at?: string | null;
+            /** Done At */
+            done_at?: string | null;
+            /** Archived At */
+            archived_at?: string | null;
             /** Revoked At */
             revoked_at?: string | null;
             /**
@@ -8517,6 +8679,27 @@ export interface components {
              * @default false
              */
             can_recall: boolean;
+        };
+        /** BookReferenceSendResult */
+        BookReferenceSendResult: {
+            /** Book Id */
+            book_id: number;
+            /** Ref Number */
+            ref_number: string;
+            /** Sent User Ids */
+            sent_user_ids: number[];
+            /** Skipped */
+            skipped: components["schemas"]["BookReferenceSkipped"][];
+        };
+        /** BookReferenceSkipped */
+        BookReferenceSkipped: {
+            /** User Id */
+            user_id: number;
+            /**
+             * Reason
+             * @enum {string}
+             */
+            reason: "not_cleared" | "personal" | "already_recipient" | "self";
         };
         /** BookRevisionAccessRead */
         BookRevisionAccessRead: {
@@ -8530,6 +8713,8 @@ export interface components {
             user_id: number;
             /** User Name */
             user_name?: string | null;
+            /** User Name Ar */
+            user_name_ar?: string | null;
             /** Kind */
             kind: string;
             /** State */
@@ -8558,7 +8743,7 @@ export interface components {
              * Purpose
              * @enum {string}
              */
-            purpose: "info" | "action" | "reply" | "sign";
+            purpose: "info" | "action" | "reply" | "circulate";
             /** Note */
             note?: string | null;
             /**
@@ -8566,6 +8751,11 @@ export interface components {
              * @default false
              */
             make_directed: boolean;
+            /**
+             * Include References
+             * @default true
+             */
+            include_references: boolean;
         };
         /** BookSendResponse */
         BookSendResponse: {
@@ -8573,6 +8763,8 @@ export interface components {
             sent: components["schemas"]["BookRecipientRead"][];
             /** Skipped */
             skipped: components["schemas"]["BookSendSkipped"][];
+            /** References */
+            references?: components["schemas"]["BookReferenceSendResult"][];
         };
         /** BookSendSkipped */
         BookSendSkipped: {
@@ -8618,6 +8810,45 @@ export interface components {
             /** Reviewer User Ids */
             reviewer_user_ids?: number[];
         };
+        /** BookThreadItem */
+        BookThreadItem: {
+            /** Book Id */
+            book_id: number;
+            /** Ref Number */
+            ref_number: string;
+            /** Subject */
+            subject: string | null;
+            /**
+             * Confidentiality
+             * @enum {string}
+             */
+            confidentiality: "general" | "personal" | "secret" | "directed";
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Approval State */
+            approval_state: string;
+            /**
+             * Direction
+             * @enum {string}
+             */
+            direction: "outgoing" | "incoming";
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "reply" | "based_on" | "reference";
+            /** Attached */
+            attached: boolean;
+            /** Can Unlink */
+            can_unlink: boolean;
+            /** Addressee User Id */
+            addressee_user_id?: number | null;
+            /** Current Document Id */
+            current_document_id?: number | null;
+        };
         /**
          * BookUpdate
          * @description Mutable fields.  ``category_id`` and ``ref_number`` are immutable.
@@ -8661,6 +8892,8 @@ export interface components {
             submitted_at?: string | null;
             /** Created By Name */
             created_by_name?: string | null;
+            /** Created By Name Ar */
+            created_by_name_ar?: string | null;
             /** Docx Url */
             docx_url?: string | null;
             /** Pdf Url */
@@ -11072,14 +11305,14 @@ export interface components {
              */
             reply: number;
             /**
-             * Sign
+             * Circulate
              * @default 0
              */
-            sign: number;
+            circulate: number;
         };
         /**
          * InboxSummaryRead
-         * @description Received counts are active rows on records the caller can open.
+         * @description Received counts exclude archived sends; archived counts whole records.
          */
         InboxSummaryRead: {
             /** Unread */
@@ -11088,6 +11321,11 @@ export interface components {
             received: number;
             /** Sent */
             sent: number;
+            /**
+             * Archived
+             * @default 0
+             */
+            archived: number;
             by_purpose: components["schemas"]["InboxPurposeCounts"];
         };
         /** IncludedPaperProposal */
@@ -11149,6 +11387,8 @@ export interface components {
             actor_user_id?: number | null;
             /** Actor Name */
             actor_name: string;
+            /** Actor Name Ar */
+            actor_name_ar?: string | null;
             /** Revision Before */
             revision_before: number;
             /** Revision After */
@@ -13332,6 +13572,8 @@ export interface components {
             assignee_user_id: number;
             /** Assignee Name */
             assignee_name?: string | null;
+            /** Assignee Name Ar */
+            assignee_name_ar?: string | null;
         };
         /** ReturnIn */
         ReturnIn: {
@@ -21785,7 +22027,7 @@ export interface operations {
         parameters: {
             query?: {
                 created_by_me?: boolean;
-                inbox?: ("received" | "sent") | null;
+                inbox?: ("received" | "sent" | "archived") | null;
             };
             header?: never;
             path?: never;
@@ -22149,6 +22391,145 @@ export interface operations {
             };
         };
     };
+    derive_book_api_v1_books__book_id__derive_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                book_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BookDeriveRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WordSessionRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_book_thread_api_v1_books__book_id__thread_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                book_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BookThreadItem"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    link_book_api_v1_books__book_id__links_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                book_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["BookLinkCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BookThreadItem"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    unlink_book_api_v1_books__book_id__links__target_book_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                book_id: number;
+                target_book_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     finish_word_session_api_v1_books__book_id__word_sessions_finish_post: {
         parameters: {
             query?: never;
@@ -22398,7 +22779,7 @@ export interface operations {
                 to_date?: string | null;
                 include_deleted?: boolean;
                 created_by_me?: boolean;
-                inbox?: ("received" | "sent") | null;
+                inbox?: ("received" | "sent" | "archived") | null;
                 limit?: number;
                 offset?: number;
             };
@@ -22877,6 +23258,7 @@ export interface operations {
             query?: {
                 include_deleted?: boolean;
                 version_id?: number | null;
+                mark_read?: boolean;
             };
             header?: never;
             path: {
@@ -23105,6 +23487,138 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    mark_book_inbox_done_api_v1_books__book_id__inbox_done_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                book_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BookInboxRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    undo_book_inbox_done_api_v1_books__book_id__inbox_done_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                book_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BookInboxRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    archive_book_inbox_api_v1_books__book_id__inbox_archive_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                book_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BookInboxRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    unarchive_book_inbox_api_v1_books__book_id__inbox_archive_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                book_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BookInboxRead"];
+                };
             };
             /** @description Validation Error */
             422: {

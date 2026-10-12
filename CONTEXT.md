@@ -93,9 +93,11 @@ _Avoid_: Classification (that is the filing tab)
 
 **Direct send**:
 Delivering a Record to named users with a purpose (للاطلاع, للتنفيذ, للإفادة,
-للتوقيع) and an optional note. It is a read grant for that one Record that can
+للتعميم) and an optional note. It is a read grant for that one Record that can
 be recalled; it never grants editing, signing or relabelling. A recipient
-sending it on is a forward.
+sending it on is a forward. Marking done also marks it read; undo keeps the
+read time. Archiving hides it from the received inbox and counts, not access;
+the Archived filter supports unarchive.
 _Avoid_: Send state (external email delivery)
 
 **Secret clearance**:

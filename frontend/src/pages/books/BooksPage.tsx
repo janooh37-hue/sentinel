@@ -27,7 +27,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { BookOpen, ChevronRight, FileInput, Send, Stamp, Trash2 } from 'lucide-react'
+import { Archive, BookOpen, ChevronRight, FileInput, Send, Stamp, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
@@ -64,7 +64,7 @@ import {
   type InboxFilter,
 } from './booksFiltersUtils'
 import { booksFacetsKey, useMyRecordsCount } from './useMyRecordsCount'
-import { useInboxCount } from './useInboxCount'
+import { useInboxSummary } from './useInboxCount'
 import { StatusSpine, type SpineState } from './StatusSpine'
 import { FormRail, MineChip, type ChipToggleState, type RailItem } from './FormRail'
 import { bookHeaderText, railItemsFrom, spineCountsFrom, useServiceLabel } from './serviceLabels'
@@ -72,6 +72,7 @@ import { BooksMobileList } from './BooksMobileList'
 import { RecordsList } from './RecordsList'
 import { FiltersPopover, ServicePopover } from './RecordsFilterPopovers'
 import { RecordPane, type PaneSize } from './RecordPane'
+import { useRecordRowMenu } from './useRecordRowMenu'
 import { deleteBlockReason } from './recordDelete'
 import { useRecordDelete } from './RecordDeleteProvider'
 import { openRecord, useListReturnFocus, type RecordNavState } from './useRecordNavContext'
@@ -156,7 +157,7 @@ export function BooksPage(): React.JSX.Element {
   // their params are ignored.
   const mine = mineParam === '1' && !isInmateReporter
   const inbox: InboxFilter | undefined =
-    !isInmateReporter && (inboxParam === 'received' || inboxParam === 'sent') ? inboxParam : undefined
+    !isInmateReporter && (inboxParam === 'received' || inboxParam === 'sent' || inboxParam === 'archived') ? inboxParam : undefined
   const filters = useMemo<BooksFilters>(
     () => ({
       categoryIds: categoriesParam ? categoriesParam.split(',').filter(Boolean) : [],
@@ -221,9 +222,25 @@ export function BooksPage(): React.JSX.Element {
   const tier = useListTier(wrapEl)
   const inlinePane = isDesktop && (tier === 'icons' || tier === 'full')
   const drawerTier = isDesktop && tier === 'drawer'
-  const [storedPaneSize, setPaneSize] = useLocalStorage<PaneSize>(PANE_SIZE_STORAGE_KEY, 'normal')
-  const paneSize: PaneSize =
-    storedPaneSize === 'collapsed' || storedPaneSize === 'wide' ? storedPaneSize : 'normal'
+  // The width (normal / wide) is remembered; the preview itself starts collapsed on
+  // every visit and only a row click (or the strip / pane controls) opens it.
+  const [storedPaneWidth, setPaneWidth] = useLocalStorage<PaneSize>(PANE_SIZE_STORAGE_KEY, 'normal')
+  const [paneOpen, setPaneOpen] = useState(false)
+  const pendingPreviewRef = useRef<number | null>(null)
+  const cancelPendingPreview = useCallback((): void => {
+    if (pendingPreviewRef.current === null) return
+    window.clearTimeout(pendingPreviewRef.current)
+    pendingPreviewRef.current = null
+  }, [])
+  useEffect(() => cancelPendingPreview, [cancelPendingPreview])
+  const paneSize: PaneSize = !paneOpen ? 'collapsed' : storedPaneWidth === 'wide' ? 'wide' : 'normal'
+  const onPaneSizeChange = (size: PaneSize): void => {
+    cancelPendingPreview()
+    if (size === 'collapsed') setPaneOpen(false)
+    // Expanding from the strip reopens at the remembered width.
+    else if (!paneOpen) setPaneOpen(true)
+    else setPaneWidth(size)
+  }
   const scrollerRef = useRef<HTMLDivElement | null>(null)
 
   // ── Desktop pane state (filters and master-detail selection live in URL) ───
@@ -244,6 +261,17 @@ export function BooksPage(): React.JSX.Element {
     autoSelectedRef.current = null
     setOpenParam(String(value))
   }
+  const selectRow = (id: number): void => {
+    cancelPendingPreview()
+    setSelectedId(id)
+    if (drawerTier) {
+      // Let a native second click reach the row before the modal covers it.
+      pendingPreviewRef.current = window.setTimeout(() => {
+        pendingPreviewRef.current = null
+        setPaneOpen(true)
+      }, 500)
+    } else setPaneOpen(true)
+  }
   // Multi-select for the bulk actions (Add to email / Delete), book ids.
   const [selectedForBasket, setSelectedForBasket] = useState<Set<number>>(new Set())
   const [highlightedId, setHighlightedId] = useState<number | null>(null)
@@ -262,7 +290,8 @@ export function BooksPage(): React.JSX.Element {
     queryFn: () => api.getBookFacets(serverScope),
   })
   const { count: myRecordsCount } = useMyRecordsCount({ enabled: !isInmateReporter })
-  const inboxUnread = useInboxCount(!isInmateReporter)
+  const { data: inboxSummary } = useInboxSummary(!isInmateReporter)
+  const inboxUnread = inboxSummary?.unread ?? 0
 
   // ── Data: one server-scoped fetch; both branches filter client-side ────────
   // `serviceParam` (`?service=`) is the single source for the service scope: the
@@ -432,8 +461,8 @@ export function BooksPage(): React.JSX.Element {
     const pool = serverSearchActive && searchItems ? searchItems : allRows
     return pool.find((r) => r.id === selectedId) ?? allRows.find((r) => r.id === selectedId) ?? null
   }, [allRows, selectedId, serverSearchActive, searchItems])
-  // Below 64rem the pane is a drawer, open while a record is selected.
-  const drawerOpen = drawerTier && selectedBook !== null
+  // Selection alone (auto-select, deep link, Back) never opens the preview.
+  const drawerOpen = drawerTier && paneOpen && selectedBook !== null
 
   // ── Navigation: every open carries the list context ─────────────────────────
   const listUrl = `${location.pathname}${location.search}`
@@ -446,12 +475,16 @@ export function BooksPage(): React.JSX.Element {
     [listUrl, desktopRowIds],
   )
   const openFromList = useCallback(
-    (id: number): void => openRecord(navigate, id, buildNav()),
-    [navigate, buildNav],
+    (id: number): void => {
+      cancelPendingPreview()
+      openRecord(navigate, id, buildNav())
+    },
+    [navigate, buildNav, cancelPendingPreview],
   )
+  const rowMenu = useRecordRowMenu({ open: openFromList, isInmateReporter })
 
-  // Back from a record: restore the scroll, select the row (inline tiers) or
-  // flash it (drawer tier — selecting would pop the drawer open).
+  // Back from a record: restore the scroll and select (inline) or flash (drawer)
+  // the row, without expanding the preview in either tier.
   useListReturnFocus(scrollerRef, {
     isDesktop: inlinePane,
     ready: isDesktop && tier !== null && listQuery.isSuccess,
@@ -462,6 +495,8 @@ export function BooksPage(): React.JSX.Element {
 
   const closeDrawer = (): void => {
     const id = selectedId
+    cancelPendingPreview()
+    setPaneOpen(false)
     setOpenParam(null)
     // Focus returns to the row that opened the drawer.
     window.requestAnimationFrame(() => {
@@ -501,6 +536,8 @@ export function BooksPage(): React.JSX.Element {
   const moveSelectionAfterDelete = (removed: ReadonlySet<number>): void => {
     if (selectedId === null || !removed.has(selectedId)) return
     if (drawerTier) {
+      cancelPendingPreview()
+      setPaneOpen(false)
       setOpenParam(null)
       return
     }
@@ -596,7 +633,7 @@ export function BooksPage(): React.JSX.Element {
     })
   })
   useShortcutAction('escape', () => {
-    if (!drawerOpen) return false
+    if (!drawerOpen && pendingPreviewRef.current === null) return false
     closeDrawer()
   })
 
@@ -624,13 +661,13 @@ export function BooksPage(): React.JSX.Element {
     autoSelectedRef.current = firstRowId
     setOpenParam(String(firstRowId))
   }, [needsAutoSelect, firstRowId, setOpenParam])
-  // Crossing into the drawer tier must not pop the drawer for a row the page
-  // (not the user) selected; a user-chosen or deep-linked `open` stays.
+  // Drop a collapsed auto-selection when entering the drawer tier. An explicitly
+  // opened preview (including the strip) and user-chosen/deep-linked rows stay.
   useEffect(() => {
-    if (!drawerTier || autoSelectedRef.current === null) return
+    if (!drawerTier || paneOpen || autoSelectedRef.current === null) return
     if (autoSelectedRef.current === selectedId) setOpenParam(null)
     autoSelectedRef.current = null
-  }, [drawerTier, selectedId, setOpenParam])
+  }, [drawerTier, paneOpen, selectedId, setOpenParam])
 
   const mineToggle = isInmateReporter
     ? undefined
@@ -661,6 +698,14 @@ export function BooksPage(): React.JSX.Element {
           count: null,
           onToggle: () => toggleInbox('sent'),
         },
+        {
+          label: t('books.inbox.archived'),
+          icon: Archive,
+          testId: 'inbox-archived-filter',
+          pressed: inbox === 'archived',
+          count: inboxSummary?.archived ?? null,
+          onToggle: () => toggleInbox('archived'),
+        },
       ]
 
   const listEmpty = hasFilters ? (
@@ -683,7 +728,7 @@ export function BooksPage(): React.JSX.Element {
 
   const paneProps = {
     nav: buildNav,
-    onSizeChange: setPaneSize,
+    onSizeChange: onPaneSizeChange,
     onContinueDraft: (id: number) => setPreviewBookId(id),
     onSubmit: submitBook,
     onSelectBook: (id: number) => setSelectedId(id),
@@ -934,13 +979,19 @@ export function BooksPage(): React.JSX.Element {
                     rows={desktopRows}
                     selectedId={selectedId}
                     highlightedId={highlightedId}
-                    onSelect={setSelectedId}
+                    onSelect={selectRow}
                     selected={isInmateReporter ? undefined : selectedForBasket}
                     onToggleSelect={isInmateReporter ? undefined : handleToggleSelect}
                     nav={buildNav}
                     scrollerRef={scrollerRef}
                     empty={listEmpty}
                     isInmateReporter={isInmateReporter}
+                    // Never beside an open preview: its tools would be duplicated.
+                    rowMenu={(inlinePane ? !paneOpen : !drawerOpen) ? rowMenu.itemsFor : undefined}
+                    onRowMenuOpen={(book) => {
+                      cancelPendingPreview()
+                      rowMenu.onMenuOpen(book)
+                    }}
                   />
                 </>
               )}
@@ -974,6 +1025,7 @@ export function BooksPage(): React.JSX.Element {
               </>,
               document.body,
             )}
+          {rowMenu.dialogs}
         </div>
       ) : (
         /* ───── Mobile: header + filter bar + card list ───── */

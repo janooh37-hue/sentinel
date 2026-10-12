@@ -2217,6 +2217,44 @@
     "addError": "تعذّر الإضافة إلى السلة — السجل غير موجود"
   },
   "books": {
+    "thread": {
+      "reply": "رد",
+      "createFrom": "إنشاء من",
+      "attachOriginal": "إرفاق الأصل كمرجع",
+      "classification": "التبويب",
+      "linkRecord": "ربط معاملة",
+      "linkTitle": "ربط معاملة",
+      "linkDescription": "اختر معاملة لإرفاقها كمرجع.",
+      "linkSearch": "البحث بالرقم المرجعي أو الموضوع",
+      "linkEmpty": "لم يتم العثور على معاملات. جرّب رقماً مرجعياً أو موضوعاً آخر.",
+      "linking": "جارٍ إضافة المرجع…",
+      "references": "المراجع",
+      "title": "سلسلة المراسلات",
+      "pdf": "فتح PDF",
+      "unlink": "إزالة المرجع",
+      "alsoSend": "إرسال المعاملات المرجعية أيضًا ({{count}})",
+      "sendSummary": "إرسال المراجع: تم إرسال {{sent}} وتخطي {{skipped}}.",
+      "skipped": {
+        "not_cleared": "{{ref}}: {{name}} لا يملك تصريح الاطلاع على السري",
+        "personal": "{{ref}}: لا يمكن إرسال المعاملات الشخصية",
+        "already_recipient": "{{ref}}: {{name}} استلم هذه المعاملة سابقًا",
+        "self": "{{ref}}: تم تخطي الإرسال إلى نفسك"
+      },
+      "relations": {
+        "outgoing": { "reply": "رد على", "based_on": "أُنشئ من", "reference": "يشير إلى" },
+        "incoming": { "reply": "الردود عليه", "based_on": "استُخدم لإنشاء", "reference": "أُشير إليه في" }
+      },
+      "errors": {
+        "levelFloor": "لا يمكن أن يقل المستوى عن الحد الأدنى المطلوب للأصل.",
+        "classificationRequired": "اختر التبويب قبل إنشاء المعاملة.",
+        "secretClearance": "إنشاء هذه المعاملة يتطلب تصريح الاطلاع على السري.",
+        "forbidden": "لا تملك صلاحية إنشاء هذه المعاملة.",
+        "linkExists": "هذه المعاملة مرفقة بالفعل كمرجع.",
+        "linkSelf": "لا يمكن إرفاق المعاملة كمرجع لنفسها.",
+        "levelBelowFloor": "ارفع مستوى سرية هذه المعاملة قبل إرفاق هذا المرجع.",
+        "bookNotFound": "هذه المعاملة غير متاحة أو لا تملك صلاحية الوصول إليها."
+      }
+    },
     "confidentiality": {
       "label": "مستوى السرية",
       "chipTitle": "مستوى المعاملة: {{level}}",
@@ -2256,7 +2294,7 @@
         "info": "للاطلاع",
         "action": "للتنفيذ",
         "reply": "للإفادة",
-        "sign": "للتوقيع"
+        "circulate": "للتعميم"
       },
       "note": "ملاحظة (اختياري)",
       "notePlaceholder": "أضف ملاحظة قصيرة للمرسل إليهم",
@@ -2304,6 +2342,20 @@
     "inbox": {
       "sentToMe": "المرسلة إليّ",
       "sentByMe": "المرسلة مني",
+      "done": "وضع علامة تم الإنجاز",
+      "undoDone": "التراجع عن الإنجاز",
+      "doneState": "تم الإنجاز",
+      "doneOn": "تم الإنجاز في {{date}}",
+      "archive": "أرشفة",
+      "unarchive": "إلغاء الأرشفة",
+      "archived": "المؤرشفة",
+      "archivedState": "مؤرشفة",
+      "toast": {
+        "done": "تم وضع علامة الإنجاز",
+        "undoDone": "تم التراجع عن علامة الإنجاز",
+        "archive": "تمت الأرشفة من الوارد",
+        "unarchive": "أُعيدت المعاملة إلى الوارد"
+      },
       "unread_zero": "لا توجد معاملات غير مقروءة",
       "unread_one": "معاملة واحدة غير مقروءة",
       "unread_two": "معاملتان غير مقروءتين",
@@ -2661,7 +2713,10 @@
       "deleteFailedMany_two": "تعذّر حذف سجلين: {{refs}}",
       "deleteFailedMany_few": "تعذّر حذف {{count}} سجلات: {{refs}}",
       "deleteFailedMany_many": "تعذّر حذف {{count}} سجلاً: {{refs}}",
-      "deleteFailedMany_other": "تعذّر حذف {{count}} سجلاً: {{refs}}"
+      "deleteFailedMany_other": "تعذّر حذف {{count}} سجلاً: {{refs}}",
+      "rowMenu": "إجراءات {{ref}}",
+      "openNewTab": "فتح في علامة تبويب جديدة",
+      "downloadPdf": "تنزيل PDF"
     },
     "reason": {
       "inFlight": "لا يمكن حذف سجل قيد الإجراء أو موقّع. استخدم «{{action}}» لإلغائه.",
