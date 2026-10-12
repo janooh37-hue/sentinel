@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { DialogRoot, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { SavedRecordActions } from '@/components/books/SavedRecordActions'
+import { pickEmployeeName } from '@/lib/employeeName'
 import { WordSteps } from './WordSteps'
 
 const DocPdfCanvas = lazy(() => import('@/pages/application/DocPdfCanvas'))
@@ -71,6 +72,18 @@ export function WordSessionPage(): React.JSX.Element {
     queryKey: ['books', 'classifications'], queryFn: () => api.listBookClassifications(), staleTime: Infinity,
   })
   const classification = classificationsQuery.data?.items.find((c) => c.code === bookQuery.data?.classification_code)
+  const isAr = i18n.language.startsWith('ar')
+  const preparerG = bookQuery.data?.submitted_by_g
+  // The book carries only the English display name; the lookup supplies the Arabic name and position.
+  const preparerQuery = useQuery({
+    queryKey: ['employee-lookup', preparerG],
+    queryFn: () => api.getEmployeeLookup(preparerG!),
+    enabled: !!preparerG,
+    retry: false,
+    staleTime: 60_000,
+  })
+  const preparer = preparerQuery.data
+  const preparerPosition = preparer && (isAr ? preparer.position_ar || preparer.position : preparer.position)
   const goBack = () => { if (window.history.state?.idx > 0) navigate(-1); else navigate('/books') }
   const discardMutation = useMutation({
     mutationFn: () => api.discardWordSession(bookId),
@@ -160,18 +173,25 @@ export function WordSessionPage(): React.JSX.Element {
         </section>
         <section aria-labelledby="word-details-heading" className="border-t border-hairline px-4 pb-8 pt-5 sm:px-6 lg:col-start-1 lg:row-start-2 lg:overflow-auto lg:border-e">
           <h2 id="word-details-heading" className="mb-3 text-xs font-semibold text-muted-foreground">{t('books.word.details')}</h2>
-          <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-3 text-sm [&_dt]:text-muted-foreground">
+          <dl className="grid grid-cols-[6.5rem_minmax(0,1fr)] gap-x-4 gap-y-3 text-sm [&_dt]:text-muted-foreground">
             <div className="contents"><dt>{t('books.word.subject')}</dt><dd className="font-semibold"><bdi dir="auto">{(finishedBook ? book.subject : session?.subject) || '—'}</bdi></dd></div>
             {book.classification_code && <div className="contents"><dt>{t('books.word.classification')}</dt><dd>
-              <span className="font-medium"><bdi dir="ltr">{book.classification_code}</bdi>{classification && <> · <bdi lang="ar" dir="rtl">{classification.name_ar}</bdi></>}</span>
-              {classification && <span className="block text-xs text-muted-foreground"><bdi lang="en" dir="ltr">{classification.name_en}</bdi> · <bdi lang="ar" dir="rtl">{classification.unit_ar}</bdi></span>}
+              <span className="font-medium"><bdi dir="ltr">{book.classification_code}</bdi>{classification && <> · <bdi dir="auto">{isAr ? classification.name_ar : classification.name_en}</bdi></>}</span>
+              {classification && isAr && <span className="block text-xs text-muted-foreground">{classification.unit_ar}</span>}
             </dd></div>}
             {!finishedBook && <>
               <div className="contents"><dt>{t('books.word.recipient')}</dt><dd><bdi dir="auto">{session?.recipient_name || '—'}</bdi></dd></div>
               {session?.cc.length ? <div className="contents"><dt>{t('books.word.cc')}</dt><dd><ul>{session.cc.map((name, index) => <li key={index}><bdi dir="auto">{name}</bdi></li>)}</ul></dd></div> : null}
               <div className="contents"><dt>{t('books.word.templateUsed')}</dt><dd><bdi dir="auto">{session?.template_name?.replace(/\.docx$/i, '') ?? t('books.word.templateNone')}</bdi></dd></div>
             </>}
-            <div className="contents"><dt>{t('books.word.preparedBy')}</dt><dd><bdi dir="auto">{book.submitted_by_name}</bdi></dd></div>
+            <div className="contents"><dt>{t('books.word.preparedBy')}</dt><dd>
+              <bdi dir="auto" className="font-medium">{preparer ? pickEmployeeName(preparer, isAr ? 'ar' : 'en') : book.submitted_by_name || '—'}</bdi>
+              {(preparerG || preparerPosition) && <span className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-xs text-muted-foreground">
+                {preparerG && <bdi dir="ltr" className="font-mono tabular-nums text-primary">{preparerG}</bdi>}
+                {preparerG && preparerPosition && <span aria-hidden>·</span>}
+                {preparerPosition && <bdi dir="auto">{preparerPosition}</bdi>}
+              </span>}
+            </dd></div>
             <div className="contents"><dt>{t('books.word.createdAt')}</dt><dd><bdi dir="auto">{new Date(book.created_at).toLocaleString(locale, { dateStyle: 'medium', timeStyle: 'short' })}</bdi></dd></div>
           </dl>
         </section>

@@ -25,7 +25,7 @@ const session: WordSessionDetailRead = {
 }
 const book = {
   id: 42, ref_number: session.ref_number, subject: session.subject, service_id: 'General Book',
-  created_at: session.created_at, submitted_by_name: 'سعيد', classification_code: '1/5', versions: [],
+  created_at: session.created_at, submitted_by_name: 'SAEED ALHARBI', submitted_by_g: 'G1234', classification_code: '1/5', versions: [],
 } as BookRead
 
 function setup() {
@@ -41,6 +41,7 @@ beforeEach(() => {
   vi.spyOn(api, 'getWordSession').mockResolvedValue(session)
   vi.spyOn(api, 'getWordSaveStatus').mockResolvedValue({ last_put_at: null })
   vi.spyOn(api, 'listBookClassifications').mockResolvedValue({ items: [{ code: '1/5', tab: 5, name_ar: 'الإدارة', name_en: 'Administration', unit_ar: 'الموارد البشرية' }] })
+  vi.spyOn(api, 'getEmployeeLookup').mockResolvedValue({ id: 'G1234', name_en: 'SAEED ALHARBI', name_ar: 'سعيد الحربي', position: 'Clerk', position_ar: 'كاتب', nationality: '', passport_no: '', has_photo: false })
 })
 
 describe('WordSessionPage in Arabic', () => {
@@ -49,11 +50,15 @@ describe('WordSessionPage in Arabic', () => {
     const ref = await screen.findByText(session.ref_number)
     expect(ref.tagName).toBe('BDI')
     expect(ref).toHaveAttribute('dir', 'ltr')
-    expect(screen.getByText('سعيد')).toHaveAttribute('dir', 'auto')
+    expect(await screen.findByText('سعيد الحربي')).toHaveAttribute('dir', 'auto')
+    expect(screen.getByText('G1234')).toHaveAttribute('dir', 'ltr')
+    expect(screen.getByText('كاتب')).toBeVisible()
     expect(screen.getByRole('link', { name: 'فتح في Word' })).toHaveAttribute('href', session.word_url)
     expect(screen.getByRole('button', { name: 'حفظ الكتاب' })).toBeDisabled()
     expect(screen.getByRole('button', { name: 'حفظ المسودة كقالب' })).toBeDisabled()
-    expect(screen.getByText('Administration')).toBeVisible()
+    expect(screen.getByText('الموارد البشرية')).toBeVisible()
+    expect(screen.queryByText('Administration')).not.toBeInTheDocument()
+    expect(screen.queryByText('SAEED ALHARBI')).not.toBeInTheDocument()
     expect(screen.getByText('نموذج')).toBeVisible()
   })
 
