@@ -1887,7 +1887,6 @@
     },
     "emptyUnfiltered": "لا توجد سجلات إجازات بعد",
     "report": {
-      "eyebrow": "العمليات — سجل الإجازات {{year}}",
       "asOf": "حتى {{date}}",
       "pendingChip_zero": "لا إجراءات معلّقة",
       "pendingChip_one": "إجراء واحد معلّق",
@@ -2051,15 +2050,7 @@
       "extendCustom": "تاريخ نهاية مخصص",
       "uploadCertificate": "إضافة شهادة",
       "viewCertificate": "عرض الشهادة",
-      "awaitingCertificate": "انتهت الخدمة — أضف شهادة الإتمام لإغلاق هذا السجل",
-      "confirmEmail": {
-        "button": "إرسال طلب تأكيد ({{n}})",
-        "subject": "تأكيد الإجازات — {{n}} موظف",
-        "intro": "يرجى تأكيد الإجازات المخطط لها التالية:",
-        "colName": "الموظف",
-        "colPeriod": "الفترة",
-        "colDays": "الأيام"
-      }
+      "awaitingCertificate": "انتهت الخدمة — أضف شهادة الإتمام لإغلاق هذا السجل"
     },
     "ns": {
       "dialogTitle": "سجل خدمة وطنية جديد",

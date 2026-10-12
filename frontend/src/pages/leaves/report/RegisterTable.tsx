@@ -185,7 +185,7 @@ export function RegisterTable({
         <div
           role="group"
           aria-label={t('leaves.report.colKind')}
-          className="flex flex-wrap items-center gap-1.5"
+          className="flex w-full flex-wrap items-center gap-1.5"
         >
           {CANONICAL_KINDS.map((k) => {
             const active = scope.kinds.includes(k.id)
@@ -203,7 +203,6 @@ export function RegisterTable({
             )
           })}
         </div>
-        <span className="h-[18px] w-px bg-border" aria-hidden="true" />
         <div
           role="group"
           aria-label={t('leaves.columns.status')}

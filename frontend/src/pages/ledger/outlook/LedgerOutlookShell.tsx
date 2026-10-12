@@ -318,7 +318,7 @@ export function LedgerOutlookShell({ onNavigate }: LedgerOutlookShellProps = {})
 
   // Consume a compose prefill from `location.state.composePrefill` once on
   // mount (or when the shell re-renders after a navigate-with-state from
-  // another page, e.g. the Leaves batch-confirmation button). The ref guard
+  // another page, e.g. the Absences email dialog). The ref guard
   // makes repeated renders harmless; `navigate` clears the state so Back/F5
   // don't re-open the compose window.
   const consumedPrefill = useRef(false)

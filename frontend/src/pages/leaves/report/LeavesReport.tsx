@@ -1,7 +1,8 @@
 /**
- * LeavesReport — the desktop "Annual Report" assembly: masthead → scope chips
- * → figure folio (Fig. 2 is the controller) → insight line → the Register |
- * Report switch → register table, or the printable report (ReportView).
+ * LeavesReport — the desktop "Annual Report" assembly: a view toolbar
+ * (Register | Report switch + the register's status line) → scope chips →
+ * figure folio (Fig. 2 is the controller) → insight line → register table,
+ * or the printable report (ReportView).
  *
  * One state owner: the scope lives in `useLeaveReport`; this component adds
  * the table-presentation state (group / expandedId / profileEmployeeId) and
@@ -14,16 +15,15 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { flushSync } from 'react-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
-import { useLocation, useNavigate } from 'react-router-dom'
+import { useLocation } from 'react-router-dom'
 import { FileText, List } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { Skeleton, SkeletonRow } from '@/components/ui/skeleton'
 
-import { actionsFor, displayState } from '../lifecycle'
+import { displayState } from '../lifecycle'
 import { leaveEmployeeName } from '../leaveEmployeeName'
-import { buildConfirmationEmail } from './confirmEmail'
 import { FigKindBars } from './FigKindBars'
 import { FigMonthColumns } from './FigMonthColumns'
 import { FigOutcomes } from './FigOutcomes'
@@ -52,7 +52,6 @@ export function LeavesReport({
 }: LeavesReportProps): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const location = useLocation()
-  const navigate = useNavigate()
   const qc = useQueryClient()
   const report = useLeaveReport()
   // The `figures` wrapper is a fresh object every render — destructure the
@@ -168,31 +167,6 @@ export function LeavesReport({
     [awaitingReturnOnly, report.tableRows, report.today],
   )
 
-  // Scope-driven on purpose: the office emails confirmations in batches — filter
-  // the report to the group (month/employee/kind), then the button emails exactly
-  // that scope's pending requests.
-  // `actionsFor` returning 'approve' is the canonical test for "this row needs
-  // a confirm/approve decision" — matches the same filter the register table uses.
-  const pendingRequests = useMemo(
-    () =>
-      report.scopedRows.filter((r) =>
-        actionsFor(r.leave_type, r.status, r.end_date, report.today).includes('approve'),
-      ),
-    [report.scopedRows, report.today],
-  )
-
-  const openConfirmCompose = useCallback(() => {
-    const prefill = buildConfirmationEmail(pendingRequests, {
-      subject: t('leaves.report.confirmEmail.subject', { n: pendingRequests.length }),
-      intro: t('leaves.report.confirmEmail.intro'),
-      colName: t('leaves.report.confirmEmail.colName'),
-      colPeriod: t('leaves.report.confirmEmail.colPeriod'),
-      colDays: t('leaves.report.confirmEmail.colDays'),
-      lang: i18n.language,
-    })
-    navigate('/ledger', { state: { composePrefill: prefill } })
-  }, [pendingRequests, t, i18n.language, navigate])
-
   const reportSeed: ReportSeed = {
     kinds: scope.kinds,
     statuses: scope.statuses,
@@ -233,33 +207,42 @@ export function LeavesReport({
     )
   }
 
-  // The masthead chips are register filters: using one from the report brings
-  // the register back, where its effect is visible.
-  const inRegister = (apply: () => void) => () => {
-    setView('register')
-    apply()
-  }
-
   return (
     <div className="mx-auto flex w-full max-w-[1180px] flex-col gap-4">
       <div className="flex flex-col gap-4" data-print-hide>
-        <div className="flex flex-wrap items-start justify-between gap-2">
-          <ReportMasthead
-            year={report.year}
-            today={report.today}
-            onLeaveTodayCount={report.onLeaveTodayCount}
-            pendingCount={report.pendingCount}
-            pendingActive={pendingActive}
-            onPendingClick={inRegister(() => setStatuses(pendingActive ? [] : ['Pending']))}
-            awaitingReturnCount={report.awaitingReturnCount}
-            awaitingReturnActive={awaitingReturnActive}
-            onAwaitingReturnClick={inRegister(() => setAwaitingReturnOnly(!awaitingReturnOnly))}
-            endingSoonCount={report.endingSoonCount}
-          />
-          {pendingRequests.length > 0 && (
-            <Button variant="secondary" size="sm" onClick={openConfirmCompose}>
-              ✉{' '}{t('leaves.report.confirmEmail.button', { n: pendingRequests.length })}
-            </Button>
+        {/* View toolbar: the switch keeps its place in both views. */}
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div role="group" aria-label={t('leaves.report.viewLabel')} className={SEGMENT_GROUP}>
+            {(
+              [
+                ['register', List],
+                ['report', FileText],
+              ] as const
+            ).map(([v, Icon]) => (
+              <button
+                key={v}
+                type="button"
+                aria-pressed={view === v}
+                onClick={() => setView(v)}
+                className={cn(SEGMENT_BUTTON, 'px-4 py-2 text-[0.85em]', view === v ? SEGMENT_ON : SEGMENT_OFF)}
+              >
+                <Icon className="h-4 w-4" aria-hidden />
+                {t(`leaves.report.view_${v}`)}
+              </button>
+            ))}
+          </div>
+          {view === 'register' && (
+            <ReportMasthead
+              today={report.today}
+              onLeaveTodayCount={report.onLeaveTodayCount}
+              pendingCount={report.pendingCount}
+              pendingActive={pendingActive}
+              onPendingClick={() => setStatuses(pendingActive ? [] : ['Pending'])}
+              awaitingReturnCount={report.awaitingReturnCount}
+              awaitingReturnActive={awaitingReturnActive}
+              onAwaitingReturnClick={() => setAwaitingReturnOnly(!awaitingReturnOnly)}
+              endingSoonCount={report.endingSoonCount}
+            />
           )}
         </div>
 
@@ -314,26 +297,6 @@ export function LeavesReport({
             />
           </>
         )}
-
-        <div role="group" aria-label={t('leaves.report.viewLabel')} className={cn(SEGMENT_GROUP, 'self-start')}>
-          {(
-            [
-              ['register', List],
-              ['report', FileText],
-            ] as const
-          ).map(([v, Icon]) => (
-            <button
-              key={v}
-              type="button"
-              aria-pressed={view === v}
-              onClick={() => setView(v)}
-              className={cn(SEGMENT_BUTTON, 'px-4 py-2 text-[0.85em]', view === v ? SEGMENT_ON : SEGMENT_OFF)}
-            >
-              <Icon className="h-4 w-4" aria-hidden />
-              {t(`leaves.report.view_${v}`)}
-            </button>
-          ))}
-        </div>
 
         {view === 'register' && (
           <RegisterTable

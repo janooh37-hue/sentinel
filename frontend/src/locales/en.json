@@ -1755,7 +1755,6 @@
     },
     "emptyUnfiltered": "No leave records yet",
     "report": {
-      "eyebrow": "Operations — Leave Register {{year}}",
       "asOf": "as of {{date}}",
       "pendingChip_one": "{{count}} pending action",
       "pendingChip_other": "{{count}} pending actions",
@@ -1883,15 +1882,7 @@
       "extendCustom": "Custom end date",
       "uploadCertificate": "Add certificate",
       "viewCertificate": "View certificate",
-      "awaitingCertificate": "Service ended — add the completion certificate to close this record",
-      "confirmEmail": {
-        "button": "Email confirmation request ({{n}})",
-        "subject": "Leave confirmation — {{n}} employee(s)",
-        "intro": "Please confirm the following planned leaves:",
-        "colName": "Employee",
-        "colPeriod": "Period",
-        "colDays": "Days"
-      }
+      "awaitingCertificate": "Service ended — add the completion certificate to close this record"
     },
     "ns": {
       "dialogTitle": "New National Service record",
