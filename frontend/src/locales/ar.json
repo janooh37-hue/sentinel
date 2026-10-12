@@ -2736,7 +2736,7 @@
       "templateUsed": "القالب المستخدم عند البدء",
       "preview": "معاينة المستند",
       "previewAfterSave": "احفظ في Word ‏(Ctrl+S) لتظهر معاينة الورقة هنا.",
-      "saveDraftAsTemplate": "حفظ المسودة كقالب",
+      "saveDraftAsTemplate": "حفظ كقالب",
       "newTemplateInWord": "إنشاء قالب جديد",
       "createTemplateSession": "إنشاء القالب",
       "templateSessionHint": "اكتب النص المشترك في Word. أبقِ أسطر الرقم والتاريخ والمرسل إليه والموضوع ونسخة إلى، إذ تُملأ لكل كتاب على حدة. لا تُنشئ هذه الجلسة كتاباً ولا تحجز رقماً.",

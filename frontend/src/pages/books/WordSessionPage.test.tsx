@@ -55,7 +55,7 @@ describe('WordSessionPage in Arabic', () => {
     expect(screen.getByText('كاتب')).toBeVisible()
     expect(screen.getByRole('link', { name: 'فتح في Word' })).toHaveAttribute('href', session.word_url)
     expect(screen.getByRole('button', { name: 'حفظ الكتاب' })).toBeDisabled()
-    expect(screen.getByRole('button', { name: 'حفظ المسودة كقالب' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'حفظ كقالب' })).toBeDisabled()
     expect(screen.getByText('الموارد البشرية')).toBeVisible()
     expect(screen.queryByText('Administration')).not.toBeInTheDocument()
     expect(screen.queryByText('SAEED ALHARBI')).not.toBeInTheDocument()
@@ -66,7 +66,7 @@ describe('WordSessionPage in Arabic', () => {
     capabilities.templates = false
     setup()
     await screen.findByText(session.ref_number)
-    expect(screen.queryByRole('button', { name: 'حفظ المسودة كقالب' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'حفظ كقالب' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: 'إنشاء قالب جديد' })).not.toBeInTheDocument()
   })
 
@@ -76,7 +76,7 @@ describe('WordSessionPage in Arabic', () => {
     vi.spyOn(api, 'saveBookAsTemplate').mockResolvedValue({ name: 'التصاريح الأمنية.docx', modified_at: session.created_at, kind: 'custom' })
     const qc = setup()
     const invalidate = vi.spyOn(qc, 'invalidateQueries')
-    const save = await screen.findByRole('button', { name: 'حفظ المسودة كقالب' })
+    const save = await screen.findByRole('button', { name: 'حفظ كقالب' })
     await waitFor(() => expect(save).toBeEnabled())
     await user.click(save)
     expect(screen.getByRole('textbox', { name: 'اسم القالب' })).toHaveValue(session.subject)
