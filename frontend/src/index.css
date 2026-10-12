@@ -1958,9 +1958,17 @@ body {
     size: A4 landscape;
     margin: 10mm 0;
   }
+  /* `contain: inline-size`: the page around the sheet is a flex item of
+     <main>, and the `overflow: visible` uncaging below revives its
+     `min-width: auto` — so it grows to the sheet's min-content width, where
+     every `truncate` name and post counts at full length, times four columns.
+     The sheet then outgrows the paper and is clipped on the inline-end side
+     (right in English, left in Arabic). Containment makes the sheet's content
+     width irrelevant to its ancestors; it takes the paper's width instead. */
   .print-attendance {
     page: attendance;
     padding-inline: 10mm;
+    contain: inline-size;
   }
   /* Two hazards this sheet has to survive, both invisible on screen:
 
