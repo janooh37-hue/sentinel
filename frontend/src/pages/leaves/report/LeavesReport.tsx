@@ -89,6 +89,21 @@ export function LeavesReport({
     return () => cancelAnimationFrame(raf)
   }, [openId, report.isPending, onOpenConsumed])
 
+  // The sheet mounts on `beforeprint`, not in the button handler, so Ctrl+P and
+  // the browser menu print it too, and a non-blocking `print()` can't unmount
+  // it before the preview lays out. `flushSync`: the DOM must hold the sheet
+  // when the listener returns.
+  useEffect(() => {
+    const show = (): void => flushSync(() => setPrinting(true))
+    const hide = (): void => setPrinting(false)
+    window.addEventListener('beforeprint', show)
+    window.addEventListener('afterprint', hide)
+    return () => {
+      window.removeEventListener('beforeprint', show)
+      window.removeEventListener('afterprint', hide)
+    }
+  }, [])
+
   const pendingActive = scope.statuses.length === 1 && scope.statuses[0] === 'Pending'
   const awaitingReturnActive = awaitingReturnOnly
   const sickActive = scope.kinds.includes('Sick Leave')
@@ -175,14 +190,6 @@ export function LeavesReport({
     navigate('/ledger', { state: { composePrefill: prefill } })
   }, [pendingRequests, t, i18n.language, navigate])
 
-  // `window.print()` blocks, so the sheet must be committed before the call
-  // (the AttendancePage pattern) and is dropped again once the dialog closes.
-  const print = useCallback(() => {
-    flushSync(() => setPrinting(true))
-    window.print()
-    setPrinting(false)
-  }, [])
-
   // The active filters, as the paper header names them.
   const printFilters = [
     monthChipLabel,
@@ -248,7 +255,7 @@ export function LeavesReport({
                 ✉{' '}{t('leaves.report.confirmEmail.button', { n: pendingRequests.length })}
               </Button>
             )}
-            <Button variant="secondary" size="sm" onClick={print} disabled={visibleRows.length === 0}>
+            <Button variant="secondary" size="sm" onClick={() => window.print()} disabled={visibleRows.length === 0}>
               <Printer className="me-1.5 h-4 w-4" aria-hidden />
               {t('leaves.report.print')}
             </Button>

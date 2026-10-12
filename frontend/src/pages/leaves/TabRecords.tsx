@@ -710,13 +710,15 @@ export function TabRecords(): React.JSX.Element {
 
   return (
     <div className="flex h-full flex-col gap-2 overflow-hidden px-4 pb-6 pt-3 md:gap-3 md:px-6 md:pt-4">
-      {/* Desktop — the Annual Report view (own fetch + loading/empty states) */}
-      <div className="max-md:hidden h-full overflow-auto">
+      {/* Desktop — the Annual Report view (own fetch + loading/empty states).
+          `print:block`: paper narrower than `md` (dialog margins) must still
+          get the register's print sheet, never the phone list below. */}
+      <div className="max-md:hidden h-full overflow-auto print:block">
         <LeavesReport openId={isMobile ? null : desktopOpenId} onOpenConsumed={handleOpenConsumed} />
       </div>
 
       {/* Mobile filter row — sticky search + Filters bottom-sheet trigger */}
-      <div className="md:hidden flex items-center gap-2">
+      <div className="md:hidden flex items-center gap-2" data-print-hide>
         <Input
           placeholder={t('leaves.filters.search')}
           value={filters.q}
@@ -733,7 +735,7 @@ export function TabRecords(): React.JSX.Element {
       </div>
 
       {/* Result count — folded into the list top edge to keep the list dominant. */}
-      <div className="md:hidden -mb-1 px-1">
+      <div className="md:hidden -mb-1 px-1" data-print-hide>
         <span className="font-mono text-[0.72em] text-muted-foreground">
           {listQuery.isPending
             ? t('common.loading')
@@ -742,7 +744,7 @@ export function TabRecords(): React.JSX.Element {
       </div>
 
       {/* Mobile list pane — desktop loading/empty states live in LeavesReport */}
-      <div className="md:hidden flex-1 overflow-hidden">
+      <div className="md:hidden flex-1 overflow-hidden" data-print-hide>
         {listQuery.isPending ? (
           <div className="flex flex-col overflow-hidden rounded-2xl border border-hairline bg-surface">
             {Array.from({ length: 6 }).map((_, i) => (
