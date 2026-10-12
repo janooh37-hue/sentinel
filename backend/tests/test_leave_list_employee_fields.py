@@ -1,7 +1,8 @@
-"""GET /api/v1/leaves carries each employee's working status.
+"""GET /api/v1/leaves carries each employee's working status and duty unit.
 
-The leave report's Staff filter (our staff vs loaned, ملحق) reads it from the
-list rows, so a leave must report its own employee's status, not a default.
+The leave report filters by staff (our staff vs loaned, ملحق) and totals days
+by duty unit straight from the list rows, so each leave must report its own
+employee's values, not a default.
 """
 
 from __future__ import annotations
@@ -18,9 +19,9 @@ from app.main import create_app
 from tests.conftest import make_user
 
 
-def test_list_rows_carry_the_employee_status(api_db: Session) -> None:
-    api_db.add(Employee(id="E1", name_en="Our Staff", status="Active"))
-    api_db.add(Employee(id="E2", name_en="On Loan", status="Loaned"))
+def test_list_rows_carry_the_employee_status_and_duty_unit(api_db: Session) -> None:
+    api_db.add(Employee(id="E1", name_en="Our Staff", status="Active", duty_unit="السرية الأولى"))
+    api_db.add(Employee(id="E2", name_en="On Loan", status="Loaned", duty_unit=None))
     for emp in ("E1", "E2"):
         api_db.add(
             Leave(
@@ -39,7 +40,9 @@ def test_list_rows_carry_the_employee_status(api_db: Session) -> None:
     r = TestClient(app).get("/api/v1/leaves")
 
     assert r.status_code == 200
-    assert {i["employee_id"]: i["employee_status"] for i in r.json()["items"]} == {
-        "E1": "Active",
-        "E2": "Loaned",
+    assert {
+        i["employee_id"]: (i["employee_status"], i["employee_duty_unit"]) for i in r.json()["items"]
+    } == {
+        "E1": ("Active", "السرية الأولى"),
+        "E2": ("Loaned", None),
     }

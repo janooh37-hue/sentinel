@@ -106,6 +106,8 @@ class LeaveListItem(ORMBase):
     # The employee's working status ("Active" = our staff, "Loaned" = ملحق); the
     # leave report filters on it. List-only: the detail view has no use for it.
     employee_status: str | None = None
+    # The employee's duty unit (السرية الأولى, رسمي, …); the leave report totals by it.
+    employee_duty_unit: str | None = None
     leave_type: str
     start_date: date
     end_date: date

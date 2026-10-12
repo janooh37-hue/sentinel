@@ -90,6 +90,7 @@ def list_leaves(
                     update={
                         "has_certificate": bool(r.certificate_path),
                         "employee_status": r.employee.status if r.employee else None,
+                        "employee_duty_unit": r.employee.duty_unit if r.employee else None,
                     }
                 ),
                 r,

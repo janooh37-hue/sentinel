@@ -11023,6 +11023,8 @@ export interface components {
             employee_name_ar?: string | null;
             /** Employee Status */
             employee_status?: string | null;
+            /** Employee Duty Unit */
+            employee_duty_unit?: string | null;
             /** Leave Type */
             leave_type: string;
             /**
