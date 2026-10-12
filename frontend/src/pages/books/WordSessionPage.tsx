@@ -123,11 +123,12 @@ export function WordSessionPage(): React.JSX.Element {
             {/* Word launches from a REAL anchor (user gesture), never a location.href write: Chrome's protocol prompt can otherwise swallow clicks. */}
             <a href={session!.word_url} onClick={() => setOpened(true)} className="inline-flex min-h-10 items-center justify-center rounded-lg bg-[#185abd] px-4 text-sm font-semibold text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{t('books.word.openInWord')}</a>
             <Button variant="commit" size="commit" disabled={!hasSave || finishMutation.isPending || discardMutation.isPending} onClick={() => finishMutation.mutate()}>{t('books.word.finish')}</Button>
-            <Button variant="ghost" disabled={finishMutation.isPending || discardMutation.isPending} className="border border-accent/50 text-accent hover:bg-accent/10" onClick={() => setDiscardOpen(true)}>{t('books.word.discard')}</Button>
+            <Button variant="ghost" disabled={finishMutation.isPending || discardMutation.isPending} className="col-span-2 border border-accent/50 text-accent hover:bg-accent/10" onClick={() => setDiscardOpen(true)}>{t('books.word.discard')}</Button>
             {has('books.templates') && <span className="mx-1 hidden h-6 w-px bg-hairline sm:block" aria-hidden />}
           </>}
-          {canSaveTemplate && <Button variant="outline" disabled={(!finishedBook && !hasSave) || saveTemplateMutation.isPending} onClick={() => openTemplateDialog('save')}>{t(finishedBook ? 'books.word.saveAsTemplate' : 'books.word.saveDraftAsTemplate')}</Button>}
-          {has('books.templates') && <Button variant="outline" onClick={() => openTemplateDialog('new')}>{t('books.word.newTemplateInWord')}</Button>}
+          {/* Templates are desk work: hidden on phones to keep the bar to the session's own actions. */}
+          {canSaveTemplate && <Button variant="outline" className="hidden sm:inline-flex" disabled={(!finishedBook && !hasSave) || saveTemplateMutation.isPending} onClick={() => openTemplateDialog('save')}>{t(finishedBook ? 'books.word.saveAsTemplate' : 'books.word.saveDraftAsTemplate')}</Button>}
+          {has('books.templates') && <Button variant="outline" className="hidden sm:inline-flex" onClick={() => openTemplateDialog('new')}>{t('books.word.newTemplateInWord')}</Button>}
         </div>
       </header>
       {/* DOM order is the phone order (status → paper → details); lg places status and details in one side column. */}
@@ -137,7 +138,7 @@ export function WordSessionPage(): React.JSX.Element {
             ? <SavedRecordActions bookId={bookId} refNumber={book.ref_number} detail={book.subject ?? undefined} />
             : <WordSteps opened={opened} saveTimes={saveHistory.times} finishLabel={t('books.word.finish')} />}
         </section>
-        <section aria-label={t('books.word.preview')} className="h-[75vh] min-h-[400px] p-3 sm:p-4 lg:col-start-2 lg:row-span-2 lg:row-start-1 lg:h-auto lg:min-h-0">
+        <section aria-label={t('books.word.preview')} className={`${(finishedBook ? pdfUrl : lastPutAt) ? 'h-[75vh] min-h-[400px]' : 'h-40'} p-3 sm:p-4 lg:col-start-2 lg:row-span-2 lg:row-start-1 lg:h-auto lg:min-h-0`}>
           {finishedBook ? (
             pdfUrl ? (
               <Suspense fallback={<p className="p-4">{t('common.loading')}</p>}>

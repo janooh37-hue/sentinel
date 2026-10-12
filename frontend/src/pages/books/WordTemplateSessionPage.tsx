@@ -70,7 +70,7 @@ export function WordTemplateSessionPage(): React.JSX.Element {
           {/* Word launches from a REAL anchor (user gesture), never a location.href write: Chrome's protocol prompt can otherwise swallow clicks. */}
           <a href={session.word_url} onClick={() => setOpened(true)} className="inline-flex min-h-10 items-center justify-center rounded-lg bg-[#185abd] px-4 text-sm font-semibold text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{t('books.word.openInWord')}</a>
           <Button variant="commit" size="commit" disabled={!lastPutAt || busy} onClick={() => finishMutation.mutate()}>{t('books.word.finishTemplate')}</Button>
-          <Button variant="ghost" disabled={busy} className="border border-accent/50 text-accent hover:bg-accent/10" onClick={() => setDiscardOpen(true)}>{t('books.word.discard')}</Button>
+          <Button variant="ghost" disabled={busy} className="col-span-2 border border-accent/50 text-accent hover:bg-accent/10" onClick={() => setDiscardOpen(true)}>{t('books.word.discard')}</Button>
         </div>
       </header>
       <div className="grid flex-1 lg:min-h-0 lg:grid-cols-[minmax(300px,360px)_1fr]">
@@ -81,7 +81,7 @@ export function WordTemplateSessionPage(): React.JSX.Element {
           </div>
           <WordSteps opened={opened} saveTimes={saveHistory.times} finishLabel={t('books.word.finishTemplate')} />
         </section>
-        <section aria-label={t('books.word.preview')} className="h-[75vh] min-h-[400px] p-3 sm:p-4 lg:h-auto lg:min-h-0">
+        <section aria-label={t('books.word.preview')} className={`${lastPutAt ? 'h-[75vh] min-h-[400px]' : 'h-40'} p-3 sm:p-4 lg:h-auto lg:min-h-0`}>
           {lastPutAt ? (
             <Suspense fallback={<p className="p-4">{t('common.loading')}</p>}>
               <DocPdfCanvas key={lastPutAt} pdfUrl={api.templateSessionPreviewUrl(id, lastPutAt)} />
