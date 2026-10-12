@@ -184,3 +184,9 @@ mockups/plan/
 
 # Local agent scratch skills dir (not part of the repo, untracked cruft)
 /.hermes/
+
+# Stray uv lockfile (deps are pinned in requirements.txt, not uv)
+/uv.lock
+
+# Filled-in HR forms (real employee data, PII in a public repo)
+docs/forms/
