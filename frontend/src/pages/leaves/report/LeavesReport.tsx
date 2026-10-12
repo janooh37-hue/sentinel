@@ -30,11 +30,9 @@ import { FigOutcomes } from './FigOutcomes'
 import { InsightLine } from './InsightLine'
 import { RegisterTable } from './RegisterTable'
 import { ReportMasthead } from './ReportMasthead'
-import { ReportPaper } from './ReportPaper'
-import { ReportView } from './ReportView'
+import { ReportView, type ReportSeed } from './ReportView'
 import { SEGMENT_BUTTON, SEGMENT_GROUP, SEGMENT_OFF, SEGMENT_ON } from './controls'
 import { dateLocale, fmtMonthYear } from './fmt'
-import { kindMeta } from './kinds'
 import type { GroupMode } from './reportData'
 import { useLeaveReport } from './useLeaveReport'
 
@@ -195,15 +193,12 @@ export function LeavesReport({
     navigate('/ledger', { state: { composePrefill: prefill } })
   }, [pendingRequests, t, i18n.language, navigate])
 
-  // The active filters, as the paper header names them.
-  const printFilters = [
-    monthChipLabel,
-    employeeChipName,
-    scope.kinds.map((k) => t(kindMeta(k).i18nKey)).join(', '),
-    scope.statuses.map((s) => t(`leaves.status.${s}`)).join(', '),
-    awaitingReturnOnly ? t('leaves.display.AwaitingReturn') : null,
-    scope.q.trim() ? t('leaves.report.printSearch', { term: scope.q.trim() }) : null,
-  ].filter((f): f is string => !!f)
+  const reportSeed: ReportSeed = {
+    kinds: scope.kinds,
+    statuses: scope.statuses,
+    employeeId: scope.employeeId,
+    month: scope.month,
+  }
 
   if (report.isPending) {
     return (
@@ -364,30 +359,10 @@ export function LeavesReport({
         )}
       </div>
 
-      {view === 'report' && (
-        <ReportView
-          all={report.all}
-          today={report.today}
-          seed={{
-            kinds: scope.kinds,
-            statuses: scope.statuses,
-            employeeId: scope.employeeId,
-            month: scope.month,
-            sort,
-            group,
-          }}
-        />
-      )}
-      {/* Ctrl+P from the register prints the register as it stands. */}
+      {view === 'report' && <ReportView all={report.all} today={report.today} seed={reportSeed} />}
+      {/* Ctrl+P from the register prints the report for its current filters. */}
       {view === 'register' && printing && (
-        <ReportPaper
-          rows={visibleRows}
-          group={group}
-          sort={sort}
-          today={report.today}
-          title={t('leaves.report.printTitle', { year: report.year })}
-          facts={printFilters}
-        />
+        <ReportView all={report.all} today={report.today} seed={reportSeed} paperOnly />
       )}
     </div>
   )

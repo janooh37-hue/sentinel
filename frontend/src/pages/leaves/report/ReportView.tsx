@@ -1,11 +1,15 @@
 /**
- * ReportView — the Records page's printable report: one options bar, then the
- * paper exactly as it prints, then Print / Save PDF under it (where reading
- * the sheet ends).
+ * ReportView — the Records page's printable leave report: an options panel at
+ * the inline start (Print / Save PDF at its foot) and the paper beside it,
+ * exactly as it prints.
  *
  * It opens with the register's filters (`seed`) and keeps its own choices
  * after that, so shaping a report never disturbs the register. Rows come from
- * the register's already-fetched list; nothing is refetched.
+ * the register's already-fetched list; nothing is refetched. `paperOnly`
+ * renders just the paper, hidden on screen: the register's Ctrl+P path.
+ *
+ * Rejected and cancelled leaves are not days taken, so they count only when
+ * the operator picks those statuses explicitly.
  */
 import { useId, useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
@@ -17,16 +21,17 @@ import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
 
 import { LeaveEmployeePicker } from '../LeaveEmployeePicker'
+import { canonStatus } from '../lifecycle'
 import { leaveEmployeeName } from '../leaveEmployeeName'
 import {
-  CHIP_BASE, CHIP_OFF, CHIP_ON, FIELD_LABEL, GROUP_LABEL_KEYS, NATIVE_SELECT, SEGMENT_BUTTON,
-  SEGMENT_GROUP, SEGMENT_OFF, SEGMENT_ON, WORKFLOW_STATUSES, toggleItem,
+  CHIP_BASE, CHIP_OFF, CHIP_ON, FIELD_LABEL, NATIVE_SELECT, SEGMENT_BUTTON, SEGMENT_GROUP,
+  SEGMENT_OFF, SEGMENT_ON, WORKFLOW_STATUSES, toggleItem,
 } from './controls'
-import { dateLocale, fmtDayMonthYear, fmtMonthYear } from './fmt'
+import { dateLocale, fmtDayMonthYear } from './fmt'
 import { CANONICAL_KINDS, kindMeta, type KindId } from './kinds'
 import {
-  applyScope, matchesStaff, periodWindow, recordOverlapsWindow, sortRows, REGISTER_COLUMNS,
-  type GroupMode, type MonthRef, type ReportPeriod, type SortSpec, type StaffFilter,
+  applyScope, buildReportSections, matchesStaff,
+  type MonthRef, type ReportPeriod, type ReportSort, type StaffFilter,
 } from './reportData'
 import { ReportPaper } from './ReportPaper'
 
@@ -36,21 +41,27 @@ export interface ReportSeed {
   statuses: string[]
   employeeId: string | null
   month: MonthRef | null
-  sort: SortSpec
-  group: GroupMode
 }
 
 const PERIOD_MODES: ReportPeriod['mode'][] = ['month', 'range', 'year']
 const STAFF_OPTIONS: StaffFilter[] = ['all', 'ours', 'loaned']
-const GROUP_MODES: GroupMode[] = ['none', 'kind', 'month', 'employee']
+/** Sort choices, labelled with the paper's own column headings. */
+const SORT_LABEL_KEYS: Record<ReportSort['key'], string> = {
+  days: 'leaves.report.colTotalDays',
+  name: 'leaves.report.colName',
+  id: 'leaves.report.colId',
+  unit: 'leaves.report.colUnit',
+}
+const NOT_TAKEN = ['Rejected', 'Cancelled']
 
 interface ReportViewProps {
   all: LeaveListItem[]
   today: string
   seed: ReportSeed
+  paperOnly?: boolean
 }
 
-export function ReportView({ all, today, seed }: ReportViewProps): React.JSX.Element {
+export function ReportView({ all, today, seed, paperOnly = false }: ReportViewProps): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const locale = dateLocale(i18n.language)
   const ids = useId()
@@ -68,23 +79,21 @@ export function ReportView({ all, today, seed }: ReportViewProps): React.JSX.Ele
   const [statuses, setStatuses] = useState(seed.statuses)
   const [employeeId, setEmployeeId] = useState(seed.employeeId)
   const [staff, setStaff] = useState<StaffFilter>('all')
-  const [group, setGroup] = useState(seed.group)
-  const [sort, setSort] = useState(seed.sort)
-  const [withTotals, setWithTotals] = useState(false)
+  const [sort, setSort] = useState<ReportSort>({ key: 'days', dir: 'desc' })
   const [withSignatures, setWithSignatures] = useState(false)
 
-  const rows = useMemo(() => {
+  const sections = useMemo(() => {
     const period: ReportPeriod =
       periodMode === 'year'
         ? { mode: 'year', year }
         : periodMode === 'month'
           ? { mode: 'month', month }
           : { mode: 'range', from, to }
-    const span = periodWindow(period)
     const picked = applyScope(all, { month: null, employeeId, kinds, statuses, q: '' }).filter(
-      (r) => recordOverlapsWindow(r, span) && matchesStaff(r, staff),
+      (r) =>
+        matchesStaff(r, staff) && (statuses.length > 0 || !NOT_TAKEN.includes(canonStatus(r.status))),
     )
-    return sortRows(picked, sort, (r) => leaveEmployeeName(r, i18n.language), i18n.language)
+    return buildReportSections(picked, period, sort, (r) => leaveEmployeeName(r, i18n.language), i18n.language)
   }, [all, periodMode, year, month, from, to, employeeId, kinds, statuses, staff, sort, i18n.language])
 
   const years = useMemo(
@@ -95,16 +104,17 @@ export function ReportView({ all, today, seed }: ReportViewProps): React.JSX.Ele
     [all, today],
   )
 
+  // Each sheet names its own month; the facts carry the wider period only
+  // when it spans more than one month.
   const periodLabel =
     periodMode === 'year'
       ? String(year)
-      : periodMode === 'month'
-        ? month && fmtMonthYear(month, locale)
-        : (from || to) &&
-          t('leaves.report.rangeLabel', {
+      : periodMode === 'range' && (from || to)
+        ? t('leaves.report.rangeLabel', {
             from: from ? fmtDayMonthYear(from, locale) : '…',
             to: to ? fmtDayMonthYear(to, locale) : '…',
           })
+        : null
   const employeeRow = employeeId ? all.find((r) => r.employee_id === employeeId) : undefined
   const facts = [
     periodLabel,
@@ -119,105 +129,93 @@ export function ReportView({ all, today, seed }: ReportViewProps): React.JSX.Ele
         : t('leaves.report.allKinds'),
   })
 
+  const paper = (
+    <ReportPaper
+      sections={sections}
+      title={title}
+      facts={facts}
+      emptyHeading={periodLabel ?? title}
+      today={today}
+      signatures={withSignatures}
+      onScreen={!paperOnly}
+    />
+  )
+  if (paperOnly) return paper
+
   return (
-    <>
+    <div className="grid grid-cols-[19rem_minmax(0,1fr)] items-start gap-6 max-lg:grid-cols-1 print:block">
       <section
         aria-label={t('leaves.report.optionsLabel')}
-        className="flex flex-col gap-4 rounded-2xl border border-hairline bg-surface p-4"
+        className="flex flex-col gap-5 rounded-2xl border border-hairline bg-surface p-4 lg:sticky lg:top-0"
         data-print-hide
       >
-        <div className="flex flex-wrap items-end gap-x-6 gap-y-3">
-          <fieldset className="min-w-0">
-            <legend className={FIELD_LABEL}>{t('leaves.report.optPeriod')}</legend>
-            <div className="flex flex-wrap items-center gap-2">
-              <div className={SEGMENT_GROUP}>
-                {PERIOD_MODES.map((m) => (
-                  <button
-                    key={m}
-                    type="button"
-                    aria-pressed={periodMode === m}
-                    onClick={() => setPeriodMode(m)}
-                    className={cn(SEGMENT_BUTTON, periodMode === m ? SEGMENT_ON : SEGMENT_OFF)}
-                  >
-                    {t(`leaves.report.period_${m}`)}
-                  </button>
-                ))}
-              </div>
-              {periodMode === 'month' && (
-                <Input
-                  type="month"
-                  aria-label={t('leaves.report.period_month')}
-                  value={month}
-                  onChange={(e) => setMonth(e.target.value)}
-                  className="h-9 w-auto font-mono tabular-nums"
-                />
-              )}
-              {periodMode === 'range' && (
-                <>
-                  {/* The bounds cap each other, so a range can't be inverted
-                      into a silently empty report. */}
-                  <Input
-                    type="date"
-                    aria-label={t('leaves.report.rangeFrom')}
-                    value={from}
-                    max={to || undefined}
-                    onChange={(e) => setFrom(e.target.value)}
-                    className="h-9 w-auto font-mono tabular-nums"
-                  />
-                  <span className="text-[0.8em] text-muted-foreground">{t('leaves.report.rangeTo')}</span>
-                  <Input
-                    type="date"
-                    aria-label={t('leaves.report.rangeToLabel')}
-                    value={to}
-                    min={from || undefined}
-                    onChange={(e) => setTo(e.target.value)}
-                    className="h-9 w-auto font-mono tabular-nums"
-                  />
-                </>
-              )}
-              {periodMode === 'year' && (
-                <select
-                  aria-label={t('leaves.report.period_year')}
-                  value={year}
-                  onChange={(e) => setYear(Number(e.target.value))}
-                  className={NATIVE_SELECT}
-                >
-                  {years.map((y) => (
-                    <option key={y} value={y}>
-                      {y}
-                    </option>
-                  ))}
-                </select>
-              )}
-            </div>
-          </fieldset>
-
-          <fieldset className="min-w-0">
-            <legend className={FIELD_LABEL}>{t('leaves.report.optStaff')}</legend>
-            <div className={SEGMENT_GROUP}>
-              {STAFF_OPTIONS.map((s) => (
-                <button
-                  key={s}
-                  type="button"
-                  aria-pressed={staff === s}
-                  onClick={() => setStaff(s)}
-                  className={cn(SEGMENT_BUTTON, staff === s ? SEGMENT_ON : SEGMENT_OFF)}
-                >
-                  {t(`leaves.report.staff.${s}`)}
-                </button>
-              ))}
-            </div>
-          </fieldset>
-
-          <div className="min-w-[14rem]">
-            <span className={FIELD_LABEL}>{t('leaves.columns.employee')}</span>
-            <LeaveEmployeePicker selectedId={employeeId} onSelect={setEmployeeId} />
+        <fieldset className="min-w-0">
+          <legend className={FIELD_LABEL}>{t('leaves.report.optPeriod')}</legend>
+          <div className={cn(SEGMENT_GROUP, 'mb-2')}>
+            {PERIOD_MODES.map((m) => (
+              <button
+                key={m}
+                type="button"
+                aria-pressed={periodMode === m}
+                onClick={() => setPeriodMode(m)}
+                className={cn(SEGMENT_BUTTON, 'flex-1 justify-center whitespace-nowrap px-2', periodMode === m ? SEGMENT_ON : SEGMENT_OFF)}
+              >
+                {t(`leaves.report.period_${m}`)}
+              </button>
+            ))}
           </div>
-        </div>
+          {periodMode === 'month' && (
+            <Input
+              type="month"
+              aria-label={t('leaves.report.period_month')}
+              value={month}
+              onChange={(e) => setMonth(e.target.value)}
+              className="h-9 font-mono tabular-nums"
+            />
+          )}
+          {periodMode === 'range' && (
+            // The bounds cap each other, so a range can't be inverted into a
+            // silently empty report.
+            <div className="grid grid-cols-[auto_1fr] items-center gap-x-2 gap-y-2 text-[0.8em] text-muted-foreground">
+              <span>{t('leaves.report.rangeFrom')}</span>
+              <Input
+                type="date"
+                aria-label={t('leaves.report.rangeFrom')}
+                value={from}
+                max={to || undefined}
+                onChange={(e) => setFrom(e.target.value)}
+                className="h-9 font-mono tabular-nums"
+              />
+              <span>{t('leaves.report.rangeTo')}</span>
+              <Input
+                type="date"
+                aria-label={t('leaves.report.rangeToLabel')}
+                value={to}
+                min={from || undefined}
+                onChange={(e) => setTo(e.target.value)}
+                className="h-9 font-mono tabular-nums"
+              />
+            </div>
+          )}
+          {periodMode === 'year' && (
+            <select
+              aria-label={t('leaves.report.period_year')}
+              value={year}
+              onChange={(e) => setYear(Number(e.target.value))}
+              className={cn(NATIVE_SELECT, 'w-full')}
+            >
+              {years.map((y) => (
+                <option key={y} value={y}>
+                  {y}
+                </option>
+              ))}
+            </select>
+          )}
+        </fieldset>
 
-        <fieldset>
+        <fieldset className="min-w-0">
           <legend className={FIELD_LABEL}>{t('leaves.report.colKind')}</legend>
-          <div className="flex flex-wrap items-center gap-1.5">
+          <div className="flex flex-wrap gap-1.5">
             {CANONICAL_KINDS.map((k) => {
               const active = kinds.includes(k.id)
               return (
@@ -236,9 +234,26 @@ export function ReportView({ all, today, seed }: ReportViewProps): React.JSX.Ele
           </div>
         </fieldset>
 
-        <fieldset>
+        <fieldset className="min-w-0">
+          <legend className={FIELD_LABEL}>{t('leaves.report.optStaff')}</legend>
+          <div className={SEGMENT_GROUP}>
+            {STAFF_OPTIONS.map((s) => (
+              <button
+                key={s}
+                type="button"
+                aria-pressed={staff === s}
+                onClick={() => setStaff(s)}
+                className={cn(SEGMENT_BUTTON, 'flex-1 justify-center whitespace-nowrap px-2', staff === s ? SEGMENT_ON : SEGMENT_OFF)}
+              >
+                {t(`leaves.report.staff.${s}`)}
+              </button>
+            ))}
+          </div>
+        </fieldset>
+
+        <fieldset className="min-w-0">
           <legend className={FIELD_LABEL}>{t('leaves.columns.status')}</legend>
-          <div className="flex flex-wrap items-center gap-1.5">
+          <div className="flex flex-wrap gap-1.5">
             {WORKFLOW_STATUSES.map((s) => {
               const active = statuses.includes(s)
               return (
@@ -256,104 +271,70 @@ export function ReportView({ all, today, seed }: ReportViewProps): React.JSX.Ele
           </div>
         </fieldset>
 
-        <div className="flex flex-wrap items-end gap-x-6 gap-y-3 border-t border-hairline pt-4">
-          <div>
-            <label htmlFor={`${ids}-group`} className={FIELD_LABEL}>
-              {t('leaves.report.groupLabel')}
-            </label>
+        <div className="min-w-0">
+          <span className={FIELD_LABEL}>{t('leaves.columns.employee')}</span>
+          <LeaveEmployeePicker selectedId={employeeId} onSelect={setEmployeeId} />
+        </div>
+
+        <div>
+          <label htmlFor={`${ids}-sort`} className={FIELD_LABEL}>
+            {t('leaves.report.optSort')}
+          </label>
+          <div className="flex gap-2">
             <select
-              id={`${ids}-group`}
-              value={group}
-              onChange={(e) => setGroup(e.target.value as GroupMode)}
-              className={NATIVE_SELECT}
+              id={`${ids}-sort`}
+              value={sort.key}
+              onChange={(e) => setSort({ ...sort, key: e.target.value as ReportSort['key'] })}
+              className={cn(NATIVE_SELECT, 'min-w-0 flex-1')}
             >
-              {GROUP_MODES.map((m) => (
-                <option key={m} value={m}>
-                  {t(GROUP_LABEL_KEYS[m])}
+              {(Object.keys(SORT_LABEL_KEYS) as ReportSort['key'][]).map((k) => (
+                <option key={k} value={k}>
+                  {t(SORT_LABEL_KEYS[k])}
                 </option>
               ))}
             </select>
+            <select
+              aria-label={t('leaves.report.optSortDir')}
+              value={sort.dir}
+              onChange={(e) => setSort({ ...sort, dir: e.target.value as ReportSort['dir'] })}
+              className={NATIVE_SELECT}
+            >
+              <option value="desc">{t('leaves.report.sortDesc')}</option>
+              <option value="asc">{t('leaves.report.sortAsc')}</option>
+            </select>
           </div>
+        </div>
 
-          <div>
-            <label htmlFor={`${ids}-sort`} className={FIELD_LABEL}>
-              {t('leaves.report.optSort')}
-            </label>
-            <div className="flex gap-2">
-              <select
-                id={`${ids}-sort`}
-                value={sort.key}
-                onChange={(e) => setSort({ ...sort, key: e.target.value as SortSpec['key'] })}
-                className={NATIVE_SELECT}
-              >
-                {REGISTER_COLUMNS.map((c) => (
-                  <option key={c.key} value={c.key}>
-                    {t(c.labelKey)}
-                  </option>
-                ))}
-              </select>
-              <select
-                aria-label={t('leaves.report.optSortDir')}
-                value={sort.dir}
-                onChange={(e) => setSort({ ...sort, dir: e.target.value as SortSpec['dir'] })}
-                className={NATIVE_SELECT}
-              >
-                <option value="asc">{t('leaves.report.sortAsc')}</option>
-                <option value="desc">{t('leaves.report.sortDesc')}</option>
-              </select>
-            </div>
-          </div>
+        <label className="inline-flex cursor-pointer items-center gap-2 text-[0.85em] text-foreground">
+          <input
+            type="checkbox"
+            checked={withSignatures}
+            onChange={(e) => setWithSignatures(e.target.checked)}
+            className="h-4 w-4 accent-primary"
+          />
+          {t('leaves.report.includeSignatures')}
+        </label>
 
-          <fieldset>
-            <legend className={FIELD_LABEL}>{t('leaves.report.optInclude')}</legend>
-            <div className="flex h-9 flex-wrap items-center gap-x-5 gap-y-1 text-[0.85em] text-foreground">
-              <label className="inline-flex cursor-pointer items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={withTotals}
-                  onChange={(e) => setWithTotals(e.target.checked)}
-                  className="h-4 w-4 accent-primary"
-                />
-                {t('leaves.report.includeTotals')}
-              </label>
-              <label className="inline-flex cursor-pointer items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={withSignatures}
-                  onChange={(e) => setWithSignatures(e.target.checked)}
-                  className="h-4 w-4 accent-primary"
-                />
-                {t('leaves.report.includeSignatures')}
-              </label>
-            </div>
-          </fieldset>
+        {/* «Save PDF» is the print dialog's own PDF target, as on every other
+            document in the app, so both actions open the same dialog. */}
+        <div className="flex flex-col gap-2 border-t border-hairline pt-4">
+          <Button type="button" disabled={sections.length === 0} onClick={() => window.print()}>
+            <Printer className="h-4 w-4" aria-hidden />
+            {t('leaves.report.print')}
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            disabled={sections.length === 0}
+            onClick={() => window.print()}
+          >
+            <FileDown className="h-4 w-4" aria-hidden />
+            {t('leaves.report.savePdf')}
+          </Button>
         </div>
       </section>
 
-      <ReportPaper
-        rows={rows}
-        group={group}
-        sort={sort}
-        today={today}
-        title={title}
-        facts={facts}
-        employeeTotals={withTotals}
-        signatures={withSignatures}
-        onScreen
-      />
-
-      {/* «Save PDF» is the print dialog's own PDF target, as on every other
-          document in the app, so both actions open the same dialog. */}
-      <div className="mx-auto flex w-full max-w-[210mm] justify-end gap-2" data-print-hide>
-        <Button type="button" variant="secondary" disabled={rows.length === 0} onClick={() => window.print()}>
-          <FileDown className="h-4 w-4" aria-hidden />
-          {t('leaves.report.savePdf')}
-        </Button>
-        <Button type="button" disabled={rows.length === 0} onClick={() => window.print()}>
-          <Printer className="h-4 w-4" aria-hidden />
-          {t('leaves.report.print')}
-        </Button>
-      </div>
-    </>
+      {paper}
+    </div>
   )
 }

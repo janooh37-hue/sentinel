@@ -11,7 +11,6 @@ export const GROUP_LABEL_KEYS: Record<GroupMode, string> = {
   none: 'leaves.report.groupNone',
   kind: 'leaves.report.groupKind',
   month: 'leaves.report.groupMonth',
-  employee: 'leaves.report.groupEmployee',
 }
 
 export const CHIP_BASE =

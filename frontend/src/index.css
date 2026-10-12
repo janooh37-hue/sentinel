@@ -1827,11 +1827,29 @@ body {
   .print-vehicle-report {
     page: register;
   }
+  /* The leave report repeats its letterhead and footer through its own table
+     header/footer groups; the page number lives in the page's bottom margin
+     box ("2 / 5", language-neutral), on a page of its own so the permits and
+     fines documents keep their unnumbered sheets. */
+  @page leave-report {
+    size: A4;
+    margin: 12mm 12mm 14mm;
+    @bottom-center {
+      content: counter(page) " / " counter(pages);
+      /* An Arabic document would otherwise lay "2 / 5" out as "5 / 2". */
+      direction: ltr;
+      font: 8.5px Arial, sans-serif;
+      color: #5a6068;
+    }
+  }
+  .print-leave-report {
+    page: leave-report;
+  }
   /* A named page starts a new sheet, and Chrome leaves an ancestor's top
-     padding on the unnamed sheet before it — the leaves register printed a
-     blank first page from its tab panel's `pt-3`. Everything else on those
+     padding on the unnamed sheet before it — the leave report printed a blank
+     first page from its tab panel's `pt-3`. Everything else on those
      ancestors is print-hidden, so their padding has nothing to inset. */
-  *:has(.print-register) {
+  *:has(.print-leave-report) {
     padding: 0 !important;
   }
   /* The fleet list carries every vehicle field (12 columns), so it gets a

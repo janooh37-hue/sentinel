@@ -39,12 +39,20 @@ import {
   SEGMENT_ON, WORKFLOW_STATUSES, toggleItem,
 } from './controls'
 import {
-  groupRows, tableTotals, REGISTER_COLUMNS,
+  groupRows, tableTotals,
   type GroupMode, type ReportScope, type SortSpec,
 } from './reportData'
 
 /** Shared row/header grid (plan-locked template). */
 const GRID = 'grid grid-cols-[1.6fr_1.2fr_1.1fr_0.5fr_0.9fr_44px] items-center gap-4 px-4'
+
+const COLUMNS: { key: SortSpec['key']; labelKey: string; numeric?: boolean }[] = [
+  { key: 'employee', labelKey: 'leaves.columns.employee' },
+  { key: 'kind', labelKey: 'leaves.report.colKind' },
+  { key: 'start', labelKey: 'leaves.report.period' },
+  { key: 'days', labelKey: 'leaves.columns.days', numeric: true },
+  { key: 'status', labelKey: 'leaves.columns.status' },
+]
 
 interface RegisterTableProps {
   /** Scoped + sorted rows (the hook's `tableRows`). */
@@ -271,7 +279,7 @@ export function RegisterTable({
           {/* header */}
           <div role="rowgroup">
             <div role="row" className={cn(GRID, 'border-b border-hairline bg-surface-tinted py-2')}>
-              {REGISTER_COLUMNS.map((c) => {
+              {COLUMNS.map((c) => {
                 const active = sort.key === c.key
                 return (
                   <span

@@ -29,15 +29,6 @@ export interface ReportScope {
 }
 export interface SortSpec { key: 'employee' | 'kind' | 'start' | 'days' | 'status'; dir: 'asc' | 'desc' }
 
-/** Register columns, shared by the screen table and its print sheet. */
-export const REGISTER_COLUMNS: { key: SortSpec['key']; labelKey: string; numeric?: boolean }[] = [
-  { key: 'employee', labelKey: 'leaves.columns.employee' },
-  { key: 'kind', labelKey: 'leaves.report.colKind' },
-  { key: 'start', labelKey: 'leaves.report.period' },
-  { key: 'days', labelKey: 'leaves.columns.days', numeric: true },
-  { key: 'status', labelKey: 'leaves.columns.status' },
-]
-
 const pad = (n: number): string => String(n + 1).padStart(2, '0')
 
 /** UTC-safe calendar-day math: ISO date (or datetime — only Y/M/D used) → UTC ms. */
@@ -101,11 +92,6 @@ export function periodWindow(p: ReportPeriod): DayWindow {
     return monthWindow(y, m - 1)
   }
   return { start: p.from || OPEN_WINDOW.start, end: p.to || OPEN_WINDOW.end }
-}
-
-/** A record belongs to a period when any of its days falls inside it. */
-export function recordOverlapsWindow(r: LeaveListItem, w: DayWindow): boolean {
-  return r.start_date.slice(0, 10) <= w.end && r.end_date.slice(0, 10) >= w.start
 }
 
 export type StaffFilter = 'all' | 'ours' | 'loaned'
@@ -311,10 +297,10 @@ export function sortRows(
   return [...rows].sort((a, b) => dir * cmp(a, b)) // Array.sort is stable
 }
 
-export type GroupMode = 'none' | 'kind' | 'month' | 'employee'
+export type GroupMode = 'none' | 'kind' | 'month'
 
 export interface RowGroup {
-  /** Stable render key: `'all'` | kind id | `'YYYY-MM'` | employee id. */
+  /** Stable render key: `'all'` | kind id | `'YYYY-MM'`. */
   key: string
   kind: KindId | null
   /** `YYYY-MM` of `start_date` for month groups. */
@@ -333,16 +319,6 @@ export function groupRows(rows: LeaveListItem[], mode: GroupMode, sort: SortSpec
   const sum = (rs: LeaveListItem[]): number => rs.reduce((s, r) => s + r.days, 0)
   if (mode === 'none') {
     return [{ key: 'all', kind: null, month: null, rows, days: sum(rows) }]
-  }
-  if (mode === 'employee') {
-    // Map keeps first-appearance order, so the groups follow the sort.
-    const byEmployee = new Map<string, LeaveListItem[]>()
-    for (const r of rows) {
-      const bucket = byEmployee.get(r.employee_id)
-      if (bucket) bucket.push(r)
-      else byEmployee.set(r.employee_id, [r])
-    }
-    return [...byEmployee].map(([id, rs]) => ({ key: id, kind: null, month: null, rows: rs, days: sum(rs) }))
   }
   if (mode === 'month') {
     const byMonth = new Map<string, LeaveListItem[]>()
@@ -385,20 +361,92 @@ export function tableTotals(rows: LeaveListItem[]): TableTotals {
   }
 }
 
-export interface EmployeeTotal { row: LeaveListItem; records: number; days: number }
+export type ReportSortKey = 'days' | 'name' | 'id' | 'unit'
+export interface ReportSort { key: ReportSortKey; dir: 'asc' | 'desc' }
 
-/** One line per employee (`row` = their first record, for name + G-number),
- * most days first. */
-export function employeeTotals(rows: LeaveListItem[]): EmployeeTotal[] {
-  const byEmployee = new Map<string, EmployeeTotal>()
+/** One employee in one month: `row` is their first record (name + G-number),
+ * `unit` their duty unit ('' = unassigned). */
+export interface ReportLine { row: LeaveListItem; unit: string; days: number }
+export interface UnitTotal { unit: string; days: number; employees: number }
+export interface ReportSection { month: string; lines: ReportLine[]; units: UnitTotal[]; days: number }
+
+/** The printable report: one section per calendar month the period touches
+ * (an open range is bounded by the rows themselves). A section counts only
+ * the days that fall inside both its month and the period, so a leave across
+ * a month end splits between the two sections and every total adds up.
+ * Employees appear once per section; months without a counted day drop out.
+ * ponytail: groups by the employee's CURRENT duty unit, not the unit they
+ * held on the leave dates; needs duty-assignment history if that matters. */
+export function buildReportSections(
+  rows: LeaveListItem[],
+  period: ReportPeriod,
+  sort: ReportSort,
+  nameOf: (r: LeaveListItem) => string,
+  lang: string,
+): ReportSection[] {
+  if (rows.length === 0) return []
+  const w = periodWindow(period)
+  let first = rows[0].start_date.slice(0, 10)
+  let last = rows[0].end_date.slice(0, 10)
   for (const r of rows) {
-    const t = byEmployee.get(r.employee_id)
-    if (t) {
-      t.records += 1
-      t.days += r.days
-    } else byEmployee.set(r.employee_id, { row: r, records: 1, days: r.days })
+    if (r.start_date.slice(0, 10) < first) first = r.start_date.slice(0, 10)
+    if (r.end_date.slice(0, 10) > last) last = r.end_date.slice(0, 10)
   }
-  return [...byEmployee.values()].sort((a, b) => b.days - a.days)
+  const start = w.start > first ? w.start : first
+  const end = w.end < last ? w.end : last
+
+  const dir = sort.dir === 'asc' ? 1 : -1
+  const byName = (a: ReportLine, b: ReportLine): number => nameOf(a.row).localeCompare(nameOf(b.row), lang)
+  const cmp = (a: ReportLine, b: ReportLine): number => {
+    switch (sort.key) {
+      case 'days':
+        return a.days - b.days
+      case 'id':
+        return a.row.employee_id.localeCompare(b.row.employee_id, undefined, { numeric: true })
+      case 'unit':
+        return a.unit.localeCompare(b.unit, lang)
+      case 'name':
+        return byName(a, b)
+    }
+  }
+
+  const sections: ReportSection[] = []
+  let [y, m] = start.split('-').map(Number)
+  while (start <= end && `${y}-${String(m).padStart(2, '0')}` <= end.slice(0, 7)) {
+    const mw = monthWindow(y, m - 1)
+    const span = { start: mw.start > start ? mw.start : start, end: mw.end < end ? mw.end : end }
+    const byEmployee = new Map<string, ReportLine>()
+    for (const r of rows) {
+      const days = daysInWindow(r, span)
+      if (days === 0) continue
+      const line = byEmployee.get(r.employee_id)
+      if (line) line.days += days
+      else byEmployee.set(r.employee_id, { row: r, unit: (r.employee_duty_unit ?? '').trim(), days })
+    }
+    if (byEmployee.size > 0) {
+      const lines = [...byEmployee.values()].sort((a, b) => dir * cmp(a, b) || byName(a, b))
+      const byUnit = new Map<string, UnitTotal>()
+      for (const l of lines) {
+        const u = byUnit.get(l.unit)
+        if (u) {
+          u.days += l.days
+          u.employees += 1
+        } else byUnit.set(l.unit, { unit: l.unit, days: l.days, employees: 1 })
+      }
+      sections.push({
+        month: mw.start.slice(0, 7),
+        lines,
+        units: [...byUnit.values()].sort((a, b) => b.days - a.days),
+        days: lines.reduce((s, l) => s + l.days, 0),
+      })
+    }
+    m += 1
+    if (m > 12) {
+      m = 1
+      y += 1
+    }
+  }
+  return sections
 }
 
 export interface Insights { sickDays: number; totalDays: number; sickSharePct: number; busiestMonthIndex: number | null }
