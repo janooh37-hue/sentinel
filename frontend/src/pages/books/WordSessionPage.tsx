@@ -122,11 +122,11 @@ export function WordSessionPage(): React.JSX.Element {
               <div><dt className="text-muted-foreground">{t('books.word.classification')}</dt><dd className="font-medium"><bdi dir="ltr">{book.classification_code}</bdi>{classification && <><span className="block" lang="ar">{classification.name_ar}</span><span className="block" lang="en">{classification.name_en}</span><span className="block text-muted-foreground" lang="ar">{classification.unit_ar}</span></>}</dd></div>
               <div><dt className="text-muted-foreground">{t('books.word.createdAt')}</dt><dd><bdi dir="ltr">{new Date(book.created_at).toLocaleString(locale)}</bdi></dd></div>
               <div><dt className="text-muted-foreground">{t('books.word.preparedBy')}</dt><dd><bdi dir="auto">{book.submitted_by_name}</bdi></dd></div>
-              <div><dt className="text-muted-foreground">{t('books.word.subject')}</dt><dd dir="auto">{finishedBook ? book.subject : session?.subject}</dd></div>
+              <div><dt className="text-muted-foreground">{t('books.word.subject')}</dt><dd><bdi dir="auto">{(finishedBook ? book.subject : session?.subject) || '—'}</bdi></dd></div>
               {!finishedBook && <>
-                <div><dt className="text-muted-foreground">{t('books.word.recipient')}</dt><dd dir="auto">{session?.recipient_name}</dd></div>
-                <div><dt className="text-muted-foreground">{t('books.word.cc')}</dt><dd><ul>{session?.cc.map((name, index) => <li key={index} dir="auto">{name}</li>)}</ul></dd></div>
-                <div><dt className="text-muted-foreground">{t('books.word.templateUsed')}</dt><dd dir="auto">{session?.template_name?.replace(/\.docx$/i, '') ?? t('books.word.templateNone')}</dd></div>
+                <div><dt className="text-muted-foreground">{t('books.word.recipient')}</dt><dd><bdi dir="auto">{session?.recipient_name || '—'}</bdi></dd></div>
+                <div><dt className="text-muted-foreground">{t('books.word.cc')}</dt><dd>{session?.cc.length ? <ul>{session.cc.map((name, index) => <li key={index}><bdi dir="auto">{name}</bdi></li>)}</ul> : '—'}</dd></div>
+                <div><dt className="text-muted-foreground">{t('books.word.templateUsed')}</dt><dd><bdi dir="auto">{session?.template_name?.replace(/\.docx$/i, '') ?? t('books.word.templateNone')}</bdi></dd></div>
               </>}
             </dl>
             {!finishedBook && <>
