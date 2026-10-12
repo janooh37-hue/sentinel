@@ -109,64 +109,70 @@ export function WordSessionPage(): React.JSX.Element {
   if (!book || (!session && !finishedBook)) return <p className="p-6 text-muted-foreground">{t('common.loading')}</p>
 
   return (
-    <div className="flex-1 overflow-auto bg-background" dir={i18n.language.startsWith('ar') ? 'rtl' : 'ltr'}>
-      <div className="h-2 bg-[#0d2845]" aria-hidden />
-      <div className="mx-auto max-w-[1600px] px-4 py-6 sm:px-8">
-        <h1 className="mb-5 text-xl font-semibold">{t(finishedBook ? 'books.word.finishedPageTitle' : 'books.word.sessionTitle')}</h1>
-        <div className="grid gap-6 lg:grid-cols-[minmax(320px,380px)_1fr]">
-          <section aria-label={t('books.word.details')} className="space-y-5">
-            <div className="rounded-xl border-2 border-red-600/30 bg-red-50 py-4 text-center dark:bg-red-950/30">
-              <bdi dir="ltr" className="font-mono text-2xl font-black tracking-tight text-red-600">{session?.ref_number ?? book.ref_number}</bdi>
-            </div>
-            <dl className="space-y-4 text-sm">
-              <div><dt className="text-muted-foreground">{t('books.word.classification')}</dt><dd className="font-medium"><bdi dir="ltr">{book.classification_code}</bdi>{classification && <><span className="block" lang="ar">{classification.name_ar}</span><span className="block" lang="en">{classification.name_en}</span><span className="block text-muted-foreground" lang="ar">{classification.unit_ar}</span></>}</dd></div>
-              <div><dt className="text-muted-foreground">{t('books.word.createdAt')}</dt><dd><bdi dir="ltr">{new Date(book.created_at).toLocaleString(locale)}</bdi></dd></div>
-              <div><dt className="text-muted-foreground">{t('books.word.preparedBy')}</dt><dd><bdi dir="auto">{book.submitted_by_name}</bdi></dd></div>
-              <div><dt className="text-muted-foreground">{t('books.word.subject')}</dt><dd><bdi dir="auto">{(finishedBook ? book.subject : session?.subject) || '—'}</bdi></dd></div>
-              {!finishedBook && <>
-                <div><dt className="text-muted-foreground">{t('books.word.recipient')}</dt><dd><bdi dir="auto">{session?.recipient_name || '—'}</bdi></dd></div>
-                <div><dt className="text-muted-foreground">{t('books.word.cc')}</dt><dd>{session?.cc.length ? <ul>{session.cc.map((name, index) => <li key={index}><bdi dir="auto">{name}</bdi></li>)}</ul> : '—'}</dd></div>
-                <div><dt className="text-muted-foreground">{t('books.word.templateUsed')}</dt><dd><bdi dir="auto">{session?.template_name?.replace(/\.docx$/i, '') ?? t('books.word.templateNone')}</bdi></dd></div>
-              </>}
-            </dl>
+    <div className="flex flex-1 flex-col overflow-auto bg-background lg:overflow-hidden" dir={i18n.language.startsWith('ar') ? 'rtl' : 'ltr'}>
+      <div className="h-2 shrink-0 bg-[#0d2845]" aria-hidden />
+      <header className="flex shrink-0 flex-wrap items-center gap-x-6 gap-y-3 border-b border-hairline bg-surface px-4 py-3 sm:px-6">
+        <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1">
+          <h1 className="text-lg font-semibold">{t(finishedBook ? 'books.word.finishedPageTitle' : 'books.word.sessionTitle')}</h1>
+          <bdi dir="ltr" className="rounded-lg border border-red-600/30 bg-red-50 px-3 py-0.5 font-mono text-xl font-black tracking-tight text-red-600 dark:bg-red-950/30">{session?.ref_number ?? book.ref_number}</bdi>
+        </div>
+        <div className="flex flex-wrap items-center gap-2 lg:ms-auto">
+          {!finishedBook && <>
+            {/* Word launches from a REAL anchor (user gesture), never a location.href write: Chrome's protocol prompt can otherwise swallow clicks. */}
+            <a href={session!.word_url} className="inline-flex min-h-10 items-center justify-center rounded-lg bg-[#185abd] px-4 text-sm font-semibold text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{t('books.word.openInWord')}</a>
+            <Button variant="commit" size="commit" disabled={!hasSave || finishMutation.isPending || discardMutation.isPending} onClick={() => finishMutation.mutate()}>{t('books.word.finish')}</Button>
+            <Button variant="ghost" disabled={finishMutation.isPending || discardMutation.isPending} className="border border-accent/50 text-accent hover:bg-accent/10" onClick={() => setDiscardOpen(true)}>{t('books.word.discard')}</Button>
+            {has('books.templates') && <span className="mx-1 hidden h-6 w-px bg-hairline sm:block" aria-hidden />}
+          </>}
+          {canSaveTemplate && <Button variant="outline" disabled={(!finishedBook && !hasSave) || saveTemplateMutation.isPending} onClick={() => openTemplateDialog('save')}>{t(finishedBook ? 'books.word.saveAsTemplate' : 'books.word.saveDraftAsTemplate')}</Button>}
+          {has('books.templates') && <Button variant="outline" onClick={() => openTemplateDialog('new')}>{t('books.word.newTemplateInWord')}</Button>}
+        </div>
+      </header>
+      <div className="grid flex-1 lg:min-h-0 lg:grid-cols-[minmax(300px,360px)_1fr]">
+        <section aria-label={t('books.word.details')} className="space-y-6 border-hairline px-4 py-5 sm:px-6 lg:overflow-auto lg:border-e">
+          {finishedBook && <SavedRecordActions bookId={bookId} refNumber={book.ref_number} detail={book.subject ?? undefined} />}
+          <dl className="space-y-3 text-sm">
+            <div><dt className="text-xs text-muted-foreground">{t('books.word.classification')}</dt><dd className="mt-0.5 font-medium"><bdi dir="ltr">{book.classification_code}</bdi>{classification && <><span className="block" lang="ar">{classification.name_ar}</span><span className="block" lang="en">{classification.name_en}</span><span className="block font-normal text-muted-foreground" lang="ar">{classification.unit_ar}</span></>}</dd></div>
+            <div><dt className="text-xs text-muted-foreground">{t('books.word.subject')}</dt><dd className="mt-0.5 font-medium"><bdi dir="auto">{(finishedBook ? book.subject : session?.subject) || '—'}</bdi></dd></div>
             {!finishedBook && <>
+              <div><dt className="text-xs text-muted-foreground">{t('books.word.recipient')}</dt><dd className="mt-0.5"><bdi dir="auto">{session?.recipient_name || '—'}</bdi></dd></div>
+              <div><dt className="text-xs text-muted-foreground">{t('books.word.cc')}</dt><dd className="mt-0.5">{session?.cc.length ? <ul>{session.cc.map((name, index) => <li key={index}><bdi dir="auto">{name}</bdi></li>)}</ul> : '—'}</dd></div>
+              <div><dt className="text-xs text-muted-foreground">{t('books.word.templateUsed')}</dt><dd className="mt-0.5"><bdi dir="auto">{session?.template_name?.replace(/\.docx$/i, '') ?? t('books.word.templateNone')}</bdi></dd></div>
+            </>}
+            <div><dt className="text-xs text-muted-foreground">{t('books.word.preparedBy')}</dt><dd className="mt-0.5"><bdi dir="auto">{book.submitted_by_name}</bdi></dd></div>
+            <div><dt className="text-xs text-muted-foreground">{t('books.word.createdAt')}</dt><dd className="mt-0.5"><bdi dir="ltr">{new Date(book.created_at).toLocaleString(locale)}</bdi></dd></div>
+          </dl>
+          {!finishedBook && <>
+            <div className="space-y-2 border-t border-hairline pt-5">
               <h2 className="text-sm font-semibold">{t('books.word.saveHistory', { count: saveHistory.times.length })}</h2>
               {hasSave ? <ol className="space-y-1 text-sm text-emerald-700 dark:text-emerald-400">{saveHistory.times.map((time) => <li key={time}><bdi dir="ltr">{new Date(time).toLocaleString(locale)}</bdi></li>)}</ol> : <p className="text-sm text-amber-700 dark:text-amber-400">{t('books.word.noSavesYet')}</p>}
+            </div>
+            <div className="space-y-3 border-t border-hairline pt-5">
               <ol className="space-y-2 text-sm">{['step1', 'step2', 'step3'].map((step, index) => <li key={step}>{index + 1}. {t(`books.word.${step}`)}</li>)}</ol>
               <p className="text-xs text-muted-foreground">{t('books.word.protocolHint')}</p>
-            </>}
-            <div className="flex flex-wrap gap-2 border-t border-hairline pt-4">
-              {finishedBook ? <SavedRecordActions bookId={bookId} refNumber={book.ref_number} detail={book.subject ?? undefined} /> : <>
-                {/* Word launches from a REAL anchor (user gesture), never a location.href write: Chrome's protocol prompt can otherwise swallow clicks. */}
-                <a href={session!.word_url} className="inline-flex min-h-10 items-center justify-center rounded-lg bg-[#185abd] px-4 text-sm font-semibold text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{t('books.word.openInWord')}</a>
-                <Button variant="commit" size="commit" disabled={!hasSave || finishMutation.isPending || discardMutation.isPending} onClick={() => finishMutation.mutate()}>{t('books.word.finish')}</Button>
-                <Button variant="ghost" disabled={finishMutation.isPending || discardMutation.isPending} className="border border-accent/50 text-accent hover:bg-accent/10" onClick={() => setDiscardOpen(true)}>{t('books.word.discard')}</Button>
-              </>}
-              {canSaveTemplate && <Button variant="outline" disabled={(!finishedBook && !hasSave) || saveTemplateMutation.isPending} onClick={() => openTemplateDialog('save')}>{t(finishedBook ? 'books.word.saveAsTemplate' : 'books.word.saveDraftAsTemplate')}</Button>}
-              {has('books.templates') && <Button variant="outline" onClick={() => openTemplateDialog('new')}>{t('books.word.newTemplateInWord')}</Button>}
             </div>
-          </section>
-          <section aria-label={t('books.word.preview')} className="h-[60vh] min-h-[400px] overflow-hidden rounded-lg border border-hairline lg:h-[75vh]">
-            {finishedBook ? (
-              pdfUrl ? (
-                <Suspense fallback={<p className="p-4">{t('common.loading')}</p>}>
-                  <DocPdfCanvas key={pdfUrl} pdfUrl={pdfUrl} docxUrl={latest?.docx_url ?? undefined} />
-                </Suspense>
-              ) : (
-                <p className="p-4 text-sm text-muted-foreground">
-                  {t('books.word.pdfPending')}{' '}
-                  {latest?.docx_url && <a href={latest.docx_url} className="text-primary underline">DOCX</a>}
-                </p>
-              )
-            ) : lastPutAt ? (
+          </>}
+        </section>
+        <section aria-label={t('books.word.preview')} className="h-[75vh] min-h-[400px] p-3 sm:p-4 lg:h-auto lg:min-h-0">
+          {finishedBook ? (
+            pdfUrl ? (
               <Suspense fallback={<p className="p-4">{t('common.loading')}</p>}>
-                <DocPdfCanvas key={lastPutAt} pdfUrl={api.wordSessionPreviewUrl(bookId, lastPutAt)} />
+                <DocPdfCanvas key={pdfUrl} pdfUrl={pdfUrl} docxUrl={latest?.docx_url ?? undefined} />
               </Suspense>
             ) : (
-              <p className="p-6 text-sm text-muted-foreground">{t('books.word.previewAfterSave')}</p>
-            )}
-          </section>
-        </div>
+              <p className="flex h-full items-center justify-center gap-1 rounded-md border border-dashed border-hairline p-6 text-sm text-muted-foreground">
+                {t('books.word.pdfPending')}{' '}
+                {latest?.docx_url && <a href={latest.docx_url} className="text-primary underline">DOCX</a>}
+              </p>
+            )
+          ) : lastPutAt ? (
+            <Suspense fallback={<p className="p-4">{t('common.loading')}</p>}>
+              <DocPdfCanvas key={lastPutAt} pdfUrl={api.wordSessionPreviewUrl(bookId, lastPutAt)} />
+            </Suspense>
+          ) : (
+            <p className="flex h-full items-center justify-center rounded-md border border-dashed border-hairline p-6 text-center text-sm text-muted-foreground">{t('books.word.previewAfterSave')}</p>
+          )}
+        </section>
       </div>
       <ConfirmDialog open={discardOpen} onOpenChange={setDiscardOpen} title={t('books.word.discardConfirmLabel')} description={t(book.versions?.length ? 'books.word.discardReopenConfirm' : 'books.word.discardConfirm')} confirmLabel={t('books.word.discardConfirmLabel')} onConfirm={() => discardMutation.mutate()} destructive />
       <DialogRoot open={templateAction != null} onOpenChange={(open) => { if (!open) setTemplateAction(null) }}>

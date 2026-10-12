@@ -60,14 +60,24 @@ export function WordTemplateSessionPage(): React.JSX.Element {
   const busy = finishMutation.isPending || discardMutation.isPending
 
   return (
-    <div className="flex-1 overflow-auto bg-background" dir={i18n.language.startsWith('ar') ? 'rtl' : 'ltr'}>
-      <div className="h-2 bg-[#0d2845]" aria-hidden />
-      <div className="mx-auto max-w-[1600px] px-4 py-6 sm:px-8">
-        <h1 className="mb-5 text-xl font-semibold"><bdi dir="auto">{session.name.replace(/\.docx$/i, '')}</bdi></h1>
-        <div className="grid gap-6 lg:grid-cols-[minmax(320px,380px)_1fr]">
-          <section className="space-y-5" aria-label={t('books.word.details')}>
+    <div className="flex flex-1 flex-col overflow-auto bg-background lg:overflow-hidden" dir={i18n.language.startsWith('ar') ? 'rtl' : 'ltr'}>
+      <div className="h-2 shrink-0 bg-[#0d2845]" aria-hidden />
+      <header className="flex shrink-0 flex-wrap items-center gap-x-6 gap-y-3 border-b border-hairline bg-surface px-4 py-3 sm:px-6">
+        <h1 className="min-w-0 text-lg font-semibold"><bdi dir="auto">{session.name.replace(/\.docx$/i, '')}</bdi></h1>
+        <div className="flex flex-wrap items-center gap-2 lg:ms-auto">
+          {/* Word launches from a REAL anchor (user gesture), never a location.href write: Chrome's protocol prompt can otherwise swallow clicks. */}
+          <a href={session.word_url} className="inline-flex min-h-10 items-center justify-center rounded-lg bg-[#185abd] px-4 text-sm font-semibold text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{t('books.word.openInWord')}</a>
+          <Button variant="commit" size="commit" disabled={!lastPutAt || busy} onClick={() => finishMutation.mutate()}>{t('books.word.finishTemplate')}</Button>
+          <Button variant="ghost" disabled={busy} className="border border-accent/50 text-accent hover:bg-accent/10" onClick={() => setDiscardOpen(true)}>{t('books.word.discard')}</Button>
+        </div>
+      </header>
+      <div className="grid flex-1 lg:min-h-0 lg:grid-cols-[minmax(300px,360px)_1fr]">
+        <section className="space-y-6 border-hairline px-4 py-5 sm:px-6 lg:overflow-auto lg:border-e" aria-label={t('books.word.details')}>
+          <div className="space-y-2">
             <p className="text-sm">{t('books.word.templateSessionHint')}</p>
-            <p className="text-sm text-muted-foreground">{t('books.word.createdAt')}: <bdi dir="ltr">{new Date(session.created_at).toLocaleString(locale)}</bdi></p>
+            <p className="text-xs text-muted-foreground">{t('books.word.createdAt')}: <bdi dir="ltr">{new Date(session.created_at).toLocaleString(locale)}</bdi></p>
+          </div>
+          <div className="space-y-2 border-t border-hairline pt-5">
             <h2 className="text-sm font-semibold">{t('books.word.saveHistory', { count: saveHistory.times.length })}</h2>
             {lastPutAt ? (
               <ol className="space-y-1 text-sm text-emerald-700 dark:text-emerald-400">
@@ -78,25 +88,21 @@ export function WordTemplateSessionPage(): React.JSX.Element {
             ) : (
               <p className="text-sm text-amber-700 dark:text-amber-400">{t('books.word.noSavesYet')}</p>
             )}
+          </div>
+          <div className="space-y-3 border-t border-hairline pt-5">
             <p className="text-sm">{t('books.word.step2')}</p>
-            <div className="flex flex-wrap gap-2 border-t border-hairline pt-4">
-              {/* Word launches from a REAL anchor (user gesture), never a location.href write: Chrome's protocol prompt can otherwise swallow clicks. */}
-              <a href={session.word_url} className="inline-flex min-h-10 items-center justify-center rounded-lg bg-[#185abd] px-4 text-sm font-semibold text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{t('books.word.openInWord')}</a>
-              <Button variant="commit" size="commit" disabled={!lastPutAt || busy} onClick={() => finishMutation.mutate()}>{t('books.word.finishTemplate')}</Button>
-              <Button variant="ghost" disabled={busy} className="border border-accent/50 text-accent hover:bg-accent/10" onClick={() => setDiscardOpen(true)}>{t('books.word.discard')}</Button>
-            </div>
             <p className="text-xs text-muted-foreground">{t('books.word.protocolHint')}</p>
-          </section>
-          <section aria-label={t('books.word.preview')} className="h-[60vh] min-h-[400px] overflow-hidden rounded-lg border border-hairline lg:h-[75vh]">
-            {lastPutAt ? (
-              <Suspense fallback={<p className="p-4">{t('common.loading')}</p>}>
-                <DocPdfCanvas key={lastPutAt} pdfUrl={api.templateSessionPreviewUrl(id, lastPutAt)} />
-              </Suspense>
-            ) : (
-              <p className="p-6 text-sm text-muted-foreground">{t('books.word.previewAfterSave')}</p>
-            )}
-          </section>
-        </div>
+          </div>
+        </section>
+        <section aria-label={t('books.word.preview')} className="h-[75vh] min-h-[400px] p-3 sm:p-4 lg:h-auto lg:min-h-0">
+          {lastPutAt ? (
+            <Suspense fallback={<p className="p-4">{t('common.loading')}</p>}>
+              <DocPdfCanvas key={lastPutAt} pdfUrl={api.templateSessionPreviewUrl(id, lastPutAt)} />
+            </Suspense>
+          ) : (
+            <p className="flex h-full items-center justify-center rounded-md border border-dashed border-hairline p-6 text-center text-sm text-muted-foreground">{t('books.word.previewAfterSave')}</p>
+          )}
+        </section>
       </div>
       <ConfirmDialog
         open={discardOpen}
