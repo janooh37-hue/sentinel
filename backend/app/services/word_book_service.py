@@ -209,7 +209,7 @@ def create_word_book(
         token=token,
         working_path=str(output_path),
         state="active",
-        template_name=template_name,
+        template_name=library_template.name if library_template is not None else None,
     )
     db.add(session)
     try:
@@ -236,11 +236,15 @@ def create_word_book(
     )
 
 
-def get_word_session_detail(db: Session, *, book_id: int) -> WordSessionDetailRead:
+def get_word_session_detail(db: Session, *, user: User, book_id: int) -> WordSessionDetailRead:
     session = db.query(BookEditSession).filter_by(book_id=book_id, state="active").one_or_none()
     if session is None:
         raise AppError(
             "NO_ACTIVE_SESSION", "No active editing session for this book", http_status=409
+        )
+    if session.user_id != user.id:
+        raise AppError(
+            "WORD_SESSION_NOT_OWNER", "This Word session belongs to another user", http_status=403
         )
     book = db.get(Book, book_id)
     if book is None:
@@ -351,7 +355,7 @@ def finish_template_session(
         db.rollback()
         book_template_service.resolve_template_path(info.name).unlink(missing_ok=True)
         raise
-    shutil.rmtree(Path(session.working_path).parent)
+    shutil.rmtree(Path(session.working_path).parent, ignore_errors=True)
     return info
 
 
@@ -359,7 +363,7 @@ def discard_template_session(db: Session, *, user: User, session_id: int) -> Non
     session = get_template_session(db, user=user, session_id=session_id)
     session.state = "discarded"
     db.commit()
-    shutil.rmtree(Path(session.working_path).parent)
+    shutil.rmtree(Path(session.working_path).parent, ignore_errors=True)
 
 
 def create_report_word_book(

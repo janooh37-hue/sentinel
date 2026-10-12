@@ -85,7 +85,7 @@ def test_template_session_round_trip(authoring):
     assert session.state == "finished"
     assert not working.parent.exists()
     assert "Reusable.docx" in [t.name for t in book_template_service.list_templates()]
-    book_id = _create_book(client, template_name="Reusable.docx", cc=["New CC"])
+    book_id = _create_book(client, template_name="Reusable", cc=["New CC"])
     detail = client.get(f"/api/v1/books/{book_id}/word-sessions").json()
     assert detail["template_name"] == "Reusable.docx"
     assert detail["subject"] == "Actual subject"
@@ -150,6 +150,19 @@ def test_word_detail_reads_current_docx_and_missing_session(authoring):
     response = client.get(f"/api/v1/books/{book_id}/word-sessions")
     assert response.status_code == 409
     assert response.json()["error"]["code"] == "NO_ACTIVE_SESSION"
+
+
+def test_word_detail_does_not_expose_another_users_dav_token(authoring):
+    db, client, app, user, other = authoring
+    book_id = _create_book(client)
+    session = db.query(BookEditSession).filter_by(book_id=book_id, state="active").one()
+    app.dependency_overrides[get_current_user] = lambda: other
+    response = client.get(f"/api/v1/books/{book_id}/word-sessions")
+    assert response.status_code == 403, response.text
+    assert response.json()["error"]["code"] == "WORD_SESSION_NOT_OWNER"
+    assert session.token not in response.text
+    app.dependency_overrides[get_current_user] = lambda: user
+    assert client.get(f"/api/v1/books/{book_id}/word-sessions").status_code == 200
 
 
 def test_template_session_owner_saves_collision_and_discard(authoring):

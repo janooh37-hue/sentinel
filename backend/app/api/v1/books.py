@@ -490,7 +490,7 @@ def get_word_session(
     else:
         _require_word_capability(db, user, "books.edit")
         _require_full_book(db, user, book_id)
-    return word_book_service.get_word_session_detail(db, book_id=book_id)
+    return word_book_service.get_word_session_detail(db, user=user, book_id=book_id)
 
 
 @router.get("/{book_id}/word-sessions/status", response_model=WordSaveStatusRead)
