@@ -3997,11 +3997,11 @@
     },
     "workspace": {
       "title": "My Workspace",
-      "staff": "STAFF",
-      "active_one": "{{count}} active",
-      "active_other": "{{count}} active",
-      "onLeave_one": "{{count}} on leave",
-      "onLeave_other": "{{count}} on leave"
+      "total": "TOTAL",
+      "ourStaff": "our staff",
+      "onSite": "on site",
+      "loaned": "loaned",
+      "onLeave": "on leave"
     },
     "widgets": {
       "violations": {

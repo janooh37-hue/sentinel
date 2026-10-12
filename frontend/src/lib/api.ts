@@ -984,7 +984,11 @@ export interface DashboardEmailSync {
 
 export interface DashboardSummary {
   totals: {
+    /** Total working: our staff + loaned. */
     employees_active: number
+    our_staff: number
+    loaned: number
+    /** Our staff only; a loaned employee counts only as loaned. */
     on_leave_today: number
     present_today: number
     forms_this_month: number

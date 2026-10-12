@@ -4311,19 +4311,11 @@
     },
     "workspace": {
       "title": "بيئة عملي",
-      "staff": "الموظفون",
-      "active_zero": "لا أحد نشط",
-      "active_one": "موظف نشط",
-      "active_two": "موظفان نشطان",
-      "active_few": "{{count}} موظفين نشطين",
-      "active_many": "{{count}} موظفًا نشطًا",
-      "active_other": "{{count}} نشط",
-      "onLeave_zero": "لا أحد في إجازة",
-      "onLeave_one": "واحد في إجازة",
-      "onLeave_two": "اثنان في إجازة",
-      "onLeave_few": "{{count}} في إجازة",
-      "onLeave_many": "{{count}} في إجازة",
-      "onLeave_other": "{{count}} في إجازة"
+      "total": "الإجمالي",
+      "ourStaff": "موظفونا",
+      "onSite": "في الموقع",
+      "loaned": "ملحق",
+      "onLeave": "في إجازة"
     },
     "widgets": {
       "violations": {
