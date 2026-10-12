@@ -813,7 +813,7 @@ export interface paths {
         };
         /**
          * Employees Completeness
-         * @description Aggregate profile gaps over Active employees (lookup-page hero card).
+         * @description Aggregate profile gaps over working (Active/Loaned) employees (lookup-page hero card).
          */
         get: operations["employees_completeness_api_v1_employees_completeness_get"];
         put?: never;
@@ -8981,6 +8981,10 @@ export interface components {
         DashboardTotals: {
             /** Employees Active */
             employees_active: number;
+            /** Our Staff */
+            our_staff: number;
+            /** Loaned */
+            loaned: number;
             /** On Leave Today */
             on_leave_today: number;
             /** Present Today */
