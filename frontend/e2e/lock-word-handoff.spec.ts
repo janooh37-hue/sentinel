@@ -34,7 +34,7 @@ const COPY = {
     classification: 'التبويب*',
     create: 'إنشاء وفتح في Word',
     discard: 'إلغاء المسودة…',
-    finish: 'إنهاء التحرير',
+    finish: 'حفظ الكتاب',
     finishedPrefix: 'تم حفظ الكتاب',
     lock: 'التطبيق مقفل',
     manageTemplates: 'إدارة القوالب',

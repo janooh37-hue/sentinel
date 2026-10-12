@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button'
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { DialogRoot, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { SavedRecordActions } from '@/components/books/SavedRecordActions'
+import { WordSteps } from './WordSteps'
 
 const DocPdfCanvas = lazy(() => import('@/pages/application/DocPdfCanvas'))
 
@@ -23,6 +24,7 @@ export function WordSessionPage(): React.JSX.Element {
   const { has } = useCapabilities()
   const qc = useQueryClient()
   const [discardOpen, setDiscardOpen] = useState(false)
+  const [opened, setOpened] = useState(false)
   const [templateAction, setTemplateAction] = useState<'save' | 'new' | null>(null)
   const [templateName, setTemplateName] = useState('')
   const bookQuery = useQuery({ queryKey: ['books', bookId], queryFn: () => api.getBook(bookId) })
@@ -116,10 +118,10 @@ export function WordSessionPage(): React.JSX.Element {
           <h1 className="text-lg font-semibold">{t(finishedBook ? 'books.word.finishedPageTitle' : 'books.word.sessionTitle')}</h1>
           <bdi dir="ltr" className="rounded-lg border border-red-600/30 bg-red-50 px-3 py-0.5 font-mono text-xl font-black tracking-tight text-red-600 dark:bg-red-950/30">{session?.ref_number ?? book.ref_number}</bdi>
         </div>
-        <div className="flex flex-wrap items-center gap-2 lg:ms-auto">
+        <div className="grid w-full grid-cols-2 gap-2 sm:flex sm:w-auto sm:flex-wrap sm:items-center lg:ms-auto">
           {!finishedBook && <>
             {/* Word launches from a REAL anchor (user gesture), never a location.href write: Chrome's protocol prompt can otherwise swallow clicks. */}
-            <a href={session!.word_url} className="inline-flex min-h-10 items-center justify-center rounded-lg bg-[#185abd] px-4 text-sm font-semibold text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{t('books.word.openInWord')}</a>
+            <a href={session!.word_url} onClick={() => setOpened(true)} className="inline-flex min-h-10 items-center justify-center rounded-lg bg-[#185abd] px-4 text-sm font-semibold text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">{t('books.word.openInWord')}</a>
             <Button variant="commit" size="commit" disabled={!hasSave || finishMutation.isPending || discardMutation.isPending} onClick={() => finishMutation.mutate()}>{t('books.word.finish')}</Button>
             <Button variant="ghost" disabled={finishMutation.isPending || discardMutation.isPending} className="border border-accent/50 text-accent hover:bg-accent/10" onClick={() => setDiscardOpen(true)}>{t('books.word.discard')}</Button>
             {has('books.templates') && <span className="mx-1 hidden h-6 w-px bg-hairline sm:block" aria-hidden />}
@@ -128,32 +130,14 @@ export function WordSessionPage(): React.JSX.Element {
           {has('books.templates') && <Button variant="outline" onClick={() => openTemplateDialog('new')}>{t('books.word.newTemplateInWord')}</Button>}
         </div>
       </header>
-      <div className="grid flex-1 lg:min-h-0 lg:grid-cols-[minmax(300px,360px)_1fr]">
-        <section aria-label={t('books.word.details')} className="space-y-6 border-hairline px-4 py-5 sm:px-6 lg:overflow-auto lg:border-e">
-          {finishedBook && <SavedRecordActions bookId={bookId} refNumber={book.ref_number} detail={book.subject ?? undefined} />}
-          <dl className="space-y-3 text-sm">
-            <div><dt className="text-xs text-muted-foreground">{t('books.word.classification')}</dt><dd className="mt-0.5 font-medium"><bdi dir="ltr">{book.classification_code}</bdi>{classification && <><span className="block" lang="ar">{classification.name_ar}</span><span className="block" lang="en">{classification.name_en}</span><span className="block font-normal text-muted-foreground" lang="ar">{classification.unit_ar}</span></>}</dd></div>
-            <div><dt className="text-xs text-muted-foreground">{t('books.word.subject')}</dt><dd className="mt-0.5 font-medium"><bdi dir="auto">{(finishedBook ? book.subject : session?.subject) || '—'}</bdi></dd></div>
-            {!finishedBook && <>
-              <div><dt className="text-xs text-muted-foreground">{t('books.word.recipient')}</dt><dd className="mt-0.5"><bdi dir="auto">{session?.recipient_name || '—'}</bdi></dd></div>
-              <div><dt className="text-xs text-muted-foreground">{t('books.word.cc')}</dt><dd className="mt-0.5">{session?.cc.length ? <ul>{session.cc.map((name, index) => <li key={index}><bdi dir="auto">{name}</bdi></li>)}</ul> : '—'}</dd></div>
-              <div><dt className="text-xs text-muted-foreground">{t('books.word.templateUsed')}</dt><dd className="mt-0.5"><bdi dir="auto">{session?.template_name?.replace(/\.docx$/i, '') ?? t('books.word.templateNone')}</bdi></dd></div>
-            </>}
-            <div><dt className="text-xs text-muted-foreground">{t('books.word.preparedBy')}</dt><dd className="mt-0.5"><bdi dir="auto">{book.submitted_by_name}</bdi></dd></div>
-            <div><dt className="text-xs text-muted-foreground">{t('books.word.createdAt')}</dt><dd className="mt-0.5"><bdi dir="ltr">{new Date(book.created_at).toLocaleString(locale)}</bdi></dd></div>
-          </dl>
-          {!finishedBook && <>
-            <div className="space-y-2 border-t border-hairline pt-5">
-              <h2 className="text-sm font-semibold">{t('books.word.saveHistory', { count: saveHistory.times.length })}</h2>
-              {hasSave ? <ol className="space-y-1 text-sm text-emerald-700 dark:text-emerald-400">{saveHistory.times.map((time) => <li key={time}><bdi dir="ltr">{new Date(time).toLocaleString(locale)}</bdi></li>)}</ol> : <p className="text-sm text-amber-700 dark:text-amber-400">{t('books.word.noSavesYet')}</p>}
-            </div>
-            <div className="space-y-3 border-t border-hairline pt-5">
-              <ol className="space-y-2 text-sm">{['step1', 'step2', 'step3'].map((step, index) => <li key={step}>{index + 1}. {t(`books.word.${step}`)}</li>)}</ol>
-              <p className="text-xs text-muted-foreground">{t('books.word.protocolHint')}</p>
-            </div>
-          </>}
+      {/* DOM order is the phone order (status → paper → details); lg places status and details in one side column. */}
+      <div className="grid flex-1 lg:min-h-0 lg:grid-cols-[minmax(300px,360px)_1fr] lg:grid-rows-[auto_1fr]">
+        <section aria-label={t('books.word.sessionTitle')} className="border-hairline px-4 pb-2 pt-5 sm:px-6 lg:col-start-1 lg:row-start-1 lg:border-e lg:pb-5">
+          {finishedBook
+            ? <SavedRecordActions bookId={bookId} refNumber={book.ref_number} detail={book.subject ?? undefined} />
+            : <WordSteps opened={opened} saveTimes={saveHistory.times} finishLabel={t('books.word.finish')} />}
         </section>
-        <section aria-label={t('books.word.preview')} className="h-[75vh] min-h-[400px] p-3 sm:p-4 lg:h-auto lg:min-h-0">
+        <section aria-label={t('books.word.preview')} className="h-[75vh] min-h-[400px] p-3 sm:p-4 lg:col-start-2 lg:row-span-2 lg:row-start-1 lg:h-auto lg:min-h-0">
           {finishedBook ? (
             pdfUrl ? (
               <Suspense fallback={<p className="p-4">{t('common.loading')}</p>}>
@@ -172,6 +156,23 @@ export function WordSessionPage(): React.JSX.Element {
           ) : (
             <p className="flex h-full items-center justify-center rounded-md border border-dashed border-hairline p-6 text-center text-sm text-muted-foreground">{t('books.word.previewAfterSave')}</p>
           )}
+        </section>
+        <section aria-labelledby="word-details-heading" className="border-t border-hairline px-4 pb-8 pt-5 sm:px-6 lg:col-start-1 lg:row-start-2 lg:overflow-auto lg:border-e">
+          <h2 id="word-details-heading" className="mb-3 text-xs font-semibold text-muted-foreground">{t('books.word.details')}</h2>
+          <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-3 text-sm [&_dt]:text-muted-foreground">
+            <div className="contents"><dt>{t('books.word.subject')}</dt><dd className="font-semibold"><bdi dir="auto">{(finishedBook ? book.subject : session?.subject) || '—'}</bdi></dd></div>
+            {book.classification_code && <div className="contents"><dt>{t('books.word.classification')}</dt><dd>
+              <span className="font-medium"><bdi dir="ltr">{book.classification_code}</bdi>{classification && <> · <span lang="ar">{classification.name_ar}</span></>}</span>
+              {classification && <span className="block text-xs text-muted-foreground"><span lang="en">{classification.name_en}</span> · <span lang="ar">{classification.unit_ar}</span></span>}
+            </dd></div>}
+            {!finishedBook && <>
+              <div className="contents"><dt>{t('books.word.recipient')}</dt><dd><bdi dir="auto">{session?.recipient_name || '—'}</bdi></dd></div>
+              {session?.cc.length ? <div className="contents"><dt>{t('books.word.cc')}</dt><dd><ul>{session.cc.map((name, index) => <li key={index}><bdi dir="auto">{name}</bdi></li>)}</ul></dd></div> : null}
+              <div className="contents"><dt>{t('books.word.templateUsed')}</dt><dd><bdi dir="auto">{session?.template_name?.replace(/\.docx$/i, '') ?? t('books.word.templateNone')}</bdi></dd></div>
+            </>}
+            <div className="contents"><dt>{t('books.word.preparedBy')}</dt><dd><bdi dir="auto">{book.submitted_by_name}</bdi></dd></div>
+            <div className="contents"><dt>{t('books.word.createdAt')}</dt><dd><bdi dir="auto">{new Date(book.created_at).toLocaleString(locale, { dateStyle: 'medium', timeStyle: 'short' })}</bdi></dd></div>
+          </dl>
         </section>
       </div>
       <ConfirmDialog open={discardOpen} onOpenChange={setDiscardOpen} title={t('books.word.discardConfirmLabel')} description={t(book.versions?.length ? 'books.word.discardReopenConfirm' : 'books.word.discardConfirm')} confirmLabel={t('books.word.discardConfirmLabel')} onConfirm={() => discardMutation.mutate()} destructive />

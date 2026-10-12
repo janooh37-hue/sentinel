@@ -342,7 +342,7 @@ export function WordHandoffDialog({ session, open, onClose, onFinished }: Props)
                   <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-primary-soft text-[0.72em] font-bold text-primary">
                     {idx + 1}
                   </span>
-                  <span className="text-[0.86em] text-foreground">{t(key)}</span>
+                  <span className="text-[0.86em] text-foreground">{t(key, { action: t('books.word.finish') })}</span>
                 </li>
               ))}
             </ol>
