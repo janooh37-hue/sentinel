@@ -39,7 +39,7 @@ def _user(db: Session, *, email: str = "scan-inbox-owner@test.ae") -> User:
     user = User(
         email=email,
         password_hash="x",
-        role="operator",
+        role="manager",  # documents.scan + books.edit + employees.vault.manage
         status="active",
     )
     db.add(user)

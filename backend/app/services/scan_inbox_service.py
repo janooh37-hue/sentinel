@@ -18,12 +18,12 @@ from uuid import uuid4
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.api.errors import NotFoundError, ValidationFailedError
+from app.api.errors import AppError, NotFoundError, ValidationFailedError
 from app.config import get_settings
 from app.core.extraction import ocr
 from app.core.extraction.dates import parse_date
 from app.db.models import Employee, ScanInbox, User
-from app.services import book_service, scan_triage_service, vault_service
+from app.services import book_service, perm_service, scan_triage_service, vault_service
 from app.services.document_reader import DocumentReader, read_document
 
 log = logging.getLogger(__name__)
@@ -154,9 +154,7 @@ def _process_one(db: Session, item: ScanInbox, *, reader: DocumentReader) -> Non
     ]
     item.raw_text = read.text
     item.confidence = decision.confidence
-    item.qr_refs = list(
-        dict.fromkeys((*read.qr_refs, *(code.ref for code in read.codes)))
-    )
+    item.qr_refs = list(dict.fromkeys((*read.qr_refs, *(code.ref for code in read.codes))))
     item.proposed_route = decision.proposed_route
     item.proposed_book_id = decision.proposed_book_id
     item.proposed_ref = decision.proposed_ref
@@ -194,9 +192,7 @@ def park_scan_back(
     """Persist a decoded scan-back upload for operator confirmation."""
     decision = scan_triage_service.project_inbox(classification)
     safe_name = Path(filename).name or "scan"
-    suffix = Path(safe_name).suffix.lower() or (
-        ".pdf" if data.startswith(b"%PDF") else ".bin"
-    )
+    suffix = Path(safe_name).suffix.lower() or (".pdf" if data.startswith(b"%PDF") else ".bin")
     root = get_settings().data_dir.resolve()
     directory = root / "scan_inbox"
     directory.mkdir(parents=True, exist_ok=True)
@@ -350,12 +346,42 @@ def _check_owner(item: ScanInbox, user: User | None) -> None:
         raise NotFoundError("SCAN_ITEM_NOT_FOUND", f"No scan-inbox item {item.id}")
 
 
+def _require_capability(db: Session, user: User, capability: str) -> None:
+    if not perm_service.has_capability(db, user, capability):
+        raise AppError(
+            "FORBIDDEN",
+            f"Missing capability: {capability}",
+            http_status=403,
+            details={"capability": capability},
+        )
+
+
+def _require_target_access(
+    db: Session, user: User | None, route: str | None, book_id: int | None
+) -> None:
+    """Authorize ``user`` against the filing *target*, not just ``documents.scan``.
+
+    Mirrors the direct routes: a book target needs ``books.edit`` plus full access
+    to that book (``POST /books/{id}/attachments``); an employee target needs
+    ``employees.vault.manage`` (the employee vault routes). Operator paths only —
+    the actorless auto-drain is the system acting on its own match.
+    """
+    if user is None:
+        raise AppError("FORBIDDEN", "An authenticated actor is required.", http_status=403)
+    if route == "book_attach" and book_id is not None:
+        _require_capability(db, user, "books.edit")
+        book_service.require_full_book_access(db, user, book_service.get_book(db, book_id))
+    elif route == "employee_doc":
+        _require_capability(db, user, "employees.vault.manage")
+
+
 def confirm(db: Session, item_id: int, *, user: User | None) -> ScanInbox:
     """Accept the proposed destination and file it."""
     item = _get(db, item_id)
     _check_owner(item, user)
     if item.state not in {"awaiting_confirmation", "unrouted"}:
         raise ValidationFailedError("SCAN_BAD_STATE", f"Cannot confirm in state {item.state}")
+    _require_target_access(db, user, item.proposed_route, item.proposed_book_id)
     _apply_file(db, item, user=user)
     _resolve(item, user, "filed")
     item.state = "filed"
@@ -378,9 +404,11 @@ def route_item(
         raise ValidationFailedError("SCAN_BAD_STATE", f"Cannot route in state {item.state}")
     abs_file_path(item)  # validate before staging a new proposed destination
     if book_id is not None:
+        _require_target_access(db, user, "book_attach", book_id)
         item.proposed_route = "book_attach"
         item.proposed_book_id = book_id
     elif employee_id is not None:
+        _require_target_access(db, user, "employee_doc", None)
         item.proposed_route = "employee_doc"
         item.proposed_employee_id = employee_id
     else:
@@ -424,6 +452,9 @@ def undo(db: Session, item_id: int, *, user: User | None) -> ScanInbox:
         raise ValidationFailedError(
             "SCAN_BAD_STATE", "Scan item has no valid undo target."
         ) from None
+    _require_target_access(
+        db, user, "book_attach" if valid_book else "employee_doc", target_id if valid_book else None
+    )
     if valid_book:
         book_service.detach_attachment(db, target_id, parts[2])
     else:
