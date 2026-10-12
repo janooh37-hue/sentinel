@@ -35,7 +35,7 @@ import { RecordExpansion } from './RecordExpansion'
 import { dateLocale, fmtMonthYear } from './fmt'
 import { CANONICAL_KINDS, classifyLeaveType, kindMeta, type KindId } from './kinds'
 import {
-  groupRows, tableTotals,
+  groupRows, tableTotals, REGISTER_COLUMNS,
   type GroupMode, type ReportScope, type SortSpec,
 } from './reportData'
 
@@ -44,14 +44,6 @@ const GRID = 'grid grid-cols-[1.6fr_1.2fr_1.1fr_0.5fr_0.9fr_44px] items-center g
 
 /** Canonical workflow statuses for the status chip row. */
 const WORKFLOW_STATUSES: LeaveStatus[] = ['Pending', 'Approved', 'Rejected', 'Cancelled', 'Completed']
-
-const COLUMNS: { key: SortSpec['key']; labelKey: string; numeric?: boolean }[] = [
-  { key: 'employee', labelKey: 'leaves.columns.employee' },
-  { key: 'kind', labelKey: 'leaves.report.colKind' },
-  { key: 'start', labelKey: 'leaves.report.period' },
-  { key: 'days', labelKey: 'leaves.columns.days', numeric: true },
-  { key: 'status', labelKey: 'leaves.columns.status' },
-]
 
 const GROUP_LABEL_KEYS: Record<GroupMode, string> = {
   none: 'leaves.report.groupNone',
@@ -300,7 +292,7 @@ export function RegisterTable({
           {/* header */}
           <div role="rowgroup">
             <div role="row" className={cn(GRID, 'border-b border-hairline bg-surface-tinted py-2')}>
-              {COLUMNS.map((c) => {
+              {REGISTER_COLUMNS.map((c) => {
                 const active = sort.key === c.key
                 return (
                   <span

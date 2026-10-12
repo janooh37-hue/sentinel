@@ -1811,6 +1811,7 @@
       "printTitle": "Leave register {{year}}",
       "printAll": "All records",
       "printSort": "Sorted by: {{column}} {{arrow}}",
+      "printSearch": "search \"{{term}}\"",
       "profileCurrent": "Current leave",
       "profileNotOnLeave": "Not currently on leave",
       "profileReturns_one": "returns in {{count}} day",

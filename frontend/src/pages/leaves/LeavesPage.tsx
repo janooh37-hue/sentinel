@@ -48,7 +48,7 @@ export function LeavesPage(): React.JSX.Element {
       </header>
 
       {/* Inner tabs — primary-color underline on active */}
-      <div className="flex gap-1 border-b border-border px-4 md:px-6" role="tablist">
+      <div className="flex gap-1 border-b border-border px-4 md:px-6" role="tablist" data-print-hide>
         {ORDER.map((key) => {
           const isActive = tab === key
           return (

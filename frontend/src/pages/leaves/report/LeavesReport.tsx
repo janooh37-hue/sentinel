@@ -10,9 +10,11 @@
  * row and centers it once, then `onOpenConsumed` clears it upstream.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { flushSync } from 'react-dom'
 import { useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { useLocation, useNavigate } from 'react-router-dom'
+import { Printer } from 'lucide-react'
 
 import { Button } from '@/components/ui/button'
 import { Skeleton, SkeletonRow } from '@/components/ui/skeleton'
@@ -24,9 +26,11 @@ import { FigKindBars } from './FigKindBars'
 import { FigMonthColumns } from './FigMonthColumns'
 import { FigOutcomes } from './FigOutcomes'
 import { InsightLine } from './InsightLine'
+import { RegisterPrintSheet } from './RegisterPrintSheet'
 import { RegisterTable } from './RegisterTable'
 import { ReportMasthead } from './ReportMasthead'
 import { dateLocale, fmtMonthYear } from './fmt'
+import { kindMeta } from './kinds'
 import type { GroupMode } from './reportData'
 import { useLeaveReport } from './useLeaveReport'
 
@@ -57,6 +61,7 @@ export function LeavesReport({
   const [group, setGroup] = useState<GroupMode>('none')
   const [expandedId, setExpandedId] = useState<number | null>(null)
   const [profileEmployeeId, setProfileEmployeeId] = useState<string | null>(null)
+  const [printing, setPrinting] = useState(false)
   // Pre-activate the awaiting-return filter when navigating from the bell /
   // dashboard attention area (they pass `{ state: { awaitingReturn: true } }`).
   const [awaitingReturnOnly, setAwaitingReturnOnly] = useState(
@@ -170,6 +175,24 @@ export function LeavesReport({
     navigate('/ledger', { state: { composePrefill: prefill } })
   }, [pendingRequests, t, i18n.language, navigate])
 
+  // `window.print()` blocks, so the sheet must be committed before the call
+  // (the AttendancePage pattern) and is dropped again once the dialog closes.
+  const print = useCallback(() => {
+    flushSync(() => setPrinting(true))
+    window.print()
+    setPrinting(false)
+  }, [])
+
+  // The active filters, as the paper header names them.
+  const printFilters = [
+    monthChipLabel,
+    employeeChipName,
+    scope.kinds.map((k) => t(kindMeta(k).i18nKey)).join(', '),
+    scope.statuses.map((s) => t(`leaves.status.${s}`)).join(', '),
+    awaitingReturnOnly ? t('leaves.display.AwaitingReturn') : null,
+    scope.q.trim() ? t('leaves.report.printSearch', { term: scope.q.trim() }) : null,
+  ].filter((f): f is string => !!f)
+
   if (report.isPending) {
     return (
       <div className="mx-auto flex w-full max-w-[1180px] flex-col gap-4" aria-busy="true">
@@ -204,95 +227,113 @@ export function LeavesReport({
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-[1180px] flex-col gap-4">
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <ReportMasthead
+    <>
+      <div className="mx-auto flex w-full max-w-[1180px] flex-col gap-4" data-print-hide>
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <ReportMasthead
+            year={report.year}
+            today={report.today}
+            onLeaveTodayCount={report.onLeaveTodayCount}
+            pendingCount={report.pendingCount}
+            pendingActive={pendingActive}
+            onPendingClick={() => setStatuses(pendingActive ? [] : ['Pending'])}
+            awaitingReturnCount={report.awaitingReturnCount}
+            awaitingReturnActive={awaitingReturnActive}
+            onAwaitingReturnClick={() => setAwaitingReturnOnly(!awaitingReturnOnly)}
+            endingSoonCount={report.endingSoonCount}
+          />
+          <div className="flex flex-wrap items-center gap-2">
+            {pendingRequests.length > 0 && (
+              <Button variant="secondary" size="sm" onClick={openConfirmCompose}>
+                ✉{' '}{t('leaves.report.confirmEmail.button', { n: pendingRequests.length })}
+              </Button>
+            )}
+            <Button variant="secondary" size="sm" onClick={print} disabled={visibleRows.length === 0}>
+              <Printer className="me-1.5 h-4 w-4" aria-hidden />
+              {t('leaves.report.print')}
+            </Button>
+          </div>
+        </div>
+
+        {/* active-scope chips (dismiss = clear that facet) */}
+        {(scope.month !== null || scope.employeeId !== null) && (
+          <div className="flex flex-wrap items-center gap-2">
+            {scope.month !== null && (
+              <button type="button" onClick={() => setMonth(null)} className={SCOPE_CHIP}>
+                {t('leaves.report.scopedToMonth', { month: monthChipLabel })}
+                <span aria-hidden="true" className="text-[0.9em]">
+                  ✕
+                </span>
+              </button>
+            )}
+            {scope.employeeId !== null && (
+              <button type="button" onClick={() => setEmployeeId(null)} className={SCOPE_CHIP}>
+                {t('leaves.report.scopedToEmployee', { name: employeeChipName })}
+                <span aria-hidden="true" className="text-[0.9em]">
+                  ✕
+                </span>
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* figure folio — Fig. 2 controls the report scope */}
+        <div className="grid grid-cols-3 gap-3.5 max-xl:grid-cols-1">
+          <FigKindBars data={figKinds} scopeLabel={scopeLabel} yearToDate={scope.month === null} />
+          <FigMonthColumns
+            data={figMonths}
+            selected={scope.month}
+            currentMonthIndex={currentMonthIndex}
+            year={report.year}
+            onSelect={setMonth}
+          />
+          <FigOutcomes data={figOutcomes} scopeLabel={scopeLabel} />
+        </div>
+
+        <InsightLine
+          insights={insights}
+          monthLabel={busiestMonthLabel}
+          sickActive={sickActive}
+          onSickClick={() =>
+            setKinds(
+              sickActive
+                ? scope.kinds.filter((k) => k !== 'Sick Leave')
+                : [...scope.kinds, 'Sick Leave'],
+            )
+          }
+        />
+
+        <RegisterTable
+          rows={visibleRows}
+          allRows={report.all}
+          today={report.today}
+          sort={sort}
+          onSort={setSort}
+          group={group}
+          onGroup={setGroup}
+          scope={scope}
+          onKindsChange={setKinds}
+          onStatusesChange={setStatuses}
+          onQChange={setQ}
+          onClearScope={clearScope}
+          expandedId={expandedId}
+          onExpand={setExpandedId}
+          profileEmployeeId={profileEmployeeId}
+          onProfile={setProfileEmployeeId}
+          onFilterEmployee={setEmployeeId}
+          onMutated={handleMutated}
+        />
+      </div>
+      {printing && (
+        <RegisterPrintSheet
+          rows={visibleRows}
+          group={group}
+          sort={sort}
           year={report.year}
           today={report.today}
-          onLeaveTodayCount={report.onLeaveTodayCount}
-          pendingCount={report.pendingCount}
-          pendingActive={pendingActive}
-          onPendingClick={() => setStatuses(pendingActive ? [] : ['Pending'])}
-          awaitingReturnCount={report.awaitingReturnCount}
-          awaitingReturnActive={awaitingReturnActive}
-          onAwaitingReturnClick={() => setAwaitingReturnOnly(!awaitingReturnOnly)}
-          endingSoonCount={report.endingSoonCount}
+          filters={printFilters}
         />
-        {pendingRequests.length > 0 && (
-          <Button variant="secondary" size="sm" onClick={openConfirmCompose}>
-            ✉{' '}{t('leaves.report.confirmEmail.button', { n: pendingRequests.length })}
-          </Button>
-        )}
-      </div>
-
-      {/* active-scope chips (dismiss = clear that facet) */}
-      {(scope.month !== null || scope.employeeId !== null) && (
-        <div className="flex flex-wrap items-center gap-2">
-          {scope.month !== null && (
-            <button type="button" onClick={() => setMonth(null)} className={SCOPE_CHIP}>
-              {t('leaves.report.scopedToMonth', { month: monthChipLabel })}
-              <span aria-hidden="true" className="text-[0.9em]">
-                ✕
-              </span>
-            </button>
-          )}
-          {scope.employeeId !== null && (
-            <button type="button" onClick={() => setEmployeeId(null)} className={SCOPE_CHIP}>
-              {t('leaves.report.scopedToEmployee', { name: employeeChipName })}
-              <span aria-hidden="true" className="text-[0.9em]">
-                ✕
-              </span>
-            </button>
-          )}
-        </div>
       )}
-
-      {/* figure folio — Fig. 2 controls the report scope */}
-      <div className="grid grid-cols-3 gap-3.5 max-xl:grid-cols-1">
-        <FigKindBars data={figKinds} scopeLabel={scopeLabel} yearToDate={scope.month === null} />
-        <FigMonthColumns
-          data={figMonths}
-          selected={scope.month}
-          currentMonthIndex={currentMonthIndex}
-          year={report.year}
-          onSelect={setMonth}
-        />
-        <FigOutcomes data={figOutcomes} scopeLabel={scopeLabel} />
-      </div>
-
-      <InsightLine
-        insights={insights}
-        monthLabel={busiestMonthLabel}
-        sickActive={sickActive}
-        onSickClick={() =>
-          setKinds(
-            sickActive
-              ? scope.kinds.filter((k) => k !== 'Sick Leave')
-              : [...scope.kinds, 'Sick Leave'],
-          )
-        }
-      />
-
-      <RegisterTable
-        rows={visibleRows}
-        allRows={report.all}
-        today={report.today}
-        sort={sort}
-        onSort={setSort}
-        group={group}
-        onGroup={setGroup}
-        scope={scope}
-        onKindsChange={setKinds}
-        onStatusesChange={setStatuses}
-        onQChange={setQ}
-        onClearScope={clearScope}
-        expandedId={expandedId}
-        onExpand={setExpandedId}
-        profileEmployeeId={profileEmployeeId}
-        onProfile={setProfileEmployeeId}
-        onFilterEmployee={setEmployeeId}
-        onMutated={handleMutated}
-      />
-    </div>
+    </>
   )
 }

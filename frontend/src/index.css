@@ -1827,6 +1827,13 @@ body {
   .print-vehicle-report {
     page: register;
   }
+  /* A named page starts a new sheet, and Chrome leaves an ancestor's top
+     padding on the unnamed sheet before it — the leaves register printed a
+     blank first page from its tab panel's `pt-3`. Everything else on those
+     ancestors is print-hidden, so their padding has nothing to inset. */
+  *:has(.print-register) {
+    padding: 0 !important;
+  }
   /* The fleet list carries every vehicle field (12 columns), so it gets a
      landscape sheet of its own. */
   @page vehicle-list {

@@ -1971,6 +1971,7 @@
       "printTitle": "سجل الإجازات {{year}}",
       "printAll": "جميع السجلات",
       "printSort": "الترتيب حسب: {{column}} {{arrow}}",
+      "printSearch": "بحث «{{term}}»",
       "profileCurrent": "الإجازة الحالية",
       "profileNotOnLeave": "ليس في إجازة حاليًا",
       "profileReturns_zero": "يعود اليوم",

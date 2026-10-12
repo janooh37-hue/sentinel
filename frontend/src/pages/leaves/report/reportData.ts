@@ -29,6 +29,15 @@ export interface ReportScope {
 }
 export interface SortSpec { key: 'employee' | 'kind' | 'start' | 'days' | 'status'; dir: 'asc' | 'desc' }
 
+/** Register columns, shared by the screen table and its print sheet. */
+export const REGISTER_COLUMNS: { key: SortSpec['key']; labelKey: string; numeric?: boolean }[] = [
+  { key: 'employee', labelKey: 'leaves.columns.employee' },
+  { key: 'kind', labelKey: 'leaves.report.colKind' },
+  { key: 'start', labelKey: 'leaves.report.period' },
+  { key: 'days', labelKey: 'leaves.columns.days', numeric: true },
+  { key: 'status', labelKey: 'leaves.columns.status' },
+]
+
 const pad = (n: number): string => String(n + 1).padStart(2, '0')
 
 /** UTC-safe calendar-day math: ISO date (or datetime — only Y/M/D used) → UTC ms. */
