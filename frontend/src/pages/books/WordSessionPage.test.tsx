@@ -67,7 +67,7 @@ describe('WordSessionPage in Arabic', () => {
     setup()
     await screen.findByText(session.ref_number)
     expect(screen.queryByRole('button', { name: 'حفظ المسودة كقالب' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'قالب جديد في Word' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'إنشاء قالب جديد' })).not.toBeInTheDocument()
   })
 
   it('saves the current draft as a template with the book id and subject-prefilled name', async () => {
@@ -123,7 +123,7 @@ describe('WordSessionPage in Arabic', () => {
     const user = userEvent.setup()
     vi.spyOn(api, 'createTemplateSession').mockResolvedValue({ id: 9, name: 'قالب.docx', token: 'tpl', filename: 'قالب.docx', word_url: 'ms-word:ofe|u|https://gssg.lan/dav/tpl/template.docx', dav_url: 'https://gssg.lan/dav/tpl/template.docx', created_at: session.created_at, last_put_at: null })
     setup()
-    await user.click(await screen.findByRole('button', { name: 'قالب جديد في Word' }))
+    await user.click(await screen.findByRole('button', { name: 'إنشاء قالب جديد' }))
     await user.type(screen.getByRole('textbox', { name: 'اسم القالب' }), 'قالب')
     await user.click(screen.getByRole('button', { name: 'إنشاء القالب' }))
     expect(await screen.findByText('template-session')).toBeVisible()
