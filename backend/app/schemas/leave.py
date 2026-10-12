@@ -103,6 +103,9 @@ class LeaveListItem(ORMBase):
     employee_id: str
     employee_name_en: str | None = None
     employee_name_ar: str | None = None
+    # The employee's working status ("Active" = our staff, "Loaned" = ملحق); the
+    # leave report filters on it. List-only: the detail view has no use for it.
+    employee_status: str | None = None
     leave_type: str
     start_date: date
     end_date: date

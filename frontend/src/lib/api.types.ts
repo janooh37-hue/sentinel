@@ -11021,6 +11021,8 @@ export interface components {
             employee_name_en?: string | null;
             /** Employee Name Ar */
             employee_name_ar?: string | null;
+            /** Employee Status */
+            employee_status?: string | null;
             /** Leave Type */
             leave_type: string;
             /**

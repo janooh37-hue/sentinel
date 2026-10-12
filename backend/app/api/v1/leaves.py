@@ -87,7 +87,10 @@ def list_leaves(
         items=[
             _with_employee_name(
                 LeaveListItem.model_validate(r).model_copy(
-                    update={"has_certificate": bool(r.certificate_path)}
+                    update={
+                        "has_certificate": bool(r.certificate_path),
+                        "employee_status": r.employee.status if r.employee else None,
+                    }
                 ),
                 r,
             )
