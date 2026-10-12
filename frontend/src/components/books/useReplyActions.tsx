@@ -14,7 +14,9 @@ export function useReplyActions(book: BookRead | null | undefined, openOverlay?:
   const { t } = useTranslation()
   const { has } = useCapabilities()
   const [selection, setSelection] = useState<{ bookId: number; kind: 'reply' | 'based_on' } | null>(null)
-  if (!book || !user || user.role === 'inmate_reporter' || book.access_scope !== 'full' || !has('books.create') || !has('books.view')) return { actions: [], dialog: null }
+  // Derive creates a General Book in the original's classification: mirror the server's record-type checks.
+  const canCreateGeneralBook = has('books.service.General Book') && (!book?.classification_code || has(`books.category.${book.classification_code}`))
+  if (!book || !user || user.role === 'inmate_reporter' || book.access_scope !== 'full' || !has('books.create') || !has('books.view') || !canCreateGeneralBook) return { actions: [], dialog: null }
   return {
     actions: [
       { key: 'reply', label: t('books.thread.reply'), icon: <Reply className="h-4 w-4 rtl:-scale-x-100" aria-hidden />, onSelect: () => openOverlay ? openOverlay('reply') : setSelection({ bookId: book.id, kind: 'reply' }) },

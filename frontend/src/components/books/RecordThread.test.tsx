@@ -156,6 +156,13 @@ describe('derive and reply actions', () => {
     expect(screen.queryByRole('dialog')).toBeNull()
   })
 
+  it.each(['books.service.General Book', 'books.category.1/1'])('hides Reply and Create from without %s, which the server requires to create the draft', (cap) => {
+    auth.denied.add(cap)
+    mount(<Actions />)
+    expect(screen.queryByRole('button', { name: 'Reply' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Create from' })).toBeNull()
+  })
+
   it('resets level and attachment choices when reopening, and obeys a changed original floor', async () => {
     const derive = vi.spyOn(api, 'deriveBook').mockResolvedValue({
       book_id: 99, ref_number: 'NEW-99', token: 'token', filename: 'copy.docx', word_url: '/word', dav_url: '/dav',
