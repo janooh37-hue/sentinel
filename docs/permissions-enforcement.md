@@ -15,7 +15,7 @@ built on top of this model see
 
 `backend/app/core/permissions.py`
 
-- `CAPABILITIES` — the catalog: 52 `Capability(id, group, label, description)` tuples.
+- `CAPABILITIES` — the catalog: 60 `Capability(id, group, label, description)` tuples.
   The `description` is user-facing (it drives the admin permission editor and the
   request UI). Since the 2026-08-23 granular split (§7) every id is atomic — the six
   old bundled ids (`employees.edit` in its old wide sense, `leaves.edit`,
@@ -30,13 +30,20 @@ built on top of this model see
 | --- | --- | --- |
 | `operator` | 17 caps | read-only across the app (`app.access`, `employees.view`, `leaves.view`, `timesheet.view`, `violations.view`, `books.view`, `permits.view`, `ledger.view`, `settings.view`) plus the daily-work writes: `documents.generate`, `documents.scan`, `ledger.create`/`ledger.edit`/`ledger.send`/`ledger.delete` (deletion restored post-split review — operators held it pre-split), and `email.manage` for the user's own mailbox, plus `workforce.self.view` for their own record |
 | `manager` | 39 caps | operator preset minus `workforce.self.view`, plus the atomic management writes: `employees.create`/`employees.edit`/`employees.vault.manage`/`employees.notify`, `leaves.create`/`leaves.edit`/`leaves.delete`, `violations.create`/`violations.edit`/`violations.delete`, `books.create`/`books.edit`/`books.submit`/`books.templates`/`books.approve`/`books.delete`, `permits.create`/`permits.edit`/`permits.revoke`/`permits.delete`, `ledger.delete`, `timesheet.edit`, `submitters.manage`, `editor_templates.manage`. The literal `frozenset` of additions lists 24 ids; unioned with operator's 17 minus the dropped self-view that resolves to 39. Workforce administration still needs an explicit grant + scope |
-| `admin` | all 52 | `ALL_CAPABILITIES` |
+| `admin` | all 60 | `ALL_CAPABILITIES` |
 
 **Admin-only by default, but delegable.** `books.override_state` (added 2026-08-14) is
 in no preset except `admin`'s `ALL_CAPABILITIES`, so only an admin holds it out of the
 box — yet it is deliberately *not* in `_SENSITIVE_CAPS`, so an admin can grant it to a
 specific manager. Contrast `users.manage` / `system.admin`, which no override can hand
 out. See §6.
+
+**Secret clearance.** `books.secret` (added 2026-10-12) is likewise in no preset except
+admin's. It is not sensitive, but `requestable=False`: users cannot ask for it through
+permission requests. Admins and managers grant or remove it with
+`PUT /api/v1/auth/users/{id}/secret-clearance` (guarded by `require_admin_or_manager`,
+audited as `set_permission`). Holders can open, create, and receive Secret records; see
+`book_service.user_visibility_clause` for the full record-level access rule.
 
 `default_caps_for_role()` falls back to the **operator** preset for an unknown role —
 fail-soft, not fail-closed. Worth remembering if a new role is ever added.

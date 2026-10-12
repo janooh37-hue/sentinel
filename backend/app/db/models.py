@@ -269,6 +269,11 @@ class Book(Base):
     # Original creator (users.id): immutable; set once at creation. No FK, same
     # SQLite batch-ALTER reason as submitted_by_user_id.
     created_by_user_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Record level (migration 0102): general | personal | secret | directed.
+    # Gates who can open the record; see book_service.user_visibility_clause.
+    confidentiality: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="general", server_default="general"
+    )
     # The Manager directory row actually printed on the doc (reviewer/manager-
     # routed approvals, 2026-06-23). Submit-for-approval follows its `user_id`
     # link to auto-route. FK omitted (SQLite batch ALTER) — integrity app-side.
@@ -306,6 +311,10 @@ class Book(Base):
         Index("ix_books_employee_id", "employee_id"),
         Index("ix_books_created_at", "created_at"),
         Index("ix_books_created_by_user_id", "created_by_user_id"),
+        CheckConstraint(
+            "confidentiality IN ('general', 'personal', 'secret', 'directed')",
+            name="ck_books_confidentiality",
+        ),
     )
 
 
@@ -469,6 +478,45 @@ class BookRevisionAccess(Base):
         CheckConstraint(
             "state IN ('approved', 'rejected', 'returned', 'reviewed', 'changes_requested')",
             name="ck_book_revision_access_state",
+        ),
+    )
+
+
+class BookRecipient(Base):
+    """A direct send of a record to one user (migration 0102).
+
+    An active row (``revoked_at IS NULL``) lets the recipient open the record
+    whatever its level or record type. A recall sets ``revoked_at``; the row
+    stays as history. At most one active row per (book, user).
+    """
+
+    __tablename__ = "book_recipients"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    book_id: Mapped[int] = mapped_column(ForeignKey("books.id", ondelete="CASCADE"), nullable=False)
+    user_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    sent_by_user_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    # info | action | reply | sign (للاطلاع / للتنفيذ / للإفادة / للتوقيع)
+    purpose: Mapped[str] = mapped_column(String(16), nullable=False)
+    note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=_utcnow)
+    read_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    revoked_by_user_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    __table_args__ = (
+        Index("ix_book_recipients_user_revoked", "user_id", "revoked_at"),
+        Index("ix_book_recipients_book", "book_id"),
+        Index(
+            "uq_book_recipients_active",
+            "book_id",
+            "user_id",
+            unique=True,
+            sqlite_where=text("revoked_at IS NULL"),
+        ),
+        CheckConstraint(
+            "purpose IN ('info', 'action', 'reply', 'sign')",
+            name="ck_book_recipients_purpose",
         ),
     )
 

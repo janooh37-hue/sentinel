@@ -22,6 +22,10 @@ BookStampStyle = Literal[
     "Watermark Style",
 ]
 
+# Record level (Book.confidentiality) and direct-send purpose.
+BookConfidentiality = Literal["general", "personal", "secret", "directed"]
+SendPurpose = Literal["info", "action", "reply", "sign"]
+
 
 # ---------------------------------------------------------------------------
 # Category schemas
@@ -52,6 +56,7 @@ class BookCreate(BaseModel):
     direction: BookDirection = "incoming"
     stamp_style: BookStampStyle = "Header Text (Ref: XX-0000)"
     doc_id: int | None = None  # optional link to a Document row
+    confidentiality: BookConfidentiality = "general"
 
 
 class BookUpdate(BaseModel):
@@ -253,6 +258,7 @@ class WordBookCreate(BaseModel):
     manager_id: int | None = None
     template_name: str | None = None
     table_rows: list[dict[str, str]] | None = None
+    confidentiality: BookConfidentiality = "general"
     # Report path only: present ⇒ create a Report (no classification/ref). `sign`
     # embeds the signer's signature at Finish; `date` is the report's document date.
     signer_employee_id: str | None = None
@@ -358,6 +364,79 @@ class IncludedPapersPreviewRead(BaseModel):
     pdf_base64: str
 
 
+class BookInboxRead(ORMBase):
+    """The caller's own received send of a record (BookRead.my_inbox)."""
+
+    id: int
+    purpose: SendPurpose
+    note: str | None = None
+    sent_by_user_id: int
+    sent_by_name: str | None = None
+    sent_at: datetime
+    read_at: datetime | None = None
+
+
+class BookRecipientRead(ORMBase):
+    id: int
+    user_id: int
+    user_name: str | None = None
+    sent_by_user_id: int
+    sent_by_name: str | None = None
+    purpose: SendPurpose
+    note: str | None = None
+    created_at: datetime
+    read_at: datetime | None = None
+    revoked_at: datetime | None = None
+    can_recall: bool = False
+
+
+class BookSendRequest(BaseModel):
+    user_ids: list[int] = Field(min_length=1, max_length=50)
+    purpose: SendPurpose
+    note: str | None = Field(default=None, max_length=500)
+    # Personal records only: switch the level to directed in the same send.
+    make_directed: bool = False
+
+
+class BookSendSkipped(BaseModel):
+    user_id: int
+    reason: Literal["already_recipient", "self"]
+
+
+class BookSendResponse(BaseModel):
+    sent: list[BookRecipientRead]
+    skipped: list[BookSendSkipped]
+
+
+class BookConfidentialityUpdate(BaseModel):
+    confidentiality: BookConfidentiality
+
+
+class RecipientCandidateRead(BaseModel):
+    id: int
+    name: str
+    name_ar: str | None = None
+    g_number: str | None = None
+    role: str
+    has_secret_clearance: bool
+
+
+class InboxPurposeCounts(BaseModel):
+    info: int = 0
+    action: int = 0
+    reply: int = 0
+    sign: int = 0
+
+
+class InboxSummaryRead(BaseModel):
+    """Received counts are active rows on records the caller can open."""
+
+    unread: int
+    received: int
+    sent: int
+    by_purpose: InboxPurposeCounts
+
+
 class BookRead(ORMBase):
     id: int
     ref_number: str
@@ -381,6 +460,13 @@ class BookRead(ORMBase):
     priority: str | None
     approval_state: str
     access_scope: Literal["full", "assigned_revision"] = "full"
+    confidentiality: BookConfidentiality = "general"
+    # Caller may direct-send / forward this record (full access).
+    can_send: bool = False
+    # Caller may relabel the level (creator, manager, or admin with full access).
+    can_change_confidentiality: bool = False
+    # The caller's newest active received send of this record, if any.
+    my_inbox: BookInboxRead | None = None
     selected_version_id: int | None = None
     can_sign: bool = False
     can_review: bool = False

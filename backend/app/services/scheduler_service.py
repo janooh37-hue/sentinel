@@ -500,6 +500,7 @@ _KIND_META: dict[str, str] = {
     "scan": "/scan-inbox",
     "email": "/ledger",
     "scanback": "/scan-back",
+    "inbox": "/books?inbox=received",
     "monthly_review": notification_service.MONTHLY_TASKS_URL,
     "monthly_approval": notification_service.MONTHLY_TASKS_URL,
 }
@@ -578,6 +579,34 @@ def _doc_push(
     noun_en = "documents awaiting your signature" if is_sign else "documents awaiting your review"
     noun_ar = "مستندات بانتظار توقيعك" if is_sign else "مستندات بانتظار مراجعتك"
     return _localized(f"{n} {noun_en}", f"{n} {noun_ar}"), section_url
+
+
+def _inbox_push(
+    new_items: list[notification_service.ActionableItem], section_url: str
+) -> tuple[dict[str, tuple[str, str]], str]:
+    """Direct sends expose record details only for a single general record."""
+    n = len(new_items)
+    if n == 1:
+        it = new_items[0]
+        if it.confidential:
+            return _localized("New record sent to you", "لديك معاملة جديدة"), it.url
+        subject = f" — {it.subject}" if it.subject else ""
+        from_en = f"\nFrom {it.requester}" if it.requester else ""
+        from_ar = f"\nمن {it.requester}" if it.requester else ""
+        return (
+            _localized(
+                f"New record sent to you · {it.label}{subject}{from_en}",
+                f"لديك معاملة جديدة · {it.label}{subject}{from_ar}",
+            ),
+            it.url,
+        )
+    return (
+        _localized(
+            f"{n} new records sent to you",
+            f"لديك معاملات جديدة · \u2066{n}\u2069",
+        ),
+        section_url,
+    )
 
 
 def _monthly_push(
@@ -689,6 +718,8 @@ def _build_push(
     """
     if kind == "email":
         return _email_push(new_items, section_url)
+    if kind == "inbox":
+        return _inbox_push(new_items, section_url)
     if kind == "scan":
         return _scan_push(new_items, section_url)
     if kind == "scanback":

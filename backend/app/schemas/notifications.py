@@ -12,3 +12,4 @@ class NotificationCounts(BaseModel):
     emails: int  # unread received email in MY mailbox
     monthly_reviews: int  # eligible monthly report assignments awaiting MY review
     monthly_approvals: int  # eligible monthly report assignments awaiting MY approval
+    inbox: int  # unread direct sends to ME on records I can open

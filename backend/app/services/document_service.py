@@ -73,6 +73,7 @@ from app.db.models import (
 )
 from app.db.repos.classified_refs_repo import allocate_classified_serial
 from app.db.repos.refs_repo import allocate_ref_with_retry
+from app.schemas.book import BookConfidentiality
 from app.schemas.employee import EMPLOYEE_STATUS_RESIGNED, WORKING_STATUSES
 from app.schemas.linked_document import LinkedDocumentRead
 from app.services import (
@@ -1524,6 +1525,7 @@ def generate_document(
     attachments: Sequence[GenerateAttachmentSpec] | None = None,
     return_for_leave_id: int | None = None,
     classification_code: str | None = None,
+    confidentiality: BookConfidentiality = "general",
     converter: artifact_service.PdfConverter | None = None,
     defer_commit: bool = False,
 ) -> GenerationResult:
@@ -2131,6 +2133,7 @@ def generate_document(
                 ref_number=raw_ref,
                 classification_code=_classification.code if _classification else None,
                 subject=_subject,
+                confidentiality=confidentiality,
                 direction="outgoing",
                 stamp_style=STAMP_STYLE_HEADER,
                 employee_id=employee_id,

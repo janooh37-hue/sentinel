@@ -16,6 +16,10 @@ PATCH /auth/users/{id}/role
 PATCH /auth/users/{id}/link
 POST  /auth/users/{id}/disable | /unlock
 POST  /auth/users/{id}/default-manager
+
+Admin or manager (require_admin_or_manager):
+GET /auth/secret-clearance
+PUT /auth/users/{id}/secret-clearance
 """
 
 from __future__ import annotations
@@ -23,11 +27,14 @@ from __future__ import annotations
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, Request, Response, UploadFile, status
+from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from app.api.deps import COOKIE_NAME, get_current_user, require_admin
+from app.api.deps import COOKIE_NAME, get_current_user, require_admin, require_admin_or_manager
+from app.api.errors import AppError
 from app.config import get_settings
 from app.core import ratelimit
+from app.core.roles import ADMIN_ROLE
 from app.db.models import User
 from app.db.session import get_db
 from app.schemas.auth import (
@@ -56,10 +63,26 @@ from app.schemas.auth import (
 )
 from app.services import (
     auth_service,
+    book_send_service,
     capability_catalog_service,
     perm_service,
     user_signature_service,
 )
+
+
+class SecretClearanceRead(BaseModel):
+    user_id: int
+    name: str
+    name_ar: str | None
+    g_number: str | None
+    role: str
+    cleared: bool
+    locked: bool
+
+
+class SecretClearanceUpdate(BaseModel):
+    enabled: bool
+
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -434,6 +457,43 @@ def list_capabilities(
         )
         for entry in capability_catalog_service.list_catalog(db)
     ]
+
+
+@router.get("/secret-clearance", response_model=list[SecretClearanceRead])
+def list_secret_clearance(
+    _user: Annotated[User, Depends(require_admin_or_manager)],
+    db: Annotated[Session, Depends(get_db)],
+) -> list[SecretClearanceRead]:
+    return [
+        SecretClearanceRead(
+            user_id=entry.user.id,
+            name=entry.name,
+            name_ar=entry.name_ar,
+            g_number=entry.g_number,
+            role=entry.user.role,
+            cleared=True if entry.user.role == ADMIN_ROLE else entry.cleared,
+            locked=entry.user.role == ADMIN_ROLE,
+        )
+        for entry in book_send_service.user_directory(db)
+    ]
+
+
+@router.put("/users/{user_id}/secret-clearance", status_code=status.HTTP_204_NO_CONTENT)
+def set_secret_clearance(
+    user_id: int,
+    body: SecretClearanceUpdate,
+    user: Annotated[User, Depends(require_admin_or_manager)],
+    db: Annotated[Session, Depends(get_db)],
+) -> Response:
+    target = auth_service.require_user(db, user_id)
+    if target.role == ADMIN_ROLE:
+        raise AppError("CLEARANCE_LOCKED", "Admin clearance cannot be changed.", http_status=409)
+    effect = "grant" if body.enabled else None
+    perm_service.set_user_override(db, target.id, "books.secret", effect, actor=user)
+    auth_service.audit_permission_change(
+        db, actor=_actor(user), user=target, capability="books.secret", effect=effect
+    )
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.get("/users/{user_id}/permissions", response_model=UserPermissionRead)

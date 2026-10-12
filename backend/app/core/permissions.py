@@ -344,6 +344,15 @@ CAPABILITIES: Final[tuple[Capability, ...]] = (
         "نقل السجلات إلى المحذوفات.",
     ),
     Capability(
+        "books.secret",
+        "books",
+        "Secret clearance",
+        "تصريح الاطلاع على السري",
+        "Open, create, and receive records marked Secret.",
+        "فتح السجلات المصنّفة سرية وإنشاؤها واستلامها.",
+        requestable=False,
+    ),
+    Capability(
         "permits.view",
         "permits",
         "View security permits",

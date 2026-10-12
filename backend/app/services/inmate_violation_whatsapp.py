@@ -72,6 +72,9 @@ def queue_send(db: Session, version: BookVersion) -> None:
     """
     if version.template_id != TEMPLATE_ID or version.status != "approved":
         return
+    book = db.get(Book, version.book_id)
+    if book is None or book.confidentiality != "general":
+        return
     if not get_settings().openwa_enabled or get_group(db) is None:
         return
     if version.id is None:
@@ -121,6 +124,8 @@ def _deliver(db: Session, version_id: int) -> None:
         return
     book = db.get(Book, version.book_id)
     assert book is not None  # FK
+    if book.confidentiality != "general":
+        return
     filename, data = announce_service.resolve_version_pdf(db, book, version)
     # ponytail: claim before sending = at-most-once; a failed send is logged
     # (GroupAnnouncementSend row) but never retried automatically.

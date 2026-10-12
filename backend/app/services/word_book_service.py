@@ -35,7 +35,7 @@ from app.core.docx_engine import aztec_corner_for
 from app.core.roles import INMATE_REPORTER_ROLE
 from app.db.models import Book, BookCategory, BookEditSession, BookVersion, Document, Manager, User
 from app.db.repos import classified_refs_repo
-from app.schemas.book import TemplateSessionRead, WordSessionDetailRead
+from app.schemas.book import BookConfidentiality, TemplateSessionRead, WordSessionDetailRead
 from app.services import artifact_service, book_template_service, manager_service
 from app.services._pdf_executor import convert_docx_to_pdf
 from app.services.document_service import GENERAL_BOOK_BODY_SENTINEL
@@ -66,6 +66,7 @@ def create_word_book(
     manager_id: int | None,
     template_name: str | None = None,
     table_rows: list[dict[str, str]] | None = None,
+    confidentiality: BookConfidentiality = "general",
 ) -> WordSessionInfo:
     """Create a General Book with a working docx for Word.
 
@@ -119,6 +120,7 @@ def create_word_book(
         category_id="GS",
         ref_number=ref,
         subject=subject,
+        confidentiality=confidentiality,
         classification_code=classification_code,
         approval_state="none",
         submitted_by_user_id=user.id,
@@ -375,6 +377,7 @@ def create_report_word_book(
     subject: str,
     date: str | None,
     sign: bool,
+    confidentiality: BookConfidentiality = "general",
 ) -> WordSessionInfo:
     """Create a no-ref Report on the report paper with an empty, Word-editable body.
 
@@ -397,6 +400,7 @@ def create_report_word_book(
         category_id="GS",
         ref_number=f"__pending_{uuid.uuid4().hex}__",
         subject=subject,
+        confidentiality=confidentiality,
         classification_code=None,
         approval_state="none" if user.role == INMATE_REPORTER_ROLE else "approved",
         submitted_by_user_id=user.id,

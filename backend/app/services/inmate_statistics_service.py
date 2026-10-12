@@ -64,7 +64,7 @@ from app.db.models import (
     UserPermission,
 )
 from app.db.workforce_models import DutyAssignmentEvent
-from app.services import perm_service
+from app.services import book_service, perm_service
 
 #: The service/template this register counts. Never the employee ``Violation``
 #: table — that is staff misconduct, a different domain sharing one word.
@@ -636,6 +636,37 @@ def _sealed_entry(row: InmateViolationStatRow) -> RegisterEntry:
     )
 
 
+def redact_month(db: Session, actor: User, month: MonthRegister) -> MonthRegister:
+    """Hide source-record content without changing official register counts."""
+    clause = book_service.user_visibility_clause(db, actor)
+    if clause is None:
+        return month
+    visible = set(db.scalars(select(Book.id).where(clause)))
+    entries = tuple(
+        replace(
+            entry,
+            details_text="",
+            source_ref_number=None,
+            source_book_id=None,
+            completion_book_id=None,
+        )
+        if entry.source_book_id is not None and entry.source_book_id not in visible
+        else entry
+        for entry in month.entries
+    )
+    return replace(
+        month,
+        entries=entries,
+        uncounted=tuple(record for record in month.uncounted if record.book_id in visible),
+        arrived_after_close=tuple(
+            replace(item, ref_number=None, source_book_id=None)
+            if item.source_book_id is not None and item.source_book_id not in visible
+            else item
+            for item in month.arrived_after_close
+        ),
+    )
+
+
 def build_month(db: Session, year: int, month: int, *, actor: User | None = None) -> MonthRegister:
     """One month, live or sealed. Never writes — the seal is an explicit act."""
 
@@ -1042,6 +1073,7 @@ def complete_import(
     book = db.get(Book, book_id)
     if book is None or book.deleted_at is not None:
         raise NotFoundError("BOOK_NOT_FOUND", "Record not found.")
+    book_service.require_full_book_access(db, actor, book, write=True)
     version = max(book.versions, key=lambda item: item.version_no, default=None)
     if version is None or version.template_id != TEMPLATE_ID:
         raise ValidationFailedError(
@@ -1065,6 +1097,7 @@ def complete_import(
     book = db.get(Book, book_id, populate_existing=True)
     if book is None or book.deleted_at is not None:
         raise NotFoundError("BOOK_NOT_FOUND", "Record not found.")
+    book_service.require_full_book_access(db, actor, book, write=True)
     version = max(book.versions, key=lambda item: item.version_no, default=None)
     fields = (
         dict(version.fields) if version is not None and isinstance(version.fields, dict) else {}
@@ -2038,6 +2071,7 @@ def export_workbook(
     *,
     language: str = "ar",
     populations: Sequence[str] = POPULATIONS,
+    actor: User | None = None,
 ) -> tuple[bytes, str]:
     """The download. Serves the sealed month's stored Arabic copy when it exists.
 
@@ -2047,6 +2081,8 @@ def export_workbook(
     """
 
     register = build_month(db, year, month)
+    if actor is not None:
+        register = redact_month(db, actor, register)
     period = _period(db, year, month)
     if (
         language == "ar"
@@ -2054,6 +2090,7 @@ def export_workbook(
         and register.closed
         and period is not None
         and period.export_path is not None
+        and (actor is None or book_service.user_visibility_clause(db, actor) is None)
     ):
         stored = get_settings().data_dir / period.export_path
         if stored.is_file():
