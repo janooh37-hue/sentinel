@@ -133,7 +133,7 @@ export function WordSessionPage(): React.JSX.Element {
       </header>
       {/* DOM order is the phone order (status → paper → details); lg places status and details in one side column. */}
       <div className="grid flex-1 lg:min-h-0 lg:grid-cols-[minmax(300px,360px)_1fr] lg:grid-rows-[auto_1fr]">
-        <section aria-label={t('books.word.sessionTitle')} className="border-hairline px-4 pb-2 pt-5 sm:px-6 lg:col-start-1 lg:row-start-1 lg:border-e lg:pb-5">
+        <section aria-label={t(finishedBook ? 'books.word.finishedPageTitle' : 'books.word.sessionTitle')} className="border-hairline px-4 pb-2 pt-5 sm:px-6 lg:col-start-1 lg:row-start-1 lg:border-e lg:pb-5">
           {finishedBook
             ? <SavedRecordActions bookId={bookId} refNumber={book.ref_number} detail={book.subject ?? undefined} />
             : <WordSteps opened={opened} saveTimes={saveHistory.times} finishLabel={t('books.word.finish')} />}
@@ -163,8 +163,8 @@ export function WordSessionPage(): React.JSX.Element {
           <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-3 text-sm [&_dt]:text-muted-foreground">
             <div className="contents"><dt>{t('books.word.subject')}</dt><dd className="font-semibold"><bdi dir="auto">{(finishedBook ? book.subject : session?.subject) || '—'}</bdi></dd></div>
             {book.classification_code && <div className="contents"><dt>{t('books.word.classification')}</dt><dd>
-              <span className="font-medium"><bdi dir="ltr">{book.classification_code}</bdi>{classification && <> · <span lang="ar">{classification.name_ar}</span></>}</span>
-              {classification && <span className="block text-xs text-muted-foreground"><span lang="en">{classification.name_en}</span> · <span lang="ar">{classification.unit_ar}</span></span>}
+              <span className="font-medium"><bdi dir="ltr">{book.classification_code}</bdi>{classification && <> · <bdi lang="ar" dir="rtl">{classification.name_ar}</bdi></>}</span>
+              {classification && <span className="block text-xs text-muted-foreground"><bdi lang="en" dir="ltr">{classification.name_en}</bdi> · <bdi lang="ar" dir="rtl">{classification.unit_ar}</bdi></span>}
             </dd></div>}
             {!finishedBook && <>
               <div className="contents"><dt>{t('books.word.recipient')}</dt><dd><bdi dir="auto">{session?.recipient_name || '—'}</bdi></dd></div>
