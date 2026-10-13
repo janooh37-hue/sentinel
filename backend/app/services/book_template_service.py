@@ -6,6 +6,7 @@ filenames on a Windows host."""
 from __future__ import annotations
 
 import contextlib
+import logging
 import os
 import shutil
 import unicodedata
@@ -21,13 +22,16 @@ from app.api.errors import AppError
 from app.config import get_settings
 from app.core.book_table import normalized_table_columns
 from app.core.book_template_retokenize import (
+    ensure_footer_submitter_g,
     retokenize_general_book,
     validate_book_template,
 )
 from app.core.constants import CLASSIFIED_BOOK_FORMS
 from app.core.form_kind import word_draft_service
-from app.db.models import Book, BookEditSession, BookVersion, Document, User
+from app.db.models import Book, BookEditSession, BookVersion, Document
 from app.services.vault_service import _safe_filename
+
+log = logging.getLogger(__name__)
 
 _RESERVED = (
     {"CON", "PRN", "AUX", "NUL"}
@@ -89,6 +93,22 @@ def resolve_template_path(name: str) -> Path:
     return templates_dir() / safe_template_name(name)
 
 
+def ensure_submitter_footers() -> None:
+    """Give library templates saved before the General Book printed the
+    submitter G-number its footer token. Runs at startup; idempotent, so only
+    templates still missing it are rewritten."""
+    for path in templates_dir().glob("*.docx"):
+        try:
+            doc = DocxDocument(str(path))
+            if not ensure_footer_submitter_g(doc):
+                continue
+            tmp = path.with_name(f".tmp-{uuid.uuid4().hex}.docx")
+            doc.save(str(tmp))
+            os.replace(tmp, path)
+        except Exception:
+            log.warning("submitter footer fix failed for template %s", path.name, exc_info=True)
+
+
 def _source_docx_of(db: Session, book: Book) -> Path:
     latest = (
         db.query(BookVersion)
@@ -133,14 +153,10 @@ def save_book_as_template(db: Session, *, book_id: int, name: str) -> TemplateIn
         raise AppError("BOOK_NOT_FOUND", f"الكتاب {book_id} غير موجود", http_status=404)
     src = _source_docx_of(db, book)
 
-    submitter_g: str | None = None
-    if book.submitted_by_user_id is not None:
-        submitter = db.get(User, book.submitted_by_user_id)
-        submitter_g = submitter.employee_id if submitter else None
-    return _install_template(src, name=name, submitter_g=submitter_g)
+    return _install_template(src, name=name)
 
 
-def _install_template(src: Path, *, name: str, submitter_g: str | None) -> TemplateInfo:
+def _install_template(src: Path, *, name: str) -> TemplateInfo:
     """Copy, retokenize, validate and exclusively install an untrusted Word docx."""
 
     dest = templates_dir() / safe_template_name(name)
@@ -148,7 +164,7 @@ def _install_template(src: Path, *, name: str, submitter_g: str | None) -> Templ
     try:
         shutil.copy2(src, tmp)
         try:
-            retokenize_general_book(tmp, submitter_g=submitter_g)
+            retokenize_general_book(tmp)
             validate_book_template(tmp)
         except ValueError as exc:
             raise AppError("TEMPLATE_INVALID", str(exc), http_status=422) from exc

@@ -25,10 +25,15 @@ from __future__ import annotations
 import copy
 import posixpath
 import re
+import sys
 import zipfile
 from pathlib import Path
 
 from lxml import etree
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from app.core.book_template_retokenize import add_footer_submitter_g
 
 TEMPLATES = Path(__file__).resolve().parents[1] / "templates"
 REPORT = TEMPLATES / "GSSG-GS_300-004_Report.docx"
@@ -39,20 +44,6 @@ WP = "http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"
 PKG_R = "http://schemas.openxmlformats.org/package/2006/relationships"
 NS = {"w": W}
 
-SUBMITTER_TOKEN = "{{ submitter_g }}"
-#: Footer G-number: its own cell at the end of the contact-strip table, right-
-#: aligned on the margin, Helvetica 8pt in the strip's grey, sitting at the end
-#: of the thin rule (the row's top edge + 4pt puts it on the rule's centre
-#: line). The row keeps its height, so nothing else in the footer moves.
-SUBMITTER_CELL_TWIPS = 900
-SUBMITTER_CELL = (
-    f'<w:tc xmlns:w="{W}"><w:tcPr><w:tcW w:w="{SUBMITTER_CELL_TWIPS}" w:type="dxa"/>'
-    '<w:vAlign w:val="top"/></w:tcPr><w:p><w:pPr><w:pStyle w:val="Footer"/>'
-    '<w:spacing w:before="80" w:after="0"/><w:jc w:val="right"/></w:pPr>'
-    '<w:r><w:rPr><w:rFonts w:ascii="Helvetica" w:hAnsi="Helvetica"/>'
-    '<w:color w:val="A09F9F"/><w:sz w:val="16"/><w:szCs w:val="16"/></w:rPr>'
-    f"<w:t>{SUBMITTER_TOKEN}</w:t></w:r></w:p></w:tc>"
-)
 #: The inmate paper's own first-page lines start at this header paragraph text.
 INMATE_FIRST_LINE = "رئيس قسم شؤون النزلاء"
 #: Space between the logo's bottom edge and the rule on the inmate paper.
@@ -98,25 +89,9 @@ def continuation_header(first: bytes) -> bytes:
 
 
 def with_submitter_g(footer: bytes, width: int) -> bytes:
-    """Add the G-number cell to the footer's contact-strip table.
-
-    The table grows to the text *width*; the last existing column gives up
-    whatever the new cell needs beyond that.
-    """
+    """Add the G-number cell to the footer's contact-strip table."""
     root = xml(footer)
-    if SUBMITTER_TOKEN in "".join(t.text or "" for t in root.iter(w("t"))):
-        return footer
-    tbl = root.findall("w:tbl", NS)[-1]
-    tbl_w = tbl.find("w:tblPr/w:tblW", NS)
-    shrink = max(0, int(tbl_w.get(w("w"))) + SUBMITTER_CELL_TWIPS - width)
-    last_col = tbl.find("w:tblGrid", NS).findall("w:gridCol", NS)[-1]
-    last_col.set(w("w"), str(int(last_col.get(w("w"))) - shrink))
-    etree.SubElement(tbl.find("w:tblGrid", NS), w("gridCol"), {w("w"): str(SUBMITTER_CELL_TWIPS)})
-    for tr in tbl.findall("w:tr", NS):
-        last_w = tr.findall("w:tc", NS)[-1].find("w:tcPr/w:tcW", NS)
-        last_w.set(w("w"), str(int(last_w.get(w("w"))) - shrink))
-        tr.append(etree.fromstring(SUBMITTER_CELL))
-    tbl_w.set(w("w"), str(int(tbl_w.get(w("w"))) + SUBMITTER_CELL_TWIPS - shrink))
+    add_footer_submitter_g(root, width)
     return dump(root)
 
 

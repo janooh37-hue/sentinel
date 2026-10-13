@@ -60,7 +60,7 @@ def _build_table(path: Path) -> None:
         closing._p.addprevious(table._tbl)
     doc.save(str(path))
 
-    retokenize_general_book(path, submitter_g="G-0000")
+    retokenize_general_book(path)
     validate_book_template(path)
 
 

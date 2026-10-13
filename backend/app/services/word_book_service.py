@@ -527,7 +527,7 @@ def finish_template_session(
         raise AppError("NO_SAVES_YET", "Nothing saved from Word yet", http_status=409)
     assert session.template_name is not None
     info = book_template_service._install_template(
-        Path(session.working_path), name=session.template_name, submitter_g=user.employee_id
+        Path(session.working_path), name=session.template_name
     )
     session.state = "finished"
     try:

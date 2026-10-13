@@ -70,7 +70,7 @@ def finished_word_book(db_session, tmp_path, monkeypatch):
     monkeypatch.setattr(svc, "templates_dir", lambda: tmp_path / "tpl_lib")
     (tmp_path / "tpl_lib").mkdir(parents=True, exist_ok=True)
 
-    # Create user (employee_id=None — FK to employees table; submitter_g will be None)
+    # Create user (employee_id=None — FK to employees table)
     user = User(email="test_tpl@test.ae", password_hash="x", status="active")
     db_session.add(user)
     db_session.commit()

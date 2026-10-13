@@ -108,12 +108,12 @@ def aztec_corner_for(template_id: str) -> str | None:
 
 
 def syncs_general_book_footer(template_id: str) -> bool:
-    """Whether page 1's footer (letterhead + submitter G-number) should be copied
-    onto pages 2+.
+    """Whether page 1's footer (``footer3``: letterhead + submitter G-number)
+    should be copied onto pages 2+ (``footer2``).
 
     The classified book forms and the Inmate Conduct Violations report carry it.
-    General Book is excluded: its redesigned paper drops the footer's G-number
-    entirely (see ``_adapt_general_book``)."""
+    General Book is excluded: its paper already prints the letterhead and the
+    G-number in both its first-page and default footers (different part names)."""
     if template_id == "Inmate Conduct Violations":
         return True
     return template_id in CLASSIFIED_BOOK_FORMS and template_id not in {
@@ -379,8 +379,8 @@ def _adapt_general_book(data: dict[str, Any]) -> dict[str, Any]:
     # never has to render a blank signature line.
     if not (out.get("manager_name") or "").strip():
         out["manager_name"] = DEFAULT_MANAGER_NAME
-    # General Book no longer prints the submitter's G-number in its footer.
-    out["submitter_g"] = ""
+    # Submitter G-number for the footer on every page (``{{ submitter_g }}``).
+    out["submitter_g"] = str(data.get("submitter_g") or "")
     # recipient_id → recipient_name is resolved upstream on the REQUEST session
     # (document_service, before engine.fill) — see that module's canonical path.
     # We must NOT open a second SessionLocal() here: the generation path holds a
@@ -392,10 +392,9 @@ def _adapt_general_book(data: dict[str, Any]) -> dict[str, Any]:
 
 def _adapt_report(data: dict[str, Any]) -> dict[str, Any]:
     """General Book adapter, except the Report prints DD/MM/YYYY (like its reference
-    letter) and its footer prints the submitter's G-number."""
+    letter)."""
     out = _adapt_general_book(data)
     out["date"] = out["date"].replace("-", "/")
-    out["submitter_g"] = str(data.get("submitter_g") or "")
     return out
 
 
@@ -1292,7 +1291,7 @@ _FORM_REGISTRY: dict[str, dict[str, Any]] = {
         "post_process": _pp_passport_release_list,
     },
     # Report: no-classification, no-ref General Book paper; reuses the General
-    # Book body + footer pipeline but keeps the submitter G-number in its footer.
+    # Book body + footer pipeline, submitter G-number included.
     "Report": {"adapter": _adapt_report, "post_process": _pp_general_book},
     "Inmate Conduct Violations": {"adapter": _adapt_common, "post_process": None},
     "Vehicle Fines": {"adapter": _adapt_common, "post_process": None},

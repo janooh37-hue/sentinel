@@ -2821,6 +2821,12 @@ def render_signed_artifact(
     )
     # Inject the approver's signature into the manager signature slot.
     data["sig1_path"] = signer_signature_path
+    if template_id in CLASSIFIED_BOOK_FORMS:
+        # No current_user here: the footer keeps the submitter's G-number, as
+        # printed on the unsigned paper.
+        from app.services import book_service
+
+        data["submitter_g"] = book_service.submitter_g_number(db, book) or ""
 
     # Resolve the classified papers' recipient_id → recipient_name on the
     # REQUEST session (mirrors the generate path) so the adapter never opens a

@@ -275,20 +275,20 @@ def test_word_book_has_header_ref_barcode_and_no_header_stamp(
     )
 
 
-def test_general_book_does_not_render_submitter_g_number(tmp_path):
+@pytest.mark.parametrize("template_id", ["General Book", "Security Permit"])
+def test_classified_paper_footer_prints_submitter_g_number(tmp_path, template_id):
     from docx import Document
     from docx.oxml.ns import qn
 
-    template = tmp_path / "footer-token.docx"
-    source = Document()
-    source.sections[0].footer.add_paragraph("{{ submitter_g }}")
-    source.add_paragraph(GENERAL_BOOK_BODY_SENTINEL)
-    source.save(template)
-    out = tmp_path / "no-submitter-footer.docx"
-    DocxEngine(TEMPLATES_DIR).fill_general_book_path(template, _BASE_DATA, out)
-    footer = Document(str(out)).sections[0].footer
-    footer_text = "\n".join(node.text or "" for node in footer.part.element.iter(qn("w:t")))
-    assert "G-1234" not in footer_text
+    out = tmp_path / "submitter-footer.docx"
+    DocxEngine(TEMPLATES_DIR).fill(template_id, _BASE_DATA, out)
+    section = Document(str(out)).sections[0]
+    footers = [section.first_page_footer]
+    if template_id == "General Book":  # Security Permit's page 2+ footer is synced later
+        footers.append(section.footer)
+    for footer in footers:
+        text = "".join(node.text or "" for node in footer.part.element.iter(qn("w:t")))
+        assert text.count("G-1234") == 1
 
 
 def test_general_book_is_the_only_top_right_form_without_aztec() -> None:

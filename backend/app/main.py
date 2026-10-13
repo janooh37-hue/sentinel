@@ -214,7 +214,12 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
     # reach already-deployed DBs without a manual migration.
     try:
         from app.db.session import SessionLocal
-        from app.services import correspondence_service, perm_service, timesheet_service
+        from app.services import (
+            book_template_service,
+            correspondence_service,
+            perm_service,
+            timesheet_service,
+        )
 
         with SessionLocal() as _db:
             perm_service.seed_role_defaults(_db)
@@ -223,6 +228,9 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
             # this only matters to a DB that predates it — and to the reorder
             # feature, which must never lose a row the catalog needs.
             timesheet_service.seed_designations(_db)
+        # Library templates saved while the General Book footer carried no
+        # G-number get the {{ submitter_g }} token (no-op once fixed).
+        book_template_service.ensure_submitter_footers()
     except Exception:
         log.warning("startup seeding failed", exc_info=True)
     scheduler_service.start()
