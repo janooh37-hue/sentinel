@@ -25,7 +25,7 @@ const session: WordSessionDetailRead = {
 }
 const book = {
   id: 42, ref_number: session.ref_number, subject: session.subject, service_id: 'General Book',
-  created_at: session.created_at, submitted_by_name: 'سعيد', classification_code: '1/5', versions: [],
+  created_at: session.created_at, submitted_by_name: 'SAEED ALHARBI', submitted_by_g: 'G1234', classification_code: '1/5', versions: [],
 } as BookRead
 
 function setup() {
@@ -41,6 +41,7 @@ beforeEach(() => {
   vi.spyOn(api, 'getWordSession').mockResolvedValue(session)
   vi.spyOn(api, 'getWordSaveStatus').mockResolvedValue({ last_put_at: null })
   vi.spyOn(api, 'listBookClassifications').mockResolvedValue({ items: [{ code: '1/5', tab: 5, name_ar: 'الإدارة', name_en: 'Administration', unit_ar: 'الموارد البشرية' }] })
+  vi.spyOn(api, 'getEmployeeLookup').mockResolvedValue({ id: 'G1234', name_en: 'SAEED ALHARBI', name_ar: 'سعيد الحربي', position: 'Clerk', position_ar: 'كاتب', nationality: '', passport_no: '', has_photo: false })
 })
 
 describe('WordSessionPage in Arabic', () => {
@@ -49,11 +50,15 @@ describe('WordSessionPage in Arabic', () => {
     const ref = await screen.findByText(session.ref_number)
     expect(ref.tagName).toBe('BDI')
     expect(ref).toHaveAttribute('dir', 'ltr')
-    expect(screen.getByText('سعيد')).toHaveAttribute('dir', 'auto')
+    expect(await screen.findByText('سعيد الحربي')).toHaveAttribute('dir', 'auto')
+    expect(screen.getByText('G1234')).toHaveAttribute('dir', 'ltr')
+    expect(screen.getByText('كاتب')).toBeVisible()
     expect(screen.getByRole('link', { name: 'فتح في Word' })).toHaveAttribute('href', session.word_url)
-    expect(screen.getByRole('button', { name: 'إنهاء التحرير' })).toBeDisabled()
-    expect(screen.getByRole('button', { name: 'حفظ المسودة كقالب' })).toBeDisabled()
-    expect(screen.getByText('Administration')).toBeVisible()
+    expect(screen.getByRole('button', { name: 'حفظ الكتاب' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'حفظ كقالب' })).toBeDisabled()
+    expect(screen.getByText('الموارد البشرية')).toBeVisible()
+    expect(screen.queryByText('Administration')).not.toBeInTheDocument()
+    expect(screen.queryByText('SAEED ALHARBI')).not.toBeInTheDocument()
     expect(screen.getByText('نموذج')).toBeVisible()
   })
 
@@ -61,8 +66,8 @@ describe('WordSessionPage in Arabic', () => {
     capabilities.templates = false
     setup()
     await screen.findByText(session.ref_number)
-    expect(screen.queryByRole('button', { name: 'حفظ المسودة كقالب' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'قالب جديد في Word' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'حفظ كقالب' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'إنشاء قالب جديد' })).not.toBeInTheDocument()
   })
 
   it('saves the current draft as a template with the book id and subject-prefilled name', async () => {
@@ -71,7 +76,7 @@ describe('WordSessionPage in Arabic', () => {
     vi.spyOn(api, 'saveBookAsTemplate').mockResolvedValue({ name: 'التصاريح الأمنية.docx', modified_at: session.created_at, kind: 'custom' })
     const qc = setup()
     const invalidate = vi.spyOn(qc, 'invalidateQueries')
-    const save = await screen.findByRole('button', { name: 'حفظ المسودة كقالب' })
+    const save = await screen.findByRole('button', { name: 'حفظ كقالب' })
     await waitFor(() => expect(save).toBeEnabled())
     await user.click(save)
     expect(screen.getByRole('textbox', { name: 'اسم القالب' })).toHaveValue(session.subject)
@@ -86,8 +91,8 @@ describe('WordSessionPage in Arabic', () => {
     vi.mocked(api.getWordSession).mockResolvedValue({ ...session, subject: 'موضوع مُعدّل', last_put_at: '2026-10-12T10:05:00Z' })
     qc.setQueryData(['word-save-status', session.token], { last_put_at: '2026-10-12T10:05:00Z' })
     expect(await screen.findByText('موضوع مُعدّل')).toBeVisible()
-    expect(screen.getByText('مرات الحفظ من Word في هذه الزيارة: 1')).toBeVisible()
-    expect(screen.getByRole('button', { name: 'إنهاء التحرير' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'حفظ الكتاب' })).toBeEnabled()
+    expect(screen.getByText('اضغط «حفظ الكتاب» هنا').closest('li')).toHaveAttribute('aria-current', 'step')
     expect(await screen.findByTestId('paper')).toHaveAttribute('data-url', api.wordSessionPreviewUrl(42, '2026-10-12T10:05:00Z'))
   })
 
@@ -106,7 +111,7 @@ describe('WordSessionPage in Arabic', () => {
     vi.mocked(api.getWordSession).mockResolvedValue({ ...session, last_put_at: '2026-10-12T10:05:00Z' })
     vi.spyOn(api, 'finishWordSession').mockResolvedValue({ ...book, versions: [{ template_id: 'General Book', pdf_url: '/final.pdf', docx_url: '/final.docx' }] } as BookRead)
     setup()
-    const finish = await screen.findByRole('button', { name: 'إنهاء التحرير' })
+    const finish = await screen.findByRole('button', { name: 'حفظ الكتاب' })
     await waitFor(() => expect(finish).toBeEnabled())
     await user.click(finish)
     expect(await screen.findByText('saved:42')).toBeVisible()
@@ -118,7 +123,7 @@ describe('WordSessionPage in Arabic', () => {
     const user = userEvent.setup()
     vi.spyOn(api, 'createTemplateSession').mockResolvedValue({ id: 9, name: 'قالب.docx', token: 'tpl', filename: 'قالب.docx', word_url: 'ms-word:ofe|u|https://gssg.lan/dav/tpl/template.docx', dav_url: 'https://gssg.lan/dav/tpl/template.docx', created_at: session.created_at, last_put_at: null })
     setup()
-    await user.click(await screen.findByRole('button', { name: 'قالب جديد في Word' }))
+    await user.click(await screen.findByRole('button', { name: 'إنشاء قالب جديد' }))
     await user.type(screen.getByRole('textbox', { name: 'اسم القالب' }), 'قالب')
     await user.click(screen.getByRole('button', { name: 'إنشاء القالب' }))
     expect(await screen.findByText('template-session')).toBeVisible()
