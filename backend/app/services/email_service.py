@@ -53,6 +53,7 @@ from app.services import book_service, correspondence_service, ledger_service
 
 # Keep in sync with BOOK_REF_SOURCE in frontend/src/lib/smartLinks.ts.
 _BOOK_REF_RE = re.compile(r"\b(?:GS|HR|NAT|INV|SC|VF|VA|\d{1,2})-\d{3,4}\b")
+_THREAD_MSG_ID_RE: Final[re.Pattern[str]] = re.compile(r"<[^<>\s]+>")
 
 log = logging.getLogger(__name__)
 
