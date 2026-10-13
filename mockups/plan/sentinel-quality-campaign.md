@@ -718,3 +718,158 @@ requires HOLD if Sentinel recovery is not accepted, the campaign lock is held,
 or a build/review/research process is active or ownership cannot be verified.
 It must recheck before restart, never terminate work to clear the guard. All
 other maintenance instructions and approval boundaries remain unchanged.
+
+## 11. Research planning, failure recovery and evidence — 2026-10-13
+
+User-approved policy: prepare research deliberately, anticipate blockers, and make
+required human actions explicit in every research result. This supplements §8–10;
+it does not change scheduling, model authorization, safety or acceptance gates.
+
+### Before each daily run
+
+The supervisor prepares a dated brief in the private research directory, before
+launching research: priority unanswered questions, existing evidence to reuse,
+primary URLs and required substantive quotations, installed-version checks,
+public-seam test ideas, expected blockers, owners and acceptance checks. Read
+checkpoint AND private recovery evidence; absent accepted inventory is not proof
+that no prior research exists. Unreviewed/rejected material is a pointer only.
+Record why any previously researched question needs revisiting. Prepare the next
+brief at the end of each run; refresh branch/PR/source facts at the next start.
+
+Initial 2026-10-14 brief: validate a text-bearing Q01 OWASP/FastAPI evidence unit;
+resolve the authorization-before-email-state-mutation boundary from current code
+and existing Q01/Q02 handoffs; then Q02 parsing/thread ownership/reconciliation
+retry, followed by Q03 DB-plus-blob snapshot/restore consistency. Preserve P0-first
+ordering and continue other useful category questions when a question is settled.
+Research may inform later tasks without authorizing their implementation.
+
+### Readiness and failure guardrails
+
+- Before substantive research, verify campaign-lock availability, worker capacity,
+  model identity/authentication, disposable browser/REA readiness, writable private
+  evidence paths and approved publication path. Never kill another run or weaken
+  unattended approval to pass preflight; defer/report the exact missing permission.
+- Require actual body quotations present verbatim in the capture, not headings
+  alone or a successful REA exit. Record filtering/truncation/attach-window limits.
+  Missing body text requires fresh allowed-page capture; unsupported claims earn
+  zero credit. Do not replace REA evidence with invented quotations.
+- Evidence dates must be exact local YYYY-MM-DD. Preserve capture timestamp in a
+  separate field. Validate required fields/types/URLs/quotes before review.
+- Productive-time estimates must not exceed measured active-unit duration; exclude
+  idle, authentication, network waits and review time already counted elsewhere.
+  The supervisor and independent reviewer bound credit conservatively. Never
+  convert elapsed time or model self-report into proof of productive work.
+- A recoverable evidence/schema/capture rejection gets at most ONE corrected
+  attempt for that question within the ORIGINAL daily wall-clock allowance.
+  Preserve original rejected artifacts and reasons; never rewrite failure as
+  success or reset the receipt's start/deadline. Review the corrected unit anew.
+  If still unsupported, record a blocked question and continue a genuinely
+  independent useful question when safe; infrastructure/auth/lock failures defer
+  the run. Stop at the two-hour ceiling with checkpoint and explicit shortfall.
+- Failure recovery is supervised policy, not permission to bypass existing runner
+  checks. If the launcher exits on a malformed unit and lacks safe in-budget
+  continuation, record a runner blocker: reproduce with an offline failing test,
+  propose the smallest fix, obtain independent review and execute regression
+  checks before describing recovery as implemented. Research-only runs MUST NOT
+  edit the launcher or Sentinel. Do not promise readiness from a document update.
+- Maintain a concise blocker record with evidence, classification (agent-fixable,
+  user decision/approval, external outage), attempted checks, smallest next action,
+  owner, verification command and retry condition. Routine reversible fixes can
+  be performed only in an authorized maintenance/build scope; policy/security/
+  production changes require user approval. Do not repeatedly retry known blockers.
+- Publish only accepted, sanitized claims. Retain local checkpoint if publication
+  is blocked; do not mark the day accepted before independent review, supported
+  minimum and exact remote doc/PR readback. A model exit zero is not completion.
+
+### Required research-result evidence and human-action section
+
+Every daily result in this Discord thread reports:
+1. Planned questions versus actually answered questions; reusable evidence and
+   next planned question. Distinguish research evidence from application tests.
+2. Each validated finding: primary URL, retrieval date, substantive quotation,
+   applicable source/installed version, private capture/review path, confidence,
+   adoption/rejection and proposed RED test. Unsupported claims stay rejected.
+3. Runtime model metadata/log paths, actual commands/exit codes, independently
+   credited productive estimate, wall time, exact shortfall, and status:
+   accepted / partial / blocked / deferred. No invented score increases.
+4. Blockers: what failed, evidence/error, attempts, owner and smallest recovery
+   plan. State explicitly which guardrails are only planned versus tested.
+5. **Action needed from Ahmed:** exact decision/approval/manual command, why it
+   is necessary, affected scope, recommendation, and what remains blocked until
+   answered. If none, write “No action needed from you.” Never ask for secrets
+   in chat or request broad permanent approval. Do not silently change permissions.
+6. Publication status with readback-verified doc/PR link, or local-only evidence
+   and the reason publication was deferred. Preserve original failed-day receipts.
+
+Readiness status at policy adoption: Oct13 evidence rejected (malformed date,
+unsupported body quotations and excessive productive-time claim); no accepted
+inventory. Runner continuation and a complete capture→validation→independent-review
+cycle still require explicit tests. This section is not evidence those fixes ran.
+
+## 12. Late Q01 recovery research — 2026-10-13 (one-off, supervised; NOT an accepted day)
+
+The 2026-10-13 06:01 allowance expired with zero credit and is preserved unedited.
+The user then authorized ONE distinct late Q01 research run with its own receipt,
+folder and fixed clock; it neither reset nor backdated the morning allowance and
+never used the normal `--research` mode. Result: **not accepted, honest shortfall.**
+
+**Clock.** Started 2026-10-13 21:31:37 +04:00; deadline 23:31:37 (7,200 s wall);
+work deadline 23:29:37 (120 s cleanup). Start and deadline never changed across three
+supervised resumes (four rounds, one start); a fresh `--run` is refused once a late receipt exists. Run closed
+22:30 (about 3,520 s wall). Setup, code fixes, reviews, waits and model smoke are not credited.
+
+**Credit.** Receipt raw 325 s; independent audit supersedes synthesis unit S2 (-40 s),
+so effective credited productive time is **285 s of the 3,600 s minimum, shortfall
+3,315 s**. Credit per unit is min(researcher claim, independent reviewer figure,
+mechanical message-gap seconds, each gap capped at 120 s). All 44 Sonnet sessions
+(373 assistant messages) carried exact `anthropic/claude-sonnet-5-5` on every assistant `message_end`, and no
+reviewer shared a session with its researcher. The whole window contained only about
+2,133 s of mechanical activity (about 1,237 s in accepted attempts, reviewers included),
+so the minimum was unreachable without padding.
+
+**Standing (preliminary, research evidence only) units:** A order-of-effects for email
+reconcile; D denial privacy; B route coverage (AST scan); E employee-expiry writers;
+G background paths and owner deactivation; I service-layer coverage; J create-employee
+expiry and undo; L remaining routes via service layer; M W1 read-access delta; O ledger
+owner scoping. Each has two or more distinct verbatim body quotations from OWASP
+Authorization, OWASP IDOR or FastAPI dependencies, local retrieval date 2026-10-13
+separate from the capture timestamp, and installed FastAPI 0.115.5 / Starlette 0.41.3 /
+Python 3.12.14. The historical first synthesis (S) is non-authoritative and S2 is
+superseded; neither is a closure source. Blocked after their single correction;
+never accepted, leads only: F (ADR 0005 denied-owner policy), H (Q02 denial leaks and
+merge order), K (other scheduler jobs), N (static 2029-vs-2030 expiry test).
+
+**Findings that Q01 BUILD must still address (static reads; main, W1 and Q02 never conflated):**
+- `send_state='confirmed'` is written and committed before any authorization in the
+  incoming-reply reconcile on origin/main, the W1 recovery tree and the Q02 patch; the
+  Sent-folder path writes `'sent'` with no authorization anywhere.
+- No background path (mail sync, drain) re-resolves owner status or capabilities on origin/main.
+- 65 of 87 id-taking book/employee/vault/ledger handlers in the AST scan show no visible object
+  helper; most are flat RBAC by design, and unit L traced the groups through the service layer
+  (`GET /{book_id}` is covered via `resolve_book_read_access`). The demonstrated cross-owner
+  exposure is the ledger id-routes (cross-owner DRAFT), not a global claim about api/v1.
+- Ledger id-routes call `get_entry` without `owner_user_id`; a cross-owner email DRAFT is
+  reachable on the write and attachment routes, while synced/sent mail is shared by design.
+- In the unmerged W1 tree (not on origin/main), the `employees.edit` gate on `_capture_expiry` is
+  complete for the scan-inbox writer; `create_employee` and undo-restore are product decisions.
+- Each finding has a proposed PUBLIC-seam RED and adversarial checks in the private units.
+  No new dependency is adopted (existing `perm_service.has_capability` and
+  `require_full_book_access`; casbin and mail-parser stay rejected).
+
+**Product decisions for the owner (not researchable):** denied-owner `send_state`
+policy (ADR 0005 is proposed and silent on authorization); `employees.create` expiry
+gate; undo expiry restore; ledger shared-mailbox versus draft-only visibility.
+
+**Accounting caveat.** Eight attempts were rejected solely because the researcher's claim
+exceeded the mechanical seconds; the single correction was spent on arithmetic. The shared
+daily runner clamps instead of rejecting; clamp-versus-reject is a separate maintenance
+item needing its own RED test and review. The wrapper changed by question data and one
+reviewer-prompt line across rounds; no validator, accounting or deadline code changed.
+
+**Q01 BUILD is NOT accepted and nothing here advances a build gate.**
+
+**Oct 14 Q02 routing (research only, user-authorized regardless of unresolved Q01 BUILD):**
+start with `RESEARCH_SOURCES` index 2 (Python 3.12 `email.parser`). Questions: conservative
+RFC 5322 Message-ID / References parsing, same-owner live parent matching, failed
+reconciliation retry, Q02 mail-sync owner gating, and the W1+Q02 merge order. F, H, K and N may be
+re-asked with fresh captures under tomorrow's own allowance.
