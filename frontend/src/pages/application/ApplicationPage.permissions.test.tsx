@@ -26,7 +26,6 @@ vi.mock('@/components/application/TemplateForm', () => ({ TemplateForm: () => nu
 vi.mock('@/components/application/AttachmentsBlock', () => ({ AttachmentsBlock: () => null }))
 vi.mock('./EmployeeHeader', () => ({ EmployeeHeader: () => null }))
 vi.mock('./JobStatus', () => ({ JobStatus: () => null }))
-vi.mock('@/pages/books/WordHandoffDialog', () => ({ WordHandoffDialog: () => null }))
 vi.mock('@/lib/formDrafts', () => ({
   clearAllDrafts: vi.fn(),
   clearDraft: vi.fn(),

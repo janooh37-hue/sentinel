@@ -48,6 +48,26 @@ _DUMMY = {
     "cc": "DUMMY_CC",
 }
 
+
+def read_general_book_fields(docx_path: Path) -> tuple[str | None, str | None, list[str]]:
+    """Read the current Word values, using the same labels as retokenization."""
+    subject: str | None = None
+    recipient: str | None = None
+    cc: list[str] = []
+    for paragraph in Document(str(docx_path)).paragraphs:
+        text = paragraph.text
+        if match := _SUBJECT_LABEL.match(text):
+            subject = text[match.end() :].strip() or None
+        if match := _ADDRESSEE.match(text):
+            recipient = re.sub(r"\s*المحترم\s*$", "", text[match.end() :]).strip() or None
+        for line in text.splitlines():
+            if match := re.search(r"نسخة إلى\s*[:：]?\s*", line):  # noqa: RUF001
+                value = line[match.end() :].strip()
+                if value:
+                    cc.append(value)
+    return subject, recipient, cc
+
+
 # w:t namespace for walking raw XML runs
 _W_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
 _W_T = f"{{{_W_NS}}}t"

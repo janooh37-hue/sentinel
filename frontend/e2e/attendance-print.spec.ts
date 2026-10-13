@@ -73,8 +73,8 @@ interface MountOptions {
   theme?: 'light' | 'dark'
   /** Reproduces an active shift chip: filtered rows, and the chip beside them. */
   shift?: string | null
-  /** Overrides every post and unit name — production names run long. */
-  names?: { post: string; unit: string } | null
+  /** Overrides every person, post and unit name — production names run long. */
+  names?: { post: string; unit: string; person: string } | null
 }
 
 /**
@@ -126,15 +126,27 @@ async function mount(
 
       // The app's own tree is replaced rather than print-hidden: the sheet has
       // to sit inside `#root` to be under the same print rules as production,
-      // and a named `@page` beside any in-flow box costs a blank sheet.
+      // and a named `@page` beside any in-flow box costs a blank sheet. The
+      // shell's flex chain (App → <main> → AttendancePage) is rebuilt around
+      // it because the page is a flex item there: once print uncages its
+      // overflow, `min-width: auto` grows it to the sheet's min-content width
+      // and the sheet was clipped off the inline-end edge of the paper.
       const root = document.getElementById('root') as HTMLElement
-      root.replaceChildren()
-      const host = document.createElement('div')
-      root.append(host)
+      root.innerHTML =
+        '<div class="flex h-screen flex-col"><div class="flex flex-1 overflow-hidden">' +
+        '<main id="main-content" class="flex flex-1 overflow-hidden">' +
+        '<div class="flex flex-1 flex-col overflow-auto"></div></main></div></div>'
+      const host = root.querySelector('main > div') as HTMLElement
 
       const filtered = shift === null ? ROWS : ROWS.filter((row) => row.shift_code === shift)
       const rows = names
-        ? filtered.map((row) => ({ ...row, duty_post: names.post, duty_unit: names.unit }))
+        ? filtered.map((row) => ({
+            ...row,
+            duty_post: names.post,
+            duty_unit: names.unit,
+            name_en: names.person,
+            name_ar: names.person,
+          }))
         : filtered
       const user = { name_en: 'A. Alhamadi', name_ar: 'أ. الحمادي', employee_id: 'G9100' }
       ReactDOM.createRoot(host).render(
@@ -157,6 +169,8 @@ async function mount(
 
   // Hidden on screen is the contract that keeps this off the display.
   await expect(page.locator('.print-attendance')).toBeHidden()
+  // A4 landscape is 1123px at 96dpi: the width print lays the sheet out at.
+  await page.setViewportSize({ width: 1123, height: 794 })
   await page.emulateMedia({ media: 'print' })
   await expect(page.locator('.print-attendance')).toBeVisible()
 }
@@ -290,20 +304,23 @@ test.describe('attendance printout', () => {
   const LONG = {
     post: 'فرع الأمن والحراسة - مسؤول وحدة الأمن الداخلي',
     unit: 'الدوام الرسمي',
+    person: 'محمد راشد سعيد خلفان المنصوري',
   }
 
-  for (const layout of LAYOUTS) {
-    test(`long production names stay inside the ${layout} page`, async ({ page }) => {
-      await mount(page, 'ar', layout, { names: LONG })
+  for (const [lang, layout] of LANGS.flatMap((l) => LAYOUTS.map((y) => [l, y] as const))) {
+    test(`long production names stay inside the ${layout} page in ${lang}`, async ({ page }) => {
+      await mount(page, lang, layout, { names: LONG })
 
       const printed = await page.evaluate(() => {
         const root = document.querySelector('.print-attendance') as HTMLElement
         const box = root.getBoundingClientRect()
         const style = getComputedStyle(root)
         // The side margins are padding on the sheet, so the paper's safe area is
-        // the content box, not the border box.
-        const start = box.left + parseFloat(style.paddingLeft)
-        const end = box.right - parseFloat(style.paddingRight)
+        // the content box, not the border box — measured on the paper (the
+        // viewport), because a sheet wider than the paper carries its children
+        // off the edge with it.
+        const start = Math.max(box.left, 0) + parseFloat(style.paddingLeft)
+        const end = Math.min(box.right, window.innerWidth) - parseFloat(style.paddingRight)
         const spill: string[] = []
         for (const el of root.querySelectorAll('*')) {
           const r = el.getBoundingClientRect()

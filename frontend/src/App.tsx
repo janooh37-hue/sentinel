@@ -78,6 +78,8 @@ const ApplicationPage = lazy(loadApplicationPage)
 const BooksPage = lazy(loadBooksPage)
 const ApprovalsPage = lazy(loadApprovalsPage)
 const BookRecordPage = lazy(loadBookRecordPage)
+const WordSessionPage = lazy(() => import('@/pages/books/WordSessionPage').then((m) => ({ default: m.WordSessionPage })))
+const WordTemplateSessionPage = lazy(() => import('@/pages/books/WordTemplateSessionPage').then((m) => ({ default: m.WordTemplateSessionPage })))
 const LeavesPage = lazy(loadLeavesPage)
 const PermitsPage = lazy(loadPermitsPage)
 const VehiclesHubPage = lazy(loadVehiclesHubPage)
@@ -334,6 +336,14 @@ function Shell(): React.JSX.Element {
                   without books.view/books.approve — the API owns that decision,
                   same as /books/:id below. */}
               <Route path="/books/approvals" element={<ApprovalsPage />} />
+              <Route
+                path="/books/word-templates/:sessionId"
+                element={<RequireCapability cap="books.templates"><WordTemplateSessionPage /></RequireCapability>}
+              />
+              <Route
+                path="/books/:id/word"
+                element={<RequireCapability cap="books.edit"><WordSessionPage /></RequireCapability>}
+              />
               {/* Pending approval/reviewer assignment is row authority even
                   without global book caps; the API owns that decision. */}
               <Route path="/books/:id" element={<BookRecordPage />} />

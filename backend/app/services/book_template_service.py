@@ -25,7 +25,8 @@ from app.core.book_template_retokenize import (
     validate_book_template,
 )
 from app.core.constants import CLASSIFIED_BOOK_FORMS
-from app.db.models import Book, BookVersion, Document, User
+from app.core.form_kind import word_draft_service
+from app.db.models import Book, BookEditSession, BookVersion, Document, User
 from app.services.vault_service import _safe_filename
 
 _RESERVED = (
@@ -95,6 +96,22 @@ def _source_docx_of(db: Session, book: Book) -> Path:
         .order_by(BookVersion.version_no.desc())
         .first()
     )
+    active = db.query(BookEditSession).filter_by(book_id=book.id, state="active").one_or_none()
+    if latest is None:
+        if (
+            word_draft_service(book.category_id, book.ref_number, book.classification_code)
+            != "General Book"
+        ):
+            raise AppError("NOT_A_GENERAL_BOOK", "حفظ كقالب متاح لكتب عامة فقط", http_status=409)
+    else:
+        document = db.get(Document, latest.document_id) if latest.document_id else None
+        if document is not None and document.template_id not in CLASSIFIED_BOOK_FORMS:
+            raise AppError("NOT_A_GENERAL_BOOK", "حفظ كقالب متاح لكتب عامة فقط", http_status=409)
+    if active is not None and active.last_put_at is not None:
+        working = Path(active.working_path)
+        if not working.is_file():
+            raise AppError("NO_SOURCE_DOCX", "ملف الكتاب غير موجود", http_status=409)
+        return working
     if latest is None or latest.document_id is None:
         raise AppError("NO_SOURCE_DOCX", "الكتاب لا يحتوي نسخة منتهية", http_status=409)
     doc = db.get(Document, latest.document_id)
@@ -120,6 +137,11 @@ def save_book_as_template(db: Session, *, book_id: int, name: str) -> TemplateIn
     if book.submitted_by_user_id is not None:
         submitter = db.get(User, book.submitted_by_user_id)
         submitter_g = submitter.employee_id if submitter else None
+    return _install_template(src, name=name, submitter_g=submitter_g)
+
+
+def _install_template(src: Path, *, name: str, submitter_g: str | None) -> TemplateInfo:
+    """Copy, retokenize, validate and exclusively install an untrusted Word docx."""
 
     dest = templates_dir() / safe_template_name(name)
     tmp = templates_dir() / f".tmp-{uuid.uuid4().hex}.docx"

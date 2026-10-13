@@ -16,6 +16,8 @@ vi.mock('@/lib/api', () => ({
     getDashboardSummary: vi.fn().mockResolvedValue({
       totals: {
         employees_active: 0,
+        our_staff: 0,
+        loaned: 0,
         on_leave_today: 0,
         present_today: 0,
         forms_this_month: 0,

@@ -387,8 +387,8 @@ export function RecordPane({
   // ── More ▾ ────────────────────────────────────────────────────────────────
   // WordReopenButton gates its own trigger (finished, not voided, no active session) but
   // must stay mounted for the whole record: the reopen response flips `edit_session`
-  // active, and unmounting then would drop the retained handoff session (a late
-  // response behind the lock screen would never present after unlock).
+  // active, and unmounting then would drop the retained inmate-reporter handoff
+  // (a late response behind the lock screen would never present after unlock).
   const hasWordReopen = !isInmateReporter || isInmateReport
   const showScanSignedInMenu = ns.overflow.includes('scanSigned') && !scanSignedShown
   const showAddToPdf = canManageIncludedPapers
@@ -705,7 +705,7 @@ export function RecordPane({
         )}
       </div>
 
-      {/* Owns the "Edit in Word" mutation + handoff dialog; the trigger renders in More. */}
+      {/* Owns the "Edit in Word" mutation + inmate-reporter handoff dialog; the trigger renders in More. */}
       {hasWordReopen && (
         <WordReopenButton
           book={book}

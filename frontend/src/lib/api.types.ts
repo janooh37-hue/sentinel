@@ -813,7 +813,7 @@ export interface paths {
         };
         /**
          * Employees Completeness
-         * @description Aggregate profile gaps over Active employees (lookup-page hero card).
+         * @description Aggregate profile gaps over working (Active/Loaned) employees (lookup-page hero card).
          */
         get: operations["employees_completeness_api_v1_employees_completeness_get"];
         put?: never;
@@ -2433,6 +2433,78 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/books/word-templates/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create Template Session
+         * @description Open an empty General Book letterhead in Word without reserving a book/ref.
+         */
+        post: operations["create_template_session_api_v1_books_word_templates_sessions_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/books/word-templates/sessions/{session_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Template Session */
+        get: operations["get_template_session_api_v1_books_word_templates_sessions__session_id__get"];
+        put?: never;
+        post?: never;
+        /** Discard Template Session */
+        delete: operations["discard_template_session_api_v1_books_word_templates_sessions__session_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/books/word-templates/sessions/{session_id}/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Template Session Preview */
+        get: operations["template_session_preview_api_v1_books_word_templates_sessions__session_id__preview_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/books/word-templates/sessions/{session_id}/finish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Finish Template Session */
+        post: operations["finish_template_session_api_v1_books_word_templates_sessions__session_id__finish_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/books/word-templates/{name}": {
         parameters: {
             query?: never;
@@ -2518,6 +2590,31 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/books/{book_id}/word-sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Word Session */
+        get: operations["get_word_session_api_v1_books__book_id__word_sessions_get"];
+        put?: never;
+        /**
+         * Reopen Word Session
+         * @description Re-open a finished book for Word editing.
+         */
+        post: operations["reopen_word_session_api_v1_books__book_id__word_sessions_post"];
+        /**
+         * Discard Word Session
+         * @description Discard the active Word editing session.
+         */
+        delete: operations["discard_word_session_api_v1_books__book_id__word_sessions_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/books/{book_id}/word-sessions/status": {
         parameters: {
             query?: never;
@@ -2558,30 +2655,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/books/{book_id}/word-sessions": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Reopen Word Session
-         * @description Re-open a finished book for Word editing.
-         */
-        post: operations["reopen_word_session_api_v1_books__book_id__word_sessions_post"];
-        /**
-         * Discard Word Session
-         * @description Discard the active Word editing session.
-         */
-        delete: operations["discard_word_session_api_v1_books__book_id__word_sessions_delete"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/books/{book_id}/save-as-template": {
         parameters: {
             query?: never;
@@ -2593,8 +2666,7 @@ export interface paths {
         put?: never;
         /**
          * Save Book As Template
-         * @description Copy a finished General Book into the shared template library
-         *     (retokenized + validated; content becomes visible to all books.templates users).
+         * @description Copy a saved draft or finished General Book into the shared template library.
          */
         post: operations["save_book_as_template_api_v1_books__book_id__save_as_template_post"];
         delete?: never;
@@ -8981,6 +9053,10 @@ export interface components {
         DashboardTotals: {
             /** Employees Active */
             employees_active: number;
+            /** Our Staff */
+            our_staff: number;
+            /** Loaned */
+            loaned: number;
             /** On Leave Today */
             on_leave_today: number;
             /** Present Today */
@@ -13449,6 +13525,28 @@ export interface components {
             /** Notifies Employee */
             notifies_employee: boolean;
         };
+        /** TemplateSessionRead */
+        TemplateSessionRead: {
+            /** Id */
+            id: number;
+            /** Name */
+            name: string;
+            /** Token */
+            token: string;
+            /** Filename */
+            filename: string;
+            /** Word Url */
+            word_url: string;
+            /** Dav Url */
+            dav_url: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Last Put At */
+            last_put_at: string | null;
+        };
         /**
          * TimesheetCellEdit
          * @description A persisted manual cell and who set it.
@@ -15080,6 +15178,36 @@ export interface components {
         WordSaveStatusRead: {
             /** Last Put At */
             last_put_at: string | null;
+        };
+        /** WordSessionDetailRead */
+        WordSessionDetailRead: {
+            /** Book Id */
+            book_id: number;
+            /** Ref Number */
+            ref_number: string;
+            /** Token */
+            token: string;
+            /** Filename */
+            filename: string;
+            /** Word Url */
+            word_url: string;
+            /** Dav Url */
+            dav_url: string;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Last Put At */
+            last_put_at: string | null;
+            /** Template Name */
+            template_name: string | null;
+            /** Subject */
+            subject: string | null;
+            /** Recipient Name */
+            recipient_name: string | null;
+            /** Cc */
+            cc: string[];
         };
         /** WordSessionRead */
         WordSessionRead: {
@@ -20924,6 +21052,173 @@ export interface operations {
             };
         };
     };
+    create_template_session_api_v1_books_word_templates_sessions_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SaveAsTemplateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TemplateSessionRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_template_session_api_v1_books_word_templates_sessions__session_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TemplateSessionRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    discard_template_session_api_v1_books_word_templates_sessions__session_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    template_session_preview_api_v1_books_word_templates_sessions__session_id__preview_get: {
+        parameters: {
+            query?: {
+                encoding?: string | null;
+            };
+            header?: never;
+            path: {
+                session_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    finish_template_session_api_v1_books_word_templates_sessions__session_id__finish_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WordTemplateRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     delete_word_template_api_v1_books_word_templates__name__delete: {
         parameters: {
             query?: never;
@@ -21093,7 +21388,7 @@ export interface operations {
             };
         };
     };
-    word_session_status_api_v1_books__book_id__word_sessions_status_get: {
+    get_word_session_api_v1_books__book_id__word_sessions_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -21112,42 +21407,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["WordSaveStatusRead"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    word_session_preview_api_v1_books__book_id__word_sessions_preview_get: {
-        parameters: {
-            query?: {
-                encoding?: string | null;
-            };
-            header?: never;
-            path: {
-                book_id: number;
-            };
-            cookie?: {
-                gssg_session?: string | null;
-            };
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["WordSessionDetailRead"];
                 };
             };
             /** @description Validation Error */
@@ -21214,6 +21474,74 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BookRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    word_session_status_api_v1_books__book_id__word_sessions_status_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                book_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WordSaveStatusRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    word_session_preview_api_v1_books__book_id__word_sessions_preview_get: {
+        parameters: {
+            query?: {
+                encoding?: string | null;
+            };
+            header?: never;
+            path: {
+                book_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
             /** @description Validation Error */

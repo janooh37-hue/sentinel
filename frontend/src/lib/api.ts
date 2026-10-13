@@ -767,6 +767,8 @@ export type BookCreate = components['schemas']['BookCreate']
 // word-books: session types
 export type WordBookCreate = components['schemas']['WordBookCreate']
 export type WordSessionRead = components['schemas']['WordSessionRead']
+export type WordSessionDetailRead = components['schemas']['WordSessionDetailRead']
+export type TemplateSessionRead = components['schemas']['TemplateSessionRead']
 export type BookUpdate = components['schemas']['BookUpdate']
 export type BookListResponse = components['schemas']['BookListResponse']
 export type BookCategoryRead = components['schemas']['BookCategoryRead']
@@ -984,7 +986,11 @@ export interface DashboardEmailSync {
 
 export interface DashboardSummary {
   totals: {
+    /** Total working: our staff + loaned. */
     employees_active: number
+    our_staff: number
+    loaned: number
+    /** Our staff only; a loaned employee counts only as loaned. */
     on_leave_today: number
     present_today: number
     forms_this_month: number
@@ -2078,6 +2084,18 @@ export const api = {
   /** POST /books/{id}/word-sessions — re-open a finished book for Word editing (creates next version on finish). */
   reopenWordSession: (bookId: number) =>
     request<WordSessionRead>('POST', `/books/${bookId}/word-sessions`),
+  getWordSession: (bookId: number) =>
+    request<WordSessionDetailRead>('GET', `/books/${bookId}/word-sessions`),
+  createTemplateSession: (name: string) =>
+    request<TemplateSessionRead>('POST', '/books/word-templates/sessions', { name }),
+  getTemplateSession: (id: number) =>
+    request<TemplateSessionRead>('GET', `/books/word-templates/sessions/${id}`),
+  templateSessionPreviewUrl: (id: number, ts: string) =>
+    `${BASE}/books/word-templates/sessions/${id}/preview?ts=${encodeURIComponent(ts)}`,
+  finishTemplateSession: (id: number) =>
+    request<components['schemas']['WordTemplateRead']>('POST', `/books/word-templates/sessions/${id}/finish`),
+  discardTemplateSession: (id: number) =>
+    request<void>('DELETE', `/books/word-templates/sessions/${id}`),
   /** GET /books/word-templates — shared General Book boilerplate library. */
   listWordTemplates: () =>
     request<components['schemas']['WordTemplateRead'][]>('GET', '/books/word-templates'),
@@ -2098,7 +2116,7 @@ export const api = {
    *  `ts` (last_put_at) busts the browser cache; DocPdfCanvas appends encoding=base64 itself. */
   wordSessionPreviewUrl: (bookId: number, ts: string) =>
     `${BASE}/books/${bookId}/word-sessions/preview?ts=${encodeURIComponent(ts)}`,
-  /** POST /books/{id}/save-as-template — copy a finished book into the shared template library. */
+  /** POST /books/{id}/save-as-template — copy a saved draft or finished book into the shared library. */
   saveBookAsTemplate: (bookId: number, name: string) =>
     request<components['schemas']['WordTemplateRead']>(
       'POST', `/books/${bookId}/save-as-template`, { name },

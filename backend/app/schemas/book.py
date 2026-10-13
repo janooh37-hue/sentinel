@@ -269,6 +269,26 @@ class WordSessionRead(BaseModel):
     dav_url: str
 
 
+class WordSessionDetailRead(WordSessionRead):
+    created_at: datetime
+    last_put_at: datetime | None
+    template_name: str | None
+    subject: str | None
+    recipient_name: str | None
+    cc: list[str]
+
+
+class TemplateSessionRead(BaseModel):
+    id: int
+    name: str
+    token: str
+    filename: str
+    word_url: str
+    dav_url: str
+    created_at: datetime
+    last_put_at: datetime | None
+
+
 class WordTemplateTableRead(BaseModel):
     has_table: bool
     columns: list[str]

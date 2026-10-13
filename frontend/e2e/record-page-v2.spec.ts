@@ -577,7 +577,7 @@ class RecordBackend {
     if (method === 'GET' && path === '/dashboard/layout') return void (await this.json(route, null))
     if (method === 'GET' && path === '/dashboard/summary') {
       return void (await this.json(route, {
-        totals: { employees_active: 0, on_leave_today: 0, present_today: 0, forms_this_month: 0, open_violations_count: 0 },
+        totals: { employees_active: 0, our_staff: 0, loaned: 0, on_leave_today: 0, present_today: 0, forms_this_month: 0, open_violations_count: 0 },
         on_leave_today: [], upcoming_leave_ends: [], recent_documents: [], recent_ledger: [],
         email_sync: { last_synced_at: null, enabled: false, interval_minutes: 15, incoming_today: 0 },
       }))

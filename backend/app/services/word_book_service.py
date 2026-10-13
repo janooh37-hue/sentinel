@@ -24,6 +24,7 @@ from sqlalchemy.orm import Session
 from app.api.errors import AppError
 from app.config import get_settings
 from app.core import manager_override
+from app.core.book_template_retokenize import read_general_book_fields
 from app.core.book_text import build_search_text, docx_to_text
 from app.core.classifications import (
     classified_ref,
@@ -34,7 +35,8 @@ from app.core.docx_engine import aztec_corner_for
 from app.core.roles import INMATE_REPORTER_ROLE
 from app.db.models import Book, BookCategory, BookEditSession, BookVersion, Document, Manager, User
 from app.db.repos import classified_refs_repo
-from app.services import artifact_service, manager_service
+from app.schemas.book import TemplateSessionRead, WordSessionDetailRead
+from app.services import artifact_service, book_template_service, manager_service
 from app.services._pdf_executor import convert_docx_to_pdf
 from app.services.document_service import GENERAL_BOOK_BODY_SENTINEL
 
@@ -93,8 +95,6 @@ def create_word_book(
         )
     library_template: Path | None = None
     if template_name is not None:
-        from app.services import book_template_service
-
         library_template = book_template_service.resolve_template_path(template_name)
     template_file = TEMPLATE_FILES[_TEMPLATE_ID]
     template_path = settings.templates_dir / template_file
@@ -209,6 +209,7 @@ def create_word_book(
         token=token,
         working_path=str(output_path),
         state="active",
+        template_name=library_template.name if library_template is not None else None,
     )
     db.add(session)
     try:
@@ -233,6 +234,136 @@ def create_word_book(
         word_url=word_url,
         dav_url=dav_url,
     )
+
+
+def get_word_session_detail(db: Session, *, user: User, book_id: int) -> WordSessionDetailRead:
+    session = db.query(BookEditSession).filter_by(book_id=book_id, state="active").one_or_none()
+    if session is None:
+        raise AppError(
+            "NO_ACTIVE_SESSION", "No active editing session for this book", http_status=409
+        )
+    if session.user_id != user.id:
+        raise AppError(
+            "WORD_SESSION_NOT_OWNER", "This Word session belongs to another user", http_status=403
+        )
+    book = db.get(Book, book_id)
+    if book is None:
+        raise AppError("BOOK_NOT_FOUND", f"Book {book_id} not found", http_status=404)
+    working = Path(session.working_path)
+    subject, recipient, cc = read_general_book_fields(working)
+    dav_url = f"{get_settings().public_base_url.rstrip('/')}/dav/{session.token}/{working.name}"
+    return WordSessionDetailRead(
+        book_id=book_id,
+        ref_number=book.ref_number,
+        token=session.token,
+        filename=working.name,
+        word_url=f"ms-word:ofe|u|{dav_url}",
+        dav_url=dav_url,
+        created_at=session.created_at,
+        last_put_at=session.last_put_at,
+        template_name=session.template_name,
+        subject=subject,
+        recipient_name=recipient,
+        cc=cc,
+    )
+
+
+def template_session_info(session: BookEditSession) -> TemplateSessionRead:
+    filename = Path(session.working_path).name
+    dav_url = f"{get_settings().public_base_url.rstrip('/')}/dav/{session.token}/{filename}"
+    assert session.template_name is not None
+    return TemplateSessionRead(
+        id=session.id,
+        name=session.template_name,
+        token=session.token,
+        filename=filename,
+        word_url=f"ms-word:ofe|u|{dav_url}",
+        dav_url=dav_url,
+        created_at=session.created_at,
+        last_put_at=session.last_put_at,
+    )
+
+
+def create_template_session(db: Session, *, user: User, name: str) -> TemplateSessionRead:
+    name = book_template_service.safe_template_name(name)
+    if book_template_service.resolve_template_path(name).exists():
+        raise AppError("TEMPLATE_EXISTS", "يوجد قالب بهذا الاسم", http_status=409)
+    output_path = get_settings().data_dir / "editing" / f"template-{uuid.uuid4().hex}" / name
+    # Keep guarded fields non-empty so retokenization can recover every token.
+    placeholder_ref = "1/1/GSSG/1"
+    artifact = artifact_service.produce_from_template(
+        template_id=_TEMPLATE_ID,
+        data={
+            "ref": placeholder_ref,
+            "subject": "موضوع القالب",
+            "recipient_name": "مستلم القالب",
+            "cc": ["نسخة القالب"],
+            "body": GENERAL_BOOK_BODY_SENTINEL,
+            "body_html": "",
+            "submitter_g": user.employee_id or "",
+        },
+        destination=output_path,
+        stamps=artifact_service.StampPlan(
+            reference=placeholder_ref, aztec_corner=aztec_corner_for(_TEMPLATE_ID)
+        ),
+        convert_pdf=False,
+        collision="exact",
+    )
+    session = BookEditSession(
+        book_id=None,
+        user_id=user.id,
+        template_name=name,
+        token=secrets.token_urlsafe(32),
+        working_path=str(artifact.docx_path),
+        state="active",
+    )
+    db.add(session)
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        artifact_service.cleanup_created(artifact, allowed_root=output_path.parent)
+        raise
+    return template_session_info(session)
+
+
+def get_template_session(db: Session, *, user: User, session_id: int) -> BookEditSession:
+    session = (
+        db.query(BookEditSession)
+        .filter_by(id=session_id, book_id=None, user_id=user.id, state="active")
+        .one_or_none()
+    )
+    if session is None:
+        raise AppError("TEMPLATE_SESSION_NOT_FOUND", "جلسة القالب غير موجودة", http_status=404)
+    return session
+
+
+def finish_template_session(
+    db: Session, *, user: User, session_id: int
+) -> book_template_service.TemplateInfo:
+    session = get_template_session(db, user=user, session_id=session_id)
+    if session.last_put_at is None:
+        raise AppError("NO_SAVES_YET", "Nothing saved from Word yet", http_status=409)
+    assert session.template_name is not None
+    info = book_template_service._install_template(
+        Path(session.working_path), name=session.template_name, submitter_g=user.employee_id
+    )
+    session.state = "finished"
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        book_template_service.resolve_template_path(info.name).unlink(missing_ok=True)
+        raise
+    shutil.rmtree(Path(session.working_path).parent, ignore_errors=True)
+    return info
+
+
+def discard_template_session(db: Session, *, user: User, session_id: int) -> None:
+    session = get_template_session(db, user=user, session_id=session_id)
+    session.state = "discarded"
+    db.commit()
+    shutil.rmtree(Path(session.working_path).parent, ignore_errors=True)
 
 
 def create_report_word_book(
@@ -701,7 +832,8 @@ def reopen_word_session(db: Session, *, user: User, book_id: int) -> WordSession
     sign_on_finish: bool | None = None
     if book.ref_number.startswith("REPORT-"):
         fields = latest_version.fields or {}
-        signer_employee_id = fields.get("signer_employee_id") or None
+        signer = fields.get("signer_employee_id")
+        signer_employee_id = signer if isinstance(signer, str) and signer else None
         sign_on_finish = True if signer_employee_id else None
 
     token = secrets.token_urlsafe(32)
@@ -764,6 +896,18 @@ def render_session_preview(
     book_id: int,
     converter: artifact_service.PdfConverter | None = None,
 ) -> Path:
+    """Resolve the active book session and reuse the session conversion core."""
+    session = db.query(BookEditSession).filter_by(book_id=book_id, state="active").one_or_none()
+    if session is None:
+        raise AppError(
+            "NO_ACTIVE_SESSION", "No active editing session for this book", http_status=409
+        )
+    return render_edit_session_preview(session, converter=converter)
+
+
+def render_edit_session_preview(
+    session: BookEditSession, *, converter: artifact_service.PdfConverter | None = None
+) -> Path:
     """PDF preview of the ACTIVE session's working docx.
 
     Cached beside the working file as ``preview-src.pdf`` and regenerated only
@@ -775,11 +919,6 @@ def render_session_preview(
     PDF's mtime is pinned to the working file's mtime AT COPY TIME, so a PUT
     landing mid-conversion correctly leaves the cache stale for the next poll.
     """
-    session = db.query(BookEditSession).filter_by(book_id=book_id, state="active").one_or_none()
-    if session is None:
-        raise AppError(
-            "NO_ACTIVE_SESSION", "No active editing session for this book", http_status=409
-        )
     if session.last_put_at is None:
         raise AppError("NO_SAVES_YET", "Nothing saved from Word yet", http_status=409)
     working = Path(session.working_path)

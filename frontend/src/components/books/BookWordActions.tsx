@@ -2,6 +2,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Check, FilePenLine, Trash2 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 
 import { ConfirmDialog } from '@/components/ui/confirm-dialog'
@@ -30,15 +31,14 @@ interface WordReopenButtonProps extends WordActionProps {
   iconOnly?: boolean
   /** Suppress the default standalone `<button>` — used when a caller renders
    *  the trigger itself (e.g. inside a dropdown menu item) via `onTriggerChange`.
-   *  The mutation, session state, and `WordHandoffDialog` stay owned and mounted
-   *  here regardless — only the visible trigger markup moves. */
+   *  The mutation stays owned here; inmate-reporter handoffs stay mounted
+   *  independently of the visible trigger markup. */
   hideTrigger?: boolean
   /** Called with the current trigger affordance (or null when not applicable)
    *  on every change. Lets a caller (e.g. a Tools dropdown) render its own
    *  menu-item markup for this action while `WordReopenButton` keeps owning
-   *  the mutation and `WordHandoffDialog` — mounted independently of whatever
-   *  container the caller puts the rendered trigger in, so closing a dropdown
-   *  never discards a pending reopen or an already-open handoff dialog. */
+   *  the mutation and inmate-reporter handoff dialog independently of the
+   *  trigger's container, so closing a dropdown does not drop the session. */
   onTriggerChange?: (trigger: WordReopenTrigger | null) => void
 }
 export function WordSessionActions({
@@ -139,6 +139,7 @@ export function WordReopenButton({
 }: WordReopenButtonProps): React.JSX.Element | null {
   const { t } = useTranslation()
   const qc = useQueryClient()
+  const navigate = useNavigate()
   const [reopenSession, setReopenSession] = useState<WordSessionRead | null>(null)
   // The same instance is reused across records (BookRecordPage QueueNav,
   // RecordPane selection). A session retained for record A must not present
@@ -154,7 +155,8 @@ export function WordReopenButton({
     mutationFn: () => api.reopenWordSession(book.id),
     onSuccess: (session) => {
       invalidate()
-      setReopenSession(session)
+      if (onFinished) setReopenSession(session)
+      else navigate(`/books/${session.book_id}/word`)
     },
     onError: (err) => toast.error(apiErrorMessage(err)),
   })

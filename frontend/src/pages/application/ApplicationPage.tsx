@@ -52,7 +52,7 @@ import type {
   JobStatusResponse,
   StagedAttachmentRead,
   TemplateMeta,
-  WordSessionRead,
+  WordBookCreate,
 } from '@/lib/api'
 import type { ExtractionResponse } from '@/lib/extraction'
 import type { TemplateDetailResponse, TemplateField } from '@/components/application/types'
@@ -96,7 +96,6 @@ import {
   seedReportDateTime,
   todayIso,
 } from './resignationDate'
-import { WordHandoffDialog } from '@/pages/books/WordHandoffDialog'
 
 type TabValue = 'fields' | 'preview'
 
@@ -211,10 +210,6 @@ function StandardApplicationPage(): React.JSX.Element {
   const [bodyMode, setBodyMode] = useState<'editor' | 'word'>('word')
   // General Book Word mode: selected boilerplate template (or null for blank).
   const [templateName, setTemplateName] = useState<string | null>(null)
-  // Task 9 placeholder: after createWordBook succeeds, the session is stored here
-  // so <WordHandoffDialog session={pendingWordSession} /> (Task 9) can mount and
-  // guide finish/discard. The variable is read below in the TODO placeholder node.
-  const [pendingWordSession, setPendingWordSession] = useState<WordSessionRead | null>(null)
   // Per-book notify opt-out — On by default; resets per form. Only surfaced for
   // the 8 notifying forms when global autosend is on (see notifyToggle.ts).
   const [notifyEmployee, setNotifyEmployee] = useState(true)
@@ -324,8 +319,7 @@ function StandardApplicationPage(): React.JSX.Element {
   // classification picker is REQUIRED: every book (rich-editor or Word) takes
   // its ref from the classified register (1/{tab}/GSSG/{serial}).
   const isGeneralBookForm = !!schema?.fields.some((f) => f.type === 'arabic_rich_full') && selectedTemplate !== 'Report'
-  // Report — body authored in Word: routes through the Word handoff
-  // (POST /books/word-sessions), opening WordHandoffDialog for finish/discard.
+  // Report: body authored in Word, with finish/discard on the Word session page.
   const isReportForm = selectedTemplate === 'Report'
 
   // Build Zod schema + RHF instance
@@ -407,10 +401,9 @@ function StandardApplicationPage(): React.JSX.Element {
     },
   })
 
-  // Word-session mutation — General Book Word mode: creates the book + DAV session,
-  // opens Word, and shows WordHandoffDialog for finish/discard.
+  // Create the book + DAV session, then show the Word session page.
   const wordSessionMutation = useMutation({
-    mutationFn: (body: import('@/lib/api').WordBookCreate) => api.createWordBook(body),
+    mutationFn: (body: WordBookCreate) => api.createWordBook(body),
     onSuccess: (res) => {
       void qc.invalidateQueries({ queryKey: ['books'] })
       // Clear the draft now the book exists — the body lives in Word from here,
@@ -421,9 +414,9 @@ function StandardApplicationPage(): React.JSX.Element {
       if (selectedTemplate) clearDraft(selectedTemplate)
       // NO auto-launch: navigating to ms-word: outside a user gesture raises
       // Chrome's tab-modal protocol prompt that silently swallows every click
-      // in the tab while it lingers. The handoff dialog's «Open in Word»
+      // in the tab while it lingers. The Word page's «Open in Word»
       // anchor is the launch point (2026-07-19 dead-buttons audit).
-      setPendingWordSession(res)
+      navigate(`/books/${res.book_id}/word`)
     },
     onError: (err) => {
       setSubmitError(err instanceof ApiError ? `${err.code}: ${err.message}` : String(err))
@@ -678,7 +671,6 @@ function StandardApplicationPage(): React.JSX.Element {
     // 'word' (not 'editor') or the form flips back to HugeRTE on every re-pick.
     setBodyMode('word')
     setTemplateName(null)
-    setPendingWordSession(null)
   }, [form])
 
   // The shell stays mounted on same-path bell navigation. Hydrate each register
@@ -849,7 +841,6 @@ function StandardApplicationPage(): React.JSX.Element {
     // M5: General Book is Word-only — reset to 'word', not 'editor' (see above).
     setBodyMode('word')
     setTemplateName(null)
-    setPendingWordSession(null)
   }, [approvedImportBusy, form])
 
   // The URL owns which service is open: every navigation (tile, Back, bell,
@@ -934,12 +925,6 @@ function StandardApplicationPage(): React.JSX.Element {
 
   return (
     <div className="flex flex-1 flex-col overflow-auto bg-background">
-      {/* Word handoff dialog — shown after createWordBook; unmounts when session is cleared */}
-      <WordHandoffDialog
-        session={pendingWordSession}
-        open={pendingWordSession != null}
-        onClose={() => setPendingWordSession(null)}
-      />
       <div className="mx-auto w-full max-w-[1320px] flex-1 px-4 pb-10 pt-6 sm:px-8">
         {selectedTemplate === null ? (
           /* ───────────────── Services gallery ───────────────── */

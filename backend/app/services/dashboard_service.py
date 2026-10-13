@@ -7,6 +7,8 @@ date deterministically.
 
 Filters worth flagging:
 - Working employees: ``status in WORKING_STATUSES`` (same rule as ``employee_service``).
+  Headcount splits them: our staff (Active) vs loaned (Loaned, ملحق). On-site and
+  on-leave count our staff only; a loaned employee counts only as loaned.
 - Leaves: only ``status == 'Approved'`` count toward on-leave / upcoming;
   ``deleted_at`` is excluded.
 - Documents: the table has no ``deleted_at`` column, so ``forms_this_month``
@@ -44,7 +46,7 @@ from app.schemas.dashboard import (
     DashboardTotals,
     DashboardUpcomingLeaveItem,
 )
-from app.schemas.employee import WORKING_STATUSES
+from app.schemas.employee import EMPLOYEE_STATUS_ACTIVE, EMPLOYEE_STATUS_LOANED, WORKING_STATUSES
 from app.services import book_service, email_service
 from app.services.ledger_service import DRAFT_TAG
 
@@ -138,18 +140,25 @@ def get_summary(
 
 
 def _compute_totals(db: Session, *, today: date, user: User | None = None) -> DashboardTotals:
-    employees_active = int(
-        db.execute(
-            select(func.count()).select_from(Employee).where(Employee.status.in_(WORKING_STATUSES))
-        ).scalar_one()
-    )
+    by_status: dict[str, int] = {
+        status: count
+        for status, count in db.execute(
+            select(Employee.status, func.count())
+            .where(Employee.status.in_(WORKING_STATUSES))
+            .group_by(Employee.status)
+        ).tuples()
+    }
+    our_staff = by_status.get(EMPLOYEE_STATUS_ACTIVE, 0)
+    loaned = by_status.get(EMPLOYEE_STATUS_LOANED, 0)
 
     on_leave_count = int(
         db.execute(
-            select(func.count())
+            select(func.count(func.distinct(Leave.employee_id)))
             .select_from(Leave)
+            .join(Employee, Employee.id == Leave.employee_id)
             .where(
                 and_(
+                    Employee.status == EMPLOYEE_STATUS_ACTIVE,
                     Leave.deleted_at.is_(None),
                     Leave.status == _APPROVED_STATUS,
                     Leave.start_date <= today,
@@ -159,7 +168,7 @@ def _compute_totals(db: Session, *, today: date, user: User | None = None) -> Da
         ).scalar_one()
     )
 
-    present_today = max(employees_active - on_leave_count, 0)
+    present_today = max(our_staff - on_leave_count, 0)
 
     forms_stmt = (
         select(func.count())
@@ -207,7 +216,9 @@ def _compute_totals(db: Session, *, today: date, user: User | None = None) -> Da
     book_draft_count = int(db.execute(book_draft_stmt).scalar_one())
 
     return DashboardTotals(
-        employees_active=employees_active,
+        employees_active=our_staff + loaned,
+        our_staff=our_staff,
+        loaned=loaned,
         on_leave_today=on_leave_count,
         present_today=present_today,
         forms_this_month=forms_this_month,

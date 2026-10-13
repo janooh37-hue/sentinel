@@ -332,13 +332,11 @@ function GenericDashboardPage({ onNavigate }: DashboardPageProps): React.JSX.Ele
           <WorkspaceCard
             staff={summary?.totals.employees_active ?? 0}
             header={t('dashboard.workspace.title')}
-            currency={t('dashboard.workspace.staff')}
-            activeLabel={t('dashboard.workspace.active', {
-              count: summary?.totals.present_today ?? 0,
-            })}
-            onLeaveLabel={t('dashboard.workspace.onLeave', {
-              count: summary?.totals.on_leave_today ?? 0,
-            })}
+            currency={t('dashboard.workspace.total')}
+            ourStaff={summary?.totals.our_staff ?? 0}
+            onSite={summary?.totals.present_today ?? 0}
+            loaned={summary?.totals.loaned ?? 0}
+            onLeave={summary?.totals.on_leave_today ?? 0}
             onClick={() => onNavigate('employees')}
             isLoading={summaryQuery.isPending}
           />
@@ -1038,8 +1036,10 @@ interface WorkspaceCardProps {
   staff: number
   header: string
   currency: string
-  activeLabel: string
-  onLeaveLabel: string
+  ourStaff: number
+  onSite: number
+  loaned: number
+  onLeave: number
   onClick: () => void
   isLoading: boolean
 }
@@ -1048,11 +1048,14 @@ function WorkspaceCard({
   staff,
   header,
   currency,
-  activeLabel,
-  onLeaveLabel,
+  ourStaff,
+  onSite,
+  loaned,
+  onLeave,
   onClick,
   isLoading,
 }: WorkspaceCardProps): React.JSX.Element {
+  const { t } = useTranslation()
   return (
     <button
       type="button"
@@ -1072,22 +1075,19 @@ function WorkspaceCard({
         {isLoading ? <Skeleton className="h-9 w-16" /> : staff}
       </div>
 
-      <div className="mt-3.5 flex gap-4 text-[0.78em] text-muted-foreground">
-        <span className="flex items-center gap-1.5">
-          {/* Static status dot. It remounts (via key) only when the active
-              count changes, replaying a one-shot settle — no ambient pulse
-              (Emil: reserve motion for the moment the value changes). */}
-          <span
-            key={activeLabel}
-            className="dash-active-dot h-1.5 w-1.5 rounded-full bg-success"
-            aria-hidden
-          />
-          {activeLabel}
-        </span>
-        <span className="flex items-center gap-1.5">
-          <span className="h-1.5 w-1.5 rounded-full bg-warning" aria-hidden />
-          {onLeaveLabel}
-        </span>
+      <div className="mt-3.5 flex flex-wrap gap-x-4 gap-y-1.5 text-[0.78em] text-muted-foreground">
+        <WorkspaceChip dotClass="bg-primary" count={ourStaff} label={t('dashboard.workspace.ourStaff')} />
+        {/* Static status dot. It remounts (via key) only when the on-site
+            count changes, replaying a one-shot settle — no ambient pulse
+            (Emil: reserve motion for the moment the value changes). */}
+        <WorkspaceChip
+          key={onSite}
+          dotClass="dash-active-dot bg-success"
+          count={onSite}
+          label={t('dashboard.workspace.onSite')}
+        />
+        <WorkspaceChip dotClass="bg-info" count={loaned} label={t('dashboard.workspace.loaned')} />
+        <WorkspaceChip dotClass="bg-warning" count={onLeave} label={t('dashboard.workspace.onLeave')} />
       </div>
 
       <ChevronRight
@@ -1097,7 +1097,7 @@ function WorkspaceCard({
       />
       <style>{`
         /* One-shot settle: plays once when the dot mounts (i.e. when the
-           active count changes and React remounts it via key). No infinite
+           on-site count changes and React remounts it via key). No infinite
            loop — the dot is otherwise static. */
         @keyframes dash-active-settle {
           0%   { transform: scale(0.4); opacity: 0; }
@@ -1113,6 +1113,24 @@ function WorkspaceCard({
         }
       `}</style>
     </button>
+  )
+}
+
+function WorkspaceChip({
+  dotClass,
+  count,
+  label,
+}: {
+  dotClass: string
+  count: number
+  label: string
+}): React.JSX.Element {
+  return (
+    <span className="flex items-center gap-1.5">
+      <span className={`h-1.5 w-1.5 rounded-full ${dotClass}`} aria-hidden />
+      <span className="font-semibold tabular-nums text-foreground">{count}</span>
+      {label}
+    </span>
   )
 }
 
