@@ -23,6 +23,7 @@ import {
   Download,
   ExternalLink,
   FileStack,
+  Inbox,
   Link2,
   Loader2,
   Lock,
@@ -78,9 +79,10 @@ import { inmateReporterActionFor } from '@/components/books/book-detail-drawer-u
 import { isApproverAssignee, myPendingReviewerStep } from '@/components/books/reviewers'
 import { BookStatusChips } from '@/components/books/BookStatusChips'
 import { ChangeConfidentialityDialog } from '@/components/books/ChangeConfidentialityDialog'
-import { RecordInboxStrip, RecordRecipientsPanel } from '@/components/books/RecordRecipientsPanel'
+import { RecordRecipientsPanel } from '@/components/books/RecordRecipientsPanel'
 import { SendRecordDialog } from '@/components/books/SendRecordDialog'
 import { useReplyActions } from '@/components/books/useReplyActions'
+import { useInboxActions } from '@/components/books/useInboxActions'
 import { LinkRecordDialog } from '@/components/books/LinkRecordDialog'
 import { DocumentState } from '@/components/books/DocumentState'
 import { ServiceArtwork } from '@/components/ui/service-artwork'
@@ -183,6 +185,7 @@ export function RecordPane({
   const [levelOpen, setLevelOpen] = useState(false)
   const [linkOpen, setLinkOpen] = useState(false)
   const reply = useReplyActions(book)
+  const inboxActions = useInboxActions(book)
   const [wordTrigger, setWordTrigger] = useState<WordReopenTrigger | null>(null)
   // Relative times ("2 days ago") are computed once per mounted pane; they need no ticking.
   const [now] = useState(() => Date.now())
@@ -291,6 +294,13 @@ export function RecordPane({
   const who = subjectEmployeePart(book.subject, { classified: !!book.classification_code })
   const review = reportReviewOf(book)
   const seal = sealDescriptor(state, { signingPath: book.signing_path, signedSource: signedSourceOf(book), review })
+  // Sender and purpose: the More menu's heading, joined for the rail's tooltip.
+  const inbox = book.my_inbox
+  const inboxFrom = inbox
+    ? t('books.send.sentToYou', { name: bidi(pickEmployeeName({ name_en: inbox.sent_by_name ?? '', name_ar: inbox.sent_by_name_ar }, i18n.language)) })
+    : ''
+  const inboxPurpose = inbox ? t(`books.send.purposes.${inbox.purpose}`) : ''
+  const inboxLabel = `${inboxFrom} · ${inboxPurpose}`
 
   if (mode === 'inline' && size === 'collapsed') {
     return (
@@ -300,7 +310,7 @@ export function RecordPane({
             type="button"
             aria-label={t('books.pane.normal')}
             onClick={() => onSizeChange('normal')}
-            className="flex h-full w-full flex-col items-center gap-3 py-3 text-primary transition-colors hover:bg-surface-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring motion-reduce:transition-none"
+            className="flex w-full shrink-0 flex-col items-center gap-3 py-3 text-primary transition-colors hover:bg-surface-raised focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring motion-reduce:transition-none"
           >
             <PanelRightOpen className="h-4 w-4 rtl:-scale-x-100" aria-hidden />
             <span
@@ -313,6 +323,54 @@ export function RecordPane({
             <span className="sr-only">{t(seal.labelKey)}</span>
           </button>
         </Hint>
+        {/* A recipient's tools stay one click away while the preview is closed. */}
+        {inbox && (
+          <div
+            role="group"
+            aria-label={inboxLabel}
+            data-testid="pane-rail-inbox"
+            className="mx-2 flex shrink-0 flex-col items-center gap-1 border-t border-hairline py-2"
+          >
+            <Hint label={inboxLabel} side="start">
+              <span className="mb-1 flex h-7 w-7 items-center justify-center rounded-full bg-info-soft text-info">
+                <Inbox className="h-3.5 w-3.5" aria-hidden />
+              </span>
+            </Hint>
+            {inboxActions.map((item) => (
+              <IconAction
+                key={item.key}
+                aria-label={item.label}
+                hint={item.label}
+                hintSide="start"
+                disabled={item.pending}
+                aria-busy={item.pending || undefined}
+                onClick={item.onSelect}
+                className="border-transparent bg-transparent pointer-coarse:h-11 pointer-coarse:w-11"
+              >
+                {item.icon}
+              </IconAction>
+            ))}
+            {reply.actions.map((item) => (
+              <IconAction
+                key={item.key}
+                aria-label={item.label}
+                hint={item.label}
+                hintSide="start"
+                onClick={item.onSelect}
+                className="border-transparent bg-transparent pointer-coarse:h-11 pointer-coarse:w-11"
+              >
+                {item.icon}
+              </IconAction>
+            ))}
+          </div>
+        )}
+        {/* The rest of the strip still expands on click (the button above is the accessible control). */}
+        <div
+          aria-hidden
+          onClick={() => onSizeChange('normal')}
+          className="min-h-0 flex-1 cursor-pointer transition-colors hover:bg-surface-raised motion-reduce:transition-none"
+        />
+        {reply.dialog}
       </aside>
     )
   }
@@ -413,9 +471,10 @@ export function RecordPane({
   const showDelete = deleteId !== undefined
   const deleteReason = deleteId ? reasonOf(deleteId) : undefined
   const deleteLabel = state === 'none' ? t('books.record.deleteDraft') : t('books.record.delete')
-  const hasMoreItems =
+  const hasOtherMoreItems =
     reply.actions.length > 0 || (canEdit && book.access_scope === 'full') || book.can_send || book.can_change_confidentiality ||
     wordTrigger !== null || showScanSignedInMenu || showAddToPdf || showEmail || showDelete
+  const hasMoreItems = inboxActions.length > 0 || hasOtherMoreItems
 
   const includedDocumentId = includedDetail.data ? currentBookDocId(includedDetail.data) : undefined
 
@@ -560,7 +619,6 @@ export function RecordPane({
       </div>
 
       <div className="min-h-0 flex-1 overflow-y-auto">
-        <RecordInboxStrip book={book} />
         {/* Identity: form · who · creator · date */}
         <div className="px-3.5 pt-3">
           <h2 className="flex items-center gap-1.5 text-[0.9em] font-bold">
@@ -677,6 +735,23 @@ export function RecordPane({
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" side="top">
+                {inbox && (
+                  <>
+                    <div role="presentation" className="max-w-64 px-2.5 pb-1.5 pt-1.5 text-[0.75em] leading-snug">
+                      <p className="font-semibold">{inboxFrom}</p>
+                      <p className="text-muted-foreground">{inboxPurpose}</p>
+                      {inbox.note && (
+                        <p className="mt-1 line-clamp-3 whitespace-pre-line" dir="auto">{inbox.note}</p>
+                      )}
+                    </div>
+                    {inboxActions.map((item) => (
+                      <DropdownMenuItem key={item.key} pending={item.pending} onSelect={item.onSelect}>
+                        {item.icon}{item.label}
+                      </DropdownMenuItem>
+                    ))}
+                    {hasOtherMoreItems && <DropdownMenuSeparator />}
+                  </>
+                )}
                 {book.can_send && (
                   <DropdownMenuItem onSelect={() => setSendOpen(true)}>
                     <Send className="h-3.5 w-3.5" aria-hidden />

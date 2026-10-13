@@ -16,11 +16,12 @@ import { RecordPane } from './RecordPane'
 
 const scheduleDelete = vi.hoisted(() => vi.fn())
 const getBook = vi.hoisted(() => vi.fn())
+const markBookInboxDone = vi.hoisted(() => vi.fn())
 const gates = vi.hoisted(() => ({ caps: new Set<string>(), role: 'admin' }))
 
 vi.mock('@/lib/api', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@/lib/api')>()
-  return { ...actual, api: { ...actual.api, getBook, listTemplates: vi.fn().mockResolvedValue({ items: [] }) } }
+  return { ...actual, api: { ...actual.api, getBook, markBookInboxDone, listTemplates: vi.fn().mockResolvedValue({ items: [] }) } }
 })
 vi.mock('@/lib/useCapabilities', () => ({
   useCapabilities: () => ({ has: (cap: string) => gates.caps.has(cap) || gates.caps.has('*') }),
@@ -61,7 +62,7 @@ function makeBook(over: Record<string, unknown> = {}): BookRead {
 
 const onDeleted = vi.fn()
 
-function renderPane(book: BookRead): void {
+function renderPane(book: BookRead, size: 'normal' | 'collapsed' = 'normal'): void {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   render(
     <QueryClientProvider client={client}>
@@ -69,7 +70,7 @@ function renderPane(book: BookRead): void {
         <RecordPane
           book={book}
           mode="inline"
-          size="normal"
+          size={size}
           onSizeChange={vi.fn()}
           nav={() => ({ from: '/books', queue: [book.id], scrollY: 0 })}
           onContinueDraft={vi.fn()}
@@ -241,6 +242,35 @@ describe('RecordPane footer', () => {
       await userEvent.click(item)
       expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
       expect(scheduleDelete).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('recipient tools', () => {
+    const received = (): BookRead => makeBook({
+      can_write: false,
+      my_inbox: {
+        id: 1, purpose: 'action', sent_by_user_id: 3, sent_by_name: 'Khalid', sent_at: '2026-10-12T09:00:00Z',
+        note: 'please handle', read_at: null, done_at: null, archived_at: null,
+      },
+    })
+
+    it('lives in More, not in the preview body', async () => {
+      renderPane(received())
+      await screen.findByRole('link', { name: 'Open full record' })
+      expect(screen.queryByRole('button', { name: 'Mark as done' })).toBeNull()
+      await userEvent.click(screen.getByRole('button', { name: /More/ }))
+      const menu = await screen.findByRole('menu')
+      expect(menu).toHaveTextContent(/Sent to you by .Khalid.For action/)
+      expect(menu).toHaveTextContent('please handle')
+      expect(within(menu).getByRole('menuitem', { name: 'Archive' })).toBeVisible()
+    })
+
+    it('stays on the collapsed rail and acts on the record', async () => {
+      markBookInboxDone.mockResolvedValue({})
+      renderPane(received(), 'collapsed')
+      const rail = screen.getByRole('group', { name: /Sent to you by .Khalid./ })
+      await userEvent.click(within(rail).getByRole('button', { name: 'Mark as done' }))
+      expect(markBookInboxDone).toHaveBeenCalledWith(1)
     })
   })
 })
