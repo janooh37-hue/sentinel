@@ -112,7 +112,7 @@ export interface RichEditorPageView {
 export const GENERAL_BOOK_PAGE_VIEW: RichEditorPageView = {
   pageWidthPx: 698, // <- script output
   page1BodyPx: 524, // <- script output
-  pageNBodyPx: 865, // <- script output
+  pageNBodyPx: 821, // script output 865, minus the 18pt + 15pt letterhead clearance on pages 2+ (2026-10-14)
 }
 
 const GUIDE_COLOR = '#c0392b'

@@ -152,3 +152,24 @@ Verify D:
   - With `print` media emulated, the Print button is not visible at any of the six sizes.
   - All three buttons fit on one row at every width the view renders, so the `flex-wrap` fallback did not trigger.
 - **Review.** `i18n-rtl-reviewer` found no must-fix items on the toolbar or on D. Its should-fix items on D are handled in the next commit.
+
+## F — Long tables must not run into the letterhead header/footer bands (user screenshots, 2026-10-14)
+
+In the filed multi-employee General Book (e.g. 1/6/279 on dev), when a table continues onto the next page its first row sits on the red header band/line at the top of the page, and the last row of a page sits on the red footer band. Page 1 is fine. Fix it so body content always stays clear of the header and footer on every page.
+
+- Find the cause in the General Book template (`backend/templates/`, the "General Book" entry in `core/constants.py`) and its render path (`_pp_general_book`, `arabic_rtl.html_to_docx`): likely the header/footer art is floating (anchored) so Word does not push the body, and the page margins/`w:header`/`w:footer` distances on continuation pages are smaller than the art. Fix at the root, for every General Book, not only leave reports; page 1 must look exactly as today.
+- `.docx` rule: edit the template XML (unpack → edit → repack per the docx skill); never resave in Word. Prefer a template/sectPr margin fix over code; if the fix belongs in code (e.g. the renderer's section setup), keep it minimal.
+- While there: mark the table's `<thead>` row as a repeating header row (`w:tblHeader`) and rows `w:cantSplit` in `html_to_docx`, so a continued table repeats its column titles — only if it is a few lines.
+- Verify: render a long multi-employee report (≥ 3 pages) and an ordinary short General Book → PDF → PNG every page (`.tmp/gb-margins/`); check page 1 unchanged vs before, and continuation pages have clear space under the header and above the footer. Narrowest pytest for any code change; existing General Book tests pass. Commit `fix(general-book): keep body clear of the letterhead on continuation pages`, publish, append evidence.
+
+### Evidence F (2026-10-14)
+- **Cause.** Pages 2+ use the default header `header2.xml` and the default footer `footer1.xml`. Page 1 uses the first-page parts `header3.xml` and `footer2.xml` (`titlePg`). Both red bands are page-anchored `wrapNone` drawings, so Word does not push the body away from them. The body starts and ends where the in-flow header/footer paragraphs end. Measured on a 5-page render, page 2: header band 99.1–114.7pt, table top 114.7pt (touching); footer band 757.0pt, table bottom 753.5pt.
+- **Fix (template XML only, no code).** Two attributes, patched in the zip without Word; every other part is byte-identical:
+  - `header2.xml`: `w:spacing w:after="360"` on the last paragraph (18pt).
+  - `footer1.xml`: `w:spacing w:before="300"` on the first paragraph (15pt).
+  - Neither part renders on page 1, and page 1 is pixel-identical before and after (`ImageChops.difference(...).getbbox() is None`) for both the long and the short book.
+- **After.** Pages 2+: the table starts at 130.0pt (15pt under the band). The body limit moves up 15pt, and rows stop at or above ~738pt, which keeps at least 18pt clear of the footer band. With these two-line rows the last row ended at 712pt.
+- **Already present.** `html_to_docx` already sets `w:tblHeader` and `w:cantSplit` on `<thead>` rows. The column titles repeat on every continued page.
+- **Editor guides.** The editor page-break guides use `GENERAL_BOOK_PAGE_VIEW.pageNBodyPx`, now 865 → 821, which is the 33pt of new clearance. `backend/scripts/measure_general_book_pages.py` can no longer run (`docx2pdf` is not installed), so this value is computed, not re-measured.
+- **Existing books.** Books filed before the fix, such as 1/6/279, keep the letterhead they were rendered with. New and re-generated books get the fix.
+- **PNGs.** In `.tmp/gb-margins/`: `before-long-p1..p5.png`, `after-long-p1..p6.png`, `before-short-p1.png` and `after-short-p1.png`.
