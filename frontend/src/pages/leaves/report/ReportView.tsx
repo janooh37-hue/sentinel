@@ -32,13 +32,13 @@ import {
   CHIP_BASE, CHIP_OFF, CHIP_ON, FIELD_LABEL, NATIVE_SELECT, SEGMENT_BUTTON, SEGMENT_GROUP,
   SEGMENT_OFF, SEGMENT_ON, WORKFLOW_STATUSES, toggleItem,
 } from './controls'
-import { dateLocale, fmtDayMonthYear, fmtMonthYear } from './fmt'
+import { dateLocale, fmtDayMonthYear } from './fmt'
 import { CANONICAL_KINDS, kindMeta, type KindId } from './kinds'
 import {
   applyScope, buildReportSections, isDeparted, matchesCompany, matchesStaff, periodWindow,
   type MonthRef, type ReportPeriod, type ReportSort, type StaffFilter,
 } from './reportData'
-import { reportBodyHtml } from './reportDocument'
+import { filedSubject, reportBodyHtml, type FiledScope } from './reportDocument'
 import { SendReportDialog } from './SendReportDialog'
 import { EmployeeReportDetails } from './EmployeeReportDetails'
 import { ReportPaper } from './ReportPaper'
@@ -120,8 +120,7 @@ export function ReportView({ all, today, seed, paperOnly = false }: ReportViewPr
   )
 
   const employeeRow = employeeId ? all.find((r) => r.employee_id === employeeId) : undefined
-  // The report's scope in one language: the paper's (the UI language) and the
-  // filed General Book's (always Arabic, like the book itself).
+  // The report's scope in the UI language, for the paper.
   const describe = (tt: TFunction, lang: string) => {
     const loc = dateLocale(lang)
     const range = tt('leaves.report.rangeLabel', {
@@ -135,15 +134,6 @@ export function ReportView({ all, today, seed, paperOnly = false }: ReportViewPr
     const companyName = company === UNASSIGNED ? tt('dutyLocations.unassigned') : company
     return {
       periodLabel,
-      subject: [
-        tt('leaves.report.sendSubject', {
-          period: periodMode === 'month' ? month && fmtMonthYear(month, loc) : (periodLabel ?? range),
-        }),
-        companyName,
-        employeeName,
-      ]
-        .filter(Boolean)
-        .join(' — '),
       facts: [
         periodLabel,
         staff !== 'all' && tt(`leaves.report.staff.${staff}`),
@@ -161,7 +151,20 @@ export function ReportView({ all, today, seed, paperOnly = false }: ReportViewPr
     }
   }
   const { periodLabel, facts, title } = describe(t, i18n.language)
-  const filed = describe(i18n.getFixedT('ar'), 'ar')
+  // The filed General Book is always Arabic, like the book itself.
+  const arT = i18n.getFixedT('ar')
+  const filedScope: FiledScope = {
+    period,
+    company: company === UNASSIGNED ? arT('dutyLocations.unassigned') : company || undefined,
+    employee: employeeId
+      ? { id: employeeId, name: employeeRow ? leaveEmployeeName(employeeRow, 'ar') : employeeId }
+      : undefined,
+    limits: [
+      ...kinds.map((k) => arT(kindMeta(k).i18nKey)),
+      ...(staff !== 'all' ? [arT(`leaves.report.staff.${staff}`)] : []),
+      ...statuses.map((s) => arT(`leaves.status.${s}`)),
+    ],
+  }
 
   const { has } = useCapabilities()
   const canSend =
@@ -177,14 +180,14 @@ export function ReportView({ all, today, seed, paperOnly = false }: ReportViewPr
   })
   const buildBody = (): string =>
     reportBodyHtml({
-      t: i18n.getFixedT('ar'),
+      t: arT,
       lang: 'ar',
       locale: dateLocale('ar'),
-      facts: [filed.title, ...filed.facts],
+      scope: filedScope,
       sections,
       rows: picked,
       window: periodWindow(period),
-      employee: employeeId ? { id: employeeId, emp, all, today } : undefined,
+      employee: employeeId ? { emp, all, today } : undefined,
     })
 
   const paper = (
@@ -450,7 +453,7 @@ export function ReportView({ all, today, seed, paperOnly = false }: ReportViewPr
         <SendReportDialog
           open={sending}
           onOpenChange={setSending}
-          subject={filed.subject}
+          subject={filedSubject(arT, dateLocale('ar'), filedScope)}
           scope={facts}
           buildBody={buildBody}
         />

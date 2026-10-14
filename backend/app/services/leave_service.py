@@ -808,21 +808,25 @@ REPORT_CLASSIFICATION = "6/1"
 
 
 def _prepared_by_html(db: Session, user: User, signature: Path) -> str:
-    """«إعداد»: the preparer's name, saved signature and today's date, closing
-    the (Arabic) body. Each line keeps with the next, so the block never
-    splits across pages."""
+    """«إعداد»: the preparer's name, job title, saved signature and today's
+    date, centred like the Report paper's signature block. Each line keeps with
+    the next, so the block never splits across pages."""
     emp = db.get(Employee, user.employee_id) if user.employee_id else None
     name = (emp.name_ar or emp.name_en or "") if emp is not None else ""
     name = name or user.display_name or user.email
+    title = (emp.position_ar or emp.position or "").strip() if emp is not None else ""
     image = base64.b64encode(signature.read_bytes()).decode("ascii")
     today = datetime.now(_WORKFORCE_TIMEZONE).strftime("%d/%m/%Y")
-    keep = 'dir="rtl" style="page-break-after:avoid"'
-    return (
-        f"<p {keep}>&nbsp;</p>"
-        f"<p {keep}><b>إعداد</b></p>"
-        f"<p {keep}>الاسم: {html.escape(name)}</p>"
-        f'<p {keep}>التوقيع: <img src="data:image/png;base64,{image}" width="150"></p>'
-        f'<p dir="rtl">التاريخ: {today}</p>'
+    keep = 'dir="rtl" style="text-align:center;page-break-after:avoid"'
+    lines = [
+        "&nbsp;",
+        "<b>إعداد</b>",
+        f"الإسم: {html.escape(name)}",
+        *([f"المسمى الوظيفي: {html.escape(title)}"] if title else []),
+        f'التوقيع: <img src="data:image/png;base64,{image}" width="120">',
+    ]
+    return "".join(f"<p {keep}>{line}</p>" for line in lines) + (
+        f'<p dir="rtl" style="text-align:center">التاريخ: {today}</p>'
     )
 
 
@@ -857,14 +861,19 @@ def send_report_for_approval(
         raise ValidationFailedError(
             "SIGNATURE_REQUIRED", "Save your signature in Settings before sending a report."
         )
-    # The printed manager block names the approver when they are a linked manager.
+    # The printed manager block names the approver when they are a linked
+    # manager; the addressee line («السيد \ … المحترم») names them either way.
     manager = db.scalar(select(Manager).where(Manager.user_id == approver.id, Manager.active))
+    addressee = (
+        (manager.title or manager.name_ar or manager.name_en) if manager is not None else None
+    ) or (approver.display_name or approver.email)
     result = document_service.generate_document(
         db,
         employee_id=None,
         template_id="General Book",
         fields={
             "subject": subject,
+            "recipient_name": addressee,
             "body": body_html + _prepared_by_html(db, user, signature),
         },
         manager_id=manager.id if manager is not None else None,

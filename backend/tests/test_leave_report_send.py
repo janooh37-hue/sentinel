@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session
 
 from app.api.errors import ValidationFailedError
 from app.config import Settings
-from app.db.models import Book, BookApprovalStep, BookCategory, User
+from app.db.models import Book, BookApprovalStep, BookCategory, Manager, User
 from app.services import document_service, leave_service, user_signature_service
 from tests.conftest import make_user
 
@@ -61,10 +61,20 @@ def test_filed_report_carries_preparer_signature_and_goes_to_picked_approver(env
     book = db.get(Book, book_id)
     assert book is not None and book.classification_code == "6/1"
     assert ref.startswith("1/6/")
-    body = book.versions[-1].fields["body"]
+    fields = book.versions[-1].fields
+    body = fields["body"]
     assert body.startswith("<table><tr><td>G-1</td></tr></table>")
     assert "إعداد" in body and "Preparer One" in body
     assert base64.b64encode(png).decode("ascii") in body
+    # No Manager row for the approver: the addressee falls back to the account.
+    assert fields["recipient_name"] == "manager@x.ae"
+
+    db.add(Manager(name_ar="سعيد", title="مدير المركز", user_id=approver.id, active=True))
+    db.commit()
+    second, _ = leave_service.send_report_for_approval(
+        db, preparer, subject="s", body_html="<p>x</p>", approver_user_id=approver.id
+    )
+    assert db.get(Book, second).versions[-1].fields["recipient_name"] == "مدير المركز"
     steps = db.scalars(select(BookApprovalStep).where(BookApprovalStep.book_id == book_id)).all()
     assert [(s.kind, s.assignee_user_id, s.state) for s in steps] == [
         ("approver", approver.id, "pending")

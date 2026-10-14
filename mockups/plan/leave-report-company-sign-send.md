@@ -59,3 +59,40 @@ Content of the filed paper:
 - The filed book (subject, body, «إعداد») is always Arabic. The screen paper follows the UI language.
 - Dev books: 1/6/270 and 1/6/273 (month 2026-08) and 1/6/271 and 1/6/272 (G3231, 2026). 1/6/270, 1/6/272 and 1/6/273 were approved by user 3. The PNGs are in `.tmp/leave-report-send/`.
 - Phone: the report view is desktop-only (`TabRecords` hides `LeavesReport` below `md`), so the narrow check ran at 800 px.
+
+## C — Professional layout for the filed single-employee report (user feedback on 1/6/275, 2026-10-14)
+
+Input: `.tmp/lr-275/in.pdf` (pages `p1.png`, `p2.png`), the filed G3997 report for August 2026. Reference look: `.tmp/lr-275/report-ref.png` (REPORT-1288, the "Report" template). The user likes how Reports look; keep our tables and branding, and make the layout match that calm, spaced Report style. Scope is the **filed document** (`reportDocument.ts` `reportBodyHtml` + `leave_service._prepared_by_html`). Do not redesign the on-screen sheet.
+
+Defects seen in 1/6/275:
+1. **Broken Arabic paragraph.** The General Book's fixed intro ends «…ننوه على الموضوع أعلاه انه», but the body then opens with a scope line («تقرير الإجازات: جميع أنواع الإجازات · دون المستقيلين والمفصولين · …»), so the sentence never finishes. Replace the scope line with one proper Arabic sentence that completes the intro, for example: «تم إعداد تقرير إجازات الموظف/ {name} ({G-number}) عن شهر أغسطس 2026، وذلك على النحو التالي:». For a multi-employee report: «…تقرير الإجازات عن شهر {period} [لـ{السرية}]، وذلك على النحو التالي:». No `·` chains or em dashes in the Arabic prose.
+2. **Addressee is empty**: «السيد \ المحترم». Fill the General Book's addressee field (find the field the GB template uses) from the picked manager: their Manager row's title or name, else the user's name. If the GB has no addressee field the send flow can set, report that instead of hacking the template.
+3. **Subject** reads «تقرير الإجازات — أغسطس 2026 — name». Make it natural Arabic: single employee «تقرير إجازات الموظف/ {name} عن شهر أغسطس 2026»; multi «تقرير الإجازات عن شهر أغسطس 2026» (+ «— {السرية}» only if scoped). Use a range wording for a multi-month period.
+4. **Info not needed for one employee** (remove when the report is scoped to one employee):
+   - the month roster table (one row repeating the same employee) and the «أيام الإجازة حسب موقع العمل» table (it also split across pages);
+   - the «الإجازة الحالية: ليس في إجازة حالياً» line, unless the employee is currently on leave; drop «آخر إجازة مأخوذة…» entirely (it repeats the leaves table);
+   - the «الحالة: نشط» row in the employee table;
+   - the «تاريخ العودة» column when no leave in the period has a return date.
+5. **Dates wrap** («13 أغسطس / 2026» on two lines). In the filed tables use the compact numeric date the Report uses (`2026/08/13`) so every date stays on one line.
+6. **Wording**: «السجلات» → «عدد الإجازات». Arabic counts/plurals must read correctly (e.g. the total row). Fix «أخر» → «آخر» wherever it remains.
+7. **«إعداد» block** looks cramped and misaligned (the signature sits above «التوقيع:», the date floats). Match the Report's signature block: centred, «الإسم: …», «المسمى الوظيفي: …» (from the preparer's employee record when present), «التوقيع:» with the image on the same line, then «التاريخ: …», with even spacing. Keep it together on one page (keep-with-next already exists). Put the date in the same format as the header (`2026/10/14`).
+8. Overall: even spacing between sections (one blank line before each heading, none doubled), section headings bold, tables full width with consistent column widths, so a one-employee report fits on **one page** with the manager signature block when the period has few leaves.
+
+Verify C:
+- Unit tests: update `reportDocument.test.ts` only for real behaviour (one-employee body omits roster/unit tables; intro sentence present; empty return column dropped). Delete any test that pins old wording.
+- Re-send the same scope (G3997, August 2026) on dev → approve as user 3 → PDF → PNG. Inspect: intro sentence reads as one Arabic paragraph, addressee filled, no redundant tables, dates on one line, «إعداد» block like the Report, ideally one page. Also re-send one multi-employee month and confirm it still renders well.
+- `i18n-rtl-reviewer` on the diff. ruff/tsc/eslint/vitest on changed files only.
+- One commit on `dev`: `fix(leaves-report): professional layout for the filed report`. `dev-channel.ps1 publish`. Append evidence here.
+
+### Evidence C (2026-10-14)
+- Body (`reportDocument.ts`): it opens with one sentence that finishes the paper's «…أعلاه انه», for example «تم إعداد تقرير إجازات الموظف/ {name} ({G}) عن شهر أغسطس 2026، وذلك على النحو التالي:». The company form is «تقرير إجازات {السرية}», a year reads «عام 2026», and a range reads «الفترة من … إلى …». Leave-type, staff or status filters add «ويقتصر التقرير على: …». The `·` scope line is gone.
+- Subject (`filedSubject`): «تقرير إجازات الموظف/ {name} عن شهر أغسطس 2026», or «تقرير الإجازات عن شهر أغسطس 2026» with «— {السرية}» added only when the report is scoped to one company.
+- One-employee body: the employee table is one horizontal row with no status column, then the days by type («عدد الإجازات»), then the leaves in the period. The return-date column appears only when a leave has a return date. The current-leave line appears only when the employee is on leave. «آخر إجازة» is dropped. The month roster and the duty-location table are omitted. Dates use the numeric `13/08/2026` form, which Word shows as 2026/08/13 on one line. A multi-employee total reads «المجموع: 18 موظفًا».
+- Spacing: there is one blank line before each heading. The first heading after the intro gets none, because the paper's body paragraph already spaces after itself.
+- Server (`leave_service`): `recipient_name` is filled from the approver's Manager row, using the title, then the name, then the account name. «إعداد» is centred: «الإسم», «المسمى الوظيفي» (from the preparer's employee record), «التوقيع:» with the image on the same line, and «التاريخ: 2026/10/14». It keeps together across pages.
+- Dev books:
+  - 1/6/277 (G3997, August 2026), approved by user 3. It is **one page**, with the addressee «السيد \ مدير مركز الاصلاح والتأهيل الوثبة -2 المحترم» and both signatures. PNG: `.tmp/lr-275/employee-signed-p1.png`.
+  - 1/6/279 (السرية الخامسة, August 2026), approved by user 3. It has two pages, and «إعداد» moved to page 2 whole. PNGs: `.tmp/lr-275/month2-signed-p1.png` and `-p2.png`.
+  - 1/6/276 and 1/6/278 are earlier iterations; 1/6/276 is still pending.
+- Checks: `vitest src/pages/leaves/report` (15 passed), `tsc -b --noEmit`, eslint on the changed files, `pytest backend/tests/test_leave_report_send.py` (2 passed), and ruff check/format on the changed backend files. The `i18n-rtl-reviewer` found no must-fix items; the wording of `filedIntroCompany` and `filedCurrent` («بتاريخ») and the English parity were applied.
+- Open (not part of C): the by-type total counts only the days inside the period (20), while the leaves table lists each leave's full days (14 + 7). The 31 July to 13 August leave straddles the month. This is the A3 behaviour, the same as on screen.

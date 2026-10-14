@@ -5,8 +5,10 @@
  * The body is real `<table>`s, which the docx pipeline
  * (`arabic_rtl.html_to_docx`) rebuilds as Word tables. The duty-location
  * totals are a table (the bar chart is screen/print only). The report view
- * files it in Arabic; the server appends «إعداد» with the preparer's saved
- * signature.
+ * files it in Arabic; the General Book paper prints the greeting
+ * («…ننوه على الموضوع أعلاه انه») right before the body, so the body opens
+ * with the sentence that finishes it. The server appends «إعداد» with the
+ * preparer's saved signature.
  */
 import type { TFunction } from 'i18next'
 
@@ -18,15 +20,30 @@ import { canonStatus } from '../lifecycle'
 import { leaveEmployeeName } from '../leaveEmployeeName'
 import { addDays, fmtDayMonthYear, fmtMonthYear } from './fmt'
 import { kindMeta } from './kinds'
-import { employeeProfile, kindAggregates, periodLeaves, type DayWindow, type ReportSection } from './reportData'
+import {
+  employeeProfile,
+  kindAggregates,
+  periodLeaves,
+  type DayWindow,
+  type ReportPeriod,
+  type ReportSection,
+} from './reportData'
 
 /** A stored leave type, translated when known, else its half in the UI language. */
 export function kindLabel(t: TFunction, lang: string, raw: string): string {
   return t(`leaves.type.${raw}`, { defaultValue: splitBilingual(raw, lang) })
 }
 
-const fmtDate = (iso: string | null | undefined, locale: string): string =>
-  iso ? fmtDayMonthYear(iso, locale) : '—'
+type DateFmt = (iso: string | null | undefined) => string
+
+const wordDate =
+  (locale: string): DateFmt =>
+  (iso) =>
+    iso ? fmtDayMonthYear(iso, locale) : '—'
+
+/** "13/08/2026", the Report paper's compact date: Word shows it as
+ * 2026/08/13 in an Arabic line, and it never wraps inside a table cell. */
+const numDate: DateFmt = (iso) => (iso ? iso.slice(0, 10).split('-').reverse().join('/') : '—')
 
 /** The employee header card: label → value. */
 export function employeeFacts(
@@ -35,6 +52,7 @@ export function employeeFacts(
   locale: string,
   employeeId: string,
   emp: EmployeeRead | undefined,
+  date: DateFmt = wordDate(locale),
 ): [string, string][] {
   const position = lang.startsWith('ar') ? emp?.position_ar || emp?.position : emp?.position
   return [
@@ -43,21 +61,56 @@ export function employeeFacts(
     [t('employees.fields.position'), position || '—'],
     [t('leaves.report.optCompany'), emp?.duty_unit?.trim() || t('dutyLocations.unassigned')],
     [t('employees.fields.status'), emp ? t(`employees.status.${emp.status}`) : '—'],
-    [t('employees.fields.doj'), fmtDate(emp?.doj, locale)],
+    [t('employees.fields.doj'), date(emp?.doj)],
   ]
 }
 
 /** One leave in the single-employee list: type, from, to, days, status, return. */
-export function leaveCells(t: TFunction, lang: string, locale: string, r: LeaveListItem): string[] {
+export function leaveCells(
+  t: TFunction,
+  lang: string,
+  locale: string,
+  r: LeaveListItem,
+  date: DateFmt = wordDate(locale),
+): string[] {
   const status = canonStatus(r.status)
   return [
     kindLabel(t, lang, r.leave_type),
-    fmtDate(r.start_date, locale),
-    fmtDate(r.end_date, locale),
+    date(r.start_date),
+    date(r.end_date),
     String(r.days),
     t(`leaves.status.${status}`, { defaultValue: status }),
-    fmtDate(r.return_date, locale),
+    date(r.return_date),
   ]
+}
+
+/** The filed period in words: "شهر أغسطس 2026", "عام 2026", or a date range. */
+function filedPeriod(t: TFunction, locale: string, period: ReportPeriod): string {
+  if (period.mode === 'month') return t('leaves.report.filedPeriodMonth', { month: fmtMonthYear(period.month, locale) })
+  if (period.mode === 'year') return t('leaves.report.filedPeriodYear', { year: period.year })
+  return t('leaves.report.filedPeriodRange', {
+    from: period.from ? numDate(period.from) : '…',
+    to: period.to ? numDate(period.to) : '…',
+  })
+}
+
+/** Who and what the filed report covers. */
+export interface FiledScope {
+  period: ReportPeriod
+  /** The picked company (duty unit) label, when the report is scoped to one. */
+  company?: string
+  /** The picked employee, when the report is scoped to one. */
+  employee?: { id: string; name: string }
+  /** Narrowing filters in words (leave types, staff, statuses); empty = all. */
+  limits: string[]
+}
+
+/** The General Book subject: one natural Arabic line, no `·` chain. */
+export function filedSubject(t: TFunction, locale: string, { period, company, employee }: FiledScope): string {
+  const when = filedPeriod(t, locale, period)
+  if (employee) return t('leaves.report.sendSubjectEmployee', { name: employee.name, period: when })
+  const subject = t('leaves.report.sendSubject', { period: when })
+  return company ? `${subject} — ${company}` : subject
 }
 
 const TH = 'border:1px solid #000000;background:#D9D9D9;padding:4px 6px;text-align:center;font-weight:bold'
@@ -70,20 +123,29 @@ interface ReportBodyInput {
   t: TFunction
   lang: string
   locale: string
-  /** The paper's scope line (period, company, staff, …). */
-  facts: string[]
+  scope: FiledScope
   sections: ReportSection[]
   /** The report's scoped rows and period, for the single-employee part. */
   rows: LeaveListItem[]
   window: DayWindow
-  employee?: { id: string; emp: EmployeeRead | undefined; all: LeaveListItem[]; today: string }
+  /** Set when `scope.employee` is: the employee record and every fetched row. */
+  employee?: { emp: EmployeeRead | undefined; all: LeaveListItem[]; today: string }
 }
 
-export function reportBodyHtml({ t, lang, locale, facts, sections, rows, window, employee }: ReportBodyInput): string {
+export function reportBodyHtml({ t, lang, locale, scope, sections, rows, window, employee }: ReportBodyInput): string {
   const dir = lang.startsWith('ar') ? 'rtl' : 'ltr'
   const para = (text: string, bold = false): string =>
     `<p dir="${dir}">${bold ? `<b>${esc(text)}</b>` : esc(text)}</p>`
-  const heading = (text: string): string => `<p>&nbsp;</p>${para(text, true)}`
+  const blank = '<p>&nbsp;</p>'
+  // One blank line before each heading. The intro lands in the paper's body
+  // paragraph, which already spaces after itself, so a heading right after it
+  // takes none.
+  let afterIntro = scope.limits.length === 0
+  const heading = (text: string): string => {
+    const gap = afterIntro ? '' : blank
+    afterIntro = false
+    return gap + para(text, true)
+  }
   /** `widths`: relative column widths (the docx renderer reads `<col width>`). */
   const table = (head: string[], widths: number[], body: string[][], total?: [string, string]): string => {
     const cols = widths.map((w) => `<col width="${w}">`).join('')
@@ -94,37 +156,54 @@ export function reportBodyHtml({ t, lang, locale, facts, sections, rows, window,
       : ''
     return `<table dir="${dir}" style="border-collapse:collapse"><colgroup>${cols}</colgroup><thead><tr>${th}</tr></thead><tbody>${tr}${foot}</tbody></table>`
   }
-  const out: string[] = []
-  if (facts.length > 0) out.push(para(facts.join(' · ')))
 
-  if (employee) {
-    const profile = employeeProfile(employee.all, employee.id, employee.today)
+  const when = filedPeriod(t, locale, scope.period)
+  const out = [
+    para(
+      scope.employee
+        ? t('leaves.report.filedIntroEmployee', { name: scope.employee.name, id: scope.employee.id, period: when })
+        : scope.company
+          ? t('leaves.report.filedIntroCompany', { company: scope.company, period: when })
+          : t('leaves.report.filedIntro', { period: when }),
+    ),
+  ]
+  if (scope.limits.length > 0) out.push(para(t('leaves.report.filedLimits', { list: scope.limits.join('، ') })))
+
+  // One employee: their details, leave days by type and the leaves themselves.
+  // The month roster and duty-location totals would repeat the same person.
+  if (scope.employee) {
+    const id = scope.employee.id
+    const { current } = employeeProfile(employee?.all ?? rows, id, employee?.today ?? '')
     const kinds = kindAggregates(rows, window)
+    const facts = employeeFacts(t, lang, locale, id, employee?.emp, numDate).filter(
+      ([label]) => label !== t('employees.fields.status'),
+    )
+    const leaves = periodLeaves(rows, window)
+    const withReturn = leaves.some((r) => r.return_date)
     out.push(
       heading(t('leaves.report.empDetails')),
       table(
-        [t('leaves.report.empField'), t('leaves.report.empValue')],
-        [35, 65],
-        employeeFacts(t, lang, locale, employee.id, employee.emp),
+        facts.map(([label]) => label),
+        [15, 33, 19, 17, 16],
+        [facts.map(([, value]) => value)],
       ),
-      '<p>&nbsp;</p>',
-      para(
-        `${t('leaves.report.profileCurrent')}: ${
-          profile.current
-            ? `${kindLabel(t, lang, profile.current.leave_type)} · ${fmtDate(profile.current.start_date, locale)} – ${fmtDate(profile.current.end_date, locale)} · ${t('leaves.report.expectedReturn')}: ${fmtDate(addDays(profile.current.end_date, 1), locale)}`
-            : t('leaves.report.profileNotOnLeave')
-        }`,
-      ),
-      para(
-        `${t('leaves.report.profileLast')}: ${
-          profile.last
-            ? `${kindLabel(t, lang, profile.last.leave_type)} · ${fmtDate(profile.last.start_date, locale)} – ${fmtDate(profile.last.end_date, locale)} · ${t('leaves.report.colReturn')}: ${fmtDate(profile.last.return_date, locale)}`
-            : t('leaves.report.profileNone')
-        }`,
-      ),
+    )
+    if (current)
+      out.push(
+        blank,
+        para(
+          t('leaves.report.filedCurrent', {
+            kind: kindLabel(t, lang, current.leave_type),
+            from: numDate(current.start_date),
+            to: numDate(current.end_date),
+            back: numDate(addDays(current.end_date, 1)),
+          }),
+        ),
+      )
+    out.push(
       heading(t('leaves.report.daysByKind')),
       table(
-        [t('leaves.report.colKind'), t('leaves.report.colRecords'), t('leaves.report.colTotalDays')],
+        [t('leaves.report.colKind'), t('leaves.report.colLeaves'), t('leaves.report.colTotalDays')],
         [60, 20, 20],
         kinds.map((k) => [t(kindMeta(k.kind).i18nKey), String(k.records), String(k.days)]),
         [t('leaves.report.total'), String(kinds.reduce((s, k) => s + k.days, 0))],
@@ -138,12 +217,13 @@ export function reportBodyHtml({ t, lang, locale, facts, sections, rows, window,
           t('leaves.report.colTo'),
           t('leaves.report.colDays'),
           t('leaves.columns.status'),
-          t('leaves.report.colReturn'),
+          ...(withReturn ? [t('leaves.report.colReturn')] : []),
         ],
-        [5, 25, 16, 16, 8, 13, 17],
-        periodLeaves(rows, window).map((r, i) => [String(i + 1), ...leaveCells(t, lang, locale, r)]),
+        withReturn ? [5, 25, 16, 16, 8, 14, 16] : [6, 30, 18, 18, 10, 18],
+        leaves.map((r, i) => [String(i + 1), ...leaveCells(t, lang, locale, r, numDate).slice(0, withReturn ? 6 : 5)]),
       ),
     )
+    return out.join('')
   }
 
   for (const s of sections) {
@@ -159,7 +239,7 @@ export function reportBodyHtml({ t, lang, locale, facts, sections, rows, window,
           l.unit || t('dutyLocations.unassigned'),
           String(l.days),
         ]),
-        [t('leaves.report.totalEmployees', { count: s.lines.length }), String(s.days)],
+        [`${t('leaves.report.total')}: ${t('leaves.report.totalsEmployees', { count: s.lines.length })}`, String(s.days)],
       ),
       heading(t('leaves.report.daysByUnit')),
       table(
