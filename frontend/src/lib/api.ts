@@ -251,6 +251,8 @@ export type LeaveUpdate = Omit<components['schemas']['LeaveUpdate'], 'notify_emp
 }
 export type LeaveAmend = components['schemas']['LeaveAmend']
 export type LeaveBalanceRead = components['schemas']['LeaveBalanceRead']
+export type LeaveReportSendRequest = components['schemas']['LeaveReportSendRequest']
+export type LeaveReportSendResult = components['schemas']['LeaveReportSendResult']
 export type LeaveStatus = 'Pending' | 'Approved' | 'Rejected' | 'Cancelled' | 'Completed'
 
 // ─── Security Permits (greenfield 2026-07) ─────────────────────────────────────
@@ -1471,6 +1473,8 @@ export const api = {
     request<LeaveRead>('POST', `/leaves/${id}/amend`, body),
   deleteLeave: (id: number) => request<void>('DELETE', `/leaves/${id}`),
   createLeave: (body: LeaveCreate) => request<LeaveRead>('POST', '/leaves', body),
+  sendLeaveReport: (body: LeaveReportSendRequest) =>
+    request<LeaveReportSendResult>('POST', '/leaves/report/send', body),
 
   // --- security permits (greenfield 2026-07) ---
   listPermits: (params: {

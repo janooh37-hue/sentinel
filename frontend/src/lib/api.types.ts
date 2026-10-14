@@ -1211,6 +1211,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/leaves/report/send": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Send Report
+         * @description File the report as a General Book carrying the caller's saved signature
+         *     under «Prepared by» and send it to the picked manager for approval.
+         */
+        post: operations["send_report_api_v1_leaves_report_send_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/leaves/{leave_id}": {
         parameters: {
             query?: never;
@@ -11114,6 +11135,26 @@ export interface components {
             linked_documents?: components["schemas"]["LinkedDocumentRead"][];
         };
         /**
+         * LeaveReportSendRequest
+         * @description POST /leaves/report/send — file the leave report as a General Book and
+         *     send it for approval. The server appends the preparer's signature block.
+         */
+        LeaveReportSendRequest: {
+            /** Subject */
+            subject: string;
+            /** Body Html */
+            body_html: string;
+            /** Approver User Id */
+            approver_user_id: number;
+        };
+        /** LeaveReportSendResult */
+        LeaveReportSendResult: {
+            /** Book Id */
+            book_id: number;
+            /** Ref */
+            ref: string;
+        };
+        /**
          * LeaveReturnRequest
          * @description POST /leaves/{id}/return — file the Duty Resumption (return) form.
          */
@@ -18387,6 +18428,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["LeaveAwaitingReturnCount"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    send_report_api_v1_leaves_report_send_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LeaveReportSendRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LeaveReportSendResult"];
                 };
             };
             /** @description Validation Error */

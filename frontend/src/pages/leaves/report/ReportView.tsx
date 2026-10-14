@@ -12,11 +12,15 @@
  * the operator picks those statuses explicitly.
  */
 import { useId, useMemo, useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import type { TFunction } from 'i18next'
 import { useTranslation } from 'react-i18next'
-import { FileDown, Printer } from 'lucide-react'
+import { FileDown, PenLine, Printer } from 'lucide-react'
 
-import type { LeaveListItem } from '@/lib/api'
+import { api, type LeaveListItem } from '@/lib/api'
+import { isQuickActionAllowed } from '@/lib/dashboardLayout'
 import { UNASSIGNED, unitOptions } from '@/lib/dutyUnits'
+import { useCapabilities } from '@/lib/useCapabilities'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
@@ -28,12 +32,14 @@ import {
   CHIP_BASE, CHIP_OFF, CHIP_ON, FIELD_LABEL, NATIVE_SELECT, SEGMENT_BUTTON, SEGMENT_GROUP,
   SEGMENT_OFF, SEGMENT_ON, WORKFLOW_STATUSES, toggleItem,
 } from './controls'
-import { dateLocale, fmtDayMonthYear } from './fmt'
+import { dateLocale, fmtDayMonthYear, fmtMonthYear } from './fmt'
 import { CANONICAL_KINDS, kindMeta, type KindId } from './kinds'
 import {
   applyScope, buildReportSections, isDeparted, matchesCompany, matchesStaff, periodWindow,
   type MonthRef, type ReportPeriod, type ReportSort, type StaffFilter,
 } from './reportData'
+import { reportBodyHtml } from './reportDocument'
+import { SendReportDialog } from './SendReportDialog'
 import { EmployeeReportDetails } from './EmployeeReportDetails'
 import { ReportPaper } from './ReportPaper'
 
@@ -65,7 +71,6 @@ interface ReportViewProps {
 
 export function ReportView({ all, today, seed, paperOnly = false }: ReportViewProps): React.JSX.Element {
   const { t, i18n } = useTranslation()
-  const locale = dateLocale(i18n.language)
   const ids = useId()
 
   const [periodMode, setPeriodMode] = useState<ReportPeriod['mode']>(seed.month ? 'month' : 'year')
@@ -105,7 +110,6 @@ export function ReportView({ all, today, seed, paperOnly = false }: ReportViewPr
   }, [all, periodMode, year, month, from, to, employeeId, kinds, statuses, staff, company, excludeDeparted, sort, i18n.language])
 
   const companies = useMemo(() => unitOptions(all.map((r) => ({ duty_unit: r.employee_duty_unit }))), [all])
-  const companyLabel = (c: string): string => (c === UNASSIGNED ? t('dutyLocations.unassigned') : c)
 
   const years = useMemo(
     () =>
@@ -115,33 +119,73 @@ export function ReportView({ all, today, seed, paperOnly = false }: ReportViewPr
     [all, today],
   )
 
-  // Each sheet names its own month; the facts carry the wider period only
-  // when it spans more than one month.
-  const periodLabel =
-    periodMode === 'year'
-      ? String(year)
-      : periodMode === 'range' && (from || to)
-        ? t('leaves.report.rangeLabel', {
-            from: from ? fmtDayMonthYear(from, locale) : '…',
-            to: to ? fmtDayMonthYear(to, locale) : '…',
-          })
-        : null
   const employeeRow = employeeId ? all.find((r) => r.employee_id === employeeId) : undefined
-  const employeeName = employeeRow ? leaveEmployeeName(employeeRow, i18n.language) : employeeId
-  const facts = [
-    periodLabel,
-    staff !== 'all' && t(`leaves.report.staff.${staff}`),
-    company !== null && companyLabel(company),
-    excludeDeparted && t('leaves.report.departedExcluded'),
-    statuses.map((s) => t(`leaves.status.${s}`)).join(', '),
-    employeeName,
-  ].filter((f): f is string => !!f)
-  const title = t('leaves.report.paperTitle', {
-    topic:
-      kinds.length > 0
-        ? kinds.map((k) => t(kindMeta(k).i18nKey)).join(', ')
-        : t('leaves.report.allKinds'),
+  // The report's scope in one language: the paper's (the UI language) and the
+  // filed General Book's (always Arabic, like the book itself).
+  const describe = (tt: TFunction, lang: string) => {
+    const loc = dateLocale(lang)
+    const range = tt('leaves.report.rangeLabel', {
+      from: from ? fmtDayMonthYear(from, loc) : '…',
+      to: to ? fmtDayMonthYear(to, loc) : '…',
+    })
+    // Each sheet names its own month; the facts carry the wider period only
+    // when it spans more than one month.
+    const periodLabel = periodMode === 'year' ? String(year) : periodMode === 'range' && (from || to) ? range : null
+    const employeeName = employeeRow ? leaveEmployeeName(employeeRow, lang) : employeeId
+    const companyName = company === UNASSIGNED ? tt('dutyLocations.unassigned') : company
+    return {
+      periodLabel,
+      subject: [
+        tt('leaves.report.sendSubject', {
+          period: periodMode === 'month' ? month && fmtMonthYear(month, loc) : (periodLabel ?? range),
+        }),
+        companyName,
+        employeeName,
+      ]
+        .filter(Boolean)
+        .join(' — '),
+      facts: [
+        periodLabel,
+        staff !== 'all' && tt(`leaves.report.staff.${staff}`),
+        companyName,
+        excludeDeparted && tt('leaves.report.departedExcluded'),
+        statuses.map((s) => tt(`leaves.status.${s}`)).join(', '),
+        employeeName,
+      ].filter((f): f is string => !!f),
+      title: tt('leaves.report.paperTitle', {
+        topic:
+          kinds.length > 0
+            ? kinds.map((k) => tt(kindMeta(k).i18nKey)).join(', ')
+            : tt('leaves.report.allKinds'),
+      }),
+    }
+  }
+  const { periodLabel, facts, title } = describe(t, i18n.language)
+  const filed = describe(i18n.getFixedT('ar'), 'ar')
+
+  const { has } = useCapabilities()
+  const canSend =
+    isQuickActionAllowed('General Book', has) &&
+    has('books.category.6/1') &&
+    has('books.submit') &&
+    has('books.edit')
+  const [sending, setSending] = useState(false)
+  const { data: emp } = useQuery({
+    queryKey: ['employee', employeeId],
+    queryFn: () => api.getEmployee(employeeId ?? ''),
+    enabled: !!employeeId,
   })
+  const buildBody = (): string =>
+    reportBodyHtml({
+      t: i18n.getFixedT('ar'),
+      lang: 'ar',
+      locale: dateLocale('ar'),
+      facts: [filed.title, ...filed.facts],
+      sections,
+      rows: picked,
+      window: periodWindow(period),
+      employee: employeeId ? { id: employeeId, emp, all, today } : undefined,
+    })
 
   const paper = (
     <ReportPaper
@@ -152,9 +196,11 @@ export function ReportView({ all, today, seed, paperOnly = false }: ReportViewPr
       today={today}
       signatures={withSignatures}
       lead={
-        employeeId && employeeName
+        employeeId
           ? {
-              heading: employeeName,
+              // The name is already in the facts line and the card; a long
+              // name as the sheet heading would crush the letterhead.
+              heading: t('leaves.report.empDetails'),
               body: (
                 <EmployeeReportDetails
                   employeeId={employeeId}
@@ -303,7 +349,7 @@ export function ReportView({ all, today, seed, paperOnly = false }: ReportViewPr
             <option value="">{t('leaves.report.allCompanies')}</option>
             {[...companies, UNASSIGNED].map((c) => (
               <option key={c} value={c}>
-                {companyLabel(c)}
+                {c === UNASSIGNED ? t('dutyLocations.unassigned') : c}
               </option>
             ))}
           </select>
@@ -389,7 +435,25 @@ export function ReportView({ all, today, seed, paperOnly = false }: ReportViewPr
             <FileDown className="h-4 w-4" aria-hidden />
             {t('leaves.report.savePdf')}
           </Button>
+          {canSend && (
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={sections.length === 0 && !employeeId}
+              onClick={() => setSending(true)}
+            >
+              <PenLine className="h-4 w-4" aria-hidden />
+              {t('leaves.report.sendTitle')}
+            </Button>
+          )}
         </div>
+        <SendReportDialog
+          open={sending}
+          onOpenChange={setSending}
+          subject={filed.subject}
+          scope={facts}
+          buildBody={buildBody}
+        />
       </section>
 
       {paper}

@@ -33,9 +33,9 @@ When the report is scoped to a single employee (the employee picker), the sheet 
 User decision: **the manager approves and signs** (normal General Book approval flow).
 
 Flow:
-1. On the report, a **"Sign and send to manager"** button (only for users who can create a General Book in category `1`; hide otherwise). Opens a dialog: manager picker (reuse the approver picker from `SubmitForApprovalDialog.tsx`), shows the period/company/employee scope being sent.
+1. On the report, a **"Sign and send to manager"** button (only for users who can create a General Book under classification 6/1; hide otherwise). Opens a dialog: manager picker (reuse the approver picker from `SubmitForApprovalDialog.tsx`), shows the period/company/employee scope being sent.
 2. The preparer's **saved profile signature** fills "Prepared by" (name, signature image, date). If the preparer has no saved signature, the dialog says so and links to where they add it — no blank-signature filing.
-3. The report is filed as a **General Book** record under category `1` Employee Staff (شؤون الموظفين), subject `تقرير الإجازات — <period>` (+ company/employee when scoped), normal confidentiality, then **submitted for approval** to the picked manager (existing `POST /books/{id}/submit` / `book_service.submit_for_approval`).
+3. The report is filed as a **General Book** record (category GS) under classification **6/1 Statistics & monthly reports** (الإحصائيات والتقارير الشهرية, ref `1/6/GSSG/n`; user decision 2026-10-14 — General Books file by classification code, not legacy category `1`), subject `تقرير الإجازات — <period>` (+ company/employee when scoped), normal confidentiality, then **submitted for approval** to the picked manager (existing `POST /books/{id}/submit` / `book_service.submit_for_approval`).
 4. When the manager approves in Approvals, the existing General Book signing embeds the manager's signature at the `GSSG_ManagerSignature` bookmark — that is the **"Approved by"** line. Do not invent a second manager-signature mechanism.
 
 Content of the filed paper:
@@ -53,3 +53,9 @@ Content of the filed paper:
 ## Finish
 - Commits on `dev` (A1, A2, A3, B separately; include this plan file in the first commit). `dev-channel.ps1 publish`.
 - Reply with: commits, checks run, PNG paths inspected, anything not done and why, and what the user should test on the dev URL.
+
+## Evidence (2026-10-14)
+- B route: `POST /leaves/report/send` (`leave_service.send_report_for_approval`). It checks record-type access for 6/1, an active approver, and the caller's saved signature before any book is minted. Then it calls `generate_document` (General Book, 6/1, manager = the approver's linked Manager row) and `submit_for_approval`. The server appends the «إعداد» block (name, saved-signature `<img>`, date). The renderer maps `page-break-after: avoid` to Word keep-with-next, so that block never splits across pages.
+- The filed book (subject, body, «إعداد») is always Arabic. The screen paper follows the UI language.
+- Dev books: 1/6/270 and 1/6/273 (month 2026-08) and 1/6/271 and 1/6/272 (G3231, 2026). 1/6/270, 1/6/272 and 1/6/273 were approved by user 3. The PNGs are in `.tmp/leave-report-send/`.
+- Phone: the report view is desktop-only (`TabRecords` hides `LeavesReport` below `md`), so the narrow check ran at 800 px.

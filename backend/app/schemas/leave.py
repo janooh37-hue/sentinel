@@ -130,6 +130,20 @@ class LeaveAwaitingReturnCount(BaseModel):
     count: int
 
 
+class LeaveReportSendRequest(BaseModel):
+    """POST /leaves/report/send — file the leave report as a General Book and
+    send it for approval. The server appends the preparer's signature block."""
+
+    subject: str = Field(min_length=1, max_length=300)
+    body_html: str = Field(min_length=1)
+    approver_user_id: int
+
+
+class LeaveReportSendResult(BaseModel):
+    book_id: int
+    ref: str
+
+
 class LeaveBalanceRead(BaseModel):
     employee_id: str
     as_of: date

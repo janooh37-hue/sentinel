@@ -33,6 +33,8 @@ from app.schemas.leave import (
     LeaveListItem,
     LeaveListResponse,
     LeaveRead,
+    LeaveReportSendRequest,
+    LeaveReportSendResult,
     LeaveReturnRequest,
     LeaveUpdate,
 )
@@ -109,6 +111,27 @@ def awaiting_return_count(
     _user: Annotated[User, Depends(require_capability("leaves.view"))],
 ) -> LeaveAwaitingReturnCount:
     return LeaveAwaitingReturnCount(count=leave_service.awaiting_return_count(db))
+
+
+@router.post("/report/send", response_model=LeaveReportSendResult)
+def send_report(
+    payload: LeaveReportSendRequest,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(require_capability("leaves.view"))],
+    _generate: Annotated[User, Depends(require_capability("documents.generate"))],
+    _books: Annotated[User, Depends(require_capability("books.view"))],
+    _submit: Annotated[User, Depends(require_capability("books.submit"))],
+) -> LeaveReportSendResult:
+    """File the report as a General Book carrying the caller's saved signature
+    under «Prepared by» and send it to the picked manager for approval."""
+    book_id, ref = leave_service.send_report_for_approval(
+        db,
+        user,
+        subject=payload.subject,
+        body_html=payload.body_html,
+        approver_user_id=payload.approver_user_id,
+    )
+    return LeaveReportSendResult(book_id=book_id, ref=ref)
 
 
 @router.post("", response_model=LeaveRead, status_code=status.HTTP_201_CREATED)
