@@ -96,3 +96,45 @@ Verify C:
   - 1/6/276 and 1/6/278 are earlier iterations; 1/6/276 is still pending.
 - Checks: `vitest src/pages/leaves/report` (15 passed), `tsc -b --noEmit`, eslint on the changed files, `pytest backend/tests/test_leave_report_send.py` (2 passed), and ruff check/format on the changed backend files. The `i18n-rtl-reviewer` found no must-fix items; the wording of `filedIntroCompany` and `filedCurrent` («بتاريخ») and the English parity were applied.
 - Open (not part of C): the by-type total counts only the days inside the period (20), while the leaves table lists each leave's full days (14 + 7). The 31 July to 13 August leave straddles the month. This is the A3 behaviour, the same as on screen.
+
+## D — «Save as PDF» downloads a real PDF (user decision 2026-10-14: server builds it)
+
+Today both «Print» and «Save as PDF» in `ReportView.tsx` (:428-440) call `window.print()`, so «Save as PDF» opens the print dialog. Make «Save as PDF» download a PDF file directly, with no print dialog. «Print» stays as is.
+
+- The PDF is the **same formal General Book layout as section C** (letterhead, intro sentence, tables, «إعداد» with the preparer's saved signature), but a **draft**: no ref allocated, no Book row, not submitted, no manager signature. Reuse the existing draft path: `document_service.generate_document(..., commit=False)` (the `/documents/generate` "Draft/Save split" → `ref_number="DRAFT"`) and the existing document download endpoint. No new libraries, no HTML→PDF stack.
+- Share one builder with the send flow: subject + body + «إعداد» must come from the same code (`leave_service`), so the draft and the filed book can never drift. Smallest shape wins, e.g. a `commit` switch on the existing service plus one thin route (or reuse `/documents/generate` directly if the «إعداد» block can be produced without duplicating `_prepared_by_html`). If a route/schema changes, run `sync-api-types` and commit the types.
+- No saved signature: still produce the PDF; «إعداد» shows name, title, an empty «التوقيع:» line and the date (saving a PDF must not require a signature; sending still does).
+- Addressee: there is no picked manager on save. Check what the General Book renders when `manager_id` is None; the paper must not show an empty «السيد \ المحترم». Pick the least-code option that reads correctly (e.g. omit the addressee line, or the default the GB draft already uses) and say which in the report.
+- UI: the button shows a busy state while Word renders (a few seconds) and disables double clicks; errors show the existing toast pattern. Download filename like the filed one: `تقرير الإجازات — <scope> — <date>.pdf` (reuse `download_filename_for` if it fits). Follow the existing in-app download pattern (base64 `encoding` to dodge download managers, `<a download>`).
+- Same permission as the send button's 6/1 General Book access check? No — saving a PDF is reading the report; anyone who can see the report can save it. If the draft path demands General Book create access, report that rather than widening permissions.
+
+Verify D:
+- Backend: narrowest pytest — draft returns a PDF/document without allocating a ref or creating a Book, with and without a saved signature.
+- On dev: click «Save as PDF» for G3997 August 2026 and for a whole month → file downloads (no print dialog) → PDF → PNG; inspect it matches the C layout, says nothing like an empty addressee.
+- `i18n-rtl-reviewer` if strings change. tsc/eslint/vitest/ruff on changed files.
+- One commit on `dev`: `feat(leaves-report): save the report as a PDF directly`. `dev-channel.ps1 publish`. Append evidence here.
+
+### Evidence D (2026-10-14)
+- **One builder.** `leave_service._generate_report` builds the subject, the body, «إعداد» and the addressee for both paths:
+  - `send_report_for_approval` calls it with `commit=True` (6/1).
+  - The new `report_pdf` calls it with `commit=False`. That is the existing draft path: `ref_number="DRAFT"`, no Book row, nothing submitted, no manager signature.
+- **Route.** `POST /leaves/report/pdf` (`LeaveReportPdfRequest{subject, body_html}`; `LeaveReportSendRequest` now extends it) returns the PDF as base64 text/plain, the in-app download pattern.
+  - It is gated by `leaves.view` only, and the service passes no `record_access_user`, so saving needs no General Book create access.
+  - Deviation from the plan: I did not chain `/documents/generate` → `/jobs` → `/documents/{id}/download`. That chain requires `documents.generate` and General Book record access, which would contradict "anyone who can see the report can save it". It would also need job polling.
+  - Types are synced (`api.types.ts`).
+- **Addressee.** Nothing is picked, so it names the paper's default signing manager: `resolve_manager(None)`, using its title or name, else `DEFAULT_MANAGER_TITLE`. That is the same manager the bottom block already prints, so there is no empty «السيد \ المحترم».
+- **No saved signature.** The PDF is still produced, and «التوقيع:» stays blank (unit test). Sending still requires a signature.
+- **UI.** «حفظ PDF» calls `api.leaveReportPdf` and saves the file with a `<a download>` blob.
+  - While Word renders, the button is disabled with `aria-busy` and a spinner. Errors use the `toast.error(apiErrorMessage)` pattern.
+  - The file name is the filed subject without path characters, then the date, for example `تقرير إجازات الموظف عبدالرحمن … عن شهر أغسطس 2026 — 2026-10-14.pdf`.
+  - «طباعة» still calls `window.print()`.
+- **Dev run** (Playwright, `window.print` stubbed to detect calls):
+  - G3997, August 2026: the file downloaded in 21 s, `print called: false`, 1 page. PNG: `.tmp/lr-275/save-employee-p1.png`.
+  - Whole month, August 2026: the file downloaded in 5.5 s, 5 pages. PNGs: `.tmp/lr-275/save-month-p1.png` and `-p5.png`.
+  - Both match the C layout: the ref is blank, there is no manager signature, and «إعداد» carries the preparer's signature.
+- **Checks.**
+  - `pytest backend/tests/test_leave_report_send.py`: 4 passed. The new parametrized test checks for a draft with no ref and no Book, the signature present or absent, and the addressee naming the default manager. The fixture now also patches `artifact_service.get_settings`, so the test no longer writes into the dev data directory.
+  - ruff check and format on the changed backend files.
+  - `mypy` on `leave_service.py` and `leaves.py`: no errors in them; the 22 errors reported are pre-existing ones in `book_service`, `auth_service` and `attendance_policy`.
+  - `tsc -b --noEmit`, and eslint on `ReportView.tsx` and `api.ts`.
+  - No UI strings changed.

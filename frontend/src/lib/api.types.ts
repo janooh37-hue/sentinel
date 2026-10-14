@@ -1232,6 +1232,28 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/leaves/report/pdf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Report Pdf
+         * @description The report as a draft General Book PDF (no ref, no book). Reading the
+         *     report is enough to save it. Base64 text/plain, like every in-app download,
+         *     so download managers leave it alone.
+         */
+        post: operations["report_pdf_api_v1_leaves_report_pdf_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/leaves/{leave_id}": {
         parameters: {
             query?: never;
@@ -11135,9 +11157,20 @@ export interface components {
             linked_documents?: components["schemas"]["LinkedDocumentRead"][];
         };
         /**
+         * LeaveReportPdfRequest
+         * @description POST /leaves/report/pdf — the leave report as a draft General Book PDF.
+         *     The server appends the preparer's signature block.
+         */
+        LeaveReportPdfRequest: {
+            /** Subject */
+            subject: string;
+            /** Body Html */
+            body_html: string;
+        };
+        /**
          * LeaveReportSendRequest
          * @description POST /leaves/report/send — file the leave report as a General Book and
-         *     send it for approval. The server appends the preparer's signature block.
+         *     send it for approval.
          */
         LeaveReportSendRequest: {
             /** Subject */
@@ -18463,6 +18496,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["LeaveReportSendResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    report_pdf_api_v1_leaves_report_pdf_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LeaveReportPdfRequest"];
+            };
+        };
+        responses: {
+            /** @description The PDF, base64 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": unknown;
                 };
             };
             /** @description Validation Error */

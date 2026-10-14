@@ -33,6 +33,7 @@ from app.schemas.leave import (
     LeaveListItem,
     LeaveListResponse,
     LeaveRead,
+    LeaveReportPdfRequest,
     LeaveReportSendRequest,
     LeaveReportSendResult,
     LeaveReturnRequest,
@@ -132,6 +133,25 @@ def send_report(
         approver_user_id=payload.approver_user_id,
     )
     return LeaveReportSendResult(book_id=book_id, ref=ref)
+
+
+@router.post(
+    "/report/pdf",
+    response_class=Response,
+    responses={200: {"content": {"text/plain": {}}, "description": "The PDF, base64"}},
+)
+def report_pdf(
+    payload: LeaveReportPdfRequest,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(require_capability("leaves.view"))],
+) -> Response:
+    """The report as a draft General Book PDF (no ref, no book). Reading the
+    report is enough to save it. Base64 text/plain, like every in-app download,
+    so download managers leave it alone."""
+    pdf = leave_service.report_pdf(db, user, subject=payload.subject, body_html=payload.body_html)
+    b64 = maybe_base64(pdf, "base64")
+    assert b64 is not None
+    return b64
 
 
 @router.post("", response_model=LeaveRead, status_code=status.HTTP_201_CREATED)

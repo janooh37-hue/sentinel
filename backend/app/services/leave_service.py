@@ -20,9 +20,10 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import and_, func, or_, select
 from sqlalchemy.orm import Session, joinedload
 
-from app.api.errors import NotFoundError, ValidationFailedError
+from app.api.errors import AppError, NotFoundError, ValidationFailedError
 from app.config import get_settings
 from app.core import leave_lifecycle
+from app.core.constants import DEFAULT_MANAGER_TITLE
 from app.core.leave_calc import TOTAL_AVAILABLE_CAP, LeaveBalance
 from app.db.models import AuditLog, Document, Employee, Leave, Manager, User
 from app.schemas.leave import LeaveBalanceRead, LeaveCreate, LeaveStatus, LeaveUpdate
@@ -807,15 +808,22 @@ def list_annual_overlapping(
 REPORT_CLASSIFICATION = "6/1"
 
 
-def _prepared_by_html(db: Session, user: User, signature: Path) -> str:
+def _prepared_by_html(db: Session, user: User, signature: Path | None) -> str:
     """«إعداد»: the preparer's name, job title, saved signature and today's
     date, centred like the Report paper's signature block. Each line keeps with
-    the next, so the block never splits across pages."""
+    the next, so the block never splits across pages. Without a saved signature
+    (a saved PDF only) the «التوقيع:» line stays blank for a pen."""
     emp = db.get(Employee, user.employee_id) if user.employee_id else None
     name = (emp.name_ar or emp.name_en or "") if emp is not None else ""
     name = name or user.display_name or user.email
     title = (emp.position_ar or emp.position or "").strip() if emp is not None else ""
-    image = base64.b64encode(signature.read_bytes()).decode("ascii")
+    image = (
+        '<img src="data:image/png;base64,{}" width="120">'.format(
+            base64.b64encode(signature.read_bytes()).decode("ascii")
+        )
+        if signature is not None
+        else ""
+    )
     today = datetime.now(_WORKFORCE_TIMEZONE).strftime("%d/%m/%Y")
     keep = 'dir="rtl" style="text-align:center;page-break-after:avoid"'
     lines = [
@@ -823,11 +831,64 @@ def _prepared_by_html(db: Session, user: User, signature: Path) -> str:
         "<b>إعداد</b>",
         f"الإسم: {html.escape(name)}",
         *([f"المسمى الوظيفي: {html.escape(title)}"] if title else []),
-        f'التوقيع: <img src="data:image/png;base64,{image}" width="120">',
+        f"التوقيع: {image}",
     ]
     return "".join(f"<p {keep}>{line}</p>" for line in lines) + (
         f'<p dir="rtl" style="text-align:center">التاريخ: {today}</p>'
     )
+
+
+def _generate_report(
+    db: Session,
+    user: User,
+    *,
+    subject: str,
+    body_html: str,
+    signature: Path | None,
+    manager: Manager | None,
+    fallback_addressee: str,
+    commit: bool,
+) -> document_service.GenerationResult:
+    """The one builder behind the filed book and the saved PDF: subject, body,
+    «إعداد», and the addressee line («السيد \\ … المحترم») naming *manager*."""
+    addressee = (
+        (manager.title or manager.name_ar or manager.name_en) if manager is not None else None
+    ) or fallback_addressee
+    return document_service.generate_document(
+        db,
+        employee_id=None,
+        template_id="General Book",
+        fields={
+            "subject": subject,
+            "recipient_name": addressee,
+            "body": body_html + _prepared_by_html(db, user, signature),
+        },
+        manager_id=manager.id if manager is not None else None,
+        current_user=user,
+        commit=commit,
+        classification_code=REPORT_CLASSIFICATION if commit else None,
+    )
+
+
+def report_pdf(db: Session, user: User, *, subject: str, body_html: str) -> bytes:
+    """The report as a draft General Book PDF: same paper as the filed book,
+    but no ref, no Book row, nothing submitted. The addressee and the manager
+    block name the default signing manager (whom the paper already prints when
+    none is picked). The preparer's saved signature is used when there is one."""
+    manager = document_service.resolve_manager(db, explicit_manager_id=None)
+    result = _generate_report(
+        db,
+        user,
+        subject=subject,
+        body_html=body_html,
+        signature=user_signature_service.resolve_signature(user),
+        manager=manager,
+        fallback_addressee=DEFAULT_MANAGER_TITLE,
+        commit=False,
+    )
+    if result.pdf_path is None:
+        raise AppError("PDF_NOT_AVAILABLE", "The PDF could not be rendered.", http_status=503)
+    return result.pdf_path.read_bytes()
 
 
 def send_report_for_approval(
@@ -862,24 +923,16 @@ def send_report_for_approval(
             "SIGNATURE_REQUIRED", "Save your signature in Settings before sending a report."
         )
     # The printed manager block names the approver when they are a linked
-    # manager; the addressee line («السيد \ … المحترم») names them either way.
-    manager = db.scalar(select(Manager).where(Manager.user_id == approver.id, Manager.active))
-    addressee = (
-        (manager.title or manager.name_ar or manager.name_en) if manager is not None else None
-    ) or (approver.display_name or approver.email)
-    result = document_service.generate_document(
+    # manager; the addressee line names them either way.
+    result = _generate_report(
         db,
-        employee_id=None,
-        template_id="General Book",
-        fields={
-            "subject": subject,
-            "recipient_name": addressee,
-            "body": body_html + _prepared_by_html(db, user, signature),
-        },
-        manager_id=manager.id if manager is not None else None,
-        current_user=user,
+        user,
+        subject=subject,
+        body_html=body_html,
+        signature=signature,
+        manager=db.scalar(select(Manager).where(Manager.user_id == approver.id, Manager.active)),
+        fallback_addressee=approver.display_name or approver.email,
         commit=True,
-        classification_code=REPORT_CLASSIFICATION,
     )
     assert result.book_id is not None  # commit=True always files a book
     book_service.submit_for_approval(
@@ -903,6 +956,7 @@ __all__ = [
     "list_annual_overlapping",
     "list_for_employee",
     "list_leaves",
+    "report_pdf",
     "send_report_for_approval",
     "soft_delete_leave",
     "update_leave",

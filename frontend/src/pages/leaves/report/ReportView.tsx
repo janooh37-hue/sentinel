@@ -1,7 +1,8 @@
 /**
  * ReportView — the Records page's printable leave report: an options panel at
- * the inline start (Print / Save PDF at its foot) and the paper beside it,
- * exactly as it prints.
+ * the inline start (Print / Save PDF / Send at its foot) and the paper beside
+ * it, exactly as it prints. «Save PDF» downloads the server-built General Book
+ * draft — the same paper «Send» files, without a ref.
  *
  * It opens with the register's filters (`seed`) and keeps its own choices
  * after that, so shaping a report never disturbs the register. Rows come from
@@ -12,12 +13,13 @@
  * the operator picks those statuses explicitly.
  */
 import { useId, useMemo, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useMutation, useQuery } from '@tanstack/react-query'
 import type { TFunction } from 'i18next'
 import { useTranslation } from 'react-i18next'
-import { FileDown, PenLine, Printer } from 'lucide-react'
+import { FileDown, Loader2, PenLine, Printer } from 'lucide-react'
+import { toast } from 'sonner'
 
-import { api, type LeaveListItem } from '@/lib/api'
+import { api, apiErrorMessage, type LeaveListItem } from '@/lib/api'
 import { isQuickActionAllowed } from '@/lib/dashboardLayout'
 import { UNASSIGNED, unitOptions } from '@/lib/dutyUnits'
 import { useCapabilities } from '@/lib/useCapabilities'
@@ -189,6 +191,22 @@ export function ReportView({ all, today, seed, paperOnly = false }: ReportViewPr
       window: periodWindow(period),
       employee: employeeId ? { emp, all, today } : undefined,
     })
+  const filedSubjectAr = filedSubject(arT, dateLocale('ar'), filedScope)
+  const savePdf = useMutation({
+    mutationFn: () => api.leaveReportPdf({ subject: filedSubjectAr, body_html: buildBody() }),
+    onSuccess: (blob) => {
+      const url = URL.createObjectURL(blob)
+      const anchor = document.createElement('a')
+      anchor.href = url
+      // Like a filed book's download name, minus the ref; no path separators.
+      anchor.download = `${filedSubjectAr.replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim()} — ${today}.pdf`
+      document.body.append(anchor)
+      anchor.click()
+      anchor.remove()
+      setTimeout(() => URL.revokeObjectURL(url), 0) // Firefox cancels a download revoked before it starts
+    },
+    onError: (err) => toast.error(apiErrorMessage(err)),
+  })
 
   const paper = (
     <ReportPaper
@@ -422,8 +440,6 @@ export function ReportView({ all, today, seed, paperOnly = false }: ReportViewPr
           {t('leaves.report.includeSignatures')}
         </label>
 
-        {/* «Save PDF» is the print dialog's own PDF target, as on every other
-            document in the app, so both actions open the same dialog. */}
         <div className="flex flex-col gap-2 border-t border-hairline pt-4">
           <Button type="button" disabled={sections.length === 0 && !employeeId} onClick={() => window.print()}>
             <Printer className="h-4 w-4" aria-hidden />
@@ -432,10 +448,15 @@ export function ReportView({ all, today, seed, paperOnly = false }: ReportViewPr
           <Button
             type="button"
             variant="secondary"
-            disabled={sections.length === 0 && !employeeId}
-            onClick={() => window.print()}
+            disabled={(sections.length === 0 && !employeeId) || savePdf.isPending}
+            aria-busy={savePdf.isPending || undefined}
+            onClick={() => savePdf.mutate()}
           >
-            <FileDown className="h-4 w-4" aria-hidden />
+            {savePdf.isPending ? (
+              <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+            ) : (
+              <FileDown className="h-4 w-4" aria-hidden />
+            )}
             {t('leaves.report.savePdf')}
           </Button>
           {canSend && (
@@ -453,7 +474,7 @@ export function ReportView({ all, today, seed, paperOnly = false }: ReportViewPr
         <SendReportDialog
           open={sending}
           onOpenChange={setSending}
-          subject={filedSubject(arT, dateLocale('ar'), filedScope)}
+          subject={filedSubjectAr}
           scope={facts}
           buildBody={buildBody}
         />

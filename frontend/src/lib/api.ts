@@ -251,6 +251,7 @@ export type LeaveUpdate = Omit<components['schemas']['LeaveUpdate'], 'notify_emp
 }
 export type LeaveAmend = components['schemas']['LeaveAmend']
 export type LeaveBalanceRead = components['schemas']['LeaveBalanceRead']
+export type LeaveReportPdfRequest = components['schemas']['LeaveReportPdfRequest']
 export type LeaveReportSendRequest = components['schemas']['LeaveReportSendRequest']
 export type LeaveReportSendResult = components['schemas']['LeaveReportSendResult']
 export type LeaveStatus = 'Pending' | 'Approved' | 'Rejected' | 'Cancelled' | 'Completed'
@@ -1475,6 +1476,18 @@ export const api = {
   createLeave: (body: LeaveCreate) => request<LeaveRead>('POST', '/leaves', body),
   sendLeaveReport: (body: LeaveReportSendRequest) =>
     request<LeaveReportSendResult>('POST', '/leaves/report/send', body),
+  /** The report as a draft General Book PDF, base64 over the wire (IDM-safe). */
+  leaveReportPdf: async (body: LeaveReportPdfRequest): Promise<Blob> => {
+    const res = await fetch(`${BASE}/leaves/report/pdf`, {
+      method: 'POST',
+      cache: 'no-store',
+      credentials: 'same-origin',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+    if (!res.ok) await unwrap<never>(res) // throws the error envelope as an ApiError
+    return base64ToBlob(await res.text())
+  },
 
   // --- security permits (greenfield 2026-07) ---
   listPermits: (params: {

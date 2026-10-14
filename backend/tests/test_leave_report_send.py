@@ -1,6 +1,7 @@
 """Leave report «Sign and send to manager»: the report is filed as a General
 Book under 6/1 carrying the preparer's saved signature, and goes to the picked
-approver; a preparer without a signature files nothing."""
+approver; a preparer without a signature files nothing. «Save as PDF» renders
+the same paper as a draft: no ref, no book, signature optional."""
 
 from __future__ import annotations
 
@@ -8,6 +9,8 @@ import base64
 from io import BytesIO
 from pathlib import Path
 
+import docx
+import fitz
 import pytest
 from PIL import Image
 from sqlalchemy import func, select
@@ -15,8 +18,9 @@ from sqlalchemy.orm import Session
 
 from app.api.errors import ValidationFailedError
 from app.config import Settings
-from app.db.models import Book, BookApprovalStep, BookCategory, Manager, User
-from app.services import document_service, leave_service, user_signature_service
+from app.core.constants import DEFAULT_MANAGER_TITLE
+from app.db.models import Book, BookApprovalStep, BookCategory, Document, Manager, User
+from app.services import artifact_service, document_service, leave_service, user_signature_service
 from tests.conftest import make_user
 
 
@@ -24,11 +28,45 @@ from tests.conftest import make_user
 def env(api_db: Session, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[Session, Path]:
     settings = Settings(data_dir=tmp_path / "data")
     monkeypatch.setattr(document_service, "get_settings", lambda: settings)
+    monkeypatch.setattr(artifact_service, "get_settings", lambda: settings)
     monkeypatch.setattr(user_signature_service, "get_settings", lambda: settings)
     monkeypatch.setattr(document_service, "convert_docx_to_pdf", lambda p: None)
     api_db.add(BookCategory(id="GS", prefix="GS"))
     api_db.commit()
     return api_db, settings.data_dir
+
+
+def _write_pdf(docx_path: Path) -> Path:
+    out = docx_path.with_suffix(".pdf")
+    pdf = fitz.open()
+    pdf.new_page()
+    pdf.save(out)
+    return out
+
+
+@pytest.mark.parametrize("signed", [True, False])
+def test_saved_pdf_is_an_unfiled_draft_with_or_without_a_signature(
+    env, monkeypatch: pytest.MonkeyPatch, signed: bool
+) -> None:
+    db, data_dir = env
+    monkeypatch.setattr(document_service, "convert_docx_to_pdf", _write_pdf)
+    user = (
+        _preparer_with_signature(db, data_dir)[0]
+        if signed
+        else make_user(db, role="admin", email="nosig@x.ae")
+    )
+
+    pdf = leave_service.report_pdf(db, user, subject="تقرير", body_html="<p>x</p>")
+
+    assert pdf.startswith(b"%PDF")
+    assert db.scalar(select(func.count()).select_from(Book)) == 0
+    draft = db.scalar(select(Document).order_by(Document.id.desc()))
+    assert draft is not None and draft.ref_number == "DRAFT"
+    paper = docx.Document(str(data_dir / draft.docx_path))
+    assert len(paper.inline_shapes) == (1 if signed else 0)
+    # No picked manager: the addressee names the default signing manager.
+    addressee = next(p.text for p in paper.paragraphs if p.text.strip().startswith("السيد"))
+    assert DEFAULT_MANAGER_TITLE in addressee
 
 
 def _preparer_with_signature(db: Session, data_dir: Path) -> tuple[User, bytes]:
