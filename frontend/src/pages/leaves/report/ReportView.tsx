@@ -241,9 +241,11 @@ export function ReportView({ all, today, seed, paperOnly = false }: ReportViewPr
 
   return (
     <div className="grid grid-cols-[19rem_minmax(0,1fr)] items-start gap-6 max-lg:grid-cols-1 print:block">
+      {/* Sticky in the tab's scroll box; 21rem ≈ shell + page header + view toolbar + bottom padding, so the
+          panel's own scrollbar keeps every option reachable at any scroll position of the paper. */}
       <section
         aria-label={t('leaves.report.optionsLabel')}
-        className="flex flex-col gap-5 rounded-2xl border border-hairline bg-surface p-4 lg:sticky lg:top-0"
+        className="flex flex-col gap-5 rounded-2xl border border-hairline bg-surface p-4 lg:sticky lg:top-0 lg:max-h-[calc(100dvh-21rem)] lg:overflow-y-auto"
         data-print-hide
       >
         <fieldset className="min-w-0">
