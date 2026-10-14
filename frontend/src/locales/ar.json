@@ -1988,6 +1988,8 @@
       },
       "optCompany": "السرية",
       "allCompanies": "جميع السرايا",
+      "excludeDeparted": "استبعاد المستقيلين والمفصولين",
+      "departedExcluded": "دون المستقيلين والمفصولين",
       "optSort": "الترتيب حسب",
       "optSortDir": "اتجاه الترتيب",
       "sortAsc": "تصاعدي",

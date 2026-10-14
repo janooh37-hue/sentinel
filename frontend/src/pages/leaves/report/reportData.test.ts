@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest'
 import type { LeaveListItem } from '@/lib/api'
 import { UNASSIGNED } from '@/lib/dutyUnits'
 
-import { matchesCompany } from './reportData'
+import { isDeparted, matchesCompany } from './reportData'
 
 const row = (over: Partial<LeaveListItem> = {}): LeaveListItem => ({
   id: 1,
@@ -32,5 +32,18 @@ describe('matchesCompany', () => {
     expect(matchesCompany(row({ employee_duty_unit: null }), UNASSIGNED)).toBe(true)
     expect(matchesCompany(row({ employee_duty_unit: '  ' }), UNASSIGNED)).toBe(true)
     expect(matchesCompany(row({ employee_duty_unit: 'السرية الأولى' }), UNASSIGNED)).toBe(false)
+  })
+})
+
+describe('isDeparted', () => {
+  it('flags resigned and terminated in stored bilingual and clean spellings', () => {
+    expect(isDeparted(row({ employee_status: 'Resigned - مستقيل' }))).toBe(true)
+    expect(isDeparted(row({ employee_status: 'Terminated' }))).toBe(true)
+  })
+
+  it('keeps working, transferred, loaned and unknown statuses', () => {
+    for (const s of ['Active - نشط', 'Transferred - منقول', 'Loaned', null]) {
+      expect(isDeparted(row({ employee_status: s }))).toBe(false)
+    }
   })
 })

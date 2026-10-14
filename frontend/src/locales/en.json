@@ -1828,6 +1828,8 @@
       },
       "optCompany": "Company",
       "allCompanies": "All companies",
+      "excludeDeparted": "Exclude resigned and terminated",
+      "departedExcluded": "Resigned and terminated excluded",
       "optSort": "Sort by",
       "optSortDir": "Sort direction",
       "sortAsc": "Ascending",

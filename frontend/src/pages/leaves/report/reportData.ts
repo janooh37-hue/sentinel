@@ -115,6 +115,14 @@ export function matchesCompany(r: LeaveListItem, company: string | null): boolea
   return company === UNASSIGNED ? unit === '' : unit === company
 }
 
+const DEPARTED = ['Resigned', 'Terminated']
+
+/** The employee has left (resigned or terminated). Someone serving notice
+ * keeps a working `status` until the departure applies, so they are not. */
+export function isDeparted(r: LeaveListItem): boolean {
+  return DEPARTED.includes(englishPart(r.employee_status ?? '').trim())
+}
+
 /** A record's day contribution to a window (the prototype's per-day
  * attribution, done arithmetically): stored `days` when the record lies fully
  * inside; otherwise the calendar-day overlap, capped at the stored count

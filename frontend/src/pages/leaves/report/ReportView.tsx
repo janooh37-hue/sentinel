@@ -31,7 +31,7 @@ import {
 import { dateLocale, fmtDayMonthYear } from './fmt'
 import { CANONICAL_KINDS, kindMeta, type KindId } from './kinds'
 import {
-  applyScope, buildReportSections, matchesCompany, matchesStaff,
+  applyScope, buildReportSections, isDeparted, matchesCompany, matchesStaff,
   type MonthRef, type ReportPeriod, type ReportSort, type StaffFilter,
 } from './reportData'
 import { ReportPaper } from './ReportPaper'
@@ -81,6 +81,7 @@ export function ReportView({ all, today, seed, paperOnly = false }: ReportViewPr
   const [employeeId, setEmployeeId] = useState(seed.employeeId)
   const [staff, setStaff] = useState<StaffFilter>('all')
   const [company, setCompany] = useState<string | null>(null)
+  const [excludeDeparted, setExcludeDeparted] = useState(true)
   const [sort, setSort] = useState<ReportSort>({ key: 'days', dir: 'desc' })
   const [withSignatures, setWithSignatures] = useState(false)
 
@@ -95,10 +96,11 @@ export function ReportView({ all, today, seed, paperOnly = false }: ReportViewPr
       (r) =>
         matchesStaff(r, staff) &&
         matchesCompany(r, company) &&
+        !(excludeDeparted && isDeparted(r)) &&
         (statuses.length > 0 || !NOT_TAKEN.includes(canonStatus(r.status))),
     )
     return buildReportSections(picked, period, sort, (r) => leaveEmployeeName(r, i18n.language), i18n.language)
-  }, [all, periodMode, year, month, from, to, employeeId, kinds, statuses, staff, company, sort, i18n.language])
+  }, [all, periodMode, year, month, from, to, employeeId, kinds, statuses, staff, company, excludeDeparted, sort, i18n.language])
 
   const companies = useMemo(() => unitOptions(all.map((r) => ({ duty_unit: r.employee_duty_unit }))), [all])
   const companyLabel = (c: string): string => (c === UNASSIGNED ? t('dutyLocations.unassigned') : c)
@@ -127,6 +129,7 @@ export function ReportView({ all, today, seed, paperOnly = false }: ReportViewPr
     periodLabel,
     staff !== 'all' && t(`leaves.report.staff.${staff}`),
     company !== null && companyLabel(company),
+    excludeDeparted && t('leaves.report.departedExcluded'),
     statuses.map((s) => t(`leaves.status.${s}`)).join(', '),
     employeeRow ? leaveEmployeeName(employeeRow, i18n.language) : employeeId,
   ].filter((f): f is string => !!f)
@@ -257,6 +260,15 @@ export function ReportView({ all, today, seed, paperOnly = false }: ReportViewPr
               </button>
             ))}
           </div>
+          <label className="mt-2 inline-flex cursor-pointer items-center gap-2 text-[0.85em] text-foreground">
+            <input
+              type="checkbox"
+              checked={excludeDeparted}
+              onChange={(e) => setExcludeDeparted(e.target.checked)}
+              className="h-4 w-4 accent-primary"
+            />
+            {t('leaves.report.excludeDeparted')}
+          </label>
         </fieldset>
 
         <div className="min-w-0">
