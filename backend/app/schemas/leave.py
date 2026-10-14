@@ -114,6 +114,8 @@ class LeaveListItem(ORMBase):
     days: int
     status: str
     has_certificate: bool = False
+    # Filed return (Duty Resumption) date; the single-employee report lists it.
+    return_date: date | None = None
     created_at: datetime
 
 

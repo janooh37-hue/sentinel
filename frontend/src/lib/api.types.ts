@@ -11046,6 +11046,8 @@ export interface components {
              * @default false
              */
             has_certificate: boolean;
+            /** Return Date */
+            return_date?: string | null;
             /**
              * Created At
              * Format: date-time

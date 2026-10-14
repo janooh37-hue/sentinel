@@ -31,9 +31,10 @@ import {
 import { dateLocale, fmtDayMonthYear } from './fmt'
 import { CANONICAL_KINDS, kindMeta, type KindId } from './kinds'
 import {
-  applyScope, buildReportSections, isDeparted, matchesCompany, matchesStaff,
+  applyScope, buildReportSections, isDeparted, matchesCompany, matchesStaff, periodWindow,
   type MonthRef, type ReportPeriod, type ReportSort, type StaffFilter,
 } from './reportData'
+import { EmployeeReportDetails } from './EmployeeReportDetails'
 import { ReportPaper } from './ReportPaper'
 
 /** The register's filters at the moment the report opens. */
@@ -85,7 +86,7 @@ export function ReportView({ all, today, seed, paperOnly = false }: ReportViewPr
   const [sort, setSort] = useState<ReportSort>({ key: 'days', dir: 'desc' })
   const [withSignatures, setWithSignatures] = useState(false)
 
-  const sections = useMemo(() => {
+  const { period, picked, sections } = useMemo(() => {
     const period: ReportPeriod =
       periodMode === 'year'
         ? { mode: 'year', year }
@@ -99,7 +100,8 @@ export function ReportView({ all, today, seed, paperOnly = false }: ReportViewPr
         !(excludeDeparted && isDeparted(r)) &&
         (statuses.length > 0 || !NOT_TAKEN.includes(canonStatus(r.status))),
     )
-    return buildReportSections(picked, period, sort, (r) => leaveEmployeeName(r, i18n.language), i18n.language)
+    const sections = buildReportSections(picked, period, sort, (r) => leaveEmployeeName(r, i18n.language), i18n.language)
+    return { period, picked, sections }
   }, [all, periodMode, year, month, from, to, employeeId, kinds, statuses, staff, company, excludeDeparted, sort, i18n.language])
 
   const companies = useMemo(() => unitOptions(all.map((r) => ({ duty_unit: r.employee_duty_unit }))), [all])
@@ -125,13 +127,14 @@ export function ReportView({ all, today, seed, paperOnly = false }: ReportViewPr
           })
         : null
   const employeeRow = employeeId ? all.find((r) => r.employee_id === employeeId) : undefined
+  const employeeName = employeeRow ? leaveEmployeeName(employeeRow, i18n.language) : employeeId
   const facts = [
     periodLabel,
     staff !== 'all' && t(`leaves.report.staff.${staff}`),
     company !== null && companyLabel(company),
     excludeDeparted && t('leaves.report.departedExcluded'),
     statuses.map((s) => t(`leaves.status.${s}`)).join(', '),
-    employeeRow ? leaveEmployeeName(employeeRow, i18n.language) : employeeId,
+    employeeName,
   ].filter((f): f is string => !!f)
   const title = t('leaves.report.paperTitle', {
     topic:
@@ -148,6 +151,22 @@ export function ReportView({ all, today, seed, paperOnly = false }: ReportViewPr
       emptyHeading={periodLabel ?? title}
       today={today}
       signatures={withSignatures}
+      lead={
+        employeeId && employeeName
+          ? {
+              heading: employeeName,
+              body: (
+                <EmployeeReportDetails
+                  employeeId={employeeId}
+                  all={all}
+                  rows={picked}
+                  window={periodWindow(period)}
+                  today={today}
+                />
+              ),
+            }
+          : undefined
+      }
       onScreen={!paperOnly}
     />
   )
@@ -357,14 +376,14 @@ export function ReportView({ all, today, seed, paperOnly = false }: ReportViewPr
         {/* «Save PDF» is the print dialog's own PDF target, as on every other
             document in the app, so both actions open the same dialog. */}
         <div className="flex flex-col gap-2 border-t border-hairline pt-4">
-          <Button type="button" disabled={sections.length === 0} onClick={() => window.print()}>
+          <Button type="button" disabled={sections.length === 0 && !employeeId} onClick={() => window.print()}>
             <Printer className="h-4 w-4" aria-hidden />
             {t('leaves.report.print')}
           </Button>
           <Button
             type="button"
             variant="secondary"
-            disabled={sections.length === 0}
+            disabled={sections.length === 0 && !employeeId}
             onClick={() => window.print()}
           >
             <FileDown className="h-4 w-4" aria-hidden />

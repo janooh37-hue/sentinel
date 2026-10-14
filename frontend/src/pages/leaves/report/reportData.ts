@@ -138,6 +138,13 @@ export function daysInWindow(r: LeaveListItem, w: DayWindow): number {
   return Math.min(r.days, diffDays(overlapStart, overlapEnd) + 1)
 }
 
+/** Leaves touching the window, oldest start first: the single-employee list. */
+export function periodLeaves(rows: LeaveListItem[], w: DayWindow): LeaveListItem[] {
+  return rows
+    .filter((r) => r.start_date.slice(0, 10) <= w.end && r.end_date.slice(0, 10) >= w.start)
+    .sort((a, b) => (a.start_date < b.start_date ? -1 : a.start_date > b.start_date ? 1 : 0))
+}
+
 /** Rows whose days count as leave days (per-kind lifecycle: record-only kinds
  * and Rejected/Cancelled rows drop out). Used for all figures
  * (Fig. 1 / Fig. 2 / insight). */
