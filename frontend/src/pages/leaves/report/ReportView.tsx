@@ -16,6 +16,7 @@ import { useTranslation } from 'react-i18next'
 import { FileDown, Printer } from 'lucide-react'
 
 import type { LeaveListItem } from '@/lib/api'
+import { UNASSIGNED, unitOptions } from '@/lib/dutyUnits'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
@@ -30,7 +31,7 @@ import {
 import { dateLocale, fmtDayMonthYear } from './fmt'
 import { CANONICAL_KINDS, kindMeta, type KindId } from './kinds'
 import {
-  applyScope, buildReportSections, matchesStaff,
+  applyScope, buildReportSections, matchesCompany, matchesStaff,
   type MonthRef, type ReportPeriod, type ReportSort, type StaffFilter,
 } from './reportData'
 import { ReportPaper } from './ReportPaper'
@@ -79,6 +80,7 @@ export function ReportView({ all, today, seed, paperOnly = false }: ReportViewPr
   const [statuses, setStatuses] = useState(seed.statuses)
   const [employeeId, setEmployeeId] = useState(seed.employeeId)
   const [staff, setStaff] = useState<StaffFilter>('all')
+  const [company, setCompany] = useState<string | null>(null)
   const [sort, setSort] = useState<ReportSort>({ key: 'days', dir: 'desc' })
   const [withSignatures, setWithSignatures] = useState(false)
 
@@ -91,10 +93,15 @@ export function ReportView({ all, today, seed, paperOnly = false }: ReportViewPr
           : { mode: 'range', from, to }
     const picked = applyScope(all, { month: null, employeeId, kinds, statuses, q: '' }).filter(
       (r) =>
-        matchesStaff(r, staff) && (statuses.length > 0 || !NOT_TAKEN.includes(canonStatus(r.status))),
+        matchesStaff(r, staff) &&
+        matchesCompany(r, company) &&
+        (statuses.length > 0 || !NOT_TAKEN.includes(canonStatus(r.status))),
     )
     return buildReportSections(picked, period, sort, (r) => leaveEmployeeName(r, i18n.language), i18n.language)
-  }, [all, periodMode, year, month, from, to, employeeId, kinds, statuses, staff, sort, i18n.language])
+  }, [all, periodMode, year, month, from, to, employeeId, kinds, statuses, staff, company, sort, i18n.language])
+
+  const companies = useMemo(() => unitOptions(all.map((r) => ({ duty_unit: r.employee_duty_unit }))), [all])
+  const companyLabel = (c: string): string => (c === UNASSIGNED ? t('dutyLocations.unassigned') : c)
 
   const years = useMemo(
     () =>
@@ -119,6 +126,7 @@ export function ReportView({ all, today, seed, paperOnly = false }: ReportViewPr
   const facts = [
     periodLabel,
     staff !== 'all' && t(`leaves.report.staff.${staff}`),
+    company !== null && companyLabel(company),
     statuses.map((s) => t(`leaves.status.${s}`)).join(', '),
     employeeRow ? leaveEmployeeName(employeeRow, i18n.language) : employeeId,
   ].filter((f): f is string => !!f)
@@ -250,6 +258,25 @@ export function ReportView({ all, today, seed, paperOnly = false }: ReportViewPr
             ))}
           </div>
         </fieldset>
+
+        <div className="min-w-0">
+          <label htmlFor={`${ids}-company`} className={FIELD_LABEL}>
+            {t('leaves.report.optCompany')}
+          </label>
+          <select
+            id={`${ids}-company`}
+            value={company ?? ''}
+            onChange={(e) => setCompany(e.target.value || null)}
+            className={cn(NATIVE_SELECT, 'w-full')}
+          >
+            <option value="">{t('leaves.report.allCompanies')}</option>
+            {[...companies, UNASSIGNED].map((c) => (
+              <option key={c} value={c}>
+                {companyLabel(c)}
+              </option>
+            ))}
+          </select>
+        </div>
 
         <fieldset className="min-w-0">
           <legend className={FIELD_LABEL}>{t('leaves.columns.status')}</legend>

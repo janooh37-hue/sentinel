@@ -1986,6 +1986,8 @@
         "ours": "موظفونا",
         "loaned": "ملحق"
       },
+      "optCompany": "السرية",
+      "allCompanies": "جميع السرايا",
       "optSort": "الترتيب حسب",
       "optSortDir": "اتجاه الترتيب",
       "sortAsc": "تصاعدي",

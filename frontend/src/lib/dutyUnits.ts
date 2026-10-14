@@ -92,7 +92,7 @@ export function postsForUnit(emps: readonly DutyEmployee[], unit: string): strin
  * extra units actually present in the data (first-seen), de-duplicated. The
  * Unassigned bucket is never a destination.
  */
-export function unitOptions(emps: readonly DutyEmployee[]): string[] {
+export function unitOptions(emps: readonly Pick<DutyEmployee, 'duty_unit'>[]): string[] {
   const out: string[] = [...SEED_UNITS]
   const seen = new Set<string>(SEED_UNITS)
   for (const emp of emps) {

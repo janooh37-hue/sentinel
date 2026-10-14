@@ -5,6 +5,7 @@
  * split Y/M/D parts. */
 import type { LeaveListItem } from '@/lib/api'
 import { englishPart } from '@/lib/bilingualValue'
+import { UNASSIGNED } from '@/lib/dutyUnits'
 import { classifyLeaveType, CANONICAL_KINDS, type KindId } from './kinds'
 import { canonStatus, countsDays } from '../lifecycle'
 
@@ -104,6 +105,14 @@ export function matchesStaff(r: LeaveListItem, staff: StaffFilter): boolean {
   if (staff === 'all') return true
   const loaned = englishPart(r.employee_status ?? '').trim() === 'Loaned'
   return staff === 'loaned' ? loaned : !loaned
+}
+
+/** The report's company (duty unit) filter: `null` = every company,
+ * `UNASSIGNED` = employees with no duty unit. */
+export function matchesCompany(r: LeaveListItem, company: string | null): boolean {
+  if (company === null) return true
+  const unit = (r.employee_duty_unit ?? '').trim()
+  return company === UNASSIGNED ? unit === '' : unit === company
 }
 
 /** A record's day contribution to a window (the prototype's per-day
