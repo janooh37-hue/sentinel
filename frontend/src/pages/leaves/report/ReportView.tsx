@@ -1,8 +1,8 @@
 /**
  * ReportView — the Records page's printable leave report: an options panel at
- * the inline start (Print / Save PDF / Send at its foot) and the paper beside
- * it, exactly as it prints. «Save PDF» downloads the server-built General Book
- * draft — the same paper «Send» files, without a ref.
+ * the inline start and the paper beside it, exactly as it prints, under one
+ * row of actions (Print / Save PDF / Send). «Save PDF» downloads the
+ * server-built General Book draft — the same paper «Send» files, without a ref.
  *
  * It opens with the register's filters (`seed`) and keeps its own choices
  * after that, so shaping a report never disturbs the register. Rows come from
@@ -439,8 +439,18 @@ export function ReportView({ all, today, seed, paperOnly = false }: ReportViewPr
           />
           {t('leaves.report.includeSignatures')}
         </label>
+        <SendReportDialog
+          open={sending}
+          onOpenChange={setSending}
+          subject={filedSubjectAr}
+          scope={facts}
+          buildBody={buildBody}
+        />
+      </section>
 
-        <div className="flex flex-col gap-2 border-t border-hairline pt-4">
+      <div className="flex min-w-0 flex-col gap-4 print:block">
+        {/* Same width as the sheet, so the row starts at the paper's edge. */}
+        <div className="mx-auto flex w-full max-w-[210mm] flex-wrap items-center gap-2 print:hidden" data-print-hide>
           <Button type="button" disabled={sections.length === 0 && !employeeId} onClick={() => window.print()}>
             <Printer className="h-4 w-4" aria-hidden />
             {t('leaves.report.print')}
@@ -471,16 +481,8 @@ export function ReportView({ all, today, seed, paperOnly = false }: ReportViewPr
             </Button>
           )}
         </div>
-        <SendReportDialog
-          open={sending}
-          onOpenChange={setSending}
-          subject={filedSubjectAr}
-          scope={facts}
-          buildBody={buildBody}
-        />
-      </section>
-
-      {paper}
+        {paper}
+      </div>
     </div>
   )
 }

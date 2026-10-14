@@ -138,3 +138,17 @@ Verify D:
   - `mypy` on `leave_service.py` and `leaves.py`: no errors in them; the 22 errors reported are pre-existing ones in `book_service`, `auth_service` and `attendance_policy`.
   - `tsc -b --noEmit`, and eslint on `ReportView.tsx` and `api.ts`.
   - No UI strings changed.
+
+### D addendum: report actions as a toolbar (user request 2026-10-14)
+- **Change.** Print, Save PDF and Sign-and-send moved from the foot of the options column to one horizontal row directly above the paper (`ReportView.tsx`).
+  - Classes: `mx-auto flex w-full max-w-[210mm] flex-wrap items-center gap-2 print:hidden` plus `data-print-hide`. The row is as wide as the sheet, so it starts at the paper's inline-start edge.
+  - The column wrapper is `print:block`. `SendReportDialog` wiring is unchanged (it portals).
+  - Logical CSS only, and no new strings.
+- **Screenshots** (Playwright on dev, August 2026):
+  - `.tmp/lr-275/toolbar-ar-desktop.png` and `toolbar-en-desktop.png` (1440 px).
+  - `toolbar-ar-1024.png` and `toolbar-en-1024.png`.
+  - `toolbar-ar-narrow.png` and `toolbar-en-narrow.png` (800 px). The view is desktop-only below `md`. At 800 px the options panel stacks above, and the toolbar still sits directly above the paper.
+  - AR puts «طباعة» at the right edge, EN puts «Print» at the left edge, and the order mirrors.
+  - With `print` media emulated, the Print button is not visible at any of the six sizes.
+  - All three buttons fit on one row at every width the view renders, so the `flex-wrap` fallback did not trigger.
+- **Review.** `i18n-rtl-reviewer` found no must-fix items on the toolbar or on D. Its should-fix items on D are handled in the next commit.
