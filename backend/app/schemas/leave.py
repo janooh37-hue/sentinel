@@ -130,24 +130,26 @@ class LeaveAwaitingReturnCount(BaseModel):
     count: int
 
 
-class LeaveReportPdfRequest(BaseModel):
-    """POST /leaves/report/pdf — the leave report as a draft General Book PDF.
-    The server appends the preparer's signature block."""
+class LeaveReportSendRequest(BaseModel):
+    """POST /leaves/report/send — file the leave report as a General Book and
+    send it for approval. The server appends the preparer's signature block."""
 
     subject: str = Field(min_length=1, max_length=300)
     body_html: str = Field(min_length=1)
-
-
-class LeaveReportSendRequest(LeaveReportPdfRequest):
-    """POST /leaves/report/send — file the leave report as a General Book and
-    send it for approval."""
-
     approver_user_id: int
 
 
 class LeaveReportSendResult(BaseModel):
     book_id: int
     ref: str
+
+
+class LeaveReportPdfRequest(BaseModel):
+    """POST /leaves/report/pdf — the printable report sheet (the DOM «Print»
+    prints) as HTML, printed to PDF by the server's own browser."""
+
+    html: str = Field(min_length=1, max_length=5_000_000)
+    lang: Literal["ar", "en"]
 
 
 class LeaveBalanceRead(BaseModel):

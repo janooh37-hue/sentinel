@@ -1476,7 +1476,8 @@ export const api = {
   createLeave: (body: LeaveCreate) => request<LeaveRead>('POST', '/leaves', body),
   sendLeaveReport: (body: LeaveReportSendRequest) =>
     request<LeaveReportSendResult>('POST', '/leaves/report/send', body),
-  /** The report as a draft General Book PDF, base64 over the wire (IDM-safe). */
+  /** The printable report sheet printed to PDF by the server's browser,
+   *  base64 over the wire (IDM-safe). */
   leaveReportPdf: async (body: LeaveReportPdfRequest): Promise<Blob> => {
     const res = await fetch(`${BASE}/leaves/report/pdf`, {
       method: 'POST',

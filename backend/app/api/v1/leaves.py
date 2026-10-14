@@ -39,7 +39,7 @@ from app.schemas.leave import (
     LeaveReturnRequest,
     LeaveUpdate,
 )
-from app.services import leave_service
+from app.services import leave_service, sheet_pdf_service
 
 router = APIRouter(prefix="/leaves", tags=["leaves"])
 
@@ -142,13 +142,13 @@ def send_report(
 )
 def report_pdf(
     payload: LeaveReportPdfRequest,
-    db: Annotated[Session, Depends(get_db)],
-    user: Annotated[User, Depends(require_capability("leaves.view"))],
+    _user: Annotated[User, Depends(require_capability("leaves.view"))],
 ) -> Response:
-    """The report as a draft General Book PDF (no ref, no book). Reading the
-    report is enough to save it. Base64 text/plain, like every in-app download,
-    so download managers leave it alone."""
-    pdf = leave_service.report_pdf(db, user, subject=payload.subject, body_html=payload.body_html)
+    """The printable report sheet as a PDF, printed by the server's browser so
+    it matches «Print» without a print dialog. Reading the report is enough to
+    save it. Base64 text/plain, like every in-app download, so download
+    managers leave it alone."""
+    pdf = sheet_pdf_service.print_sheet(payload.html, lang=payload.lang)
     b64 = maybe_base64(pdf, "base64")
     assert b64 is not None
     return b64

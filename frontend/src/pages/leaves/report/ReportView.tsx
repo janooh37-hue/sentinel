@@ -1,8 +1,8 @@
 /**
  * ReportView — the Records page's printable leave report: an options panel at
  * the inline start and the paper beside it, exactly as it prints, under one
- * row of actions (Print / Save PDF / Send). «Save PDF» downloads the
- * server-built General Book draft — the same paper «Send» files, without a ref.
+ * row of actions (Print / Save PDF / Send). «Save PDF» saves that same sheet,
+ * printed to a file by the server's browser (no print dialog).
  *
  * It opens with the register's filters (`seed`) and keeps its own choices
  * after that, so shaping a report never disturbs the register. Rows come from
@@ -12,7 +12,7 @@
  * Rejected and cancelled leaves are not days taken, so they count only when
  * the operator picks those statuses explicitly.
  */
-import { useId, useMemo, useState } from 'react'
+import { useId, useMemo, useRef, useState } from 'react'
 import { useMutation, useQuery } from '@tanstack/react-query'
 import type { TFunction } from 'i18next'
 import { useTranslation } from 'react-i18next'
@@ -34,7 +34,7 @@ import {
   CHIP_BASE, CHIP_OFF, CHIP_ON, FIELD_LABEL, NATIVE_SELECT, SEGMENT_BUTTON, SEGMENT_GROUP,
   SEGMENT_OFF, SEGMENT_ON, WORKFLOW_STATUSES, toggleItem,
 } from './controls'
-import { dateLocale, fmtDayMonthYear } from './fmt'
+import { dateLocale, fmtDayMonthYear, fmtMonthYear } from './fmt'
 import { CANONICAL_KINDS, kindMeta, type KindId } from './kinds'
 import {
   applyScope, buildReportSections, isDeparted, matchesCompany, matchesStaff, periodWindow,
@@ -136,6 +136,10 @@ export function ReportView({ all, today, seed, paperOnly = false }: ReportViewPr
     const companyName = company === UNASSIGNED ? tt('dutyLocations.unassigned') : company
     return {
       periodLabel,
+      // The saved PDF's name: period, then company or employee when scoped.
+      fileScope: [periodMode === 'month' ? month && fmtMonthYear(month, loc) : periodLabel, companyName, employeeName]
+        .filter(Boolean)
+        .join(' — '),
       facts: [
         periodLabel,
         staff !== 'all' && tt(`leaves.report.staff.${staff}`),
@@ -152,7 +156,7 @@ export function ReportView({ all, today, seed, paperOnly = false }: ReportViewPr
       }),
     }
   }
-  const { periodLabel, facts, title } = describe(t, i18n.language)
+  const { periodLabel, facts, title, fileScope } = describe(t, i18n.language)
   // The filed General Book is always Arabic, like the book itself.
   const arT = i18n.getFixedT('ar')
   const filedScope: FiledScope = {
@@ -191,15 +195,27 @@ export function ReportView({ all, today, seed, paperOnly = false }: ReportViewPr
       window: periodWindow(period),
       employee: employeeId ? { emp, all, today } : undefined,
     })
-  const filedSubjectAr = filedSubject(arT, dateLocale('ar'), filedScope)
+  // «Save PDF» posts the very sheet «Print» prints; the server's own browser
+  // prints it, so the file matches the print without a print dialog.
+  const sheetRef = useRef<HTMLDivElement>(null)
   const savePdf = useMutation({
-    mutationFn: () => api.leaveReportPdf({ subject: filedSubjectAr, body_html: buildBody() }),
+    mutationFn: () =>
+      api.leaveReportPdf({
+        html: sheetRef.current?.querySelector('.print-leave-report')?.outerHTML ?? '',
+        lang: i18n.language.startsWith('ar') ? 'ar' : 'en',
+      }),
     onSuccess: (blob) => {
       const url = URL.createObjectURL(blob)
       const anchor = document.createElement('a')
       anchor.href = url
-      // Like a filed book's download name, minus the ref; no path separators.
-      anchor.download = `${filedSubjectAr.replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim()} — ${today}.pdf`
+      // Characters Windows rejects and bidi controls (a pasted RLE/LRM reorders
+      // the whole name in the download bar) become spaces.
+      anchor.download = `${t('leaves.report.pdfFilename', { scope: fileScope, date: today })
+        // eslint-disable-next-line no-control-regex
+        .replace(/[\\/:*?"<>|\u0000-\u001f\u007f\u200e\u200f\u202a-\u202e\u2066-\u2069]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .replace(/(?:\s*—\s*){2,}/g, ' — ') // an empty scope leaves one separator, not two
+        .trim()}.pdf`
       document.body.append(anchor)
       anchor.click()
       anchor.remove()
@@ -444,13 +460,13 @@ export function ReportView({ all, today, seed, paperOnly = false }: ReportViewPr
         <SendReportDialog
           open={sending}
           onOpenChange={setSending}
-          subject={filedSubjectAr}
+          subject={filedSubject(arT, dateLocale('ar'), filedScope)}
           scope={facts}
           buildBody={buildBody}
         />
       </section>
 
-      <div className="flex min-w-0 flex-col gap-4 print:block">
+      <div ref={sheetRef} className="flex min-w-0 flex-col gap-4 print:block">
         {/* Same width as the sheet, so the row starts at the paper's edge. */}
         <div className="mx-auto flex w-full max-w-[210mm] flex-wrap items-center gap-2 print:hidden" data-print-hide>
           <Button type="button" disabled={sections.length === 0 && !employeeId} onClick={() => window.print()}>

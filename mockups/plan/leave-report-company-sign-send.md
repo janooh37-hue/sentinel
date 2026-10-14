@@ -151,7 +151,43 @@ Verify D:
   - AR puts «طباعة» at the right edge, EN puts «Print» at the left edge, and the order mirrors.
   - With `print` media emulated, the Print button is not visible at any of the six sizes.
   - All three buttons fit on one row at every width the view renders, so the `flex-wrap` fallback did not trigger.
-- **Review.** `i18n-rtl-reviewer` found no must-fix items on the toolbar or on D. Its should-fix items on D are handled in the next commit.
+- **Review.** `i18n-rtl-reviewer` found no must-fix items on the toolbar or on D. Its should-fix items on D (filename date separators and bidi controls, a blank line to sign by pen) were **not** committed: D was stopped and replaced by E.
+
+## E — «Save as PDF» = the printable sheet, saved straight to a file (user, 2026-10-14 14:4x; replaces D's General Book draft)
+
+User: the saved PDF must be **the same as the printable one** (the on-screen report sheet that «Print» prints, `ReportPaper.tsx` + print CSS). The General Book draft from D is wrong for saving: with no manager approval there is no ref, so the letter format makes no sense. Still **no print dialog**.
+
+- Replace D's draft path (`POST /leaves/report/pdf` → `leave_service.report_pdf` / `api.leaveReportPdf` / `savePdf` mutation, commit 5a50925d). Remove what becomes dead; keep `send_report_for_approval` (it shares `_generate_report`) working and unchanged in behaviour.
+- No new npm/pip dependency. Options, in order of preference — measure, pick the first that gives a faithful, Arabic-correct PDF:
+  1. Server prints the sheet with the **installed Chromium browser in headless mode** (`msedge`/`chrome --headless --print-to-pdf`, or Chrome DevTools `Page.printToPDF` via stdlib if flags are not enough for page size/margins). Both exist on GSSGLT (`C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe`, `C:/Program Files/Google/Chrome/Application/chrome.exe`). The browser path must be resolved at runtime (Edge, then Chrome) with a clear 503 if neither is present — production is GSSGAPP (Windows), do not hard-code one host's path. The client posts the sheet's HTML (the same DOM the print uses, with the built CSS/fonts resolvable, e.g. inline the app stylesheet or serve via the same origin) — the PDF must look like the browser's print of that sheet, including RTL, fonts, page breaks and the print-only parts.
+  2. If headless print cannot be made faithful and safe (sanitise posted HTML: no scripts, no external fetches; run with a temp profile, timeout, kill on hang), STOP and report options with evidence. Do not fall back to the General Book.
+- Frontend: «حفظ PDF» in the toolbar (28509b34) calls it, busy state, blob `<a download>`, filename `تقرير الإجازات — <scope> — <date>.pdf` (Arabic and English per UI language), error toast.
+- Permission: anyone who can view the report.
+- Verify: download for G3997 August 2026 and for a whole month in AR and EN → render to PNG → compare side by side with the browser's own print of the same sheet (`.tmp/lr-save/`). pytest for the new route (happy path + browser missing). tsc/eslint/vitest/ruff on changed files. `i18n-rtl-reviewer`. Commit `fix(leaves-report): save the printable report as a PDF`, publish, append evidence. Also correct D's evidence line that says reviewer items were "handled in the next commit" (they were not).
+
+### Evidence E (2026-10-14)
+- **Replaced D.**
+  - `leave_service.py`, `schemas/leave.py` and `test_leave_report_send.py` are back to their `eef80ec2` (C) state. `report_pdf`, `_generate_report`, the optional-signature path and the D test are gone, and `send_report_for_approval` is byte-for-byte as in C.
+  - The test fixture now also patches `artifact_service.get_settings`, so it no longer writes into the dev data directory.
+- **Server.** New `services/sheet_pdf_service.py`. `POST /leaves/report/pdf` (`LeaveReportPdfRequest{html, lang: ar|en}`, ≤ 5 MB, gated by `leaves.view` only) returns base64 text/plain.
+  - The posted sheet HTML is wrapped in `<html lang dir><div id="root">` with the built app CSS inlined. `/assets/` font URLs point at `backend/app/static/assets` on disk.
+  - The page is printed by headless Edge, else Chrome, resolved at runtime from `ProgramFiles(x86)`, `ProgramFiles` and `LocalAppData`. It runs `--print-to-pdf --no-pdf-header-footer` with a throwaway profile and a 60 s timeout, and a hang is killed with `taskkill /T /F`. No browser gives a 503 `PDF_BROWSER_UNAVAILABLE`; a failed print gives a 503 `PDF_NOT_AVAILABLE`.
+  - **Safety.** `<script>` tags are stripped. The page CSP is `default-src 'none'; style-src 'unsafe-inline'; img-src data:; font-src file: data:`, which allows no network, no scripts or inline handlers, and no `file:` images, so a posted `<img src=file:…>` can't pull server files into the PDF. The wordmark is inlined as a data URI.
+  - Measured: `--blink-settings=scriptEnabled=false` makes `--print-to-pdf` write nothing, so it is not used.
+- **Frontend.**
+  - «حفظ PDF» posts `.print-leave-report` `outerHTML` (the same DOM «Print» prints) and the UI language. It is busy and disabled while printing, saves with a blob `<a download>`, and shows `toast.error(apiErrorMessage)` on failure.
+  - New key `leaves.report.pdfFilename` (ar/en) gives `تقرير الإجازات — أغسطس 2026 — <name> — 2026-10-14.pdf` and `Leave report — August 2026 — 2026-10-14.pdf`. Characters Windows rejects and bidi controls are stripped, and an empty scope leaves a single separator.
+- **Dev run** (Playwright, August 2026; `window.print` stubbed, print dialog never called):
+  - The download took 2–3.4 s per file.
+  - Each file was compared with the browser's own print of the same page (`page.pdf`, print media): same page count (employee 2/2, month 4/4), all A4, and the same text on every page except one extraction-order difference on AR employee p2.
+  - The images are visually identical: fonts, RTL/LTR, the `n / N` counter, footer.
+  - Side-by-side PNGs (left saved, right print) in `.tmp/lr-save/`: `ar-employee-p1/p2`, `ar-month-p1/p4`, `en-employee-p1/p2` and `en-month-p1/p4`, each `-saved-vs-print.png`.
+- **Checks.**
+  - `pytest test_leave_report_pdf.py test_leave_report_send.py`: 4 passed. The new tests cover the happy path (scripts stripped, CSP, wordmark inlined, font URLs on disk, base64 PDF back) and the missing browser (503 `PDF_BROWSER_UNAVAILABLE`).
+  - ruff check and format on the changed backend files. mypy reports no errors in `sheet_pdf_service.py` or `leaves.py`.
+  - `tsc -b --noEmit`, eslint on `ReportView.tsx` and `api.ts`, and `vitest src/pages/leaves/report` (15 passed).
+  - `api.types.ts` was regenerated.
+- **Review.** `i18n-rtl-reviewer` raised one must-fix: a cleared month input crashed `describe()`. It is now guarded. Its should-fix (a doubled separator when the scope is empty) is applied.
 
 ## F — Long tables must not run into the letterhead header/footer bands (user screenshots, 2026-10-14)
 

@@ -1243,9 +1243,10 @@ export interface paths {
         put?: never;
         /**
          * Report Pdf
-         * @description The report as a draft General Book PDF (no ref, no book). Reading the
-         *     report is enough to save it. Base64 text/plain, like every in-app download,
-         *     so download managers leave it alone.
+         * @description The printable report sheet as a PDF, printed by the server's browser so
+         *     it matches «Print» without a print dialog. Reading the report is enough to
+         *     save it. Base64 text/plain, like every in-app download, so download
+         *     managers leave it alone.
          */
         post: operations["report_pdf_api_v1_leaves_report_pdf_post"];
         delete?: never;
@@ -11158,19 +11159,22 @@ export interface components {
         };
         /**
          * LeaveReportPdfRequest
-         * @description POST /leaves/report/pdf — the leave report as a draft General Book PDF.
-         *     The server appends the preparer's signature block.
+         * @description POST /leaves/report/pdf — the printable report sheet (the DOM «Print»
+         *     prints) as HTML, printed to PDF by the server's own browser.
          */
         LeaveReportPdfRequest: {
-            /** Subject */
-            subject: string;
-            /** Body Html */
-            body_html: string;
+            /** Html */
+            html: string;
+            /**
+             * Lang
+             * @enum {string}
+             */
+            lang: "ar" | "en";
         };
         /**
          * LeaveReportSendRequest
          * @description POST /leaves/report/send — file the leave report as a General Book and
-         *     send it for approval.
+         *     send it for approval. The server appends the preparer's signature block.
          */
         LeaveReportSendRequest: {
             /** Subject */

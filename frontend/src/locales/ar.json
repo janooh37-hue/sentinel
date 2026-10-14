@@ -1968,6 +1968,7 @@
       "clearFilters": "مسح عوامل التصفية",
       "print": "طباعة",
       "savePdf": "حفظ PDF",
+      "pdfFilename": "تقرير الإجازات — {{scope}} — {{date}}",
       "viewLabel": "العرض",
       "view_register": "السجل",
       "view_report": "التقرير",

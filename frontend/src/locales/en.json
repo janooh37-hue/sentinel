@@ -1808,6 +1808,7 @@
       "clearFilters": "Clear filters",
       "print": "Print",
       "savePdf": "Save PDF",
+      "pdfFilename": "Leave report — {{scope}} — {{date}}",
       "viewLabel": "View",
       "view_register": "Register",
       "view_report": "Report",
