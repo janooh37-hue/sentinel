@@ -904,9 +904,8 @@ def _pp_leave_permit(doc: Any, ctx: dict[str, Any]) -> None:
 
 
 def _pp_admin_leave(doc: Any, ctx: dict[str, Any]) -> None:
-    """Same signer-block layout as Leave Permit, plus clear the literal "x"
-    placeholder in the branch-manager التوقيع value cell so it reads as a clean,
-    empty manual-signature line."""
+    """Keep the manager signer block inside the final notes box, and leave
+    the separate branch-manager التوقيع cell clean for a manual signature."""
     try:
         branch_sig_cell = doc.tables[2].rows[3].cells[1]
         for para in branch_sig_cell.paragraphs:
@@ -914,8 +913,9 @@ def _pp_admin_leave(doc: Any, ctx: dict[str, Any]) -> None:
                 replace_paragraph_text(para, "")
     except IndexError:
         log.warning("Admin Leave: branch التوقيع cell (t2 r3 c1) missing")
-    _place_manager_sig_above_name(doc, ctx)
-    _finalize_manager_block(doc, ctx)
+    manager_cell = doc.tables[3].rows[1].cells[0]
+    _place_manager_sig_above_name(manager_cell, ctx)
+    _finalize_manager_block(manager_cell, ctx)
 
 
 def _pp_material_request(doc: Any, ctx: dict[str, Any]) -> None:
