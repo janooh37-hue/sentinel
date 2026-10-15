@@ -451,7 +451,7 @@ function ExternalCard({ result, file, onDismiss }: ExternalCardProps): React.JSX
                   type="button"
                   variant="outline"
                   size="sm"
-                  onClick={() => navigate('/ledger')}
+                  onClick={() => navigate('/ledger?tab=email')}
                 >
                   {t('intake.external.logLedger')}
                 </Button>

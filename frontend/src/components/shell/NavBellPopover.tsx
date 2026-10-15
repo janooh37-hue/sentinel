@@ -603,7 +603,7 @@ function DefaultNavBellPopover(): React.JSX.Element {
             )}
             {canViewLedger ? (
               <Link
-                to="/ledger"
+                to="/ledger?tab=email"
                 onClick={() => setOpen(false)}
                 className="flex items-center justify-between px-4 py-2.5 text-sm text-primary transition-colors hover:bg-surface-tinted focus-visible:bg-surface-tinted focus-visible:outline-none"
               >

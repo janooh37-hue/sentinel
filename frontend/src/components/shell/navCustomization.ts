@@ -65,7 +65,7 @@ export const SIGNAL_ENTRIES: readonly DockEntry[] = [
     kind: 'signal',
     labelKey: 'nav.signals.ledgerUnread',
     Icon: Inbox,
-    to: '/ledger',
+    to: '/ledger?tab=email',
     cap: 'ledger.view',
     signal: 'ledgerUnread',
   },
