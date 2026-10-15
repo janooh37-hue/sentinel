@@ -170,9 +170,10 @@ describe('Books routing desk', () => {
     await userEvent.click(await screen.findByRole('button', { name: /GS-7/ }))
     await userEvent.click(await screen.findByRole('button', { name: 'Undo done' }))
     await waitFor(() => expect(api.undoBookInboxDone).toHaveBeenCalledWith(7))
-    // The last book left the scope, so the view falls back to the list.
+    // The last book left the scope, so the view falls back to the list and focus to the scope tab.
     await waitFor(() => expect(screen.getByLabelText('URL').textContent).not.toContain('book='))
     expect(screen.queryByRole('button', { name: /GS-7/ })).not.toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: 'Done' })).toHaveFocus()
     await userEvent.click(screen.getByRole('tab', { name: 'Incoming' }))
     expect(await screen.findByRole('button', { name: /GS-7/ })).toBeInTheDocument()
   })

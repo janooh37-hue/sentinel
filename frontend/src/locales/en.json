@@ -2792,7 +2792,8 @@
       },
       "state": {
         "unread": "New",
-        "read": "Read"
+        "read": "Read",
+        "archived": "Archived"
       },
       "openInRecords": "Open in Records",
       "details": "Details",

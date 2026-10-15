@@ -3039,11 +3039,12 @@
         "subject": "الموضوع",
         "createdBy": "أنشأه",
         "state": "الحالة",
-        "papers": "الأوراق"
+        "papers": "المستندات"
       },
       "state": {
         "unread": "جديد",
-        "read": "مقروء"
+        "read": "مقروء",
+        "archived": "مؤرشف"
       },
       "openInRecords": "فتح في المستندات",
       "details": "التفاصيل",

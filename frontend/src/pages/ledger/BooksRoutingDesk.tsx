@@ -52,7 +52,7 @@ function DeskLoading(): React.JSX.Element {
 /** Where the book stands in my inbox: shape + text, so colour is never the only cue. */
 function InboxState({ inbox }: { inbox: BookInboxRead }): React.JSX.Element {
   const { t } = useTranslation()
-  if (inbox.archived_at) return <span className="inline-flex items-center gap-1.5"><Archive className="h-3.5 w-3.5 shrink-0" aria-hidden />{t('books.inbox.archivedState')}</span>
+  if (inbox.archived_at) return <span className="inline-flex items-center gap-1.5"><Archive className="h-3.5 w-3.5 shrink-0" aria-hidden />{t('ledger.booksDesk.state.archived')}</span>
   if (inbox.done_at) return <span className="inline-flex items-center gap-1.5 text-success"><CheckCheck className="h-3.5 w-3.5 shrink-0" aria-hidden />{t('books.inbox.doneState')}</span>
   if (inbox.read_at) return <span>{t('ledger.booksDesk.state.read')}</span>
   return <span className="inline-flex items-center gap-1.5 font-semibold text-foreground"><span aria-hidden className="h-2 w-2 shrink-0 rounded-full bg-primary" />{t('ledger.booksDesk.state.unread')}</span>
@@ -83,7 +83,7 @@ export function BooksRoutingDesk(): React.JSX.Element {
   const selectedId = /^\d+$/.test(bookParam) && Number(bookParam) > 0 ? Number(bookParam) : null
   const [lastOpenedId, setLastOpenedId] = useState(selectedId)
   if (selectedId !== null && selectedId !== lastOpenedId) setLastOpenedId(selectedId)
-  const listRef = useRef<HTMLUListElement>(null)
+  const deskRef = useRef<HTMLElement>(null)
   const [search, setSearch] = useState('')
   const [query, setQuery] = useState('')
   const [offset, setOffset] = useState(0)
@@ -92,8 +92,10 @@ export function BooksRoutingDesk(): React.JSX.Element {
     return () => window.clearTimeout(timer)
   }, [search])
   useEffect(() => {
-    // Back from a book returns focus to its row.
-    if (selectedId === null && lastOpenedId !== null) listRef.current?.querySelector<HTMLElement>(`[data-book-id="${lastOpenedId}"]`)?.focus()
+    // Back returns focus to the opened row, or to the scope tab when that row left the scope.
+    if (selectedId !== null || lastOpenedId === null) return
+    const desk = deskRef.current
+    ;(desk?.querySelector<HTMLElement>(`[data-book-id="${lastOpenedId}"]`) ?? desk?.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]'))?.focus()
   }, [selectedId, lastOpenedId])
   const summary = useInboxSummary()
   const list = useQuery({
@@ -165,7 +167,7 @@ export function BooksRoutingDesk(): React.JSX.Element {
   const unread = summary.data?.unread ?? 0
 
   return (
-    <section dir={i18n.dir()} className="flex min-h-0 flex-1 flex-col bg-surface" aria-label={t('ledger.tabs.books')}>
+    <section ref={deskRef} dir={i18n.dir()} className="flex min-h-0 flex-1 flex-col bg-surface" aria-label={t('ledger.tabs.books')}>
       {/* Keep the list mounted while a book is open so Back restores search and scroll. */}
       <div hidden={open} className={cn('min-h-0 flex-1 flex-col', open ? 'hidden' : 'flex')}>
         <div className="flex shrink-0 flex-wrap items-center gap-x-6 border-b border-border px-4 lg:px-6">
@@ -206,7 +208,7 @@ export function BooksRoutingDesk(): React.JSX.Element {
                 {received && <span>{t('ledger.booksDesk.columns.state')}</span>}
                 <span className="text-end">{t(received ? 'ledger.booksDesk.sent' : 'ledger.booksDesk.created')}</span>
               </div>
-              <ul ref={listRef} className="divide-y divide-hairline" aria-label={scopeLabel(scope)}>
+              <ul className="divide-y divide-hairline" aria-label={scopeLabel(scope)}>
                 {rows.map((book) => {
                   const inbox = book.my_inbox
                   const papers = paperCountOf(book, { inmateReporter: false })
@@ -227,18 +229,18 @@ export function BooksRoutingDesk(): React.JSX.Element {
                         )}
                       >
                         {received && <span className="min-w-0">{inbox && <PurposeMark purpose={inbox.purpose} />}</span>}
-                        <span title={book.ref_number} className="min-w-0 truncate font-mono text-xs tabular-nums text-muted-foreground"><bdi dir="ltr">{book.ref_number}</bdi></span>
+                        <span title={book.ref_number} className="min-w-0 truncate text-xs text-muted-foreground"><bdi dir="ltr" className="font-mono tabular-nums">{book.ref_number}</bdi></span>
                         <span className="col-span-3 flex min-w-0 items-baseline gap-3 lg:col-span-1">
                           <span dir="auto" className={cn('min-w-0 break-words', inbox && !inbox.read_at ? 'font-semibold' : 'font-medium')}>{book.subject || t('ledger.booksDesk.untitled')}</span>
                           {papers > 1 && <PaperCount count={papers} />}
                         </span>
                         <span className="col-span-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground lg:contents">
-                          <bdi className="min-w-0 truncate lg:text-sm lg:text-foreground">{who}</bdi>
+                          <span className="min-w-0 truncate lg:text-sm lg:text-foreground"><span className="sr-only">{t(received ? 'ledger.booksDesk.from' : 'ledger.booksDesk.columns.createdBy')}: </span><bdi>{who}</bdi></span>
                           <span className="empty:hidden lg:empty:block"><ConfidentialityChip level={book.confidentiality} /></span>
                           {received && <span className="lg:text-sm">{inbox && <InboxState inbox={inbox} />}</span>}
                         </span>
                         <span className="col-start-3 row-start-1 text-end text-xs text-muted-foreground lg:col-start-auto lg:row-start-auto">
-                          <BookDate value={inbox?.sent_at ?? book.created_at} />
+                          <span className="sr-only">{t(received ? 'ledger.booksDesk.sent' : 'ledger.booksDesk.created')}: </span><BookDate value={inbox?.sent_at ?? book.created_at} />
                         </span>
                       </button>
                     </li>

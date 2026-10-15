@@ -2504,9 +2504,10 @@ will trip over them.
 `components/books/PurposeMark.tsx`.
 
 - Books is the first Ledger tab and the landing tab. Email opens for
-  `?tab=email`, `?mail=`, `?action=`, or a `composePrefill` / `ledgerView`
-  navigation state; the resolved tab is pinned in the URL with replace.
-  Users without `books.view` (and inmate reporters) land on Email.
+  `?tab=email`, `?mail=` or `?action=`; the resolved tab is pinned in the URL
+  with replace. Email hand-offs (`composePrefill`, `ledgerView` state) navigate
+  to `/ledger?tab=email` so the pin never rewrites their entry. Users without
+  `books.view` (and inmate reporters) land on Email.
 - Incoming / Done / Outgoing / Archived are personal routing scopes. Done means
   the caller marked their received book done; Archived takes precedence over
   Incoming and Done. Incoming shows the unread count as plain mono text.
@@ -2545,7 +2546,8 @@ will trip over them.
   and replaces the list and the Ledger tabs with a full-page view; the list stays
   mounted but hidden. Toolbar Back and browser Back both pop to the list, which
   keeps scope, search and scroll and returns focus to the opened row
-  (`aria-current`, `bg-primary-soft`).
+  (`aria-current`, `bg-primary-soft`), or to the scope tab when that row left
+  the scope.
   1. One toolbar, `bg-surface-raised border-b px-3 py-2 lg:px-4`, `flex-wrap`:
      Back to books (ghost), hairline divider, inbox actions (Mark as done is the
      only `default` button), Send / Forward, reply actions; then at the inline
