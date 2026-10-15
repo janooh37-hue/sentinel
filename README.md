@@ -95,7 +95,6 @@ twice or against a different vehicle. Migration
 `0104_vehicle_maintenance_requests` adds the request history without changing
 existing maintenance records.
 
-
 ## Vehicle photo library
 
 Choose an existing main photo from **Add vehicle**, **Edit vehicle**, or the
