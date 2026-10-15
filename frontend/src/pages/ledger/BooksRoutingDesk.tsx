@@ -140,7 +140,7 @@ export function BooksRoutingDesk(): React.JSX.Element {
       })
     }
   }
-  const scopeLabel = (value: Scope): string => t(value === 'archived' ? 'books.inbox.archived' : `ledger.booksDesk.${value}`)
+  const scopeLabel = (value: Scope): string => t(`ledger.booksDesk.${value}`)
   const rows = list.data?.items ?? []
   const reader = !isMobile && readerPage.value === 'reader' && selectedId !== null
   const mobileBook = isMobile && selectedId !== null
