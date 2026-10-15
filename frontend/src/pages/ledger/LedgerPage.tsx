@@ -6,6 +6,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useAuth } from '@/lib/authContext'
 import { useCapabilities } from '@/lib/useCapabilities'
 
+import { BooksRoutingDesk } from './BooksRoutingDesk'
 import { LedgerOutlookShell } from './outlook/LedgerOutlookShell'
 
 interface LedgerPageProps {
@@ -24,7 +25,7 @@ interface LedgerPageProps {
 
 /** Keep email URL state and its fixed-LTR shell confined to the Email panel. */
 export function LedgerPage({ onNavigate }: LedgerPageProps = {}): React.JSX.Element {
-  const { t, i18n } = useTranslation()
+  const { t } = useTranslation()
   const { has, isLoading } = useCapabilities()
   const { user } = useAuth()
   const [params, setParams] = useSearchParams()
@@ -61,7 +62,7 @@ export function LedgerPage({ onNavigate }: LedgerPageProps = {}): React.JSX.Elem
 
   return (
     <Tabs value={tab} onValueChange={selectTab} className="flex min-h-0 flex-1 flex-col">
-      <TabsList className="shrink-0 px-4" >
+      <TabsList className="shrink-0 px-4">
         {canEmail && <TabsTrigger value="email">{t('ledger.tabs.email')}</TabsTrigger>}
         {canBooks && <TabsTrigger value="books">{t('ledger.tabs.books')}</TabsTrigger>}
       </TabsList>
@@ -72,7 +73,7 @@ export function LedgerPage({ onNavigate }: LedgerPageProps = {}): React.JSX.Elem
       )}
       {canBooks && (
         <TabsContent value="books" className="mt-0 flex min-h-0 flex-1 flex-col">
-          <section aria-label={t('ledger.tabs.books')} dir={i18n.dir()} />
+          <BooksRoutingDesk />
         </TabsContent>
       )}
     </Tabs>

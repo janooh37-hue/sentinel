@@ -10,6 +10,7 @@ vi.mock('@/lib/useCapabilities', () => ({
 vi.mock('@/lib/authContext', () => ({ useAuth: () => ({ user: { role: state.role } }) }))
 vi.mock('./outlook/LedgerOutlookShell', () => ({ LedgerOutlookShell: () => <div>email-shell</div> }))
 
+vi.mock('./BooksRoutingDesk', () => ({ BooksRoutingDesk: () => <div>books-desk</div> }))
 import { LedgerPage } from './LedgerPage'
 
 function Location(): React.JSX.Element {

@@ -2777,6 +2777,39 @@
       "email": "Email",
       "books": "Books"
     },
+    "booksDesk": {
+      "incoming": "Incoming",
+      "outgoing": "Outgoing",
+      "search": "Search reference or subject",
+      "dossier": "Book details",
+      "selectBook": "Select a book",
+      "selectHint": "Choose a book from the list to read its routing details and take action.",
+      "openRecord": "Open record",
+      "forward": "Send / Forward",
+      "from": "From",
+      "sent": "Sent",
+      "opened": "Opened",
+      "created": "Created",
+      "notDone": "Not done",
+      "notApplicable": "Not applicable",
+      "untitled": "No subject",
+      "noMatches": "No matching books",
+      "searchHint": "Try another reference or subject, or clear the search to see this scope.",
+      "clearSearch": "Clear search",
+      "previous": "Previous",
+      "next": "Next",
+      "retry": "Try again",
+      "empty": {
+        "incoming": "No incoming books",
+        "outgoing": "No outgoing books",
+        "archived": "No archived books"
+      },
+      "emptyHint": {
+        "incoming": "Books sent to you will appear here. Check Outgoing for books you have sent.",
+        "outgoing": "Open a record and use Send to route it to a colleague.",
+        "archived": "Use Archive on an incoming book to move it here. You can restore it at any time."
+      }
+    },
     "subtitle": "Correspondence and communication log",
     "pageMeta_one": "{{count}} entry · this month",
     "pageMeta_other": "{{count}} entries · this month",

@@ -59,7 +59,7 @@ export function useWaitingSignals(enabled: boolean): Partial<Record<WaitingSigna
   if (scanBackQuery.isSuccess && !scanBackQuery.isError) {
     signals.scanback = scanBackQuery.data.length
   }
-  if (ledgerUnreadQuery.isSuccess && !ledgerUnreadQuery.isError) {
+  if (authenticated && canViewLedger && ledgerUnreadQuery.isSuccess && !ledgerUnreadQuery.isError) {
     signals.ledgerUnread = ledgerUnreadQuery.data.total_unread
   }
   if (inboxQuery.isSuccess && !inboxQuery.isError) {
