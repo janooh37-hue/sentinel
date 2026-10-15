@@ -17,8 +17,11 @@ Enforcement uses one rule, held both as the SQL visibility clause and as its Pyt
 
 The level is a separate field from the التبويب filing classification code, which remains a filing index and record-type permission.
 
+Migration `0104_record_confidentiality` follows `0103_odometer_optional_closing`;
+recipient state and book links continue that single migration chain.
+
 Direct-send purposes are `info`, `action`, `reply`, and `circulate`; signing
-belongs to the approval chain. Migration 0103 translates legacy `sign` sends.
+belongs to the approval chain. Migration `0105_recipient_state` translates legacy `sign` sends.
 Recipients can mark their active sends done or archive them (both undoable).
 Done stamps first read; undo preserves it. Archive leaves access unchanged,
 excludes the send from received/unread counts, and exposes the record under
@@ -38,7 +41,7 @@ Direct-send and approval push text uses the Arabic name in Arabic, falling back
 to English; confidential direct-send notifications omit both name variants.
 
 Replies and derived records use a new General Book Word draft and a live
-`BookLink` to the original (migration 0104). The addressee is the sender of the
+`BookLink` to the original (migration `0106_book_links`). The addressee is the sender of the
 caller's newest active direct send, falling back to the original creator;
 the printed reference uses the original's reference and date. Create-from
 copies a General Book's structured or Word-authored body when available.
