@@ -1,8 +1,10 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
+import i18n from 'i18next'
 import { MemoryRouter, useLocation, useNavigate } from 'react-router-dom'
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import ar from '@/locales/ar.json'
 import type { BookRead } from '@/lib/api'
 import type * as ApiModule from '@/lib/api'
 
@@ -80,7 +82,6 @@ describe('Books routing desk', () => {
     await waitFor(() => expect(api.getBook).toHaveBeenCalledWith(7))
     resolveBook({ ...BOOK, versions: [{ id: 1, version_no: 1, document_id: 73, status: 'none', trigger: 'create', has_fields: false, created_at: BOOK.created_at, manager_sig_embedded: false }], my_inbox: { ...BOOK.my_inbox!, read_at: '2026-10-15T09:00:00Z' } })
     expect(await screen.findByRole('document')).toHaveAttribute('data-url', expect.stringContaining('/documents/73/download'))
-    await userEvent.click(screen.getByRole('button', { name: 'Details' }))
     expect(screen.getByRole('link', { name: 'Open in Records' })).toHaveAttribute('href', '/books/7')
     expect(invalidate).toHaveBeenCalledWith({ queryKey: ['books', 'inbox-summary'] })
     expect(invalidate).toHaveBeenCalledWith({ queryKey: ['notifications', 'counts'] })
@@ -88,32 +89,32 @@ describe('Books routing desk', () => {
     expect(qc.getQueryData<{ items: BookRead[] }>(['books', 'routing', 'incoming', '', 0])?.items[0].my_inbox?.read_at).toBeTruthy()
   })
 
-  it('pushes the reader URL and restores selection, search and list scroll on collapse and browser Back', async () => {
+  it.each(['toolbar', 'browser'])('opens a book over the list and %s Back restores scope, search, scroll and focus', async (back) => {
     vi.mocked(api.listBooks).mockResolvedValue({ items: [BOOK], total: 1, limit: 50, offset: 0 })
     vi.spyOn(api, 'getBook').mockResolvedValue(BOOK)
     mount('/ledger?tab=books&scope=incoming')
-    const search = screen.getByRole('searchbox')
-    await userEvent.type(search, 'Staff')
+    await userEvent.type(screen.getByRole('searchbox'), 'Staff')
     await waitFor(() => expect(api.listBooks).toHaveBeenLastCalledWith(expect.objectContaining({ q: 'Staff' })))
     const row = await screen.findByRole('button', { name: /GS-7/ })
     const scroller = row.closest('ul')!.parentElement!
     fireEvent.scroll(scroller, { target: { scrollTop: 180 } })
     await userEvent.click(row)
+    expect(screen.getByLabelText('URL').textContent).toContain('book=7')
+    expect(screen.queryByRole('searchbox')).not.toBeInTheDocument()
+    // Expand only widens the document; it is not a history step.
     await userEvent.click(await screen.findByRole('button', { name: 'Expand' }))
     expect(screen.getByLabelText('URL').textContent).toContain('view=reader')
-    expect(screen.queryByRole('searchbox')).not.toBeInTheDocument()
-    await userEvent.click(screen.getByRole('button', { name: 'Collapse' }))
-    expect(screen.getByLabelText('URL').textContent).not.toContain('view=reader')
+    expect(screen.queryByRole('complementary', { name: 'Details' })).not.toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: back === 'toolbar' ? 'Back to books' : 'Browser Back' }))
+    expect(screen.getByLabelText('URL').textContent).toBe('?tab=books&scope=incoming')
     expect(screen.getByRole('searchbox')).toHaveValue('Staff')
-    expect(screen.getByRole('button', { name: /GS-7/ })).toHaveAttribute('aria-current', 'true')
+    const restored = screen.getByRole('button', { name: /GS-7/ })
+    expect(restored).toHaveAttribute('aria-current', 'true')
+    expect(restored).toHaveFocus()
     expect(scroller.scrollTop).toBe(180)
-    await userEvent.click(screen.getByRole('button', { name: 'Expand' }))
-    await userEvent.click(screen.getByRole('button', { name: 'Browser Back' }))
-    expect(screen.getByLabelText('URL').textContent).not.toContain('view=reader')
-    expect(screen.getByRole('searchbox')).toHaveValue('Staff')
   })
 
-  it.each([false, true])('moves done out of Incoming and advances selection before refresh completes (reader=%s)', async (reader) => {
+  it.each([false, true])('moves done out of Incoming and opens the next book before refresh completes (expanded=%s)', async (expanded) => {
     const nextBook = { ...BOOK, id: 8, ref_number: 'GS-8', subject: 'Next instruction' }
     vi.mocked(api.listBooks).mockResolvedValueOnce({ items: [BOOK, nextBook], total: 2, limit: 50, offset: 0 })
     // Keep the invalidation fetch pending to prove the queue updates locally.
@@ -122,15 +123,15 @@ describe('Books routing desk', () => {
     vi.mocked(api.markBookInboxDone).mockResolvedValue({ ...BOOK.my_inbox!, done_at: '2026-10-15T10:00:00Z', read_at: '2026-10-15T09:00:00Z' })
     mount()
     await userEvent.click(await screen.findByRole('button', { name: /GS-7/ }))
-    await screen.findByRole('button', { name: 'Mark as done' })
-    if (reader) await userEvent.click(screen.getByRole('button', { name: 'Expand' }))
+    if (expanded) await userEvent.click(await screen.findByRole('button', { name: 'Expand' }))
     await userEvent.click(await screen.findByRole('button', { name: 'Mark as done' }))
     await waitFor(() => expect(api.markBookInboxDone).toHaveBeenCalledWith(7))
     await waitFor(() => expect(screen.getByRole('heading', { name: 'Next instruction' })).toBeInTheDocument())
-    if (reader) await userEvent.click(screen.getByRole('button', { name: 'Collapse' }))
+    expect(screen.getByLabelText('URL').textContent).toContain('book=8')
+    expect(screen.getByRole('button', { name: expanded ? 'Collapse' : 'Expand' })).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Back to books' }))
     expect(screen.queryByRole('button', { name: /GS-7/ })).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: /GS-8/ })).toHaveAttribute('aria-current', 'true')
-    expect(screen.getByLabelText('URL').textContent).toContain('book=8')
   })
 
   it('refreshes a cached destination scope after marking read on the next queue book', async () => {
@@ -152,6 +153,7 @@ describe('Books routing desk', () => {
     await userEvent.click(await screen.findByRole('button', { name: 'Mark as done' }))
     await screen.findByRole('heading', { name: 'Next instruction' })
     await waitFor(() => expect(api.getBook).toHaveBeenCalledWith(8))
+    await userEvent.click(screen.getByRole('button', { name: 'Back to books' }))
     await userEvent.click(screen.getByRole('tab', { name: 'Done' }))
     expect(await screen.findByRole('button', { name: /GS-7/ })).toBeInTheDocument()
   })
@@ -168,8 +170,66 @@ describe('Books routing desk', () => {
     await userEvent.click(await screen.findByRole('button', { name: /GS-7/ }))
     await userEvent.click(await screen.findByRole('button', { name: 'Undo done' }))
     await waitFor(() => expect(api.undoBookInboxDone).toHaveBeenCalledWith(7))
-    await waitFor(() => expect(screen.queryByRole('button', { name: /GS-7/ })).not.toBeInTheDocument())
+    // The last book left the scope, so the view falls back to the list.
+    await waitFor(() => expect(screen.getByLabelText('URL').textContent).not.toContain('book='))
+    expect(screen.queryByRole('button', { name: /GS-7/ })).not.toBeInTheDocument()
     await userEvent.click(screen.getByRole('tab', { name: 'Incoming' }))
     expect(await screen.findByRole('button', { name: /GS-7/ })).toBeInTheDocument()
+  })
+
+  it('marks each purpose with its own glyph and label, apart from the confidentiality chip', async () => {
+    const purposes = ['info', 'action', 'reply', 'circulate'] as const
+    vi.mocked(api.listBooks).mockResolvedValue({
+      items: purposes.map((purpose, index) => ({ ...BOOK, id: index + 1, ref_number: `GS-${index + 1}`, confidentiality: 'secret', my_inbox: { ...BOOK.my_inbox!, purpose } })),
+      total: 4, limit: 50, offset: 0,
+    })
+    mount()
+    for (const [index, label] of ['For information', 'For action', 'For reply', 'For circulation'].entries()) {
+      const row = await screen.findByRole('button', { name: new RegExp(`GS-${index + 1}`) })
+      const mark = within(row).getByText(label)
+      expect(mark).toHaveAttribute('data-purpose', purposes[index])
+      expect(mark.querySelector('svg')?.getAttribute('class')).toMatch(/lucide-/)
+      expect(mark.closest('[data-testid="confidentiality-chip"]')).toBeNull()
+      expect(within(row).getByTestId('confidentiality-chip')).toHaveTextContent('Secret')
+    }
+    const glyphs = purposes.map((purpose) => document.querySelector(`[data-purpose="${purpose}"] svg`)!.getAttribute('class'))
+    expect(new Set(glyphs).size).toBe(4)
+  })
+})
+
+describe('Books routing desk (Arabic)', () => {
+  beforeAll(async () => {
+    i18n.addResourceBundle('ar', 'translation', ar, true, true)
+    await i18n.changeLanguage('ar')
+  })
+  afterAll(async () => {
+    await i18n.changeLanguage('en')
+  })
+
+  /** Visible text plus every accessible name, title and placeholder, with Latin refs removed. */
+  function rendered(root: HTMLElement): string {
+    const attributes = Array.from(root.querySelectorAll('[aria-label], [title], [placeholder]'))
+      .flatMap((node) => ['aria-label', 'title', 'placeholder'].map((name) => node.getAttribute(name) ?? ''))
+    return [root.textContent, ...attributes].join(' ').replace(/GS-\d+/g, '')
+  }
+
+  it('renders the list and the open book without any English', async () => {
+    const arabic = { ...BOOK, subject: 'تعليمات الموظفين', confidentiality: 'secret' as const, versions: [{ id: 1, version_no: 1, document_id: 73, status: 'none', trigger: 'create', has_fields: false, created_at: BOOK.created_at, manager_sig_embedded: false }] }
+    const purposes = ['info', 'action', 'reply', 'circulate'] as const
+    const items = purposes.map((purpose, index) => ({
+      ...arabic, id: index + 1, ref_number: `GS-${index + 1}`,
+      my_inbox: { ...BOOK.my_inbox!, purpose, sent_by_name_ar: 'خالد', note: 'يرجى التنفيذ', read_at: index ? '2026-10-13T09:00:00Z' : null, done_at: index === 2 ? '2026-10-14T09:00:00Z' : null },
+    }))
+    vi.mocked(api.listBooks).mockResolvedValue({ items, total: 4, limit: 50, offset: 0 })
+    vi.spyOn(api, 'getBook').mockImplementation(async (id) => items[id - 1])
+    mount()
+    const desk = screen.getByRole('region', { name: 'الكتب' })
+    await screen.findByRole('button', { name: /GS-1/ })
+    for (const label of ['للاطلاع', 'للتنفيذ', 'للإفادة', 'للتعميم']) expect(within(desk).getByText(label)).toBeInTheDocument()
+    expect(rendered(desk)).not.toMatch(/[A-Za-z]/)
+    await userEvent.click(screen.getByRole('button', { name: /GS-2/ }))
+    await screen.findByRole('button', { name: 'العودة إلى الكتب' })
+    await screen.findByRole('complementary', { name: 'التفاصيل' })
+    expect(rendered(desk)).not.toMatch(/[A-Za-z]/)
   })
 })

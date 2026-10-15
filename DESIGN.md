@@ -1255,7 +1255,7 @@ border-b border-hairline px-4 py-3
 **Footer:**
 
 - Optional `"+ N more unread"` line when `total_unread > items.length`.
-- `<Link to="/ledger">` styled like the inline-button-link pattern, with
+- `<Link to="/ledger?tab=email">` styled like the inline-button-link pattern, with
   an `ArrowRight` icon. The arrow rotates 180° in RTL.
 
 **Open/close:**
@@ -2500,38 +2500,71 @@ will trip over them.
 
 ## 7. Ledger Books workspace
 
-**Source:** `pages/ledger/BooksRoutingDesk.tsx`.
+**Sources:** `pages/ledger/LedgerPage.tsx`, `pages/ledger/BooksRoutingDesk.tsx`,
+`components/books/PurposeMark.tsx`.
 
+- Books is the first Ledger tab and the landing tab. Email opens for
+  `?tab=email`, `?mail=`, `?action=`, or a `composePrefill` / `ledgerView`
+  navigation state; the resolved tab is pinned in the URL with replace.
+  Users without `books.view` (and inmate reporters) land on Email.
 - Incoming / Done / Outgoing / Archived are personal routing scopes. Done means
   the caller marked their received book done; Archived takes precedence over
-  Incoming and Done. No Done count is shown.
-- Plain ruled rows open the document in place. The compact header keeps the
-  reference, subject, sender, purpose, sent date, sender note and actions visible.
-  Details is collapsed initially and contains facts, recipients, thread and the
-  secondary Open in Records link for editing and revision tools.
-- The document reuses Records' lazy `RecordPaperViewer` and its `papersOf` /
-  `defaultPaperKey` resolution, including signed copies, imports and scans.
-  Books fit the available width on opening and on pane resize, capped at actual
-  size so wide panes do not enlarge the document. The displayed percentage is
-  the actual scale against the PDF's first page (or image) width. Manual zoom
-  stays fixed for the current book until Fit resumes the same capped auto-fit.
-  Signed copy / Original use the existing labelled toolbar switcher instead of
-  the thumbnail strip. Records retain their existing viewer defaults.
-- Desktop Expand pushes `view=reader`. The list stays mounted but hidden;
-  Collapse and browser Back restore it without losing selection, search or scroll.
-  A directly opened reader link collapses with URL replacement.
-- Both desktop pane and reader put expanded Details in the same independently
-  scrolling, fixed `340px` inline-end column. The PDF keeps the remaining pane
-  height below the compact header and scrolls separately. The column mirrors
-  with page direction; Details starts collapsed.
-  The Ledger root permits shrinking below its content width, so opening Details
-  or manually enlarging a page cannot push the column outside the viewport.
-- Mobile selection pushes a book view with Back; desktop Expand is not shown.
-  Details starts collapsed and stacks below the document when expanded.
-  The book view scrolls as a page, with a `65dvh` document area (at least `24rem`)
-  so facts never shrink the PDF to a strip.
-- List queries keep a 30-second fresh cache. Selection patches read state in that
-  cache rather than refetching the list, without clearing pending mutation
-  invalidation; queue actions remove the completed row locally and select the
-  next available row before the invalidation fetch ends.
+  Incoming and Done. Incoming shows the unread count as plain mono text.
+- **List.** One full-width list, no placeholder pane. Scope tabs and the search
+  field share one bar. From `lg` up, a sticky `aria-hidden` header and every row
+  share one grid template (`RECEIVED_GRID`):
+  `9.5rem` purpose, `10.5rem` reference, `1fr` subject, `minmax(7rem,12rem)`
+  sender, `6.5rem` confidentiality, `6rem` status, `6rem` sent date (end
+  aligned). Outgoing (`OUTGOING_GRID`) drops purpose and status and shows the
+  creator and created date. Below `lg` the same row stacks in three lines:
+  purpose, reference and date; subject; sender, confidentiality and status.
+  Rows are `<button>`s: `px-4 py-3 lg:px-6`, `hover:bg-surface-tinted`, inset
+  focus ring. Unread subjects are `font-semibold`. A paper count (`FileText` +
+  mono number + sr-only plural) follows the subject only when there is more
+  than one paper.
+- **Status** is text plus shape, never colour alone: New = `h-2 w-2` primary dot +
+  `font-semibold`; Read = muted text; Done = `CheckCheck` + `text-success`;
+  Archived = `Archive` icon.
+- **Purpose mark** (`PurposeMark`): bare lucide glyph (`h-4 w-4`, stroke 1.8) +
+  label, no background, no border, no radius. It sits in a fixed column so it
+  never competes with the confidentiality chip, which keeps its existing pill
+  (`ConfidentialityChip`, uppercase, tinted background; General renders nothing).
+  The glyph shape and label carry the meaning; the tone only helps scanning.
+  No new tokens.
 
+  | Purpose     | Glyph                | Glyph tone              | Label weight    | RTL                |
+  | ----------- | -------------------- | ----------------------- | --------------- | ------------------ |
+  | `info`      | `Eye`                | `text-muted-foreground` | `font-medium`   | unchanged          |
+  | `action`    | `ClipboardCheck`     | `text-primary`          | `font-semibold` | unchanged          |
+  | `reply`     | `MessageSquareReply` | `text-warning`          | `font-medium`   | `rtl:-scale-x-100` |
+  | `circulate` | `Megaphone`          | `text-success`          | `font-medium`   | `rtl:-scale-x-100` |
+
+  Glyphs avoid `Flag` (Email follow-up) and the chip icons (`Lock`, `UserRound`,
+  `Send`).
+- **Book view.** Clicking a row pushes `?book=` (`useUrlOverlay('book', ['view'])`)
+  and replaces the list and the Ledger tabs with a full-page view; the list stays
+  mounted but hidden. Toolbar Back and browser Back both pop to the list, which
+  keeps scope, search and scroll and returns focus to the opened row
+  (`aria-current`, `bg-primary-soft`).
+  1. One toolbar, `bg-surface-raised border-b px-3 py-2 lg:px-4`, `flex-wrap`:
+     Back to books (ghost), hairline divider, inbox actions (Mark as done is the
+     only `default` button), Send / Forward, reply actions; then at the inline
+     end Expand / Collapse (desktop) and Open in Records (ghost link,
+     `BookText`). On mobile the toolbar is sticky and wraps.
+  2. Title band `px-4 py-4 lg:px-6`: purpose mark, mono reference, confidentiality
+     chip, then the subject as `h2 text-xl font-semibold` (`max-w-[75ch]`,
+     wrapped in `<bdi>` so it aligns to the page start).
+  3. Body: the reused `RecordPaperViewer` (`mode="pane"`, `compact`,
+     `initialFit="width"`, capped at actual size) beside a Details aside
+     (`w-80 xl:w-96`, `border-s`, own scroll) holding the sender note, a
+     two-column `dl` (From, Sent, Opened, Done, Papers; outgoing books show
+     Created by, Created, Papers), recipients and thread. Mobile stacks the aside below a `65dvh`
+     (min `24rem`) document area and scrolls as a page.
+- Expand toggles `view=reader` with replace (not a history step) and hides the
+  Details aside so the document takes the full width.
+- List queries keep a 30-second fresh cache. Opening patches read state in that
+  cache rather than refetching the list, without clearing pending mutation
+  invalidation. Queue actions remove the completed row locally and open the next
+  book in place (replace), or return to the list when the scope is empty.
+- Dates are `DD/MM/YYYY` with Western digits (`formatDmy`, `dir="ltr"` mono) in
+  both languages, per §1.7.
