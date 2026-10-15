@@ -1,7 +1,7 @@
 """Record replies, derived records and attached references.
 
-Revision ID: 0104_book_links
-Revises: 0103_recipient_state
+Revision ID: 0106_book_links
+Revises: 0105_recipient_state
 """
 
 from __future__ import annotations
@@ -11,8 +11,8 @@ from collections.abc import Sequence
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "0104_book_links"
-down_revision: str | Sequence[str] | None = "0103_recipient_state"
+revision: str = "0106_book_links"
+down_revision: str | Sequence[str] | None = "0105_recipient_state"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

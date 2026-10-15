@@ -1,7 +1,7 @@
 """Recipient done/archive state and circulation purpose.
 
-Revision ID: 0103_recipient_state
-Revises: 0102_record_confidentiality
+Revision ID: 0105_recipient_state
+Revises: 0104_record_confidentiality
 """
 
 from __future__ import annotations
@@ -11,8 +11,8 @@ from collections.abc import Sequence
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "0103_recipient_state"
-down_revision: str | Sequence[str] | None = "0102_record_confidentiality"
+revision: str = "0105_recipient_state"
+down_revision: str | Sequence[str] | None = "0104_record_confidentiality"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
