@@ -31,6 +31,7 @@ from app.db.models import (
     Vehicle,
     VehicleAccident,
     VehicleFile,
+    VehicleOdometerReading,
     VehiclePhotoAsset,
     VehicleSite,
 )
@@ -509,6 +510,212 @@ def test_maintenance_lifecycle_and_delete_capability(
     remaining = admin_client.get("/api/v1/vehicles/maintenance")
     assert remaining.status_code == 200, remaining.text
     assert remaining.json() == []
+
+
+def test_odometer_month_openings_totals_maintenance_and_active_filter(
+    admin_client: TestClient, api_db: Session
+) -> None:
+    vehicle = _create_vehicle(admin_client)
+    vehicles = [vehicle]
+    for number in ("10001", "10002", "10003"):
+        payload = _vehicle_payload()
+        payload.pop("new_site")
+        payload.update(plate_number=number, site_id=vehicle["site_id"])
+        response = admin_client.post("/api/v1/vehicles", json=payload)
+        assert response.status_code == 201, response.text
+        vehicles.append(response.json())
+    first_id, initial_id, unknown_id, archived_id = [row["id"] for row in vehicles]
+    for vehicle_id, month, payload in (
+        (first_id, "2026-01", {"opening_km": 900, "closing_km": 1000}),
+        (first_id, "2026-03", {"closing_km": 1400}),
+        (first_id, "2026-06", {"opening_km": 9999, "closing_km": 1600}),
+        (initial_id, "2026-06", {"opening_km": 100, "closing_km": 200}),
+        (unknown_id, "2026-06", {"closing_km": 500}),
+        (archived_id, "2026-06", {"opening_km": 0, "closing_km": 9999}),
+    ):
+        response = admin_client.put(f"/api/v1/vehicles/{vehicle_id}/odometer/{month}", json=payload)
+        assert response.status_code == 200, response.text
+    for day, cost in (
+        ("2026-05-31", 50),
+        ("2026-06-30", 200),
+        ("2026-06-01", 100),
+        ("2026-07-01", 75),
+    ):
+        response = admin_client.post(
+            "/api/v1/vehicles/maintenance",
+            json={"vehicle_id": first_id, "date": day, "type": "service", "cost": cost},
+        )
+        assert response.status_code == 201, response.text
+    archived = admin_client.post(f"/api/v1/vehicles/{archived_id}/archive")
+    assert archived.status_code == 200, archived.text
+
+    response = admin_client.get("/api/v1/vehicles/odometer", params={"month": "2026-06"})
+    assert response.status_code == 200, response.text
+    month = response.json()
+    assert month["month"] == "2026-06"
+    active = admin_client.get("/api/v1/vehicles").json()
+    assert [row["vehicle_id"] for row in month["rows"]] == [row["id"] for row in active]
+    rows = {row["vehicle_id"]: row for row in month["rows"]}
+    first = rows[first_id]
+    assert first["plate_label"] == "14 \\ 58216"
+    assert first["vehicle_type_ar"] == vehicle["type_ar"]
+    assert first["vehicle_type_en"] == vehicle["type_en"]
+    assert first["opening_km"] == 1400
+    assert first["opening_from_previous"] is True
+    assert first["closing_km"] == 1600
+    assert first["km_driven"] == 200
+    assert first["maintenance_count"] == 2
+    assert first["maintenance_cost"] == 300
+    assert first["maintenance"] == [
+        {"date": "2026-06-01", "type": "service", "cost": 100},
+        {"date": "2026-06-30", "type": "service", "cost": 200},
+    ]
+    assert rows[initial_id]["opening_km"] == 100
+    assert rows[initial_id]["opening_from_previous"] is False
+    assert rows[initial_id]["km_driven"] == 100
+    assert rows[unknown_id]["opening_km"] is None
+    assert rows[unknown_id]["km_driven"] is None
+    assert archived_id not in rows
+    assert month["total_km_driven"] == 300
+    assert month["total_maintenance_cost"] == 300
+    stored = api_db.scalar(
+        select(VehicleOdometerReading).where(
+            VehicleOdometerReading.vehicle_id == first_id,
+            VehicleOdometerReading.month == "2026-06",
+        )
+    )
+    assert stored is not None and stored.opening_km is None
+    assert (
+        api_db.scalar(select(func.count(AuditLog.id)).where(AuditLog.action == "odometer.recorded"))
+        == 6
+    )
+    filtered = vehicle_service.odometer_month(
+        api_db, "2026-06", vehicle_ids=[first_id, archived_id, initial_id, 999999]
+    )
+    assert [row.vehicle_id for row in filtered.rows] == [
+        row["vehicle_id"] for row in month["rows"] if row["vehicle_id"] in {first_id, initial_id}
+    ]
+    empty = vehicle_service.odometer_month(api_db, "2026-06", vehicle_ids=[])
+    assert empty.rows == [] and empty.total_km_driven == empty.total_maintenance_cost == 0
+
+    later = admin_client.get("/api/v1/vehicles/odometer", params={"month": "2026-08"}).json()
+    later_row = next(row for row in later["rows"] if row["vehicle_id"] == first_id)
+    assert later_row["opening_km"] == 1600
+    assert later_row["closing_km"] is None
+    assert later_row["km_driven"] is None
+    assert later["total_km_driven"] == 0
+    blocked = admin_client.put(
+        f"/api/v1/vehicles/{archived_id}/odometer/2026-07", json={"closing_km": 10000}
+    )
+    assert blocked.status_code == 409, blocked.text
+    assert blocked.json()["error"]["code"] == "VEHICLE_ARCHIVED"
+
+
+def test_odometer_rejects_negative_distance_and_above_next_without_writing(
+    admin_client: TestClient, api_db: Session
+) -> None:
+    vehicle_id = _create_vehicle(admin_client)["id"]
+    for month, payload in (
+        ("2026-01", {"opening_km": 900, "closing_km": 1000}),
+        ("2026-03", {"closing_km": 2000}),
+    ):
+        response = admin_client.put(f"/api/v1/vehicles/{vehicle_id}/odometer/{month}", json=payload)
+        assert response.status_code == 200, response.text
+    for closing, code in (
+        (999, "ODOMETER_CLOSING_BELOW_OPENING"),
+        (2001, "ODOMETER_CLOSING_ABOVE_NEXT"),
+    ):
+        response = admin_client.put(
+            f"/api/v1/vehicles/{vehicle_id}/odometer/2026-02", json={"closing_km": closing}
+        )
+        assert response.status_code == 422, response.text
+        assert response.json()["error"]["code"] == code
+    assert api_db.scalar(select(func.count(VehicleOdometerReading.id))) == 2
+    below_initial = admin_client.put(
+        f"/api/v1/vehicles/{vehicle_id}/odometer/2026-01",
+        json={"opening_km": 1001, "closing_km": 1000},
+    )
+    assert below_initial.status_code == 422, below_initial.text
+    assert below_initial.json()["error"]["code"] == "ODOMETER_CLOSING_BELOW_OPENING"
+    for closing in (1000, 2000, 1500):
+        response = admin_client.put(
+            f"/api/v1/vehicles/{vehicle_id}/odometer/2026-02", json={"closing_km": closing}
+        )
+        assert response.status_code == 200, response.text
+    updated = admin_client.put(
+        f"/api/v1/vehicles/{vehicle_id}/odometer/2026-01", json={"closing_km": 1100}
+    )
+    assert updated.status_code == 200, updated.text
+    assert updated.json()["opening_km"] == 900
+    assert updated.json()["km_driven"] == 200
+    listed = admin_client.get("/api/v1/vehicles/odometer", params={"month": "2026-02"}).json()
+    assert listed["rows"][0]["opening_km"] == 1100
+    assert listed["rows"][0]["km_driven"] == 400
+
+
+def test_odometer_put_requires_edit_capability(admin_client: TestClient, api_db: Session) -> None:
+    vehicle_id = _create_vehicle(admin_client)["id"]
+    viewer = _make_user(
+        api_db, role="operator", email="odometer-viewer@test.ae", capabilities=("vehicles.view",)
+    )
+    client = _client_for(api_db, viewer)
+    listed = client.get("/api/v1/vehicles/odometer", params={"month": "2026-06"})
+    assert listed.status_code == 200, listed.text
+    response = client.put(
+        f"/api/v1/vehicles/{vehicle_id}/odometer/2026-06", json={"closing_km": 1000}
+    )
+    assert response.status_code == 403, response.text
+    assert response.json()["error"]["details"]["capability"] == "vehicles.edit"
+    assert api_db.scalar(select(func.count(VehicleOdometerReading.id))) == 0
+
+
+@pytest.mark.parametrize("month", ["2026-00", "2026-13", "2026-1", "not-a-month", "0000-01"])
+def test_odometer_and_maintenance_reject_invalid_month(
+    admin_client: TestClient, month: str
+) -> None:
+    vehicle_id = _create_vehicle(admin_client)["id"]
+    for path in ("/api/v1/vehicles/odometer", "/api/v1/vehicles/maintenance"):
+        response = admin_client.get(path, params={"month": month})
+        assert response.status_code == 422, response.text
+    response = admin_client.put(
+        f"/api/v1/vehicles/{vehicle_id}/odometer/{month}", json={"closing_km": 1000}
+    )
+    assert response.status_code == 422, response.text
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"closing_km": -1},
+        {"closing_km": 10_000_000},
+        {"opening_km": -1, "closing_km": 1000},
+        {"opening_km": 10_000_000, "closing_km": 1000},
+    ],
+)
+def test_odometer_validates_reading_bounds(
+    admin_client: TestClient, payload: dict[str, int]
+) -> None:
+    vehicle_id = _create_vehicle(admin_client)["id"]
+    response = admin_client.put(f"/api/v1/vehicles/{vehicle_id}/odometer/2026-06", json=payload)
+    assert response.status_code == 422, response.text
+
+
+def test_maintenance_month_filter(admin_client: TestClient) -> None:
+    vehicle_id = _create_vehicle(admin_client)["id"]
+    created = []
+    for day in ("2026-05-31", "2026-06-01", "2026-06-30", "2026-07-01"):
+        response = admin_client.post(
+            "/api/v1/vehicles/maintenance",
+            json={"vehicle_id": vehicle_id, "date": day, "type": "service", "cost": 100},
+        )
+        assert response.status_code == 201, response.text
+        created.append(response.json())
+    response = admin_client.get("/api/v1/vehicles/maintenance", params={"month": "2026-06"})
+    assert response.status_code == 200, response.text
+    assert [row["id"] for row in response.json()] == [created[2]["id"], created[1]["id"]]
+    unfiltered = admin_client.get("/api/v1/vehicles/maintenance")
+    assert unfiltered.status_code == 200, unfiltered.text
+    assert len(unfiltered.json()) == 4
 
 
 def test_gallery_png_upload_is_served_inline(admin_client: TestClient) -> None:

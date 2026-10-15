@@ -17,6 +17,7 @@ MaintenanceType = Literal["service", "repair", "tires", "other"]
 AccidentStatus = Literal["open", "closed"]
 
 _TIME_PATTERN = r"^(?:[01]\d|2[0-3]):[0-5]\d$"
+MONTH_PATTERN = r"^\d{4}-(0[1-9]|1[0-2])$"
 
 
 class VehicleSiteCreate(BaseModel):
@@ -303,6 +304,39 @@ class LetterResult(BaseModel):
     document_id: int
     ref_number: str
     pdf_available: bool
+
+
+class OdometerMaintenanceItem(BaseModel):
+    date: date_t
+    type: str
+    cost: int
+
+
+class OdometerRowRead(BaseModel):
+    vehicle_id: int
+    plate_label: str
+    vehicle_type_ar: str | None
+    vehicle_type_en: str | None
+    month: str
+    opening_km: int | None
+    opening_from_previous: bool
+    closing_km: int | None
+    km_driven: int | None
+    maintenance_count: int
+    maintenance_cost: int
+    maintenance: list[OdometerMaintenanceItem]
+
+
+class OdometerMonthRead(BaseModel):
+    month: str
+    rows: list[OdometerRowRead]
+    total_km_driven: int
+    total_maintenance_cost: int
+
+
+class OdometerUpsert(BaseModel):
+    closing_km: int = Field(ge=0, le=9_999_999)
+    opening_km: int | None = Field(default=None, ge=0, le=9_999_999)
 
 
 class LicenseRenewCreate(BaseModel):
