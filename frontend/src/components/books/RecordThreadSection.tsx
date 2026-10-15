@@ -12,10 +12,10 @@ function RecordLink({ item }: { item: BookThreadItem }): React.JSX.Element {
     <div className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1">
       <Link
         to={`/books/${item.book_id}`}
-        className="min-w-0 rounded-sm text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="inline-flex min-w-0 flex-wrap items-baseline gap-x-2 rounded-sm text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
         <bdi dir="ltr" className="font-mono font-medium tabular-nums">{item.ref_number}</bdi>
-        <span className="ms-2 break-words" dir="auto">{item.subject}</span>
+        <span className="break-words" dir="auto">{item.subject}</span>
       </Link>
       <ConfidentialityChip level={item.confidentiality} />
     </div>

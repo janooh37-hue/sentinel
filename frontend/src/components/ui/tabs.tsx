@@ -78,8 +78,9 @@ export function TabsTrigger({ value, className, ...props }: TabsTriggerProps): R
       data-state={active ? 'active' : 'inactive'}
       onClick={() => onChange(value)}
       className={cn(
-        'relative -mb-px flex h-10 items-center whitespace-nowrap border-b-2 border-transparent text-sm font-medium leading-none text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background',
-        active && 'border-primary text-foreground',
+        // ponytail: underline is a pseudo-element because the unlayered `* { border-color }` in index.css overrides border-color utilities.
+        'relative flex h-10 items-center whitespace-nowrap text-sm font-medium leading-none text-muted-foreground transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background',
+        active && 'text-foreground after:absolute after:inset-x-0 after:bottom-0 after:h-0.5 after:bg-primary',
         className,
       )}
       {...props}

@@ -60,7 +60,7 @@ const actionCls = 'h-11 md:h-8'
 const tabCls =
   'h-auto min-h-11 flex-1 justify-center whitespace-normal rounded-md border-0 px-2 py-1.5 text-center leading-tight ' +
   'md:h-9 md:min-h-0 md:flex-none md:whitespace-nowrap md:px-6 md:py-0 md:text-[0.86em] ' +
-  'mb-0 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-0 motion-reduce:transition-none ' +
+  'mb-0 after:hidden focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-0 motion-reduce:transition-none ' +
   'data-[state=inactive]:hover:bg-surface/60 ' +
   'data-[state=active]:bg-surface data-[state=active]:font-semibold data-[state=active]:text-primary data-[state=active]:shadow-sm ' +
   '[[data-theme=dark]_&]:data-[state=active]:bg-surface-tinted [[data-theme=dark]_&]:data-[state=active]:text-foreground [[data-theme=dark]_&]:data-[state=active]:shadow-none'
