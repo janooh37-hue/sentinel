@@ -2520,6 +2520,8 @@ will trip over them.
   A directly opened reader link collapses with URL replacement. The reader's
   document and facts/actions side column mirror with the page direction.
 - Mobile selection pushes a book view with Back; desktop Expand is not shown.
+  Expanded Details scrolls within a quarter of the mobile document area so the
+  PDF remains visible alongside its facts; desktop Details keeps its larger cap.
 - List queries keep a 30-second fresh cache. Selection patches read state in that
   cache rather than refetching the list, without clearing pending mutation
   invalidation; queue actions remove the completed row locally and select the

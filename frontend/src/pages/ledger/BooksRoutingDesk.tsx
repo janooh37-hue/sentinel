@@ -298,7 +298,7 @@ function BookDossier({ book, loading, reader, isMobile, onToggleReader, onInboxU
             <h3 className="mb-2 mt-4 text-sm font-semibold">{t('ledger.booksDesk.details')}</h3>
             {details}
           </aside>
-        ) : detailsOpen && <section className="max-h-[45%] shrink-0 overflow-y-auto border-t border-hairline px-4 py-3" aria-label={t('ledger.booksDesk.details')}>{details}</section>}
+        ) : detailsOpen && <section className="min-h-0 max-h-[25%] shrink-0 overflow-y-auto border-t border-hairline px-4 py-3 md:max-h-[45%]" aria-label={t('ledger.booksDesk.details')}>{details}</section>}
       </div>
       {book.can_send && <SendRecordDialog book={book} open={sendOpen} onOpenChange={setSendOpen} />}
       {reply.dialog}
