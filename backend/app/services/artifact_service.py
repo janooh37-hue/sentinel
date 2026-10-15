@@ -43,6 +43,7 @@ _FORM_SHORT_NAME: dict[str, str] = {
     "Inmate Conduct Violations": "InmateViolations",
     "Vehicle Fines": "VehicleFines",
     "Vehicle Accident Report": "VehicleAccident",
+    "Vehicle Mileage Log": "VehicleMileageLog",
 }
 
 

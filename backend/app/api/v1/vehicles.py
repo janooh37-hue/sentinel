@@ -28,6 +28,7 @@ from app.schemas.vehicle import (
     LetterResult,
     LicenseRenewCreate,
     NotifyDaysUpdate,
+    OdometerFormRequest,
     OdometerMonthRead,
     OdometerRowRead,
     OdometerUpsert,
@@ -368,6 +369,17 @@ def get_vehicle_photo_library_image(
         return Response(status_code=status.HTTP_304_NOT_MODIFIED, headers=headers)
     headers["Content-Disposition"] = f'inline; filename="{row.id}-{variant}.webp"'
     return Response(content=path.read_bytes(), media_type="image/webp", headers=headers)
+
+
+@router.post("/odometer/form", response_model=LetterResult)
+def generate_vehicle_odometer_form(
+    payload: OdometerFormRequest,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(require_capability("vehicles.edit"))],
+) -> LetterResult:
+    return vehicle_letter_service.generate_odometer_form(
+        db, month=payload.month, vehicle_ids=payload.vehicle_ids, user=user
+    )
 
 
 @router.get("", response_model=list[VehicleListItem])

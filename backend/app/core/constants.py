@@ -71,6 +71,7 @@ TEMPLATE_FILES: Final[Mapping[str, str]] = MappingProxyType(
         "Inmate Conduct Violations": "GSSG-NAT_300-005_Inmate_Conduct_Violations.docx",
         "Vehicle Fines": "GSSG-VF_300-001_Vehicle_Fines.docx",
         "Vehicle Accident Report": "GSSG-VA_300-001_Vehicle_Accident_Report.docx",
+        "Vehicle Mileage Log": "GSSG-GS_300-005_Vehicle_Mileage_Log.docx",
         # --- 2026-09-21 HR intake additions (19 new forms, built from PDF
         # exports pending native Word originals — see the intake review
         # package for source/disposition notes) -----------------------------
@@ -102,28 +103,30 @@ TEMPLATE_FILES: Final[Mapping[str, str]] = MappingProxyType(
 
 # --- The classified Arabic letter papers -----------------------------------
 
-#: Template ids that render the classified Arabic letter. They share one whole
-#: pipeline: the ref is allocated from the classified register
-#: (``1/{tab}/GSSG/{serial}``) and printed into the body's «الرقم:» line instead
-#: of the English header stamp, the entire body is rendered from HTML by
-#: ``docx_engine._pp_general_book``, ``footer2`` is synced from ``footer3`` so
-#: page 2+ keeps the letterhead, and the signature block prefers the manager's
-#: Arabic name.
+#: Template ids that render the classified Arabic letter. The ref is allocated
+#: from the classified register (``1/{tab}/{serial}``) and printed into the
+#: paper's «الرقم:» line instead of the English header stamp, and the signature
+#: block prefers the manager's Arabic name.
 #:
-#: ``Security Permit`` is the 1/5 permit letter: the same paper on its own
-#: ``.docx`` above, so the permit form can be edited without touching every
-#: other 1/x letter.
+#: ``General Book`` and ``Security Permit`` (the 1/5 permit letter, on its own
+#: ``.docx`` so it can be edited without touching every other 1/x letter) also
+#: render the whole body from HTML via ``docx_engine._pp_general_book`` and sync
+#: ``footer2`` from ``footer3`` so page 2+ keeps the letterhead.
+#: ``Vehicle Mileage Log`` (1/11) is a landscape docxtpl table with its own
+#: header barcode block and keeps its original footers.
 #:
 #: Callers MUST test membership here, never equality with a single id. A miss
 #: is silent — it yields a plausible-looking letter with a legacy ``HR-####``
 #: ref, a plain-text body, no page-2 footer and a stray English ref stamp
 #: painted over the Arabic paper.
-CLASSIFIED_BOOK_FORMS: Final[frozenset[str]] = frozenset({"General Book", "Security Permit"})
+CLASSIFIED_BOOK_FORMS: Final[frozenset[str]] = frozenset(
+    {"General Book", "Security Permit", "Vehicle Mileage Log"}
+)
 
 #: Vehicle letterhead papers minted only by the vehicles module. Their refs
 #: print in the body's «الرقم:» line instead of the English header stamp.
 VEHICLE_LETTER_FORMS: Final[frozenset[str]] = frozenset(
-    {"Vehicle Fines", "Vehicle Accident Report"}
+    {"Vehicle Fines", "Vehicle Accident Report", "Vehicle Mileage Log"}
 )
 
 

@@ -687,3 +687,8 @@ class VehicleImportResult(BaseModel):
     images_added: int
     images_skipped: int
     vehicle_ids: list[int]
+
+
+class OdometerFormRequest(BaseModel):
+    month: str = Field(pattern=MONTH_PATTERN)
+    vehicle_ids: list[int] | None = None

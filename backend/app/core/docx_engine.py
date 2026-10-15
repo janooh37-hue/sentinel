@@ -99,8 +99,8 @@ _AZTEC_BOTTOM_RIGHT: frozenset[str] = frozenset(
 
 
 def aztec_corner_for(template_id: str) -> str | None:
-    """Page-1 corner for the Aztec ref code, except General Book's template code."""
-    if template_id == "General Book":
+    """Page-1 Aztec corner, except papers with a template Code 39 reference."""
+    if template_id in {"General Book", "Vehicle Mileage Log"}:
         return None
     if template_id in _AZTEC_BOTTOM_RIGHT:
         return "bottom-right"
@@ -116,7 +116,10 @@ def syncs_general_book_footer(template_id: str) -> bool:
     entirely (see ``_adapt_general_book``)."""
     if template_id == "Inmate Conduct Violations":
         return True
-    return template_id in CLASSIFIED_BOOK_FORMS and template_id != "General Book"
+    return template_id in CLASSIFIED_BOOK_FORMS and template_id not in {
+        "General Book",
+        "Vehicle Mileage Log",
+    }
 
 
 # Forms that cannot carry a scannable page-1 code. Report is a no-ref document
@@ -1271,6 +1274,7 @@ _FORM_REGISTRY: dict[str, dict[str, Any]] = {
     "Inmate Conduct Violations": {"adapter": _adapt_common, "post_process": None},
     "Vehicle Fines": {"adapter": _adapt_common, "post_process": None},
     "Vehicle Accident Report": {"adapter": _adapt_common, "post_process": None},
+    "Vehicle Mileage Log": {"adapter": _adapt_general_book, "post_process": _pp_header_reference},
     # --- 2026-09-21 HR intake additions — plain scalar/table tokens, no
     # legacy v3 key renames needed, so the common adapter covers all 19.
     "Manpower Requisition Form": {"adapter": _adapt_common, "post_process": None},

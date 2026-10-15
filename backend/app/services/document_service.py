@@ -131,6 +131,7 @@ _FORM_CATEGORY: dict[str, str] = {
     "Inmate Conduct Violations": "INV",
     "Vehicle Fines": "VF",
     "Vehicle Accident Report": "VA",
+    "Vehicle Mileage Log": "GS",
 }
 
 

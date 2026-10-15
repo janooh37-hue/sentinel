@@ -986,6 +986,13 @@
     "form_number": "300-001",
     "fields": []
   },
+  "Vehicle Mileage Log": {
+    "category": "admin",
+    "name_en": "Vehicle Mileage Log",
+    "name_ar": "سجل عداد المسافات والصيانة الشهري للمركبات",
+    "form_number": "300-005",
+    "fields": []
+  },
   "Manpower Requisition Form": {
     "category": "personnel",
     "name_en": "Manpower Requisition",
