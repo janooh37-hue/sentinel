@@ -6,11 +6,9 @@
  * Photos. The active register lives in the URL (`?tab=accidents`), so the
  * accidents register can link straight at it and a reload keeps its place.
  *
- * Everything comes from `GET /vehicles/{id}` (`['vehicle', id]`): the fines,
- * the archived license periods, the incident reports, the maintenance log and
- * the gallery are all fields of that one response, so no register can disagree
- * with the overview. The operating-site name is the one fact the response does
- * not carry (it holds `site_id`), and comes from the cached sites list.
+ * The vehicle response holds the registers, while maintenance requests and the
+ * contractor setting use their shared queries. The operating-site name comes
+ * from the cached sites list.
  *
  * Ownership of writes: every dialog (Renew, Fine, Accident, Maintenance) and
  * `AccidentCard` own their own mutation, toast and invalidation — this page
@@ -25,7 +23,7 @@
  * viewer is never shown a control the API would refuse.
  */
 
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useId, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   Car,
@@ -70,6 +68,7 @@ import type {
   VehicleFileRead,
   VehicleFineRead,
   VehicleMaintenanceRead,
+  VehicleMaintenanceRequestRead,
   VehicleRead,
 } from '@/lib/api'
 import { toBase64Url } from '@/lib/pdf'
@@ -106,6 +105,7 @@ import { FineAmount } from './components/FineAmount'
 import { FineDialog } from './components/FineDialog'
 import { FinePaymentDialog, type FinePaymentMode } from './components/FinePaymentDialog'
 import { MaintenanceDialog } from './components/MaintenanceDialog'
+import { MaintenanceRequestDialog } from './components/MaintenanceRequestDialog'
 import { PlateChip } from './components/PlateChip'
 import { TabChip } from './components/TabChip'
 import { RenewLicenseDialog } from './components/RenewLicenseDialog'
@@ -155,9 +155,10 @@ export function VehicleDetailPage(): React.JSX.Element {
   const canEdit = has('vehicles.edit')
   const canDelete = has('vehicles.delete')
   const isMobile = useIsMobile()
-  const actionOverlay = useUrlOverlay('action', ['fine', 'mode'])
+  const actionOverlay = useUrlOverlay('action', ['fine', 'mode', 'request'])
   const action = actionOverlay.value
   const linkedFineId = searchParams.get('fine')
+  const linkedRequestId = searchParams.get('request')
   const paymentMode: FinePaymentMode = searchParams.get('mode') === 'receipt' ? 'receipt' : 'payment'
 
   const [fineToDelete, setFineToDelete] = useState<VehicleFineRead | null>(null)
@@ -181,6 +182,19 @@ export function VehicleDetailPage(): React.JSX.Element {
     enabled: vehicleId != null,
     staleTime: 60_000,
   })
+  const requestsQuery = useQuery({
+    queryKey: VEHICLE_QUERY_KEYS.maintenanceRequests(vehicleId ?? 0),
+    queryFn: () => api.listVehicleMaintenanceRequests(vehicleId as number),
+    enabled: vehicleId != null && (tab === 'maintenance' || action === 'maintenance'),
+  })
+  const summaryQuery = useQuery({
+    queryKey: VEHICLE_QUERY_KEYS.summary,
+    queryFn: () => api.vehiclesSummary(),
+    enabled: vehicleId != null && (tab === 'maintenance' || action === 'maintenance-request'),
+  })
+  const maintenanceRequest = requestsQuery.data?.find(
+    (request) => String(request.id) === linkedRequestId && request.status === 'open',
+  ) ?? null
 
   const selectTab = useCallback(
     (next: VehicleTab) => {
@@ -363,12 +377,14 @@ export function VehicleDetailPage(): React.JSX.Element {
 
   useEffect(() => {
     if (capabilityLoading || vehicleQuery.isLoading || !action) return
-    const validAction = ['renew', 'fine', 'accident', 'maintenance', 'photos', 'payment'].includes(action)
+    const validAction = ['renew', 'fine', 'accident', 'maintenance', 'maintenance-request', 'photos', 'payment'].includes(action)
     if (
       !validAction ||
       !canMutate ||
       (action === 'payment' && !actionFine) ||
-      (action === 'fine' && linkedFineId != null && !actionFine)
+      (action === 'fine' && linkedFineId != null && !actionFine) ||
+      (action === 'maintenance' && linkedRequestId != null && requestsQuery.isSuccess && !maintenanceRequest) ||
+      (action === 'maintenance-request' && summaryQuery.isSuccess && !summaryQuery.data.maintenance_contractor_id)
     ) {
       actionOverlay.close()
     }
@@ -379,10 +395,19 @@ export function VehicleDetailPage(): React.JSX.Element {
     canMutate,
     capabilityLoading,
     linkedFineId,
+    linkedRequestId,
+    maintenanceRequest,
+    requestsQuery.isSuccess,
+    summaryQuery.isSuccess,
+    summaryQuery.data?.maintenance_contractor_id,
     vehicleQuery.isLoading,
   ])
   const accidents = vehicle?.accidents ?? []
   const maintenance = vehicle?.maintenance ?? []
+  const lastMaintenance = maintenance.reduce<VehicleMaintenanceRead | null>(
+    (last, record) => !last || record.date > last.date || (record.date === last.date && record.id > last.id) ? record : last,
+    null,
+  )
   const photos = vehicle?.photos ?? []
   const certificates = vehicle?.certificates ?? []
   const galleryCount =
@@ -624,15 +649,30 @@ export function VehicleDetailPage(): React.JSX.Element {
                 />
               )}
               {tab === 'maintenance' && (
-                <MaintenancePanel
-                  records={maintenance}
-                  canEdit={canMutate}
-                  canDelete={canDeleteMutate}
-                  isMobile={isMobile}
-                  busy={deleteMaintenance.isPending}
-                  onAdd={() => actionOverlay.open('maintenance')}
-                  onDelete={setRecordToDelete}
-                />
+                <div className="flex flex-col gap-3">
+                  <MaintenanceRequestsPanel
+                    requests={requestsQuery.data?.filter((request) => request.status === 'open') ?? []}
+                    loading={requestsQuery.isLoading}
+                    error={requestsQuery.isError}
+                    onRetry={() => void requestsQuery.refetch()}
+                    canEdit={canMutate}
+                    contractorSet={Boolean(summaryQuery.data?.maintenance_contractor_id)}
+                    settingsLoading={summaryQuery.isPending}
+                    settingsError={summaryQuery.isError}
+                    onRetrySettings={() => void summaryQuery.refetch()}
+                    onRequest={() => actionOverlay.open('maintenance-request')}
+                    onComplete={(request) => actionOverlay.open('maintenance', { request: String(request.id) })}
+                  />
+                  <MaintenancePanel
+                    records={maintenance}
+                    canEdit={canMutate}
+                    canDelete={canDeleteMutate}
+                    isMobile={isMobile}
+                    busy={deleteMaintenance.isPending}
+                    onAdd={() => actionOverlay.open('maintenance')}
+                    onDelete={setRecordToDelete}
+                  />
+                </div>
               )}
               {tab === 'photos' && (
                 <PhotosPanel
@@ -697,9 +737,21 @@ export function VehicleDetailPage(): React.JSX.Element {
               }}
             />
           )}
-          {action === 'maintenance' && (
+          {action === 'maintenance-request' && summaryQuery.data?.maintenance_contractor_id && (
+            <MaintenanceRequestDialog
+              open
+              vehicle={vehicle}
+              lastMaintenance={lastMaintenance}
+              onOpenChange={(open) => {
+                if (!open) actionOverlay.close()
+              }}
+            />
+          )}
+          {action === 'maintenance' && (linkedRequestId == null || maintenanceRequest) && (
             <MaintenanceDialog
               open
+              key={maintenanceRequest?.id ?? 'new'}
+              request={maintenanceRequest}
               vehicle={vehicle}
               onOpenChange={(open) => {
                 if (!open) actionOverlay.close()
@@ -1546,6 +1598,70 @@ function AccidentsPanel({
 }
 
 // ── Maintenance ─────────────────────────────────────────────────────────────
+
+function MaintenanceRequestsPanel({
+  requests, loading, error, onRetry, canEdit, contractorSet, settingsLoading,
+  settingsError, onRetrySettings, onRequest, onComplete,
+}: {
+  requests: readonly VehicleMaintenanceRequestRead[]
+  loading: boolean
+  error: boolean
+  onRetry: () => void
+  canEdit: boolean
+  contractorSet: boolean
+  settingsLoading: boolean
+  settingsError: boolean
+  onRetrySettings: () => void
+  onRequest: () => void
+  onComplete: (request: VehicleMaintenanceRequestRead) => void
+}): React.JSX.Element {
+  const { t } = useTranslation()
+  const hintId = useId()
+  return (
+    <Panel>
+      <PanelHeader
+        title={t('vehicles.openMaintenanceRequests')}
+        actions={canEdit && (
+          <Button type="button" size="sm" disabled={!contractorSet || settingsLoading || settingsError} aria-describedby={!contractorSet && !settingsLoading && !settingsError ? hintId : undefined} onClick={onRequest}>
+            {t('vehicles.requestMaintenance')}
+          </Button>
+        )}
+      />
+      {canEdit && !contractorSet && !settingsLoading && !settingsError && (
+        <p id={hintId} className="px-3.5 py-2 text-xs text-muted-foreground">
+          {t('vehicles.maintenanceContractorRequired')}{' '}
+          <Link to="/vehicles" className="font-medium text-primary underline">{t('vehicles.vehicleSettings')}</Link>
+        </p>
+      )}
+      {canEdit && settingsError && (
+        <div className="flex flex-wrap items-center gap-2 px-3.5 py-2 text-xs text-destructive">
+          <span>{t('common.loadError')}</span>
+          <Button type="button" size="sm" variant="outline" onClick={onRetrySettings}>{t('common.retry')}</Button>
+        </div>
+      )}
+      {loading ? <div className="p-3.5"><Skeleton className="h-12 w-full" /></div> : error ? (
+        <EmptyState icon={Wrench} message={t('common.loadError')} actionLabel={t('common.retry')} onAction={onRetry} />
+      ) : requests.length === 0 ? (
+        <p className="px-3.5 py-4 text-sm text-muted-foreground">{t('vehicles.noOpenMaintenanceRequests')}</p>
+      ) : (
+        <ul className="divide-y divide-hairline">
+          {requests.map((request) => (
+            <li key={request.id} className="flex flex-wrap items-center justify-between gap-3 px-3.5 py-3">
+              <div className="flex min-w-0 flex-col gap-1 text-sm">
+                {request.book_id ? (
+                  <Link to={`/books/${request.book_id}`} className="font-mono font-medium text-primary hover:underline"><bdi dir="ltr">{request.ref_number || `#${request.book_id}`}</bdi></Link>
+                ) : <span>{EMPTY_VALUE}</span>}
+                <span>{t(`vehicles.${request.type}`)}{' · '}<bdi dir="ltr">{formatIsoDate(request.created_at.slice(0, 10))}</bdi></span>
+                <span className="whitespace-pre-wrap break-words text-xs text-muted-foreground" dir="auto">{request.description}</span>
+              </div>
+              {canEdit && <Button type="button" size="sm" variant="outline" onClick={() => onComplete(request)}>{t('vehicles.markMaintenanceDone')}</Button>}
+            </li>
+          ))}
+        </ul>
+      )}
+    </Panel>
+  )
+}
 
 function MaintenancePanel({
   records,

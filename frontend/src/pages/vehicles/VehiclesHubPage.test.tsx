@@ -57,6 +57,8 @@ vi.mock('@/lib/api', async (importOriginal) => {
       listVehicleSites: vi.fn(),
       listVehicles: vi.fn(),
       setVehicleNotifyDays: vi.fn(),
+      setVehicleMaintenanceContractor: vi.fn(),
+      listRecipients: vi.fn(),
       archiveVehicle: vi.fn(),
       restoreVehicle: vi.fn(),
     },
@@ -74,6 +76,8 @@ const SUMMARY: VehiclesSummary = {
   maintenance_due: 2,
   active_sites: 2,
   notify_days: 30,
+  maintenance_contractor_id: null,
+  maintenance_contractor_name: null,
 }
 
 const SITES: VehicleSiteRead[] = [
@@ -222,6 +226,11 @@ beforeEach(async () => {
   await i18n.changeLanguage('en')
   vi.mocked(copyTable).mockResolvedValue()
   vi.mocked(api.vehiclesSummary).mockResolvedValue(SUMMARY)
+  vi.mocked(api.listRecipients).mockResolvedValue([{ id: 3, name: 'Fleet garage', name_ar: 'ورشة الأسطول' }])
+  vi.mocked(api.setVehicleMaintenanceContractor).mockImplementation(async (id) => ({
+    ...SUMMARY, maintenance_contractor_id: id,
+    maintenance_contractor_name: id == null ? null : 'Fleet garage',
+  }))
   vi.mocked(api.listVehicleSites).mockResolvedValue(SITES)
   vi.mocked(api.listVehicles).mockImplementation(async (params = {}) =>
     VEHICLES.filter((vehicle) => {
@@ -246,6 +255,22 @@ beforeEach(async () => {
 })
 
 describe('VehiclesHubPage', () => {
+  it('saves the contractor from the existing recipient picker and allows clearing it', async () => {
+    const user = userEvent.setup()
+    renderPage()
+
+    const picker = await screen.findByRole('combobox', { name: 'Maintenance contractor' })
+    await user.click(picker)
+    await user.click(await screen.findByRole('option', { name: /Fleet garage/ }))
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(api.setVehicleMaintenanceContractor).toHaveBeenCalledWith(3))
+    await waitFor(() => expect(screen.getByRole('combobox', { name: 'Maintenance contractor' })).toHaveValue('Fleet garage'))
+
+    await user.click(screen.getByRole('button', { name: 'Clear recipient' }))
+    await user.click(screen.getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(api.setVehicleMaintenanceContractor).toHaveBeenCalledWith(null))
+  })
+
   it('uses the thumbnail variant in the fleet ledger', async () => {
     renderPage()
 

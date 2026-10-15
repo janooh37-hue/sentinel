@@ -395,6 +395,7 @@ export const VEHICLE_QUERY_KEYS = {
   summary: ['vehicles-summary'] as const,
   list: ['vehicles'] as const,
   detail: (vehicleId: number) => ['vehicle', vehicleId] as const,
+  maintenanceRequests: (vehicleId: number) => ['vehicle-maintenance-requests', vehicleId] as const,
   photoLibrary: ['vehicle-photo-library'] as const,
   sites: ['vehicle-sites'] as const,
   fines: ['vehicle-fines'] as const,
@@ -419,6 +420,7 @@ export function invalidateVehicleQueries(
   void queryClient.invalidateQueries({ queryKey: VEHICLE_QUERY_KEYS.photoLibrary })
   if (options.vehicleId != null) {
     void queryClient.invalidateQueries({ queryKey: VEHICLE_QUERY_KEYS.detail(options.vehicleId) })
+    void queryClient.invalidateQueries({ queryKey: VEHICLE_QUERY_KEYS.maintenanceRequests(options.vehicleId) })
   }
   for (const register of options.registers ?? []) {
     const key = VEHICLE_QUERY_KEYS[register]
@@ -433,6 +435,8 @@ export function invalidateVehicleQueries(
  *  falls through to the API's own message. */
 const ERROR_MESSAGE_KEYS: Record<string, string> = {
   SITE_HAS_VEHICLES: 'vehicles.siteHasVehicles',
+  MAINTENANCE_CONTRACTOR_MISSING: 'vehicles.maintenanceContractorRequired',
+  MAINTENANCE_REQUEST_NOT_OPEN: 'vehicles.maintenanceRequestNotOpen',
   ODOMETER_CLOSING_BELOW_OPENING: 'vehicles.odometerClosingBelowOpening',
   ODOMETER_CLOSING_ABOVE_NEXT: 'vehicles.odometerClosingAboveNext',
   ODOMETER_NO_VEHICLES: 'vehicles.selectAtLeastOneVehicle',

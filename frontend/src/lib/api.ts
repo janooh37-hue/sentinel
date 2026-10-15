@@ -316,6 +316,9 @@ export type VehicleAccidentCreate = components['schemas']['VehicleAccidentCreate
 export type VehicleAccidentRead = components['schemas']['VehicleAccidentRead']
 export type VehicleMaintenanceCreate = components['schemas']['VehicleMaintenanceCreate']
 export type VehicleMaintenanceRead = components['schemas']['VehicleMaintenanceRead']
+export type VehicleMaintenanceRequestCreate = components['schemas']['VehicleMaintenanceRequestCreate']
+export type VehicleMaintenanceRequestRead = components['schemas']['VehicleMaintenanceRequestRead']
+export type VehicleMaintenanceRequestResult = components['schemas']['VehicleMaintenanceRequestResult']
 export type OdometerMonthRead = components['schemas']['OdometerMonthRead']
 export type OdometerRowRead = components['schemas']['OdometerRowRead']
 export type OdometerUpsert = components['schemas']['OdometerUpsert']
@@ -1591,6 +1594,10 @@ export const api = {
   vehiclesSummary: () => request<VehiclesSummary>('GET', '/vehicles/summary'),
   setVehicleNotifyDays: (days: number) =>
     request<VehiclesSummary>('PUT', '/vehicles/notify-days', { days }),
+  setVehicleMaintenanceContractor: (maintenanceContractorId: number | null) =>
+    request<VehiclesSummary>('PUT', '/vehicles/maintenance-contractor', {
+      maintenance_contractor_id: maintenanceContractorId,
+    }),
   listVehicleSites: () => request<VehicleSiteRead[]>('GET', '/vehicles/sites'),
   createVehicleSite: (body: VehicleSiteCreate) =>
     request<VehicleSiteRead>('POST', '/vehicles/sites', body),
@@ -1768,6 +1775,10 @@ export const api = {
     request<OdometerRowRead>('PUT', `/vehicles/${vehicleId}/odometer/${month}`, body),
   generateOdometerForm: (body: OdometerFormRequest) =>
     request<LetterResult>('POST', '/vehicles/odometer/form', body),
+  listVehicleMaintenanceRequests: (vehicleId: number) =>
+    request<VehicleMaintenanceRequestRead[]>('GET', `/vehicles/${vehicleId}/maintenance-requests`),
+  createVehicleMaintenanceRequest: (vehicleId: number, body: VehicleMaintenanceRequestCreate) =>
+    request<VehicleMaintenanceRequestResult>('POST', `/vehicles/${vehicleId}/maintenance-requests`, body),
   listVehicleMaintenance: (month?: string) =>
     request<VehicleMaintenanceRead[]>('GET', `/vehicles/maintenance${qs({ month })}`),
   createVehicleMaintenance: (body: VehicleMaintenanceCreate) =>

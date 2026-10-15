@@ -64,6 +64,7 @@ import {
 } from './vehicleUtils'
 import { AddVehicleDialog } from './components/AddVehicleDialog'
 import { EvgFetchDialog } from './components/EvgFetchDialog'
+import { MaintenanceContractorSetting } from './components/MaintenanceContractorSetting'
 import { PlateChip } from './components/PlateChip'
 import { RenewLicenseDialog } from './components/RenewLicenseDialog'
 import { ServiceCard } from './components/ServiceCard'
@@ -710,6 +711,13 @@ export function VehiclesHubPage(): React.JSX.Element {
                 />
                 <span id={notifyUnitId}>{t('vehicles.days')}</span>
               </div>
+              {summary && (
+                <MaintenanceContractorSetting
+                  key={summary.maintenance_contractor_id ?? 'none'}
+                  summary={summary}
+                  canEdit={canEdit}
+                />
+              )}
             </div>
 
             <div
