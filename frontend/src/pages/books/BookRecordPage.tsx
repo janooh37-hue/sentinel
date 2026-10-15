@@ -723,7 +723,7 @@ function BookRecordPageBody(): React.JSX.Element {
       // filling. Clear only the persisted-basket identity, not the prefill.
       const prefill = buildBasketPrefill([item], getRecentRecipientsForForm(key))
       prefill.basketKey = undefined
-      navigate('/ledger', { state: { composePrefill: prefill } })
+      navigate('/ledger?tab=email', { state: { composePrefill: prefill } })
     } catch (err) {
       toast.error(apiErrorMessage(err))
     } finally {

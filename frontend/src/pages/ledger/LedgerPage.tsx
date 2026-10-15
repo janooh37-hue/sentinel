@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { useTranslation } from 'react-i18next'
-import { useLocation, useSearchParams } from 'react-router-dom'
+import { useSearchParams } from 'react-router-dom'
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { useAuth } from '@/lib/authContext'
@@ -23,21 +23,20 @@ interface LedgerPageProps {
   ) => void
 }
 
-/** Books is the landing tab; mail links, compose hand-offs and `?tab=email` open Email. */
+/** Books is the landing tab; `?tab=email` and mail links (`?mail=`, `?action=`) open Email. */
 export function LedgerPage({ onNavigate }: LedgerPageProps = {}): React.JSX.Element {
   const { t } = useTranslation()
   const { has, isLoading } = useCapabilities()
   const { user } = useAuth()
-  const location = useLocation()
   const [params, setParams] = useSearchParams()
   const canEmail = has('ledger.view')
   const canBooks = has('books.view') && user?.role !== 'inmate_reporter'
   const explicit = params.get('tab')
-  const navState = location.state as { composePrefill?: unknown; ledgerView?: unknown } | null
-  const wantsEmail = explicit === 'email' || (explicit !== 'books'
-    && (params.has('mail') || params.has('action') || !!navState?.composePrefill || !!navState?.ledgerView))
+  const wantsEmail = explicit === 'email' || (explicit !== 'books' && (params.has('mail') || params.has('action')))
   const requested = wantsEmail ? 'email' : 'books'
   const tab = requested === 'books' ? (canBooks ? 'books' : 'email') : (canEmail ? 'email' : 'books')
+  // Same guard as the desk, so a malformed `book` never strands the user without tabs.
+  const bookOpen = tab === 'books' && /^0*[1-9]\d*$/.test(params.get('book') ?? '')
 
   useEffect(() => {
     if (isLoading || (!canEmail && !canBooks) || explicit === tab) return
@@ -54,8 +53,8 @@ export function LedgerPage({ onNavigate }: LedgerPageProps = {}): React.JSX.Elem
         next.delete('view')
       }
       return next
-    }, { replace: true, state: location.state })
-  }, [isLoading, canEmail, canBooks, explicit, requested, tab, setParams, location.state])
+    }, { replace: true })
+  }, [isLoading, canEmail, canBooks, explicit, requested, tab, setParams])
 
   function selectTab(value: string): void {
     setParams((previous) => {
@@ -68,7 +67,7 @@ export function LedgerPage({ onNavigate }: LedgerPageProps = {}): React.JSX.Elem
   return (
     <Tabs value={tab} onValueChange={selectTab} className="flex min-h-0 min-w-0 flex-1 flex-col">
       {/* An open book takes the whole page; its toolbar carries Back. */}
-      {!(tab === 'books' && params.has('book')) && (
+      {!bookOpen && (
         <TabsList className="shrink-0 px-4">
           {canBooks && <TabsTrigger value="books">{t('ledger.tabs.books')}</TabsTrigger>}
           {canEmail && <TabsTrigger value="email">{t('ledger.tabs.email')}</TabsTrigger>}

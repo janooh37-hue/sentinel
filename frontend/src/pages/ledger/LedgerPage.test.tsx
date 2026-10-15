@@ -1,7 +1,6 @@
 import { cleanup, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter, useLocation } from 'react-router-dom'
-import type { InitialEntry } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const state = vi.hoisted(() => ({ caps: new Set<string>(), role: 'employee' }))
@@ -17,7 +16,7 @@ import { LedgerPage } from './LedgerPage'
 function Location(): React.JSX.Element {
   return <output>{useLocation().search}</output>
 }
-function mount(url: InitialEntry = '/ledger'): void {
+function mount(url = '/ledger'): void {
   render(<MemoryRouter initialEntries={[url]}><LedgerPage /><Location /></MemoryRouter>)
 }
 
@@ -44,13 +43,18 @@ describe('Ledger tabs by capability', () => {
     expect(screen.getByRole('status').textContent).toBe(search)
   })
 
-  it('opens Email for a compose hand-off carried in navigation state', () => {
+  it('leaves an Email hand-off URL and its navigation state for the email shell', () => {
     state.caps = new Set(['ledger.view', 'books.view'])
-    mount({ pathname: '/ledger', state: { composePrefill: { subject: 'x' } } })
+    function StateProbe(): React.JSX.Element {
+      return <pre data-testid="state">{JSON.stringify(useLocation().state)}</pre>
+    }
+    render(<MemoryRouter initialEntries={[{ pathname: '/ledger', search: '?tab=email', state: { composePrefill: { subject: 'x' } } }]}><LedgerPage /><Location /><StateProbe /></MemoryRouter>)
     expect(screen.getByText('email-shell')).toBeVisible()
+    expect(screen.getByRole('status').textContent).toBe('?tab=email')
+    expect(screen.getByTestId('state').textContent).toBe('{"composePrefill":{"subject":"x"}}')
   })
 
-  it('keeps an email deep link while switching tabs and hides the tabs over an open book', async () => {
+  it('keeps an email deep link while switching tabs', async () => {
     state.caps = new Set(['ledger.view', 'books.view'])
     mount('/ledger?mail=42')
     await userEvent.click(screen.getByRole('tab', { name: 'Books' }))
@@ -58,10 +62,16 @@ describe('Ledger tabs by capability', () => {
     await userEvent.click(screen.getByRole('tab', { name: 'Email' }))
     expect(screen.getByText('email-shell')).toBeVisible()
     expect(screen.getByRole('status').textContent).toBe('?mail=42&tab=email')
-    cleanup()
-    mount('/ledger?tab=books&book=7')
+  })
+
+  it.each([
+    ['hides', '7', false],
+    ['keeps', 'abc', true],
+  ])('%s the Ledger tabs for book=%s', (_, book, tabs) => {
+    state.caps = new Set(['ledger.view', 'books.view'])
+    mount(`/ledger?tab=books&book=${book}`)
     expect(screen.getByText('books-desk')).toBeVisible()
-    expect(screen.queryByRole('tab', { name: 'Books' })).not.toBeInTheDocument()
+    expect(screen.queryAllByRole('tab').length > 0).toBe(tabs)
   })
 
   it.each([

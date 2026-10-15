@@ -399,7 +399,7 @@ function DefaultNavBellPopover(): React.JSX.Element {
               type="button"
               onClick={() => {
                 setOpen(false)
-                navigate('/ledger', { state: { ledgerView: 'followups' } })
+                navigate('/ledger?tab=email', { state: { ledgerView: 'followups' } })
               }}
               className="flex w-full items-center gap-3 border-b border-hairline px-4 py-3 text-start transition-colors hover:bg-surface-tinted focus-visible:bg-surface-tinted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
             >
