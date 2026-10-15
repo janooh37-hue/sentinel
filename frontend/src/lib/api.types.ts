@@ -5307,6 +5307,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/vehicles/odometer": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Vehicle Odometer Month */
+        get: operations["get_vehicle_odometer_month_api_v1_vehicles_odometer_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/vehicles/photo-library": {
         parameters: {
             query?: never;
@@ -5354,6 +5371,23 @@ export interface paths {
         get: operations["get_vehicle_photo_library_image_api_v1_vehicles_photo_library__photo_id__image__variant__get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/vehicles/odometer/form": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Generate Vehicle Odometer Form */
+        post: operations["generate_vehicle_odometer_form_api_v1_vehicles_odometer_form_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -5754,6 +5788,23 @@ export interface paths {
         head?: never;
         /** Update Vehicle Accident Status */
         patch: operations["update_vehicle_accident_status_api_v1_vehicles__vehicle_id__accidents__accident_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/vehicles/{vehicle_id}/odometer/{month}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Upsert Vehicle Odometer */
+        put: operations["upsert_vehicle_odometer_api_v1_vehicles__vehicle_id__odometer__month__put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/vehicles/{vehicle_id}/maintenance/{maintenance_id}": {
@@ -11972,6 +12023,70 @@ export interface components {
             /** Enabled */
             enabled: boolean;
             last: components["schemas"]["NotifyStatusItem"] | null;
+        };
+        /** OdometerFormRequest */
+        OdometerFormRequest: {
+            /** Month */
+            month: string;
+            /** Vehicle Ids */
+            vehicle_ids?: number[] | null;
+        };
+        /** OdometerMaintenanceItem */
+        OdometerMaintenanceItem: {
+            /**
+             * Date
+             * Format: date
+             */
+            date: string;
+            /** Type */
+            type: string;
+            /** Cost */
+            cost: number;
+        };
+        /** OdometerMonthRead */
+        OdometerMonthRead: {
+            /** Month */
+            month: string;
+            /** Rows */
+            rows: components["schemas"]["OdometerRowRead"][];
+            /** Total Km Driven */
+            total_km_driven: number;
+            /** Total Maintenance Cost */
+            total_maintenance_cost: number;
+        };
+        /** OdometerRowRead */
+        OdometerRowRead: {
+            /** Vehicle Id */
+            vehicle_id: number;
+            /** Plate Label */
+            plate_label: string;
+            /** Vehicle Type Ar */
+            vehicle_type_ar: string | null;
+            /** Vehicle Type En */
+            vehicle_type_en: string | null;
+            /** Month */
+            month: string;
+            /** Opening Km */
+            opening_km: number | null;
+            /** Opening From Previous */
+            opening_from_previous: boolean;
+            /** Closing Km */
+            closing_km: number | null;
+            /** Km Driven */
+            km_driven: number | null;
+            /** Maintenance Count */
+            maintenance_count: number;
+            /** Maintenance Cost */
+            maintenance_cost: number;
+            /** Maintenance */
+            maintenance: components["schemas"]["OdometerMaintenanceItem"][];
+        };
+        /** OdometerUpsert */
+        OdometerUpsert: {
+            /** Closing Km */
+            closing_km: number;
+            /** Opening Km */
+            opening_km?: number | null;
         };
         /** OrgNode */
         OrgNode: {
@@ -27728,7 +27843,9 @@ export interface operations {
     };
     list_vehicle_maintenance_api_v1_vehicles_maintenance_get: {
         parameters: {
-            query?: never;
+            query?: {
+                month?: string | null;
+            };
             header?: never;
             path?: never;
             cookie?: {
@@ -27779,6 +27896,39 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["VehicleMaintenanceRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_vehicle_odometer_month_api_v1_vehicles_odometer_get: {
+        parameters: {
+            query: {
+                month: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OdometerMonthRead"];
                 };
             };
             /** @description Validation Error */
@@ -27945,6 +28095,41 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    generate_vehicle_odometer_form_api_v1_vehicles_odometer_form_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OdometerFormRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LetterResult"];
                 };
             };
             /** @description Validation Error */
@@ -28943,6 +29128,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["VehicleAccidentRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    upsert_vehicle_odometer_api_v1_vehicles__vehicle_id__odometer__month__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                vehicle_id: number;
+                month: string;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OdometerUpsert"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OdometerRowRead"];
                 };
             };
             /** @description Validation Error */

@@ -8,7 +8,8 @@ import { formatRegisterMonth, shiftMonth } from './registerModel'
 interface MonthSwitcherProps {
   year: number
   month: number
-  closed: boolean
+  closed?: boolean
+  labels?: { previous: string; next: string; label: string }
   onChange: (coordinate: { year: number; month: number }) => void
 }
 
@@ -16,6 +17,7 @@ export function MonthSwitcher({
   year,
   month,
   closed,
+  labels,
   onChange,
 }: MonthSwitcherProps): React.JSX.Element {
   const { t, i18n } = useTranslation()
@@ -25,14 +27,14 @@ export function MonthSwitcher({
         type="button"
         size="icon-sm"
         variant="outline"
-        aria-label={t('inmateStats.month.previous')}
+        aria-label={labels?.previous ?? t('inmateStats.month.previous')}
         onClick={() => onChange(shiftMonth(year, month, -1))}
       >
         <ChevronLeft className="h-4 w-4 rtl:rotate-180" aria-hidden />
       </Button>
       <div className="min-w-44 rounded-lg border border-hairline bg-surface-tinted px-3 py-2 text-center">
         <span className="block text-[0.68rem] font-medium uppercase tracking-[0.08em] text-muted-foreground">
-          {t('inmateStats.month.label')}
+          {labels?.label ?? t('inmateStats.month.label')}
         </span>
         <bdi dir="ltr" className="mt-0.5 block text-sm font-semibold">
           {formatRegisterMonth(year, month, i18n.language)}
@@ -42,14 +44,16 @@ export function MonthSwitcher({
         type="button"
         size="icon-sm"
         variant="outline"
-        aria-label={t('inmateStats.month.next')}
+        aria-label={labels?.next ?? t('inmateStats.month.next')}
         onClick={() => onChange(shiftMonth(year, month, 1))}
       >
         <ChevronRight className="h-4 w-4 rtl:rotate-180" aria-hidden />
       </Button>
-      <Badge tone={closed ? 'neutral' : 'active'} withDot>
-        {t(closed ? 'inmateStats.month.closed' : 'inmateStats.month.open')}
-      </Badge>
+      {closed !== undefined && (
+        <Badge tone={closed ? 'neutral' : 'active'} withDot>
+          {t(closed ? 'inmateStats.month.closed' : 'inmateStats.month.open')}
+        </Badge>
+      )}
     </div>
   )
 }

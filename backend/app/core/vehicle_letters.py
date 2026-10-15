@@ -7,7 +7,9 @@ from dataclasses import dataclass
 from datetime import date
 from typing import Any
 
+from app.core.constants import ARABIC_MONTHS
 from app.core.hijri import hijri_label
+from app.schemas.vehicle import OdometerRowRead
 
 
 @dataclass(frozen=True, slots=True)
@@ -105,4 +107,41 @@ def accident_letter_fields(
         "description": description_ar,
         "hijri_date": hijri_label(today),
         "subject": f"بلاغ حادث مركبة — {plate}",
+    }
+
+
+def odometer_form_fields(
+    *, month: str, rows: Sequence[OdometerRowRead], today: date
+) -> dict[str, Any]:
+    """Format the monthly fleet register without treating missing readings as zero."""
+    year, month_number = map(int, month.split("-"))
+    maintenance_labels = {
+        "service": "صيانة دورية",
+        "repair": "إصلاح",
+        "tires": "إطارات",
+        "other": "أخرى",
+    }
+    return {
+        "subject": f"سجل عداد المسافات والصيانة الشهري للمركبات — {month_number:02d}/{year}",
+        "date": today.strftime("%d-%m-%Y"),
+        "month_label": f"{ARABIC_MONTHS[month_number - 1]} {year}",
+        "rows": [
+            {
+                "seq": seq,
+                "plate": row.plate_label.replace("\\", "/"),
+                "vehicle_type": row.vehicle_type_ar or row.vehicle_type_en or "—",
+                "opening_km": f"{row.opening_km:,}" if row.opening_km is not None else "—",
+                "closing_km": f"{row.closing_km:,}" if row.closing_km is not None else "—",
+                "km_driven": f"{row.km_driven:,}" if row.km_driven is not None else "—",
+                "maintenance": "\n".join(
+                    f"{maintenance_labels.get(item.type, item.type)} (\u200e{item.date:%d/%m}\u200e)"
+                    for item in row.maintenance
+                )
+                or "—",
+                "maintenance_cost": f"{row.maintenance_cost:,}",
+            }
+            for seq, row in enumerate(rows, start=1)
+        ],
+        "total_km_driven": f"{sum(row.km_driven or 0 for row in rows):,}",
+        "total_maintenance_cost": f"{sum(row.maintenance_cost for row in rows):,}",
     }

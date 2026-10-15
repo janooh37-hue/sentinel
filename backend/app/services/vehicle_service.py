@@ -6,6 +6,8 @@ import json
 import logging
 import re
 import uuid
+from calendar import monthrange
+from collections.abc import Sequence
 from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Any, Literal, cast
@@ -27,12 +29,18 @@ from app.db.models import (
     VehicleFine,
     VehicleLicenseRenewal,
     VehicleMaintenance,
+    VehicleOdometerReading,
     VehiclePhotoAsset,
     VehicleSite,
 )
 from app.schemas.vehicle import (
+    MONTH_PATTERN,
     LicenseRenewalRead,
     LicenseRenewCreate,
+    OdometerMaintenanceItem,
+    OdometerMonthRead,
+    OdometerRowRead,
+    OdometerUpsert,
     VehicleAccidentCreate,
     VehicleAccidentRead,
     VehicleCertificateUpdate,
@@ -1570,23 +1578,176 @@ def list_accidents(db: Session) -> list[VehicleAccident]:
     )
 
 
-def list_maintenance(db: Session) -> list[VehicleMaintenance]:
-    return list(
-        db.execute(
-            select(VehicleMaintenance)
-            .join(VehicleMaintenance.vehicle)
-            .options(
-                selectinload(VehicleMaintenance.vehicle).selectinload(Vehicle.files),
-                selectinload(VehicleMaintenance.vehicle).selectinload(Vehicle.site),
-            )
-            .execution_options(populate_existing=True)
-            .where(Vehicle.archived_at.is_(None))
-            .order_by(VehicleMaintenance.date.desc(), VehicleMaintenance.id.desc())
+def _month_dates(month: str) -> tuple[date, date]:
+    try:
+        if not re.fullmatch(MONTH_PATTERN, month):
+            raise ValueError
+        year, month_number = map(int, month.split("-"))
+        return date(year, month_number, 1), date(
+            year, month_number, monthrange(year, month_number)[1]
         )
-        .scalars()
-        .unique()
-        .all()
+    except ValueError:
+        raise ValidationFailedError(
+            "VALIDATION_ERROR", "Month must be a valid YYYY-MM value.", month=month
+        ) from None
+
+
+def list_maintenance(db: Session, *, month: str | None = None) -> list[VehicleMaintenance]:
+    stmt = (
+        select(VehicleMaintenance)
+        .join(VehicleMaintenance.vehicle)
+        .options(
+            selectinload(VehicleMaintenance.vehicle).selectinload(Vehicle.files),
+            selectinload(VehicleMaintenance.vehicle).selectinload(Vehicle.site),
+        )
+        .execution_options(populate_existing=True)
+        .where(Vehicle.archived_at.is_(None))
+        .order_by(VehicleMaintenance.date.desc(), VehicleMaintenance.id.desc())
     )
+    if month is not None:
+        first, last = _month_dates(month)
+        stmt = stmt.where(VehicleMaintenance.date.between(first, last))
+    return list(db.execute(stmt).scalars().unique().all())
+
+
+def odometer_month(
+    db: Session, month: str, *, vehicle_ids: Sequence[int] | None = None
+) -> OdometerMonthRead:
+    first, last = _month_dates(month)
+    stmt = select(Vehicle).where(Vehicle.archived_at.is_(None))
+    if vehicle_ids is not None:
+        stmt = stmt.where(Vehicle.id.in_(vehicle_ids))
+    vehicles = db.scalars(
+        stmt.order_by(Vehicle.site_id.asc(), Vehicle.plate_number.asc(), Vehicle.id.asc())
+    ).all()
+    ids = [vehicle.id for vehicle in vehicles]
+    rows: list[OdometerRowRead] = []
+    if ids:
+        readings = {
+            reading.vehicle_id: reading
+            for reading in db.scalars(
+                select(VehicleOdometerReading).where(
+                    VehicleOdometerReading.vehicle_id.in_(ids),
+                    VehicleOdometerReading.month == month,
+                )
+            )
+        }
+        latest = (
+            select(
+                VehicleOdometerReading.vehicle_id,
+                func.max(VehicleOdometerReading.month).label("month"),
+            )
+            .where(
+                VehicleOdometerReading.vehicle_id.in_(ids),
+                VehicleOdometerReading.month < month,
+            )
+            .group_by(VehicleOdometerReading.vehicle_id)
+            .subquery()
+        )
+        previous = {
+            reading.vehicle_id: reading.closing_km
+            for reading in db.scalars(
+                select(VehicleOdometerReading).join(
+                    latest,
+                    (VehicleOdometerReading.vehicle_id == latest.c.vehicle_id)
+                    & (VehicleOdometerReading.month == latest.c.month),
+                )
+            )
+        }
+        maintenance: dict[int, list[OdometerMaintenanceItem]] = {}
+        for item in db.scalars(
+            select(VehicleMaintenance)
+            .where(
+                VehicleMaintenance.vehicle_id.in_(ids),
+                VehicleMaintenance.date.between(first, last),
+            )
+            .order_by(VehicleMaintenance.date.asc(), VehicleMaintenance.id.asc())
+        ):
+            maintenance.setdefault(item.vehicle_id, []).append(
+                OdometerMaintenanceItem(date=item.date, type=item.type, cost=item.cost)
+            )
+        for vehicle in vehicles:
+            reading = readings.get(vehicle.id)
+            opening = previous.get(vehicle.id, reading.opening_km if reading is not None else None)
+            closing = reading.closing_km if reading is not None else None
+            items = maintenance.get(vehicle.id, [])
+            rows.append(
+                OdometerRowRead(
+                    vehicle_id=vehicle.id,
+                    plate_label=plate_label(vehicle),
+                    vehicle_type_ar=vehicle.type_ar,
+                    vehicle_type_en=vehicle.type_en,
+                    month=month,
+                    opening_km=opening,
+                    opening_from_previous=vehicle.id in previous,
+                    closing_km=closing,
+                    km_driven=closing - opening
+                    if closing is not None and opening is not None
+                    else None,
+                    maintenance_count=len(items),
+                    maintenance_cost=sum(item.cost for item in items),
+                    maintenance=items,
+                )
+            )
+    return OdometerMonthRead(
+        month=month,
+        rows=rows,
+        total_km_driven=sum(row.km_driven for row in rows if row.km_driven is not None),
+        total_maintenance_cost=sum(row.maintenance_cost for row in rows),
+    )
+
+
+def upsert_odometer(
+    db: Session, vehicle_id: int, month: str, payload: OdometerUpsert, *, actor: str
+) -> OdometerRowRead:
+    _month_dates(month)
+    require_active_vehicle(db, vehicle_id)
+    base = select(VehicleOdometerReading).where(VehicleOdometerReading.vehicle_id == vehicle_id)
+    reading = db.scalar(base.where(VehicleOdometerReading.month == month))
+    previous = db.scalar(
+        base.where(VehicleOdometerReading.month < month)
+        .order_by(VehicleOdometerReading.month.desc())
+        .limit(1)
+    )
+    following = db.scalar(
+        base.where(VehicleOdometerReading.month > month)
+        .order_by(VehicleOdometerReading.month.asc())
+        .limit(1)
+    )
+    opening = payload.opening_km
+    if previous is not None:
+        opening = previous.closing_km
+    elif reading is not None and "opening_km" not in payload.model_fields_set:
+        opening = reading.opening_km
+    if opening is not None and payload.closing_km < opening:
+        raise ValidationFailedError(
+            "ODOMETER_CLOSING_BELOW_OPENING",
+            "The closing odometer reading cannot be below the opening reading.",
+            opening_km=opening,
+        )
+    if following is not None and payload.closing_km > following.closing_km:
+        raise ValidationFailedError(
+            "ODOMETER_CLOSING_ABOVE_NEXT",
+            "The closing odometer reading cannot exceed the next month's closing reading.",
+            next_month=following.month,
+            next_closing_km=following.closing_km,
+        )
+    if reading is None:
+        reading = VehicleOdometerReading(vehicle_id=vehicle_id, month=month)
+        db.add(reading)
+    else:
+        reading.updated_at = _utcnow()
+    reading.opening_km = None if previous is not None else opening
+    reading.closing_km = payload.closing_km
+    db.commit()
+    _audit(
+        db,
+        "odometer.recorded",
+        vehicle_id,
+        actor,
+        {"month": month, "opening_km": opening, "closing_km": payload.closing_km},
+    )
+    return odometer_month(db, month, vehicle_ids=[vehicle_id]).rows[0]
 
 
 def summary(db: Session) -> VehiclesSummary:

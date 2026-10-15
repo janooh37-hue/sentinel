@@ -107,6 +107,7 @@ import { FineDialog } from './components/FineDialog'
 import { FinePaymentDialog, type FinePaymentMode } from './components/FinePaymentDialog'
 import { MaintenanceDialog } from './components/MaintenanceDialog'
 import { PlateChip } from './components/PlateChip'
+import { TabChip } from './components/TabChip'
 import { RenewLicenseDialog } from './components/RenewLicenseDialog'
 import { VehicleFileThumb } from './components/VehicleFileViewer'
 import { VehicleStatusBadge } from './components/VehicleStatusBadge'
@@ -900,45 +901,6 @@ function InfoItem({
       <dt className="text-[0.63rem] uppercase tracking-[0.06em] text-muted-foreground">{label}</dt>
       <dd className="mt-0.5 break-words text-[0.78rem] font-medium text-foreground">{children}</dd>
     </div>
-  )
-}
-
-function TabChip({
-  active,
-  label,
-  count,
-  onClick,
-}: {
-  active: boolean
-  label: string
-  count: number
-  onClick: () => void
-}): React.JSX.Element {
-  const { i18n } = useTranslation()
-  return (
-    <button
-      type="button"
-      aria-pressed={active}
-      onClick={onClick}
-      className={cn(
-        'inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3.5 py-1.5 text-[0.78rem] font-semibold transition-colors',
-        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background',
-        'motion-reduce:transition-none',
-        active
-          ? 'border-primary bg-primary text-primary-foreground'
-          : 'border-border bg-surface text-muted-foreground hover:border-border-strong hover:text-foreground',
-      )}
-    >
-      {label}
-      <span
-        className={cn(
-          'font-mono text-[0.7rem] tabular-nums',
-          active ? 'opacity-75' : 'text-faint',
-        )}
-      >
-        {formatNumber(count, i18n.language)}
-      </span>
-    </button>
   )
 }
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from datetime import date
 
 from sqlalchemy import select
@@ -12,6 +13,7 @@ from app.core.vehicle_letters import (
     FineLine,
     accident_letter_fields,
     fines_letter_fields,
+    odometer_form_fields,
 )
 from app.db.models import Book, Document, User
 from app.schemas.vehicle import LetterResult
@@ -204,5 +206,48 @@ def generate_accident_letter(
             "ref_number": result.ref_number,
             "accident_id": accident.id,
         },
+    )
+    return result
+
+
+def generate_odometer_form(
+    db: Session,
+    *,
+    month: str,
+    vehicle_ids: Sequence[int] | None,
+    user: User,
+) -> LetterResult:
+    """File the monthly fleet mileage and maintenance register as a GS book."""
+    report = vehicle_service.odometer_month(db, month, vehicle_ids=vehicle_ids)
+    if not report.rows:
+        raise ValidationFailedError(
+            "ODOMETER_NO_VEHICLES",
+            "Select at least one active vehicle to generate the monthly mileage log.",
+        )
+    fields = odometer_form_fields(month=month, rows=report.rows, today=date.today())
+    generated = document_service.generate_document(
+        db,
+        employee_id=None,
+        template_id="Vehicle Mileage Log",
+        fields=fields,
+        classification_code="11/1",
+        commit=True,
+        current_user=user,
+    )
+    result = _letter_result(generated)
+    vehicle_service._audit(
+        db,
+        "letter.generated",
+        result.book_id,
+        user.email,
+        {
+            "template_id": "Vehicle Mileage Log",
+            "book_id": result.book_id,
+            "document_id": result.document_id,
+            "ref_number": result.ref_number,
+            "month": month,
+            "vehicle_ids": [row.vehicle_id for row in report.rows],
+        },
+        entity_type="book",
     )
     return result

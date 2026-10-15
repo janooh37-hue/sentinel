@@ -44,7 +44,7 @@ SERVICE_ALIASES: Final[Mapping[str, str]] = MappingProxyType({"Security Permit":
 #: rail entries and dynamic ``books.service.*`` capabilities, but manual form
 #: generators must not offer them. They are deliberately not service aliases.
 FEATURE_MINTED_TEMPLATE_IDS: Final[frozenset[str]] = frozenset(
-    {"Vehicle Fines", "Vehicle Accident Report"}
+    {"Vehicle Fines", "Vehicle Accident Report", "Vehicle Mileage Log"}
 )
 
 #: Every service that can own a rail entry: registered templates minus the two

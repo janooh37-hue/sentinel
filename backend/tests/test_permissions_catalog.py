@@ -170,8 +170,12 @@ def test_legacy_categories_name_the_services_a_deny_blocks(db_session):
     }
 
     gs = by_id["books.category.GS"]
-    assert gs.description_en == "Covers records from: Acknowledgment Form, General Book, Report."
-    assert gs.description_ar == "يشمل سجلات: استلام المواد، كتاب عام، تقرير."
+    assert gs.description_en == (
+        "Covers records from: Acknowledgment Form, General Book, Report, Vehicle Mileage Log."
+    )
+    assert gs.description_ar == (
+        "يشمل سجلات: استلام المواد، كتاب عام، تقرير، سجل عداد المسافات والصيانة الشهري للمركبات."
+    )
     assert by_id["books.category.NAT"].description_en == (
         "Covers records from: Violation Form, Warning Form."
     )

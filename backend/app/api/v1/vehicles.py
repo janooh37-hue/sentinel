@@ -18,6 +18,7 @@ from app.core.vehicle_photos import MAX_UPLOAD_BYTES
 from app.db.models import User, VehicleFile
 from app.db.session import get_db
 from app.schemas.vehicle import (
+    MONTH_PATTERN,
     EvgConfirmRequest,
     EvgConfirmResult,
     EvgPreviewJobCreated,
@@ -27,6 +28,10 @@ from app.schemas.vehicle import (
     LetterResult,
     LicenseRenewCreate,
     NotifyDaysUpdate,
+    OdometerFormRequest,
+    OdometerMonthRead,
+    OdometerRowRead,
+    OdometerUpsert,
     VehicleAccidentCreate,
     VehicleAccidentRead,
     VehicleAccidentStatusUpdate,
@@ -250,12 +255,13 @@ def create_vehicle_accident(
 def list_vehicle_maintenance(
     db: Annotated[Session, Depends(get_db)],
     _user: Annotated[User, Depends(require_capability("vehicles.view"))],
+    month: str | None = Query(default=None, pattern=MONTH_PATTERN),
 ) -> list[VehicleMaintenanceRead]:
     notify_days = settings_service.get_vehicle_notify_days(db)
     today = date_t.today()
     return [
         vehicle_service.maintenance_read(row, today=today, notify_days=notify_days)
-        for row in vehicle_service.list_maintenance(db)
+        for row in vehicle_service.list_maintenance(db, month=month)
     ]
 
 
@@ -275,6 +281,15 @@ def create_vehicle_maintenance(
         today=date_t.today(),
         notify_days=settings_service.get_vehicle_notify_days(db),
     )
+
+
+@router.get("/odometer", response_model=OdometerMonthRead)
+def get_vehicle_odometer_month(
+    db: Annotated[Session, Depends(get_db)],
+    _user: Annotated[User, Depends(require_capability("vehicles.view"))],
+    month: str = Query(pattern=MONTH_PATTERN),
+) -> OdometerMonthRead:
+    return vehicle_service.odometer_month(db, month)
 
 
 @router.get("/photo-library", response_model=list[VehiclePhotoRead])
@@ -354,6 +369,17 @@ def get_vehicle_photo_library_image(
         return Response(status_code=status.HTTP_304_NOT_MODIFIED, headers=headers)
     headers["Content-Disposition"] = f'inline; filename="{row.id}-{variant}.webp"'
     return Response(content=path.read_bytes(), media_type="image/webp", headers=headers)
+
+
+@router.post("/odometer/form", response_model=LetterResult)
+def generate_vehicle_odometer_form(
+    payload: OdometerFormRequest,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(require_capability("vehicles.edit"))],
+) -> LetterResult:
+    return vehicle_letter_service.generate_odometer_form(
+        db, month=payload.month, vehicle_ids=payload.vehicle_ids, user=user
+    )
 
 
 @router.get("", response_model=list[VehicleListItem])
@@ -801,6 +827,17 @@ def delete_vehicle_accident(
 ) -> Response:
     vehicle_service.delete_accident(db, vehicle_id, accident_id, actor=user.email)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.put("/{vehicle_id}/odometer/{month}", response_model=OdometerRowRead)
+def upsert_vehicle_odometer(
+    vehicle_id: int,
+    month: str,
+    payload: OdometerUpsert,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(require_capability("vehicles.edit"))],
+) -> OdometerRowRead:
+    return vehicle_service.upsert_odometer(db, vehicle_id, month, payload, actor=user.email)
 
 
 @router.delete(

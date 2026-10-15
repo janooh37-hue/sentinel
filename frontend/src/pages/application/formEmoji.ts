@@ -28,6 +28,7 @@ const DEFAULT_EMOJI = '📄'
 export const EXTRA_TEMPLATE_EMOJI: Record<string, string> = {
   'Vehicle Fines': '🚗',
   'Vehicle Accident Report': '🚧',
+  'Vehicle Mileage Log': '🛣️',
   'Manpower Requisition Form': '👥',
   'Employment Application Form': '📝',
   'Interview Assessment Form': '💬',
@@ -53,6 +54,7 @@ export const EXTRA_TEMPLATE_EMOJI: Record<string, string> = {
 export const EXTRA_TEMPLATE_ARTWORK: Record<string, ServiceArtworkId> = {
   'Vehicle Fines': 'vehicle-fines',
   'Vehicle Accident Report': 'vehicle-accident',
+  'Vehicle Mileage Log': 'vehicle-maintenance',
   'Manpower Requisition Form': 'manpower-requisition',
   'Employment Application Form': 'employment-application',
   'Interview Assessment Form': 'interview-assessment',

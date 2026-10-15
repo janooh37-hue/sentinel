@@ -18,7 +18,11 @@ import pytest
 from docx import Document as DocxDocument
 from sqlalchemy.orm import Session
 
+from app.api.errors import ValidationFailedError
 from app.config import Settings
+from app.core.docx_engine import aztec_corner_for, syncs_general_book_footer
+from app.core.qr import barcode_payload
+from app.core.vehicle_letters import odometer_form_fields
 from app.db.models import (
     Book,
     BookCategory,
@@ -28,13 +32,17 @@ from app.db.models import (
     Vehicle,
     VehicleAccident,
     VehicleFine,
+    VehicleMaintenance,
+    VehicleOdometerReading,
     VehicleSite,
 )
+from app.schemas.vehicle import OdometerRowRead
 from app.services import document_service, vehicle_letter_service
 
 TEMPLATES_DIR = Path(__file__).resolve().parents[1] / "templates"
 FINES_TEMPLATE = TEMPLATES_DIR / "GSSG-VF_300-001_Vehicle_Fines.docx"
 ACCIDENT_TEMPLATE = TEMPLATES_DIR / "GSSG-VA_300-001_Vehicle_Accident_Report.docx"
+MILEAGE_TEMPLATE = TEMPLATES_DIR / "GSSG-GS_300-005_Vehicle_Mileage_Log.docx"
 
 
 @dataclass(frozen=True)
@@ -52,6 +60,7 @@ def _seed_vehicle_categories(db: Session) -> None:
     categories = (
         ("VF", "Vehicle Fines", "مخالفات المركبات"),
         ("VA", "Vehicle Accidents", "حوادث المركبات"),
+        ("GS", "General Services", "الخدمات العامة"),
     )
     for category_id, name_en, name_ar in categories:
         if db.get(BookCategory, category_id) is None:
@@ -428,3 +437,111 @@ def test_accident_template_contains_expected_jinja_tokens() -> None:
     }
     missing = {token for token in expected_tokens if token not in text}
     assert not missing, f"missing accident template tokens: {sorted(missing)}"
+
+
+def test_odometer_form_files_classified_gs_book_without_aztec(gen_env: _GenerationEnv) -> None:
+    env = gen_env
+    env.db.add_all(
+        [
+            VehicleOdometerReading(
+                vehicle_id=env.vehicle.id, month="2026-08", opening_km=100000, closing_km=101000
+            ),
+            VehicleOdometerReading(vehicle_id=env.vehicle.id, month="2026-09", closing_km=103450),
+            VehicleMaintenance(
+                vehicle_id=env.vehicle.id, date=date(2026, 9, 10), type="service", cost=450
+            ),
+        ]
+    )
+    env.db.commit()
+    result = vehicle_letter_service.generate_odometer_form(
+        env.db, month="2026-09", vehicle_ids=[env.vehicle.id], user=env.user
+    )
+    assert re.fullmatch(r"1/11/\d+", result.ref_number)
+    book = env.db.get(Book, result.book_id)
+    assert book is not None
+    assert book.category_id == "GS"
+    assert book.classification_code == "11/1"
+    assert book.ref_number == result.ref_number
+    assert result.pdf_available is False
+    _, path = _rendered_docx(env, result.document_id)
+    text = _all_docx_text(path)
+    assert "14 / 58216" in text
+    assert "تويوتا لاند كروزر" in text
+    assert "2,450" in text
+    assert "450" in text
+    assert "صيانة دورية" in text
+    assert "الإجمالي" in text
+    assert "{{" not in text and "{%" not in text
+    ns = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
+    with zipfile.ZipFile(path) as archive, zipfile.ZipFile(MILEAGE_TEMPLATE) as source:
+        header = ElementTree.fromstring(archive.read("word/header2.xml"))
+        barcode_runs = [
+            run
+            for run in header.findall(".//w:r", ns)
+            if (fonts := run.find("w:rPr/w:rFonts", ns)) is not None
+            and fonts.get(f"{{{ns['w']}}}ascii") == "Libre Barcode 39"
+        ]
+        payload = barcode_payload(result.ref_number, date.today())
+        assert len(barcode_runs) == 2  # DrawingML + VML copies
+        assert all("".join(run.itertext()) == payload for run in barcode_runs)
+        # Same 8pt barcode as the General Book.
+        assert all(
+            run.find("w:rPr/w:sz", ns).get(f"{{{ns['w']}}}val") == "16" for run in barcode_runs
+        )
+        assert sorted(
+            archive.read(name) for name in archive.namelist() if name.startswith("word/media/")
+        ) == sorted(
+            source.read(name) for name in source.namelist() if name.startswith("word/media/")
+        )
+    assert aztec_corner_for("Vehicle Mileage Log") is None
+    assert syncs_general_book_footer("Vehicle Mileage Log") is False
+
+
+def test_odometer_form_rejects_empty_fleet(gen_env: _GenerationEnv) -> None:
+    with pytest.raises(ValidationFailedError) as raised:
+        vehicle_letter_service.generate_odometer_form(
+            gen_env.db, month="2026-09", vehicle_ids=[], user=gen_env.user
+        )
+    assert raised.value.code == "ODOMETER_NO_VEHICLES"
+    assert raised.value.http_status == 422
+
+
+def test_odometer_fields_keep_unknown_readings_blank() -> None:
+    row = OdometerRowRead(
+        vehicle_id=1,
+        plate_label="14 \\ 58216",
+        vehicle_type_ar=None,
+        vehicle_type_en="Toyota",
+        month="2026-09",
+        opening_km=None,
+        opening_from_previous=False,
+        closing_km=None,
+        km_driven=None,
+        maintenance_count=0,
+        maintenance_cost=0,
+        maintenance=[],
+    )
+    fields = odometer_form_fields(month="2026-09", rows=[row], today=date(2026, 10, 15))
+    assert fields["rows"][0]["opening_km"] == "—"
+    assert fields["rows"][0]["closing_km"] == "—"
+    assert fields["rows"][0]["km_driven"] == "—"
+    assert fields["rows"][0]["vehicle_type"] == "Toyota"
+    assert fields["total_km_driven"] == "0"
+    assert fields["month_label"] == "سبتمبر 2026"
+
+
+def test_mileage_template_is_landscape_with_repeating_rtl_table() -> None:
+    document = DocxDocument(str(MILEAGE_TEMPLATE))
+    section = document.sections[0]
+    assert section.page_width > section.page_height
+    assert section.different_first_page_header_footer
+    table = document.tables[0]
+    assert len(table.columns) == 9
+    assert len(table.rows) == 5
+    assert _row_text(table.rows[1]).strip() == "{%tr for r in rows %}"
+    assert _row_text(table.rows[3]).strip() == "{%tr endfor %}"
+    ns = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
+    assert table._tbl.find("w:tblPr/w:bidiVisual", ns) is not None
+    assert table.rows[0]._tr.find("w:trPr/w:tblHeader", ns) is not None
+    assert table.rows[-1]._tr.find("w:trPr/w:tblHeader", ns) is None
+    assert "{{ barcode }}" in _all_word_xml_text(MILEAGE_TEMPLATE)

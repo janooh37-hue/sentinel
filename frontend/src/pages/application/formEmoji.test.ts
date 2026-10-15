@@ -35,6 +35,7 @@ describe('Services-gallery artwork registry', () => {
     expect(artworkForTemplate('Warning Form')).toBe('warning')
     expect(artworkForTemplate('Vehicle Fines')).toBe('vehicle-fines')
     expect(artworkForTemplate('Vehicle Accident Report')).toBe('vehicle-accident')
+    expect(artworkForTemplate('Vehicle Mileage Log')).toBe('vehicle-maintenance')
     expect(artworkForTemplate('Nope')).toBeUndefined()
   })
 })

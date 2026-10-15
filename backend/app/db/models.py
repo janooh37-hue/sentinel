@@ -722,6 +722,9 @@ class Vehicle(Base):
     maintenance: Mapped[list[VehicleMaintenance]] = relationship(
         back_populates="vehicle", cascade="all, delete-orphan"
     )
+    odometer_readings: Mapped[list[VehicleOdometerReading]] = relationship(
+        back_populates="vehicle", cascade="all, delete-orphan"
+    )
 
     __table_args__ = (
         Index("uq_vehicles_plate", "plate_code", "plate_number", unique=True),
@@ -879,6 +882,31 @@ class VehicleMaintenance(Base):
     vehicle: Mapped[Vehicle] = relationship(back_populates="maintenance")
 
     __table_args__ = (Index("ix_vehicle_maintenance_vehicle", "vehicle_id"),)
+
+
+class VehicleOdometerReading(Base):
+    __tablename__ = "vehicle_odometer_readings"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    vehicle_id: Mapped[int] = mapped_column(
+        ForeignKey("vehicles.id", ondelete="CASCADE"), nullable=False
+    )
+    month: Mapped[str] = mapped_column(String(7), nullable=False)
+    opening_km: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    closing_km: Mapped[int] = mapped_column(Integer, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_utcnow)
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    vehicle: Mapped[Vehicle] = relationship(back_populates="odometer_readings")
+
+    __table_args__ = (
+        CheckConstraint("closing_km >= 0", name="ck_vehicle_odometer_closing_nonnegative"),
+        CheckConstraint(
+            "opening_km IS NULL OR opening_km >= 0",
+            name="ck_vehicle_odometer_opening_nonnegative",
+        ),
+        UniqueConstraint("vehicle_id", "month", name="uq_vehicle_odometer_month"),
+    )
 
 
 class Permit(Base):
