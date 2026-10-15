@@ -1,9 +1,11 @@
-import { useEffect, useState, type ReactNode } from 'react'
-import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowLeft, Send } from 'lucide-react'
+import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
+import type { ReactNode } from 'react'
+import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query'
+import { ArrowLeft, ChevronDown, Maximize2, Minimize2, Send } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Link, useSearchParams } from 'react-router-dom'
 
+import { DocumentState } from '@/components/books/DocumentState'
 import { RecordRecipientsPanel } from '@/components/books/RecordRecipientsPanel'
 import { RecordThreadSection } from '@/components/books/RecordThreadSection'
 import { SendRecordDialog } from '@/components/books/SendRecordDialog'
@@ -14,7 +16,8 @@ import { buttonVariants } from '@/components/ui/button-variants'
 import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { api, apiErrorMessage, type BookRead } from '@/lib/api'
+import { api, apiErrorMessage } from '@/lib/api'
+import type { BookListResponse, BookRead } from '@/lib/api'
 import { pickEmployeeName } from '@/lib/employeeName'
 import { formatDmy } from '@/lib/formatDmy'
 import { useIsMobile } from '@/lib/useIsMobile'
@@ -22,6 +25,10 @@ import { useSearchParam, useUrlOverlay } from '@/lib/urlState'
 import { cn } from '@/lib/utils'
 import { InboxUnreadDot } from '@/pages/books/InboxUnreadDot'
 import { inboxSummaryKey, useInboxSummary } from '@/pages/books/useInboxCount'
+import { defaultPaperKey, paperKey, papersOf } from '@/pages/books/recordPapers'
+import type { PaperKey } from '@/pages/books/recordPapers'
+
+const RecordPaperViewer = lazy(() => import('@/pages/books/RecordPaperViewer'))
 
 type Scope = 'incoming' | 'outgoing' | 'archived'
 const INBOX_BY_SCOPE: Record<Scope, 'received' | 'sent' | 'archived'> = {
@@ -46,6 +53,7 @@ export function BooksRoutingDesk(): React.JSX.Element {
   const scope: Scope = rawScope === 'outgoing' || rawScope === 'archived' ? rawScope : 'incoming'
   const [bookParam, setBookParam] = useSearchParam('book')
   const bookPage = useUrlOverlay('book')
+  const readerPage = useUrlOverlay('view')
   const selectedId = /^\d+$/.test(bookParam) && Number(bookParam) > 0 ? Number(bookParam) : null
   const [search, setSearch] = useState('')
   const [query, setQuery] = useState('')
@@ -58,21 +66,26 @@ export function BooksRoutingDesk(): React.JSX.Element {
   const list = useQuery({
     queryKey: ['books', 'routing', scope, query, offset],
     queryFn: () => api.listBooks({ inbox: INBOX_BY_SCOPE[scope], q: query || undefined, limit: PAGE_SIZE, offset }),
+    staleTime: 30_000,
+    placeholderData: (previous, previousQuery) => previousQuery?.queryKey[2] === scope ? keepPreviousData(previous) : undefined,
   })
   const detail = useQuery({
     queryKey: ['books', 'detail', selectedId, null],
     queryFn: async () => {
-      // Like the full record page, default mark_read=true records the first open.
-      // Row-menu peeks explicitly opt out; a dossier selection is a real open.
+      // Opening marks read, but patch cached rows instead of refetching the list.
       const book = await api.getBook(selectedId!)
       if (book.my_inbox?.read_at) {
-        void qc.invalidateQueries({ queryKey: ['books', 'routing'] })
+        qc.setQueriesData<BookListResponse>({ queryKey: ['books', 'routing'] }, (previous) => previous && ({
+          ...previous,
+          items: previous.items.map((row) => row.id === book.id ? { ...row, my_inbox: book.my_inbox } : row),
+        }))
         void qc.invalidateQueries({ queryKey: inboxSummaryKey })
         void qc.invalidateQueries({ queryKey: ['notifications', 'counts'] })
       }
       return book
     },
     enabled: selectedId !== null,
+    placeholderData: () => list.data?.items.find((book) => book.id === selectedId),
   })
 
   function selectScope(value: string): void {
@@ -81,6 +94,7 @@ export function BooksRoutingDesk(): React.JSX.Element {
       const next = new URLSearchParams(previous)
       next.set('scope', value)
       next.delete('book')
+      next.delete('view')
       return next
     }, { replace: true })
   }
@@ -90,24 +104,24 @@ export function BooksRoutingDesk(): React.JSX.Element {
   }
   const scopeLabel = (value: Scope): string => t(value === 'archived' ? 'books.inbox.archived' : `ledger.booksDesk.${value}`)
   const rows = list.data?.items ?? []
-  const dossier = detail.isError
+  const reader = !isMobile && readerPage.value === 'reader' && selectedId !== null
+  const mobileBook = isMobile && selectedId !== null
+  const dossier = detail.data ? (
+    <BookDossier
+      key={detail.data.id}
+      book={detail.data}
+      loading={detail.isPlaceholderData}
+      reader={reader}
+      isMobile={isMobile}
+      onToggleReader={reader ? readerPage.close : () => readerPage.open('reader')}
+    />
+  ) : detail.isError
     ? <div role="alert" className="p-5 text-destructive"><p>{apiErrorMessage(detail.error)}</p><Button variant="outline" className="mt-3" onClick={() => void detail.refetch()}>{t('ledger.booksDesk.retry')}</Button></div>
-    : detail.isPending ? <DeskLoading /> : <BookDossier key={detail.data.id} book={detail.data} />
-
-  if (isMobile && selectedId !== null) {
-    return (
-      <section dir={i18n.dir()} className="flex min-h-0 flex-1 flex-col bg-surface" aria-label={t('ledger.booksDesk.dossier')}>
-        <div className="shrink-0 border-b border-hairline px-3 py-2">
-          <Button variant="ghost" onClick={bookPage.close}><ArrowLeft className="h-4 w-4 rtl:rotate-180" aria-hidden />{t('ledger.outlook.back')}</Button>
-        </div>
-        <div className="min-h-0 flex-1 overflow-y-auto">{dossier}</div>
-      </section>
-    )
-  }
+    : <DeskLoading />
 
   return (
     <section dir={i18n.dir()} className="flex min-h-0 flex-1 flex-col bg-surface" aria-label={t('ledger.tabs.books')}>
-      <Tabs value={scope} onValueChange={selectScope} className="shrink-0">
+      <Tabs value={scope} onValueChange={selectScope} className={cn('shrink-0', (reader || mobileBook) && 'hidden')}>
         <TabsList className="gap-5 overflow-x-auto px-4">
           {(['incoming', 'outgoing', 'archived'] as const).map((value) => (
             <TabsTrigger key={value} value={value}>
@@ -120,7 +134,8 @@ export function BooksRoutingDesk(): React.JSX.Element {
         </TabsList>
       </Tabs>
       <div className="flex min-h-0 flex-1">
-        <div className="flex min-h-0 w-full shrink-0 flex-col md:w-[22rem] md:max-w-[44%] md:border-e md:border-hairline">
+        {/* Keep the list mounted so reader/mobile Back preserves its scroll. */}
+        <div className={cn('min-h-0 w-full shrink-0 flex-col md:w-[22rem] md:max-w-[44%] md:border-e md:border-hairline', reader || mobileBook ? 'hidden' : 'flex')}>
           <div className="shrink-0 border-b border-hairline p-3">
             <label htmlFor="routing-search" className="sr-only">{t('ledger.booksDesk.search')}</label>
             <Input id="routing-search" type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder={t('ledger.booksDesk.search')} />
@@ -160,8 +175,9 @@ export function BooksRoutingDesk(): React.JSX.Element {
             </div>
           )}
         </div>
-        {!isMobile && (
-          <div className="min-w-0 flex-1 overflow-y-auto" aria-label={t('ledger.booksDesk.dossier')}>
+        {(!isMobile || mobileBook) && (
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col" aria-label={t('ledger.booksDesk.dossier')}>
+            {mobileBook && <div className="shrink-0 border-b border-hairline px-3 py-2"><Button variant="ghost" onClick={bookPage.close}><ArrowLeft className="h-4 w-4 rtl:rotate-180" aria-hidden />{t('ledger.outlook.back')}</Button></div>}
             {selectedId === null ? <div className="max-w-prose px-8 py-10"><h2 className="text-lg font-semibold">{t('ledger.booksDesk.selectBook')}</h2><p className="mt-2 text-sm text-muted-foreground">{t('ledger.booksDesk.selectHint')}</p></div> : dossier}
           </div>
         )}
@@ -170,11 +186,22 @@ export function BooksRoutingDesk(): React.JSX.Element {
   )
 }
 
-function BookDossier({ book }: { book: BookRead }): React.JSX.Element {
+function BookDossier({ book, loading, reader, isMobile, onToggleReader }: {
+  book: BookRead
+  loading: boolean
+  reader: boolean
+  isMobile: boolean
+  onToggleReader: () => void
+}): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const [sendOpen, setSendOpen] = useState(false)
-  const inboxActions = useInboxActions(book)
-  const reply = useReplyActions(book)
+  const [detailsOpen, setDetailsOpen] = useState(false)
+  const [pickedPaper, setPickedPaper] = useState<PaperKey | null>(null)
+  const papers = useMemo(() => papersOf(book, { inmateReporter: false }), [book])
+  const selectedPaper = pickedPaper && papers.some((paper) => paperKey(paper) === pickedPaper)
+    ? pickedPaper : defaultPaperKey(book, papers)
+  const inboxActions = useInboxActions(loading ? null : book)
+  const reply = useReplyActions(loading ? null : book)
   const inbox = book.my_inbox
   const notApplicable = t('ledger.booksDesk.notApplicable')
   const facts: { label: string; value: ReactNode }[] = [
@@ -185,24 +212,53 @@ function BookDossier({ book }: { book: BookRead }): React.JSX.Element {
     { label: t('books.inbox.doneState'), value: inbox ? (inbox.done_at ? <BookDate value={inbox.done_at} /> : t('ledger.booksDesk.notDone')) : notApplicable },
     { label: t('ledger.booksDesk.confidentiality'), value: t(`books.confidentiality.levels.${book.confidentiality}`) },
   ]
-  return (
-    <article>
-      <header className="px-5 pb-4 pt-6 sm:px-7">
-        <bdi dir="ltr" className="font-mono text-sm font-medium tabular-nums text-muted-foreground">{book.ref_number}</bdi>
-        <h2 dir="auto" className="mt-2 break-words text-xl font-semibold leading-snug tracking-tight">{book.subject || t('ledger.booksDesk.untitled')}</h2>
-      </header>
-      <dl className="mx-5 border-t border-hairline sm:mx-7">
-        {facts.map(({ label, value }) => <div key={label} className="grid grid-cols-[minmax(7rem,1fr)_2fr] gap-x-4 border-b border-hairline py-3 text-sm"><dt className="font-semibold">{label}</dt><dd className="min-w-0 break-words">{value}</dd></div>)}
+  const actions = (
+    <div className="flex flex-wrap gap-2">
+      {inboxActions.map((action) => <Button key={action.key} variant={action.key === 'done' ? 'default' : 'outline'} size="sm" disabled={action.pending} aria-busy={action.pending} onClick={action.onSelect}>{action.icon}{action.label}</Button>)}
+      {book.can_send && <Button variant="outline" size="sm" disabled={loading} onClick={() => setSendOpen(true)}><Send className="h-4 w-4" aria-hidden />{t('ledger.booksDesk.forward')}</Button>}
+      {reply.actions.map((action) => <Button key={action.key} variant="outline" size="sm" onClick={action.onSelect}>{action.icon}{action.label}</Button>)}
+    </div>
+  )
+  const details = (
+    <div id={`book-details-${book.id}`}>
+      <dl className="border-t border-hairline">
+        {facts.map(({ label, value }) => <div key={label} className="grid grid-cols-[minmax(6rem,1fr)_2fr] gap-x-3 border-b border-hairline py-3 text-sm"><dt className="font-semibold">{label}</dt><dd className="min-w-0 break-words">{value}</dd></div>)}
       </dl>
-      {inbox?.note && <section className="px-5 pt-5 sm:px-7"><h3 className="text-sm font-semibold">{t('ledger.booksDesk.note')}</h3><p dir="auto" className="mt-2 max-w-prose whitespace-pre-wrap break-words text-sm leading-relaxed">{inbox.note}</p></section>}
-      <div className="flex flex-wrap gap-2 border-b border-hairline px-5 py-5 sm:px-7">
-        <Link to={`/books/${book.id}`} className={buttonVariants({ size: 'sm' })}>{t('ledger.booksDesk.openRecord')}</Link>
-        {book.can_send && <Button variant="outline" size="sm" onClick={() => setSendOpen(true)}><Send className="h-4 w-4" aria-hidden />{t('ledger.booksDesk.forward')}</Button>}
-        {inboxActions.map((action) => <Button key={action.key} variant="outline" size="sm" disabled={action.pending} aria-busy={action.pending} onClick={action.onSelect}>{action.icon}{action.label}</Button>)}
-        {reply.actions.map((action) => <Button key={action.key} variant="outline" size="sm" onClick={action.onSelect}>{action.icon}{action.label}</Button>)}
+      {!loading && <><RecordRecipientsPanel bookId={book.id} /><RecordThreadSection book={book} /></>}
+      <Link to={`/books/${book.id}`} className={buttonVariants({ variant: 'link', size: 'sm', className: 'mt-3' })}>{t('ledger.booksDesk.openInRecords')}</Link>
+    </div>
+  )
+  return (
+    <article className="flex min-h-0 flex-1 flex-col">
+      <header className="max-h-[45%] shrink-0 overflow-y-auto border-b border-hairline px-4 py-3">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <bdi dir="ltr" className="font-mono text-xs font-medium tabular-nums text-muted-foreground">{book.ref_number}</bdi>
+            <h2 dir="auto" className="mt-1 break-words text-lg font-semibold leading-snug tracking-tight">{book.subject || t('ledger.booksDesk.untitled')}</h2>
+          </div>
+          {!isMobile && <Button variant="ghost" size="sm" onClick={onToggleReader}>{reader ? <Minimize2 className="h-4 w-4" aria-hidden /> : <Maximize2 className="h-4 w-4" aria-hidden />}{t(reader ? 'ledger.booksDesk.collapse' : 'ledger.booksDesk.expand')}</Button>}
+        </div>
+        <p className="mt-2 text-xs leading-relaxed text-muted-foreground">
+          {inbox ? <><bdi>{pickEmployeeName({ name_en: inbox.sent_by_name ?? '', name_ar: inbox.sent_by_name_ar }, i18n.language)}</bdi>{' · '}{t(`books.send.purposes.${inbox.purpose}`)}{' · '}<BookDate value={inbox.sent_at} /></> : <>{t('ledger.booksDesk.created')} <BookDate value={book.created_at} /></>}
+        </p>
+        {inbox?.note && <p dir="auto" className="mt-2 max-w-prose whitespace-pre-wrap break-words text-sm leading-relaxed"><span className="sr-only">{t('ledger.booksDesk.note')}: </span>{inbox.note}</p>}
+        {!reader && <div className="mt-3 flex flex-wrap items-center gap-2">{actions}<Button variant="ghost" size="sm" aria-expanded={detailsOpen} aria-controls={`book-details-${book.id}`} onClick={() => setDetailsOpen(!detailsOpen)}><ChevronDown className={cn('h-4 w-4', detailsOpen && 'rotate-180')} aria-hidden />{t('ledger.booksDesk.details')}</Button></div>}
+      </header>
+      <div className={cn('flex min-h-0 flex-1', !reader && 'flex-col')}>
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+          {loading ? <DeskLoading /> : papers.length === 0 ? (
+            <DocumentState kind="empty" title={t('ledger.booksDesk.noDocument')} body={t('ledger.booksDesk.noDocumentHint')} />
+          ) : <Suspense fallback={<DeskLoading />}><RecordPaperViewer papers={papers} selectedKey={selectedPaper} onSelectKey={setPickedPaper} mode="pane" /></Suspense>}
+        </div>
+        {reader ? (
+          <aside className="w-[20rem] max-w-[35%] shrink-0 overflow-y-auto border-s border-hairline p-4">
+            <Button variant="ghost" size="sm" className="mb-4" onClick={onToggleReader}><ArrowLeft className="h-4 w-4 rtl:rotate-180" aria-hidden />{t('ledger.outlook.back')}</Button>
+            {actions}
+            <h3 className="mb-2 mt-4 text-sm font-semibold">{t('ledger.booksDesk.details')}</h3>
+            {details}
+          </aside>
+        ) : detailsOpen && <section className="max-h-[45%] shrink-0 overflow-y-auto border-t border-hairline px-4 py-3" aria-label={t('ledger.booksDesk.details')}>{details}</section>}
       </div>
-      <RecordRecipientsPanel bookId={book.id} />
-      <RecordThreadSection book={book} />
       {book.can_send && <SendRecordDialog book={book} open={sendOpen} onOpenChange={setSendOpen} />}
       {reply.dialog}
     </article>
