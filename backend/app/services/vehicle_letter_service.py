@@ -13,11 +13,16 @@ from app.core.vehicle_letters import (
     FineLine,
     accident_letter_fields,
     fines_letter_fields,
+    maintenance_request_body,
     odometer_form_fields,
 )
-from app.db.models import Book, Document, User
-from app.schemas.vehicle import LetterResult
-from app.services import document_service, vehicle_service
+from app.db.models import Book, Document, Employee, User, VehicleMaintenanceRequest
+from app.schemas.vehicle import (
+    LetterResult,
+    VehicleMaintenanceRequestCreate,
+    VehicleMaintenanceRequestResult,
+)
+from app.services import document_service, recipient_service, settings_service, vehicle_service
 
 
 def _letter_result(
@@ -251,3 +256,97 @@ def generate_odometer_form(
         entity_type="book",
     )
     return result
+
+
+def create_maintenance_request(
+    db: Session,
+    vehicle_id: int,
+    payload: VehicleMaintenanceRequestCreate,
+    *,
+    user: User,
+) -> VehicleMaintenanceRequestResult:
+    """Generate and link a contractor book in the request's single transaction."""
+    vehicle = vehicle_service.require_active_vehicle(db, vehicle_id)
+    contractor_id = settings_service.get_vehicle_maintenance_contractor_id(db)
+    contractor_name = (
+        recipient_service.resolve_name(db, contractor_id) if contractor_id is not None else None
+    )
+    if contractor_name is None:
+        raise ValidationFailedError(
+            "MAINTENANCE_CONTRACTOR_MISSING",
+            "Set the maintenance contractor in vehicle settings before requesting maintenance.",
+        )
+    vehicle_service._validate_employee(db, payload.employee_id)
+    employee = db.get(Employee, payload.employee_id) if payload.employee_id is not None else None
+    driver = (
+        f"{employee.name_ar or employee.name_en} ({employee.id})" if employee is not None else None
+    )
+    odometer = (
+        payload.odometer_km
+        if "odometer_km" in payload.model_fields_set
+        else vehicle_service.current_odometer_km(vehicle)
+    )
+    last = max(vehicle.maintenance, key=lambda item: (item.date, item.id), default=None)
+    plate = vehicle_service.plate_label(vehicle).replace("\\", "/")
+    body = maintenance_request_body(
+        plate=plate,
+        vehicle_type=vehicle.type_ar,
+        make_model=" ".join(part for part in (vehicle.make, vehicle.model) if part),
+        year=vehicle.model_year,
+        vin=vehicle.vin,
+        site=vehicle.site.name_ar or vehicle.site.name_en,
+        driver=driver,
+        odometer_km=odometer,
+        last_maintenance=vehicle_service.maintenance_read(last) if last is not None else None,
+        work_type=payload.type,
+        description=payload.description,
+    )
+    row = VehicleMaintenanceRequest(
+        vehicle_id=vehicle_id,
+        employee_id=payload.employee_id,
+        type=payload.type,
+        description=payload.description,
+        odometer_km=odometer,
+        created_by_user_id=user.id,
+    )
+    try:
+        generated = document_service.generate_document(
+            db,
+            employee_id=None,
+            template_id="General Book",
+            fields={
+                "subject": f"طلب صيانة مركبة — {plate}",
+                "recipient_id": contractor_id,
+                "body": body,
+            },
+            commit=True,
+            classification_code="11/1",
+            current_user=user,
+            defer_commit=True,
+        )
+        letter = _letter_result(generated)
+        row.book_id = letter.book_id
+        db.add(row)
+        db.flush()
+        vehicle_service._add_audit(
+            db,
+            "letter.generated",
+            letter.book_id,
+            user.email,
+            {
+                "template_id": "General Book",
+                "book_id": letter.book_id,
+                "document_id": letter.document_id,
+                "ref_number": letter.ref_number,
+                "vehicle_id": vehicle_id,
+                "maintenance_request_id": row.id,
+            },
+            entity_type="book",
+        )
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise
+    return VehicleMaintenanceRequestResult(
+        request=vehicle_service.maintenance_request_read(db, row), letter=letter
+    )

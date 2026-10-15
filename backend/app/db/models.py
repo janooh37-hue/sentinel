@@ -722,6 +722,9 @@ class Vehicle(Base):
     maintenance: Mapped[list[VehicleMaintenance]] = relationship(
         back_populates="vehicle", cascade="all, delete-orphan"
     )
+    maintenance_requests: Mapped[list[VehicleMaintenanceRequest]] = relationship(
+        back_populates="vehicle", cascade="all, delete-orphan"
+    )
     odometer_readings: Mapped[list[VehicleOdometerReading]] = relationship(
         back_populates="vehicle", cascade="all, delete-orphan"
     )
@@ -882,6 +885,41 @@ class VehicleMaintenance(Base):
     vehicle: Mapped[Vehicle] = relationship(back_populates="maintenance")
 
     __table_args__ = (Index("ix_vehicle_maintenance_vehicle", "vehicle_id"),)
+
+
+class VehicleMaintenanceRequest(Base):
+    __tablename__ = "vehicle_maintenance_requests"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    vehicle_id: Mapped[int] = mapped_column(
+        ForeignKey("vehicles.id", ondelete="CASCADE"), nullable=False
+    )
+    employee_id: Mapped[str | None] = mapped_column(ForeignKey("employees.id"), nullable=True)
+    type: Mapped[str] = mapped_column(String(16), nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=False)
+    odometer_km: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    # Cross-workflow links are service-owned, like VehicleAccident.letter_book_id.
+    book_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    status: Mapped[str] = mapped_column(
+        String(8), nullable=False, default="open", server_default="open"
+    )
+    maintenance_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_by_user_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_utcnow)
+    completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    vehicle: Mapped[Vehicle] = relationship(back_populates="maintenance_requests")
+
+    __table_args__ = (
+        CheckConstraint(
+            "type IN ('service', 'repair', 'tires', 'other')",
+            name="ck_vehicle_maintenance_requests_type",
+        ),
+        CheckConstraint(
+            "status IN ('open', 'done')", name="ck_vehicle_maintenance_requests_status"
+        ),
+        Index("ix_vehicle_maintenance_requests_vehicle_status", "vehicle_id", "status"),
+    )
 
 
 class VehicleOdometerReading(Base):

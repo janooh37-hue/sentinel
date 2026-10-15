@@ -78,6 +78,24 @@ under that classification (`classification_code`), plus any old records whose
 category is that code. Leave and resignation papers carry a classification code
 too but are not matched, the same as for a classification deny.
 
+## Vehicle maintenance requests
+
+Set the maintenance contractor beside the reminder window in vehicle settings,
+using the existing General Book recipient list. On a vehicle, **Request
+maintenance** files an official Arabic General Book under classification `11/1`
+and opens its record. The book includes the vehicle and driver, the latest
+monthly odometer reading (or the latest maintenance reading), the previous
+maintenance, and the requested work. The odometer snapshot can be edited before
+submission. A contractor must be configured before requests can be generated.
+
+Use **Mark done** in the vehicle's open requests to record the completed work.
+The maintenance form starts with the request's type and odometer; saving links
+the maintenance record and closes the request. A request cannot be completed
+twice or against a different vehicle. Migration
+`0104_vehicle_maintenance_requests` adds the request history without changing
+existing maintenance records.
+
+
 ## Vehicle photo library
 
 Choose an existing main photo from **Add vehicle**, **Edit vehicle**, or the

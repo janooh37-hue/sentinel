@@ -5134,6 +5134,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/vehicles/maintenance-contractor": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** Update Maintenance Contractor */
+        put: operations["update_maintenance_contractor_api_v1_vehicles_maintenance_contractor_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/vehicles/sites": {
         parameters: {
             query?: never;
@@ -5788,6 +5805,24 @@ export interface paths {
         head?: never;
         /** Update Vehicle Accident Status */
         patch: operations["update_vehicle_accident_status_api_v1_vehicles__vehicle_id__accidents__accident_id__patch"];
+        trace?: never;
+    };
+    "/api/v1/vehicles/{vehicle_id}/maintenance-requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** List Vehicle Maintenance Requests */
+        get: operations["list_vehicle_maintenance_requests_api_v1_vehicles__vehicle_id__maintenance_requests_get"];
+        put?: never;
+        /** Create Vehicle Maintenance Request */
+        post: operations["create_vehicle_maintenance_request_api_v1_vehicles__vehicle_id__maintenance_requests_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/vehicles/{vehicle_id}/odometer/{month}": {
@@ -11634,6 +11669,11 @@ export interface components {
             /** Password */
             password: string;
         };
+        /** MaintenanceContractorUpdate */
+        MaintenanceContractorUpdate: {
+            /** Maintenance Contractor Id */
+            maintenance_contractor_id?: number | null;
+        };
         /** ManagerCreate */
         ManagerCreate: {
             /** Name En */
@@ -14893,6 +14933,8 @@ export interface components {
             next_due?: string | null;
             /** Receipt File Id */
             receipt_file_id?: number | null;
+            /** Request Id */
+            request_id?: number | null;
         };
         /** VehicleMaintenanceRead */
         VehicleMaintenanceRead: {
@@ -14946,6 +14988,63 @@ export interface components {
              * @default
              */
             vehicle_type_en: string;
+        };
+        /** VehicleMaintenanceRequestCreate */
+        VehicleMaintenanceRequestCreate: {
+            /**
+             * Type
+             * @enum {string}
+             */
+            type: "service" | "repair" | "tires" | "other";
+            /** Description */
+            description: string;
+            /** Employee Id */
+            employee_id?: string | null;
+            /** Odometer Km */
+            odometer_km?: number | null;
+        };
+        /** VehicleMaintenanceRequestRead */
+        VehicleMaintenanceRequestRead: {
+            /** Id */
+            id: number;
+            /** Vehicle Id */
+            vehicle_id: number;
+            /** Employee Id */
+            employee_id: string | null;
+            /**
+             * Type
+             * @enum {string}
+             */
+            type: "service" | "repair" | "tires" | "other";
+            /** Description */
+            description: string;
+            /** Odometer Km */
+            odometer_km: number | null;
+            /** Book Id */
+            book_id: number | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "open" | "done";
+            /** Maintenance Id */
+            maintenance_id: number | null;
+            /** Created By User Id */
+            created_by_user_id: number | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Completed At */
+            completed_at: string | null;
+            /** Ref Number */
+            ref_number?: string | null;
+        };
+        /** VehicleMaintenanceRequestResult */
+        VehicleMaintenanceRequestResult: {
+            request: components["schemas"]["VehicleMaintenanceRequestRead"];
+            letter: components["schemas"]["LetterResult"];
         };
         /** VehiclePhotoRead */
         VehiclePhotoRead: {
@@ -15130,6 +15229,8 @@ export interface components {
             license_files?: components["schemas"]["VehicleFileRead"][];
             /** Certificates */
             certificates?: components["schemas"]["VehicleFileRead"][];
+            /** Current Odometer Km */
+            current_odometer_km?: number | null;
         };
         /** VehicleSiteCreate */
         VehicleSiteCreate: {
@@ -15240,6 +15341,10 @@ export interface components {
             active_sites: number;
             /** Notify Days */
             notify_days: number;
+            /** Maintenance Contractor Id */
+            maintenance_contractor_id?: number | null;
+            /** Maintenance Contractor Name */
+            maintenance_contractor_name?: string | null;
         };
         /** VerifyPasswordRequest */
         VerifyPasswordRequest: {
@@ -27464,6 +27569,41 @@ export interface operations {
             };
         };
     };
+    update_maintenance_contractor_api_v1_vehicles_maintenance_contractor_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MaintenanceContractorUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VehiclesSummary"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     list_vehicle_sites_api_v1_vehicles_sites_get: {
         parameters: {
             query?: never;
@@ -29128,6 +29268,76 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["VehicleAccidentRead"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    list_vehicle_maintenance_requests_api_v1_vehicles__vehicle_id__maintenance_requests_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                vehicle_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VehicleMaintenanceRequestRead"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_vehicle_maintenance_request_api_v1_vehicles__vehicle_id__maintenance_requests_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                vehicle_id: number;
+            };
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VehicleMaintenanceRequestCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VehicleMaintenanceRequestResult"];
                 };
             };
             /** @description Validation Error */

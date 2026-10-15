@@ -1525,6 +1525,7 @@ def generate_document(
     return_for_leave_id: int | None = None,
     classification_code: str | None = None,
     converter: artifact_service.PdfConverter | None = None,
+    defer_commit: bool = False,
 ) -> GenerationResult:
     """Orchestrate the v4 doc generation pipeline.
 
@@ -1541,6 +1542,10 @@ def generate_document(
         keeps working unchanged for the in-app PDF canvas; it carries the
         sentinel ``ref_number="DRAFT"`` and is the absence of a Book row that
         identifies it as un-committed.
+
+    ``defer_commit`` leaves persistence in the caller's transaction, allowing a
+    generated book to be linked to its source record atomically. This mode is
+    limited to new books without attachments; those workflows own file cleanup.
 
     ``current_user`` is the presentation and stamping identity. When set, their
     ``employee_id`` (G-number) is injected as ``data["submitter_g"]`` for the
@@ -1575,6 +1580,8 @@ def generate_document(
     (``Document.leave_id = return_for_leave_id``). leave_service.file_return
     then completes that leave.
     """
+    if defer_commit and (revise_of_book_id is not None or attachments):
+        raise ValueError("Deferred generation requires a new book without attachments.")
     embed_signature = dict(embed_signature or {})
     _raw_manager_embed_requested = embed_signature.get("manager") is True
     _raw_employee_embed_requested = embed_signature.get("employee") is True
@@ -2546,7 +2553,10 @@ def generate_document(
             fields,
             actor_user_id=current_user.id if current_user is not None else None,
         )
-    db.commit()
+    if defer_commit:
+        db.flush()
+    else:
+        db.commit()
     db.refresh(doc_row)
 
     # B1: unlink superseded in-place-edit files NOW — transaction is durable.

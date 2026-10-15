@@ -422,6 +422,7 @@ class VehicleMaintenanceCreate(BaseModel):
     vendor_en: str | None = None
     next_due: date_t | None = None
     receipt_file_id: int | None = None
+    request_id: int | None = Field(default=None, ge=1)
 
 
 class VehicleMaintenanceRead(ORMBase):
@@ -443,6 +444,41 @@ class VehicleMaintenanceRead(ORMBase):
     vehicle_type_en: str = ""
 
 
+class VehicleMaintenanceRequestCreate(BaseModel):
+    type: MaintenanceType
+    description: str = Field(min_length=1)
+    employee_id: str | None = None
+    odometer_km: int | None = Field(default=None, ge=0)
+
+    @field_validator("description")
+    @classmethod
+    def nonblank_description(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("Description must not be blank.")
+        return value.strip()
+
+
+class VehicleMaintenanceRequestRead(ORMBase):
+    id: int
+    vehicle_id: int
+    employee_id: str | None
+    type: MaintenanceType
+    description: str
+    odometer_km: int | None
+    book_id: int | None
+    status: Literal["open", "done"]
+    maintenance_id: int | None
+    created_by_user_id: int | None
+    created_at: datetime
+    completed_at: datetime | None
+    ref_number: str | None = None
+
+
+class VehicleMaintenanceRequestResult(BaseModel):
+    request: VehicleMaintenanceRequestRead
+    letter: LetterResult
+
+
 class VehicleRead(VehicleListItem):
     contract_note_ar: str | None
     contract_note_en: str | None
@@ -462,6 +498,7 @@ class VehicleRead(VehicleListItem):
     license_file_id: int | None = None
     license_files: list[VehicleFileRead] = Field(default_factory=list)
     certificates: list[VehicleFileRead] = Field(default_factory=list)
+    current_odometer_km: int | None = None
 
 
 class VehiclesSummary(BaseModel):
@@ -475,10 +512,16 @@ class VehiclesSummary(BaseModel):
     maintenance_due: int
     active_sites: int
     notify_days: int
+    maintenance_contractor_id: int | None = None
+    maintenance_contractor_name: str | None = None
 
 
 class NotifyDaysUpdate(BaseModel):
     days: int = Field(ge=1, le=365)
+
+
+class MaintenanceContractorUpdate(BaseModel):
+    maintenance_contractor_id: int | None = Field(default=None, ge=1)
 
 
 EvgMatch = Literal[

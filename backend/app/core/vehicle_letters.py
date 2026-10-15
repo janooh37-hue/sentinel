@@ -5,11 +5,19 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import date
+from html import escape
 from typing import Any
 
 from app.core.constants import ARABIC_MONTHS
 from app.core.hijri import hijri_label
-from app.schemas.vehicle import OdometerRowRead
+from app.schemas.vehicle import OdometerRowRead, VehicleMaintenanceRead
+
+_MAINTENANCE_LABELS = {
+    "service": "صيانة دورية",
+    "repair": "إصلاح",
+    "tires": "إطارات",
+    "other": "أخرى",
+}
 
 
 @dataclass(frozen=True, slots=True)
@@ -115,12 +123,6 @@ def odometer_form_fields(
 ) -> dict[str, Any]:
     """Format the monthly fleet register without treating missing readings as zero."""
     year, month_number = map(int, month.split("-"))
-    maintenance_labels = {
-        "service": "صيانة دورية",
-        "repair": "إصلاح",
-        "tires": "إطارات",
-        "other": "أخرى",
-    }
     return {
         "subject": f"سجل عداد المسافات والصيانة الشهري للمركبات — {month_number:02d}/{year}",
         "date": today.strftime("%d-%m-%Y"),
@@ -134,7 +136,7 @@ def odometer_form_fields(
                 "closing_km": f"{row.closing_km:,}" if row.closing_km is not None else "—",
                 "km_driven": f"{row.km_driven:,}" if row.km_driven is not None else "—",
                 "maintenance": "\n".join(
-                    f"{maintenance_labels.get(item.type, item.type)} (\u200e{item.date:%d/%m}\u200e)"
+                    f"{_MAINTENANCE_LABELS.get(item.type, item.type)} (\u200e{item.date:%d/%m}\u200e)"
                     for item in row.maintenance
                 )
                 or "—",
@@ -145,3 +147,64 @@ def odometer_form_fields(
         "total_km_driven": f"{sum(row.km_driven or 0 for row in rows):,}",
         "total_maintenance_cost": f"{sum(row.maintenance_cost for row in rows):,}",
     }
+
+
+def maintenance_request_body(
+    *,
+    plate: str,
+    vehicle_type: str,
+    make_model: str,
+    year: int | None,
+    vin: str | None,
+    site: str,
+    driver: str | None,
+    odometer_km: int | None,
+    last_maintenance: VehicleMaintenanceRead | None,
+    work_type: str,
+    description: str,
+) -> str:
+    """Build escaped Arabic HTML for the existing General Book table renderer."""
+
+    def cell(value: object) -> str:
+        return escape(str(value) if value is not None and value != "" else "—")
+
+    def table(rows: Sequence[tuple[str, object]]) -> str:
+        return (
+            '<table dir="rtl">'
+            + "".join(
+                f"<tr><td>{cell(label)}</td><td>{cell(value)}</td></tr>" for label, value in rows
+            )
+            + "</table>"
+        )
+
+    vehicle_table = table(
+        [
+            ("رقم اللوحة", plate),
+            ("نوع المركبة", vehicle_type),
+            ("الصنع والطراز", make_model),
+            ("سنة الصنع", year),
+            ("رقم الهيكل", vin),
+            ("الموقع", site),
+            ("السائق", driver),
+            ("قراءة العداد الحالية (كم)", odometer_km),
+        ]
+    )
+    maintenance = "<p>لا توجد صيانة سابقة مسجلة</p>"
+    if last_maintenance is not None:
+        maintenance = table(
+            [
+                ("التاريخ", last_maintenance.date.strftime("%d/%m/%Y")),
+                ("النوع", _MAINTENANCE_LABELS.get(last_maintenance.type, last_maintenance.type)),
+                ("قراءة العداد (كم)", last_maintenance.odometer_km),
+                ("التكلفة (درهم)", last_maintenance.cost),
+            ]
+        )
+    work_label = cell(_MAINTENANCE_LABELS.get(work_type, work_type))
+    work_description = cell(description).replace("\n", "<br>")
+    return (
+        '<div dir="rtl" style="text-align:right">'
+        "<p>يرجى التكرم بتنفيذ الأعمال المطلوبة للمركبة الموضحة بياناتها أدناه.</p>"
+        f"<h3>بيانات المركبة</h3>{vehicle_table}"
+        f"<h3>آخر صيانة</h3>{maintenance}"
+        f"<h3>العمل المطلوب</h3><p>{work_label}: {work_description}</p></div>"
+    )
