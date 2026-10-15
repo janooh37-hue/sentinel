@@ -1,7 +1,7 @@
 """Monthly vehicle odometer readings.
 
-Revision ID: 0105_vehicle_odometer
-Revises: 0104_book_links
+Revision ID: 0102_vehicle_odometer
+Revises: 0101_word_template_sessions
 """
 
 from __future__ import annotations
@@ -11,8 +11,8 @@ from collections.abc import Sequence
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "0105_vehicle_odometer"
-down_revision: str | Sequence[str] | None = "0104_book_links"
+revision: str = "0102_vehicle_odometer"
+down_revision: str | Sequence[str] | None = "0101_word_template_sessions"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

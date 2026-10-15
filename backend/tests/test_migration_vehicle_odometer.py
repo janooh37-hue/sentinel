@@ -1,4 +1,4 @@
-"""Migration 0105: odometer schema parity, constraints, and reversibility."""
+"""Migration 0102: odometer schema parity, constraints, and reversibility."""
 
 from __future__ import annotations
 
@@ -15,8 +15,8 @@ from sqlalchemy.exc import IntegrityError
 from app.db.models import VehicleOdometerReading
 
 ROOT = Path(__file__).resolve().parents[2]
-HEAD = "0105_vehicle_odometer"
-PARENT = "0104_book_links"
+HEAD = "0102_vehicle_odometer"
+PARENT = "0101_word_template_sessions"
 
 
 @pytest.fixture
@@ -150,7 +150,7 @@ def test_downgrade_round_trip_preserves_vehicles(at_parent: tuple[Engine, Config
     command.downgrade(config, PARENT)
     with engine.connect() as c:
         assert "vehicle_odometer_readings" not in inspect(c).get_table_names()
-        assert "book_links" in inspect(c).get_table_names()
+        assert "book_edit_sessions" in inspect(c).get_table_names()
         assert c.execute(text("SELECT version_num FROM alembic_version")).scalar_one() == PARENT
         assert c.execute(text("SELECT id, plate_number FROM vehicles")).all() == [(1, "12345")]
     command.upgrade(config, HEAD)
