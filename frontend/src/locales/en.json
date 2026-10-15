@@ -2791,6 +2791,8 @@
       "created": "Created",
       "notDone": "Not done",
       "notApplicable": "Not applicable",
+      "note": "Sender note",
+      "confidentiality": "Confidentiality",
       "untitled": "No subject",
       "noMatches": "No matching books",
       "searchHint": "Try another reference or subject, or clear the search to see this scope.",
@@ -2806,7 +2808,7 @@
       "emptyHint": {
         "incoming": "Books sent to you will appear here. Check Outgoing for books you have sent.",
         "outgoing": "Open a record and use Send to route it to a colleague.",
-        "archived": "Use Archive on an incoming book to move it here. You can restore it at any time."
+        "archived": "Use Archive on an incoming book to move it here. Use Unarchive to send it back to Incoming."
       }
     },
     "subtitle": "Correspondence and communication log",

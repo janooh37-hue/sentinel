@@ -182,8 +182,8 @@ function BookDossier({ book }: { book: BookRead }): React.JSX.Element {
     { label: t('books.send.purpose'), value: inbox ? t(`books.send.purposes.${inbox.purpose}`) : notApplicable },
     { label: t('ledger.booksDesk.sent'), value: inbox ? <BookDate value={inbox.sent_at} /> : notApplicable },
     { label: t('ledger.booksDesk.opened'), value: inbox ? (inbox.read_at ? <BookDate value={inbox.read_at} /> : t('books.send.notOpened')) : notApplicable },
-    { label: t('books.inbox.done'), value: inbox ? (inbox.done_at ? <BookDate value={inbox.done_at} /> : t('ledger.booksDesk.notDone')) : notApplicable },
-    { label: t('books.confidentiality.label'), value: t(`books.confidentiality.levels.${book.confidentiality}`) },
+    { label: t('books.inbox.doneState'), value: inbox ? (inbox.done_at ? <BookDate value={inbox.done_at} /> : t('ledger.booksDesk.notDone')) : notApplicable },
+    { label: t('ledger.booksDesk.confidentiality'), value: t(`books.confidentiality.levels.${book.confidentiality}`) },
   ]
   return (
     <article>
@@ -194,7 +194,7 @@ function BookDossier({ book }: { book: BookRead }): React.JSX.Element {
       <dl className="mx-5 border-t border-hairline sm:mx-7">
         {facts.map(({ label, value }) => <div key={label} className="grid grid-cols-[minmax(7rem,1fr)_2fr] gap-x-4 border-b border-hairline py-3 text-sm"><dt className="font-semibold">{label}</dt><dd className="min-w-0 break-words">{value}</dd></div>)}
       </dl>
-      {inbox?.note && <section className="px-5 pt-5 sm:px-7"><h3 className="text-sm font-semibold">{t('books.send.note')}</h3><p dir="auto" className="mt-2 max-w-prose whitespace-pre-wrap break-words text-sm leading-relaxed">{inbox.note}</p></section>}
+      {inbox?.note && <section className="px-5 pt-5 sm:px-7"><h3 className="text-sm font-semibold">{t('ledger.booksDesk.note')}</h3><p dir="auto" className="mt-2 max-w-prose whitespace-pre-wrap break-words text-sm leading-relaxed">{inbox.note}</p></section>}
       <div className="flex flex-wrap gap-2 border-b border-hairline px-5 py-5 sm:px-7">
         <Link to={`/books/${book.id}`} className={buttonVariants({ size: 'sm' })}>{t('ledger.booksDesk.openRecord')}</Link>
         {book.can_send && <Button variant="outline" size="sm" onClick={() => setSendOpen(true)}><Send className="h-4 w-4" aria-hidden />{t('ledger.booksDesk.forward')}</Button>}
