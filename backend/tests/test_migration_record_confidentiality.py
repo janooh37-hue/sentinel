@@ -12,8 +12,8 @@ from sqlalchemy import Engine, create_engine, inspect, text
 from sqlalchemy.exc import IntegrityError
 
 ROOT = Path(__file__).resolve().parents[2]
-HEAD = "0104_record_confidentiality"
-PARENT = "0103_odometer_optional_closing"
+HEAD = "0105_record_confidentiality"
+PARENT = "0104_vehicle_maintenance_requests"
 
 
 def _config(database: Path) -> Config:

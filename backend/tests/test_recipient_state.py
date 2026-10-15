@@ -307,7 +307,7 @@ def test_recipient_state_migration_translates_purpose_and_round_trips(tmp_path: 
                 "VALUES (1, 1, 7, 3, 'sign', '2026-10-01 00:00:00', '2026-10-02 00:00:00')"
             )
         )
-    command.upgrade(config, "0105_recipient_state")
+    command.upgrade(config, "0106_recipient_state")
     with engine.connect() as connection:
         row = connection.execute(
             text("SELECT purpose, read_at, done_at, archived_at FROM book_recipients")
@@ -331,7 +331,7 @@ def test_recipient_state_migration_translates_purpose_and_round_trips(tmp_path: 
         }
     with pytest.raises(IntegrityError), engine.begin() as connection:
         connection.execute(text("UPDATE book_recipients SET purpose = 'circulate'"))
-    command.upgrade(config, "0105_recipient_state")
+    command.upgrade(config, "0106_recipient_state")
     with engine.connect() as connection:
         assert (
             connection.execute(text("SELECT purpose FROM book_recipients")).scalar_one()
@@ -351,9 +351,9 @@ def test_recipient_state_migration_preserves_partial_unique_index(tmp_path: Path
     with engine.begin() as connection:
         connection.execute(insert, {"revoked": None})
     for migrate, target in (
-        (command.upgrade, "0105_recipient_state"),
+        (command.upgrade, "0106_recipient_state"),
         (command.downgrade, HEAD),
-        (command.upgrade, "0105_recipient_state"),
+        (command.upgrade, "0106_recipient_state"),
     ):
         migrate(config, target)
         with engine.connect() as connection:

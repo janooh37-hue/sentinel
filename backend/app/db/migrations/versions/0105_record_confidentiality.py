@@ -1,7 +1,7 @@
 """Record confidentiality level and direct-send recipients.
 
-Revision ID: 0104_record_confidentiality
-Revises: 0103_odometer_optional_closing
+Revision ID: 0105_record_confidentiality
+Revises: 0104_vehicle_maintenance_requests
 """
 
 from __future__ import annotations
@@ -11,8 +11,8 @@ from collections.abc import Sequence
 import sqlalchemy as sa
 from alembic import op
 
-revision: str = "0104_record_confidentiality"
-down_revision: str | Sequence[str] | None = "0103_odometer_optional_closing"
+revision: str = "0105_record_confidentiality"
+down_revision: str | Sequence[str] | None = "0104_vehicle_maintenance_requests"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

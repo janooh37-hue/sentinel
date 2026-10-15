@@ -15,8 +15,8 @@ from sqlalchemy.exc import IntegrityError
 from app.db.models import BookLink
 
 ROOT = Path(__file__).resolve().parents[2]
-HEAD = "0106_book_links"
-PARENT = "0105_recipient_state"
+HEAD = "0107_book_links"
+PARENT = "0106_recipient_state"
 
 
 @pytest.fixture
