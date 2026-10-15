@@ -1211,6 +1211,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/leaves/report/send": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Send Report
+         * @description File the report as a General Book carrying the caller's saved signature
+         *     under «Prepared by» and send it to the picked manager for approval.
+         */
+        post: operations["send_report_api_v1_leaves_report_send_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/leaves/report/pdf": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Report Pdf
+         * @description The printable report sheet as a PDF, printed by the server's browser so
+         *     it matches «Print» without a print dialog. Reading the report is enough to
+         *     save it. Base64 text/plain, like every in-app download, so download
+         *     managers leave it alone.
+         */
+        post: operations["report_pdf_api_v1_leaves_report_pdf_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/leaves/{leave_id}": {
         parameters: {
             query?: never;
@@ -11046,6 +11090,8 @@ export interface components {
              * @default false
              */
             has_certificate: boolean;
+            /** Return Date */
+            return_date?: string | null;
             /**
              * Created At
              * Format: date-time
@@ -11110,6 +11156,40 @@ export interface components {
             updated_at?: string | null;
             /** Linked Documents */
             linked_documents?: components["schemas"]["LinkedDocumentRead"][];
+        };
+        /**
+         * LeaveReportPdfRequest
+         * @description POST /leaves/report/pdf — the printable report sheet (the DOM «Print»
+         *     prints) as HTML, printed to PDF by the server's own browser.
+         */
+        LeaveReportPdfRequest: {
+            /** Html */
+            html: string;
+            /**
+             * Lang
+             * @enum {string}
+             */
+            lang: "ar" | "en";
+        };
+        /**
+         * LeaveReportSendRequest
+         * @description POST /leaves/report/send — file the leave report as a General Book and
+         *     send it for approval. The server appends the preparer's signature block.
+         */
+        LeaveReportSendRequest: {
+            /** Subject */
+            subject: string;
+            /** Body Html */
+            body_html: string;
+            /** Approver User Id */
+            approver_user_id: number;
+        };
+        /** LeaveReportSendResult */
+        LeaveReportSendResult: {
+            /** Book Id */
+            book_id: number;
+            /** Ref */
+            ref: string;
         };
         /**
          * LeaveReturnRequest
@@ -18385,6 +18465,76 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["LeaveAwaitingReturnCount"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    send_report_api_v1_leaves_report_send_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LeaveReportSendRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LeaveReportSendResult"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    report_pdf_api_v1_leaves_report_pdf_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: {
+                gssg_session?: string | null;
+            };
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LeaveReportPdfRequest"];
+            };
+        };
+        responses: {
+            /** @description The PDF, base64 */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/plain": unknown;
                 };
             };
             /** @description Validation Error */

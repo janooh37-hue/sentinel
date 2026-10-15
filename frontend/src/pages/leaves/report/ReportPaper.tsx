@@ -23,8 +23,8 @@ import { dateLocale, fmtDayMonthYear, fmtMonthYear } from './fmt'
 import type { ReportSection } from './reportData'
 
 const INK = '#1c1f24'
-const NAVY = '#0d2845'
-const CELL = 'border border-neutral-400 px-2 py-1 text-start align-middle'
+export const NAVY = '#0d2845'
+export const CELL = 'border border-neutral-400 px-2 py-1 text-start align-middle'
 const SHEET = cn(
   'w-full border-collapse',
   'mx-auto max-w-[210mm] bg-[#fffdf8] shadow-sm ring-1 ring-border',
@@ -41,6 +41,9 @@ interface ReportPaperProps {
   emptyHeading: string
   today: string
   signatures: boolean
+  /** A first sheet ahead of the months (the single-employee details); it
+   * stands in for the empty sheet when no month has a counted day. */
+  lead?: { heading: string; body: React.ReactNode }
   /** Also show the sheets on screen (the Report view's preview). */
   onScreen?: boolean
 }
@@ -52,6 +55,7 @@ export function ReportPaper({
   emptyHeading,
   today,
   signatures,
+  lead,
   onScreen = false,
 }: ReportPaperProps): React.JSX.Element {
   const { t, i18n } = useTranslation()
@@ -98,8 +102,10 @@ export function ReportPaper({
 
   return (
     <div className={cn('print-leave-report', onScreen ? 'flex flex-col gap-6' : 'hidden print:block')}>
+      {lead && sheet('lead', lead.heading, lead.body)}
       {sections.length === 0
-        ? sheet(
+        ? !lead &&
+          sheet(
             'empty',
             emptyHeading,
             <p className="py-10 text-center text-neutral-600">{t('leaves.report.emptyReport')}</p>,

@@ -299,7 +299,7 @@ class _Fmt:
 class _BlockFmt:
     """Block-level format inherited at paragraph creation time."""
 
-    __slots__ = ("align", "indent_left_px", "indent_right_px", "line_height", "rtl")
+    __slots__ = ("align", "indent_left_px", "indent_right_px", "keep_next", "line_height", "rtl")
 
     def __init__(self) -> None:
         self.align: str | None = None
@@ -307,6 +307,8 @@ class _BlockFmt:
         self.indent_left_px: int = 0
         self.indent_right_px: int = 0
         self.line_height: float | None = None  # unit-less CSS line-height multiplier
+        # CSS ``page-break-after: avoid`` → Word "keep with next".
+        self.keep_next: bool = False
 
     def copy(self) -> _BlockFmt:
         c = _BlockFmt()
@@ -315,6 +317,7 @@ class _BlockFmt:
         c.indent_left_px = self.indent_left_px
         c.indent_right_px = self.indent_right_px
         c.line_height = self.line_height
+        c.keep_next = self.keep_next
         return c
 
 
@@ -427,6 +430,8 @@ def _merge_block_fmt_from_attrs(blk: _BlockFmt, tag: str, attrs: dict[str, str])
         out.rtl = True
     elif direction == "ltr":
         out.rtl = False
+    if "avoid" in (style.get("page-break-after") or style.get("break-after") or ""):
+        out.keep_next = True
     for k in ("margin-left", "padding-left"):
         v = style.get(k)
         if v:
@@ -533,6 +538,8 @@ def _apply_block_fmt(paragraph: Any, blk: _BlockFmt) -> None:
         ind.set(qn("w:start"), "0")
     if blk.line_height and blk.line_height > 0:
         paragraph.paragraph_format.line_spacing = blk.line_height
+    if blk.keep_next:
+        paragraph.paragraph_format.keep_with_next = True
     if blk.indent_left_px or blk.indent_right_px:
         pPr = paragraph._p.get_or_add_pPr()
         ind = pPr.find(qn("w:ind"))

@@ -5,6 +5,7 @@
  * split Y/M/D parts. */
 import type { LeaveListItem } from '@/lib/api'
 import { englishPart } from '@/lib/bilingualValue'
+import { UNASSIGNED } from '@/lib/dutyUnits'
 import { classifyLeaveType, CANONICAL_KINDS, type KindId } from './kinds'
 import { canonStatus, countsDays } from '../lifecycle'
 
@@ -106,6 +107,22 @@ export function matchesStaff(r: LeaveListItem, staff: StaffFilter): boolean {
   return staff === 'loaned' ? loaned : !loaned
 }
 
+/** The report's company (duty unit) filter: `null` = every company,
+ * `UNASSIGNED` = employees with no duty unit. */
+export function matchesCompany(r: LeaveListItem, company: string | null): boolean {
+  if (company === null) return true
+  const unit = (r.employee_duty_unit ?? '').trim()
+  return company === UNASSIGNED ? unit === '' : unit === company
+}
+
+const DEPARTED = ['Resigned', 'Terminated']
+
+/** The employee has left (resigned or terminated). Someone serving notice
+ * keeps a working `status` until the departure applies, so they are not. */
+export function isDeparted(r: LeaveListItem): boolean {
+  return DEPARTED.includes(englishPart(r.employee_status ?? '').trim())
+}
+
 /** A record's day contribution to a window (the prototype's per-day
  * attribution, done arithmetically): stored `days` when the record lies fully
  * inside; otherwise the calendar-day overlap, capped at the stored count
@@ -119,6 +136,13 @@ export function daysInWindow(r: LeaveListItem, w: DayWindow): number {
   const overlapStart = start > w.start ? start : w.start
   const overlapEnd = end < w.end ? end : w.end
   return Math.min(r.days, diffDays(overlapStart, overlapEnd) + 1)
+}
+
+/** Leaves touching the window, oldest start first: the single-employee list. */
+export function periodLeaves(rows: LeaveListItem[], w: DayWindow): LeaveListItem[] {
+  return rows
+    .filter((r) => r.start_date.slice(0, 10) <= w.end && r.end_date.slice(0, 10) >= w.start)
+    .sort((a, b) => (a.start_date < b.start_date ? -1 : a.start_date > b.start_date ? 1 : 0))
 }
 
 /** Rows whose days count as leave days (per-kind lifecycle: record-only kinds

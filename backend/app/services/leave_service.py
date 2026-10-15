@@ -6,6 +6,8 @@ Phase 06 expands this module with full management operations.
 
 from __future__ import annotations
 
+import base64
+import html
 import json
 import logging
 import re
@@ -22,8 +24,9 @@ from app.api.errors import NotFoundError, ValidationFailedError
 from app.config import get_settings
 from app.core import leave_lifecycle
 from app.core.leave_calc import TOTAL_AVAILABLE_CAP, LeaveBalance
-from app.db.models import AuditLog, Document, Employee, Leave, User
+from app.db.models import AuditLog, Document, Employee, Leave, Manager, User
 from app.schemas.leave import LeaveBalanceRead, LeaveCreate, LeaveStatus, LeaveUpdate
+from app.services import book_service, document_service, user_signature_service
 
 # ---------------------------------------------------------------------------
 _WORKFORCE_TIMEZONE = ZoneInfo("Asia/Dubai")
@@ -799,6 +802,97 @@ def list_annual_overlapping(
     ]
 
 
+# The leave report files under الإحصائيات والتقارير الشهرية (Statistics & monthly
+# reports) in the General Book classification index.
+REPORT_CLASSIFICATION = "6/1"
+
+
+def _prepared_by_html(db: Session, user: User, signature: Path) -> str:
+    """«إعداد»: the preparer's name, job title, saved signature and today's
+    date, centred like the Report paper's signature block. Each line keeps with
+    the next, so the block never splits across pages."""
+    emp = db.get(Employee, user.employee_id) if user.employee_id else None
+    name = (emp.name_ar or emp.name_en or "") if emp is not None else ""
+    name = name or user.display_name or user.email
+    title = (emp.position_ar or emp.position or "").strip() if emp is not None else ""
+    image = base64.b64encode(signature.read_bytes()).decode("ascii")
+    today = datetime.now(_WORKFORCE_TIMEZONE).strftime("%d/%m/%Y")
+    keep = 'dir="rtl" style="text-align:center;page-break-after:avoid"'
+    lines = [
+        "&nbsp;",
+        "<b>إعداد</b>",
+        f"الإسم: {html.escape(name)}",
+        *([f"المسمى الوظيفي: {html.escape(title)}"] if title else []),
+        f'التوقيع: <img src="data:image/png;base64,{image}" width="120">',
+    ]
+    return "".join(f"<p {keep}>{line}</p>" for line in lines) + (
+        f'<p dir="rtl" style="text-align:center">التاريخ: {today}</p>'
+    )
+
+
+def send_report_for_approval(
+    db: Session,
+    user: User,
+    *,
+    subject: str,
+    body_html: str,
+    approver_user_id: int,
+) -> tuple[int, str]:
+    """File the leave report as a General Book signed by its preparer and send
+    it to *approver_user_id*, whose approval embeds the manager signature.
+
+    Everything that can refuse runs before the book is minted, so a refusal
+    never leaves an orphan draft. Returns ``(book_id, ref)``.
+    """
+    book_service.require_record_type_access(
+        db,
+        user,
+        category_id=document_service.record_category_for_template("General Book"),
+        service_id="General Book",
+        classification_code=REPORT_CLASSIFICATION,
+    )
+    approver = db.get(User, approver_user_id)
+    if approver is None or approver.status != "active":
+        raise ValidationFailedError(
+            "APPROVER_NOT_ELIGIBLE", "The chosen signing manager is not an active user account."
+        )
+    signature = user_signature_service.resolve_signature(user)
+    if signature is None:
+        raise ValidationFailedError(
+            "SIGNATURE_REQUIRED", "Save your signature in Settings before sending a report."
+        )
+    # The printed manager block names the approver when they are a linked
+    # manager; the addressee line («السيد \ … المحترم») names them either way.
+    manager = db.scalar(select(Manager).where(Manager.user_id == approver.id, Manager.active))
+    addressee = (
+        (manager.title or manager.name_ar or manager.name_en) if manager is not None else None
+    ) or (approver.display_name or approver.email)
+    result = document_service.generate_document(
+        db,
+        employee_id=None,
+        template_id="General Book",
+        fields={
+            "subject": subject,
+            "recipient_name": addressee,
+            "body": body_html + _prepared_by_html(db, user, signature),
+        },
+        manager_id=manager.id if manager is not None else None,
+        current_user=user,
+        commit=True,
+        classification_code=REPORT_CLASSIFICATION,
+    )
+    assert result.book_id is not None  # commit=True always files a book
+    book_service.submit_for_approval(
+        db,
+        result.book_id,
+        priority="Normal",
+        approver_user_id=approver.id,
+        reviewer_user_ids=[],
+        submitted_by_user_id=user.id,
+    )
+    return result.book_id, result.ref_number
+
+
 __all__ = [
     "add_certificate",
     "compute_balance",
@@ -809,6 +903,7 @@ __all__ = [
     "list_annual_overlapping",
     "list_for_employee",
     "list_leaves",
+    "send_report_for_approval",
     "soft_delete_leave",
     "update_leave",
 ]

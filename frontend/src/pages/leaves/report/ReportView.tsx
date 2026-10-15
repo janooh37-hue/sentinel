@@ -1,7 +1,8 @@
 /**
  * ReportView — the Records page's printable leave report: an options panel at
- * the inline start (Print / Save PDF at its foot) and the paper beside it,
- * exactly as it prints.
+ * the inline start and the paper beside it, exactly as it prints, under one
+ * row of actions (Print / Save PDF / Send). «Save PDF» saves that same sheet,
+ * printed to a file by the server's browser (no print dialog).
  *
  * It opens with the register's filters (`seed`) and keeps its own choices
  * after that, so shaping a report never disturbs the register. Rows come from
@@ -11,11 +12,17 @@
  * Rejected and cancelled leaves are not days taken, so they count only when
  * the operator picks those statuses explicitly.
  */
-import { useId, useMemo, useState } from 'react'
+import { useId, useMemo, useRef, useState } from 'react'
+import { useMutation, useQuery } from '@tanstack/react-query'
+import type { TFunction } from 'i18next'
 import { useTranslation } from 'react-i18next'
-import { FileDown, Printer } from 'lucide-react'
+import { FileDown, Loader2, PenLine, Printer } from 'lucide-react'
+import { toast } from 'sonner'
 
-import type { LeaveListItem } from '@/lib/api'
+import { api, apiErrorMessage, type LeaveListItem } from '@/lib/api'
+import { isQuickActionAllowed } from '@/lib/dashboardLayout'
+import { UNASSIGNED, unitOptions } from '@/lib/dutyUnits'
+import { useCapabilities } from '@/lib/useCapabilities'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { cn } from '@/lib/utils'
@@ -27,12 +34,15 @@ import {
   CHIP_BASE, CHIP_OFF, CHIP_ON, FIELD_LABEL, NATIVE_SELECT, SEGMENT_BUTTON, SEGMENT_GROUP,
   SEGMENT_OFF, SEGMENT_ON, WORKFLOW_STATUSES, toggleItem,
 } from './controls'
-import { dateLocale, fmtDayMonthYear } from './fmt'
+import { dateLocale, fmtDayMonthYear, fmtMonthYear } from './fmt'
 import { CANONICAL_KINDS, kindMeta, type KindId } from './kinds'
 import {
-  applyScope, buildReportSections, matchesStaff,
+  applyScope, buildReportSections, isDeparted, matchesCompany, matchesStaff, periodWindow,
   type MonthRef, type ReportPeriod, type ReportSort, type StaffFilter,
 } from './reportData'
+import { filedSubject, reportBodyHtml, type FiledScope } from './reportDocument'
+import { SendReportDialog } from './SendReportDialog'
+import { EmployeeReportDetails } from './EmployeeReportDetails'
 import { ReportPaper } from './ReportPaper'
 
 /** The register's filters at the moment the report opens. */
@@ -63,7 +73,6 @@ interface ReportViewProps {
 
 export function ReportView({ all, today, seed, paperOnly = false }: ReportViewProps): React.JSX.Element {
   const { t, i18n } = useTranslation()
-  const locale = dateLocale(i18n.language)
   const ids = useId()
 
   const [periodMode, setPeriodMode] = useState<ReportPeriod['mode']>(seed.month ? 'month' : 'year')
@@ -79,10 +88,12 @@ export function ReportView({ all, today, seed, paperOnly = false }: ReportViewPr
   const [statuses, setStatuses] = useState(seed.statuses)
   const [employeeId, setEmployeeId] = useState(seed.employeeId)
   const [staff, setStaff] = useState<StaffFilter>('all')
+  const [company, setCompany] = useState<string | null>(null)
+  const [excludeDeparted, setExcludeDeparted] = useState(true)
   const [sort, setSort] = useState<ReportSort>({ key: 'days', dir: 'desc' })
   const [withSignatures, setWithSignatures] = useState(false)
 
-  const sections = useMemo(() => {
+  const { period, picked, sections } = useMemo(() => {
     const period: ReportPeriod =
       periodMode === 'year'
         ? { mode: 'year', year }
@@ -91,10 +102,16 @@ export function ReportView({ all, today, seed, paperOnly = false }: ReportViewPr
           : { mode: 'range', from, to }
     const picked = applyScope(all, { month: null, employeeId, kinds, statuses, q: '' }).filter(
       (r) =>
-        matchesStaff(r, staff) && (statuses.length > 0 || !NOT_TAKEN.includes(canonStatus(r.status))),
+        matchesStaff(r, staff) &&
+        matchesCompany(r, company) &&
+        !(excludeDeparted && isDeparted(r)) &&
+        (statuses.length > 0 || !NOT_TAKEN.includes(canonStatus(r.status))),
     )
-    return buildReportSections(picked, period, sort, (r) => leaveEmployeeName(r, i18n.language), i18n.language)
-  }, [all, periodMode, year, month, from, to, employeeId, kinds, statuses, staff, sort, i18n.language])
+    const sections = buildReportSections(picked, period, sort, (r) => leaveEmployeeName(r, i18n.language), i18n.language)
+    return { period, picked, sections }
+  }, [all, periodMode, year, month, from, to, employeeId, kinds, statuses, staff, company, excludeDeparted, sort, i18n.language])
+
+  const companies = useMemo(() => unitOptions(all.map((r) => ({ duty_unit: r.employee_duty_unit }))), [all])
 
   const years = useMemo(
     () =>
@@ -104,29 +121,107 @@ export function ReportView({ all, today, seed, paperOnly = false }: ReportViewPr
     [all, today],
   )
 
-  // Each sheet names its own month; the facts carry the wider period only
-  // when it spans more than one month.
-  const periodLabel =
-    periodMode === 'year'
-      ? String(year)
-      : periodMode === 'range' && (from || to)
-        ? t('leaves.report.rangeLabel', {
-            from: from ? fmtDayMonthYear(from, locale) : '…',
-            to: to ? fmtDayMonthYear(to, locale) : '…',
-          })
-        : null
   const employeeRow = employeeId ? all.find((r) => r.employee_id === employeeId) : undefined
-  const facts = [
-    periodLabel,
-    staff !== 'all' && t(`leaves.report.staff.${staff}`),
-    statuses.map((s) => t(`leaves.status.${s}`)).join(', '),
-    employeeRow ? leaveEmployeeName(employeeRow, i18n.language) : employeeId,
-  ].filter((f): f is string => !!f)
-  const title = t('leaves.report.paperTitle', {
-    topic:
-      kinds.length > 0
-        ? kinds.map((k) => t(kindMeta(k).i18nKey)).join(', ')
-        : t('leaves.report.allKinds'),
+  // The report's scope in the UI language, for the paper.
+  const describe = (tt: TFunction, lang: string) => {
+    const loc = dateLocale(lang)
+    const range = tt('leaves.report.rangeLabel', {
+      from: from ? fmtDayMonthYear(from, loc) : '…',
+      to: to ? fmtDayMonthYear(to, loc) : '…',
+    })
+    // Each sheet names its own month; the facts carry the wider period only
+    // when it spans more than one month.
+    const periodLabel = periodMode === 'year' ? String(year) : periodMode === 'range' && (from || to) ? range : null
+    const employeeName = employeeRow ? leaveEmployeeName(employeeRow, lang) : employeeId
+    const companyName = company === UNASSIGNED ? tt('dutyLocations.unassigned') : company
+    return {
+      periodLabel,
+      // The saved PDF's name: period, then company or employee when scoped.
+      fileScope: [periodMode === 'month' ? month && fmtMonthYear(month, loc) : periodLabel, companyName, employeeName]
+        .filter(Boolean)
+        .join(' — '),
+      facts: [
+        periodLabel,
+        staff !== 'all' && tt(`leaves.report.staff.${staff}`),
+        companyName,
+        excludeDeparted && tt('leaves.report.departedExcluded'),
+        statuses.map((s) => tt(`leaves.status.${s}`)).join(', '),
+        employeeName,
+      ].filter((f): f is string => !!f),
+      title: tt('leaves.report.paperTitle', {
+        topic:
+          kinds.length > 0
+            ? kinds.map((k) => tt(kindMeta(k).i18nKey)).join(', ')
+            : tt('leaves.report.allKinds'),
+      }),
+    }
+  }
+  const { periodLabel, facts, title, fileScope } = describe(t, i18n.language)
+  // The filed General Book is always Arabic, like the book itself.
+  const arT = i18n.getFixedT('ar')
+  const filedScope: FiledScope = {
+    period,
+    company: company === UNASSIGNED ? arT('dutyLocations.unassigned') : company || undefined,
+    employee: employeeId
+      ? { id: employeeId, name: employeeRow ? leaveEmployeeName(employeeRow, 'ar') : employeeId }
+      : undefined,
+    limits: [
+      ...kinds.map((k) => arT(kindMeta(k).i18nKey)),
+      ...(staff !== 'all' ? [arT(`leaves.report.staff.${staff}`)] : []),
+      ...statuses.map((s) => arT(`leaves.status.${s}`)),
+    ],
+  }
+
+  const { has } = useCapabilities()
+  const canSend =
+    isQuickActionAllowed('General Book', has) &&
+    has('books.category.6/1') &&
+    has('books.submit') &&
+    has('books.edit')
+  const [sending, setSending] = useState(false)
+  const { data: emp } = useQuery({
+    queryKey: ['employee', employeeId],
+    queryFn: () => api.getEmployee(employeeId ?? ''),
+    enabled: !!employeeId,
+  })
+  const buildBody = (): string =>
+    reportBodyHtml({
+      t: arT,
+      lang: 'ar',
+      locale: dateLocale('ar'),
+      scope: filedScope,
+      sections,
+      rows: picked,
+      window: periodWindow(period),
+      employee: employeeId ? { emp, all, today } : undefined,
+    })
+  // «Save PDF» posts the very sheet «Print» prints; the server's own browser
+  // prints it, so the file matches the print without a print dialog.
+  const sheetRef = useRef<HTMLDivElement>(null)
+  const savePdf = useMutation({
+    mutationFn: () =>
+      api.leaveReportPdf({
+        html: sheetRef.current?.querySelector('.print-leave-report')?.outerHTML ?? '',
+        lang: i18n.language.startsWith('ar') ? 'ar' : 'en',
+      }),
+    onSuccess: (blob) => {
+      const url = URL.createObjectURL(blob)
+      const anchor = document.createElement('a')
+      anchor.href = url
+      // Characters Windows rejects and bidi controls (a pasted RLE/LRM reorders
+      // the whole name in the download bar) become spaces.
+      anchor.download = `${t('leaves.report.pdfFilename', { scope: fileScope, date: today })
+        // eslint-disable-next-line no-control-regex
+        .replace(/[\\/:*?"<>|\u0000-\u001f\u007f\u200e\u200f\u202a-\u202e\u2066-\u2069]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .replace(/(?:\s*—\s*){2,}/g, ' — ') // an empty scope leaves one separator, not two
+        .trim()}.pdf`
+      document.body.append(anchor)
+      anchor.click()
+      anchor.remove()
+      setTimeout(() => URL.revokeObjectURL(url), 0) // Firefox cancels a download revoked before it starts
+    },
+    onError: (err) => toast.error(apiErrorMessage(err)),
   })
 
   const paper = (
@@ -137,6 +232,24 @@ export function ReportView({ all, today, seed, paperOnly = false }: ReportViewPr
       emptyHeading={periodLabel ?? title}
       today={today}
       signatures={withSignatures}
+      lead={
+        employeeId
+          ? {
+              // The name is already in the facts line and the card; a long
+              // name as the sheet heading would crush the letterhead.
+              heading: t('leaves.report.empDetails'),
+              body: (
+                <EmployeeReportDetails
+                  employeeId={employeeId}
+                  all={all}
+                  rows={picked}
+                  window={periodWindow(period)}
+                  today={today}
+                />
+              ),
+            }
+          : undefined
+      }
       onScreen={!paperOnly}
     />
   )
@@ -144,9 +257,11 @@ export function ReportView({ all, today, seed, paperOnly = false }: ReportViewPr
 
   return (
     <div className="grid grid-cols-[19rem_minmax(0,1fr)] items-start gap-6 max-lg:grid-cols-1 print:block">
+      {/* Sticky in the tab's scroll box; 21rem ≈ shell + page header + view toolbar + bottom padding, so the
+          panel's own scrollbar keeps every option reachable at any scroll position of the paper. */}
       <section
         aria-label={t('leaves.report.optionsLabel')}
-        className="flex flex-col gap-5 rounded-2xl border border-hairline bg-surface p-4 lg:sticky lg:top-0"
+        className="flex flex-col gap-5 rounded-2xl border border-hairline bg-surface p-4 lg:sticky lg:top-0 lg:max-h-[calc(100dvh-21rem)] lg:overflow-y-auto"
         data-print-hide
       >
         <fieldset className="min-w-0">
@@ -249,7 +364,35 @@ export function ReportView({ all, today, seed, paperOnly = false }: ReportViewPr
               </button>
             ))}
           </div>
+          <label className="mt-2 inline-flex cursor-pointer items-center gap-2 text-[0.85em] text-foreground">
+            <input
+              type="checkbox"
+              checked={excludeDeparted}
+              onChange={(e) => setExcludeDeparted(e.target.checked)}
+              className="h-4 w-4 accent-primary"
+            />
+            {t('leaves.report.excludeDeparted')}
+          </label>
         </fieldset>
+
+        <div className="min-w-0">
+          <label htmlFor={`${ids}-company`} className={FIELD_LABEL}>
+            {t('leaves.report.optCompany')}
+          </label>
+          <select
+            id={`${ids}-company`}
+            value={company ?? ''}
+            onChange={(e) => setCompany(e.target.value || null)}
+            className={cn(NATIVE_SELECT, 'w-full')}
+          >
+            <option value="">{t('leaves.report.allCompanies')}</option>
+            {[...companies, UNASSIGNED].map((c) => (
+              <option key={c} value={c}>
+                {c === UNASSIGNED ? t('dutyLocations.unassigned') : c}
+              </option>
+            ))}
+          </select>
+        </div>
 
         <fieldset className="min-w-0">
           <legend className={FIELD_LABEL}>{t('leaves.columns.status')}</legend>
@@ -314,27 +457,50 @@ export function ReportView({ all, today, seed, paperOnly = false }: ReportViewPr
           />
           {t('leaves.report.includeSignatures')}
         </label>
+        <SendReportDialog
+          open={sending}
+          onOpenChange={setSending}
+          subject={filedSubject(arT, dateLocale('ar'), filedScope)}
+          scope={facts}
+          buildBody={buildBody}
+        />
+      </section>
 
-        {/* «Save PDF» is the print dialog's own PDF target, as on every other
-            document in the app, so both actions open the same dialog. */}
-        <div className="flex flex-col gap-2 border-t border-hairline pt-4">
-          <Button type="button" disabled={sections.length === 0} onClick={() => window.print()}>
+      <div ref={sheetRef} className="flex min-w-0 flex-col gap-4 print:block">
+        {/* Same width as the sheet, so the row starts at the paper's edge. */}
+        <div className="mx-auto flex w-full max-w-[210mm] flex-wrap items-center gap-2 print:hidden" data-print-hide>
+          <Button type="button" disabled={sections.length === 0 && !employeeId} onClick={() => window.print()}>
             <Printer className="h-4 w-4" aria-hidden />
             {t('leaves.report.print')}
           </Button>
           <Button
             type="button"
             variant="secondary"
-            disabled={sections.length === 0}
-            onClick={() => window.print()}
+            disabled={(sections.length === 0 && !employeeId) || savePdf.isPending}
+            aria-busy={savePdf.isPending || undefined}
+            onClick={() => savePdf.mutate()}
           >
-            <FileDown className="h-4 w-4" aria-hidden />
+            {savePdf.isPending ? (
+              <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+            ) : (
+              <FileDown className="h-4 w-4" aria-hidden />
+            )}
             {t('leaves.report.savePdf')}
           </Button>
+          {canSend && (
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={sections.length === 0 && !employeeId}
+              onClick={() => setSending(true)}
+            >
+              <PenLine className="h-4 w-4" aria-hidden />
+              {t('leaves.report.sendTitle')}
+            </Button>
+          )}
         </div>
-      </section>
-
-      {paper}
+        {paper}
+      </div>
     </div>
   )
 }
