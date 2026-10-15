@@ -62,7 +62,7 @@ export function LedgerPage({ onNavigate }: LedgerPageProps = {}): React.JSX.Elem
   }
 
   return (
-    <Tabs value={tab} onValueChange={selectTab} className="flex min-h-0 flex-1 flex-col">
+    <Tabs value={tab} onValueChange={selectTab} className="flex min-h-0 min-w-0 flex-1 flex-col">
       <TabsList className="shrink-0 px-4">
         {canEmail && <TabsTrigger value="email">{t('ledger.tabs.email')}</TabsTrigger>}
         {canBooks && <TabsTrigger value="books">{t('ledger.tabs.books')}</TabsTrigger>}

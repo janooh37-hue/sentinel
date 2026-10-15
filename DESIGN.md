@@ -2515,9 +2515,10 @@ will trip over them.
   secondary Open in Records link for editing and revision tools.
 - The document reuses Records' lazy `RecordPaperViewer` and its `papersOf` /
   `defaultPaperKey` resolution, including signed copies, imports and scans.
-  Books fit the available width on opening and on pane resize; the displayed
-  percentage is the actual scale against the PDF's first page (or image) width.
-  Manual zoom stays fixed for the current book until Fit is pressed again.
+  Books fit the available width on opening and on pane resize, capped at actual
+  size so wide panes do not enlarge the document. The displayed percentage is
+  the actual scale against the PDF's first page (or image) width. Manual zoom
+  stays fixed for the current book until Fit resumes the same capped auto-fit.
   Signed copy / Original use the existing labelled toolbar switcher instead of
   the thumbnail strip. Records retain their existing viewer defaults.
 - Desktop Expand pushes `view=reader`. The list stays mounted but hidden;
@@ -2527,6 +2528,8 @@ will trip over them.
   scrolling, fixed `340px` inline-end column. The PDF keeps the remaining pane
   height below the compact header and scrolls separately. The column mirrors
   with page direction; Details starts collapsed.
+  The Ledger root permits shrinking below its content width, so opening Details
+  or manually enlarging a page cannot push the column outside the viewport.
 - Mobile selection pushes a book view with Back; desktop Expand is not shown.
   Details starts collapsed and stacks below the document when expanded.
   The book view scrolls as a page, with a `65dvh` document area (at least `24rem`)

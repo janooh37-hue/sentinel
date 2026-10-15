@@ -235,7 +235,7 @@ export function RecordPaperViewer({
   selectedKey: PaperKey | null
   onSelectKey: (key: PaperKey) => void
   mode: RecordPaperViewerMode
-  /** Books use true document scale and stay fitted until the user zooms. Records keep their existing relative zoom. */
+  /** Books fit without enlarging beyond actual size until manually zoomed. Records keep their existing relative zoom. */
   initialFit?: 'width'
   /** Reuse the toolbar paper switcher instead of the tall thumbnail strip. */
   compact?: boolean
@@ -288,8 +288,8 @@ export function RecordPaperViewer({
     return () => ro.disconnect()
   }, [])
   const fitWidth = Math.max(0, containerWidth - PAPER_PADDING)
-  const scale = initialFit === 'width' ? (zoom ?? (naturalWidth > 0 ? fitWidth / naturalWidth : 1)) : (zoom ?? 1)
-  const paperWidth = initialFit === 'width' && zoom !== null && naturalWidth > 0 ? naturalWidth * zoom : fitWidth * (initialFit === 'width' ? 1 : scale)
+  const scale = initialFit === 'width' ? (zoom ?? (naturalWidth > 0 ? Math.min(1, fitWidth / naturalWidth) : 1)) : (zoom ?? 1)
+  const paperWidth = initialFit === 'width' && naturalWidth > 0 ? naturalWidth * scale : fitWidth * (initialFit === 'width' ? 1 : scale)
   const narrow = containerWidth > 0 && containerWidth < NARROW_TOOLBAR
   const showStrip =
     !compact && ((mode === 'pane' && (papers.length > 1 || !!addScanSlot)) ||

@@ -76,7 +76,7 @@ describe('RecordPaperViewer', () => {
     expect(screen.getByRole('img', { name: 'scan-0.png' })).toHaveStyle({ width: '802px' })
   })
 
-  it('fits Books to width at the real scale, preserves manual zoom on resize, and Fit resumes refitting', async () => {
+  it('fits Books up to actual size, preserves manual zoom on resize, and Fit resumes refitting', async () => {
     render(
       <RecordPaperViewer papers={[scan(0), scan(3)]} selectedKey="scan-0" onSelectKey={() => undefined} mode="pane" initialFit="width" compact />,
     )
@@ -86,6 +86,9 @@ describe('RecordPaperViewer', () => {
     fireEvent.load(img)
     expect(img).toHaveStyle({ width: '300px' })
     expect(screen.getByText('50%')).toBeInTheDocument()
+    resize(932)
+    expect(img).toHaveStyle({ width: '600px' })
+    expect(screen.getByText('100%')).toBeInTheDocument()
     resize(452)
     expect(img).toHaveStyle({ width: '420px' })
     expect(screen.getByText('70%')).toBeInTheDocument()
