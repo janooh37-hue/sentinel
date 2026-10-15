@@ -889,11 +889,15 @@ def _pp_material_request(doc: Any, ctx: dict[str, Any]) -> None:
     overflows UP into the empty cell above (the unused Contact cell) instead of
     hanging down across the section divider.
 
-    Cells (table 4): r2/c3 = employee "Signature", r5/c3 = manager
-    "Signature". No-op for whichever signature wasn't embedded."""
-    try:
-        sig_cells = [doc.tables[4].rows[2].cells[3], doc.tables[4].rows[5].cells[3]]
-    except IndexError:
+    Cells are located by their English or Arabic Signature label, so both MRF
+    layouts share this post-processing. No-op for signatures not embedded."""
+    sig_cells = []
+    for table in doc.tables:
+        for row in table.rows:
+            for index, cell in enumerate(row.cells[:-1]):
+                if cell.text.strip() in {"Signature", "التوقيع"}:
+                    sig_cells.append(row.cells[index + 1])
+    if not sig_cells:
         log.warning("Material Request: signature cell missing — float skipped")
         return
     for cell in sig_cells:
@@ -1236,6 +1240,10 @@ _FORM_REGISTRY: dict[str, dict[str, Any]] = {
         "post_process": _pp_header_reference,
     },
     "Material Request Form": {
+        "adapter": _adapt_material_request,
+        "post_process": _pp_material_request,
+    },
+    "Material Request Form (Arabic)": {
         "adapter": _adapt_material_request,
         "post_process": _pp_material_request,
     },

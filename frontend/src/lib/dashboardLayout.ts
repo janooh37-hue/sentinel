@@ -146,6 +146,7 @@ export const QUICK_ACTION_IDS = [
   'Employee Clearance Form',
   'Passport Release Form',
   'Material Request Form',
+  'Material Request Form (Arabic)',
   'Resignation Letter',
   'Administrative Leave Form',
   'Warning Form',

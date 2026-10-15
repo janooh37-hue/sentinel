@@ -74,6 +74,23 @@ def test_admin_types_labels_have_no_form_prefix():
     assert "Material Request Form - طلب مواد" in ADMIN_TYPES
 
 
+def test_material_requests_are_separate_services_with_matching_printed_fields():
+    by_id = {meta.id: meta for meta in template_service.list_templates().items}
+    english = "Material Request Form"
+    arabic = "Material Request Form (Arabic)"
+    assert by_id[english].name_en == "Material Request Form (English)"
+    assert by_id[english].name_ar == "طلب مواد (إنجليزي)"
+    assert by_id[arabic].name_ar == "طلب مواد (عربي)"
+    assert by_id[arabic].signing_path == by_id[english].signing_path == "in_app"
+    arabic_fields = template_service.get_template_fields(arabic).fields
+    assert {field.key for field in arabic_fields} == {"delivery_date", "items", "manager_id"}
+    assert arabic_fields == [
+        field
+        for field in template_service.get_template_fields(english).fields
+        if field.key in {"delivery_date", "items", "manager_id"}
+    ]
+
+
 def test_every_listed_template_fields_endpoint_loads():
     """Every listed template's field schema must validate against TemplateField.
 

@@ -12,6 +12,7 @@ const calibratedArtwork = {
   'Passport Release Form': 'passport-release',
   'Duty Resumption Form': 'duty-resumption',
   'Material Request Form': 'material-request',
+  'Material Request Form (Arabic)': 'material-request',
   'General Book': 'general-book',
   'HR Request Form': 'hr-request',
   'Resignation Letter': 'resignation-letter',

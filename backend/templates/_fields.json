@@ -694,8 +694,8 @@
   },
   "Material Request Form": {
     "category": "admin",
-    "name_en": "Material Request Form",
-    "name_ar": "طلب مواد",
+    "name_en": "Material Request Form (English)",
+    "name_ar": "طلب مواد (إنجليزي)",
     "form_number": "300-001",
     "fields": [
       {
@@ -752,6 +752,35 @@
         "type": "signature",
         "label_en": "Employee Signature",
         "label_ar": "توقيع الموظف",
+        "required": false
+      }
+    ]
+  },
+  "Material Request Form (Arabic)": {
+    "category": "admin",
+    "name_en": "Material Request Form (Arabic)",
+    "name_ar": "طلب مواد (عربي)",
+    "form_number": "300-001",
+    "fields": [
+      {
+        "key": "delivery_date",
+        "type": "date",
+        "label_en": "Required Delivery Date",
+        "label_ar": "تاريخ التسليم المطلوب",
+        "required": false
+      },
+      {
+        "key": "items",
+        "type": "items_table",
+        "label_en": "Requested Items",
+        "label_ar": "المواد المطلوبة",
+        "required": true
+      },
+      {
+        "key": "manager_id",
+        "type": "manager_picker",
+        "label_en": "Verifier / Project Manager",
+        "label_ar": "المراجع / مدير المشروع",
         "required": false
       }
     ]

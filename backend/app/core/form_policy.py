@@ -13,6 +13,7 @@ SigningPath = Literal["auto", "in_app", "scan", "chain"]
 
 SIGNING_PATHS: dict[str, SigningPath] = {
     "Material Request Form": "in_app",
+    "Material Request Form (Arabic)": "in_app",
     "General Book": "chain",
     # Permit letters take the same manager-approval chain as any General Book.
     "Security Permit": "chain",

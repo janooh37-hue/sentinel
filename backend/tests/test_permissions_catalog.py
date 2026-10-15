@@ -182,8 +182,8 @@ def test_legacy_categories_name_the_services_a_deny_blocks(db_session):
     assert by_id["books.category.INV"].description_en == (
         "Covers records from: Inmate Conduct Violations."
     )
-    assert (
-        by_id["books.category.SC"].description_en == "Covers records from: Material Request Form."
+    assert by_id["books.category.SC"].description_en == (
+        "Covers records from: Material Request Form (English), Material Request Form (Arabic)."
     )
     assert by_id["books.category.VA"].description_ar == "يشمل سجلات: بلاغ حادث مركبة."
     hr = by_id["books.category.HR"].description_en

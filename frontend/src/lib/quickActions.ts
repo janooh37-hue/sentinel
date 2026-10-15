@@ -1,5 +1,5 @@
 /**
- * Quick-action metadata — single source of truth for the 18 dashboard
+ * Quick-action metadata — single source of truth for the dashboard
  * quick-action tiles (one tile per selectable service form).
  *
  * Each entry maps a {@link QuickActionId} to:
@@ -134,6 +134,13 @@ export const QUICK_ACTION_META: Record<QuickActionId, QuickActionMeta> = {
     href: serviceHref('Material Request Form'),
     intent: 'new',
     slug: slugifyQuickActionId('Material Request Form'),
+  },
+  'Material Request Form (Arabic)': {
+    emoji: '📦',
+    artwork: 'material-request',
+    href: serviceHref('Material Request Form (Arabic)'),
+    intent: 'new',
+    slug: slugifyQuickActionId('Material Request Form (Arabic)'),
   },
   'General Book': {
     emoji: '📓',
