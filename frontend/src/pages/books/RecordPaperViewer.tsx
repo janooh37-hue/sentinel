@@ -42,7 +42,7 @@ import { cachedThumb, loadThumb, type ThumbInfo } from './recordPaperThumbs'
 import { paperKey, type Paper, type PaperKey } from './recordPapers'
 import { paperLabels } from './recordPaperLabels'
 
-/** Horizontal padding (px) around the page inside the scroll container (`p-4` × 2). */
+/** Horizontal padding (px) around the page inside the Books scroll container. */
 const PAPER_PADDING = 32
 /** Below this container width Replace / Delete collapse into a ⋯ menu. */
 const NARROW_TOOLBAR = 420
@@ -55,14 +55,14 @@ type DocState =
   | { kind: 'error'; error: unknown }
 
 /** Renders one paper (PDF pages stacked, or an image) at `width` px. */
-function PaperCanvas({ paper, width }: { paper: Paper; width: number }): React.JSX.Element {
+function PaperCanvas({ paper, width, onNaturalWidth }: { paper: Paper; width: number; onNaturalWidth?: (width: number) => void }): React.JSX.Element {
   if (!paper.isPdf) {
-    return <img src={paper.url} alt={paper.filename} style={{ width }} className="block shadow-md" draggable={false} />
+    return <img src={paper.url} alt={paper.filename} style={{ width }} onLoad={(event) => onNaturalWidth?.(event.currentTarget.naturalWidth)} className="block shadow-md" draggable={false} />
   }
-  return <PdfPaper key={paper.url} url={paper.url} width={width} />
+  return <PdfPaper key={paper.url} url={paper.url} width={width} onNaturalWidth={onNaturalWidth} />
 }
 
-function PdfPaper({ url, width }: { url: string; width: number }): React.JSX.Element {
+function PdfPaper({ url, width, onNaturalWidth }: { url: string; width: number; onNaturalWidth?: (width: number) => void }): React.JSX.Element {
   const [state, setState] = useState<DocState>({ kind: 'loading' })
   // Retry bumps this; a failed load is never cached, so the effect refetches.
   const [nonce, setNonce] = useState(0)
@@ -117,6 +117,7 @@ function PdfPaper({ url, width }: { url: string; width: number }): React.JSX.Ele
       doc={state.doc}
       sizing={{ kind: 'width', px: width }}
       pageClassName="shadow-[0_2px_8px_rgba(13,40,69,.18)]"
+      onLayout={onNaturalWidth}
       onError={(error) => setState({ kind: 'error', error })}
     />
   )
@@ -220,6 +221,8 @@ export function RecordPaperViewer({
   selectedKey,
   onSelectKey,
   mode,
+  initialFit,
+  compact = false,
   onOpenFull,
   onClose,
   addScanSlot,
@@ -232,6 +235,10 @@ export function RecordPaperViewer({
   selectedKey: PaperKey | null
   onSelectKey: (key: PaperKey) => void
   mode: RecordPaperViewerMode
+  /** Books use true document scale and stay fitted until the user zooms. Records keep their existing relative zoom. */
+  initialFit?: 'width'
+  /** Reuse the toolbar paper switcher instead of the tall thumbnail strip. */
+  compact?: boolean
   onOpenFull?: () => void
   onClose?: () => void
   /** parent-provided "＋ Add scan" strip frame (caps-gated) */
@@ -245,7 +252,8 @@ export function RecordPaperViewer({
 }): React.JSX.Element {
   const { t } = useTranslation()
   const isOverlay = mode !== 'pane'
-  const [zoom, setZoom] = useState(1)
+  const [zoom, setZoom] = useState<number | null>(initialFit === 'width' ? null : 1)
+  const [naturalSize, setNaturalSize] = useState<{ url: string; width: number } | null>(null)
   const canvasRef = useRef<HTMLDivElement | null>(null)
   const [containerWidth, setContainerWidth] = useState(0)
   const panState = useRef<{ x: number; y: number; active: boolean }>({ x: 0, y: 0, active: false })
@@ -257,9 +265,15 @@ export function RecordPaperViewer({
   const [prevActiveKey, setPrevActiveKey] = useState(activeKey)
   if (prevActiveKey !== activeKey) {
     setPrevActiveKey(activeKey)
-    setZoom(1)
+    if (initialFit !== 'width') setZoom(1)
   }
 
+  const url = paper?.url
+  const onNaturalWidth = useCallback((width: number): void => {
+    if (!url || width <= 0) return
+    setNaturalSize((previous) => previous?.url === url && previous.width === width ? previous : { url, width })
+  }, [url])
+  const naturalWidth = naturalSize?.url === url ? naturalSize?.width ?? 0 : 0
   // Fit width = this container's own width minus padding.
   useLayoutEffect(() => {
     const el = canvasRef.current
@@ -274,14 +288,16 @@ export function RecordPaperViewer({
     return () => ro.disconnect()
   }, [])
   const fitWidth = Math.max(0, containerWidth - PAPER_PADDING)
+  const scale = initialFit === 'width' ? (zoom ?? (naturalWidth > 0 ? fitWidth / naturalWidth : 1)) : (zoom ?? 1)
+  const paperWidth = initialFit === 'width' && zoom !== null && naturalWidth > 0 ? naturalWidth * zoom : fitWidth * (initialFit === 'width' ? 1 : scale)
   const narrow = containerWidth > 0 && containerWidth < NARROW_TOOLBAR
   const showStrip =
-    (mode === 'pane' && (papers.length > 1 || !!addScanSlot)) ||
-    (mode === 'dialog' && papers.length > 1)
+    !compact && ((mode === 'pane' && (papers.length > 1 || !!addScanSlot)) ||
+    (mode === 'dialog' && papers.length > 1))
   const labels = paperLabels(t, papers)
   const labelOf = (p: Paper): string => labels[papers.indexOf(p)] ?? ''
 
-  const minZoom = isOverlay ? 0.5 : 0.6
+  const minZoom = initialFit === 'width' ? 0.1 : isOverlay ? 0.5 : 0.6
   const maxZoom = isOverlay ? 3 : 2.4
   const step = isOverlay ? 0.25 : 0.2
 
@@ -321,7 +337,7 @@ export function RecordPaperViewer({
   const canDelete = !!onDeletePaper && manageable
 
   return (
-    <div className={cn('flex min-h-0 flex-1 flex-col', isOverlay && 'h-full')}>
+    <div className={cn('flex min-h-0 min-w-0 flex-1 flex-col', isOverlay && 'h-full')}>
       {showStrip && (
         <div className="flex shrink-0 gap-2 overflow-x-auto border-b border-hairline bg-surface-raised px-3 py-2.5">
           {papers.map((p) => (
@@ -344,8 +360,8 @@ export function RecordPaperViewer({
             isOverlay ? 'justify-center' : 'border-b border-hairline bg-surface-raised',
           )}
         >
-          {mode === 'overlay' && papers.length > 1 && (
-            <div role="group" aria-label={t('books.pane.papers', { count: papers.length })} className="flex flex-wrap gap-1">
+          {(mode === 'overlay' || compact) && papers.length > 1 && (
+            <div role="group" aria-label={t('books.pane.papers', { count: papers.length })} className="flex max-w-full gap-1 overflow-x-auto">
               {papers.map((p) => (
                 <button
                   key={paperKey(p)}
@@ -353,8 +369,10 @@ export function RecordPaperViewer({
                   aria-pressed={paperKey(p) === activeKey}
                   onClick={() => onSelectKey(paperKey(p))}
                   className={cn(
-                    'inline-flex min-h-8 items-center rounded-sm px-2 text-[0.75em] font-semibold transition-colors motion-reduce:transition-none',
-                    paperKey(p) === activeKey ? 'bg-white text-black' : 'bg-white/15 text-white hover:bg-white/25',
+                    'inline-flex min-h-8 shrink-0 items-center rounded-sm px-2 text-[0.75em] font-semibold transition-colors motion-reduce:transition-none',
+                    isOverlay
+                      ? paperKey(p) === activeKey ? 'bg-white text-black' : 'bg-white/15 text-white hover:bg-white/25'
+                      : paperKey(p) === activeKey ? 'bg-primary-soft text-primary' : 'text-muted-foreground hover:bg-surface-tinted',
                   )}
                 >
                   {labelOf(p)}
@@ -373,7 +391,7 @@ export function RecordPaperViewer({
           <ToolbarBtn
             isOverlay={isOverlay}
             label={t('books.pane.zoomOut')}
-            onClick={() => setZoom((z) => Math.max(minZoom, +(z - step).toFixed(2)))}
+            onClick={() => setZoom(Math.max(minZoom, +(scale - step).toFixed(2)))}
           >
             <Minus className="h-3 w-3" aria-hidden />
           </ToolbarBtn>
@@ -384,19 +402,19 @@ export function RecordPaperViewer({
               isOverlay ? 'text-white' : 'text-muted-foreground',
             )}
           >
-            {Math.round(zoom * 100)}%
+            {Math.round(scale * 100)}%
           </span>
           <ToolbarBtn
             isOverlay={isOverlay}
             label={t('books.pane.zoomIn')}
-            onClick={() => setZoom((z) => Math.min(maxZoom, +(z + step).toFixed(2)))}
+            onClick={() => setZoom(Math.min(maxZoom, +(scale + step).toFixed(2)))}
           >
             <Plus className="h-3 w-3" aria-hidden />
           </ToolbarBtn>
           <ToolbarBtn
             isOverlay={isOverlay}
             label={t('books.pane.fit')}
-            onClick={() => setZoom(1)}
+            onClick={() => setZoom(initialFit === 'width' ? null : 1)}
             text={t('books.pane.fit')}
           />
           <a
@@ -486,15 +504,15 @@ export function RecordPaperViewer({
         onPointerUp={endPan}
         onPointerCancel={endPan}
         className={cn(
-          'flex min-h-0 flex-1 overflow-auto',
+          'flex min-h-0 min-w-0 flex-1 overflow-auto',
           !isOverlay && 'bg-surface-tinted',
           canPan && (grabbing ? 'cursor-grabbing select-none' : 'cursor-grab'),
         )}
       >
-        <div className="m-auto shrink-0 p-4">
+        <div className={cn('m-auto shrink-0', initialFit === 'width' ? 'p-[16px]' : 'p-4')}>
           {paper ? (
             fitWidth > 0 ? (
-              <PaperCanvas paper={paper} width={Math.round(fitWidth * zoom)} />
+              <PaperCanvas paper={paper} width={Math.round(paperWidth)} onNaturalWidth={initialFit === 'width' ? onNaturalWidth : undefined} />
             ) : null
           ) : (
             (emptySlot ?? null)

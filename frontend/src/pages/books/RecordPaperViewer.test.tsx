@@ -1,4 +1,4 @@
-import { act, render, screen } from '@testing-library/react'
+import { act, fireEvent, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -74,6 +74,32 @@ describe('RecordPaperViewer', () => {
 
     await userEvent.click(screen.getByRole('button', { name: 'Zoom in' }))
     expect(screen.getByRole('img', { name: 'scan-0.png' })).toHaveStyle({ width: '802px' })
+  })
+
+  it('fits Books to width at the real scale, preserves manual zoom on resize, and Fit resumes refitting', async () => {
+    render(
+      <RecordPaperViewer papers={[scan(0), scan(3)]} selectedKey="scan-0" onSelectKey={() => undefined} mode="pane" initialFit="width" compact />,
+    )
+    resize(332)
+    const img = screen.getByRole('img', { name: 'scan-0.png' })
+    Object.defineProperty(img, 'naturalWidth', { value: 600 })
+    fireEvent.load(img)
+    expect(img).toHaveStyle({ width: '300px' })
+    expect(screen.getByText('50%')).toBeInTheDocument()
+    resize(452)
+    expect(img).toHaveStyle({ width: '420px' })
+    expect(screen.getByText('70%')).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Zoom in' }))
+    expect(img).toHaveStyle({ width: '540px' })
+    expect(screen.getByText('90%')).toBeInTheDocument()
+    resize(332)
+    expect(img).toHaveStyle({ width: '540px' })
+    await userEvent.click(screen.getByRole('button', { name: 'Fit' }))
+    expect(img).toHaveStyle({ width: '300px' })
+    resize(392)
+    expect(img).toHaveStyle({ width: '360px' })
+    expect(screen.getByText('60%')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Scan 2' })).toBeInTheDocument()
   })
 
   it('selects by key and reports key picks', async () => {

@@ -2515,13 +2515,22 @@ will trip over them.
   secondary Open in Records link for editing and revision tools.
 - The document reuses Records' lazy `RecordPaperViewer` and its `papersOf` /
   `defaultPaperKey` resolution, including signed copies, imports and scans.
+  Books fit the available width on opening and on pane resize; the displayed
+  percentage is the actual scale against the PDF's first page (or image) width.
+  Manual zoom stays fixed for the current book until Fit is pressed again.
+  Signed copy / Original use the existing labelled toolbar switcher instead of
+  the thumbnail strip. Records retain their existing viewer defaults.
 - Desktop Expand pushes `view=reader`. The list stays mounted but hidden;
   Collapse and browser Back restore it without losing selection, search or scroll.
-  A directly opened reader link collapses with URL replacement. The reader's
-  document and facts/actions side column mirror with the page direction.
+  A directly opened reader link collapses with URL replacement.
+- Both desktop pane and reader put expanded Details in the same independently
+  scrolling, fixed `340px` inline-end column. The PDF keeps the remaining pane
+  height below the compact header and scrolls separately. The column mirrors
+  with page direction; Details starts collapsed.
 - Mobile selection pushes a book view with Back; desktop Expand is not shown.
-  Expanded Details scrolls within a quarter of the mobile document area so the
-  PDF remains visible alongside its facts; desktop Details keeps its larger cap.
+  Details starts collapsed and stacks below the document when expanded.
+  The book view scrolls as a page, with a `65dvh` document area (at least `24rem`)
+  so facts never shrink the PDF to a strip.
 - List queries keep a 30-second fresh cache. Selection patches read state in that
   cache rather than refetching the list, without clearing pending mutation
   invalidation; queue actions remove the completed row locally and select the

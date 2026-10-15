@@ -270,8 +270,8 @@ function BookDossier({ book, loading, reader, isMobile, onToggleReader, onInboxU
     </div>
   )
   return (
-    <article className="flex min-h-0 flex-1 flex-col">
-      <header className="max-h-[45%] shrink-0 overflow-y-auto border-b border-hairline px-4 py-3">
+    <article className={cn('flex min-h-0 min-w-0 flex-1 flex-col', isMobile && 'overflow-y-auto')}>
+      <header className={cn('shrink-0 border-b border-hairline px-4 py-2', !isMobile && 'max-h-[35%] overflow-y-auto')}>
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <bdi dir="ltr" className="font-mono text-xs font-medium tabular-nums text-muted-foreground">{book.ref_number}</bdi>
@@ -283,22 +283,19 @@ function BookDossier({ book, loading, reader, isMobile, onToggleReader, onInboxU
           {inbox ? <><bdi>{pickEmployeeName({ name_en: inbox.sent_by_name ?? '', name_ar: inbox.sent_by_name_ar }, i18n.language)}</bdi>{' · '}{t(`books.send.purposes.${inbox.purpose}`)}{' · '}<BookDate value={inbox.sent_at} /></> : <>{t('ledger.booksDesk.created')} <BookDate value={book.created_at} /></>}
         </p>
         {inbox?.note && <p dir="auto" className="mt-2 max-w-prose whitespace-pre-wrap break-words text-sm leading-relaxed"><span className="sr-only">{t('ledger.booksDesk.note')}: </span>{inbox.note}</p>}
-        {!reader && <div className="mt-3 flex flex-wrap items-center gap-2">{actions}<Button variant="ghost" size="sm" aria-expanded={detailsOpen} aria-controls={`book-details-${book.id}`} onClick={() => setDetailsOpen(!detailsOpen)}><ChevronDown className={cn('h-4 w-4', detailsOpen && 'rotate-180')} aria-hidden />{t('ledger.booksDesk.details')}</Button></div>}
+        <div className="mt-2 flex flex-wrap items-center gap-2">{actions}<Button variant="ghost" size="sm" aria-expanded={detailsOpen} aria-controls={`book-details-${book.id}`} onClick={() => setDetailsOpen(!detailsOpen)}><ChevronDown className={cn('h-4 w-4', detailsOpen && 'rotate-180')} aria-hidden />{t('ledger.booksDesk.details')}</Button></div>
       </header>
-      <div className={cn('flex min-h-0 flex-1', !reader && 'flex-col')}>
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+      <div className={cn('flex min-w-0', isMobile ? 'shrink-0 flex-col' : 'min-h-0 flex-1')}>
+        <div className={cn('flex min-w-0 flex-col', isMobile ? 'h-[65dvh] min-h-[24rem] shrink-0' : 'min-h-0 flex-1')}>
           {loading ? <DeskLoading /> : papers.length === 0 ? (
             <DocumentState kind="empty" title={t('ledger.booksDesk.noDocument')} body={t('ledger.booksDesk.noDocumentHint')} />
-          ) : <Suspense fallback={<DeskLoading />}><RecordPaperViewer papers={papers} selectedKey={selectedPaper} onSelectKey={setPickedPaper} mode="pane" /></Suspense>}
+          ) : <Suspense fallback={<DeskLoading />}><RecordPaperViewer papers={papers} selectedKey={selectedPaper} onSelectKey={setPickedPaper} mode="pane" initialFit="width" compact /></Suspense>}
         </div>
-        {reader ? (
-          <aside className="w-[20rem] max-w-[35%] shrink-0 overflow-y-auto border-s border-hairline p-4">
-            <Button variant="ghost" size="sm" className="mb-4" onClick={onToggleReader}><ArrowLeft className="h-4 w-4 rtl:rotate-180" aria-hidden />{t('ledger.outlook.back')}</Button>
-            {actions}
-            <h3 className="mb-2 mt-4 text-sm font-semibold">{t('ledger.booksDesk.details')}</h3>
+        {detailsOpen && (
+          <aside className={cn('shrink-0 border-hairline px-4 py-3', isMobile ? 'border-t' : 'min-h-0 w-[340px] overflow-y-auto border-s')} aria-label={t('ledger.booksDesk.details')}>
             {details}
           </aside>
-        ) : detailsOpen && <section className="min-h-0 max-h-[25%] shrink-0 overflow-y-auto border-t border-hairline px-4 py-3 md:max-h-[45%]" aria-label={t('ledger.booksDesk.details')}>{details}</section>}
+        )}
       </div>
       {book.can_send && <SendRecordDialog book={book} open={sendOpen} onOpenChange={setSendOpen} />}
       {reply.dialog}
