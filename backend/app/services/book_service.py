@@ -908,15 +908,15 @@ def _created_by_clause(user: User | None) -> ColumnElement[bool]:
     return false() if user is None else Book.created_by_user_id == user.id
 
 
-InboxFilter = Literal["received", "sent", "archived"]
+InboxFilter = Literal["received", "done", "sent", "archived"]
 
 
 def inbox_clause(user: User | None, inbox: InboxFilter) -> ColumnElement[bool]:
-    """Received has an unarchived send; archived has active sends but none unarchived."""
+    """Caller-owned incoming states; archive takes precedence over done."""
     if user is None:
         return false()
-    if inbox in ("received", "archived"):
-        unarchived = exists(
+    if inbox in ("received", "done", "archived"):
+        unarchived_stmt = (
             select(BookRecipient.id)
             .where(
                 BookRecipient.book_id == Book.id,
@@ -926,7 +926,14 @@ def inbox_clause(user: User | None, inbox: InboxFilter) -> ColumnElement[bool]:
             )
             .correlate_except(BookRecipient)
         )
-        return unarchived if inbox == "received" else active_recipient_clause(user.id) & ~unarchived
+        if inbox in ("received", "done"):
+            done_clause = (
+                BookRecipient.done_at.is_not(None)
+                if inbox == "done"
+                else BookRecipient.done_at.is_(None)
+            )
+            return exists(unarchived_stmt.where(done_clause))
+        return active_recipient_clause(user.id) & ~exists(unarchived_stmt)
     return exists(
         select(BookRecipient.id)
         .where(

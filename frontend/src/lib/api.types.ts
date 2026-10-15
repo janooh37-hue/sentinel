@@ -2828,7 +2828,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** List Books */
+        /**
+         * List Books
+         * @description List records; inbox scopes use the caller's state, with archive before done.
+         */
         get: operations["list_books_api_v1_books_get"];
         put?: never;
         /** Create Book */
@@ -11312,7 +11315,7 @@ export interface components {
         };
         /**
          * InboxSummaryRead
-         * @description Received counts exclude archived sends; archived counts whole records.
+         * @description Received counts exclude done/archived sends; archived counts whole records.
          */
         InboxSummaryRead: {
             /** Unread */
@@ -22027,7 +22030,7 @@ export interface operations {
         parameters: {
             query?: {
                 created_by_me?: boolean;
-                inbox?: ("received" | "sent" | "archived") | null;
+                inbox?: ("received" | "done" | "sent" | "archived") | null;
             };
             header?: never;
             path?: never;
@@ -22779,7 +22782,7 @@ export interface operations {
                 to_date?: string | null;
                 include_deleted?: boolean;
                 created_by_me?: boolean;
-                inbox?: ("received" | "sent" | "archived") | null;
+                inbox?: ("received" | "done" | "sent" | "archived") | null;
                 limit?: number;
                 offset?: number;
             };

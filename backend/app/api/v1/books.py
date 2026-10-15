@@ -746,6 +746,7 @@ def list_books(
     limit: int = Query(LIST_DEFAULT_LIMIT, ge=1, le=LIST_MAX_LIMIT),
     offset: int = Query(0, ge=0),
 ) -> BookListResponse:
+    """List records; inbox scopes use the caller's state, with archive before done."""
     rows, total, fts_snippets = book_service.list_books(
         db,
         user=user,

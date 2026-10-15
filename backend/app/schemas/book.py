@@ -483,7 +483,7 @@ class InboxPurposeCounts(BaseModel):
 
 
 class InboxSummaryRead(BaseModel):
-    """Received counts exclude archived sends; archived counts whole records."""
+    """Received counts exclude done/archived sends; archived counts whole records."""
 
     unread: int
     received: int

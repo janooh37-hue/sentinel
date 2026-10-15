@@ -68,7 +68,7 @@ def test_done_marks_read_and_undo_preserves_first_read(confidentiality_api: ApiH
     assert state["read_at"] == state["done_at"]
     summary = api.client.get(f"{API}/books/inbox/summary").json()
     assert summary["unread"] == 0
-    assert summary["received"] == summary["by_purpose"]["action"] == 1
+    assert summary["received"] == summary["by_purpose"]["action"] == 0
     assert api.client.get(f"{API}/notifications/counts").json()["inbox"] == 0
     assert not any(
         item.kind == "inbox"
@@ -88,6 +88,59 @@ def test_done_marks_read_and_undo_preserves_first_read(confidentiality_api: ApiH
     assert own["done_at"] == redone.json()["done_at"]
     assert other["done_at"] is None
     assert other["read_at"] is None
+
+
+def test_done_scope_moves_own_incoming_and_archive_takes_precedence(
+    confidentiality_api: ApiHarness,
+) -> None:
+    api = confidentiality_api
+    sent = _send(api, "directed", ["B", "C"], purpose="action")["sent"]
+    api.as_user("B")
+    base = f"{API}/books/{api.records['directed'].id}/inbox"
+    _listing(api, {"directed"}, "received")
+    _listing(api, set(), "done")
+    assert api.client.post(f"{base}/done").status_code == 200
+    _listing(api, set(), "received")
+    _listing(api, {"directed"}, "done")
+    _listing(api, set(), "archived")
+    summary = api.client.get(f"{API}/books/inbox/summary").json()
+    assert summary["received"] == summary["unread"] == summary["archived"] == 0
+    assert not any(summary["by_purpose"].values())
+
+    # Other recipients' state and the sender's outgoing list are independent.
+    api.as_user("C")
+    _listing(api, {"directed"}, "received")
+    _listing(api, set(), "done")
+    api.as_user("A")
+    _listing(api, {"directed"}, "sent")
+    _listing(api, set(), "done")
+
+    api.as_user("B")
+    assert api.client.post(f"{base}/archive").status_code == 200
+    _listing(api, set(), "received")
+    _listing(api, set(), "done")
+    _listing(api, {"directed"}, "archived")
+    summary = api.client.get(f"{API}/books/inbox/summary").json()
+    assert summary["archived"] == 1
+    assert summary["received"] == summary["unread"] == 0
+    assert api.client.delete(f"{base}/archive").status_code == 200
+    _listing(api, {"directed"}, "done")
+    assert api.client.delete(f"{base}/done").status_code == 200
+    _listing(api, {"directed"}, "received")
+    _listing(api, set(), "done")
+    summary = api.client.get(f"{API}/books/inbox/summary").json()
+    assert summary["received"] == summary["by_purpose"]["action"] == 1
+    assert summary["unread"] == 0
+
+    # A recalled done row must not leak into any recipient scope.
+    assert api.client.post(f"{base}/done").status_code == 200
+    api.as_user("A")
+    own = next(row for row in sent if row["user_id"] == api.users["B"].id)
+    recalled = api.client.delete(f"{API}/books/{api.records['directed'].id}/recipients/{own['id']}")
+    assert recalled.status_code == 204, recalled.text
+    api.as_user("B")
+    for scope in ("received", "done", "archived"):
+        _listing(api, set(), scope)
 
 
 @pytest.mark.parametrize("action", ["done", "archive"])

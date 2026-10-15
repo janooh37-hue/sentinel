@@ -658,6 +658,7 @@ def _received_stmt(db: Session, user: User):  # type: ignore[no-untyped-def]
             BookRecipient.user_id == user.id,
             BookRecipient.revoked_at.is_(None),
             BookRecipient.archived_at.is_(None),
+            BookRecipient.done_at.is_(None),
             Book.deleted_at.is_(None),
         )
     )
@@ -666,7 +667,7 @@ def _received_stmt(db: Session, user: User):  # type: ignore[no-untyped-def]
 
 
 def unread_received(db: Session, user: User) -> list[tuple[BookRecipient, Book]]:
-    """Unread active sends to ``user`` on records they can open (push + bell)."""
+    """Unread, not-done incoming sends on visible records (push + bell)."""
     stmt = _received_stmt(db, user).where(BookRecipient.read_at.is_(None))
     return [(row, book) for row, book in db.execute(stmt.order_by(BookRecipient.id.desc()))]
 
