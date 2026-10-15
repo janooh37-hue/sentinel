@@ -8,7 +8,7 @@ import { BottomTabBar } from '@/components/shell/BottomTabBar'
 import { LockOverlay } from '@/components/shell/LockOverlay'
 import { MobileTopBar } from '@/components/shell/MobileTopBar'
 import { NavDrawer } from '@/components/shell/NavDrawer'
-import { RequireCapability } from '@/components/shell/RequireCapability'
+import { RequireAnyCapability, RequireCapability } from '@/components/shell/RequireCapability'
 import { TopNav } from '@/components/shell/TopNav'
 import { ErrorBoundary } from '@/components/ui/error-boundary'
 import { ShortcutsHelpDialog } from '@/components/ui/shortcuts-help'
@@ -486,9 +486,9 @@ function Shell(): React.JSX.Element {
               <Route
                 path="/ledger"
                 element={
-                  <RequireCapability cap="ledger.view">
+                  <RequireAnyCapability caps={['ledger.view', 'books.view']}>
                     <LedgerRoute />
-                  </RequireCapability>
+                  </RequireAnyCapability>
                 }
               />
               <Route

@@ -13,18 +13,20 @@ export interface DockEntry {
   to: string
   cap?: string
   caps?: readonly string[]
+  anyCaps?: readonly string[]
   signal?: WaitingSignalId
 }
 
 export const SECTION_ENTRIES: readonly DockEntry[] = [
   ...NAV_ITEMS.map(
-    ({ to, key, Icon, cap }): DockEntry => ({
+    ({ to, key, Icon, cap, anyCaps }): DockEntry => ({
       id: `sec:${to}`,
       kind: 'section',
       labelKey: key,
       Icon,
       to,
       cap,
+      anyCaps,
     }),
   ),
   {
@@ -101,10 +103,11 @@ export function entryById(id: string): DockEntry | undefined {
 }
 
 export function isNavEntryAllowed(
-  entry: Pick<DockEntry, 'cap' | 'caps'>,
+  entry: Pick<DockEntry, 'cap' | 'caps' | 'anyCaps'>,
   has: (capability: string) => boolean,
 ): boolean {
-  return (!entry.cap || has(entry.cap)) && (!entry.caps || entry.caps.every(has))
+  return (!entry.cap || has(entry.cap)) && (!entry.caps || entry.caps.every(has)) &&
+    (!entry.anyCaps || entry.anyCaps.some(has))
 }
 
 /** The `sig:approvals` entry has no static capability gate (see above) — it

@@ -2773,6 +2773,10 @@
   },
   "ledger": {
     "title": "Ledger",
+    "tabs": {
+      "email": "Email",
+      "books": "Books"
+    },
     "subtitle": "Correspondence and communication log",
     "pageMeta_one": "{{count}} entry · this month",
     "pageMeta_other": "{{count}} entries · this month",
