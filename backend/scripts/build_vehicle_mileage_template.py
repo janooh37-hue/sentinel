@@ -141,8 +141,8 @@ def reference_block() -> etree._Element:
         )
     for textbox in block.xpath(".//w:txbxContent", namespaces=NS):
         paragraphs = list(textbox)
-        # The landscape red rule is at 94pt. Compact the inherited portrait
-        # paragraph spacing so the full 28pt barcode remains above that rule.
+        # The landscape red rule is at 94pt. Exact 15pt lines keep the four
+        # header lines and the 8pt barcode above it.
         for p in paragraphs:
             props = p.find("w:pPr", NS)
             if props is None:
@@ -151,12 +151,17 @@ def reference_block() -> etree._Element:
             spacing = props.find("w:spacing", NS)
             if spacing is not None:
                 props.remove(spacing)
-            props.insert(
-                0, element("spacing", before="0", after="0", line="240", lineRule="atLeast")
-            )
+            props.insert(0, element("spacing", before="0", after="0", line="300", lineRule="exact"))
             for text in p.xpath("./w:r/w:t", namespaces=NS):
                 if "{{ date }}" in (text.text or ""):
-                    text.text = text.text.replace("{{ date }}", "\u200e{{ date }}\u200e")
+                    text.text = text.text.replace(
+                        "{{ date }}", "\u200e{{ date }}\u200e م  الموافق  {{ hijri_date }}"
+                    )
+                    month = copy.deepcopy(p)
+                    month.xpath(".//w:t", namespaces=NS)[
+                        0
+                    ].text = "الشهر: \u200e{{ month_label }}\u200e"
+                    p.addnext(month)
         ref = next(p for p in paragraphs if "{{ ref }}" in "".join(p.itertext()))
         barcode = next(
             p
@@ -170,8 +175,14 @@ def reference_block() -> etree._Element:
             indent.set(f"{{{NS['w']}}}right", "0")
         for text in barcode.xpath("./w:r/w:t", namespaces=NS):
             text.text = "{{ barcode }}"
-        for size in barcode.xpath(".//w:sz | .//w:szCs", namespaces=NS):
-            size.set(f"{{{NS['w']}}}val", "56")
+        # Keep the General Book's 8pt barcode, but let its tall glyphs set the
+        # line height, and drop the blank barcode-font spacer above it.
+        barcode.find("w:pPr/w:spacing", NS).set(f"{{{NS['w']}}}lineRule", "atLeast")
+        for p in paragraphs:
+            if p is not barcode and p.xpath(
+                ".//w:rFonts[@w:ascii='Libre Barcode 39']", namespaces=NS
+            ):
+                textbox.remove(p)
         if not any("{%p if ref %}" in "".join(p.itertext()) for p in paragraphs):
             ref.addprevious(paragraph("{%p if ref %}"))
             barcode.addnext(paragraph("{%p endif %}"))
@@ -189,18 +200,10 @@ def build(letterhead: Path) -> Path:
         if child is not section:
             body.remove(child)
     # Header artwork ends at 109pt; start the title beneath it, not behind it.
+    # Side margins stay as the letterhead's so logo and footer keep their place.
     section.find("w:pgMar", NS).set(f"{{{NS['w']}}}top", "2400")
-    section.find("w:pgMar", NS).set(f"{{{NS['w']}}}left", "900")
-    section.find("w:pgMar", NS).set(f"{{{NS['w']}}}right", "900")
     title = paragraph("سجل عداد المسافات والصيانة الشهري للمركبات", bold=True, size=28)
     body.insert(0, title)
-    body.insert(
-        1,
-        paragraph(
-            "الشهر الميلادي: \u200e{{ month_label }}\u200e    |    بداية الشهر هجرياً: {{ month_hijri }}",
-            size=22,
-        ),
-    )
     table = element("tbl")
     props = element("tblPr")
     props.extend(
@@ -275,14 +278,13 @@ def build(letterhead: Path) -> Path:
     # Only the actual column header repeats, not the totals row.
     total_properties = table[-1].find("w:trPr", NS)
     total_properties.remove(total_properties.find("w:tblHeader", NS))
-    body.insert(2, table)
-    body.insert(3, paragraph(""))
+    body.insert(1, table)
+    body.insert(2, paragraph(""))
     header = etree.fromstring(entries["word/header2.xml"])
-    ref_paragraph = element("p")
+    # Anchor in the existing first paragraph: a new paragraph would push the inline logo down.
     run = element("r")
     run.append(reference_block())
-    ref_paragraph.append(run)
-    header.insert(0, ref_paragraph)
+    header.find("w:p", NS).append(run)
     entries["word/header2.xml"] = etree.tostring(
         header, xml_declaration=True, encoding="UTF-8", standalone=True
     )

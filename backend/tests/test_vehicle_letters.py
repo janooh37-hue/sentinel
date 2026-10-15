@@ -484,8 +484,9 @@ def test_odometer_form_files_classified_gs_book_without_aztec(gen_env: _Generati
         payload = barcode_payload(result.ref_number, date.today())
         assert len(barcode_runs) == 2  # DrawingML + VML copies
         assert all("".join(run.itertext()) == payload for run in barcode_runs)
+        # Same 8pt barcode as the General Book.
         assert all(
-            run.find("w:rPr/w:sz", ns).get(f"{{{ns['w']}}}val") == "56" for run in barcode_runs
+            run.find("w:rPr/w:sz", ns).get(f"{{{ns['w']}}}val") == "16" for run in barcode_runs
         )
         assert sorted(
             archive.read(name) for name in archive.namelist() if name.startswith("word/media/")
