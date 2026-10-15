@@ -2521,6 +2521,7 @@ will trip over them.
   document and facts/actions side column mirror with the page direction.
 - Mobile selection pushes a book view with Back; desktop Expand is not shown.
 - List queries keep a 30-second fresh cache. Selection patches read state in that
-  cache rather than refetching the list; queue actions remove the completed row
-  locally and select the next available row before the invalidation fetch ends.
+  cache rather than refetching the list, without clearing pending mutation
+  invalidation; queue actions remove the completed row locally and select the
+  next available row before the invalidation fetch ends.
 

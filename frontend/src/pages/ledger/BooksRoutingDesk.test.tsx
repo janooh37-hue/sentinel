@@ -133,6 +133,29 @@ describe('Books routing desk', () => {
     expect(screen.getByLabelText('URL').textContent).toContain('book=8')
   })
 
+  it('refreshes a cached destination scope after marking read on the next queue book', async () => {
+    const nextBook = { ...BOOK, id: 8, ref_number: 'GS-8', subject: 'Next instruction', my_inbox: { ...BOOK.my_inbox!, read_at: '2026-10-15T09:00:00Z' } }
+    let done = false
+    vi.mocked(api.listBooks).mockImplementation(async ({ inbox } = {}) => {
+      const items = inbox === 'done' ? (done ? [BOOK] : []) : done ? [nextBook] : [BOOK, nextBook]
+      return { items, total: items.length, limit: 50, offset: 0 }
+    })
+    vi.spyOn(api, 'getBook').mockImplementation(async (id) => id === BOOK.id ? BOOK : nextBook)
+    vi.mocked(api.markBookInboxDone).mockImplementation(async () => {
+      done = true
+      return { ...BOOK.my_inbox!, done_at: '2026-10-15T10:00:00Z' }
+    })
+    mount('/ledger?tab=books&scope=done')
+    await screen.findByText('No books marked done')
+    await userEvent.click(screen.getByRole('tab', { name: 'Incoming' }))
+    await userEvent.click(await screen.findByRole('button', { name: /GS-7/ }))
+    await userEvent.click(await screen.findByRole('button', { name: 'Mark as done' }))
+    await screen.findByRole('heading', { name: 'Next instruction' })
+    await waitFor(() => expect(api.getBook).toHaveBeenCalledWith(8))
+    await userEvent.click(screen.getByRole('tab', { name: 'Done' }))
+    expect(await screen.findByRole('button', { name: /GS-7/ })).toBeInTheDocument()
+  })
+
   it('undoes done in Done and returns the book to Incoming', async () => {
     let done = true
     vi.mocked(api.listBooks).mockImplementation(async ({ inbox } = {}) => {

@@ -82,7 +82,8 @@ export function BooksRoutingDesk(): React.JSX.Element {
       // Opening marks read, but patch cached rows instead of refetching the list.
       const book = await api.getBook(selectedId!)
       if (book.my_inbox?.read_at) {
-        qc.setQueriesData<BookListResponse>({ queryKey: ['books', 'routing'] }, (previous) => previous && ({
+        // A read receipt must not make a mutation-invalidated scope fresh again.
+        qc.setQueriesData<BookListResponse>({ queryKey: ['books', 'routing'], predicate: (query) => !query.state.isInvalidated }, (previous) => previous && ({
           ...previous,
           items: previous.items.map((row) => row.id === book.id ? { ...row, my_inbox: book.my_inbox } : row),
         }))
