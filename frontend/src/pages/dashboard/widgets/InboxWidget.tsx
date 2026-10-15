@@ -1,7 +1,7 @@
 /**
  * InboxWidget — records sent directly to me (widget id `inbox`, top-eligible
- * metric card). Big number = unread; received/sent link to the Records inbox
- * filters, and the four purposes break the received count down. Self-hides
+ * metric card). Big number = unread; received/sent link to Ledger's Books
+ * scopes, and the four purposes break the received count down. Self-hides
  * without `books.view` (the summary endpoint needs it).
  */
 
@@ -14,8 +14,8 @@ import { useCapabilities } from '@/lib/useCapabilities'
 import { useInboxSummary } from '@/pages/books/useInboxCount'
 
 const PURPOSES = ['info', 'action', 'reply', 'circulate'] as const
-const RECEIVED_URL = '/books?inbox=received'
-const SENT_URL = '/books?inbox=sent'
+const RECEIVED_URL = '/ledger?tab=books&scope=incoming'
+const SENT_URL = '/ledger?tab=books&scope=outgoing'
 
 const LINK =
   'rounded-sm hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1'

@@ -25,9 +25,9 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
-import { useLocation, useNavigate, useSearchParams } from 'react-router-dom'
+import { Navigate, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { Archive, BookOpen, ChevronRight, FileInput, Send, Stamp, Trash2 } from 'lucide-react'
+import { BookOpen, ChevronRight, Stamp, Trash2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
@@ -61,12 +61,10 @@ import {
   matchesBookFilters,
   matchesDesktopSearchRow,
   type BooksFilters,
-  type InboxFilter,
 } from './booksFiltersUtils'
 import { booksFacetsKey, useMyRecordsCount } from './useMyRecordsCount'
-import { useInboxSummary } from './useInboxCount'
 import { StatusSpine, type SpineState } from './StatusSpine'
-import { FormRail, MineChip, type ChipToggleState, type RailItem } from './FormRail'
+import { FormRail, MineChip, type RailItem } from './FormRail'
 import { bookHeaderText, railItemsFrom, spineCountsFrom, useServiceLabel } from './serviceLabels'
 import { BooksMobileList } from './BooksMobileList'
 import { RecordsList } from './RecordsList'
@@ -125,6 +123,21 @@ function RecordDrawer({
 }
 
 export function BooksPage(): React.JSX.Element {
+  const [params] = useSearchParams()
+  const location = useLocation()
+  if (params.has('inbox')) {
+    const inbox = params.get('inbox')
+    const scope =
+      inbox === 'received' ? 'incoming' : inbox === 'sent' ? 'outgoing' : inbox === 'archived' ? 'archived' : null
+    if (scope) return <Navigate to={`/ledger?tab=books&scope=${scope}`} replace />
+    const next = new URLSearchParams(params)
+    next.delete('inbox')
+    return <Navigate to={{ pathname: '/books', search: next.toString(), hash: location.hash }} replace />
+  }
+  return <BooksRegister />
+}
+
+function BooksRegister(): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const isAr = i18n.language.startsWith('ar')
   const { has } = useCapabilities()
@@ -150,14 +163,10 @@ export function BooksPage(): React.JSX.Element {
   const [fromParam] = useSearchParam('from')
   const [toParam] = useSearchParam('to')
   const [mineParam] = useSearchParam('mine')
-  const [inboxParam] = useSearchParam('inbox')
   const [openParam, setOpenParam] = useSearchParam('open')
   const status = (statusParam === 'draft' ? 'none' : statusParam) as BooksFilters['status']
-  // "Created by me" and the inbox filters are hidden for inmate reporters, so
-  // their params are ignored.
+  // "Created by me" is hidden for inmate reporters, so its param is ignored.
   const mine = mineParam === '1' && !isInmateReporter
-  const inbox: InboxFilter | undefined =
-    !isInmateReporter && (inboxParam === 'received' || inboxParam === 'sent' || inboxParam === 'archived') ? inboxParam : undefined
   const filters = useMemo<BooksFilters>(
     () => ({
       categoryIds: categoriesParam ? categoriesParam.split(',').filter(Boolean) : [],
@@ -170,9 +179,8 @@ export function BooksPage(): React.JSX.Element {
       q: searchParam,
       drafts: draftsParam === '1',
       mine,
-      inbox,
     }),
-    [categoriesParam, directionParam, fromParam, toParam, status, serviceParam, searchParam, draftsParam, mine, inbox],
+    [categoriesParam, directionParam, fromParam, toParam, status, serviceParam, searchParam, draftsParam, mine],
   )
   const setFilters = (next: BooksFilters | ((prev: BooksFilters) => BooksFilters)): void => {
     const value = typeof next === 'function' ? next(filters) : next
@@ -190,7 +198,6 @@ export function BooksPage(): React.JSX.Element {
     update('from', value.fromDate, '')
     update('to', value.toDate, '')
     update('mine', value.mine ? '1' : '', '')
-    update('inbox', value.inbox ?? '', '')
     setSearchParams(params, { replace: true })
   }
   const clearAllFilters = (): void => setFilters({ ...DEFAULT_BOOKS_FILTERS })
@@ -278,20 +285,16 @@ export function BooksPage(): React.JSX.Element {
   // Server-side scopes shared by the facets, list and search fetches.
   const serverScope = {
     ...(mine ? { created_by_me: true } : {}),
-    ...(inbox ? { inbox } : {}),
   }
   // Rail + spine numbers over EVERY record — the 500-row page window is why
   // these used to disagree with the page's own total.
-  // Page facets follow the "Created by me" and inbox toggles; the badge count
-  // below is a separate always-on query (same key as this one while only
-  // "Created by me" is on).
+  // Page facets follow "Created by me"; the badge count below shares this
+  // query while that toggle is on.
   const facetsQuery = useQuery({
-    queryKey: inbox ? [...booksFacetsKey(mine), inbox] : booksFacetsKey(mine),
+    queryKey: booksFacetsKey(mine),
     queryFn: () => api.getBookFacets(serverScope),
   })
   const { count: myRecordsCount } = useMyRecordsCount({ enabled: !isInmateReporter })
-  const { data: inboxSummary } = useInboxSummary(!isInmateReporter)
-  const inboxUnread = inboxSummary?.unread ?? 0
 
   // ── Data: one server-scoped fetch; both branches filter client-side ────────
   // `serviceParam` (`?service=`) is the single source for the service scope: the
@@ -302,7 +305,7 @@ export function BooksPage(): React.JSX.Element {
   // Application Form: 276 true vs 230 visible).
   const railScope = serviceParam
   const listQuery = useQuery({
-    queryKey: ['books', 'all', railScope, mine, inbox],
+    queryKey: ['books', 'all', railScope, mine],
     queryFn: () =>
       api.listBooks({
         limit: 500,
@@ -330,7 +333,7 @@ export function BooksPage(): React.JSX.Element {
   }, [search])
   const serverSearchActive = debouncedSearch.trim().length >= 2
   const searchQuery = useQuery({
-    queryKey: ['books', 'search', debouncedSearch, mine, inbox],
+    queryKey: ['books', 'search', debouncedSearch, mine],
     queryFn: () => api.listBooks({ q: debouncedSearch, limit: 500, ...serverScope }),
     enabled: serverSearchActive,
     staleTime: 30_000,
@@ -676,37 +679,6 @@ export function BooksPage(): React.JSX.Element {
         count: myRecordsCount,
         onToggle: () => setFilters({ ...filters, mine: !filters.mine }),
       }
-  const toggleInbox = (value: InboxFilter): void =>
-    setFilters({ ...filters, inbox: filters.inbox === value ? undefined : value })
-  const inboxToggles: ChipToggleState[] | undefined = isInmateReporter
-    ? undefined
-    : [
-        {
-          label: t('books.inbox.sentToMe'),
-          icon: FileInput,
-          testId: 'inbox-received-filter',
-          pressed: inbox === 'received',
-          // Unread only: a badge for "nothing new" would be noise.
-          count: inboxUnread > 0 ? inboxUnread : null,
-          onToggle: () => toggleInbox('received'),
-        },
-        {
-          label: t('books.inbox.sentByMe'),
-          icon: Send,
-          testId: 'inbox-sent-filter',
-          pressed: inbox === 'sent',
-          count: null,
-          onToggle: () => toggleInbox('sent'),
-        },
-        {
-          label: t('books.inbox.archived'),
-          icon: Archive,
-          testId: 'inbox-archived-filter',
-          pressed: inbox === 'archived',
-          count: inboxSummary?.archived ?? null,
-          onToggle: () => toggleInbox('archived'),
-        },
-      ]
 
   const listEmpty = hasFilters ? (
     <EmptyState
@@ -817,7 +789,6 @@ export function BooksPage(): React.JSX.Element {
                     onChange={setRailService}
                     tier={tier === 'icons' ? 'icons' : 'full'}
                     mine={mineToggle}
-                    inbox={inboxToggles}
                   />
                 )}
               </div>
@@ -843,9 +814,6 @@ export function BooksPage(): React.JSX.Element {
                 {mineToggle && (
                   <span className="contents @5xl/page:hidden">
                     <MineChip {...mineToggle} variant="chip" />
-                    {inboxToggles?.map((toggle) => (
-                      <MineChip key={toggle.label} {...toggle} variant="chip" />
-                    ))}
                   </span>
                 )}
                 {/* Drafts filter pill — shows only when there are drafts */}

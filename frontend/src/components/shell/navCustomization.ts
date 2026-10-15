@@ -74,7 +74,7 @@ export const SIGNAL_ENTRIES: readonly DockEntry[] = [
     kind: 'signal',
     labelKey: 'books.inbox.sentToMe',
     Icon: FileInput,
-    to: '/books?inbox=received',
+    to: '/ledger?tab=books&scope=incoming',
     cap: 'books.view',
     signal: 'inbox',
   },

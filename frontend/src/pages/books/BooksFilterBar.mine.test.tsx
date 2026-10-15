@@ -23,7 +23,6 @@ vi.mock('react-i18next', () => ({
         'books.filters.clear': 'مسح المرشحات',
         'books.filters.drafts': 'المسودات',
         'books.approval.stateAwaitingScan': 'بانتظار النسخة الممسوحة',
-        'books.inbox.archived': 'المؤرشفة',
       }
       return ar[k] ?? k
     },
@@ -45,7 +44,6 @@ vi.mock('@/lib/authContext', () => ({
 vi.mock('./useMyRecordsCount', () => ({
   useMyRecordsCount: () => ({ count: state.count }),
 }))
-vi.mock('./useInboxCount', () => ({ useInboxSummary: () => ({ data: { unread: 0, archived: 3 } }) }))
 
 function setup(filters: Partial<BooksFilters> = {}) {
   const onChange = vi.fn()
@@ -94,44 +92,10 @@ describe('BooksFilterBar — Created by me', () => {
     setup()
     expect(screen.queryByRole('button', { name: /من إنشائي/ })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /بانتظار النسخة الممسوحة/ })).not.toBeInTheDocument()
-    expect(screen.queryByTestId('inbox-archived-filter')).not.toBeInTheDocument()
   })
 
   it('Clear appears when only mine is on and resets it', async () => {
     const { onChange } = setup({ mine: true })
-    await userEvent.click(screen.getByRole('button', { name: /مسح المرشحات/ }))
-    expect(onChange).toHaveBeenLastCalledWith(DEFAULT_BOOKS_FILTERS)
-  })
-})
-
-describe('BooksFilterBar — Sent to me / Sent by me', () => {
-  it('switches between the two inbox scopes, clears on the active one, and counts for Clear', async () => {
-    const { onChange } = setup({ inbox: 'received' })
-    expect(screen.getByTestId('inbox-received-filter')).toHaveAttribute('aria-pressed', 'true')
-    await userEvent.click(screen.getByTestId('inbox-sent-filter'))
-    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ inbox: 'sent' }))
-    await userEvent.click(screen.getByTestId('inbox-received-filter'))
-    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ inbox: undefined }))
-    await userEvent.click(screen.getByRole('button', { name: /مسح المرشحات/ }))
-    expect(onChange).toHaveBeenLastCalledWith(DEFAULT_BOOKS_FILTERS)
-  })
-
-  it('shows the Archived count and selects that inbox scope', async () => {
-    const { onChange } = setup()
-    const chip = screen.getByTestId('inbox-archived-filter')
-    expect(chip).toHaveTextContent('المؤرشفة')
-    expect(chip).toHaveTextContent('3')
-    expect(chip).toHaveAttribute('aria-pressed', 'false')
-    await userEvent.click(chip)
-    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ inbox: 'archived' }))
-  })
-
-  it('clears the active Archived scope and includes it in Clear', async () => {
-    const { onChange } = setup({ inbox: 'archived' })
-    const chip = screen.getByTestId('inbox-archived-filter')
-    expect(chip).toHaveAttribute('aria-pressed', 'true')
-    await userEvent.click(chip)
-    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ inbox: undefined }))
     await userEvent.click(screen.getByRole('button', { name: /مسح المرشحات/ }))
     expect(onChange).toHaveBeenLastCalledWith(DEFAULT_BOOKS_FILTERS)
   })

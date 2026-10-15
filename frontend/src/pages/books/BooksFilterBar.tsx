@@ -6,7 +6,7 @@
  */
 
 import { useEffect, useEffectEvent, useRef, useState } from 'react'
-import { Archive, ChevronDown, FileInput, Send, UserRound, X, type LucideIcon } from 'lucide-react'
+import { ChevronDown, UserRound, X } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 
 import type { BookCategoryRead, ServiceFacetRead } from '@/lib/api'
@@ -18,9 +18,8 @@ import { serviceArtwork, serviceGlyph, useServiceLabel } from './serviceLabels'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { hasServiceRecordsCap } from '@/lib/dashboardLayout'
 import { CategoryChecklist, DateRangeFields, DirectionChips } from './BooksFilterFields'
-import { DEFAULT_BOOKS_FILTERS, hasActiveFilters, type BooksFilters, type InboxFilter } from './booksFiltersUtils'
+import { DEFAULT_BOOKS_FILTERS, hasActiveFilters, type BooksFilters } from './booksFiltersUtils'
 import { useMyRecordsCount } from './useMyRecordsCount'
-import { useInboxSummary } from './useInboxCount'
 import { useAuth } from '@/lib/authContext'
 
 interface BooksFilterBarProps {
@@ -42,8 +41,6 @@ export function BooksFilterBar({
   const { user } = useAuth()
   const isInmateReporter = user?.role === 'inmate_reporter'
   const { count: myCount } = useMyRecordsCount({ enabled: !isInmateReporter })
-  const { data: inboxSummary } = useInboxSummary(!isInmateReporter)
-  const inboxUnread = inboxSummary?.unread ?? 0
   const visibleServices = services.filter((service) => hasServiceRecordsCap(service.id, has))
   const selectedServiceAllowed =
     filters.serviceId === 'all' || hasServiceRecordsCap(filters.serviceId, has)
@@ -307,40 +304,6 @@ export function BooksFilterBar({
           ) : null}
         </button>
       )}
-      {/* Direct-send scopes follow the same visibility rule as "Created by me". */}
-      {!isInmateReporter &&
-        (
-          [
-            ['received', FileInput, t('books.inbox.sentToMe'), inboxUnread],
-            ['sent', Send, t('books.inbox.sentByMe'), 0],
-            ['archived', Archive, t('books.inbox.archived'), inboxSummary?.archived ?? 0],
-          ] satisfies [InboxFilter, LucideIcon, string, number][]
-        ).map(([value, Icon, label, count]) => (
-          <button
-            key={value}
-            type="button"
-            data-testid={`inbox-${value}-filter`}
-            aria-pressed={filters.inbox === value}
-            onClick={() => onChange({ ...filters, inbox: filters.inbox === value ? undefined : value })}
-            className={cn(
-              'inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1 text-[0.78em] transition-colors motion-reduce:transition-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 focus-visible:ring-offset-background max-md:min-h-[36px] max-md:py-1.5',
-              filters.inbox === value
-                ? 'bg-primary-soft font-semibold text-primary'
-                : 'bg-surface-tinted text-muted-foreground hover:bg-border hover:text-foreground',
-            )}
-          >
-            <Icon className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
-            {label}
-            {count > 0 || value === 'archived' ? (
-              <bdi
-                dir="ltr"
-                className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-surface px-1 text-[0.85em] font-bold tabular-nums"
-              >
-                {count}
-              </bdi>
-            ) : null}
-          </button>
-        ))}
       <div className="hidden h-5 w-px shrink-0 bg-hairline md:block" />
 
       {/* Drafts pill */}

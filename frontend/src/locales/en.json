@@ -2150,7 +2150,6 @@
     },
     "inbox": {
       "sentToMe": "Sent to me",
-      "sentByMe": "Sent by me",
       "done": "Mark as done",
       "undoDone": "Undo done",
       "doneState": "Done",

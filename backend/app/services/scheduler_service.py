@@ -500,7 +500,7 @@ _KIND_META: dict[str, str] = {
     "scan": "/scan-inbox",
     "email": "/ledger",
     "scanback": "/scan-back",
-    "inbox": "/books?inbox=received",
+    "inbox": "/ledger?tab=books&scope=incoming",
     "monthly_review": notification_service.MONTHLY_TASKS_URL,
     "monthly_approval": notification_service.MONTHLY_TASKS_URL,
 }

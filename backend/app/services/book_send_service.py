@@ -51,7 +51,7 @@ from app.services import (
 
 log = logging.getLogger(__name__)
 
-INBOX_SECTION_URL = "/books?inbox=received"
+INBOX_SECTION_URL = "/ledger?tab=books&scope=incoming"
 
 
 def _now() -> datetime:

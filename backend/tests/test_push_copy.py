@@ -148,7 +148,7 @@ def test_inbox_confidential_single_is_neutral_even_with_details_present():
         requester="Ali",
         confidential=True,
     )
-    messages, url = ss._build_push("inbox", [it], "/books?inbox=received")
+    messages, url = ss._build_push("inbox", [it], "/ledger?tab=books&scope=incoming")
     assert messages == {
         "en": (APP, "New record sent to you"),
         "ar": (APP, "لديك معاملة جديدة"),
@@ -161,7 +161,7 @@ def test_inbox_general_single_includes_record_and_sender():
     item = ns.inbox_item(book, BookRecipient(id=12), "Ali")
     assert (item.kind, item.ref, item.label) == ("inbox", "send:12", "HR-0409")
     assert not item.confidential
-    messages, url = ss._build_push("inbox", [item], "/books?inbox=received")
+    messages, url = ss._build_push("inbox", [item], "/ledger?tab=books&scope=incoming")
     assert messages["en"][1] == "New record sent to you · HR-0409 — Annual leave\nFrom Ali"
     assert messages["ar"][1] == "لديك معاملة جديدة · HR-0409 — Annual leave\nمن Ali"
     assert url == "/books/5"
@@ -179,7 +179,7 @@ def test_inbox_item_redacts_non_general_record(level):
 
 def test_inbox_multiple_summarizes_without_any_record_details():
     section = ss._KIND_META["inbox"]
-    assert section == "/books?inbox=received"
+    assert section == "/ledger?tab=books&scope=incoming"
     items = [
         _item("inbox", subject="General memo", requester="Ali"),
         _item("inbox", ref="send:2", subject="Private memo", confidential=True),

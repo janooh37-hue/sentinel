@@ -1,7 +1,5 @@
 import type { BookRead } from '@/lib/api'
 
-export type InboxFilter = 'received' | 'sent' | 'archived'
-
 export interface BooksFilters {
   categoryIds: string[]
   direction: 'all' | 'incoming' | 'outgoing'
@@ -13,8 +11,6 @@ export interface BooksFilters {
   serviceId: string
   /** "Created by me": `created_by_user_id = me`, server-side (`created_by_me`). */
   mine: boolean
-  /** Direct send, server-side (`inbox`): received, sent or archived records. */
-  inbox?: InboxFilter
 }
 
 export const DEFAULT_BOOKS_FILTERS: BooksFilters = {
@@ -47,7 +43,6 @@ export function hasActiveFilters(
     filters.fromDate !== '' ||
     filters.toDate !== '' ||
     filters.mine ||
-    !!filters.inbox ||
     q.trim() !== '' ||
     drafts
   )
