@@ -527,7 +527,7 @@ def test_odometer_fields_keep_unknown_readings_blank() -> None:
     assert fields["rows"][0]["km_driven"] == "—"
     assert fields["rows"][0]["vehicle_type"] == "Toyota"
     assert fields["total_km_driven"] == "0"
-    assert fields["month_label"] == "09/2026"
+    assert fields["month_label"] == "سبتمبر 2026"
 
 
 def test_mileage_template_is_landscape_with_repeating_rtl_table() -> None:

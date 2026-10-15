@@ -26,6 +26,8 @@ NS = {
     "wp": "http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing",
     "mc": "http://schemas.openxmlformats.org/markup-compatibility/2006",
     "v": "urn:schemas-microsoft-com:vml",
+    "wpg": "http://schemas.microsoft.com/office/word/2010/wordprocessingGroup",
+    "a": "http://schemas.openxmlformats.org/drawingml/2006/main",
 }
 WIDTHS = [480, 1320, 2220, 1320, 1320, 1260, 3000, 1440, 1440]
 
@@ -157,11 +159,7 @@ def reference_block() -> etree._Element:
                     text.text = text.text.replace(
                         "{{ date }}", "\u200e{{ date }}\u200e م  الموافق  {{ hijri_date }}"
                     )
-                    month = copy.deepcopy(p)
-                    month.xpath(".//w:t", namespaces=NS)[
-                        0
-                    ].text = "الشهر: \u200e{{ month_label }}\u200e"
-                    p.addnext(month)
+                    # The month is shown large under the title, not here.
         ref = next(p for p in paragraphs if "{{ ref }}" in "".join(p.itertext()))
         barcode = next(
             p
@@ -190,6 +188,34 @@ def reference_block() -> etree._Element:
     return block
 
 
+def enlarge_logo(header: etree._Element, scale: float = 1.3) -> None:
+    """Scale the inline GSSG logo and lift it by collapsing the blank line above it."""
+    logo = next(p for p in header.findall("w:p", NS) if p.find(".//wp:inline", NS) is not None)
+    for size in logo.xpath(".//wp:inline/wp:extent | .//wpg:grpSpPr/a:xfrm/a:ext", namespaces=NS):
+        for axis in ("cx", "cy"):
+            size.set(axis, str(round(int(size.get(axis)) * scale)))
+    for group in logo.xpath(".//v:group", namespaces=NS):
+        group.set(
+            "style",
+            ";".join(
+                f"{key}:{float(value.removesuffix('pt')) * scale:.1f}pt"
+                if key in ("width", "height")
+                else f"{key}:{value}"
+                for item in group.get("style", "").split(";")
+                if ":" in item
+                for key, value in [item.split(":", 1)]
+            ),
+        )
+    spacer = logo.getprevious()
+    props = spacer.find("w:pPr", NS)
+    if props is None:
+        props = element("pPr")
+        spacer.insert(0, props)
+    for old in props.findall("w:spacing", NS):
+        props.remove(old)
+    props.insert(0, element("spacing", before="0", after="0", line="100", lineRule="exact"))
+
+
 def build(letterhead: Path) -> Path:
     with ZipFile(letterhead) as archive:
         entries = {item.filename: archive.read(item.filename) for item in archive.infolist()}
@@ -203,7 +229,11 @@ def build(letterhead: Path) -> Path:
     # Side margins stay as the letterhead's so logo and footer keep their place.
     section.find("w:pgMar", NS).set(f"{{{NS['w']}}}top", "2400")
     title = paragraph("سجل عداد المسافات والصيانة الشهري للمركبات", bold=True, size=28)
+    month = paragraph("شهر {{ month_label }}", bold=True, size=32)
+    # Breathing room between the month heading and the table.
+    month.find("w:pPr/w:spacing", NS).set(f"{{{NS['w']}}}after", "280")
     body.insert(0, title)
+    body.insert(1, month)
     table = element("tbl")
     props = element("tblPr")
     props.extend(
@@ -278,9 +308,10 @@ def build(letterhead: Path) -> Path:
     # Only the actual column header repeats, not the totals row.
     total_properties = table[-1].find("w:trPr", NS)
     total_properties.remove(total_properties.find("w:tblHeader", NS))
-    body.insert(1, table)
-    body.insert(2, paragraph(""))
+    body.insert(2, table)
+    body.insert(3, paragraph(""))
     header = etree.fromstring(entries["word/header2.xml"])
+    enlarge_logo(header)
     # Anchor in the existing first paragraph: a new paragraph would push the inline logo down.
     run = element("r")
     run.append(reference_block())

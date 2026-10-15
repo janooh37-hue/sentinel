@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from datetime import date
 from typing import Any
 
+from app.core.constants import ARABIC_MONTHS
 from app.core.hijri import hijri_label
 from app.schemas.vehicle import OdometerRowRead
 
@@ -123,7 +124,7 @@ def odometer_form_fields(
     return {
         "subject": f"سجل عداد المسافات والصيانة الشهري للمركبات — {month_number:02d}/{year}",
         "date": today.strftime("%d-%m-%Y"),
-        "month_label": f"{month_number:02d}/{year}",
+        "month_label": f"{ARABIC_MONTHS[month_number - 1]} {year}",
         "hijri_date": hijri_label(today),
         "rows": [
             {
