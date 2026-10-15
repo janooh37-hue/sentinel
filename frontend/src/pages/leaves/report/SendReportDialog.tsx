@@ -14,7 +14,6 @@ import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 
 import { api, apiErrorMessage } from '@/lib/api'
-import { pickEmployeeName } from '@/lib/employeeName'
 import { DialogContent, DialogDescription, DialogHeader, DialogRoot, DialogTitle } from '@/components/ui/dialog'
 
 import { FIELD_LABEL, NATIVE_SELECT } from './controls'
@@ -43,7 +42,7 @@ function Body({
   buildBody,
   close,
 }: Omit<SendReportDialogProps, 'open' | 'onOpenChange'> & { close: () => void }): React.JSX.Element {
-  const { t, i18n } = useTranslation()
+  const { t } = useTranslation()
   const navigate = useNavigate()
   const qc = useQueryClient()
   const [picked, setPicked] = useState<string | null>(null)
@@ -139,9 +138,7 @@ function Body({
             >
               <option value="">{t('books.approval.selectApprover')}</option>
               {(approvers.data ?? []).map((a) => (
-                <option key={a.id} value={a.id}>
-                  {pickEmployeeName({ name_en: a.name ?? '', name_ar: a.name_ar }, i18n.language)}
-                </option>
+                <option key={a.id} value={a.id}>{a.name}</option>
               ))}
             </select>
           )}
