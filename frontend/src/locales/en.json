@@ -2778,6 +2778,7 @@
     },
     "booksDesk": {
       "incoming": "Incoming",
+      "done": "Done",
       "outgoing": "Outgoing",
       "search": "Search reference or subject",
       "dossier": "Book details",
@@ -2807,13 +2808,15 @@
       "retry": "Try again",
       "empty": {
         "incoming": "No incoming books",
+        "done": "No books marked done",
         "outgoing": "No outgoing books",
         "archived": "No archived books"
       },
       "emptyHint": {
         "incoming": "Books sent to you will appear here. Check Outgoing for books you have sent.",
+        "done": "Mark an incoming book as done to move it here. Use Undo done to return it to Incoming.",
         "outgoing": "Open a record and use Send to route it to a colleague.",
-        "archived": "Use Archive on an incoming book to move it here. Use Unarchive to send it back to Incoming."
+        "archived": "Use Archive to move a received book here. Unarchive returns it to Incoming or Done."
       }
     },
     "subtitle": "Correspondence and communication log",

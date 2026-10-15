@@ -2110,7 +2110,7 @@ export const api = {
     limit?: number
     offset?: number
     created_by_me?: boolean
-    inbox?: 'received' | 'sent' | 'archived'
+    inbox?: 'received' | 'done' | 'sent' | 'archived'
   } = {}) => request<BookListResponse>('GET', `/books${qs({ ...params })}`),
   getBook: (id: number, versionId?: number, options: { markRead?: boolean } = {}) =>
     request<BookRead>('GET', `/books/${id}${qs({ version_id: versionId, mark_read: options.markRead })}`),
@@ -2195,7 +2195,7 @@ export const api = {
   /** GET /books/facets — per-service counts + per-service approval-state
    *  counts, over every record (not a page window). Backs the Records rail
    *  and the status spine. */
-  getBookFacets: (params: { created_by_me?: boolean; inbox?: 'received' | 'sent' | 'archived' } = {}) =>
+  getBookFacets: (params: { created_by_me?: boolean; inbox?: 'received' | 'done' | 'sent' | 'archived' } = {}) =>
     request<BookFacetsResponse>('GET', `/books/facets${qs({ ...params })}`),
 
   // --- books approval worklist (#31, revision-scoped) ---

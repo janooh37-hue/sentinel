@@ -3,7 +3,8 @@ import { Archive, ArchiveRestore, CheckCheck, Undo2 } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
-import { api, apiErrorMessage, type BookRead } from '@/lib/api'
+import { api, apiErrorMessage } from '@/lib/api'
+import type { BookInboxRead, BookRead } from '@/lib/api'
 
 export interface InboxAction {
   key: string
@@ -23,12 +24,16 @@ const methods = {
 }
 
 /** Recipient tools shared by the record strip and desktop/mobile menus. */
-export function useInboxActions(book: BookRead | null | undefined): InboxAction[] {
+export function useInboxActions(
+  book: BookRead | null | undefined,
+  onUpdated?: (id: number, inbox: BookInboxRead) => void,
+): InboxAction[] {
   const { t } = useTranslation()
   const qc = useQueryClient()
   const mutation = useMutation({
     mutationFn: ({ id, action }: { id: number; action: Action }) => methods[action](id),
-    onSuccess: (_inbox, { action }) => {
+    onSuccess: (inbox, { id, action }) => {
+      onUpdated?.(id, inbox)
       // Detail, lists, recipient rows and inbox summary all live under this key.
       void qc.invalidateQueries({ queryKey: ['books'] })
       void qc.invalidateQueries({ queryKey: ['notifications', 'counts'] })

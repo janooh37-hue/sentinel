@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { keepPreviousData, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, ChevronDown, Maximize2, Minimize2, Send } from 'lucide-react'
@@ -17,7 +17,7 @@ import { Input } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { api, apiErrorMessage } from '@/lib/api'
-import type { BookListResponse, BookRead } from '@/lib/api'
+import type { BookInboxRead, BookListResponse, BookRead } from '@/lib/api'
 import { pickEmployeeName } from '@/lib/employeeName'
 import { formatDmy } from '@/lib/formatDmy'
 import { useIsMobile } from '@/lib/useIsMobile'
@@ -30,9 +30,9 @@ import type { PaperKey } from '@/pages/books/recordPapers'
 
 const RecordPaperViewer = lazy(() => import('@/pages/books/RecordPaperViewer'))
 
-type Scope = 'incoming' | 'outgoing' | 'archived'
-const INBOX_BY_SCOPE: Record<Scope, 'received' | 'sent' | 'archived'> = {
-  incoming: 'received', outgoing: 'sent', archived: 'archived',
+type Scope = 'incoming' | 'done' | 'outgoing' | 'archived'
+const INBOX_BY_SCOPE: Record<Scope, 'received' | 'done' | 'sent' | 'archived'> = {
+  incoming: 'received', done: 'done', outgoing: 'sent', archived: 'archived',
 }
 const PAGE_SIZE = 50
 
@@ -50,10 +50,17 @@ export function BooksRoutingDesk(): React.JSX.Element {
   const qc = useQueryClient()
   const [params, setParams] = useSearchParams()
   const rawScope = params.get('scope')
-  const scope: Scope = rawScope === 'outgoing' || rawScope === 'archived' ? rawScope : 'incoming'
+  const scope: Scope = rawScope === 'done' || rawScope === 'outgoing' || rawScope === 'archived' ? rawScope : 'incoming'
   const [bookParam, setBookParam] = useSearchParam('book')
   const bookPage = useUrlOverlay('book')
   const readerPage = useUrlOverlay('view')
+  const readerQueueSelection = useRef<string | null | undefined>(undefined)
+  useEffect(() => {
+    if (readerPage.value === 'reader' || readerQueueSelection.current === undefined) return
+    // Back pops the URL from before queue processing; keep the advanced selection.
+    setBookParam(readerQueueSelection.current)
+    readerQueueSelection.current = undefined
+  }, [readerPage.value, setBookParam])
   const selectedId = /^\d+$/.test(bookParam) && Number(bookParam) > 0 ? Number(bookParam) : null
   const [search, setSearch] = useState('')
   const [query, setQuery] = useState('')
@@ -102,6 +109,37 @@ export function BooksRoutingDesk(): React.JSX.Element {
     if (isMobile) bookPage.open(String(id))
     else setBookParam(String(id))
   }
+  function updateInbox(id: number, inbox: BookInboxRead): void {
+    const staysInScope = (value: unknown): boolean => value === 'outgoing'
+      || (value === 'archived' ? !!inbox.archived_at : !inbox.archived_at && (value === 'done' ? !!inbox.done_at : !inbox.done_at))
+    const remaining = (list.data?.items ?? []).filter((row) => row.id !== id)
+    if (selectedId === id && !staysInScope(scope)) {
+      const index = list.data?.items.findIndex((row) => row.id === id) ?? 0
+      const next = remaining[index] ?? remaining[0]
+      const nextId = next ? String(next.id) : null
+      if (!isMobile && readerPage.value === 'reader') readerQueueSelection.current = nextId
+      if (nextId === null) {
+        setParams((previous) => {
+          const nextParams = new URLSearchParams(previous)
+          nextParams.delete('book')
+          nextParams.delete('view')
+          return nextParams
+        }, { replace: true })
+      } else setBookParam(nextId)
+    }
+    qc.setQueryData<BookRead>(['books', 'detail', id, null], (previous) => previous && ({ ...previous, my_inbox: inbox }))
+    for (const [key] of qc.getQueriesData<BookListResponse>({ queryKey: ['books', 'routing'] })) {
+      qc.setQueryData<BookListResponse>(key, (previous) => {
+        if (!previous) return previous
+        const included = previous.items.some((row) => row.id === id)
+        return {
+          ...previous,
+          items: staysInScope(key[2]) ? previous.items.map((row) => row.id === id ? { ...row, my_inbox: inbox } : row) : previous.items.filter((row) => row.id !== id),
+          total: included && !staysInScope(key[2]) ? previous.total - 1 : previous.total,
+        }
+      })
+    }
+  }
   const scopeLabel = (value: Scope): string => t(value === 'archived' ? 'books.inbox.archived' : `ledger.booksDesk.${value}`)
   const rows = list.data?.items ?? []
   const reader = !isMobile && readerPage.value === 'reader' && selectedId !== null
@@ -114,6 +152,7 @@ export function BooksRoutingDesk(): React.JSX.Element {
       reader={reader}
       isMobile={isMobile}
       onToggleReader={reader ? readerPage.close : () => readerPage.open('reader')}
+      onInboxUpdated={updateInbox}
     />
   ) : detail.isError
     ? <div role="alert" className="p-5 text-destructive"><p>{apiErrorMessage(detail.error)}</p><Button variant="outline" className="mt-3" onClick={() => void detail.refetch()}>{t('ledger.booksDesk.retry')}</Button></div>
@@ -123,7 +162,7 @@ export function BooksRoutingDesk(): React.JSX.Element {
     <section dir={i18n.dir()} className="flex min-h-0 flex-1 flex-col bg-surface" aria-label={t('ledger.tabs.books')}>
       <Tabs value={scope} onValueChange={selectScope} className={cn('shrink-0', (reader || mobileBook) && 'hidden')}>
         <TabsList className="gap-5 overflow-x-auto px-4">
-          {(['incoming', 'outgoing', 'archived'] as const).map((value) => (
+          {(['incoming', 'done', 'outgoing', 'archived'] as const).map((value) => (
             <TabsTrigger key={value} value={value}>
               {scopeLabel(value)}
               {value === 'incoming' && (summary.data?.unread ?? 0) > 0 && (
@@ -135,7 +174,7 @@ export function BooksRoutingDesk(): React.JSX.Element {
       </Tabs>
       <div className="flex min-h-0 flex-1">
         {/* Keep the list mounted so reader/mobile Back preserves its scroll. */}
-        <div className={cn('min-h-0 w-full shrink-0 flex-col md:w-[22rem] md:max-w-[44%] md:border-e md:border-hairline', reader || mobileBook ? 'hidden' : 'flex')}>
+        <div hidden={reader || mobileBook} className={cn('min-h-0 w-full shrink-0 flex-col md:w-[22rem] md:max-w-[44%] md:border-e md:border-hairline', reader || mobileBook ? 'hidden' : 'flex')}>
           <div className="shrink-0 border-b border-hairline p-3">
             <label htmlFor="routing-search" className="sr-only">{t('ledger.booksDesk.search')}</label>
             <Input id="routing-search" type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder={t('ledger.booksDesk.search')} />
@@ -186,12 +225,13 @@ export function BooksRoutingDesk(): React.JSX.Element {
   )
 }
 
-function BookDossier({ book, loading, reader, isMobile, onToggleReader }: {
+function BookDossier({ book, loading, reader, isMobile, onToggleReader, onInboxUpdated }: {
   book: BookRead
   loading: boolean
   reader: boolean
   isMobile: boolean
   onToggleReader: () => void
+  onInboxUpdated: (id: number, inbox: BookInboxRead) => void
 }): React.JSX.Element {
   const { t, i18n } = useTranslation()
   const [sendOpen, setSendOpen] = useState(false)
@@ -200,7 +240,7 @@ function BookDossier({ book, loading, reader, isMobile, onToggleReader }: {
   const papers = useMemo(() => papersOf(book, { inmateReporter: false }), [book])
   const selectedPaper = pickedPaper && papers.some((paper) => paperKey(paper) === pickedPaper)
     ? pickedPaper : defaultPaperKey(book, papers)
-  const inboxActions = useInboxActions(loading ? null : book)
+  const inboxActions = useInboxActions(loading ? null : book, onInboxUpdated)
   const reply = useReplyActions(loading ? null : book)
   const inbox = book.my_inbox
   const notApplicable = t('ledger.booksDesk.notApplicable')

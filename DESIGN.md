@@ -65,6 +65,7 @@ Other pages will be appended under §4 as they're documented.
    4.10 Monthly inmate report workspace
 5. Animation appendix
 6. Not yet documented
+7. Ledger Books workspace
 ```
 
 ---
@@ -2500,3 +2501,26 @@ will trip over them.
   intentional (per source comment) until a dedicated backend summary
   endpoint lands. Worth flagging in the variant matrix as "placeholder"
   rather than "live data".
+
+## 7. Ledger Books workspace
+
+**Source:** `pages/ledger/BooksRoutingDesk.tsx`.
+
+- Incoming / Done / Outgoing / Archived are personal routing scopes. Done means
+  the caller marked their received book done; Archived takes precedence over
+  Incoming and Done. No Done count is shown.
+- Plain ruled rows open the document in place. The compact header keeps the
+  reference, subject, sender, purpose, sent date, sender note and actions visible.
+  Details is collapsed initially and contains facts, recipients, thread and the
+  secondary Open in Records link for editing and revision tools.
+- The document reuses Records' lazy `RecordPaperViewer` and its `papersOf` /
+  `defaultPaperKey` resolution, including signed copies, imports and scans.
+- Desktop Expand pushes `view=reader`. The list stays mounted but hidden;
+  Collapse and browser Back restore it without losing selection, search or scroll.
+  A directly opened reader link collapses with URL replacement. The reader's
+  document and facts/actions side column mirror with the page direction.
+- Mobile selection pushes a book view with Back; desktop Expand is not shown.
+- List queries keep a 30-second fresh cache. Selection patches read state in that
+  cache rather than refetching the list; queue actions remove the completed row
+  locally and select the next available row before the invalidation fetch ends.
+

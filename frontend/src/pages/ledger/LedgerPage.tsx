@@ -46,6 +46,7 @@ export function LedgerPage({ onNavigate }: LedgerPageProps = {}): React.JSX.Elem
         next.delete('tab')
         next.delete('scope')
         next.delete('book')
+        next.delete('view')
       }
       return next
     }, { replace: true })

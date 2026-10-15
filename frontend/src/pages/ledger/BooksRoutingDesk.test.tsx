@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event'
 import { MemoryRouter, useLocation, useNavigate } from 'react-router-dom'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { BookRead } from '@/lib/api'
+import type * as ApiModule from '@/lib/api'
 
 vi.mock('@/lib/authContext', () => ({ useAuth: () => ({ user: { id: 1, role: 'employee' } }) }))
 vi.mock('@/lib/useCapabilities', () => ({ useCapabilities: () => ({ has: () => false }) }))
@@ -11,6 +12,10 @@ vi.mock('@/lib/useIsMobile', () => ({ useIsMobile: () => false }))
 vi.mock('@/pages/books/RecordPaperViewer', () => ({
   default: ({ papers }: { papers: { url: string }[] }) => <div role="document" data-url={papers[0]?.url} />,
 }))
+vi.mock('@/lib/api', async (original) => {
+  const actual = await original<typeof ApiModule>()
+  return { ...actual, api: { ...actual.api, markBookInboxDone: vi.fn(), undoBookInboxDone: vi.fn() } }
+})
 
 import { api } from '@/lib/api'
 import { BooksRoutingDesk } from './BooksRoutingDesk'
@@ -48,7 +53,7 @@ afterEach(() => { cleanup(); vi.restoreAllMocks() })
 
 describe('Books routing desk', () => {
   it.each([
-    ['incoming', 'received'], ['outgoing', 'sent'], ['archived', 'archived'],
+    ['incoming', 'received'], ['done', 'done'], ['outgoing', 'sent'], ['archived', 'archived'],
   ])('maps the %s URL scope to inbox=%s', async (scope, inbox) => {
     mount(`/ledger?tab=books&scope=${scope}`)
     await waitFor(() => expect(api.listBooks).toHaveBeenCalledWith(expect.objectContaining({ inbox })))
@@ -106,5 +111,42 @@ describe('Books routing desk', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Browser Back' }))
     expect(screen.getByLabelText('URL').textContent).not.toContain('view=reader')
     expect(screen.getByRole('searchbox')).toHaveValue('Staff')
+  })
+
+  it.each([false, true])('moves done out of Incoming and advances selection before refresh completes (reader=%s)', async (reader) => {
+    const nextBook = { ...BOOK, id: 8, ref_number: 'GS-8', subject: 'Next instruction' }
+    vi.mocked(api.listBooks).mockResolvedValueOnce({ items: [BOOK, nextBook], total: 2, limit: 50, offset: 0 })
+    // Keep the invalidation fetch pending to prove the queue updates locally.
+    vi.mocked(api.listBooks).mockImplementation(() => new Promise(() => {}))
+    vi.spyOn(api, 'getBook').mockImplementation(async (id) => id === BOOK.id ? BOOK : nextBook)
+    vi.mocked(api.markBookInboxDone).mockResolvedValue({ ...BOOK.my_inbox!, done_at: '2026-10-15T10:00:00Z', read_at: '2026-10-15T09:00:00Z' })
+    mount()
+    await userEvent.click(await screen.findByRole('button', { name: /GS-7/ }))
+    await screen.findByRole('button', { name: 'Mark as done' })
+    if (reader) await userEvent.click(screen.getByRole('button', { name: 'Expand' }))
+    await userEvent.click(await screen.findByRole('button', { name: 'Mark as done' }))
+    await waitFor(() => expect(api.markBookInboxDone).toHaveBeenCalledWith(7))
+    await waitFor(() => expect(screen.getByRole('heading', { name: 'Next instruction' })).toBeInTheDocument())
+    if (reader) await userEvent.click(screen.getByRole('button', { name: 'Collapse' }))
+    expect(screen.queryByRole('button', { name: /GS-7/ })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /GS-8/ })).toHaveAttribute('aria-current', 'true')
+    expect(screen.getByLabelText('URL').textContent).toContain('book=8')
+  })
+
+  it('undoes done in Done and returns the book to Incoming', async () => {
+    let done = true
+    vi.mocked(api.listBooks).mockImplementation(async ({ inbox } = {}) => {
+      const items = inbox === 'done' ? (done ? [{ ...BOOK, my_inbox: { ...BOOK.my_inbox!, done_at: '2026-10-15T10:00:00Z' } }] : []) : done ? [] : [BOOK]
+      return { items, total: items.length, limit: 50, offset: 0 }
+    })
+    vi.spyOn(api, 'getBook').mockImplementation(async () => ({ ...BOOK, my_inbox: { ...BOOK.my_inbox!, done_at: done ? '2026-10-15T10:00:00Z' : null } }))
+    vi.mocked(api.undoBookInboxDone).mockImplementation(async () => { done = false; return BOOK.my_inbox! })
+    mount('/ledger?tab=books&scope=done')
+    await userEvent.click(await screen.findByRole('button', { name: /GS-7/ }))
+    await userEvent.click(await screen.findByRole('button', { name: 'Undo done' }))
+    await waitFor(() => expect(api.undoBookInboxDone).toHaveBeenCalledWith(7))
+    await waitFor(() => expect(screen.queryByRole('button', { name: /GS-7/ })).not.toBeInTheDocument())
+    await userEvent.click(screen.getByRole('tab', { name: 'Incoming' }))
+    expect(await screen.findByRole('button', { name: /GS-7/ })).toBeInTheDocument()
   })
 })
