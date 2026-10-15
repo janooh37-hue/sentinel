@@ -313,6 +313,10 @@ export type VehicleAccidentCreate = components['schemas']['VehicleAccidentCreate
 export type VehicleAccidentRead = components['schemas']['VehicleAccidentRead']
 export type VehicleMaintenanceCreate = components['schemas']['VehicleMaintenanceCreate']
 export type VehicleMaintenanceRead = components['schemas']['VehicleMaintenanceRead']
+export type OdometerMonthRead = components['schemas']['OdometerMonthRead']
+export type OdometerRowRead = components['schemas']['OdometerRowRead']
+export type OdometerUpsert = components['schemas']['OdometerUpsert']
+export type OdometerFormRequest = components['schemas']['OdometerFormRequest']
 export type VehiclesSummary = components['schemas']['VehiclesSummary']
 export type VehicleProfileScan = components['schemas']['VehicleProfileScan']
 export type VehicleImportChange = components['schemas']['VehicleImportChange']
@@ -1740,8 +1744,14 @@ export const api = {
       'POST',
       `/vehicles/${vehicleId}/accidents/${accidentId}/letter`,
     ),
-  listVehicleMaintenance: () =>
-    request<VehicleMaintenanceRead[]>('GET', '/vehicles/maintenance'),
+  getVehicleOdometer: (month: string) =>
+    request<OdometerMonthRead>('GET', `/vehicles/odometer${qs({ month })}`),
+  saveVehicleOdometer: (vehicleId: number, month: string, body: OdometerUpsert) =>
+    request<OdometerRowRead>('PUT', `/vehicles/${vehicleId}/odometer/${month}`, body),
+  generateOdometerForm: (body: OdometerFormRequest) =>
+    request<LetterResult>('POST', '/vehicles/odometer/form', body),
+  listVehicleMaintenance: (month?: string) =>
+    request<VehicleMaintenanceRead[]>('GET', `/vehicles/maintenance${qs({ month })}`),
   createVehicleMaintenance: (body: VehicleMaintenanceCreate) =>
     request<VehicleMaintenanceRead>('POST', '/vehicles/maintenance', body),
   deleteVehicleMaintenance: (vehicleId: number, maintenanceId: number) =>

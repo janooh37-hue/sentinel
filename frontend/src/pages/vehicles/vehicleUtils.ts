@@ -399,10 +399,11 @@ export const VEHICLE_QUERY_KEYS = {
   sites: ['vehicle-sites'] as const,
   fines: ['vehicle-fines'] as const,
   accidents: ['vehicle-accidents'] as const,
-  maintenance: ['vehicle-maintenance'] as const,
+  maintenance: (month?: string) => month ? ['vehicle-maintenance', month] as const : ['vehicle-maintenance'] as const,
+  odometer: (month?: string) => month ? ['vehicle-odometer', month] as const : ['vehicle-odometer'] as const,
 }
 
-export type VehicleRegister = 'fines' | 'accidents' | 'maintenance' | 'sites'
+export type VehicleRegister = 'fines' | 'accidents' | 'maintenance' | 'sites' | 'odometer'
 
 /**
  * The invalidation fan-out every vehicle mutation performs: the hub summary,
@@ -420,7 +421,11 @@ export function invalidateVehicleQueries(
     void queryClient.invalidateQueries({ queryKey: VEHICLE_QUERY_KEYS.detail(options.vehicleId) })
   }
   for (const register of options.registers ?? []) {
-    void queryClient.invalidateQueries({ queryKey: VEHICLE_QUERY_KEYS[register] })
+    const key = VEHICLE_QUERY_KEYS[register]
+    void queryClient.invalidateQueries({ queryKey: typeof key === 'function' ? key() : key })
+  }
+  if (options.registers?.includes('maintenance')) {
+    void queryClient.invalidateQueries({ queryKey: VEHICLE_QUERY_KEYS.odometer() })
   }
 }
 
@@ -428,6 +433,9 @@ export function invalidateVehicleQueries(
  *  falls through to the API's own message. */
 const ERROR_MESSAGE_KEYS: Record<string, string> = {
   SITE_HAS_VEHICLES: 'vehicles.siteHasVehicles',
+  ODOMETER_CLOSING_BELOW_OPENING: 'vehicles.odometerClosingBelowOpening',
+  ODOMETER_CLOSING_ABOVE_NEXT: 'vehicles.odometerClosingAboveNext',
+  ODOMETER_NO_VEHICLES: 'vehicles.selectAtLeastOneVehicle',
   VEHICLE_FILE_IN_USE: 'vehicles.vehicleFileInUse',
   VEHICLE_FILE_KIND_MISMATCH: 'vehicles.photoLibrary.errors.invalid',
   VEHICLE_PHOTO_INVALID: 'vehicles.photoLibrary.errors.invalid',

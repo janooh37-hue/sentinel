@@ -1,40 +1,8 @@
-/**
- * Maintenance register — `/vehicles/maintenance`.
- *
- * The fleet-wide technical log: every service, repair, tyre change and other
- * work recorded against any vehicle, newest first, with the two figures that
- * decide the day's work on top — how many next-service dates are already
- * overdue and how many fall inside the reminder window.
- *
- * The classification is the server's, not this page's: `due_state` on each row
- * is computed from `settings.vehicles_notify_days` by `vehicle_service`, the
- * same knob the daily push reminder reads. A row therefore reads «Overdue» here
- * exactly when the operator's phone said so, and changing the reminder window
- * on the hub re-badges this register on its next fetch. A row with no next
- * service carries no state and is counted in neither box.
- *
- * Rows arrive already ordered (date desc, id desc) from `GET /vehicles/
- * maintenance` and are rendered in that order: the register is a log, and a log
- * is read from the newest entry. Every row of the response is shown — there is
- * no filter to hide one behind, so the counts and the table always describe the
- * same set.
- *
- * Writes: `MaintenanceDialog` owns adding a record (vehicle selectable here,
- * since the register spans the fleet) together with its own toast and cache
- * invalidation. The one mutation this page owns is the delete the
- * `vehicles.delete` capability promises; it goes through
- * `invalidateVehicleQueries`, so the hub summary, the ledger and the vehicle
- * file refresh with this register.
- *
- * Capability gating: `vehicles.view` is enforced by the route. «Add
- * maintenance» needs `vehicles.edit` and the delete icon needs
- * `vehicles.delete` plus a confirmation — a viewer is never shown a control the
- * API would refuse.
- */
+/** Monthly fleet mileage and maintenance records, sharing the selected month. */
 
 import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ChevronLeft, ChevronRight, Trash2, Wrench } from 'lucide-react'
+import { ChevronLeft, ChevronRight, FileText, Gauge, Trash2, Wrench } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Link } from 'react-router-dom'
 import { toast } from 'sonner'
@@ -55,6 +23,9 @@ import { toBase64Url } from '@/lib/pdf'
 import { useCapabilities } from '@/lib/useCapabilities'
 import { useIsMobile } from '@/lib/useIsMobile'
 import { cn } from '@/lib/utils'
+import { useSearchParam } from '@/lib/urlState'
+import { MonthSwitcher } from '@/pages/application/statistics/MonthSwitcher'
+import { monthKey, parseMonthKey } from '@/pages/application/statistics/registerModel'
 
 import {
   EMPTY_VALUE,
@@ -69,6 +40,9 @@ import {
 } from './vehicleUtils'
 import { MaintenanceDialog } from './components/MaintenanceDialog'
 import { PlateChip } from './components/PlateChip'
+import { TabChip } from './components/TabChip'
+import { OdometerLog } from './components/OdometerLog'
+import { OdometerFormDialog } from './components/OdometerFormDialog'
 import { VehicleStatusBadge } from './components/VehicleStatusBadge'
 
 /** Stable empty list, so a pending or failed fetch does not re-run the counting
@@ -86,11 +60,26 @@ export function VehicleMaintenancePage(): React.JSX.Element {
   const isMobile = useIsMobile()
 
   const [addOpen, setAddOpen] = useState(false)
+  const [printOpen, setPrintOpen] = useState(false)
+  const now = new Date()
+  const [rawMonth, setMonth] = useSearchParam('month')
+  const coordinate = parseMonthKey(rawMonth) ?? { year: now.getFullYear(), month: now.getMonth() + 1 }
+  const month = monthKey(coordinate.year, coordinate.month)
+  const [rawTab, setTab] = useSearchParam('tab', { fallback: 'log' })
+  const tab = rawTab === 'records' ? 'records' : 'log'
+  const [recordsScope, setRecordsScope] = useSearchParam('records')
+  const recordsMonth = recordsScope === 'all' ? undefined : month
+  const odometerQuery = useQuery({
+    queryKey: VEHICLE_QUERY_KEYS.odometer(month),
+    queryFn: () => api.getVehicleOdometer(month),
+    enabled: tab === 'log',
+  })
   const [recordToDelete, setRecordToDelete] = useState<VehicleMaintenanceRead | null>(null)
 
   const recordsQuery = useQuery({
-    queryKey: VEHICLE_QUERY_KEYS.maintenance,
-    queryFn: () => api.listVehicleMaintenance(),
+    queryKey: VEHICLE_QUERY_KEYS.maintenance(recordsMonth),
+    queryFn: () => api.listVehicleMaintenance(recordsMonth),
+    enabled: tab === 'records',
   })
 
   const deleteRecord = useMutation({
@@ -148,22 +137,47 @@ export function VehicleMaintenancePage(): React.JSX.Element {
           </div>
 
           <div className="flex shrink-0 flex-wrap items-center gap-2">
-            {canEdit && (
+            {canEdit && (tab === 'log' ? (
+              <Button type="button" size="sm" disabled={!odometerQuery.isSuccess} onClick={() => setPrintOpen(true)}>
+                <FileText className="h-3.5 w-3.5" aria-hidden />
+                {t('vehicles.printOdometerForm')}
+              </Button>
+            ) : (
               <Button type="button" size="sm" onClick={() => setAddOpen(true)}>
                 <Wrench className="h-3.5 w-3.5" aria-hidden />
                 {t('vehicles.addMaintenance')}
               </Button>
-            )}
+            ))}
             <RefreshButton />
+          </div>
+        </div>
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+          <MonthSwitcher
+            {...coordinate}
+            onChange={(next) => setMonth(monthKey(next.year, next.month))}
+            labels={{ previous: t('vehicles.previousMonth'), next: t('vehicles.nextMonth'), label: t('vehicles.month') }}
+          />
+          <div role="group" aria-label={t('vehicles.maintenanceTitle')} className="flex flex-wrap gap-1.5">
+            <TabChip active={tab === 'log'} label={t('vehicles.monthlyLog')} onClick={() => setTab('log')} />
+            <TabChip active={tab === 'records'} label={t('vehicles.maintenanceRecords')} onClick={() => setTab('records')} />
           </div>
         </div>
       </header>
 
       <div className="flex-1 overflow-y-auto px-4 pb-24 md:px-6">
-        {/* Overdue first: it is the box that means "today". Both stay quiet at
-            zero and take their state's tint only when they carry work — and
-            print a dash rather than a confident «0» while the register is
-            loading or failed, which would be a figure nobody vouched for. */}
+        {tab === 'log' ? (
+          odometerQuery.isError ? (
+            <EmptyState icon={Gauge} message={t('common.loadError')} actionLabel={t('common.retry')} onAction={() => void odometerQuery.refetch()} />
+          ) : odometerQuery.isPending ? (
+            <div className="rounded-xl border border-border bg-surface">{Array.from({ length: 5 }, (_, index) => <SkeletonRow key={index} cols={6} />)}</div>
+          ) : (
+            <OdometerLog data={odometerQuery.data} canEdit={canEdit} isMobile={isMobile} />
+          )
+        ) : <>
+        <label className="mb-4 flex w-fit items-center gap-2 text-sm">
+          <input type="checkbox" checked={recordsScope === 'all'} onChange={(event) => setRecordsScope(event.target.checked ? 'all' : null)} />
+          {t('vehicles.allMonths')}
+        </label>
         <dl className="mb-4 grid grid-cols-2 gap-2.5 sm:max-w-[26rem]">
           <SummaryBox
             state="overdue"
@@ -262,12 +276,16 @@ export function VehicleMaintenancePage(): React.JSX.Element {
             )}
           </section>
         )}
+        </>}
       </div>
 
       {/* The dialog owns its own mutation, toast and invalidation; the register
           only owns whether it is open. No vehicle is passed, so it offers the
           fleet picker. */}
       {canEdit && <MaintenanceDialog open={addOpen} onOpenChange={setAddOpen} />}
+      {canEdit && odometerQuery.data && (
+        <OdometerFormDialog key={month} month={month} rows={odometerQuery.data.rows} open={printOpen} onOpenChange={setPrintOpen} />
+      )}
 
       {canDelete && (
         <ConfirmDialog
