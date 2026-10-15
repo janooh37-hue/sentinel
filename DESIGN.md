@@ -536,18 +536,15 @@ focus-visible:ring-offset-1 focus-visible:ring-offset-background
 | Variant       | Default                                                      | Hover                          | Active                          | Disabled              |
 | ------------- | ------------------------------------------------------------ | ------------------------------ | ------------------------------- | --------------------- |
 | `default`     | `bg-primary text-primary-foreground`                         | `bg-primary/90`                | `bg-primary/95`                 | `pointer-events-none opacity-50` |
-| `secondary`   | `border border-border bg-surface text-foreground`            | `bg-accent`                    | (no specific active)            | same                  |
-| `outline`     | `border border-border bg-transparent text-foreground`        | `bg-accent`                    | (no specific active)            | same                  |
-| `ghost`       | `text-muted-foreground`                                      | `bg-accent hover:text-foreground` | (no specific active)         | same                  |
+| `secondary`   | `border border-border bg-surface text-foreground`            | `bg-surface-tinted`            | (no specific active)            | same                  |
+| `outline`     | `border border-border bg-transparent text-foreground`        | `bg-surface-tinted`            | (no specific active)            | same                  |
+| `ghost`       | `text-muted-foreground`                                      | `bg-surface-tinted hover:text-foreground` | (no specific active) | same                  |
 | `destructive` | `bg-destructive text-destructive-foreground` (*see note*)    | `bg-destructive/90`            | (no specific active)            | same                  |
 | `link`        | `text-primary underline-offset-4`                            | `underline`                    | (no underline change)           | same                  |
 
-> **Wart:** `secondary`, `outline`, and `ghost` all hover to `bg-accent` —
-> which is GSSG red. The intent here predates the Phase-17 color rebind;
-> these variants should hover to `bg-surface-tinted`, not `bg-accent`. The
-> Dashboard sidesteps this bug by not using these variants (EmptyState's
-> secondary button only appears in empty states, where the red flash is
-> rare).
+> Neutral variants (`secondary`, `outline`, `ghost`) hover to
+> `bg-surface-tinted`. They hovered to GSSG red (`bg-accent`) until the Books
+> workspace pass fixed it.
 >
 > **`destructive` variant** references `bg-destructive` and
 > `text-destructive-foreground`, which are **not defined** in the project's
@@ -2466,9 +2463,8 @@ documented.
   green / amber / red / blue backgrounds become harsh against `#131826`.
   Migrate to semantic soft-tones (`bg-success-soft text-success` etc.) —
   the WidgetCard delta pills already do this.
-- shadcn Button `secondary` / `outline` / `ghost` variants hover to
-  `bg-accent` (GSSG red) which is almost certainly a bug. Should hover
-  to `bg-surface-tinted`.
+- (Fixed) shadcn Button `secondary` / `outline` / `ghost` variants now hover to
+  `bg-surface-tinted` instead of `bg-accent` (GSSG red).
 - shadcn Button `destructive` variant references `bg-destructive` and
   `text-destructive-foreground` which **don't exist in @theme inline** —
   the variant is effectively unstyled. Either delete the variant or wire
