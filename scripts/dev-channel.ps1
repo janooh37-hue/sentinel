@@ -1,22 +1,22 @@
 <#
 .SYNOPSIS
-    GSSGLT dev channel: branch `dev` in this worktree, rebased on origin/main.
+    GSSGLT dev channel: branch `dev` in this worktree = origin/main + work branches under test.
 .DESCRIPTION
-    dev-channel.ps1 [open] [-Agent omp]  sync if clean, ensure the server is up, start the agent here
-    dev-channel.ps1 sync                 rebase on origin/main, sync deps, rebuild, migrate, restart
-    dev-channel.ps1 publish              build frontend, migrate, restart (after local edits)
+    dev-channel.ps1 [open] [-Agent omp]  ensure the server is up, start the agent here
+    dev-channel.ps1 rebuild [work/x ...] reset dev to origin/main, merge the listed work branches, sync deps, rebuild, migrate, restart
+    dev-channel.ps1 publish              build frontend, migrate, restart (after merging a work branch)
     dev-channel.ps1 restart              restart the dev server on 127.0.0.1:8765
     dev-channel.ps1 status               branch vs origin/main + server health
-    dev-channel.ps1 promote [-Yes]       push tested dev commits to origin/main
 
-    After promote, production still needs `scripts\mng.ps1 update` on GSSGAPP.
+    dev is disposable: never commit on it or PR from it. Promote by PR'ing the work branch itself.
     See docs/dev-channel.md and ADR 0004.
 #>
+[CmdletBinding(PositionalBinding = $false)]
 param(
-    [ValidateSet('open', 'sync', 'publish', 'restart', 'status', 'promote')]
+    [Parameter(Position = 0)] [ValidateSet('open', 'rebuild', 'publish', 'restart', 'status')]
     [string] $Command = 'open',
     [string] $Agent = 'omp',
-    [switch] $Yes
+    [Parameter(ValueFromRemainingArguments)] [string[]] $Branches = @()
 )
 
 $ErrorActionPreference = 'Stop'
@@ -89,17 +89,20 @@ function Publish([bool] $Frontend = $true) {
     Restart-Server
 }
 
-function Sync {
-    if (-not (Test-Clean)) { throw 'Uncommitted changes in the dev worktree; commit or stash them, then sync.' }
+function Rebuild {
+    if (-not (Test-Clean)) { throw 'Uncommitted changes in the dev worktree; move them to their work branch, then rebuild.' }
     Invoke-Native { git fetch -q origin }
     $before = git rev-parse HEAD
-    git rebase origin/main
-    if ($LASTEXITCODE) {
-        git rebase --abort
-        throw 'Rebase onto origin/main conflicted and was aborted; nothing changed. Resolve by hand: git rebase origin/main'
+    Invoke-Native { git reset -q --hard origin/main }
+    foreach ($branch in $Branches) {
+        git merge -q --no-edit $branch
+        if ($LASTEXITCODE) {
+            git merge --abort
+            throw "Merging $branch conflicted and was aborted; dev is origin/main plus the branches before it. Rebase $branch on origin/main, then rebuild."
+        }
     }
     $changed = @(git diff --name-only $before HEAD)
-    if (-not $changed) { Write-Host 'Already on latest main.' -ForegroundColor Green; return }
+    if (-not $changed) { Write-Host 'dev unchanged.' -ForegroundColor Green; return }
     if ($changed -contains 'requirements.txt') {
         Invoke-Native { & $Py -m pip install -q --disable-pip-version-check -r requirements.txt }
     }
@@ -109,30 +112,13 @@ function Sync {
     Publish ([bool]($changed -like 'frontend/*'))
 }
 
-function Promote {
-    if (-not (Test-Clean)) { throw 'Uncommitted changes; commit them and retest before promoting.' }
-    Invoke-Native { git fetch -q origin }
-    git merge-base --is-ancestor origin/main HEAD
-    if ($LASTEXITCODE) { throw 'origin/main moved since your last sync. Run sync, retest on the dev URL, then promote.' }
-    $commits = @(git log --oneline origin/main..HEAD)
-    if (-not $commits) { Write-Host 'Nothing to promote.'; return }
-    $commits
-    if (-not $Yes -and (Read-Host "Push these $($commits.Count) commit(s) to origin/main? [y/N]") -ne 'y') { return }
-    Invoke-Native { git push origin HEAD:main }
-    Write-Host 'Pushed to main. To go live, on GSSGAPP run: scripts\mng.ps1 update' -ForegroundColor Green
-}
-
 switch ($Command) {
     'status'  { Show-Status }
-    'sync'    { Sync }
+    'rebuild' { Rebuild }
     'publish' { Publish }
     'restart' { Restart-Server }
-    'promote' { Promote }
     'open' {
         Show-Status
-        $behind = [int](git rev-list --count HEAD..origin/main)
-        if ($behind -and (Test-Clean)) { Sync }
-        elseif ($behind) { Write-Warning "$behind commit(s) behind main, but the worktree has uncommitted changes; run sync after committing." }
         if (-not (Get-Health)) { Start-Server }
         & $Agent
     }
