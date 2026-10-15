@@ -156,10 +156,7 @@ def reference_block() -> etree._Element:
             props.insert(0, element("spacing", before="0", after="0", line="300", lineRule="exact"))
             for text in p.xpath("./w:r/w:t", namespaces=NS):
                 if "{{ date }}" in (text.text or ""):
-                    text.text = text.text.replace(
-                        "{{ date }}", "\u200e{{ date }}\u200e م  الموافق  {{ hijri_date }}"
-                    )
-                    # The month is shown large under the title, not here.
+                    text.text = text.text.replace("{{ date }}", "\u200e{{ date }}\u200e")
         ref = next(p for p in paragraphs if "{{ ref }}" in "".join(p.itertext()))
         barcode = next(
             p

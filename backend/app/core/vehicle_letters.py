@@ -125,7 +125,6 @@ def odometer_form_fields(
         "subject": f"سجل عداد المسافات والصيانة الشهري للمركبات — {month_number:02d}/{year}",
         "date": today.strftime("%d-%m-%Y"),
         "month_label": f"{ARABIC_MONTHS[month_number - 1]} {year}",
-        "hijri_date": hijri_label(today),
         "rows": [
             {
                 "seq": seq,
