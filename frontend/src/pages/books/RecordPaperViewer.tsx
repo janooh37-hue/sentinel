@@ -368,7 +368,7 @@ export function RecordPaperViewer({
               isOverlay ? 'max-w-[18rem] text-white/90' : 'min-w-0 flex-1 text-muted-foreground',
             )}
           >
-            {paper.filename}
+            <bdi dir="ltr">{paper.filename}</bdi>
           </span>
           <ToolbarBtn
             isOverlay={isOverlay}
