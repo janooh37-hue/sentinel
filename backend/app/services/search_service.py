@@ -6,10 +6,11 @@ by ``bm25()`` ascending (best match first) and includes a highlighted
 ``snippet()`` of the matched ``notes_html`` so the timeline can show
 context inline.
 
-User input is wrapped as a phrase (``"...""``) so the caller can type
-free-form text without worrying about FTS5 operator syntax (``AND``,
-``OR``, ``NEAR``, ``*``, ``-`` prefix). Embedded double quotes are
-doubled per the FTS5 string-literal rules.
+User input is wrapped as one phrase literal (``"..."``) by
+``app.core.fts_query.phrase_query`` so the caller can type free-form text without
+worrying about FTS5 operator syntax (``AND``, ``OR``, ``NEAR``, ``*``, ``-`` prefix);
+embedded double quotes are doubled per the FTS5 string-literal rules. Blank text, or
+text containing a NUL (which cannot be quoted), matches nothing.
 """
 
 from __future__ import annotations
@@ -17,6 +18,7 @@ from __future__ import annotations
 from sqlalchemy import Engine, text
 from sqlalchemy.orm import Session
 
+from app.core.fts_query import phrase_query
 from app.db.models import LedgerEntry
 from app.schemas.ledger import LedgerEntryRead
 from app.schemas.search import SearchHit
@@ -69,16 +71,6 @@ def create_fts_schema(engine: Engine) -> None:
             conn.exec_driver_sql(stmt)
 
 
-def _sanitize_query(raw: str) -> str:
-    """Wrap user input as an FTS5 phrase literal.
-
-    FTS5 reserves ``"`` as the phrase delimiter. Doubling embedded quotes
-    is the documented escape (same as SQL string literals).
-    """
-    escaped = raw.replace('"', '""').strip()
-    return f'"{escaped}"'
-
-
 def search(
     db: Session,
     query: str,
@@ -93,10 +85,12 @@ def search(
     mirroring ``ledger_service.list_entries``. ``None`` (legacy callers) applies
     no owner filter.
     """
-    if not query or not query.strip():
+    # Blank input matches nothing; so does text with a NUL, which cannot be quoted into
+    # an FTS5 literal (see app.core.fts_query).
+    fts_query = phrase_query(query or "")
+    if fts_query is None:
         return []
     limit = max(1, min(limit, 200))
-    fts_query = _sanitize_query(query)
 
     owner_clause = ""
     params: dict[str, object] = {"q": fts_query, "limit": limit}
