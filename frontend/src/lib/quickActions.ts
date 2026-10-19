@@ -135,13 +135,6 @@ export const QUICK_ACTION_META: Record<QuickActionId, QuickActionMeta> = {
     intent: 'new',
     slug: slugifyQuickActionId('Material Request Form'),
   },
-  'Material Request Form (Arabic)': {
-    emoji: '🗃️',
-    artwork: 'material-request',
-    href: serviceHref('Material Request Form (Arabic)'),
-    intent: 'new',
-    slug: slugifyQuickActionId('Material Request Form (Arabic)'),
-  },
   'General Book': {
     emoji: '📓',
     artwork: 'general-book',

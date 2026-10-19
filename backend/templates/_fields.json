@@ -694,8 +694,8 @@
   },
   "Material Request Form": {
     "category": "admin",
-    "name_en": "Material Request Form (English)",
-    "name_ar": "طلب مواد (إنجليزي)",
+    "name_en": "Material Request Form",
+    "name_ar": "طلب مواد",
     "form_number": "300-001",
     "fields": [
       {

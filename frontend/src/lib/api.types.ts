@@ -9053,7 +9053,7 @@ export interface components {
              * Id
              * @enum {string}
              */
-            id: "General Book" | "Acknowledgment Form" | "Salary Transfer Request" | "Leave Permit Form" | "Violation Form" | "Leave Application Form" | "Duty Resumption Form" | "HR Request Form" | "Salary Deduction Form" | "Employee Clearance Form" | "Passport Release Form" | "Material Request Form" | "Material Request Form (Arabic)" | "Resignation Letter" | "Administrative Leave Form" | "Warning Form" | "Passport Release List" | "Report" | "Inmate Conduct Violations";
+            id: "General Book" | "Acknowledgment Form" | "Salary Transfer Request" | "Leave Permit Form" | "Violation Form" | "Leave Application Form" | "Duty Resumption Form" | "HR Request Form" | "Salary Deduction Form" | "Employee Clearance Form" | "Passport Release Form" | "Material Request Form" | "Resignation Letter" | "Administrative Leave Form" | "Warning Form" | "Passport Release List" | "Report" | "Inmate Conduct Violations";
             /**
              * Visible
              * @default true
