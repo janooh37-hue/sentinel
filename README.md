@@ -20,7 +20,7 @@ application only. It is pulled to the office server.
 Material Request is one service in Services. An `English | العربية` tab in its
 form picks the paper to preview and save, and opens on the interface language.
 Switching keeps the delivery date, items, and manager, which both papers share
-with the same in-app manager-signing workflow. The Arabic paper has 20 item
+with the same in-app manager-signing workflow. The Arabic paper has 17 item
 slots and asks only for delivery date, items, and the verifying manager.
 English-only delivery location, shipping address, justification, and requester
 signature fields are not offered on the Arabic form. Requester name,

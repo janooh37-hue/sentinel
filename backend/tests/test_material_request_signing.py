@@ -9,6 +9,7 @@ signing path:
      was chosen at generation (stored on ``Book.doc_manager_id``); the signed
      copy used to render it blank.
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -110,7 +111,7 @@ def test_arabic_material_request_renders_three_items_and_center_manager_signatur
         for value in item.values():
             assert value in xml
     doc = Document(str(out))
-    assert len(doc.tables[0].rows) == 21
+    assert len(doc.tables[0].rows) == 18
     approval = doc.tables[1]
     assert approval.rows[1].cells[1].text == data["manager_name"]
     cell_xml = approval.rows[1].cells[3]._tc.xml
@@ -153,4 +154,4 @@ def test_arabic_material_request_tokens_keep_design_font_and_direction():
                     token in ("{{ request_date }}", "{{ delivery_date }}")
                 )
                 assert rtl.get(w + "val") == ("0" if ltr else None), token
-    assert token_count == 125
+    assert token_count == 107
