@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useId, useRef, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { Gauge } from 'lucide-react'
+import { Gauge, Search } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { toast } from 'sonner'
 
@@ -8,7 +8,7 @@ import { EmptyState } from '@/components/ui/empty-state'
 import { Input } from '@/components/ui/input'
 import { TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { api, type OdometerMonthRead, type OdometerRowRead, type OdometerUpsert } from '@/lib/api'
-import { EMPTY_VALUE, formatAed, formatNumber, invalidateVehicleQueries, localized, vehicleErrorMessage } from '../vehicleUtils'
+import { EMPTY_VALUE, formatAed, formatNumber, invalidateVehicleQueries, localized, normalizeDigits, vehicleErrorMessage } from '../vehicleUtils'
 import { PlateChip } from './PlateChip'
 
 export function OdometerLog({ data, canEdit, isMobile }: {
@@ -17,6 +17,12 @@ export function OdometerLog({ data, canEdit, isMobile }: {
   isMobile: boolean
 }): React.JSX.Element {
   const { t, i18n } = useTranslation()
+  const searchId = useId()
+  const [query, setQuery] = useState('')
+  const needle = searchKey(query)
+  const rows = needle
+    ? data.rows.filter((row) => searchKey(`${row.plate_label} ${row.vehicle_type_ar ?? ''} ${row.vehicle_type_en ?? ''}`).includes(needle))
+    : data.rows
   const headings = ['plate', 'openingKm', 'closingKm', 'kmDriven', 'maintenanceCount', 'cost']
   return (
     <>
@@ -30,18 +36,34 @@ export function OdometerLog({ data, canEdit, isMobile }: {
           <dd className="mt-1 font-mono font-semibold"><bdi>{formatAed(data.total_maintenance_cost, i18n.language)}</bdi></dd>
         </div>
       </dl>
+      {data.rows.length > 0 && (
+        <div className="relative mb-4 max-w-md">
+          <Search className="pointer-events-none absolute inset-y-0 start-2.5 my-auto h-3.5 w-3.5 text-muted-foreground" aria-hidden />
+          <label className="sr-only" htmlFor={searchId}>{t('vehicles.odometerSearch')}</label>
+          <Input
+            id={searchId}
+            type="search"
+            className="ps-8"
+            placeholder={t('vehicles.odometerSearch')}
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+          />
+        </div>
+      )}
       {data.rows.length === 0 ? (
         <EmptyState icon={Gauge} message={t('vehicles.noActiveVehicles')} />
+      ) : rows.length === 0 ? (
+        <EmptyState icon={Search} message={t('vehicles.noVehicles')} />
       ) : isMobile ? (
         <div className="flex flex-col gap-3">
-          {data.rows.map((row) => <OdometerRow key={rowKey(row)} row={row} canEdit={canEdit} mobile />)}
+          {rows.map((row) => <OdometerRow key={rowKey(row)} row={row} canEdit={canEdit} mobile />)}
         </div>
       ) : (
         <section className="overflow-x-auto rounded-xl border border-border bg-surface">
           <table className="w-full min-w-[800px] text-sm">
             <caption className="sr-only">{t('vehicles.monthlyLog')}</caption>
             <TableHeader><TableRow>{headings.map((key) => <TableHead key={key}>{t(`vehicles.${key}`)}</TableHead>)}</TableRow></TableHeader>
-            <TableBody>{data.rows.map((row) => <OdometerRow key={rowKey(row)} row={row} canEdit={canEdit} mobile={false} />)}</TableBody>
+            <TableBody>{rows.map((row) => <OdometerRow key={rowKey(row)} row={row} canEdit={canEdit} mobile={false} />)}</TableBody>
           </table>
         </section>
       )}
@@ -49,8 +71,14 @@ export function OdometerLog({ data, canEdit, isMobile }: {
   )
 }
 
+/** Plate digits match however they are typed: Arabic-Indic digits, spaces, or separators. */
+function searchKey(text: string): string {
+  return normalizeDigits(text).replace(/[^\p{L}\p{N}]/gu, '').toLowerCase()
+}
+
+/** Remount only when the month changes; typing in one reading must survive saving the other. */
 function rowKey(row: OdometerRowRead): string {
-  return `${row.month}:${row.vehicle_id}:${row.opening_km}:${row.closing_km}:${row.opening_from_previous}`
+  return `${row.month}:${row.vehicle_id}`
 }
 
 function OdometerRow({ row, canEdit, mobile }: { row: OdometerRowRead; canEdit: boolean; mobile: boolean }): React.JSX.Element {
@@ -58,25 +86,32 @@ function OdometerRow({ row, canEdit, mobile }: { row: OdometerRowRead; canEdit: 
   const queryClient = useQueryClient()
   const [opening, setOpening] = useState(row.opening_km == null ? '' : String(row.opening_km))
   const [closing, setClosing] = useState(row.closing_km == null ? '' : String(row.closing_km))
+  /** Saves run in order: tabbing from opening to closing must not let the older save land last. */
+  const queue = useRef<Promise<unknown>>(Promise.resolve())
   const save = useMutation({
     mutationFn: (body: OdometerUpsert) => api.saveVehicleOdometer(row.vehicle_id, row.month, body),
-    onSuccess: () => invalidateVehicleQueries(queryClient, { vehicleId: row.vehicle_id, registers: ['odometer'] }),
+    onSuccess: (saved) => {
+      setOpening(saved.opening_km == null ? '' : String(saved.opening_km))
+      invalidateVehicleQueries(queryClient, { vehicleId: row.vehicle_id, registers: ['odometer'] })
+    },
     onError: (err) => toast.error(vehicleErrorMessage(err, t)),
   })
   const submit = () => {
-    if (save.isPending || closing === '') return
+    if (opening === '' && closing === '') return
     const openingKm = opening === '' ? null : Number(opening)
-    const closingKm = Number(closing)
+    const closingKm = closing === '' ? null : Number(closing)
     if (closingKm === row.closing_km && openingKm === row.opening_km) return
-    if (!/^\d{1,7}$/.test(closing) || (opening !== '' && !/^\d{1,7}$/.test(opening))) {
+    if ((closing !== '' && !/^\d{1,7}$/.test(closing)) || (opening !== '' && !/^\d{1,7}$/.test(opening))) {
       toast.error(t('vehicles.odometerInvalidReading'))
       return
     }
-    if (openingKm != null && closingKm < openingKm) {
+    if (openingKm != null && closingKm != null && closingKm < openingKm) {
       toast.error(t('vehicles.odometerClosingBelowOpening'))
       return
     }
-    save.mutate({ closing_km: closingKm, ...(!row.opening_from_previous ? { opening_km: openingKm } : {}) })
+    if (row.opening_from_previous && closingKm == null) return
+    const body = { closing_km: closingKm, ...(!row.opening_from_previous ? { opening_km: openingKm } : {}) }
+    queue.current = queue.current.then(() => save.mutateAsync(body)).catch(() => undefined)
   }
   const reading = (kind: 'opening' | 'closing') => {
     const editable = canEdit && (kind === 'closing' || !row.opening_from_previous)
@@ -93,7 +128,6 @@ function OdometerRow({ row, canEdit, mobile }: { row: OdometerRowRead; canEdit: 
       inputMode="numeric"
       aria-label={`${t(kind === 'opening' ? 'vehicles.openingKm' : 'vehicles.closingKm')} · ${row.plate_label}`}
       value={value}
-      disabled={save.isPending}
       onChange={(event) => (kind === 'opening' ? setOpening : setClosing)(event.target.value)}
       onBlur={submit}
       onKeyDown={(event) => {

@@ -335,8 +335,14 @@ class OdometerMonthRead(BaseModel):
 
 
 class OdometerUpsert(BaseModel):
-    closing_km: int = Field(ge=0, le=9_999_999)
+    closing_km: int | None = Field(default=None, ge=0, le=9_999_999)
     opening_km: int | None = Field(default=None, ge=0, le=9_999_999)
+
+    @model_validator(mode="after")
+    def _has_reading(self) -> OdometerUpsert:
+        if self.closing_km is None and self.opening_km is None:
+            raise ValueError("Enter the opening or the closing reading.")
+        return self
 
 
 class LicenseRenewCreate(BaseModel):

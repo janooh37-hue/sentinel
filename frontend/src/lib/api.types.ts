@@ -12084,7 +12084,7 @@ export interface components {
         /** OdometerUpsert */
         OdometerUpsert: {
             /** Closing Km */
-            closing_km: number;
+            closing_km?: number | null;
             /** Opening Km */
             opening_km?: number | null;
         };

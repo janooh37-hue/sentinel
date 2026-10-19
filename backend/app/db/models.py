@@ -893,17 +893,24 @@ class VehicleOdometerReading(Base):
     )
     month: Mapped[str] = mapped_column(String(7), nullable=False)
     opening_km: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    closing_km: Mapped[int] = mapped_column(Integer, nullable=False)
+    closing_km: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=_utcnow)
     updated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     vehicle: Mapped[Vehicle] = relationship(back_populates="odometer_readings")
 
     __table_args__ = (
-        CheckConstraint("closing_km >= 0", name="ck_vehicle_odometer_closing_nonnegative"),
+        CheckConstraint(
+            "closing_km IS NULL OR closing_km >= 0",
+            name="ck_vehicle_odometer_closing_nonnegative",
+        ),
         CheckConstraint(
             "opening_km IS NULL OR opening_km >= 0",
             name="ck_vehicle_odometer_opening_nonnegative",
+        ),
+        CheckConstraint(
+            "opening_km IS NOT NULL OR closing_km IS NOT NULL",
+            name="ck_vehicle_odometer_has_reading",
         ),
         UniqueConstraint("vehicle_id", "month", name="uq_vehicle_odometer_month"),
     )

@@ -1653,6 +1653,7 @@ def odometer_month(
                     & (VehicleOdometerReading.month == latest.c.month),
                 )
             )
+            if reading.closing_km is not None
         }
         maintenance: dict[int, list[OdometerMaintenanceItem]] = {}
         for item in db.scalars(
@@ -1714,38 +1715,49 @@ def upsert_odometer(
         .order_by(VehicleOdometerReading.month.asc())
         .limit(1)
     )
+    fields = payload.model_fields_set
+    carried = previous.closing_km if previous is not None else None
     opening = payload.opening_km
-    if previous is not None:
-        opening = previous.closing_km
-    elif reading is not None and "opening_km" not in payload.model_fields_set:
+    if carried is not None:
+        opening = carried
+    elif reading is not None and "opening_km" not in fields:
         opening = reading.opening_km
-    if opening is not None and payload.closing_km < opening:
+    closing = payload.closing_km
+    if reading is not None and "closing_km" not in fields:
+        closing = reading.closing_km
+    if closing is None and (carried is not None or opening is None):
+        raise ValidationFailedError(
+            "ODOMETER_READING_REQUIRED", "Enter the opening or the closing reading."
+        )
+    if opening is not None and closing is not None and closing < opening:
         raise ValidationFailedError(
             "ODOMETER_CLOSING_BELOW_OPENING",
             "The closing odometer reading cannot be below the opening reading.",
             opening_km=opening,
         )
-    if following is not None and payload.closing_km > following.closing_km:
-        raise ValidationFailedError(
-            "ODOMETER_CLOSING_ABOVE_NEXT",
-            "The closing odometer reading cannot exceed the next month's closing reading.",
-            next_month=following.month,
-            next_closing_km=following.closing_km,
-        )
+    if following is not None and closing is not None:
+        next_km = following.opening_km if following.closing_km is None else following.closing_km
+        if next_km is not None and closing > next_km:
+            raise ValidationFailedError(
+                "ODOMETER_CLOSING_ABOVE_NEXT",
+                "The closing odometer reading cannot exceed the next month's reading.",
+                next_month=following.month,
+                next_closing_km=next_km,
+            )
     if reading is None:
         reading = VehicleOdometerReading(vehicle_id=vehicle_id, month=month)
         db.add(reading)
     else:
         reading.updated_at = _utcnow()
-    reading.opening_km = None if previous is not None else opening
-    reading.closing_km = payload.closing_km
+    reading.opening_km = None if carried is not None else opening
+    reading.closing_km = closing
     db.commit()
     _audit(
         db,
         "odometer.recorded",
         vehicle_id,
         actor,
-        {"month": month, "opening_km": opening, "closing_km": payload.closing_km},
+        {"month": month, "opening_km": opening, "closing_km": closing},
     )
     return odometer_month(db, month, vehicle_ids=[vehicle_id]).rows[0]
 

@@ -1,4 +1,4 @@
-"""Migration 0102: odometer schema parity, constraints, and reversibility."""
+"""Migrations 0102-0103: odometer schema parity, constraints, and reversibility."""
 
 from __future__ import annotations
 
@@ -15,7 +15,8 @@ from sqlalchemy.exc import IntegrityError
 from app.db.models import VehicleOdometerReading
 
 ROOT = Path(__file__).resolve().parents[2]
-HEAD = "0102_vehicle_odometer"
+HEAD = "0103_odometer_optional_closing"
+TABLE_REVISION = "0102_vehicle_odometer"
 PARENT = "0101_word_template_sessions"
 
 
@@ -57,7 +58,8 @@ def test_revision_follows_parent_in_single_head_history() -> None:
     heads = script.get_heads()
     assert len(heads) == 1
     assert HEAD in {revision.revision for revision in script.walk_revisions("base", heads[0])}
-    assert script.get_revision(HEAD).down_revision == PARENT
+    assert script.get_revision(HEAD).down_revision == TABLE_REVISION
+    assert script.get_revision(TABLE_REVISION).down_revision == PARENT
 
 
 def test_upgrade_schema_model_parity_constraints_and_cascade(
@@ -73,7 +75,7 @@ def test_upgrade_schema_model_parity_constraints_and_cascade(
         "vehicle_id": False,
         "month": False,
         "opening_km": True,
-        "closing_km": False,
+        "closing_km": True,
         "created_at": False,
         "updated_at": True,
     }
@@ -102,6 +104,7 @@ def test_upgrade_schema_model_parity_constraints_and_cascade(
     assert {constraint["name"] for constraint in inspector.get_check_constraints(table)} == {
         "ck_vehicle_odometer_closing_nonnegative",
         "ck_vehicle_odometer_opening_nonnegative",
+        "ck_vehicle_odometer_has_reading",
     }
     assert {
         (
@@ -121,15 +124,17 @@ def test_upgrade_schema_model_parity_constraints_and_cascade(
     with engine.begin() as c:
         c.execute(insert, values)
         c.execute(insert, {**values, "month": "2026-10", "opening": 100, "closing": 200})
+        c.execute(insert, {**values, "month": "2026-12", "opening": 300, "closing": None})
     for invalid in (
         values,
         {**values, "vehicle": 999},
         {**values, "month": "2026-11", "opening": -1},
         {**values, "month": "2026-11", "closing": -1},
+        {**values, "month": "2026-11", "opening": None, "closing": None},
     ):
         with pytest.raises(IntegrityError), engine.begin() as c:
             c.execute(insert, invalid)
-    for name in ("vehicle_id", "month", "closing_km", "created_at"):
+    for name in ("vehicle_id", "month", "created_at"):
         with pytest.raises(IntegrityError), engine.begin() as c:
             c.execute(text(f"UPDATE vehicle_odometer_readings SET {name} = NULL WHERE id = 1"))
     with engine.begin() as c:
@@ -143,10 +148,15 @@ def test_downgrade_round_trip_preserves_vehicles(at_parent: tuple[Engine, Config
     with engine.begin() as c:
         c.execute(
             text(
-                "INSERT INTO vehicle_odometer_readings (vehicle_id, month, closing_km, created_at) "
+                "INSERT INTO vehicle_odometer_readings (vehicle_id, month, opening_km, created_at) "
                 "VALUES (1, '2026-10', 200, '2026-10-01 00:00:00')"
             )
         )
+    command.downgrade(config, TABLE_REVISION)
+    with engine.connect() as c:
+        assert c.execute(
+            text("SELECT opening_km, closing_km FROM vehicle_odometer_readings")
+        ).all() == [(200, 200)]
     command.downgrade(config, PARENT)
     with engine.connect() as c:
         assert "vehicle_odometer_readings" not in inspect(c).get_table_names()
