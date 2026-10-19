@@ -165,7 +165,7 @@ describe('ApplicationPage approved violation entry mode', () => {
     expect(createMode).toHaveAttribute('aria-pressed', 'true')
     expect(await screen.findByTestId('template-form')).toBeVisible()
 
-    await user.click(screen.getByRole('button', { name: 'Upload approved copy' }))
+    await user.click(screen.getByRole('button', { name: 'Import signed violation' }))
     expect(screen.getByTestId('approved-violation-upload')).toBeVisible()
     expect(screen.getByTestId('template-form')).not.toBeVisible()
 
@@ -191,17 +191,17 @@ describe('ApplicationPage approved violation entry mode', () => {
     const user = userEvent.setup()
     renderPage('inmate_conduct_violations')
 
-    await user.click(await screen.findByRole('button', { name: 'Upload approved copy' }))
+    await user.click(await screen.findByRole('button', { name: 'Import signed violation' }))
     await user.click(screen.getByRole('button', { name: 'Begin approved save' }))
 
     expect(screen.getByRole('button', { name: 'Create form' })).toBeDisabled()
-    expect(screen.getByRole('button', { name: 'Upload approved copy' })).toBeDisabled()
+    expect(screen.getByRole('button', { name: 'Import signed violation' })).toBeDisabled()
     expect(screen.getByRole('button', { name: 'Services' })).toBeDisabled()
     expect(screen.getByTestId('approved-violation-upload')).toBeVisible()
 
     await user.click(screen.getByRole('button', { name: 'Finish approved save' }))
     expect(screen.getByRole('button', { name: 'Create form' })).toBeEnabled()
-    expect(screen.getByRole('button', { name: 'Upload approved copy' })).toBeEnabled()
+    expect(screen.getByRole('button', { name: 'Import signed violation' })).toBeEnabled()
     expect(screen.getByRole('button', { name: 'Services' })).toBeEnabled()
   })
 
@@ -210,6 +210,6 @@ describe('ApplicationPage approved violation entry mode', () => {
 
     expect(await screen.findByTestId('template-form')).toBeVisible()
     expect(screen.queryByRole('button', { name: 'Create form' })).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: 'Upload approved copy' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'Import signed violation' })).not.toBeInTheDocument()
   })
 })

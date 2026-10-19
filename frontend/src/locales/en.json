@@ -3529,6 +3529,21 @@
     "searchServices": "Search services…",
     "paperLanguage": "Paper language",
     "noServicesMatch": "No forms match your search.",
+    "groupCount_one": "{{count}} service",
+    "groupCount_other": "{{count}} services",
+    "backToAllServices": "All services",
+    "importSignedViolation": "Import Signed Violation",
+    "serviceGroups": {
+      "recruitment": "Recruitment",
+      "leave": "Leave & Attendance",
+      "payroll": "Payroll & Benefits",
+      "employee-affairs": "Employee Affairs",
+      "discipline": "Discipline & Conduct",
+      "inmates": "Inmates",
+      "administration": "Administration",
+      "logistics": "Logistics & Supplies",
+      "other": "Other"
+    },
     "nsCategory": "Record",
     "inmateReporter": {
       "title": "Inmate Conduct Violations",
@@ -3624,7 +3639,7 @@
     },
     "approvedViolation": {
       "createForm": "Create form",
-      "uploadApproved": "Upload approved copy",
+      "uploadApproved": "Import signed violation",
       "dropzone": "Choose approved PDF or image",
       "dropHint": "Drop the signed, typed copy here or choose a file.",
       "limit": "PDF, PNG, JPG, or JPEG · maximum 25 MB",

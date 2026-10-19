@@ -15,7 +15,9 @@ import employmentOfferArtwork from '@/assets/service-icons/employment-offer.webp
 import expenseClaimArtwork from '@/assets/service-icons/expense-claim.webp'
 import generalBookArtwork from '@/assets/service-icons/general-book.webp'
 import hrRequestArtwork from '@/assets/service-icons/hr-request.webp'
+import inmateApprovedUploadArtwork from '@/assets/service-icons/inmate-approved-upload.webp'
 import inmateConductArtwork from '@/assets/service-icons/inmate-conduct.webp'
+import inmateMonthlyStatisticsArtwork from '@/assets/service-icons/inmate-monthly-statistics.webp'
 import interviewAssessmentArtwork from '@/assets/service-icons/interview-assessment.webp'
 import interviewScoresArtwork from '@/assets/service-icons/interview-scores.webp'
 import jobDescriptionArtwork from '@/assets/service-icons/job-description.webp'
@@ -65,7 +67,9 @@ export type ServiceArtworkId =
   | 'expense-claim'
   | 'general-book'
   | 'hr-request'
+  | 'inmate-approved-upload'
   | 'inmate-conduct'
+  | 'inmate-monthly-statistics'
   | 'interview-assessment'
   | 'interview-scores'
   | 'job-description'
@@ -135,7 +139,9 @@ const ARTWORK_SRC: Record<ServiceArtworkId, string> = {
   'expense-claim': expenseClaimArtwork,
   'general-book': generalBookArtwork,
   'hr-request': hrRequestArtwork,
+  'inmate-approved-upload': inmateApprovedUploadArtwork,
   'inmate-conduct': inmateConductArtwork,
+  'inmate-monthly-statistics': inmateMonthlyStatisticsArtwork,
   'interview-assessment': interviewAssessmentArtwork,
   'interview-scores': interviewScoresArtwork,
   'job-description': jobDescriptionArtwork,
