@@ -448,6 +448,10 @@ def measure_signature_layout(
         sig_probe_rgb[drawing.signature_id] = rgb
         new_rel_id, _image = part.get_or_add_image(io.BytesIO(_probe_png_bytes(rgb)))
         blip.set(f"{{{_R_NS}}}embed", new_rel_id)
+        # A behind-text signature under a name or shaded cell reads back as
+        # that cell's colour; draw the probe in front (layout is unchanged).
+        if container.tag == qn("wp:anchor"):
+            container.set("behindDoc", "0")
 
     full_paragraphs = _iter_body_paragraphs(doc)
     eligible_indices = [i for i, p in enumerate(full_paragraphs) if not _is_table_nested(p)]
@@ -906,7 +910,11 @@ def replace_signature_image(
     doc = Document(str(source))
     part = doc.part
     docpr = next(
-        (c for c in doc.element.body.iter(qn("wp:docPr")) if c.get("name") == marker_name(signature_id)),
+        (
+            c
+            for c in doc.element.body.iter(qn("wp:docPr"))
+            if c.get("name") == marker_name(signature_id)
+        ),
         None,
     )
     if docpr is None:

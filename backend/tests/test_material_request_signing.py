@@ -126,6 +126,32 @@ def test_arabic_material_request_renders_three_items_and_center_manager_signatur
     assert "w:drawing" not in final.cells[3]._tc.xml
 
 
+def test_word_authored_material_request_signs_in_its_signature_cell(tmp_path):
+    """A Word-revised MRF has no tokens left, so signing finds the manager's
+    name; the signature lands in the Signature cell, never over the name
+    (SC-1914). English floats up into the empty Contact cell; Arabic, whose
+    label shares the name's row under a red header, stays inline."""
+    from app.core.docx_engine import stamp_signature_above_name
+
+    sig = _make_sig_png(tmp_path / "sig.png")
+    engine = DocxEngine(_TEMPLATES_DIR)
+    cases = (
+        ("Material Request Form", "SAEED RASHED", (4, 4, 1), (4, 5, 3), "wp:anchor"),
+        ("Material Request Form (Arabic)", "سعيد راشد", (1, 1, 1), (1, 1, 3), "wp:inline"),
+    )
+    for template_id, name, name_cell, sig_cell, container in cases:
+        out = tmp_path / f"{len(template_id)}.docx"
+        engine.fill(template_id, {"manager_name": name, "items": []}, out)
+
+        assert stamp_signature_above_name(out, str(sig), [name])
+
+        doc = Document(str(out))
+        t, r, c = name_cell
+        assert "w:drawing" not in doc.tables[t].rows[r].cells[c]._tc.xml, template_id
+        t, r, c = sig_cell
+        assert container in doc.tables[t].rows[r].cells[c]._tc.xml, template_id
+
+
 def test_arabic_material_request_tokens_keep_design_font_and_direction():
     from zipfile import ZipFile
 
