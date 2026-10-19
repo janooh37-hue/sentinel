@@ -185,6 +185,7 @@ def fill_image_behind_text_in_paragraph(
     dilate_radius_px: int = DEFAULT_SIG_BOLDNESS,
     center_horizontal: bool = False,
     signature_role: str | None = None,
+    keep_inline: bool = False,
 ) -> bool:
     """Place *image_path* as a behind-text float resting on *paragraph*'s line
     and rising UP into the blank space above it — used for the Leave Permit /
@@ -196,8 +197,9 @@ def fill_image_behind_text_in_paragraph(
     footer) and bottom-aligned to *paragraph*'s line. ``center_horizontal``
     centres it in the column; otherwise it pins to the left edge to sit above a
     left-aligned name block. ``signature_role`` marks the drawing for the
-    placement/identity scheme (None for non-signature images). Returns True
-    iff the image embedded.
+    placement/identity scheme (None for non-signature images). ``keep_inline``
+    skips the float: the image stays in the text flow and grows its row.
+    Returns True iff the image embedded.
     """
     drawing = _embed_image_run(
         paragraph, image_path, width_inches=width_inches, dilate_radius_px=dilate_radius_px
@@ -205,6 +207,8 @@ def fill_image_behind_text_in_paragraph(
     if drawing is None:
         return False
     _mark_signature_drawing(drawing, signature_role=signature_role)
+    if keep_inline:
+        return True
     try:
         return _convert_inline_drawing_to_anchor(
             drawing, bottom_align=True, center_horizontal=center_horizontal
