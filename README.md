@@ -17,9 +17,11 @@ application only. It is pulled to the office server.
 - Shared vehicle-photo library with reusable named images and lightweight WebP previews
 - Runs as an always-on Windows service on the office LAN
 
-Material requests have separate English and Arabic choices in Services, sharing
-the item field keys and in-app manager-signing workflow. The Arabic paper has 20
-item slots and asks only for delivery date, items, and the verifying manager.
+Material Request is one service in Services. An `English | العربية` tab in its
+form picks the paper to preview and save, and opens on the interface language.
+Switching keeps the delivery date, items, and manager, which both papers share
+with the same in-app manager-signing workflow. The Arabic paper has 20 item
+slots and asks only for delivery date, items, and the verifying manager.
 English-only delivery location, shipping address, justification, and requester
 signature fields are not offered on the Arabic form. Requester name,
 designation/contact, and manager signing date do not print because its design

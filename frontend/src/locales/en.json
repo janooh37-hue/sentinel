@@ -3526,6 +3526,7 @@
     "meta": "{{count}} templates · select a form to begin",
     "servicesTitle": "Services",
     "searchServices": "Search services…",
+    "paperLanguage": "Paper language",
     "noServicesMatch": "No forms match your search.",
     "nsCategory": "Record",
     "inmateReporter": {
