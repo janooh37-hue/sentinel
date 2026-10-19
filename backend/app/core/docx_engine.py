@@ -882,24 +882,22 @@ def _pp_admin_leave(doc: Any, ctx: dict[str, Any]) -> None:
 
 
 def _pp_material_request(doc: Any, ctx: dict[str, Any]) -> None:
-    """Float the signature images behind text so they don't grow their row and
-    push the form onto a second page (SC-0425 regression). The ``{{ *_sig }}``
-    tokens place the images inline; we convert them in place to behind-text
-    floats, bottom-aligned so each signature rests on its cell's line and
-    overflows UP into the empty cell above (the unused Contact cell) instead of
-    hanging down across the section divider.
+    """Float the English signature images behind text so they don't grow their
+    row and push the form onto a second page (SC-0425 regression). The
+    ``{{ *_sig }}`` tokens place the images inline; we convert them in place to
+    behind-text floats, bottom-aligned so each signature rests on its cell's
+    line and overflows UP into the empty cell above (the unused Contact cell)
+    instead of hanging down across the section divider.
 
-    Cells are located by their English or Arabic Signature label, so both MRF
-    layouts share this post-processing. No-op for signatures not embedded."""
+    The Arabic paper stays inline: its signature row sits under a red header
+    bar, which hides a lifted float, and the page has room for the taller row.
+    No-op for signatures not embedded."""
     sig_cells = []
     for table in doc.tables:
         for row in table.rows:
             for index, cell in enumerate(row.cells[:-1]):
-                if cell.text.strip() in {"Signature", "التوقيع"}:
+                if cell.text.strip() == "Signature":
                     sig_cells.append(row.cells[index + 1])
-    if not sig_cells:
-        log.warning("Material Request: signature cell missing — float skipped")
-        return
     for cell in sig_cells:
         float_inline_images_in_cell(cell, bottom_align=True)
 
