@@ -59,6 +59,7 @@ import type { TemplateDetailResponse, TemplateField } from '@/components/applica
 import { buildZodSchema } from '@/lib/applicationFormSchema'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { ServiceArtwork, type ServiceArtworkId } from '@/components/ui/service-artwork'
 import { TemplateForm } from '@/components/application/TemplateForm'
 import { AttachmentsBlock } from '@/components/application/AttachmentsBlock'
@@ -100,6 +101,19 @@ import {
 type TabValue = 'fields' | 'preview'
 
 type InmateEntryMode = 'create' | 'upload' | 'stats'
+
+/** Services printed on an English or an Arabic paper: one gallery tile, and a
+ *  language tab in the form choosing which backend form kind is generated. */
+const PAPER_LANGUAGES = [
+  { en: 'Material Request Form', ar: 'Material Request Form (Arabic)' },
+] as const
+
+/** Segmented tab: the shared underline trigger reshaped into a pill (as on Permits). */
+const paperTabCls =
+  'mb-0 h-11 rounded-md border-0 px-4 focus-visible:ring-offset-0 motion-reduce:transition-none md:h-8 md:text-[0.86em] ' +
+  'data-[state=inactive]:hover:bg-surface/60 ' +
+  'data-[state=active]:bg-surface data-[state=active]:font-semibold data-[state=active]:text-primary data-[state=active]:shadow-sm ' +
+  '[[data-theme=dark]_&]:data-[state=active]:bg-surface-tinted [[data-theme=dark]_&]:data-[state=active]:text-foreground [[data-theme=dark]_&]:data-[state=active]:shadow-none'
 
 // Adapter: translate the api response into the shape TemplateForm expects
 function adaptSchema(raw: Awaited<ReturnType<typeof api.getTemplateFields>>): TemplateDetailResponse {
@@ -285,6 +299,16 @@ function StandardApplicationPage(): React.JSX.Element {
   })
   const schema = schemaQuery.data ? adaptSchema(schemaQuery.data) : null
   const selectedMeta = templates.find((tpl) => tpl.id === selectedTemplate) ?? null
+  const paperPair =
+    PAPER_LANGUAGES.find((p) => p.en === selectedTemplate || p.ar === selectedTemplate) ?? null
+  // The tab needs both papers allowed; a revision stays on its book's paper.
+  const paperChoice =
+    paperPair &&
+    reviseBookId === null &&
+    templates.some((tpl) => tpl.id === paperPair.en) &&
+    templates.some((tpl) => tpl.id === paperPair.ar)
+      ? paperPair
+      : null
   const showNotifyEmployee = shouldShowNotifyToggle({
     notifiesEmployee: selectedMeta?.notifies_employee ?? false,
     autosendEnabled: settingsQuery.data?.sms_autosend_enabled ?? false,
@@ -853,6 +877,19 @@ function StandardApplicationPage(): React.JSX.Element {
       return
     }
     if (id === selectedTemplate) return
+    // A two-paper service opens on the UI language's paper, unless the user is
+    // switching from its other paper or revising a book.
+    const pair = PAPER_LANGUAGES.find((p) => p.en === id)
+    if (
+      pair &&
+      isAr &&
+      reviseBookId === null &&
+      selectedTemplate !== pair.ar &&
+      templates.some((tpl) => tpl.id === pair.ar)
+    ) {
+      navigate({ pathname: serviceHref(pair.ar), search: location.search }, { replace: true })
+      return
+    }
     if (id) handleSelectTemplate(id)
     else resetToGallery()
   }, [
@@ -861,6 +898,9 @@ function StandardApplicationPage(): React.JSX.Element {
     templates,
     slug,
     selectedTemplate,
+    isAr,
+    reviseBookId,
+    location.search,
     handleSelectTemplate,
     resetToGallery,
     navigate,
@@ -873,6 +913,30 @@ function StandardApplicationPage(): React.JSX.Element {
     },
     [employeeIdFromUrl, navigate],
   )
+
+  // Language tab: carry the values both papers print (items, delivery date,
+  // manager) into the other paper's draft, which the restore effect applies
+  // once that paper's fields load. Each paper keeps its own other fields.
+  const switchPaper = useCallback(
+    async (id: string) => {
+      if (!selectedTemplate || id === selectedTemplate) return
+      const target = await qc
+        .fetchQuery({
+          queryKey: ['template-fields', id],
+          queryFn: () => api.getTemplateFields(id),
+          staleTime: Infinity,
+        })
+        .catch(() => null)
+      const values = form.getValues() as Record<string, unknown>
+      saveDraft(selectedTemplate, { ...values, __attachments: attachmentsState })
+      const shared = Object.fromEntries(
+        (target?.fields ?? []).filter((f) => f.id in values).map((f) => [f.id, values[f.id]]),
+      )
+      saveDraft(id, { ...loadDraft(id), ...shared, __attachments: attachmentsState })
+      navigate({ pathname: serviceHref(id), search: location.search }, { replace: true })
+    },
+    [selectedTemplate, qc, form, attachmentsState, navigate, location.search],
+  )
   const openGallery = useCallback(() => {
     if (!approvedImportBusy) navigate('/services')
   }, [approvedImportBusy, navigate])
@@ -881,26 +945,38 @@ function StandardApplicationPage(): React.JSX.Element {
   useShortcutAction('newItem', openGallery)
 
   const previewTabLabel = t('application.tabs.preview')
-  const selectedTemplateName = selectedMeta
-    ? isAr
-      ? selectedMeta.name_ar
-      : selectedMeta.name_en
-    : ''
+  // A two-paper service is titled by its English entry's catalog name.
+  const titleMeta =
+    (paperPair && templates.find((tpl) => tpl.id === paperPair.en)) || selectedMeta
+  const selectedTemplateName = titleMeta ? (isAr ? titleMeta.name_ar : titleMeta.name_en) : ''
   const selectedTemplateArtwork = selectedTemplate
     ? artworkForTemplate(selectedTemplate)
     : undefined
 
+  // Gallery tiles: the Arabic paper of a two-paper service hides behind its
+  // English tile (when both are allowed) and is reached through the form's tab.
+  const galleryTemplates = useMemo(
+    () =>
+      templates.filter(
+        (tpl) =>
+          !PAPER_LANGUAGES.some(
+            (p) => p.ar === tpl.id && templates.some((other) => other.id === p.en),
+          ),
+      ),
+    [templates],
+  )
+
   // Gallery filter — match on either language's name or the canonical id.
   const galleryItems = useMemo(() => {
     const q = query.trim().toLowerCase()
-    if (!q) return templates
-    return templates.filter(
+    if (!q) return galleryTemplates
+    return galleryTemplates.filter(
       (tpl) =>
         tpl.name_en.toLowerCase().includes(q) ||
         tpl.name_ar.toLowerCase().includes(q) ||
         tpl.id.toLowerCase().includes(q),
     )
-  }, [templates, query])
+  }, [galleryTemplates, query])
 
   // Synthetic tiles show only when their destination would let the user act.
   // National Service — record shortcut (no DOCX form).
@@ -937,7 +1013,7 @@ function StandardApplicationPage(): React.JSX.Element {
                 {t('application.servicesTitle')}
               </h2>
               <div className="mt-1 text-[0.86em] text-muted-foreground">
-                {t('application.meta', { count: templates.length })}
+                {t('application.meta', { count: galleryTemplates.length })}
               </div>
             </header>
 
@@ -1058,6 +1134,22 @@ function StandardApplicationPage(): React.JSX.Element {
                 </div>
               </div>
             </header>
+
+            {paperChoice && selectedTemplate && (
+              <Tabs value={selectedTemplate} onValueChange={(id) => void switchPaper(id)} className="mb-4">
+                <TabsList
+                  aria-label={t('application.paperLanguage')}
+                  className="inline-flex gap-1 rounded-lg border border-border bg-surface-tinted p-1 [[data-theme=dark]_&]:bg-background"
+                >
+                  <TabsTrigger value={paperChoice.en} lang="en" className={paperTabCls}>
+                    English
+                  </TabsTrigger>
+                  <TabsTrigger value={paperChoice.ar} lang="ar" className={paperTabCls}>
+                    العربية
+                  </TabsTrigger>
+                </TabsList>
+              </Tabs>
+            )}
 
             {isInmateService && (
               <div data-print-hide className="mb-4 inline-flex rounded-xl border border-border bg-surface-tinted p-1">

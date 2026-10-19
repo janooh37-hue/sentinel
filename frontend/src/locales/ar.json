@@ -3824,6 +3824,7 @@
     "meta": "{{count}} نموذجًا · اختر نموذجًا للبدء",
     "servicesTitle": "الخدمات",
     "searchServices": "بحث في الخدمات…",
+    "paperLanguage": "لغة النموذج",
     "noServicesMatch": "لا توجد نماذج مطابقة لبحثك.",
     "nsCategory": "سجل",
     "inmateReporter": {

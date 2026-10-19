@@ -9,6 +9,7 @@ signing path:
      was chosen at generation (stored on ``Book.doc_manager_id``); the signed
      copy used to render it blank.
 """
+
 from __future__ import annotations
 
 from pathlib import Path
@@ -66,3 +67,91 @@ def test_manager_signature_is_floated_behind_text(tmp_path):
 
     voffsets = re.findall(r"<wp:positionV[^>]*>\s*<wp:posOffset>(-?\d+)</wp:posOffset>", cell_xml)
     assert voffsets and int(voffsets[0]) < 0, f"signature not lifted up (vOffset={voffsets})"
+
+
+def test_arabic_material_request_renders_three_items_and_center_manager_signature(tmp_path):
+    """Only the selected manager fills the center-manager approval slot."""
+    from zipfile import ZipFile
+
+    sig = _make_sig_png(tmp_path / "arabic-sig.png")
+    out = tmp_path / "arabic-mrf.docx"
+    data = {
+        "department": "قسم الأمن",
+        "project_site": "الوثبة",
+        "request_date": "15/10/2026",
+        "delivery_date": "20/10/2026",
+        "name": "طالب المواد",
+        "manager_name": "مدير العقد",
+        "employee_sig_path": str(sig),
+        "manager_sig_path": str(sig),
+        "items": [
+            {
+                "sno": str(i),
+                "code": f"AR-{i}",
+                "description": f"مادة {i}",
+                "unit": "قطعة",
+                "qty": str(i + 2),
+                "remarks": f"ملاحظة {i}",
+            }
+            for i in range(1, 4)
+        ],
+    }
+    DocxEngine(_TEMPLATES_DIR).fill("Material Request Form (Arabic)", data, out)
+    with ZipFile(out) as archive:
+        xml = "".join(
+            archive.read(name).decode("utf-8")
+            for name in archive.namelist()
+            if name.startswith("word/") and name.endswith(".xml")
+        )
+    assert "{{" not in xml and "{%" not in xml
+    for key in ("department", "project_site", "request_date", "delivery_date", "manager_name"):
+        assert data[key] in xml
+    assert data["name"] not in xml
+    for item in data["items"]:
+        for value in item.values():
+            assert value in xml
+    doc = Document(str(out))
+    assert len(doc.tables[0].rows) == 18
+    approval = doc.tables[1]
+    assert approval.rows[1].cells[1].text == data["manager_name"]
+    cell_xml = approval.rows[1].cells[3]._tc.xml
+    assert 'behindDoc="1"' in cell_xml
+    assert "wp:inline" not in cell_xml
+    assert approval.rows[3].cells[1].text == ""
+    assert "w:drawing" not in approval.rows[3].cells[3]._tc.xml
+    final = doc.tables[2].rows[2]
+    assert final.cells[1].text == ""
+    assert "w:drawing" not in final.cells[3]._tc.xml
+
+
+def test_arabic_material_request_tokens_keep_design_font_and_direction():
+    from zipfile import ZipFile
+
+    from lxml import etree
+
+    from app.core.constants import TEMPLATE_FILES
+
+    ns = {"w": "http://schemas.openxmlformats.org/wordprocessingml/2006/main"}
+    w = f"{{{ns['w']}}}"
+    token_count = 0
+    template = _TEMPLATES_DIR / TEMPLATE_FILES["Material Request Form (Arabic)"]
+    with ZipFile(template) as archive:
+        for part in ("word/document.xml", "word/header2.xml"):
+            tree = etree.fromstring(archive.read(part))
+            for text in tree.findall(".//w:t", ns):
+                token = text.text or ""
+                if "{{" not in token or "manager_sig" in token:
+                    continue
+                token_count += 1
+                props = text.getparent().find("w:rPr", ns)
+                assert props is not None, token
+                assert props.find("w:rFonts", ns).get(w + "ascii") == "Univers Next Arabic"
+                assert props.find("w:sz", ns).get(w + "val") == "19"
+                assert props.find("w:szCs", ns).get(w + "val") == "19"
+                rtl = props.find("w:rtl", ns)
+                assert rtl is not None, token
+                ltr = any(f"'{key}'" in token for key in ("sno", "code", "qty")) or (
+                    token in ("{{ request_date }}", "{{ delivery_date }}")
+                )
+                assert rtl.get(w + "val") == ("0" if ltr else None), token
+    assert token_count == 107
