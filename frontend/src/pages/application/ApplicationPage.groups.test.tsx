@@ -98,3 +98,33 @@ describe('Services gallery folders', () => {
     expect(screen.getByTestId('location')).toHaveTextContent('/services/inmate_conduct_violations?mode=upload')
   })
 })
+
+describe('Folder preview panel', () => {
+  it('previews three services and counts the rest, hidden from assistive tech', async () => {
+    vi.mocked(api.listTemplates).mockResolvedValue({
+      items: [
+        'Leave Application Form',
+        'Leave Permit Form',
+        'Administrative Leave Form',
+        'Duty Resumption Form',
+        'Staff Attendance Form',
+        'Leave Encashment Form',
+      ].map(template),
+    } as never)
+    renderServices('/services')
+
+    const folder = await screen.findByRole('button', { name: /Leave & Attendance/ })
+    const panel = folder.querySelector('[aria-hidden="true"]')
+    expect(panel).not.toBeNull()
+    // 6 templates + 2 synthetic services (absence, national service) = 8 → 3 icons + "+5".
+    expect(panel).toHaveTextContent('+5')
+    expect(folder).toHaveAccessibleName(/Leave & Attendance 8 services/)
+  })
+
+  it('shows no overflow cell when a folder has three or fewer services', async () => {
+    renderServices('/services')
+
+    const folder = await screen.findByRole('button', { name: /Administration/ })
+    expect(folder.querySelector('[aria-hidden="true"]')?.textContent ?? '').not.toContain('+')
+  })
+})

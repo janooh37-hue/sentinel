@@ -1193,8 +1193,10 @@ function StandardApplicationPage(): React.JSX.Element {
                     <FolderCell
                       key={g.id}
                       name={t(`application.serviceGroups.${g.id}`)}
+                      description={t(`application.serviceGroupDescriptions.${g.id}`)}
                       count={t('application.groupCount', { count: g.tiles.length })}
                       icon={g.icon}
+                      tiles={g.tiles}
                       onSelect={() => setGroupId(g.id)}
                     />
                   ))}
@@ -1645,32 +1647,61 @@ function StandardApplicationPage(): React.JSX.Element {
 // Sub-components
 // ---------------------------------------------------------------------------
 
-/** One folder in the Services gallery: the group's artwork, name and service count. */
+/** One folder in the Services gallery, with a decorative preview of its visible services. */
 function FolderCell({
   name,
+  description,
   count,
   icon,
+  tiles,
   onSelect,
 }: {
   name: string
+  description: string
   count: string
   icon: string
+  tiles: readonly GalleryTile[]
   onSelect: () => void
 }): React.JSX.Element {
   return (
     <button
       type="button"
       onClick={onSelect}
+      aria-label={`${name} ${count}`}
       className="service-tile group relative flex h-full min-h-[170px] w-full flex-col items-start rounded-2xl border-t-4 border-primary bg-surface p-4 text-start shadow-sm ring-1 ring-hairline transition-[transform,box-shadow] duration-200 ease-[cubic-bezier(0.16,1,0.3,1)] hover:-translate-y-1 hover:shadow-md focus-visible:-translate-y-1 focus-visible:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary motion-reduce:!translate-none motion-reduce:transition-none"
     >
-      <img
-        src={icon}
-        alt=""
-        draggable={false}
-        className="h-[4.5rem] w-[4.5rem] object-contain transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:-translate-y-1.5 group-focus-visible:-translate-y-1.5 motion-reduce:!translate-none motion-reduce:transition-none"
-      />
+      <span className="flex min-h-[5.125rem] w-full items-start gap-3">
+        <img
+          src={icon}
+          alt=""
+          draggable={false}
+          className="h-[4.5rem] w-[4.5rem] min-w-0 object-contain transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:-translate-y-1.5 group-focus-visible:-translate-y-1.5 motion-reduce:!translate-none motion-reduce:transition-none"
+        />
+        <span
+          aria-hidden="true"
+          className="pointer-events-none ms-auto grid shrink-0 grid-cols-2 gap-[0.3rem] rounded-[0.8rem] bg-surface-tinted p-[0.4rem] opacity-55 transition-opacity duration-200 group-hover:opacity-85 group-focus-visible:opacity-85 motion-reduce:transition-none"
+        >
+          {tiles.slice(0, tiles.length === 4 ? 4 : 3).map((tile) => (
+            <span key={tile.id} className="grid h-8 w-8 place-items-center rounded-lg bg-surface p-1">
+              {tile.artwork ? (
+                <ServiceArtwork artwork={tile.artwork} size="row" />
+              ) : (
+                <span className="text-lg leading-none">{tile.emoji}</span>
+              )}
+            </span>
+          ))}
+          {tiles.length > 4 && (
+            <span className="grid h-8 w-8 place-items-center rounded-lg bg-surface text-[0.7em] font-bold text-muted-foreground">
+              <bdi dir="ltr">+{tiles.length - 3}</bdi>
+            </span>
+          )}
+        </span>
+      </span>
       <span className="mt-2.5 line-clamp-2 text-[0.95em] font-semibold leading-snug text-foreground">
         {name}
+      </span>
+      <span className="mt-1 block w-full line-clamp-2 text-[0.72em] leading-relaxed text-muted-foreground">
+        {description}
       </span>
       <span className="mt-auto pt-1.5 text-[0.68em] font-medium uppercase tracking-[0.06em] text-muted-foreground">
         {count}

@@ -3533,6 +3533,17 @@
     "groupCount_other": "{{count}} services",
     "backToAllServices": "All services",
     "importSignedViolation": "Import Signed Violation",
+    "serviceGroupDescriptions": {
+      "recruitment": "From the manpower request to the job offer.",
+      "leave": "Leave requests, permits, resumption and attendance.",
+      "payroll": "Salary transfers, advances, loans, allowances and claims.",
+      "employee-affairs": "Employee records, passports, appraisals and exit.",
+      "discipline": "Violations, warnings and breaches of discipline.",
+      "inmates": "Conduct violations, guard orders, handover and destruction.",
+      "administration": "Official letters, reports and daily operations notes.",
+      "logistics": "Material requests and acknowledgment forms.",
+      "other": "Forms that are not in a folder yet."
+    },
     "serviceGroups": {
       "recruitment": "Recruitment",
       "leave": "Leave & Attendance",
