@@ -9,7 +9,7 @@
     dev-channel.ps1 status               branch vs origin/main + server health
     dev-channel.ps1 promote [-Yes]       push tested dev commits to origin/main
 
-    After promote, production still needs `scripts\mng.ps1 update` on GSSGAPP.
+    After promote, production still needs `scripts\mng.ps1 update` on GSSGIT.
     See docs/dev-channel.md and ADR 0004.
 #>
 param(
@@ -119,7 +119,7 @@ function Promote {
     $commits
     if (-not $Yes -and (Read-Host "Push these $($commits.Count) commit(s) to origin/main? [y/N]") -ne 'y') { return }
     Invoke-Native { git push origin HEAD:main }
-    Write-Host 'Pushed to main. To go live, on GSSGAPP run: scripts\mng.ps1 update' -ForegroundColor Green
+    Write-Host 'Pushed to main. To go live, on GSSGIT run: scripts\mng.ps1 update' -ForegroundColor Green
 }
 
 switch ($Command) {

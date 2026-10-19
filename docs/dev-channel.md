@@ -1,6 +1,6 @@
 # Laptop dev channel (GSSGLT)
 
-One feature worktree at a time uses the shared, throwaway `C:\Users\GSSG\gssg-dev-data` snapshot. Never run this on GSSGAPP or point `GSSG_DATA_DIR` at production. See [ADR 0004](adr/0004-dev-channel-on-laptop-with-production-snapshot.md).
+One feature worktree at a time uses the shared, throwaway `C:\Users\GSSG\gssg-dev-data` snapshot. Never run this on GSSGIT or point `GSSG_DATA_DIR` at production. See [ADR 0004](adr/0004-dev-channel-on-laptop-with-production-snapshot.md).
 
 ## Daily channel
 
@@ -12,14 +12,14 @@ The worktree `.worktrees\160-laptop-dev` holds branch `dev`, whose upstream is `
 | `sync` | Rebase `dev` on `origin/main`; reinstall deps if `requirements.txt`/lockfile changed; rebuild the frontend if `frontend/` changed; `alembic upgrade head`; restart. Refuses on uncommitted changes and aborts on conflicts. |
 | `publish` | Build the frontend, migrate, restart. Use after local edits. |
 | `restart` / `status` | Restart the detached `backend\serve.py` on 8765 / show branch and server health. |
-| `promote` | Push `dev` commits to `origin/main` after confirmation. Refuses if main moved since the last sync. Then run `scripts\mng.ps1 update` on GSSGAPP. |
+| `promote` | Push `dev` commits to `origin/main` after confirmation. Refuses if main moved since the last sync. Then run `scripts\mng.ps1 update` on GSSGIT. |
 
 The server log is `.tmp\dev-server.log.err`. The `tailscale serve` proxy below should point at `http://127.0.0.1:8765`.
 
 ## Restore a backup
 
 1. On GSSGLT, confirm **C:** is protected with BitLocker in an **elevated** PowerShell window: `manage-bde -status C:`. Require `Protection Status: Protection On` and `Percentage Encrypted: 100.0%`. Stop if this cannot be confirmed. Do not transfer HR data before this check.
-2. Copy a completed `gssg-backup-YYYYMMDD-HHMMSS` directory made by `app.services.backup_service` from GSSGAPP to GSSGLT using a protected channel. Never copy the live `gssg.db`, its WAL sidecars, the production `.env`, `.email_key`, or `.vapid_key`. The backup contains a consistent SQLite snapshot and the record file trees.
+2. Copy a completed `gssg-backup-YYYYMMDD-HHMMSS` directory made by `app.services.backup_service` from GSSGIT to GSSGLT using a protected channel. Never copy the live `gssg.db`, its WAL sidecars, the production `.env`, `.email_key`, or `.vapid_key`. The backup contains a consistent SQLite snapshot and the record file trees.
 3. Stop the dev backend. For a refresh, first move aside or remove the *old dev data directory* after checking its path; a changed branch may have advanced its Alembic revision. The command below refuses to overwrite any existing directory, including an empty one. In PowerShell on GSSGLT (replace only `$backup` with the actual copied backup path):
 
    ```powershell
@@ -59,4 +59,4 @@ On GSSGLT, with the backend and Vite running, run `tailscale serve --bg --https=
 
 ## Promotion and rollback rehearsal
 
-Before a real release, rehearse in a disposable worktree/branch: merge the feature branch into a temporary branch based on `main`, build and exercise the changed behavior against **dev data only**; record the Alembic revision before and after. Revert the merge in that temporary branch (or revert the feature commit), restore a fresh dev snapshot if migrations moved ahead, build and check health again. Do not run `mng update` on GSSGAPP as a dry run. A real promotion is admin-only: merge to `main`, push `origin/main`, then `scripts\mng.ps1 update` on GSSGAPP outside working hours. Real rollback is a revert on `main`, push, then `update`; record the applied revision for each release. The pre-migration backup from `mng.ps1` is the last resort.
+Before a real release, rehearse in a disposable worktree/branch: merge the feature branch into a temporary branch based on `main`, build and exercise the changed behavior against **dev data only**; record the Alembic revision before and after. Revert the merge in that temporary branch (or revert the feature commit), restore a fresh dev snapshot if migrations moved ahead, build and check health again. Do not run `mng update` on GSSGIT as a dry run. A real promotion is admin-only: merge to `main`, push `origin/main`, then `scripts\mng.ps1 update` on GSSGIT outside working hours. Real rollback is a revert on `main`, push, then `update`; record the applied revision for each release. The pre-migration backup from `mng.ps1` is the last resort.
