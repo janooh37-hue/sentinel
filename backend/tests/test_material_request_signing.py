@@ -115,8 +115,10 @@ def test_arabic_material_request_renders_three_items_and_center_manager_signatur
     approval = doc.tables[1]
     assert approval.rows[1].cells[1].text == data["manager_name"]
     cell_xml = approval.rows[1].cells[3]._tc.xml
-    assert 'behindDoc="1"' in cell_xml
-    assert "wp:inline" not in cell_xml
+    # Inline, not a lifted behind-text float: the row above is a red header bar
+    # that hid the floated signature (SC-1911).
+    assert "wp:inline" in cell_xml
+    assert "wp:anchor" not in cell_xml
     assert approval.rows[3].cells[1].text == ""
     assert "w:drawing" not in approval.rows[3].cells[3]._tc.xml
     final = doc.tables[2].rows[2]
