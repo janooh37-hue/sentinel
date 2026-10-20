@@ -29,6 +29,7 @@ from fastapi.responses import FileResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.api._offload import run_exclusive
 from app.api._responses import maybe_base64
 from app.api.deps import get_current_user, require_capability
 from app.api.errors import AppError, ValidationFailedError
@@ -1839,55 +1840,60 @@ async def scan_back_book(
 ) -> ScanBackResult:
     """Route a General Book signed scan by its Reference barcode."""
     data = await file.read()
-    classification = scan_triage_service.classify(data, db=db, employees=[])
-    codes = [code for code in classification.read.codes if code.source == "code39"]
-    if not codes:
-        raise ValidationFailedError(
-            "BOOK_BARCODE_UNREADABLE",
-            "تعذر قراءة الباركود المرجعي للكتاب العام",
-        )
-    decoded = codes[0]
-    if isinstance(classification, scan_triage_service.ReturnedFormClassification):
-        match = classification.match
-        if match.book.approval_state != "awaiting_scan":
+    filename = file.filename or "scan"
+
+    def work() -> ScanBackResult:
+        classification = scan_triage_service.classify(data, db=db, employees=[])
+        codes = [code for code in classification.read.codes if code.source == "code39"]
+        if not codes:
             raise ValidationFailedError(
-                "BOOK_NOT_AWAITING_SCAN",
-                "هذا السجل غير جاهز لاستلام النسخة الموقعة",
+                "BOOK_BARCODE_UNREADABLE",
+                "تعذر قراءة الباركود المرجعي للكتاب العام",
             )
-        if match.confidence == 1.0:
-            row = book_service.add_attachment(
-                db,
-                match.book.book_id,
-                file.filename or "scan",
-                data,
-                user=user,
-                as_signed=True,
-            )
-            return ScanBackResult(
-                book_id=row.id,
-                ref_number=row.ref_number,
-                outcome="filed",
-            )
-    scan_inbox_service.park_scan_back(
-        db,
-        filename=file.filename or "scan",
-        data=data,
-        user=user,
-        classification=classification,
-        ref_number=decoded.ref,
-    )
-    return ScanBackResult(
-        book_id=(
-            classification.match.book.book_id
-            if isinstance(
-                classification,
-                scan_triage_service.ReturnedFormClassification,
-            )
-            else None
-        ),
-        ref_number=decoded.ref,
-        outcome="parked",
-    )
+        decoded = codes[0]
+        if isinstance(classification, scan_triage_service.ReturnedFormClassification):
+            match = classification.match
+            if match.book.approval_state != "awaiting_scan":
+                raise ValidationFailedError(
+                    "BOOK_NOT_AWAITING_SCAN",
+                    "هذا السجل غير جاهز لاستلام النسخة الموقعة",
+                )
+            if match.confidence == 1.0:
+                row = book_service.add_attachment(
+                    db,
+                    match.book.book_id,
+                    filename,
+                    data,
+                    user=user,
+                    as_signed=True,
+                )
+                return ScanBackResult(
+                    book_id=row.id,
+                    ref_number=row.ref_number,
+                    outcome="filed",
+                )
+        scan_inbox_service.park_scan_back(
+            db,
+            filename=filename,
+            data=data,
+            user=user,
+            classification=classification,
+            ref_number=decoded.ref,
+        )
+        return ScanBackResult(
+            book_id=(
+                classification.match.book.book_id
+                if isinstance(
+                    classification,
+                    scan_triage_service.ReturnedFormClassification,
+                )
+                else None
+            ),
+            ref_number=decoded.ref,
+            outcome="parked",
+        )
+
+    return await run_exclusive(work)
 
 
 @router.post("/{book_id}/attachments", response_model=BookRead)
@@ -1902,12 +1908,16 @@ async def add_book_attachment(
     signature). For a ``none``/``pending`` book, ``as_signed=true`` records the
     upload as the signed copy and approves the record; otherwise it is filed as a
     plain attachment. Authority is ``books.edit`` for every path."""
-    _require_full_book(db, user, book_id)
     data = await upload.read()
-    row = book_service.add_attachment(
-        db, book_id, upload.filename or "scan", data, user=user, as_signed=as_signed
-    )
-    return _build_book_response(db, row, user)
+
+    def work() -> BookRead:
+        _require_full_book(db, user, book_id)
+        row = book_service.add_attachment(
+            db, book_id, upload.filename or "scan", data, user=user, as_signed=as_signed
+        )
+        return _build_book_response(db, row, user)
+
+    return await run_exclusive(work)
 
 
 @router.get("/{book_id}/attachments/{index}")
@@ -1965,10 +1975,14 @@ async def replace_book_attachment(
     upload: Annotated[UploadFile, File(alias="file")],
 ) -> BookRead:
     """Replace one plain attachment's bytes, keeping its index (fix a wrong upload)."""
-    _require_full_book(db, user, book_id)
     data = await upload.read()
-    row = book_service.replace_attachment(db, book_id, index, upload.filename or "scan", data)
-    return _build_book_response(db, row, user)
+
+    def work() -> BookRead:
+        _require_full_book(db, user, book_id)
+        row = book_service.replace_attachment(db, book_id, index, upload.filename or "scan", data)
+        return _build_book_response(db, row, user)
+
+    return await run_exclusive(work)
 
 
 @router.put("/{book_id}/signed-copy", response_model=BookRead)
@@ -1979,12 +1993,16 @@ async def replace_signed_copy(
     upload: Annotated[UploadFile, File(alias="file")],
 ) -> BookRead:
     """Replace the signed copy's bytes, keeping the record approved."""
-    _require_full_book(db, user, book_id)
     data = await upload.read()
-    row = book_service.replace_signed_copy(
-        db, book_id, upload.filename or "signed", data, user=user
-    )
-    return _build_book_response(db, row, user)
+
+    def work() -> BookRead:
+        _require_full_book(db, user, book_id)
+        row = book_service.replace_signed_copy(
+            db, book_id, upload.filename or "signed", data, user=user
+        )
+        return _build_book_response(db, row, user)
+
+    return await run_exclusive(work)
 
 
 @router.delete("/{book_id}/signed-copy", response_model=BookRead)

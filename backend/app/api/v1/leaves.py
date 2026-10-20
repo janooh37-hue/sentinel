@@ -22,6 +22,7 @@ from fastapi import APIRouter, Depends, File, Query, UploadFile, status
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
+from app.api._offload import run_exclusive
 from app.api._responses import maybe_base64
 from app.api.deps import require_capability
 from app.db.models import Leave, User
@@ -210,10 +211,14 @@ async def upload_leave_certificate(
     upload: Annotated[UploadFile, File(alias="file")],
 ) -> LeaveRead:
     data = await upload.read()
-    row = leave_service.add_certificate(
-        db, leave_id, upload.filename or "certificate", data, actor=_user.email
-    )
-    return _with_employee_name(LeaveRead.model_validate(row), row)
+
+    def work() -> LeaveRead:
+        row = leave_service.add_certificate(
+            db, leave_id, upload.filename or "certificate", data, actor=_user.email
+        )
+        return _with_employee_name(LeaveRead.model_validate(row), row)
+
+    return await run_exclusive(work)
 
 
 @router.post("/{leave_id}/return", response_model=LeaveRead)

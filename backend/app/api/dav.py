@@ -18,13 +18,17 @@ from __future__ import annotations
 import hashlib
 import logging
 import os
+import uuid
+from contextlib import suppress
 from email.utils import formatdate
 from typing import Annotated
 from xml.etree import ElementTree
 
 from fastapi import APIRouter, Depends, Request, Response
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
+from starlette.datastructures import Headers
 
 from app.db.session import get_db
 from app.services import word_session_repo
@@ -58,17 +62,33 @@ async def dav_handler(
     request: Request,
     db: Annotated[Session, Depends(get_db)],
 ) -> Response:
-    method = request.method.upper()
+    # The request body is awaitable and stays on the loop. Everything after it — token and
+    # DB lookups, the Word working-file write and the ``record_put`` commit (up to the
+    # 5 s SQLite busy wait) — is blocking, so it runs in the worker pool; the ``db``
+    # session is handed over whole and used by that one thread only.
     body = await request.body()
+    return await run_in_threadpool(
+        _serve_dav, token, filename, request.method.upper(), request.headers, body, db
+    )
+
+
+def _serve_dav(
+    token: str,
+    filename: str,
+    method: str,
+    headers: Headers,
+    body: bytes,
+    db: Session,
+) -> Response:
     event = {
         "dav_correlation": hashlib.sha256(token.encode()).hexdigest()[:12],
         "dav_method": method,
         "dav_path_shape": "collection" if filename == "" else "file",
-        "dav_depth": request.headers.get("depth"),
+        "dav_depth": headers.get("depth"),
         "dav_propfind_properties": _propfind_names(body) if method == "PROPFIND" else [],
         "dav_body_length": len(body),
-        "dav_if_present": "if" in request.headers,
-        "dav_lock_token_present": "lock-token" in request.headers,
+        "dav_if_present": "if" in headers,
+        "dav_lock_token_present": "lock-token" in headers,
     }
 
     def respond(response: Response, session_id: int | None = None) -> Response:
@@ -135,10 +155,18 @@ async def dav_handler(
     if method == "PUT":
         if not body:
             return respond(Response(status_code=400), sess.id)
-        tmp = path + ".tmp"
-        with open(tmp, "wb") as fh:
-            fh.write(body)
-        os.replace(tmp, path)
+        # A per-request temp name: two overlapping PUTs (e.g. a client retry while the first
+        # is still in flight) must not truncate each other's temp file. The replace is atomic;
+        # the last one to finish wins, exactly as when requests were served one at a time.
+        tmp = f"{path}.{uuid.uuid4().hex}.tmp"
+        try:
+            with open(tmp, "wb") as fh:
+                fh.write(body)
+            os.replace(tmp, path)
+        except BaseException:
+            with suppress(OSError):
+                os.unlink(tmp)
+            raise
         word_session_repo.record_put(db, sess.id)
         return respond(Response(status_code=204), sess.id)
 

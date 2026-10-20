@@ -8,6 +8,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from sqlalchemy.orm import Session
 
+from app.api._offload import run_exclusive
 from app.api.deps import require_capability
 from app.db.models import AuditLog, User
 from app.db.session import get_db
@@ -124,58 +125,64 @@ async def send_announcement(
     if not (group_ids or employee_ids):
         raise HTTPException(status_code=422, detail="at least one group or employee required")
 
-    # Resolve attachment.
-    attachment: announce_service.Attachment | None = None
-    if file is not None:
-        attachment = announce_service.Attachment(
-            filename=file.filename or "file",
-            data=await file.read(),
-        )
-    elif book_id is not None:
-        try:
-            filename, data = announce_service.resolve_book_pdf(db, book_id)
-        except announce_service.BookPdfError as exc:
-            raise HTTPException(status_code=422, detail=str(exc)) from exc
-        attachment = announce_service.Attachment(filename=filename, data=data)
+    upload_name = (file.filename or "file") if file is not None else None
+    upload_data = await file.read() if file is not None else None
 
-    # Require text or attachment.
-    if not text.strip() and attachment is None:
-        raise HTTPException(status_code=422, detail="text or attachment required")
+    def work() -> tuple[
+        announce_service.AnnouncementResult | None, list[announce_service.DirectSendResult]
+    ]:
+        # Resolve attachment.
+        attachment: announce_service.Attachment | None = None
+        if upload_data is not None and upload_name is not None:
+            attachment = announce_service.Attachment(filename=upload_name, data=upload_data)
+        elif book_id is not None:
+            try:
+                filename, data = announce_service.resolve_book_pdf(db, book_id)
+            except announce_service.BookPdfError as exc:
+                raise HTTPException(status_code=422, detail=str(exc)) from exc
+            attachment = announce_service.Attachment(filename=filename, data=data)
 
-    # Group fan-out (unchanged) — only when groups were requested.
-    result = None
-    if group_ids:
-        available = announce_service.groups_available(db)
-        target_ids = set(group_ids)
-        groups = [(g.id, g.name) for g in available if g.id in target_ids]
-        if not groups:
-            raise HTTPException(status_code=422, detail="no matching groups found")
-        result = announce_service.send_announcement(
-            db,
-            groups=groups,
-            text=text,
-            attachment=attachment,
-            book_id=(book_id if file is None else None),
-            sent_by=user.id,
-            mentions=mentions or [],
-        )
+        # Require text or attachment.
+        if not text.strip() and attachment is None:
+            raise HTTPException(status_code=422, detail="text or attachment required")
 
-    # Direct (private) fan-out. @mentions are a group-chat concept — the plain
-    # text is sent as-is to each employee.
-    try:
-        direct = (
-            announce_service.send_direct_announcement(
+        # Group fan-out (unchanged) — only when groups were requested.
+        result = None
+        if group_ids:
+            available = announce_service.groups_available(db)
+            target_ids = set(group_ids)
+            groups = [(g.id, g.name) for g in available if g.id in target_ids]
+            if not groups:
+                raise HTTPException(status_code=422, detail="no matching groups found")
+            result = announce_service.send_announcement(
                 db,
-                employee_ids=employee_ids,
-                text=text.strip(),
+                groups=groups,
+                text=text,
                 attachment=attachment,
+                book_id=(book_id if file is None else None),
                 sent_by=user.id,
+                mentions=mentions or [],
             )
-            if employee_ids
-            else []
-        )
-    except notify_dispatch.NotifyDisabledError as exc:
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+        # Direct (private) fan-out. @mentions are a group-chat concept — the plain
+        # text is sent as-is to each employee.
+        try:
+            direct = (
+                announce_service.send_direct_announcement(
+                    db,
+                    employee_ids=employee_ids,
+                    text=text.strip(),
+                    attachment=attachment,
+                    sent_by=user.id,
+                )
+                if employee_ids
+                else []
+            )
+        except notify_dispatch.NotifyDisabledError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        return result, direct
+
+    result, direct = await run_exclusive(work)
 
     sent = (result.sent if result else 0) + sum(1 for d in direct if d.ok)
     failed = (result.failed if result else 0) + sum(1 for d in direct if not d.ok)

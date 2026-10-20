@@ -17,6 +17,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, File, Query, Response, UploadFile, status
 from sqlalchemy.orm import Session
 
+from app.api._offload import run_exclusive
 from app.api._responses import maybe_base64
 from app.api.deps import require_capability
 from app.api.errors import NotFoundError, ValidationFailedError
@@ -72,11 +73,17 @@ async def upload_manager_signature(
     upload: Annotated[UploadFile, File(alias="file")],
 ) -> dict[str, str]:
     data = await upload.read()
-    try:
-        path = manager_service.save_manager_signature(db, manager_id, data)
-    except signature_core.SignatureError as exc:
-        raise ValidationFailedError("SIGNATURE_INVALID", str(exc), manager_id=manager_id) from exc
-    return {"path": str(path), "filename": path.name}
+
+    def work() -> dict[str, str]:
+        try:
+            path = manager_service.save_manager_signature(db, manager_id, data)
+        except signature_core.SignatureError as exc:
+            raise ValidationFailedError(
+                "SIGNATURE_INVALID", str(exc), manager_id=manager_id
+            ) from exc
+        return {"path": str(path), "filename": path.name}
+
+    return await run_exclusive(work)
 
 
 @router.get("/{manager_id}/signature")
