@@ -8,7 +8,7 @@
     dev-channel.ps1 restart              restart the dev server on 127.0.0.1:8765
     dev-channel.ps1 status               branch vs origin/main + server health
 
-    dev is disposable: never commit on it or PR from it. Promote by PR'ing the work branch itself.
+    Never commit on dev directly. When the user says the staged work is ready, PR dev to main.
     See docs/dev-channel.md and ADR 0004.
 #>
 [CmdletBinding(PositionalBinding = $false)]
