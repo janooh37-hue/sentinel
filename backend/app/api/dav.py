@@ -31,6 +31,7 @@ from sqlalchemy.orm import Session
 from starlette.datastructures import Headers
 
 from app.api._offload import run_exclusive
+from app.api._word_session_order import session_turn
 from app.db.session import get_db
 from app.services import word_session_repo
 
@@ -75,8 +76,16 @@ async def dav_handler(
         # their bodies arrived, so the newest save stayed on disk. Plain pool threads would let
         # an older body overwrite a newer one, so PUTs take the lane: first come, first served
         # (anyio's CapacityLimiter wakes waiters in order), queueing on the loop, not on a pool
-        # thread. Every other DAV method only reads and stays in the pool.
-        return await run_exclusive(_serve_dav, token, filename, method, request.headers, body, db)
+        # thread. The lane also keeps a save from starting while a lane mail / announcement job
+        # holds SQLite's write lock: ``record_put`` would otherwise fail after the working file
+        # was already replaced. The per-session turn is taken *first* and held across the lane
+        # wait, so Finish / discard of the same session (books.py) queue behind this save.
+        # Different sessions never wait for each other's turn. Every other DAV method only reads
+        # and stays in the pool.
+        async with session_turn(token):
+            return await run_exclusive(
+                _serve_dav, token, filename, method, request.headers, body, db
+            )
     return await run_in_threadpool(_serve_dav, token, filename, method, request.headers, body, db)
 
 
@@ -164,8 +173,9 @@ def _serve_dav(
         if not body:
             return respond(Response(status_code=400), sess.id)
         # Overlapping PUTs are already ordered: ``dav_handler`` runs every PUT through the
-        # exclusive lane, so they land strictly in arrival order. The per-request temp name only
-        # keeps this write from ever sharing a temp path with another writer; the replace is atomic.
+        # session's turn and the exclusive lane, so they land strictly in arrival order. The
+        # per-request temp name only keeps this write from ever sharing a temp path with another
+        # writer; the replace is atomic.
         tmp = f"{path}.{uuid.uuid4().hex}.tmp"
         try:
             with open(tmp, "wb") as fh:

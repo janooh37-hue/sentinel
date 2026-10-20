@@ -38,8 +38,8 @@ import sys
 import threading
 import time
 import warnings
-from collections.abc import Awaitable, Callable, Iterator
-from contextlib import contextmanager
+from collections.abc import AsyncIterator, Awaitable, Callable, Iterator
+from contextlib import asynccontextmanager, contextmanager
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -65,6 +65,7 @@ from app.db.models import (
     BookCategory,
     BookEditSession,
     BookVersion,
+    Document,
     EmailAccount,
     Employee,
     User,
@@ -359,13 +360,16 @@ def employee(db: Session, employee_id: str = "G9001") -> Employee:
 
 
 def dav_session(env: Env, *, token: str = "tok-p01", name: str = "letter.docx") -> Path:
-    owner = User(email="dav-owner-p01@test.ae", password_hash="x", status="active", role="operator")
+    suffix = "p01" if token == "tok-p01" else token
+    owner = User(
+        email=f"dav-owner-{suffix}@test.ae", password_hash="x", status="active", role="operator"
+    )
     env.db.add(owner)
     env.db.flush()
     if env.db.get(BookCategory, "GEN") is None:
         env.db.add(BookCategory(id="GEN", name_en="General", name_ar="عام", prefix="GEN"))
         env.db.flush()
-    book = Book(category_id="GEN", ref_number="B-P01")
+    book = Book(category_id="GEN", ref_number=f"B-{suffix.upper()}")
     env.db.add(book)
     env.db.flush()
     working = env.data_dir / "word_sessions" / name
@@ -1317,6 +1321,635 @@ def test_failed_dav_put_cleans_up_and_does_not_wedge_later_saves(env: Env) -> No
     assert working.read_bytes() == b"saved after failure"
     env.db.rollback()
     assert env.engine.pool.checkedout() == 0  # type: ignore[attr-defined]
+
+
+# ---------------------------------------------------------------------------
+# Word save vs Finish / discard ordering (P01 launches 5 and 10)
+# ---------------------------------------------------------------------------
+
+
+def word_book_session(env: Env, *, token: str = "tok-p01") -> tuple[Path, int]:
+    """An active Word book session that has already had one save (so Finish is allowed)."""
+    working = dav_session(env, token=token)
+    row = env.db.query(BookEditSession).filter_by(token=token).one()
+    row.last_put_at = datetime(2026, 9, 21, 12, 0, 0)
+    env.db.commit()
+    assert row.book_id is not None
+    return working, row.book_id
+
+
+def test_finish_waits_for_an_earlier_dav_put_still_in_flight(env: Env) -> None:
+    """A save the user made before pressing Finish must be in the finished version.
+
+    The earlier PUT is held inside its file replace while Finish arrives. Finish used to be a
+    plain pool route that never looked at in-flight saves, so it built the version from the
+    previous working file and then marked the session finished, losing the latest bytes.
+    """
+    from app.services import word_book_service
+
+    _manager, token = env.make_user("manager")
+    _working, book_id = word_book_session(env)
+    env.mp.setattr(word_book_service, "convert_docx_to_pdf", lambda _source: None)
+    first_in_replace, landed = hold_first_dav_replace(env)
+    latest = b"latest-word-save " * 8
+
+    async def scenario() -> tuple[httpx.Response, httpx.Response]:
+        app = create_app()
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app, raise_app_exceptions=False),
+            base_url="http://test",
+            cookies={"gssg_session": token},
+        ) as client:
+            assert (await client.get(HEALTH_URL)).status_code == 200
+            loop = asyncio.get_running_loop()
+            save = asyncio.create_task(client.put("/dav/tok-p01/letter.docx", content=latest))
+            deadline = loop.time() + SCENARIO_WALL_LIMIT_S
+            while not first_in_replace.is_set() and loop.time() < deadline:
+                await asyncio.sleep(0.005)
+            assert first_in_replace.is_set(), "the save never reached the working-file replace"
+            finish = asyncio.create_task(
+                client.post(f"/api/v1/books/{book_id}/word-sessions/finish")
+            )
+            await asyncio.sleep(0.2)  # Finish has arrived strictly after the save
+            return await save, await finish
+
+    save_response, finish_response = asyncio.run(scenario())
+    assert save_response.status_code == 204, save_response.text
+    assert finish_response.status_code == 200, finish_response.text
+    assert landed == [latest]
+    env.db.rollback()
+    document = env.db.query(Document).filter_by(ref_number="B-P01").one()
+    assert Path(document.docx_path).read_bytes() == latest, "Finish lost the latest Word save"
+    env.db.rollback()
+    assert env.engine.pool.checkedout() == 0  # type: ignore[attr-defined]
+
+
+async def _save_then(
+    token: str,
+    filename: str,
+    latest: bytes,
+    first_in_replace: threading.Event,
+    follow: Callable[[httpx.AsyncClient], Awaitable[httpx.Response]],
+    *,
+    cookie: str | None = None,
+    cancel_follow_after: float | None = None,
+) -> tuple[httpx.Response, httpx.Response | None]:
+    """Hold a save inside its replace, send ``follow`` strictly after it, return both outcomes.
+
+    With ``cancel_follow_after`` the follow-up request is cancelled that long after it arrived
+    and ``None`` stands in for its response.
+    """
+    app = create_app()
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app, raise_app_exceptions=False),
+        base_url="http://test",
+        cookies={"gssg_session": cookie} if cookie else None,
+    ) as client:
+        assert (await client.get(HEALTH_URL)).status_code == 200
+        loop = asyncio.get_running_loop()
+        save = asyncio.create_task(client.put(f"/dav/{token}/{filename}", content=latest))
+        deadline = loop.time() + SCENARIO_WALL_LIMIT_S
+        while not first_in_replace.is_set() and loop.time() < deadline:
+            await asyncio.sleep(0.005)
+        assert first_in_replace.is_set(), "the save never reached the working-file replace"
+        later = asyncio.create_task(follow(client))
+        await asyncio.sleep(0.2 if cancel_follow_after is None else cancel_follow_after)
+        if cancel_follow_after is not None:
+            later.cancel()
+            outcome = (await asyncio.gather(later, return_exceptions=True))[0]
+            assert isinstance(outcome, asyncio.CancelledError), outcome
+            return await save, None
+        return await save, await later
+
+
+def template_word_session(env: Env, owner: User, *, token: str = "tok-tpl") -> Path:
+    """An active template-authoring session that has already had one save."""
+    working = env.data_dir / "word_sessions" / "tpl-p01" / "Letterhead.docx"
+    working.parent.mkdir(parents=True, exist_ok=True)
+    working.write_bytes(b"original-docx-bytes")
+    env.db.add(
+        BookEditSession(
+            book_id=None,
+            user_id=owner.id,
+            template_name="Letterhead.docx",
+            token=token,
+            working_path=str(working),
+            state="active",
+            last_put_at=datetime(2026, 9, 21, 12, 0, 0),
+        )
+    )
+    env.db.commit()
+    return working
+
+
+def fake_template_install(env: Env) -> list[bytes]:
+    """Stand in for template validation/install; records the working bytes it was handed."""
+    from app.services import book_template_service
+
+    installed: list[bytes] = []
+
+    def install(src: Path, *, name: str, submitter_g: str | None) -> Any:
+        installed.append(Path(src).read_bytes())
+        return book_template_service.TemplateInfo(name=name, modified_at=datetime(2026, 9, 21))
+
+    env.mp.setattr(book_template_service, "_install_template", install)
+    return installed
+
+
+def test_template_finish_waits_for_an_earlier_dav_put_still_in_flight(env: Env) -> None:
+    manager, token = env.make_user("manager")
+    template_word_session(env, manager)
+    installed = fake_template_install(env)
+    first_in_replace, _landed = hold_first_dav_replace(env)
+    latest = b"latest-template-save " * 8
+    session_id = env.db.query(BookEditSession).filter_by(token="tok-tpl").one().id
+    save, finish = asyncio.run(
+        _save_then(
+            "tok-tpl",
+            "Letterhead.docx",
+            latest,
+            first_in_replace,
+            lambda c: c.post(f"/api/v1/books/word-templates/sessions/{session_id}/finish"),
+            cookie=token,
+        )
+    )
+    assert save.status_code == 204, save.text
+    assert finish is not None and finish.status_code == 201, finish and finish.text
+    assert installed == [latest], "template Finish installed an older Word save"
+
+
+def test_template_discard_waits_for_an_earlier_dav_put_and_leaves_no_file(env: Env) -> None:
+    manager, token = env.make_user("manager")
+    working = template_word_session(env, manager)
+    first_in_replace, _landed = hold_first_dav_replace(env)
+    session_id = env.db.query(BookEditSession).filter_by(token="tok-tpl").one().id
+    save, discard = asyncio.run(
+        _save_then(
+            "tok-tpl",
+            "Letterhead.docx",
+            b"latest-template-save " * 8,
+            first_in_replace,
+            lambda c: c.delete(f"/api/v1/books/word-templates/sessions/{session_id}"),
+            cookie=token,
+        )
+    )
+    assert save.status_code == 204, save.text
+    assert discard is not None and discard.status_code == 204, discard and discard.text
+    assert not working.exists(), "a save landed after discard and resurrected the working file"
+    assert not working.parent.exists()
+
+
+def test_book_discard_waits_for_an_earlier_dav_put_and_leaves_no_file(env: Env) -> None:
+    _manager, token = env.make_user("manager")
+    working, book_id = word_book_session(env)
+    first_in_replace, _landed = hold_first_dav_replace(env)
+    save, discard = asyncio.run(
+        _save_then(
+            "tok-p01",
+            "letter.docx",
+            b"latest-word-save " * 8,
+            first_in_replace,
+            lambda c: c.delete(f"/api/v1/books/{book_id}/word-sessions"),
+            cookie=token,
+        )
+    )
+    assert save.status_code == 204, save.text
+    assert discard is not None and discard.status_code == 200, discard and discard.text
+    assert not working.exists(), "a save landed after discard and resurrected the working file"
+    env.db.rollback()
+    assert env.engine.pool.checkedout() == 0  # type: ignore[attr-defined]
+
+
+def test_finish_abandoned_while_queued_behind_a_save_never_runs(env: Env) -> None:
+    """A Finish cancelled before its turn must not finalize; the retry then sees the latest save."""
+    from app.services import word_book_service
+
+    _manager, token = env.make_user("manager")
+    _working, book_id = word_book_session(env)
+    env.mp.setattr(word_book_service, "convert_docx_to_pdf", lambda _source: None)
+    first_in_replace, _landed = hold_first_dav_replace(env)
+    latest = b"latest-word-save " * 8
+
+    async def scenario() -> tuple[httpx.Response, httpx.Response]:
+        save_task: asyncio.Task[tuple[httpx.Response, httpx.Response | None]] = asyncio.create_task(
+            _save_then(
+                "tok-p01",
+                "letter.docx",
+                latest,
+                first_in_replace,
+                lambda c: c.post(f"/api/v1/books/{book_id}/word-sessions/finish"),
+                cookie=token,
+                cancel_follow_after=0.2,
+            )
+        )
+        save, _ = await save_task
+        app = create_app()
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app, raise_app_exceptions=False),
+            base_url="http://test",
+            cookies={"gssg_session": token},
+        ) as client:
+            return save, await client.post(f"/api/v1/books/{book_id}/word-sessions/finish")
+
+    with stream_leaks_tolerated():
+        save, retry = asyncio.run(scenario())
+    assert save.status_code == 204, save.text
+    assert retry.status_code == 200, retry.text
+    # Before any query of the test's own session: the cancelled Finish leaked no connection.
+    assert env.engine.pool.checkedout() == 0  # type: ignore[attr-defined]
+    env.db.rollback()
+    documents = env.db.query(Document).filter_by(ref_number="B-P01").all()
+    assert [Path(d.docx_path).read_bytes() for d in documents] == [latest]
+    env.db.rollback()  # the test's own session holds a connection after the query above
+    assert env.engine.pool.checkedout() == 0  # type: ignore[attr-defined]
+
+
+def test_dav_put_cancelled_while_running_still_lands_and_frees_its_session(env: Env) -> None:
+    """A save cancelled mid-write is not abandoned: its thread finishes before the turn is released."""
+    working = dav_session(env)
+    first_in_replace, landed = hold_first_dav_replace(env)
+    bodies = [b"A" * 64 + b" save", b"B" * 64 + b" save"]
+
+    async def scenario() -> httpx.Response:
+        app = create_app()
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app, raise_app_exceptions=False),
+            base_url="http://test",
+        ) as client:
+            assert (await client.get(HEALTH_URL)).status_code == 200
+            loop = asyncio.get_running_loop()
+            running = asyncio.create_task(client.put("/dav/tok-p01/letter.docx", content=bodies[0]))
+            deadline = loop.time() + SCENARIO_WALL_LIMIT_S
+            while not first_in_replace.is_set() and loop.time() < deadline:
+                await asyncio.sleep(0.005)
+            assert first_in_replace.is_set()
+            running.cancel()
+            await asyncio.gather(running, return_exceptions=True)
+            return await client.put("/dav/tok-p01/letter.docx", content=bodies[1])
+
+    with stream_leaks_tolerated():
+        later = asyncio.run(scenario())
+    assert later.status_code == 204
+    assert landed == bodies, "the cancelled save did not finish before the next one started"
+    assert working.read_bytes() == bodies[1]
+    assert [p.name for p in working.parent.iterdir()] == [working.name]
+    env.db.rollback()
+    assert env.engine.pool.checkedout() == 0  # type: ignore[attr-defined]
+
+
+# ---------------------------------------------------------------------------
+# A save queued in the global lane vs Finish / discard; per-session turns (P01 launch 10)
+#
+# A DAV PUT keeps its place in the global exclusive lane: with the lane held by a mail /
+# announcement job that owns SQLite's write lock, a PUT taken out of the lane would replace the
+# Word file and then fail with "database is locked" (500 after the replace). On top of the
+# lane a PUT takes a per-session turn, so Finish / discard of that session wait for it, while
+# other sessions' Finish / discard never wait for it and never take the lane.
+# ---------------------------------------------------------------------------
+
+
+@asynccontextmanager
+async def lane_held(blocker: Blocker) -> AsyncIterator[None]:
+    """Occupy the global exclusive lane with ``blocker`` for the body of the ``async with``."""
+    from app.api._offload import run_exclusive
+
+    occupant = asyncio.create_task(run_exclusive(blocker.block))
+    try:
+        loop = asyncio.get_running_loop()
+        deadline = loop.time() + SCENARIO_WALL_LIMIT_S
+        while not blocker.entered.is_set() and loop.time() < deadline:
+            await asyncio.sleep(0.005)
+        assert blocker.entered.is_set(), "the lane occupant never started"
+        yield
+    finally:
+        blocker.release.set()
+        await occupant
+
+
+async def save_queued_in_lane() -> None:
+    """Wait until a request is parked in the global lane's wait queue, not merely sent."""
+    from app.api._offload import _exclusive_lane
+
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + SCENARIO_WALL_LIMIT_S
+    while _exclusive_lane().statistics().tasks_waiting < 1 and loop.time() < deadline:
+        await asyncio.sleep(0.005)
+    assert _exclusive_lane().statistics().tasks_waiting >= 1, "the save never queued in the lane"
+
+
+async def _save_queued_in_lane_then(
+    token: str,
+    filename: str,
+    latest: bytes,
+    follow: Callable[[httpx.AsyncClient], Awaitable[httpx.Response]],
+    *,
+    cookie: str,
+) -> tuple[httpx.Response, httpx.Response, bool]:
+    """Queue a save in the lane behind a busy occupant, then send ``follow`` strictly after it.
+
+    Returns both responses and whether, 0.3 s after ``follow`` arrived and while the lane was
+    still held, neither request had finished: ``follow`` waits for the earlier save instead of
+    overtaking it.
+    """
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=create_app(), raise_app_exceptions=False),
+        base_url="http://test",
+        cookies={"gssg_session": cookie},
+    ) as client:
+        assert (await client.get(HEALTH_URL)).status_code == 200
+        async with lane_held(Blocker()):
+            save = asyncio.create_task(client.put(f"/dav/{token}/{filename}", content=latest))
+            await save_queued_in_lane()  # the save waits in the lane behind the occupant
+            later = asyncio.create_task(follow(client))
+            await asyncio.sleep(0.3)  # ``follow`` has arrived strictly after the save
+            waiting = not save.done() and not later.done()
+        return await save, await later, waiting
+
+
+def test_finish_waits_for_a_save_still_queued_in_the_lane(env: Env) -> None:
+    """A save the user made before pressing Finish must be in the finished version, even when
+    that save has not yet left the global lane."""
+    from app.services import word_book_service
+
+    _manager, token = env.make_user("manager")
+    _working, book_id = word_book_session(env)
+    env.mp.setattr(word_book_service, "convert_docx_to_pdf", lambda _source: None)
+    latest = b"latest-word-save " * 8
+    save, finish, waiting = asyncio.run(
+        _save_queued_in_lane_then(
+            "tok-p01",
+            "letter.docx",
+            latest,
+            lambda c: c.post(f"/api/v1/books/{book_id}/word-sessions/finish"),
+            cookie=token,
+        )
+    )
+    assert waiting, "Finish overtook an earlier save that was still queued in the lane"
+    assert save.status_code == 204, save.text
+    assert finish.status_code == 200, finish.text
+    env.db.rollback()
+    document = env.db.query(Document).filter_by(ref_number="B-P01").one()
+    assert Path(document.docx_path).read_bytes() == latest, "Finish lost the latest Word save"
+    env.db.rollback()
+    assert env.engine.pool.checkedout() == 0  # type: ignore[attr-defined]
+
+
+def test_book_discard_waits_for_a_save_still_queued_in_the_lane_and_leaves_no_file(
+    env: Env,
+) -> None:
+    _manager, token = env.make_user("manager")
+    working, book_id = word_book_session(env)
+    save, discard, waiting = asyncio.run(
+        _save_queued_in_lane_then(
+            "tok-p01",
+            "letter.docx",
+            b"latest-word-save " * 8,
+            lambda c: c.delete(f"/api/v1/books/{book_id}/word-sessions"),
+            cookie=token,
+        )
+    )
+    assert waiting, "discard overtook an earlier save that was still queued in the lane"
+    assert save.status_code == 204, save.text
+    assert discard.status_code == 200, discard.text
+    assert not working.exists(), "a queued save landed after discard and resurrected the file"
+    env.db.rollback()
+    assert env.engine.pool.checkedout() == 0  # type: ignore[attr-defined]
+
+
+def test_template_finish_waits_for_a_save_still_queued_in_the_lane(env: Env) -> None:
+    manager, token = env.make_user("manager")
+    template_word_session(env, manager)
+    installed = fake_template_install(env)
+    latest = b"latest-template-save " * 8
+    session_id = env.db.query(BookEditSession).filter_by(token="tok-tpl").one().id
+    env.db.rollback()
+    save, finish, waiting = asyncio.run(
+        _save_queued_in_lane_then(
+            "tok-tpl",
+            "Letterhead.docx",
+            latest,
+            lambda c: c.post(f"/api/v1/books/word-templates/sessions/{session_id}/finish"),
+            cookie=token,
+        )
+    )
+    assert waiting, "template Finish overtook an earlier save that was still queued in the lane"
+    assert save.status_code == 204, save.text
+    assert finish.status_code == 201, finish.text
+    assert installed == [latest], "template Finish installed an older Word save"
+
+
+def test_template_discard_waits_for_a_save_still_queued_in_the_lane_and_leaves_no_file(
+    env: Env,
+) -> None:
+    manager, token = env.make_user("manager")
+    working = template_word_session(env, manager)
+    session_id = env.db.query(BookEditSession).filter_by(token="tok-tpl").one().id
+    env.db.rollback()
+    save, discard, waiting = asyncio.run(
+        _save_queued_in_lane_then(
+            "tok-tpl",
+            "Letterhead.docx",
+            b"latest-template-save " * 8,
+            lambda c: c.delete(f"/api/v1/books/word-templates/sessions/{session_id}"),
+            cookie=token,
+        )
+    )
+    assert waiting, "template discard overtook an earlier save that was still queued in the lane"
+    assert save.status_code == 204, save.text
+    assert discard.status_code == 204, discard.text
+    assert not working.exists(), "a queued save landed after discard and resurrected the file"
+    assert not working.parent.exists()
+
+
+def test_finalizing_one_session_does_not_wait_for_another_sessions_queued_save(env: Env) -> None:
+    """Turns are per session; only the lane orders saves across sessions.
+
+    Session A's save sits in the lane behind a busy occupant. Discarding the unrelated template
+    session B (own token, own working directory) must neither wait for that save nor take the
+    lane, and A's save must not have started: it keeps its place behind the occupant.
+    """
+    manager, token = env.make_user("manager")
+    a_file = dav_session(env, token="tok-a", name="a.docx")
+    b_file = template_word_session(env, manager)
+    b_id = env.db.query(BookEditSession).filter_by(token="tok-tpl").one().id
+    env.db.rollback()
+
+    async def scenario() -> tuple[httpx.Response, httpx.Response, bytes, bool]:
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=create_app(), raise_app_exceptions=False),
+            base_url="http://test",
+            cookies={"gssg_session": token},
+        ) as client:
+            assert (await client.get(HEALTH_URL)).status_code == 200
+            async with lane_held(Blocker()):
+                save = asyncio.create_task(client.put("/dav/tok-a/a.docx", content=b"save for a"))
+                await save_queued_in_lane()  # A's save waits in the lane behind the occupant
+                discard = await asyncio.wait_for(
+                    client.delete(f"/api/v1/books/word-templates/sessions/{b_id}"),
+                    timeout=BLOCK_CAP_S / 2,
+                )
+                queued = not save.done()
+                untouched = a_file.read_bytes()
+            return await save, discard, untouched, queued
+
+    with stream_leaks_tolerated():  # a timeout would cancel the discard mid-request
+        saved, discard, untouched, queued = asyncio.run(scenario())
+    assert discard.status_code == 204, discard.text
+    assert not b_file.exists()
+    assert queued, "session A's save left the lane before its occupant finished"
+    assert untouched == b"original-docx-bytes"
+    assert saved.status_code == 204, saved.text
+    assert a_file.read_bytes() == b"save for a"
+
+
+LANE_WRITE_LOCK_HOLD_S = 8.0  # the owner's reproduction: longer than SQLite's 5 s busy timeout
+
+
+def _hold_write_lock(
+    engine: Engine, holding: threading.Event, release: threading.Event, cap: float
+) -> None:
+    """A lane job that owns SQLite's write lock for as long as it is told to (a network call)."""
+    raw = engine.raw_connection()
+    try:
+        cursor = raw.cursor()
+        cursor.execute("BEGIN IMMEDIATE")
+        holding.set()
+        release.wait(cap)
+        raw.rollback()
+        cursor.close()
+    finally:
+        raw.close()
+
+
+def test_dav_put_queued_behind_a_long_lane_write_lock_is_saved_not_failed(env: Env) -> None:
+    """A save that waits for a lane job holding the write lock longer than the busy timeout.
+
+    Out of the lane (the launch-5 candidate) the PUT replaced the Word file at once, waited the
+    5 s busy timeout for ``record_put`` and answered 500 *after* the replace. In the lane it must
+    not start before the occupant ends, then answer 204 with the file replaced and the save
+    recorded.
+    """
+    from app.api._offload import run_exclusive
+
+    working = dav_session(env)
+    holding, release = threading.Event(), threading.Event()
+    latest = b"saved by word during lane job"
+
+    async def scenario() -> tuple[httpx.Response, bytes, bool]:
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=create_app(), raise_app_exceptions=False),
+            base_url="http://test",
+        ) as client:
+            assert (await client.get(HEALTH_URL)).status_code == 200
+            loop = asyncio.get_running_loop()
+            occupant = asyncio.create_task(
+                run_exclusive(
+                    _hold_write_lock, env.engine, holding, release, LANE_WRITE_LOCK_HOLD_S + 10
+                )
+            )
+            try:
+                deadline = loop.time() + SCENARIO_WALL_LIMIT_S
+                while not holding.is_set() and loop.time() < deadline:
+                    await asyncio.sleep(0.005)
+                assert holding.is_set(), "the lane job never took the write lock"
+                save = asyncio.create_task(client.put("/dav/tok-p01/letter.docx", content=latest))
+                await asyncio.sleep(LANE_WRITE_LOCK_HOLD_S)
+                queued = not save.done()  # no 500 after the busy timeout: it never started
+                untouched = working.read_bytes()
+                assert (await client.get(HEALTH_URL)).status_code == 200
+            finally:
+                release.set()
+                await occupant
+            return await save, untouched, queued
+
+    response, untouched, queued = asyncio.run(scenario())
+    assert queued, "the save answered while the lane job still held the write lock"
+    assert untouched == b"original-docx-bytes", "the save replaced the file before its lane turn"
+    assert response.status_code == 204, response.text
+    assert working.read_bytes() == latest
+    assert [p.name for p in working.parent.iterdir()] == [working.name]
+    env.db.rollback()
+    row = env.db.query(BookEditSession).filter_by(token="tok-p01").one()
+    assert row.last_put_at is not None, "the save landed but was never recorded"
+    env.db.rollback()
+    assert env.engine.pool.checkedout() == 0  # type: ignore[attr-defined]
+
+
+def test_session_turn_is_first_come_first_served_per_token_and_leaves_no_entry() -> None:
+    from app.api import _word_session_order as order
+
+    async def scenario() -> tuple[list[str], list[str], list[object], dict[str, object]]:
+        events: list[str] = []
+        gate = asyncio.Event()
+
+        async def member(name: str, token: str | None, *, hold: bool = False) -> None:
+            async with order.session_turn(token):
+                events.append(f"{name}:in")
+                if hold:
+                    await gate.wait()
+                events.append(f"{name}:out")
+
+        first = asyncio.create_task(member("a1", "A", hold=True))
+        await asyncio.sleep(0.01)
+        queued = asyncio.create_task(member("a2", "A"))
+        abandoned = asyncio.create_task(member("a3", "A"))
+        other = asyncio.create_task(member("b", "B"))
+        untokened = asyncio.create_task(member("n", None))
+        await asyncio.sleep(0.05)
+        abandoned.cancel()
+        await asyncio.sleep(0.01)
+        while_held = list(events)
+        gate.set()
+        results = await asyncio.gather(
+            first, queued, abandoned, other, untokened, return_exceptions=True
+        )
+        return while_held, events, results, dict(order._registry())
+
+    while_held, events, results, registry = asyncio.run(scenario())
+    # B and the token-less member never wait for A; A's followers wait for A's first member.
+    assert while_held[0] == "a1:in"
+    assert sorted(while_held[1:]) == ["b:in", "b:out", "n:in", "n:out"]
+    # The abandoned waiter never ran; the queued one ran after the first, in arrival order.
+    assert events[5:] == ["a1:out", "a2:in", "a2:out"]
+    assert isinstance(results[2], asyncio.CancelledError)
+    assert [r for i, r in enumerate(results) if i != 2] == [None, None, None, None]
+    assert registry == {}, "a finished turn left its token in the registry"
+
+
+def test_run_in_session_order_works_off_the_loop_one_session_at_a_time() -> None:
+    from app.api import _word_session_order as order
+
+    guard = threading.Lock()
+    running = {"a": 0, "b": 0}
+    most = {"a": 0, "b": 0}
+    threads: list[int] = []
+
+    def work(name: str) -> str:
+        key = name[0]
+        with guard:
+            running[key] += 1
+            most[key] = max(most[key], running[key])
+            threads.append(threading.get_ident())
+        time.sleep(0.05)
+        with guard:
+            running[key] -= 1
+        return name
+
+    async def scenario() -> tuple[int, list[str]]:
+        names = await asyncio.gather(
+            order.run_in_session_order("A", work, "a1"),
+            order.run_in_session_order("A", work, "a2"),
+            order.run_in_session_order("A", work, "a3"),
+            order.run_in_session_order("B", work, "b1"),
+            order.run_in_session_order("B", work, "b2"),
+            order.run_in_session_order(None, work, "b3"),
+        )
+        return threading.get_ident(), list(names)
+
+    loop_thread, names = asyncio.run(scenario())
+    assert names == ["a1", "a2", "a3", "b1", "b2", "b3"]
+    assert loop_thread not in threads, "session work ran on the event-loop thread"
+    assert most["a"] == 1, "two saves / finals of one session ran at the same time"
 
 
 # ---------------------------------------------------------------------------

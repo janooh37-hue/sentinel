@@ -24,11 +24,21 @@ file naming, a Session-per-request that two worker threads would otherwise race 
   teardown cannot close a ``Session`` the thread is still using.
 * waiters are woken first-come-first-served, so work that must land in arrival order keeps
   it: the DAV ``PUT`` that replaces a Word working file takes the lane for exactly that
-  reason (overlapping saves must not let an older body overwrite a newer one).
+  reason (overlapping saves must not let an older body overwrite a newer one), and so that a
+  save never starts while a lane job holds SQLite's write lock (it would replace the file and
+  then fail ``record_put`` after the busy timeout). Finish / discard of a Word session must
+  also wait for that session's earlier saves, so a ``PUT`` takes its session's turn
+  (``_word_session_order``) *before* it waits for the lane and holds it across the wait;
+  Finish / discard take the same turn but never the lane, and a lane job never waits for a
+  turn, so there is no wait cycle.
 
 This preserves — it does not improve — the previous overlap profile. It is deliberately
-not a PyMuPDF confinement (process isolation is a later, separate change) and not a
-throughput feature: lane members still wait for each other, but no longer freeze the app.
+not a PyMuPDF confinement: the nine PDF entrypoints that lane routes reach run in spawned
+worker processes (``app.core.pdf_worker``), whether or not their caller is in the lane. It is
+not a transaction fix either: a lane job that holds SQLite's write lock across network I/O (a
+draft email, a group announcement) still holds it for the whole call and other writers wait
+up to the 5 s busy timeout. And it is not a throughput feature: lane members still wait for
+each other, but no longer freeze the app.
 """
 
 from __future__ import annotations

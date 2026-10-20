@@ -25,12 +25,14 @@ from fastapi import (
     UploadFile,
     status,
 )
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import FileResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api._offload import run_exclusive
 from app.api._responses import maybe_base64
+from app.api._word_session_order import run_in_session_order
 from app.api.deps import get_current_user, require_capability
 from app.api.errors import AppError, ValidationFailedError
 from app.core import form_policy
@@ -179,6 +181,31 @@ def _require_word_capability(db: Session, user: User, capability: str) -> None:
         )
 
 
+def _authorized_book_session_token(db: Session, user: User, book_id: int) -> str | None:
+    """Authorize a Word Finish / discard, then return the active session's ordering token."""
+    if user.role == INMATE_REPORTER_ROLE:
+        _inmate_report_word_access(db, user, book_id)
+    else:
+        _require_word_capability(db, user, "books.edit")
+        _require_full_book(db, user, book_id)
+    return db.scalar(
+        select(BookEditSession.token).where(
+            BookEditSession.book_id == book_id, BookEditSession.state == "active"
+        )
+    )
+
+
+def _template_session_token(db: Session, session_id: int) -> str | None:
+    """The active template session's ordering token (the service re-checks ownership)."""
+    return db.scalar(
+        select(BookEditSession.token).where(
+            BookEditSession.id == session_id,
+            BookEditSession.book_id.is_(None),
+            BookEditSession.state == "active",
+        )
+    )
+
+
 def _signed_source_of(v: BookVersion) -> Literal["in_app", "scan"] | None:
     """Classify by the preserved base; packaged scan outputs live elsewhere."""
     if not v.signed_pdf_path:
@@ -313,22 +340,34 @@ def template_session_preview(
     response_model=WordTemplateRead,
     status_code=status.HTTP_201_CREATED,
 )
-def finish_template_session(
+async def finish_template_session(
     session_id: int,
     db: Annotated[Session, Depends(get_db)],
     user: Annotated[User, Depends(require_capability("books.templates"))],
 ) -> WordTemplateRead:
-    info = word_book_service.finish_template_session(db, user=user, session_id=session_id)
-    return WordTemplateRead(name=info.name, modified_at=info.modified_at)
+    # Finish builds the template from the working file: an earlier Word save still in flight
+    # for this session must land first (see ``_word_session_order``).
+    token = await run_in_threadpool(_template_session_token, db, session_id)
+
+    def work() -> WordTemplateRead:
+        info = word_book_service.finish_template_session(db, user=user, session_id=session_id)
+        return WordTemplateRead(name=info.name, modified_at=info.modified_at)
+
+    return await run_in_session_order(token, work)
 
 
 @router.delete("/word-templates/sessions/{session_id}", status_code=status.HTTP_204_NO_CONTENT)
-def discard_template_session(
+async def discard_template_session(
     session_id: int,
     db: Annotated[Session, Depends(get_db)],
     user: Annotated[User, Depends(require_capability("books.templates"))],
 ) -> Response:
-    word_book_service.discard_template_session(db, user=user, session_id=session_id)
+    token = await run_in_threadpool(_template_session_token, db, session_id)
+
+    def work() -> None:
+        word_book_service.discard_template_session(db, user=user, session_id=session_id)
+
+    await run_in_session_order(token, work)
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
@@ -465,19 +504,19 @@ def create_word_session(
     "/{book_id}/word-sessions/finish",
     response_model=BookRead,
 )
-def finish_word_session(
+async def finish_word_session(
     book_id: int,
     db: Annotated[Session, Depends(get_db)],
     user: Annotated[User, Depends(get_current_user)],
 ) -> BookRead:
     """Finish the active Word editing session."""
-    if user.role == INMATE_REPORTER_ROLE:
-        _inmate_report_word_access(db, user, book_id)
-    else:
-        _require_word_capability(db, user, "books.edit")
-        _require_full_book(db, user, book_id)
-    row = word_book_service.finish_word_session(db, user=user, book_id=book_id)
-    return _build_book_response(db, row, user)
+    token = await run_in_threadpool(_authorized_book_session_token, db, user, book_id)
+
+    def work() -> BookRead:
+        row = word_book_service.finish_word_session(db, user=user, book_id=book_id)
+        return _build_book_response(db, row, user)
+
+    return await run_in_session_order(token, work)
 
 
 @router.get("/{book_id}/word-sessions", response_model=WordSessionDetailRead)
@@ -572,19 +611,19 @@ def reopen_word_session(
     "/{book_id}/word-sessions",
     response_model=BookRead,
 )
-def discard_word_session(
+async def discard_word_session(
     book_id: int,
     db: Annotated[Session, Depends(get_db)],
     user: Annotated[User, Depends(get_current_user)],
 ) -> BookRead:
     """Discard the active Word editing session."""
-    if user.role == INMATE_REPORTER_ROLE:
-        _inmate_report_word_access(db, user, book_id)
-    else:
-        _require_word_capability(db, user, "books.edit")
-        _require_full_book(db, user, book_id)
-    row = word_book_service.discard_word_session(db, user=user, book_id=book_id)
-    return _build_book_response(db, row, user)
+    token = await run_in_threadpool(_authorized_book_session_token, db, user, book_id)
+
+    def work() -> BookRead:
+        row = word_book_service.discard_word_session(db, user=user, book_id=book_id)
+        return _build_book_response(db, row, user)
+
+    return await run_in_session_order(token, work)
 
 
 @router.post(
