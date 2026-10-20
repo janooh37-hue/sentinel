@@ -73,7 +73,7 @@ beforeEach(async () => {
 
 describe('Material Request paper language tab', () => {
   it('shows one gallery tile for the two papers', async () => {
-    renderServices('/services')
+    renderServices('/services?group=logistics')
 
     expect(await screen.findByRole('button', { name: /Material Request Form/ })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: new RegExp(AR.replace(/[()]/g, '\\$&')) })).not.toBeInTheDocument()

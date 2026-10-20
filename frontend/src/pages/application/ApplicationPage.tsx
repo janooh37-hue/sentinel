@@ -23,6 +23,8 @@
  *   - ?employee_id=<G-id>  pre-selects an employee
  *   - ?revise=<bookId>     revise mode (regenerates a new version of that book)
  *   - ?mode=stats&stats_month=YYYY-MM → inmate violations monthly register
+ *   - ?mode=upload → Inmate Conduct Violations opens on "import a signed paper violation"
+ *   - ?group=<id> → gallery opened inside that service folder (see serviceGroups.ts)
  *
  * The RHF useForm instance is reset whenever the selected template changes.
  */
@@ -92,6 +94,16 @@ import {
 import { useSearchParam } from '@/lib/urlState'
 import { serviceHref } from '@/lib/quickActions'
 import {
+  DUTY_LOCATIONS_ID,
+  EMPLOYEE_ABSENCE_ID,
+  INMATE_IMPORT_SIGNED_ID,
+  INMATE_MONTHLY_STATS_ID,
+  NATIONAL_SERVICE_ID,
+  OTHER_GROUP_ICON,
+  OTHER_GROUP_ID,
+  SERVICE_GROUPS,
+} from './serviceGroups'
+import {
   nowHM,
   restoreThenSeedResignationDate,
   seedReportDateTime,
@@ -101,6 +113,20 @@ import {
 type TabValue = 'fields' | 'preview'
 
 type InmateEntryMode = 'create' | 'upload' | 'stats'
+
+/** One openable tile of the Services gallery (a template form or a shortcut). */
+interface GalleryTile {
+  id: string
+  name: string
+  /** Lower-cased on match; template tiles match either language and the id. */
+  searchText: string
+  category: string
+  emoji: string
+  artwork?: ServiceArtworkId
+  basketCount?: number
+  hasCode?: boolean
+  onSelect: () => void
+}
 
 /** Services printed on an English or an Arabic paper: one gallery tile, and a
  *  language tab in the form choosing which backend form kind is generated. */
@@ -216,6 +242,9 @@ function StandardApplicationPage(): React.JSX.Element {
     useState<JobStatusResponse['status'] | null>(null)
   const [submitError, setSubmitError] = useState<string | null>(null)
   const [query, setQuery] = useSearchParam('q')
+  // Folder currently open in the gallery (no value = the folder grid). Pushed so Back
+  // from a service returns to the folder the user came from.
+  const [groupId, setGroupId] = useSearchParam('group', { push: true })
   // General Book: classification code selected by the picker. Required for
   // every ref-allocating submit (both body modes); null only while unpicked.
   const [classificationCode, setClassificationCode] = useState<string | null>(null)
@@ -237,8 +266,11 @@ function StandardApplicationPage(): React.JSX.Element {
   const [lastSaved, setLastSaved] = useState<
     (SavedGeneration & { notification?: NotificationChoice }) | null
   >(null)
-  const requestedStatsMode =
-    slug === 'inmate_conduct_violations' && searchParams.get('mode') === 'stats'
+  const requestedInmateMode: 'stats' | 'upload' | null =
+    slug === 'inmate_conduct_violations' &&
+    (searchParams.get('mode') === 'stats' || searchParams.get('mode') === 'upload')
+      ? (searchParams.get('mode') as 'stats' | 'upload')
+      : null
   const hydratedStatsNavigationRef = useRef<string | null>(null)
   const [inmateEntryMode, setInmateEntryMode] = useState<InmateEntryMode>('create')
   const [approvedImport, setApprovedImport] = useState<ApprovedViolationImportRead | null>(null)
@@ -702,7 +734,7 @@ function StandardApplicationPage(): React.JSX.Element {
   // Keep the canonical form parameter so reloads retain the statistics service.
   useEffect(() => {
     if (
-      !requestedStatsMode ||
+      requestedInmateMode === null ||
       capabilitiesLoading ||
       approvedImportBusy ||
       hydratedStatsNavigationRef.current === location.key
@@ -713,10 +745,10 @@ function StandardApplicationPage(): React.JSX.Element {
     if (!id) return
     hydratedStatsNavigationRef.current = location.key
     if (selectedTemplate !== id) handleSelectTemplate(id)
-    setInmateEntryMode(has('books.view') ? 'stats' : 'create')
+    setInmateEntryMode(requestedInmateMode === 'stats' && !has('books.view') ? 'create' : requestedInmateMode)
     setApprovedImport(null)
   }, [
-    requestedStatsMode,
+    requestedInmateMode,
     capabilitiesLoading,
     approvedImportBusy,
     location.key,
@@ -870,7 +902,7 @@ function StandardApplicationPage(): React.JSX.Element {
   // The URL owns which service is open: every navigation (tile, Back, bell,
   // direct load) lands here. The monthly register is selected by its own effect.
   useEffect(() => {
-    if (requestedStatsMode || capabilitiesLoading || templates.length === 0) return
+    if (requestedInmateMode !== null || capabilitiesLoading || templates.length === 0) return
     const id = slug ? resolveTemplateIdFromSlug(slug, templates) : null
     if (slug && !id) {
       navigate('/services', { replace: true })
@@ -893,7 +925,7 @@ function StandardApplicationPage(): React.JSX.Element {
     if (id) handleSelectTemplate(id)
     else resetToGallery()
   }, [
-    requestedStatsMode,
+    requestedInmateMode,
     capabilitiesLoading,
     templates,
     slug,
@@ -966,38 +998,121 @@ function StandardApplicationPage(): React.JSX.Element {
     [templates],
   )
 
-  // Gallery filter — match on either language's name or the canonical id.
-  const galleryItems = useMemo(() => {
-    const q = query.trim().toLowerCase()
-    if (!q) return galleryTemplates
-    return galleryTemplates.filter(
-      (tpl) =>
-        tpl.name_en.toLowerCase().includes(q) ||
-        tpl.name_ar.toLowerCase().includes(q) ||
-        tpl.id.toLowerCase().includes(q),
-    )
-  }, [galleryTemplates, query])
-
-  // Synthetic tiles show only when their destination would let the user act.
-  // National Service — record shortcut (no DOCX form).
+  // Every tile the user can open, by id. Synthetic tiles (record shortcuts and the
+  // Inmate Conduct Violations entry modes) show only when their destination would
+  // let the user act. Insertion order is the flat search-result order.
+  const tileMap = new Map<string, GalleryTile>()
   const nsTitle = t('leaves.type.National Service')
-  const nsShown =
-    has('leaves.view') &&
-    has('leaves.create') &&
-    (!query.trim() || nsTitle.toLowerCase().includes(query.trim().toLowerCase()))
-
-  // Duty Locations — generates a General Book transfer letter.
   const dlTitle = t('dutyLocations.tile.name')
-  const dlShown =
-    isQuickActionAllowed('General Book', has) &&
-    has('documents.duty_transfer') &&
-    (!query.trim() || dlTitle.toLowerCase().includes(query.trim().toLowerCase()))
-  // Employee Absence — record-only service (no DOCX form).
   const absTitle = t('absences.tile.name')
-  const absShown =
-    has('leaves.view') &&
-    has('leaves.edit') &&
-    (!query.trim() || absTitle.toLowerCase().includes(query.trim().toLowerCase()))
+  if (has('leaves.view') && has('leaves.create')) {
+    tileMap.set(NATIONAL_SERVICE_ID, {
+      id: NATIONAL_SERVICE_ID,
+      name: nsTitle,
+      searchText: nsTitle,
+      category: t('application.nsCategory'),
+      emoji: '🎖️',
+      artwork: 'national-service',
+      onSelect: () => navigate('/leaves?action=ns-new'),
+    })
+  }
+  if (isQuickActionAllowed('General Book', has) && has('documents.duty_transfer')) {
+    tileMap.set(DUTY_LOCATIONS_ID, {
+      id: DUTY_LOCATIONS_ID,
+      name: dlTitle,
+      searchText: dlTitle,
+      category: t('dutyLocations.tile.category'),
+      emoji: '🚚',
+      artwork: 'duty-locations',
+      onSelect: () => navigate('/duty-locations'),
+    })
+  }
+  if (has('leaves.view') && has('leaves.edit')) {
+    tileMap.set(EMPLOYEE_ABSENCE_ID, {
+      id: EMPLOYEE_ABSENCE_ID,
+      name: absTitle,
+      searchText: absTitle,
+      category: t('dutyLocations.tile.category'),
+      emoji: '🚫',
+      artwork: 'employee-absence',
+      onSelect: () => navigate('/absences'),
+    })
+  }
+  for (const tpl of galleryTemplates) {
+    const name = isAr ? tpl.name_ar : tpl.name_en
+    tileMap.set(tpl.id, {
+      id: tpl.id,
+      name,
+      searchText: `${tpl.name_en} ${tpl.name_ar} ${tpl.id}`,
+      category: t(`application.formList.${tpl.category}`),
+      emoji: emojiForTemplate(tpl.id),
+      artwork: artworkForTemplate(tpl.id),
+      basketCount: basketCounts[tpl.id] ?? 0,
+      hasCode: tpl.has_code,
+      onSelect: () => openService(tpl.id),
+    })
+    if (tpl.id === 'Inmate Conduct Violations') {
+      // The entry modes that used to hide behind this form's tabs are services of their own.
+      const inmateHref = serviceHref(tpl.id)
+      const importTitle = t('application.importSignedViolation')
+      tileMap.set(INMATE_IMPORT_SIGNED_ID, {
+        id: INMATE_IMPORT_SIGNED_ID,
+        name: importTitle,
+        searchText: importTitle,
+        category: t('application.formList.admin'),
+        emoji: '📥',
+        artwork: 'inmate-approved-upload',
+        onSelect: () => navigate(`${inmateHref}?mode=upload`),
+      })
+      if (has('books.view')) {
+        const statsTitle = t('application.approvedViolation.monthlyStatistics')
+        tileMap.set(INMATE_MONTHLY_STATS_ID, {
+          id: INMATE_MONTHLY_STATS_ID,
+          name: statsTitle,
+          searchText: statsTitle,
+          category: t('application.formList.admin'),
+          emoji: '📊',
+          artwork: 'inmate-monthly-statistics',
+          onSelect: () => navigate(`${inmateHref}?mode=stats`),
+        })
+      }
+    }
+  }
+
+  // Search is global: while the box has text, results ignore the folders.
+  const searchQuery = query.trim().toLowerCase()
+  const searching = searchQuery !== ''
+  const searchTiles = [...tileMap.values()].filter((tile) =>
+    tile.searchText.toLowerCase().includes(searchQuery),
+  )
+
+  // Folders: configured groups with at least one openable tile, then an "Other"
+  // folder for any tile no group lists so a new service is never invisible.
+  const galleryGroups = SERVICE_GROUPS.map((g) => ({
+    id: g.id,
+    icon: g.icon,
+    tiles: g.items.flatMap((id) => tileMap.get(id) ?? []),
+  })).filter((g) => g.tiles.length > 0)
+  const groupedIds = new Set(SERVICE_GROUPS.flatMap((g) => g.items))
+  const ungroupedTiles = [...tileMap.values()].filter((tile) => !groupedIds.has(tile.id))
+  if (ungroupedTiles.length > 0) {
+    galleryGroups.push({ id: OTHER_GROUP_ID, icon: OTHER_GROUP_ICON, tiles: ungroupedTiles })
+  }
+  const activeGroup = galleryGroups.find((g) => g.id === groupId) ?? null
+  const galleryGridCls =
+    'grid grid-cols-2 gap-3 [grid-auto-rows:1fr] sm:grid-cols-3 lg:grid-cols-4'
+  const renderTile = (tile: GalleryTile): React.JSX.Element => (
+    <ServiceCell
+      key={tile.id}
+      name={tile.name}
+      category={tile.category}
+      emoji={tile.emoji}
+      artwork={tile.artwork}
+      basketCount={tile.basketCount}
+      hasCode={tile.hasCode}
+      onSelect={tile.onSelect}
+    />
+  )
 
   return (
     <div className="flex flex-1 flex-col overflow-auto bg-background">
@@ -1044,52 +1159,45 @@ function StandardApplicationPage(): React.JSX.Element {
                     <Skeleton key={i} className="h-[120px] w-full rounded-2xl" />
                   ))}
                 </div>
-              ) : galleryItems.length === 0 && !nsShown && !dlShown && !absShown ? (
+              ) : (searching ? searchTiles.length : galleryGroups.length) === 0 ? (
                 <p className="py-12 text-center text-[0.86em] text-muted-foreground">
                   {t('application.noServicesMatch')}
                 </p>
+              ) : searching ? (
+                <div className={galleryGridCls}>{searchTiles.map(renderTile)}</div>
+              ) : activeGroup ? (
+                <div>
+                  <button
+                    type="button"
+                    onClick={() => setGroupId(null)}
+                    className="mb-3 inline-flex items-center gap-1.5 text-[0.86em] font-medium text-primary transition-colors hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                  >
+                    {isAr ? (
+                      <ChevronRight className="h-3.5 w-3.5" strokeWidth={1.8} aria-hidden />
+                    ) : (
+                      <ChevronLeft className="h-3.5 w-3.5" strokeWidth={1.8} aria-hidden />
+                    )}
+                    {t('application.backToAllServices')}
+                  </button>
+                  <div className="mb-4 flex items-center gap-3">
+                    <img src={activeGroup.icon} alt="" draggable={false} className="h-12 w-12 object-contain" />
+                    <h3 className="text-[1.25em] font-semibold tracking-tight text-foreground">
+                      {t(`application.serviceGroups.${activeGroup.id}`)}
+                    </h3>
+                  </div>
+                  <div className={galleryGridCls}>{activeGroup.tiles.map(renderTile)}</div>
+                </div>
               ) : (
-                <div className="grid grid-cols-2 gap-3 [grid-auto-rows:1fr] sm:grid-cols-3 lg:grid-cols-4">
-                  {nsShown && (
-                    <ServiceCell
-                      key="national-service-record"
-                      name={nsTitle}
-                      category={t('application.nsCategory')}
-                      emoji="🎖️"
-                      artwork="national-service"
-                      onSelect={() => navigate('/leaves?action=ns-new')}
-                    />
-                  )}
-                  {dlShown && (
-                    <ServiceCell
-                      key="duty-locations"
-                      name={dlTitle}
-                      category={t('dutyLocations.tile.category')}
-                      emoji="🚚"
-                      artwork="duty-locations"
-                      onSelect={() => navigate('/duty-locations')}
-                    />
-                  )}
-                  {absShown && (
-                    <ServiceCell
-                      key="employee-absence"
-                      name={absTitle}
-                      category={t('dutyLocations.tile.category')}
-                      artwork="employee-absence"
-                      emoji="🚫"
-                      onSelect={() => navigate('/absences')}
-                    />
-                  )}
-                  {galleryItems.map((tpl) => (
-                    <ServiceCell
-                      key={tpl.id}
-                      name={isAr ? tpl.name_ar : tpl.name_en}
-                      category={t(`application.formList.${tpl.category}`)}
-                      emoji={emojiForTemplate(tpl.id)}
-                      artwork={artworkForTemplate(tpl.id)}
-                      basketCount={basketCounts[tpl.id] ?? 0}
-                      hasCode={tpl.has_code}
-                      onSelect={() => openService(tpl.id)}
+                <div className={galleryGridCls}>
+                  {galleryGroups.map((g) => (
+                    <FolderCell
+                      key={g.id}
+                      name={t(`application.serviceGroups.${g.id}`)}
+                      description={t(`application.serviceGroupDescriptions.${g.id}`)}
+                      count={t('application.groupCount', { count: g.tiles.length })}
+                      icon={g.icon}
+                      tiles={g.tiles}
+                      onSelect={() => setGroupId(g.id)}
                     />
                   ))}
                 </div>
@@ -1538,6 +1646,69 @@ function StandardApplicationPage(): React.JSX.Element {
 // ---------------------------------------------------------------------------
 // Sub-components
 // ---------------------------------------------------------------------------
+
+/** One folder in the Services gallery, with a decorative preview of its visible services. */
+function FolderCell({
+  name,
+  description,
+  count,
+  icon,
+  tiles,
+  onSelect,
+}: {
+  name: string
+  description: string
+  count: string
+  icon: string
+  tiles: readonly GalleryTile[]
+  onSelect: () => void
+}): React.JSX.Element {
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      aria-label={`${name} ${count}`}
+      className="service-tile group relative flex h-full min-h-[170px] w-full flex-col items-start rounded-2xl border-t-4 border-primary bg-surface p-4 text-start shadow-sm ring-1 ring-hairline transition-[transform,box-shadow] duration-200 ease-[cubic-bezier(0.16,1,0.3,1)] hover:-translate-y-1 hover:shadow-md focus-visible:-translate-y-1 focus-visible:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary motion-reduce:!translate-none motion-reduce:transition-none"
+    >
+      <span className="flex min-h-[5.125rem] w-full items-start gap-3">
+        <img
+          src={icon}
+          alt=""
+          draggable={false}
+          className="h-[4.5rem] w-[4.5rem] min-w-0 object-contain transition-transform duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:-translate-y-1.5 group-focus-visible:-translate-y-1.5 motion-reduce:!translate-none motion-reduce:transition-none"
+        />
+        <span
+          aria-hidden="true"
+          className="pointer-events-none ms-auto grid shrink-0 grid-cols-2 gap-[0.3rem] rounded-[0.8rem] bg-surface-tinted p-[0.4rem] opacity-55 transition-opacity duration-200 group-hover:opacity-85 group-focus-visible:opacity-85 motion-reduce:transition-none"
+        >
+          {tiles.slice(0, tiles.length === 4 ? 4 : 3).map((tile) => (
+            <span key={tile.id} className="grid h-8 w-8 place-items-center rounded-lg bg-surface p-1">
+              {tile.artwork ? (
+                <ServiceArtwork artwork={tile.artwork} size="row" />
+              ) : (
+                <span className="text-lg leading-none">{tile.emoji}</span>
+              )}
+            </span>
+          ))}
+          {tiles.length > 4 && (
+            <span className="grid h-8 w-8 place-items-center rounded-lg bg-surface text-[0.7em] font-bold text-muted-foreground">
+              <bdi dir="ltr">+{tiles.length - 3}</bdi>
+            </span>
+          )}
+        </span>
+      </span>
+      <span className="mt-2.5 line-clamp-2 text-[0.95em] font-semibold leading-snug text-foreground">
+        {name}
+      </span>
+      <span className="mt-1 block w-full line-clamp-2 text-[0.72em] leading-relaxed text-muted-foreground">
+        {description}
+      </span>
+      <span className="mt-auto pt-1.5 text-[0.68em] font-medium uppercase tracking-[0.06em] text-muted-foreground">
+        {count}
+      </span>
+    </button>
+  )
+}
 
 /** One service card in the Services gallery.
  *

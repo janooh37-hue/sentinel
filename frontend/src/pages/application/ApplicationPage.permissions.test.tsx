@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { render, screen } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { MemoryRouter, Route, Routes } from 'react-router-dom'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
@@ -98,7 +98,10 @@ describe('ApplicationPage service permissions', () => {
     ])
     renderPage()
 
-    expect(await screen.findByText('General Book')).toBeVisible()
+    fireEvent.click(await screen.findByText('Administration'))
+    expect(screen.getByText('General Book')).toBeVisible()
+    fireEvent.click(screen.getByText('All services'))
+    fireEvent.click(screen.getByText('Other'))
     expect(screen.getByText('Demo companion')).toBeVisible()
   })
 
@@ -110,8 +113,8 @@ describe('ApplicationPage service permissions', () => {
     ])
     renderPage('/services/demo_companion')
 
-    expect(await screen.findByText('General Book')).toBeVisible()
-    expect(screen.queryByText('Demo companion')).not.toBeInTheDocument()
+    expect(await screen.findByText('Administration')).toBeVisible()
+    expect(screen.queryByText('Other')).not.toBeInTheDocument()
   })
 
   it('hides synthetic tiles whose destination capability is missing', async () => {
@@ -132,8 +135,8 @@ describe('ApplicationPage service permissions', () => {
     ])
     renderPage()
 
-    expect(await screen.findByText('General Book')).toBeVisible()
-    expect(screen.queryByText('Duty Locations & Transfers')).not.toBeInTheDocument()
+    expect(await screen.findByText('Administration')).toBeVisible()
+    expect(screen.queryByText('Employee Affairs')).not.toBeInTheDocument()
   })
 
   it('uses calibrated artwork for synthetic and supported template tiles', async () => {
@@ -146,18 +149,18 @@ describe('ApplicationPage service permissions', () => {
       'leaves.create',
       'leaves.edit',
     ])
-    renderPage()
-
-    for (const [label, artwork] of [
-      ['National Service', 'national-service'],
-      ['Duty Locations & Transfers', 'duty-locations'],
-      ['Employee Absence', 'employee-absence'],
-      ['General Book', 'general-book'],
+    for (const [group, label, artwork] of [
+      ['leave', 'National Service', 'national-service'],
+      ['employee-affairs', 'Duty Locations & Transfers', 'duty-locations'],
+      ['leave', 'Employee Absence', 'employee-absence'],
+      ['administration', 'General Book', 'general-book'],
     ]) {
+      renderPage(`/services?group=${group}`)
       const text = await screen.findByText(label)
       const tile = text.closest('button')
       expect(tile).not.toBeNull()
       expect(tile?.querySelector(`[data-service-artwork="${artwork}"]`)).toBeInTheDocument()
+      cleanup()
     }
   })
 
@@ -169,8 +172,8 @@ describe('ApplicationPage service permissions', () => {
     capabilityState.allowed = new Set([...allowed, 'leaves.view', 'leaves.create'])
     renderPage('/services/general_book')
 
-    expect(await screen.findByText('National Service')).toBeVisible()
-    expect(screen.queryByText('General Book')).not.toBeInTheDocument()
+    expect(await screen.findByText('Leave & Attendance')).toBeVisible()
+    expect(screen.queryByText('Administration')).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /Services/i })).not.toBeInTheDocument()
   })
 })
