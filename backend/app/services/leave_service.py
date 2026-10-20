@@ -523,22 +523,15 @@ def file_return(
     resumption_date: date,
     delay_reason: str | None = None,
     manager_id: int | None = None,
-    embed_manager_signature: bool = True,
     actor: str | None = None,
     current_user: User | None = None,
 ) -> Leave:
     """File the Duty Resumption (return) form for a returnable leave.
 
-    Generates the Duty Resumption document, embedding the employee's saved
-    vault signature when present, and the manager's saved signature when
-    ``embed_manager_signature`` is true (default) AND the resolved manager
-    has one on file — ``document_service.generate_document`` raises
-    ``MANAGER_SIGNATURE_REQUIRED`` before allocating a reference or
-    committing anything when a REQUESTED manager signature is unavailable,
-    so filing never silently lands as an unsigned "signed" copy. Turning
-    the checkbox off only skips that embed; it never blanks the printed
-    manager name/title. Attaches the result to THIS leave (no standalone
-    register row), records the return date, and sets status -> Completed.
+    Generates the Duty Resumption document with the employee's saved vault
+    signature when present; the manager signs through the book approval chain.
+    Attaches the result to THIS leave (no standalone register row), records
+    the return date, and sets status -> Completed.
     NS requires a certificate already on file.
     """
     from app.services import document_service  # local import: avoid cycle
@@ -576,7 +569,7 @@ def file_return(
         template_id="Duty Resumption Form",
         fields=fields,
         manager_id=manager_id,
-        embed_signature={"employee": True, "manager": embed_manager_signature},
+        embed_signature={"employee": True},
         current_user=current_user,
         return_for_leave_id=leave_id,
     )

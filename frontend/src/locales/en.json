@@ -1957,9 +1957,7 @@
       "resumptionDate": "Return (resumption) date",
       "delayReason": "Reason for delay (if any)",
       "fileButton": "File & complete",
-      "filed": "Return form filed — leave completed",
-      "managerSignatureHelp": "Turning this off still prints the manager's name and title — it only skips embedding their signature image.",
-      "managerSignatureRequired": "Select a manager with a saved signature, or turn off \"Include manager signature\"."
+      "filed": "Return form filed — leave completed"
     },
     "amend": {
       "action": "Edit leave",

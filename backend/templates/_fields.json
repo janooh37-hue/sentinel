@@ -94,13 +94,6 @@
         "required": false
       },
       {
-        "key": "hand_sign_manager",
-        "type": "hand_sign_checkbox",
-        "label_en": "Embed manager's saved signature",
-        "label_ar": "تضمين توقيع المدير المحفوظ",
-        "required": false
-      },
-      {
         "key": "submitter_id",
         "type": "submitter_picker",
         "label_en": "Submitter",
@@ -256,14 +249,6 @@
         "label_en": "Line Manager",
         "label_ar": "المدير المباشر",
         "required": false
-      },
-      {
-        "key": "hand_sign_manager",
-        "type": "hand_sign_checkbox",
-        "label_en": "Include manager signature",
-        "label_ar": "تضمين توقيع المدير",
-        "required": false,
-        "default": "true"
       },
       {
         "key": "submitter_id",
@@ -819,13 +804,6 @@
         "label_en": "Project Manager",
         "label_ar": "مدير المشروع",
         "required": false
-      },
-      {
-        "key": "hand_sign_manager",
-        "type": "hand_sign_checkbox",
-        "label_en": "Embed manager's saved signature",
-        "label_ar": "تضمين توقيع المدير المحفوظ",
-        "required": false
       }
     ]
   },
@@ -875,13 +853,6 @@
         "type": "manager_picker",
         "label_en": "Project Manager",
         "label_ar": "مدير المشروع",
-        "required": false
-      },
-      {
-        "key": "hand_sign_manager",
-        "type": "hand_sign_checkbox",
-        "label_en": "Embed manager's saved signature",
-        "label_ar": "تضمين توقيع المدير المحفوظ",
         "required": false
       }
     ]
@@ -991,14 +962,6 @@
         "label_en": "Signing manager",
         "label_ar": "المُوقِّع",
         "required": false
-      },
-      {
-        "key": "hand_sign_manager",
-        "type": "hand_sign_checkbox",
-        "label_en": "Embed manager's saved signature",
-        "label_ar": "تضمين توقيع المدير المحفوظ",
-        "required": false,
-        "default": "true"
       }
     ]
   },
@@ -1186,13 +1149,6 @@
         "type": "manager_picker",
         "label_en": "Line Manager",
         "label_ar": "المدير المباشر",
-        "required": false
-      },
-      {
-        "key": "hand_sign_manager",
-        "type": "hand_sign_checkbox",
-        "label_en": "Embed manager's saved signature",
-        "label_ar": "تضمين توقيع المدير المحفوظ",
         "required": false
       }
     ]
@@ -1754,13 +1710,6 @@
         "required": false
       },
       {
-        "key": "hand_sign_manager",
-        "type": "hand_sign_checkbox",
-        "label_en": "Embed manager's saved signature",
-        "label_ar": "تضمين توقيع المدير المحفوظ",
-        "required": false
-      },
-      {
         "key": "submitter_id",
         "type": "submitter_picker",
         "label_en": "Submitter",
@@ -1854,13 +1803,6 @@
         "required": false
       },
       {
-        "key": "hand_sign_manager",
-        "type": "hand_sign_checkbox",
-        "label_en": "Embed manager's saved signature",
-        "label_ar": "تضمين توقيع المدير المحفوظ",
-        "required": false
-      },
-      {
         "key": "submitter_id",
         "type": "submitter_picker",
         "label_en": "Submitter",
@@ -1915,13 +1857,6 @@
         "type": "manager_picker",
         "label_en": "Line Manager",
         "label_ar": "المدير المباشر",
-        "required": false
-      },
-      {
-        "key": "hand_sign_manager",
-        "type": "hand_sign_checkbox",
-        "label_en": "Embed manager's saved signature",
-        "label_ar": "تضمين توقيع المدير المحفوظ",
         "required": false
       },
       {
@@ -2393,13 +2328,6 @@
         "label_en": "Line Manager",
         "label_ar": "المدير المباشر",
         "required": false
-      },
-      {
-        "key": "hand_sign_manager",
-        "type": "hand_sign_checkbox",
-        "label_en": "Embed manager's saved signature",
-        "label_ar": "تضمين توقيع المدير المحفوظ",
-        "required": false
       }
     ]
   },
@@ -2428,13 +2356,6 @@
         "type": "manager_picker",
         "label_en": "Line Manager",
         "label_ar": "المدير المباشر",
-        "required": false
-      },
-      {
-        "key": "hand_sign_manager",
-        "type": "hand_sign_checkbox",
-        "label_en": "Embed manager's saved signature",
-        "label_ar": "تضمين توقيع المدير المحفوظ",
         "required": false
       },
       {
@@ -2527,13 +2448,6 @@
         "type": "manager_picker",
         "label_en": "Line Manager",
         "label_ar": "المدير المباشر",
-        "required": false
-      },
-      {
-        "key": "hand_sign_manager",
-        "type": "hand_sign_checkbox",
-        "label_en": "Embed manager's saved signature",
-        "label_ar": "تضمين توقيع المدير المحفوظ",
         "required": false
       },
       {
@@ -3092,13 +3006,6 @@
         "label_en": "Line Manager",
         "label_ar": "المدير المباشر",
         "required": false
-      },
-      {
-        "key": "hand_sign_manager",
-        "type": "hand_sign_checkbox",
-        "label_en": "Embed manager's saved signature",
-        "label_ar": "تضمين توقيع المدير المحفوظ",
-        "required": false
       }
     ]
   },
@@ -3167,13 +3074,6 @@
         "type": "manager_picker",
         "label_en": "Line Manager",
         "label_ar": "المدير المباشر",
-        "required": false
-      },
-      {
-        "key": "hand_sign_manager",
-        "type": "hand_sign_checkbox",
-        "label_en": "Embed manager's saved signature",
-        "label_ar": "تضمين توقيع المدير المحفوظ",
         "required": false
       }
     ]

@@ -1616,8 +1616,7 @@ def generate_document(
                 field=field_meta["key"],
             )
 
-    # Forms with an explicit manager-signature checkbox honor the operator's
-    # choice; all other forms keep their server-enforced signing policy.
+    # Enforce the server signing policy; chain forms stay unsigned until approval.
     signing_path = form_policy.signing_path_of(template_id)
     hand_sign_manager_field = next(
         (f for f in form_meta.get("fields", []) if f.get("key") == "hand_sign_manager"),
@@ -1704,23 +1703,6 @@ def generate_document(
         fields["reporter_id"] = current_user.employee_id
         fields["submitter_g"] = current_user.employee_id
 
-    # Duty Resumption checkbox contract (approval-signature-placement plan
-    # §4): a REQUESTED manager signature that cannot be embedded must stop
-    # filing before any reference is allocated or record committed — never
-    # silently fall through to an unsigned "signed" copy. Scoped to this one
-    # form; every other form keeps its existing signing policy (unticking
-    # the checkbox bypasses only this requirement, not manager-ID validity).
-    if template_id == "Duty Resumption Form" and embed_signature.get("manager"):
-        if manager_id is not None and db.get(Manager, manager_id) is None:
-            raise NotFoundError(
-                "MANAGER_NOT_FOUND", f"Manager {manager_id} does not exist", id=manager_id
-            )
-        _gate_manager = resolve_manager(db, explicit_manager_id=manager_id)
-        if _gate_manager is None or manager_service.signature_str(db, _gate_manager) is None:
-            raise ValidationFailedError(
-                "MANAGER_SIGNATURE_REQUIRED",
-                "Select a manager with a saved signature or turn off Include manager signature.",
-            )
     is_personnel = form_meta.get("category", "personnel") == "personnel"
 
     employee: Employee | None = None
