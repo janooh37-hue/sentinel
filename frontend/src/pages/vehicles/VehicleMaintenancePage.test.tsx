@@ -76,18 +76,37 @@ describe('monthly vehicle maintenance', () => {
     expect(await screen.findByText('Bus')).toBeInTheDocument()
     expect(screen.getByText('Truck')).toBeInTheDocument()
     expect(api.getVehicleOdometer).toHaveBeenCalledWith('2026-10')
-    expect(screen.getAllByRole('spinbutton', { name: /Opening reading/ })).toHaveLength(1)
-    expect(screen.queryByRole('spinbutton', { name: /Opening reading.*36348/ })).not.toBeInTheDocument()
-    const closing = screen.getByRole('spinbutton', { name: /Closing reading.*58216/ })
+    expect(screen.getAllByRole('spinbutton', { name: /Start-of-month reading/ })).toHaveLength(1)
+    expect(screen.queryByRole('spinbutton', { name: /Start-of-month reading.*36348/ })).not.toBeInTheDocument()
+    const closing = screen.getByRole('spinbutton', { name: /end-of-month reading.*58216/ })
     await user.clear(closing)
     await user.type(closing, '1300{Enter}')
     await waitFor(() => expect(api.saveVehicleOdometer).toHaveBeenCalledWith(42, '2026-10', { opening_km: 1000, closing_km: 1300 }))
   })
 
+  it('saves a start-of-month reading on its own', async () => {
+    const empty = { ...MONTH.rows[0], opening_km: null, closing_km: null, km_driven: null }
+    vi.spyOn(api, 'getVehicleOdometer').mockResolvedValue({ ...MONTH, rows: [empty] })
+    const user = userEvent.setup()
+    renderPage()
+    const opening = await screen.findByRole('spinbutton', { name: /Start-of-month reading.*58216/ })
+    await user.type(opening, '5000{Enter}')
+    await waitFor(() => expect(api.saveVehicleOdometer).toHaveBeenCalledWith(42, '2026-10', { opening_km: 5000, closing_km: null }))
+  })
+
+  it('finds a vehicle by plate number typed in Arabic digits', async () => {
+    const user = userEvent.setup()
+    renderPage()
+    await screen.findByText('Bus')
+    await user.type(screen.getByRole('searchbox', { name: 'Search by plate number or type' }), '١٠ ٣٦٣٤٨')
+    expect(screen.getByText('Truck')).toBeInTheDocument()
+    expect(screen.queryByText('Bus')).not.toBeInTheDocument()
+  })
+
   it('rejects closing below opening without sending it', async () => {
     const user = userEvent.setup()
     renderPage()
-    const closing = await screen.findByRole('spinbutton', { name: /Closing reading.*58216/ })
+    const closing = await screen.findByRole('spinbutton', { name: /end-of-month reading.*58216/ })
     await user.clear(closing)
     await user.type(closing, '900{Enter}')
     expect(api.saveVehicleOdometer).not.toHaveBeenCalled()

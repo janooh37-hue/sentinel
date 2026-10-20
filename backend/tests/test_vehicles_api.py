@@ -653,6 +653,33 @@ def test_odometer_rejects_negative_distance_and_above_next_without_writing(
     assert listed["rows"][0]["km_driven"] == 400
 
 
+def test_odometer_saves_opening_alone_then_carries_closing_forward(
+    admin_client: TestClient,
+) -> None:
+    vehicle_id = _create_vehicle(admin_client)["id"]
+    url = f"/api/v1/vehicles/{vehicle_id}/odometer"
+
+    started = admin_client.put(f"{url}/2026-10", json={"opening_km": 5000, "closing_km": None})
+    assert started.status_code == 200, started.text
+    assert (started.json()["opening_km"], started.json()["closing_km"]) == (5000, None)
+    november = admin_client.get("/api/v1/vehicles/odometer", params={"month": "2026-11"}).json()
+    row = november["rows"][0]
+    assert (row["opening_km"], row["opening_from_previous"]) == (None, False)
+
+    closed = admin_client.put(f"{url}/2026-10", json={"closing_km": 5400})
+    assert closed.status_code == 200, closed.text
+    assert (closed.json()["opening_km"], closed.json()["km_driven"]) == (5000, 400)
+    november = admin_client.get("/api/v1/vehicles/odometer", params={"month": "2026-11"}).json()
+    row = november["rows"][0]
+    assert (row["opening_km"], row["opening_from_previous"]) == (5400, True)
+
+    nothing = admin_client.put(f"{url}/2026-11", json={"opening_km": 1, "closing_km": None})
+    assert nothing.status_code == 422, nothing.text
+    assert nothing.json()["error"]["code"] == "ODOMETER_READING_REQUIRED"
+    driven = admin_client.put(f"{url}/2026-11", json={"closing_km": 6000})
+    assert driven.json()["km_driven"] == 600
+
+
 def test_odometer_put_requires_edit_capability(admin_client: TestClient, api_db: Session) -> None:
     vehicle_id = _create_vehicle(admin_client)["id"]
     viewer = _make_user(
@@ -690,10 +717,12 @@ def test_odometer_and_maintenance_reject_invalid_month(
         {"closing_km": 10_000_000},
         {"opening_km": -1, "closing_km": 1000},
         {"opening_km": 10_000_000, "closing_km": 1000},
+        {},
+        {"opening_km": None, "closing_km": None},
     ],
 )
 def test_odometer_validates_reading_bounds(
-    admin_client: TestClient, payload: dict[str, int]
+    admin_client: TestClient, payload: dict[str, int | None]
 ) -> None:
     vehicle_id = _create_vehicle(admin_client)["id"]
     response = admin_client.put(f"/api/v1/vehicles/{vehicle_id}/odometer/2026-06", json=payload)

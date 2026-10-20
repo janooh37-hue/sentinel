@@ -40,6 +40,7 @@ import logging
 import re
 from collections.abc import Callable, Mapping, Sequence
 from datetime import datetime
+from itertools import pairwise
 from pathlib import Path
 from typing import Any, ClassVar, cast
 
@@ -547,6 +548,33 @@ _CC_LABEL_NORM = "نسخةإلى"  # "نسخة إلى" normalized — CC lines c
 _SIG_LABEL_NORM = "التوقيع"  # "التوقيع" normalized — Report paper signature label
 
 
+def _labelled_signature_slot(doc: Any, name_para: Any) -> tuple[Any, bool] | None:
+    """For a manager name found in a table cell: the value-cell paragraph
+    beside the first Signature/التوقيع label at or below the name's row, and
+    whether that label shares the name's row. None when the table has none."""
+    for table in doc.tables:
+        rows = table.rows
+        start = next(
+            (
+                i
+                for i, row in enumerate(rows)
+                if any(p._p is name_para._p for c in row.cells for p in c.paragraphs)
+            ),
+            None,
+        )
+        if start is None:
+            continue
+        for i in range(start, len(rows)):
+            for label, value in pairwise(rows[i].cells):
+                if label._tc is not value._tc and _norm_name(label.text).lower() in {
+                    "signature",
+                    _SIG_LABEL_NORM,
+                }:
+                    return value.paragraphs[0], i == start
+        return None
+    return None
+
+
 class SignatureAnchorAmbiguousError(RuntimeError):
     """More than one candidate manager closing block was found in a
     General Book/Security Permit source lacking the ``GSSG_ManagerSignature``
@@ -808,6 +836,7 @@ def stamp_signature_above_name(
                 label_anchor = True
                 break
 
+    keep_inline = False
     if anchor is None:
         idx = _find(paras, exact=True)
         if idx is None:
@@ -820,6 +849,13 @@ def stamp_signature_above_name(
                 t_idx = _find(table_paras, exact=False)
             if t_idx is not None:
                 anchor = table_paras[t_idx]  # float rises up from the name's own line
+                # A form with a Signature cell signs there, like its template:
+                # a label below the name rises into the name's block; a label
+                # on the name's own row would rise into the header, so the
+                # signature stays inline and grows that row instead.
+                slot = _labelled_signature_slot(doc, anchor)
+                if slot is not None:
+                    anchor, keep_inline = slot
     if anchor is None:
         last = next((p for p in reversed(paras) if p.text.strip()), None) or next(
             (p for p in reversed(table_paras) if p.text.strip()), None
@@ -834,6 +870,7 @@ def stamp_signature_above_name(
         dilate_radius_px=boldness,
         center_horizontal=label_anchor,
         signature_role="manager",
+        keep_inline=keep_inline,
     )
     if placed and date_below and not anchor.text.strip():
         from docx.oxml import OxmlElement
@@ -882,20 +919,22 @@ def _pp_admin_leave(doc: Any, ctx: dict[str, Any]) -> None:
 
 
 def _pp_material_request(doc: Any, ctx: dict[str, Any]) -> None:
-    """Float the signature images behind text so they don't grow their row and
-    push the form onto a second page (SC-0425 regression). The ``{{ *_sig }}``
-    tokens place the images inline; we convert them in place to behind-text
-    floats, bottom-aligned so each signature rests on its cell's line and
-    overflows UP into the empty cell above (the unused Contact cell) instead of
-    hanging down across the section divider.
+    """Float the English signature images behind text so they don't grow their
+    row and push the form onto a second page (SC-0425 regression). The
+    ``{{ *_sig }}`` tokens place the images inline; we convert them in place to
+    behind-text floats, bottom-aligned so each signature rests on its cell's
+    line and overflows UP into the empty cell above (the unused Contact cell)
+    instead of hanging down across the section divider.
 
-    Cells (table 4): r2/c3 = employee "Signature", r5/c3 = manager
-    "Signature". No-op for whichever signature wasn't embedded."""
-    try:
-        sig_cells = [doc.tables[4].rows[2].cells[3], doc.tables[4].rows[5].cells[3]]
-    except IndexError:
-        log.warning("Material Request: signature cell missing — float skipped")
-        return
+    The Arabic paper stays inline: its signature row sits under a red header
+    bar, which hides a lifted float, and the page has room for the taller row.
+    No-op for signatures not embedded."""
+    sig_cells = []
+    for table in doc.tables:
+        for row in table.rows:
+            for index, cell in enumerate(row.cells[:-1]):
+                if cell.text.strip() == "Signature":
+                    sig_cells.append(row.cells[index + 1])
     for cell in sig_cells:
         float_inline_images_in_cell(cell, bottom_align=True)
 
@@ -1236,6 +1275,10 @@ _FORM_REGISTRY: dict[str, dict[str, Any]] = {
         "post_process": _pp_header_reference,
     },
     "Material Request Form": {
+        "adapter": _adapt_material_request,
+        "post_process": _pp_material_request,
+    },
+    "Material Request Form (Arabic)": {
         "adapter": _adapt_material_request,
         "post_process": _pp_material_request,
     },

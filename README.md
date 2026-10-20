@@ -17,6 +17,17 @@ application only. It is pulled to the office server.
 - Shared vehicle-photo library with reusable named images and lightweight WebP previews
 - Runs as an always-on Windows service on the office LAN
 
+Material Request is one service in Services. An `English | العربية` tab in its
+form picks the paper to preview and save, and opens on the interface language.
+Switching keeps the delivery date, items, and manager, which both papers share
+with the same in-app manager-signing workflow. The Arabic paper has 17 item
+slots and asks only for delivery date, items, and the verifying manager.
+English-only delivery location, shipping address, justification, and requester
+signature fields are not offered on the Arabic form. Requester name,
+designation/contact, and manager signing date do not print because its design
+has no slots. The selected manager fills the center-manager approval; the
+contract-manager and final approvals stay blank for hand signing.
+
 ## Requirements
 
 - Python 3.12

@@ -115,6 +115,7 @@ _FORM_CATEGORY: dict[str, str] = {
     "Warning Form": "NAT",
     "Employee Clearance Form": "HR",
     "Material Request Form": "SC",
+    "Material Request Form (Arabic)": "SC",
     "Leave Application Form": "HR",
     "Passport Release Form": "HR",
     "Duty Resumption Form": "HR",
@@ -1190,6 +1191,7 @@ def _build_template_data(
                     "Leave Permit Form",
                     "Administrative Leave Form",
                     "Inmate Conduct Violations",
+                    "Material Request Form (Arabic)",
                 )
             ),
         )

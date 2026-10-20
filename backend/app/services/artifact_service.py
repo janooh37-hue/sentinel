@@ -35,6 +35,7 @@ _FORM_SHORT_NAME: dict[str, str] = {
     "Resignation Declaration": "ResignationDecl",
     "Acknowledgment Form": "Acknowledgment",
     "Material Request Form": "MRF",
+    "Material Request Form (Arabic)": "MRF-AR",
     "Leave Permit Form": "LeavePermit",
     "Administrative Leave Form": "AdminLeave",
     "General Book": "GeneralBook",
