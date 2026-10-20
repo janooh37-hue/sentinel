@@ -1,7 +1,11 @@
 from __future__ import annotations
 
 import base64
+import os
+import signal
+import sys
 import uuid
+from collections.abc import Iterator
 from pathlib import Path
 
 import fitz
@@ -12,6 +16,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.api.deps import get_current_user
 from app.config import get_settings
+from app.core import pdf_worker
 from app.db import session as session_mod
 from app.db.models import (
     Base,
@@ -302,3 +307,73 @@ def test_save_notifies_each_approver_after_an_approved_package_change(
 
     assert response.status_code == 200, response.text
     assert sent == [manager.id]
+
+
+# --- native-worker failures on the book-detail response (launch 12) -----------------------------
+#
+# `GET /books/{id}` describes the published package through the confined PDF worker. A worker
+# failure is infrastructure (`NativeWorkerError`, HTTP 503), never "this record has no package":
+# the route may degrade to the empty package only for the genuine no-package states.
+
+POSIX_ONLY = pytest.mark.skipif(sys.platform == "win32", reason="SIGSTOP is POSIX-only")
+
+
+@pytest.fixture()
+def wedged_calls_worker(monkeypatch: pytest.MonkeyPatch) -> Iterator[int]:
+    """The next ``calls`` worker is a real child frozen by SIGSTOP, with a 1 s job budget."""
+    pdf_worker.shutdown()  # rebuild the module pools under the short budget
+    monkeypatch.setattr(pdf_worker, "CALL_TIMEOUT_SECONDS", 1.0)
+    pool = pdf_worker.get_pool("calls")
+    pool.warm(1)
+    pid = pool.snapshot().idle_pids[0]
+    os.kill(pid, signal.SIGSTOP)
+    yield pid
+    pdf_worker.shutdown()
+
+
+@POSIX_ONLY
+def test_detail_answers_the_worker_503_envelope_instead_of_hiding_the_package(
+    api_db: Session, tmp_path: Path, wedged_calls_worker: int
+) -> None:
+    book, _version, _document, creator, _viewer = _record(api_db, tmp_path)
+    client = _client(api_db, creator)
+
+    failed = client.get(f"/api/v1/books/{book.id}")
+
+    assert failed.status_code == 503, failed.text
+    assert failed.json() == {
+        "error": {
+            "code": "PDF_WORKER_TIMEOUT",
+            "message": "PDF processing took too long and was stopped. Please try again.",
+            "details": {"op": "inspect_source"},
+        }
+    }
+
+    recovered = client.get(f"/api/v1/books/{book.id}")  # the wedged worker was replaced, no retry
+    assert recovered.status_code == 200, recovered.text
+    body = recovered.json()
+    assert body["included_papers_total_page_count"] == 3
+    assert [paper["original_name"] for paper in body["included_papers"]] == ["paper.pdf"]
+
+
+@pytest.mark.parametrize("damage", ["no_document", "record_pdf_missing", "record_pdf_unreadable"])
+def test_detail_still_degrades_to_an_empty_package_for_a_record_without_a_usable_pdf(
+    api_db: Session, tmp_path: Path, damage: str
+) -> None:
+    book, version, _document, creator, _viewer = _record(api_db, tmp_path)
+    if damage == "no_document":
+        version.document_id = None
+        api_db.commit()
+    elif damage == "record_pdf_missing":
+        (tmp_path / "published.pdf").unlink()
+    else:  # the worker runs the op and it raises an ordinary file error: still a record problem
+        (tmp_path / "published.pdf").write_bytes(b"not a pdf")
+    client = _client(api_db, creator)
+
+    response = client.get(f"/api/v1/books/{book.id}")
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["original_creator_user_id"] == creator.id
+    assert body["included_papers"] == []
+    assert body["included_papers_total_page_count"] == 0

@@ -317,6 +317,11 @@ stdlib-only entry point.
   request and never ahead of the consumer, so closing it early stops the stream.
 * Workers are daemon processes that exit on pipe EOF, so none outlives the API
   process (including after SIGKILL); `atexit` and `shutdown()` kill and reap them.
+* Workers start lazily: on a pool's first use, or to replace one that died or was
+  killed (nothing is spawned at import or startup). After an idle lull a pool
+  keeps its last healthy idle worker, so the first hot read does not pay a
+  spawn; only surplus idle workers older than 120 s retire (at the next lease).
+  A pool never exceeds its `max_workers` (3 each for `calls` and `streams`).
 * No automatic retry. Every job logs one `native_pdf_op` line (pool, op, worker
   pid, outcome, items, ms).
 

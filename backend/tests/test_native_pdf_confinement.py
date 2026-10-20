@@ -1247,3 +1247,156 @@ def test_a_worker_that_died_while_idle_is_replaced_before_the_next_job(
 
     assert replacement != victim
     assert pool.jobs[-1].outcome == "ok"
+
+
+# ============================================================================================
+# F. idle retirement keeps one warm worker per used pool (launch 12)
+#
+# Contract: after a lull longer than ``idle_retire`` the next job is served by an already-warm
+# worker (a spawn costs ~1-3 s on the hot read path); only *surplus* idle workers retire. The
+# floor counts healthy idle workers only, creates nothing eagerly, never exceeds max_workers,
+# and a shutdown still removes every worker. Aging is simulated by skewing the monotonic clock
+# ``pdf_worker`` reads, so nothing sleeps for ``IDLE_RETIRE_SECONDS`` and no timing is asserted.
+# ============================================================================================
+
+
+class _SkewedClock:
+    """Stands in for ``pdf_worker.time``: the real monotonic clock plus a controllable jump."""
+
+    def __init__(self) -> None:
+        self.offset = 0.0
+
+    def monotonic(self) -> float:
+        return time.monotonic() + self.offset
+
+    def advance(self, seconds: float) -> None:
+        self.offset += seconds
+
+
+@pytest.fixture()
+def idle_clock(pdf_worker: Any, monkeypatch: pytest.MonkeyPatch) -> Iterator[_SkewedClock]:
+    pdf_worker.shutdown()  # the module pools rebuild lazily under the skewed clock
+    clock = _SkewedClock()
+    monkeypatch.setattr(pdf_worker, "time", clock)
+    yield clock
+    pdf_worker.shutdown()
+
+
+def _hot_job(pdf_worker: Any, pool_name: str, data: bytes) -> int:
+    """One short public job on a module pool; returns the pid of the worker that served it."""
+    if pool_name == "calls":
+        return int(pdf_worker.call("ping")[0])
+    stream = pdf_worker.open_stream("rasters", data, 72)
+    try:
+        next(stream)
+        return int(stream.pid)
+    finally:
+        stream.close()
+
+
+@pytest.mark.parametrize("pool_name", ["calls", "streams"])
+def test_the_only_warm_worker_survives_a_lull_so_the_next_hot_job_does_not_respawn(
+    pdf_worker: Any, idle_clock: _SkewedClock, pool_name: str
+) -> None:
+    pool = pdf_worker.get_pool(pool_name)
+    assert pool.snapshot().idle_pids == ()  # nothing is started eagerly
+    data = _pdf_bytes(["A", "B"])
+
+    first = _hot_job(pdf_worker, pool_name, data)
+    assert pool.snapshot().idle_pids == (first,)
+
+    idle_clock.advance(pool.idle_retire + 1)  # a lull longer than the retirement horizon
+    again = _hot_job(pdf_worker, pool_name, data)
+
+    assert again == first, "the first job after a lull paid a cold spawn"
+    assert not _is_gone(first)
+    assert pool.snapshot().idle_pids == (first,)  # still exactly one worker: bounded, no refill
+
+    idle_clock.advance(pool.idle_retire * 10)  # the floor holds across repeated lulls
+    assert _hot_job(pdf_worker, pool_name, data) == first
+
+    pdf_worker.shutdown()  # shutdown removes the retained worker too
+    assert _wait_until(lambda: _is_gone(first))
+
+
+def test_surplus_idle_workers_retire_after_a_lull_but_one_warm_worker_remains(
+    pdf_worker: Any, make_pool: Callable[..., Any], idle_clock: _SkewedClock
+) -> None:
+    pool = make_pool(max_workers=3)
+    pool.warm(3)
+    original = set(pool.snapshot().idle_pids)
+    assert len(original) == 3
+
+    within_horizon = pool.call("ping")[0]  # nothing is stale yet: nothing retires
+    assert within_horizon in original
+    assert set(pool.snapshot().idle_pids) == original
+
+    idle_clock.advance(pool.idle_retire + 1)
+    served = pool.call("ping")[0]
+
+    assert served in original, "the first job after the lull paid a cold spawn"
+    assert pool.snapshot().idle_pids == (served,)  # exactly the floor: no refill to max_workers
+    assert all(_wait_until(lambda pid=pid: _is_gone(pid)) for pid in original - {served})
+    assert not _is_gone(served)
+
+    pool.shutdown()  # a shut-down pool keeps no warm worker either
+    assert _wait_until(lambda: _is_gone(served))
+    with pytest.raises(pdf_worker.NativeWorkerError):
+        pool.call("ping")
+
+
+@POSIX_ONLY
+def test_a_dead_idle_worker_is_never_the_warm_floor(
+    pdf_worker: Any, make_pool: Callable[..., Any], idle_clock: _SkewedClock
+) -> None:
+    pool = make_pool(max_workers=2)
+    pool.warm(2)
+    dead, healthy = pool.snapshot().idle_pids  # lease order: `dead` would be leased next
+    os.kill(dead, signal.SIGKILL)
+    assert _wait_until(lambda: _is_gone(dead))
+    idle_clock.advance(pool.idle_retire + 1)
+
+    served = pool.call("ping")[0]
+
+    assert served == healthy  # the healthy worker is the floor: no cold spawn, no corpse leased
+    assert pool.snapshot().idle_pids == (healthy,)
+
+
+def test_a_leased_worker_never_counts_as_the_warm_floor(
+    pdf_worker: Any, make_pool: Callable[..., Any], idle_clock: _SkewedClock
+) -> None:
+    pool = make_pool(max_workers=2)
+    pool.warm(2)
+    busy, idle = pool.snapshot().idle_pids  # lease order: the first is leased next
+    holder = pool.open_stream("rasters", _pdf_bytes(["A", "B", "C"]), 72)
+    next(holder)
+    assert holder.pid == busy
+    idle_clock.advance(pool.idle_retire + 1)
+
+    served = pool.call("ping")[0]  # the idle worker is the only healthy warm one
+
+    assert served == idle, "a busy worker was counted as the floor and the idle one retired"
+    assert pool.snapshot().leased_pids == (busy,)
+    assert pool.snapshot().idle_pids == (idle,)
+    meta, _blob = next(holder)  # the holder keeps streaming on its own, untouched worker
+    assert meta == (300, 400)
+    holder.close()
+
+
+@POSIX_ONLY
+def test_the_warm_floor_never_shields_a_timed_out_worker(
+    pdf_worker: Any, make_pool: Callable[..., Any], idle_clock: _SkewedClock
+) -> None:
+    pool = make_pool(max_workers=1)
+    pool.warm(1)
+    wedged = pool.snapshot().idle_pids[0]
+    os.kill(wedged, signal.SIGSTOP)
+
+    with pytest.raises(pdf_worker.NativeWorkerTimeoutError):
+        pool.call("ping", timeout=1.0)
+
+    assert _wait_until(lambda: _is_gone(wedged))
+    assert pool.snapshot().idle_pids == ()  # the killed owner is not kept warm
+    assert pool.snapshot().leased_pids == ()
+    idle_clock.advance(pool.idle_retire + 1)
+    assert pool.call("ping")[0] != wedged

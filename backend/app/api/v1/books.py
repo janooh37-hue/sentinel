@@ -38,6 +38,7 @@ from app.api.errors import AppError, ValidationFailedError
 from app.core import form_policy
 from app.core.classifications import CLASSIFICATIONS
 from app.core.form_kind import OTHER_SERVICE_ID
+from app.core.pdf_worker import NativeWorkerError
 from app.core.roles import INMATE_REPORTER_ROLE
 from app.db.models import (
     Book,
@@ -1121,7 +1122,11 @@ def _populate_included_papers(item: BookRead, row: Book, db: Session) -> None:
     item.included_papers_revision = row.included_papers_revision
     try:
         package = included_papers_service.describe_package(db, row)
+    except NativeWorkerError:
+        raise  # infrastructure failure (503): never degrade it to "this record has no package"
     except AppError:
+        # The record genuinely has no describable package (no generated document, missing or
+        # unreadable record PDF/paper): the detail simply omits the package state.
         return
     item.included_papers_fixed_page_count = package.fixed_page_count
     item.included_papers_total_page_count = package.total_page_count

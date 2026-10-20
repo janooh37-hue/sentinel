@@ -18,6 +18,11 @@ Design
   and replaces only the leased worker, so one job can never reap a sibling.
 * No automatic retry: a failed job raises, the caller decides. (A worker found dead while idle is
   replaced before the job is sent; that is not a retry.)
+* Workers are started lazily: on a pool's first use, or to replace one that died or was killed.
+  Nothing is spawned at import or startup. After a lull a pool keeps its last healthy idle worker
+  warm, so the first hot job after it does not pay a spawn; only *surplus* idle workers older
+  than ``IDLE_RETIRE_SECONDS`` retire (lazily, at the next lease). Capacity stays bounded by
+  ``max_workers``, and ``shutdown()`` still removes every worker.
 * Streams are credit-based with a window of one item: the child produces the next page only
   when the parent asks for it, so a consumer that stops early (``close()``, ``islice``, GC)
   leaves at most the pages it actually took rendered.
@@ -66,7 +71,8 @@ STREAM_LEASE_TIMEOUT_SECONDS = 900.0  # streams are held across OCR time; this i
 STARTUP_TIMEOUT_SECONDS = 60.0  # spawn + imports, budgeted separately from any job
 CLOSE_GRACE_SECONDS = 5.0  # a stream's polite ``close`` before its worker is killed
 REAP_SECONDS = 5.0
-IDLE_RETIRE_SECONDS = 120.0  # idle workers are retired lazily, at the next lease
+# Idle workers older than this retire lazily at the next lease, except the last healthy one.
+IDLE_RETIRE_SECONDS = 120.0
 CALL_POOL_WORKERS = 3
 STREAM_POOL_WORKERS = 3
 JOB_HISTORY = 256
@@ -404,7 +410,12 @@ class Stream:
 
 
 class WorkerPool:
-    """A bounded set of lazily spawned workers, leased exclusively one job at a time."""
+    """A bounded set of lazily spawned workers, leased exclusively one job at a time.
+
+    A worker is started on the pool's first use or to replace one that died or was killed.
+    Idle ones retire lazily at the next lease once older than ``idle_retire``, but the last
+    healthy idle worker is kept warm (see ``_drop_idle``); nothing is ever started eagerly.
+    """
 
     def __init__(
         self,
@@ -435,6 +446,29 @@ class WorkerPool:
 
     # -- leasing -------------------------------------------------------------------------
 
+    def _drop_idle(self, now: float) -> list[_Worker]:
+        """Remove dead and surplus-stale idle workers and return them for disposal.
+
+        The caller holds ``_cond``. A dead worker is never kept. A healthy idle worker older
+        than ``idle_retire`` retires only while another healthy idle worker remains: when none
+        is fresh, the most recently idle one is kept as the pool's warm floor, so the first job
+        after a lull is served by a live process instead of paying a spawn. Leased workers are
+        not idle and never count toward the floor.
+        """
+        healthy: list[_Worker] = []
+        dropped: list[_Worker] = []
+        for candidate in self._idle:
+            if candidate.alive:
+                healthy.append(candidate)
+            else:
+                dropped.append(candidate)
+        keep = [worker for worker in healthy if now - worker.idle_since <= self.idle_retire]
+        if not keep and healthy:
+            keep = [healthy[-1]]  # the stack top: the most recently idle healthy worker
+        dropped.extend(worker for worker in healthy if worker not in keep)
+        self._idle = keep
+        return dropped
+
     def _lease(self) -> _Worker:
         deadline = time.monotonic() + self.lease_timeout
         doomed: list[_Worker] = []
@@ -446,13 +480,7 @@ class WorkerPool:
                             "PDF worker pool is shut down", pool=self.name
                         )
                     now = time.monotonic()
-                    fresh: list[_Worker] = []
-                    for candidate in self._idle:
-                        if candidate.alive and now - candidate.idle_since <= self.idle_retire:
-                            fresh.append(candidate)
-                        else:
-                            doomed.append(candidate)
-                    self._idle = fresh
+                    doomed.extend(self._drop_idle(now))
                     if self._idle:
                         worker = self._idle.pop()
                         self._leased.add(worker)
