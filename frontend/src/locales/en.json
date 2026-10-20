@@ -3823,6 +3823,7 @@
     },
     "noTemplateSelected": "Select a form to begin",
     "noEmployeeSelected": "Pick an employee first",
+    "leaveAlreadyIssued": "Record {{ref}} already covers this leave. Open that record instead of issuing a new one.",
     "toast": {
       "generated": "Document generated",
       "previewed": "Preview rendered",

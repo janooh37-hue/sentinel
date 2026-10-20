@@ -1214,76 +1214,110 @@ def _recompute_approval_state(book: Book) -> None:
     book.approval_state = state
 
 
-def _decides_leave(db: Session, book: Book, leave_id: int) -> bool:
-    """Whether ``book`` settles the leave its paper is linked to.
+def is_enrolled(book: Book) -> bool:
+    """Whether ``book`` was generated under the sign-gated leave lifecycle.
 
-    A duplicate generation reuses the leave (natural-key dedup, unique index), so
-    the earliest live record decides it; a record that is deleted or voided
-    cancels it only when no other live record is left.
+    Enrolled records carry the generation-time ``_signing`` snapshot on some
+    version (a Word revision inherits it from the versions before it). Records
+    issued before the gate keep their already-issued leave untouched.
     """
-    others = db.scalars(
-        select(Book.id)
+    return any(isinstance((v.fields or {}).get("_signing"), dict) for v in book.versions)
+
+
+def leave_owner(db: Session, leave_id: int, *, include: Book | None = None) -> Book | None:
+    """The live record that decides a sign-gated leave, or ``None``.
+
+    The owner is the live (not deleted, not voided) record whose CURRENT version
+    links the leave. A re-issue that takes a leave over links a newer document,
+    so the newest link wins. ``include`` also counts that record when it was
+    just deleted or voided (it then cancels the leave it owned).
+    """
+    later = aliased(BookVersion)
+    live = and_(Book.deleted_at.is_(None), Book.voided_at.is_(None))
+    return db.scalars(
+        select(Book)
         .join(BookVersion, BookVersion.book_id == Book.id)
         .join(Document, Document.id == BookVersion.document_id)
         .where(
             Document.leave_id == leave_id,
-            Book.id != book.id,
-            Book.deleted_at.is_(None),
-            Book.voided_at.is_(None),
+            ~exists().where(
+                later.book_id == BookVersion.book_id, later.version_no > BookVersion.version_no
+            ),
+            or_(live, Book.id == include.id) if include is not None else live,
         )
-    ).all()
-    if book.deleted_at is None and book.voided_at is None:
-        return all(other > book.id for other in others)
-    return not others
+        .order_by(Document.id.desc())
+        .limit(1)
+    ).first()
+
+
+def set_leave_status(db: Session, leave: Leave, status: str, *, user_id: int | None) -> bool:
+    """Move a sign-gated leave to ``status`` with audit and re-evaluation; no commit.
+
+    Returns whether the status changed. The caller commits and then invalidates
+    the employee's leave cache.
+    """
+    from app.services import absence_service, leave_service
+
+    if leave.status == status:
+        return False
+    before = leave_service._workforce_leave_snapshot(leave)
+    actor = db.get(User, user_id) if user_id is not None else None
+    leave_service._audit(
+        db,
+        "leave.status_changed",
+        leave.id,
+        actor.employee_id if actor else None,
+        {"from": leave.status, "to": status},
+    )
+    leave.status = status
+    leave.updated_at = datetime.now(UTC).replace(tzinfo=None)
+    leave_service._enqueue_leave_reevaluation(
+        db,
+        before=before,
+        after=leave,
+        reason_code=leave_service._leave_transition_reason(status),
+    )
+    # Generation leaves absences alone; only an approved leave explains them.
+    if status == "Approved" and absence_service.supersedes_absence(leave.leave_type):
+        absence_service.delete_absences_covered_by(
+            db, leave.employee_id, leave.start_date, leave.end_date, commit=False
+        )
+    return True
 
 
 def _commit_approval_state(db: Session, book: Book, *, user_id: int | None) -> None:
     """Commit a chain decision and its linked leave together; notify only afterwards.
 
     Record-kind leaves cannot be approved through Leaves PATCH. Only these two
-    generated forms mirror the record's verdict, including administrative repairs.
+    generated forms mirror the record's verdict, including administrative repairs,
+    and only when the record is enrolled and owns the leave (``leave_owner``).
     A voided or deleted record cancels its leave. Approval is the only send.
     """
     from app.core import form_policy
-    from app.services import absence_service, leave_service, notify_dispatch
+    from app.services import leave_service, notify_dispatch
 
     version = _current_version(book)
     leave = None
     status_changed = False
-    if version is not None and version.template_id in form_policy.SIGN_GATED_LEAVE_FORMS:
+    if (
+        version is not None
+        and version.template_id in form_policy.SIGN_GATED_LEAVE_FORMS
+        and is_enrolled(book)
+    ):
         document = db.get(Document, version.document_id) if version.document_id else None
         leave = db.get(Leave, document.leave_id) if document and document.leave_id else None
-        if leave is not None and leave.deleted_at is None and _decides_leave(db, book, leave.id):
+        if (
+            leave is not None
+            and leave.deleted_at is None
+            and leave_owner(db, leave.id, include=book) is book
+        ):
             if book.voided_at is not None or book.deleted_at is not None:
                 status = "Cancelled"
             else:
                 status = {"approved": "Approved", "rejected": "Rejected"}.get(
                     book.approval_state, "Pending"
                 )
-            if leave.status != status:
-                before = leave_service._workforce_leave_snapshot(leave)
-                actor = db.get(User, user_id) if user_id is not None else None
-                leave_service._audit(
-                    db,
-                    "leave.status_changed",
-                    leave.id,
-                    actor.employee_id if actor else None,
-                    {"from": leave.status, "to": status},
-                )
-                leave.status = status
-                leave.updated_at = datetime.now(UTC).replace(tzinfo=None)
-                leave_service._enqueue_leave_reevaluation(
-                    db,
-                    before=before,
-                    after=leave,
-                    reason_code=leave_service._leave_transition_reason(status),
-                )
-                # Generation leaves absences alone; only an approved leave explains them.
-                if status == "Approved" and absence_service.supersedes_absence(leave.leave_type):
-                    absence_service.delete_absences_covered_by(
-                        db, leave.employee_id, leave.start_date, leave.end_date, commit=False
-                    )
-                status_changed = True
+            status_changed = set_leave_status(db, leave, status, user_id=user_id)
     db.commit()
     db.refresh(book)
     if leave is None or leave.deleted_at is not None or not status_changed:

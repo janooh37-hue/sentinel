@@ -452,6 +452,12 @@ function StandardApplicationPage(): React.JSX.Element {
       setSubmitError(null)
     },
     onError: (err) => {
+      if (err instanceof ApiError && err.code === 'LEAVE_ALREADY_ISSUED') {
+        const message = t('application.leaveAlreadyIssued', { ref: String(err.details.ref_number ?? '') })
+        setSubmitError(message)
+        toast.error(message)
+        return
+      }
       setSubmitError(err instanceof ApiError ? `${err.code}: ${err.message}` : String(err))
       toast.error(apiErrorMessage(err))
     },

@@ -455,11 +455,21 @@ def generate_document(
             payload.classification_code if effective_service == "General Book" else None
         ),
     )
+    revise_book: Book | None = None
     if payload.revise_of_book_id is not None:
         revise_book = db.get(Book, payload.revise_of_book_id)
         if revise_book is not None and revise_book.deleted_at is not None:
             revise_book = None
         book_service.require_revise_access(db, user, revise_book)
+    # Refuse a duplicate of a live record's leave now, with its reference number,
+    # rather than as a failed job (the job re-checks it).
+    document_service.plan_gated_leave(
+        db,
+        template_id=payload.template_id,
+        employee_id=payload.employee_id,
+        fields=payload.fields,
+        revise_book=revise_book,
+    )
 
     for source in payload.attachments or ():
         if source.source == "staged" or source.book_id is None:

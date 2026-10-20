@@ -217,22 +217,171 @@ def test_revision_reuses_leave_even_when_dates_change(gate_env):
     assert revised_leave.status == "Pending"
 
 
-def test_duplicate_generation_cannot_change_the_original_leave_verdict(gate_env):
+def decide(env, book, decision):
+    book_service.decide_step(
+        env.db,
+        book.id,
+        user_id=env.signer.id,
+        version_id=book.versions[-1].id,
+        decision=decision,
+        note=decision,
+    )
+
+
+def _issued_on(excinfo):
+    assert excinfo.value.code == "LEAVE_ALREADY_ISSUED"
+    return excinfo.value.details["ref_number"]
+
+
+@pytest.mark.parametrize("template", ["Leave Permit Form", "Administrative Leave Form"])
+def test_legacy_record_keeps_its_issued_leave(gate_env, monkeypatch, template):
+    """A record issued before the sign gate (no snapshot, leave Approved, employee
+    told) keeps main's behaviour when it is later sent for signature."""
+    env = gate_env
+    book, leave = generate(env, template)
+    for version in book.versions:
+        version.fields = {k: v for k, v in version.fields.items() if k != "_signing"}
+    leave.status = "Approved"
+    env.db.commit()
+    reevaluate = Mock()
+    monkeypatch.setattr(leave_service, "_enqueue_leave_reevaluation", reevaluate)
+    submit(env, book)
+    decide(env, book, "rejected")
+    env.db.refresh(leave)
+    assert book.approval_state == "rejected"
+    assert leave.status == "Approved"
+    assert reevaluate.call_count == 0
+    assert env.send.call_count == 0
+    assert env.db.query(OutboundMessage).count() == 0
+
+
+def test_duplicate_is_refused_while_the_owner_is_live(gate_env):
     env = gate_env
     book, leave = generate(env)
-    book_service.override_state(env.db, book.id, target_state="approved", actor=env.signer)
-    duplicate, same_leave = generate(env)
+    for state in ("none", "pending", "approved"):
+        if state == "pending":
+            submit(env, book)
+        elif state == "approved":
+            book_service.sign_book(
+                env.db, book.id, user_id=env.signer.id, version_id=book.versions[-1].id
+            )
+        with pytest.raises(document_service.ValidationFailedError) as excinfo:
+            generate(env)
+        assert _issued_on(excinfo) == book.ref_number
+        env.db.rollback()
+    env.db.refresh(leave)
+    assert leave.status == "Approved"
+    assert env.db.query(Book).count() == 1
+
+
+@pytest.mark.parametrize("template", ["Leave Permit Form", "Administrative Leave Form"])
+def test_a_reissue_takes_over_a_rejected_leave(gate_env, template):
+    env = gate_env
+    rejected, leave = generate(env, template)
+    submit(env, rejected)
+    decide(env, rejected, "rejected")
+    assert leave.status == "Rejected"
+    reissue, same_leave = generate(env, template)
     assert same_leave.id == leave.id
-    assert duplicate.approval_state == "none"
+    assert leave.status == "Pending"
+    # The rejected original no longer decides the leave.
+    book_service.override_state(env.db, rejected.id, target_state="approved", actor=env.signer)
+    env.db.refresh(leave)
+    assert leave.status == "Pending"
+    submit(env, reissue)
+    book_service.sign_book(
+        env.db, reissue.id, user_id=env.signer.id, version_id=reissue.versions[-1].id
+    )
+    env.db.refresh(leave)
+    assert leave.status == "Approved"
+    assert env.send.call_count == 1
+    book_service.override_state(
+        env.db, rejected.id, target_state=book_service.VOIDED_STATE, actor=env.signer
+    )
+    env.db.refresh(leave)
+    assert leave.status == "Approved"
     assert env.db.query(Leave).count() == 1
-    submit(env, duplicate)
+
+
+@pytest.mark.parametrize("template", ["Leave Permit Form", "Administrative Leave Form"])
+def test_a_revision_cannot_move_onto_a_live_records_leave(gate_env, template):
+    env = gate_env
+    first, first_leave = generate(env, template)
+    submit(env, first)
+    decide(env, first, "rejected")
+    moved = {"date": "22/10/2026", "start_date": "22/10/2026", "end_date": "23/10/2026"}
+    second, second_leave = generate(env, template, fields=moved)
+    with pytest.raises(document_service.ValidationFailedError) as excinfo:
+        generate(env, template, revise_of_book_id=first.id, fields=moved)
+    assert _issued_on(excinfo) == second.ref_number
+    env.db.rollback()
+    env.db.refresh(first_leave)
+    env.db.refresh(second_leave)
+    assert (first_leave.start_date, first_leave.status) == (date(2026, 10, 20), "Rejected")
+    assert (second_leave.start_date, second_leave.status) == (date(2026, 10, 22), "Pending")
+
+
+@pytest.mark.parametrize("template", ["Leave Permit Form", "Administrative Leave Form"])
+def test_a_revision_onto_a_rejected_records_leave_takes_it_over(gate_env, template):
+    env = gate_env
+    first, first_leave = generate(env, template)
+    submit(env, first)
+    decide(env, first, "rejected")
+    moved = {"date": "22/10/2026", "start_date": "22/10/2026", "end_date": "23/10/2026"}
+    second, second_leave = generate(env, template, fields=moved)
+    submit(env, second)
+    decide(env, second, "rejected")
+    revised, revised_leave = generate(env, template, revise_of_book_id=second.id, fields={})
+    assert revised_leave.id == first_leave.id
+    env.db.refresh(second_leave)
+    assert first_leave.status == "Pending"
+    assert second_leave.status == "Cancelled"
+    submit(env, revised)
+    book_service.sign_book(
+        env.db, revised.id, user_id=env.signer.id, version_id=revised.versions[-1].id
+    )
+    env.db.refresh(first_leave)
+    assert first_leave.status == "Approved"
+    assert env.send.call_count == 1
+
+
+def test_a_non_owner_revision_leaves_the_owners_leave_alone(gate_env):
+    env = gate_env
+    original, leave = generate(env)
+    submit(env, original)
+    decide(env, original, "rejected")
+    reissue, _leave = generate(env)
+    submit(env, reissue)
+    book_service.sign_book(
+        env.db, reissue.id, user_id=env.signer.id, version_id=reissue.versions[-1].id
+    )
+    with pytest.raises(document_service.ValidationFailedError) as excinfo:
+        generate(env, revise_of_book_id=original.id, fields={})
+    assert _issued_on(excinfo) == reissue.ref_number
+    env.db.rollback()
+    revised, new_leave = generate(env, revise_of_book_id=original.id, fields={"date": "22/10/2026"})
+    env.db.refresh(leave)
+    assert new_leave.id != leave.id
+    assert (leave.start_date, leave.status) == (date(2026, 10, 20), "Approved")
+    assert revised.id == original.id
+
+
+@pytest.mark.parametrize("template", ["Leave Permit Form", "Administrative Leave Form"])
+def test_a_revision_keeps_the_notify_opt_out(gate_env, template):
+    env = gate_env
+    book, leave = generate(env, template, notify_employee=False)
+    submit(env, book)
+    decide(env, book, "returned")
+    # The revise screen hides the switch and sends its default (on).
+    revised, _leave = generate(env, template, revise_of_book_id=book.id, notify_employee=True)
+    assert revised.versions[-1].fields["_signing"]["notify_employee"] is False
+    submit(env, revised)
+    book_service.sign_book(
+        env.db, book.id, user_id=env.signer.id, version_id=revised.versions[-1].id
+    )
     env.db.refresh(leave)
     assert leave.status == "Approved"
-    deleted, _leave = generate(env)
-    book_service.delete_book(env.db, deleted.id, user_id=env.signer.id)
-    env.db.refresh(leave)
-    assert book.approval_state == "approved"
-    assert leave.status == "Approved"
+    env.send.assert_not_called()
 
 
 def _word_revision(env, book):

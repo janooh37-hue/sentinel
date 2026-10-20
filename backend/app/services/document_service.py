@@ -910,6 +910,74 @@ def _find_duplicate_leave(db: Session, leave_row: Leave) -> Leave | None:
     )
 
 
+@dataclass(frozen=True)
+class GatedLeavePlan:
+    """Which leave row a sign-gated generation links, decided before any side effect."""
+
+    #: Row to link; ``None`` inserts a fresh Pending row.
+    leave_id: int | None = None
+    #: The revised record's own row follows its corrected dates.
+    move_dates: bool = False
+    #: The row was another (rejected, deleted, voided or legacy) record's: set Pending.
+    take_over: bool = False
+    #: The revised record's own row, left behind by a take-over: set Cancelled.
+    cancel_leave_id: int | None = None
+
+
+def plan_gated_leave(
+    db: Session,
+    *,
+    template_id: str,
+    employee_id: str | None,
+    fields: dict[str, Any],
+    revise_book: Book | None,
+) -> GatedLeavePlan | None:
+    """Settle exclusive ownership of a sign-gated leave (unique natural key).
+
+    Raises ``LEAVE_ALREADY_ISSUED`` when another live, non-rejected, enrolled
+    record owns the leave these fields describe. Otherwise the generation links
+    its own row (moved to new dates on a revision), takes the matching row over,
+    or inserts a new one. ``None`` for every other form.
+    """
+    if template_id not in form_policy.SIGN_GATED_LEAVE_FORMS or employee_id is None:
+        return None
+    from app.services import book_service
+
+    own: Leave | None = None
+    if revise_book is not None:
+        # Newest version linked to a live leave; a Word revision may predate the
+        # leave_id carry-over. Only an unowned or self-owned row is still this record's.
+        for previous in reversed(revise_book.versions):
+            previous_document = (
+                db.get(Document, previous.document_id) if previous.document_id else None
+            )
+            if previous_document is not None and previous_document.leave_id is not None:
+                previous_leave = db.get(Leave, previous_document.leave_id)
+                if previous_leave is not None and previous_leave.deleted_at is None:
+                    owner = book_service.leave_owner(db, previous_leave.id)
+                    if owner is None or owner is revise_book:
+                        own = previous_leave
+                break
+    key = _make_leave_row(employee_id, template_id, fields, Path(), datetime.now())
+    held = _find_duplicate_leave(db, key)
+    if held is None or held is own:
+        return GatedLeavePlan(leave_id=own.id if own else None, move_dates=own is not None)
+    owner = book_service.leave_owner(db, held.id)
+    if (
+        owner is not None
+        and owner is not revise_book
+        and owner.approval_state != "rejected"
+        and book_service.is_enrolled(owner)
+    ):
+        raise ValidationFailedError(
+            "LEAVE_ALREADY_ISSUED",
+            f"This leave is already issued on record {owner.ref_number}",
+            ref_number=owner.ref_number,
+            book_id=owner.id,
+        )
+    return GatedLeavePlan(leave_id=held.id, take_over=True, cancel_leave_id=own.id if own else None)
+
+
 def _make_leave_row(
     employee_id: str,
     template_id: str,
@@ -1742,7 +1810,6 @@ def generate_document(
     # ref (no allocation, no new Book row) and append a fresh version.
     # ------------------------------------------------------------------
     revise_book: Book | None = None
-    revision_leave_id: int | None = None
     if revise_of_book_id is not None:
         if not commit:
             raise ValidationFailedError(
@@ -1770,18 +1837,14 @@ def generate_document(
                 "Only a draft, returned, rejected, or awaiting-scan book can be revised",
                 state=revise_book.approval_state,
             )
-        if template_id in form_policy.SIGN_GATED_LEAVE_FORMS:
-            # Newest version linked to a live leave; a Word revision may predate
-            # the leave_id carry-over, and a soft-deleted leave is not reused.
-            for previous in reversed(revise_book.versions):
-                previous_document = (
-                    db.get(Document, previous.document_id) if previous.document_id else None
-                )
-                if previous_document is not None and previous_document.leave_id is not None:
-                    previous_leave = db.get(Leave, previous_document.leave_id)
-                    if previous_leave is not None and previous_leave.deleted_at is None:
-                        revision_leave_id = previous_leave.id
-                    break
+    # Before any side effect: a duplicate of a live record's leave is refused.
+    gated_leave = plan_gated_leave(
+        db,
+        template_id=template_id,
+        employee_id=employee_id,
+        fields=fields,
+        revise_book=revise_book,
+    )
 
     # ------------------------------------------------------------------
     # 1c. Attachments (spec §6) — validate slots + resolve sources BEFORE
@@ -1891,6 +1954,17 @@ def generate_document(
     # choices so the signed copy reproduces this paper (render_signed_artifact).
     fields = {k: v for k, v in fields.items() if k != _SIGNING_KEY}
     if commit and signing_path == "chain" and template_id != "Inmate Conduct Violations":
+        if revise_book is not None:
+            # The revise screen hides the notify switch, so the request flag carries
+            # no choice: keep the newest snapshot's (none: revisions never notified).
+            notify_employee = next(
+                (
+                    snapshot.get("notify_employee") is not False
+                    for v in reversed(revise_book.versions)
+                    if isinstance(snapshot := (v.fields or {}).get(_SIGNING_KEY), dict)
+                ),
+                False,
+            )
         fields[_SIGNING_KEY] = {
             "issued": datetime.now().strftime("%d/%m/%Y"),
             "employee": bool(embed_signature.get("employee")),
@@ -2415,6 +2489,8 @@ def generate_document(
     leave_id: int | None = None
     #: Days whose absence rows a generated superseding leave overwrote.
     superseded_absences: list[date] = []
+    #: A take-over changed an existing leave's status (leave cache to invalidate).
+    gated_leave_changed = False
     if return_for_leave_id is not None:
         # Return-form filing: attach to the existing leave; no new register row.
         doc_row.leave_id = return_for_leave_id
@@ -2425,18 +2501,31 @@ def generate_document(
         # loop must not spam exact-duplicate Leave rows (the documented
         # 2026-03-26 incident inserted 300 identical sick rows). Reuse any
         # non-deleted row with the same natural key instead of inserting again.
-        # A revision keeps its leave identity even when the corrected dates
-        # change the natural key. Preserve its verdict until it is resubmitted.
-        existing_leave = (
-            db.get(Leave, revision_leave_id)
-            if revision_leave_id is not None
-            else _find_duplicate_leave(db, leave_row)
-        )
-        if existing_leave is not None and revision_leave_id is not None:
-            existing_leave.start_date = leave_row.start_date
-            existing_leave.end_date = leave_row.end_date
-            existing_leave.days = leave_row.days
-            existing_leave.doc_path = leave_row.doc_path
+        # A sign-gated form follows its ownership plan (plan_gated_leave).
+        if gated_leave is None:
+            existing_leave = _find_duplicate_leave(db, leave_row)
+        else:
+            from app.services import book_service
+
+            existing_leave = (
+                db.get(Leave, gated_leave.leave_id) if gated_leave.leave_id is not None else None
+            )
+            actor_id = current_user.id if current_user is not None else None
+            if existing_leave is not None and gated_leave.move_dates:
+                # A revision keeps its leave identity on corrected dates and its
+                # verdict until it is resubmitted.
+                existing_leave.start_date = leave_row.start_date
+                existing_leave.end_date = leave_row.end_date
+                existing_leave.days = leave_row.days
+                existing_leave.doc_path = leave_row.doc_path
+            if commit and existing_leave is not None and gated_leave.take_over:
+                gated_leave_changed = book_service.set_leave_status(
+                    db, existing_leave, "Pending", user_id=actor_id
+                )
+            if gated_leave.cancel_leave_id is not None:
+                left_behind = db.get_one(Leave, gated_leave.cancel_leave_id)
+                if book_service.set_leave_status(db, left_behind, "Cancelled", user_id=actor_id):
+                    gated_leave_changed = True
         if existing_leave is not None:
             log.info(
                 "leave-row dedup: reusing leave %d for employee %s (%s %s→%s)",
@@ -2587,6 +2676,10 @@ def generate_document(
         )
     db.commit()
     db.refresh(doc_row)
+    if gated_leave_changed and employee_id is not None:
+        from app.services import leave_service
+
+        leave_service._cache_invalidate_employee(employee_id)
 
     # B1: unlink superseded in-place-edit files NOW — transaction is durable.
     # If commit raised above, we never reach this point, so old files are safe.
