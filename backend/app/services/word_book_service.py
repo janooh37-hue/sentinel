@@ -23,7 +23,7 @@ from sqlalchemy.orm import Session
 
 from app.api.errors import AppError
 from app.config import get_settings
-from app.core import manager_override
+from app.core import form_policy, manager_override
 from app.core.book_template_retokenize import read_general_book_fields
 from app.core.book_text import build_search_text, docx_to_text
 from app.core.classifications import (
@@ -606,6 +606,15 @@ def finish_word_session(
     # ------------------------------------------------------------------
     # 3. Create Document row
     # ------------------------------------------------------------------
+    # A sign-gated leave form keeps its leave through a Word revision, so signing
+    # still settles it (book_service._commit_approval_state).
+    prior_document = (
+        db.get(Document, prior.document_id)
+        if prior is not None
+        and prior.document_id
+        and template_id in form_policy.SIGN_GATED_LEAVE_FORMS
+        else None
+    )
     doc = Document(
         template_id=template_id,
         ref_number=book.ref_number,
@@ -614,6 +623,7 @@ def finish_word_session(
         submission_id=str(uuid.uuid4()),
         role="primary",
         created_at=now,
+        leave_id=prior_document.leave_id if prior_document is not None else None,
     )
     db.add(doc)
     db.flush()  # get doc.id

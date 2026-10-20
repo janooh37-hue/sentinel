@@ -89,7 +89,8 @@ def _load_book_event(db: Session, book_id: int) -> BookEvent | None:
     )
     return BookEvent(
         employee=employee,
-        fields=version.fields or {},
+        # A Word revision stores no fields; its message keeps the generated form's.
+        fields=next((v.fields for v in reversed(book.versions) if v.fields), {}),
         today=date.today(),
         created_at=issued,
     )

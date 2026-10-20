@@ -17,6 +17,7 @@ afterEach(() => {
 
 describe('GeneratedSaveActions', () => {
   const baseProps = {
+    templateId: 'Salary Transfer Request',
     showNotify: true,
     notifyEmployee: true,
     notifyDisabled: false,
@@ -45,6 +46,17 @@ describe('GeneratedSaveActions', () => {
     render(<GeneratedSaveActions {...baseProps} />)
 
     expect(screen.getByText(/واتساب، ثم الرسائل النصية كخيار بديل/)).toBeVisible()
+  })
+
+  it('tells the operator a sign-gated leave notifies on manager approval', () => {
+    const { rerender } = render(<GeneratedSaveActions {...baseProps} />)
+    expect(screen.getByText(/سيصل الموظف إشعار عند حفظ هذا النموذج/)).toBeVisible()
+
+    for (const templateId of ['Leave Permit Form', 'Administrative Leave Form']) {
+      rerender(<GeneratedSaveActions {...baseProps} templateId={templateId} />)
+      expect(screen.getByText(/سيصل الموظف إشعار بعد اعتماد المدير لهذا النموذج/)).toBeVisible()
+      expect(screen.queryByText(/عند حفظ هذا النموذج/)).not.toBeInTheDocument()
+    }
   })
 
   it('uses the saved-without-notifying hint when notification is off', () => {

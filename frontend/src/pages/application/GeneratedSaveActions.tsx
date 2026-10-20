@@ -4,7 +4,14 @@ import { useTranslation } from 'react-i18next'
 import { NotifyEmployeeToggle } from '@/components/notify/NotifyEmployeeToggle'
 import { Button } from '@/components/ui/button'
 
+// Mirrors backend form_policy.SIGN_GATED_LEAVE_FORMS: these notify on approval.
+const SIGN_GATED_LEAVE_FORMS: Partial<Record<string, true>> = {
+  'Leave Permit Form': true,
+  'Administrative Leave Form': true,
+}
+
 export interface GeneratedSaveActionsProps {
+  templateId: string | null
   showNotify: boolean
   notifyEmployee: boolean
   notifyDisabled: boolean
@@ -16,6 +23,7 @@ export interface GeneratedSaveActionsProps {
 }
 
 export function GeneratedSaveActions({
+  templateId,
   showNotify,
   notifyEmployee,
   notifyDisabled,
@@ -26,8 +34,12 @@ export function GeneratedSaveActions({
   onSave,
 }: GeneratedSaveActionsProps): React.JSX.Element {
   const { t } = useTranslation()
+  const hintOn =
+    templateId !== null && SIGN_GATED_LEAVE_FORMS[templateId]
+      ? 'application.notify.hintOnAtApproval'
+      : 'application.notify.hintOn'
   const notificationHint = notifyEmployee
-    ? `${t('application.notify.hintOn')} ${t('application.actions.notificationChannel')}`
+    ? `${t(hintOn)} ${t('application.actions.notificationChannel')}`
     : t('application.notify.hintOff')
 
   return (

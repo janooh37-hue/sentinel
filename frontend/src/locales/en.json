@@ -3606,6 +3606,7 @@
     "notify": {
       "label": "Notify employee",
       "hintOn": "The employee will get a message when this form is saved.",
+      "hintOnAtApproval": "The employee will get a message once the manager approves this form.",
       "hintOff": "Saved without notifying the employee."
     },
     "selectedRecipients": "Selected recipients",

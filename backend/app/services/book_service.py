@@ -1214,6 +1214,29 @@ def _recompute_approval_state(book: Book) -> None:
     book.approval_state = state
 
 
+def _decides_leave(db: Session, book: Book, leave_id: int) -> bool:
+    """Whether ``book`` settles the leave its paper is linked to.
+
+    A duplicate generation reuses the leave (natural-key dedup, unique index), so
+    the earliest live record decides it; a record that is deleted or voided
+    cancels it only when no other live record is left.
+    """
+    others = db.scalars(
+        select(Book.id)
+        .join(BookVersion, BookVersion.book_id == Book.id)
+        .join(Document, Document.id == BookVersion.document_id)
+        .where(
+            Document.leave_id == leave_id,
+            Book.id != book.id,
+            Book.deleted_at.is_(None),
+            Book.voided_at.is_(None),
+        )
+    ).all()
+    if book.deleted_at is None and book.voided_at is None:
+        return all(other > book.id for other in others)
+    return not others
+
+
 def _commit_approval_state(db: Session, book: Book, *, user_id: int | None) -> None:
     """Commit a chain decision and its linked leave together; notify only afterwards.
 
@@ -1230,7 +1253,7 @@ def _commit_approval_state(db: Session, book: Book, *, user_id: int | None) -> N
     if version is not None and version.template_id in form_policy.SIGN_GATED_LEAVE_FORMS:
         document = db.get(Document, version.document_id) if version.document_id else None
         leave = db.get(Leave, document.leave_id) if document and document.leave_id else None
-        if leave is not None and leave.deleted_at is None:
+        if leave is not None and leave.deleted_at is None and _decides_leave(db, book, leave.id):
             if book.voided_at is not None or book.deleted_at is not None:
                 status = "Cancelled"
             else:
@@ -1267,11 +1290,28 @@ def _commit_approval_state(db: Session, book: Book, *, user_id: int | None) -> N
         return
     leave_service._cache_invalidate_employee(leave.employee_id)
     # Notify only on a real approval, and only if the operator kept the
-    # generation-time "notify employee" switch on.
-    signing = (version.fields or {}).get("_signing") if version is not None else None
+    # generation-time "notify employee" switch on. A Word revision has no
+    # snapshot, so the newest generated version's choice holds.
+    signing = next(
+        (
+            snapshot
+            for v in reversed(book.versions)
+            if isinstance(snapshot := (v.fields or {}).get("_signing"), dict)
+        ),
+        None,
+    )
     if book.approval_state != "approved" or (
         isinstance(signing, dict) and signing.get("notify_employee") is False
     ):
+        return
+    # Revoking and re-granting approval does not re-issue the same message.
+    event, record_id = (
+        (nf.EVENT_LEAVE_PERMIT, book.id)
+        if version is not None and version.template_id == "Leave Permit Form"
+        else (nf.EVENT_ADMIN_LEAVE, leave.id)
+    )
+    sent = notify_dispatch.last_status(db, event, record_id)
+    if sent is not None and sent.status != "failed":
         return
     try:
         notify_dispatch.auto_send_for_book(db, book.id, sent_by=user_id)

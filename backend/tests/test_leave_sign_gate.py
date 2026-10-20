@@ -3,23 +3,39 @@
 import hashlib
 import io
 import zipfile
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 from types import SimpleNamespace
 from unittest.mock import Mock
 
+import docx
 import pytest
 from PIL import Image
 from sqlalchemy import select
 
 from app.config import Settings
 from app.core import docx_engine, form_policy, leave_lifecycle
-from app.db.models import AuditLog, Book, BookCategory, Document, Employee, Leave, Manager, User
+from app.db.models import (
+    AuditLog,
+    Book,
+    BookCategory,
+    BookEditSession,
+    Document,
+    Employee,
+    Leave,
+    Manager,
+    OutboundMessage,
+    User,
+)
 from app.services import (
+    absence_service,
     artifact_service,
     book_service,
     document_service,
     included_papers_service,
+    leave_service,
     notify_dispatch,
+    sms_templates,
+    word_book_service,
 )
 
 
@@ -201,15 +217,120 @@ def test_revision_reuses_leave_even_when_dates_change(gate_env):
     assert revised_leave.status == "Pending"
 
 
-def test_duplicate_generation_preserves_existing_leave_verdict(gate_env):
+def test_duplicate_generation_cannot_change_the_original_leave_verdict(gate_env):
     env = gate_env
     book, leave = generate(env)
     book_service.override_state(env.db, book.id, target_state="approved", actor=env.signer)
     duplicate, same_leave = generate(env)
     assert same_leave.id == leave.id
-    assert same_leave.status == "Approved"
     assert duplicate.approval_state == "none"
     assert env.db.query(Leave).count() == 1
+    submit(env, duplicate)
+    env.db.refresh(leave)
+    assert leave.status == "Approved"
+    deleted, _leave = generate(env)
+    book_service.delete_book(env.db, deleted.id, user_id=env.signer.id)
+    env.db.refresh(leave)
+    assert book.approval_state == "approved"
+    assert leave.status == "Approved"
+
+
+def _word_revision(env, book):
+    """Reopen the latest paper in Word and finish it unchanged."""
+    word_book_service.reopen_word_session(env.db, user=env.signer, book_id=book.id)
+    session = env.db.query(BookEditSession).filter_by(book_id=book.id, state="active").one()
+    session.last_put_at = datetime.now(UTC).replace(tzinfo=None)
+    env.db.commit()
+    word_book_service.finish_word_session(
+        env.db, user=env.signer, book_id=book.id, converter=lambda _: None
+    )
+    env.db.refresh(book)
+    return book.versions[-1]
+
+
+@pytest.mark.parametrize("notify", [True, False])
+def test_word_revision_keeps_the_leave_and_the_notify_choice(gate_env, monkeypatch, notify):
+    env = gate_env
+    monkeypatch.setattr(word_book_service, "get_settings", document_service.get_settings)
+    book, leave = generate(env, notify_employee=notify)
+    word_version = _word_revision(env, book)
+    assert word_version.fields == {}
+    submit(env, book)
+    book_service.sign_book(env.db, book.id, user_id=env.signer.id, version_id=word_version.id)
+    env.db.refresh(leave)
+    assert book.approval_state == "approved"
+    assert leave.status == "Approved"
+    assert env.send.call_count == int(notify)
+    # The approval message still states the generated permit's duration.
+    event = notify_dispatch._load_book_event(env.db, book.id)
+    assert "3 hour(s)" in sms_templates.render_text("leave_permit", "en", event, env.employee)
+    assert "ولمدة 3 ساعة" in sms_templates.render_text("leave_permit", "ar", event, env.employee)
+
+
+def test_structured_revision_after_word_revision_keeps_the_leave(gate_env, monkeypatch):
+    env = gate_env
+    monkeypatch.setattr(word_book_service, "get_settings", document_service.get_settings)
+    book, leave = generate(env)
+    _word_revision(env, book)
+    _revised, revised_leave = generate(
+        env, revise_of_book_id=book.id, fields={"date": "22/10/2026"}
+    )
+    assert revised_leave.id == leave.id
+    assert env.db.query(Leave).count() == 1
+
+
+def test_revision_does_not_reuse_a_deleted_leave(gate_env):
+    env = gate_env
+    book, leave = generate(env)
+    leave_service.soft_delete_leave(env.db, leave.id)
+    revised, revised_leave = generate(env, revise_of_book_id=book.id, fields={"date": "22/10/2026"})
+    assert revised_leave.id != leave.id
+    assert revised_leave.deleted_at is None
+    submit(env, revised)
+    book_service.sign_book(
+        env.db, book.id, user_id=env.signer.id, version_id=revised.versions[-1].id
+    )
+    env.db.refresh(revised_leave)
+    assert revised_leave.status == "Approved"
+    assert env.send.call_count == 1
+
+
+def test_regranting_approval_does_not_resend(gate_env):
+    env = gate_env
+
+    def logged_send(db, event_type, record_id, *, sent_by):
+        db.add(
+            OutboundMessage(
+                employee_id=env.employee.id,
+                event_type=event_type,
+                event_ref=f"{event_type}:{record_id}",
+                language="en",
+                phone="+971500000000",
+                status="sent",
+            )
+        )
+        db.commit()
+
+    env.send.side_effect = logged_send
+    book, leave = generate(env)
+    for state in ("approved", "none", "approved"):
+        book_service.override_state(env.db, book.id, target_state=state, actor=env.signer)
+    env.db.refresh(leave)
+    assert leave.status == "Approved"
+    assert env.send.call_count == 1
+
+
+def test_pending_gated_leave_does_not_block_absences(gate_env):
+    env = gate_env
+    book, _leave = generate(env, "Administrative Leave Form")
+    start = date(2026, 10, 20)
+    pending = absence_service.add_range(env.db, env.employee.id, start=start, end=start)
+    assert [row.date for row in pending.created] == [start]
+    book_service.override_state(env.db, book.id, target_state="approved", actor=env.signer)
+    next_day = date(2026, 10, 21)
+    approved = absence_service.add_range(env.db, env.employee.id, start=next_day, end=next_day)
+    assert approved.created == []
+    assert approved.skipped_on_leave == [next_day]
 
 
 @pytest.mark.parametrize("gateway_raises", [False, True])
@@ -312,8 +433,32 @@ def test_signed_copy_keeps_employee_signature_and_issue_date(gate_env, monkeypat
 
     signed = _data_path(env, version.signed_pdf_path)
     assert _media(generated) < _media(signed)  # employee kept, manager added
-    assert issued in _document_xml(signed)
-    assert "01/01/2030" not in _document_xml(signed)
+    assert issued in _document_xml(signed)  # request_date stays the issue date
+    manager_row = next(
+        [cell.text.strip() for cell in row.cells]
+        for table in docx.Document(str(signed)).tables
+        for row in table.rows
+        if row.cells[0].text.strip() == "Line Manager"
+    )
+    assert manager_row[-1] == "01/01/2030"  # the manager dates the signature
+
+
+def test_signed_admin_leave_dates_the_manager_approval(gate_env, monkeypatch):
+    env = gate_env
+    book, _leave = generate(env, "Administrative Leave Form")
+    submit(env, book)
+
+    class Later(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return datetime(2030, 1, 1, 9, 0, tzinfo=tz)
+
+    monkeypatch.setattr(document_service, "datetime", Later)
+    monkeypatch.setattr(docx_engine, "datetime", Later)
+    version = book.versions[-1]
+    book_service.sign_book(env.db, book.id, user_id=env.signer.id, version_id=version.id)
+    signed = _document_xml(_data_path(env, version.signed_pdf_path))
+    assert "01/01/2030" in signed  # manager approval date ({{ today }})
 
 
 def test_scan_flip_settles_leave_and_unfile_reopens_it(gate_env, monkeypatch):

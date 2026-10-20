@@ -367,10 +367,16 @@ _SUBMITTER_AUTO_SIGN_FORMS: frozenset[str] = frozenset({"Employee Clearance Form
 # signing snapshot (issue date, employee/submitter embed, notify choice).
 _SIGNING_KEY = "_signing"
 
-# Chain forms whose ``{{ today if manager_sig_path }}`` is the manager's signing
-# date, not the issue date.
+# Chain forms whose ``{{ today }}`` is the manager's signing date, not the
+# issue date (the issue date rides ``date``/``request_date``).
 _MANAGER_SIGN_DATE_FORMS: frozenset[str] = frozenset(
-    {"HR Request Form", "Passport Release Form", "Duty Resumption Form"}
+    {
+        "HR Request Form",
+        "Passport Release Form",
+        "Duty Resumption Form",
+        "Leave Application Form",
+        "Administrative Leave Form",
+    }
 )
 
 
@@ -1764,10 +1770,18 @@ def generate_document(
                 "Only a draft, returned, rejected, or awaiting-scan book can be revised",
                 state=revise_book.approval_state,
             )
-        if template_id in form_policy.SIGN_GATED_LEAVE_FORMS and revise_book.versions:
-            previous_document = db.get(Document, revise_book.versions[-1].document_id)
-            if previous_document is not None:
-                revision_leave_id = previous_document.leave_id
+        if template_id in form_policy.SIGN_GATED_LEAVE_FORMS:
+            # Newest version linked to a live leave; a Word revision may predate
+            # the leave_id carry-over, and a soft-deleted leave is not reused.
+            for previous in reversed(revise_book.versions):
+                previous_document = (
+                    db.get(Document, previous.document_id) if previous.document_id else None
+                )
+                if previous_document is not None and previous_document.leave_id is not None:
+                    previous_leave = db.get(Leave, previous_document.leave_id)
+                    if previous_leave is not None and previous_leave.deleted_at is None:
+                        revision_leave_id = previous_leave.id
+                    break
 
     # ------------------------------------------------------------------
     # 1c. Attachments (spec §6) — validate slots + resolve sources BEFORE
