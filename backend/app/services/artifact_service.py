@@ -14,11 +14,10 @@ from datetime import datetime
 from pathlib import Path
 from typing import Literal, Protocol, cast
 
-import fitz
-
 from app.config import get_settings
 from app.core.constants import STAMP_STYLE_HEADER
 from app.core.docx_engine import DocxEngine
+from app.core.pdf_merge import pdf_page_count
 
 _FORM_SHORT_NAME: dict[str, str] = {
     "Leave Application Form": "LeaveApp",
@@ -182,10 +181,11 @@ def _convert(target: Path, converter: PdfConverter | None) -> ConversionOutcome:
     if not resolved.is_file() or resolved.stat().st_size == 0:
         return ConversionOutcome(status="unavailable")
     try:
-        with fitz.open(resolved) as pdf:
-            if pdf.page_count < 1:
-                return ConversionOutcome(status="unavailable")
-    except (fitz.FileDataError, RuntimeError, ValueError, OSError):
+        if pdf_page_count(resolved) < 1:
+            return ConversionOutcome(status="unavailable")
+    except (RuntimeError, ValueError, OSError):  # PyMuPDF's FileDataError is a RuntimeError
+        # A worker failure (``NativeWorkerError``) is none of these: it propagates, never
+        # degrades to an "unavailable" PDF.
         return ConversionOutcome(status="unavailable")
     return ConversionOutcome(status="success", pdf_path=resolved)
 

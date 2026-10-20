@@ -1,16 +1,50 @@
 """Live preview of an active Word session's working docx."""
 
+from collections.abc import Iterator
 from datetime import UTC, datetime
 from pathlib import Path
 
 import fitz
 import pytest
 from docx import Document as DocxFile
-from sqlalchemy.orm import Session
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.pool import StaticPool
 
 from app.api.errors import AppError
-from app.db.models import Book, BookCategory, BookEditSession, User
-from app.services import word_book_service
+from app.db import session as session_mod
+from app.db.models import Base, Book, BookCategory, BookEditSession, User
+from app.db.session import attach_sqlite_pragmas
+from app.services import perm_service, word_book_service
+
+
+@pytest.fixture()
+def db_session(monkeypatch: pytest.MonkeyPatch) -> Iterator[Session]:
+    """conftest's in-memory ``db_session``, made usable from a worker thread.
+
+    The DAV handler serves a request in the AnyIO worker pool, so the Session it is handed
+    (``test_dav_put_during_preview_conversion_...`` calls the handler directly) must be
+    shareable across threads — one pinned connection, ``check_same_thread=False`` — exactly
+    as the production engine and ``api_db`` are.
+    """
+    engine = create_engine(
+        "sqlite://",
+        future=True,
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+    )
+    attach_sqlite_pragmas(engine, wal=False)
+    Base.metadata.create_all(engine)
+    test_session = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False, future=True)
+    monkeypatch.setattr(session_mod, "engine", engine)
+    monkeypatch.setattr(session_mod, "SessionLocal", test_session)
+    db = test_session()
+    perm_service.seed_role_defaults(db)
+    try:
+        yield db
+    finally:
+        db.close()
+        engine.dispose()
 
 
 def _pdf(path: Path) -> Path:

@@ -327,15 +327,18 @@ async def upload_vehicle_photo_library_item(
             f"File exceeds {MAX_UPLOAD_BYTES // (1024 * 1024)} MiB.",
             size=len(data),
         )
-    row = await run_in_threadpool(
-        vehicle_photo_service.create_photo_asset,
-        db,
-        filename=file.filename or "vehicle-photo",
-        data=data,
-        label_ar=label_ar,
-        label_en=label_en,
-    )
-    return vehicle_photo_service.photo_read(db, row)
+
+    def work() -> VehiclePhotoRead:
+        row = vehicle_photo_service.create_photo_asset(
+            db,
+            filename=file.filename or "vehicle-photo",
+            data=data,
+            label_ar=label_ar,
+            label_en=label_en,
+        )
+        return vehicle_photo_service.photo_read(db, row)
+
+    return await run_in_threadpool(work)
 
 
 @router.delete(
@@ -740,17 +743,21 @@ async def record_vehicle_fine_payment(
     if_match: Annotated[str | None, Header(alias="If-Match")] = None,
 ) -> VehicleFineRead:
     data = await file.read(vehicle_service.FINE_RECEIPT_MAX_BYTES + 1) if file is not None else None
-    row = vehicle_service.record_payment(
-        db,
-        vehicle_id,
-        fine_id,
-        if_match=if_match,
-        filename=file.filename if file is not None else None,
-        data=data,
-        media_type=file.content_type if file is not None else None,
-        actor=user.email,
-    )
-    return vehicle_service.fine_read(row)
+
+    def work() -> VehicleFineRead:
+        row = vehicle_service.record_payment(
+            db,
+            vehicle_id,
+            fine_id,
+            if_match=if_match,
+            filename=file.filename if file is not None else None,
+            data=data,
+            media_type=file.content_type if file is not None else None,
+            actor=user.email,
+        )
+        return vehicle_service.fine_read(row)
+
+    return await run_in_threadpool(work)
 
 
 @router.put("/{vehicle_id}/fines/{fine_id}/receipt", response_model=VehicleFineRead)
@@ -763,17 +770,21 @@ async def attach_vehicle_fine_receipt(
     if_match: Annotated[str | None, Header(alias="If-Match")] = None,
 ) -> VehicleFineRead:
     data = await file.read(vehicle_service.FINE_RECEIPT_MAX_BYTES + 1)
-    row = vehicle_service.attach_receipt(
-        db,
-        vehicle_id,
-        fine_id,
-        if_match=if_match,
-        filename=file.filename or "receipt",
-        data=data,
-        media_type=file.content_type or "",
-        actor=user.email,
-    )
-    return vehicle_service.fine_read(row)
+
+    def work() -> VehicleFineRead:
+        row = vehicle_service.attach_receipt(
+            db,
+            vehicle_id,
+            fine_id,
+            if_match=if_match,
+            filename=file.filename or "receipt",
+            data=data,
+            media_type=file.content_type or "",
+            actor=user.email,
+        )
+        return vehicle_service.fine_read(row)
+
+    return await run_in_threadpool(work)
 
 
 @router.post(

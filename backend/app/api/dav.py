@@ -18,14 +18,20 @@ from __future__ import annotations
 import hashlib
 import logging
 import os
+import uuid
+from contextlib import suppress
 from email.utils import formatdate
 from typing import Annotated
 from xml.etree import ElementTree
 
 from fastapi import APIRouter, Depends, Request, Response
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
+from starlette.datastructures import Headers
 
+from app.api._offload import run_exclusive
+from app.api._word_session_order import session_turn
 from app.db.session import get_db
 from app.services import word_session_repo
 
@@ -58,17 +64,48 @@ async def dav_handler(
     request: Request,
     db: Annotated[Session, Depends(get_db)],
 ) -> Response:
-    method = request.method.upper()
+    # The request body is awaitable and stays on the loop. Everything after it — token and
+    # DB lookups, the Word working-file write and the ``record_put`` commit (up to the
+    # 5 s SQLite busy wait) — is blocking, so it leaves the loop; the ``db`` session is
+    # handed over whole and used by that one thread only.
     body = await request.body()
+    method = request.method.upper()
+    if method == "PUT":
+        # A save replaces the Word working file. Before P01 the loop itself landed overlapping
+        # PUTs (a client retry while the first save is still in flight) strictly in the order
+        # their bodies arrived, so the newest save stayed on disk. Plain pool threads would let
+        # an older body overwrite a newer one, so PUTs take the lane: first come, first served
+        # (anyio's CapacityLimiter wakes waiters in order), queueing on the loop, not on a pool
+        # thread. The lane also keeps a save from starting while a lane mail / announcement job
+        # holds SQLite's write lock: ``record_put`` would otherwise fail after the working file
+        # was already replaced. The per-session turn is taken *first* and held across the lane
+        # wait, so Finish / discard of the same session (books.py) queue behind this save.
+        # Different sessions never wait for each other's turn. Every other DAV method only reads
+        # and stays in the pool.
+        async with session_turn(token):
+            return await run_exclusive(
+                _serve_dav, token, filename, method, request.headers, body, db
+            )
+    return await run_in_threadpool(_serve_dav, token, filename, method, request.headers, body, db)
+
+
+def _serve_dav(
+    token: str,
+    filename: str,
+    method: str,
+    headers: Headers,
+    body: bytes,
+    db: Session,
+) -> Response:
     event = {
         "dav_correlation": hashlib.sha256(token.encode()).hexdigest()[:12],
         "dav_method": method,
         "dav_path_shape": "collection" if filename == "" else "file",
-        "dav_depth": request.headers.get("depth"),
+        "dav_depth": headers.get("depth"),
         "dav_propfind_properties": _propfind_names(body) if method == "PROPFIND" else [],
         "dav_body_length": len(body),
-        "dav_if_present": "if" in request.headers,
-        "dav_lock_token_present": "lock-token" in request.headers,
+        "dav_if_present": "if" in headers,
+        "dav_lock_token_present": "lock-token" in headers,
     }
 
     def respond(response: Response, session_id: int | None = None) -> Response:
@@ -135,10 +172,19 @@ async def dav_handler(
     if method == "PUT":
         if not body:
             return respond(Response(status_code=400), sess.id)
-        tmp = path + ".tmp"
-        with open(tmp, "wb") as fh:
-            fh.write(body)
-        os.replace(tmp, path)
+        # Overlapping PUTs are already ordered: ``dav_handler`` runs every PUT through the
+        # session's turn and the exclusive lane, so they land strictly in arrival order. The
+        # per-request temp name only keeps this write from ever sharing a temp path with another
+        # writer; the replace is atomic.
+        tmp = f"{path}.{uuid.uuid4().hex}.tmp"
+        try:
+            with open(tmp, "wb") as fh:
+                fh.write(body)
+            os.replace(tmp, path)
+        except BaseException:
+            with suppress(OSError):
+                os.unlink(tmp)
+            raise
         word_session_repo.record_put(db, sess.id)
         return respond(Response(status_code=204), sess.id)
 

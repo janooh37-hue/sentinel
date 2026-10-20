@@ -36,6 +36,7 @@ from pydantic import BaseModel, Field, StringConstraints
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.api._offload import run_exclusive
 from app.api._responses import maybe_base64
 from app.api.deps import get_current_user, require_capability
 from app.api.errors import AppError, NotFoundError
@@ -486,7 +487,7 @@ async def stage_attachment(
     on each call (see ``services.staging_service``).
     """
     data = await upload.read()
-    staged = staging_service.stage(data, upload.filename or "")
+    staged = await run_exclusive(staging_service.stage, data, upload.filename or "")
     return StagedAttachmentRead(token=staged.token, filename=staged.filename, size=staged.size)
 
 

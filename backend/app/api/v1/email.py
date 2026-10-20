@@ -1,11 +1,11 @@
 """Email integration endpoints — configure IMAP account + trigger sync.
 
-  GET    /email/account          → current config (no password)
-  PUT    /email/account          → upsert (password optional on PATCH-like updates)
-  DELETE /email/account          → drop the row + forget credentials
-  POST   /email/test             → live IMAP login test against saved creds
-  POST   /email/sync             → fetch new mail + create LedgerEntries
-  GET    /email/sync/status      → live sync state for the Ledger strip
+GET    /email/account          → current config (no password)
+PUT    /email/account          → upsert (password optional on PATCH-like updates)
+DELETE /email/account          → drop the row + forget credentials
+POST   /email/test             → live IMAP login test against saved creds
+POST   /email/sync             → fetch new mail + create LedgerEntries
+GET    /email/sync/status      → live sync state for the Ledger strip
 """
 
 from __future__ import annotations
@@ -25,6 +25,7 @@ from fastapi import (
 )
 from sqlalchemy.orm import Session
 
+from app.api._offload import run_exclusive
 from app.api.deps import get_current_user, require_capability
 from app.db.models import User
 from app.db.session import get_db
@@ -171,11 +172,10 @@ async def create_handoff(
         for upload in files:
             data = await upload.read()
             if data:
-                attachments.append(
-                    (upload.filename or "attachment", upload.content_type, data)
-                )
+                attachments.append((upload.filename or "attachment", upload.content_type, data))
     try:
-        entry = email_service.draft_outgoing(
+        entry = await run_exclusive(
+            email_service.draft_outgoing,
             db,
             owner_user_id=current_user.id,
             to=to_list,
@@ -197,4 +197,3 @@ async def create_handoff(
         raise HTTPException(status_code=502, detail=str(exc)) from exc
     result_mode = "draft" if mode == "draft" else "mailto"
     return EmailHandoffResult(ledger_entry_id=entry.id, mode=result_mode)
-

@@ -23,6 +23,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.api._offload import run_exclusive
 from app.api._responses import maybe_base64
 from app.api.deps import get_current_user, require_capability
 from app.api.errors import AppError, NotFoundError, ValidationFailedError
@@ -503,20 +504,24 @@ async def upload_to_vault(
     kind: Annotated[str, Form()],
     upload: Annotated[UploadFile, File(alias="file")],
 ) -> VaultEntry:
-    employee_service.get_employee(db, employee_id)
     data = await upload.read()
-    entry = vault_service.save_upload(employee_id, kind, upload.filename or "upload", data)
-    if kind == "passport":
-        # Best-effort: fill passport_no from a validated MRZ. Never fail the
-        # upload if OCR is unavailable or the scan is unreadable.
-        try:
-            result = passport_ocr_service.extract_passport_for_employee(db, employee_id)
-            emp = db.get(Employee, employee_id)
-            if result is not None and emp is not None:
-                passport_ocr_service.apply_passport_extraction(db, emp, result)
-        except Exception:
-            log.warning("passport auto-extract failed for %s", employee_id, exc_info=True)
-    return entry
+
+    def work() -> VaultEntry:
+        employee_service.get_employee(db, employee_id)
+        entry = vault_service.save_upload(employee_id, kind, upload.filename or "upload", data)
+        if kind == "passport":
+            # Best-effort: fill passport_no from a validated MRZ. Never fail the
+            # upload if OCR is unavailable or the scan is unreadable.
+            try:
+                result = passport_ocr_service.extract_passport_for_employee(db, employee_id)
+                emp = db.get(Employee, employee_id)
+                if result is not None and emp is not None:
+                    passport_ocr_service.apply_passport_extraction(db, emp, result)
+            except Exception:
+                log.warning("passport auto-extract failed for %s", employee_id, exc_info=True)
+        return entry
+
+    return await run_exclusive(work)
 
 
 @router.delete(
@@ -598,14 +603,20 @@ async def upload_signature(
     _user: Annotated[User, Depends(require_capability("employees.edit"))],
     upload: Annotated[UploadFile, File(alias="file")],
 ) -> dict[str, str]:
-    employee_service.get_employee(db, employee_id)
     data = await upload.read()
-    try:
-        data = signature_core.normalize_to_png(data)
-        path = signature_core.save(data, employee_id, Vault(get_settings().vault_dir))
-    except signature_core.SignatureError as exc:
-        raise ValidationFailedError("SIGNATURE_INVALID", str(exc), employee_id=employee_id) from exc
-    return {"path": str(path), "filename": path.name}
+
+    def work() -> dict[str, str]:
+        employee_service.get_employee(db, employee_id)
+        try:
+            png = signature_core.normalize_to_png(data)
+            path = signature_core.save(png, employee_id, Vault(get_settings().vault_dir))
+        except signature_core.SignatureError as exc:
+            raise ValidationFailedError(
+                "SIGNATURE_INVALID", str(exc), employee_id=employee_id
+            ) from exc
+        return {"path": str(path), "filename": path.name}
+
+    return await run_exclusive(work)
 
 
 @router.get("/{employee_id}/signature")
@@ -662,14 +673,18 @@ async def upload_employee_photo(
     upload: Annotated[UploadFile, File(alias="file")],
 ) -> dict[str, object]:
     """Replace the employee's avatar photo (one per employee)."""
-    employee_service.get_employee(db, employee_id)
     data = await upload.read()
-    row = photo_service.save_photo(db, employee_id, upload.filename or "photo.png", data)
-    return {
-        "filename": row.filename,
-        "size_bytes": row.size_bytes,
-        "photo_version": str(row.id),
-    }
+
+    def work() -> dict[str, object]:
+        employee_service.get_employee(db, employee_id)
+        row = photo_service.save_photo(db, employee_id, upload.filename or "photo.png", data)
+        return {
+            "filename": row.filename,
+            "size_bytes": row.size_bytes,
+            "photo_version": str(row.id),
+        }
+
+    return await run_exclusive(work)
 
 
 @router.delete("/{employee_id}/photo", status_code=status.HTTP_204_NO_CONTENT)

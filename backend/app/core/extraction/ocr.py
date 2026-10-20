@@ -119,36 +119,27 @@ def extract_text(image: Image.Image) -> OcrResult:
 
 
 def pdf_to_images(pdf_bytes: bytes, *, dpi: int = 200) -> Generator[Image.Image, None, None]:
-    """Yield bounded PDF page rasters via PyMuPDF without retaining prior pages."""
-    import fitz
+    """Yield bounded PDF page rasters without retaining prior pages.
+
+    The pages are rendered by a confined worker process (``app.core.pdf_worker``), one page
+    per request: the worker never renders ahead of this generator, so closing it early (a
+    ``closing()`` block, ``islice``, garbage collection) stops the stream with at most the
+    consumed pages rasterised. Page-size / pixel-budget guards and ``InvalidImageError`` are
+    enforced worker-side exactly as before, and surface at the same point of the iteration.
+    """
+    from app.core import pdf_worker
 
     if dpi <= 0:
         raise InvalidImageError("PDF raster DPI must be positive.")
 
-    total_pixels = 0
-    scale = dpi / 72.0
+    stream = pdf_worker.open_stream("rasters", pdf_bytes, dpi)
     try:
-        with fitz.open(stream=pdf_bytes, filetype="pdf") as doc:
-            for page in doc:
-                width = math.ceil(page.rect.width * scale)
-                height = math.ceil(page.rect.height * scale)
-                pixels = width * height
-                if (
-                    width <= 0
-                    or height <= 0
-                    or width > _MAX_RASTER_AXIS
-                    or height > _MAX_RASTER_AXIS
-                    or pixels > _MAX_PIXELS
-                    or total_pixels > _MAX_PIXELS - pixels
-                ):
-                    raise InvalidImageError("The uploaded PDF is too large to rasterize safely.")
-                total_pixels += pixels
-                pix = page.get_pixmap(dpi=dpi, alpha=False)
-                yield Image.frombytes("RGB", (pix.width, pix.height), pix.samples)
-    except InvalidImageError:
-        raise
-    except (fitz.FileDataError, fitz.EmptyFileError, RuntimeError) as exc:
-        raise InvalidImageError("The uploaded PDF is not readable.") from exc
+        for (width, height), samples in stream:
+            image = Image.frombytes("RGB", (width, height), samples)
+            del samples  # keep one raster alive, not the wire copy too
+            yield image
+    finally:
+        stream.close()
 
 
 # A PDF text layer with at least this many alphanumeric characters is treated as
@@ -165,13 +156,10 @@ def pdf_text_layer(pdf_bytes: bytes) -> str:
     Unlike :func:`pdf_to_images`, a corrupt PDF yields ``""`` here rather than
     raising — callers fall back to OCR, which surfaces the proper 422.
     """
-    import fitz
+    from app.core import pdf_worker
 
-    try:
-        with fitz.open(stream=pdf_bytes, filetype="pdf") as doc:
-            return "\n".join(page.get_text() for page in doc)
-    except (fitz.FileDataError, fitz.EmptyFileError, RuntimeError):
-        return ""
+    layer: str = pdf_worker.call("text_layer", pdf_bytes)
+    return layer
 
 
 def text_from_pdf(pdf_bytes: bytes) -> str:
@@ -213,6 +201,7 @@ def qr_refs_from_bytes(raw: bytes) -> list[str]:
     ``[]`` on any failure (unreadable upload, decoder unavailable) so callers
     fall straight back to OCR.
     """
+    from app.core.pdf_worker import NativeWorkerError
     from app.core.qr import decode_qr_refs
 
     refs: list[str] = []
@@ -232,6 +221,8 @@ def qr_refs_from_bytes(raw: bytes) -> list[str]:
                             refs.append(ref)
                 finally:
                     image.close()
+    except NativeWorkerError:
+        raise  # infrastructure failure, not an unreadable upload: never degrade to "no refs"
     except Exception:
         return refs
     return refs
@@ -239,6 +230,8 @@ def qr_refs_from_bytes(raw: bytes) -> list[str]:
 
 def decode_codes_from_bytes(raw: bytes) -> list[qr.Decoded]:
     """Decoded GSSG codes from an upload; PDFs use a dedicated 300 dpi pass."""
+    from app.core.pdf_worker import NativeWorkerError
+
     codes: list[qr.Decoded] = []
     seen: set[qr.Decoded] = set()
     try:
@@ -256,6 +249,8 @@ def decode_codes_from_bytes(raw: bytes) -> list[qr.Decoded]:
                             codes.append(code)
                 finally:
                     image.close()
+    except NativeWorkerError:
+        raise  # infrastructure failure, not an unreadable upload: never degrade to "no codes"
     except Exception:
         return codes
     return codes

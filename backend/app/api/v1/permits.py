@@ -30,6 +30,7 @@ from fastapi import APIRouter, Depends, File, Query, UploadFile, status
 from fastapi.responses import Response
 from sqlalchemy.orm import Session
 
+from app.api._offload import run_exclusive
 from app.api._responses import maybe_base64
 from app.api.deps import require_capability
 from app.db.models import User
@@ -151,7 +152,7 @@ async def scan_vehicle_licence(
     _user: Annotated[User, Depends(require_capability("permits.edit"))],
     upload: Annotated[UploadFile, File(alias="file")],
 ) -> VehicleLicenceScan:
-    return permit_service.scan_vehicle_licence(await upload.read())
+    return await run_exclusive(permit_service.scan_vehicle_licence, await upload.read())
 
 
 @router.post("/scan-emirates-id", response_model=PersonIdScan)
@@ -159,7 +160,7 @@ async def scan_emirates_id(
     _user: Annotated[User, Depends(require_capability("permits.edit"))],
     upload: Annotated[UploadFile, File(alias="file")],
 ) -> PersonIdScan:
-    return permit_service.scan_emirates_id(await upload.read())
+    return await run_exclusive(permit_service.scan_emirates_id, await upload.read())
 
 
 @router.get("/{permit_id}", response_model=PermitRead)
@@ -263,10 +264,14 @@ async def upload_person_document(
     upload: Annotated[UploadFile, File(alias="file")],
 ) -> PermitRead:
     data = await upload.read()
-    row = permit_service.attach_person_document(
-        db, permit_id, person_id, upload.filename or "uae-id", data, actor=user.email
-    )
-    return permit_service.to_read(row, db=db)
+
+    def work() -> PermitRead:
+        row = permit_service.attach_person_document(
+            db, permit_id, person_id, upload.filename or "uae-id", data, actor=user.email
+        )
+        return permit_service.to_read(row, db=db)
+
+    return await run_exclusive(work)
 
 
 @router.get("/{permit_id}/people/{person_id}/document")
@@ -327,10 +332,14 @@ async def upload_vehicle_document(
     upload: Annotated[UploadFile, File(alias="file")],
 ) -> PermitRead:
     data = await upload.read()
-    row = permit_service.attach_vehicle_document(
-        db, permit_id, vehicle_id, upload.filename or "licence", data, actor=user.email
-    )
-    return permit_service.to_read(row, db=db)
+
+    def work() -> PermitRead:
+        row = permit_service.attach_vehicle_document(
+            db, permit_id, vehicle_id, upload.filename or "licence", data, actor=user.email
+        )
+        return permit_service.to_read(row, db=db)
+
+    return await run_exclusive(work)
 
 
 @router.get("/{permit_id}/vehicles/{vehicle_id}/document")
@@ -354,10 +363,14 @@ async def upload_permit_document(
     upload: Annotated[UploadFile, File(alias="file")],
 ) -> PermitRead:
     data = await upload.read()
-    row = permit_service.attach_document(
-        db, permit_id, upload.filename or "permit", data, actor=user.email
-    )
-    return permit_service.to_read(row, db=db)
+
+    def work() -> PermitRead:
+        row = permit_service.attach_document(
+            db, permit_id, upload.filename or "permit", data, actor=user.email
+        )
+        return permit_service.to_read(row, db=db)
+
+    return await run_exclusive(work)
 
 
 @router.get("/{permit_id}/document")

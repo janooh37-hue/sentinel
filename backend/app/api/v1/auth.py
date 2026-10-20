@@ -25,6 +25,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, File, Request, Response, UploadFile, status
 from sqlalchemy.orm import Session
 
+from app.api._offload import run_exclusive
 from app.api.deps import COOKIE_NAME, get_current_user, require_admin
 from app.config import get_settings
 from app.core import ratelimit
@@ -214,8 +215,12 @@ async def upload_my_signature(
     file: Annotated[UploadFile, File()],
 ) -> SessionUser:
     data = await file.read()
-    user_signature_service.save_signature(db, user, file.filename or "sig.png", data)
-    return auth_service.to_session_user(db, user)
+
+    def work() -> SessionUser:
+        user_signature_service.save_signature(db, user, file.filename or "sig.png", data)
+        return auth_service.to_session_user(db, user)
+
+    return await run_exclusive(work)
 
 
 @router.delete("/me/signature", status_code=status.HTTP_204_NO_CONTENT)
