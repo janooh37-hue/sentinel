@@ -245,6 +245,21 @@ class Env:
         return user, token
 
 
+def _collect_asgi_streams_quietly() -> None:
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", ResourceWarning)
+        gc.collect()
+
+
+@contextmanager
+def stream_leaks_tolerated() -> Iterator[None]:
+    """Ignore the ASGI-stream ResourceWarning for requests a test cancels or fails on purpose."""
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", ResourceWarning)
+        yield
+        gc.collect()
+
+
 @pytest.fixture(autouse=True)
 def _collect_asgi_streams() -> Iterator[None]:
     """Contain a known httpx-ASGITransport/Starlette artifact to this module.
@@ -256,9 +271,7 @@ def _collect_asgi_streams() -> Iterator[None]:
     so a leak cannot be blamed on an unrelated test. Pre-existing, test-harness only.
     """
     yield
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore", ResourceWarning)
-        gc.collect()
+    _collect_asgi_streams_quietly()
 
 
 @pytest.fixture(autouse=True)
@@ -1161,6 +1174,149 @@ def test_concurrent_dav_puts_do_not_corrupt_the_working_file(env: Env) -> None:
     assert working.read_bytes() in bodies, "working file is not one complete saved body"
     leftovers = [p.name for p in working.parent.iterdir() if p.name != working.name]
     assert leftovers == [], f"temporary files left behind: {leftovers}"
+
+
+DAV_FIRST_SAVE_HOLD_S = 1.0  # how long the older save sits inside its file replace
+
+
+async def _staggered_dav_puts(
+    first_in_replace: threading.Event, bodies: list[bytes]
+) -> list[httpx.Response]:
+    """Send ``bodies[0]``; once it is inside its file replace, send the rest, one after another."""
+    app = create_app()
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app=app, raise_app_exceptions=False),
+        base_url="http://test",
+    ) as client:
+        assert (await client.get(HEALTH_URL)).status_code == 200
+        loop = asyncio.get_running_loop()
+        saves = [asyncio.create_task(client.put("/dav/tok-p01/letter.docx", content=bodies[0]))]
+        deadline = loop.time() + SCENARIO_WALL_LIMIT_S
+        while not first_in_replace.is_set() and loop.time() < deadline:
+            await asyncio.sleep(0.005)
+        assert first_in_replace.is_set(), "the first save never reached the working-file replace"
+        for body in bodies[1:]:
+            saves.append(asyncio.create_task(client.put("/dav/tok-p01/letter.docx", content=body)))
+            await asyncio.sleep(0.05)  # each later save arrives strictly after the previous one
+        return list(await asyncio.gather(*saves))
+
+
+def hold_first_dav_replace(env: Env) -> tuple[threading.Event, list[bytes]]:
+    """Hold the first PUT inside its file replace; return (that moment's event, bodies as landed)."""
+    from app.api import dav as dav_api
+
+    first_in_replace = threading.Event()
+    landed: list[bytes] = []
+    guard = threading.Lock()
+    real_replace = os.replace
+    calls = 0
+
+    def replace_first_save_slowly(src: str, dst: str) -> None:
+        nonlocal calls
+        with guard:
+            calls += 1
+            is_first = calls == 1
+        body = Path(src).read_bytes()
+        if is_first:
+            first_in_replace.set()
+            time.sleep(DAV_FIRST_SAVE_HOLD_S)
+        real_replace(src, dst)
+        with guard:
+            landed.append(body)
+
+    env.mp.setattr(dav_api.os, "replace", replace_first_save_slowly)
+    return first_in_replace, landed
+
+
+def test_overlapping_dav_puts_land_in_arrival_order(env: Env) -> None:
+    """Word's newest save must win. The loop used to land overlapping PUTs in arrival order.
+
+    The first save is held inside its file replace for ``DAV_FIRST_SAVE_HOLD_S`` while two newer,
+    different bodies arrive behind it. If a newer save is allowed to overtake an older one, the
+    older body is written last and silently replaces the user's latest edit. This also passes on
+    the pre-P01 source, where the loop itself served the saves one at a time in arrival order.
+    """
+    working = dav_session(env)
+    first_in_replace, landed = hold_first_dav_replace(env)
+    bodies = [label * 64 + b" save" for label in (b"A", b"B", b"C")]
+    responses = asyncio.run(_staggered_dav_puts(first_in_replace, bodies))
+    assert [r.status_code for r in responses] == [204, 204, 204]
+    assert landed == bodies, f"saves landed out of arrival order: {[b[:1] for b in landed]}"
+    assert working.read_bytes() == bodies[-1], "an older Word save overwrote the newest one"
+    leftovers = [p.name for p in working.parent.iterdir() if p.name != working.name]
+    assert leftovers == [], f"temporary files left behind: {leftovers}"
+
+
+def test_dav_put_abandoned_while_waiting_its_turn_writes_nothing_and_frees_the_lane(
+    env: Env,
+) -> None:
+    """A save cancelled before it gets its turn must not write, leak a Session or wedge the saves behind it."""
+    working = dav_session(env)
+    first_in_replace, landed = hold_first_dav_replace(env)
+    bodies = [label * 64 + b" save" for label in (b"A", b"B", b"C")]
+
+    async def scenario() -> list[httpx.Response]:
+        app = create_app()
+        async with httpx.AsyncClient(
+            transport=httpx.ASGITransport(app=app, raise_app_exceptions=False),
+            base_url="http://test",
+        ) as client:
+            assert (await client.get(HEALTH_URL)).status_code == 200
+            loop = asyncio.get_running_loop()
+            held = asyncio.create_task(client.put("/dav/tok-p01/letter.docx", content=bodies[0]))
+            deadline = loop.time() + SCENARIO_WALL_LIMIT_S
+            while not first_in_replace.is_set() and loop.time() < deadline:
+                await asyncio.sleep(0.005)
+            assert first_in_replace.is_set(), "the first save never reached the replace"
+            abandoned = asyncio.create_task(
+                client.put("/dav/tok-p01/letter.docx", content=bodies[1])
+            )
+            await asyncio.sleep(0.2)  # it is now queued behind the held save
+            abandoned.cancel()
+            outcome = (await asyncio.gather(abandoned, return_exceptions=True))[0]
+            assert isinstance(outcome, asyncio.CancelledError), outcome
+            later = await client.put("/dav/tok-p01/letter.docx", content=bodies[2])
+            return [await held, later]
+
+    with stream_leaks_tolerated():  # cancelling mid-request strands ASGI stream objects
+        responses = asyncio.run(scenario())
+    assert [r.status_code for r in responses] == [204, 204]
+    assert landed == [bodies[0], bodies[2]], "the abandoned save was written, or a save was lost"
+    assert working.read_bytes() == bodies[2]
+    assert [p.name for p in working.parent.iterdir()] == [working.name]
+    env.db.rollback()
+    assert env.engine.pool.checkedout() == 0  # type: ignore[attr-defined]
+
+
+def test_failed_dav_put_cleans_up_and_does_not_wedge_later_saves(env: Env) -> None:
+    """A save that dies mid-write leaves no temp file, keeps the old content and frees the lane."""
+    from app.api import dav as dav_api
+
+    working = dav_session(env)
+    real_replace = os.replace
+    calls = 0
+
+    def fail_the_first_replace(src: str, dst: str) -> None:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            raise OSError("simulated disk failure")
+        real_replace(src, dst)
+
+    env.mp.setattr(dav_api.os, "replace", fail_the_first_replace)
+    first = [lambda c: c.put("/dav/tok-p01/letter.docx", content=b"doomed save")]
+    with stream_leaks_tolerated():  # the app answers 500 mid-request: see the autouse fixture
+        responses, _ = asyncio.run(_gather_posts(None, first, blocker=Blocker()))
+    assert [r.status_code for r in responses] == [500]
+    assert working.read_bytes() == b"original-docx-bytes"
+    assert [p.name for p in working.parent.iterdir()] == [working.name]
+
+    second = [lambda c: c.put("/dav/tok-p01/letter.docx", content=b"saved after failure")]
+    responses, _ = asyncio.run(_gather_posts(None, second, blocker=Blocker()))
+    assert [r.status_code for r in responses] == [204]
+    assert working.read_bytes() == b"saved after failure"
+    env.db.rollback()
+    assert env.engine.pool.checkedout() == 0  # type: ignore[attr-defined]
 
 
 # ---------------------------------------------------------------------------
