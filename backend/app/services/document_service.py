@@ -363,6 +363,16 @@ _SUBMITTER_SIGN_FORMS: frozenset[str] = frozenset(
 # submitter's signature is the only one available for the employee slot.
 _SUBMITTER_AUTO_SIGN_FORMS: frozenset[str] = frozenset({"Employee Clearance Form"})
 
+# Reserved ``BookVersion.fields`` key holding a chain form's generation-time
+# signing snapshot (issue date, employee/submitter embed, notify choice).
+_SIGNING_KEY = "_signing"
+
+# Chain forms whose ``{{ today if manager_sig_path }}`` is the manager's signing
+# date, not the issue date.
+_MANAGER_SIGN_DATE_FORMS: frozenset[str] = frozenset(
+    {"HR Request Form", "Passport Release Form", "Duty Resumption Form"}
+)
+
 
 def _submitter_signs_employee_cell(
     template_id: str,
@@ -1120,6 +1130,15 @@ def _build_template_data(
     # HugeRTE HTML — flatten to plain text so the Jinja {{ token }} render
     # doesn't emit literal <p>/<span> markup into the DOCX.
     data.update(_flatten_rich_fields(template_id, fields))
+    # A chain form renders its frozen issue date, on generation and on signing.
+    signing = data.pop(_SIGNING_KEY, None)
+    issued = signing.get("issued") if isinstance(signing, dict) else None
+    if isinstance(issued, str):
+        for key in ("today", "date", "request_date", "issue_date"):
+            if key not in fields and not (
+                key == "today" and template_id in _MANAGER_SIGN_DATE_FORMS
+            ):
+                data[key] = issued
 
     # The exit forms use an independent interviewer selection. The UI sends
     # picker IDs as strings; resolve to a Submitter without affecting the
@@ -1528,6 +1547,7 @@ def generate_document(
     return_for_leave_id: int | None = None,
     classification_code: str | None = None,
     converter: artifact_service.PdfConverter | None = None,
+    notify_employee: bool = True,
 ) -> GenerationResult:
     """Orchestrate the v4 doc generation pipeline.
 
@@ -1851,6 +1871,18 @@ def generate_document(
         raw_ref = allocate_ref_with_retry(db, cat_code)
     else:
         raw_ref = "DRAFT"
+
+    # Chain forms are re-rendered when the manager signs, possibly days later:
+    # freeze the issue date and the employee/submitter signature and notify
+    # choices so the signed copy reproduces this paper (render_signed_artifact).
+    fields = {k: v for k, v in fields.items() if k != _SIGNING_KEY}
+    if commit and signing_path == "chain" and template_id != "Inmate Conduct Violations":
+        fields[_SIGNING_KEY] = {
+            "issued": datetime.now().strftime("%d/%m/%Y"),
+            "employee": bool(embed_signature.get("employee")),
+            "submitter_id": submitter_id,
+            "notify_employee": notify_employee,
+        }
 
     # ------------------------------------------------------------------
     # 4-7. Assemble the docxtpl data dict (employee fields, manager override,
@@ -2414,7 +2446,11 @@ def generate_document(
         # purpose — the dedup branch above reuses an existing row and never calls
         # ``db.add``, and a re-generated certificate is exactly when an operator
         # expects the correction to land.
-        if absence_service.supersedes_absence(leave_row.leave_type):
+        # Sign-gated leaves supersede only once approved (book_service._commit_approval_state).
+        if (
+            absence_service.supersedes_absence(leave_row.leave_type)
+            and template_id not in form_policy.SIGN_GATED_LEAVE_FORMS
+        ):
             # ``commit=False``: this is part of the document's unit of work, so a
             # failure in step 13 or later takes the supersede back with the rest.
             superseded_absences = absence_service.delete_absences_covered_by(
@@ -2723,6 +2759,7 @@ def render_signed_artifact(
     version: BookVersion,
     signer_signature_path: str,
     signer_names: Sequence[str] = (),
+    signer_user_id: int | None = None,
     output_dir: Path | None = None,
     converter: artifact_service.PdfConverter | None = None,
 ) -> artifact_service.ArtifactResult:
@@ -2771,22 +2808,50 @@ def render_signed_artifact(
         )
     employee = db.get(Employee, book.employee_id) if book.employee_id else None
     fields = dict(version.fields or {})
-
-    data = _build_template_data(
-        db,
-        template_id=template_id,
-        employee=employee,
-        employee_id=book.employee_id,
-        fields=fields,
-        # The manager chosen at generation is recorded on book.doc_manager_id,
-        # NOT in version.fields — re-render with it so the signed copy keeps the
-        # same verifier name/title (else the {{ manager_name }} cell renders
-        # blank; SC-0425 regression).
-        manager_id=book.doc_manager_id,
-        submitter_id=None,
-        embed_signature=None,
-        current_user=None,
+    signing = fields.get(_SIGNING_KEY)
+    signing = signing if isinstance(signing, dict) else {}
+    # Replay the generation's employee/submitter signature choice.
+    embed_signature = {"employee": signing.get("employee") is True}
+    raw_submitter_id = signing.get("submitter_id")
+    submitter_id = (
+        raw_submitter_id
+        if isinstance(raw_submitter_id, int) and db.get(Submitter, raw_submitter_id) is not None
+        else None
     )
+
+    def _data(manager_id: int | None) -> dict[str, Any]:
+        return _build_template_data(
+            db,
+            template_id=template_id,
+            employee=employee,
+            employee_id=book.employee_id,
+            fields=fields,
+            # The manager chosen at generation is recorded on book.doc_manager_id,
+            # NOT in version.fields — re-render with it so the signed copy keeps the
+            # same verifier name/title (else the {{ manager_name }} cell renders
+            # blank; SC-0425 regression).
+            manager_id=manager_id,
+            submitter_id=submitter_id,
+            embed_signature=embed_signature,
+            current_user=None,
+        )
+
+    data = _data(book.doc_manager_id)
+    if not str(data.get("manager_name") or "").strip() and signer_user_id is not None:
+        # No manager on the paper: name the signer so the signature has an anchor.
+        signer_manager_id = db.scalar(select(Manager.id).where(Manager.user_id == signer_user_id))
+        if signer_manager_id is not None:
+            data = _data(signer_manager_id)
+    if _submitter_signs_employee_cell(template_id, submitter_id, embed_signature):
+        assert submitter_id is not None  # _submitter_signs_employee_cell requires it
+        data["employee_sig_path"] = _submitter_sign_path(db, submitter_id)
+    if template_id in _MANAGER_SIGN_DATE_FORMS:
+        signed_on = (
+            version.signed_at.replace(tzinfo=UTC).astimezone()
+            if version.signed_at is not None
+            else datetime.now()
+        )
+        data["today"] = signed_on.strftime("%d/%m/%Y")
     # Inject the approver's signature into the manager signature slot.
     data["sig1_path"] = signer_signature_path
 

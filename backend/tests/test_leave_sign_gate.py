@@ -1,6 +1,9 @@
 """Generated leave records are settled by their record's signing chain, not Leaves PATCH."""
 
-from datetime import date
+import hashlib
+import io
+import zipfile
+from datetime import date, datetime
 from types import SimpleNamespace
 from unittest.mock import Mock
 
@@ -9,9 +12,15 @@ from PIL import Image
 from sqlalchemy import select
 
 from app.config import Settings
-from app.core import form_policy, leave_lifecycle
+from app.core import docx_engine, form_policy, leave_lifecycle
 from app.db.models import AuditLog, Book, BookCategory, Document, Employee, Leave, Manager, User
-from app.services import artifact_service, book_service, document_service, notify_dispatch
+from app.services import (
+    artifact_service,
+    book_service,
+    document_service,
+    included_papers_service,
+    notify_dispatch,
+)
 
 
 @pytest.fixture()
@@ -61,7 +70,7 @@ def generate(env, template="Leave Permit Form", **kwargs):
         employee_id=env.employee.id,
         template_id=template,
         fields=fields,
-        manager_id=env.manager.id,
+        manager_id=kwargs.pop("manager_id", env.manager.id),
         current_user=env.signer,
         converter=lambda _: None,
         **kwargs,
@@ -116,11 +125,9 @@ def test_generated_leave_waits_for_signing_and_sends_once(gate_env, monkeypatch,
     assert audit is not None
 
 
-def test_reject_notifies_leave_status_and_return_does_not(gate_env, monkeypatch):
+def test_reject_and_return_send_nothing(gate_env):
     env = gate_env
     book, leave = generate(env, "Administrative Leave Form")
-    status_send = Mock(wraps=notify_dispatch.auto_send_leave_status)
-    monkeypatch.setattr(notify_dispatch, "auto_send_leave_status", status_send)
     submit(env, book)
     book_service.decide_step(
         env.db,
@@ -131,7 +138,6 @@ def test_reject_notifies_leave_status_and_return_does_not(gate_env, monkeypatch)
         note="Correct dates",
     )
     assert leave.status == "Pending"
-    env.send.assert_not_called()
     submit(env, book)
     book_service.decide_step(
         env.db,
@@ -142,8 +148,7 @@ def test_reject_notifies_leave_status_and_return_does_not(gate_env, monkeypatch)
         note="Not granted",
     )
     assert leave.status == "Rejected"
-    status_send.assert_called_once_with(env.db, leave.id, sent_by=env.signer.id)
-    assert env.send.call_args.args[1] == "leave_rejected"
+    env.send.assert_not_called()
 
 
 def test_admin_override_settles_leave_and_notifications_are_best_effort(gate_env, monkeypatch):
@@ -159,12 +164,11 @@ def test_admin_override_settles_leave_and_notifications_are_best_effort(gate_env
         env.db, book.id, target_state="rejected", actor=env.signer, reason="Correction"
     )
     assert leave.status == "Rejected"
-    assert env.send.call_args.args[1] == "leave_rejected"
     book_service.override_state(
         env.db, book.id, target_state="returned", actor=env.signer, reason="Revise"
     )
     assert leave.status == "Pending"
-    assert env.send.call_count == 1
+    env.send.assert_not_called()
 
 
 def test_revision_reuses_leave_even_when_dates_change(gate_env):
@@ -251,3 +255,131 @@ def test_monthly_admin_count_includes_pending_but_excludes_negative_verdicts(gat
         current_user=None,
     )
     assert data["admin_leaves_this_month"] == "2"
+
+
+def _media(path):
+    with zipfile.ZipFile(path) as docx:
+        return {
+            hashlib.sha256(docx.read(name)).hexdigest()
+            for name in docx.namelist()
+            if name.startswith("word/media/")
+        }
+
+
+def _document_xml(path):
+    with zipfile.ZipFile(path) as docx:
+        return docx.read("word/document.xml").decode("utf-8")
+
+
+def _data_path(env, rel):
+    return document_service.get_settings().data_dir / rel
+
+
+def test_signed_copy_keeps_employee_signature_and_issue_date(gate_env, monkeypatch):
+    env = gate_env
+    employee = Employee(id="G4401", name_en="Signing Employee", status="Active")
+    env.db.add(employee)
+    env.db.commit()
+    employee_sig = document_service.signature_core.employee_signature_path(
+        document_service.get_settings().vault_dir, employee.id
+    )
+    employee_sig.parent.mkdir(parents=True)
+    Image.new("RGBA", (120, 50), (255, 0, 0, 255)).save(employee_sig)
+    result = document_service.generate_document(
+        env.db,
+        employee_id=employee.id,
+        template_id="Leave Application Form",
+        fields={"start_date": "20/10/2026", "end_date": "21/10/2026"},
+        manager_id=env.manager.id,
+        embed_signature={"employee": True},
+        current_user=env.signer,
+        converter=lambda _: None,
+    )
+    book = env.db.get_one(Book, result.book_id)
+    version = book.versions[-1]
+    issued = datetime.now().strftime("%d/%m/%Y")
+    generated = _data_path(env, env.db.get_one(Document, version.document_id).docx_path)
+    submit(env, book)
+
+    class Later(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return datetime(2030, 1, 1, 9, 0, tzinfo=tz)
+
+    monkeypatch.setattr(document_service, "datetime", Later)
+    monkeypatch.setattr(docx_engine, "datetime", Later)
+    book_service.sign_book(env.db, book.id, user_id=env.signer.id, version_id=version.id)
+
+    signed = _data_path(env, version.signed_pdf_path)
+    assert _media(generated) < _media(signed)  # employee kept, manager added
+    assert issued in _document_xml(signed)
+    assert "01/01/2030" not in _document_xml(signed)
+
+
+def test_scan_flip_settles_leave_and_unfile_reopens_it(gate_env, monkeypatch):
+    env = gate_env
+    monkeypatch.setattr(included_papers_service, "get_settings", document_service.get_settings)
+    book, leave = generate(env)
+    scan = io.BytesIO()
+    Image.new("RGB", (200, 280), "white").save(scan, format="PNG")
+    book_service.add_attachment(
+        env.db, book.id, "scan.png", scan.getvalue(), user=env.signer, as_signed=True
+    )
+    env.db.refresh(leave)
+    assert book.approval_state == "approved"
+    assert leave.status == "Approved"
+    assert env.send.call_count == 1
+    book_service.unfile_signed_copy(env.db, book.id, user=env.signer)
+    env.db.refresh(leave)
+    assert leave.status == "Pending"
+    assert env.send.call_count == 1
+
+
+@pytest.mark.parametrize("how", ["delete", "void"])
+def test_deleting_or_voiding_cancels_the_leave_silently(gate_env, how):
+    env = gate_env
+    book, leave = generate(env)
+    if how == "delete":
+        book_service.delete_book(env.db, book.id, user_id=env.signer.id)
+    else:
+        book_service.override_state(
+            env.db, book.id, target_state=book_service.VOIDED_STATE, actor=env.signer
+        )
+    env.db.refresh(leave)
+    assert leave.status == "Cancelled"
+    env.send.assert_not_called()
+    audit = env.db.scalar(
+        select(AuditLog).where(
+            AuditLog.action == "leave.status_changed", AuditLog.entity_id == str(leave.id)
+        )
+    )
+    assert audit is not None
+
+
+def test_operator_notify_opt_out_holds_on_approval(gate_env):
+    env = gate_env
+    book, leave = generate(env, notify_employee=False)
+    submit(env, book)
+    book_service.sign_book(env.db, book.id, user_id=env.signer.id, version_id=book.versions[-1].id)
+    env.db.refresh(leave)
+    assert leave.status == "Approved"
+    env.send.assert_not_called()
+
+
+def test_permit_without_doc_manager_carries_the_signer_name(gate_env):
+    env = gate_env
+    book, _leave = generate(env, manager_id=None)
+    assert book.doc_manager_id is None
+    book_service.submit_for_approval(
+        env.db,
+        book.id,
+        submitted_by_user_id=env.signer.id,
+        approver_user_id=env.signer.id,
+        priority="normal",
+        reviewer_user_ids=[],
+    )
+    version = book.versions[-1]
+    book_service.sign_book(env.db, book.id, user_id=env.signer.id, version_id=version.id)
+    signed = _document_xml(_data_path(env, version.signed_pdf_path))
+    assert env.manager.name_en in signed
+    assert "w:drawing" in signed

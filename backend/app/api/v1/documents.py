@@ -357,6 +357,13 @@ def _run_generation(
         # now-closed request session; re-fetch so a role/link change made
         # while this job sat queued is respected, not a stale detached read.
         actor = db.get(User, current_user.id) if current_user is not None else None
+        # inmate_reporter's private saves never notify regardless of the request
+        # flag (server-enforced, not just a UI default).
+        notify_employee = (
+            False
+            if actor is not None and actor.role == INMATE_REPORTER_ROLE
+            else request.notify_employee
+        )
         result = document_service.generate_document(
             db,
             employee_id=request.employee_id,
@@ -371,20 +378,15 @@ def _run_generation(
             revise_of_book_id=request.revise_of_book_id,
             attachments=request.attachments,
             classification_code=request.classification_code,
+            notify_employee=notify_employee,
         )
         # Best-effort automatic employee SMS for generated service forms.
         # Must never break generation — the document is already committed.
-        # inmate_reporter's private saves never autosend regardless of the
-        # request flag (server-enforced, not just a UI default).
         if _should_autosend(
             commit=request.commit,
             revise_of_book_id=request.revise_of_book_id,
             book_id=result.book_id,
-            notify_employee=(
-                False
-                if actor is not None and actor.role == INMATE_REPORTER_ROLE
-                else request.notify_employee
-            ),
+            notify_employee=notify_employee,
         ):
             try:
                 notify_dispatch.auto_send_for_book(db, result.book_id, sent_by=None)  # type: ignore[arg-type]

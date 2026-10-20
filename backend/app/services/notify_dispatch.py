@@ -80,11 +80,18 @@ def _load_book_event(db: Session, book_id: int) -> BookEvent | None:
     # book rows sit +4h from their Document.created_at (naive UTC), 26 at +0
     # (the book_service.create_book path, which raises none of these events).
     # Converting again here pushed every permit 4h into the future.
+    # A sign-gated permit is notified when signed, so it starts at signing.
+    # signed_at is naive UTC; convert to the same local wall-clock.
+    issued = (
+        version.signed_at.replace(tzinfo=UTC).astimezone().replace(tzinfo=None)
+        if version.signed_at is not None
+        else book.created_at
+    )
     return BookEvent(
         employee=employee,
         fields=version.fields or {},
         today=date.today(),
-        created_at=book.created_at,
+        created_at=issued,
     )
 
 

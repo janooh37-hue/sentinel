@@ -1122,7 +1122,7 @@ def has_active_edit_session(db: Session, book_id: int) -> bool:
     )
 
 
-def delete_book(db: Session, book_id: int) -> None:
+def delete_book(db: Session, book_id: int, *, user_id: int | None = None) -> None:
     """Soft-delete: set deleted_at.  Ref number is NOT released.
 
     Raises ``BOOK_NOT_DELETABLE`` (409) when the record is voided, pending or
@@ -1142,7 +1142,7 @@ def delete_book(db: Session, book_id: int) -> None:
             },
         )
     row.deleted_at = datetime.now(UTC).replace(tzinfo=None)
-    db.commit()
+    _commit_approval_state(db, row, user_id=user_id)
 
 
 # ---------------------------------------------------------------------------
@@ -1214,14 +1214,15 @@ def _recompute_approval_state(book: Book) -> None:
     book.approval_state = state
 
 
-def _commit_approval_state(db: Session, book: Book, *, user_id: int) -> None:
+def _commit_approval_state(db: Session, book: Book, *, user_id: int | None) -> None:
     """Commit a chain decision and its linked leave together; notify only afterwards.
 
     Record-kind leaves cannot be approved through Leaves PATCH. Only these two
     generated forms mirror the record's verdict, including administrative repairs.
+    A voided or deleted record cancels its leave. Approval is the only send.
     """
     from app.core import form_policy
-    from app.services import leave_service, notify_dispatch
+    from app.services import absence_service, leave_service, notify_dispatch
 
     version = _current_version(book)
     leave = None
@@ -1230,12 +1231,15 @@ def _commit_approval_state(db: Session, book: Book, *, user_id: int) -> None:
         document = db.get(Document, version.document_id) if version.document_id else None
         leave = db.get(Leave, document.leave_id) if document and document.leave_id else None
         if leave is not None and leave.deleted_at is None:
-            status = {"approved": "Approved", "rejected": "Rejected"}.get(
-                book.approval_state, "Pending"
-            )
+            if book.voided_at is not None or book.deleted_at is not None:
+                status = "Cancelled"
+            else:
+                status = {"approved": "Approved", "rejected": "Rejected"}.get(
+                    book.approval_state, "Pending"
+                )
             if leave.status != status:
                 before = leave_service._workforce_leave_snapshot(leave)
-                actor = db.get(User, user_id)
+                actor = db.get(User, user_id) if user_id is not None else None
                 leave_service._audit(
                     db,
                     "leave.status_changed",
@@ -1251,19 +1255,26 @@ def _commit_approval_state(db: Session, book: Book, *, user_id: int) -> None:
                     after=leave,
                     reason_code=leave_service._leave_transition_reason(status),
                 )
+                # Generation leaves absences alone; only an approved leave explains them.
+                if status == "Approved" and absence_service.supersedes_absence(leave.leave_type):
+                    absence_service.delete_absences_covered_by(
+                        db, leave.employee_id, leave.start_date, leave.end_date, commit=False
+                    )
                 status_changed = True
     db.commit()
     db.refresh(book)
-    # Notify only on a real verdict change: advisory reviewer decisions or a
-    # repeat override must not re-send the employee message.
     if leave is None or leave.deleted_at is not None or not status_changed:
         return
     leave_service._cache_invalidate_employee(leave.employee_id)
+    # Notify only on a real approval, and only if the operator kept the
+    # generation-time "notify employee" switch on.
+    signing = (version.fields or {}).get("_signing") if version is not None else None
+    if book.approval_state != "approved" or (
+        isinstance(signing, dict) and signing.get("notify_employee") is False
+    ):
+        return
     try:
-        if book.approval_state == "approved":
-            notify_dispatch.auto_send_for_book(db, book.id, sent_by=user_id)
-        elif book.approval_state == "rejected":
-            notify_dispatch.auto_send_leave_status(db, leave.id, sent_by=user_id)
+        notify_dispatch.auto_send_for_book(db, book.id, sent_by=user_id)
     except Exception:
         db.rollback()
         log.exception("auto notification failed for signed leave book %s", book.id)
@@ -1855,6 +1866,7 @@ def sign_book(db: Session, book_id: int, *, user_id: int, version_id: int) -> Bo
         version=version,
         signer_signature_path=str(abs_sig),
         signer_names=signer_names,
+        signer_user_id=user_id,
     )
     _require_current_revision(db, book, version_id)
     db.refresh(book, attribute_names=["approval_state", "voided_at", "deleted_at"])
@@ -3334,8 +3346,7 @@ def add_attachment(
                 book.id,
                 exc_info=True,
             )
-    db.commit()
-    db.refresh(book)
+    _commit_approval_state(db, book, user_id=user.id if user is not None else None)
     return book
 
 
@@ -3536,11 +3547,10 @@ def unfile_signed_copy(db: Session, book_id: int, *, user: User | None = None) -
             payload=json.dumps({"ref_number": book.ref_number, "reverted_to": book.approval_state}),
         )
     )
-    db.commit()
+    _commit_approval_state(db, book, user_id=user.id if user is not None else None)
     for path in old_paths:
         with contextlib.suppress(OSError):
             path.unlink()
-    db.refresh(book)
     return book
 
 

@@ -409,6 +409,7 @@ def _reconstruct_signed_base(
         version=version,
         signer_signature_path=str(signature),
         signer_names=signer_names,
+        signer_user_id=signer.id,
         output_dir=temp_dir,
     )
     primary = artifact.conversion.pdf_path
