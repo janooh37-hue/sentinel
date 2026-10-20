@@ -22,6 +22,9 @@ file naming, a Session-per-request that two worker threads would otherwise race 
   whole body; ``get_db`` setup and teardown run before/after, never concurrently. A
   cancelled request does not abandon the thread (AnyIO's default), so the dependency
   teardown cannot close a ``Session`` the thread is still using.
+* waiters are woken first-come-first-served, so work that must land in arrival order keeps
+  it: the DAV ``PUT`` that replaces a Word working file takes the lane for exactly that
+  reason (overlapping saves must not let an older body overwrite a newer one).
 
 This preserves — it does not improve — the previous overlap profile. It is deliberately
 not a PyMuPDF confinement (process isolation is a later, separate change) and not a

@@ -30,6 +30,7 @@ from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from starlette.datastructures import Headers
 
+from app.api._offload import run_exclusive
 from app.db.session import get_db
 from app.services import word_session_repo
 
@@ -64,12 +65,19 @@ async def dav_handler(
 ) -> Response:
     # The request body is awaitable and stays on the loop. Everything after it — token and
     # DB lookups, the Word working-file write and the ``record_put`` commit (up to the
-    # 5 s SQLite busy wait) — is blocking, so it runs in the worker pool; the ``db``
-    # session is handed over whole and used by that one thread only.
+    # 5 s SQLite busy wait) — is blocking, so it leaves the loop; the ``db`` session is
+    # handed over whole and used by that one thread only.
     body = await request.body()
-    return await run_in_threadpool(
-        _serve_dav, token, filename, request.method.upper(), request.headers, body, db
-    )
+    method = request.method.upper()
+    if method == "PUT":
+        # A save replaces the Word working file. Before P01 the loop itself landed overlapping
+        # PUTs (a client retry while the first save is still in flight) strictly in the order
+        # their bodies arrived, so the newest save stayed on disk. Plain pool threads would let
+        # an older body overwrite a newer one, so PUTs take the lane: first come, first served
+        # (anyio's CapacityLimiter wakes waiters in order), queueing on the loop, not on a pool
+        # thread. Every other DAV method only reads and stays in the pool.
+        return await run_exclusive(_serve_dav, token, filename, method, request.headers, body, db)
+    return await run_in_threadpool(_serve_dav, token, filename, method, request.headers, body, db)
 
 
 def _serve_dav(
@@ -155,9 +163,9 @@ def _serve_dav(
     if method == "PUT":
         if not body:
             return respond(Response(status_code=400), sess.id)
-        # A per-request temp name: two overlapping PUTs (e.g. a client retry while the first
-        # is still in flight) must not truncate each other's temp file. The replace is atomic;
-        # the last one to finish wins, exactly as when requests were served one at a time.
+        # Overlapping PUTs are already ordered: ``dav_handler`` runs every PUT through the
+        # exclusive lane, so they land strictly in arrival order. The per-request temp name only
+        # keeps this write from ever sharing a temp path with another writer; the replace is atomic.
         tmp = f"{path}.{uuid.uuid4().hex}.tmp"
         try:
             with open(tmp, "wb") as fh:
