@@ -934,7 +934,7 @@ def _make_leave_row(
         start = fields.get("date", today)
         end = start
         days = 0
-        status = "Approved"
+        status = "Pending"
 
     elif template_id == "Administrative Leave Form":
         leave_type = "Administrative Leave"
@@ -944,7 +944,7 @@ def _make_leave_row(
             days = int(fields.get("duration", 1) or 1)
         except (ValueError, TypeError):
             days = 1
-        status = "Approved"
+        status = "Pending"
 
     else:
         leave_type = template_id
@@ -1309,6 +1309,7 @@ def _build_template_data(
                 Leave.start_date >= month_start,
                 Leave.start_date < month_end,
                 Leave.deleted_at.is_(None),
+                ~Leave.status.in_(["Rejected", "Cancelled"]),
             )
             .count()
         )
@@ -1727,6 +1728,7 @@ def generate_document(
     # ref (no allocation, no new Book row) and append a fresh version.
     # ------------------------------------------------------------------
     revise_book: Book | None = None
+    revision_leave_id: int | None = None
     if revise_of_book_id is not None:
         if not commit:
             raise ValidationFailedError(
@@ -1754,6 +1756,13 @@ def generate_document(
                 "Only a draft, returned, rejected, or awaiting-scan book can be revised",
                 state=revise_book.approval_state,
             )
+        if (
+            template_id in ("Leave Permit Form", "Administrative Leave Form")
+            and revise_book.versions
+        ):
+            previous_document = db.get(Document, revise_book.versions[-1].document_id)
+            if previous_document is not None:
+                revision_leave_id = previous_document.leave_id
 
     # ------------------------------------------------------------------
     # 1c. Attachments (spec §6) — validate slots + resolve sources BEFORE
@@ -2385,7 +2394,18 @@ def generate_document(
         # loop must not spam exact-duplicate Leave rows (the documented
         # 2026-03-26 incident inserted 300 identical sick rows). Reuse any
         # non-deleted row with the same natural key instead of inserting again.
-        existing_leave = _find_duplicate_leave(db, leave_row)
+        # A revision keeps its leave identity even when the corrected dates
+        # change the natural key. Preserve its verdict until it is resubmitted.
+        existing_leave = (
+            db.get(Leave, revision_leave_id)
+            if revision_leave_id is not None
+            else _find_duplicate_leave(db, leave_row)
+        )
+        if existing_leave is not None and revision_leave_id is not None:
+            existing_leave.start_date = leave_row.start_date
+            existing_leave.end_date = leave_row.end_date
+            existing_leave.days = leave_row.days
+            existing_leave.doc_path = leave_row.doc_path
         if existing_leave is not None:
             log.info(
                 "leave-row dedup: reusing leave %d for employee %s (%s %s→%s)",

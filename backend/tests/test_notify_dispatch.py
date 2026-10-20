@@ -602,9 +602,8 @@ def test_send_leave_status_admin_leave_swaps_to_admin_leave(db_session, monkeypa
 
 
 def test_auto_send_for_book_leave_permit_renders_hours_and_local_time(db_session, monkeypatch):
-    """Generating a Leave Permit Form sends the permit body: issue time is the
-    book's created_at verbatim (document_service already stamps it in local
-    wall-clock), plus duration_hours."""
+    """An approved Leave Permit sends its body with the book's local creation
+    time (document_service already stamps local wall-clock) and duration_hours."""
     from app.db.models import Book, BookCategory, BookVersion
     from app.services import notify_dispatch as nd
     from app.services import openwa_client
@@ -620,7 +619,9 @@ def test_auto_send_for_book_leave_permit_renders_hours_and_local_time(db_session
     if db_session.get(BookCategory, "HR") is None:
         db_session.add(BookCategory(id="HR", prefix="HR"))
     db_session.flush()
-    book = Book(category_id="HR", ref_number="HR-7001", employee_id="GLP")
+    book = Book(
+        category_id="HR", ref_number="HR-7001", employee_id="GLP", approval_state="approved"
+    )
     db_session.add(book)
     db_session.flush()
     db_session.add(
@@ -685,8 +686,8 @@ def test_load_book_event_keeps_evening_created_at_on_the_same_day(db_session):
 
 
 def test_auto_send_for_book_admin_leave_routes_via_leave_row(db_session, monkeypatch):
-    """Generating an Administrative Leave Form routes by the Leave row it created
-    (doc.leave_id) and sends the admin_leave body."""
+    """An approved Administrative Leave routes by its linked Leave row
+    rather than trying to load a Leave using the book id."""
     from app.db.models import Book, BookCategory, BookVersion, Document
     from app.services import notify_dispatch as nd
     from app.services import openwa_client
@@ -722,7 +723,9 @@ def test_auto_send_for_book_admin_leave_routes_via_leave_row(db_session, monkeyp
     )
     db_session.add(doc)
     db_session.flush()
-    book = Book(category_id="HR", ref_number="HR-7002", employee_id="GAL2")
+    book = Book(
+        category_id="HR", ref_number="HR-7002", employee_id="GAL2", approval_state="approved"
+    )
     db_session.add(book)
     db_session.flush()
     db_session.add(

@@ -46,6 +46,7 @@ from app.db.models import (
     BookVersion,
     Document,
     Employee,
+    Leave,
     Manager,
     OutboundMessage,
     User,
@@ -1213,6 +1214,62 @@ def _recompute_approval_state(book: Book) -> None:
     book.approval_state = state
 
 
+def _commit_approval_state(db: Session, book: Book, *, user_id: int) -> None:
+    """Commit a chain decision and its linked leave together; notify only afterwards.
+
+    Record-kind leaves cannot be approved through Leaves PATCH. Only these two
+    generated forms mirror the record's verdict, including administrative repairs.
+    """
+    from app.services import leave_service, notify_dispatch
+
+    version = _current_version(book)
+    leave = None
+    status_changed = False
+    if version is not None and version.template_id in (
+        "Leave Permit Form",
+        "Administrative Leave Form",
+    ):
+        document = db.get(Document, version.document_id) if version.document_id else None
+        leave = db.get(Leave, document.leave_id) if document and document.leave_id else None
+        if leave is not None and leave.deleted_at is None:
+            status = {"approved": "Approved", "rejected": "Rejected"}.get(
+                book.approval_state, "Pending"
+            )
+            if leave.status != status:
+                before = leave_service._workforce_leave_snapshot(leave)
+                actor = db.get(User, user_id)
+                leave_service._audit(
+                    db,
+                    "leave.status_changed",
+                    leave.id,
+                    actor.employee_id if actor else None,
+                    {"from": leave.status, "to": status},
+                )
+                leave.status = status
+                leave.updated_at = datetime.now(UTC).replace(tzinfo=None)
+                leave_service._enqueue_leave_reevaluation(
+                    db,
+                    before=before,
+                    after=leave,
+                    reason_code=leave_service._leave_transition_reason(status),
+                )
+                status_changed = True
+    db.commit()
+    db.refresh(book)
+    if leave is None or leave.deleted_at is not None:
+        return
+    if status_changed:
+        leave_service._cache_invalidate_employee(leave.employee_id)
+    try:
+        if book.approval_state == "approved":
+            notify_dispatch.auto_send_for_book(db, book.id, sent_by=user_id)
+        elif book.approval_state == "rejected":
+            notify_dispatch.auto_send_leave_status(db, leave.id, sent_by=user_id)
+    except Exception:
+        db.rollback()
+        log.exception("auto notification failed for signed leave book %s", book.id)
+
+
 def _current_pending_step(book: Book) -> BookApprovalStep | None:
     """The lowest-order pending approver step of the current version.
     Reviewer steps are advisory and never returned as the 'current' step."""
@@ -1462,8 +1519,7 @@ def submit_for_approval(
         submitted_at=datetime.now(UTC),
     )
     _recompute_approval_state(book)
-    db.commit()
-    db.refresh(book)
+    _commit_approval_state(db, book, user_id=submitted_by_user_id)
     return book
 
 
@@ -1556,8 +1612,7 @@ def decide_step(
     assert version is not None
     retain_revision_access(db, version, current)
     _recompute_approval_state(book)
-    db.commit()
-    db.refresh(book)
+    _commit_approval_state(db, book, user_id=user_id)
     return book
 
 
@@ -1687,8 +1742,8 @@ def override_state(
       - delete artifacts. Flipping away from ``approved`` leaves a filed signed
         PDF in place (it just stops being served, since serving keys on
         ``status == "approved"``); ``unfile_signed_copy`` is how you remove it.
-      - notify, or re-file in the Correspondence Log. This is a repair tool,
-        not a signing path.
+      - re-file in the Correspondence Log. This is a repair tool, not a signing
+        path. Linked sign-gated leaves still follow the repaired verdict and notify.
 
     Writes a ``book_state_override`` AuditLog row with the before/after pair
     and the reason.
@@ -1738,8 +1793,7 @@ def override_state(
             ),
         )
     )
-    db.commit()
-    db.refresh(book)
+    _commit_approval_state(db, book, user_id=actor.id)
     return book
 
 
@@ -1880,8 +1934,7 @@ def sign_book(db: Session, book_id: int, *, user_id: int, version_id: int) -> Bo
     except Exception:
         log.warning("correspondence auto-log failed on sign for book %s", book.id, exc_info=True)
     inmate_violation_whatsapp.queue_send(db, version)
-    db.commit()
-    db.refresh(book)
+    _commit_approval_state(db, book, user_id=user_id)
     return book
 
 

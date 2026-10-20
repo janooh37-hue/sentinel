@@ -292,9 +292,8 @@ def _send_leave_status(
         and leave_lifecycle.classify_group(leave.leave_type) == "sick"
     ):
         event = nf.EVENT_SICK_LEAVE_REGISTERED
-    # Administrative Leave is born Approved (issued) — its dedicated wording
-    # replaces the generic approval message (spec 2026-07-16). elif: a leave is
-    # at most one type, so this is mutually exclusive with the sick swap above.
+    # Administrative Leave uses its dedicated issued wording after approval,
+    # including generated records settled by the manager's signing chain.
     elif (
         event == nf.EVENT_LEAVE_APPROVED
         and nf.type_label(leave.leave_type, "en") == "Administrative Leave"
@@ -326,10 +325,11 @@ def auto_send_leave_status(
 def auto_send_for_book(
     db: Session, book_id: int, *, sent_by: int | None = None
 ) -> OutboundMessage | None:
-    """Best-effort automatic notification for a freshly-generated service form.
+    """Best-effort automatic notification for a generated or approved service form.
 
-    No-ops (returns None) unless a channel is enabled, auto-send is enabled, the
-    book's latest version maps to an event, and the book has an employee.
+    No-ops unless a channel and auto-send are enabled, the latest version maps
+    to an event, and the book has an employee. Sign-gated leave forms must first
+    reach approved: generating or returning one must not send a request message.
 
     Leave/violation forms carry their record on the generated Document (a book id
     is the wrong key for their loaders): route those by the document's leave_id /
@@ -343,6 +343,11 @@ def auto_send_for_book(
         return None
     version = book.versions[-1]
     tpl = version.template_id or ""
+    if (
+        tpl in ("Leave Permit Form", "Administrative Leave Form")
+        and book.approval_state != "approved"
+    ):
+        return None
     doc = db.get(Document, version.document_id) if version.document_id else None
     route = nf.SPECIAL_TEMPLATE_ROUTES.get(tpl)
     if doc is not None:
