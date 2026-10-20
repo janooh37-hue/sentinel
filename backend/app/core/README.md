@@ -288,6 +288,40 @@ and per-conversion cold/open/export/close milliseconds).
 
 ---
 
+### `pdf_worker` + `pdf_ops` + `pdf_child` (native PDF confinement)
+
+```python
+pdf_worker.call(op: str, *args, timeout=None) -> Any                 # short op, "calls" pool
+pdf_worker.open_stream(op: str, *args, step_timeout=None) -> Stream  # raster stream, "streams" pool
+pdf_worker.shutdown() -> None                                        # idempotent; pools respawn lazily
+# errors: NativeWorkerError(AppError, 503) -> Timeout | Crashed | Cancelled | Busy
+#         NativeOpError(Exception): an op's own exception that cannot be pickled
+```
+
+Every PyMuPDF entrypoint reachable from API routes runs in a **spawned worker
+process**, never in an API/lane thread: `ocr.pdf_text_layer` / `pdf_to_images`,
+`pdf_merge.build_pdf_package` / `merge_pdfs_to_bytes` / `pdf_page_count` /
+`inspect_source_pages` / `image_to_pdf_bytes`, and through them
+`book_service._image_to_pdf_bytes`, `included_papers_service.inspect_paper` /
+`describe_package` / `publish_signed_package` and `artifact_service._convert`'s
+page check. Public signatures, results and exceptions are unchanged; DB/Session
+work and file publication stay in the caller. `pdf_ops` holds the (moved)
+PyMuPDF bodies and is imported only inside the worker; `pdf_child` is its
+stdlib-only entry point.
+
+* `spawn` start method always (Windows-identical); no inline/env bypass.
+* A job leases one worker exclusively. Its execution deadline starts at the
+  lease; waiting for a free worker is a separate bounded
+  `NativeWorkerBusyError`. A timeout/cancel/crash kills only that job's worker.
+* `pdf_to_images` stays a lazy generator: the worker renders one page per
+  request and never ahead of the consumer, so closing it early stops the stream.
+* Workers are daemon processes that exit on pipe EOF, so none outlives the API
+  process (including after SIGKILL); `atexit` and `shutdown()` kill and reap them.
+* No automatic retry. Every job logs one `native_pdf_op` line (pool, op, worker
+  pid, outcome, items, ms).
+
+---
+
 ### `arabic_rtl`
 
 ```python

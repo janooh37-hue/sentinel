@@ -14,7 +14,6 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, cast
 
-import fitz
 from fastapi import status
 from sqlalchemy import select, update
 from sqlalchemy.engine import CursorResult
@@ -24,7 +23,13 @@ from sqlalchemy.orm.attributes import set_committed_value
 from app.api.errors import AppError, ConflictError, NotFoundError, ValidationFailedError
 from app.config import get_settings
 from app.core.constants import ALLOWED_DOC_EXTS
-from app.core.pdf_merge import PdfPackageSourceError, build_pdf_package
+from app.core.pdf_merge import (
+    PdfPackageSourceError,
+    build_pdf_package,
+    inspect_source_pages,
+    pdf_page_count,
+)
+from app.core.pdf_worker import NativeWorkerError
 from app.db.models import AuditLog, Book, BookVersion, Document, Employee, User
 from app.services import (
     artifact_service,
@@ -217,14 +222,10 @@ def inspect_paper(path: Path, *, display_name: str | None = None) -> tuple[str, 
             size=size,
         )
     try:
-        if ext in _IMAGE_EXTS:
-            with fitz.open(path) as image:
-                image.convert_to_pdf()
-            return _MIME_TYPES[ext], 1
-        with fitz.open(path) as pdf:
-            if pdf.page_count < 1:
-                raise ValueError("PDF has no pages")
-            return _MIME_TYPES[ext], pdf.page_count
+        pages = inspect_source_pages(path, is_image=ext in _IMAGE_EXTS)
+        return _MIME_TYPES[ext], pages
+    except NativeWorkerError:
+        raise  # the worker failed; do not blame the upload (422)
     except Exception as exc:
         raise ValidationFailedError(
             "INCLUDED_PAPERS_UNREADABLE",
@@ -587,8 +588,9 @@ def describe_package(db: Session, book: Book) -> PackageState:
     if published is None:
         raise NotFoundError("INCLUDED_PAPERS_PDF_MISSING", "The record PDF is not available")
     try:
-        with fitz.open(published) as pdf:
-            total_pages = pdf.page_count
+        total_pages = pdf_page_count(published)
+    except NativeWorkerError:
+        raise  # the worker failed; do not blame the record PDF (422)
     except Exception as exc:
         raise ValidationFailedError(
             "INCLUDED_PAPERS_BASE_UNREADABLE",
@@ -699,9 +701,10 @@ def publish_signed_package(
             "The signed form is not a readable PDF",
         )
     try:
-        with fitz.open(signed_primary) as pdf:
-            if pdf.page_count < 1:
-                raise ValueError("PDF has no pages")
+        if pdf_page_count(signed_primary) < 1:
+            raise ValueError("PDF has no pages")
+    except NativeWorkerError:
+        raise  # the worker failed; do not blame the signed form (422)
     except Exception as exc:
         raise ValidationFailedError(
             "INCLUDED_PAPERS_SIGNED_BASE_UNREADABLE",

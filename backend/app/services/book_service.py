@@ -3060,17 +3060,17 @@ def _image_to_pdf_bytes(data: bytes, ext: str) -> bytes:
     download as a corrupt renamed ``.pdf`` and fail pdf.js. Raises 422 when
     the bytes are not a readable image.
     """
-    import fitz  # PyMuPDF — heavyweight; only the scan-back flip pays for it
+    from app.core import pdf_merge, pdf_worker
 
     try:
-        with fitz.open(stream=data, filetype=ext.lstrip(".")) as img:
-            pdf_bytes: bytes = img.convert_to_pdf()
+        return pdf_merge.image_to_pdf_bytes(data, ext)
+    except pdf_worker.NativeWorkerError:
+        raise  # the worker failed; that is not a bad image (and not a 422)
     except Exception as exc:
         raise ValidationFailedError(
             "BOOK_SCAN_CONVERT_FAILED",
             "Could not read the scanned image; upload a valid PDF, PNG or JPEG scan",
         ) from exc
-    return pdf_bytes
 
 
 def _unique_attachment_dest(target_dir: Path, name: str) -> Path:
