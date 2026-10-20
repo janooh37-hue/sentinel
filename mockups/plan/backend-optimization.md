@@ -50,7 +50,7 @@ Legend: `pending` (not started, not authorized), `in-progress`, `ready-for-revie
 
 | Pt | Scope (unchanged from the owner request) | Status |
 |---|---|---|
-| P01 | Safe event-loop execution boundaries for traced blocking `async` handlers; matched ASGI responsiveness baseline and regression. Native-library and DB-session safety are mandatory. Plan: [backend-optimization-p01.md](backend-optimization-p01.md) | in-progress |
+| P01 | Safe event-loop execution boundaries for traced blocking `async` handlers; matched ASGI responsiveness baseline and regression. Native-library and DB-session safety are mandatory. Plan: [backend-optimization-p01.md](backend-optimization-p01.md) | **in-progress — blocked, not ready for review/merge.** Built; one independent review; scoped correction applied (launch 3); draft PR [#244](https://github.com/janooh37-hue/sentinel/pull/244). Open: (1) parent decision on lane-exposed SQLite writer contention (P01 plan §7.1), (2) no parent exception for the five base full-suite failures or the 22 base `mypy` errors, (3) exact-head Opus re-review of the corrected head pending. Detail: P01 plan §6.1 |
 | P02 | Shorten generation/broadcast write transactions and fix allocator retry reachability. Preserve numbering, audit atomicity, caller-staged writes, artifact publication and cleanup. No burned/gapped numbers or new pending/void states without an owner decision; if semantics cannot be preserved, document options and ask at that point. | pending |
 | P03 | Word/certificate worker queue vs execution deadlines; ownership-aware idempotent reap; bounded admission; no blind replay of side effects. `Future.running()` is not proof an operation began; completion-only worker timestamps cannot enforce a live timeout — a real started/ownership signal is needed where warranted. | pending |
 | P04 | OCR: explicit handled timeouts; reduce duplicate recognition/raster passes while preserving text/barcode priority and bilingual accuracy; benchmark native thread limits (do not hardcode `OMP_THREAD_LIMIT=1` as universally faster). | pending |
@@ -85,12 +85,13 @@ Every row is measured at the **same base SHA** with the same interpreter/hardwar
 |---|---|
 | Branch | `perf/backend-opt-01-isolation` |
 | Base | `origin/main` @ `f19e034c524090cc847ce9b82d7401babb334b83` |
-| PR | draft PR targeting `main`, linked to #209 with “Refs” (not “Closes”): number recorded in `p01/build-handoff.md` and in the PR itself |
-| Tests | `backend/tests/test_event_loop_isolation.py` (headline RED→GREEN, session/serialization/DAV safety, AST guard) |
-| RED / GREEN / full-suite counts | see `backend-optimization-p01.md` §Evidence receipts |
-| Build route | `anthropic/claude-sonnet-5-5` (native metadata verified, not self-description): `p01/route-receipt-launch1.md` |
-| Independent review | pending — Opus `anthropic/claude-opus-5-5`, exact head, launched by the coordinator |
-| Parent acceptance | **not accepted** (only the parent accepts) |
+| PR | draft [#244](https://github.com/janooh37-hue/sentinel/pull/244), `main` ← `perf/backend-opt-01-isolation`, linked to #209 with “Refs” (not “Closes”). The exact head is `headRefOid` of the PR and is pinned in `p01/correction-handoff.md`; reviewed head of review #1: `f9c51daa` |
+| Tests | `backend/tests/test_event_loop_isolation.py` (headline RED→GREEN, session/serialization safety, DAV arrival-order / failure-cleanup / abandoned-waiter guards, AST guard) |
+| RED / GREEN / benchmark / full-suite counts | P01 plan §8. RED at base 24 failed / 7 passed; GREEN 31 at the reviewed head; correction RED 2 failed / 4 passed at `f9c51daa`, GREEN 6 passed three times; matched benchmark: **five** alternating reps for the reviewed code **and** five for the corrected head (health max latency ≈ 2.0–3.3 s on base → 3.5–20.4 ms, 0 → 3–7 health completions during the block, loop-thread SQL 0–15 → 0 on all 7 routes); full suite base 4 failed / 3075 passed / 18 skipped / 1 error, reviewed head 4 / 3106 / 18 / 1 (identical failure set), corrected head: PR #244 + `p01/correction-handoff.md` |
+| Build route | Launch 1 and launch 3: `anthropic/claude-sonnet-5-5`, `resolvedModelIsFallback=false`, native session metadata (not self-description): `p01/route-receipt-launch1.md`, `p01/route-receipt-launch3.md` |
+| Independent review | Launch 2: Opus `anthropic/claude-opus-5-5` on exact head `f9c51daa` (`p01/independent-review.json`) — no must-fix code defects; **P2** lane-exposed writer contention (open, parent decision, P01 plan §7.1); **P3** DAV arrival order (fixed in launch 3). Launch 4: exact-head Opus re-review of the corrected head — **pending** |
+| Open blockers | (1) §7.1 parent decision; (2) five base full-suite failures (4 failed + 1 error, identical at base, outside the diff) and 22 base `mypy` errors — **no exception granted**; (3) re-review; native-overlap evidence (§7.2) is evidence, not a vendor guarantee, and P05 remains |
+| Parent acceptance | **not accepted** (only the parent accepts); P02–P08 not started |
 
 ### P02 – P08
 
@@ -116,3 +117,5 @@ After P01–P07 are individually accepted, build an owned integration worktree o
 ## Receipt log (append-only)
 
 - 2026-10-20 — master plan and P01 plan written before any P01 implementation; base `f19e034c`; research linked above.
+- 2026-10-20 — P01 built and pushed; draft PR #244; independent review #1 (Opus) at `f9c51daa`: no must-fix code defects, two findings.
+- 2026-10-20 — launch 3 (Sonnet correction): DAV overlapping-`PUT` order restored through the existing lane with a RED-first test; lane-exposed writer contention measured against base / reviewed head / corrected head and left open for the parent (not accepted, not silently moved into P02); native-overlap evidence recorded; five-rep benchmark for both code states; both plans updated. P02–P08 remain pending.
