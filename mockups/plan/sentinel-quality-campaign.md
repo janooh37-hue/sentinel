@@ -873,3 +873,16 @@ start with `RESEARCH_SOURCES` index 2 (Python 3.12 `email.parser`). Questions: c
 RFC 5322 Message-ID / References parsing, same-owner live parent matching, failed
 reconciliation retry, Q02 mail-sync owner gating, and the W1+Q02 merge order. F, H, K and N may be
 re-asked with fresh captures under tomorrow's own allowance.
+
+## 13. Related: user-requested backend optimization series (not a weekly run)
+
+Pointer only; no score, schedule or gate in this document changes. The owner separately
+requested sequential, individually reviewed backend optimizations. They are planned in
+`mockups/plan/backend-optimization.md` (P01–P08) and reuse Q06
+[#209](https://github.com/janooh37-hue/sentinel/issues/209) and Q09
+[#212](https://github.com/janooh37-hue/sentinel/issues/212) rather than opening duplicates.
+P01 (event-loop execution boundaries, `perf/backend-opt-01-isolation`) addresses the
+“saturated work preserves unrelated request responsiveness” and category-2 G3 “zero
+inline-on-event-loop blocking calls” parts of Q06 only; timeout/executor accounting (category 6
+G1–G3) belongs to P03/P04. A pending PR is not evidence on `main`; main scores are unaffected
+until merged.
