@@ -18,7 +18,7 @@ from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.config import get_settings
-from app.core import leave_lifecycle
+from app.core import form_policy, leave_lifecycle
 from app.core.phone import normalize_phone
 from app.db.models import Book, Document, Employee, Leave, OutboundMessage, Violation
 from app.services import notify_format as nf
@@ -343,10 +343,7 @@ def auto_send_for_book(
         return None
     version = book.versions[-1]
     tpl = version.template_id or ""
-    if (
-        tpl in ("Leave Permit Form", "Administrative Leave Form")
-        and book.approval_state != "approved"
-    ):
+    if tpl in form_policy.SIGN_GATED_LEAVE_FORMS and book.approval_state != "approved":
         return None
     doc = db.get(Document, version.document_id) if version.document_id else None
     route = nf.SPECIAL_TEMPLATE_ROUTES.get(tpl)

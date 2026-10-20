@@ -41,6 +41,10 @@ SIGNING_PATHS: dict[str, SigningPath] = {
     "Passport Release List": "scan",
 }
 
+# Generated leave records whose Leave row stays Pending (and employee
+# notifications held) until the manager signs through the approval chain.
+SIGN_GATED_LEAVE_FORMS = frozenset({"Leave Permit Form", "Administrative Leave Form"})
+
 _DEFAULT_PATH: SigningPath = "auto"
 
 

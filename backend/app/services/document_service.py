@@ -152,8 +152,8 @@ _INMATE_ACTION_LABELS: tuple[tuple[str, str], ...] = (
 
 # ---------------------------------------------------------------------------
 # inmate_reporter draft/submit field validation (spec: role §5) — the only
-# fields this role may write; everything else (manager_id, hand_sign_manager,
-# signature paths, ...) is rejected before it reaches here.
+# fields this role may write; everything else (manager_id, signature paths,
+# ...) is rejected before it reaches here.
 # ---------------------------------------------------------------------------
 
 _INMATE_REPORT_FIELD_KEYS: Final[frozenset[str]] = frozenset(
@@ -1619,19 +1619,7 @@ def generate_document(
 
     # Enforce the server signing policy; chain forms stay unsigned until approval.
     signing_path = form_policy.signing_path_of(template_id)
-    hand_sign_manager_field = next(
-        (f for f in form_meta.get("fields", []) if f.get("key") == "hand_sign_manager"),
-        None,
-    )
-    if hand_sign_manager_field is None:
-        embed_signature["manager"] = signing_path == "auto"
-    elif "manager" not in embed_signature and hand_sign_manager_field.get("default") == "true":
-        # Per-field default (_fields.json), e.g. Inmate Conduct Violations —
-        # only seeded when the caller genuinely omitted the key (a script, a
-        # test, or any non-UI caller must not silently land unsigned and
-        # unrouted just because it didn't think to send embed_signature).
-        # An explicit {"manager": False} from the caller is left untouched.
-        embed_signature["manager"] = True
+    embed_signature["manager"] = signing_path == "auto"
 
     # ------------------------------------------------------------------
     # 1a-inmate_reporter. Fixed-scope role: exact template, unattached,
@@ -1756,10 +1744,7 @@ def generate_document(
                 "Only a draft, returned, rejected, or awaiting-scan book can be revised",
                 state=revise_book.approval_state,
             )
-        if (
-            template_id in ("Leave Permit Form", "Administrative Leave Form")
-            and revise_book.versions
-        ):
+        if template_id in form_policy.SIGN_GATED_LEAVE_FORMS and revise_book.versions:
             previous_document = db.get(Document, revise_book.versions[-1].document_id)
             if previous_document is not None:
                 revision_leave_id = previous_document.leave_id

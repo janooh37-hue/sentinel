@@ -500,8 +500,8 @@ function StandardApplicationPage(): React.JSX.Element {
     // remain "hand_sign_<entity>" for backwards-compat with _fields.json, but
     // Round 2 — Fix E inverted the semantics: a checked box now means
     // "embed the saved signature image". The payload key is the bare entity
-    // ("employee" / "manager"). A field with `default: "true"` (e.g. Inmate
-    // Conduct Violations' hand_sign_manager) is treated as checked unless the
+    // ("employee" / "manager"). A field with `default: "true"` is treated as
+    // checked unless the
     // operator explicitly unticks it — same `value !== false` rule as the
     // Report form's `sign` field below, generalized via the per-field default
     // instead of a hardcoded field id.

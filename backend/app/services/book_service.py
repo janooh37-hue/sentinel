@@ -1220,15 +1220,13 @@ def _commit_approval_state(db: Session, book: Book, *, user_id: int) -> None:
     Record-kind leaves cannot be approved through Leaves PATCH. Only these two
     generated forms mirror the record's verdict, including administrative repairs.
     """
+    from app.core import form_policy
     from app.services import leave_service, notify_dispatch
 
     version = _current_version(book)
     leave = None
     status_changed = False
-    if version is not None and version.template_id in (
-        "Leave Permit Form",
-        "Administrative Leave Form",
-    ):
+    if version is not None and version.template_id in form_policy.SIGN_GATED_LEAVE_FORMS:
         document = db.get(Document, version.document_id) if version.document_id else None
         leave = db.get(Leave, document.leave_id) if document and document.leave_id else None
         if leave is not None and leave.deleted_at is None:
@@ -1256,10 +1254,11 @@ def _commit_approval_state(db: Session, book: Book, *, user_id: int) -> None:
                 status_changed = True
     db.commit()
     db.refresh(book)
-    if leave is None or leave.deleted_at is not None:
+    # Notify only on a real verdict change: advisory reviewer decisions or a
+    # repeat override must not re-send the employee message.
+    if leave is None or leave.deleted_at is not None or not status_changed:
         return
-    if status_changed:
-        leave_service._cache_invalidate_employee(leave.employee_id)
+    leave_service._cache_invalidate_employee(leave.employee_id)
     try:
         if book.approval_state == "approved":
             notify_dispatch.auto_send_for_book(db, book.id, sent_by=user_id)
