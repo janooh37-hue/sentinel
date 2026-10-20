@@ -4,7 +4,7 @@ One feature worktree at a time uses the shared, throwaway `C:\Users\GSSG\gssg-de
 
 ## Daily channel
 
-The worktree `.worktrees\160-laptop-dev` holds branch `dev` = `origin/main` + the work branches staged for testing. Never commit on it directly. Each work item gets its own worktree and `work/<x>` branch cut from `origin/main` and merged into `dev` to test; when the user says the staged work is ready, `dev` is PR'd to main. `scripts\dev-channel.ps1` drives `dev`:
+The worktree `.worktrees\160-laptop-dev` holds branch `dev` = `origin/main` + the work branches under test. It is disposable: never commit on it or PR from it. Each work item gets its own worktree and `work/<x>` branch cut from `origin/main`, merged into `dev` to test, and PR'd to main from its own branch. `scripts\dev-channel.ps1` drives `dev`:
 
 | Verb | Effect |
 | --- | --- |

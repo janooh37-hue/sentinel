@@ -1,13 +1,13 @@
 ---
 name: "dev-cycle"
-description: "Fix bugs and add features on the laptop dev channel (one worktree per work item off main, merged into dev for testing; dev is PR'd to main when the user says so); user tests on the dev URL before promotion. Use for any fix, feature, or template change."
+description: "Fix bugs and add features on the laptop dev channel (one worktree per work item off main; dev is a disposable test merge); user tests on the dev URL before promotion. Use for any fix, feature, or template change."
 ---
 
 # /dev-cycle
 
 ## Locations
 
-- Dev worktree: `C:\Users\GSSG\projects\sentinel\.worktrees\160-laptop-dev`, branch `dev` = `origin/main` + work branches staged for testing. Never commit on it directly; it is the branch PR'd to main.
+- Dev worktree: `C:\Users\GSSG\projects\sentinel\.worktrees\160-laptop-dev`, branch `dev` = `origin/main` + work branches under test. Disposable; never commit or PR from it.
 - Work worktree: `C:\Users\GSSG\projects\sentinel\.worktrees\<x>`, branch `work/<x>` cut from `origin/main`. Absolute paths only.
 - Control: `scripts\dev-channel.ps1` (`status`, `rebuild`, `publish`, `restart`), run from the dev worktree with `powershell -NoProfile -ExecutionPolicy Bypass -File scripts\dev-channel.ps1 <verb>`.
 - Server: `backend\serve.py` on 127.0.0.1:8765, started detached by the script; log `.tmp\dev-server.log.err`.
@@ -27,13 +27,13 @@ description: "Fix bugs and add features on the laptop dev channel (one worktree 
    - Required `AGENTS.md` reviews.
 6. **Publish:** in the dev worktree, `git merge work/<x>`, then `dev-channel.ps1 publish` (`restart` alone for backend-only changes).
 7. **Report:** changes, commits, checks, failures, what to test on the dev URL.
-8. **Promote (gate):** only when the user says so, push `dev` (`git push --force-with-lease origin dev`; `rebuild` rewrites it) and open a PR `dev` → `main` per **Promotion**. After it merges: `dev-channel.ps1 rebuild <work branches still under test>`. Production goes live only via `scripts\mng.ps1 update` on GSSGAPP.
+8. **Promote (gate):** after the user approves, PR `work/<x>` per **Promotion**. After it merges: `dev-channel.ps1 rebuild <work branches still under test>`. Production goes live only via `scripts\mng.ps1 update` on GSSGAPP.
 
 ## Promotion
 
 - Word reaches the server through `ms-word:ofe|u|{GSSG_PUBLIC_BASE_URL}/dav/...`. On the laptop, that base URL is the tailnet dev host, set only in the gitignored dev `.env`; production sets its own. Never commit the dev host, change the `public_base_url` default, or alter Word/WebDAV URL building to make dev work. The code path stays identical; only `.env` differs.
-- The PR goes from `dev` to `main`, opened only when the user says the staged work is ready; never PR `work/<x>` branches directly.
-- Before opening the PR, audit `git diff origin/main...dev` and the PR text for dev routing leaks. Grep added lines for non-placeholder `ts.net`, `127.0.0.1` / `localhost` / `8765` used as a Word/DAV base, and changes to `GSSG_PUBLIC_BASE_URL`, `public_base_url`, `/dav`, or `word_url`.
+- PR the work branch itself; never PR or cherry-pick from `dev`.
+- Before opening the PR, audit `git diff origin/main...work/<x>` and the PR text for dev routing leaks. Grep added lines for non-placeholder `ts.net`, `127.0.0.1` / `localhost` / `8765` used as a Word/DAV base, and changes to `GSSG_PUBLIC_BASE_URL`, `public_base_url`, `/dav`, or `word_url`.
 
 ## Gates (ask)
 
@@ -59,4 +59,4 @@ description: "Fix bugs and add features on the laptop dev channel (one worktree 
 - Reports are claims: read the diff and handoff file before step 7.
 - Close an agent's pane after you verify its diff. Small fixes go back to the same agent; bigger follow-ups go to a fresh agent briefed with the handoff file.
 - Tests: agents run the narrowest pytest locally; you run the full suite once after merging.
-- When the user says it is ready, PR `dev` → `main` (step 8).
+- When the user says it is ready, PR the work branch to `main` from its own worktree (step 8).
