@@ -50,12 +50,13 @@ description: "Fix bugs and add features on the laptop dev channel (one worktree 
 - `.docx`: edit XML; never resave in Word.
 - Other sessions' hunks: leave alone.
 
-## Work 
+## Work
 
-- Always Auto-plan 
-- Use Herdr skill and send work to another agent
-- Give Agent instruction to use subagents to keep context window clean
-- if task is large you can delegate to multiple agent in parallel 
-- keep your context window clean by delegating 
-- close the tab or pane of the agent work after he report back to you and he is done working 
-- after done working create a PR in github 
+- Always auto-plan.
+- Delegate through the Herdr skill to keep your context clean: `herdr agent start <name> --kind omp --pane <id> -- --model <model>`; cheap model to explore, strong model to review. Tell each agent to use subagents.
+- Large task: parallel agents. Each writer gets its own `.worktrees/<name>` on a branch cut from `dev` and never shares files with another writer; merge into `dev` before publish.
+- Brief: goal, owned files, edits allowed or not, check to run, and "write your report to `<worktree>\.tmp\handoff-<name>.md` and reply with the path only".
+- Reports are claims: read the diff and handoff file before step 7.
+- Close an agent's pane after you verify its diff. Small fixes go back to the same agent; bigger follow-ups go to a fresh agent briefed with the handoff file.
+- Tests: agents run the narrowest pytest locally; you run the full suite once after merging.
+- When done, create a PR on GitHub.
