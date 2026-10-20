@@ -99,34 +99,37 @@ Controlled blocking adapters (deterministic, bounded): each adapter blocks on a 
 
 Per route the harness records, **before** asserting: health-probe completions *during* the block, per-probe latency (p50/p95/max), loop heartbeat max gap (10 ms ticks), SQL statements executed on the loop thread, adapter thread identity, request wall time, process CPU seconds and peak RSS. Set `SENTINEL_LOOP_BENCH_OUT=<file.jsonl>` to append one JSON object per route/run.
 
-Procedure (run twice, **same checkout / interpreter / hardware**, only the source differs):
+Procedure (run twice, **same checkout / interpreter / hardware**, only the source differs). The benchmark is the headline test function only (7 routes, one blocking source each); the other tests are correctness guards, not measurements:
 
 ```bash
 export TMPDIR=/home/amh/.hermes/cache/scratch GSSG_DISABLE_SCHEDULER=1 PYTHONHASHSEED=0
 for i in 1 2 3 4 5; do
-  SENTINEL_LOOP_BENCH_OUT=<evidence>/loop-bench-<label>.jsonl \
-    venv/bin/python -m pytest backend/tests/test_event_loop_isolation.py -p no:cacheprovider -q
+  SENTINEL_LOOP_BENCH_OUT=<evidence>/loop-bench-<label>.jsonl SENTINEL_LOOP_BENCH_LABEL=<label>-$i \
+    venv/bin/python -m pytest backend/tests/test_event_loop_isolation.py \
+      -k test_event_loop_stays_responsive_during_slow_route -p no:cacheprovider -q
 done
 ```
 
-`<label>` is `base` (production source at `f19e034c`, test files present) and `head` (P01 commit). Host noise (other processes) is recorded, not hidden. Later points (P08) re-run exactly this against the integration worktree.
+`<label>` is `base` (production source identical to `f19e034c`, test file copied in — the file does not exist on `main`) and `head` (the P01 commit). Host noise (other processes) is recorded (`loadavg`), not hidden. Later points (P08) re-run exactly this against the integration worktree.
 
 ## 5. Test plan — vertical slices (TDD), seams and assertions
 
-Seam (approved by the owner brief): the **real ASGI application** (`create_app()` via `httpx.ASGITransport` on a live asyncio loop) with synthetic authenticated users; adapters only at the external/native boundary. Tests assert behaviour, not helper internals.
+Seam (approved by the owner brief): the **real ASGI application** (`create_app()` via `httpx.ASGITransport` on a live asyncio loop) with synthetic authenticated users; adapters only at the external/native boundary. Tests assert behaviour, not helper internals. All in `backend/tests/test_event_loop_isolation.py`.
 
 | Slice | Test | Expected at base `f19e034c` (RED) | Expected after fix |
 |---|---|---|---|
-| S1 | **T1** `test_event_loop_stays_responsive_during_slow_route[<route>]` for scan-back, book attachment, permit Emirates-ID scan, email handoff (slow IMAP APPEND), announcement group send (slow gateway), DAV `PUT` (contended SQLite writer): ≥3 health completions *while the adapter is blocked*; adapter ran off the loop thread; **0 SQL statements on the loop thread**; heartbeat gap bounded; response status/body unchanged | fails: adapter ran on the loop thread, 0 health completions during the block, loop SQL > 0 | passes |
-| S1 | **T1b** denial: a user lacking the route capability gets the unchanged 403 envelope and the adapter is **never entered** (PII/permission gate precedes offloaded work) | passes (guards the move) | passes |
-| S2 | **T2** `test_lane_does_not_exhaust_worker_pool`: 1 blocked lane request + 47 queued; health (sync `def`, pool-served) still answers; all complete after release | n/a (loop-blocked) | passes (a lock-based design fails) |
-| S2 | **T3** `test_lane_keeps_native_section_exclusive`: 6 overlapping OCR scans never run inside the native adapter concurrently (`max_concurrent == 1`) | passes by accident (loop serialises) — **RED on a plain thread offload** | passes |
-| S2 | **T4** `test_overlapping_scan_backs_file_exactly_once`: two simultaneous scan-backs for one awaiting-scan Record → one `filed`, one `422 BOOK_NOT_AWAITING_SCAN`; one signed copy on disk | passes by accident — **RED on a plain thread offload** | passes |
-| S3 | **T5** `test_concurrent_dav_puts_do_not_corrupt_working_file`: two overlapping `PUT`s both 204; final bytes equal one full body | passes by accident — **RED on a plain thread offload** | passes |
-| S4 | **T6** `test_no_async_route_handler_runs_blocking_calls_inline` (AST sweep with an explicit benign allowlist) | fails listing the 19+ offenders | passes (0 violations) |
-| S5 | **T7** session lifecycle: after every covered route the engine reports 0 checked-out connections (no leaked/cross-thread-held `Session`) | passes | passes |
+| S1 | `test_event_loop_stays_responsive_during_slow_route[<route>]` for scan-back, book attachment, permit Emirates-ID scan, permit vehicle-licence scan, email handoff (slow IMAP APPEND), announcement group send (slow gateway), DAV `PUT` (real contended SQLite writer lock): ≥3 health completions *while the adapter is blocked*; adapter ran off the loop thread; **0 SQL statements on the loop thread**; heartbeat gap bounded; status/body unchanged; 0 connections left checked out | fails: adapter ran on the loop thread, 0 health completions during the block, loop SQL > 0 | passes |
+| S1 | `test_sibling_handlers_run_blocking_work_off_the_loop[<15 siblings>]` — same verdicts with the controlled adapter wrapping the service call (stage, ledger, leave certificate, my/manager/employee signature, employee photo, vault upload, permit person/vehicle/permit document, book replace attachment / signed copy, vehicle fine payment / receipt); response must be 2xx/4xx, never 5xx | fails (same reason) | passes |
+| S1 | `test_unprivileged_user_is_refused_before_any_offloaded_work`, `test_denied_capability_override_refuses_handoff_without_mailbox_work`, `test_unknown_dav_token_is_refused_without_touching_the_working_file`: capability / token gate still answers first with the unchanged envelope; adapter **never entered** (PII/permission boundary) | passes (guards the move) | passes |
+| S2 | `test_exclusive_lane_does_not_exhaust_the_worker_pool`: 1 blocked lane request + 47 queued; health (plain `def`, pool-served) still answers; all 48 complete after release | fails (loop-blocked) | passes (a lock-based design fails) |
+| S2 | `test_exclusive_lane_never_overlaps_native_section`: 6 overlapping OCR scans never run inside the native adapter concurrently (`max_concurrent == 1`) | passes by accident (loop serialises) — **RED on a plain thread offload** (observed `max_concurrent == 2`) | passes |
+| S2 | `test_overlapping_scan_backs_file_the_record_exactly_once`: two simultaneous scan-backs for one awaiting-scan Record → one `200 filed`, one `422 BOOK_NOT_AWAITING_SCAN`; one signed copy on disk | passes by accident — **RED on a plain thread offload** (observed `[200, 200]`) | passes |
+| S3 | `test_concurrent_dav_puts_do_not_corrupt_the_working_file`: two overlapping `PUT`s both 204; final bytes equal one full body; no temp files left | passes by accident — **RED on a plain thread offload** (observed `[204, 500]`) | passes |
+| S4 | `test_no_async_route_handler_runs_blocking_calls_inline` (AST sweep, explicit benign allowlist: SSE `stream`) + `test_ast_guard_sees_the_known_blocking_shapes` (the guard flags inline, module-helper and nested-called-inline shapes; not vacuous) | fails listing every offender | passes (0 violations) |
 
-S2/S3 slices demonstrably fail against a naive thread offload (recorded in `raw/`), which is the justification for the lane and the DAV temp name. Existing route suites (`test_book_scan_back.py`, `test_scanback_api.py`, `test_book_attachment_manage.py`, `test_signed_copy_manage.py`, `test_dav.py`, `test_email_routes.py`, `test_announcements_api.py`, `test_permits*`, `test_ledger*`, `test_vehicle*` fines, …) are the behaviour-preservation net; the full backend suite is run once at the end and compared against the base-SHA characterization.
+Slice order actually executed (raw outputs in `p01/raw/`): S1 RED at base → slice-1 plain thread offload (`run_in_threadpool`, no lane, no DAV temp name): S1/S4 green, S2/S3 guards RED → slice-2 exclusive lane + DAV per-request temp name: all green. Existing route suites (`test_book_scan_back.py`, `test_scanback_api.py`, `test_book_attachment_manage.py`, `test_signed_copy_manage.py`, `test_dav.py`, `test_email_routes.py`, `test_announcements_*.py`, `test_permit_scan_endpoints.py`, `test_granular_permits_ledger_gates.py`, `test_vehicles_api.py`, `test_passport_upload_hook.py`, … list in `p01/raw/targeted-files.txt`) are the behaviour-preservation net; the full backend suite is run once at the end and compared against the base-SHA characterization.
+
+Harness note: with `filterwarnings = error`, `httpx.ASGITransport` + the debug `BaseHTTPMiddleware` leave an unclosed anyio `MemoryObjectReceiveStream` when the app answers (early 401/403/404) before reading the request body; the module's autouse fixture collects with `ResourceWarning` silenced so the leak is not blamed on a neighbouring test. Pre-existing, test-harness only; no application change.
 
 ## 6. Acceptance
 
@@ -146,6 +149,16 @@ S2/S3 slices demonstrably fail against a naive thread offload (recorded in `raw/
 - **Windows/Word/Arabic Tesseract unavailable here:** every figure is a Linux, Python 3.12, fake-engine measurement of loop responsiveness.
 - **Rollback:** revert the single commit; no data, schema or API change.
 
-## 8. Evidence receipts (filled during the build)
+## 8. Evidence receipts
 
-Filled at the end of the build with exact commands, SHAs, counts and the evidence-root paths (see `p01/build-handoff.md` for the same data plus routing/PR metadata).
+Evidence root (outside the repo): `/home/amh/Projects/astra-orchestration/task-receipts/sentinel-backend-optimization/p01/raw/`. Environment: Linux x86_64, i7-7820HQ 8 threads, Python 3.12.14 owned venv (pinned `requirements.txt`; `ruff==0.16.6` to match CI), FastAPI 0.115.5, Starlette 0.41.3, anyio 4.15.1, SQLAlchemy 2.1.5, PyMuPDF 1.28.2, Tesseract 5.5.3 (`eng` only), `PYTHONHASHSEED=0`, scheduler off, `TMPDIR=/home/amh/.hermes/cache/scratch`. The host was shared with other processes (loadavg 1.1–4.5 recorded per run).
+
+- Commits on `perf/backend-opt-01-isolation` (base `f19e034c`): plans `cdc39f1a` → RED tests `b9a1d98b` → implementation `8a1aa349` → this evidence update.
+- **RED** on the pristine base source + test file (`red-base-run2.log`): **24 failed, 7 passed** — 7 headline routes, 15 siblings, pool-exhaustion and the AST sweep all fail for the expected reason (`adapter executed ON the event-loop thread`, 0 health completions during the block, loop SQL > 0). The 7 that pass at base are the denial/guard tests and the shape check (guards that only break under a naive offload).
+- **Slice 1** (plain `run_in_threadpool`, `slice1-naive-offload.log`): **3 failed, 28 passed** — exclusivity (`max_concurrent == 2`), double scan-back filing (`[200, 200]`) and DAV overlap (`[204, 500]`) fail, justifying the lane and the DAV temp name.
+- **GREEN** with the lane (`slice2-green-dev.log`): **31 passed**.
+- **Matched benchmark** (3 alternating reps, headline test, `loop-bench-summary.txt`): health max latency ≈ 2.0–3.4 s with 0 health responses during the block and loop SQL 2–15 on base, versus 3.4–19.7 ms with 3–6 health responses during the block and 0 loop SQL at head, on all 7 routes. These are fake-engine, Linux, Python 3.12 measurements of loop responsiveness (block capped at 2.0 s by design), not production latency.
+- **Static**: `ruff check .` clean; `ruff format --check` clean on every changed file (`ledger.py`/`email.py` were off-format on `main` and are formatted per the CI changed-files rule); `scripts/check_numbering.py` ok; `mypy` strict: 22 errors in 8 files, **identical at base** (SQLAlchemy 2.1.5 typing drift in this venv), 0 in `app/api`.
+- **Base full backend suite** (`full-suite-base.log`): 4 failed, 3075 passed, 18 skipped, 1 error in 89 min — pre-existing: `test_inmate_reporter::test_signed_report_submit_routes_to_manager_pending_worklist`, `test_migration_inmate_violations_category::test_0099_...`, `test_schema_utc_serialization::test_every_schema_with_a_timestamp_inherits_the_tagging`, `test_vehicle_reminders::test_scheduler_registers_vehicle_reminders_at_0910_dubai`, and a `MemoryObjectReceiveStream` ResourceWarning error in `test_vehicle_import`.
+- **Existing-test adaptation (no assertion changed):** `test_word_book_preview.py` calls `dav_handler` directly with conftest's in-memory `db_session`, which is bound to its creating thread; the DAV body now runs in the worker pool, so the module overrides `db_session` with a one-connection `StaticPool`, `check_same_thread=False` engine (what `api_db` and the production engine already are).
+- Full backend suite at the P01 head and targeted-suite results: see `p01/build-handoff.md`.
