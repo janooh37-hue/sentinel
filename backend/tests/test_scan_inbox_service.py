@@ -6,6 +6,7 @@ from datetime import date
 from pathlib import Path
 
 import pytest
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 
 from app.api.errors import NotFoundError, ValidationFailedError
@@ -13,7 +14,7 @@ from app.config import get_settings
 from app.core.extraction import ocr
 from app.core.qr import Decoded
 from app.db.models import Book, BookCategory, BookVersion, Employee, ScanInbox, User, VaultFile
-from app.services import scan_inbox_service
+from app.services import book_service, scan_inbox_service
 from app.services.document_reader import DocumentRead
 
 _FIXTURES = Path(__file__).parent / "fixtures" / "scan_triage"
@@ -982,3 +983,39 @@ def test_drain_commits_containment_error_and_continues_to_next_item(
     assert book.attachment_paths == [f"book_attachments/{book.id}/valid.pdf"]
     assert (isolated_data_dir / book.attachment_paths[0]).read_bytes() == raw
     assert outside.read_bytes() == source.read_bytes() == raw
+
+
+def test_drain_lock_timeout_aborts_the_batch_and_keeps_later_items_pending(
+    db_session: Session,
+    isolated_data_dir: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A lock timeout aborts the drain as main did: items filed before it stay filed,
+    the failing item and the rest stay ``pending_ocr`` for the next drain."""
+    book = _approved_book(db_session)
+    raw = (_FIXTURES / "returned-form-text.pdf").read_bytes()
+    items = []
+    for name in ("first.pdf", "locked.pdf", "later.pdf"):
+        (isolated_data_dir / name).write_bytes(raw)
+        items.append(ScanInbox(source="upload", file_path=name, filename=name, state="pending_ocr"))
+    db_session.add_all(items)
+    db_session.commit()
+    commit_state = book_service._commit_approval_state
+
+    def locked_on_second(db, book, **kwargs):
+        if book.attachment_paths and len(book.attachment_paths) == 2:
+            raise OperationalError("BEGIN IMMEDIATE", {}, Exception("database is locked"))
+        return commit_state(db, book, **kwargs)
+
+    monkeypatch.setattr(book_service, "_commit_approval_state", locked_on_second)
+    with pytest.raises(OperationalError):
+        scan_inbox_service.drain_pending(db_session)
+    db_session.rollback()
+    db_session.expire_all()
+    first, locked, later = (db_session.get_one(ScanInbox, item.id) for item in items)
+    assert (first.state, first.attempts) == ("auto_filed", 1)
+    assert (locked.state, locked.attempts, locked.error_detail) == ("pending_ocr", 0, None)
+    assert (later.state, later.attempts) == ("pending_ocr", 0)
+    assert db_session.get_one(Book, book.id).attachment_paths == [
+        f"book_attachments/{book.id}/first.pdf"
+    ]

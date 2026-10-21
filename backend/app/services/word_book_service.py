@@ -35,6 +35,7 @@ from app.core.docx_engine import aztec_corner_for
 from app.core.roles import INMATE_REPORTER_ROLE
 from app.db.models import Book, BookCategory, BookEditSession, BookVersion, Document, Manager, User
 from app.db.repos import classified_refs_repo
+from app.db.repos._locking import begin_immediate_if_idle
 from app.schemas.book import TemplateSessionRead, WordSessionDetailRead
 from app.services import artifact_service, book_template_service, manager_service
 from app.services._pdf_executor import convert_docx_to_pdf
@@ -620,6 +621,9 @@ def finish_word_session(
     if carried_leave_id is not None:
         from app.services import book_service
 
+        # Read ownership under the write lock, as generation's plan does, so a
+        # takeover in flight cannot be overtaken by this revision.
+        begin_immediate_if_idle(db)
         if book_service.leave_owner(db, carried_leave_id) not in (None, book):
             carried_leave_id = None
     doc = Document(

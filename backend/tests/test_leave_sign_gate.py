@@ -13,6 +13,7 @@ import docx
 import pytest
 from PIL import Image
 from sqlalchemy import create_engine, select
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.config import Settings
@@ -29,8 +30,10 @@ from app.db.models import (
     Document,
     Employee,
     Leave,
+    LedgerEntry,
     Manager,
     OutboundMessage,
+    ScanInbox,
     User,
 )
 from app.db.session import attach_sqlite_pragmas
@@ -43,6 +46,7 @@ from app.services import (
     leave_service,
     notify_dispatch,
     perm_service,
+    scan_inbox_service,
     sms_templates,
     word_book_service,
 )
@@ -421,6 +425,120 @@ def test_overriding_a_rejected_owner_waits_for_a_takeover_in_flight(
     assert book_service.leave_owner(env.db, leave.id) is env.db.get_one(Book, reissue.id)
     assert env.db.get_one(Leave, leave.id).status == "Pending"
     assert env.send.call_count == 0
+
+
+@pytest.mark.parametrize("template", ["Leave Permit Form", "Administrative Leave Form"])
+def test_a_word_revision_of_a_rejected_owner_waits_for_a_takeover_in_flight(
+    wal_gate_env, monkeypatch, template
+):
+    """A Word revision reads leave ownership under the write lock, so finishing one
+    on a rejected owner while a re-issue takes its leave over cannot take it back."""
+    env = wal_gate_env
+    monkeypatch.setattr(word_book_service, "get_settings", document_service.get_settings)
+    rejected, leave = generate(env, template)
+    submit(env, rejected)
+    decide(env, rejected, "rejected")
+    word_book_service.reopen_word_session(env.db, user=env.signer, book_id=rejected.id)
+    session = env.db.query(BookEditSession).filter_by(book_id=rejected.id, state="active").one()
+    session.last_put_at = datetime.now(UTC).replace(tzinfo=None)
+    env.db.commit()
+    planned, release, owner_read = threading.Event(), threading.Event(), threading.Event()
+    plan, owner = document_service.plan_gated_leave, book_service.leave_owner
+
+    def paused_plan(*args, **kwargs):
+        result = plan(*args, **kwargs)
+        planned.set()
+        assert release.wait(10)
+        return result
+
+    def observed_owner(*args, **kwargs):
+        if threading.current_thread().name.startswith("word"):
+            owner_read.set()
+        return owner(*args, **kwargs)
+
+    monkeypatch.setattr(document_service, "plan_gated_leave", paused_plan)
+    monkeypatch.setattr(book_service, "leave_owner", observed_owner)
+
+    def finish():
+        with Session(env.db.bind, autoflush=False, expire_on_commit=False) as db:
+            user = db.get_one(User, env.signer.id)
+            word_book_service.finish_word_session(
+                db, user=user, book_id=rejected.id, converter=lambda _: None
+            )
+
+    with (
+        ThreadPoolExecutor(1) as takeover_pool,
+        ThreadPoolExecutor(1, thread_name_prefix="word") as word_pool,
+    ):
+        takeover = takeover_pool.submit(generate, env, template)
+        assert planned.wait(10)
+        finishing = word_pool.submit(finish)
+        # Unlocked, the finish reads ownership at once; locked, it waits for the takeover.
+        owner_read.wait(1)
+        release.set()
+        reissue, reissued_leave = takeover.result(15)
+        finishing.result(15)
+    monkeypatch.setattr(book_service, "leave_owner", owner)
+    assert reissued_leave.id == leave.id
+    env.db.expire_all()
+    reissue = env.db.get_one(Book, reissue.id)
+    assert book_service.leave_owner(env.db, leave.id) is reissue
+    submit(env, reissue)
+    book_service.sign_book(
+        env.db, reissue.id, user_id=env.signer.id, version_id=reissue.versions[-1].id
+    )
+    assert env.db.get_one(Leave, leave.id).status == "Approved"
+    assert env.send.call_count == 1
+
+
+def test_a_lock_timeout_aborts_reply_filing_instead_of_half_filing(gate_env, monkeypatch):
+    """A lock timeout in the gated approval mirror rolls the reply filing back so the
+    row retries, rather than committing the attachment and parking it for a second file."""
+    env = gate_env
+    monkeypatch.setattr(scan_inbox_service, "get_settings", document_service.get_settings)
+    book, _leave = generate(env)
+    submit(env, book)
+    now = datetime.now(UTC).replace(tzinfo=None)
+    entry = LedgerEntry(
+        entry_date=date.today(),
+        direction="incoming",
+        channel="email",
+        counterparty="other@example.com",
+        subject="reply",
+        attachment_paths=[],
+        tags=["email"],
+        owner_user_id=env.signer.id,
+        to_recipients=[],
+        cc_recipients=[],
+        bcc_recipients=[],
+        created_at=now,
+        read_at=now,
+    )
+    env.db.add(entry)
+    env.db.flush()
+    source = document_service.get_settings().data_dir / "scan_inbox" / "reply.pdf"
+    source.parent.mkdir(parents=True, exist_ok=True)
+    source.write_bytes(b"%PDF-1.4 signed reply")
+    item = ScanInbox(
+        source="email_attachment",
+        ledger_entry_id=entry.id,
+        file_path="scan_inbox/reply.pdf",
+        filename="reply.pdf",
+        state="pending_ocr",
+    )
+    env.db.add(item)
+    env.db.commit()
+
+    def locked(_db):
+        raise OperationalError("BEGIN IMMEDIATE", {}, Exception("database is locked"))
+
+    monkeypatch.setattr(book_service, "begin_immediate_if_idle", locked)
+    with pytest.raises(OperationalError):
+        scan_inbox_service.auto_file_email_reply(env.db, ledger_entry_id=entry.id, book_id=book.id)
+    env.db.rollback()
+    env.db.expire_all()
+    assert not env.db.get_one(Book, book.id).attachment_paths
+    assert env.db.get_one(ScanInbox, item.id).state == "pending_ocr"
 
 
 @pytest.mark.parametrize("template", ["Leave Permit Form", "Administrative Leave Form"])
