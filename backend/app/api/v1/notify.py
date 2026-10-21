@@ -9,23 +9,28 @@ send/status require ``employees.notify``; refresh requires ``books.edit``.
 
 from __future__ import annotations
 
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import require_capability
+from app.api.deps import get_current_user, require_capability
 from app.config import get_settings
 from app.db.models import User
 from app.db.session import get_db
 from app.schemas.notify import (
+    MessageRenderRead,
+    MessageTemplateRead,
+    MessageText,
     NotifyMessageRead,
+    NotifyPreviewRead,
+    NotifyPreviewRequest,
     NotifySendRequest,
     NotifySendResponse,
     NotifyStatusItem,
     NotifyStatusResponse,
 )
-from app.services import notify_dispatch
+from app.services import message_template_service, notify_dispatch, sms_templates
 
 router = APIRouter(prefix="/notify", tags=["notify"])
 
@@ -79,6 +84,55 @@ def refresh_delivery(
     if row is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Message not found")
     return NotifyMessageRead.model_validate(row)
+
+
+@router.get("/templates", response_model=list[MessageTemplateRead])
+def templates(
+    db: Annotated[Session, Depends(get_db)],
+    _user: Annotated[User, Depends(get_current_user)],
+) -> list[dict[str, Any]]:
+    return [message_template_service.read_template(db, event) for event in sms_templates.EVENTS]
+
+
+@router.put("/templates/{event}", response_model=MessageTemplateRead)
+def update_template(
+    event: str,
+    payload: MessageText,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(require_capability("messages.templates"))],
+) -> dict[str, Any]:
+    return message_template_service.save_template(
+        db, event, payload, actor=user.employee_id or user.email
+    )
+
+
+@router.delete("/templates/{event}", response_model=MessageTemplateRead)
+def reset_template(
+    event: str,
+    db: Annotated[Session, Depends(get_db)],
+    user: Annotated[User, Depends(require_capability("messages.templates"))],
+) -> dict[str, Any]:
+    return message_template_service.save_template(
+        db, event, None, actor=user.employee_id or user.email
+    )
+
+
+@router.post("/templates/{event}/render", response_model=MessageRenderRead)
+def render_template(
+    event: str,
+    payload: MessageText,
+    _user: Annotated[User, Depends(get_current_user)],
+) -> dict[str, Any]:
+    return message_template_service.render_sample(event, payload)
+
+
+@router.post("/preview", response_model=NotifyPreviewRead)
+def preview(
+    payload: NotifyPreviewRequest,
+    db: Annotated[Session, Depends(get_db)],
+    _user: Annotated[User, Depends(get_current_user)],
+) -> dict[str, Any]:
+    return message_template_service.preview(db, payload)
 
 
 __all__ = ["router"]

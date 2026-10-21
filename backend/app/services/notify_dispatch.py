@@ -215,7 +215,7 @@ def _resolve(db: Session, event_type: str, record_id: int) -> tuple[Employee, st
         raise RecordNotFoundError(f"{event_type} {record_id} has no employee")
     lang = "ar" if (employee.msg_language or "ar") == "ar" else "en"
     phone = normalize_phone(employee.contact, default_cc=get_settings().sms_country_code)
-    text: str = sms_templates.render_text(event_type, lang, record, employee)
+    text: str = sms_templates.render_text(event_type, lang, record, employee, db=db)
     return employee, lang, phone, text
 
 
@@ -284,7 +284,7 @@ def send_direct(
     return _route(db, base=base, cfg=cfg)
 
 
-def _leave_status_event(leave: Leave) -> str | None:
+def leave_status_event(leave: Leave) -> str | None:
     """The event matching a leave's current canonical status, or ``None``."""
     event = _LEAVE_STATUS_EVENTS.get(leave_lifecycle.canonical_status(leave.status))
     # Sick leave is recorded, not requested — the dedicated wording replaces
@@ -311,7 +311,7 @@ def _send_leave_status(
     leave = db.get(Leave, leave_id)
     if leave is None or leave.employee_id is None:
         return None
-    event = _leave_status_event(leave)
+    event = leave_status_event(leave)
     if event is None:
         return None
     return send_for_event(db, event, leave_id, sent_by=sent_by)
@@ -335,6 +335,23 @@ def auto_send_leave_status(
     if not _autosend_enabled(db):
         return None
     return _send_leave_status(db, leave_id, sent_by=sent_by)
+
+
+def template_event(template_id: str, leave: Leave | None = None) -> str | None:
+    """Pure generated-form route, with the leave's send-time status when needed."""
+    route = nf.SPECIAL_TEMPLATE_ROUTES.get(template_id)
+    if route == "leave_status":
+        return leave_status_event(leave) if leave is not None else None
+    if route == "duty_resumption":
+        return nf.EVENT_DUTY_RESUMPTION
+    if route == "violation":
+        return nf.EVENT_VIOLATION
+    return nf.TEMPLATE_EVENTS.get(template_id)
+
+
+def send_timing(template_id: str) -> str:
+    """Approval-chain forms notify at approval; other forms notify on save."""
+    return "on_approval" if form_policy.signing_path_of(template_id) == "chain" else "on_save"
 
 
 def book_event(db: Session, book: Book) -> tuple[str, int] | None:
@@ -363,8 +380,9 @@ def book_event(db: Session, book: Book) -> tuple[str, int] | None:
                 leave = db.get(Leave, doc.leave_id)
                 if leave is None or leave.employee_id is None:
                     return None
-                event = _leave_status_event(leave)
+                event = template_event(tpl, leave)
                 return (event, leave.id) if event is not None else None
+    # Special routes found no linked record: a book id is the wrong key for them.
     event = nf.TEMPLATE_EVENTS.get(tpl)
     return (event, book.id) if event is not None else None
 
@@ -384,7 +402,7 @@ def auto_send_for_book(
     if book is None or not book.versions:
         return None
     if (
-        form_policy.signing_path_of(book.versions[-1].template_id) == "chain"
+        send_timing(book.versions[-1].template_id or "") == "on_approval"
         and book.approval_state != "approved"
     ):
         return None
@@ -411,7 +429,7 @@ def auto_send_leave_amended(
     employee = leave.employee
     lang = "ar" if (employee.msg_language or "ar") == "ar" else "en"
     body = sms_templates.render_leave_amended(
-        leave, employee, lang, old_days=old_days, reason=reason
+        leave, employee, lang, old_days=old_days, reason=reason, db=db
     )
     return send_direct(
         db,

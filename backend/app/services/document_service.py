@@ -981,6 +981,16 @@ def plan_gated_leave(
     return GatedLeavePlan(leave_id=held.id, take_over=True, cancel_leave_id=own.id if own else None)
 
 
+def join_violation_types(fields: dict[str, Any]) -> dict[str, Any]:
+    """Warning Form sends ``violation_type`` as a list of strings; join it once
+    with the Arabic comma so the DOCX token, the Violation record and the
+    employee message all read the same text."""
+    vio_type = fields.get("violation_type")
+    if isinstance(vio_type, list):
+        return {**fields, "violation_type": "، ".join(str(v) for v in vio_type)}
+    return fields
+
+
 def _make_leave_row(
     employee_id: str,
     template_id: str,
@@ -1682,11 +1692,7 @@ def generate_document(
     _raw_employee_embed_requested = embed_signature.get("employee") is True
     pdf_converter = converter or convert_docx_to_pdf
 
-    # Warning Form sends ``violation_type`` as a list of strings; join it once
-    # with the Arabic comma so the DOCX token and the Violation record match.
-    vio_type = fields.get("violation_type")
-    if isinstance(vio_type, list):
-        fields = {**fields, "violation_type": "، ".join(str(v) for v in vio_type)}
+    fields = join_violation_types(fields)
     if commit and template_id == "General Book" and not fields.get("date"):
         fields = {**fields, "date": datetime.now().strftime("%d-%m-%Y")}
 
