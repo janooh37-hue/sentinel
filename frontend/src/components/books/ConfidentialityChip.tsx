@@ -1,6 +1,10 @@
 /**
  * ConfidentialityChip — the record's level (Personal / Secret / Directed).
  * General is the default and renders nothing.
+ *
+ * ConfidentialityMark — the same level as a quiet glyph + label for dense
+ * typographic rows (the Ledger Books desk), styled like PurposeMark. Only
+ * Secret keeps a tone. Being trialled on the desk before replacing the chip.
  */
 import { Lock, Send, UserRound } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
@@ -35,6 +39,32 @@ export function ConfidentialityChip({
       )}
     >
       <Icon className="h-3 w-3 shrink-0" strokeWidth={2.2} aria-hidden="true" />
+      {t(`books.confidentiality.levels.${level}`)}
+    </span>
+  )
+}
+
+export function ConfidentialityMark({
+  level,
+  className,
+}: {
+  level: Confidentiality | null | undefined
+  className?: string
+}): React.JSX.Element | null {
+  const { t } = useTranslation()
+  if (!level || level === 'general') return null
+  const Icon = STYLE[level].icon
+  return (
+    <span
+      data-testid="confidentiality-mark"
+      title={t('books.confidentiality.chipTitle', { level: t(`books.confidentiality.levels.${level}`) })}
+      className={cn(
+        'inline-flex items-center gap-1 whitespace-nowrap font-medium',
+        level === 'secret' ? 'text-destructive' : 'text-muted-foreground',
+        className,
+      )}
+    >
+      <Icon className="h-3.5 w-3.5 shrink-0" strokeWidth={1.8} aria-hidden="true" />
       {t(`books.confidentiality.levels.${level}`)}
     </span>
   )

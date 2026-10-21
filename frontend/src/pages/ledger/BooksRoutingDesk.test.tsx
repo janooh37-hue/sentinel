@@ -86,7 +86,7 @@ describe('Books routing desk', () => {
     expect(invalidate).toHaveBeenCalledWith({ queryKey: ['books', 'inbox-summary'] })
     expect(invalidate).toHaveBeenCalledWith({ queryKey: ['notifications', 'counts'] })
     expect(api.listBooks).toHaveBeenCalledTimes(1)
-    expect(qc.getQueryData<{ items: BookRead[] }>(['books', 'routing', 'incoming', '', 0])?.items[0].my_inbox?.read_at).toBeTruthy()
+    expect(qc.getQueryData<{ items: BookRead[] }>(['books', 'routing', 'incoming', '', 'newest', 0])?.items[0].my_inbox?.read_at).toBeTruthy()
   })
 
   it.each(['toolbar', 'browser'])('opens a book over the list and %s Back restores scope, search, scroll and focus', async (back) => {
@@ -178,7 +178,7 @@ describe('Books routing desk', () => {
     expect(await screen.findByRole('button', { name: /GS-7/ })).toBeInTheDocument()
   })
 
-  it('marks each purpose with its own glyph and label, apart from the confidentiality chip', async () => {
+  it('marks each purpose with its own glyph and label, apart from the confidentiality mark', async () => {
     const purposes = ['info', 'action', 'reply', 'circulate'] as const
     vi.mocked(api.listBooks).mockResolvedValue({
       items: purposes.map((purpose, index) => ({ ...BOOK, id: index + 1, ref_number: `GS-${index + 1}`, confidentiality: 'secret', my_inbox: { ...BOOK.my_inbox!, purpose } })),
@@ -190,11 +190,58 @@ describe('Books routing desk', () => {
       const mark = within(row).getByText(label)
       expect(mark).toHaveAttribute('data-purpose', purposes[index])
       expect(mark.querySelector('svg')?.getAttribute('class')).toMatch(/lucide-/)
-      expect(mark.closest('[data-testid="confidentiality-chip"]')).toBeNull()
-      expect(within(row).getByTestId('confidentiality-chip')).toHaveTextContent('Secret')
+      expect(mark.closest('[data-testid="confidentiality-mark"]')).toBeNull()
+      expect(within(row).getByTestId('confidentiality-mark')).toHaveTextContent('Secret')
     }
     const glyphs = purposes.map((purpose) => document.querySelector(`[data-purpose="${purpose}"] svg`)!.getAttribute('class'))
     expect(new Set(glyphs).size).toBe(4)
+  })
+
+  it('searches every place at once, tags each hit with its place, and Esc clears back to the scope', async () => {
+    const done = { ...BOOK, id: 8, ref_number: 'GS-8', my_inbox: { ...BOOK.my_inbox!, read_at: '2026-10-13T09:00:00Z', done_at: '2026-10-14T09:00:00Z' } }
+    const sent = { ...BOOK, id: 9, ref_number: 'GS-9', my_inbox: null }
+    vi.mocked(api.listBooks).mockImplementation(async ({ inbox } = {}) => {
+      const items = inbox === 'any' ? [done, sent] : [BOOK]
+      return { items, total: items.length, limit: 50, offset: 0 }
+    })
+    mount()
+    const box = await screen.findByRole('searchbox', { name: 'Search books' })
+    await userEvent.type(box, 'Staff')
+    await waitFor(() => expect(api.listBooks).toHaveBeenLastCalledWith(expect.objectContaining({ inbox: 'any', q: 'Staff', sort: 'newest' })))
+    expect(await screen.findByText('2 results across all books')).toHaveAttribute('role', 'status')
+    // Place tag plus my own state: both read "Done".
+    expect(within(screen.getByRole('button', { name: /GS-8/ })).getAllByText('Done')).toHaveLength(2)
+    expect(within(screen.getByRole('button', { name: /GS-9/ })).getByText('Outgoing')).toBeInTheDocument()
+    expect(screen.queryByRole('tab', { selected: true })).not.toBeInTheDocument()
+    await userEvent.keyboard('{Escape}')
+    expect(box).toHaveValue('')
+    expect(await screen.findByRole('tab', { name: 'Incoming', selected: true })).toBeInTheDocument()
+    expect(await screen.findByRole('button', { name: /GS-7/ })).toBeInTheDocument()
+  })
+
+  it('shows an outgoing book with its recipients, my note and their read/done progress', async () => {
+    const recipient = (id: number, name: string, extra: object = {}) => ({
+      id, user_id: id, user_name: name, sent_by_user_id: 1, purpose: 'action' as const, note: 'Count by Thursday',
+      created_at: '2026-10-12T09:00:00Z', can_recall: true, ...extra,
+    })
+    vi.mocked(api.listBooks).mockResolvedValue({
+      items: [{ ...BOOK, my_inbox: null, priority: 'High', signer_name: 'Juma Saadi', recipients: [
+        recipient(2, 'Khalid', { read_at: '2026-10-12T10:00:00Z', done_at: '2026-10-12T11:00:00Z' }),
+        recipient(3, 'Salim', { read_at: '2026-10-12T10:00:00Z' }),
+        recipient(4, 'Aisha'),
+        { ...recipient(5, 'Forwarded'), sent_by_user_id: 2 },
+      ] }],
+      total: 1, limit: 50, offset: 0,
+    })
+    mount('/ledger?tab=books&scope=outgoing')
+    const row = await screen.findByRole('button', { name: /GS-7/ })
+    expect(row).toHaveTextContent('Khalid, Salim+1')
+    expect(row).not.toHaveTextContent('Forwarded')
+    expect(row).toHaveTextContent('Count by Thursday')
+    expect(row).toHaveTextContent('Juma Saadi')
+    expect(row).toHaveTextContent('Urgent')
+    expect(within(row).getByText('Opened by 2 of 3')).toBeInTheDocument()
+    expect(within(row).getByText('Done by 1 of 3')).toBeInTheDocument()
   })
 })
 
@@ -207,11 +254,12 @@ describe('Books routing desk (Arabic)', () => {
     await i18n.changeLanguage('en')
   })
 
-  /** Visible text plus every accessible name, title and placeholder, with Latin refs removed. */
+  /** Visible text plus every accessible name, title and placeholder, with Latin refs and key caps removed. */
   function rendered(root: HTMLElement): string {
     const attributes = Array.from(root.querySelectorAll('[aria-label], [title], [placeholder]'))
       .flatMap((node) => ['aria-label', 'title', 'placeholder'].map((name) => node.getAttribute(name) ?? ''))
-    return [root.textContent, ...attributes].join(' ').replace(/GS-\d+/g, '')
+    const keys = Array.from(root.querySelectorAll('kbd'), (node) => node.textContent ?? '')
+    return keys.reduce((text, key) => text.replace(key, ''), [root.textContent, ...attributes].join(' ')).replace(/GS-\d+/g, '')
   }
 
   it('renders the list and the open book without any English', async () => {

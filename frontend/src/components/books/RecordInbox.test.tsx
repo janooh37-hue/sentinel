@@ -145,7 +145,7 @@ describe('Arabic recipient surfaces and circulation', () => {
     expect(panel).toHaveTextContent('خالد المرسل')
     expect(panel).not.toHaveTextContent('Mariam Recipient')
     expect(panel).not.toHaveTextContent('Khalid Sender')
-    expect(panel).toHaveTextContent('تم الإنجاز في')
+    expect(panel).toHaveTextContent('أُنجز في')
     const localDoneAt = new Intl.DateTimeFormat(i18n.language, {
       year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit',
     }).format(parseUtcMs(recipient.done_at!))
