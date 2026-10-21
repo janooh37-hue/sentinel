@@ -76,15 +76,19 @@ function scopeOf(book: BookRead): Scope {
   return inbox.archived_at ? 'archived' : inbox.done_at ? 'done' : 'incoming'
 }
 
-/** A labelled fact on a row's meta line: muted label, readable value. */
-function Meta({ label, title, children }: { label: string; title?: string; children: ReactNode }): React.JSX.Element {
+/** A labelled fact: the label shows on stacked (mobile) rows; from lg the column header names it. */
+function Meta({ label, title, className, children }: { label: string; title?: string; className?: string; children: ReactNode }): React.JSX.Element {
   return (
-    <span className="inline-flex min-w-0 max-w-full items-baseline gap-1" title={title}>
-      <span className="shrink-0">{label}</span>
+    <span className={cn('inline-flex min-w-0 max-w-full items-baseline gap-1', className)} title={title}>
+      <span className="shrink-0 lg:sr-only">{label}</span>
       <bdi className="min-w-0 truncate text-foreground">{children}</bdi>
     </span>
   )
 }
+
+// One template for the header and every row so columns align from lg up; below lg rows stack.
+// purpose | ref | subject | from | to | signatory | level | status | date
+const DESK_GRID = 'lg:grid-cols-[7rem_5.5rem_minmax(12rem,1fr)_minmax(6rem,10rem)_minmax(6rem,10rem)_minmax(6rem,10rem)_5rem_6rem_5.5rem]'
 
 function DeskLoading(): React.JSX.Element {
   return <div className="space-y-4 p-5" aria-busy="true"><Skeleton className="h-5 w-2/3" /><Skeleton className="h-5 w-full" /><Skeleton className="h-5 w-1/2" /></div>
@@ -297,13 +301,26 @@ export function BooksRoutingDesk(): React.JSX.Element {
               {query && <Button variant="outline" className="mt-4" onClick={() => setSearch('')}>{t('ledger.booksDesk.clearSearch')}</Button>}
             </div>
           ) : (
-            <ul className="divide-y divide-hairline" aria-label={searching ? t('ledger.booksDesk.searchLabel') : scopeLabel(scope)}>
-              {rows.map((book) => (
-                <li key={book.id}>
-                  <BookRow book={book} asSent={!searching && scope === 'outgoing'} showScope={searching} current={book.id === lastOpenedId} onOpen={() => bookPage.open(String(book.id))} />
-                </li>
-              ))}
-            </ul>
+            <>
+              <div aria-hidden className={cn('sticky top-0 z-10 hidden gap-x-4 border-b border-hairline bg-surface px-6 py-2 text-xs font-medium text-muted-foreground lg:grid', DESK_GRID)}>
+                <span>{t('books.send.purpose')}</span>
+                <span>{t('ledger.booksDesk.columns.ref')}</span>
+                <span>{t('ledger.booksDesk.columns.subject')}</span>
+                <span>{t(!searching && scope === 'outgoing' ? 'ledger.booksDesk.columns.createdBy' : 'ledger.booksDesk.from')}</span>
+                <span>{t('ledger.booksDesk.to')}</span>
+                <span>{t('ledger.booksDesk.signer')}</span>
+                <span>{t('ledger.booksDesk.confidentiality')}</span>
+                <span>{t('ledger.booksDesk.columns.state')}</span>
+                <span className="text-end">{t('ledger.booksDesk.sent')}</span>
+              </div>
+              <ul className="divide-y divide-hairline" aria-label={searching ? t('ledger.booksDesk.searchLabel') : scopeLabel(scope)}>
+                {rows.map((book) => (
+                  <li key={book.id}>
+                    <BookRow book={book} asSent={!searching && scope === 'outgoing'} showScope={searching} current={book.id === lastOpenedId} onOpen={() => bookPage.open(String(book.id))} />
+                  </li>
+                ))}
+              </ul>
+            </>
           )}
         </div>
         {(offset > 0 || (list.data?.total ?? 0) > PAGE_SIZE) && (
@@ -341,10 +358,9 @@ export function BooksRoutingDesk(): React.JSX.Element {
 }
 
 /**
- * One book on the desk: enough to decide before opening it. Line 1 is what it
- * is (subject, papers, urgency); the routing note follows; the meta line says
- * where it came from, who it went to and whose signature it carries. The end
- * column is when, plus my state (received) or the recipients' progress (sent).
+ * One book on the desk: enough to decide before opening it. From lg it is a
+ * table row under the column header; below lg it stacks: purpose, then
+ * subject + note, then a labelled meta line, with date and status at the end.
  */
 function BookRow({ book, asSent, showScope, current, onOpen }: {
   book: BookRead
@@ -360,12 +376,12 @@ function BookRow({ book, asSent, showScope, current, onOpen }: {
   const inbox = asSent ? null : book.my_inbox
   const place = scopeOf(book)
   const recipients = book.recipients ?? []
-  // Received: my own row. Sent: the rows I sent (other forwards are not my send).
+  // Received: everyone it went to. Sent: the rows I sent (other forwards are not my send).
   const mine = inbox ? [] : recipients.filter((row) => row.sent_by_user_id === me)
+  const toRows: BookRecipientRead[] = inbox ? recipients : mine
   const purpose: SendPurpose | undefined = inbox?.purpose ?? mine[0]?.purpose
   const note = inbox ? inbox.note : mine.find((row) => row.note)?.note
   const sentAt = inbox?.sent_at ?? mine.at(-1)?.created_at ?? book.created_at
-  const toRows: BookRecipientRead[] = inbox ? (recipients.length > 1 ? recipients : []) : mine
   const toNames = toRows.map((row) => row.user_id === me ? t('ledger.booksDesk.you') : name(row.user_name, row.user_name_ar))
   const listSep = i18n.language.startsWith('ar') ? '، ' : ', '
   const papers = paperCountOf(book, { inmateReporter: false })
@@ -373,6 +389,8 @@ function BookRow({ book, asSent, showScope, current, onOpen }: {
   const signer = book.signer_name || book.signer_name_ar ? name(book.signer_name, book.signer_name_ar) : null
   const opened = mine.filter((row) => row.read_at).length
   const done = mine.filter((row) => row.done_at).length
+  // lg: every cell pins to its header column on row 1 (the meta wrapper dissolves via lg:contents).
+  const cell = 'lg:row-start-1 lg:text-sm'
   return (
     <button
       type="button"
@@ -380,13 +398,16 @@ function BookRow({ book, asSent, showScope, current, onOpen }: {
       aria-current={current ? 'true' : undefined}
       onClick={onOpen}
       className={cn(
-        // Mobile: purpose above the subject, date column beside both. lg: purpose gets its own scanning column.
-        'grid w-full grid-cols-[minmax(0,1fr)_auto] items-start gap-x-4 gap-y-1 px-4 py-3 text-start text-sm transition-colors hover:bg-surface-tinted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring lg:grid-cols-[7rem_minmax(0,1fr)_auto] lg:px-6',
+        'grid w-full grid-cols-[minmax(0,1fr)_auto] items-start gap-x-4 gap-y-1 px-4 py-3 text-start text-sm transition-colors hover:bg-surface-tinted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring lg:px-6',
+        DESK_GRID,
         current && 'bg-primary-soft hover:bg-primary-soft',
       )}
     >
-      <span className="col-start-1 row-start-1 empty:hidden lg:pt-px lg:empty:block">{purpose && <PurposeMark purpose={purpose} />}</span>
-      <span className="col-start-1 row-start-2 min-w-0 lg:col-start-2 lg:row-start-1">
+      <span className="col-start-1 row-start-1 flex flex-col items-start gap-1 empty:hidden lg:col-start-1 lg:empty:block">
+        {purpose && <PurposeMark purpose={purpose} />}
+        {showScope && <span className="inline-flex items-center gap-1 text-xs text-muted-foreground"><ScopeIcon scope={place} className="h-3.5 w-3.5" />{t(`ledger.booksDesk.${place}`)}</span>}
+      </span>
+      <span className="col-start-1 row-start-2 min-w-0 lg:col-start-3 lg:row-start-1">
         <span className="flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-1">
           <span dir="auto" className={cn('min-w-0 break-words', inbox && !inbox.read_at ? 'font-semibold' : 'font-medium')}>{book.subject || t('ledger.booksDesk.untitled')}</span>
           {papers > 1 && <PaperCount count={papers} />}
@@ -396,6 +417,7 @@ function BookRow({ book, asSent, showScope, current, onOpen }: {
             </span>
           )}
         </span>
+        {category && <bdi className="mt-0.5 block truncate text-xs text-muted-foreground">{category}</bdi>}
         {note && (
           <span className="mt-1 flex min-w-0 items-start gap-1.5 text-muted-foreground">
             <MessageSquareText className="mt-0.5 h-3.5 w-3.5 shrink-0 rtl:-scale-x-100" strokeWidth={1.8} aria-hidden />
@@ -403,25 +425,24 @@ function BookRow({ book, asSent, showScope, current, onOpen }: {
             <bdi className="line-clamp-2 min-w-0 break-words">{note}</bdi>
           </span>
         )}
-        <span className="mt-1.5 flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
-          {showScope && <span className="inline-flex items-center gap-1 font-medium text-foreground"><ScopeIcon scope={place} className="h-3.5 w-3.5" />{t(`ledger.booksDesk.${place}`)}</span>}
-          <span title={book.ref_number}><span className="sr-only">{t('ledger.booksDesk.columns.ref')}: </span><bdi dir="ltr" className="font-mono tabular-nums">{book.ref_number}</bdi></span>
-          {category && <bdi className="min-w-0 truncate">{category}</bdi>}
-          {inbox
-            ? <Meta label={t('ledger.booksDesk.from')}>{name(inbox.sent_by_name, inbox.sent_by_name_ar)}</Meta>
-            : !toRows.length && <Meta label={t('ledger.booksDesk.columns.createdBy')}>{name(book.created_by_name, book.created_by_name_ar)}</Meta>}
-          {toNames.length > 0 && (
-            <Meta label={t('ledger.booksDesk.to')} title={toNames.join(listSep)}>
-              {toNames.slice(0, 2).join(listSep)}
-              {toNames.length > 2 && <bdi dir="ltr" className="ms-1 text-muted-foreground">{t('ledger.booksDesk.moreNames', { count: toNames.length - 2 })}</bdi>}
-            </Meta>
-          )}
-          {signer && <Meta label={t('ledger.booksDesk.signer')}>{signer}</Meta>}
-          <ConfidentialityMark level={book.confidentiality} />
-        </span>
       </span>
-      <span className="col-start-2 row-span-2 row-start-1 flex flex-col items-end gap-1.5 text-xs text-muted-foreground lg:col-start-3 lg:row-span-1">
-        <span><span className="sr-only">{t(inbox || mine.length ? 'ledger.booksDesk.sent' : 'ledger.booksDesk.created')}: </span><BookDate value={sentAt} /></span>
+      <span className="col-start-1 row-start-3 mt-0.5 flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground lg:contents">
+        <span title={book.ref_number} className={cn('min-w-0 truncate lg:col-start-2 lg:text-xs', 'lg:row-start-1')}>
+          <span className="sr-only">{t('ledger.booksDesk.columns.ref')}: </span><bdi dir="ltr" className="font-mono tabular-nums">{book.ref_number}</bdi>
+        </span>
+        {inbox
+          ? <Meta label={t('ledger.booksDesk.from')} className={cn(cell, 'lg:col-start-4')}>{name(inbox.sent_by_name, inbox.sent_by_name_ar)}</Meta>
+          : <Meta label={t('ledger.booksDesk.columns.createdBy')} className={cn(cell, 'lg:col-start-4')}>{name(book.created_by_name, book.created_by_name_ar)}</Meta>}
+        {toNames.length > 0 && (
+          <Meta label={t('ledger.booksDesk.to')} title={toNames.join(listSep)} className={cn(cell, 'lg:col-start-5')}>
+            {toNames.slice(0, 2).join(listSep)}
+            {toNames.length > 2 && <bdi dir="ltr" className="ms-1 text-muted-foreground">{t('ledger.booksDesk.moreNames', { count: toNames.length - 2 })}</bdi>}
+          </Meta>
+        )}
+        {signer && <Meta label={t('ledger.booksDesk.signer')} title={signer} className={cn(cell, 'lg:col-start-6')}>{signer}</Meta>}
+        <span className={cn('empty:hidden lg:col-start-7 lg:row-start-1 lg:empty:block')}><ConfidentialityMark level={book.confidentiality} /></span>
+      </span>
+      <span className={cn('col-start-2 row-start-2 flex justify-end text-xs text-muted-foreground lg:col-start-8 lg:justify-start', cell)}>
         {inbox ? <InboxState inbox={inbox} /> : mine.length > 0 && (
           <span className="inline-flex items-center gap-3 font-mono tabular-nums">
             <span className="inline-flex items-center gap-1" title={t('ledger.booksDesk.openedOf', { count: opened, total: mine.length })}>
@@ -434,6 +455,9 @@ function BookRow({ book, asSent, showScope, current, onOpen }: {
             </span>
           </span>
         )}
+      </span>
+      <span className="col-start-2 row-start-1 text-end text-xs text-muted-foreground lg:col-start-9 lg:row-start-1">
+        <span className="sr-only">{t(inbox || mine.length ? 'ledger.booksDesk.sent' : 'ledger.booksDesk.created')}: </span><BookDate value={sentAt} />
       </span>
     </button>
   )

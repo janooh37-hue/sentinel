@@ -2801,7 +2801,7 @@
       "collapse": "Collapse",
       "noDocument": "No document to preview",
       "noDocumentHint": "Use Open in Records to finish the Word draft or add a PDF.",
-      "forward": "Forward",
+      "forward": "Send",
       "from": "From",
       "sent": "Sent",
       "opened": "Opened",
@@ -2825,7 +2825,7 @@
       "emptyHint": {
         "incoming": "Books sent to you will appear here. Check Outgoing for books you have sent.",
         "done": "Use Mark as done on an incoming book to move it here. Undo done returns it to Incoming.",
-        "outgoing": "Open a book and use Forward to send it to a colleague.",
+        "outgoing": "Open a book and use Send to route it to a colleague.",
         "archived": "Use Archive to move a received book here. Unarchive returns it to Incoming or Done."
       },
       "searchLabel": "Search books",
