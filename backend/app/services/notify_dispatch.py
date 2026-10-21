@@ -358,11 +358,11 @@ def book_event(db: Session, book: Book) -> tuple[str, int] | None:
                 if doc.violation_id is not None:
                     return nf.EVENT_VIOLATION, doc.violation_id
             elif doc.leave_id is not None:
-                if route == "duty_resumption":
-                    return nf.EVENT_DUTY_RESUMPTION, doc.leave_id
                 leave = db.get(Leave, doc.leave_id)
                 if leave is None or leave.employee_id is None or leave.deleted_at is not None:
                     return None
+                if route == "duty_resumption":
+                    return nf.EVENT_DUTY_RESUMPTION, leave.id
                 event = _leave_status_event(leave)
                 return (event, leave.id) if event is not None else None
     event = nf.TEMPLATE_EVENTS.get(tpl)

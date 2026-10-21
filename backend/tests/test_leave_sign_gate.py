@@ -1107,9 +1107,16 @@ def test_plain_attachment_does_not_send_a_held_approval_message(gate_env, monkey
     env.send.assert_not_called()
 
 
-def test_deleted_annual_leave_gets_no_message_on_signing(gate_env):
+@pytest.mark.parametrize(
+    ("template", "fields"),
+    [
+        ("Leave Application Form", {"leave_type": "Annual Leave", "total_days": "2"}),
+        ("Duty Resumption Form", {"resumption_date": "22/10/2026"}),
+    ],
+)
+def test_deleted_leave_gets_no_message_on_signing(gate_env, template, fields):
     env = gate_env
-    book, leave = _application(env, "Annual Leave")
+    book, leave = generate(env, template, fields=fields)
     leave_service.soft_delete_leave(env.db, leave.id)
     _sign(env, book)
     assert book.approval_state == "approved"
