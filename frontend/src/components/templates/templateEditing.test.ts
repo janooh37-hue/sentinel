@@ -33,8 +33,28 @@ describe('templateErrorMessage', () => {
     )
   })
 
+  it.each([
+    ['en', ['body', 'intro'], 2000, 'Template text must be {{limit}} characters or fewer.'],
+    ['en', ['body', 'ar'], 1000, 'Template text must be {{limit}} characters or fewer.'],
+    ['ar', ['body', 'intro'], 2000, 'يجب ألا يتجاوز نص القالب {{limit}} حرفًا.'],
+    ['ar', ['body', 'en'], 1000, 'يجب ألا يتجاوز نص القالب {{limit}} حرفًا.'],
+  ] as const)('localizes a too-long %s template field %j with limit %i', async (language, loc, limit, message) => {
+    i18n.addResourceBundle('ar', 'translation', ar, true, true)
+    await i18n.changeLanguage(language)
+    const error = new ApiError(422, 'VALIDATION_ERROR', 'raw server validation', {
+      errors: [
+        { type: 'missing', loc: ['body', 'other'] },
+        { type: 'string_too_long', loc, ctx: { max_length: limit } },
+      ],
+    })
+    expect(templateErrorMessage(error, t)).toBe(message.replace('{{limit}}', String(limit)))
+  })
+
   it('never shows raw server text for other failures', () => {
     expect(templateErrorMessage(new ApiError(502, 'HTTP_502', 'Bad Gateway'), t)).toBe('Something went wrong')
     expect(templateErrorMessage(new TypeError('Failed to fetch'), t)).toBe('Something went wrong')
+    expect(templateErrorMessage(new ApiError(422, 'VALIDATION_ERROR', 'raw validation', {
+      errors: [{ type: 'missing', loc: ['body', 'ar'] }],
+    }), t)).toBe('Something went wrong')
   })
 })

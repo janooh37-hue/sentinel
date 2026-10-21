@@ -116,11 +116,18 @@ function absenceDraftValues(rows: AbsenceEmailRow[]): Record<string, string> {
   }
 }
 
+const ABSENCE_GREETING = 'السلام عليكم ورحمة الله وبركاته'
+
+function defaultAbsenceIntro(rows: AbsenceEmailRow[], includeGreeting = true): string {
+  const paragraph = rows[0].case === 'returned'
+    ? returnedParagraph(rows) : rows.length > 1 ? ABSENT_PLURAL : ABSENT_SINGULAR
+  return (includeGreeting ? p(ABSENCE_GREETING) : '') + p(paragraph)
+}
+
 export function defaultAbsenceDraftText(rows: AbsenceEmailRow[]) {
   return {
     subject: ABSENCE_EMAIL_SUBJECT,
-    intro: rows.length ? draftPlainText(rows[0].case === 'returned'
-      ? returnedParagraph(rows) : rows.length > 1 ? ABSENT_PLURAL : ABSENT_SINGULAR) : '',
+    intro: rows.length ? draftPlainText(defaultAbsenceIntro(rows)) : '',
     closing: draftPlainText(ABSENCE_CLOSING),
   }
 }
@@ -133,24 +140,21 @@ export function buildAbsenceEmail(
 
   const absent = rows.filter((row) => row.case === 'absent')
   const returned = rows.filter((row) => row.case === 'returned')
-  const sections = [p('السلام عليكم ورحمة الله وبركاته')]
+  const sections: string[] = []
   const firstOverride = opts.overrides?.[`absence:${rows[0].case}`]
   const subject = firstOverride?.subject
     ? substituteDraftText(firstOverride.subject, absenceDraftValues(rows)) : ABSENCE_EMAIL_SUBJECT
 
-  if (absent.length > 0) {
-    const intro = opts.overrides?.['absence:absent']?.intro ?? ''
+  for (const group of [absent, returned]) {
+    if (!group.length) continue
+    let intro = opts.overrides?.[`absence:${group[0].case}`]?.intro ?? ''
+    if (sections.length && intro.startsWith(ABSENCE_GREETING)) {
+      intro = intro.slice(ABSENCE_GREETING.length).trimStart()
+    }
     sections.push(
-      p(intro ? draftTextHtml(substituteDraftText(intro, absenceDraftValues(absent)))
-        : absent.length > 1 ? ABSENT_PLURAL : ABSENT_SINGULAR),
-      buildAbsenceTableHtml(absent),
-    )
-  }
-  if (returned.length > 0) {
-    const intro = opts.overrides?.['absence:returned']?.intro ?? ''
-    sections.push(
-      p(intro ? draftTextHtml(substituteDraftText(intro, absenceDraftValues(returned))) : returnedParagraph(returned)),
-      buildAbsenceTableHtml(returned),
+      intro ? p(draftTextHtml(substituteDraftText(intro, absenceDraftValues(group))))
+        : defaultAbsenceIntro(group, sections.length === 0),
+      buildAbsenceTableHtml(group),
     )
   }
   if (opts.violationAttached) {

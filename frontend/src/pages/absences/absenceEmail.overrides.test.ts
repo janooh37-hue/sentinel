@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { ABSENCE_EMAIL_SUBJECT, buildAbsenceEmail, type AbsenceEmailRow } from './absenceEmail'
+import { ABSENCE_EMAIL_SUBJECT, buildAbsenceEmail, defaultAbsenceDraftText, type AbsenceEmailRow } from './absenceEmail'
 
 const row: AbsenceEmailRow = {
   employee_id: 'G1001', employee_name_en: 'Ahmed', employee_name_ar: 'أحمد',
@@ -14,6 +14,32 @@ const overrides = {
 }
 
 describe('absence draft overrides', () => {
+  it('replaces the editable greeting along with the introduction', () => {
+    const greeting = 'السلام عليكم ورحمة الله وبركاته'
+    expect(defaultAbsenceDraftText([row]).intro).toContain(greeting)
+    const result = buildAbsenceEmail([row], { violationAttached: false, overrides })
+    expect(result.bodyHtml).not.toContain(greeting)
+    expect(result.bodyHtml).toContain('Absent أحمد')
+  })
+
+  it('includes the greeting once in mixed batches even when both editable intros are supplied', () => {
+    const greeting = 'السلام عليكم ورحمة الله وبركاته'
+    const returned = { ...row, employee_id: 'G1002', case: 'returned' as const }
+    for (const rows of [[row, returned], [returned, row]]) {
+      expect(buildAbsenceEmail(rows, { violationAttached: false }).bodyHtml.split(greeting)).toHaveLength(2)
+      const result = buildAbsenceEmail(rows, {
+        violationAttached: false,
+        overrides: {
+          'absence:absent': { intro: `${greeting}\nEdited absent` },
+          'absence:returned': { intro: `${greeting}\nEdited returned` },
+        },
+      })
+      expect(result.bodyHtml.split(greeting)).toHaveLength(2)
+      expect(result.bodyHtml).toContain('Edited absent')
+      expect(result.bodyHtml).toContain('Edited returned')
+    }
+  })
+
   it('applies the absent introduction, subject and closing without changing the table or attachment notice', () => {
     const result = buildAbsenceEmail([row], { violationAttached: true, overrides })
     expect(result.subject).toBe('Absent أحمد')
@@ -48,7 +74,6 @@ describe('absence draft overrides', () => {
     const result = buildAbsenceEmail([{ ...row, employee_name_ar: '<img>' }], opts)
     expect(result.subject).toBe(ABSENCE_EMAIL_SUBJECT)
     expect(result.bodyHtml).toContain('&lt;b&gt;&lt;img&gt;&lt;/b&gt;<br>{unknown} {name} {employee_id} {start} {end} {days} {date}')
-    expect(result.bodyHtml).toContain('وأقبلوا فائق الإحترام والتقدير')
     expect(result.bodyHtml).not.toContain('<img>')
     expect(buildAbsenceEmail([row], { violationAttached: false, overrides: { 'absence:absent': {
       subject: '', intro: null, closing: null,

@@ -6040,6 +6040,7 @@
         "UNKNOWN_TOKEN": "Unknown token. Use only the listed variables.",
         "HTML_NOT_ALLOWED": "HTML is not allowed. Enter plain text only.",
         "UNKNOWN_KEY": "This email draft template is not available.",
+        "tooLong": "Template text must be {{limit}} characters or fewer.",
         "unknownIn": "{{language}}: {{names}}.",
         "unknownNames": "Not recognised: {{names}}."
       }
@@ -6062,6 +6063,17 @@
         "scheduled": "Sent on schedule",
         "manual": "Sent manually"
       }
+    },
+    "draftTokens": {
+      "ref": "Reference",
+      "date": "Record date",
+      "names": "Employee names",
+      "count": "Employee count",
+      "detail": "Details",
+      "bank": "Bank names",
+      "start_date": "Start date",
+      "end_date": "End date",
+      "return_date": "Return date"
     },
     "drafts": {
       "general": "General Book",

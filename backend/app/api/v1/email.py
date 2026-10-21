@@ -36,7 +36,7 @@ from app.schemas.email import (
     EmailSyncStatus,
     HandoffAttachment,
 )
-from app.schemas.email_draft_template import EmailDraftTemplateParts, EmailDraftTemplatesRead
+from app.schemas.email_draft_template import EmailDraftTemplatePartsWrite, EmailDraftTemplatesRead
 from app.services import email_draft_template_service, email_service, scheduler_service
 
 log = logging.getLogger(__name__)
@@ -61,7 +61,7 @@ def get_draft_templates(
 )
 def put_draft_template(
     key: str,
-    payload: EmailDraftTemplateParts,
+    payload: EmailDraftTemplatePartsWrite,
     db: Annotated[Session, Depends(get_db)],
     current_user: Annotated[User, Depends(require_capability("messages.templates"))],
 ) -> EmailDraftTemplatesRead:

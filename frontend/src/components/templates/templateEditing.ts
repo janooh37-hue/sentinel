@@ -59,6 +59,12 @@ function tokenList(names: unknown): string {
  *  Lists the offending names: UNKNOWN_PLACEHOLDER details are `{ar: [...], en: [...]}`,
  *  UNKNOWN_TOKEN details are `{tokens: [...]}`. */
 export function templateErrorMessage(error: unknown, t: TFunction): string {
+  if (error instanceof ApiError && error.code === 'VALIDATION_ERROR' && Array.isArray(error.details.errors)) {
+    const tooLong = error.details.errors.find((detail) => detail?.type === 'string_too_long')
+    if (typeof tooLong?.ctx?.max_length === 'number') {
+      return t('msgTemplates.editor.errors.tooLong', { limit: tooLong.ctx.max_length })
+    }
+  }
   if (!(error instanceof ApiError) || !TEMPLATE_ERROR_CODES.some((code) => code === error.code)) {
     return t('common.errorToast')
   }

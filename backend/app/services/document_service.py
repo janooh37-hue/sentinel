@@ -381,6 +381,21 @@ _MANAGER_SIGN_DATE_FORMS: frozenset[str] = frozenset(
 )
 
 
+def inherited_notify_employee(book: Book) -> bool:
+    """Revision saves and previews inherit the newest generated snapshot's choice.
+
+    Missing flags default on; records without any snapshot never notified revisions.
+    """
+    return next(
+        (
+            snapshot.get("notify_employee") is not False
+            for version in reversed(book.versions)
+            if isinstance(snapshot := (version.fields or {}).get(_SIGNING_KEY), dict)
+        ),
+        False,
+    )
+
+
 def _submitter_signs_employee_cell(
     template_id: str,
     submitter_id: int | None,
@@ -1975,14 +1990,7 @@ def generate_document(
         if revise_book is not None:
             # The revise screen hides the notify switch, so the request flag carries
             # no choice: keep the newest snapshot's (none: revisions never notified).
-            notify_employee = next(
-                (
-                    snapshot.get("notify_employee") is not False
-                    for v in reversed(revise_book.versions)
-                    if isinstance(snapshot := (v.fields or {}).get(_SIGNING_KEY), dict)
-                ),
-                False,
-            )
+            notify_employee = inherited_notify_employee(revise_book)
         fields[_SIGNING_KEY] = {
             "issued": datetime.now().strftime("%d/%m/%Y"),
             "employee": bool(embed_signature.get("employee")),

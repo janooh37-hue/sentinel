@@ -33,11 +33,25 @@ describe('draft template rendering', () => {
     const unclassified = { ...item, classificationCode: '6/1' }
     expect(buildBasketSubject([unclassified], overrides)).toBe('generic REF-1')
     expect(buildBasketBodyHtml([unclassified], overrides)).toContain('generic closing')
-    expect(buildBasketSubject([unclassified], {})).toBe('General Book')
+    expect(buildBasketSubject([unclassified], {})).toBe(buildBasketSubject([unclassified]))
     expect(buildBasketBodyHtml([unclassified], {})).toBe(buildBasketBodyHtml([unclassified]))
-    expect(buildBasketSubject([item], { 'classification:5/1': { subject: null } })).toBe('General Book')
+    expect(buildBasketSubject([item], { 'classification:5/1': { subject: null } })).toBe(buildBasketSubject([item]))
     expect(buildBasketBodyHtml([item], { 'classification:5/1': { intro: null, closing: '' } }))
       .toBe(buildBasketBodyHtml([item]))
+  })
+
+  it('resolves Security Permit classification and General Book overrides without changing defaults', () => {
+    const permit = { ...item, formKind: 'Security Permit' }
+    const generic = { subject: 'generic {ref}', intro: 'generic introduction', closing: 'generic closing' }
+    const classified = { subject: 'permit {ref}', intro: 'permit introduction', closing: 'permit closing' }
+    const overrides = { 'General Book': generic, 'classification:5/1': classified }
+    expect(buildBasketSubject([permit], overrides)).toBe('permit REF-1')
+    expect(buildBasketBodyHtml([permit], overrides)).toContain('permit introduction')
+    expect(buildBasketBodyHtml([permit], overrides)).toContain('permit closing')
+    expect(buildBasketSubject([permit], { 'General Book': generic })).toBe('generic REF-1')
+    expect(buildBasketBodyHtml([permit], { 'General Book': generic })).toContain('generic introduction')
+    expect(buildBasketBodyHtml([permit], { 'General Book': generic })).toContain('generic closing')
+    expect(buildBasketPrefill([permit], [], {})).toEqual(buildBasketPrefill([permit], []))
   })
 
   it('uses the generic override for batches with differing classifications', () => {

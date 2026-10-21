@@ -73,7 +73,7 @@ function DraftEditor({ draftKey, label, data }: { draftKey: string; label: strin
           </div>
         ))}
       </div>
-      {canEdit && <TemplateTokens disabled={pending} tokens={draftTokensFor(data.tokens, draftKey).map((name) => ({ name, label: `{${name}}` }))} onInsert={insertion.insert} />}
+      {canEdit && <TemplateTokens disabled={pending} tokens={draftTokensFor(data.tokens, draftKey).map((name) => ({ name, label: t(`msgTemplates.draftTokens.${name}`) }))} onInsert={insertion.insert} />}
       <div className="space-y-2">
         <h4 className="text-sm font-semibold">{t('msgTemplates.editor.preview')}</h4>
         <p dir="rtl" lang="ar" className="break-words text-sm font-medium">{normalizeDigits(preview.subject)}</p>

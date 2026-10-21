@@ -53,6 +53,11 @@ class MessageText(BaseModel):
     en: str
 
 
+class MessageTextWrite(MessageText):
+    ar: str = Field(max_length=1000)
+    en: str = Field(max_length=1000)
+
+
 class MessageSegments(BaseModel):
     ar: int
     en: int

@@ -9764,6 +9764,15 @@ export interface components {
             /** Closing */
             closing?: string | null;
         };
+        /** EmailDraftTemplatePartsWrite */
+        EmailDraftTemplatePartsWrite: {
+            /** Subject */
+            subject?: string | null;
+            /** Intro */
+            intro?: string | null;
+            /** Closing */
+            closing?: string | null;
+        };
         /** EmailDraftTemplatesRead */
         EmailDraftTemplatesRead: {
             /** Overrides */
@@ -11912,6 +11921,13 @@ export interface components {
         };
         /** MessageText */
         MessageText: {
+            /** Ar */
+            ar: string;
+            /** En */
+            en: string;
+        };
+        /** MessageTextWrite */
+        MessageTextWrite: {
             /** Ar */
             ar: string;
             /** En */
@@ -25383,7 +25399,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["EmailDraftTemplateParts"];
+                "application/json": components["schemas"]["EmailDraftTemplatePartsWrite"];
             };
         };
         responses: {
@@ -26412,7 +26428,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["MessageText"];
+                "application/json": components["schemas"]["MessageTextWrite"];
             };
         };
         responses: {
@@ -26482,7 +26498,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["MessageText"];
+                "application/json": components["schemas"]["MessageTextWrite"];
             };
         };
         responses: {

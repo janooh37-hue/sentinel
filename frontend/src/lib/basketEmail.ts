@@ -58,7 +58,7 @@ function basketDraftValues(items: EmailBasketItem[]): Record<string, string> {
 function basketOverride(items: EmailBasketItem[], overrides?: DraftOverrides): DraftTemplateFields {
   if (!overrides || !items.length) return {}
   const first = items[0]
-  const key = basketKey(first)
+  const key = first.formKind === 'Security Permit' ? 'General Book' : basketKey(first)
   if (key !== 'General Book') return overrides[key] ?? {}
   if (items.every(isTransfer)) return overrides['General Book:transfer'] ?? {}
   const code = first.classificationCode

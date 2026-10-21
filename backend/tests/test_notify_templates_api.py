@@ -64,9 +64,19 @@ def test_authenticated_reads_and_capability_write_gate(api_db, template_client):
         ({"ar": " \n", "en": "Hello"}, "EMPTY_TEMPLATE", {}),
         ({"ar": "مرحبا", "en": "\t"}, "EMPTY_TEMPLATE", {}),
         (
-            {"ar": "{missing}", "en": "{name.__class__} {oops} {oops}"},
+            {"ar": "{missing}", "en": "{name.__class__} {0} {{x}} {x!r} { x } {oops} {oops}"},
             "UNKNOWN_PLACEHOLDER",
-            {"ar": ["missing"], "en": ["name.__class__", "oops"]},
+            {"ar": ["missing"], "en": [" x ", "0", "name.__class__", "oops", "x", "x!r", "{", "}"]},
+        ),
+        (
+            {"ar": "{missing}", "en": "Hello {name}"},
+            "UNKNOWN_PLACEHOLDER",
+            {"ar": ["missing"], "en": []},
+        ),
+        (
+            {"ar": "مرحبا {name}", "en": "{missing}"},
+            "UNKNOWN_PLACEHOLDER",
+            {"ar": [], "en": ["missing"]},
         ),
     ],
 )
@@ -120,6 +130,25 @@ def test_override_audit_next_send_render_and_reset(api_db, template_client):
     assert all(row.actor == user.email and row.entity_id == "leave_requested" for row in audits)
 
 
+@pytest.mark.parametrize("language", ["ar", "en"])
+def test_message_length_limit(api_db, template_client, language):
+    client, user = template_client
+    grant(api_db, user)
+    draft = {"ar": "مرحبا", "en": "Hello", language: "ن" * 1001}
+    response = client.put("/api/v1/notify/templates/leave_requested", json=draft)
+    assert response.status_code == 422
+    error = response.json()["error"]
+    assert error["code"] == "VALIDATION_ERROR"
+    assert [
+        (item["type"], item["loc"], item["ctx"]["max_length"])
+        for item in error["details"]["errors"]
+    ] == [("string_too_long", ["body", language], 1000)]
+    assert api_db.get(AppSetting, "msgtpl.leave_requested") is None
+    assert api_db.scalar(select(AuditLog).where(AuditLog.entity_type == "message_template")) is None
+    draft[language] = "ن" * 1000
+    assert client.put("/api/v1/notify/templates/leave_requested", json=draft).status_code == 200
+
+
 def test_sample_render_preserves_unknown_tokens(template_client):
     client, _ = template_client
     response = client.post(
@@ -134,6 +163,31 @@ def test_sample_render_preserves_unknown_tokens(template_client):
     }
     assert body["segments"]["ar"] > 0
     assert body["segments"]["en"] > 0
+
+
+def test_render_expansion_can_exceed_request_length_limit(template_client):
+    client, _ = template_client
+    template = "x" * 994 + "{name}"
+    response = client.post(
+        "/api/v1/notify/templates/violation/render",
+        json={"ar": template, "en": template},
+    )
+    assert response.status_code == 200
+    for language in ("ar", "en"):
+        expected = "x" * 994 + sms_templates.sample_values("violation", language)["name"]
+        assert len(expected) > 1000
+        assert response.json()["text"][language] == expected
+
+
+def test_catalog_reads_legacy_oversized_override(api_db, template_client):
+    client, _ = template_client
+    override = {"ar": "ن" * 1001, "en": "x" * 1001}
+    api_db.add(AppSetting(key="msgtpl.violation", value=json.dumps(override)))
+    api_db.commit()
+    response = client.get("/api/v1/notify/templates")
+    assert response.status_code == 200
+    template = next(row for row in response.json() if row["event"] == "violation")
+    assert template["override"] == override
 
 
 def test_unknown_event_is_not_found(api_db, template_client):

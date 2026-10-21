@@ -11,6 +11,12 @@ class EmailDraftTemplateParts(BaseModel):
     closing: str | None = None
 
 
+class EmailDraftTemplatePartsWrite(EmailDraftTemplateParts):
+    subject: str | None = Field(default=None, max_length=2000)
+    intro: str | None = Field(default=None, max_length=2000)
+    closing: str | None = Field(default=None, max_length=2000)
+
+
 class EmailDraftTemplatesRead(BaseModel):
     overrides: dict[str, EmailDraftTemplateParts] = Field(default_factory=dict)
     tokens: dict[str, list[str]]

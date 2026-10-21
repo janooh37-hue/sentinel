@@ -15,13 +15,14 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, require_capability
+from app.api.v1.documents import _effective_document_service
 from app.config import get_settings
 from app.db.models import User
 from app.db.session import get_db
 from app.schemas.notify import (
     MessageRenderRead,
     MessageTemplateRead,
-    MessageText,
+    MessageTextWrite,
     NotifyMessageRead,
     NotifyPreviewRead,
     NotifyPreviewRequest,
@@ -30,7 +31,13 @@ from app.schemas.notify import (
     NotifyStatusItem,
     NotifyStatusResponse,
 )
-from app.services import message_template_service, notify_dispatch, sms_templates
+from app.services import (
+    book_service,
+    document_service,
+    message_template_service,
+    notify_dispatch,
+    sms_templates,
+)
 
 router = APIRouter(prefix="/notify", tags=["notify"])
 
@@ -97,7 +104,7 @@ def templates(
 @router.put("/templates/{event}", response_model=MessageTemplateRead)
 def update_template(
     event: str,
-    payload: MessageText,
+    payload: MessageTextWrite,
     db: Annotated[Session, Depends(get_db)],
     user: Annotated[User, Depends(require_capability("messages.templates"))],
 ) -> dict[str, Any]:
@@ -120,7 +127,7 @@ def reset_template(
 @router.post("/templates/{event}/render", response_model=MessageRenderRead)
 def render_template(
     event: str,
-    payload: MessageText,
+    payload: MessageTextWrite,
     _user: Annotated[User, Depends(get_current_user)],
 ) -> dict[str, Any]:
     return message_template_service.render_sample(event, payload)
@@ -130,8 +137,24 @@ def render_template(
 def preview(
     payload: NotifyPreviewRequest,
     db: Annotated[Session, Depends(get_db)],
-    _user: Annotated[User, Depends(get_current_user)],
+    user: Annotated[User, Depends(get_current_user)],
 ) -> dict[str, Any]:
+    if payload.employee_id is not None:
+        require_capability("documents.generate")(user=user, db=db)
+        require_capability("books.view")(user=user, db=db)
+        book_service.require_record_type_access(
+            db,
+            user,
+            category_id=document_service.record_category_for_template(payload.template_id),
+            service_id=_effective_document_service(payload.template_id),
+        )
+    if payload.revise_of_book_id is not None:
+        from app.db.models import Book
+
+        revise_book = db.get(Book, payload.revise_of_book_id)
+        if revise_book is not None and revise_book.deleted_at is not None:
+            revise_book = None
+        book_service.require_revise_access(db, user, revise_book)
     return message_template_service.preview(db, payload)
 
 

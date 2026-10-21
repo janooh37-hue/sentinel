@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.api.errors import ValidationFailedError
 from app.core import form_policy
-from app.db.models import Employee
+from app.db.models import Book, Employee
 from app.schemas.notify import MessageText, NotifyPreviewRequest
 from app.services import document_service, notify_dispatch, settings_service, sms_templates
 from app.services import notify_format as nf
@@ -171,11 +171,16 @@ def preview(db: Session, payload: NotifyPreviewRequest) -> dict[str, Any]:
     language = "ar" if (employee.msg_language or "ar") == "ar" else "en"
     timing = notify_dispatch.send_timing(payload.template_id)
     result = {"event": None, "language": language, "timing": timing, "text": None, "segments": None}
-    if (
-        payload.revise_of_book_id is not None
-        or payload.template_id not in nf.AUTO_NOTIFY_TEMPLATE_IDS
-    ):
+    if payload.template_id not in nf.AUTO_NOTIFY_TEMPLATE_IDS:
         return result
+    if payload.revise_of_book_id is not None:
+        if timing != "on_approval":
+            return result
+        revise_book = db.get(Book, payload.revise_of_book_id)
+        if revise_book is None or revise_book.deleted_at is not None:
+            raise HTTPException(status_code=404, detail="Book not found")
+        if not document_service.inherited_notify_employee(revise_book):
+            return result
     now = datetime.now()
     route = nf.SPECIAL_TEMPLATE_ROUTES.get(payload.template_id)
     record: Any

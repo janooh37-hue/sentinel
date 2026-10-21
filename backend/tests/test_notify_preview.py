@@ -1,14 +1,35 @@
-from datetime import datetime
+from datetime import date, datetime
 
 import pytest
 from fastapi.testclient import TestClient
+from PIL import Image
 from sqlalchemy import func, select
 
 from app.api.deps import get_current_user
-from app.db.models import Book, Document, Employee, Leave, OutboundMessage, User, Violation
+from app.config import Settings
+from app.db.models import (
+    Book,
+    BookCategory,
+    Document,
+    Employee,
+    Leave,
+    Manager,
+    OutboundMessage,
+    User,
+    Violation,
+)
 from app.db.session import get_db
 from app.main import create_app
-from app.services import message_template_service, sms_templates
+from app.services import (
+    artifact_service,
+    book_service,
+    document_service,
+    message_template_service,
+    notify_dispatch,
+    perm_service,
+    sms_client,
+    sms_templates,
+)
 
 
 @pytest.fixture()
@@ -17,7 +38,10 @@ def preview_client(api_db, monkeypatch):
     api_db.add_all(
         [user, Employee(id="P1", name_en="Preview Name", name_ar="اسم المعاينة", msg_language="en")]
     )
+    api_db.add_all([BookCategory(id=category, prefix=category) for category in ("HR", "GS", "NAT")])
     api_db.commit()
+    # Revision previews use the same explicit edit authority as revision saves.
+    perm_service.set_user_override(api_db, user.id, "books.edit", "grant")
     app = create_app()
     app.dependency_overrides[get_db] = lambda: api_db
     app.dependency_overrides[get_current_user] = lambda: user
@@ -150,7 +174,6 @@ def test_preview_uses_current_override(api_db, preview_client):
     [
         ("General Book", None, "on_approval"),
         ("Violation Form", 7, "on_save"),
-        ("HR Request Form", 7, "on_approval"),
     ],
 )
 def test_non_notifying_or_revision_has_no_message(preview_client, template, revision, timing):
@@ -164,6 +187,134 @@ def test_non_notifying_or_revision_has_no_message(preview_client, template, revi
         "text": None,
         "segments": None,
     }
+
+
+@pytest.mark.parametrize("language,decision", [("ar", "returned"), ("en", "rejected")])
+@pytest.mark.parametrize("notify_employee", [True, False, None])
+def test_revision_preview_matches_approval_send(
+    api_db, preview_client, monkeypatch, tmp_path, language, decision, notify_employee
+):
+    settings = Settings(
+        data_dir=tmp_path / "data",
+        templates_dir=document_service._TEMPLATES_DIR,
+        openwa_enabled=False,
+        sms_enabled=True,
+    )
+    for module in (document_service, artifact_service, book_service, notify_dispatch):
+        monkeypatch.setattr(module, "get_settings", lambda: settings)
+    monkeypatch.setattr(notify_dispatch, "_autosend_enabled", lambda _: True)
+    monkeypatch.setattr(
+        sms_client, "send", lambda phone, text: sms_client.SendResult(ok=True, message_id="m1")
+    )
+    clock = message_template_service.datetime
+    for module in (document_service, book_service, notify_dispatch):
+        monkeypatch.setattr(module, "datetime", clock)
+
+    class Today(date):
+        @classmethod
+        def today(cls):
+            return cls(2026, 10, 21)
+
+    monkeypatch.setattr(notify_dispatch, "date", Today)
+    employee = api_db.get(Employee, "P1")
+    employee.msg_language = language
+    employee.contact = "0501234567"
+    signer = User(email="signer@preview.test", password_hash="x", role="admin", status="active")
+    api_db.add(signer)
+    api_db.flush()
+    manager = Manager(name_en="Preview Manager", user_id=signer.id)
+    api_db.add(manager)
+    api_db.commit()
+    signature = tmp_path / "signature.png"
+    Image.new("RGBA", (100, 40), (0, 0, 0, 255)).save(signature)
+    monkeypatch.setattr(
+        book_service.user_signature_service, "resolve_signature", lambda _: signature
+    )
+    render_signed = document_service.render_signed_artifact
+    monkeypatch.setattr(
+        document_service,
+        "render_signed_artifact",
+        lambda *args, **kwargs: render_signed(*args, **kwargs, converter=lambda _: None),
+    )
+    template = "Employee Clearance Form"
+    fields = {"date": "21/10/2026"}
+    result = document_service.generate_document(
+        api_db,
+        employee_id=employee.id,
+        template_id=template,
+        fields=fields,
+        manager_id=manager.id,
+        current_user=signer,
+        converter=lambda _: None,
+        notify_employee=notify_employee is not False,
+    )
+    book = api_db.get_one(Book, result.book_id)
+    if notify_employee is None:
+        # Older snapshots without the flag inherit the default-on choice.
+        snapshot = dict(book.versions[-1].fields["_signing"])
+        snapshot.pop("notify_employee")
+        book.versions[-1].fields = {**book.versions[-1].fields, "_signing": snapshot}
+        api_db.commit()
+    book_service.submit_for_approval(
+        api_db,
+        book.id,
+        submitted_by_user_id=signer.id,
+        approver_user_id=signer.id,
+        priority="normal",
+        reviewer_user_ids=[],
+    )
+    book_service.decide_step(
+        api_db,
+        book.id,
+        user_id=signer.id,
+        version_id=book.versions[-1].id,
+        decision=decision,
+        note="Revise this paper",
+    )
+    assert book.approval_state == decision
+    assert api_db.scalar(select(func.count()).select_from(OutboundMessage)) == 0
+    response = preview_client.post(
+        "/api/v1/notify/preview",
+        json={
+            "template_id": template,
+            "employee_id": employee.id,
+            "fields": fields,
+            "revise_of_book_id": book.id,
+        },
+    )
+    assert response.status_code == 200
+    preview = response.json()
+    document_service.generate_document(
+        api_db,
+        employee_id=employee.id,
+        template_id=template,
+        fields=fields,
+        manager_id=manager.id,
+        current_user=signer,
+        converter=lambda _: None,
+        revise_of_book_id=book.id,
+        notify_employee=notify_employee is False,  # revision must ignore this request choice
+    )
+    book_service.submit_for_approval(
+        api_db,
+        book.id,
+        submitted_by_user_id=signer.id,
+        approver_user_id=signer.id,
+        priority="normal",
+        reviewer_user_ids=[],
+    )
+    book_service.sign_book(api_db, book.id, user_id=signer.id, version_id=book.versions[-1].id)
+    assert book.approval_state == "approved"
+    sent = api_db.scalar(select(OutboundMessage))
+    if notify_employee is False:
+        assert sent is None
+        assert preview["event"] is None and preview["text"] is None
+    else:
+        assert sent is not None and sent.status == "sent"
+        assert preview["event"] == sent.event_type
+        assert preview["language"] == language
+        assert preview["timing"] == "on_approval"
+        assert preview["text"][language] == sent.body
 
 
 def test_missing_employee_uses_sample_and_arabic(preview_client):
@@ -190,6 +341,87 @@ def test_preview_employee_language_rule(api_db, preview_client, language, expect
         "/api/v1/notify/preview", json={"template_id": "General Book", "employee_id": "P1"}
     )
     assert response.json()["language"] == expected
+
+
+@pytest.mark.parametrize(
+    "template,denied",
+    [
+        ("HR Request Form", "documents.generate"),
+        ("HR Request Form", "books.view"),
+        ("HR Request Form", "books.service.HR Request Form"),
+        ("Violation Form", "books.service.Violation Form"),
+        ("Leave Application Form", "books.service.Leave Application Form"),
+        ("HR Request Form", "books.category.HR"),
+    ],
+)
+def test_real_employee_preview_requires_save_screen_access(
+    api_db, preview_client, template, denied
+):
+    user = api_db.scalar(select(User).where(User.email == "preview@test.ae"))
+    payload = {"template_id": template, "employee_id": "P1"}
+    assert preview_client.post("/api/v1/notify/preview", json=payload).status_code == 200
+    perm_service.set_user_override(api_db, user.id, denied, "deny")
+    assert preview_client.post("/api/v1/notify/preview", json=payload).status_code == 403
+    # Authorization precedes the employee lookup, including nonexistent ids.
+    assert (
+        preview_client.post(
+            "/api/v1/notify/preview", json={**payload, "employee_id": "missing"}
+        ).status_code
+        == 403
+    )
+    assert (
+        preview_client.post(
+            "/api/v1/notify/preview", json={**payload, "employee_id": None}
+        ).status_code
+        == 200
+    )
+    perm_service.set_user_override(api_db, user.id, denied, None)
+    assert preview_client.post("/api/v1/notify/preview", json=payload).status_code == 200
+
+
+@pytest.mark.parametrize(
+    "denied",
+    [
+        "books.edit",
+        "books.view",
+        "books.category.HR",
+        "books.servicerecords.Employee Clearance Form",
+    ],
+)
+@pytest.mark.parametrize("template", ["HR Request Form", "Violation Form"])
+def test_sample_revision_preview_requires_source_record_access(
+    api_db, preview_client, denied, template
+):
+    from app.db.models import BookVersion
+
+    user = api_db.scalar(select(User).where(User.email == "preview@test.ae"))
+    book = Book(category_id="HR", ref_number="HR-8100", employee_id="P1")
+    book.versions.append(
+        BookVersion(
+            version_no=1,
+            template_id="Employee Clearance Form",
+            fields={"_signing": {"notify_employee": True}},
+        )
+    )
+    api_db.add(book)
+    api_db.commit()
+    # The source record, not the supplied preview template, determines access.
+    payload = {"template_id": template, "revise_of_book_id": book.id}
+    response = preview_client.post("/api/v1/notify/preview", json=payload)
+    assert response.status_code == 200
+    if template == "HR Request Form":
+        assert response.json()["event"] == "hr_request"
+        assert response.json()["text"]["ar"] and response.json()["text"]["en"]
+    previous = perm_service.get_user_overrides(api_db, user.id).get(denied)
+    perm_service.set_user_override(api_db, user.id, denied, "deny")
+    assert preview_client.post("/api/v1/notify/preview", json=payload).status_code == 403
+    # Only revision-less sample previews retain the authenticated-only bypass.
+    assert (
+        preview_client.post("/api/v1/notify/preview", json={"template_id": template}).status_code
+        == 200
+    )
+    perm_service.set_user_override(api_db, user.id, denied, previous)
+    assert preview_client.post("/api/v1/notify/preview", json=payload).status_code == 200
 
 
 @pytest.mark.parametrize(

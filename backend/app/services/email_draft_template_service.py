@@ -43,7 +43,7 @@ KEY_FAMILIES = {
     "absence:returned": "absence",
 }
 _TOKEN = re.compile(r"\{(\w+)\}")
-_BRACE_EXPRESSION = re.compile(r"\{([^}]*)\}")
+_BRACE_EXPRESSION = re.compile(r"\{([^{}]*)\}")
 _HTML = re.compile(r"<(?:[^\W\d_]|[/!])|&(?:\w+;|#)")
 
 
@@ -79,6 +79,11 @@ def set_template(
             for expression in _BRACE_EXPRESSION.findall(text)
             if not _TOKEN.fullmatch("{" + expression + "}")
         )
+        # Preserve nested-token rejection without backtracking across opening braces.
+        for prefix in text.split("}")[:-1]:
+            expression = prefix.partition("{")[2]
+            if "{" in expression:
+                unknown.add(expression)
     if unknown:
         raise ValidationFailedError(
             "UNKNOWN_TOKEN", "Unknown email draft template tokens", tokens=sorted(unknown)

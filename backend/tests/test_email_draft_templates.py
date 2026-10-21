@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Iterator
+from time import perf_counter
 from urllib.parse import quote
 
 import pytest
@@ -10,11 +11,14 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
+from app.api.errors import ValidationFailedError
 from app.core.classifications import CLASSIFICATIONS
 from app.core.constants import TEMPLATE_FILES
 from app.db.models import AppSetting, AuditLog, User, UserPermission
 from app.db.session import get_db
 from app.main import create_app
+from app.schemas.email_draft_template import EmailDraftTemplateParts
+from app.services import email_draft_template_service
 
 URL = "/api/v1/email/draft-templates"
 SETTING_KEY = "email.draft_templates"
@@ -57,6 +61,15 @@ def test_get_shape(client: TestClient) -> None:
     response = client.get(URL)
     assert response.status_code == 200
     assert response.json() == {"overrides": {}, "tokens": EXPECTED_TOKENS}
+
+
+def test_get_reads_legacy_oversized_parts(client: TestClient, api_db: Session) -> None:
+    parts = {"subject": "x" * 2001, "intro": "ن" * 2001, "closing": "x" * 2001}
+    api_db.add(AppSetting(key=SETTING_KEY, value=json.dumps({"General Book": parts})))
+    api_db.commit()
+    response = client.get(URL)
+    assert response.status_code == 200
+    assert response.json()["overrides"] == {"General Book": parts}
 
 
 def test_round_trip_replaces_parts_and_preserves_other_keys(
@@ -204,6 +217,31 @@ def test_plain_text_and_unknown_body_fields(client: TestClient) -> None:
     response = client.put(_url("General Book"), json={"html": "text"})
     assert response.status_code == 422
     assert response.json()["error"]["code"] == "VALIDATION_ERROR"
+
+
+def test_long_open_brace_run_is_handled_quickly(api_db: Session) -> None:
+    # Exercise the validator independently of the API's request-length guard.
+    parts = EmailDraftTemplateParts.model_construct(subject="{" * 50_000, intro="{missing}")
+    started = perf_counter()
+    with pytest.raises(ValidationFailedError):
+        email_draft_template_service.set_template(api_db, "General Book", parts, actor="test")
+    assert perf_counter() - started < 5
+    assert api_db.get(AppSetting, SETTING_KEY) is None
+
+
+@pytest.mark.parametrize("part", ["subject", "intro", "closing"])
+def test_parts_length_limit(client: TestClient, api_db: Session, part: str) -> None:
+    response = client.put(_url("General Book"), json={part: "ن" * 2001})
+    assert response.status_code == 422
+    error = response.json()["error"]
+    assert error["code"] == "VALIDATION_ERROR"
+    assert [
+        (item["type"], item["loc"], item["ctx"]["max_length"])
+        for item in error["details"]["errors"]
+    ] == [("string_too_long", ["body", part], 2000)]
+    assert api_db.get(AppSetting, SETTING_KEY) is None
+    assert api_db.scalars(select(AuditLog)).all() == []
+    assert client.put(_url("General Book"), json={part: "ن" * 2000}).status_code == 200
 
 
 def test_permission_gate(client: TestClient, api_db: Session, draft_user: User) -> None:

@@ -1,6 +1,10 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import i18n from 'i18next'
+
+import ar from '@/locales/ar.json'
+import en from '@/locales/en.json'
 
 import { ApiError } from '@/lib/api'
 import { messageTemplatesApi } from '@/lib/messageTemplates'
@@ -33,9 +37,31 @@ beforeEach(() => {
   vi.mocked(messageTemplatesApi.resetDraft).mockResolvedValue({ overrides: {}, tokens: { leave: ['names'] } })
   sample.mockReturnValue({ subject: 'موضوع تجريبي', bodyHtml: '<p>نص تجريبي</p>' })
 })
-afterEach(cleanup)
+afterEach(async () => {
+  cleanup()
+  await i18n.changeLanguage('en')
+})
 
 describe('EmailDraftEditor', () => {
+  it.each(['en', 'ar'] as const)('labels every draft variable in %s and inserts its raw token', async (language) => {
+    i18n.addResourceBundle('ar', 'translation', ar, true, true)
+    await i18n.changeLanguage(language)
+    const labels = (language === 'ar' ? ar : en).msgTemplates
+    const tokens = ['ref', 'date', 'names', 'count', 'detail', 'bank', 'start_date', 'end_date', 'return_date']
+    vi.mocked(messageTemplatesApi.drafts).mockResolvedValue({ overrides: {}, tokens: { form: tokens } })
+    mount('General Book')
+    const intro = await screen.findByRole('textbox', { name: labels.editor.fields.intro }) as HTMLTextAreaElement
+    fireEvent.focus(intro)
+    for (const token of tokens) {
+      const button = screen.getByTitle(`{${token}}`)
+      expect(button).toHaveAccessibleName(i18n.t(`msgTemplates.draftTokens.${token}`))
+      expect(button.textContent).not.toContain(`{${token}}`)
+      if (language === 'ar') expect(button.textContent).toMatch(/[\u0600-\u06ff]/)
+      fireEvent.click(button)
+    }
+    expect(intro).toHaveValue(tokens.map((token) => `{${token}}`).join(''))
+  })
+
   it('uses defaults for missing fields and replaces all three parts on save', async () => {
     vi.mocked(messageTemplatesApi.drafts).mockResolvedValue({ tokens: { leave: ['names'] } })
     vi.mocked(messageTemplatesApi.saveDraft).mockResolvedValue({ overrides: { 'leave:Annual': { subject: 'عنوان خاص' } }, tokens: { leave: ['names'] } })
@@ -63,11 +89,11 @@ describe('EmailDraftEditor', () => {
     mount('classification:5/1')
     const intro = await screen.findByRole('textbox', { name: 'Introduction' }) as HTMLTextAreaElement
     for (const token of ['ref', 'date', 'names', 'count', 'detail']) {
-      expect(screen.getByRole('button', { name: `{${token}}` })).toBeVisible()
+      expect(screen.getByTitle(`{${token}}`)).toBeVisible()
     }
-    expect(screen.queryByRole('button', { name: '{wrong_family}' })).not.toBeInTheDocument()
+    expect(screen.queryByTitle('{wrong_family}')).not.toBeInTheDocument()
     fireEvent.focus(intro)
-    fireEvent.click(screen.getByRole('button', { name: '{names}' }))
+    fireEvent.click(screen.getByTitle('{names}'))
     expect(intro).toHaveValue('{names}')
     expect(intro).toHaveFocus()
     expect(sample).toHaveBeenLastCalledWith('classification:5/1', { 'classification:5/1': { intro: '{names}' } })
