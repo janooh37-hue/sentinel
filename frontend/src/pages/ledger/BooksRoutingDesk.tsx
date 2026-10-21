@@ -431,8 +431,8 @@ function BookRow({ book, asSent, showScope, current, onOpen }: {
           <span className="sr-only">{t('ledger.booksDesk.columns.ref')}: </span><bdi dir="ltr" className="font-mono tabular-nums">{book.ref_number}</bdi>
         </span>
         {inbox
-          ? <Meta label={t('ledger.booksDesk.from')} className={cn(cell, 'lg:col-start-4')}>{name(inbox.sent_by_name, inbox.sent_by_name_ar)}</Meta>
-          : <Meta label={t('ledger.booksDesk.columns.createdBy')} className={cn(cell, 'lg:col-start-4')}>{name(book.created_by_name, book.created_by_name_ar)}</Meta>}
+          ? <Meta label={t('ledger.booksDesk.from')} title={name(inbox.sent_by_name, inbox.sent_by_name_ar)} className={cn(cell, 'lg:col-start-4')}>{name(inbox.sent_by_name, inbox.sent_by_name_ar)}</Meta>
+          : <Meta label={t('ledger.booksDesk.columns.createdBy')} title={name(book.created_by_name, book.created_by_name_ar)} className={cn(cell, 'lg:col-start-4')}>{name(book.created_by_name, book.created_by_name_ar)}</Meta>}
         {toNames.length > 0 && (
           <Meta label={t('ledger.booksDesk.to')} title={toNames.join(listSep)} className={cn(cell, 'lg:col-start-5')}>
             {toNames.slice(0, 2).join(listSep)}
