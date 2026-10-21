@@ -34,11 +34,11 @@ describe('templateErrorMessage', () => {
   })
 
   it.each([
-    ['en', ['body', 'intro'], 2000, 'Template text must be {{limit}} characters or fewer.'],
-    ['en', ['body', 'ar'], 1000, 'Template text must be {{limit}} characters or fewer.'],
-    ['ar', ['body', 'intro'], 2000, 'يجب ألا يتجاوز نص القالب {{limit}} حرفًا.'],
-    ['ar', ['body', 'en'], 1000, 'يجب ألا يتجاوز نص القالب {{limit}} حرفًا.'],
-  ] as const)('localizes a too-long %s template field %j with limit %i', async (language, loc, limit, message) => {
+    ['en', ['body', 'intro'], 2000],
+    ['en', ['body', 'ar'], 1000],
+    ['ar', ['body', 'intro'], 2000],
+    ['ar', ['body', 'en'], 1000],
+  ] as const)('localizes a too-long %s template field %j with limit %i', async (language, loc, limit) => {
     i18n.addResourceBundle('ar', 'translation', ar, true, true)
     await i18n.changeLanguage(language)
     const error = new ApiError(422, 'VALIDATION_ERROR', 'raw server validation', {
@@ -47,7 +47,7 @@ describe('templateErrorMessage', () => {
         { type: 'string_too_long', loc, ctx: { max_length: limit } },
       ],
     })
-    expect(templateErrorMessage(error, t)).toBe(message.replace('{{limit}}', String(limit)))
+    expect(templateErrorMessage(error, t)).toBe(t('msgTemplates.editor.errors.tooLong', { limit }))
   })
 
   it('never shows raw server text for other failures', () => {

@@ -53,23 +53,21 @@ export function GeneratedSaveActions({
           </p>
           <p className="mt-1 text-sm text-muted-foreground">{hint}</p>
           {showNotify && (
-            <>
-              <NotifyEmployeeToggle
-                className="mt-3"
-                checked={notifyEmployee}
-                disabled={notifyDisabled || saving}
-                onChange={onNotifyChange}
-                label={t('application.notify.label')}
-                hint={notificationHint}
-              />
-              {previewBody && (
-                <NotifyMessagePreview
-                  key={`${previewBody.template_id}:${previewBody.employee_id}`}
-                  body={previewBody}
-                  notifyEmployee={notifyEmployee}
-                />
-              )}
-            </>
+            <NotifyEmployeeToggle
+              className="mt-3"
+              checked={notifyEmployee}
+              disabled={notifyDisabled || saving}
+              onChange={onNotifyChange}
+              label={t('application.notify.label')}
+              hint={notificationHint}
+            />
+          )}
+          {previewBody && (
+            <NotifyMessagePreview
+              key={`${previewBody.template_id}:${previewBody.employee_id}`}
+              body={previewBody}
+              notifyEmployee={notifyEmployee}
+            />
           )}
         </div>
         <Button

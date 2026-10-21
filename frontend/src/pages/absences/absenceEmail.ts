@@ -141,6 +141,7 @@ export function buildAbsenceEmail(
   const absent = rows.filter((row) => row.case === 'absent')
   const returned = rows.filter((row) => row.case === 'returned')
   const sections: string[] = []
+  let greetingEmitted = false
   const firstOverride = opts.overrides?.[`absence:${rows[0].case}`]
   const subject = firstOverride?.subject
     ? substituteDraftText(firstOverride.subject, absenceDraftValues(rows)) : ABSENCE_EMAIL_SUBJECT
@@ -148,14 +149,19 @@ export function buildAbsenceEmail(
   for (const group of [absent, returned]) {
     if (!group.length) continue
     let intro = opts.overrides?.[`absence:${group[0].case}`]?.intro ?? ''
-    if (sections.length && intro.startsWith(ABSENCE_GREETING)) {
-      intro = intro.slice(ABSENCE_GREETING.length).trimStart()
+    const hasOverride = Boolean(intro)
+    const normalizedIntro = intro.replace(/\r\n/g, '\n').trimStart()
+    if (normalizedIntro.startsWith(ABSENCE_GREETING)) {
+      if (greetingEmitted) intro = normalizedIntro.slice(ABSENCE_GREETING.length).trimStart()
+      greetingEmitted = true
     }
-    sections.push(
-      intro ? p(draftTextHtml(substituteDraftText(intro, absenceDraftValues(group))))
-        : defaultAbsenceIntro(group, sections.length === 0),
-      buildAbsenceTableHtml(group),
-    )
+    if (hasOverride) {
+      if (intro) sections.push(p(draftTextHtml(substituteDraftText(intro, absenceDraftValues(group)))))
+    } else {
+      sections.push(defaultAbsenceIntro(group, !greetingEmitted))
+      greetingEmitted = true
+    }
+    sections.push(buildAbsenceTableHtml(group))
   }
   if (opts.violationAttached) {
     const line = rows.length === 1

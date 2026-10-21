@@ -358,11 +358,13 @@ function StandardApplicationPage(): React.JSX.Element {
     templates.some((tpl) => tpl.id === paperPair.ar)
       ? paperPair
       : null
-  const showNotifyEmployee = shouldShowNotifyToggle({
+  const notifyContext = {
     notifiesEmployee: selectedMeta?.notifies_employee ?? false,
     autosendEnabled: settingsQuery.data?.sms_autosend_enabled ?? false,
     isRevision: reviseBookId !== null,
-  })
+  }
+  const showNotifyEmployee = shouldShowNotifyToggle(notifyContext)
+  const showNotifyPreview = shouldShowNotifyToggle({ ...notifyContext, isRevision: false })
 
   // Attachments (spec 2026-06-11 §6) — named slots come from the template
   // policy on the detail response; the block itself renders on EVERY form
@@ -584,7 +586,9 @@ function StandardApplicationPage(): React.JSX.Element {
     }
   }
 
-  const notifyPayload = showNotifyEmployee ? buildPayload(currentFormValues, false) : null
+  const notifyPayload = showNotifyPreview
+    ? buildPayload(currentFormValues, false)
+    : null
 
   const submitWithCommit = (commit: boolean) => {
     // General Book Word mode: the create needs only classification + subject —

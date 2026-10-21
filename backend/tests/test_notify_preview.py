@@ -189,11 +189,8 @@ def test_non_notifying_or_revision_has_no_message(preview_client, template, revi
     }
 
 
-@pytest.mark.parametrize("language,decision", [("ar", "returned"), ("en", "rejected")])
-@pytest.mark.parametrize("notify_employee", [True, False, None])
-def test_revision_preview_matches_approval_send(
-    api_db, preview_client, monkeypatch, tmp_path, language, decision, notify_employee
-):
+@pytest.fixture()
+def revision_env(api_db, preview_client, monkeypatch, tmp_path):
     settings = Settings(
         data_dir=tmp_path / "data",
         templates_dir=document_service._TEMPLATES_DIR,
@@ -217,7 +214,6 @@ def test_revision_preview_matches_approval_send(
 
     monkeypatch.setattr(notify_dispatch, "date", Today)
     employee = api_db.get(Employee, "P1")
-    employee.msg_language = language
     employee.contact = "0501234567"
     signer = User(email="signer@preview.test", password_hash="x", role="admin", status="active")
     api_db.add(signer)
@@ -236,6 +232,16 @@ def test_revision_preview_matches_approval_send(
         "render_signed_artifact",
         lambda *args, **kwargs: render_signed(*args, **kwargs, converter=lambda _: None),
     )
+    return employee, signer, manager
+
+
+@pytest.mark.parametrize("language,decision", [("ar", "returned"), ("en", "rejected")])
+@pytest.mark.parametrize("notify_employee", [True, False, None])
+def test_revision_preview_matches_approval_send(
+    api_db, preview_client, revision_env, language, decision, notify_employee
+):
+    employee, signer, manager = revision_env
+    employee.msg_language = language
     template = "Employee Clearance Form"
     fields = {"date": "21/10/2026"}
     result = document_service.generate_document(
@@ -315,6 +321,95 @@ def test_revision_preview_matches_approval_send(
         assert preview["language"] == language
         assert preview["timing"] == "on_approval"
         assert preview["text"][language] == sent.body
+
+
+@pytest.mark.parametrize(
+    "template,fields",
+    [
+        ("Employee Clearance Form", {"date": "21/10/2026"}),
+        (
+            "Administrative Leave Form",
+            {"start_date": "01/11/2026", "end_date": "05/11/2026", "duration": "5"},
+        ),
+        (
+            "Leave Application Form",
+            {
+                "leave_type": "Annual Leave",
+                "start_date": "01/11/2026",
+                "end_date": "05/11/2026",
+                "total_days": "5",
+            },
+        ),
+    ],
+)
+@pytest.mark.parametrize("original_status", ["sent", "failed", "settled_leave"])
+def test_approved_revision_preview_matches_deduplicated_send(
+    api_db, preview_client, revision_env, template, fields, original_status
+):
+    if original_status == "settled_leave" and template != "Leave Application Form":
+        pytest.skip("Only Annual Leave has a later Leaves-page verdict")
+    employee, signer, manager = revision_env
+
+    def generate(**kwargs):
+        result = document_service.generate_document(
+            api_db,
+            employee_id=employee.id,
+            template_id=template,
+            fields=fields,
+            manager_id=manager.id,
+            current_user=signer,
+            converter=lambda _: None,
+            **kwargs,
+        )
+        return api_db.get_one(Book, result.book_id)
+
+    def approve(book):
+        book_service.submit_for_approval(
+            api_db,
+            book.id,
+            submitted_by_user_id=signer.id,
+            approver_user_id=signer.id,
+            priority="normal",
+            reviewer_user_ids=[],
+        )
+        book_service.sign_book(api_db, book.id, user_id=signer.id, version_id=book.versions[-1].id)
+        assert book.approval_state == "approved"
+
+    book = generate()
+    approve(book)
+    original = api_db.scalar(select(OutboundMessage))
+    assert original is not None and original.status == "sent"
+    original.status = "failed" if original_status != "sent" else "sent"
+    if original_status == "settled_leave":
+        document = api_db.get_one(Document, book.versions[-1].document_id)
+        api_db.get_one(Leave, document.leave_id).status = "Approved"
+    api_db.commit()
+    book_service.override_state(
+        api_db, book.id, target_state="returned", actor=signer, reason="Correct paper"
+    )
+    response = preview_client.post(
+        "/api/v1/notify/preview",
+        json={
+            "template_id": template,
+            "employee_id": employee.id,
+            "fields": fields,
+            "revise_of_book_id": book.id,
+        },
+    )
+    assert response.status_code == 200
+    preview = response.json()
+    assert not api_db.new
+    approve(generate(revise_of_book_id=book.id))
+    messages = list(api_db.scalars(select(OutboundMessage).order_by(OutboundMessage.id)))
+    if original_status != "failed":
+        assert len(messages) == 1
+        assert preview["text"] is None
+        assert preview["segments"] is None
+    else:
+        assert len(messages) == 2
+        assert messages[-1].status == "sent"
+        assert messages[-1].event_ref == original.event_ref
+        assert preview["text"][employee.msg_language] == messages[-1].body
 
 
 def test_missing_employee_uses_sample_and_arabic(preview_client):

@@ -385,6 +385,37 @@ def book_event(db: Session, book: Book) -> tuple[str, int] | None:
     return (event, book.id) if event is not None else None
 
 
+def approval_notification_eligible(
+    db: Session,
+    book: Book,
+    *,
+    template_id: str | None,
+    target: tuple[str, int | None] | None,
+    gated: bool,
+    status_changed: bool,
+) -> bool:
+    """Shared send policy for committed approvals and prospective revisions.
+
+    A missing record id means generation will insert a new record, with no
+    previous send to deduplicate. The caller owns the approval-state guards.
+    """
+    from app.services import document_service
+
+    # Inheritance includes enrollment: no signing snapshot means no notification.
+    if (
+        not document_service.inherited_notify_employee(book)
+        or (gated and not status_changed)
+        or target is None
+    ):
+        return False
+    event, record_id = target
+    # Annual Leave approval acknowledges the request, not its later verdict.
+    if template_id == "Leave Application Form" and not gated and event != nf.EVENT_LEAVE_REQUESTED:
+        return False
+    sent = last_status(db, event, record_id) if record_id is not None else None
+    return sent is None or sent.status == "failed"
+
+
 def auto_send_for_book(
     db: Session, book_id: int, *, sent_by: int | None = None
 ) -> OutboundMessage | None:

@@ -1,15 +1,19 @@
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, renderHook, screen } from '@testing-library/react'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import i18n from 'i18next'
 
+import { DEFAULT_QUERY_STALE_TIME } from '@/App'
+import type * as MessageTemplatesModule from '@/lib/messageTemplates'
 import ar from '@/locales/ar.json'
-import { messageTemplatesApi, type NotifyPreviewRequest, type NotifyPreviewResponse } from '@/lib/messageTemplates'
+import { messageTemplatesApi, useSaveMessageTemplate, type NotifyPreviewRequest, type NotifyPreviewResponse } from '@/lib/messageTemplates'
 import { NotifyMessagePreview } from './NotifyMessagePreview'
 
-vi.mock('@/lib/messageTemplates', () => ({
-  messageTemplatesApi: { preview: vi.fn() },
-}))
+vi.mock('@/lib/messageTemplates', async (importOriginal) => {
+  const actual = await importOriginal<typeof MessageTemplatesModule>()
+  Object.assign(actual.messageTemplatesApi, { preview: vi.fn(), save: vi.fn() })
+  return actual
+})
 
 const body: NotifyPreviewRequest = {
   template_id: 'Leave Permit Form',
@@ -46,6 +50,35 @@ afterEach(() => {
 })
 
 describe('NotifyMessagePreview', () => {
+  it('refreshes a remounted save-screen preview after a template edit with production staleTime', async () => {
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false, staleTime: DEFAULT_QUERY_STALE_TIME } },
+    })
+    const wrapper = ({ children }: { children: React.ReactNode }) => (
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    )
+    const initial = render(<NotifyMessagePreview body={body} notifyEmployee />, { wrapper })
+    expect(await screen.findByText(response.text!.en)).toBeVisible()
+    initial.unmount()
+
+    const updated = { en: 'Your updated permit message.', ar: 'رسالة التصريح المحدّثة.' }
+    vi.mocked(messageTemplatesApi.save).mockImplementation(async (event, text) => {
+      preview.mockResolvedValue({ ...response, text })
+      return {
+        event, label: { en: 'Permit', ar: 'تصريح' }, group: 'forms',
+        services: [body.template_id], timing: 'on_approval',
+        default: response.text!, override: text, variables: [],
+      }
+    })
+    const save = renderHook(() => useSaveMessageTemplate(), { wrapper })
+    await act(async () => {
+      await save.result.current.mutateAsync({ event: response.event!, body: updated })
+    })
+    render(<NotifyMessagePreview body={body} notifyEmployee />, { wrapper })
+    expect(await screen.findByText(updated.en)).toBeVisible()
+    expect(screen.queryByText(response.text!.en)).not.toBeInTheDocument()
+  })
+
   it.each(['en', 'ar'] as const)('shows employee language %s first, with the other one a tap away', async (language) => {
     preview.mockResolvedValue({ ...response, language })
     renderPreview()

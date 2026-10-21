@@ -14,6 +14,33 @@ const overrides = {
 }
 
 describe('absence draft overrides', () => {
+  it.each([
+    { name: 'greeting-only later override', absentIntro: undefined, returnedIntro: 'السلام عليكم ورحمة الله وبركاته', noReturnedIntro: true },
+    { name: 'custom first intro without greeting', absentIntro: 'Custom absence introduction', returnedIntro: 'السلام عليكم ورحمة الله وبركاته\nCustom return introduction', noReturnedIntro: false },
+    { name: 'leading-newline CRLF greeting', absentIntro: undefined, returnedIntro: '\r\nالسلام عليكم ورحمة الله وبركاته\r\nCustom return introduction', noReturnedIntro: false },
+  ])('preserves replaced introductions and emits one greeting: $name', ({
+    absentIntro, returnedIntro, noReturnedIntro,
+  }) => {
+    const greeting = 'السلام عليكم ورحمة الله وبركاته'
+    const result = buildAbsenceEmail([row, { ...row, employee_id: 'G1002', case: 'returned' }], {
+      violationAttached: false,
+      overrides: {
+        'absence:absent': { intro: absentIntro },
+        'absence:returned': { intro: returnedIntro },
+      },
+    })
+    expect(result.bodyHtml.split(greeting)).toHaveLength(2)
+    const document = new DOMParser().parseFromString(result.bodyHtml, 'text/html')
+    const tables = document.querySelectorAll('table')
+    expect(tables).toHaveLength(2)
+    if (noReturnedIntro) {
+      expect(tables[1].previousElementSibling).toBe(tables[0])
+    } else {
+      expect(tables[1].previousElementSibling?.textContent).toContain('Custom return introduction')
+    }
+    if (absentIntro) expect(result.bodyHtml).toContain(absentIntro)
+  })
+
   it('replaces the editable greeting along with the introduction', () => {
     const greeting = 'السلام عليكم ورحمة الله وبركاته'
     expect(defaultAbsenceDraftText([row]).intro).toContain(greeting)

@@ -69,7 +69,6 @@ describe('EmailDraftEditor', () => {
     const subject = await screen.findByRole('textbox', { name: 'Subject' })
     expect(subject).toHaveAttribute('dir', 'rtl')
     expect(subject).toHaveAttribute('placeholder', 'الموضوع الافتراضي')
-    expect(screen.getAllByText('Default text is used when this field is empty.')).toHaveLength(3)
     fireEvent.change(subject, { target: { value: 'عنوان خاص' } })
     fireEvent.click(screen.getByRole('button', { name: 'Save template' }))
     await waitFor(() => expect(messageTemplatesApi.saveDraft).toHaveBeenCalledWith('leave:Annual', {

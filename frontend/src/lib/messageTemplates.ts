@@ -58,10 +58,12 @@ export function useSaveMessageTemplate() {
   return useMutation({
     mutationFn: ({ event, body }: { event: string; body: Bilingual }) =>
       messageTemplatesApi.save(event, body),
-    onSuccess: (next) =>
+    onSuccess: (next) => {
       qc.setQueryData<MessageTemplateRead[]>(MESSAGE_TEMPLATES_KEY, (l) =>
         l?.map((t) => (t.event === next.event ? next : t)),
-      ),
+      )
+      void qc.invalidateQueries({ queryKey: ['notify-preview'] })
+    },
   })
 }
 
@@ -69,10 +71,12 @@ export function useResetMessageTemplate() {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (event: string) => messageTemplatesApi.reset(event),
-    onSuccess: (next) =>
+    onSuccess: (next) => {
       qc.setQueryData<MessageTemplateRead[]>(MESSAGE_TEMPLATES_KEY, (l) =>
         l?.map((t) => (t.event === next.event ? next : t)),
-      ),
+      )
+      void qc.invalidateQueries({ queryKey: ['notify-preview'] })
+    },
   })
 }
 

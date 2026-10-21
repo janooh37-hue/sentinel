@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.api.errors import ValidationFailedError
 from app.core import form_policy
-from app.db.models import Book, Employee
+from app.db.models import Book, Employee, Leave
 from app.schemas.notify import MessageText, NotifyPreviewRequest
 from app.services import document_service, notify_dispatch, settings_service, sms_templates
 from app.services import notify_format as nf
@@ -173,16 +173,17 @@ def preview(db: Session, payload: NotifyPreviewRequest) -> dict[str, Any]:
     result = {"event": None, "language": language, "timing": timing, "text": None, "segments": None}
     if payload.template_id not in nf.AUTO_NOTIFY_TEMPLATE_IDS:
         return result
+    revise_book = None
     if payload.revise_of_book_id is not None:
         if timing != "on_approval":
             return result
         revise_book = db.get(Book, payload.revise_of_book_id)
         if revise_book is None or revise_book.deleted_at is not None:
             raise HTTPException(status_code=404, detail="Book not found")
-        if not document_service.inherited_notify_employee(revise_book):
-            return result
     now = datetime.now()
     route = nf.SPECIAL_TEMPLATE_ROUTES.get(payload.template_id)
+    gated = form_policy.is_sign_gated_leave(payload.template_id, fields.get("leave_type"))
+    record_id = revise_book.id if revise_book is not None else None
     record: Any
     if route == "violation":
         record = document_service._make_violation_row(employee.id, fields, Path(""), now)
@@ -190,6 +191,31 @@ def preview(db: Session, payload: NotifyPreviewRequest) -> dict[str, Any]:
         record = document_service._make_leave_row(
             employee.id, payload.template_id, fields, Path(""), now
         )
+        if revise_book is not None:
+            plan = document_service.plan_gated_leave(
+                db,
+                template_id=payload.template_id,
+                employee_id=employee.id,
+                fields=fields,
+                revise_book=revise_book,
+            )
+            existing = (
+                db.get(Leave, plan.leave_id)
+                if plan is not None and plan.leave_id is not None
+                else document_service._find_duplicate_leave(db, record)
+                if plan is None
+                else None
+            )
+            record_id = existing.id if existing is not None else None
+            # Generation updates dates only for the record's own gated leave.
+            # Otherwise it reuses the row (including Annual Leave's later verdict).
+            if existing is not None and (plan is None or not plan.move_dates):
+                record.leave_type = existing.leave_type
+                record.start_date = existing.start_date
+                record.end_date = existing.end_date
+                record.days = existing.days
+                record.return_date = existing.return_date
+                record.status = existing.status
         # Preview the approval-time message, not the unsaved row's Pending state.
         if form_policy.is_sign_gated_leave(payload.template_id, record.leave_type):
             record.status = "Approved"
@@ -200,6 +226,16 @@ def preview(db: Session, payload: NotifyPreviewRequest) -> dict[str, Any]:
         payload.template_id, record if route == "leave_status" else None
     )
     if event is None:
+        return result
+    if revise_book is not None and not notify_dispatch.approval_notification_eligible(
+        db,
+        revise_book,
+        template_id=payload.template_id,
+        target=(event, record_id),
+        gated=gated,
+        # Saving/submitting an enrolled gated revision resets its leave to Pending.
+        status_changed=gated,
+    ):
         return result
     text = {
         lang: sms_templates.render_text(event, lang, record, employee, db=db)
