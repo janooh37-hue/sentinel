@@ -701,7 +701,11 @@ def test_load_book_event_starts_a_signed_permit_at_signing(db_session):
     signed_at = datetime(2026, 7, 16, 9, 30)
     db_session.add(
         BookVersion(
-            book_id=book.id, version_no=1, template_id="Leave Permit Form", signed_at=signed_at
+            book_id=book.id,
+            version_no=1,
+            template_id="Leave Permit Form",
+            signed_at=signed_at,
+            fields={"_signing": {"issued": "15/07/2026"}},
         )
     )
     book.created_at = datetime(2026, 7, 15, 8, 0)

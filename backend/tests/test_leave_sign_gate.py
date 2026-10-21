@@ -15,10 +15,12 @@ from sqlalchemy import select
 from app.config import Settings
 from app.core import docx_engine, form_policy, leave_lifecycle
 from app.db.models import (
+    REF_SEQUENCE_ID,
     AuditLog,
     Book,
     BookCategory,
     BookEditSession,
+    BookRefSequence,
     Document,
     Employee,
     Leave,
@@ -253,6 +255,10 @@ def test_legacy_record_keeps_its_issued_leave(gate_env, monkeypatch, template):
     assert reevaluate.call_count == 0
     assert env.send.call_count == 0
     assert env.db.query(OutboundMessage).count() == 0
+    # A legacy permit signed on main keeps its issue time as the validity start.
+    book.versions[-1].signed_at = datetime(2026, 10, 21, 2, 16)
+    event = notify_dispatch._load_book_event(env.db, book.id)
+    assert event.created_at == book.created_at
 
 
 def test_duplicate_is_refused_while_the_owner_is_live(gate_env):
@@ -272,6 +278,35 @@ def test_duplicate_is_refused_while_the_owner_is_live(gate_env):
     env.db.refresh(leave)
     assert leave.status == "Approved"
     assert env.db.query(Book).count() == 1
+
+
+@pytest.mark.parametrize("template", ["Leave Permit Form", "Administrative Leave Form"])
+def test_a_duplicate_committed_mid_generation_is_refused_without_burning_a_ref(
+    gate_env, monkeypatch, template
+):
+    """The ownership plan runs under the write lock, so a rival generation that
+    commits while this one is in flight is seen; the refusal writes nothing."""
+    env = gate_env
+    allocate = document_service.allocate_ref_with_retry
+    rival = {}
+
+    def rival_commits_first(db, category):
+        if not rival:
+            rival["book"] = None
+            rival["book"], rival["leave"] = generate(env, template)
+            rival["next_ref"] = db.get_one(BookRefSequence, REF_SEQUENCE_ID).next_value
+        return allocate(db, category)
+
+    monkeypatch.setattr(document_service, "allocate_ref_with_retry", rival_commits_first)
+    with pytest.raises(document_service.ValidationFailedError) as excinfo:
+        generate(env, template)
+    assert _issued_on(excinfo) == rival["book"].ref_number
+    env.db.rollback()
+    assert env.db.get_one(BookRefSequence, REF_SEQUENCE_ID).next_value == rival["next_ref"]
+    assert env.db.query(Book).count() == 1
+    assert env.db.query(Leave).count() == 1
+    env.db.refresh(rival["leave"])
+    assert rival["leave"].status == "Pending"
 
 
 @pytest.mark.parametrize("template", ["Leave Permit Form", "Administrative Leave Form"])
@@ -337,11 +372,20 @@ def test_a_revision_onto_a_rejected_records_leave_takes_it_over(gate_env, templa
     assert first_leave.status == "Pending"
     assert second_leave.status == "Cancelled"
     submit(env, revised)
+    # Its first version still links the row it left behind, but no longer owns it.
+    reissue, reissued_leave = generate(env, template, fields=moved)
+    assert reissue.id != revised.id
+    assert reissued_leave.id == second_leave.id
+    assert second_leave.status == "Pending"
+    env.db.refresh(first_leave)
+    assert (first_leave.start_date, first_leave.status) == (date(2026, 10, 20), "Pending")
     book_service.sign_book(
         env.db, revised.id, user_id=env.signer.id, version_id=revised.versions[-1].id
     )
     env.db.refresh(first_leave)
+    env.db.refresh(second_leave)
     assert first_leave.status == "Approved"
+    assert second_leave.status == "Pending"
     assert env.send.call_count == 1
 
 

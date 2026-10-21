@@ -4126,6 +4126,7 @@
     "noTemplateSelected": "اختر نموذجًا للبدء",
     "noEmployeeSelected": "اختر موظفًا أولاً",
     "leaveAlreadyIssued": "السجل {{ref}} يغطي هذه الإجازة بالفعل. افتح ذلك السجل بدلاً من إصدار سجل جديد.",
+    "leaveAlreadyIssuedNoRef": "سجل آخر يغطي هذه الإجازة بالفعل. افتح ذلك السجل بدلاً من إصدار سجل جديد.",
     "toast": {
       "generated": "تم إنشاء المستند",
       "previewed": "تم عرض المعاينة",

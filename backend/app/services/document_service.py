@@ -71,6 +71,7 @@ from app.db.models import (
     User,
     Violation,
 )
+from app.db.repos._locking import begin_immediate_if_idle
 from app.db.repos.classified_refs_repo import allocate_classified_serial
 from app.db.repos.refs_repo import allocate_ref_with_retry
 from app.schemas.employee import EMPLOYEE_STATUS_RESIGNED, WORKING_STATUSES
@@ -1837,14 +1838,6 @@ def generate_document(
                 "Only a draft, returned, rejected, or awaiting-scan book can be revised",
                 state=revise_book.approval_state,
             )
-    # Before any side effect: a duplicate of a live record's leave is refused.
-    gated_leave = plan_gated_leave(
-        db,
-        template_id=template_id,
-        employee_id=employee_id,
-        fields=fields,
-        revise_book=revise_book,
-    )
 
     # ------------------------------------------------------------------
     # 1c. Attachments (spec §6) — validate slots + resolve sources BEFORE
@@ -1934,7 +1927,11 @@ def generate_document(
         if code is not None:
             _classification = get_classification(code)
     if commit and revise_book is not None:
-        # Revise reuses the existing book's ref — no allocation.
+        # Revise reuses the existing book's ref — no allocation. A sign-gated
+        # revision still takes the write lock so its leave plan below is decided
+        # under the same serialisation as a fresh generation's.
+        if template_id in form_policy.SIGN_GATED_LEAVE_FORMS:
+            begin_immediate_if_idle(db)
         raw_ref = revise_book.ref_number
     elif commit and _classification is not None:
         # Shared classified serial — atomic with the Book/Document insert via
@@ -1948,6 +1945,17 @@ def generate_document(
         raw_ref = allocate_ref_with_retry(db, cat_code)
     else:
         raw_ref = "DRAFT"
+
+    # Under the write lock (held through the terminal commit): a duplicate of a
+    # live record's leave is refused before anything is written but the ref,
+    # which the caller's rollback returns.
+    gated_leave = plan_gated_leave(
+        db,
+        template_id=template_id,
+        employee_id=employee_id,
+        fields=fields,
+        revise_book=revise_book,
+    )
 
     # Chain forms are re-rendered when the manager signs, possibly days later:
     # freeze the issue date and the employee/submitter signature and notify

@@ -21,8 +21,8 @@ from app.config import get_settings
 from app.core import form_policy, leave_lifecycle
 from app.core.phone import normalize_phone
 from app.db.models import Book, Document, Employee, Leave, OutboundMessage, Violation
+from app.services import book_service, openwa_client, sms_client, sms_templates
 from app.services import notify_format as nf
-from app.services import openwa_client, sms_client, sms_templates
 
 log = logging.getLogger(__name__)
 
@@ -81,10 +81,11 @@ def _load_book_event(db: Session, book_id: int) -> BookEvent | None:
     # (the book_service.create_book path, which raises none of these events).
     # Converting again here pushed every permit 4h into the future.
     # A sign-gated permit is notified when signed, so it starts at signing.
-    # signed_at is naive UTC; convert to the same local wall-clock.
+    # signed_at is naive UTC; convert to the same local wall-clock. A record
+    # issued before the gate keeps its issue time even if it was signed later.
     issued = (
         version.signed_at.replace(tzinfo=UTC).astimezone().replace(tzinfo=None)
-        if version.signed_at is not None
+        if version.signed_at is not None and book_service.is_enrolled(book)
         else book.created_at
     )
     return BookEvent(
